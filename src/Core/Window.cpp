@@ -1,0 +1,138 @@
+#include "Window.h"
+#include "gl.h"
+#include <GLFW/glfw3.h>
+#include <stdexcept>
+#include <iostream>
+
+#if defined(_WIN32)
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#include <dwmapi.h>
+
+// Present in the Windows 11 SDK's dwmapi.h, but guarded here in case an older SDK is used
+// to build this — DwmSetWindowAttribute itself just ignores attributes it doesn't recognize
+// on older Windows versions, so this degrades gracefully to the default title bar.
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
+#endif
+#ifndef DWMWA_CAPTION_COLOR
+#define DWMWA_CAPTION_COLOR 35
+#endif
+#ifndef DWMWA_TEXT_COLOR
+#define DWMWA_TEXT_COLOR 36
+#endif
+
+namespace {
+void ApplyBlackTitleBar(GLFWwindow* handle) {
+    HWND hwnd = glfwGetWin32Window(handle);
+    BOOL darkMode = TRUE;
+    DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkMode, sizeof(darkMode));
+    COLORREF black = 0x00000000;  // 0x00BBGGRR
+    COLORREF white = 0x00FFFFFF;
+    DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &black, sizeof(black));
+    DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, &white, sizeof(white));
+}
+}
+#endif
+
+Window::Window(int width, int height, const std::string& title)
+    : m_Width(width), m_Height(height) {
+    if (!glfwInit()) {
+        throw std::runtime_error("Failed to initialize GLFW");
+    }
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_SAMPLES, 4);
+    // Stay hidden until the title bar is recolored below, so it never flashes the default
+    // light title bar for a frame before switching to black.
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+
+    m_Handle = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
+    if (!m_Handle) {
+        glfwTerminate();
+        throw std::runtime_error("Failed to create GLFW window");
+    }
+
+#if defined(_WIN32)
+    ApplyBlackTitleBar(m_Handle);
+#endif
+    glfwShowWindow(m_Handle);
+
+    glfwMakeContextCurrent(m_Handle);
+    glfwSwapInterval(1); // vsync
+
+    if (!GLLoader_Init()) {
+        throw std::runtime_error("Failed to load OpenGL functions");
+    }
+
+    glfwSetWindowUserPointer(m_Handle, this);
+    glfwSetFramebufferSizeCallback(m_Handle, FramebufferSizeCallback);
+
+    glViewport(0, 0, width, height);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    glEnable(GL_MULTISAMPLE);
+}
+
+Window::~Window() {
+    if (m_Handle) {
+        glfwDestroyWindow(m_Handle);
+    }
+    glfwTerminate();
+}
+
+bool Window::ShouldClose() const {
+    return glfwWindowShouldClose(m_Handle);
+}
+
+void Window::SetShouldClose(bool close) {
+    glfwSetWindowShouldClose(m_Handle, close ? GLFW_TRUE : GLFW_FALSE);
+}
+
+void Window::PollEvents() {
+    glfwPollEvents();
+}
+
+void Window::SwapBuffers() {
+    glfwSwapBuffers(m_Handle);
+}
+
+void Window::SetTitle(const std::string& title) {
+    glfwSetWindowTitle(m_Handle, title.c_str());
+}
+
+void Window::Maximize() {
+    glfwMaximizeWindow(m_Handle);
+}
+
+void Window::SetFullscreen(bool fullscreen) {
+    if (fullscreen == m_IsFullscreen) return;
+
+    if (fullscreen) {
+        // Remember the windowed rect so toggling back doesn't strand the window at (0,0)
+        // or the monitor's resolution.
+        glfwGetWindowPos(m_Handle, &m_WindowedX, &m_WindowedY);
+        glfwGetWindowSize(m_Handle, &m_WindowedW, &m_WindowedH);
+
+        GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+        const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+        glfwSetWindowMonitor(m_Handle, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+    } else {
+        glfwSetWindowMonitor(m_Handle, nullptr, m_WindowedX, m_WindowedY, m_WindowedW, m_WindowedH, 0);
+    }
+    m_IsFullscreen = fullscreen;
+}
+
+void Window::SetCursorLocked(bool locked) {
+    m_CursorLocked = locked;
+    glfwSetInputMode(m_Handle, GLFW_CURSOR, locked ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+}
+
+void Window::FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
+    Window* self = static_cast<Window*>(glfwGetWindowUserPointer(window));
+    self->m_Width = width;
+    self->m_Height = height;
+    glViewport(0, 0, width, height);
+}
