@@ -30,6 +30,12 @@ public:
     // instead of flashing an undefined framebuffer.
     void Show();
 
+    // A native modal error dialog. Static, and usable before any Window exists, because the
+    // failures it reports are mostly startup ones (no GL context, no window). Release builds
+    // have no console for a stderr message to reach, so without this a failed launch would
+    // look like the engine silently doing nothing. No-op off Windows.
+    static void ShowFatalErrorDialog(const std::string& message);
+
     // True fullscreen (takes over the monitor's own video mode), not a borderless-window
     // fake. Toggling back to windowed restores whatever position/size the window had
     // before it went fullscreen.

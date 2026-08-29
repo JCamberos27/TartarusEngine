@@ -6,31 +6,9 @@
     "BuildingKit/Textures/Ceilings",
     "BuildingKit/Textures/Floors",
     "BuildingKit/Textures/Walls",
-    "Chesterfield Sofa",
-    "Chesterfield Sofa/Chesterfield Textures 4K",
     "Scenes"
   ],
   "assetMeta": [
-    {
-      "folder": "Chesterfield Sofa/Chesterfield Textures 4K",
-      "path": "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_AlbedoTransparency.png"
-    },
-    {
-      "folder": "Chesterfield Sofa/Chesterfield Textures 4K",
-      "path": "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_Ambient_Occlusion.png"
-    },
-    {
-      "folder": "Chesterfield Sofa/Chesterfield Textures 4K",
-      "path": "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_MetallicSmoothness.png"
-    },
-    {
-      "folder": "Chesterfield Sofa/Chesterfield Textures 4K",
-      "path": "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_Normal.png"
-    },
-    {
-      "folder": "Chesterfield Sofa",
-      "path": "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa.fbx"
-    },
     {
       "folder": "BuildingKit/Meshes",
       "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_3m_3m.FBX"
@@ -192,7 +170,6 @@
     "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_5m.FBX",
     "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Window_fake.FBX",
     "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Window_tall_fake.FBX",
-    "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa.fbx",
     "primitive://sphere#0"
   ],
   "libraryPrefabs": [],
@@ -215,11 +192,7 @@
     "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_BaseColor.png",
     "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_MaskMap.png",
     "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_Normal.png",
-    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_green_BaseColor.png",
-    "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_AlbedoTransparency.png",
-    "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_Ambient_Occlusion.png",
-    "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_MetallicSmoothness.png",
-    "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_Normal.png"
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_green_BaseColor.png"
   ],
   "models": [
     {

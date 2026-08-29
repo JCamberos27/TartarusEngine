@@ -118,6 +118,14 @@ void Window::Show() {
     glfwShowWindow(m_Handle);
 }
 
+void Window::ShowFatalErrorDialog(const std::string& message) {
+#if defined(_WIN32)
+    MessageBoxA(nullptr, message.c_str(), "Tartarus Engine", MB_ICONERROR | MB_OK);
+#else
+    (void)message;
+#endif
+}
+
 void Window::SetFullscreen(bool fullscreen) {
     if (fullscreen == m_IsFullscreen) return;
 
