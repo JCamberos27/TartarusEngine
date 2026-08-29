@@ -22,6 +22,7 @@
 #include "GameViewPanel.h"
 #include "ProjectPaths.h"
 #include "SplashScreen.h"
+#include "GLDebug.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -183,6 +184,8 @@ int main() {
         splash.Show("assets/branding/splash.png", 1.0f);
 
         Window window(1280, 720, "Tartarus Engine");
+        // GL context + loader are live now. No-op unless a Debug build or TARTARUS_GL_DEBUG=1.
+        GLDebug::Init();
         Input::Init(window.Handle());
         window.SetCursorLocked(true);
         window.Maximize(); // opens maximized (not true fullscreen, no monitor video-mode switch); F11 still enters fullscreen

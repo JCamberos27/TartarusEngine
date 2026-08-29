@@ -40,7 +40,11 @@ void Input::Update() {
     s_ScrollY = s_ScrollAccum;
     s_ScrollAccum = 0.0;
 
-    for (int key = 0; key < 512; ++key) {
+    // Only GLFW_KEY_SPACE (32) .. GLFW_KEY_LAST (348) are valid arguments to glfwGetKey — any
+    // code outside that range raises GLFW_INVALID_VALUE (previously silent; now caught by the
+    // error callback). The arrays stay sized 512 and indexed by raw keycode; slots outside this
+    // range are just never touched, since nothing in the engine maps a key there.
+    for (int key = GLFW_KEY_SPACE; key <= GLFW_KEY_LAST; ++key) {
         s_PrevKeys[key] = s_CurKeys[key];
         s_CurKeys[key] = glfwGetKey(s_Window, key) == GLFW_PRESS;
     }
