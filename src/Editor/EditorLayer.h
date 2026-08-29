@@ -322,6 +322,18 @@ private:
     // the persisted preferences this timer is measured against.
     float m_AutoSaveTimer = 0.0f;
 
+    // --- Crash-recovery auto-save --------------------------------------------------------
+    // The auto-save timer writes a full-scene snapshot to a sidecar file (<stem>.recovery.json)
+    // NEXT TO the scene file, rather than overwriting the scene file itself — so an unnoticed
+    // bad edit that happens to auto-save can never become the only copy. The real scene file
+    // changes only on an explicit Save/Save As. On launch, a recovery file newer than the scene
+    // file raises a Restore/Discard modal (m_RecoveryPromptPending, drawn by DrawRecoveryPrompt).
+    static std::string RecoveryPathFor(const std::string& scenePath);
+    void WriteRecoverySnapshot(const World& world, const AssetLibrary& assets);
+    void ClearRecoverySnapshot(); // deletes the recovery file for m_CurrentScenePath if present; silent
+    void DrawRecoveryPrompt(World& world, AssetLibrary& assets);
+    bool m_RecoveryPromptPending = false;
+
     GizmoOp m_GizmoOp = GizmoOp::Translate;
     bool m_GizmoLocalSpace = false; // false = world-aligned handles, true = aligned to the object's own rotation
     float m_GizmoSize = 0.1f;       // ImGuizmo's clip-space size units; 0.1 is its own built-in default
