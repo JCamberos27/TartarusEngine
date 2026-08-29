@@ -43,3 +43,12 @@ copied next to the exe automatically by a post-build step, no other assets/DLLs 
 - The renderer is intentionally single-shader/single-pass; add a material system,
   texturing (there's no image loader yet — vertex colors/uniform colors only), and a
   proper render queue as the game grows.
+
+## License
+
+Tartarus Engine is released under the [MIT License](LICENSE).
+
+Bundled and fetched third-party components (miniaudio, stb, nlohmann/json, Font Awesome,
+GLFW, GLM, Assimp, EnTT, Dear ImGui, ImGuizmo, libtiff) remain under their own licenses —
+see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Branding assets under
+`extern/branding/` are not covered by the MIT license.
