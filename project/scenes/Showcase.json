@@ -1,0 +1,822 @@
+{
+  "assetFolders": [
+    "Scenes",
+    "Shapes"
+  ],
+  "assetMeta": [
+    {
+      "folder": "Shapes",
+      "path": "primitive://plane#0"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://cube#1"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://sphere#2"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://cube#3"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://cylinder#4"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://cube#5"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://cone#6"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://cube#7"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://sphere#8"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://cylinder#9"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://cube#10"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://sphere#11"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://sphere#13"
+    }
+  ],
+  "boxes": [],
+  "empties": [
+    {
+      "id": 12,
+      "name": "Key Warm",
+      "parentId": -1,
+      "position": [
+        -3.5,
+        4.2,
+        -5.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "light": {
+        "color": [
+          1.0,
+          0.55,
+          0.25
+        ],
+        "intensity": 90.0,
+        "kind": "point",
+        "range": 26.0,
+        "spotAngle": 35.0
+      }
+    },
+    {
+      "id": 14,
+      "name": "Key Cool",
+      "parentId": -1,
+      "position": [
+        4.0,
+        3.6,
+        -12.0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "light": {
+        "color": [
+          0.35,
+          0.6,
+          1.0
+        ],
+        "intensity": 85.0,
+        "kind": "point",
+        "range": 26.0,
+        "spotAngle": 35.0
+      }
+    },
+    {
+      "id": 15,
+      "name": "Fill",
+      "parentId": -1,
+      "position": [
+        0,
+        8.5,
+        -11.0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "light": {
+        "color": [
+          0.8,
+          0.84,
+          1.0
+        ],
+        "intensity": 38.0,
+        "kind": "point",
+        "range": 34.0,
+        "spotAngle": 35.0
+      }
+    },
+    {
+      "id": 16,
+      "name": "Rim Back",
+      "parentId": -1,
+      "position": [
+        0,
+        3.0,
+        -22.0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "light": {
+        "color": [
+          0.55,
+          0.45,
+          0.95
+        ],
+        "intensity": 60.0,
+        "kind": "point",
+        "range": 30.0,
+        "spotAngle": 35.0
+      }
+    }
+  ],
+  "libraryModels": [
+    "primitive://plane#0",
+    "primitive://cube#1",
+    "primitive://sphere#2",
+    "primitive://cube#3",
+    "primitive://cylinder#4",
+    "primitive://cube#5",
+    "primitive://cone#6",
+    "primitive://cube#7",
+    "primitive://sphere#8",
+    "primitive://cylinder#9",
+    "primitive://cube#10",
+    "primitive://sphere#11",
+    "primitive://sphere#13"
+  ],
+  "libraryPrefabs": [],
+  "librarySounds": [],
+  "libraryTextures": [],
+  "models": [
+    {
+      "id": 0,
+      "name": "Ground",
+      "parentId": -1,
+      "path": "primitive://plane#0",
+      "position": [
+        0,
+        0,
+        -12
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        70,
+        1,
+        70
+      ],
+      "soundPath": "",
+      "material": {
+        "baseColor": [
+          0.13,
+          0.13,
+          0.16
+        ],
+        "metallic": 0.0,
+        "roughness": 0.8,
+        "emissiveColor": [
+          0,
+          0,
+          0
+        ],
+        "emissiveStrength": 1.0,
+        "albedoMap": "",
+        "normalMap": "",
+        "metallicRoughnessMap": "",
+        "metallicMap": "",
+        "roughnessMap": "",
+        "aoMap": "",
+        "emissiveMap": ""
+      },
+      "collider": {
+        "isTrigger": false
+      }
+    },
+    {
+      "id": 1,
+      "name": "Plinth",
+      "parentId": -1,
+      "path": "primitive://cube#1",
+      "position": [
+        0,
+        0.35,
+        -10
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        3.6,
+        0.7,
+        3.6
+      ],
+      "soundPath": "",
+      "material": {
+        "baseColor": [
+          0.28,
+          0.28,
+          0.32
+        ],
+        "metallic": 0.0,
+        "roughness": 0.55,
+        "emissiveColor": [
+          0,
+          0,
+          0
+        ],
+        "emissiveStrength": 1.0,
+        "albedoMap": "",
+        "normalMap": "",
+        "metallicRoughnessMap": "",
+        "metallicMap": "",
+        "roughnessMap": "",
+        "aoMap": "",
+        "emissiveMap": ""
+      },
+      "collider": {
+        "isTrigger": false
+      }
+    },
+    {
+      "id": 2,
+      "name": "Pearl Ball",
+      "parentId": -1,
+      "path": "primitive://sphere#2",
+      "position": [
+        0,
+        2.05,
+        -10
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.7,
+        2.7,
+        2.7
+      ],
+      "soundPath": "",
+      "material": {
+        "baseColor": [
+          0.9,
+          0.9,
+          0.93
+        ],
+        "metallic": 0.1,
+        "roughness": 0.22,
+        "emissiveColor": [
+          0,
+          0,
+          0
+        ],
+        "emissiveStrength": 1.0,
+        "albedoMap": "",
+        "normalMap": "",
+        "metallicRoughnessMap": "",
+        "metallicMap": "",
+        "roughnessMap": "",
+        "aoMap": "",
+        "emissiveMap": ""
+      },
+      "collider": {
+        "isTrigger": false
+      }
+    },
+    {
+      "id": 3,
+      "name": "Plinth L",
+      "parentId": -1,
+      "path": "primitive://cube#3",
+      "position": [
+        -5.4,
+        0.3,
+        -8.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.4,
+        0.6,
+        2.4
+      ],
+      "soundPath": "",
+      "material": {
+        "baseColor": [
+          0.28,
+          0.28,
+          0.32
+        ],
+        "metallic": 0.0,
+        "roughness": 0.55,
+        "emissiveColor": [
+          0,
+          0,
+          0
+        ],
+        "emissiveStrength": 1.0,
+        "albedoMap": "",
+        "normalMap": "",
+        "metallicRoughnessMap": "",
+        "metallicMap": "",
+        "roughnessMap": "",
+        "aoMap": "",
+        "emissiveMap": ""
+      },
+      "collider": {
+        "isTrigger": false
+      }
+    },
+    {
+      "id": 4,
+      "name": "Amber",
+      "parentId": -1,
+      "path": "primitive://cylinder#4",
+      "position": [
+        -5.4,
+        1.45,
+        -8.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1.4,
+        1.7,
+        1.4
+      ],
+      "soundPath": "",
+      "material": {
+        "baseColor": [
+          0.95,
+          0.55,
+          0.18
+        ],
+        "metallic": 0.05,
+        "roughness": 0.45,
+        "emissiveColor": [
+          0,
+          0,
+          0
+        ],
+        "emissiveStrength": 1.0,
+        "albedoMap": "",
+        "normalMap": "",
+        "metallicRoughnessMap": "",
+        "metallicMap": "",
+        "roughnessMap": "",
+        "aoMap": "",
+        "emissiveMap": ""
+      },
+      "collider": {
+        "isTrigger": false
+      }
+    },
+    {
+      "id": 5,
+      "name": "Plinth R",
+      "parentId": -1,
+      "path": "primitive://cube#5",
+      "position": [
+        5.4,
+        0.3,
+        -8.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.4,
+        0.6,
+        2.4
+      ],
+      "soundPath": "",
+      "material": {
+        "baseColor": [
+          0.28,
+          0.28,
+          0.32
+        ],
+        "metallic": 0.0,
+        "roughness": 0.55,
+        "emissiveColor": [
+          0,
+          0,
+          0
+        ],
+        "emissiveStrength": 1.0,
+        "albedoMap": "",
+        "normalMap": "",
+        "metallicRoughnessMap": "",
+        "metallicMap": "",
+        "roughnessMap": "",
+        "aoMap": "",
+        "emissiveMap": ""
+      },
+      "collider": {
+        "isTrigger": false
+      }
+    },
+    {
+      "id": 6,
+      "name": "Teal",
+      "parentId": -1,
+      "path": "primitive://cone#6",
+      "position": [
+        5.4,
+        1.55,
+        -8.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1.7,
+        2.0,
+        1.7
+      ],
+      "soundPath": "",
+      "material": {
+        "baseColor": [
+          0.2,
+          0.7,
+          0.78
+        ],
+        "metallic": 0.05,
+        "roughness": 0.4,
+        "emissiveColor": [
+          0,
+          0,
+          0
+        ],
+        "emissiveStrength": 1.0,
+        "albedoMap": "",
+        "normalMap": "",
+        "metallicRoughnessMap": "",
+        "metallicMap": "",
+        "roughnessMap": "",
+        "aoMap": "",
+        "emissiveMap": ""
+      },
+      "collider": {
+        "isTrigger": false
+      }
+    },
+    {
+      "id": 7,
+      "name": "Violet Block",
+      "parentId": -1,
+      "path": "primitive://cube#7",
+      "position": [
+        -8.6,
+        1.1,
+        -15.0
+      ],
+      "rotation": [
+        0,
+        25,
+        0
+      ],
+      "scale": [
+        2.2,
+        2.2,
+        2.2
+      ],
+      "soundPath": "",
+      "material": {
+        "baseColor": [
+          0.55,
+          0.28,
+          0.72
+        ],
+        "metallic": 0.05,
+        "roughness": 0.5,
+        "emissiveColor": [
+          0,
+          0,
+          0
+        ],
+        "emissiveStrength": 1.0,
+        "albedoMap": "",
+        "normalMap": "",
+        "metallicRoughnessMap": "",
+        "metallicMap": "",
+        "roughnessMap": "",
+        "aoMap": "",
+        "emissiveMap": ""
+      },
+      "collider": {
+        "isTrigger": false
+      }
+    },
+    {
+      "id": 8,
+      "name": "Rose Ball",
+      "parentId": -1,
+      "path": "primitive://sphere#8",
+      "position": [
+        8.6,
+        1.2,
+        -15.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "soundPath": "",
+      "material": {
+        "baseColor": [
+          0.88,
+          0.3,
+          0.42
+        ],
+        "metallic": 0.05,
+        "roughness": 0.45,
+        "emissiveColor": [
+          0,
+          0,
+          0
+        ],
+        "emissiveStrength": 1.0,
+        "albedoMap": "",
+        "normalMap": "",
+        "metallicRoughnessMap": "",
+        "metallicMap": "",
+        "roughnessMap": "",
+        "aoMap": "",
+        "emissiveMap": ""
+      },
+      "collider": {
+        "isTrigger": false
+      }
+    },
+    {
+      "id": 9,
+      "name": "Lime Post",
+      "parentId": -1,
+      "path": "primitive://cylinder#9",
+      "position": [
+        -2.6,
+        1.6,
+        -18.0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.9,
+        3.2,
+        0.9
+      ],
+      "soundPath": "",
+      "material": {
+        "baseColor": [
+          0.55,
+          0.85,
+          0.3
+        ],
+        "metallic": 0.05,
+        "roughness": 0.5,
+        "emissiveColor": [
+          0,
+          0,
+          0
+        ],
+        "emissiveStrength": 1.0,
+        "albedoMap": "",
+        "normalMap": "",
+        "metallicRoughnessMap": "",
+        "metallicMap": "",
+        "roughnessMap": "",
+        "aoMap": "",
+        "emissiveMap": ""
+      },
+      "collider": {
+        "isTrigger": false
+      }
+    },
+    {
+      "id": 10,
+      "name": "Slate Step",
+      "parentId": -1,
+      "path": "primitive://cube#10",
+      "position": [
+        3.0,
+        0.55,
+        -18.5
+      ],
+      "rotation": [
+        0,
+        -18,
+        0
+      ],
+      "scale": [
+        3.0,
+        1.1,
+        3.0
+      ],
+      "soundPath": "",
+      "material": {
+        "baseColor": [
+          0.3,
+          0.34,
+          0.44
+        ],
+        "metallic": 0.05,
+        "roughness": 0.65,
+        "emissiveColor": [
+          0,
+          0,
+          0
+        ],
+        "emissiveStrength": 1.0,
+        "albedoMap": "",
+        "normalMap": "",
+        "metallicRoughnessMap": "",
+        "metallicMap": "",
+        "roughnessMap": "",
+        "aoMap": "",
+        "emissiveMap": ""
+      },
+      "collider": {
+        "isTrigger": false
+      }
+    },
+    {
+      "id": 11,
+      "name": "Orb Warm",
+      "parentId": -1,
+      "path": "primitive://sphere#11",
+      "position": [
+        -3.5,
+        4.2,
+        -5.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "soundPath": "",
+      "material": {
+        "baseColor": [
+          0,
+          0,
+          0
+        ],
+        "metallic": 0.0,
+        "roughness": 1.0,
+        "emissiveColor": [
+          1.0,
+          0.55,
+          0.2
+        ],
+        "emissiveStrength": 6.0,
+        "albedoMap": "",
+        "normalMap": "",
+        "metallicRoughnessMap": "",
+        "metallicMap": "",
+        "roughnessMap": "",
+        "aoMap": "",
+        "emissiveMap": ""
+      }
+    },
+    {
+      "id": 13,
+      "name": "Orb Cool",
+      "parentId": -1,
+      "path": "primitive://sphere#13",
+      "position": [
+        4.0,
+        3.6,
+        -12.0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.35,
+        0.35,
+        0.35
+      ],
+      "soundPath": "",
+      "material": {
+        "baseColor": [
+          0,
+          0,
+          0
+        ],
+        "metallic": 0.0,
+        "roughness": 1.0,
+        "emissiveColor": [
+          0.3,
+          0.6,
+          1.0
+        ],
+        "emissiveStrength": 6.0,
+        "albedoMap": "",
+        "normalMap": "",
+        "metallicRoughnessMap": "",
+        "metallicMap": "",
+        "roughnessMap": "",
+        "aoMap": "",
+        "emissiveMap": ""
+      }
+    }
+  ],
+  "skyHorizonColor": [
+    0.16,
+    0.15,
+    0.24
+  ],
+  "skyZenithColor": [
+    0.03,
+    0.03,
+    0.07
+  ]
+}
