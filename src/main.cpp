@@ -766,6 +766,10 @@ int main() {
         AudioEngine::Shutdown();
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
+        // Release builds use the GUI subsystem (see CMakeLists), so there's no console for the
+        // message above to land in — without this, a failure to start would just look like the
+        // engine silently doing nothing.
+        Window::ShowFatalErrorDialog(std::string("Tartarus Engine failed to start.\n\n") + e.what());
         return 1;
     }
 

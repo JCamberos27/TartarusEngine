@@ -103,6 +103,21 @@ endif()
 
 add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES})
 
+# A console-subsystem build makes Windows open a terminal window alongside the editor, which
+# looks like a launch error to anyone who didn't expect it. Release builds use the GUI
+# subsystem so only the editor appears; Debug keeps the console, where seeing stdout/stderr
+# immediately is worth more than the cosmetics.
+#
+# /ENTRY:mainCRTStartup is required alongside it: the GUI subsystem makes MSVC look for
+# WinMain, and the engine has an ordinary main(). Log output still reaches the editor's own
+# Console panel either way, and shell redirection to a file keeps working in both.
+if(WIN32)
+  set_target_properties(TartarusEngine PROPERTIES
+    WIN32_EXECUTABLE $<NOT:$<CONFIG:Debug>>)
+  target_link_options(TartarusEngine PRIVATE
+    $<$<NOT:$<CONFIG:Debug>>:/ENTRY:mainCRTStartup>)
+endif()
+
 target_include_directories(TartarusEngine PRIVATE
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/src/Core
