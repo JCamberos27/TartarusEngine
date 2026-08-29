@@ -380,6 +380,24 @@ void EditorLayer::Init(GLFWwindow* window) {
     // — see ProjectPaths.h. main.cpp resolves the same path for its initial load.
     m_CurrentScenePath = ProjectPaths::Resolve("scene.json");
 
+    // Crash recovery: if the auto-save timer wrote a recovery snapshot in a previous session
+    // that never got an explicit Save afterward, that file is now newer than the scene file
+    // (which a clean exit would have re-saved, then deleted the snapshot). Note it here; Draw()
+    // raises the Restore/Discard modal on the first editor frame, once ImGui + the World exist.
+    {
+        std::error_code ec;
+        const std::string recoveryPath = RecoveryPathFor(m_CurrentScenePath);
+        if (std::filesystem::exists(recoveryPath, ec) && !ec) {
+            const bool sceneExists = std::filesystem::exists(m_CurrentScenePath, ec);
+            auto recT = std::filesystem::last_write_time(recoveryPath, ec);
+            if (!ec) {
+                auto sceneT = sceneExists ? std::filesystem::last_write_time(m_CurrentScenePath, ec)
+                                          : std::filesystem::file_time_type::min();
+                if (!ec && (!sceneExists || recT > sceneT)) m_RecoveryPromptPending = true;
+            }
+        }
+    }
+
     // Read the monitor's content scale (1.0 at 96 DPI, 2.0 at Windows' 200% scaling, which is
     // the common default on 4K displays) once at startup, and bake it into font pixel sizes and
     // the layout constants below rather than relying on ImGui's blurry FontGlobalScale — so the
@@ -500,9 +518,74 @@ void EditorLayer::Init(GLFWwindow* window) {
 }
 
 void EditorLayer::Shutdown() {
+    // Shutdown() is only reached on a clean exit, and main.cpp saves the real scene file just
+    // before calling it — so any recovery snapshot is now stale and would otherwise trigger a
+    // spurious "restore unsaved changes?" prompt on the next launch.
+    ClearRecoverySnapshot();
+
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
+}
+
+std::string EditorLayer::RecoveryPathFor(const std::string& scenePath) {
+    std::filesystem::path p(scenePath);
+    p.replace_extension(); // "…/scene.json" -> "…/scene"
+    return p.string() + ".recovery.json";
+}
+
+void EditorLayer::WriteRecoverySnapshot(const World& world, const AssetLibrary& assets) {
+    const std::string path = RecoveryPathFor(m_CurrentScenePath);
+    if (SceneSerializer::Save(world, assets, path)) {
+        Log::Info("Auto-save: wrote recovery snapshot (unsaved changes are safe if the editor closes unexpectedly).");
+    }
+}
+
+void EditorLayer::ClearRecoverySnapshot() {
+    std::error_code ec;
+    std::filesystem::remove(RecoveryPathFor(m_CurrentScenePath), ec); // absent file is not an error
+}
+
+void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
+    if (!m_RecoveryPromptPending) return;
+
+    if (!ImGui::IsPopupOpen("Recover Unsaved Changes?")) {
+        ImGui::OpenPopup("Recover Unsaved Changes?");
+    }
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (ImGui::BeginPopupModal("Recover Unsaved Changes?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted(
+            "A recovery snapshot newer than the saved scene was found - the editor\n"
+            "likely closed before these changes were saved.\n\n"
+            "Restore the unsaved changes, or discard them and keep the saved scene?");
+        ImGui::Separator();
+
+        if (ImGui::Button("Restore", ImVec2(120.0f, 0.0f))) {
+            const std::string recoveryPath = RecoveryPathFor(m_CurrentScenePath);
+            if (SceneSerializer::Load(world, assets, recoveryPath)) {
+                ClearSelection();
+                m_UndoStack.clear();
+                m_RedoStack.clear();
+                m_Dirty = true; // recovered content isn't in the real scene file yet
+                Log::Info("Restored unsaved changes from the recovery snapshot.");
+            } else {
+                Log::Error("Recovery snapshot could not be read - kept the saved scene instead.");
+            }
+            ClearRecoverySnapshot();
+            m_RecoveryPromptPending = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Discard", ImVec2(120.0f, 0.0f))) {
+            ClearRecoverySnapshot();
+            m_RecoveryPromptPending = false;
+            Log::Info("Discarded the recovery snapshot; opened the saved scene.");
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 }
 
 void EditorLayer::BeginFrame() {
@@ -1108,21 +1191,26 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_AssetsPtr = &assets; // see the member comment - lets PushUndo() snapshot AssetLibrary
                            // state without needing every one of its call sites to pass it in
 
+    // First editor frame after a crash-interrupted session: offer to restore the auto-saved
+    // recovery snapshot. No-op unless Init() flagged one as newer than the scene file.
+    DrawRecoveryPrompt(world, assets);
+
     // Auto-save: only ticks here (Draw() is editor-mode-only, per main.cpp) so it never fires
     // mid-Play - the same reason OnExitPlayMode's revert-to-snapshot exists, autosaving
     // transient gameplay state would be wrong. Skipped entirely when nothing's actually unsaved,
-    // so a session where you're just looking around never writes the file over and over.
+    // so a session where you're just looking around never writes anything.
+    //
+    // Crucially it writes a RECOVERY SNAPSHOT (see WriteRecoverySnapshot), not the real scene
+    // file, and does NOT clear m_Dirty: the timer is a crash safety net, and an unnoticed bad
+    // edit must never be able to auto-overwrite the only saved copy. The scene file changes
+    // only on an explicit Save / Save As.
     const EditorSettings& prefsForAutoSave = EditorSettings::Get();
     if (prefsForAutoSave.AutoSaveEnabled) {
         m_AutoSaveTimer += dt;
         float intervalSeconds = std::max(1.0f, prefsForAutoSave.AutoSaveIntervalMinutes * 60.0f);
         if (m_AutoSaveTimer >= intervalSeconds) {
             m_AutoSaveTimer = 0.0f;
-            if (m_Dirty) {
-                SceneSerializer::Save(world, assets, m_CurrentScenePath);
-                m_Dirty = false;
-                Log::Info("Auto-saved '" + m_CurrentScenePath + "'.");
-            }
+            if (m_Dirty) WriteRecoverySnapshot(world, assets);
         }
     } else {
         m_AutoSaveTimer = 0.0f; // don't let it silently accumulate while disabled
@@ -1444,6 +1532,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             SceneSerializer::Save(world, assets, m_CurrentScenePath);
             m_Dirty = false;
             m_AutoSaveTimer = 0.0f; // don't auto-save again just seconds after a manual save
+            ClearRecoverySnapshot(); // the real file is now current — the snapshot is stale
         }
         if (HasAnySelection() && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
             DeleteSelection(world);
@@ -1617,6 +1706,7 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
 
 void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::string& path) {
     if (path.empty() || !SceneSerializer::Load(world, assets, path)) return;
+    ClearRecoverySnapshot(); // drop the outgoing scene's snapshot before switching away from it
     m_CurrentScenePath = path;
     ClearSelection();
     m_UndoStack.clear();
@@ -1958,6 +2048,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 m_RedoStack.clear();
                 m_Dirty = false;
                 m_AutoSaveTimer = 0.0f;
+                ClearRecoverySnapshot(); // starting fresh — a leftover snapshot must not prompt next launch
             }
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open...")) {
@@ -1968,12 +2059,14 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 SceneSerializer::Save(world, assets, m_CurrentScenePath);
                 m_Dirty = false;
                 m_AutoSaveTimer = 0.0f;
+                ClearRecoverySnapshot();
             }
             if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As...")) {
                 std::string path = FileDialog::SaveFile(
                     "Scene Files\0*.json\0All Files\0*.*\0", "json", m_Window);
                 if (!path.empty()) {
                     SceneSerializer::Save(world, assets, path);
+                    ClearRecoverySnapshot();   // clears the snapshot for the PREVIOUS path (still current here)
                     m_CurrentScenePath = path;
                     m_Dirty = false;
                     m_AutoSaveTimer = 0.0f;
@@ -1981,7 +2074,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             }
             ImGui::Separator();
             ImGui::TextDisabled("Current: %s%s", std::filesystem::path(m_CurrentScenePath).filename().string().c_str(), m_Dirty ? " (unsaved)" : "");
-            ImGui::TextDisabled("Also auto-saves on exit,\nauto-loads on launch.");
+            ImGui::TextDisabled("Saves on exit; auto-loads on launch.\nAuto-save keeps a crash-recovery snapshot\nbetween manual saves.");
             if (EditorSettings::Get().AutoSaveEnabled) {
                 float remaining = std::max(0.0f, EditorSettings::Get().AutoSaveIntervalMinutes * 60.0f - m_AutoSaveTimer);
                 ImGui::TextDisabled("Next auto-save in %.0fs%s", remaining, m_Dirty ? "" : " (nothing to save)");

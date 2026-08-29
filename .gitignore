@@ -4,3 +4,6 @@ out/
 configure_log.txt
 *.pdb
 Library/
+
+# Auto-save crash-recovery snapshots — regenerated at runtime, never authoritative
+*.recovery.json
