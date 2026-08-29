@@ -25,6 +25,11 @@ public:
     void SetTitle(const std::string& title);
     void Maximize();
 
+    // The window is created hidden and stays hidden until this is called — see the constructor.
+    // Call it only after a frame has actually been presented, so it appears already painted
+    // instead of flashing an undefined framebuffer.
+    void Show();
+
     // True fullscreen (takes over the monitor's own video mode), not a borderless-window
     // fake. Toggling back to windowed restores whatever position/size the window had
     // before it went fullscreen.
