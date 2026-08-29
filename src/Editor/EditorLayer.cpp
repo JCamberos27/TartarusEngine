@@ -4342,18 +4342,26 @@ void EditorLayer::SetFolderExpandedRecursive(AssetLibrary& assets, const std::st
 }
 
 namespace {
-// Draws `text` left-aligned at `pos` as at most `maxLines` lines that fit `wrapWidth`, breaking
-// on word boundaries where possible; if the whole string still doesn't fit, the last line is
-// trimmed at the character level and gets a trailing "…". This replaces ImDrawList::AddText's
-// own wrap_width mode for grid labels, which happily splits a single long word across lines
-// ("Chesterfi / eld Sofa"). Returns true when anything was clipped, so the caller can add a
-// hover tooltip with the full name.
+// Draws `text` as at most `maxLines` lines that fit `wrapWidth`, each line horizontally
+// centred within [pos.x, pos.x + wrapWidth] under the tile's icon. Breaks on word boundaries
+// where possible; if the whole string still doesn't fit, the last line is trimmed at the
+// character level and gets a trailing "…". Replaces ImDrawList::AddText's own wrap_width mode,
+// which splits a single long word across lines ("Chesterfi / eld Sofa"). Returns true when
+// anything was clipped, so the caller can add a hover tooltip with the full name.
 bool DrawClampedGridLabel(ImDrawList* dl, ImVec2 pos, float wrapWidth, float lineHeight,
                           ImU32 color, const char* text, int maxLines = 2) {
     ImFont* font = ImGui::GetFont();
     const float sz = ImGui::GetFontSize();
     const char* const textEnd = text + strlen(text);
     const char* s = text;
+    const float left = pos.x;
+
+    // Draw one already-delimited run centred on this line, then advance to the next line.
+    auto drawCentered = [&](const char* a, const char* b) {
+        float w = font->CalcTextSizeA(sz, FLT_MAX, 0.0f, a, b).x;
+        dl->AddText(font, sz, ImVec2(left + (wrapWidth - w) * 0.5f, pos.y), color, a, b);
+        pos.y += lineHeight;
+    };
 
     for (int line = 0; line < maxLines; ++line) {
         if (s >= textEnd) return false;
@@ -4361,7 +4369,7 @@ bool DrawClampedGridLabel(ImDrawList* dl, ImVec2 pos, float wrapWidth, float lin
 
         // Whole remainder fits on this line?
         if (font->CalcTextSizeA(sz, FLT_MAX, 0.0f, s, textEnd).x <= wrapWidth) {
-            dl->AddText(font, sz, pos, color, s, textEnd);
+            drawCentered(s, textEnd);
             return false;
         }
 
@@ -4369,22 +4377,23 @@ bool DrawClampedGridLabel(ImDrawList* dl, ImVec2 pos, float wrapWidth, float lin
             // Word-wrap break for this line, then continue with the rest below.
             const char* brk = font->CalcWordWrapPosition(sz, s, textEnd, wrapWidth);
             if (brk <= s) brk = s + 1; // guarantee forward progress on an unbreakable word
-            dl->AddText(font, sz, pos, color, s, brk);
+            drawCentered(s, brk);
             s = brk;
             while (s < textEnd && (*s == ' ' || *s == '\n')) ++s; // skip the breaking blank
-            pos.y += lineHeight;
             continue;
         }
 
-        // Last line and it overflows: character-trim to leave room for the ellipsis.
+        // Last line and it overflows: character-trim to leave room for the ellipsis, then
+        // centre the visible text + "…" together.
         static const char* kEllipsis = "\xE2\x80\xA6";
         const float ellW = font->CalcTextSizeA(sz, FLT_MAX, 0.0f, kEllipsis).x;
         const char* fitEnd = s;
         font->CalcTextSizeA(sz, ImMax(wrapWidth - ellW, 1.0f), 0.0f, s, textEnd, &fitEnd);
         if (fitEnd <= s) fitEnd = s + 1; // always show at least one glyph
-        dl->AddText(font, sz, pos, color, s, fitEnd);
-        ImVec2 ellPos(pos.x + font->CalcTextSizeA(sz, FLT_MAX, 0.0f, s, fitEnd).x, pos.y);
-        dl->AddText(font, sz, ellPos, color, kEllipsis);
+        const float textW = font->CalcTextSizeA(sz, FLT_MAX, 0.0f, s, fitEnd).x;
+        const float x0 = left + (wrapWidth - (textW + ellW)) * 0.5f;
+        dl->AddText(font, sz, ImVec2(x0, pos.y), color, s, fitEnd);
+        dl->AddText(font, sz, ImVec2(x0 + textW, pos.y), color, kEllipsis);
         return true;
     }
     return true;
@@ -4790,8 +4799,11 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             }
 
             if (!isRenaming) {
-                ImVec2 labelPos(tileMin.x + 2.0f, tileMin.y + m_AssetIconSize + cellPadding);
-                bool truncated = DrawClampedGridLabel(dl, labelPos, cellWidth - 4.0f,
+                // Label box spans the whole cell (like the icon above it, which is centred in
+                // cellWidth), with a small inset so a full-width line doesn't touch the edges —
+                // DrawClampedGridLabel centres each line within this box.
+                ImVec2 labelPos(tileMin.x + 3.0f, tileMin.y + m_AssetIconSize + cellPadding);
+                bool truncated = DrawClampedGridLabel(dl, labelPos, cellWidth - 6.0f,
                     ImGui::GetTextLineHeightWithSpacing(), textColor, cell.display.c_str());
                 if (truncated && ImGui::IsItemHovered()) {
                     EditorUI::SetTooltip(cell.display.c_str());
