@@ -3,3 +3,4 @@ build/
 out/
 configure_log.txt
 *.pdb
+Library/

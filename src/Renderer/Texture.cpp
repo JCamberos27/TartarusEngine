@@ -2,6 +2,7 @@
 #include "Log.h"
 #include "gl.h"
 #include "GLStateCache.h"
+#include "TextureCache.h"
 #include "stb_image.h"
 #include <algorithm>
 #include <vector>
@@ -40,23 +41,56 @@ Texture::Texture(const std::string& path, const TextureImportSettings& settings)
 }
 
 void Texture::UploadFromFile(const TextureImportSettings& settings) {
-    // Do NOT flip on load: Model.cpp already applies Assimp's aiProcess_FlipUVs to correct
-    // the top-left-origin (FBX/glTF) vs bottom-left-origin (OpenGL) mismatch on the mesh's
-    // own UVs. Flipping the image here too double-corrects it, leaving UV islands sampling
-    // the wrong region of the texture (mirrored vertically relative to where they should be).
-    stbi_set_flip_vertically_on_load(false);
-    unsigned char* data = stbi_load(m_Path.c_str(), &m_Width, &m_Height, &m_Channels, 0);
-    if (!data) {
-        Log::Error("Texture: failed to load '" + m_Path + "'.");
-        return;
-    }
+    // Warm path: pixels already decoded and downsampled by a previous run. PNG decode dominates
+    // scene-load time (measured ~4.6s of a ~5.6s cold boot on a 22-texture library), so skipping
+    // it is the single biggest startup win available. See TextureCache.h.
+    TextureCache::Image cached;
+    bool fromCache = TextureCache::Load(m_Path, settings, cached);
 
+    // Owns the decoded pixels only on a cache miss; `uploadData` points into either this, the
+    // cache entry, or stb's buffer.
+    unsigned char* data = nullptr;
     std::vector<unsigned char> resized;
-    const unsigned char* uploadData = data;
-    int uploadW = m_Width, uploadH = m_Height;
-    if (settings.MaxTextureSize > 0 && (m_Width > settings.MaxTextureSize || m_Height > settings.MaxTextureSize)) {
-        resized = DownsampleNearest(data, m_Width, m_Height, m_Channels, settings.MaxTextureSize, uploadW, uploadH);
-        uploadData = resized.data();
+    const unsigned char* uploadData = nullptr;
+    int uploadW = 0, uploadH = 0;
+
+    if (fromCache) {
+        m_Width = cached.SourceWidth;
+        m_Height = cached.SourceHeight;
+        m_Channels = cached.Channels;
+        uploadW = cached.Width;
+        uploadH = cached.Height;
+        uploadData = cached.Pixels.data();
+    } else {
+        // Do NOT flip on load: Model.cpp already applies Assimp's aiProcess_FlipUVs to correct
+        // the top-left-origin (FBX/glTF) vs bottom-left-origin (OpenGL) mismatch on the mesh's
+        // own UVs. Flipping the image here too double-corrects it, leaving UV islands sampling
+        // the wrong region of the texture (mirrored vertically relative to where they should be).
+        stbi_set_flip_vertically_on_load(false);
+        data = stbi_load(m_Path.c_str(), &m_Width, &m_Height, &m_Channels, 0);
+        if (!data) {
+            Log::Error("Texture: failed to load '" + m_Path + "'.");
+            return;
+        }
+
+        uploadData = data;
+        uploadW = m_Width;
+        uploadH = m_Height;
+        if (settings.MaxTextureSize > 0 && (m_Width > settings.MaxTextureSize || m_Height > settings.MaxTextureSize)) {
+            resized = DownsampleNearest(data, m_Width, m_Height, m_Channels, settings.MaxTextureSize, uploadW, uploadH);
+            uploadData = resized.data();
+        }
+
+        // Bake the result for next time — post-downsample, so the cache stores exactly the
+        // bytes glTexImage2D receives below.
+        TextureCache::Image entry;
+        entry.SourceWidth = m_Width;
+        entry.SourceHeight = m_Height;
+        entry.Width = uploadW;
+        entry.Height = uploadH;
+        entry.Channels = m_Channels;
+        entry.Pixels.assign(uploadData, uploadData + (size_t)uploadW * uploadH * m_Channels);
+        TextureCache::Store(m_Path, settings, entry);
     }
 
     GLenum format = GL_RGB;
@@ -104,7 +138,7 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
 
-    stbi_image_free(data);
+    if (data) stbi_image_free(data); // null on the cache-hit path, where stb never ran
     m_Settings = settings;
 }
 
