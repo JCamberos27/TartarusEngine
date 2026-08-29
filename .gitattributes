@@ -1,0 +1,51 @@
+# Normalize line endings: LF in the repository, native on checkout. This is what silences
+# git's "LF will be replaced by CRLF" warnings — the working copy stays CRLF on Windows,
+# the committed blobs stay LF, so diffs don't churn if the project is ever touched from
+# another platform or editor.
+* text=auto
+
+# Sources and text content — normalized explicitly rather than relying on content sniffing.
+*.c      text
+*.cpp    text
+*.h      text
+*.hpp    text
+*.inl    text
+*.glsl   text
+*.md     text
+*.txt    text
+*.json   text
+*.cmake  text
+*.rc     text
+*.ps1    text eol=crlf
+*.bat    text eol=crlf
+
+# Binary — never normalized, never diffed as text.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.tga    binary
+*.bmp    binary
+*.tif    binary
+*.tiff   binary
+*.ico    binary
+*.ttf    binary
+*.otf    binary
+*.fbx    binary
+*.glb    binary
+*.wav    binary
+*.mp3    binary
+*.ogg    binary
+*.flac   binary
+*.exe    binary
+*.dll    binary
+*.lib    binary
+*.pdb    binary
+
+# Vendored third-party single-header libraries — excluded from language stats and collapsed
+# in pull request diffs, since they aren't this project's code (see THIRD-PARTY-NOTICES.md).
+extern/miniaudio.h        linguist-vendored
+extern/stb_image.h        linguist-vendored
+extern/stb_image_write.h  linguist-vendored
+extern/json.hpp           linguist-vendored
+extern/IconsFontAwesome6.h linguist-vendored
+extern/ImViewGuizmo.h     linguist-vendored
