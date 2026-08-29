@@ -1,8 +1,19 @@
 #include "Window.h"
 #include "gl.h"
+#include "Log.h"
 #include <GLFW/glfw3.h>
 #include <stdexcept>
 #include <iostream>
+#include <string>
+
+namespace {
+// Installed before glfwInit() so it also catches init-time failures. GLFW otherwise reports
+// errors only through this callback — with none set, a failed window/context/monitor call is
+// completely silent. Routed into the engine Log (which mirrors to stderr) like everything else.
+void GlfwErrorCallback(int code, const char* description) {
+    Log::Error("GLFW error " + std::to_string(code) + ": " + (description ? description : "(no description)"));
+}
+} // namespace
 
 #if defined(_WIN32)
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -37,6 +48,8 @@ void ApplyBlackTitleBar(GLFWwindow* handle) {
 
 Window::Window(int width, int height, const std::string& title)
     : m_Width(width), m_Height(height) {
+    glfwSetErrorCallback(GlfwErrorCallback);
+
     if (!glfwInit()) {
         throw std::runtime_error("Failed to initialize GLFW");
     }
