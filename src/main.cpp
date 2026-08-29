@@ -21,6 +21,7 @@
 #include "Frustum.h"
 #include "GameViewPanel.h"
 #include "ProjectPaths.h"
+#include "SplashScreen.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -175,6 +176,12 @@ static void UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm:
 
 int main() {
     try {
+        // Up before anything else so it covers the whole startup, including the GL context
+        // creation and shader compiles below. The main window stays hidden until its first
+        // frame is presented (see Window::Show), so the two never overlap.
+        SplashScreen splash;
+        splash.Show("assets/branding/splash.png", 1.0f);
+
         Window window(1280, 720, "Tartarus Engine");
         Input::Init(window.Handle());
         window.SetCursorLocked(true);
@@ -237,6 +244,7 @@ int main() {
             editor.HandleDroppedFiles(world, assets, editorCamera, editorUIVisible, paths);
         });
 
+        bool firstFramePresented = false; // gates the splash -> editor handoff at the loop's end
         bool prevF1 = false;
         bool prevF11 = false;
         bool prevEscape = false;
@@ -738,6 +746,15 @@ int main() {
             GLStateCache::Invalidate();
 
             window.SwapBuffers();
+
+            // The editor has now actually presented a frame, so revealing the window shows
+            // finished content rather than an unpainted framebuffer. Ordered swap -> show ->
+            // close so the splash never disappears before there's something to replace it.
+            if (!firstFramePresented) {
+                firstFramePresented = true;
+                window.Show();
+                splash.Close(); // blocks out any remainder of the minimum display time
+            }
         }
 
         // Closing mid-play would otherwise auto-save the transient play state — revert to the

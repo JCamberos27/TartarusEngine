@@ -146,6 +146,11 @@ add_custom_command(TARGET TartarusEngine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${CMAKE_SOURCE_DIR}/extern/branding/tartarus_engine_mark.png"
     "$<TARGET_FILE_DIR:TartarusEngine>/assets/branding/tartarus_engine_mark.png"
+  # Startup splash. Pre-scaled to its display size on purpose: the 4K source would cost more
+  # to decode than the splash is meant to hide.
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_SOURCE_DIR}/extern/branding/splash.png"
+    "$<TARGET_FILE_DIR:TartarusEngine>/assets/branding/splash.png"
 )
 
 # --- TifSplitter (optional standalone tool) ---------------------------------------------

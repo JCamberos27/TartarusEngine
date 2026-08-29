@@ -62,7 +62,9 @@ Window::Window(int width, int height, const std::string& title)
 #if defined(_WIN32)
     ApplyBlackTitleBar(m_Handle);
 #endif
-    glfwShowWindow(m_Handle);
+    // Deliberately NOT shown here. Showing before anything is drawn flashes an unpainted
+    // framebuffer (a white rectangle over garbage) for as long as loading takes. main() calls
+    // Show() once the first real frame has been rendered; the splash covers the gap.
 
     glfwMakeContextCurrent(m_Handle);
     glfwSwapInterval(1); // vsync
@@ -110,6 +112,10 @@ void Window::SetTitle(const std::string& title) {
 
 void Window::Maximize() {
     glfwMaximizeWindow(m_Handle);
+}
+
+void Window::Show() {
+    glfwShowWindow(m_Handle);
 }
 
 void Window::SetFullscreen(bool fullscreen) {
