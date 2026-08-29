@@ -3,9 +3,9 @@
 #include <vector>
 #include <memory>
 #include <map>
-
-class Model;
-class Texture;
+#include <set>
+#include "Texture.h" // TextureImportSettings - stored by value below, needs the full definition
+#include "Model.h"   // ModelImportSettings - same
 
 // Tracks every asset imported through the editor so it can be reused (by path)
 // and listed in the Asset Browser panel.
@@ -14,6 +14,9 @@ public:
     std::shared_ptr<Model> LoadModel(const std::string& path);
     std::shared_ptr<Texture> LoadTexture(const std::string& path);
     void RegisterSound(const std::string& path); // sounds are played by path via AudioEngine
+    // Prefabs are tracked by path only (like sounds) rather than loaded into memory — a prefab
+    // file is read fresh on each instantiate, so editing one on disk affects the next instance.
+    void RegisterPrefab(const std::string& path);
 
     // Creates a fresh, independent primitive Model (kind: "cube"/"sphere"/"cylinder"/"cone"/
     // "plane") with its own unique synthetic path, so multiple placed primitives of the same
@@ -32,6 +35,7 @@ public:
     const std::vector<std::shared_ptr<Model>>& Models() const { return m_ModelList; }
     const std::vector<std::shared_ptr<Texture>>& Textures() const { return m_TextureList; }
     const std::vector<std::string>& Sounds() const { return m_Sounds; }
+    const std::vector<std::string>& Prefabs() const { return m_Prefabs; }
 
     // Removes an asset from the browser/cache only — safe to call even while placed objects
     // still reference it, since they hold their own shared_ptr (Model/Texture) or plain path
@@ -41,6 +45,7 @@ public:
     void RemoveModel(const std::shared_ptr<Model>& model);
     void RemoveTexture(const std::shared_ptr<Texture>& texture);
     void RemoveSound(const std::string& path);
+    void RemovePrefab(const std::string& path);
 
     // Virtual folders for browsing only (Unity Project-window style) — these never touch
     // real files on disk, they just group asset *references* by an editor-side path like
@@ -54,6 +59,31 @@ public:
     void SetDisplayName(const std::string& assetKey, const std::string& name);
     std::string DisplayName(const std::string& assetKey) const; // filename fallback already applied
 
+    // Free-text labels (Unity's Inspector "Labels" field) — independent of folder/display name,
+    // searchable via "l:label" in the Asset Browser search box. An asset can carry any number.
+    void SetLabels(const std::string& assetKey, const std::set<std::string>& labels);
+    const std::set<std::string>& Labels(const std::string& assetKey) const; // empty set if none
+    // Every label currently in use by anything, for the search bar's Label filter dropdown.
+    std::set<std::string> AllKnownLabels() const;
+
+    // Removes any currently-loaded model/texture/sound/prefab/folder whose path isn't in the
+    // corresponding keep-set — used by undo/redo's snapshot restore to make loading a prior
+    // state a true replace (an asset created after that point disappears again) without
+    // reimporting anything that's staying. Cheap: dropping a cache entry costs nothing, and
+    // nothing in the keep-set is touched, so a texture/model that's already loaded and still
+    // wanted is never re-decoded/re-imported — only genuinely-missing entries get a real
+    // Load*() call afterward, by whoever calls this. Deliberately NOT used by File > Open: that
+    // path stays additive (opening a different scene isn't "forget every known asset").
+    void PruneToKeepSet(const std::set<std::string>& modelPaths, const std::set<std::string>& texturePaths,
+        const std::set<std::string>& soundPaths, const std::set<std::string>& prefabPaths,
+        const std::set<std::string>& folderPaths);
+
+    // Clears only folder assignments, display names, and import settings — NOT the loaded
+    // assets themselves. Paired with PruneToKeepSet and a plain re-application of a snapshot's
+    // metadata, this makes metadata restore a true replace too, without touching decoded
+    // pixel/mesh data. Cheap regardless of library size (these are just small maps of strings).
+    void ClearMetadataOnly();
+
     void CreateFolder(const std::string& folderPath);
     // Renames (or, since a folder's "path" IS its nesting, re-parents) a folder, cascading the
     // prefix change to every subfolder and asset nested under it.
@@ -63,6 +93,11 @@ public:
     // silently un-nest an unknown amount of content.
     bool CanDeleteFolder(const std::string& folderPath) const;
     void DeleteFolder(const std::string& folderPath);
+    // Like DeleteFolder, but doesn't require the folder to be empty first — removes every
+    // model/texture/sound/prefab filed under it (directly or in a subfolder) and every
+    // subfolder itself. Real, irreversible-except-via-undo data loss if misused, which is why
+    // the Asset Browser only offers this behind a confirmation dialog.
+    void DeleteFolderRecursive(const std::string& folderPath);
     const std::vector<std::string>& Folders() const { return m_Folders; }
 
     // For SceneSerializer: every asset key currently known to have a folder and/or display
@@ -70,14 +105,37 @@ public:
     const std::map<std::string, std::string>& AssetFolders() const { return m_AssetFolder; }
     const std::map<std::string, std::string>& DisplayNames() const { return m_DisplayNames; }
 
+    // Import settings, keyed by asset path. Reading returns a default-constructed settings
+    // struct for a path that's never been customized, so callers never need an existence check.
+    TextureImportSettings GetTextureSettings(const std::string& path) const;
+    void SetTextureSettings(const std::string& path, const TextureImportSettings& settings);
+    ModelImportSettings GetModelSettings(const std::string& path) const;
+    void SetModelSettings(const std::string& path, const ModelImportSettings& settings);
+
+    // Re-imports the cached Texture/Model at `path` (if it's actually loaded) using whatever
+    // settings are currently stored for it — call SetTexture/ModelSettings first, then this.
+    // Returns false if the asset isn't loaded yet or the reimport itself fails.
+    bool ReimportTexture(const std::string& path);
+    bool ReimportModel(const std::string& path);
+
+    // For SceneSerializer, same pattern as AssetFolders()/DisplayNames() above.
+    const std::map<std::string, TextureImportSettings>& TextureSettingsMap() const { return m_TextureSettings; }
+    const std::map<std::string, ModelImportSettings>& ModelSettingsMap() const { return m_ModelSettings; }
+    const std::map<std::string, std::set<std::string>>& LabelsMap() const { return m_Labels; }
+
 private:
     std::map<std::string, std::shared_ptr<Model>> m_ModelCache;
     std::map<std::string, std::shared_ptr<Texture>> m_TextureCache;
     std::vector<std::shared_ptr<Model>> m_ModelList;
     std::vector<std::shared_ptr<Texture>> m_TextureList;
     std::vector<std::string> m_Sounds;
+    std::vector<std::string> m_Prefabs;
 
     std::map<std::string, std::string> m_AssetFolder;  // asset key -> folder path ("" = root)
     std::map<std::string, std::string> m_DisplayNames; // asset key -> user-given display name
     std::vector<std::string> m_Folders;                // every known folder path, so empty ones persist too
+
+    std::map<std::string, TextureImportSettings> m_TextureSettings;
+    std::map<std::string, ModelImportSettings> m_ModelSettings;
+    std::map<std::string, std::set<std::string>> m_Labels;
 };

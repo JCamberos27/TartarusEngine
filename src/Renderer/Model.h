@@ -22,13 +22,42 @@ struct BoneInfo {
 
 constexpr int MAX_BONES = 100;
 
+// Mirrors the knobs a Unity-style Model Importer would expose. Stored per-asset-path in
+// AssetLibrary and applied whenever a Model is constructed or re-imported — see Model::Reimport.
+struct ModelImportSettings {
+    enum class MaterialMode {
+        ImportEmbedded,   // read materials/textures from the source file (today's only behavior)
+        CreateSynthetic,  // ignore the file's materials entirely; assign one neutral PBR material
+        None              // leave every mesh at Material{}'s bare defaults
+    };
+
+    // Fed into Assimp's AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY alongside aiProcess_GlobalScale —
+    // multiplies whatever unit-scale correction the importer already derives from the file's
+    // own metadata (see the comment on that in Model.cpp), rather than replacing it.
+    float GlobalScale = 1.0f;
+    bool ImportNormals = true;   // generate smooth normals + tangent space if the file lacks them
+    bool ImportAnimations = true;
+    bool ImportSkeleton = true;  // false imports every mesh as static (no bone weights)
+    bool OptimizeGraph = true;   // aiProcess_JoinIdenticalVertices + OptimizeMeshes
+    MaterialMode MaterialImportMode = MaterialMode::ImportEmbedded;
+};
+
 // An imported 3D asset (FBX/glTF/OBJ via Assimp): one or more meshes, optional skeleton,
 // optional animation clips, and a PBR material per mesh as read from the source file.
 // Static (non-rigged) models simply have no bones/animations.
 class Model {
 public:
     explicit Model(const std::string& path);
+    Model(const std::string& path, const ModelImportSettings& settings);
     ~Model();
+
+    // Re-runs the Assimp import from disk with new settings, replacing this Model's meshes/
+    // bones/animations in place — every existing shared_ptr<Model> (placed instances included)
+    // sees the update, since it's the same object. MaterialOverride (an editor-set look that
+    // deliberately replaces whatever the file specifies) is left untouched. Returns false (and
+    // leaves the previous import in place) if the file can't be re-read.
+    bool Reimport(const ModelImportSettings& settings);
+    const ModelImportSettings& ImportSettings() const { return m_Settings; }
 
     // Builds a procedural primitive (kind: "cube"/"sphere"/"cylinder"/"cone"/"plane") instead
     // of importing a file. `path` is stored as this Model's Path() so the editor's usual
@@ -59,10 +88,9 @@ public:
     int MeshCount() const { return (int)m_Meshes.size(); }
     Material& MeshMaterial(int index) { return m_Meshes[index]->Mat; }
 
-    // Nearest bind-pose vertex (across all meshes) to worldQuery, within maxDist, after being
-    // placed by modelMatrix. Used for the editor's vertex-snapping. Returns false (outWorldPos
-    // untouched) if nothing is within range.
-    bool FindNearestVertexWorld(const glm::mat4& modelMatrix, const glm::vec3& worldQuery, float maxDist, glm::vec3& outWorldPos) const;
+    // Summed across every sub-mesh, for the editor's statistics overlay.
+    unsigned int TriangleCount() const;
+    unsigned int VertexCount() const;
 
     // Nearest bind-pose vertex to a screen-space point (e.g. the mouse cursor), within
     // maxPixelDist pixels. Used for the editor's "press V to grab a vertex" workflow — picks
@@ -98,11 +126,21 @@ private:
     std::vector<glm::mat4> m_FinalBoneMatrices;
 
     glm::vec3 m_BoundsMin{1e30f}, m_BoundsMax{-1e30f};
+    ModelImportSettings m_Settings;
 
+    void ImportFromFile(const ModelImportSettings& settings);
     void ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& parentTransform);
     std::unique_ptr<ModelMesh> ProcessMesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& nodeTransform);
     Material ExtractMaterial(const aiScene* scene, unsigned int materialIndex);
     std::shared_ptr<Texture> LoadCachedTexture(const std::string& fullPath);
+    // Turns whatever path string a model file baked in for a texture (bare filename, path
+    // relative to the model, a "..\tex\x.png" with junk separators, or an absolute path from
+    // the machine the asset was authored on) into a real file on THIS disk. Tries the sensible
+    // interpretations in order and returns the first that exists; falls back to a clean model-dir
+    // join (so a failure logs a sane path, never "modelDir + C:\someone-else\..."). An embedded
+    // ("*0") reference is returned unchanged for the caller to handle. See Model.cpp for the
+    // full resolution order.
+    std::string ResolveTexturePath(const std::string& raw) const;
     void ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh);
     void ReadHierarchy(AssimpNodeData& out, const aiNode* node);
     void ReadAnimations(const aiScene* scene);

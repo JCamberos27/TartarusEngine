@@ -52,6 +52,7 @@ PFNGLBINDRENDERBUFFERPROC glBindRenderbuffer = nullptr;
 PFNGLRENDERBUFFERSTORAGEPROC glRenderbufferStorage = nullptr;
 PFNGLFRAMEBUFFERRENDERBUFFERPROC glFramebufferRenderbuffer = nullptr;
 PFNGLDELETERENDERBUFFERSPROC glDeleteRenderbuffers = nullptr;
+PFNGLBLITFRAMEBUFFERPROC glBlitFramebuffer = nullptr;
 
 namespace {
 void* LoadGLFunc(const char* name) {
@@ -118,6 +119,7 @@ bool GLLoader_Init() {
     LOAD(PFNGLRENDERBUFFERSTORAGEPROC, glRenderbufferStorage)
     LOAD(PFNGLFRAMEBUFFERRENDERBUFFERPROC, glFramebufferRenderbuffer)
     LOAD(PFNGLDELETERENDERBUFFERSPROC, glDeleteRenderbuffers)
+    LOAD(PFNGLBLITFRAMEBUFFERPROC, glBlitFramebuffer)
 #undef LOAD
     return ok;
 }

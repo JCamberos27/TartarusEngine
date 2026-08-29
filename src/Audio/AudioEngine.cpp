@@ -1,4 +1,5 @@
 #include "AudioEngine.h"
+#include "Log.h"
 #include "miniaudio.h"
 #include <fstream>
 #include <vector>
@@ -15,7 +16,7 @@ std::string s_PreviewPath;
 void AudioEngine::Init() {
     if (s_Initialized) return;
     if (ma_engine_init(nullptr, &s_Engine) != MA_SUCCESS) {
-        std::cerr << "Failed to initialize audio engine" << std::endl;
+        Log::Error("Audio: failed to initialize the audio engine.");
         return;
     }
     s_Initialized = true;
@@ -47,7 +48,7 @@ void AudioEngine::Play(const std::string& path, float volume, bool loop) {
 
     auto sound = std::make_unique<ma_sound>();
     if (ma_sound_init_from_file(&s_Engine, path.c_str(), MA_SOUND_FLAG_STREAM, nullptr, nullptr, sound.get()) != MA_SUCCESS) {
-        std::cerr << "Failed to load sound: " << path << std::endl;
+        Log::Error("Audio: failed to load sound '" + path + "'.");
         return;
     }
     ma_sound_set_looping(sound.get(), MA_TRUE);
@@ -70,7 +71,7 @@ void AudioEngine::PlayPreview(const std::string& path) {
 
     auto sound = std::make_unique<ma_sound>();
     if (ma_sound_init_from_file(&s_Engine, path.c_str(), MA_SOUND_FLAG_STREAM, nullptr, nullptr, sound.get()) != MA_SUCCESS) {
-        std::cerr << "Failed to load sound: " << path << std::endl;
+        Log::Error("Audio: failed to load sound '" + path + "'.");
         return;
     }
     ma_sound_start(sound.get());

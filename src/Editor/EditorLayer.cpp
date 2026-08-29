@@ -10,22 +10,37 @@
 #include "SceneSerializer.h"
 #include "AABB.h"
 #include "Texture.h"
+#include "Log.h"
+#include "EditorSettings.h"
+#include "EditorUIHelpers.h"
+#include "AssetImporterInspector.h"
+#include "Profiler.h"
+#include "ProjectPaths.h"
+#include "GLStateCache.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // DockBuilder* — only used once, to lay out the default dock tree on first run
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 #include <ImGuizmo.h>
+#include <ImViewGuizmo.h>
 #include <IconsFontAwesome6.h>
 #include <GLFW/glfw3.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #include <filesystem>
 #include <memory>
 #include <algorithm>
+#include <unordered_map>
+#include <sstream>
 #include <cmath>
 #include <cctype>
+#include <cstring>
+#include <functional>
+#include <cfloat>
 
 namespace {
 
@@ -35,10 +50,13 @@ constexpr float kToolbarHeight = 84.0f;
 
 // Reverse lookup for the Asset Browser: which placed objects reference a given asset.
 // Compared by raw pointer (Model/Texture) since two placed objects can share one instance.
+// Level-geometry entities excluded — their cube Model is private/unshared, never an "asset".
 std::vector<std::string> FindModelUsages(const World& world, const Model* model) {
     std::vector<std::string> names;
-    for (const auto& pm : world.Models) {
-        if (pm.ModelRef.get() == model) names.push_back(pm.Name.empty() ? "(unnamed)" : pm.Name);
+    auto view = world.Registry.view<const NameComponent, const RenderableComponent>(entt::exclude<LevelGeometryTag>);
+    for (auto entity : view) {
+        const auto& [name, renderable] = view.get<const NameComponent, const RenderableComponent>(entity);
+        if (renderable.ModelRef.get() == model) names.push_back(name.Name.empty() ? "(unnamed)" : name.Name);
     }
     return names;
 }
@@ -51,26 +69,60 @@ bool MaterialUsesTexture(const Material& mat, const Texture* tex) {
 
 std::vector<std::string> FindTextureUsages(const World& world, const Texture* tex) {
     std::vector<std::string> names;
-    for (const auto& pm : world.Models) {
+    auto view = world.Registry.view<const NameComponent, const RenderableComponent>(entt::exclude<LevelGeometryTag>);
+    for (auto entity : view) {
+        const auto& [name, renderable] = view.get<const NameComponent, const RenderableComponent>(entity);
         bool used = false;
-        if (auto override_ = pm.ModelRef->MaterialOverride()) {
+        if (auto override_ = renderable.ModelRef->MaterialOverride()) {
             used = MaterialUsesTexture(*override_, tex);
         } else {
-            for (int i = 0; i < pm.ModelRef->MeshCount(); ++i) {
-                if (MaterialUsesTexture(pm.ModelRef->MeshMaterial(i), tex)) { used = true; break; }
+            for (int i = 0; i < renderable.ModelRef->MeshCount(); ++i) {
+                if (MaterialUsesTexture(renderable.ModelRef->MeshMaterial(i), tex)) { used = true; break; }
             }
         }
-        if (used) names.push_back(pm.Name.empty() ? "(unnamed)" : pm.Name);
+        if (used) names.push_back(name.Name.empty() ? "(unnamed)" : name.Name);
     }
     return names;
 }
 
 std::vector<std::string> FindSoundUsages(const World& world, const std::string& path) {
     std::vector<std::string> names;
-    for (const auto& pm : world.Models) {
-        if (pm.SoundPath == path) names.push_back(pm.Name.empty() ? "(unnamed)" : pm.Name);
+    auto view = world.Registry.view<const NameComponent, const AudioSourceComponent>();
+    for (auto entity : view) {
+        const auto& [name, audio] = view.get<const NameComponent, const AudioSourceComponent>(entity);
+        if (audio.SoundPath == path) names.push_back(name.Name.empty() ? "(unnamed)" : name.Name);
     }
     return names;
+}
+
+// True only for entities the vertex-grab workflow applies to — level-geometry boxes are
+// excluded, matching the original "models only" restriction (a box's geometry is just its
+// private cube primitive; there's nothing meaningful to snap onto vertex-by-vertex).
+bool IsVertexDraggable(World& world, entt::entity entity) {
+    if (entity == entt::null || !world.Registry.valid(entity) ||
+        world.Registry.all_of<LevelGeometryTag>(entity)) return false;
+    // There has to be a mesh to grab a vertex FROM — a light or empty has none. Without this,
+    // holding V over a selected light/empty would reach FindVertexUnderCursor's unchecked
+    // get<RenderableComponent>(), which is undefined behavior (a crash) on an entity that
+    // doesn't have one.
+    if (!world.Registry.all_of<RenderableComponent>(entity)) return false;
+    // Vertex-drag math below works entirely in local space (matching TransformComponent for an
+    // unparented entity); a parented entity's TransformComponent is local-relative-to-parent, so
+    // mixing it with the world-space grab point would move the object to the wrong place. Not
+    // supported for now — same kind of deliberate scope line as the LevelGeometryTag exclusion.
+    if (const auto* hier = world.Registry.try_get<HierarchyComponent>(entity)) {
+        if (hier->Parent != entt::null) return false;
+    }
+    return true;
+}
+
+// EnTT views iterate newest-entity-first; the Hierarchy reads far more naturally in creation
+// order (the way every scene editor lists objects), so panel iteration goes through this.
+template <typename View>
+std::vector<entt::entity> ViewInCreationOrder(View view) {
+    std::vector<entt::entity> entities(view.begin(), view.end());
+    std::reverse(entities.begin(), entities.end());
+    return entities;
 }
 
 std::string UsageTooltip(const std::vector<std::string>& users) {
@@ -82,7 +134,8 @@ std::string UsageTooltip(const std::vector<std::string>& users) {
     return s;
 }
 
-// Case-insensitive substring match for the Asset Browser's search filter.
+// Case-insensitive substring match — shared by the Console filter, Hierarchy filter, and (as
+// one piece of the richer parser below) the Asset Browser search.
 bool MatchesFilter(const std::string& filter, const std::string& text) {
     if (filter.empty()) return true;
     auto toLower = [](std::string s) {
@@ -90,6 +143,91 @@ bool MatchesFilter(const std::string& filter, const std::string& text) {
         return s;
     };
     return toLower(text).find(toLower(filter)) != std::string::npos;
+}
+
+// Unity's Project-window search syntax: plain words match the asset name and are ANDed
+// together ("coastal scene" needs both words); "t:Model" restricts by asset type, and several
+// t: terms are ORed ("t:Model t:Texture" means either kind); "l:label" restricts by label, and
+// several l: terms are ANDed (must carry every listed label). Typed directly or built by the
+// Type/Label filter dropdown buttons - both just edit this same text.
+struct ParsedAssetSearch {
+    std::vector<std::string> nameTerms;
+    std::vector<std::string> typeTerms;  // lowercased kind names: "model","texture","sound","scene","prefab","folder"
+    std::vector<std::string> labelTerms; // lowercased
+};
+
+ParsedAssetSearch ParseAssetSearch(const std::string& filter) {
+    ParsedAssetSearch result;
+    std::istringstream iss(filter);
+    std::string token;
+    auto toLower = [](std::string s) {
+        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+        return s;
+    };
+    while (iss >> token) {
+        if (token.size() > 2 && (token[0] == 't' || token[0] == 'T') && token[1] == ':') {
+            result.typeTerms.push_back(toLower(token.substr(2)));
+        } else if (token.size() > 2 && (token[0] == 'l' || token[0] == 'L') && token[1] == ':') {
+            result.labelTerms.push_back(toLower(token.substr(2)));
+        } else {
+            result.nameTerms.push_back(token);
+        }
+    }
+    return result;
+}
+
+// `kind` is the asset's type name (already lowercased: "model", "texture", ...), `labels` its
+// current label set. Name terms AND, type terms OR (any one is enough), label terms AND (every
+// one must be present) - matching the semantics Unity documents for t:/l:.
+bool MatchesAssetSearch(const ParsedAssetSearch& parsed, const std::string& name, const std::string& kind,
+    const std::set<std::string>& labels) {
+    for (const auto& term : parsed.nameTerms) {
+        if (!MatchesFilter(term, name)) return false;
+    }
+    if (!parsed.typeTerms.empty()) {
+        bool anyTypeMatches = false;
+        for (const auto& t : parsed.typeTerms) {
+            if (t == kind) { anyTypeMatches = true; break; }
+        }
+        if (!anyTypeMatches) return false;
+    }
+    for (const auto& term : parsed.labelTerms) {
+        bool found = false;
+        for (const auto& lbl : labels) {
+            if (MatchesFilter(term, lbl) && term.size() == lbl.size()) { found = true; break; } // exact, case-insensitive
+        }
+        if (!found) return false;
+    }
+    return true;
+}
+
+// Adds `token` (e.g. "t:Model") to `filter`'s text if it's not already there, or removes it if
+// it is - how the Type/Label filter dropdown checkboxes edit the plain search text, since
+// that's the one source of truth Unity's own filters work the same way against.
+void ToggleSearchToken(std::string& filter, const std::string& token) {
+    std::istringstream iss(filter);
+    std::vector<std::string> tokens;
+    std::string t;
+    bool removed = false;
+    while (iss >> t) {
+        if (t == token) { removed = true; continue; }
+        tokens.push_back(t);
+    }
+    if (!removed) tokens.push_back(token);
+    filter.clear();
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        if (i) filter += " ";
+        filter += tokens[i];
+    }
+}
+
+bool SearchHasToken(const std::string& filter, const std::string& token) {
+    std::istringstream iss(filter);
+    std::string t;
+    while (iss >> t) {
+        if (t == token) return true;
+    }
+    return false;
 }
 
 // Virtual folder paths are '/'-joined segments (e.g. "Props/Guns") — these split off the
@@ -119,31 +257,71 @@ bool DrawNameField(const char* label, std::string& name, const char* placeholder
 // Icon-only action button with a tooltip carrying the full name — shared by DrawInspector and
 // DrawMaterialEditor so both get the same compact single-row style instead of stacked
 // full-width text buttons.
-bool ActionButton(const char* icon, const char* tooltip) {
-    bool clicked = ImGui::Button(icon);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tooltip);
+bool ActionButton(const char* icon, const char* tooltip, ImVec2 size = ImVec2(0, 0)) {
+    bool clicked = ImGui::Button(icon, size);
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
     return clicked;
 }
 
-bool DeleteIconButton(const char* tooltip) {
+bool DeleteIconButton(const char* tooltip, ImVec2 size = ImVec2(0, 0)) {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.18f, 0.18f, 1.00f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.68f, 0.22f, 0.22f, 1.00f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.80f, 0.26f, 0.26f, 1.00f));
-    bool clicked = ImGui::Button(ICON_FA_TRASH);
+    bool clicked = ImGui::Button(ICON_FA_TRASH, size);
     ImGui::PopStyleColor(3);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tooltip);
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
     return clicked;
+}
+
+// The Unity/Blender/Unreal property-grid convention: a fixed-width label column so a field's
+// name always sits at the same X position regardless of what that row's own value widget is —
+// which is what actually made a component-heavy Inspector read as disorganized before this,
+// since ImGui's default "label drawn after the widget" placed every row's text wherever that
+// row's widget happened to end. Follow with a widget using "##..." as its own (invisible) label
+// so it doesn't draw a second, differently-positioned label of its own.
+// Draws `label`, then repositions the cursor `columnWidth` past wherever this line actually
+// started — shared by PropertyLabel (single-widget rows) and DrawVec3Row (which needs a
+// narrower column of its own, followed by three widgets instead of one). SameLine(x)'s x is
+// measured from the window's left edge, NOT from the current indent, but component section
+// bodies ARE indented (see BeginComponentSection) — capturing the real line-start position
+// first (GetCursorPosX() already includes indent) is what keeps a column aligned at any
+// indent depth instead of drifting left as sections nest.
+void AlignToColumn(const char* label, float columnWidth, const char* tooltip = nullptr) {
+    float lineStartX = ImGui::GetCursorPosX();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(label);
+    if (tooltip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
+    ImGui::SameLine(lineStartX + columnWidth);
+}
+
+// `tooltip`, when given, shows on hovering the label text itself — this is how nearly every
+// field in the Inspector explains what it does and how to use it, without needing a value
+// permanently on screen for it.
+void PropertyLabel(const char* label, const char* tooltip = nullptr) {
+    // Sized to fit "Emissive Strength", the longest label actually used — every row sharing
+    // this one constant is what makes their value widgets land in the same column regardless
+    // of how long that particular row's own label is. Computed once (the UI font is fixed).
+    static const float labelColumnWidth = ImGui::CalcTextSize("Emissive Strength").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+    AlignToColumn(label, labelColumnWidth, tooltip);
+    ImGui::SetNextItemWidth(-FLT_MIN); // fill exactly to the window's right edge
 }
 
 // Unity/Hazel-style vector row: a colored X/Y/Z button (click to zero that axis) glued to
 // each drag field, instead of ImGui's plain unlabeled DragFloat3. `activatedOut` is set when
 // any axis field starts being dragged this frame, for undo-snapshot timing at the call site.
-bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float maxV, bool& activatedOut) {
+bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float maxV, bool& activatedOut,
+    const char* tooltip = nullptr) {
     activatedOut = false;
     bool changed = false;
 
     ImGui::PushID(label);
-    ImGui::TextUnformatted(label);
+    // A dedicated, shorter column than PropertyLabel's (which is sized for spelled-out names
+    // like "Emissive Strength") — "Position"/"Rotation"/"Scale" are short, and the XYZ triplet
+    // that follows needs the width back more than it needs to share that wider column. Putting
+    // the label on the SAME line as its row (instead of on its own line above it, as before) is
+    // what actually removes the wasted vertical gap between each Position/Rotation/Scale block.
+    static const float vec3LabelColumnWidth = ImGui::CalcTextSize("Rotation").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+    AlignToColumn(label, vec3LabelColumnWidth, tooltip);
 
     float lineHeight = ImGui::GetFrameHeight();
     float buttonW = lineHeight + 4.0f;
@@ -168,11 +346,13 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
             *axes[i].value = 0.0f;
             changed = true;
         }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Click to zero the %s axis", axes[i].name);
         ImGui::PopStyleColor(3);
 
         ImGui::SameLine(0.0f, innerSpacing);
         ImGui::SetNextItemWidth(dragW);
         bool itemChanged = ImGui::DragFloat("##v", axes[i].value, speed, minV, maxV, "%.3f");
+        if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) EditorUI::SetTooltip("Click and drag to change; double-click to type a value");
         if (ImGui::IsItemActivated()) activatedOut = true;
         changed |= itemChanged;
 
@@ -191,6 +371,33 @@ EditorLayer::~EditorLayer() = default;
 
 void EditorLayer::Init(GLFWwindow* window) {
     m_Window = window;
+
+    // Editor preferences (currently just the tooltip toggle) are independent of any scene, so
+    // they're loaded once here rather than as part of scene load/save.
+    EditorSettings::Load();
+
+    // Authored content lives in the project folder, not the working directory (build/Release/)
+    // — see ProjectPaths.h. main.cpp resolves the same path for its initial load.
+    m_CurrentScenePath = ProjectPaths::Resolve("scene.json");
+
+    // Read the monitor's content scale (1.0 at 96 DPI, 2.0 at Windows' 200% scaling, which is
+    // the common default on 4K displays) once at startup, and bake it into font pixel sizes and
+    // the layout constants below rather than relying on ImGui's blurry FontGlobalScale — so the
+    // UI reads at a consistent physical size instead of shrinking to illegible on a 4K monitor.
+    float xscale = 1.0f, yscale = 1.0f;
+    glfwGetWindowContentScale(window, &xscale, &yscale);
+    m_UIScale = xscale > 0.0f ? xscale : 1.0f;
+
+    // Asset Browser tree width / icon size: restore the user's last size, or fall back to a
+    // roomy DPI-scaled default (folder names like "Chesterfield Sofa" fit without a manual drag,
+    // and thumbnails start Large rather than as tiny 32px chips).
+    {
+        const EditorSettings& prefs = EditorSettings::Get();
+        m_AssetTreeWidth = prefs.AssetBrowserTreeWidth > 0.0f ? prefs.AssetBrowserTreeWidth
+                                                              : 230.0f * m_UIScale;
+        m_AssetIconSize = prefs.AssetBrowserIconSize > 0.0f ? prefs.AssetBrowserIconSize
+                                                            : 96.0f * m_UIScale;
+    }
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -242,36 +449,54 @@ void EditorLayer::Init(GLFWwindow* window) {
     style.Colors[ImGuiCol_SeparatorActive] = accentActive;
     style.Colors[ImGuiCol_ResizeGripHovered] = accentHovered;
     style.Colors[ImGuiCol_ResizeGripActive] = accentActive;
-    style.Colors[ImGuiCol_TabSelected] = accent;
-    style.Colors[ImGuiCol_TabHovered] = accentHovered;
-    style.Colors[ImGuiCol_TabSelectedOverline] = accentActive;
+    // Tabs: fully neutral grays, no accent — the selected tab reads by being a distinctly
+    // lighter step, not by color. (ImGui 1.93 names; TabActive/TabUnfocused/TabUnfocusedActive
+    // are compat aliases for TabSelected/TabDimmed/TabDimmedSelected.)
+    style.Colors[ImGuiCol_Tab]                       = ImVec4(0.15f, 0.15f, 0.15f, 1.00f); // focused bar, unselected
+    style.Colors[ImGuiCol_TabHovered]               = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
+    style.Colors[ImGuiCol_TabSelected]             = ImVec4(0.28f, 0.28f, 0.28f, 1.00f); // focused bar, selected
+    style.Colors[ImGuiCol_TabDimmed]              = ImVec4(0.12f, 0.12f, 0.12f, 1.00f); // unfocused bar, unselected
+    style.Colors[ImGuiCol_TabDimmedSelected]     = ImVec4(0.22f, 0.22f, 0.22f, 1.00f); // unfocused bar, selected
+    style.Colors[ImGuiCol_TabSelectedOverline]  = ImVec4(0.00f, 0.00f, 0.00f, 0.00f); // no accent line
+    style.Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
     style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(accent.x, accent.y, accent.z, 0.45f);
     style.Colors[ImGuiCol_NavCursor] = accentActive;
+
+    // Scale every size/padding/rounding set above (and ImGui's own defaults) by the monitor's
+    // content scale, so spacing keeps its proportions instead of staying pinned to 96-DPI pixel
+    // counts while the fonts below grow to match.
+    style.ScaleAllSizes(m_UIScale);
 
     // UI text font. Loaded straight from the Windows system font directory rather than
     // bundled into the repo (Segoe UI is Microsoft-licensed, not ours to redistribute).
     // Falls back to ImGui's built-in bitmap font if it's ever missing (e.g. running under
     // Wine, or a stripped-down Windows install), so this never hard-fails.
+    // Baked at the monitor's content scale (not left at 1x + FontGlobalScale) so text stays
+    // crisp instead of blurry-upscaled on high-DPI/4K displays.
+    const float baseFontPx = 16.0f * m_UIScale;
     ImFontConfig baseFontConfig;
-    baseFontConfig.SizePixels = 16.0f;
-    ImFont* uiFont = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 16.0f, &baseFontConfig);
+    baseFontConfig.SizePixels = baseFontPx;
+    ImFont* uiFont = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", baseFontPx, &baseFontConfig);
     if (!uiFont) {
         ImFontConfig fallbackConfig;
-        fallbackConfig.SizePixels = 15.0f;
+        fallbackConfig.SizePixels = 15.0f * m_UIScale;
         io.Fonts->AddFontDefault(&fallbackConfig);
     }
     static const ImWchar iconRanges[] = {ICON_MIN_FA, ICON_MAX_16_FA, 0};
     ImFontConfig iconConfig;
     iconConfig.MergeMode = true;
     iconConfig.PixelSnapH = true;
-    iconConfig.GlyphMinAdvanceX = 16.0f;
-    io.Fonts->AddFontFromFileTTF("assets/fonts/fa-solid-900.ttf", 16.0f, &iconConfig, iconRanges);
+    iconConfig.GlyphMinAdvanceX = baseFontPx;
+    io.Fonts->AddFontFromFileTTF("assets/fonts/fa-solid-900.ttf", baseFontPx, &iconConfig, iconRanges);
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
-    m_LogoTexture = std::make_unique<Texture>("assets/branding/atrocity_exhibition_logo.png");
+    m_LogoTexture = std::make_unique<Texture>("assets/branding/tartarus_wordmark.png");
     if (!m_LogoTexture->IsValid()) m_LogoTexture.reset(); // missing file — just skip the watermark
+
+    m_MarkTexture = std::make_unique<Texture>("assets/branding/tartarus_engine_mark.png");
+    if (!m_MarkTexture->IsValid()) m_MarkTexture.reset();
 }
 
 void EditorLayer::Shutdown() {
@@ -285,6 +510,7 @@ void EditorLayer::BeginFrame() {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
     ImGuizmo::BeginFrame();
+    ImViewGuizmo::BeginFrame();
 }
 
 void EditorLayer::EndFrame() {
@@ -292,14 +518,48 @@ void EditorLayer::EndFrame() {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-void EditorLayer::ApplyPanelPlacement(glm::vec2 pos, glm::vec2 size) const {
-    ImGuiCond cond = m_LayoutLocked ? ImGuiCond_Always : ImGuiCond_FirstUseEver;
-    ImGui::SetNextWindowPos(ImVec2(pos.x, pos.y), cond);
-    ImGui::SetNextWindowSize(ImVec2(size.x, size.y), cond);
+std::vector<std::string> EditorLayer::CaptureSelectedNames(const World& world) const {
+    std::vector<std::string> names;
+    auto addIfValid = [&](entt::entity e) {
+        if (e != entt::null && world.Registry.valid(e) && world.Registry.all_of<NameComponent>(e)) {
+            names.push_back(world.Registry.get<NameComponent>(e).Name);
+        }
+    };
+    addIfValid(m_Selected);
+    for (entt::entity e : m_ExtraSelection) addIfValid(e);
+    return names;
 }
 
-void EditorLayer::PushUndo(const World& world) {
-    m_UndoStack.push_back(SceneSerializer::SaveToString(world));
+void EditorLayer::RestoreSelectionByName(World& world, const std::vector<std::string>& names) {
+    ClearSelection();
+    if (names.empty()) return;
+
+    // Built once per restore rather than per-name lookup - cheap either way at this engine's
+    // scale, but there's no reason to re-scan the registry per selected name. A duplicate name
+    // just picks whichever entity is encountered first - the same ambiguity Search/Tag filtering
+    // already lives with elsewhere in the Hierarchy.
+    std::unordered_map<std::string, entt::entity> byName;
+    for (auto e : world.Registry.view<NameComponent>()) {
+        const std::string& n = world.Registry.get<NameComponent>(e).Name;
+        byName.try_emplace(n, e);
+    }
+
+    bool first = true;
+    for (const std::string& wantedName : names) {
+        auto it = byName.find(wantedName);
+        if (it == byName.end()) continue; // that object doesn't exist at this point in history
+        if (first) { m_Selected = it->second; first = false; }
+        else m_ExtraSelection.push_back(it->second);
+    }
+}
+
+void EditorLayer::PushUndo(const World& world, const std::string& label) {
+    UndoEntry entry;
+    entry.SceneJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
+                                   : SceneSerializer::SaveToString(world);
+    entry.SelectedNames = CaptureSelectedNames(world);
+    entry.Label = label;
+    m_UndoStack.push_back(std::move(entry));
     if (m_UndoStack.size() > kMaxHistory) {
         m_UndoStack.erase(m_UndoStack.begin());
     }
@@ -309,149 +569,246 @@ void EditorLayer::PushUndo(const World& world) {
 
 void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     if (m_UndoStack.empty()) return;
-    m_RedoStack.push_back(SceneSerializer::SaveToString(world));
-    std::string snapshot = m_UndoStack.back();
+
+    UndoEntry redoEntry;
+    redoEntry.SceneJson = SceneSerializer::SaveToString(world, assets);
+    redoEntry.SelectedNames = CaptureSelectedNames(world);
+    redoEntry.Label = m_UndoStack.back().Label; // the action Redo would re-apply from here
+    m_RedoStack.push_back(std::move(redoEntry));
+
+    UndoEntry entry = std::move(m_UndoStack.back());
     m_UndoStack.pop_back();
-    SceneSerializer::LoadFromString(world, assets, snapshot);
-    ClearSelection();
+    SceneSerializer::LoadFromString(world, assets, entry.SceneJson);
+    RestoreSelectionByName(world, entry.SelectedNames);
     m_Dirty = true;
 }
 
 void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     if (m_RedoStack.empty()) return;
-    m_UndoStack.push_back(SceneSerializer::SaveToString(world));
-    std::string snapshot = m_RedoStack.back();
+
+    UndoEntry undoEntry;
+    undoEntry.SceneJson = SceneSerializer::SaveToString(world, assets);
+    undoEntry.SelectedNames = CaptureSelectedNames(world);
+    undoEntry.Label = m_RedoStack.back().Label;
+    m_UndoStack.push_back(std::move(undoEntry));
+
+    UndoEntry entry = std::move(m_RedoStack.back());
     m_RedoStack.pop_back();
-    SceneSerializer::LoadFromString(world, assets, snapshot);
-    ClearSelection();
+    SceneSerializer::LoadFromString(world, assets, entry.SceneJson);
+    RestoreSelectionByName(world, entry.SelectedNames);
     m_Dirty = true;
 }
 
-void EditorLayer::ClearSelection() {
-    m_SelectedBox = -1;
-    m_SelectedModel = -1;
-    m_ExtraSelection.clear();
+void EditorLayer::JumpToUndoEntry(World& world, AssetLibrary& assets, size_t undoStackIndex) {
+    if (undoStackIndex >= m_UndoStack.size()) return;
+    while (m_UndoStack.size() > undoStackIndex) {
+        Undo(world, assets);
+    }
 }
 
-void EditorLayer::SelectItem(bool isModel, int index, bool addToSelection) {
-    bool isPrimary = isModel ? (m_SelectedModel == index) : (m_SelectedBox == index);
+void EditorLayer::JumpToRedoEntry(World& world, AssetLibrary& assets, size_t redoStackIndex) {
+    if (redoStackIndex >= m_RedoStack.size()) return;
+    size_t steps = m_RedoStack.size() - redoStackIndex;
+    for (size_t i = 0; i < steps; ++i) Redo(world, assets);
+}
+
+void EditorLayer::OnEnterPlayMode(const World& world) {
+    m_PlayModeSnapshot = SceneSerializer::SaveToString(world);
+    Log::Info("Entered play mode - scene state saved, changes will be reverted on exit.");
+}
+
+void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
+    if (m_PlayModeSnapshot.empty()) return;
+    SceneSerializer::LoadFromString(world, assets, m_PlayModeSnapshot);
+    m_PlayModeSnapshot.clear();
+    ClearSelection();
+    // Deliberately does NOT set m_Dirty: the scene is back exactly as it was before Play, so
+    // there's nothing new to save — the same reason Unity doesn't dirty a scene on play/stop.
+    Log::Info("Exited play mode - scene state restored.");
+}
+
+void EditorLayer::CopySelection(World& world) {
+    auto selection = GetSelectedItems();
+    if (selection.empty()) return;
+    m_Clipboard = SceneSerializer::SaveEntitiesToString(world, selection);
+    Log::Info("Copied " + std::to_string(selection.size()) +
+        (selection.size() == 1 ? " object." : " objects."));
+}
+
+void EditorLayer::PasteClipboard(World& world, AssetLibrary& assets) {
+    if (m_Clipboard.empty()) return;
+    PushUndo(world, "Paste");
+    std::vector<entt::entity> pasted;
+    if (!SceneSerializer::AppendEntitiesFromString(world, assets, m_Clipboard, pasted) || pasted.empty()) {
+        Log::Warn("Paste failed: clipboard content could not be rebuilt.");
+        return;
+    }
+    // Offset so a paste is visibly distinct from the original instead of landing exactly on top
+    // of it — matching what Duplicate already does.
+    for (entt::entity e : pasted) {
+        if (auto* transform = world.Registry.try_get<TransformComponent>(e)) {
+            const auto* hier = world.Registry.try_get<HierarchyComponent>(e);
+            bool isRoot = !hier || hier->Parent == entt::null;
+            if (isRoot) transform->Position += glm::vec3(1.0f, 0.0f, 1.0f);
+        }
+    }
+    ClearSelection();
+    for (entt::entity e : pasted) AddToSelectionIfAbsent(e);
+    if (m_Selected == entt::null && !pasted.empty()) SelectItem(pasted.front(), false);
+}
+
+void EditorLayer::ClearSelection() {
+    m_Selected = entt::null;
+    m_ExtraSelection.clear();
+    m_RenamingEntity = entt::null;
+}
+
+void EditorLayer::SelectItem(entt::entity entity, bool addToSelection) {
+    bool isPrimary = m_Selected == entity;
 
     if (!addToSelection) {
         m_ExtraSelection.clear();
-        if (isModel) { m_SelectedModel = index; m_SelectedBox = -1; }
-        else { m_SelectedBox = index; m_SelectedModel = -1; }
+        m_Selected = entity;
         return;
     }
 
     if (isPrimary) {
         // Demote: promote the most recently added extra to primary, or clear if none left.
         if (!m_ExtraSelection.empty()) {
-            SelectedItem promoted = m_ExtraSelection.back();
+            m_Selected = m_ExtraSelection.back();
             m_ExtraSelection.pop_back();
-            if (promoted.IsModel) { m_SelectedModel = promoted.Index; m_SelectedBox = -1; }
-            else { m_SelectedBox = promoted.Index; m_SelectedModel = -1; }
         } else {
-            m_SelectedBox = -1;
-            m_SelectedModel = -1;
+            m_Selected = entt::null;
         }
         return;
     }
 
     for (auto it = m_ExtraSelection.begin(); it != m_ExtraSelection.end(); ++it) {
-        if (it->IsModel == isModel && it->Index == index) {
+        if (*it == entity) {
             m_ExtraSelection.erase(it); // already co-selected — toggle it back off
             return;
         }
     }
 
     if (!HasAnySelection()) {
-        if (isModel) m_SelectedModel = index; else m_SelectedBox = index;
+        m_Selected = entity;
     } else {
-        m_ExtraSelection.push_back({isModel, index});
+        m_ExtraSelection.push_back(entity);
     }
 }
 
-void EditorLayer::AddToSelectionIfAbsent(bool isModel, int index) {
-    if (IsSelected(isModel, index)) return; // leave already-selected items alone — don't toggle them off
+void EditorLayer::AddToSelectionIfAbsent(entt::entity entity) {
+    if (IsSelected(entity)) return; // leave already-selected items alone — don't toggle them off
     if (!HasAnySelection()) {
-        if (isModel) m_SelectedModel = index; else m_SelectedBox = index;
+        m_Selected = entity;
     } else {
-        m_ExtraSelection.push_back({isModel, index});
+        m_ExtraSelection.push_back(entity);
     }
 }
 
 void EditorLayer::DeleteSelection(World& world) {
-    PushUndo(world);
+    PushUndo(world, "Delete");
 
-    std::vector<int> modelIndices, boxIndices;
-    auto collect = [&](bool isModel, int index) {
-        if (index < 0) return;
-        (isModel ? modelIndices : boxIndices).push_back(index);
-    };
-    collect(true, m_SelectedModel);
-    collect(false, m_SelectedBox);
-    for (const auto& item : m_ExtraSelection) collect(item.IsModel, item.Index);
-
-    // Models are physically erased from the vector, so later indices must go first or an
-    // earlier erase would shift the ones still queued for deletion out from under it.
-    std::sort(modelIndices.rbegin(), modelIndices.rend());
-    for (int idx : modelIndices) {
-        if (idx < (int)world.Models.size()) world.Models.erase(world.Models.begin() + idx);
-    }
-
-    // Boxes use the existing "Alive" flag convention instead of erasing (matches the single-
-    // object delete path and keeps World::Raycast/ResolveCollisions indices stable).
-    for (int idx : boxIndices) {
-        if (idx < (int)world.Boxes.size()) world.Boxes[idx].Alive = false;
+    // entt::entity handles don't shift when another entity is destroyed (unlike the vector
+    // indices this replaced), so unlike before there's no careful ordering needed here at all —
+    // and no more separate "boxes soft-delete, models hard-erase" split, either.
+    // Destroys children recursively too, so parenting one entity under another means deleting
+    // the parent doesn't leave the child pointing at a dead entt::entity.
+    if (m_Selected != entt::null) world.DestroyEntityAndChildren(m_Selected);
+    for (entt::entity e : m_ExtraSelection) {
+        if (world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
     }
 
     ClearSelection();
 }
 
+namespace {
+// Unity-style duplicate naming: "Cube" -> "Cube (1)" -> "Cube (2)". Re-derives the base name
+// from an already-numbered source first, so duplicating a duplicate produces "Cube (2)" instead
+// of chaining into "Cube (1) (1)".
+std::string NextDuplicateName(const World& world, const std::string& sourceName) {
+    std::string base = sourceName;
+    size_t open = base.find_last_of('(');
+    if (open != std::string::npos && !base.empty() && base.back() == ')') {
+        std::string inside = base.substr(open + 1, base.size() - open - 2);
+        if (!inside.empty() && inside.find_first_not_of("0123456789") == std::string::npos) {
+            base = base.substr(0, open);
+            while (!base.empty() && base.back() == ' ') base.pop_back();
+        }
+    }
+    if (base.empty()) base = "Object";
+
+    std::set<std::string> existingNames;
+    for (auto e : world.Registry.view<NameComponent>()) existingNames.insert(world.Registry.get<NameComponent>(e).Name);
+
+    int n = 1;
+    std::string candidate;
+    do {
+        candidate = base + " (" + std::to_string(n) + ")";
+        n++;
+    } while (existingNames.count(candidate));
+    return candidate;
+}
+}
+
 void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets) {
     if (!HasAnySelection()) return;
-    PushUndo(world);
+    PushUndo(world, "Duplicate");
 
-    std::vector<SelectedItem> source;
-    if (m_SelectedModel >= 0) source.push_back({true, m_SelectedModel});
-    else if (m_SelectedBox >= 0) source.push_back({false, m_SelectedBox});
-    for (const auto& item : m_ExtraSelection) source.push_back(item);
+    std::vector<entt::entity> source;
+    if (m_Selected != entt::null) source.push_back(m_Selected);
+    for (entt::entity e : m_ExtraSelection) source.push_back(e);
 
-    // Nudge each copy sideways so it doesn't land exactly on top of the original — original
-    // indices in `source` stay valid throughout since every new object is push_back'd (only
-    // ever appended, never inserted/erased), so reallocation never invalidates them.
-    const glm::vec3 kOffset(0.5f, 0.0f, 0.5f);
-    std::vector<SelectedItem> created;
+    std::vector<entt::entity> created;
 
-    for (const auto& item : source) {
-        if (item.IsModel) {
-            if (item.Index < 0 || item.Index >= (int)world.Models.size()) continue;
-            const PlacedModel& src = world.Models[item.Index];
+    for (entt::entity srcEntity : source) {
+        if (!world.Registry.valid(srcEntity)) continue;
+        const auto& transform = world.Registry.get<TransformComponent>(srcEntity);
+        const auto& name = world.Registry.get<NameComponent>(srcEntity);
+        // Exact same Transform as the source - no offset. NextDuplicateName already guarantees a
+        // unique name, so an in-place duplicate is still easy to tell apart in the Hierarchy even
+        // though it's sitting exactly on top of the original in the viewport.
+        glm::vec3 newPos = transform.Position;
 
-            PlacedModel copy = src;
-            copy.Name = src.Name.empty() ? "Model Copy" : (src.Name + " Copy");
-            copy.Position += kOffset;
+        // Mesh-less entity (a light or empty) — nothing to clone via AssetLibrary, so it gets
+        // its own branch instead of falling into the box/model paths below, both of which
+        // unconditionally read RenderableComponent (would be undefined behavior — a crash —
+        // on an entity that doesn't have one).
+        if (!world.Registry.all_of<RenderableComponent>(srcEntity)) {
+            std::string newName = NextDuplicateName(world, name.Name.empty() ? "Object" : name.Name);
+            entt::entity newEntity = world.CreateEmptyEntity(newPos, transform.RotationEuler, transform.Scale, newName);
+            if (const auto* light = world.Registry.try_get<LightComponent>(srcEntity)) {
+                world.Registry.emplace<LightComponent>(newEntity, *light);
+            }
+            if (const auto* tag = world.Registry.try_get<TagComponent>(srcEntity)) {
+                world.Registry.emplace<TagComponent>(newEntity, *tag);
+            }
+            if (world.Registry.all_of<StaticTag>(srcEntity)) world.Registry.emplace<StaticTag>(newEntity);
+            if (world.Registry.all_of<InactiveTag>(srcEntity)) world.Registry.emplace<InactiveTag>(newEntity);
+            created.push_back(newEntity);
+            continue;
+        }
+
+        const auto& renderable = world.Registry.get<RenderableComponent>(srcEntity);
+
+        if (world.Registry.all_of<LevelGeometryTag>(srcEntity)) {
+            std::string baseName = NextDuplicateName(world, name.Name.empty() ? "Box" : name.Name);
+            glm::vec3 color = renderable.ModelRef->MeshMaterial(0).BaseColor;
+            created.push_back(world.CreateBox(newPos, transform.Scale, color, transform.RotationEuler, baseName));
+        } else {
             // Its own Model instance (own material-override/animation state), not the same
             // shared_ptr as the original — otherwise recoloring one copy would recolor every
-            // duplicate made from it, since Model (not PlacedModel) owns the material override.
-            copy.ModelRef = assets.CloneModel(src.ModelRef);
-            if (auto srcMat = src.ModelRef->MaterialOverride()) {
-                copy.ModelRef->SetMaterialOverride(std::make_shared<Material>(*srcMat));
+            // duplicate made from it, since Model (not the entity) owns the material override.
+            auto clonedModel = assets.CloneModel(renderable.ModelRef);
+            if (auto srcMat = renderable.ModelRef->MaterialOverride()) {
+                clonedModel->SetMaterialOverride(std::make_shared<Material>(*srcMat));
             }
-
-            world.Models.push_back(copy);
-            created.push_back({true, (int)world.Models.size() - 1});
-        } else {
-            if (item.Index < 0 || item.Index >= (int)world.Boxes.size()) continue;
-            const WorldBox& src = world.Boxes[item.Index];
-
-            WorldBox copy = src;
-            std::string baseName = src.Name.empty() ? ("Box " + std::to_string(item.Index)) : src.Name;
-            copy.Name = baseName + " Copy";
-            copy.Center += kOffset;
-
-            world.Boxes.push_back(copy);
-            created.push_back({false, (int)world.Boxes.size() - 1});
+            std::string newName = NextDuplicateName(world, name.Name.empty() ? "Model" : name.Name);
+            entt::entity newEntity = world.CreateModelEntity(clonedModel, newPos, transform.RotationEuler, transform.Scale, newName);
+            if (const auto* audio = world.Registry.try_get<AudioSourceComponent>(srcEntity)) {
+                world.Registry.emplace<AudioSourceComponent>(newEntity, audio->SoundPath);
+            }
+            created.push_back(newEntity);
         }
     }
 
@@ -459,41 +816,56 @@ void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets) {
     // into place without having to re-pick them from the Hierarchy.
     ClearSelection();
     for (size_t i = 0; i < created.size(); ++i) {
-        if (i == 0) {
-            if (created[i].IsModel) m_SelectedModel = created[i].Index;
-            else m_SelectedBox = created[i].Index;
-        } else {
-            m_ExtraSelection.push_back(created[i]);
-        }
+        if (i == 0) m_Selected = created[i];
+        else m_ExtraSelection.push_back(created[i]);
     }
 }
 
-void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
-    if (!HasAnySelection()) return;
+bool EditorLayer::ComputeSelectionBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) const {
+    if (!HasAnySelection()) return false;
 
     glm::vec3 boundsMin(1e30f), boundsMax(-1e30f);
     bool any = false;
-    auto expand = [&](bool isModel, int index) {
-        if (isModel) {
-            if (index < 0 || index >= (int)world.Models.size()) return;
-            PlacedModel& pm = world.Models[index];
-            glm::mat4 m = ComposeTransform(pm.Position, pm.RotationEuler, pm.Scale);
-            AABB bounds = AABB{pm.ModelRef->BoundsMin(), pm.ModelRef->BoundsMax()}.Transformed(m);
-            boundsMin = glm::min(boundsMin, bounds.Min);
-            boundsMax = glm::max(boundsMax, bounds.Max);
-        } else {
-            if (index < 0 || index >= (int)world.Boxes.size()) return;
-            WorldBox& box = world.Boxes[index];
-            glm::mat4 m = ComposeTransform(box.Center, box.RotationEuler, glm::vec3(1.0f));
-            AABB bounds = AABB{-box.Size * 0.5f, box.Size * 0.5f}.Transformed(m);
-            boundsMin = glm::min(boundsMin, bounds.Min);
-            boundsMax = glm::max(boundsMax, bounds.Max);
+    // Every placeable-in-the-world entity used to have a real Renderable Model (former-boxes
+    // included, via the cube primitive) — that stopped being true once lights and empties were
+    // added, so this can no longer assume RenderableComponent exists (it used to call the
+    // unchecked get<>(), which is undefined behavior — a crash in practice — the instant a
+    // light/empty was selected, since this runs every frame via GetSelectionCenter). A
+    // mesh-less entity contributes a small nominal box around its own origin instead, matching
+    // the fallback DrawGizmo already uses for the same case, so focus/orbit still center on it
+    // sensibly rather than crashing or silently contributing nothing.
+    auto expand = [&](entt::entity entity) {
+        if (!world.Registry.valid(entity)) return;
+        glm::mat4 m = world.ComposeWorldTransform(entity);
+        glm::vec3 localMin(-0.5f), localMax(0.5f);
+        if (const auto* renderable = world.Registry.try_get<RenderableComponent>(entity)) {
+            localMin = renderable->ModelRef->BoundsMin();
+            localMax = renderable->ModelRef->BoundsMax();
         }
+        AABB bounds = AABB{localMin, localMax}.Transformed(m);
+        boundsMin = glm::min(boundsMin, bounds.Min);
+        boundsMax = glm::max(boundsMax, bounds.Max);
         any = true;
     };
-    expand(m_SelectedModel >= 0, m_SelectedModel >= 0 ? m_SelectedModel : m_SelectedBox);
-    for (const auto& item : m_ExtraSelection) expand(item.IsModel, item.Index);
-    if (!any) return;
+    expand(m_Selected);
+    for (entt::entity e : m_ExtraSelection) expand(e);
+    if (!any) return false;
+
+    outMin = boundsMin;
+    outMax = boundsMax;
+    return true;
+}
+
+bool EditorLayer::GetSelectionCenter(World& world, glm::vec3& outCenter) const {
+    glm::vec3 boundsMin, boundsMax;
+    if (!ComputeSelectionBounds(world, boundsMin, boundsMax)) return false;
+    outCenter = (boundsMin + boundsMax) * 0.5f;
+    return true;
+}
+
+void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
+    glm::vec3 boundsMin, boundsMax;
+    if (!ComputeSelectionBounds(world, boundsMin, boundsMax)) return;
 
     glm::vec3 center = (boundsMin + boundsMax) * 0.5f;
     float radius = glm::length(boundsMax - boundsMin) * 0.5f;
@@ -505,15 +877,259 @@ void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
     editorCamera.Position = center - editorCamera.Front() * distance;
 }
 
+bool EditorLayer::CanSnapSelectionToGround(World& world) const {
+    return m_Selected != entt::null && world.Registry.valid(m_Selected) &&
+        world.Registry.all_of<RenderableComponent>(m_Selected);
+}
+
+void EditorLayer::SnapSelectionToGround(World& world) {
+    if (!CanSnapSelectionToGround(world)) return;
+    PushUndo(world, "Snap to Ground");
+
+    auto& transform = world.Registry.get<TransformComponent>(m_Selected);
+    auto& renderable = world.Registry.get<RenderableComponent>(m_Selected);
+    glm::mat4 m = ComposeTransform(transform);
+    if (world.Registry.all_of<LevelGeometryTag>(m_Selected)) {
+        AABB worldBounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(m);
+        transform.Position.y -= worldBounds.Min.y;
+    } else {
+        transform.Position.y -= renderable.ModelRef->LowestVertexWorldY(m);
+    }
+}
+
+void EditorLayer::ComputeViewPivot(World& world, Camera& editorCamera, glm::vec3& outPivot) const {
+    if (GetSelectionCenter(world, outPivot)) return;
+
+    float t;
+    if (world.Raycast(editorCamera.Position, editorCamera.Front(), 1000.0f, t) != entt::null) {
+        outPivot = editorCamera.Position + editorCamera.Front() * t;
+        return;
+    }
+
+    const float kDefaultFocusDistance = 15.0f;
+    outPivot = editorCamera.Position + editorCamera.Front() * kDefaultFocusDistance;
+}
+
+void EditorLayer::SnapToView(World& world, Camera& editorCamera, float yaw, float pitch, bool orthographic) {
+    glm::vec3 pivot;
+    ComputeViewPivot(world, editorCamera, pivot);
+
+    // A "distance to pivot" that means the same thing regardless of the CURRENT projection mode.
+    // In orthographic mode the camera's literal position is decoupled from zoom level (scroll
+    // only changes OrthoHalfHeight, never Position — see UpdateEditorCamera in main.cpp), so
+    // computing distance from Position here would use a stale, arbitrary number; derive the
+    // perspective-equivalent distance from the current ortho size instead.
+    float halfFovTan = tan(glm::radians(editorCamera.Fov) * 0.5f);
+    float distance = editorCamera.Orthographic
+        ? editorCamera.OrthoHalfHeight / halfFovTan
+        : glm::length(editorCamera.Position - pivot);
+    distance = std::max(distance, 0.5f);
+
+    glm::vec3 newFront;
+    newFront.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    newFront.y = sin(glm::radians(pitch));
+    newFront.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    newFront = glm::normalize(newFront);
+
+    m_ViewTransition.Active = true;
+    m_ViewTransition.T = 0.0f;
+    m_ViewTransition.FromPos = editorCamera.Position;
+    m_ViewTransition.FromYaw = editorCamera.Yaw;
+    m_ViewTransition.FromPitch = editorCamera.Pitch;
+    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
+    m_ViewTransition.ToYaw = yaw;
+    m_ViewTransition.ToPitch = pitch;
+    m_ViewTransition.ToPos = pivot - newFront * distance;
+    // Keep apparent scale continuous across a projection-mode switch instead of an arbitrary
+    // jump in how big everything suddenly looks.
+    m_ViewTransition.ToOrthoHalfHeight = orthographic ? (distance * halfFovTan) : editorCamera.OrthoHalfHeight;
+
+    editorCamera.Orthographic = orthographic; // switches immediately; only angle/position/size animate
+}
+
+void EditorLayer::ToggleOrthographic(World& world, Camera& editorCamera) {
+    // Same angle, just flips projection — SnapToView still handles the position/scale
+    // conversion so perspective<->orthographic round-trips don't drift.
+    SnapToView(world, editorCamera, editorCamera.Yaw, editorCamera.Pitch, !editorCamera.Orthographic);
+}
+
+void EditorLayer::UpdateViewTransition(Camera& editorCamera, float dt) {
+    if (!m_ViewTransition.Active) return;
+
+    // Any manual camera input hands control back to the user immediately instead of fighting
+    // the animation to completion — the same feel as canceling the nav gizmo's own axis-snap
+    // animation by moving the mouse mid-flight.
+    ImGuiIO& io = ImGui::GetIO();
+    bool manualInput = io.MouseWheel != 0.0f ||
+        ImGui::IsMouseDown(ImGuiMouseButton_Right) || ImGui::IsMouseDown(ImGuiMouseButton_Middle) ||
+        (io.KeyAlt && ImGui::IsMouseDown(ImGuiMouseButton_Left)) ||
+        (!io.WantCaptureKeyboard && (ImGui::IsKeyDown(ImGuiKey_W) || ImGui::IsKeyDown(ImGuiKey_A) ||
+            ImGui::IsKeyDown(ImGuiKey_S) || ImGui::IsKeyDown(ImGuiKey_D) ||
+            ImGui::IsKeyDown(ImGuiKey_Q) || ImGui::IsKeyDown(ImGuiKey_E)));
+    if (manualInput) {
+        m_ViewTransition.Active = false;
+        return;
+    }
+
+    const float kDuration = 0.28f;
+    m_ViewTransition.T = std::min(1.0f, m_ViewTransition.T + dt / kDuration);
+    float t = m_ViewTransition.T;
+    float eased = t * t * (3.0f - 2.0f * t); // smoothstep
+
+    auto lerpAngle = [](float from, float to, float f) {
+        float delta = fmodf(to - from + 540.0f, 360.0f) - 180.0f; // shortest path, wrapped to [-180,180)
+        return from + delta * f;
+    };
+
+    editorCamera.Yaw = lerpAngle(m_ViewTransition.FromYaw, m_ViewTransition.ToYaw, eased);
+    editorCamera.Pitch = m_ViewTransition.FromPitch + (m_ViewTransition.ToPitch - m_ViewTransition.FromPitch) * eased;
+    editorCamera.Position = glm::mix(m_ViewTransition.FromPos, m_ViewTransition.ToPos, eased);
+    editorCamera.OrthoHalfHeight = m_ViewTransition.FromOrthoHalfHeight +
+        (m_ViewTransition.ToOrthoHalfHeight - m_ViewTransition.FromOrthoHalfHeight) * eased;
+
+    if (m_ViewTransition.T >= 1.0f) m_ViewTransition.Active = false;
+}
+
+void EditorLayer::DrawEngineMark(float dt) {
+    if (!m_MarkTexture) return;
+    if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
+
+    // Slow, subtle spin — a full rotation every ~12 seconds, not a dizzying logo-spinner.
+    const float kSpinSpeed = 0.52f; // radians/sec
+    const float kTwoPi = 6.28318530718f;
+    m_MarkSpinAngle = fmodf(m_MarkSpinAngle + dt * kSpinSpeed, kTwoPi);
+
+    float size = 40.0f * m_UIScale; // "not too big" — a small corner decoration, not a feature
+    float margin = 14.0f * m_UIScale;
+    float half = size * 0.5f;
+    ImVec2 center(m_ViewportPos.x + margin + half, m_ViewportPos.y + m_ViewportSize.y - margin - half);
+
+    // Drawn via the foreground draw list rather than an ImGui::Image in its own window: this
+    // needs per-vertex placement ImGui's Image widget can't do directly, and the foreground
+    // list also sidesteps the docking/z-order pitfalls the toolbar overlays needed NoDocking +
+    // explicit front-ordering to avoid (see DrawPlayStopButton/DrawViewGizmo) — it always
+    // renders on top, full stop, with no window of its own to get knocked around by a dock
+    // rebuild.
+    //
+    // Spinning around the Y axis (a vertical axis through the mark's center, like a sign
+    // swinging on a post) rather than the screen-plane Z axis: a flat sprite can't actually
+    // turn in depth, so this fakes it the standard way — foreshorten the horizontal extent by
+    // cos(angle) each frame, full width when face-on, collapsing to a sliver edge-on. abs()
+    // keeps it from mirroring through a negative scale, since there's no distinct "back" face
+    // texture — it just squashes to a line and un-squashes, reading as a continuous spin.
+    float halfX = half * fabsf(cosf(m_MarkSpinAngle));
+    ImVec2 p1(center.x - halfX, center.y - half);
+    ImVec2 p2(center.x + halfX, center.y - half);
+    ImVec2 p3(center.x + halfX, center.y + half);
+    ImVec2 p4(center.x - halfX, center.y + half);
+
+    ImGui::GetForegroundDrawList()->AddImageQuad((ImTextureID)(intptr_t)m_MarkTexture->GLHandle(),
+        p1, p2, p3, p4, ImVec2(0, 0), ImVec2(1, 0), ImVec2(1, 1), ImVec2(0, 1),
+        IM_COL32(255, 255, 255, 140));
+}
+
+bool EditorLayer::IsMouseOverSceneViewport() const {
+    // Pure geometric test against the same rect picking/gizmos already trust (ViewportPos()/
+    // ViewportSize(), zeroed whenever the "Scene" tab isn't the active one) — deliberately NOT
+    // ImGui::IsWindowHovered(), which can read false in edge cases involving overlapping
+    // transparent gizmo-overlay windows or an active drag elsewhere, none of which should affect
+    // whether the mouse is, geometrically, over the viewport.
+    if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return false;
+    ImVec2 mouse = ImGui::GetIO().MousePos;
+    return mouse.x >= m_ViewportPos.x && mouse.x <= m_ViewportPos.x + m_ViewportSize.x &&
+           mouse.y >= m_ViewportPos.y && mouse.y <= m_ViewportPos.y + m_ViewportSize.y;
+}
+
 bool EditorLayer::WantsCaptureMouse() const {
-    return ImGui::GetIO().WantCaptureMouse;
+    // ImGui's own WantCaptureMouse is true while merely hovering the "Scene" window now that
+    // it's a real docked/tabbed window rather than the dockspace's bare passthrough central
+    // node — which would otherwise block camera navigation AND viewport picking/box-select
+    // (both gate on this) everywhere inside the one place they need to work. Hovering the
+    // viewport itself was never what this check was meant to guard against; hovering some
+    // OTHER panel (Hierarchy, Inspector, a popup, ...) still is.
+    //
+    // While the running game owns input, the editor viewport stands down entirely — everything
+    // that gates on !WantsCaptureMouse() (camera nav, picking, box-select, vertex grab, the
+    // Asset-Browser drop target) then naturally no-ops.
+    if (m_GameInputActive) return true;
+    return ImGui::GetIO().WantCaptureMouse && !IsMouseOverSceneViewport();
 }
 
 bool EditorLayer::WantsCaptureKeyboard() const {
-    return ImGui::GetIO().WantCaptureKeyboard;
+    return ImGui::GetIO().WantCaptureKeyboard || m_GameInputActive;
+}
+
+void EditorLayer::KeepDockspaceAlive() {
+    // Reuse the id Draw() already resolved inside "##DockHost" — NOT ImGui::GetID("EditorDockspace")
+    // again, which from here (no window pushed) hashes to a different, phantom id and leaves the
+    // real editor dockspace to go stale through Play Mode. Zero only before Draw() has ever run,
+    // which can't happen before Play is reachable anyway.
+    if (m_EditorDockspaceId == 0) return;
+    ImGui::DockSpace(m_EditorDockspaceId, ImVec2(0, 0), ImGuiDockNodeFlags_KeepAliveOnly);
+}
+
+namespace {
+// Make `windowName`'s tab the selected one in whatever dock node it lives in. Returns false if
+// the window has no live dock node yet (so the caller can keep the request pending and retry).
+//
+// ImGui::SetWindowFocus() does NOT select a specific tab in a shared dock node in this vendored
+// version — its own source comment says so ("we avoid applying focus immediately before the
+// tabbar is visible") and the line that would do it is commented out. It only affects nav/OS
+// focus, so selecting a tab means poking the dock node's own TabBar state directly.
+bool SelectDockedTab(const char* windowName) {
+    ImGuiWindow* win = ImGui::FindWindowByName(windowName);
+    if (!win || !win->DockNode) return false;
+    ImGuiDockNode* node = win->DockNode;
+    node->SelectedTabId = win->TabId;
+    if (node->TabBar) {
+        node->TabBar->SelectedTabId = win->TabId;
+        node->TabBar->NextSelectedTabId = win->TabId;
+    }
+    return true;
+}
+} // namespace
+
+void EditorLayer::ApplyPendingViewportTabFocus() {
+    // A request stays pending until it actually lands on a live dock node — on the exact frame
+    // Play/Stop is pressed, Draw() (and Scene's/Game's Begin) may not have run yet, so there's
+    // nothing to select into; the next full editor-UI frame finishes the job. Game wins if both
+    // are somehow set (Play is the more recent intent) and clears the stale Scene request.
+    if (m_FocusGameTabRequested) {
+        if (SelectDockedTab("Game")) {
+            m_FocusGameTabRequested = false;
+            m_FocusSceneTabRequested = false;
+        }
+    } else if (m_FocusSceneTabRequested) {
+        if (SelectDockedTab("Scene")) m_FocusSceneTabRequested = false;
+    }
 }
 
 void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera, float dt) {
+    m_AssetsPtr = &assets; // see the member comment - lets PushUndo() snapshot AssetLibrary
+                           // state without needing every one of its call sites to pass it in
+
+    // Auto-save: only ticks here (Draw() is editor-mode-only, per main.cpp) so it never fires
+    // mid-Play - the same reason OnExitPlayMode's revert-to-snapshot exists, autosaving
+    // transient gameplay state would be wrong. Skipped entirely when nothing's actually unsaved,
+    // so a session where you're just looking around never writes the file over and over.
+    const EditorSettings& prefsForAutoSave = EditorSettings::Get();
+    if (prefsForAutoSave.AutoSaveEnabled) {
+        m_AutoSaveTimer += dt;
+        float intervalSeconds = std::max(1.0f, prefsForAutoSave.AutoSaveIntervalMinutes * 60.0f);
+        if (m_AutoSaveTimer >= intervalSeconds) {
+            m_AutoSaveTimer = 0.0f;
+            if (m_Dirty) {
+                SceneSerializer::Save(world, assets, m_CurrentScenePath);
+                m_Dirty = false;
+                Log::Info("Auto-saved '" + m_CurrentScenePath + "'.");
+            }
+        }
+    } else {
+        m_AutoSaveTimer = 0.0f; // don't let it silently accumulate while disabled
+    }
+
+    UpdateViewTransition(editorCamera, dt);
+
     int ww, wh;
     glfwGetWindowSize(m_Window, &ww, &wh);
     float w = (float)ww, h = (float)wh;
@@ -526,10 +1142,57 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // every neighbor sharing that border reacts too, and ImGui persists the whole arrangement
     // to imgui.ini across launches — DockBuilder below only runs once, to seed that arrangement
     // the very first time there's no saved layout yet.
-    const float toolbarH = kToolbarHeight;
+    const float toolbarH = kToolbarHeight * m_UIScale;
 
-    ApplyPanelPlacement({0, 0}, {w, toolbarH});
+    // The toolbar is chrome, not a panel: hard-pinned to the top, full width, exact height, every
+    // frame — independent of the Lock Layout toggle (which only governs the dock panels). Fixed
+    // size + NoResize + size constraints keep it from ever being stretched down over the dock
+    // panels' tab bars; NoMove/NoDocking keep it from being dragged off or docked; NoSavedSettings
+    // stops a stale imgui.ini from repositioning it.
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(w, toolbarH), ImGuiCond_Always);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(w, toolbarH), ImVec2(w, toolbarH));
+    ImGui::SetNextWindowViewport(ImGui::GetMainViewport()->ID);
     DrawTopToolbar(world, assets, editorCamera);
+
+    // Engine wordmark: a standalone overlay (not embedded in the toolbar's own layout, so it
+    // isn't clipped by the toolbar's height), fixed-size (scaled only by DPI, NOT by window
+    // width — sizing it as a fraction of window width blows up way past the Inspector panel's
+    // actual width on a large/high-res monitor) and pinned to the top-right corner with fixed
+    // margins. Non-interactive, like the old bottom-right viewport watermark this replaces —
+    // the "TE" monogram half of that moved elsewhere; this is text-only.
+    if (m_LogoTexture) {
+        float aspect = (float)m_LogoTexture->Width() / (float)m_LogoTexture->Height();
+        float logoH = 50.0f * m_UIScale;
+        float logoW = logoH * aspect;
+        float topMargin = 30.0f * m_UIScale;
+
+        // Centered over the Inspector panel's actual live rect (one frame stale — it hasn't
+        // been drawn yet this frame — which is imperceptible) rather than a fixed margin from
+        // the window edge, so it stays centered on that column even if it's resized, instead of
+        // just approximating where the column's default width happens to put it.
+        ImGuiWindow* inspectorWin = ImGui::FindWindowByName("Inspector");
+        float centerX = inspectorWin ? (inspectorWin->Pos.x + inspectorWin->Size.x * 0.5f) : (w * 0.89f);
+
+        ImGui::SetNextWindowPos(ImVec2(centerX - logoW * 0.5f, topMargin), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(logoW, logoH), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::Begin("##EngineWordmark", nullptr,
+            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground |
+            ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoSavedSettings |
+            ImGuiWindowFlags_NoDocking);
+        // Without NoDocking this is technically a dockable floating window, and Reset Layout's
+        // DockBuilderRemoveNode + full dockspace rebuild (below) can knock an undocked-but-
+        // dockable window out of the visible window list entirely. Also force it to the front
+        // of the display order every frame so the rebuild can't bury it behind whatever the
+        // freshly recreated dock host window ends up as.
+        ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+        ImGui::ImageWithBg((ImTextureID)(intptr_t)m_LogoTexture->GLHandle(), ImVec2(logoW, logoH),
+            ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), ImVec4(1, 1, 1, 0.6f));
+        ImGui::End();
+        ImGui::PopStyleVar();
+    }
 
     ImGui::SetNextWindowPos(ImVec2(0, toolbarH));
     ImGui::SetNextWindowSize(ImVec2(w, h - toolbarH));
@@ -542,18 +1205,35 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     ImGui::PopStyleVar();
 
     ImGuiID dockspaceId = ImGui::GetID("EditorDockspace");
-    if (m_ResetLayoutRequested) {
+    // Stash it while "##DockHost" is the current window — KeepDockspaceAlive() runs later with
+    // no window pushed and can't re-derive the same id itself (see its comment).
+    m_EditorDockspaceId = dockspaceId;
+    bool rebuildLayout = m_ResetLayoutRequested;
+    m_ResetLayoutRequested = false;
+    // One-time migration: builds before this seeded the Scene/Game viewport as the dockspace's
+    // "central node". ImGui's DockNodeTreeUpdatePosSize() then hands every panel sharing a split
+    // with the central node a FIXED pixel size on window resize and lets the viewport absorb all
+    // the slack — so the side panels never scale with the window. The seed below uses no central
+    // node (every split distributes by ratio → all panels keep their fraction, like Unity), so
+    // if a persisted layout still has a central node, tear it down once and re-seed.
+    if (!rebuildLayout && ImGui::DockBuilderGetNode(dockspaceId) &&
+        ImGui::DockBuilderGetCentralNode(dockspaceId) != nullptr) {
+        rebuildLayout = true;
+    }
+    if (rebuildLayout) {
         // Tear down the existing tree (whatever the user dragged panels into) so the block
         // below rebuilds the original default split from scratch, same as a first launch.
         ImGui::DockBuilderRemoveNode(dockspaceId);
-        m_ResetLayoutRequested = false;
     }
     if (!ImGui::DockBuilderGetNode(dockspaceId)) {
-        // ImGuiDockNodeFlags_DockSpace is what marks the root as a real dockspace so its
-        // empty center leaf survives as the CentralNode (visible-when-empty) after the splits
-        // below, instead of being reclaimed by a neighbor — PassthruCentralNode alone (passed
-        // to DockSpace() further down) only controls how that surviving central node renders.
-        ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace | ImGuiDockNodeFlags_PassthruCentralNode);
+        // Deliberately NOT ImGuiDockNodeFlags_DockSpace here: that flag makes the leftover
+        // center leaf a "central node", which ImGui then resizes by giving its split-siblings a
+        // fixed pixel size and itself the remainder — so the surrounding panels wouldn't scale
+        // when the window resizes. A plain node means every split redistributes by SizeRef
+        // ratio, so all five regions keep their fraction of the window. The passthru central
+        // node is unused anyway — the Scene view is an FBO shown via ImGui::Image, not an
+        // empty see-through center (see SetSceneTexture).
+        ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_None);
         ImGui::DockBuilderSetNodeSize(dockspaceId, ImVec2(w, h - toolbarH));
 
         // Proportions picked to give each panel room to breathe rather than a bare-minimum
@@ -568,46 +1248,108 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGui::DockBuilderDockWindow("Scene Hierarchy", left);
         ImGui::DockBuilderDockWindow("Inspector", right);
         ImGui::DockBuilderDockWindow("Asset Browser", bottom);
+        // Console shares the bottom node as a tab beside the Asset Browser, the way Unity docks
+        // Project and Console together.
+        ImGui::DockBuilderDockWindow(ICON_FA_TERMINAL "  Console", bottom);
+        // Scene and Game are Unity's own pair of tabs sharing one dock node — Scene is the
+        // editor's 3D viewport, Game is the locked-aspect Play Mode preview; only whichever tab
+        // is active actually shows/renders (see m_SceneViewportVisible below).
+        ImGui::DockBuilderDockWindow("Scene", center);
+        ImGui::DockBuilderDockWindow("Game", center);
         ImGui::DockBuilderFinish(dockspaceId);
+        m_SceneGameDockNodeId = center;
     }
-    ImGui::DockSpace(dockspaceId, ImVec2(0, 0), ImGuiDockNodeFlags_PassthruCentralNode);
+    ImGui::DockSpace(dockspaceId, ImVec2(0, 0), ImGuiDockNodeFlags_None);
     ImGui::End();
 
-    // The dockspace's central node IS the viewport — read its live rect so picking, gizmos,
-    // and the 3D render itself (main.cpp reads these via ViewportPos()/ViewportSize()) track
-    // the Hierarchy/Inspector/Asset Browser panels being resized instead of assuming the
-    // viewport always fills the whole window underneath them.
-    if (ImGuiDockNode* centralNode = ImGui::DockBuilderGetCentralNode(dockspaceId)) {
-        m_ViewportPos = {centralNode->Pos.x, centralNode->Pos.y};
-        m_ViewportSize = {centralNode->Size.x, centralNode->Size.y};
-    } else {
-        m_ViewportPos = {0.0f, toolbarH};
-        m_ViewportSize = {w, h - toolbarH};
+    // Neither Scene nor Game is submitted while play is maximized (both gated on editorUIVisible) —
+    // reapplying the node here, every editor-mode frame, guards against ImGui occasionally
+    // failing to remember Game's dock assignment across that gap and popping it out into its own
+    // floating window instead (observed after a Play/Stop cycle). ImGuiCond_Appearing makes this
+    // a no-op for a window that's already being submitted continuously, so it never fights a
+    // manual re-dock the user did on purpose.
+    if (m_SceneGameDockNodeId != 0) {
+        ImGui::SetNextWindowDockID(m_SceneGameDockNodeId, ImGuiCond_Appearing);
     }
+
+    // "Scene" is a real dockable/tabbable ImGui window now (tabbed with "Game"). Its 3D content
+    // is rendered by main.cpp into its own offscreen framebuffer beforehand (see
+    // SetSceneTexture()'s comment for why — a docked window's host node always paints its own
+    // near-opaque background over raw GL content drawn straight into the backbuffer, which is
+    // NOT how this used to render: back when the viewport was the dockspace's bare passthrough
+    // central node rather than a real named window, there was no host background to paint).
+    // Begin() returns false when Scene isn't the active tab (Game is showing instead) — zeroing
+    // the viewport rect in that case is what makes every existing ">0.0f" guard elsewhere
+    // (picking, gizmos) just naturally no-op instead of needing an explicit visibility check.
+    // (Pending Scene/Game tab focus is applied later, from main.cpp, after Game's Begin() has
+    // also run this frame — see ApplyPendingViewportTabFocus for why it can't happen here.)
+    // NoFocusOnAppearing: the ACTUAL root cause of the Play/Stop tab-selection bug, found by
+    // reading ImGui's own source rather than guessing further. Both Scene and Game go many
+    // frames without being submitted at all during Play Mode, which makes each one
+    // "window_just_activated_by_user" the instant it's Begin()'d again after Stop — and without
+    // this flag, THAT alone makes a window auto-focus itself (imgui.cpp's Begin(), "Apply window
+    // focus" block), which a separate docking code path ("Apply NavWindow focus back to the tab
+    // bar", DockNodeUpdateTabBar) then uses to force it to become the dock node's selected tab.
+    // Since Game's Begin() always runs after Scene's in a frame, Game's auto-focus-on-reappear
+    // was winning every single time, no matter what explicitly requested otherwise afterward.
+    // With this flag on both windows, reappearing after Play never touches tab selection again -
+    // ApplyPendingViewportTabFocus()'s explicit override is the only thing that still can.
+    ImGuiWindowFlags sceneFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+        ImGuiWindowFlags_NoFocusOnAppearing;
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    m_SceneViewportVisible = ImGui::Begin("Scene", nullptr, sceneFlags);
+    ImGui::PopStyleVar();
+    // Track Scene's live dock node every frame (not just once) so the Play/Stop re-docking
+    // safety net always targets the pair's CURRENT home — wherever the user last dragged the
+    // Scene/Game tab group — instead of the stale first-run seed id. Only overwrite with a real
+    // assignment: a docked Scene always reports a non-zero DockId; keep the last known one if it
+    // ever reads zero (e.g. mid-undock) rather than blanking the safety net.
+    if (ImGuiWindow* sceneWindow = ImGui::FindWindowByName("Scene")) {
+        if (sceneWindow->DockId != 0) m_SceneGameDockNodeId = sceneWindow->DockId;
+    }
+    if (m_SceneViewportVisible) {
+        ImVec2 contentMin = ImGui::GetWindowContentRegionMin();
+        ImVec2 windowPos = ImGui::GetWindowPos();
+        ImVec2 contentSize = ImGui::GetContentRegionAvail();
+        m_ViewportPos = {windowPos.x + contentMin.x, windowPos.y + contentMin.y};
+        m_ViewportSize = {contentSize.x, contentSize.y};
+        m_LastSceneContentRegion = m_ViewportSize;
+
+        if (m_SceneColorTexture != 0 && contentSize.x > 0.0f && contentSize.y > 0.0f) {
+            // uv0=(0,1)/uv1=(1,0): OpenGL textures are bottom-left origin, ImGui::Image expects
+            // top-left, so this flips the framebuffer's color attachment right-side up. Filled
+            // exactly (no letterboxing) since the offscreen render is sized to match this exact
+            // rect every frame, so absolute-screen-space gizmo/picking math keeps working
+            // unchanged against ViewportPos()/ViewportSize().
+            ImGui::Image((ImTextureID)(intptr_t)m_SceneColorTexture, contentSize, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+        }
+    } else {
+        m_ViewportPos = {0.0f, 0.0f};
+        m_ViewportSize = {0.0f, 0.0f};
+    }
+    ImGui::End();
+
+    DrawEngineMark(dt);
 
     DrawHierarchy(world, assets);
     DrawInspector(world, assets, dt);
     DrawAssetBrowser(world, assets);
+    DrawConsole();
+    DrawStatsOverlay(world, dt);
+    DrawHistoryPanel(world, assets);
 
-    // Studio watermark: small, translucent, bottom-right of the whole window. Sits over
-    // whatever the passthrough center (viewport) node currently occupies in the default
-    // layout; a non-interactive overlay like the "##hint" one below, so it never steals
-    // clicks from the gizmo/viewport underneath it.
-    if (m_LogoTexture) {
-        float logoH = 110.0f;
-        float logoW = logoH * ((float)m_LogoTexture->Width() / (float)m_LogoTexture->Height());
-        ImGui::SetNextWindowPos(ImVec2(w - logoW - 18.0f, h - logoH - 14.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(logoW, logoH), ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-        ImGui::Begin("##BrandWatermark", nullptr,
-            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground |
-            ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoSavedSettings);
-        ImGui::ImageWithBg((ImTextureID)(intptr_t)m_LogoTexture->GLHandle(), ImVec2(logoW, logoH),
-            ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), ImVec4(1, 1, 1, 0.5f));
-        ImGui::End();
-        ImGui::PopStyleVar();
-    }
+    // Drains a couple of queued imports per frame (see ImportQueueManager.h) and, while any
+    // remain, draws the bottom-right progress window with the current file / X of N / Cancel.
+    m_ImportQueue.Update([&](const std::string& path) {
+        std::string folder = m_CurrentAssetFolder;
+        auto it = m_ImportTargetFolder.find(path);
+        if (it != m_ImportTargetFolder.end()) {
+            folder = it->second;
+            m_ImportTargetFolder.erase(it);
+        }
+        ImportDroppedFile(world, assets, editorCamera, path, folder);
+    });
+    m_ImportQueue.DrawProgressUI();
 
     DrawViewportDropTarget(world, assets, editorCamera);
 
@@ -617,30 +1359,39 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // selected model, but if a group is selected, every other member rides along by the same
     // delta each frame (see UpdateVertexDrag) so the whole group snaps together via that one
     // vertex instead of only the primary moving.
-    bool vHeld = !ImGui::GetIO().WantTextInput && ImGui::IsKeyDown(ImGuiKey_V);
+    // Ctrl excluded so Ctrl+V (paste) doesn't also arm the vertex-grab mode this key normally
+    // owns on its own.
+    bool vHeld = !ImGui::GetIO().WantTextInput && !ImGui::GetIO().KeyCtrl && ImGui::IsKeyDown(ImGuiKey_V);
 
     if (m_VertexDragActive && (!vHeld || !ImGui::IsMouseDown(ImGuiMouseButton_Left))) {
         m_VertexDragActive = false; // dropped: releasing V or the mouse button leaves it exactly where it is
     }
 
     glm::vec3 hoverLocal;
-    bool hasHover = vHeld && !m_VertexDragActive && !ImGui::GetIO().WantCaptureMouse &&
+    bool hasHover = vHeld && !m_VertexDragActive && !WantsCaptureMouse() &&
         FindVertexUnderCursor(world, editorCamera, hoverLocal);
 
     if (hasHover && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-        PushUndo(world);
-        PlacedModel& pm = world.Models[m_SelectedModel];
-        glm::mat4 model = ComposeTransform(pm.Position, pm.RotationEuler, pm.Scale);
+        PushUndo(world, "Move Vertex");
+        auto& transform = world.Registry.get<TransformComponent>(m_Selected);
+        glm::mat4 model = ComposeTransform(transform);
         glm::vec3 grabbedWorld = glm::vec3(model * glm::vec4(hoverLocal, 1.0f));
         m_VertexDragLocal = hoverLocal;
         m_VertexDragPlanePoint = grabbedWorld;
-        m_VertexDragOffset = pm.Position - grabbedWorld;
+        m_VertexDragOffset = transform.Position - grabbedWorld;
         m_VertexDragActive = true;
     }
 
     if (m_VertexDragActive) {
         UpdateVertexDrag(world, editorCamera);
     }
+
+    DrawEntityIcons(world, editorCamera);
+
+    // Drawn (and its hover/drag state refreshed) before picking runs below, so a click that
+    // lands on the nav gizmo's rotate ring or tool buttons doesn't also start a viewport
+    // box-select/pick underneath it.
+    DrawViewGizmo(world, editorCamera);
 
     if (!vHeld) {
         HandleViewportPicking(world, editorCamera);
@@ -664,7 +1415,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
                 ? "Dragging vertex — rest of the group is riding along (release click or V to drop)"
                 : "Dragging vertex — release click or V to drop";
             ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s", msg);
-        } else if (m_SelectedModel < 0) {
+        } else if (!IsVertexDraggable(world, m_Selected)) {
             ImGui::TextDisabled("Select a model first, then aim at one of its vertices");
         } else if (hasHover) {
             ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Click and hold to grab this vertex");
@@ -674,94 +1425,191 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGui::End();
     }
 
-    if (!ImGui::GetIO().WantTextInput) {
-        if (ImGui::IsKeyPressed(ImGuiKey_1)) m_GizmoOp = GizmoOp::Translate;
-        if (ImGui::IsKeyPressed(ImGuiKey_2)) m_GizmoOp = GizmoOp::Rotate;
-        if (ImGui::IsKeyPressed(ImGuiKey_3)) m_GizmoOp = GizmoOp::Scale;
-
+    if (!ImGui::GetIO().WantTextInput && !m_GameInputActive) {
         ImGuiIO& io = ImGui::GetIO();
+
+        // W/E/R/T gizmo-tool shortcuts (Unity's own scheme) only when Right-drag isn't held —
+        // WASDQE fly the camera during Right-drag instead (see main.cpp's UpdateEditorCamera),
+        // so without this guard just walking forward with W would also switch tools every time.
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+            if (ImGui::IsKeyPressed(ImGuiKey_W)) m_GizmoOp = GizmoOp::Translate;
+            if (ImGui::IsKeyPressed(ImGuiKey_E)) m_GizmoOp = GizmoOp::Rotate;
+            if (ImGui::IsKeyPressed(ImGuiKey_R)) m_GizmoOp = GizmoOp::Scale;
+            if (ImGui::IsKeyPressed(ImGuiKey_T)) m_GizmoOp = GizmoOp::Rect;
+        }
+
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) Undo(world, assets);
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) Redo(world, assets);
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S)) {
             SceneSerializer::Save(world, assets, m_CurrentScenePath);
             m_Dirty = false;
+            m_AutoSaveTimer = 0.0f; // don't auto-save again just seconds after a manual save
         }
-        if (HasAnySelection() && ImGui::IsKeyPressed(ImGuiKey_Delete)) DeleteSelection(world);
-        if (HasAnySelection() && ImGui::IsKeyPressed(ImGuiKey_F)) FocusOnSelection(world, editorCamera);
-        if (HasAnySelection() && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) DuplicateSelection(world, assets);
+        if (HasAnySelection() && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+            DeleteSelection(world);
+        } else if (!m_SelectedAssetKey.empty() && m_RenamingAssetKey.empty() && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+            std::vector<AssetKeyRef> toDelete;
+            toDelete.push_back({m_SelectedAssetKey, m_SelectedAssetIsFolder});
+            for (const auto& e : m_ExtraAssetSelection) toDelete.push_back(e);
+            RequestDeleteAssets(world, assets, toDelete, io.KeyShift);
+        }
+        if (HasAnySelection() && !m_AssetBrowserFocused && ImGui::IsKeyPressed(ImGuiKey_F)) FocusOnSelection(world, editorCamera);
+        if (HasAnySelection() && !m_AssetBrowserFocused && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) DuplicateSelection(world, assets);
 
-        if (!m_SelectedAssetKey.empty() && m_RenamingAssetKey.empty() && ImGui::IsKeyPressed(ImGuiKey_F2)) {
-            std::string currentName = m_SelectedAssetIsFolder ? LeafNameOf(m_SelectedAssetKey) : assets.DisplayName(m_SelectedAssetKey);
-            BeginRenameAsset(m_SelectedAssetKey, m_SelectedAssetIsFolder, currentName);
+        // Unity Project-window-style Asset Browser shortcuts — only while it has focus, so they
+        // don't collide with the scene-selection F/Ctrl+D bindings above. Tab (two-column focus
+        // switch), Ctrl+A (multi-select), and every OSX Cmd-key variant from Unity's manual are
+        // deliberately not implemented — this browser has one grid+tree layout, no multi-select
+        // model for assets, and this is a Windows-only engine.
+        if (m_AssetBrowserFocused && m_RenamingAssetKey.empty()) {
+            if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F)) {
+                m_AssetSearchFocusRequested = true;
+            } else if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F) && !m_SelectedAssetKey.empty()) {
+                // "Frame selected" — Unity shows the asset in its containing folder; here that
+                // just means navigating the browser to it, since it's already always visible
+                // once you're in the right folder.
+                if (!m_SelectedAssetIsFolder) m_CurrentAssetFolder = assets.AssetFolder(m_SelectedAssetKey);
+            } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) {
+                DuplicateSelectedAsset(world, assets);
+            } else if (ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+                if (m_SelectedAssetIsFolder) m_CurrentAssetFolder = m_SelectedAssetKey;
+            } else if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
+                m_CurrentAssetFolder = ParentFolderOf(m_CurrentAssetFolder);
+            } else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow) && !m_CurrentAssetFolder.empty()) {
+                m_ExpandedAssetFolders.insert(m_CurrentAssetFolder);
+            } else if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow) && !m_CurrentAssetFolder.empty()) {
+                if (m_ExpandedAssetFolders.count(m_CurrentAssetFolder)) m_ExpandedAssetFolders.erase(m_CurrentAssetFolder);
+                else m_CurrentAssetFolder = ParentFolderOf(m_CurrentAssetFolder);
+            }
+        }
+
+        // Clipboard. Cut is copy-then-delete, so a cancelled paste still leaves the objects
+        // recoverable through undo rather than gone.
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && HasAnySelection()) CopySelection(world);
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_X) && HasAnySelection()) {
+            CopySelection(world);
+            DeleteSelection(world);
+        }
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V)) PasteClipboard(world, assets);
+
+        // View presets on the regular number row (Blender/Maya use the numpad for these, but
+        // plenty of keyboards — laptops especially — don't have one). Ctrl gets you the
+        // opposite side of each axis pair.
+        if (ImGui::IsKeyPressed(ImGuiKey_7)) {
+            SnapToView(world, editorCamera, -90.0f, io.KeyCtrl ? 89.9f : -89.9f, true);
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_1)) {
+            SnapToView(world, editorCamera, io.KeyCtrl ? 90.0f : -90.0f, 0.0f, true);
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_3)) {
+            SnapToView(world, editorCamera, io.KeyCtrl ? 0.0f : 180.0f, 0.0f, true);
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_0)) SnapToView(world, editorCamera, -45.0f, -35.264f, true);
+        if (ImGui::IsKeyPressed(ImGuiKey_5)) ToggleOrthographic(world, editorCamera);
+
+        // F2 renames whichever selection is "live": a scene object takes priority over an Asset
+        // Browser entry, matching which panel the user most likely just clicked in.
+        if (ImGui::IsKeyPressed(ImGuiKey_F2)) {
+            if (HasAnySelection()) {
+                BeginRenameEntity(m_Selected);
+            } else if (!m_SelectedAssetKey.empty() && m_RenamingAssetKey.empty() && m_ExtraAssetSelection.empty()) {
+                std::string currentName = m_SelectedAssetIsFolder ? LeafNameOf(m_SelectedAssetKey) : assets.DisplayName(m_SelectedAssetKey);
+                BeginRenameAsset(m_SelectedAssetKey, m_SelectedAssetIsFolder, currentName);
+            }
         }
     }
 
     if (hasHover) {
         // Not-yet-grabbed indicator: yellow circle at the vertex the cursor is closest to.
-        PlacedModel& pm = world.Models[m_SelectedModel];
-        glm::mat4 model = ComposeTransform(pm.Position, pm.RotationEuler, pm.Scale);
-        glm::mat4 viewProj = editorCamera.ProjectionMatrix(w / h) * editorCamera.ViewMatrix();
+        // Screen position must be computed against the VIEWPORT sub-rect (m_ViewportPos/Size),
+        // not the full window (w/h) — the viewport doesn't start at the window's top-left once
+        // the Hierarchy/Inspector/Asset Browser panels are docked around it, and its aspect
+        // ratio isn't the whole window's either. Using w/h here (as this used to) computed the
+        // right NDC coordinates against the wrong rect, landing the dot wherever that rect
+        // mismatch happened to put it instead of on the actual vertex.
+        const auto& transform = world.Registry.get<TransformComponent>(m_Selected);
+        glm::mat4 model = ComposeTransform(transform);
+        glm::mat4 viewProj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) * editorCamera.ViewMatrix();
         glm::vec4 clip = viewProj * model * glm::vec4(hoverLocal, 1.0f);
         if (clip.w > 0.0001f) {
             glm::vec3 ndc = glm::vec3(clip) / clip.w;
-            ImVec2 screen((ndc.x * 0.5f + 0.5f) * w, (1.0f - (ndc.y * 0.5f + 0.5f)) * h);
+            ImVec2 screen(m_ViewportPos.x + (ndc.x * 0.5f + 0.5f) * m_ViewportSize.x,
+                          m_ViewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * m_ViewportSize.y);
             ImGui::GetForegroundDrawList()->AddCircle(screen, 8.0f, IM_COL32(255, 217, 77, 230), 0, 2.5f);
         }
     }
 
-    if (m_VertexDragActive && m_SelectedModel >= 0 && m_SelectedModel < (int)world.Models.size()) {
+    if (m_VertexDragActive && IsVertexDraggable(world, m_Selected)) {
         // Actively grabbed: filled yellow dot tracking the vertex's live (post-drag) position.
-        PlacedModel& pm = world.Models[m_SelectedModel];
-        glm::mat4 model = ComposeTransform(pm.Position, pm.RotationEuler, pm.Scale);
-        glm::mat4 viewProj = editorCamera.ProjectionMatrix(w / h) * editorCamera.ViewMatrix();
+        const auto& transform = world.Registry.get<TransformComponent>(m_Selected);
+        glm::mat4 model = ComposeTransform(transform);
+        glm::mat4 viewProj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) * editorCamera.ViewMatrix();
         glm::vec4 clip = viewProj * model * glm::vec4(m_VertexDragLocal, 1.0f);
         if (clip.w > 0.0001f) {
             glm::vec3 ndc = glm::vec3(clip) / clip.w;
-            ImVec2 screen((ndc.x * 0.5f + 0.5f) * w, (1.0f - (ndc.y * 0.5f + 0.5f)) * h);
+            ImVec2 screen(m_ViewportPos.x + (ndc.x * 0.5f + 0.5f) * m_ViewportSize.x,
+                          m_ViewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * m_ViewportSize.y);
             ImGui::GetForegroundDrawList()->AddCircle(screen, 7.0f, IM_COL32(255, 217, 77, 255), 0, 2.0f);
             ImGui::GetForegroundDrawList()->AddCircleFilled(screen, 3.0f, IM_COL32(255, 217, 77, 255));
         }
     }
 }
 
-void EditorLayer::DrawPlayStopButton(bool editorMode) {
+void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
     int ww, wh;
     glfwGetWindowSize(m_Window, &ww, &wh);
     float w = (float)ww;
 
+    // NoDocking: without it this is technically a dockable floating window, and Reset Layout's
+    // DockBuilderRemoveNode + full dockspace rebuild (in Draw()) can knock an undocked-but-
+    // dockable window out of the visible window list entirely.
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+        ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize;
 
-    if (editorMode) {
-        // Centered in the toolbar strip's icon row (above the viewport, not over it) —
-        // transparent background so it reads as part of that already-dark toolbar rather
-        // than a floating card. Called after DrawTopToolbar this frame so it layers on top.
-        float y = kToolbarHeight * 0.64f; // icon row's vertical center, below the menu bar row
+    if (!maximized) {
+        // Editor UI is up (editing, or in-panel play) — sit in the toolbar strip's icon row,
+        // transparent so it reads as part of that already-dark toolbar. Called after
+        // DrawTopToolbar this frame so it layers on top.
+        float y = kToolbarHeight * m_UIScale * 0.64f; // icon row's vertical center, below the menu bar row
         ImGui::SetNextWindowPos(ImVec2(w * 0.5f, y), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
         ImGui::SetNextWindowBgAlpha(0.0f);
         flags |= ImGuiWindowFlags_NoBackground;
     } else {
-        // No toolbar in play mode, so this floats near the top of the full window instead —
-        // opaque enough to read clearly over the 3D scene.
+        // Game view maximized over the editor — no toolbar to sit in, so float near the top of
+        // the window, opaque enough to read over the 3D scene.
         ImGui::SetNextWindowPos(ImVec2(w * 0.5f, 10.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
         ImGui::SetNextWindowBgAlpha(0.85f);
     }
     ImGui::Begin("##PlayStopButton", nullptr, flags);
+    // Forces this to the front of the display order every frame so a dock rebuild elsewhere
+    // (Reset Layout) can't bury it behind whatever the freshly recreated dock host window
+    // ends up as.
+    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 
-    if (editorMode) {
+    if (!playing) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.55f, 0.24f, 1.00f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.68f, 0.30f, 1.00f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.26f, 0.80f, 0.36f, 1.00f));
         if (ImGui::Button(ICON_FA_PLAY "  Play")) m_PlayStopRequested = true;
         ImGui::PopStyleColor(3);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Return to game (F1)");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Play the scene in the Game panel (F1)");
     } else {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.18f, 0.18f, 1.00f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.68f, 0.22f, 0.22f, 1.00f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.80f, 0.26f, 0.26f, 1.00f));
         if (ImGui::Button(ICON_FA_STOP "  Stop")) m_PlayStopRequested = true;
         ImGui::PopStyleColor(3);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Return to editor (F1)");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Stop and revert the scene (F1)");
+
+        ImGui::SameLine();
+        const char* fsLabel = maximized ? ICON_FA_COMPRESS "  Restore" : ICON_FA_EXPAND "  Fullscreen";
+        if (ImGui::Button(fsLabel)) m_MaximizeToggleRequested = true;
+        if (ImGui::IsItemHovered()) {
+            EditorUI::SetTooltip(maximized
+                ? "Back to windowed play (editor panels return)"
+                : "Maximize the Game view over the editor panels");
+        }
     }
 
     ImGui::End();
@@ -774,11 +1622,329 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     m_UndoStack.clear();
     m_RedoStack.clear();
     m_Dirty = false;
+    m_AutoSaveTimer = 0.0f;
+    Log::Info("Opened scene '" + path + "'.");
+}
+
+// Imports one file (never a directory) into `targetFolder` - the virtual Asset Browser folder
+// it should be filed under, '/'-joined the same way m_CurrentAssetFolder is. Factored out of
+// HandleDroppedFiles so a dropped folder's contents can each land in their own mirrored
+// subfolder instead of everything collapsing into whichever folder happened to be open.
+void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& editorCamera,
+    const std::string& path, const std::string& targetFolder) {
+    std::string ext = std::filesystem::path(path).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+    std::string name = std::filesystem::path(path).stem().string();
+
+    Log::Info("Importing '" + path + "'...");
+
+    if (ext == ".fbx" || ext == ".obj" || ext == ".gltf" || ext == ".glb") {
+        // Imports into the library only - it shows up in the Asset Browser, nothing more.
+        // Deliberately NOT placed into the scene: that used to happen automatically here, but
+        // it meant every dropped/imported model needed an undo (or a manual delete) if you only
+        // wanted it available to drag in later. Explicit placement is now always the Asset
+        // Browser -> Viewport drag (DrawViewportDropTarget's live ghost preview).
+        assets.LoadModel(path);
+        assets.SetAssetFolder(path, targetFolder);
+        Log::Info("Imported model '" + name + "'.");
+    } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") {
+        auto tex = assets.LoadTexture(path);
+        if (tex) {
+            assets.SetAssetFolder(path, targetFolder);
+            Log::Info("Imported texture '" + name + "'.");
+        } else {
+            Log::Error("Failed to load texture '" + path + "'.");
+        }
+    } else if (ext == ".wav" || ext == ".mp3" || ext == ".ogg" || ext == ".flac") {
+        if (AudioEngine::Load(path)) {
+            assets.RegisterSound(path);
+            assets.SetAssetFolder(path, targetFolder);
+            Log::Info("Imported sound '" + name + "'.");
+        } else {
+            Log::Error("Failed to load sound '" + path + "'.");
+        }
+    } else if (ext == ".json") {
+        // A dropped scene file offers to open it rather than silently doing nothing —
+        // "import" has no other meaning for a whole scene.
+        OpenScene(world, assets, path);
+    } else if (ext == ".prefab") {
+        entt::entity e = SceneSerializer::InstantiatePrefab(world, assets, path);
+        if (e != entt::null) {
+            assets.RegisterPrefab(path);
+            assets.SetAssetFolder(path, targetFolder);
+            SelectItem(e, false);
+            Log::Info("Instantiated prefab '" + name + "'.");
+        } else {
+            Log::Error("Failed to load prefab '" + path + "'.");
+        }
+    } else if (ext == ".tif" || ext == ".tiff") {
+        Log::Warn("Skipped '" + path + "' - TIFF isn't supported directly. Convert it to PNG first (see the TifSplitter tool) and drop that instead.");
+    } else {
+        Log::Warn("Don't know how to import '" + path + "' (unrecognized extension \"" + ext + "\").");
+    }
+}
+
+void EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera& editorCamera,
+    bool editorUIVisible, const std::vector<std::string>& paths) {
+    if (!editorUIVisible) {
+        Log::Warn("Ignored " + std::to_string(paths.size()) + " dropped file(s) - restore the editor panels to import assets.");
+        return;
+    }
+
+    // Expanding a dropped folder's structure and resolving every file's target virtual folder
+    // is pure filesystem traversal (no GL calls) - cheap and safe to do synchronously, right
+    // here. Only the actual per-file import (which DOES touch GL, via Texture/Model loading)
+    // gets deferred to the queue, drained a few at a time from EditorLayer::Draw.
+    std::vector<std::string> toEnqueue;
+    auto queueFile = [&](const std::string& filePath, const std::string& targetFolder) {
+        m_ImportTargetFolder[filePath] = targetFolder;
+        toEnqueue.push_back(filePath);
+    };
+
+    for (const std::string& path : paths) {
+        std::error_code isDirErr;
+        if (!std::filesystem::is_directory(path, isDirErr) || isDirErr) {
+            queueFile(path, m_CurrentAssetFolder);
+            continue;
+        }
+
+        // A dropped folder mirrors its own structure into the Asset Browser rather than
+        // dumping every file it contains flat into whichever folder is currently open - e.g.
+        // dropping "BuildingKit" (containing Meshes/ and Textures/Walls/) creates matching
+        // "BuildingKit", "BuildingKit/Meshes", "BuildingKit/Textures/Walls" virtual folders
+        // under the current one, and files land in the folder that mirrors where they sat on
+        // disk. GLFW hands directory drops through the exact same path list as files - nothing
+        // upstream of this treats them differently, so without this branch a dropped folder
+        // just fell through to the "unrecognized extension" case below (a folder path has no
+        // extension) and silently did nothing.
+        std::filesystem::path root(path);
+        std::string rootFolder = m_CurrentAssetFolder.empty()
+            ? root.filename().string()
+            : m_CurrentAssetFolder + "/" + root.filename().string();
+        assets.CreateFolder(rootFolder);
+
+        std::error_code walkErr;
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(
+                 root, std::filesystem::directory_options::skip_permission_denied, walkErr)) {
+            std::error_code relErr;
+            std::filesystem::path rel = std::filesystem::relative(entry.path(), root, relErr);
+            if (relErr) continue;
+
+            // Virtual folder path mirroring this entry's position under rootFolder - '/'
+            // regardless of the OS path separator, since that's what the Asset Browser expects.
+            std::string relFolder;
+            for (const auto& part : rel.parent_path()) {
+                if (!relFolder.empty()) relFolder += "/";
+                relFolder += part.string();
+            }
+            std::string virtualFolder = relFolder.empty() ? rootFolder : rootFolder + "/" + relFolder;
+
+            if (entry.is_directory()) {
+                assets.CreateFolder(virtualFolder + "/" + entry.path().filename().string());
+            } else if (entry.is_regular_file()) {
+                assets.CreateFolder(virtualFolder);
+                queueFile(entry.path().string(), virtualFolder);
+            }
+        }
+        if (walkErr) Log::Warn("Folder scan of '" + path + "' reported: " + walkErr.message());
+    }
+
+    m_ImportQueue.Enqueue(toEnqueue);
+}
+
+void EditorLayer::DrawConsole() {
+    if (!m_ShowConsole) return;
+
+    ImGuiWindowFlags flags = m_LayoutLocked
+        ? (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)
+        : ImGuiWindowFlags_None;
+    if (!ImGui::Begin(ICON_FA_TERMINAL "  Console", &m_ShowConsole, flags)) { ImGui::End(); return; }
+
+    if (ImGui::Button(ICON_FA_TRASH "  Clear")) Log::Clear();
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Remove every message from the console");
+    ImGui::SameLine();
+    ImGui::Checkbox("Auto-scroll", &m_ConsoleAutoScroll);
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Automatically jump to the newest message as it arrives");
+
+    // Per-level toggles double as counters, the way Unity's console header does.
+    ImGui::SameLine();
+    ImGui::TextDisabled("|");
+    ImGui::SameLine();
+    char infoLabel[32], warnLabel[32], errorLabel[32];
+    snprintf(infoLabel, sizeof(infoLabel), ICON_FA_CIRCLE_INFO " %d", Log::CountOf(LogLevel::Info));
+    snprintf(warnLabel, sizeof(warnLabel), ICON_FA_TRIANGLE_EXCLAMATION " %d", Log::CountOf(LogLevel::Warning));
+    snprintf(errorLabel, sizeof(errorLabel), ICON_FA_CIRCLE_EXCLAMATION " %d", Log::CountOf(LogLevel::Error));
+    ImGui::Checkbox(infoLabel, &m_ConsoleShowInfo);
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show/hide informational messages");
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.80f, 0.30f, 1.0f));
+    ImGui::Checkbox(warnLabel, &m_ConsoleShowWarning);
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show/hide warnings");
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.42f, 0.38f, 1.0f));
+    ImGui::Checkbox(errorLabel, &m_ConsoleShowError);
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show/hide errors");
+
+    ImGui::SetNextItemWidth(-1.0f);
+    char filterBuf[128];
+    snprintf(filterBuf, sizeof(filterBuf), "%s", m_ConsoleFilter.c_str());
+    if (ImGui::InputTextWithHint("##ConsoleFilter", ICON_FA_MAGNIFYING_GLASS "  Filter messages...", filterBuf, sizeof(filterBuf))) {
+        m_ConsoleFilter = filterBuf;
+    }
+    if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) EditorUI::SetTooltip("Only show messages containing this text");
+
+    ImGui::Separator();
+    if (ImGui::BeginChild("##ConsoleScroll", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar)) {
+        for (const LogEntry& entry : Log::Entries()) {
+            bool levelVisible =
+                (entry.Level == LogLevel::Info && m_ConsoleShowInfo) ||
+                (entry.Level == LogLevel::Warning && m_ConsoleShowWarning) ||
+                (entry.Level == LogLevel::Error && m_ConsoleShowError);
+            if (!levelVisible || !MatchesFilter(m_ConsoleFilter, entry.Message)) continue;
+
+            ImVec4 color(0.82f, 0.84f, 0.86f, 1.0f);
+            const char* icon = ICON_FA_CIRCLE_INFO;
+            if (entry.Level == LogLevel::Warning) { color = ImVec4(1.0f, 0.80f, 0.30f, 1.0f); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
+            else if (entry.Level == LogLevel::Error) { color = ImVec4(1.0f, 0.42f, 0.38f, 1.0f); icon = ICON_FA_CIRCLE_EXCLAMATION; }
+
+            ImGui::PushStyleColor(ImGuiCol_Text, color);
+            if (entry.Count > 1) ImGui::Text("%s  %s  (x%d)", icon, entry.Message.c_str(), entry.Count);
+            else ImGui::Text("%s  %s", icon, entry.Message.c_str());
+            ImGui::PopStyleColor();
+
+            // Right-click any line to copy its text — the usual reason to read a console entry
+            // is to paste it somewhere else.
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::SetClipboardText(entry.Message.c_str());
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Right-click to copy this message");
+        }
+
+        // Only when something actually arrived, so scrolling back through history isn't yanked
+        // to the bottom on every single frame.
+        if (m_ConsoleAutoScroll && Log::Revision() != m_ConsoleSeenRevision) {
+            ImGui::SetScrollHereY(1.0f);
+        }
+        m_ConsoleSeenRevision = Log::Revision();
+    }
+    ImGui::EndChild();
+
+    ImGui::End();
+}
+
+void EditorLayer::DrawStatsOverlay(World& world, float dt) {
+    if (!m_ShowStats) return;
+
+    // Exponential smoothing: a raw per-frame ms figure flickers too fast to read.
+    float frameMs = dt * 1000.0f;
+    m_SmoothedFrameMs = m_SmoothedFrameMs * 0.92f + frameMs * 0.08f;
+
+    int entityCount = 0, renderableCount = 0, lightCount = 0, colliderCount = 0, inactiveCount = 0;
+    for (auto entity : world.Registry.view<TransformComponent>()) {
+        entityCount++;
+        if (world.Registry.all_of<RenderableComponent>(entity)) renderableCount++;
+        if (world.Registry.all_of<LightComponent>(entity)) lightCount++;
+        if (world.Registry.all_of<ColliderComponent>(entity)) colliderCount++;
+        if (world.Registry.all_of<InactiveTag>(entity)) inactiveCount++;
+    }
+
+    // Pinned to the viewport's top-left, inside it rather than docked, so it reads as a scene
+    // overlay (Unity's Stats panel) instead of stealing panel space. NoInputs is essential here,
+    // not optional — without it this rectangle would swallow camera-look/click-to-pick input
+    // for whatever's underneath it (the same reason DrawViewGizmo's overlay uses it).
+    const float pad = 12.0f * m_UIScale;
+    ImGui::SetNextWindowPos(ImVec2(m_ViewportPos.x + pad, m_ViewportPos.y + pad), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.78f);
+    if (ImGui::Begin("##Stats", nullptr,
+            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking |
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs)) {
+        ImGui::TextUnformatted(ICON_FA_CHART_SIMPLE "  Statistics");
+        ImGui::Separator();
+        ImGui::Text("%.1f FPS  (%.2f ms)", m_SmoothedFrameMs > 0.0001f ? 1000.0f / m_SmoothedFrameMs : 0.0f, m_SmoothedFrameMs);
+        ImGui::Separator();
+        ImGui::Text("Draw calls   %d", m_RenderStats.DrawCalls);
+        ImGui::Text("Triangles    %d", m_RenderStats.Triangles);
+        ImGui::Text("Vertices     %d", m_RenderStats.Vertices);
+        if (m_RenderStats.Culled > 0) ImGui::TextDisabled("Culled       %d (outside view)", m_RenderStats.Culled);
+        ImGui::Separator();
+        ImGui::Text("Entities     %d", entityCount);
+        ImGui::Text("Renderers    %d", renderableCount);
+        ImGui::Text("Colliders    %d", colliderCount);
+        ImGui::Text("Lights       %d", lightCount);
+        if (inactiveCount > 0) ImGui::TextDisabled("Inactive     %d", inactiveCount);
+
+        // Numbers from the frame that just finished (this frame's own "Scene Draw"/"ImGui
+        // Render" scopes haven't run yet at this point) - same one-frame-behind convention the
+        // smoothed FPS figure above already uses, so it's not called out as its own oddity.
+        if (ImGui::TreeNode("Profiler")) {
+            for (const auto& sample : Profiler::GetLastFrame()) {
+                ImGui::Text("%-16s %.3f ms", sample.Name.c_str(), sample.Milliseconds);
+            }
+            ImGui::Separator();
+            const auto& gl = GLStateCache::GetFrameStats();
+            ImGui::Text("Shader binds   %d (%d skipped)", gl.ProgramBinds, gl.ProgramBindsSkipped);
+            ImGui::Text("Texture binds  %d (%d skipped)", gl.TextureBinds, gl.TextureBindsSkipped);
+            ImGui::TreePop();
+        }
+    }
+    ImGui::End();
+}
+
+// Unity-style Undo History: every recorded change, oldest to newest, with the current position
+// highlighted. Clicking any entry jumps straight there via JumpToUndoEntry/JumpToRedoEntry -
+// each step is still a single full-snapshot load (see PushUndo's own comment), not incremental
+// command replay, so jumping several steps at once stays cheap regardless of distance.
+void EditorLayer::DrawHistoryPanel(World& world, AssetLibrary& assets) {
+    if (!m_ShowHistory) return;
+
+    ImGuiWindowFlags flags = m_LayoutLocked
+        ? (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)
+        : ImGuiWindowFlags_None;
+    if (!ImGui::Begin(ICON_FA_CLOCK_ROTATE_LEFT "  History", &m_ShowHistory, flags)) { ImGui::End(); return; }
+
+    EditorUI::HelpMarker("Every recorded change, oldest to newest. Click any entry to jump\nstraight there - undoing or redoing everything in between automatically.");
+    ImGui::Separator();
+
+    if (m_UndoStack.empty() && m_RedoStack.empty()) {
+        ImGui::TextDisabled("No changes yet.");
+        ImGui::End();
+        return;
+    }
+
+    for (size_t k = 0; k < m_UndoStack.size(); ++k) {
+        ImGui::PushID((int)k);
+        if (ImGui::Selectable(m_UndoStack[k].Label.c_str())) {
+            JumpToUndoEntry(world, assets, k);
+        }
+        ImGui::PopID();
+    }
+
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.75f, 0.3f, 1.0f));
+    ImGui::Selectable(ICON_FA_LOCATION_DOT "  Current", true);
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Where you are right now");
+
+    // Newest-future-first won't read naturally, so this walks the redo stack back-to-front
+    // (Redo() always consumes from .back()) to show it oldest-to-newest like everything above.
+    for (size_t idx = m_RedoStack.size(); idx-- > 0;) {
+        ImGui::PushID((int)(100000 + idx)); // distinct ID range from the undo rows above
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        bool clicked = ImGui::Selectable(m_RedoStack[idx].Label.c_str());
+        ImGui::PopStyleColor();
+        if (clicked) JumpToRedoEntry(world, assets, idx);
+        ImGui::PopID();
+    }
+
+    ImGui::End();
 }
 
 void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& editorCamera) {
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_MenuBar;
-    if (m_LayoutLocked) flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+    // Always pinned regardless of Lock Layout — pos/size are forced every frame by the caller.
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar |
+        ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoNavFocus |
+        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings;
     if (!ImGui::Begin("##Toolbar", nullptr, flags)) { ImGui::End(); return; }
 
     // Real dropdown menus for the stuff you reach for occasionally (import, add primitive,
@@ -791,6 +1957,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 m_UndoStack.clear();
                 m_RedoStack.clear();
                 m_Dirty = false;
+                m_AutoSaveTimer = 0.0f;
             }
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open...")) {
@@ -800,6 +1967,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save")) {
                 SceneSerializer::Save(world, assets, m_CurrentScenePath);
                 m_Dirty = false;
+                m_AutoSaveTimer = 0.0f;
             }
             if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As...")) {
                 std::string path = FileDialog::SaveFile(
@@ -808,11 +1976,16 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                     SceneSerializer::Save(world, assets, path);
                     m_CurrentScenePath = path;
                     m_Dirty = false;
+                    m_AutoSaveTimer = 0.0f;
                 }
             }
             ImGui::Separator();
             ImGui::TextDisabled("Current: %s%s", std::filesystem::path(m_CurrentScenePath).filename().string().c_str(), m_Dirty ? " (unsaved)" : "");
             ImGui::TextDisabled("Also auto-saves on exit,\nauto-loads on launch.");
+            if (EditorSettings::Get().AutoSaveEnabled) {
+                float remaining = std::max(0.0f, EditorSettings::Get().AutoSaveIntervalMinutes * 60.0f - m_AutoSaveTimer);
+                ImGui::TextDisabled("Next auto-save in %.0fs%s", remaining, m_Dirty ? "" : " (nothing to save)");
+            }
             ImGui::EndMenu();
         }
 
@@ -820,16 +1993,10 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem(ICON_FA_CUBE "  Model  (FBX / OBJ / glTF)...")) {
                 std::string path = FileDialog::OpenFile(
                     "3D Models\0*.fbx;*.obj;*.gltf;*.glb\0All Files\0*.*\0", m_Window);
-                if (!path.empty()) {
-                    PushUndo(world);
-                    auto model = assets.LoadModel(path);
-                    PlacedModel pm;
-                    pm.ModelRef = model;
-                    pm.Name = std::filesystem::path(path).stem().string();
-                    pm.Position = editorCamera.Position + editorCamera.Front() * 5.0f;
-                    world.Models.push_back(pm);
-                    SelectItem(true, (int)world.Models.size() - 1, false);
-                }
+                // Imports into the library only, same as Texture/Sound import right below -
+                // doesn't place an instance in the scene. Drag it from the Asset Browser into
+                // the Viewport when you actually want one placed.
+                if (!path.empty()) assets.LoadModel(path);
             }
             if (ImGui::MenuItem(ICON_FA_IMAGE "  Texture  (PNG / JPG / TGA)...")) {
                 std::string path = FileDialog::OpenFile(
@@ -846,79 +2013,182 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
 
         if (ImGui::BeginMenu(ICON_FA_CUBES " Add")) {
             auto spawnPrimitive = [&](const char* kind, const char* displayName) {
-                PushUndo(world);
+                PushUndo(world, std::string("Create ") + displayName);
                 auto model = assets.CreatePrimitive(kind);
-                PlacedModel pm;
-                pm.ModelRef = model;
-                pm.Name = displayName;
-                pm.Position = editorCamera.Position + editorCamera.Front() * 5.0f;
-                world.Models.push_back(pm);
-                SelectItem(true, (int)world.Models.size() - 1, false);
+                glm::vec3 position = editorCamera.Position + editorCamera.Front() * 5.0f;
+                entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), displayName);
+                SelectItem(e, false);
             };
             if (ImGui::MenuItem(ICON_FA_CUBE "  Cube")) spawnPrimitive("cube", "Cube");
             if (ImGui::MenuItem(ICON_FA_CIRCLE "  Sphere")) spawnPrimitive("sphere", "Sphere");
             if (ImGui::MenuItem(ICON_FA_SHAPES "  Cylinder")) spawnPrimitive("cylinder", "Cylinder");
             if (ImGui::MenuItem(ICON_FA_SHAPES "  Cone")) spawnPrimitive("cone", "Cone");
             if (ImGui::MenuItem(ICON_FA_SHAPES "  Plane")) spawnPrimitive("plane", "Plane");
+
+            ImGui::SeparatorText("Objects");
+            if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Empty")) {
+                CreateEmptyAt(world, &editorCamera, "Empty", false);
+            }
+            if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) {
+                CreateEmptyAt(world, &editorCamera, "Point Light", true);
+            }
+            if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light")) {
+                entt::entity e = CreateEmptyAt(world, &editorCamera, "Spot Light", true);
+                world.Registry.get<LightComponent>(e).Kind = LightComponent::Type::Spot;
+            }
+
             ImGui::Separator();
-            ImGui::TextDisabled("Real mesh data — supports materials,\nvertex snapping, gizmos. No collision yet\n(same as imported models).");
+            ImGui::TextDisabled("Primitives carry real mesh data — materials,\nvertex snapping, gizmos. Add a Box Collider\nin the Inspector to make one solid.");
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu(ICON_FA_CAMERA " View")) {
+            if (ImGui::MenuItem(ICON_FA_BORDER_ALL "  Orthographic", "5", editorCamera.Orthographic)) {
+                ToggleOrthographic(world, editorCamera);
+            }
+            ImGui::Separator();
+            ImGui::TextDisabled("Snap to view");
+            if (ImGui::MenuItem(ICON_FA_CUBES "  Iso", "0")) {
+                SnapToView(world, editorCamera, -45.0f, -35.264f, true);
+            }
+            if (ImGui::MenuItem("  Front", "1")) SnapToView(world, editorCamera, -90.0f, 0.0f, true);
+            if (ImGui::MenuItem("  Back", "Ctrl+1")) SnapToView(world, editorCamera, 90.0f, 0.0f, true);
+            if (ImGui::MenuItem("  Right", "3")) SnapToView(world, editorCamera, 180.0f, 0.0f, true);
+            if (ImGui::MenuItem("  Left", "Ctrl+3")) SnapToView(world, editorCamera, 0.0f, 0.0f, true);
+            if (ImGui::MenuItem("  Top", "7")) SnapToView(world, editorCamera, -90.0f, -89.9f, true);
+            if (ImGui::MenuItem("  Bottom", "Ctrl+7")) SnapToView(world, editorCamera, -90.0f, 89.9f, true);
+            ImGui::Separator();
+            ImGui::TextDisabled(
+                "Views snap around the current selection\n"
+                "if there is one, else whatever the camera\n"
+                "is currently looking at.");
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu(ICON_FA_TABLE_COLUMNS " Window")) {
+            ImGui::MenuItem(ICON_FA_TERMINAL "  Console", nullptr, &m_ShowConsole);
+            ImGui::MenuItem(ICON_FA_CHART_SIMPLE "  Statistics", nullptr, &m_ShowStats);
+            ImGui::MenuItem(ICON_FA_CLOCK_ROTATE_LEFT "  History", nullptr, &m_ShowHistory);
+            ImGui::Separator();
+            ImGui::TextDisabled("Scene Hierarchy, Inspector and Asset\nBrowser are always open — use Settings >\nReset Layout to restore their positions.");
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu(ICON_FA_GEAR " Settings")) {
+            ImGui::SeparatorText(ICON_FA_UNIVERSAL_ACCESS "  General");
+            {
+                EditorSettings& prefs = EditorSettings::Get();
+                if (ImGui::Checkbox("Show Editor Tooltips", &prefs.ShowTooltips)) {
+                    EditorSettings::Save();
+                }
+                // Raw ImGui::SetTooltip, deliberately NOT the gated EditorUI::SetTooltip every
+                // other hover hint in the editor uses — this is the one explanation that must
+                // stay visible even with the setting OFF, or turning tooltips off would also
+                // hide the only text explaining how to turn them back on.
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(
+                        "When enabled, hovering over Inspector fields, Hierarchy rows,\n"
+                        "and Toolbar options displays helpful usage context.");
+                }
+            }
+
+            ImGui::SeparatorText(ICON_FA_CLOCK "  Auto-Save");
+            {
+                EditorSettings& prefs = EditorSettings::Get();
+                if (ImGui::Checkbox("Enable Auto-Save", &prefs.AutoSaveEnabled)) {
+                    EditorSettings::Save();
+                }
+                if (ImGui::IsItemHovered()) {
+                    EditorUI::SetTooltip(
+                        "Periodically saves the current scene to its own file while you\n"
+                        "work, in addition to the always-on save on exit. Only saves when\n"
+                        "there are actually unsaved changes - an idle session never writes\n"
+                        "the file over and over.");
+                }
+                if (!prefs.AutoSaveEnabled) ImGui::BeginDisabled();
+                ImGui::SetNextItemWidth(140.0f);
+                if (ImGui::DragFloat("Interval (minutes)", &prefs.AutoSaveIntervalMinutes, 0.5f, 1.0f, 60.0f, "%.1f")) {
+                    prefs.AutoSaveIntervalMinutes = std::clamp(prefs.AutoSaveIntervalMinutes, 1.0f, 60.0f);
+                }
+                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+                if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) {
+                    EditorUI::SetTooltip("How often the scene auto-saves while there are unsaved changes.");
+                }
+                if (!prefs.AutoSaveEnabled) ImGui::EndDisabled();
+            }
+
             ImGui::SeparatorText(ICON_FA_TABLE_COLUMNS "  Layout");
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
                 m_ResetLayoutRequested = true;
             }
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Puts Scene Hierarchy / Inspector / Asset Browser back\nin their default docked positions and sizes.");
+                EditorUI::SetTooltip("Puts Scene Hierarchy / Inspector / Asset Browser back\nin their default docked positions and sizes.");
             }
 
             ImGui::SeparatorText(ICON_FA_SUN "  Environment");
             ImGui::ColorEdit3("Horizon Color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
-            if (ImGui::IsItemActivated()) PushUndo(world);
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky color at the horizon (the world's XZ plane)");
             ImGui::ColorEdit3("Zenith Color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
-            if (ImGui::IsItemActivated()) PushUndo(world);
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky color straight up");
 
             ImGui::SeparatorText(ICON_FA_TABLE_CELLS "  Grid & Snapping");
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Grid/Snap toggles are in the row below.");
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Grid/Snap toggles are in the row below.");
             ImGui::SetNextItemWidth(140.0f);
             ImGui::DragFloat("Grid Size", &m_GridSize, 0.05f, 0.05f, 50.0f, "%.2f");
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Spacing between minor grid lines, in world units");
             ImGui::SetNextItemWidth(140.0f);
             ImGui::DragFloat("Position Snap", &m_SnapTranslation, 0.05f, 0.01f, 50.0f, "%.2f");
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Distance the Translate gizmo jumps per step when grid snap is on");
             ImGui::SetNextItemWidth(140.0f);
             ImGui::SliderFloat("Rotation Snap", &m_SnapRotationDeg, 1.0f, 180.0f, "%.1f°");
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Degrees the Rotate gizmo jumps per step when grid snap is on");
             ImGui::SetNextItemWidth(140.0f);
             ImGui::DragFloat("Scale Snap", &m_SnapScale, 0.01f, 0.01f, 5.0f, "%.2f");
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Amount the Scale gizmo jumps per step when grid snap is on");
             ImGui::SetNextItemWidth(140.0f);
             ImGui::SliderFloat("Gizmo Size", &m_GizmoSize, 0.03f, 0.3f, "%.2f");
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("On-screen size of the viewport transform gizmo");
 
             ImGui::SeparatorText(ICON_FA_CIRCLE_DOT "  Vertex Snap");
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip(
+                EditorUI::SetTooltip(
                     "Select a model, hold V near one of its\n"
                     "vertices (shown in yellow), click and\n"
-                    "drag to move it — it snaps onto the\n"
-                    "nearest vertex of any other model.\n"
+                    "drag to move it — it snaps onto whichever\n"
+                    "vertex of any other model is closest to\n"
+                    "your cursor ON SCREEN (same radius as the\n"
+                    "hover circle below), regardless of how\n"
+                    "far that object actually is in the scene.\n"
                     "Release the click or V to drop it.\n"
                     "With a group selected, the rest of the\n"
                     "group rides along by the same offset.");
             }
             ImGui::SetNextItemWidth(140.0f);
-            ImGui::SliderFloat("Snap Radius", &m_VertexSnapRadius, 0.1f, 5.0f, "%.2f");
-            ImGui::SetNextItemWidth(140.0f);
             ImGui::SliderFloat("Pick Radius (px)", &m_VertexPickPixels, 5.0f, 150.0f, "%.0f");
+            if (ImGui::IsItemHovered()) {
+                EditorUI::SetTooltip("How close (in screen pixels) the cursor must be to a vertex\nto hover, grab, or snap onto it.");
+            }
 
             ImGui::SeparatorText(ICON_FA_KEYBOARD "  Controls");
             ImGui::TextDisabled(
-                "Fly camera: WASD + right-drag to look\n"
+                "Fly camera: hold right-drag + WASDQE\n"
+                "Zoom: scroll wheel\n"
+                "Pan: middle-drag\n"
+                "Orbit selection: Alt + left-drag\n"
+                "View presets: 1/3/7/0 (Ctrl for opposite side)\n"
+                "Toggle orthographic: 5\n"
                 "Undo/Redo: Ctrl+Z / Ctrl+Y\n"
                 "Save: Ctrl+S\n"
-                "Gizmo mode: 1 / 2 / 3\n"
+                "Gizmo mode: W (move) / E (rotate) / R (scale) / T (rect)\n"
                 "Vertex grab: hold V\n"
                 "Multi-select: Ctrl+Click or drag a box\n"
                 "Delete selection: Delete key\n"
+                "Delete selected asset: Delete key (in Asset Browser)\n"
                 "Duplicate selection: Ctrl+D\n"
+                "Copy / Cut / Paste: Ctrl+C / Ctrl+X / Ctrl+V\n"
+                "Rename selection: F2 (or double-click in Hierarchy)\n"
                 "Focus selection: F\n"
                 "Toggle fullscreen: F11\n"
                 "Return to game / editor: F1");
@@ -933,9 +2203,16 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     // of spelling every label out.
     auto iconButton = [](const char* icon, const char* tooltip, bool active = false) {
         if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        // ImGui::Button() uses its label text as its ID too — two buttons that ever show the
+        // same icon glyph (e.g. a state-dependent icon reusing another tool's icon) would
+        // collide. Scoping the ID to the tooltip instead — always unique, since every button
+        // here has a distinct description — makes that class of bug impossible regardless of
+        // which icon two buttons happen to display.
+        ImGui::PushID(tooltip);
         bool clicked = ImGui::Button(icon);
+        ImGui::PopID();
         if (active) ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tooltip);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
         return clicked;
     };
 
@@ -944,15 +2221,25 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     if (iconButton(ICON_FA_ROTATE_RIGHT, "Redo (Ctrl+Y)")) Redo(world, assets);
 
     divider();
-    if (iconButton(ICON_FA_UP_DOWN_LEFT_RIGHT, "Translate (1)", m_GizmoOp == GizmoOp::Translate)) m_GizmoOp = GizmoOp::Translate;
+    if (iconButton(ICON_FA_UP_DOWN_LEFT_RIGHT, "Translate (W)", m_GizmoOp == GizmoOp::Translate)) m_GizmoOp = GizmoOp::Translate;
     ImGui::SameLine();
-    if (iconButton(ICON_FA_ROTATE, "Rotate (2)", m_GizmoOp == GizmoOp::Rotate)) m_GizmoOp = GizmoOp::Rotate;
+    if (iconButton(ICON_FA_ROTATE, "Rotate (E)", m_GizmoOp == GizmoOp::Rotate)) m_GizmoOp = GizmoOp::Rotate;
     ImGui::SameLine();
-    if (iconButton(ICON_FA_EXPAND, "Scale (3)", m_GizmoOp == GizmoOp::Scale)) m_GizmoOp = GizmoOp::Scale;
+    if (iconButton(ICON_FA_EXPAND, "Scale (R)", m_GizmoOp == GizmoOp::Scale)) m_GizmoOp = GizmoOp::Scale;
+    ImGui::SameLine();
+    if (iconButton(ICON_FA_VECTOR_SQUARE, "Rect — move + non-uniform scale via corner/edge handles (T)",
+            m_GizmoOp == GizmoOp::Rect)) m_GizmoOp = GizmoOp::Rect;
     ImGui::SameLine();
     if (iconButton(m_GizmoLocalSpace ? ICON_FA_CUBE : ICON_FA_GLOBE,
             m_GizmoLocalSpace ? "Local space (click for World)" : "World space (click for Local)")) {
         m_GizmoLocalSpace = !m_GizmoLocalSpace;
+    }
+    ImGui::SameLine();
+    if (iconButton(m_GizmoPivotCenter ? ICON_FA_CIRCLE_DOT : ICON_FA_CROSSHAIRS,
+            m_GizmoPivotCenter
+                ? "Center - gizmo sits on the bounding-box center (click for Pivot)"
+                : "Pivot - gizmo sits on the object's own origin (click for Center)")) {
+        m_GizmoPivotCenter = !m_GizmoPivotCenter;
     }
 
     divider();
@@ -961,6 +2248,37 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     if (iconButton(ICON_FA_MAGNET, "Toggle Snap to Grid (hold Ctrl to invert while dragging)", m_GridSnapEnabled)) {
         m_GridSnapEnabled = !m_GridSnapEnabled;
     }
+    ImGui::SameLine();
+    {
+        bool canSnap = CanSnapSelectionToGround(world);
+        ImGui::BeginDisabled(!canSnap);
+        if (iconButton(ICON_FA_DOWN_LONG, "Snap selection to ground")) SnapSelectionToGround(world);
+        ImGui::EndDisabled();
+    }
+
+    divider();
+    // Scene-view shading, cycling Shaded -> Wireframe -> Unlit like a draw-mode dropdown.
+    {
+        const char* shadingIcon = ICON_FA_CIRCLE_HALF_STROKE;
+        const char* shadingTip = "Shaded (click for Wireframe)";
+        if (m_ShadingMode == ShadingMode::Wireframe) {
+            shadingIcon = ICON_FA_VECTOR_SQUARE;
+            shadingTip = "Wireframe (click for Unlit)";
+        } else if (m_ShadingMode == ShadingMode::Unlit) {
+            shadingIcon = ICON_FA_SUN;
+            shadingTip = "Unlit (click for Shaded)";
+        }
+        if (iconButton(shadingIcon, shadingTip, m_ShadingMode != ShadingMode::Shaded)) {
+            m_ShadingMode = m_ShadingMode == ShadingMode::Shaded ? ShadingMode::Wireframe
+                : (m_ShadingMode == ShadingMode::Wireframe ? ShadingMode::Unlit : ShadingMode::Shaded);
+        }
+    }
+    ImGui::SameLine();
+    if (iconButton(ICON_FA_CHART_SIMPLE, "Toggle Statistics overlay", m_ShowStats)) m_ShowStats = !m_ShowStats;
+    ImGui::SameLine();
+    if (iconButton(ICON_FA_TERMINAL, "Toggle Console", m_ShowConsole)) m_ShowConsole = !m_ShowConsole;
+    ImGui::SameLine();
+    if (iconButton(ICON_FA_CLOCK_ROTATE_LEFT, "Toggle History", m_ShowHistory)) m_ShowHistory = !m_ShowHistory;
 
     divider();
     bool unlocked = !m_LayoutLocked;
@@ -968,6 +2286,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             unlocked ? "Layout unlocked — click to lock panels in place" : "Layout locked — panels can still be resized; click to allow moving/rearranging too", unlocked)) {
         m_LayoutLocked = !m_LayoutLocked;
     }
+
 
     ImGui::End();
 }
@@ -980,64 +2299,457 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
         : ImGuiWindowFlags_None;
     if (!ImGui::Begin("Scene Hierarchy", nullptr, flags)) { ImGui::End(); return; }
 
-    int aliveBoxes = 0;
-    for (const auto& box : world.Boxes) if (box.Alive) aliveBoxes++;
+    // Search box. A bare string matches names; the "t:" prefix matches TagComponent instead,
+    // the same shorthand Unity's Hierarchy search uses.
+    ImGui::SetNextItemWidth(-1.0f);
+    char filterBuf[128];
+    snprintf(filterBuf, sizeof(filterBuf), "%s", m_HierarchyFilter.c_str());
+    if (ImGui::InputTextWithHint("##HierarchyFilter", ICON_FA_MAGNIFYING_GLASS "  Search (t:Tag to filter by tag)",
+            filterBuf, sizeof(filterBuf))) {
+        m_HierarchyFilter = filterBuf;
+    }
+    if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) {
+        EditorUI::SetTooltip("Type a name to filter the list below.\nType \"t:\" followed by a tag (e.g. t:Enemy) to filter by Tag instead.");
+    }
+    ImGui::Separator();
 
-    char geoHeader[32];
-    snprintf(geoHeader, sizeof(geoHeader), "Level Geometry (%d)", aliveBoxes);
+    auto boxView = world.Registry.view<const NameComponent, const LevelGeometryTag>();
+    int boxCount = 0;
+    for (auto e : boxView) { (void)e; boxCount++; }
+
+    char geoHeader[48];
+    snprintf(geoHeader, sizeof(geoHeader), "Level Geometry (%d)###LevelGeo", boxCount);
     if (ImGui::TreeNodeEx(geoHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (int i = 0; i < (int)world.Boxes.size(); ++i) {
-            if (!world.Boxes[i].Alive) continue;
-            std::string label = ICON_FA_CUBE "  " + (world.Boxes[i].Name.empty() ? ("Box " + std::to_string(i)) : world.Boxes[i].Name);
-            bool selected = IsSelected(false, i);
-            if (ImGui::Selectable(label.c_str(), selected)) {
-                SelectItem(false, i, ImGui::GetIO().KeyCtrl);
-            }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Solid boxes with collision built in - always block movement.");
+        for (auto entity : ViewInCreationOrder(boxView)) {
+            if (!MatchesHierarchyFilter(world, entity)) continue;
+            DrawHierarchyNode(world, assets, entity, /*isLevelGeometry=*/true);
         }
         ImGui::TreePop();
     }
 
-    char modelHeader[32];
-    snprintf(modelHeader, sizeof(modelHeader), "Models (%d)", (int)world.Models.size());
-    if (ImGui::TreeNodeEx(modelHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (int i = 0; i < (int)world.Models.size(); ++i) {
-            bool selected = IsSelected(true, i);
-            std::string label = ICON_FA_DRAW_POLYGON "  " + world.Models[i].Name;
-            if (ImGui::Selectable(label.c_str(), selected)) {
-                SelectItem(true, i, ImGui::GetIO().KeyCtrl);
-            }
+    auto objectView = world.Registry.view<const NameComponent>(entt::exclude<LevelGeometryTag>);
+    int objectCount = 0;
+    for (auto e : objectView) { (void)e; objectCount++; }
 
-            // Drop a texture from the Asset Browser onto a model here to set it as that
-            // model's Albedo map, creating a custom material override if it doesn't have one.
-            if (ImGui::BeginDragDropTarget()) {
-                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
-                    std::string texPath((const char*)payload->Data);
-                    PushUndo(world);
-
-                    Model* model = world.Models[i].ModelRef.get();
-                    auto override_ = model->MaterialOverride();
-                    if (!override_) {
-                        override_ = std::make_shared<Material>();
-                        if (model->MeshCount() > 0) {
-                            const Material& imported = model->MeshMaterial(0);
-                            override_->NormalMap = imported.NormalMap;
-                            override_->MetallicRoughnessMap = imported.MetallicRoughnessMap;
-                            override_->MetallicMap = imported.MetallicMap;
-                            override_->RoughnessMap = imported.RoughnessMap;
-                            override_->AOMap = imported.AOMap;
-                            override_->EmissiveMap = imported.EmissiveMap;
-                        }
-                        model->SetMaterialOverride(override_);
-                    }
-                    override_->AlbedoMap = assets.LoadTexture(texPath);
-                }
-                ImGui::EndDragDropTarget();
-            }
+    char objectHeader[48];
+    snprintf(objectHeader, sizeof(objectHeader), "Objects (%d)###Objects", objectCount);
+    if (ImGui::TreeNodeEx(objectHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::IsItemHovered()) {
+            EditorUI::SetTooltip("Models, lights, and empties. Drag one row onto another to parent it;\ndrag onto empty space below to un-parent.");
+        }
+        for (auto entity : ViewInCreationOrder(objectView)) {
+            const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
+            // A parented entity draws nested under its parent instead of as a sibling — except
+            // while filtering, where the parent may be filtered out and the match would then
+            // never be reachable, so matches are listed flat instead.
+            bool filtering = !m_HierarchyFilter.empty();
+            if (!filtering && hier && hier->Parent != entt::null) continue;
+            if (filtering && !MatchesHierarchyFilter(world, entity)) continue;
+            DrawHierarchyNode(world, assets, entity, /*isLevelGeometry=*/false);
         }
         ImGui::TreePop();
+    }
+
+    // Dropping onto empty space below the tree un-parents (Unity's "drag to the root") — and
+    // right-clicking there opens the create/paste menu.
+    // Dummy needs a real size (negative width isn't valid here), so this claims whatever space
+    // is left below the tree as one big drop/right-click zone.
+    ImVec2 remaining = ImGui::GetContentRegionAvail();
+    ImGui::Dummy(ImVec2(remaining.x > 0.0f ? remaining.x : 1.0f, remaining.y > 0.0f ? remaining.y : 1.0f));
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
+            entt::entity dragged = *(const entt::entity*)payload->Data;
+            if (world.Registry.valid(dragged)) {
+                PushUndo(world, "Reparent");
+                world.SetParent(dragged, entt::null);
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+    if (ImGui::BeginPopupContextItem("##HierarchyEmptyContext")) {
+        DrawHierarchyContextMenu(world, assets, entt::null);
+        ImGui::EndPopup();
     }
 
     ImGui::End();
+}
+
+bool EditorLayer::MatchesHierarchyFilter(const World& world, entt::entity entity) const {
+    if (m_HierarchyFilter.empty()) return true;
+
+    if (m_HierarchyFilter.rfind("t:", 0) == 0) {
+        std::string wanted = m_HierarchyFilter.substr(2);
+        if (wanted.empty()) return true;
+        const auto* tag = world.Registry.try_get<TagComponent>(entity);
+        return MatchesFilter(wanted, tag ? tag->Tag : std::string("Untagged"));
+    }
+
+    const auto* name = world.Registry.try_get<NameComponent>(entity);
+    return MatchesFilter(m_HierarchyFilter, name ? name->Name : std::string());
+}
+
+void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::entity entity, bool isLevelGeometry) {
+    if (!world.Registry.valid(entity)) return;
+
+    auto& name = world.Registry.get<NameComponent>(entity);
+    bool selected = IsSelected(entity);
+    bool inactive = world.Registry.all_of<InactiveTag>(entity);
+    const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
+    bool hasChildren = hier && !hier->Children.empty() && m_HierarchyFilter.empty();
+
+    ImGui::PushID((int)entt::to_integral(entity));
+
+    // Leading eye toggle = Unity's active checkbox. Drawn before the row so clicking it never
+    // also changes the selection.
+    if (ImGui::SmallButton(inactive ? ICON_FA_EYE_SLASH : ICON_FA_EYE)) {
+        PushUndo(world, "Toggle Active");
+        if (inactive) world.Registry.remove<InactiveTag>(entity);
+        else world.Registry.emplace<InactiveTag>(entity);
+    }
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip(inactive ? "Inactive - click to enable" : "Active - click to disable");
+    ImGui::SameLine();
+
+    // Inline rename (F2 / context menu) replaces the row with an edit field in place.
+    if (m_RenamingEntity == entity) {
+        ImGui::SetNextItemWidth(-1.0f);
+        if (m_EntityRenameJustStarted) {
+            ImGui::SetKeyboardFocusHere();
+            snprintf(m_EntityRenameBuffer, sizeof(m_EntityRenameBuffer), "%s", name.Name.c_str());
+            m_EntityRenameJustStarted = false;
+        }
+        if (ImGui::InputText("##Rename", m_EntityRenameBuffer, sizeof(m_EntityRenameBuffer),
+                ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+            PushUndo(world, "Rename");
+            name.Name = m_EntityRenameBuffer;
+            m_RenamingEntity = entt::null;
+        }
+        if (ImGui::IsItemDeactivated()) m_RenamingEntity = entt::null;
+        ImGui::PopID();
+        return; // children stay collapsed for the one frame a rename is open — deliberate, keeps the field stable
+    }
+
+    // Icon reflects what the entity actually is, so lights and empties are distinguishable at a
+    // glance from meshes rather than all sharing one generic icon.
+    const char* icon = ICON_FA_DRAW_POLYGON;
+    if (isLevelGeometry) icon = ICON_FA_CUBE;
+    else if (world.Registry.all_of<LightComponent>(entity)) icon = ICON_FA_LIGHTBULB;
+    else if (!world.Registry.all_of<RenderableComponent>(entity)) icon = ICON_FA_DIAGRAM_PROJECT;
+
+    std::string label = std::string(icon) + "  " + (name.Name.empty() ? std::string("(unnamed)") : name.Name);
+
+    ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth |
+        (selected ? ImGuiTreeNodeFlags_Selected : 0) |
+        (hasChildren ? ImGuiTreeNodeFlags_DefaultOpen : (ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen));
+
+    if (inactive) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    bool open = ImGui::TreeNodeEx("##node", nodeFlags, "%s", label.c_str());
+    if (inactive) ImGui::PopStyleColor();
+
+    if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+        SelectItem(entity, ImGui::GetIO().KeyCtrl);
+    }
+    if (ImGui::IsItemToggledOpen() && ImGui::GetIO().KeyAlt && hasChildren) {
+        // `open` already reflects the state ImGui just toggled this entity's own row to —
+        // cascade that same state to every descendant.
+        for (entt::entity child : hier->Children) {
+            SetHierarchyExpandedRecursive(world, child, open);
+        }
+    }
+    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+        BeginRenameEntity(entity);
+    }
+    if (ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+        EditorUI::SetTooltip("Click to select (Ctrl+Click to add/remove).\nDouble-click or F2 to rename. Drag onto another row to parent it.\nRight-click for more options.");
+    }
+
+    if (ImGui::BeginPopupContextItem("##RowContext")) {
+        if (!IsSelected(entity)) SelectItem(entity, false);
+        DrawHierarchyContextMenu(world, assets, entity);
+        ImGui::EndPopup();
+    }
+
+    // Drag a row onto another row to re-parent it (Unity's core Hierarchy gesture).
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoDisableHover)) {
+        ImGui::SetDragDropPayload("HIERARCHY_ENTITY", &entity, sizeof(entt::entity));
+        ImGui::Text("%s", label.c_str());
+        ImGui::EndDragDropSource();
+    }
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
+            entt::entity dragged = *(const entt::entity*)payload->Data;
+            if (world.Registry.valid(dragged) && dragged != entity) {
+                PushUndo(world, "Reparent");
+                // SetParent refuses cycles and Collider-bearing children on its own; report the
+                // refusal rather than silently doing nothing, so the gesture never looks broken.
+                if (!world.SetParent(dragged, entity)) {
+                    Log::Warn("Can't parent that: level geometry has a collider that needs world-space "
+                              "coordinates, or the target is already a child of the dragged object.");
+                }
+            }
+        }
+        // Existing behavior: dropping a texture from the Asset Browser assigns it as Albedo.
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
+            std::string texPath((const char*)payload->Data);
+            if (auto* renderable = world.Registry.try_get<RenderableComponent>(entity)) {
+                PushUndo(world, "Set Albedo Map");
+                Model* model = renderable->ModelRef.get();
+                auto override_ = model->MaterialOverride();
+                if (!override_) {
+                    override_ = std::make_shared<Material>();
+                    if (model->MeshCount() > 0) {
+                        const Material& imported = model->MeshMaterial(0);
+                        override_->NormalMap = imported.NormalMap;
+                        override_->MetallicMap = imported.MetallicMap;
+                        override_->RoughnessMap = imported.RoughnessMap;
+                        override_->AOMap = imported.AOMap;
+                        override_->EmissiveMap = imported.EmissiveMap;
+                    }
+                    model->SetMaterialOverride(override_);
+                }
+                override_->AlbedoMap = assets.LoadTexture(texPath);
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+
+    if (hasChildren && open) {
+        // Copied because a re-parent or delete triggered from a child's own context menu would
+        // otherwise mutate this vector mid-iteration.
+        std::vector<entt::entity> children = hier->Children;
+        for (entt::entity child : children) {
+            if (world.Registry.valid(child)) DrawHierarchyNode(world, assets, child, isLevelGeometry);
+        }
+        ImGui::TreePop();
+    }
+
+    ImGui::PopID();
+}
+
+void EditorLayer::SetHierarchyExpandedRecursive(World& world, entt::entity entity, bool open) {
+    if (!world.Registry.valid(entity)) return;
+    ImGui::PushID((int)entt::to_integral(entity));
+    ImGuiID nodeId = ImGui::GetID("##node");
+    ImGui::GetStateStorage()->SetInt(nodeId, open ? 1 : 0);
+    if (const auto* hier = world.Registry.try_get<HierarchyComponent>(entity)) {
+        for (entt::entity child : hier->Children) {
+            SetHierarchyExpandedRecursive(world, child, open);
+        }
+    }
+    ImGui::PopID();
+}
+
+void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, entt::entity entity) {
+    bool hasEntity = entity != entt::null && world.Registry.valid(entity);
+
+    if (ImGui::BeginMenu(ICON_FA_PLUS "  Create")) {
+        if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Empty")) CreateEmptyAt(world, nullptr, "Empty", false);
+        if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) CreateEmptyAt(world, nullptr, "Point Light", true);
+        ImGui::EndMenu();
+    }
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C", false, hasEntity)) CopySelection(world);
+    if (ImGui::MenuItem(ICON_FA_SCISSORS "  Cut", "Ctrl+X", false, hasEntity)) {
+        CopySelection(world);
+        DeleteSelection(world);
+    }
+    if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", "Ctrl+V", false, !m_Clipboard.empty())) {
+        PasteClipboard(world, assets);
+    }
+    if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", "Ctrl+D", false, hasEntity)) {
+        DuplicateSelection(world, assets);
+    }
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_FA_PEN "  Rename", "F2", false, hasEntity)) BeginRenameEntity(entity);
+    if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Save as Prefab...", nullptr, false, hasEntity)) {
+        std::string path = FileDialog::SaveFile("Prefab Files\0*.prefab\0All Files\0*.*\0", "prefab", m_Window);
+        if (!path.empty() && SceneSerializer::SavePrefab(world, entity, path)) {
+            assets.RegisterPrefab(path);
+        }
+    }
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_FA_TRASH "  Delete", "Del", false, hasEntity)) DeleteSelection(world);
+}
+
+void EditorLayer::BeginRenameEntity(entt::entity entity) {
+    if (entity == entt::null) return;
+    m_RenamingEntity = entity;
+    m_EntityRenameJustStarted = true;
+}
+
+entt::entity EditorLayer::CreateEmptyAt(World& world, Camera* editorCamera, const char* name, bool asLight) {
+    PushUndo(world, std::string("Create ") + name);
+    // Spawned in front of the camera when there is one (menu invoked from the viewport/toolbar),
+    // else at the origin — the Hierarchy's own context menu has no camera to reference.
+    glm::vec3 position = editorCamera ? editorCamera->Position + editorCamera->Front() * 5.0f : glm::vec3(0.0f);
+    entt::entity e = world.CreateEmptyEntity(position, glm::vec3(0.0f), glm::vec3(1.0f), name);
+    if (asLight) world.Registry.emplace<LightComponent>(e);
+    SelectItem(e, false);
+    return e;
+}
+
+namespace {
+std::string LowerExt(const std::string& path) {
+    std::string ext = std::filesystem::path(path).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+    return ext;
+}
+}
+
+// Unity-AssetImporter-style Import Settings panel, shown in the Inspector when an asset (not a
+// scene entity) is selected in the Asset Browser. Only textures and models have any settings to
+// show — sounds/prefabs/scenes just get a name/path readout, matching Unity (not every asset
+// type has an importer with configurable options).
+void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, const std::string& key) {
+    std::string ext = LowerExt(key);
+    bool isTexture = (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp");
+    bool isModel = (ext == ".fbx" || ext == ".obj" || ext == ".gltf" || ext == ".glb");
+
+    ImGui::SeparatorText(assets.DisplayName(key).c_str());
+    ImGui::TextDisabled("%s", key.c_str());
+    ImGui::Spacing();
+
+    if (!isTexture && !isModel) {
+        ImGui::TextWrapped("This asset type has no import settings.");
+        return;
+    }
+
+    // Fresh copy from AssetLibrary whenever the selection changes to a different asset - so an
+    // edit made (but not Applied) on one asset never bleeds onto the next one selected.
+    if (m_ImportInspectorKey != key) {
+        m_ImportInspectorKey = key;
+        m_ImportSettingsDirty = false;
+        m_ChannelPreviewChannel = -1; // back to "Combined" for a newly-selected asset
+        if (isTexture) {
+            m_PendingTextureSettings = assets.GetTextureSettings(key);
+        } else {
+            m_PendingModelSettings = assets.GetModelSettings(key);
+            // Fresh orbit framing for the model preview below - a pleasant default angle, and
+            // a distance that fits this particular model's own bounding box (a tiny prop and a
+            // whole building shouldn't start at the same zoom level).
+            m_ModelPreviewYaw = 0.6f;
+            m_ModelPreviewPitch = 0.35f;
+            if (auto model = assets.LoadModel(key)) { // cache hit if already loaded to appear in the browser
+                m_ModelPreviewDistance = ModelPreviewRenderer::ComputeFramingDistance(*model);
+            }
+        }
+    }
+
+    if (isTexture) {
+        auto tex = assets.LoadTexture(key); // cache hit - already imported to appear in the browser
+        if (tex && tex->IsValid()) {
+            const char* kFormats[] = {"", "R8", "", "RGB8", "RGBA8"}; // indexed by channel count (1/3/4); 0/2 unused
+            int channels = tex->SourceChannels();
+            ImGui::Text("%d x %d, %s, %d channel(s)", tex->Width(), tex->Height(),
+                (channels >= 1 && channels <= 4 && kFormats[channels][0]) ? kFormats[channels] : "8-bit", channels);
+
+            float previewSize = 160.0f;
+            float aspect = tex->Height() > 0 ? (float)tex->Width() / (float)tex->Height() : 1.0f;
+            ImVec2 previewDims = aspect >= 1.0f ? ImVec2(previewSize, previewSize / aspect) : ImVec2(previewSize * aspect, previewSize);
+
+            // Channel isolation toggles - "Combined" shows the texture as normal; R/G/B/A each
+            // broadcast that one channel to grayscale, e.g. to check what a MaskMap's alpha
+            // (often Smoothness) actually contains without exporting it to a separate file first.
+            auto channelButton = [&](const char* label, int channel) {
+                bool active = m_ChannelPreviewChannel == channel;
+                if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+                if (ImGui::Button(label)) m_ChannelPreviewChannel = channel;
+                if (active) ImGui::PopStyleColor();
+            };
+            channelButton("Combined", -1);
+            ImGui::SameLine();
+            channelButton("R", 0);
+            ImGui::SameLine();
+            channelButton("G", 1);
+            ImGui::SameLine();
+            channelButton("B", 2);
+            ImGui::SameLine();
+            channelButton("A", 3);
+
+            // Render (or reuse) the offscreen preview - only when the inspected asset or the
+            // selected channel actually changed since the last frame, not unconditionally.
+            int renderW = std::max(64, (int)previewDims.x * 2); // 2x the display size for a crisp
+            int renderH = std::max(64, (int)previewDims.y * 2); // result when the panel is resized larger
+            if (m_ChannelPreviewRenderedKey != key || m_ChannelPreviewRenderedChannel != m_ChannelPreviewChannel) {
+                m_ChannelPreview.Render(*tex, m_ChannelPreviewChannel, renderW, renderH);
+                m_ChannelPreviewRenderedKey = key;
+                m_ChannelPreviewRenderedChannel = m_ChannelPreviewChannel;
+            }
+            ImGui::Image((ImTextureID)(intptr_t)m_ChannelPreview.Handle(), previewDims);
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Failed to load - see Console.");
+        }
+
+        ImGui::Spacing();
+        ImGui::SeparatorText("Texture Import Settings");
+        AssetImporterInspector::DrawTextureSettings(m_PendingTextureSettings, m_ImportSettingsDirty);
+        AssetImporterInspector::DrawApplyRevertFooter(m_ImportSettingsDirty,
+            [&]() {
+                PushUndo(world, "Reimport Texture");
+                assets.SetTextureSettings(key, m_PendingTextureSettings);
+                if (assets.ReimportTexture(key)) Log::Info("Reimported texture '" + key + "'.");
+                else Log::Error("Reimport failed for '" + key + "' - see Console.");
+                m_ImportSettingsDirty = false;
+            },
+            [&]() {
+                m_PendingTextureSettings = assets.GetTextureSettings(key);
+                m_ImportSettingsDirty = false;
+            });
+    } else {
+        auto model = assets.LoadModel(key);
+        if (model) {
+            ImGui::Text("%u triangles, %u vertices, %d mesh(es)", model->TriangleCount(), model->VertexCount(), model->MeshCount());
+            if (model->HasAnimations()) ImGui::Text("%d animation clip(s)", model->AnimationCount());
+
+            float previewSize = 220.0f;
+            ImVec2 previewDims(previewSize, previewSize);
+            unsigned int handle = m_ModelPreview.Render(*model, m_ModelPreviewYaw, m_ModelPreviewPitch,
+                m_ModelPreviewDistance, (int)previewDims.x * 2, (int)previewDims.y * 2);
+            ImGui::Image((ImTextureID)(intptr_t)handle, previewDims);
+
+            // Left-drag to orbit, scroll to zoom - the same mouse language as the main viewport's
+            // own camera controls. ImGui::Image is a plain draw, not a clickable widget, so it
+            // never becomes "active" the way a button would - IsItemActive() here would just
+            // always read false. Tracking press/release ourselves (matching how the main
+            // viewport's own camera drag is done, via raw IsMouseDown checks rather than
+            // IsItemActive) is what actually works, and it also means the drag keeps tracking
+            // correctly even once the cursor moves outside this small preview box mid-drag.
+            bool hovered = ImGui::IsItemHovered();
+            if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) m_ModelPreviewDragging = true;
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) m_ModelPreviewDragging = false;
+
+            if (hovered) {
+                float wheel = ImGui::GetIO().MouseWheel;
+                if (wheel != 0.0f) m_ModelPreviewDistance *= (1.0f - wheel * 0.1f);
+            }
+            if (m_ModelPreviewDragging) {
+                ImVec2 delta = ImGui::GetIO().MouseDelta;
+                m_ModelPreviewYaw += delta.x * 0.01f;
+                m_ModelPreviewPitch = std::clamp(m_ModelPreviewPitch - delta.y * 0.01f, -1.5f, 1.5f);
+            }
+            m_ModelPreviewDistance = std::max(0.01f, m_ModelPreviewDistance);
+            ImGui::TextDisabled("Drag to orbit, scroll to zoom");
+        }
+
+        ImGui::Spacing();
+        ImGui::SeparatorText("Model Import Settings");
+        AssetImporterInspector::DrawModelSettings(m_PendingModelSettings, m_ImportSettingsDirty);
+        AssetImporterInspector::DrawApplyRevertFooter(m_ImportSettingsDirty,
+            [&]() {
+                PushUndo(world, "Reimport Model");
+                assets.SetModelSettings(key, m_PendingModelSettings);
+                if (assets.ReimportModel(key)) Log::Info("Reimported model '" + key + "'.");
+                else Log::Error("Reimport failed for '" + key + "' - see Console.");
+                m_ImportSettingsDirty = false;
+            },
+            [&]() {
+                m_PendingModelSettings = assets.GetModelSettings(key);
+                m_ImportSettingsDirty = false;
+            });
+    }
 }
 
 void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
@@ -1049,156 +2761,396 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     if (!ImGui::Begin("Inspector", nullptr, flags)) { ImGui::End(); return; }
 
     if (HasGroupSelection()) {
-        int count = (m_SelectedBox >= 0 || m_SelectedModel >= 0 ? 1 : 0) + (int)m_ExtraSelection.size();
-        ImGui::SeparatorText((std::to_string(count) + " objects selected").c_str());
+        int count = (m_Selected != entt::null ? 1 : 0) + (int)m_ExtraSelection.size();
+        std::string header = std::to_string(count) + " objects selected";
+        ImGui::SeparatorText(header.c_str());
+        EditorUI::HelpMarker("Move/rotate/scale together with the viewport gizmo.\nCtrl+Click to add or remove objects from the selection.");
 
-        auto listOne = [&](bool isModel, int index) {
-            if (isModel) {
-                if (index >= 0 && index < (int)world.Models.size()) {
-                    ImGui::BulletText("%s", world.Models[index].Name.c_str());
-                }
-            } else if (index >= 0 && index < (int)world.Boxes.size()) {
-                const WorldBox& box = world.Boxes[index];
-                if (box.Name.empty()) ImGui::BulletText("Box %d", index);
-                else ImGui::BulletText("%s", box.Name.c_str());
-            }
+        auto listOne = [&](entt::entity entity) {
+            if (!world.Registry.valid(entity)) return;
+            const auto& name = world.Registry.get<NameComponent>(entity);
+            if (name.Name.empty()) ImGui::BulletText("(unnamed)");
+            else ImGui::BulletText("%s", name.Name.c_str());
         };
-        listOne(m_SelectedModel >= 0, m_SelectedModel >= 0 ? m_SelectedModel : m_SelectedBox);
-        for (const auto& item : m_ExtraSelection) listOne(item.IsModel, item.Index);
+        if (m_Selected != entt::null) listOne(m_Selected);
+        for (entt::entity e : m_ExtraSelection) listOne(e);
 
-        ImGui::TextDisabled("Move/rotate/scale together with the\nviewport gizmo. Ctrl+Click to add or\nremove objects from the selection.");
         ImGui::Spacing();
-        if (ActionButton(ICON_FA_CLONE, "Duplicate (Ctrl+D)")) {
+        float halfWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+        if (ActionButton(ICON_FA_CLONE, "Duplicate (Ctrl+D)", ImVec2(halfWidth, 0.0f))) {
             DuplicateSelection(world, assets);
         }
         ImGui::SameLine();
-        if (DeleteIconButton("Delete Selected")) {
+        if (DeleteIconButton("Delete Selected", ImVec2(halfWidth, 0.0f))) {
             DeleteSelection(world);
         }
         ImGui::End();
         return;
     }
 
-    if (m_SelectedBox >= 0 && m_SelectedBox < (int)world.Boxes.size()) {
-        WorldBox& box = world.Boxes[m_SelectedBox];
-        ImGui::SeparatorText((std::string("Box ") + std::to_string(m_SelectedBox)).c_str());
-
-        bool activated;
-        char defaultBoxName[32];
-        snprintf(defaultBoxName, sizeof(defaultBoxName), "Box %d", m_SelectedBox);
-        DrawNameField("Name", box.Name, defaultBoxName, activated);
-        if (activated) PushUndo(world);
-        DrawVec3Row("Position", box.Center, 0.1f, 0.0f, 0.0f, activated);
-        if (activated) PushUndo(world);
-        DrawVec3Row("Rotation", box.RotationEuler, 1.0f, 0.0f, 0.0f, activated);
-        if (activated) PushUndo(world);
-        DrawVec3Row("Scale", box.Size, 0.1f, 0.1f, 100.0f, activated);
-        if (activated) PushUndo(world);
-        ImGui::ColorEdit3("Color", &box.Color.x, ImGuiColorEditFlags_DisplayHex);
-        if (ImGui::IsItemActivated()) PushUndo(world);
-
+    bool selectionValid = m_Selected != entt::null && world.Registry.valid(m_Selected);
+    if (!selectionValid) {
+        // No scene entity selected — fall back to whatever's selected in the Asset Browser, if
+        // anything, and show its Import Settings instead of just an empty placeholder.
+        if (!m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder) {
+            DrawAssetImportInspector(world, assets, m_SelectedAssetKey);
+            ImGui::End();
+            return;
+        }
         ImGui::Spacing();
-        if (ActionButton(ICON_FA_DOWN_LONG, "Snap to Ground")) {
-            PushUndo(world);
-            glm::vec3 half = box.Size * 0.5f;
-            glm::mat4 m = ComposeTransform(box.Center, box.RotationEuler, glm::vec3(1.0f));
-            AABB worldBounds = AABB{-half, half}.Transformed(m);
-            box.Center.y -= worldBounds.Min.y;
-        }
-        ImGui::SameLine();
-        if (ActionButton(ICON_FA_CLONE, "Duplicate (Ctrl+D)")) {
-            DuplicateSelection(world, assets);
-        }
-        ImGui::SameLine();
-        if (DeleteIconButton("Delete Box")) {
-            DeleteSelection(world);
-        }
-    } else if (m_SelectedModel >= 0 && m_SelectedModel < (int)world.Models.size()) {
-        PlacedModel& pm = world.Models[m_SelectedModel];
-        ImGui::SeparatorText(pm.Name.empty() ? "(unnamed)" : pm.Name.c_str());
-        ImGui::TextDisabled("%s", pm.ModelRef->Path().c_str());
-        ImGui::Spacing();
+        ImGui::TextDisabled("Select something in the Scene Hierarchy\nor Asset Browser");
+        ImGui::End();
+        return;
+    }
 
-        bool activated;
-        DrawNameField("Name", pm.Name, "Model", activated);
-        if (activated) PushUndo(world);
-        DrawVec3Row("Position", pm.Position, 0.1f, 0.0f, 0.0f, activated);
-        if (activated) PushUndo(world);
-        DrawVec3Row("Rotation", pm.RotationEuler, 1.0f, 0.0f, 0.0f, activated);
-        if (activated) PushUndo(world);
-        DrawVec3Row("Scale", pm.Scale, 0.05f, 0.01f, 100.0f, activated);
-        if (activated) PushUndo(world);
+    entt::entity entity = m_Selected;
+    auto& registry = world.Registry;
+    bool isLevelGeometry = registry.all_of<LevelGeometryTag>(entity);
+    auto& transform = registry.get<TransformComponent>(entity);
+    auto& name = registry.get<NameComponent>(entity);
+    bool activated = false;
 
-        ImGui::Spacing();
-        if (ActionButton(ICON_FA_DOWN_LONG, "Snap to Ground")) {
-            PushUndo(world);
-            glm::mat4 m = ComposeTransform(pm.Position, pm.RotationEuler, pm.Scale);
-            pm.Position.y -= pm.ModelRef->LowestVertexWorldY(m);
-        }
-        ImGui::SameLine();
-        if (ActionButton(ICON_FA_CLONE, "Duplicate (Ctrl+D)")) {
-            DuplicateSelection(world, assets);
-        }
-        ImGui::SameLine();
-        if (DeleteIconButton("Delete Model")) {
-            DeleteSelection(world);
-        }
+    // Scopes every CollapsingHeader ID below to this entity — otherwise ImGui remembers a
+    // header's open/closed state by its label text alone, so collapsing e.g. "Health" on one
+    // object would also show it collapsed on the next, unrelated object that happens to have
+    // the same component.
+    ImGui::PushID((int)entt::to_integral(entity));
 
-        if (ImGui::CollapsingHeader(ICON_FA_FILM "  Animations")) {
-            if (pm.ModelRef->HasAnimations()) {
-                for (int i = 0; i < pm.ModelRef->AnimationCount(); ++i) {
+    // --- Header: active checkbox + icon + name, then tag/static, matching Unity's Inspector
+    // top block but with the same per-kind icon the Hierarchy already uses, so the two panels
+    // read as one consistent visual language instead of the Inspector being icon-less.
+    bool active = !registry.all_of<InactiveTag>(entity);
+    if (ImGui::Checkbox("##Active", &active)) {
+        PushUndo(world, "Toggle Active");
+        if (active) registry.remove<InactiveTag>(entity);
+        else registry.emplace<InactiveTag>(entity);
+    }
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Active - inactive objects are not drawn and don't collide");
+    ImGui::SameLine();
+
+    const char* kindIcon = ICON_FA_DRAW_POLYGON;
+    const char* kindTip = "Model - an imported or primitive mesh";
+    if (isLevelGeometry) { kindIcon = ICON_FA_CUBE; kindTip = "Level Geometry - a solid box with collision"; }
+    else if (registry.all_of<LightComponent>(entity)) { kindIcon = ICON_FA_LIGHTBULB; kindTip = "Light - casts light into the scene"; }
+    else if (!registry.all_of<RenderableComponent>(entity)) { kindIcon = ICON_FA_DIAGRAM_PROJECT; kindTip = "Empty - a transform with no mesh, useful as a grouping pivot"; }
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(kindIcon);
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", kindTip);
+    ImGui::SameLine();
+
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    DrawNameField("##Name", name.Name, isLevelGeometry ? "Box" : "Object", activated);
+    if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) EditorUI::SetTooltip("Display name shown in the Hierarchy and here");
+    if (activated) PushUndo(world, "Rename");
+
+    {
+        auto* tag = registry.try_get<TagComponent>(entity);
+        std::string tagText = tag ? tag->Tag : std::string("Untagged");
+        char tagBuf[64];
+        snprintf(tagBuf, sizeof(tagBuf), "%s", tagText.c_str());
+
+        PropertyLabel("Tag", "Free-text label for filtering/searching - e.g. search \"t:Enemy\" in the\nHierarchy to find every object tagged \"Enemy\".");
+        // Leaves room for the Static checkbox after it instead of claiming the row's full width
+        // the way a plain PropertyLabel field would — this row is the one place two fields
+        // deliberately share a line, to keep the header block compact.
+        float staticReserve = ImGui::CalcTextSize("Static").x + ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - staticReserve);
+        if (ImGui::InputText("##Tag", tagBuf, sizeof(tagBuf))) {
+            registry.emplace_or_replace<TagComponent>(entity, std::string(tagBuf));
+        }
+        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Tag");
+        ImGui::SameLine();
+        bool isStatic = registry.all_of<StaticTag>(entity);
+        if (ImGui::Checkbox("Static", &isStatic)) {
+            PushUndo(world, "Toggle Static");
+            if (isStatic) registry.emplace<StaticTag>(entity);
+            else registry.remove<StaticTag>(entity);
+        }
+        if (ImGui::IsItemHovered()) {
+            EditorUI::SetTooltip("Marks this object as never moving at runtime.\nDoesn't change behavior yet - just records the intent for later optimizations.");
+        }
+    }
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // --- Transform (every entity has one; not removable, same as Unity) --------------------
+    bool removed = false;
+    if (BeginComponentSection(world, entity, ICON_FA_UP_DOWN_LEFT_RIGHT, "Transform", false, removed,
+            /*defaultOpen=*/true, "Position, rotation, and scale in the world. Every object has one.")) {
+        DrawVec3Row("Position", transform.Position, 0.1f, 0.0f, 0.0f, activated,
+            "World-space position in units. Drag a number to change it, or\nclick a colored letter to zero that axis.");
+        if (activated) PushUndo(world, "Move");
+        DrawVec3Row("Rotation", transform.RotationEuler, 1.0f, 0.0f, 0.0f, activated,
+            "Rotation in degrees around each axis.");
+        if (activated) PushUndo(world, "Rotate");
+        DrawVec3Row("Scale", transform.Scale, isLevelGeometry ? 0.1f : 0.05f, 0.01f, 100.0f, activated,
+            "Size multiplier per axis - 1 is the original imported/created size.");
+        if (activated) PushUndo(world, "Scale");
+
+        // Re-parenting lives in the Hierarchy panel (drag one row onto another), and Snap to
+        // Ground lives in the toolbar now — neither duplicated here.
+        EndComponentSection();
+    }
+
+    // --- Mesh Renderer ---------------------------------------------------------------------
+    if (auto* renderable = registry.try_get<RenderableComponent>(entity)) {
+        // Not removable on level geometry: a box IS its cube mesh, and removing it would leave
+        // an invisible collider that the Hierarchy still lists under "Level Geometry".
+        if (BeginComponentSection(world, entity, ICON_FA_DRAW_POLYGON, "Mesh Renderer", !isLevelGeometry, removed,
+                /*defaultOpen=*/true, "The mesh this object draws, and its material color/texture options.")) {
+            std::string meshName = std::filesystem::path(renderable->ModelRef->Path()).filename().string();
+
+            if (isLevelGeometry) {
+                PropertyLabel("Color", "Solid tint for this box's surface. Click the swatch\nfor the full color picker, or type a hex value.");
+                ImGui::ColorEdit3("##Color", &renderable->ModelRef->MeshMaterial(0).BaseColor.x, ImGuiColorEditFlags_DisplayHex);
+                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Color");
+            }
+
+            if (renderable->ModelRef->HasAnimations()) {
+                for (int i = 0; i < renderable->ModelRef->AnimationCount(); ++i) {
                     ImGui::PushID(i);
-                    if (ImGui::Button(ICON_FA_PLAY)) {
-                        pm.ModelRef->PlayAnimation(i);
-                    }
+                    if (ImGui::Button(ICON_FA_PLAY)) renderable->ModelRef->PlayAnimation(i);
+                    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Play this animation clip");
                     ImGui::SameLine();
-                    ImGui::TextUnformatted(pm.ModelRef->AnimationName(i).c_str());
+                    ImGui::TextUnformatted(renderable->ModelRef->AnimationName(i).c_str());
                     ImGui::PopID();
                 }
-                if (pm.ModelRef->IsPlayingAnimation() && ImGui::Button("Stop Animation")) {
-                    pm.ModelRef->PlayAnimation(-1);
+                if (renderable->ModelRef->IsPlayingAnimation() && ImGui::Button("Stop Animation")) {
+                    renderable->ModelRef->PlayAnimation(-1);
                 }
-            } else {
-                ImGui::TextDisabled("No animations in this asset");
             }
-        }
 
-        if (ImGui::CollapsingHeader(ICON_FA_PALETTE "  PBR Material")) {
+            // One row does everything: shows what's assigned, tells you its stats and full
+            // path on hover, and lets you change it (click for a primitive, or drag a Model
+            // from the Asset Browser onto it) — instead of a separate always-on info line above
+            // plus a combo plus a drop button below, all doing pieces of the same job. Every
+            // row in this section now shares the exact same label column, so nothing here
+            // breaks the grid the rest of the Inspector already uses.
+            PropertyLabel("Mesh");
+            if (ImGui::Button(meshName.c_str(), ImVec2(-FLT_MIN, 0.0f))) {
+                ImGui::OpenPopup("##ChangeMesh");
+            }
+            if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen("##ChangeMesh")) {
+                EditorUI::SetTooltip("%s\n%u tris, %u verts\n\nClick to pick a primitive, or drag a Model here from the Asset Browser.",
+                    renderable->ModelRef->Path().c_str(), renderable->ModelRef->TriangleCount(), renderable->ModelRef->VertexCount());
+            }
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
+                    std::string path((const char*)payload->Data);
+                    PushUndo(world, "Change Mesh");
+                    renderable->ModelRef = assets.LoadModel(path);
+                }
+                ImGui::EndDragDropTarget();
+            }
+            if (ImGui::BeginPopup("##ChangeMesh")) {
+                auto pick = [&](const char* kind) {
+                    PushUndo(world, "Change Mesh");
+                    renderable->ModelRef = assets.CreatePrimitive(kind);
+                };
+                if (ImGui::Selectable(ICON_FA_CUBE "  Cube")) pick("cube");
+                if (ImGui::Selectable(ICON_FA_CIRCLE "  Sphere")) pick("sphere");
+                if (ImGui::Selectable(ICON_FA_SHAPES "  Cylinder")) pick("cylinder");
+                if (ImGui::Selectable(ICON_FA_SHAPES "  Cone")) pick("cone");
+                if (ImGui::Selectable(ICON_FA_SHAPES "  Plane")) pick("plane");
+                ImGui::EndPopup();
+            }
+            EndComponentSection();
+        }
+        if (removed) {
+            PushUndo(world, "Remove Renderer");
+            registry.remove<RenderableComponent>(entity);
+        }
+    }
+
+    // --- PBR Material (part of the renderer, so only shown when there is one; collapsed by
+    // default since it's usually set once and left alone) -----------------------------------
+    if (registry.all_of<RenderableComponent>(entity)) {
+        if (BeginComponentSection(world, entity, ICON_FA_PALETTE, "Material", false, removed, /*defaultOpen=*/false,
+                "Surface appearance: color, metallic/roughness, emissive glow, and texture maps.")) {
             DrawMaterialEditor(world, assets);
+            EndComponentSection();
         }
+    }
 
-        if (ImGui::CollapsingHeader(ICON_FA_VOLUME_HIGH "  Audio")) {
-            const std::string preview = pm.SoundPath.empty() ? "(none)" : std::filesystem::path(pm.SoundPath).filename().string();
-            if (ImGui::BeginCombo("Clip", preview.c_str())) {
-                if (ImGui::Selectable("(none)", pm.SoundPath.empty())) { PushUndo(world); pm.SoundPath.clear(); }
+    // --- Collider (collapsed by default: a single checkbox, rarely revisited) --------------
+    if (auto* collider = registry.try_get<ColliderComponent>(entity)) {
+        if (BeginComponentSection(world, entity, ICON_FA_CUBE, "Box Collider", true, removed, /*defaultOpen=*/false,
+                "Lets this object block movement and be hit by raycasts.\nBounds follow its Transform/mesh automatically.")) {
+            PropertyLabel("Is Trigger", "If checked, this object doesn't block movement -\nit's solid (blocking) by default.");
+            if (ImGui::Checkbox("##IsTrigger", &collider->IsTrigger)) PushUndo(world, "Edit Collider");
+            EndComponentSection();
+        }
+        if (removed) {
+            PushUndo(world, "Remove Collider");
+            registry.remove<ColliderComponent>(entity);
+        }
+    }
+
+    // --- Light (open by default — usually the main thing being tuned on a light entity) ----
+    if (auto* light = registry.try_get<LightComponent>(entity)) {
+        if (BeginComponentSection(world, entity, ICON_FA_LIGHTBULB, "Light", true, removed,
+            /*defaultOpen=*/true, "Casts light into the scene from this object's position.")) {
+            PropertyLabel("Type", "Point shines in all directions; Spot shines in a cone.");
+            int kind = light->Kind == LightComponent::Type::Spot ? 1 : 0;
+            if (ImGui::Combo("##Type", &kind, "Point\0Spot\0")) {
+                PushUndo(world, "Edit Light");
+                light->Kind = kind == 1 ? LightComponent::Type::Spot : LightComponent::Type::Point;
+            }
+            PropertyLabel("Color", "The light's color.");
+            ImGui::ColorEdit3("##Color", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+            PropertyLabel("Intensity", "Brightness multiplier - higher is brighter.");
+            ImGui::DragFloat("##Intensity", &light->Intensity, 0.1f, 0.0f, 100.0f, "%.2f");
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+            PropertyLabel("Range", "Distance (in world units) at which the light's effect fades to zero.");
+            ImGui::DragFloat("##Range", &light->Range, 0.2f, 0.1f, 200.0f, "%.1f");
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+            if (light->Kind == LightComponent::Type::Spot) {
+                PropertyLabel("Spot Angle", "Half-angle of the light cone, in degrees.\nThe cone points along the entity's -Z axis - use Rotation to aim it.");
+                ImGui::SliderFloat("##SpotAngle", &light->SpotAngleDegrees, 1.0f, 89.0f, "%.0f deg");
+                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+            }
+            EndComponentSection();
+        }
+        if (removed) {
+            PushUndo(world, "Remove Light");
+            registry.remove<LightComponent>(entity);
+        }
+    }
+
+    // --- Audio Source (collapsed by default: set-and-forget once a clip is chosen) ---------
+    if (auto* audio = registry.try_get<AudioSourceComponent>(entity)) {
+        if (BeginComponentSection(world, entity, ICON_FA_VOLUME_HIGH, "Audio Source", true, removed, /*defaultOpen=*/false,
+                "A sound clip that can be played from this object.")) {
+            const std::string preview = audio->SoundPath.empty()
+                ? "(none)" : std::filesystem::path(audio->SoundPath).filename().string();
+            PropertyLabel("Clip", "Which imported sound this object plays.\nImport sounds via File > Import, or the Asset Browser.");
+            if (ImGui::BeginCombo("##Clip", preview.c_str())) {
                 for (const auto& sound : assets.Sounds()) {
-                    bool selected = (sound == pm.SoundPath);
-                    if (ImGui::Selectable(std::filesystem::path(sound).filename().string().c_str(), selected)) {
-                        PushUndo(world);
-                        pm.SoundPath = sound;
+                    bool isSelected = (sound == audio->SoundPath);
+                    if (ImGui::Selectable(std::filesystem::path(sound).filename().string().c_str(), isSelected)) {
+                        PushUndo(world, "Set Sound Clip");
+                        audio->SoundPath = sound;
                     }
                 }
                 ImGui::EndCombo();
             }
-            if (!pm.SoundPath.empty() && ImGui::Button(ICON_FA_VOLUME_HIGH "  Play Sound")) {
-                AudioEngine::Play(pm.SoundPath);
+            if (!audio->SoundPath.empty() && ImGui::Button(ICON_FA_PLAY "  Preview")) {
+                AudioEngine::Play(audio->SoundPath);
             }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Play the clip once, right now, to check how it sounds");
+            EndComponentSection();
         }
-    } else {
-        ImGui::Spacing();
-        ImGui::TextDisabled("Select something in the Scene Hierarchy");
+        if (removed) {
+            PushUndo(world, "Remove Audio Source");
+            registry.remove<AudioSourceComponent>(entity);
+        }
     }
 
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    DrawAddComponentMenu(world, assets, entity);
+
+    ImGui::Spacing();
+    float thirdWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2.0f) / 3.0f;
+    if (ActionButton(ICON_FA_CLONE, "Duplicate (Ctrl+D)", ImVec2(thirdWidth, 0.0f))) DuplicateSelection(world, assets);
+    ImGui::SameLine();
+    if (ActionButton(ICON_FA_BOX_ARCHIVE, "Save as Prefab...", ImVec2(thirdWidth, 0.0f))) {
+        std::string path = FileDialog::SaveFile("Prefab Files\0*.prefab\0All Files\0*.*\0", "prefab", m_Window);
+        if (!path.empty() && SceneSerializer::SavePrefab(world, entity, path)) assets.RegisterPrefab(path);
+    }
+    ImGui::SameLine();
+    if (DeleteIconButton("Delete (Del)", ImVec2(thirdWidth, 0.0f))) DeleteSelection(world);
+
+    ImGui::PopID();
     ImGui::End();
 }
 
+bool EditorLayer::BeginComponentSection(World& world, entt::entity entity, const char* icon,
+    const char* label, bool removable, bool& removedOut, bool defaultOpen, const char* tooltip) {
+    (void)world; (void)entity;
+    removedOut = false;
+
+    std::string header = std::string(icon) + "  " + label;
+    // CollapsingHeader claims its ENTIRE row as one hit-test region by default, so without
+    // AllowOverlap the "x" button drawn on top of that same row below never actually receives
+    // the click — it lands on the header's own collapse-toggle instead, which is exactly why
+    // pressing it only expanded/collapsed the section instead of removing anything.
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_AllowOverlap | (defaultOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0);
+    bool open = ImGui::CollapsingHeader(header.c_str(), flags);
+    if (tooltip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
+
+    if (removable) {
+        // Right-aligned "x" sharing the header's line, the way Unity puts a component's context
+        // menu at the far right of its header bar.
+        float buttonWidth = ImGui::GetFrameHeight();
+        float x = ImGui::GetWindowContentRegionMax().x - buttonWidth;
+        ImGui::SameLine(x);
+        ImGui::PushID(label);
+        if (ImGui::SmallButton(ICON_FA_XMARK)) removedOut = true;
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Remove this component");
+        ImGui::PopID();
+    }
+
+    bool showBody = open && !removedOut;
+    // Indenting the body is what visually reads as "these fields belong to that header" instead
+    // of every section's fields sitting flush with the header bars themselves — paired with
+    // EndComponentSection(), which callers must call whenever this returns true.
+    if (showBody) ImGui::Indent();
+    return showBody;
+}
+
+void EditorLayer::EndComponentSection() {
+    ImGui::Unindent();
+    ImGui::Spacing();
+}
+
+void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity) {
+    if (ImGui::Button(ICON_FA_PLUS "  Add Component", ImVec2(-1.0f, 0.0f))) {
+        ImGui::OpenPopup("##AddComponentPopup");
+    }
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Attach a new capability to this object");
+    if (!ImGui::BeginPopup("##AddComponentPopup")) return;
+
+    auto& registry = world.Registry;
+    // Greyed out rather than hidden when already present, so the menu's contents (i.e. what the
+    // engine actually supports) stay the same every time it's opened.
+    auto entry = [&](const char* icon, const char* label, bool alreadyHas, const std::function<void()>& add) {
+        std::string text = std::string(icon) + "  " + label;
+        if (ImGui::MenuItem(text.c_str(), nullptr, false, !alreadyHas)) {
+            PushUndo(world, std::string("Add ") + label);
+            add();
+        }
+    };
+
+    ImGui::SeparatorText("Rendering");
+    // Defaults to a cube — the Mesh Renderer section's own "Replace Mesh" drop target (drag a
+    // Model from the Asset Browser onto it) is how you point it at something else afterward.
+    entry(ICON_FA_DRAW_POLYGON, "Mesh Renderer", registry.all_of<RenderableComponent>(entity),
+        [&] { registry.emplace<RenderableComponent>(entity, assets.CreatePrimitive("cube")); });
+    entry(ICON_FA_LIGHTBULB, "Light", registry.all_of<LightComponent>(entity),
+        [&] { registry.emplace<LightComponent>(entity); });
+
+    ImGui::SeparatorText("Physics");
+    entry(ICON_FA_CUBE, "Box Collider", registry.all_of<ColliderComponent>(entity),
+        [&] { registry.emplace<ColliderComponent>(entity); });
+
+    ImGui::SeparatorText("Audio");
+    entry(ICON_FA_VOLUME_HIGH, "Audio Source", registry.all_of<AudioSourceComponent>(entity),
+        [&] { registry.emplace<AudioSourceComponent>(entity); });
+
+    ImGui::EndPopup();
+}
+
 void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets) {
-    if (m_SelectedModel < 0 || m_SelectedModel >= (int)world.Models.size()) return;
-    Model* model = world.Models[m_SelectedModel].ModelRef.get();
+    if (m_Selected == entt::null || !world.Registry.valid(m_Selected)) return;
+    Model* model = world.Registry.get<RenderableComponent>(m_Selected).ModelRef.get();
 
     bool useCustom = (bool)model->MaterialOverride();
     if (ImGui::Checkbox("Use Custom Material", &useCustom)) {
-        PushUndo(world);
+        PushUndo(world, "Edit Material");
         if (useCustom) {
             auto mat = std::make_shared<Material>();
             // Keep the imported texture maps (convenient starting point) but NOT the raw
@@ -1210,7 +3162,6 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets) {
                 const Material& imported = model->MeshMaterial(0);
                 mat->AlbedoMap = imported.AlbedoMap;
                 mat->NormalMap = imported.NormalMap;
-                mat->MetallicRoughnessMap = imported.MetallicRoughnessMap;
                 mat->MetallicMap = imported.MetallicMap;
                 mat->RoughnessMap = imported.RoughnessMap;
                 mat->AOMap = imported.AOMap;
@@ -1221,6 +3172,9 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets) {
             model->SetMaterialOverride(nullptr);
         }
     }
+    if (ImGui::IsItemHovered()) {
+        EditorUI::SetTooltip("Override with a fully editable PBR material.\nUnchecking goes back to whatever the source file imported.");
+    }
 
     auto mat = model->MaterialOverride();
     if (!mat) {
@@ -1228,129 +3182,231 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets) {
         return;
     }
 
-    ImGui::ColorEdit3("Base Color", &mat->BaseColor.x, ImGuiColorEditFlags_DisplayHex);
-    if (ImGui::IsItemActivated()) PushUndo(world);
-    ImGui::SliderFloat("Metallic", &mat->Metallic, 0.0f, 1.0f);
-    if (ImGui::IsItemActivated()) PushUndo(world);
-    ImGui::SliderFloat("Roughness", &mat->Roughness, 0.04f, 1.0f);
-    if (ImGui::IsItemActivated()) PushUndo(world);
-    ImGui::ColorEdit3("Emissive Color", &mat->EmissiveColor.x, ImGuiColorEditFlags_DisplayHex);
-    if (ImGui::IsItemActivated()) PushUndo(world);
-    ImGui::SliderFloat("Emissive Strength", &mat->EmissiveStrength, 0.0f, 10.0f);
-    if (ImGui::IsItemActivated()) PushUndo(world);
+    PropertyLabel("Base Color", "The surface's tint, multiplied with the Albedo map if one is set.");
+    ImGui::ColorEdit3("##BaseColor", &mat->BaseColor.x, ImGuiColorEditFlags_DisplayHex);
+    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Material");
+    PropertyLabel("Metallic", "0 = non-metal (plastic, wood, skin), 1 = pure metal.\nIgnored where a Metallic map is set.");
+    ImGui::SliderFloat("##Metallic", &mat->Metallic, 0.0f, 1.0f);
+    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Material");
+    PropertyLabel("Roughness", "0 = mirror-smooth, 1 = fully matte.\nIgnored where a Roughness map is set.");
+    ImGui::SliderFloat("##Roughness", &mat->Roughness, 0.04f, 1.0f);
+    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Material");
+    PropertyLabel("Emissive Color", "Color this surface glows, independent of scene lighting.");
+    ImGui::ColorEdit3("##EmissiveColor", &mat->EmissiveColor.x, ImGuiColorEditFlags_DisplayHex);
+    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Material");
+    PropertyLabel("Emissive Strength", "Brightness multiplier for the Emissive Color/map - above 1 for a strong glow.");
+    ImGui::SliderFloat("##EmissiveStrength", &mat->EmissiveStrength, 0.0f, 10.0f);
+    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Material");
 
     ImGui::SeparatorText("Texture Maps");
 
-    // One compact line per map: a thumbnail if it's set, the label, then icon-only
-    // Import/Clear buttons — instead of a label+filename line followed by a full-width
-    // button line each.
-    auto mapRow = [&](const char* label, std::shared_ptr<Texture>& slot) {
+    // Same one-button-does-everything pattern as the Mesh Renderer's "Mesh" row: a single
+    // button shows the assigned filename (or "(none)"), click opens a file picker, dragging a
+    // texture from the Asset Browser onto it assigns it, and hovering it previews the actual
+    // image instead of a permanent inline thumbnail — plus every row now shares the exact same
+    // PropertyLabel column as the rest of the Inspector, which is what actually fixes the old
+    // layout's real problem: the Import button used to sit at a different X on every row
+    // because it came right after each row's own (differently-sized) label.
+    auto mapRow = [&](const char* label, std::shared_ptr<Texture>& slot, const char* helpText) {
         ImGui::PushID(label);
-        if (slot) {
-            ImGui::Image((ImTextureID)(intptr_t)slot->GLHandle(), ImVec2(20, 20));
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s", std::filesystem::path(slot->Path()).filename().string().c_str());
+        PropertyLabel(label);
+
+        bool hasSlot = (bool)slot;
+        std::string preview = hasSlot ? std::filesystem::path(slot->Path()).filename().string() : std::string("(none)");
+        // Negative width = "fill up to this many pixels before the right edge" (ImGui's own
+        // convention) — reserves exactly the Clear button's width when there's one to reserve
+        // for, or claims the full row when there isn't.
+        float clearReserve = hasSlot ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+        if (ImGui::Button(preview.c_str(), ImVec2(hasSlot ? -clearReserve : -FLT_MIN, 0.0f))) {
+            std::string path = FileDialog::OpenFile(
+                "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
+            if (!path.empty()) {
+                PushUndo(world, std::string("Set ") + label + " Map");
+                slot = assets.LoadTexture(path);
             }
-            ImGui::SameLine();
         }
-        ImGui::TextUnformatted(label);
+        if (ImGui::IsItemHovered()) {
+            if (hasSlot) {
+                ImGui::BeginTooltip();
+                ImGui::Image((ImTextureID)(intptr_t)slot->GLHandle(), ImVec2(96, 96));
+                ImGui::TextUnformatted(slot->Path().c_str());
+                ImGui::EndTooltip();
+            } else {
+                EditorUI::SetTooltip("Click to import an image, or drag one here from the Asset Browser.");
+            }
+        }
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
                 std::string texPath((const char*)payload->Data);
-                PushUndo(world);
+                PushUndo(world, std::string("Set ") + label + " Map");
                 slot = assets.LoadTexture(texPath);
             }
             ImGui::EndDragDropTarget();
         }
-        ImGui::SameLine();
-        if (ActionButton(ICON_FA_FOLDER_OPEN, "Import...")) {
-            std::string path = FileDialog::OpenFile(
-                "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
-            if (!path.empty()) {
-                PushUndo(world);
-                slot = assets.LoadTexture(path);
-            }
-        }
-        if (slot) {
+        if (hasSlot) {
             ImGui::SameLine();
-            if (ActionButton(ICON_FA_XMARK, "Clear")) {
-                PushUndo(world);
+            if (ActionButton(ICON_FA_XMARK, "Clear", ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+                PushUndo(world, std::string("Clear ") + label + " Map");
                 slot = nullptr;
             }
         }
+        if (helpText) EditorUI::HelpMarker(helpText);
         ImGui::PopID();
     };
 
-    mapRow("Albedo", mat->AlbedoMap);
-    mapRow("Normal", mat->NormalMap);
-    mapRow("Metallic-Roughness", mat->MetallicRoughnessMap);
-    if (mat->MetallicRoughnessMap) {
-        ImGui::TextDisabled("Packed (glTF-style) map above overrides the two below.");
+    mapRow("Albedo", mat->AlbedoMap, "The base color texture (also called diffuse/base color map).");
+    mapRow("Normal", mat->NormalMap, "Adds fine surface detail (bumps, grooves) without extra geometry.");
+    mapRow("Metallic", mat->MetallicMap, "Grayscale: white = metal, black = non-metal. Overrides the Metallic slider above.");
+    mapRow("Roughness", mat->RoughnessMap, "Grayscale: white = matte, black = mirror-smooth. Overrides the Roughness slider above.");
+    mapRow("AO", mat->AOMap, "Ambient occlusion - darkens crevices/contact points for added depth.");
+    mapRow("Emissive", mat->EmissiveMap, "Texture for glowing areas (e.g. windows, screens). Tinted by Emissive Color.");
+}
+
+glm::vec3 EditorLayer::ComputeDropRayPosition(World& world, Camera& editorCamera) const {
+    glm::mat4 view = editorCamera.ViewMatrix();
+    glm::mat4 proj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y);
+    glm::mat4 invVP = glm::inverse(proj * view);
+    ImVec2 mousePos = ImGui::GetMousePos();
+    float ndcX = (2.0f * (mousePos.x - m_ViewportPos.x)) / m_ViewportSize.x - 1.0f;
+    float ndcY = 1.0f - (2.0f * (mousePos.y - m_ViewportPos.y)) / m_ViewportSize.y;
+    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
+    glm::vec4 farP = invVP * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
+    nearP /= nearP.w;
+    farP /= farP.w;
+    glm::vec3 origin = glm::vec3(nearP);
+    glm::vec3 dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
+
+    // Landing point: the nearest existing box collider, else the Y=0 ground plane, else a fixed
+    // distance out (pointing at the sky / parallel to the ground, where neither hits).
+    float bestT = 1e30f;
+    float boxDist;
+    if (world.Raycast(origin, dir, 500.0f, boxDist) != entt::null) {
+        bestT = boxDist;
     }
-    mapRow("Metallic (standalone)", mat->MetallicMap);
-    mapRow("Roughness (standalone)", mat->RoughnessMap);
-    mapRow("AO", mat->AOMap);
-    mapRow("Emissive", mat->EmissiveMap);
+    if (std::abs(dir.y) > 1e-5f) {
+        float groundT = -origin.y / dir.y;
+        if (groundT > 0.0f && groundT < bestT) bestT = groundT;
+    }
+    if (bestT >= 1e30f) bestT = 8.0f;
+    glm::vec3 position = origin + dir * bestT;
+
+    // Same grid-snap concept as the transform gizmo (m_GridSnapEnabled, Ctrl inverts it
+    // momentarily) - XZ only, since Y is about to be re-derived from where the object actually
+    // sits (either here directly, for a prefab, or bottom-aligned in ComputeModelDropPosition).
+    bool snapActive = m_GridSnapEnabled != ImGui::GetIO().KeyCtrl;
+    if (snapActive && m_GridSize > 0.0001f) {
+        position.x = std::round(position.x / m_GridSize) * m_GridSize;
+        position.z = std::round(position.z / m_GridSize) * m_GridSize;
+    }
+    return position;
+}
+
+glm::vec3 EditorLayer::ComputeModelDropPosition(World& world, Model& model, Camera& editorCamera) const {
+    glm::vec3 position = ComputeDropRayPosition(world, editorCamera);
+
+    // Rest the model's own bottom on the hit point instead of its (possibly arbitrary) pivot -
+    // same technique SnapSelectionToGround() uses for an already-placed object: evaluate the
+    // lowest vertex's world Y at a candidate transform, then shift by however far that missed
+    // the target height. See SnapSelectionToGround's comment for the general formula this is a
+    // special case of (targetY happens to equal the candidate's own Y here).
+    float targetY = position.y;
+    glm::mat4 candidate = ComposeTransform(position, glm::vec3(0.0f), glm::vec3(1.0f));
+    float lowestY = model.LowestVertexWorldY(candidate);
+    position.y += (targetY - lowestY);
+    return position;
 }
 
 void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Camera& editorCamera) {
     const ImGuiPayload* peek = ImGui::GetDragDropPayload();
-    if (!peek || !peek->IsDataType("ASSET_MODEL_PATH")) return; // only active during a model drag
+    bool isModelDrag = peek && peek->IsDataType("ASSET_MODEL_PATH");
+    bool isPrefabDrag = peek && peek->IsDataType("ASSET_PREFAB_PATH");
+    // Only active while a placeable asset is actually being dragged, so this fullscreen overlay
+    // never otherwise sits over the viewport intercepting camera input.
+    if (!isModelDrag && !isPrefabDrag) {
+        m_DragPreview.Active = false;
+        return;
+    }
 
-    int w, h;
-    glfwGetWindowSize(m_Window, &w, &h);
-    if (w <= 0 || h <= 0 || m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
+    if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) {
+        m_DragPreview.Active = false;
+        return;
+    }
 
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2((float)w, (float)h));
+    // Cover exactly the Scene viewport rect (not the whole window) and sit ON TOP of the "Scene"
+    // panel for the duration of the drag. "Scene" is a normal docked window now — it used to be
+    // the dockspace's passthru central node, which let mouse events fall through it to a
+    // fullscreen catcher behind. A bottom-layer catcher is simply occluded by "Scene" and never
+    // becomes g.HoveredWindowUnderMovingWindow, so BeginDragDropTarget() below refuses the drop.
+    // Restricting the window to the viewport rect keeps drops over the side panels routing to
+    // those panels' own drop targets.
+    ImGui::SetNextWindowPos(ImVec2(m_ViewportPos.x, m_ViewportPos.y));
+    ImGui::SetNextWindowSize(ImVec2(m_ViewportSize.x, m_ViewportSize.y));
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("##ViewportDropTarget", nullptr,
         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground |
-        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
-        ImGuiWindowFlags_NoFocusOnAppearing);
+        ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoFocusOnAppearing |
+        ImGuiWindowFlags_NoDocking);
+    // Only submitted while a placeable asset is mid-drag (see the early-out above), so forcing
+    // it to the front just parks the catcher over the Scene image for that drag.
+    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 
     ImGui::InvisibleButton("##viewport_drop_zone", ImGui::GetContentRegionAvail());
+    // Plain IsItemHovered() defaults to false here for the ENTIRE drag: the Asset Browser's
+    // drag-source cell stays the "active" item the whole time the mouse button is held, and
+    // IsItemHovered() normally excludes hover on anything else while a different item is active
+    // (to stop drag interactions from also triggering hover-only affordances underneath). That
+    // flag is exactly why this only lit up after release before - the active item cleared at
+    // that point, so hover only ever registered on the very last frame.
+    bool hoveringViewport = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+
+    // Live preview: recomputed every frame while a model is being dragged over the viewport, so
+    // main.cpp can render a translucent ghost at the exact spot that would be committed if the
+    // mouse were released right now (TintOverlayRenderer, driven by GetDragPreview()). Prefabs
+    // don't get a ghost - they aren't necessarily a single Model with bounds to preview.
+    if (isModelDrag && hoveringViewport) {
+        std::string path((const char*)peek->Data);
+        auto model = assets.LoadModel(path); // cache hit - already imported to appear in the browser
+        if (model) {
+            m_DragPreview.Active = true;
+            m_DragPreview.ModelRef = model;
+            m_DragPreview.Position = ComputeModelDropPosition(world, *model, editorCamera);
+        } else {
+            m_DragPreview.Active = false;
+        }
+    } else {
+        m_DragPreview.Active = false;
+    }
+
     if (ImGui::BeginDragDropTarget()) {
-        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
-            std::string path((const char*)payload->Data);
-            PushUndo(world);
+        const ImGuiPayload* modelPayload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH");
+        const ImGuiPayload* prefabPayload = modelPayload ? nullptr : ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH");
 
-            // Drop where the cursor is pointing: raycast from the camera through the mouse,
-            // landing on the nearest existing box or the ground plane, whichever is closer.
-            glm::mat4 view = editorCamera.ViewMatrix();
-            glm::mat4 proj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y);
-            glm::mat4 invVP = glm::inverse(proj * view);
-            ImVec2 mousePos = ImGui::GetMousePos();
-            float ndcX = (2.0f * (mousePos.x - m_ViewportPos.x)) / m_ViewportSize.x - 1.0f;
-            float ndcY = 1.0f - (2.0f * (mousePos.y - m_ViewportPos.y)) / m_ViewportSize.y;
-            glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
-            glm::vec4 farP = invVP * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
-            nearP /= nearP.w;
-            farP /= farP.w;
-            glm::vec3 origin = glm::vec3(nearP);
-            glm::vec3 dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
+        if (modelPayload || prefabPayload) {
+            std::string path((const char*)(modelPayload ? modelPayload->Data : prefabPayload->Data));
+            PushUndo(world, modelPayload ? "Place Model" : "Place Prefab Instance");
 
-            float bestT = 1e30f;
-            float boxDist;
-            if (world.Raycast(origin, dir, 500.0f, boxDist) >= 0) {
-                bestT = boxDist;
+            if (modelPayload) {
+                auto model = assets.LoadModel(path);
+                glm::vec3 position = ComputeModelDropPosition(world, *model, editorCamera);
+                std::string name = std::filesystem::path(path).stem().string();
+                entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), name);
+                SelectItem(e, false);
+            } else {
+                glm::vec3 position = ComputeDropRayPosition(world, editorCamera);
+                // A prefab carries its own authored transform, so the instance is created first
+                // and then moved to the drop point (children ride along, being local-space).
+                entt::entity e = SceneSerializer::InstantiatePrefab(world, assets, path);
+                if (e != entt::null) {
+                    if (auto* transform = world.Registry.try_get<TransformComponent>(e)) {
+                        transform->Position = position;
+                    }
+                    SelectItem(e, false);
+                }
             }
-            if (std::abs(dir.y) > 1e-5f) {
-                float groundT = -origin.y / dir.y;
-                if (groundT > 0.0f && groundT < bestT) bestT = groundT;
-            }
-            if (bestT >= 1e30f) bestT = 8.0f; // pointing at the sky / parallel to the ground
-
-            auto model = assets.LoadModel(path);
-            PlacedModel pm;
-            pm.ModelRef = model;
-            pm.Name = std::filesystem::path(path).stem().string();
-            pm.Position = origin + dir * bestT;
-            world.Models.push_back(pm);
-            SelectItem(true, (int)world.Models.size() - 1, false);
+            m_DragPreview.Active = false;
         }
         ImGui::EndDragDropTarget();
     }
@@ -1376,7 +3432,10 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
     const float kDragThreshold = 6.0f; // pixels of movement before a press-drag-release counts as a box select rather than a click
 
     if (leftPressed) {
-        m_BoxSelectActive = !io.WantCaptureMouse && !m_GizmoEngaged; // ImGui panel or the gizmo itself already owns this click
+        // ImGui panel, the transform gizmo, or the nav gizmo (rotate ring / dolly / pan
+        // buttons) already owns this click; Alt+Left-drag is reserved for orbiting the camera
+        // around the current selection (see main.cpp's UpdateEditorCamera).
+        m_BoxSelectActive = !WantsCaptureMouse() && !m_GizmoEngaged && !m_ViewGizmoBlocking && !io.KeyAlt;
         m_BoxSelectStart = {io.MousePos.x, io.MousePos.y};
         return; // click vs. drag is only decided on release, below
     }
@@ -1412,26 +3471,49 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         glm::vec3 dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
 
         float bestT = 1e30f;
-        int bestBox = -1, bestModel = -1;
-        for (int i = 0; i < (int)world.Boxes.size(); ++i) {
-            if (!world.Boxes[i].Alive) continue;
-            float t;
-            if (world.Boxes[i].Bounds().RayIntersect(origin, dir, t) && t < bestT) {
-                bestT = t; bestBox = i; bestModel = -1;
-            }
-        }
-        for (int i = 0; i < (int)world.Models.size(); ++i) {
-            PlacedModel& pm = world.Models[i];
-            glm::mat4 model = ComposeTransform(pm.Position, pm.RotationEuler, pm.Scale);
-            AABB worldBounds = AABB{pm.ModelRef->BoundsMin(), pm.ModelRef->BoundsMax()}.Transformed(model);
+        entt::entity best = entt::null;
+        auto pickView = world.Registry.view<const RenderableComponent>();
+        for (auto entity : pickView) {
+            const auto& renderable = pickView.get<const RenderableComponent>(entity);
+            glm::mat4 model = world.ComposeWorldTransform(entity);
+            AABB worldBounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(model);
             float t;
             if (worldBounds.RayIntersect(origin, dir, t) && t < bestT) {
-                bestT = t; bestModel = i; bestBox = -1;
+                bestT = t; best = entity;
             }
         }
 
-        if (bestBox >= 0) SelectItem(false, bestBox, io.KeyCtrl);
-        else if (bestModel >= 0) SelectItem(true, bestModel, io.KeyCtrl);
+        // Mesh-less entities (lights, empties) have no geometry to hit, so they're picked by
+        // proximity to their on-screen icon instead — same rule that draws the icon in
+        // DrawEntityIcons. Only considered when nothing solid was hit closer to the camera.
+        {
+            const float kIconPickPixels = 14.0f * m_UIScale;
+            glm::mat4 viewProj = proj * view;
+            float bestPixelDist = kIconPickPixels;
+            for (auto entity : world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent>)) {
+                glm::mat4 model = world.ComposeWorldTransform(entity);
+                glm::vec3 worldPos = glm::vec3(model[3]);
+                glm::vec4 clip = viewProj * glm::vec4(worldPos, 1.0f);
+                if (clip.w <= 0.0001f) continue;
+
+                glm::vec3 ndc = glm::vec3(clip) / clip.w;
+                glm::vec2 screen(vpPos.x + (ndc.x * 0.5f + 0.5f) * w,
+                                 vpPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * h);
+                float pixelDist = glm::length(screen - current);
+                if (pixelDist > bestPixelDist) continue;
+
+                // An icon only wins over a mesh if it's actually in front of it — otherwise a
+                // light behind a wall would be clickable through the wall.
+                float depth = glm::length(worldPos - origin);
+                if (best != entt::null && depth > bestT) continue;
+
+                bestPixelDist = pixelDist;
+                best = entity;
+                bestT = depth;
+            }
+        }
+
+        if (best != entt::null) SelectItem(best, io.KeyCtrl);
         else if (!io.KeyCtrl) ClearSelection(); // clicked empty space -> deselect (unless Ctrl-clicking to preserve a group)
         return;
     }
@@ -1466,40 +3548,35 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
 
     if (!io.KeyCtrl) ClearSelection();
 
-    for (int i = 0; i < (int)world.Boxes.size(); ++i) {
-        if (!world.Boxes[i].Alive) continue;
-        glm::vec2 pMin, pMax;
-        if (projectedScreenRect(world.Boxes[i].Bounds(), pMin, pMax) && rectsOverlap(pMin, pMax, rectMin, rectMax)) {
-            AddToSelectionIfAbsent(false, i);
-        }
-    }
-    for (int i = 0; i < (int)world.Models.size(); ++i) {
-        PlacedModel& pm = world.Models[i];
-        glm::mat4 model = ComposeTransform(pm.Position, pm.RotationEuler, pm.Scale);
-        AABB bounds = AABB{pm.ModelRef->BoundsMin(), pm.ModelRef->BoundsMax()}.Transformed(model);
+    auto entityView = world.Registry.view<const RenderableComponent>();
+    for (auto entity : entityView) {
+        const auto& renderable = entityView.get<const RenderableComponent>(entity);
+        glm::mat4 model = world.ComposeWorldTransform(entity);
+        AABB bounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(model);
         glm::vec2 pMin, pMax;
         if (projectedScreenRect(bounds, pMin, pMax) && rectsOverlap(pMin, pMax, rectMin, rectMax)) {
-            AddToSelectionIfAbsent(true, i);
+            AddToSelectionIfAbsent(entity);
         }
     }
 }
 
 bool EditorLayer::FindVertexUnderCursor(World& world, Camera& editorCamera, glm::vec3& outLocalPos) const {
-    if (m_SelectedModel < 0 || m_SelectedModel >= (int)world.Models.size()) return false;
+    if (!IsVertexDraggable(world, m_Selected)) return false;
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return false;
 
-    const PlacedModel& pm = world.Models[m_SelectedModel];
-    glm::mat4 model = ComposeTransform(pm.Position, pm.RotationEuler, pm.Scale);
+    const auto& transform = world.Registry.get<TransformComponent>(m_Selected);
+    const auto& renderable = world.Registry.get<RenderableComponent>(m_Selected);
+    glm::mat4 model = ComposeTransform(transform);
     glm::mat4 viewProj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) * editorCamera.ViewMatrix();
 
     ImVec2 mouse = ImGui::GetIO().MousePos;
     glm::vec2 viewportMouse(mouse.x - m_ViewportPos.x, mouse.y - m_ViewportPos.y);
-    return pm.ModelRef->FindNearestVertexToScreenPoint(model, viewProj, {viewportMouse.x, viewportMouse.y},
+    return renderable.ModelRef->FindNearestVertexToScreenPoint(model, viewProj, {viewportMouse.x, viewportMouse.y},
         m_ViewportSize.x, m_ViewportSize.y, m_VertexPickPixels, outLocalPos);
 }
 
 void EditorLayer::UpdateVertexDrag(World& world, Camera& editorCamera) {
-    if (m_SelectedModel < 0 || m_SelectedModel >= (int)world.Models.size()) {
+    if (!IsVertexDraggable(world, m_Selected)) {
         m_VertexDragActive = false;
         return;
     }
@@ -1533,30 +3610,55 @@ void EditorLayer::UpdateVertexDrag(World& world, Camera& editorCamera) {
     glm::vec3 grabbedWorld = rayOrigin + rayDir * t;
     glm::vec3 candidatePosition = grabbedWorld + m_VertexDragOffset;
 
-    // Vertex snap: search every model OUTSIDE the current selection for the nearest vertex
-    // within radius (other group members are excluded — they're moving rigidly along with
-    // the grabbed vertex, so their relative distance to it never actually changes, and
-    // "snapping" onto one would just lock the group to itself) and, if one is close enough,
-    // nudge the object so the grabbed vertex lands exactly on it.
-    auto inSelection = [&](int modelIndex) {
-        if (modelIndex == m_SelectedModel) return true;
-        for (const auto& item : m_ExtraSelection) {
-            if (item.IsModel && item.Index == modelIndex) return true;
-        }
+    // Vertex snap: search every model OUTSIDE the current selection for whichever vertex sits
+    // closest to the CURSOR ON SCREEN (other group members are excluded — they're moving
+    // rigidly along with the grabbed vertex, so their relative distance to it never actually
+    // changes, and "snapping" onto one would just lock the group to itself) and, if one is
+    // within the pick radius, nudge the object so the grabbed vertex lands exactly on it.
+    //
+    // This is screen-space (pixels), matching the SAME m_VertexPickPixels threshold that
+    // decides whether the yellow hover circle shows up in the first place — deliberately, so
+    // "the circle is showing" and "this will snap" always agree. It used to be a fixed
+    // world-space radius (m_VertexSnapRadius), which meant a vertex that looked perfectly
+    // aligned on screen (because the camera was zoomed out) could still refuse to snap purely
+    // because it was far away in 3D units — a mismatch between what you see and what the
+    // check actually measured.
+    auto isExcluded = [&](entt::entity entity) {
+        if (entity == m_Selected) return true;
+        for (entt::entity e : m_ExtraSelection) if (e == entity) return true;
         return false;
     };
 
-    float bestDist = m_VertexSnapRadius;
+    glm::mat4 viewProjSnap = proj * view;
+    glm::vec2 cursorScreen(mouse.x - m_ViewportPos.x, mouse.y - m_ViewportPos.y);
+
+    // Boxes were never valid snap targets before (only other models) — excluded here the same
+    // way, via LevelGeometryTag.
+    float bestPixelDist = m_VertexPickPixels;
     glm::vec3 bestTarget{};
     bool found = false;
-    for (int i = 0; i < (int)world.Models.size(); ++i) {
-        if (inSelection(i)) continue;
-        PlacedModel& other = world.Models[i];
-        glm::mat4 otherMatrix = ComposeTransform(other.Position, other.RotationEuler, other.Scale);
-        glm::vec3 candidateVertex;
-        if (other.ModelRef->FindNearestVertexWorld(otherMatrix, grabbedWorld, bestDist, candidateVertex)) {
-            bestTarget = candidateVertex;
-            bestDist = glm::length(candidateVertex - grabbedWorld);
+    auto snapView = world.Registry.view<const RenderableComponent>(entt::exclude<LevelGeometryTag>);
+    for (auto entity : snapView) {
+        if (isExcluded(entity)) continue;
+        const auto& otherRenderable = snapView.get<const RenderableComponent>(entity);
+        glm::mat4 otherMatrix = world.ComposeWorldTransform(entity);
+        glm::vec3 candidateLocal;
+        // Passing the current best-so-far as this call's own cutoff narrows every subsequent
+        // candidate model to "closer than whatever's already winning," so the loop converges
+        // on the single nearest-on-screen vertex across ALL candidate models, not just the
+        // nearest one within each model considered in isolation.
+        if (!otherRenderable.ModelRef->FindNearestVertexToScreenPoint(otherMatrix, viewProjSnap, cursorScreen,
+                m_ViewportSize.x, m_ViewportSize.y, bestPixelDist, candidateLocal)) {
+            continue;
+        }
+        glm::vec4 clip = viewProjSnap * otherMatrix * glm::vec4(candidateLocal, 1.0f);
+        if (clip.w <= 0.0001f) continue; // behind the camera
+        glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        glm::vec2 screen((ndc.x * 0.5f + 0.5f) * m_ViewportSize.x, (1.0f - (ndc.y * 0.5f + 0.5f)) * m_ViewportSize.y);
+        float pixelDist = glm::length(screen - cursorScreen);
+        if (pixelDist < bestPixelDist) {
+            bestPixelDist = pixelDist;
+            bestTarget = glm::vec3(otherMatrix * glm::vec4(candidateLocal, 1.0f));
             found = true;
         }
     }
@@ -1566,18 +3668,69 @@ void EditorLayer::UpdateVertexDrag(World& world, Camera& editorCamera) {
 
     // Move the primary by however much this frame actually resolved to (drag + snap), then
     // carry every other selected object along by that exact same delta so the whole group
-    // moves together while only the primary's vertex does the snapping.
-    glm::vec3 delta = candidatePosition - world.Models[m_SelectedModel].Position;
-    world.Models[m_SelectedModel].Position = candidatePosition;
+    // moves together while only the primary's vertex does the snapping. Boxes and models both
+    // just have a TransformComponent now, so there's no more per-kind branch needed here either.
+    auto& primaryTransform = world.Registry.get<TransformComponent>(m_Selected);
+    glm::vec3 delta = candidatePosition - primaryTransform.Position;
+    primaryTransform.Position = candidatePosition;
 
-    for (const auto& item : m_ExtraSelection) {
-        if (item.IsModel) {
-            if (item.Index >= 0 && item.Index < (int)world.Models.size()) {
-                world.Models[item.Index].Position += delta;
-            }
-        } else if (item.Index >= 0 && item.Index < (int)world.Boxes.size()) {
-            world.Boxes[item.Index].Center += delta;
+    for (entt::entity e : m_ExtraSelection) {
+        if (world.Registry.valid(e)) world.Registry.get<TransformComponent>(e).Position += delta;
+    }
+}
+
+void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
+    if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
+
+    glm::mat4 viewProj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) * editorCamera.ViewMatrix();
+    ImDrawList* draw = ImGui::GetForegroundDrawList();
+
+    // Mesh-less entities would otherwise be invisible in the viewport — a light you can't see
+    // is a light you can't select or aim.
+    auto view = world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent>);
+    for (auto entity : view) {
+        glm::mat4 model = world.ComposeWorldTransform(entity);
+        glm::vec4 clip = viewProj * glm::vec4(glm::vec3(model[3]), 1.0f);
+        if (clip.w <= 0.0001f) continue; // behind the camera
+
+        glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        ImVec2 screen(m_ViewportPos.x + (ndc.x * 0.5f + 0.5f) * m_ViewportSize.x,
+                      m_ViewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * m_ViewportSize.y);
+
+        bool selected = IsSelected(entity);
+        bool inactive = world.Registry.all_of<InactiveTag>(entity);
+        const auto* light = world.Registry.try_get<LightComponent>(entity);
+
+        ImU32 color;
+        if (inactive) {
+            color = IM_COL32(140, 140, 140, 170);
+        } else if (light) {
+            // Tinted with the light's own color so what you see in the viewport reads as what
+            // it'll actually cast.
+            glm::vec3 c = glm::clamp(light->Color, 0.0f, 1.0f) * 255.0f;
+            color = IM_COL32((int)c.r, (int)c.g, (int)c.b, 235);
+        } else {
+            color = IM_COL32(190, 200, 210, 220);
         }
+
+        const float r = 9.0f * m_UIScale;
+        if (light) {
+            draw->AddCircleFilled(screen, r * 0.45f, color);
+            // Short rays, so a light icon reads as a light rather than a generic dot.
+            for (int i = 0; i < 8; ++i) {
+                float a = (float)i * 0.7853981f; // 2*pi / 8
+                ImVec2 from(screen.x + cosf(a) * r * 0.72f, screen.y + sinf(a) * r * 0.72f);
+                ImVec2 to(screen.x + cosf(a) * r * 1.15f, screen.y + sinf(a) * r * 1.15f);
+                draw->AddLine(from, to, color, 1.6f);
+            }
+        } else {
+            // Empties get an axis cross — the same "there is a transform here" shorthand most
+            // editors use.
+            draw->AddLine(ImVec2(screen.x - r, screen.y), ImVec2(screen.x + r, screen.y), color, 1.6f);
+            draw->AddLine(ImVec2(screen.x, screen.y - r), ImVec2(screen.x, screen.y + r), color, 1.6f);
+        }
+
+        if (selected) draw->AddCircle(screen, r * 1.6f, IM_COL32(255, 140, 25, 255), 0, 2.0f);
     }
 }
 
@@ -1587,23 +3740,26 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         return;
     }
 
-    if (m_SelectedBox < 0 && m_SelectedModel < 0) {
+    if (m_Selected == entt::null || !world.Registry.valid(m_Selected)) {
         m_GizmoEngaged = false;
         return;
     }
 
-    glm::vec3* pos = nullptr;
-    glm::vec3* rot = nullptr;
-    glm::vec3* scale = nullptr;
+    auto& transform = world.Registry.get<TransformComponent>(m_Selected);
+    // Lights and empties have no mesh, so this can legitimately be null — everything below that
+    // needs mesh extents (Rect-tool bounds, Center pivot) falls back to a small unit box.
+    auto* renderablePtr = world.Registry.try_get<RenderableComponent>(m_Selected);
+    bool registryHasRenderable = renderablePtr != nullptr;
 
-    if (m_SelectedBox >= 0 && m_SelectedBox < (int)world.Boxes.size()) {
-        WorldBox& box = world.Boxes[m_SelectedBox];
-        pos = &box.Center; rot = &box.RotationEuler; scale = &box.Size;
-    } else if (m_SelectedModel >= 0 && m_SelectedModel < (int)world.Models.size()) {
-        PlacedModel& pm = world.Models[m_SelectedModel];
-        pos = &pm.Position; rot = &pm.RotationEuler; scale = &pm.Scale;
-    }
-    if (!pos) return;
+    // A parented entity's TransformComponent is local space, but ImGuizmo has to manipulate a
+    // world-space matrix (it's drawn and dragged against the world-space view/proj below) — so
+    // the gizmo works in world space and the result gets converted back to local afterward.
+    entt::entity parent = entt::null;
+    if (auto* hier = world.Registry.try_get<HierarchyComponent>(m_Selected)) parent = hier->Parent;
+    glm::mat4 parentWorld = parent != entt::null ? world.ComposeWorldTransform(parent) : glm::mat4(1.0f);
+
+    glm::vec3 nativeBoundsMin = registryHasRenderable ? renderablePtr->ModelRef->BoundsMin() : glm::vec3(-0.5f);
+    glm::vec3 nativeBoundsMax = registryHasRenderable ? renderablePtr->ModelRef->BoundsMax() : glm::vec3(0.5f);
 
     int w, h;
     glfwGetWindowSize(m_Window, &w, &h);
@@ -1627,6 +3783,18 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground |
         ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoInputs);
+    // NoInputs means this window can never be clicked to bring itself to front, so its z-order
+    // is otherwise whatever position it happened to land in ImGui's window stack the first time
+    // it was ever created - which put it BEHIND "Scene" once that became a real window (Scene is
+    // newer, so it was appended in front). Forced to the front explicitly, every frame, so the
+    // gizmo actually draws on top of the Scene image instead of being invisibly covered by it.
+    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+
+    // ImGuizmo hit-tests against its own draw-list window (this NoInputs overlay), which is never
+    // ImGui's g.HoveredWindow — so without this, hovering the actual "Scene" panel makes
+    // IsHoveringWindow() return false and the handles draw but never grab. Registering "Scene" as
+    // the alternative window is ImGuizmo's supported way to say "the user hovers there, not here".
+    ImGuizmo::SetAlternativeWindow(ImGui::FindWindowByName("Scene"));
 
     ImGuizmo::SetOrthographic(false);
     ImGuizmo::SetDrawlist();
@@ -1640,12 +3808,21 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     ImGuizmo::OPERATION op = ImGuizmo::TRANSLATE;
     if (m_GizmoOp == GizmoOp::Rotate) op = ImGuizmo::ROTATE;
     else if (m_GizmoOp == GizmoOp::Scale) op = ImGuizmo::SCALE;
+    else if (m_GizmoOp == GizmoOp::Rect) op = ImGuizmo::OPERATION(ImGuizmo::TRANSLATE | ImGuizmo::BOUNDS);
 
-    float t[3] = {pos->x, pos->y, pos->z};
-    float r[3] = {rot->x, rot->y, rot->z};
-    float s[3] = {scale->x, scale->y, scale->z};
-    glm::mat4 matrix;
-    ImGuizmo::RecomposeMatrixFromComponents(t, r, s, glm::value_ptr(matrix));
+    glm::mat4 matrix = parentWorld * ComposeTransform(transform);
+
+    // Pivot/Center: in Center mode the gizmo is drawn at the bounding-box center instead of the
+    // object's own origin. Only the gizmo's displayed frame shifts — the delta it produces is
+    // applied back to the real transform below, so the object doesn't move when the mode flips.
+    glm::vec3 centerOffset(0.0f);
+    if (m_GizmoPivotCenter && registryHasRenderable) {
+        AABB nativeBounds{nativeBoundsMin, nativeBoundsMax};
+        AABB worldBounds = nativeBounds.Transformed(matrix);
+        glm::vec3 worldCenter = (worldBounds.Min + worldBounds.Max) * 0.5f;
+        centerOffset = worldCenter - glm::vec3(matrix[3]);
+        matrix[3] += glm::vec4(centerOffset, 0.0f);
+    }
 
     // Ctrl held inverts the checkbox for the duration of the drag — matches Blender's
     // momentary-snap convention while still giving snapping a persistent on/off default.
@@ -1654,24 +3831,169 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     if (m_GizmoOp == GizmoOp::Rotate) snapValues[0] = snapValues[1] = snapValues[2] = m_SnapRotationDeg;
     else if (m_GizmoOp == GizmoOp::Scale) snapValues[0] = snapValues[1] = snapValues[2] = m_SnapScale;
 
+    float bounds[6] = {nativeBoundsMin.x, nativeBoundsMin.y, nativeBoundsMin.z,
+                        nativeBoundsMax.x, nativeBoundsMax.y, nativeBoundsMax.z};
+    const float* boundsPtr = (m_GizmoOp == GizmoOp::Rect) ? bounds : nullptr;
+
     ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(proj), op, gizmoMode,
-        glm::value_ptr(matrix), nullptr, snapActive ? snapValues : nullptr);
+        glm::value_ptr(matrix), nullptr, snapActive ? snapValues : nullptr, boundsPtr);
     m_GizmoEngaged = ImGuizmo::IsOver() || ImGuizmo::IsUsing();
 
     bool isUsingNow = ImGuizmo::IsUsing();
     if (isUsingNow && !m_GizmoWasUsing) {
         // Drag just started this frame: snapshot the still-unmodified transform (pos/rot/scale
         // below haven't been written yet) so undo restores to exactly where the drag began.
-        PushUndo(world);
+        PushUndo(world, "Transform");
     }
     m_GizmoWasUsing = isUsingNow;
 
     if (isUsingNow) {
+        // Undo the Center-mode display shift before reading the result back, so the object's
+        // real origin moves by the drag delta rather than jumping onto its bounds center.
+        glm::mat4 adjusted = matrix;
+        adjusted[3] -= glm::vec4(centerOffset, 0.0f);
+        // Manipulate() edited the world-space matrix — convert back to local before writing it
+        // to TransformComponent (a no-op conversion when unparented, since parentWorld is then
+        // identity).
+        glm::mat4 newLocal = glm::inverse(parentWorld) * adjusted;
         float nt[3], nr[3], ns[3];
-        ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(matrix), nt, nr, ns);
-        *pos = {nt[0], nt[1], nt[2]};
-        *rot = {nr[0], nr[1], nr[2]};
-        *scale = {ns[0], ns[1], ns[2]};
+        ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(newLocal), nt, nr, ns);
+        transform.Position = {nt[0], nt[1], nt[2]};
+        transform.RotationEuler = {nr[0], nr[1], nr[2]};
+        transform.Scale = {ns[0], ns[1], ns[2]};
+    }
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor();
+}
+
+void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
+    if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
+
+    int w, h;
+    glfwGetWindowSize(m_Window, &w, &h);
+    if (w <= 0 || h <= 0) return;
+
+    // The library's own defaults (256px rotate ring, 50px tool buttons) are sized for a full
+    // editor viewport; shrink them to sit unobtrusively in the corner instead.
+    ImViewGuizmo::Style& style = ImViewGuizmo::GetStyle();
+    style.scale = m_UIScale * 0.5f;
+
+    float gizmoRadius = 128.0f * style.scale; // half of the library's fixed 256px rotate-ring box
+    float toolRadius = style.toolButtonRadius * style.scale;
+    float margin = 14.0f * m_UIScale;
+    float spacing = 8.0f * m_UIScale;
+
+    // Rotate's `position` param is the ring's CENTER, but Dolly/Pan's is the TOP-LEFT of their
+    // button box (confirmed by reading ImViewGuizmo.h — the two widget kinds don't agree on
+    // that convention despite the doc comments implying otherwise). Laying out from a shared
+    // center point and converting only for Dolly/Pan keeps the whole cluster symmetric.
+    ImVec2 rotateCenter(m_ViewportPos.x + m_ViewportSize.x - margin - gizmoRadius,
+        m_ViewportPos.y + margin + gizmoRadius);
+    float toolCenterY = rotateCenter.y + gizmoRadius + spacing + toolRadius;
+    ImVec2 dollyCenter(rotateCenter.x - spacing * 0.5f - toolRadius, toolCenterY);
+    ImVec2 panCenter(rotateCenter.x + spacing * 0.5f + toolRadius, toolCenterY);
+
+    ImVec2 rotatePos = rotateCenter;
+    ImVec2 dollyPos(dollyCenter.x - toolRadius, dollyCenter.y - toolRadius);
+    ImVec2 panPos(panCenter.x - toolRadius, panCenter.y - toolRadius);
+
+    // Same fullscreen-transparent-overlay trick as DrawGizmo(): the library hit-tests against
+    // raw mouse position within ImGui::GetWindowDrawList()'s owning window, so it needs a real
+    // hoverable window as the "current window"; NoInputs keeps it from stealing
+    // WantCaptureMouse everywhere else (which would otherwise block the editor fly-camera).
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2((float)w, (float)h));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("##ViewGizmoOverlay", nullptr,
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground |
+        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
+        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoInputs);
+    // See DrawGizmo's identical call for why this is needed - without it, "Scene" (newer, so
+    // higher in ImGui's window stack) covers this NoInputs overlay instead of the other way
+    // around.
+    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+
+    glm::vec3 camPos = editorCamera.Position;
+    glm::quat camRot = glm::quatLookAt(editorCamera.Front(), glm::vec3(0.0f, 1.0f, 0.0f));
+    // Orbit pivot for the Rotate ring: the current selection's bounds center when there is one,
+    // so dragging to orbit or clicking an axis handle to snap keeps the selected object(s)
+    // centered instead of spinning around an arbitrary point. Falls back to a fixed distance in
+    // front of the camera (the old behavior) when nothing's selected — the editor camera is a
+    // plain fly-camera with no scene pivot of its own otherwise.
+    glm::vec3 pivot;
+    glm::vec3 selBoundsMin, selBoundsMax;
+    if (ComputeSelectionBounds(world, selBoundsMin, selBoundsMax)) {
+        pivot = (selBoundsMin + selBoundsMax) * 0.5f;
+    } else {
+        pivot = camPos + editorCamera.Front() * 6.0f;
+    }
+
+    bool modified = false;
+    modified |= ImViewGuizmo::Rotate(camPos, camRot, pivot, rotatePos);
+    modified |= ImViewGuizmo::Dolly(camPos, camRot, dollyPos);
+    modified |= ImViewGuizmo::Pan(camPos, camRot, panPos);
+    m_ViewGizmoBlocking = ImViewGuizmo::IsOver() || ImViewGuizmo::IsUsing();
+
+    // Tooltips - the tool buttons above give no feedback on their own (they're manually
+    // hit-tested inside the vendored gizmo library, not real ImGui widgets, so
+    // ImGui::IsItemHovered() can't see them); read the library's own hover state instead.
+    const auto& gizmoCtx = ImViewGuizmo::GetContext();
+    if (gizmoCtx.hoveredAxisID == 6) {
+        EditorUI::SetTooltip("Drag to orbit the view");
+    } else if (gizmoCtx.hoveredAxisID >= 0 && gizmoCtx.hoveredAxisID <= 5) {
+        static const char* kAxisTooltips[6] = {
+            "Click to look along +X",
+            "Click to look along -X",
+            "Click to look straight down (+Y)",
+            "Click to look straight up (-Y)",
+            "Click to look along +Z",
+            "Click to look along -Z",
+        };
+        EditorUI::SetTooltip("%s", kAxisTooltips[gizmoCtx.hoveredAxisID]);
+    } else if (gizmoCtx.isZoomButtonHovered) {
+        EditorUI::SetTooltip("Click and drag to dolly the view closer to/further from the pivot");
+    } else if (gizmoCtx.isPanButtonHovered) {
+        EditorUI::SetTooltip("Click and drag to pan the view");
+    }
+
+    // "Persp"/"Iso" label under the gizmo, mirroring Unity's own - click to switch the editor
+    // camera between perspective and orthographic (isometric) projection without changing the
+    // current viewing angle. Manually hit-tested against the raw mouse position, same as the
+    // tool buttons above, since this overlay window is ImGuiWindowFlags_NoInputs.
+    {
+        const char* isoLabel = editorCamera.Orthographic ? "Iso" : "Persp";
+        ImFont* font = ImGui::GetFont();
+        float labelFontSize = ImGui::GetFontSize();
+        ImVec2 textSize = font->CalcTextSizeA(labelFontSize, FLT_MAX, 0.0f, isoLabel);
+        ImVec2 textPos(rotateCenter.x - textSize.x * 0.5f, toolCenterY + toolRadius + spacing);
+        ImVec2 padding(4.0f * m_UIScale, 2.0f * m_UIScale);
+        ImVec2 hitMin(textPos.x - padding.x, textPos.y - padding.y);
+        ImVec2 hitMax(textPos.x + textSize.x + padding.x, textPos.y + textSize.y + padding.y);
+        ImVec2 mouse = ImGui::GetIO().MousePos;
+        bool isoHovered = mouse.x >= hitMin.x && mouse.x <= hitMax.x && mouse.y >= hitMin.y && mouse.y <= hitMax.y;
+        ImDrawList* labelDl = ImGui::GetWindowDrawList();
+        if (isoHovered) {
+            labelDl->AddRectFilled(hitMin, hitMax, ImGui::GetColorU32(ImGuiCol_FrameBgHovered), 3.0f * m_UIScale);
+            EditorUI::SetTooltip("Switch between Perspective and Isometric (orthographic) view");
+            m_ViewGizmoBlocking = true;
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                ToggleOrthographic(world, editorCamera);
+            }
+        }
+        ImU32 isoTextColor = ImGui::GetColorU32(isoHovered ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+        labelDl->AddText(font, labelFontSize, textPos, isoTextColor, isoLabel);
+    }
+
+    if (modified) {
+        glm::vec3 forward = glm::normalize(camRot * glm::vec3(0.0f, 0.0f, -1.0f));
+        editorCamera.Pitch = glm::clamp(glm::degrees(asinf(glm::clamp(forward.y, -1.0f, 1.0f))), -89.0f, 89.0f);
+        editorCamera.Yaw = glm::degrees(atan2f(forward.z, forward.x));
+        editorCamera.Position = camPos;
     }
 
     ImGui::End();
@@ -1682,19 +4004,13 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
 void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     struct Ref { glm::vec3* pos; glm::vec3* rot; glm::vec3* scale; };
     std::vector<Ref> refs;
-    auto addRef = [&](bool isModel, int index) {
-        if (isModel) {
-            if (index >= 0 && index < (int)world.Models.size()) {
-                PlacedModel& pm = world.Models[index];
-                refs.push_back({&pm.Position, &pm.RotationEuler, &pm.Scale});
-            }
-        } else if (index >= 0 && index < (int)world.Boxes.size()) {
-            WorldBox& box = world.Boxes[index];
-            refs.push_back({&box.Center, &box.RotationEuler, &box.Size});
-        }
+    auto addRef = [&](entt::entity entity) {
+        if (entity == entt::null || !world.Registry.valid(entity)) return;
+        auto& transform = world.Registry.get<TransformComponent>(entity);
+        refs.push_back({&transform.Position, &transform.RotationEuler, &transform.Scale});
     };
-    addRef(m_SelectedModel >= 0, m_SelectedModel >= 0 ? m_SelectedModel : m_SelectedBox);
-    for (const auto& item : m_ExtraSelection) addRef(item.IsModel, item.Index);
+    addRef(m_Selected);
+    for (entt::entity e : m_ExtraSelection) addRef(e);
     if (refs.empty()) { m_GizmoEngaged = false; return; }
 
     int w, h;
@@ -1713,6 +4029,14 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground |
         ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoInputs);
+    // See DrawGizmo's identical call for why this is needed.
+    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+
+    // ImGuizmo hit-tests against its own draw-list window (this NoInputs overlay), which is never
+    // ImGui's g.HoveredWindow — so without this, hovering the actual "Scene" panel makes
+    // IsHoveringWindow() return false and the handles draw but never grab. Registering "Scene" as
+    // the alternative window is ImGuizmo's supported way to say "the user hovers there, not here".
+    ImGuizmo::SetAlternativeWindow(ImGui::FindWindowByName("Scene"));
 
     ImGuizmo::SetOrthographic(false);
     ImGuizmo::SetDrawlist();
@@ -1723,6 +4047,9 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     glm::mat4 view = editorCamera.ViewMatrix();
     glm::mat4 proj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y);
 
+    // GizmoOp::Rect falls through to plain TRANSLATE here (no bounds-handle case below, unlike
+    // DrawGizmo) — a group's members don't share one native mesh extent, so there's no single
+    // coherent bounding box to hang scale handles on; translating the whole group still works.
     ImGuizmo::OPERATION op = ImGuizmo::TRANSLATE;
     if (m_GizmoOp == GizmoOp::Rotate) op = ImGuizmo::ROTATE;
     else if (m_GizmoOp == GizmoOp::Scale) op = ImGuizmo::SCALE;
@@ -1749,7 +4076,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
 
     bool isUsingNow = ImGuizmo::IsUsing();
     if (isUsingNow && !m_GizmoWasUsing) {
-        PushUndo(world);
+        PushUndo(world, "Transform");
     }
 
     if (isUsingNow) {
@@ -1783,10 +4110,211 @@ void EditorLayer::BeginRenameAsset(const std::string& key, bool isFolder, const 
     m_SelectedAssetIsFolder = isFolder;
 }
 
-void EditorLayer::CommitRename(AssetLibrary& assets) {
+bool EditorLayer::IsAssetSelected(const std::string& key, bool isFolder) const {
+    if (m_SelectedAssetKey == key && m_SelectedAssetIsFolder == isFolder) return true;
+    for (const auto& e : m_ExtraAssetSelection) {
+        if (e.Key == key && e.IsFolder == isFolder) return true;
+    }
+    return false;
+}
+
+void EditorLayer::ClearAssetSelection() {
+    m_SelectedAssetKey.clear();
+    m_ExtraAssetSelection.clear();
+}
+
+void EditorLayer::ToggleAssetSelection(const std::string& key, bool isFolder) {
+    if (m_SelectedAssetKey.empty()) {
+        m_SelectedAssetKey = key;
+        m_SelectedAssetIsFolder = isFolder;
+        return;
+    }
+    if (m_SelectedAssetKey == key && m_SelectedAssetIsFolder == isFolder) {
+        // Toggling off the primary — promote an extra selection to take its place, if any.
+        if (!m_ExtraAssetSelection.empty()) {
+            m_SelectedAssetKey = m_ExtraAssetSelection.back().Key;
+            m_SelectedAssetIsFolder = m_ExtraAssetSelection.back().IsFolder;
+            m_ExtraAssetSelection.pop_back();
+        } else {
+            m_SelectedAssetKey.clear();
+        }
+        return;
+    }
+    for (auto it = m_ExtraAssetSelection.begin(); it != m_ExtraAssetSelection.end(); ++it) {
+        if (it->Key == key && it->IsFolder == isFolder) {
+            m_ExtraAssetSelection.erase(it); // already co-selected — toggle it back off
+            return;
+        }
+    }
+    m_ExtraAssetSelection.push_back({key, isFolder});
+}
+
+void EditorLayer::RequestDeleteAsset(World& world, AssetLibrary& assets, const std::string& key, bool isFolder, bool skipDialog) {
+    if (key.empty()) return;
+    RequestDeleteAssets(world, assets, { AssetKeyRef{key, isFolder} }, skipDialog);
+}
+
+void EditorLayer::RequestDeleteAssets(World& world, AssetLibrary& assets, const std::vector<AssetKeyRef>& items, bool skipDialog) {
+    if (items.empty()) return;
+    if (skipDialog) {
+        for (const auto& item : items) PerformAssetDelete(world, assets, item.Key, item.IsFolder);
+        ClearAssetSelection();
+        return;
+    }
+    m_PendingDelete = items;
+    m_OpenDeleteConfirmRequested = true;
+}
+
+void EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const std::string& key, bool isFolder) {
+    if (isFolder) {
+        PushUndo(world, "Delete Folder");
+        assets.DeleteFolderRecursive(key);
+        // Don't leave the browser pointed at a folder that no longer exists.
+        if (m_CurrentAssetFolder == key || m_CurrentAssetFolder.rfind(key + "/", 0) == 0) {
+            m_CurrentAssetFolder = ParentFolderOf(key);
+        }
+    } else {
+        for (const auto& model : assets.Models()) {
+            if (model->Path() == key) { PushUndo(world, "Delete Asset"); assets.RemoveModel(model); break; }
+        }
+        for (const auto& tex : assets.Textures()) {
+            if (tex->Path() == key) { PushUndo(world, "Delete Asset"); assets.RemoveTexture(tex); break; }
+        }
+        for (const auto& sound : assets.Sounds()) {
+            if (sound == key) { PushUndo(world, "Delete Asset"); assets.RemoveSound(sound); break; }
+        }
+        for (const auto& prefab : assets.Prefabs()) {
+            if (prefab == key) { PushUndo(world, "Delete Asset"); assets.RemovePrefab(prefab); break; }
+        }
+        // Otherwise it's a Scene entry (a real file, not an AssetLibrary asset) — deliberately
+        // left alone, same as the right-click menu which doesn't offer delete for scenes.
+    }
+    if (m_SelectedAssetKey == key) m_SelectedAssetKey.clear();
+}
+
+void EditorLayer::DrawDeleteConfirmPopup(World& world, AssetLibrary& assets) {
+    const char* kPopupId = "Delete Asset?";
+    if (m_OpenDeleteConfirmRequested) {
+        ImGui::OpenPopup(kPopupId);
+        m_OpenDeleteConfirmRequested = false;
+    }
+    ImGui::SetNextWindowSize(ImVec2(340.0f * m_UIScale, 0.0f));
+    if (ImGui::BeginPopupModal(kPopupId, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 300.0f * m_UIScale);
+        if (m_PendingDelete.size() == 1) {
+            ImGui::Text("Delete \"%s\"?", LeafNameOf(m_PendingDelete[0].Key).c_str());
+        } else {
+            ImGui::Text("Delete %d selected items?", (int)m_PendingDelete.size());
+        }
+        bool anyNonEmptyFolder = false;
+        for (const auto& item : m_PendingDelete) {
+            if (item.IsFolder && !assets.CanDeleteFolder(item.Key)) { anyNonEmptyFolder = true; break; }
+        }
+        if (anyNonEmptyFolder) {
+            ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.35f, 1.0f),
+                "One or more of these folders isn't empty - everything inside, including subfolders, will be removed too.");
+        }
+        ImGui::TextDisabled("Objects already placed in the scene keep working - this only removes it from the Asset Browser. Undoable.");
+        ImGui::PopTextWrapPos();
+        ImGui::Spacing();
+
+        float buttonWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+        if (ImGui::Button("Cancel", ImVec2(buttonWidth, 0.0f))) {
+            m_PendingDelete.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Delete", ImVec2(buttonWidth, 0.0f))) {
+            for (const auto& item : m_PendingDelete) PerformAssetDelete(world, assets, item.Key, item.IsFolder);
+            m_PendingDelete.clear();
+            ClearAssetSelection();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void EditorLayer::DuplicateSelectedAsset(World& world, AssetLibrary& assets) {
+    std::vector<AssetKeyRef> targets;
+    if (!m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder) targets.push_back({m_SelectedAssetKey, false});
+    for (const auto& e : m_ExtraAssetSelection) {
+        if (!e.IsFolder) targets.push_back(e); // folders aren't duplicable — silently skipped
+    }
+    if (targets.empty()) return;
+
+    // Duplicates one asset's file on disk to a numbered sibling and registers it the same way
+    // importing it fresh would. Returns the new path, or empty if the file's gone, the copy
+    // failed, or it's not an AssetLibrary-tracked kind (e.g. a Scene — file copied, nothing
+    // further to register, so not worth reselecting).
+    auto duplicateOne = [&](const std::string& key) -> std::string {
+        std::filesystem::path srcPath(key);
+        std::error_code existsErr;
+        if (!std::filesystem::exists(srcPath, existsErr)) {
+            Log::Error("Can't duplicate '" + key + "' - the file no longer exists on disk.");
+            return {};
+        }
+
+        std::string stem = srcPath.stem().string();
+        std::string ext = srcPath.extension().string();
+        std::filesystem::path dir = srcPath.parent_path();
+        std::filesystem::path candidate;
+        int n = 1;
+        do {
+            candidate = dir / (stem + " (" + std::to_string(n) + ")" + ext);
+            n++;
+        } while (std::filesystem::exists(candidate));
+
+        std::error_code copyErr;
+        std::filesystem::copy_file(srcPath, candidate, copyErr);
+        if (copyErr) {
+            Log::Error("Failed to duplicate '" + key + "': " + copyErr.message());
+            return {};
+        }
+
+        std::string newPath = candidate.generic_string();
+        std::string folder = assets.AssetFolder(key);
+
+        bool registered = false;
+        for (const auto& model : assets.Models()) {
+            if (model->Path() == key) { assets.LoadModel(newPath); registered = true; break; }
+        }
+        if (!registered) for (const auto& tex : assets.Textures()) {
+            if (tex->Path() == key) { assets.LoadTexture(newPath); registered = true; break; }
+        }
+        if (!registered) for (const auto& sound : assets.Sounds()) {
+            if (sound == key) { if (AudioEngine::Load(newPath)) { assets.RegisterSound(newPath); registered = true; } break; }
+        }
+        if (!registered) for (const auto& prefab : assets.Prefabs()) {
+            if (prefab == key) { assets.RegisterPrefab(newPath); registered = true; break; }
+        }
+
+        Log::Info("Duplicated '" + srcPath.filename().string() + "' -> '" + candidate.filename().string() + "'.");
+        if (!registered) return {};
+        assets.SetAssetFolder(newPath, folder);
+        return newPath;
+    };
+
+    PushUndo(world, targets.size() > 1 ? "Duplicate Assets" : "Duplicate Asset");
+    std::vector<std::string> newKeys;
+    for (const auto& t : targets) {
+        std::string newKey = duplicateOne(t.Key);
+        if (!newKey.empty()) newKeys.push_back(newKey);
+    }
+
+    // Select the duplicates afterward, same as Unity's own Ctrl+D.
+    if (!newKeys.empty()) {
+        ClearAssetSelection();
+        m_SelectedAssetKey = newKeys[0];
+        m_SelectedAssetIsFolder = false;
+        for (size_t i = 1; i < newKeys.size(); ++i) m_ExtraAssetSelection.push_back({newKeys[i], false});
+    }
+}
+
+void EditorLayer::CommitRename(World& world, AssetLibrary& assets) {
     std::string newName = m_RenameBuffer;
     if (!newName.empty()) {
         if (m_RenamingIsFolder) {
+            PushUndo(world, "Rename Folder");
             std::string parent = ParentFolderOf(m_RenamingAssetKey);
             std::string newPath = parent.empty() ? newName : (parent + "/" + newName);
             assets.RenameFolder(m_RenamingAssetKey, newPath);
@@ -1797,10 +4325,159 @@ void EditorLayer::CommitRename(AssetLibrary& assets) {
             }
             if (m_SelectedAssetKey == m_RenamingAssetKey) m_SelectedAssetKey = newPath;
         } else {
+            PushUndo(world, "Rename Asset");
             assets.SetDisplayName(m_RenamingAssetKey, newName);
         }
     }
     m_RenamingAssetKey.clear();
+}
+
+void EditorLayer::SetFolderExpandedRecursive(AssetLibrary& assets, const std::string& folderPath, bool expand, bool recursive) {
+    if (expand) m_ExpandedAssetFolders.insert(folderPath);
+    else m_ExpandedAssetFolders.erase(folderPath);
+    if (!recursive) return;
+    for (const auto& f : assets.Folders()) {
+        if (ParentFolderOf(f) == folderPath) SetFolderExpandedRecursive(assets, f, expand, true);
+    }
+}
+
+namespace {
+// Draws `text` left-aligned at `pos` as at most `maxLines` lines that fit `wrapWidth`, breaking
+// on word boundaries where possible; if the whole string still doesn't fit, the last line is
+// trimmed at the character level and gets a trailing "…". This replaces ImDrawList::AddText's
+// own wrap_width mode for grid labels, which happily splits a single long word across lines
+// ("Chesterfi / eld Sofa"). Returns true when anything was clipped, so the caller can add a
+// hover tooltip with the full name.
+bool DrawClampedGridLabel(ImDrawList* dl, ImVec2 pos, float wrapWidth, float lineHeight,
+                          ImU32 color, const char* text, int maxLines = 2) {
+    ImFont* font = ImGui::GetFont();
+    const float sz = ImGui::GetFontSize();
+    const char* const textEnd = text + strlen(text);
+    const char* s = text;
+
+    for (int line = 0; line < maxLines; ++line) {
+        if (s >= textEnd) return false;
+        const bool lastLine = (line == maxLines - 1);
+
+        // Whole remainder fits on this line?
+        if (font->CalcTextSizeA(sz, FLT_MAX, 0.0f, s, textEnd).x <= wrapWidth) {
+            dl->AddText(font, sz, pos, color, s, textEnd);
+            return false;
+        }
+
+        if (!lastLine) {
+            // Word-wrap break for this line, then continue with the rest below.
+            const char* brk = font->CalcWordWrapPosition(sz, s, textEnd, wrapWidth);
+            if (brk <= s) brk = s + 1; // guarantee forward progress on an unbreakable word
+            dl->AddText(font, sz, pos, color, s, brk);
+            s = brk;
+            while (s < textEnd && (*s == ' ' || *s == '\n')) ++s; // skip the breaking blank
+            pos.y += lineHeight;
+            continue;
+        }
+
+        // Last line and it overflows: character-trim to leave room for the ellipsis.
+        static const char* kEllipsis = "\xE2\x80\xA6";
+        const float ellW = font->CalcTextSizeA(sz, FLT_MAX, 0.0f, kEllipsis).x;
+        const char* fitEnd = s;
+        font->CalcTextSizeA(sz, ImMax(wrapWidth - ellW, 1.0f), 0.0f, s, textEnd, &fitEnd);
+        if (fitEnd <= s) fitEnd = s + 1; // always show at least one glyph
+        dl->AddText(font, sz, pos, color, s, fitEnd);
+        ImVec2 ellPos(pos.x + font->CalcTextSizeA(sz, FLT_MAX, 0.0f, s, fitEnd).x, pos.y);
+        dl->AddText(font, sz, ellPos, color, kEllipsis);
+        return true;
+    }
+    return true;
+}
+} // namespace
+
+// Unity Project window's left pane: a real folder hierarchy (not just the breadcrumb above the
+// grid) with expand/collapse arrows. Alt+click recursively expands/collapses every descendant in
+// one step - the same gesture Unity uses - which is why open/closed state is tracked in
+// m_ExpandedAssetFolders rather than left to ImGui's own per-ID tree memory (that has no hook
+// for "and everything under it too").
+void EditorLayer::DrawFolderTreeNode(World& world, AssetLibrary& assets, const std::string& folderPath, bool isRoot) {
+    std::vector<std::string> children;
+    for (const auto& f : assets.Folders()) {
+        if (ParentFolderOf(f) == folderPath) children.push_back(f);
+    }
+    std::sort(children.begin(), children.end(), [](const std::string& a, const std::string& b) {
+        return LeafNameOf(a) < LeafNameOf(b);
+    });
+
+    bool hasChildren = !children.empty();
+    bool wasExpanded = isRoot || m_ExpandedAssetFolders.count(folderPath) > 0;
+    if (!isRoot) ImGui::SetNextItemOpen(wasExpanded);
+
+    ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+    if (m_CurrentAssetFolder == folderPath) nodeFlags |= ImGuiTreeNodeFlags_Selected;
+    if (!hasChildren) nodeFlags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    if (isRoot) nodeFlags |= ImGuiTreeNodeFlags_DefaultOpen;
+
+    std::string label = std::string(isRoot ? ICON_FA_FOLDER_TREE : ICON_FA_FOLDER) + "  " + (isRoot ? "Assets" : LeafNameOf(folderPath));
+
+    ImGui::PushID(folderPath.c_str());
+    bool open = ImGui::TreeNodeEx("##node", nodeFlags, "%s", label.c_str());
+
+    if (!isRoot && open != wasExpanded) {
+        // The user just clicked THIS node's arrow this frame (ImGui's own toggle already ran,
+        // which is why `open` differs from what we told it to be) - Alt turns it into "and
+        // every descendant folder too."
+        SetFolderExpandedRecursive(assets, folderPath, open, ImGui::GetIO().KeyAlt);
+    }
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen()) {
+        m_CurrentAssetFolder = folderPath;
+        ClearAssetSelection();
+        m_SelectedAssetKey = folderPath;
+        m_SelectedAssetIsFolder = true;
+    }
+
+    if (!isRoot) {
+        if (ImGui::BeginDragDropSource()) {
+            ImGui::SetDragDropPayload("ASSET_FOLDER_PATH", folderPath.c_str(), folderPath.size() + 1);
+            ImGui::TextUnformatted(LeafNameOf(folderPath).c_str());
+            ImGui::EndDragDropSource();
+        }
+    }
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
+            PushUndo(world, "Move Asset to Folder");
+            assets.SetAssetFolder((const char*)p->Data, folderPath);
+        }
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
+            PushUndo(world, "Move Asset to Folder");
+            assets.SetAssetFolder((const char*)p->Data, folderPath);
+        }
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_SOUND_PATH")) {
+            PushUndo(world, "Move Asset to Folder");
+            assets.SetAssetFolder((const char*)p->Data, folderPath);
+        }
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH")) {
+            PushUndo(world, "Move Asset to Folder");
+            assets.SetAssetFolder((const char*)p->Data, folderPath);
+        }
+        if (!isRoot) {
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FOLDER_PATH")) {
+                std::string src((const char*)p->Data);
+                if (src != folderPath && folderPath.rfind(src + "/", 0) != 0) {
+                    PushUndo(world, "Move Folder");
+                    assets.RenameFolder(src, folderPath + "/" + LeafNameOf(src));
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+    if (ImGui::IsItemHovered() && !ImGui::IsItemToggledOpen()) {
+        EditorUI::SetTooltip(isRoot
+            ? "The root of every asset the editor knows about.\nAlt+click a folder's arrow to expand/collapse it and everything under it."
+            : "Click to browse. Drag assets or other folders onto it to file them here.");
+    }
+    ImGui::PopID();
+
+    if (open) {
+        for (const auto& child : children) DrawFolderTreeNode(world, assets, child, false);
+        if (hasChildren || isRoot) ImGui::TreePop();
+    }
 }
 
 void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
@@ -1815,6 +4492,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     bool open = ImGui::Begin("Asset Browser", nullptr, flags);
     ImGui::PopStyleVar();
     if (!open) { ImGui::End(); return; }
+    m_AssetBrowserFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
 
     auto makeNewFolder = [&]() {
         std::string base = m_CurrentAssetFolder.empty() ? "New Folder" : (m_CurrentAssetFolder + "/New Folder");
@@ -1825,6 +4503,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             return false;
         };
         while (exists(candidate)) candidate = base + " (" + std::to_string(n++) + ")";
+        PushUndo(world, "Create Folder");
         assets.CreateFolder(candidate);
         BeginRenameAsset(candidate, true, LeafNameOf(candidate));
     };
@@ -1849,6 +4528,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     // Breadcrumb: "Assets" root plus one clickable button per path segment.
     ImGui::AlignTextToFramePadding();
     if (ImGui::SmallButton(ICON_FA_FOLDER_OPEN " Assets")) m_CurrentAssetFolder.clear();
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Go to the root folder");
     if (!m_CurrentAssetFolder.empty()) {
         std::string accum;
         size_t start = 0;
@@ -1861,33 +4541,122 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             ImGui::TextDisabled("/");
             ImGui::SameLine();
             if (ImGui::SmallButton(part.c_str())) m_CurrentAssetFolder = accum;
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Go to \"%s\"", part.c_str());
             if (slash == std::string::npos) break;
             start = slash + 1;
         }
     }
 
-    // Search box pinned to the toolbar's right edge, falling back to a new line only if the
-    // breadcrumb has grown too long to leave room for it.
-    float targetX = ImGui::GetWindowContentRegionMax().x - searchWidth;
+    // Search box + its two filter buttons (Type, Label), pinned as one group to the toolbar's
+    // right edge - falling back to a new line only if the breadcrumb has grown too long to
+    // leave room for it.
+    float filterButtonsWidth = (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) * 2.0f;
+    float groupWidth = searchWidth + filterButtonsWidth;
+    float targetX = ImGui::GetWindowContentRegionMax().x - groupWidth;
     if (targetX > ImGui::GetCursorPosX()) ImGui::SameLine(targetX);
     else ImGui::NewLine();
 
     char filterBuf[64];
     snprintf(filterBuf, sizeof(filterBuf), "%s", m_AssetSearchFilter.c_str());
     ImGui::SetNextItemWidth(searchWidth);
+    if (m_AssetSearchFocusRequested) {
+        ImGui::SetKeyboardFocusHere();
+        m_AssetSearchFocusRequested = false;
+    }
     if (ImGui::InputTextWithHint("##AssetFilter", ICON_FA_MAGNIFYING_GLASS "  Search...", filterBuf, sizeof(filterBuf))) {
         m_AssetSearchFilter = filterBuf;
+    }
+    if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) {
+        EditorUI::SetTooltip(
+            "Search every asset by name, across all folders.\n"
+            "Type multiple words to match all of them (AND).\n"
+            "t:Model / t:Texture / t:Sound / t:Scene / t:Prefab / t:Folder\n"
+            "  restricts by type - listing several ORs them together.\n"
+            "l:label restricts by label (set in an asset's right-click\n"
+            "  menu) - listing several ANDs them, requiring every one.");
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_FILTER)) ImGui::OpenPopup("##AssetTypeFilter");
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Filter by asset type");
+    if (ImGui::BeginPopup("##AssetTypeFilter")) {
+        static const std::pair<const char*, const char*> kTypes[] = {
+            {"Model", "model"}, {"Texture", "texture"}, {"Sound", "sound"},
+            {"Scene", "scene"}, {"Prefab", "prefab"}, {"Folder", "folder"},
+        };
+        for (const auto& [label, token] : kTypes) {
+            std::string full = std::string("t:") + token;
+            bool active = SearchHasToken(m_AssetSearchFilter, full);
+            if (ImGui::MenuItem(label, nullptr, active)) ToggleSearchToken(m_AssetSearchFilter, full);
+        }
+        ImGui::EndPopup();
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_TAG)) ImGui::OpenPopup("##AssetLabelFilter");
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Filter by label");
+    if (ImGui::BeginPopup("##AssetLabelFilter")) {
+        ImGui::SetNextItemWidth(160.0f);
+        char labelSearchBuf[64];
+        snprintf(labelSearchBuf, sizeof(labelSearchBuf), "%s", m_AssetLabelMenuFilter.c_str());
+        if (ImGui::InputTextWithHint("##LabelMenuFilter", ICON_FA_MAGNIFYING_GLASS "  Search labels...",
+                labelSearchBuf, sizeof(labelSearchBuf))) {
+            m_AssetLabelMenuFilter = labelSearchBuf;
+        }
+        ImGui::Separator();
+        std::set<std::string> allLabels = assets.AllKnownLabels();
+        if (allLabels.empty()) {
+            ImGui::TextDisabled("No labels yet - add one from an\nasset's right-click menu.");
+        }
+        for (const auto& lbl : allLabels) {
+            if (!MatchesFilter(m_AssetLabelMenuFilter, lbl)) continue;
+            std::string full = "l:" + lbl;
+            bool active = SearchHasToken(m_AssetSearchFilter, full);
+            if (ImGui::MenuItem(lbl.c_str(), nullptr, active)) ToggleSearchToken(m_AssetSearchFilter, full);
+        }
+        ImGui::EndPopup();
     }
 
     ImGui::EndChild(); // ##AssetToolbar
 
     ImGui::Separator();
-    ImGui::BeginChild("##AssetList", ImVec2(0, 0), ImGuiChildFlags_Borders);
+
+    // Unity Project-window layout: a folder tree on the left (real hierarchy navigation, not
+    // just the breadcrumb above) and the current folder's contents as icons on the right,
+    // split by a drag-resizable divider.
+    float footerHeight = ImGui::GetFrameHeightWithSpacing() + 4.0f;
+    float contentHeight = ImGui::GetContentRegionAvail().y - footerHeight;
+
+    ImGui::BeginChild("##AssetTree", ImVec2(m_AssetTreeWidth, contentHeight), ImGuiChildFlags_Borders);
+    DrawFolderTreeNode(world, assets, "", true);
+    ImGui::EndChild();
+
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ChildBg));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_SeparatorHovered));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_SeparatorActive));
+    ImGui::Button("##AssetTreeSplitter", ImVec2(6.0f, contentHeight));
+    ImGui::PopStyleColor(3);
+    if (ImGui::IsItemHovered() || ImGui::IsItemActive()) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    if (ImGui::IsItemActive()) m_AssetTreeWidth += ImGui::GetIO().MouseDelta.x;
+    m_AssetTreeWidth = std::clamp(m_AssetTreeWidth, 140.0f * m_UIScale, 460.0f * m_UIScale);
+    if (ImGui::IsItemDeactivated()) { // drag finished — remember it
+        EditorSettings::Get().AssetBrowserTreeWidth = m_AssetTreeWidth;
+        EditorSettings::Save();
+    }
+    ImGui::SameLine();
+
+    ImGui::BeginChild("##AssetList", ImVec2(0, contentHeight), ImGuiChildFlags_Borders);
 
     bool searching = !m_AssetSearchFilter.empty();
+    ParsedAssetSearch parsedSearch = ParseAssetSearch(m_AssetSearchFilter);
+    // A type/label filter still narrows results even inside a specific folder (not just while
+    // searching by name) - e.g. "t:Texture" alone, browsing normally, should hide non-textures
+    // right where they are rather than forcing a switch to whole-library search first.
+    bool filtering = searching || !parsedSearch.typeTerms.empty() || !parsedSearch.labelTerms.empty();
 
     struct Cell {
-        enum class Kind { Folder, Model, Texture, Sound, Scene } kind;
+        enum class Kind { Folder, Model, Texture, Sound, Scene, Prefab } kind;
         std::string key;
         std::string display;
         std::shared_ptr<Model> model;
@@ -1900,41 +4669,51 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     // opened the same way models/textures/sounds are, instead of only via File > Open.
     static const std::string kScenesFolder = "Scenes";
     assets.CreateFolder(kScenesFolder);
-    if (searching || m_CurrentAssetFolder == kScenesFolder) {
+    if (filtering || m_CurrentAssetFolder == kScenesFolder) {
         std::error_code ec;
-        std::filesystem::create_directory("scenes", ec);
-        for (const auto& entry : std::filesystem::directory_iterator("scenes", ec)) {
+        // Under the project folder, alongside scene.json — not the working directory (see
+        // ProjectPaths.h), so saved scenes are tracked content rather than build output.
+        const std::string scenesDir = ProjectPaths::Resolve("scenes");
+        std::filesystem::create_directory(scenesDir, ec);
+        for (const auto& entry : std::filesystem::directory_iterator(scenesDir, ec)) {
             if (!entry.is_regular_file() || entry.path().extension() != ".json") continue;
             std::string path = entry.path().generic_string();
             std::string name = entry.path().stem().string();
-            if (!MatchesFilter(m_AssetSearchFilter, name)) continue;
+            if (!MatchesAssetSearch(parsedSearch, name, "scene", assets.Labels(path))) continue;
             cells.push_back({Cell::Kind::Scene, path, name, nullptr, nullptr});
         }
     }
 
     for (const auto& folder : assets.Folders()) {
-        bool show = searching ? MatchesFilter(m_AssetSearchFilter, LeafNameOf(folder)) : (ParentFolderOf(folder) == m_CurrentAssetFolder);
+        bool show = filtering ? MatchesAssetSearch(parsedSearch, LeafNameOf(folder), "folder", {})
+            : (ParentFolderOf(folder) == m_CurrentAssetFolder);
         if (show) cells.push_back({Cell::Kind::Folder, folder, LeafNameOf(folder), nullptr, nullptr});
     }
     for (const auto& model : assets.Models()) {
         std::string path = model->Path();
         std::string name = assets.DisplayName(path);
-        if (!MatchesFilter(m_AssetSearchFilter, name)) continue;
-        bool show = searching || assets.AssetFolder(path) == m_CurrentAssetFolder;
+        if (!MatchesAssetSearch(parsedSearch, name, "model", assets.Labels(path))) continue;
+        bool show = filtering || assets.AssetFolder(path) == m_CurrentAssetFolder;
         if (show) cells.push_back({Cell::Kind::Model, path, name, model, nullptr});
     }
     for (const auto& tex : assets.Textures()) {
         std::string path = tex->Path();
         std::string name = assets.DisplayName(path);
-        if (!MatchesFilter(m_AssetSearchFilter, name)) continue;
-        bool show = searching || assets.AssetFolder(path) == m_CurrentAssetFolder;
+        if (!MatchesAssetSearch(parsedSearch, name, "texture", assets.Labels(path))) continue;
+        bool show = filtering || assets.AssetFolder(path) == m_CurrentAssetFolder;
         if (show) cells.push_back({Cell::Kind::Texture, path, name, nullptr, tex});
     }
     for (const auto& sound : assets.Sounds()) {
         std::string name = assets.DisplayName(sound);
-        if (!MatchesFilter(m_AssetSearchFilter, name)) continue;
-        bool show = searching || assets.AssetFolder(sound) == m_CurrentAssetFolder;
+        if (!MatchesAssetSearch(parsedSearch, name, "sound", assets.Labels(sound))) continue;
+        bool show = filtering || assets.AssetFolder(sound) == m_CurrentAssetFolder;
         if (show) cells.push_back({Cell::Kind::Sound, sound, name, nullptr, nullptr});
+    }
+    for (const auto& prefab : assets.Prefabs()) {
+        std::string name = assets.DisplayName(prefab);
+        if (!MatchesAssetSearch(parsedSearch, name, "prefab", assets.Labels(prefab))) continue;
+        bool show = filtering || assets.AssetFolder(prefab) == m_CurrentAssetFolder;
+        if (show) cells.push_back({Cell::Kind::Prefab, prefab, name, nullptr, nullptr});
     }
     std::sort(cells.begin(), cells.end(), [](const Cell& a, const Cell& b) {
         bool aFolder = a.kind == Cell::Kind::Folder, bFolder = b.kind == Cell::Kind::Folder;
@@ -1942,56 +4721,150 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
         return a.display < b.display;
     });
 
-    const float iconSize = ImGui::GetTextLineHeight();
+    // Ctrl+A - select every currently-visible item (respecting the active search/filter, same
+    // as Unity's own "select all visible items in list").
+    if (m_AssetBrowserFocused && m_RenamingAssetKey.empty() && ImGui::GetIO().KeyCtrl
+        && ImGui::IsKeyPressed(ImGuiKey_A) && !cells.empty()) {
+        ClearAssetSelection();
+        m_SelectedAssetKey = cells[0].key;
+        m_SelectedAssetIsFolder = cells[0].kind == Cell::Kind::Folder;
+        for (size_t i = 1; i < cells.size(); ++i) {
+            m_ExtraAssetSelection.push_back({cells[i].key, cells[i].kind == Cell::Kind::Folder});
+        }
+    }
 
-    if (!searching && !m_CurrentAssetFolder.empty()) {
+    // Below kListViewIconSize (DPI-scaled, matching the footer slider's minimum), the slider
+    // switches to a compact list - Unity's "slide the icon size to the extreme left for list
+    // view" behavior.
+    bool gridMode = m_AssetIconSize > kListViewIconSize * m_UIScale;
+    const float cellPadding = 8.0f;
+    const float cellWidth = m_AssetIconSize + cellPadding * 2.0f;
+    const float cellHeight = m_AssetIconSize + cellPadding + ImGui::GetTextLineHeightWithSpacing() * 2.0f;
+
+    if (!filtering && !m_CurrentAssetFolder.empty()) {
         if (ImGui::Selectable(ICON_FA_ARROW_UP "  ..")) {
             m_CurrentAssetFolder = ParentFolderOf(m_CurrentAssetFolder);
         }
     }
 
-    for (const auto& cell : cells) {
+    for (size_t cellIndex = 0; cellIndex < cells.size(); ++cellIndex) {
+        const auto& cell = cells[cellIndex];
         ImGui::PushID(cell.key.c_str());
 
         bool isFolder = cell.kind == Cell::Kind::Folder;
-        bool isSelected = m_SelectedAssetKey == cell.key && m_SelectedAssetIsFolder == isFolder;
+        bool isSelected = IsAssetSelected(cell.key, isFolder);
         bool isRenaming = m_RenamingAssetKey == cell.key && m_RenamingIsFolder == isFolder;
         bool playing = cell.kind == Cell::Kind::Sound && AudioEngine::IsPreviewPlaying(cell.key);
-
-        // Little icon (real thumbnail for textures, a Font Awesome glyph otherwise) followed
-        // by the name, mirroring how the Scene Hierarchy lists its rows — no button box.
-        if (cell.kind == Cell::Kind::Texture) {
-            ImGui::Image((ImTextureID)(intptr_t)cell.texture->GLHandle(), ImVec2(iconSize, iconSize));
-        } else {
-            const char* icon = isFolder ? ICON_FA_FOLDER
-                : cell.kind == Cell::Kind::Model ? (cell.model->HasAnimations() ? ICON_FA_FILM : ICON_FA_CUBE)
-                : cell.kind == Cell::Kind::Scene ? ICON_FA_MAP
-                : (playing ? ICON_FA_STOP : ICON_FA_MUSIC);
-            ImGui::TextUnformatted(icon);
-        }
-        ImGui::SameLine();
+        const char* icon = isFolder ? ICON_FA_FOLDER
+            : cell.kind == Cell::Kind::Model ? (cell.model->HasAnimations() ? ICON_FA_FILM : ICON_FA_CUBE)
+            : cell.kind == Cell::Kind::Scene ? ICON_FA_MAP
+            : cell.kind == Cell::Kind::Prefab ? ICON_FA_BOX_ARCHIVE
+            : (playing ? ICON_FA_STOP : ICON_FA_MUSIC);
 
         bool clicked = false;
-        if (isRenaming) {
-            ImGui::SetNextItemWidth(-1);
-            if (m_RenamingJustStarted) {
-                ImGui::SetKeyboardFocusHere();
-                m_RenamingJustStarted = false;
+        if (gridMode) {
+            // The tile itself (Selectable for its background/hit-test, or a same-size Dummy
+            // while renaming) stays "the last submitted item" for everything below (hover,
+            // drag-drop, context menu) - icon and label are painted directly onto the draw
+            // list afterward rather than as their own widgets, so they never steal that.
+            ImVec2 tileMin = ImGui::GetCursorScreenPos();
+            ImVec2 tileSize(cellWidth, cellHeight);
+            if (!isRenaming) {
+                clicked = ImGui::Selectable("##tile", isSelected, ImGuiSelectableFlags_None, tileSize);
+            } else {
+                ImGui::Dummy(tileSize);
             }
-            bool done = ImGui::InputText("##rename", m_RenameBuffer, sizeof(m_RenameBuffer),
-                ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
-            bool cancel = ImGui::IsKeyPressed(ImGuiKey_Escape);
-            bool lostFocus = ImGui::IsItemDeactivated() && !done;
-            if (done) CommitRename(assets);
-            else if (cancel || lostFocus) m_RenamingAssetKey.clear();
+
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
+            if (cell.kind == Cell::Kind::Texture) {
+                float aspect = cell.texture->Height() > 0 ? (float)cell.texture->Width() / (float)cell.texture->Height() : 1.0f;
+                ImVec2 imgSize = aspect >= 1.0f ? ImVec2(m_AssetIconSize, m_AssetIconSize / aspect) : ImVec2(m_AssetIconSize * aspect, m_AssetIconSize);
+                ImVec2 imgPos(tileMin.x + (cellWidth - imgSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - imgSize.y) * 0.5f);
+                dl->AddImage((ImTextureID)(intptr_t)cell.texture->GLHandle(), imgPos, ImVec2(imgPos.x + imgSize.x, imgPos.y + imgSize.y));
+            } else {
+                ImFont* font = ImGui::GetFont();
+                ImVec2 glyphSize = font->CalcTextSizeA(m_AssetIconSize, FLT_MAX, 0.0f, icon);
+                ImVec2 glyphPos(tileMin.x + (cellWidth - glyphSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - glyphSize.y) * 0.5f);
+                dl->AddText(font, m_AssetIconSize, glyphPos, textColor, icon);
+            }
+
+            if (!isRenaming) {
+                ImVec2 labelPos(tileMin.x + 2.0f, tileMin.y + m_AssetIconSize + cellPadding);
+                bool truncated = DrawClampedGridLabel(dl, labelPos, cellWidth - 4.0f,
+                    ImGui::GetTextLineHeightWithSpacing(), textColor, cell.display.c_str());
+                if (truncated && ImGui::IsItemHovered()) {
+                    EditorUI::SetTooltip(cell.display.c_str());
+                }
+            } else {
+                ImGui::SetCursorScreenPos(ImVec2(tileMin.x + 2.0f, tileMin.y + m_AssetIconSize + cellPadding));
+                ImGui::SetNextItemWidth(cellWidth - 4.0f);
+                if (m_RenamingJustStarted) {
+                    ImGui::SetKeyboardFocusHere();
+                    m_RenamingJustStarted = false;
+                }
+                bool done = ImGui::InputText("##rename", m_RenameBuffer, sizeof(m_RenameBuffer),
+                    ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+                bool cancel = ImGui::IsKeyPressed(ImGuiKey_Escape);
+                bool lostFocus = ImGui::IsItemDeactivated() && !done;
+                if (done) CommitRename(world, assets);
+                else if (cancel || lostFocus) m_RenamingAssetKey.clear();
+                ImGui::SetCursorScreenPos(ImVec2(tileMin.x, tileMin.y + tileSize.y));
+            }
         } else {
-            clicked = ImGui::Selectable(cell.display.c_str(), isSelected);
+            // List mode: little icon (real thumbnail for textures, a Font Awesome glyph
+            // otherwise) followed by the name, mirroring how the Scene Hierarchy lists rows.
+            float rowIconSize = ImGui::GetTextLineHeight();
+            if (cell.kind == Cell::Kind::Texture) {
+                ImGui::Image((ImTextureID)(intptr_t)cell.texture->GLHandle(), ImVec2(rowIconSize, rowIconSize));
+            } else {
+                ImGui::TextUnformatted(icon);
+            }
+            ImGui::SameLine();
+
+            if (isRenaming) {
+                ImGui::SetNextItemWidth(-1);
+                if (m_RenamingJustStarted) {
+                    ImGui::SetKeyboardFocusHere();
+                    m_RenamingJustStarted = false;
+                }
+                bool done = ImGui::InputText("##rename", m_RenameBuffer, sizeof(m_RenameBuffer),
+                    ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+                bool cancel = ImGui::IsKeyPressed(ImGuiKey_Escape);
+                bool lostFocus = ImGui::IsItemDeactivated() && !done;
+                if (done) CommitRename(world, assets);
+                else if (cancel || lostFocus) m_RenamingAssetKey.clear();
+            } else {
+                clicked = ImGui::Selectable(cell.display.c_str(), isSelected);
+            }
         }
 
         if (clicked) {
-            m_SelectedAssetKey = cell.key;
-            m_SelectedAssetIsFolder = isFolder;
-            if (cell.kind == Cell::Kind::Sound) {
+            ImGuiIO& assetIO = ImGui::GetIO();
+            if (assetIO.KeyShift && !m_SelectedAssetKey.empty()) {
+                // Range-select from the anchor to here, replacing the current selection —
+                // Unity/Explorer-standard Shift-click behavior. The anchor index is only
+                // meaningful against this same, currently-visible `cells` list.
+                ClearAssetSelection();
+                size_t lo = std::min(m_AssetSelectionAnchorIndex, cellIndex);
+                size_t hi = std::min(std::max(m_AssetSelectionAnchorIndex, cellIndex), cells.size() - 1);
+                for (size_t i = lo; i <= hi; ++i) {
+                    bool f = cells[i].kind == Cell::Kind::Folder;
+                    if (i == lo) { m_SelectedAssetKey = cells[i].key; m_SelectedAssetIsFolder = f; }
+                    else m_ExtraAssetSelection.push_back({cells[i].key, f});
+                }
+                // Deliberately don't move the anchor, so repeated Shift-clicks keep extending
+                // or shrinking the range from the same starting point.
+            } else if (assetIO.KeyCtrl) {
+                ToggleAssetSelection(cell.key, isFolder);
+                m_AssetSelectionAnchorIndex = cellIndex;
+            } else {
+                ClearAssetSelection();
+                m_SelectedAssetKey = cell.key;
+                m_SelectedAssetIsFolder = isFolder;
+                m_AssetSelectionAnchorIndex = cellIndex;
+            }
+            if (cell.kind == Cell::Kind::Sound && !assetIO.KeyShift && !assetIO.KeyCtrl) {
                 if (playing) AudioEngine::StopPreview();
                 else AudioEngine::PlayPreview(cell.key);
             }
@@ -2002,6 +4875,11 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
         if (cell.kind == Cell::Kind::Scene && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             OpenScene(world, assets, cell.key);
         }
+        if (cell.kind == Cell::Kind::Prefab && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+            PushUndo(world, "Place Prefab Instance");
+            entt::entity spawned = SceneSerializer::InstantiatePrefab(world, assets, cell.key);
+            if (spawned != entt::null) SelectItem(spawned, false);
+        }
 
         if (isFolder) {
             if (ImGui::BeginDragDropSource()) {
@@ -2010,12 +4888,26 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
                 ImGui::EndDragDropSource();
             }
             if (ImGui::BeginDragDropTarget()) {
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) assets.SetAssetFolder((const char*)p->Data, cell.key);
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) assets.SetAssetFolder((const char*)p->Data, cell.key);
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_SOUND_PATH")) assets.SetAssetFolder((const char*)p->Data, cell.key);
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
+                    PushUndo(world, "Move Asset to Folder");
+                    assets.SetAssetFolder((const char*)p->Data, cell.key);
+                }
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
+                    PushUndo(world, "Move Asset to Folder");
+                    assets.SetAssetFolder((const char*)p->Data, cell.key);
+                }
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_SOUND_PATH")) {
+                    PushUndo(world, "Move Asset to Folder");
+                    assets.SetAssetFolder((const char*)p->Data, cell.key);
+                }
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH")) {
+                    PushUndo(world, "Move Asset to Folder");
+                    assets.SetAssetFolder((const char*)p->Data, cell.key);
+                }
                 if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FOLDER_PATH")) {
                     std::string src((const char*)p->Data);
                     if (src != cell.key && cell.key.rfind(src + "/", 0) != 0) {
+                        PushUndo(world, "Move Folder");
                         assets.RenameFolder(src, cell.key + "/" + LeafNameOf(src));
                     }
                 }
@@ -2023,7 +4915,8 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             }
         } else if (cell.kind != Cell::Kind::Scene) { // scenes aren't placeable — nothing to drag into the viewport
             const char* payloadType = cell.kind == Cell::Kind::Model ? "ASSET_MODEL_PATH"
-                : cell.kind == Cell::Kind::Texture ? "ASSET_TEXTURE_PATH" : "ASSET_SOUND_PATH";
+                : cell.kind == Cell::Kind::Texture ? "ASSET_TEXTURE_PATH"
+                : cell.kind == Cell::Kind::Prefab ? "ASSET_PREFAB_PATH" : "ASSET_SOUND_PATH";
             if (ImGui::BeginDragDropSource()) {
                 ImGui::SetDragDropPayload(payloadType, cell.key.c_str(), cell.key.size() + 1);
                 ImGui::TextUnformatted(cell.display.c_str());
@@ -2033,19 +4926,22 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
 
         if (!isRenaming && ImGui::IsItemHovered()) {
             if (cell.kind == Cell::Kind::Model) {
-                ImGui::SetTooltip("%s\n\nDrag into the viewport to place\n\n%s",
+                EditorUI::SetTooltip("%s\n\nDrag into the viewport to place\n\n%s",
                     cell.display.c_str(), UsageTooltip(FindModelUsages(world, cell.model.get())).c_str());
             } else if (cell.kind == Cell::Kind::Texture) {
-                ImGui::SetTooltip(
+                EditorUI::SetTooltip(
                     "%s\n\nDrag onto a model to set its Albedo map,\nor onto a map row in the Inspector's PBR Material.\n\n%s",
                     cell.display.c_str(), UsageTooltip(FindTextureUsages(world, cell.texture.get())).c_str());
             } else if (cell.kind == Cell::Kind::Sound) {
-                ImGui::SetTooltip("%s\n\nClick to preview\n\n%s",
+                EditorUI::SetTooltip("%s\n\nClick to preview\n\n%s",
                     cell.display.c_str(), UsageTooltip(FindSoundUsages(world, cell.key)).c_str());
             } else if (cell.kind == Cell::Kind::Scene) {
-                ImGui::SetTooltip("%s\n\nDouble-click to open", cell.display.c_str());
+                EditorUI::SetTooltip("%s\n\nDouble-click to open", cell.display.c_str());
+            } else if (cell.kind == Cell::Kind::Prefab) {
+                EditorUI::SetTooltip("%s\n\nDrag into the viewport to place an instance,\nor double-click to place one at the origin.",
+                    cell.display.c_str());
             } else {
-                ImGui::SetTooltip("%s", cell.display.c_str());
+                EditorUI::SetTooltip("%s\n\nDouble-click to open. Drag assets onto it to file them here.", cell.display.c_str());
             }
         }
 
@@ -2053,38 +4949,98 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             // Scenes aren't AssetLibrary entries (no rename/remove-from-library — they're
             // real files on disk), so they get their own, much shorter context menu.
             if (ImGui::BeginPopupContextItem()) {
-                m_SelectedAssetKey = cell.key;
-                m_SelectedAssetIsFolder = false;
+                if (!IsAssetSelected(cell.key, false)) {
+                    ClearAssetSelection();
+                    m_SelectedAssetKey = cell.key;
+                    m_SelectedAssetIsFolder = false;
+                }
                 if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open")) OpenScene(world, assets, cell.key);
                 ImGui::EndPopup();
             }
         } else if (ImGui::BeginPopupContextItem()) {
-            m_SelectedAssetKey = cell.key;
-            m_SelectedAssetIsFolder = isFolder;
-            if (ImGui::MenuItem(ICON_FA_PEN "  Rename (F2)")) {
+            // Right-clicking an item already part of the selection keeps the whole selection
+            // (so Delete/Remove from Library below can act on all of it, Explorer-style);
+            // right-clicking an unselected item replaces the selection with just this one.
+            if (!IsAssetSelected(cell.key, isFolder)) {
+                ClearAssetSelection();
+                m_SelectedAssetKey = cell.key;
+                m_SelectedAssetIsFolder = isFolder;
+            }
+            if (ImGui::MenuItem(ICON_FA_PEN "  Rename (F2)", nullptr, false, m_ExtraAssetSelection.empty())) {
                 BeginRenameAsset(cell.key, isFolder, cell.display);
             }
+            if (ImGui::MenuItem(ICON_FA_TAG "  Edit Labels...")) {
+                std::string joined;
+                for (const auto& lbl : assets.Labels(cell.key)) {
+                    if (!joined.empty()) joined += ", ";
+                    joined += lbl;
+                }
+                snprintf(m_LabelsEditBuffer, sizeof(m_LabelsEditBuffer), "%s", joined.c_str());
+                ImGui::OpenPopup("##EditLabels");
+            }
+            if (ImGui::BeginPopup("##EditLabels")) {
+                ImGui::TextDisabled("Comma-separated labels - searchable as l:label");
+                ImGui::SetNextItemWidth(240.0f);
+                bool enter = ImGui::InputText("##LabelsBuf", m_LabelsEditBuffer, sizeof(m_LabelsEditBuffer),
+                    ImGuiInputTextFlags_EnterReturnsTrue);
+                bool apply = enter || ImGui::Button("Apply");
+                if (apply) {
+                    std::set<std::string> labels;
+                    std::stringstream ss(m_LabelsEditBuffer);
+                    std::string part;
+                    while (std::getline(ss, part, ',')) {
+                        size_t b = part.find_first_not_of(" \t");
+                        size_t e = part.find_last_not_of(" \t");
+                        if (b != std::string::npos) labels.insert(part.substr(b, e - b + 1));
+                    }
+                    PushUndo(world, "Edit Labels");
+                    assets.SetLabels(cell.key, labels);
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+            // Everything currently selected, whenever the right-clicked item is part of a
+            // multi-selection - so Delete/Remove from Library act on the whole group rather
+            // than just the one cell that happened to receive the right-click.
+            std::vector<AssetKeyRef> selectionForAction;
+            selectionForAction.push_back({m_SelectedAssetKey, m_SelectedAssetIsFolder});
+            for (const auto& e : m_ExtraAssetSelection) selectionForAction.push_back(e);
+            const char* deleteLabel = selectionForAction.size() > 1
+                ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete Folder";
+
             if (isFolder) {
-                bool canDelete = assets.CanDeleteFolder(cell.key);
-                if (ImGui::MenuItem(ICON_FA_TRASH "  Delete Folder", nullptr, false, canDelete)) {
-                    assets.DeleteFolder(cell.key);
+                if (ImGui::MenuItem(deleteLabel)) {
+                    RequestDeleteAssets(world, assets, selectionForAction, /*skipDialog=*/false);
                 }
-                if (!canDelete) ImGui::TextDisabled("Must be empty to delete");
             } else {
-                if (ImGui::MenuItem(ICON_FA_TRASH "  Remove from Library")) {
-                    if (cell.kind == Cell::Kind::Model) assets.RemoveModel(cell.model);
-                    else if (cell.kind == Cell::Kind::Texture) assets.RemoveTexture(cell.texture);
-                    else assets.RemoveSound(cell.key);
+                if (cell.kind == Cell::Kind::Prefab && selectionForAction.size() == 1 && ImGui::MenuItem(ICON_FA_PLUS "  Place Instance")) {
+                    PushUndo(world, "Place Prefab Instance");
+                    entt::entity spawned = SceneSerializer::InstantiatePrefab(world, assets, cell.key);
+                    if (spawned != entt::null) SelectItem(spawned, false);
                 }
+                const char* removeLabel = selectionForAction.size() > 1
+                    ? ICON_FA_TRASH "  Remove Selected from Library" : ICON_FA_TRASH "  Remove from Library";
+                if (ImGui::MenuItem(removeLabel)) {
+                    RequestDeleteAssets(world, assets, selectionForAction, /*skipDialog=*/false);
+                }
+                if (cell.kind == Cell::Kind::Prefab) ImGui::TextDisabled("The .prefab file stays on disk.");
             }
             ImGui::EndPopup();
         }
 
         ImGui::PopID();
+
+        // Wrap to the next row only when there's genuinely room for another tile - the
+        // standard ImGui "wrapping button grid" idiom (imgui_demo.cpp's Layout section).
+        if (gridMode && cellIndex + 1 < cells.size()) {
+            float windowVisibleX2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+            float nextTileX2 = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x + cellWidth;
+            if (nextTileX2 < windowVisibleX2) ImGui::SameLine();
+        }
     }
 
     if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered()) {
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) m_SelectedAssetKey.clear();
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ClearAssetSelection();
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup("##BrowserBgContext");
     }
     if (ImGui::BeginPopup("##BrowserBgContext")) {
@@ -2093,6 +5049,38 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     }
 
     ImGui::EndChild(); // ##AssetList
+
+    // Footer: the selected item's name/path on the left (Unity shows the full path here only
+    // while searching; a plain display name the rest of the time is enough for this browser's
+    // scale), and the icon-size slider on the right - dragging it to the minimum switches the
+    // grid above to the compact list view instead of tiles.
+    ImGui::BeginChild("##AssetGridFooter", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+    std::string footerLabel;
+    if (!m_ExtraAssetSelection.empty()) {
+        footerLabel = std::to_string(m_ExtraAssetSelection.size() + 1) + " items selected";
+    } else if (!m_SelectedAssetKey.empty()) {
+        footerLabel = m_SelectedAssetIsFolder ? m_SelectedAssetKey : assets.DisplayName(m_SelectedAssetKey);
+    }
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextDisabled("%s", footerLabel.c_str());
+
+    const float sliderWidth = 100.0f;
+    float sliderX = ImGui::GetWindowContentRegionMax().x - sliderWidth;
+    if (sliderX > ImGui::GetCursorPosX()) ImGui::SameLine(sliderX);
+    else ImGui::NewLine();
+    ImGui::SetNextItemWidth(sliderWidth);
+    ImGui::SliderFloat("##IconSize", &m_AssetIconSize,
+        kListViewIconSize * m_UIScale, 128.0f * m_UIScale, "");
+    if (ImGui::IsItemHovered()) {
+        EditorUI::SetTooltip("Icon size - drag all the way to the left for a compact list view.");
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) { // slider released — remember it
+        EditorSettings::Get().AssetBrowserIconSize = m_AssetIconSize;
+        EditorSettings::Save();
+    }
+    ImGui::EndChild();
+
+    DrawDeleteConfirmPopup(world, assets);
 
     ImGui::End();
 }

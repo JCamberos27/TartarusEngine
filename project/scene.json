@@ -1,0 +1,336 @@
+{
+  "assetFolders": [
+    "BuildingKit",
+    "BuildingKit/Meshes",
+    "BuildingKit/Textures",
+    "BuildingKit/Textures/Ceilings",
+    "BuildingKit/Textures/Floors",
+    "BuildingKit/Textures/Walls",
+    "Chesterfield Sofa",
+    "Chesterfield Sofa/Chesterfield Textures 4K",
+    "Scenes"
+  ],
+  "assetMeta": [
+    {
+      "folder": "Chesterfield Sofa/Chesterfield Textures 4K",
+      "path": "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_AlbedoTransparency.png"
+    },
+    {
+      "folder": "Chesterfield Sofa/Chesterfield Textures 4K",
+      "path": "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_Ambient_Occlusion.png"
+    },
+    {
+      "folder": "Chesterfield Sofa/Chesterfield Textures 4K",
+      "path": "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_MetallicSmoothness.png"
+    },
+    {
+      "folder": "Chesterfield Sofa/Chesterfield Textures 4K",
+      "path": "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_Normal.png"
+    },
+    {
+      "folder": "Chesterfield Sofa",
+      "path": "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa.fbx"
+    },
+    {
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_3m_3m.FBX"
+    },
+    {
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_5m_3m.FBX"
+    },
+    {
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Floor_3m_3m.FBX"
+    },
+    {
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Floor_5m_3m.FBX"
+    },
+    {
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_3m.FBX"
+    },
+    {
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_3m_door.FBX"
+    },
+    {
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_5m.FBX"
+    },
+    {
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Window_fake.FBX"
+    },
+    {
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Window_tall_fake.FBX"
+    },
+    {
+      "folder": "BuildingKit/Textures/Ceilings",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Ceilings",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_MaskMap.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Ceilings",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_Normal.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Floors",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_concrete_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Floors",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_concrete_MaskMap.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Floors",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_concrete_Normal.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Floors",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Floors",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_MaskMap.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Floors",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_Normal.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_blue_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_brown_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_concrete_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_concrete_MaskMap.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_concrete_Normal.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_MaskMap.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_Normal.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_green_BaseColor.png"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://plane#1"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://sphere#0"
+    }
+  ],
+  "boxes": [],
+  "empties": [
+    {
+      "id": 4,
+      "light": {
+        "color": [
+          1.0,
+          0.949999988079071,
+          0.8500000238418579
+        ],
+        "intensity": 31.700000762939453,
+        "kind": "point",
+        "range": 12.0,
+        "spotAngle": 35.0
+      },
+      "name": "Point Light",
+      "parentId": -1,
+      "position": [
+        -1.033726453781128,
+        0.4608643651008606,
+        -0.06424456089735031
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "libraryModels": [
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_3m_3m.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_5m_3m.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Floor_3m_3m.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Floor_5m_3m.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_3m.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_3m_door.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_5m.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Window_fake.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Window_tall_fake.FBX",
+    "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa.fbx",
+    "primitive://sphere#0"
+  ],
+  "libraryPrefabs": [],
+  "librarySounds": [],
+  "libraryTextures": [
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_MaskMap.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_Normal.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_concrete_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_concrete_MaskMap.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_concrete_Normal.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_MaskMap.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_Normal.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_blue_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_brown_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_concrete_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_concrete_MaskMap.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_concrete_Normal.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_MaskMap.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_Normal.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_green_BaseColor.png",
+    "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_AlbedoTransparency.png",
+    "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_Ambient_Occlusion.png",
+    "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_MetallicSmoothness.png",
+    "C:\\Users\\jacob\\Downloads\\Chesterfield Sofa\\Chesterfield Sofa\\Chesterfield Sofa Textures\\4096\\mat_sofa_vintage_03_Normal.png"
+  ],
+  "models": [
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 0,
+      "name": "Floor_3m_3m",
+      "parentId": -1,
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Floor_3m_3m.FBX",
+      "position": [
+        1.4027862548828125,
+        -2.384185791015625e-07,
+        -2.7419166564941406
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 1,
+      "name": "Wall_3m",
+      "parentId": -1,
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_3m.FBX",
+      "position": [
+        1.4027862548828125,
+        -2.384185791015625e-07,
+        -2.8520193099975586
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 2,
+      "name": "Wall_3m Copy",
+      "parentId": -1,
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_3m.FBX",
+      "position": [
+        -1.5972137451171875,
+        -2.384185791015625e-07,
+        -2.8520193099975586
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 3,
+      "name": "Floor_3m_3m Copy",
+      "parentId": -1,
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Floor_3m_3m.FBX",
+      "position": [
+        -1.5972137451171875,
+        -2.384185791015625e-07,
+        -2.7419166564941406
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    }
+  ],
+  "skyHorizonColor": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "skyZenithColor": [
+    0.0,
+    0.0,
+    0.0
+  ]
+}

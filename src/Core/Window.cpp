@@ -45,6 +45,10 @@ Window::Window(int width, int height, const std::string& title)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_SAMPLES, 4);
+    // Report the real per-monitor content scale (e.g. 2.0 at Windows' 200% scaling, common on
+    // 4K displays) so the editor can bake it into font sizes and layout instead of rendering a
+    // tiny fixed-pixel UI.
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
     // Stay hidden until the title bar is recolored below, so it never flashes the default
     // light title bar for a frame before switching to black.
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
@@ -69,6 +73,7 @@ Window::Window(int width, int height, const std::string& title)
 
     glfwSetWindowUserPointer(m_Handle, this);
     glfwSetFramebufferSizeCallback(m_Handle, FramebufferSizeCallback);
+    glfwSetDropCallback(m_Handle, DropCallbackTrampoline);
 
     glViewport(0, 0, width, height);
     glEnable(GL_DEPTH_TEST);
@@ -135,4 +140,18 @@ void Window::FramebufferSizeCallback(GLFWwindow* window, int width, int height) 
     self->m_Width = width;
     self->m_Height = height;
     glViewport(0, 0, width, height);
+}
+
+void Window::SetDropCallback(std::function<void(const std::vector<std::string>&)> callback) {
+    m_DropCallback = std::move(callback);
+}
+
+void Window::DropCallbackTrampoline(GLFWwindow* window, int pathCount, const char* paths[]) {
+    Window* self = static_cast<Window*>(glfwGetWindowUserPointer(window));
+    if (!self->m_DropCallback || pathCount <= 0) return;
+
+    std::vector<std::string> pathList;
+    pathList.reserve((size_t)pathCount);
+    for (int i = 0; i < pathCount; ++i) pathList.emplace_back(paths[i]);
+    self->m_DropCallback(pathList);
 }

@@ -1,5 +1,6 @@
 #include "Shader.h"
 #include "gl.h"
+#include "GLStateCache.h"
 #include <glm/gtc/type_ptr.hpp>
 #include <stdexcept>
 #include <vector>
@@ -47,15 +48,23 @@ unsigned int Shader::Compile(unsigned int type, const std::string& src) {
 }
 
 void Shader::Bind() const {
-    glUseProgram(m_Program);
+    GLStateCache::UseProgram(m_Program);
 }
 
 int Shader::Loc(const std::string& name) const {
-    return glGetUniformLocation(m_Program, name.c_str());
+    auto it = m_UniformCache.find(name);
+    if (it != m_UniformCache.end()) return it->second;
+    int loc = glGetUniformLocation(m_Program, name.c_str());
+    m_UniformCache.emplace(name, loc);
+    return loc;
 }
 
 void Shader::SetMat4(const std::string& name, const glm::mat4& m) const {
     glUniformMatrix4fv(Loc(name), 1, GL_FALSE, glm::value_ptr(m));
+}
+
+void Shader::SetMat4Array(const std::string& name, int count, const glm::mat4* data) const {
+    glUniformMatrix4fv(Loc(name), count, GL_FALSE, glm::value_ptr(data[0]));
 }
 
 void Shader::SetVec3(const std::string& name, const glm::vec3& v) const {

@@ -1,0 +1,5 @@
+// Embeds the engine's icon into TartarusEngine.exe itself (Windows reads resource ID 1's icon
+// for taskbar/Explorer/shortcut display). Baked into every build via CMakeLists.txt, so a
+// desktop shortcut that targets the exe directly keeps showing this icon across rebuilds
+// without any extra setup — nothing outside the repo needs to be re-pointed after an update.
+IDI_ICON1 ICON "tartarus_icon.ico"

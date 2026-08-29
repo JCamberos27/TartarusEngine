@@ -29,6 +29,8 @@
 #define GL_INFO_LOG_LENGTH 0x8B84
 #define GL_LEQUAL 0x0203
 #define GL_LESS 0x0201
+#define GL_DEPTH_FUNC 0x0B74
+#define GL_POLYGON_OFFSET_FILL 0x8037
 #define GL_FILL 0x1B02
 #define GL_LINE 0x1B01
 #define GL_FRONT_AND_BACK 0x0408
@@ -40,7 +42,12 @@
 #define GL_TEXTURE_MAG_FILTER 0x2800
 #define GL_LINEAR 0x2601
 #define GL_LINEAR_MIPMAP_LINEAR 0x2703
+#define GL_LINEAR_MIPMAP_NEAREST 0x2701
+#define GL_NEAREST_MIPMAP_LINEAR 0x2702
+#define GL_NEAREST_MIPMAP_NEAREST 0x2700
 #define GL_REPEAT 0x2901
+#define GL_SRGB8 0x8C41
+#define GL_SRGB8_ALPHA8 0x8C43
 #define GL_TEXTURE_WRAP_S 0x2802
 #define GL_TEXTURE_WRAP_T 0x2803
 #define GL_BLEND 0x0BE2
@@ -58,11 +65,16 @@
 #define GL_R8 0x8229
 #define GL_CLAMP_TO_EDGE 0x812F
 #define GL_NEAREST 0x2600
+#define GL_VIEWPORT 0x0BA2
 #define GL_FRAMEBUFFER 0x8D40
+#define GL_READ_FRAMEBUFFER 0x8CA8
+#define GL_DRAW_FRAMEBUFFER 0x8CA9
+#define GL_FRAMEBUFFER_BINDING 0x8CA6
 #define GL_COLOR_ATTACHMENT0 0x8CE0
 #define GL_DEPTH_ATTACHMENT 0x8D00
 #define GL_DEPTH_STENCIL_ATTACHMENT 0x821A
 #define GL_DEPTH24_STENCIL8 0x88F0
+#define GL_DEPTH_COMPONENT24 0x81A6
 #define GL_DEPTH_STENCIL 0x84F9
 #define GL_UNSIGNED_INT_24_8 0x84FA
 #define GL_RENDERBUFFER 0x8D41
@@ -91,6 +103,7 @@ void __stdcall glDisable(GLenum cap);
 void __stdcall glDepthFunc(GLenum func);
 void __stdcall glDepthMask(GLboolean flag);
 void __stdcall glCullFace(GLenum mode);
+void __stdcall glPolygonOffset(GLfloat factor, GLfloat units);
 void __stdcall glFrontFace(GLenum mode);
 void __stdcall glDrawArrays(GLenum mode, GLint first, GLsizei count);
 void __stdcall glPolygonMode(GLenum face, GLenum mode);
@@ -159,6 +172,7 @@ typedef void (__stdcall* PFNGLBINDRENDERBUFFERPROC)(GLenum, GLuint);
 typedef void (__stdcall* PFNGLRENDERBUFFERSTORAGEPROC)(GLenum, GLenum, GLsizei, GLsizei);
 typedef void (__stdcall* PFNGLFRAMEBUFFERRENDERBUFFERPROC)(GLenum, GLenum, GLenum, GLuint);
 typedef void (__stdcall* PFNGLDELETERENDERBUFFERSPROC)(GLsizei, const GLuint*);
+typedef void (__stdcall* PFNGLBLITFRAMEBUFFERPROC)(GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum);
 
 extern PFNGLGENVERTEXARRAYSPROC glGenVertexArrays;
 extern PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
@@ -211,6 +225,7 @@ extern PFNGLBINDRENDERBUFFERPROC glBindRenderbuffer;
 extern PFNGLRENDERBUFFERSTORAGEPROC glRenderbufferStorage;
 extern PFNGLFRAMEBUFFERRENDERBUFFERPROC glFramebufferRenderbuffer;
 extern PFNGLDELETERENDERBUFFERSPROC glDeleteRenderbuffers;
+extern PFNGLBLITFRAMEBUFFERPROC glBlitFramebuffer;
 
 // Call once after a GL context is current (e.g. right after glfwMakeContextCurrent).
 bool GLLoader_Init();
