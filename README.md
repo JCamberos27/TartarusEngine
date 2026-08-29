@@ -29,6 +29,12 @@ hand-rolled OpenGL 3.3 core loader, with no glad/Python codegen step in the buil
 
 <br><br>
 
+<img src="docs/images/playmode.png" alt="Play mode running in the docked Game panel" width="100%">
+
+<sub>Play mode runs <em>inside</em> the docked Game panel — the editor stays live, the scene is snapshotted on entry and restored on Stop, and the Fullscreen button beside Stop maximises the view when you want it.</sub>
+
+<br><br>
+
 <img src="docs/images/viewport.png" alt="Scene viewport" width="100%">
 
 <sub>Scene view — coloured point lights, PBR-style materials, and the distance-faded grid. Included as <code>project/scenes/Showcase.json</code>.</sub>
