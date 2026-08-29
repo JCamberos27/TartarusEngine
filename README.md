@@ -21,7 +21,19 @@ hand-rolled OpenGL 3.3 core loader, with no glad/Python codegen step in the buil
 
 ## Screenshots
 
-<!-- Add editor screenshots here as docs/images/*.png -->
+<div align="center">
+
+<img src="docs/images/editor.png" alt="The Tartarus editor" width="100%">
+
+<sub>The editor: dockable Scene/Game viewports, Hierarchy, Inspector, and Asset Browser, with a transform gizmo on the selected object.</sub>
+
+<br><br>
+
+<img src="docs/images/viewport.png" alt="Scene viewport" width="100%">
+
+<sub>Scene view — coloured point lights, PBR-style materials, and the distance-faded grid. Included as <code>project/scenes/Showcase.json</code>.</sub>
+
+</div>
 
 ## Built with Tartarus
 
