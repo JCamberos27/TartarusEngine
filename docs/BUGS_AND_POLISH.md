@@ -12,6 +12,19 @@ not be automated and are tracked separately under [Needs manual verification](#n
 
 ---
 
+## Progress log
+
+Date-stamped each working session. See [`CHANGELOG.md`](../CHANGELOG.md) for what has shipped.
+
+### 2026-08-29
+- **Initial sweep** — all findings below recorded (D1–D3, B1–B8, P1–P21).
+- **Fixed:** `Input` was polling invalid GLFW key codes every frame (`301f865`).
+- **Landed alongside (not from this list):** GL/GLFW error diagnostics (`301f865`),
+  recovery-file auto-save (`58641e5`).
+- **Still open:** everything under Data loss / Bugs / Polish — none triaged into fixes yet.
+
+---
+
 ## Severity legend
 
 | Tag | Meaning |
