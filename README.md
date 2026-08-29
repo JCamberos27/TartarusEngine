@@ -82,6 +82,37 @@ the roadmap honest.
 - Audio playback and in-editor preview via miniaudio
 - Frame profiler, and a log that streams into the editor Console
 
+## Tools
+
+### TifSplitter
+
+A standalone command-line utility (built alongside the engine as its own executable) that turns
+high-bit-depth or multi-channel TIFFs into the 8-bit PNGs the engine's texture loader reads.
+Decoding goes through libtiff, so any source layout it supports works — 8/16/32-bit integer or
+float samples, tiled or stripped, palette, YCbCr, CMYK.
+
+| | |
+|---|---|
+| **Channel splitting** | Unpack a combined sheet into `_R` / `_G` / `_B` / `_A` PNGs — e.g. a Metallic / Roughness / AO / Smoothness texture authored as one RGBA image |
+| **Normal map conversion** | Flip green to convert a DirectX (+Y up) normal map to OpenGL (+Y down), which is what the engine's shaders expect |
+| **Heightmap normalization** | Stretch a 16-bit heightmap's actual value range to fill 0–255, so terrain data that only occupied a narrow slice of its range doesn't decode to flat gray |
+| **Tiling** | Split an oversized source into a grid of square PNGs, for terrain too large to load as a single texture |
+| **Batch mode** | Convert a whole folder (optionally recursive, mirroring its structure) or an explicit file list, across multiple threads |
+
+```bash
+# One file, splitting a packed PBR sheet into its channels
+TifSplitter -i packed_mrao.tif -o ./Output --split-channels
+
+# A whole tree, converting DirectX normal maps as it goes
+TifSplitter -d ./SourceTextures --recursive -o ./Output --flip-y
+
+# A heightmap too big for one texture, cut into 1024px tiles
+TifSplitter -i Terrain_Height.tif -o ./Output --tile-size 1024
+```
+
+Run it with no arguments for the full option list, or drag a `.tif` onto the executable to
+convert it in place.
+
 ## Building
 
 Requires **CMake 3.16+** and an **MSVC** toolset (Visual Studio 2022 or newer). GLFW, GLM,
