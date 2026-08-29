@@ -1,0 +1,171 @@
+{
+  "assetFolders": [
+    "Scenes"
+  ],
+  "assetMeta": [],
+  "boxes": [
+    {
+      "center": [
+        0.0,
+        -0.5,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.25,
+        0.2800000011920929,
+        0.25
+      ],
+      "destructible": false,
+      "id": 0,
+      "name": "Ground",
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        40.0,
+        1.0,
+        40.0
+      ]
+    },
+    {
+      "center": [
+        3.0,
+        1.0,
+        2.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.800000011920929,
+        0.30000001192092896,
+        0.20000000298023224
+      ],
+      "destructible": true,
+      "health": {
+        "current": 75.0,
+        "max": 100.0
+      },
+      "id": 1,
+      "name": "Crate",
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        25.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "tag": "Enemy"
+    },
+    {
+      "active": false,
+      "center": [
+        -4.0,
+        1.0,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.20000000298023224,
+        0.5,
+        0.800000011920929
+      ],
+      "destructible": true,
+      "id": 2,
+      "name": "HiddenCrate",
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "static": true
+    }
+  ],
+  "empties": [
+    {
+      "id": 3,
+      "light": {
+        "color": [
+          1.0,
+          0.8500000238418579,
+          0.6000000238418579
+        ],
+        "intensity": 8.0,
+        "kind": "point",
+        "range": 18.0,
+        "spotAngle": 35.0
+      },
+      "name": "Lamp",
+      "parentId": -1,
+      "position": [
+        0.0,
+        4.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 4,
+      "name": "ChildPivot",
+      "parentId": 3,
+      "position": [
+        0.0,
+        2.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        45.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "tag": "Rig"
+    }
+  ],
+  "libraryModels": [],
+  "libraryPrefabs": [],
+  "librarySounds": [],
+  "libraryTextures": [],
+  "models": [],
+  "skyHorizonColor": [
+    0.5299999713897705,
+    0.7200000286102295,
+    0.8600000143051147
+  ],
+  "skyZenithColor": [
+    0.20000000298023224,
+    0.4000000059604645,
+    0.75
+  ]
+}

@@ -5,7 +5,9 @@
 
 class World;
 
-// FPS player: capsule-ish AABB body, WASD + mouse look, gravity/jump, and a shoot raycast.
+// Basic first-person playtest controller: capsule-ish AABB body, WASD + mouse look,
+// gravity/jump. Just a way to walk around and check collision while testing a scene in Play
+// mode — no gameplay of its own.
 class Player {
 public:
     Camera Cam;
@@ -19,11 +21,10 @@ public:
     float Gravity = -18.0f;
     bool Grounded = false;
 
-    void Update(float dt, World& world, struct GLFWwindow* window);
-
-    // Fires a hitscan shot from the camera; marks the hit target (if any) dead.
-    // Returns true if something was hit.
-    bool Shoot(World& world, float maxDist = 100.0f);
+    // readInput == false keeps the body simulating (gravity, collision, resting on geometry)
+    // but ignores mouse-look / WASD / jump — used while the game runs inside the docked Game
+    // panel and the player hasn't clicked in to take control yet (Esc hands control back).
+    void Update(float dt, World& world, struct GLFWwindow* window, bool readInput = true);
 
 private:
     AABB BodyBounds() const;

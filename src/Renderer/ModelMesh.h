@@ -19,6 +19,10 @@ public:
     // the rest pose, which is what you want for static props anyway.
     const std::vector<glm::vec3>& LocalPositions() const { return m_LocalPositions; }
 
+    // Geometry counts for the editor's statistics overlay.
+    unsigned int IndexCount() const { return m_IndexCount; }
+    unsigned int VertexCount() const { return (unsigned int)m_LocalPositions.size(); }
+
 private:
     unsigned int m_VAO = 0, m_VBO = 0, m_EBO = 0;
     unsigned int m_IndexCount = 0;

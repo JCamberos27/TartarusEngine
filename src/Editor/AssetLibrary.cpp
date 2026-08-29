@@ -69,6 +69,8 @@ void AssetLibrary::RemoveModel(const std::shared_ptr<Model>& model) {
     m_ModelList.erase(std::remove(m_ModelList.begin(), m_ModelList.end(), model), m_ModelList.end());
     m_AssetFolder.erase(model->Path());
     m_DisplayNames.erase(model->Path());
+    m_ModelSettings.erase(model->Path());
+    m_Labels.erase(model->Path());
 }
 
 void AssetLibrary::RemoveTexture(const std::shared_ptr<Texture>& texture) {
@@ -77,12 +79,28 @@ void AssetLibrary::RemoveTexture(const std::shared_ptr<Texture>& texture) {
     m_TextureList.erase(std::remove(m_TextureList.begin(), m_TextureList.end(), texture), m_TextureList.end());
     m_AssetFolder.erase(texture->Path());
     m_DisplayNames.erase(texture->Path());
+    m_TextureSettings.erase(texture->Path());
+    m_Labels.erase(texture->Path());
 }
 
 void AssetLibrary::RemoveSound(const std::string& path) {
     m_Sounds.erase(std::remove(m_Sounds.begin(), m_Sounds.end(), path), m_Sounds.end());
     m_AssetFolder.erase(path);
     m_DisplayNames.erase(path);
+    m_Labels.erase(path);
+}
+
+void AssetLibrary::RegisterPrefab(const std::string& path) {
+    if (std::find(m_Prefabs.begin(), m_Prefabs.end(), path) == m_Prefabs.end()) {
+        m_Prefabs.push_back(path);
+    }
+}
+
+void AssetLibrary::RemovePrefab(const std::string& path) {
+    m_Prefabs.erase(std::remove(m_Prefabs.begin(), m_Prefabs.end(), path), m_Prefabs.end());
+    m_AssetFolder.erase(path);
+    m_DisplayNames.erase(path);
+    m_Labels.erase(path);
 }
 
 void AssetLibrary::SetAssetFolder(const std::string& assetKey, const std::string& folder) {
@@ -105,6 +123,58 @@ std::string AssetLibrary::DisplayName(const std::string& assetKey) const {
     if (it != m_DisplayNames.end()) return it->second;
     size_t slash = assetKey.find_last_of("/\\");
     return slash == std::string::npos ? assetKey : assetKey.substr(slash + 1);
+}
+
+void AssetLibrary::SetLabels(const std::string& assetKey, const std::set<std::string>& labels) {
+    if (labels.empty()) m_Labels.erase(assetKey);
+    else m_Labels[assetKey] = labels;
+}
+
+const std::set<std::string>& AssetLibrary::Labels(const std::string& assetKey) const {
+    static const std::set<std::string> kEmpty;
+    auto it = m_Labels.find(assetKey);
+    return it != m_Labels.end() ? it->second : kEmpty;
+}
+
+std::set<std::string> AssetLibrary::AllKnownLabels() const {
+    std::set<std::string> all;
+    for (const auto& [key, labels] : m_Labels) all.insert(labels.begin(), labels.end());
+    return all;
+}
+
+void AssetLibrary::PruneToKeepSet(const std::set<std::string>& modelPaths, const std::set<std::string>& texturePaths,
+    const std::set<std::string>& soundPaths, const std::set<std::string>& prefabPaths,
+    const std::set<std::string>& folderPaths) {
+    // Copy each list before iterating it - RemoveModel/etc. erase from the very vectors
+    // Models()/Textures()/... return, so iterating those directly while removing from them
+    // would be iterating a container out from under itself.
+    for (const auto& m : std::vector<std::shared_ptr<Model>>(m_ModelList)) {
+        if (!modelPaths.count(m->Path())) RemoveModel(m);
+    }
+    for (const auto& t : std::vector<std::shared_ptr<Texture>>(m_TextureList)) {
+        if (!texturePaths.count(t->Path())) RemoveTexture(t);
+    }
+    for (const auto& s : std::vector<std::string>(m_Sounds)) {
+        if (!soundPaths.count(s)) RemoveSound(s);
+    }
+    for (const auto& p : std::vector<std::string>(m_Prefabs)) {
+        if (!prefabPaths.count(p)) RemovePrefab(p);
+    }
+    for (const auto& f : std::vector<std::string>(m_Folders)) {
+        // A folder that still has something under it isn't in the keep-set by mistake - it
+        // just hasn't had its contents pruned yet on this pass (RemoveModel/etc. above already
+        // ran, so by this point anything real that shouldn't survive is already gone). Silently
+        // skipping instead of forcing it is the safe fallback if that assumption is ever wrong.
+        if (!folderPaths.count(f) && CanDeleteFolder(f)) DeleteFolder(f);
+    }
+}
+
+void AssetLibrary::ClearMetadataOnly() {
+    m_AssetFolder.clear();
+    m_DisplayNames.clear();
+    m_TextureSettings.clear();
+    m_ModelSettings.clear();
+    m_Labels.clear();
 }
 
 void AssetLibrary::CreateFolder(const std::string& folderPath) {
@@ -136,4 +206,63 @@ bool AssetLibrary::CanDeleteFolder(const std::string& folderPath) const {
 void AssetLibrary::DeleteFolder(const std::string& folderPath) {
     if (!CanDeleteFolder(folderPath)) return;
     m_Folders.erase(std::remove(m_Folders.begin(), m_Folders.end(), folderPath), m_Folders.end());
+}
+
+void AssetLibrary::DeleteFolderRecursive(const std::string& folderPath) {
+    auto isUnderFolder = [&](const std::string& assetPath) {
+        std::string f = AssetFolder(assetPath);
+        return f == folderPath || f.rfind(folderPath + "/", 0) == 0;
+    };
+
+    // Copy each list before removing from it - RemoveModel/etc. erase from the very vectors
+    // Models()/Textures()/... return.
+    for (const auto& m : std::vector<std::shared_ptr<Model>>(m_ModelList)) {
+        if (isUnderFolder(m->Path())) RemoveModel(m);
+    }
+    for (const auto& t : std::vector<std::shared_ptr<Texture>>(m_TextureList)) {
+        if (isUnderFolder(t->Path())) RemoveTexture(t);
+    }
+    for (const auto& s : std::vector<std::string>(m_Sounds)) {
+        if (isUnderFolder(s)) RemoveSound(s);
+    }
+    for (const auto& p : std::vector<std::string>(m_Prefabs)) {
+        if (isUnderFolder(p)) RemovePrefab(p);
+    }
+
+    // Every asset that belonged under this folder is gone now, so every subfolder (and the
+    // folder itself) is empty - just drop them from the folder list directly rather than going
+    // through CanDeleteFolder/DeleteFolder's "must be empty" guard one at a time.
+    m_Folders.erase(std::remove_if(m_Folders.begin(), m_Folders.end(), [&](const std::string& f) {
+        return f == folderPath || f.rfind(folderPath + "/", 0) == 0;
+    }), m_Folders.end());
+}
+
+TextureImportSettings AssetLibrary::GetTextureSettings(const std::string& path) const {
+    auto it = m_TextureSettings.find(path);
+    return it != m_TextureSettings.end() ? it->second : TextureImportSettings{};
+}
+
+void AssetLibrary::SetTextureSettings(const std::string& path, const TextureImportSettings& settings) {
+    m_TextureSettings[path] = settings;
+}
+
+ModelImportSettings AssetLibrary::GetModelSettings(const std::string& path) const {
+    auto it = m_ModelSettings.find(path);
+    return it != m_ModelSettings.end() ? it->second : ModelImportSettings{};
+}
+
+void AssetLibrary::SetModelSettings(const std::string& path, const ModelImportSettings& settings) {
+    m_ModelSettings[path] = settings;
+}
+
+bool AssetLibrary::ReimportTexture(const std::string& path) {
+    auto it = m_TextureCache.find(path);
+    if (it == m_TextureCache.end()) return false;
+    return it->second->Reimport(GetTextureSettings(path));
+}
+
+bool AssetLibrary::ReimportModel(const std::string& path) {
+    auto it = m_ModelCache.find(path);
+    if (it == m_ModelCache.end()) return false;
+    return it->second->Reimport(GetModelSettings(path));
 }

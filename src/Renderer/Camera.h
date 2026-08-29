@@ -1,5 +1,6 @@
 #pragma once
 #include <glm/glm.hpp>
+#include <limits>
 
 // First-person camera: position + yaw/pitch, derives view matrix and basis vectors.
 class Camera {
@@ -9,6 +10,14 @@ public:
     float Pitch = 0.0f;
     float Fov = 75.0f;
 
+    // Editor-only (the player camera never sets this): orthographic/parallel projection
+    // instead of perspective — used for the axis-aligned Front/Top/Right/... views and the
+    // isometric view. OrthoHalfHeight is the view volume's half-height in world units (the
+    // orthographic equivalent of Fov); scroll-wheel zoom adjusts it directly since dollying
+    // the camera position has no visual effect under an orthographic projection.
+    bool Orthographic = false;
+    float OrthoHalfHeight = 8.0f;
+
     glm::vec3 Front() const;
     glm::vec3 Right() const;
     glm::vec3 Up() const;
@@ -17,4 +26,18 @@ public:
 
     glm::mat4 ViewMatrix() const;
     glm::mat4 ProjectionMatrix(float aspect, float nearPlane = 0.05f, float farPlane = 500.0f) const;
+
+private:
+    // Yaw/Pitch are public and frequently set directly (mouse look, editor camera snapping,
+    // scene load) rather than through a setter, so the cache is validated by comparing against
+    // the angles it was last computed from rather than an explicit dirty flag. Front()/Right()/
+    // Up() are each called several times per frame (movement, view matrix, editor gizmos); this
+    // turns that into one trig+normalize pass per changed frame instead of one per call, with
+    // Right/Up no longer each recomputing Front from scratch on top of that.
+    mutable float m_CachedYaw = std::numeric_limits<float>::quiet_NaN();
+    mutable float m_CachedPitch = std::numeric_limits<float>::quiet_NaN();
+    mutable glm::vec3 m_CachedFront{0.0f, 0.0f, -1.0f};
+    mutable glm::vec3 m_CachedRight{1.0f, 0.0f, 0.0f};
+    mutable glm::vec3 m_CachedUp{0.0f, 1.0f, 0.0f};
+    void RefreshBasisIfNeeded() const;
 };

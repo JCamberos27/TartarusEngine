@@ -1,0 +1,4 @@
+// Embeds TifSplitter's icon into TifSplitter.exe itself (Windows reads resource ID 1's icon for
+// taskbar/Explorer/shortcut display) — same treatment as app_icon.rc for TartarusEngine, so the
+// desktop shortcut keeps showing this icon across rebuilds with no extra setup.
+IDI_ICON1 ICON "tifsplitter_icon.ico"

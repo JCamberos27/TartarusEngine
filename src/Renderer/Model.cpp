@@ -1,4 +1,5 @@
 #include "Model.h"
+#include "Log.h"
 #include "Texture.h"
 #include "Shader.h"
 #include "PrimitiveMeshes.h"
@@ -11,6 +12,7 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
+#include <filesystem>
 
 namespace {
 
@@ -33,7 +35,14 @@ std::string DirectoryOf(const std::string& path) {
 
 } // namespace
 
-Model::Model(const std::string& path) : m_Path(path), m_Directory(DirectoryOf(path)) {
+Model::Model(const std::string& path) : Model(path, ModelImportSettings{}) {}
+
+Model::Model(const std::string& path, const ModelImportSettings& settings)
+    : m_Path(path), m_Directory(DirectoryOf(path)) {
+    ImportFromFile(settings);
+}
+
+void Model::ImportFromFile(const ModelImportSettings& settings) {
     Assimp::Importer importer;
     // FBX files embed their own unit scale (commonly centimeters, sometimes meters or
     // inches) in the file's global settings. aiProcess_GlobalScale + this property tells
@@ -41,24 +50,57 @@ Model::Model(const std::string& path) : m_Path(path), m_Directory(DirectoryOf(pa
     // unit = 1cm no longer imports 100x too large without the artist doing anything special.
     // Files with no such metadata (most .obj) are unaffected — this can't invent scale that
     // was never recorded, so hand-authored/untagged assets may still need manual correction.
-    importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, 1.0f);
-    const aiScene* scene = importer.ReadFile(path,
-        aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs |
-        aiProcess_CalcTangentSpace | aiProcess_LimitBoneWeights | aiProcess_JoinIdenticalVertices |
-        aiProcess_GlobalScale);
+    // settings.GlobalScale multiplies on top of that derived correction (Import Settings'
+    // "Import Scale" knob), rather than replacing it.
+    importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, settings.GlobalScale);
+
+    unsigned int flags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GlobalScale;
+    if (settings.ImportNormals) flags |= aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace;
+    if (settings.ImportSkeleton) flags |= aiProcess_LimitBoneWeights;
+    if (settings.OptimizeGraph) flags |= aiProcess_JoinIdenticalVertices | aiProcess_OptimizeMeshes;
+
+    const aiScene* scene = importer.ReadFile(m_Path, flags);
 
     if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
-        std::cerr << "Assimp import failed for '" << path << "': " << importer.GetErrorString() << std::endl;
+        Log::Error("Model: import failed for '" + m_Path + "': " + importer.GetErrorString());
         return;
     }
+
+    // Reset every field an import populates, so re-running this on an already-imported Model
+    // (Reimport) starts from a clean slate instead of appending to/leaking the previous import's
+    // state. Deliberately NOT touched: m_Path, m_Directory, m_MaterialOverride (an independent
+    // editor-set look, not part of what "importing" produces).
+    m_Meshes.clear();
+    m_TextureCache.clear();
+    m_BoneInfoMap.clear();
+    m_BoneCounter = 0;
+    m_Animations.clear();
+    m_CurrentAnimation = -1;
+    m_CurrentTimeTicks = 0.0f;
+    m_BoundsMin = glm::vec3(1e30f);
+    m_BoundsMax = glm::vec3(-1e30f);
+    m_Settings = settings;
 
     m_GlobalInverseTransform = glm::inverse(AiToGlm(scene->mRootNode->mTransformation));
 
     ProcessNode(scene->mRootNode, scene, glm::mat4(1.0f));
     ReadHierarchy(m_RootNode, scene->mRootNode);
-    ReadAnimations(scene);
+    if (settings.ImportAnimations) ReadAnimations(scene);
 
     m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+}
+
+bool Model::Reimport(const ModelImportSettings& settings) {
+    std::error_code ec;
+    // primitive:// paths aren't real files - regenerating one from ImportFromFile would try
+    // (and fail) to open that synthetic path via Assimp, so reimporting a primitive is a no-op.
+    if (m_Path.rfind("primitive://", 0) == 0) return false;
+    if (!std::filesystem::exists(m_Path, ec) || ec) {
+        Log::Error("Model: cannot reimport '" + m_Path + "' - file is missing.");
+        return false;
+    }
+    ImportFromFile(settings);
+    return !m_Meshes.empty();
 }
 
 Model::~Model() = default;
@@ -111,7 +153,11 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     // Skinned meshes are positioned entirely by their bone matrices (computed by walking
     // the full node hierarchy in CalculateBoneTransform), so baking the mesh's own node
     // transform into the raw vertex data here would double-apply it once skinning runs.
-    bool skinned = mesh->mNumBones > 0;
+    // Gated on m_Settings.ImportSkeleton too: with skeleton import off, ExtractBoneWeights below
+    // never runs, so treating this as "skinned" would leave every vertex's bone weights at their
+    // default (unset) values instead of the identity-pose vertex position baked in here - the
+    // mesh would render collapsed to the origin rather than as a static copy of its bind pose.
+    bool skinned = m_Settings.ImportSkeleton && mesh->mNumBones > 0;
     glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(nodeTransform)));
 
     for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
@@ -154,12 +200,19 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
         }
     }
 
-    ExtractBoneWeights(vertices, mesh);
+    if (m_Settings.ImportSkeleton) ExtractBoneWeights(vertices, mesh);
 
     auto gpuMesh = std::make_unique<ModelMesh>(vertices, indices);
-    if (mesh->mMaterialIndex < scene->mNumMaterials) {
-        gpuMesh->Mat = ExtractMaterial(scene, mesh->mMaterialIndex);
+    if (m_Settings.MaterialImportMode == ModelImportSettings::MaterialMode::ImportEmbedded) {
+        if (mesh->mMaterialIndex < scene->mNumMaterials) {
+            gpuMesh->Mat = ExtractMaterial(scene, mesh->mMaterialIndex);
+        }
+    } else if (m_Settings.MaterialImportMode == ModelImportSettings::MaterialMode::CreateSynthetic) {
+        // Ignore the file's own materials/textures entirely - same neutral look CreatePrimitive
+        // assigns, left for the Inspector's PBR Material section to author from scratch.
+        gpuMesh->Mat.BaseColor = glm::vec3(0.75f);
     }
+    // MaterialMode::None: leave gpuMesh->Mat at Material{}'s bare defaults, untouched.
     return gpuMesh;
 }
 
@@ -173,6 +226,61 @@ std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath) {
     return tex;
 }
 
+std::string Model::ResolveTexturePath(const std::string& raw) const {
+    namespace fs = std::filesystem;
+
+    // Embedded texture ("*0", "*1", ...): the pixels live inside the model file, not on disk.
+    // The Texture class is disk-only, so there's nothing to resolve here — hand the marker back
+    // and let the caller log one clear line instead of a mangled path.
+    if (!raw.empty() && raw[0] == '*') return raw;
+    if (raw.empty()) return raw;
+
+    std::error_code ec;
+
+    // Unify separators so a Windows-authored "\" path (or a mixed "/"+"\" one) parses the same
+    // way regardless of the platform doing the import.
+    std::string norm = raw;
+    std::replace(norm.begin(), norm.end(), '\\', '/');
+
+    const fs::path p(norm);
+    const fs::path modelDir(m_Directory);
+
+    // 1. Exactly as given, when it's an absolute path that actually exists on THIS machine.
+    if (p.is_absolute()) {
+        if (fs::exists(p, ec)) return p.lexically_normal().string();
+    } else {
+        // 2. Relative to the model's own directory (the common, correct case), ".." collapsed.
+        const fs::path joined = (modelDir / p).lexically_normal();
+        if (fs::exists(joined, ec)) return joined.string();
+    }
+
+    const fs::path filename = p.filename();
+    if (!filename.empty()) {
+        // 3. Just the filename, sitting next to the model. Covers texture folders that got
+        //    flattened, and absolute paths from another machine that shipped a same-named file
+        //    with the model (e.g. the Chesterfield Sofa pack, whose materials point at the
+        //    original author's Dropbox).
+        const fs::path byName = modelDir / filename;
+        if (fs::exists(byName, ec)) return byName.string();
+
+        // 4. The filename one level down, through the model directory's immediate subfolders
+        //    ("textures/", "maps/", ...). Non-recursive and cheap; resolves most "textures are
+        //    in a sibling subfolder the baked path didn't name" cases.
+        if (fs::is_directory(modelDir, ec)) {
+            for (fs::directory_iterator it(modelDir, ec), end; it != end && !ec; it.increment(ec)) {
+                if (!it->is_directory(ec)) continue;
+                const fs::path candidate = it->path() / filename;
+                if (fs::exists(candidate, ec)) return candidate.string();
+            }
+        }
+    }
+
+    // Nothing matched — return a clean best-effort path so the load failure names something
+    // sensible rather than "modelDir + someone-else's-absolute-path".
+    if (p.is_absolute()) return p.lexically_normal().string();
+    return (modelDir / p).lexically_normal().string();
+}
+
 Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex) {
     Material mat;
     aiMaterial* material = scene->mMaterials[materialIndex];
@@ -181,7 +289,17 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
         if (material->GetTextureCount(type) == 0) return nullptr;
         aiString str;
         material->GetTexture(type, 0, &str);
-        return LoadCachedTexture(m_Directory + "/" + str.C_Str());
+        if (str.length == 0) return nullptr;
+
+        std::string resolved = ResolveTexturePath(str.C_Str());
+        if (!resolved.empty() && resolved[0] == '*') {
+            // Embedded texture — not supported by the disk-only Texture loader yet. Log once,
+            // clearly, instead of failing on a bogus "*0" filename.
+            Log::Warn("Model: '" + m_Path + "' uses an embedded texture (" + resolved +
+                      ") which isn't supported yet - that map slot will be blank.");
+            return nullptr;
+        }
+        return LoadCachedTexture(resolved);
     };
 
     mat.AlbedoMap = loadSlot(aiTextureType_DIFFUSE);
@@ -329,9 +447,7 @@ void Model::UploadBoneMatrices(Shader& shader) const {
     shader.SetInt("uUseSkinning", skinning ? 1 : 0);
     if (!skinning) return;
 
-    for (int i = 0; i < MAX_BONES; ++i) {
-        shader.SetMat4("uBones[" + std::to_string(i) + "]", m_FinalBoneMatrices[i]);
-    }
+    shader.SetMat4Array("uBones[0]", MAX_BONES, m_FinalBoneMatrices.data());
 }
 
 namespace {
@@ -372,22 +488,16 @@ void Model::Draw(Shader& shader) {
     }
 }
 
-bool Model::FindNearestVertexWorld(const glm::mat4& modelMatrix, const glm::vec3& worldQuery, float maxDist, glm::vec3& outWorldPos) const {
-    float bestDistSq = maxDist * maxDist;
-    bool found = false;
-    for (const auto& mesh : m_Meshes) {
-        for (const glm::vec3& local : mesh->LocalPositions()) {
-            glm::vec3 world = glm::vec3(modelMatrix * glm::vec4(local, 1.0f));
-            glm::vec3 diff = world - worldQuery;
-            float distSq = glm::dot(diff, diff);
-            if (distSq < bestDistSq) {
-                bestDistSq = distSq;
-                outWorldPos = world;
-                found = true;
-            }
-        }
-    }
-    return found;
+unsigned int Model::TriangleCount() const {
+    unsigned int total = 0;
+    for (const auto& mesh : m_Meshes) total += mesh->IndexCount() / 3;
+    return total;
+}
+
+unsigned int Model::VertexCount() const {
+    unsigned int total = 0;
+    for (const auto& mesh : m_Meshes) total += mesh->VertexCount();
+    return total;
 }
 
 float Model::LowestVertexWorldY(const glm::mat4& modelMatrix) const {
