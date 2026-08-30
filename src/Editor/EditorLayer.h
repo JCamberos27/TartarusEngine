@@ -522,6 +522,11 @@ private:
     bool m_OpenQuickAdd = false; // set by the Shift+A shortcut, consumed next frame in Draw()
     std::string m_LastSelectedName; // last valid scene selection, shown in the Inspector empty state
 
+    // Inspector Transform > Copy / Paste Values (#77) — stored as raw vectors to keep
+    // Components.h out of this header.
+    glm::vec3 m_TransformClipPos{0.0f}, m_TransformClipRot{0.0f}, m_TransformClipScale{1.0f};
+    bool m_HasTransformClipboard = false;
+
     // Inspector Tag field: dropdown of known tags with an inline "New tag..." entry mode.
     bool m_TagAdding = false;
     bool m_TagAddingJustOpened = false;
