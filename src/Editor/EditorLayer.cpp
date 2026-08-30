@@ -36,6 +36,7 @@
 #include <memory>
 #include <algorithm>
 #include <unordered_map>
+#include <set>
 #include <sstream>
 #include <cmath>
 #include <cctype>
@@ -3634,23 +3635,61 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     {
         auto* tag = registry.try_get<TagComponent>(entity);
         std::string tagText = tag ? tag->Tag : std::string("Untagged");
-        char tagBuf[64];
-        snprintf(tagBuf, sizeof(tagBuf), "%s", tagText.c_str());
 
-        PropertyLabel("Tag", "Free-text label for filtering/searching - e.g. search \"t:Enemy\" in the\nHierarchy to find every object tagged \"Enemy\".");
+        PropertyLabel("Tag", "Label for filtering/searching - e.g. search \"t:Enemy\" in the\nHierarchy to find every object tagged \"Enemy\".");
         // Leaves room for the Static checkbox after it instead of claiming the row's full width
         // the way a plain PropertyLabel field would — this row is the one place two fields
         // deliberately share a line, to keep the header block compact.
-        // checkbox widget width = box (FrameHeight) + inner gap + label text; plus the SameLine
-        // ItemSpacing before it and a few px so the label never kisses the panel's right edge.
         const ImGuiStyle& st = ImGui::GetStyle();
         float staticReserve = ImGui::GetFrameHeight() + st.ItemInnerSpacing.x + ImGui::CalcTextSize("Static").x
             + st.ItemSpacing.x + 6.0f;
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - staticReserve);
-        if (ImGui::InputText("##Tag", tagBuf, sizeof(tagBuf))) {
-            registry.emplace_or_replace<TagComponent>(entity, std::string(tagBuf));
+
+        auto setTag = [&](const std::string& t) {
+            PushUndo(world, "Edit Tag");
+            if (t.empty()) registry.remove<TagComponent>(entity);
+            else registry.emplace_or_replace<TagComponent>(entity, t);
+        };
+
+        if (m_TagAdding) {
+            // Inline "add a new tag" field, shown after picking "New tag..." in the combo.
+            if (ImGui::IsWindowAppearing() || m_TagAddingJustOpened) {
+                ImGui::SetKeyboardFocusHere();
+                m_TagAddingJustOpened = false;
+            }
+            bool commit = ImGui::InputText("##NewTag", m_TagAddBuf, sizeof(m_TagAddBuf),
+                ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+            if (commit) {
+                std::string t = SanitizeEntityName(m_TagAddBuf); // reuse the name scrubber - trims + strips control chars
+                if (!t.empty()) setTag(t);
+                m_TagAdding = false;
+                m_TagAddBuf[0] = '\0';
+            } else if (ImGui::IsItemDeactivated()) { // clicked away / Esc
+                m_TagAdding = false;
+                m_TagAddBuf[0] = '\0';
+            }
+        } else {
+            // Gather the distinct tags already in use, sorted, for the dropdown.
+            std::set<std::string> known;
+            for (auto e : registry.view<const TagComponent>()) {
+                const auto& tc = registry.get<TagComponent>(e);
+                if (!tc.Tag.empty()) known.insert(tc.Tag);
+            }
+            if (ImGui::BeginCombo("##Tag", tagText.c_str())) {
+                if (ImGui::Selectable("Untagged", !tag)) setTag("");
+                if (!known.empty()) ImGui::Separator();
+                for (const auto& t : known) {
+                    if (ImGui::Selectable(t.c_str(), tag && tag->Tag == t)) setTag(t);
+                }
+                ImGui::Separator();
+                if (ImGui::Selectable(ICON_FA_PLUS "  New tag...")) {
+                    m_TagAdding = true;
+                    m_TagAddingJustOpened = true;
+                    m_TagAddBuf[0] = '\0';
+                }
+                ImGui::EndCombo();
+            }
         }
-        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Tag");
         ImGui::SameLine();
         bool isStatic = registry.all_of<StaticTag>(entity);
         if (ImGui::Checkbox("Static", &isStatic)) {
