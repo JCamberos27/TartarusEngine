@@ -189,6 +189,16 @@ public:
     // this to show an unsaved-changes indicator in the window title.
     bool IsDirty() const { return m_Dirty; }
 
+    // "Save changes?" on-exit prompt (audit #56). main.cpp intercepts the window-close request
+    // when the scene is dirty, calls OpenExitPrompt(), and each frame polls TakeExitDecision():
+    //   SaveAndExit  - main saves, then exits
+    //   DiscardAndExit - main exits without saving
+    //   None + ExitPromptActive() false again - the user picked Cancel; stay open
+    enum class ExitDecision { None, SaveAndExit, DiscardAndExit };
+    void OpenExitPrompt() { m_ExitPromptPending = true; m_ExitDecision = ExitDecision::None; }
+    bool ExitPromptActive() const { return m_ExitPromptPending; }
+    ExitDecision TakeExitDecision() { ExitDecision d = m_ExitDecision; m_ExitDecision = ExitDecision::None; return d; }
+
     // The full selection (primary + any Ctrl+Click extras) as entity handles, for main.cpp's
     // outline-render pass — empty when nothing is selected or outside editor mode.
     std::vector<entt::entity> GetSelectedItems() const {
@@ -350,6 +360,10 @@ private:
     void ClearRecoverySnapshot(); // deletes the recovery file for m_CurrentScenePath if present; silent
     void DrawRecoveryPrompt(World& world, AssetLibrary& assets);
     bool m_RecoveryPromptPending = false;
+
+    void DrawExitPrompt();
+    bool m_ExitPromptPending = false;
+    ExitDecision m_ExitDecision = ExitDecision::None;
 
     // Save routing. m_CurrentScenePath is EMPTY for an untitled scene (File > New Scene): it has
     // no file to overwrite, so main.cpp skips the save-on-exit and DoSave() must prompt for a
