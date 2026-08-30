@@ -290,12 +290,12 @@ int main() {
         EditorLayer editor;
         editor.Init(window.Handle());
 
-        // One-shot rig dump: OS, CPU, RAM, GPU, driver, display, build. Mirrored to the Console
-        // on launch (audit #82) AND kept as a block for Preferences > About (each line goes to
-        // both via report()).
+        // One-shot rig dump: OS, CPU, RAM, GPU, driver, display, build. Collected into a block
+        // for Preferences > About — no longer spammed line-by-line to the Console (it lives in
+        // About now).
         std::vector<std::string> sysReport;
         {
-            auto report = [&](const std::string& s) { sysReport.push_back(s); Log::Info(s); };
+            auto report = [&](const std::string& s) { sysReport.push_back(s); };
             constexpr GLenum kGL_VENDOR = 0x1F00, kGL_RENDERER = 0x1F01, kGL_VERSION = 0x1F02,
                              kGL_GLSL_VERSION = 0x8B8C, kGL_MAX_TEXTURE_SIZE = 0x0D33,
                              kGL_MAX_SAMPLES = 0x8D57,
@@ -383,6 +383,7 @@ int main() {
             }
 
             report("Tartarus Engine - editor up.");
+            Log::Info("Tartarus Engine ready. System details: Preferences > About.");
 
             {
                 std::string line = "CPU: " + cpuName() + "  (";
