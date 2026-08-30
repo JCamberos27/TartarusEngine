@@ -77,6 +77,11 @@ drag-FBX-to-place), Environment colour live-update, Reset Layout + dock resize, 
 ## Progress log
 
 ### 2026-08-29
+### 2026-08-29 (session 2)
+- **Fixed & verified live:** B4 (#7), B5 (#8), D1 (#1), B2 (#5), B1 (#4).
+- **Fixed, builds clean, live-check pending:** B3 (#6).
+- Commits `6f7a02a`..`0-b3`. Not yet triaged: D2, D3, B6, B7, B8, all polish.
+
 - **Initial sweep** — 33 findings filed as issues [#1–#33](https://github.com/JCamberos27/TartarusEngine/issues).
 - **Fixed:** `Input` was polling invalid GLFW key codes every frame (`301f865`).
 - **Landed alongside (not from this list):** GL/GLFW error diagnostics (`301f865`),
