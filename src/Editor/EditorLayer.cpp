@@ -2121,6 +2121,19 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             ImGui::GetForegroundDrawList()->AddCircleFilled(screen, 3.0f, IM_COL32(255, 217, 77, 255));
         }
     }
+
+    // Quick-add popup — opened by Shift+A (shortcut handler above) or the Inspector empty
+    // state's "Add to Scene" button. Handled here, at the very end of the frame's UI, so it
+    // works no matter which earlier panel set the flag. Positioned at the cursor.
+    if (m_OpenQuickAdd) {
+        ImGui::OpenPopup("##QuickAdd");
+        m_OpenQuickAdd = false;
+    }
+    if (ImGui::BeginPopup("##QuickAdd")) {
+        ImGui::SeparatorText(ICON_FA_CUBES "  Add");
+        DrawAddEntityItems(world, assets, editorCamera);
+        ImGui::EndPopup();
+    }
 }
 
 void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
@@ -2921,18 +2934,6 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         m_LayoutLocked = !m_LayoutLocked;
     }
 
-    // Shift+A quick-add popup (opened by the shortcut handler in Draw()). Rendered here because
-    // this window is always present; ImGui positions the popup at the cursor.
-    if (m_OpenQuickAdd) {
-        ImGui::OpenPopup("##QuickAdd");
-        m_OpenQuickAdd = false;
-    }
-    if (ImGui::BeginPopup("##QuickAdd")) {
-        ImGui::SeparatorText(ICON_FA_CUBES "  Add");
-        DrawAddEntityItems(world, assets, editorCamera);
-        ImGui::EndPopup();
-    }
-
     ImGui::End();
 }
 
@@ -3549,8 +3550,34 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             ImGui::End();
             return;
         }
+        // Nothing selected anywhere — instead of a near-black void with one line of grey text,
+        // show a short scene summary and a way to add something (audit #72).
         ImGui::Spacing();
-        ImGui::TextDisabled("Select something in the Scene Hierarchy\nor Asset Browser");
+        ImGui::TextDisabled("Nothing selected");
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Select an object in the Scene Hierarchy, or an\nasset in the Asset Browser, to edit it here.");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        int boxes = 0, objects = 0, lights = 0, cameras = 0;
+        for (auto e : world.Registry.view<const NameComponent, const LevelGeometryTag>()) { (void)e; ++boxes; }
+        for (auto e : world.Registry.view<const NameComponent>(entt::exclude<LevelGeometryTag>)) { (void)e; ++objects; }
+        for (auto e : world.Registry.view<const LightComponent>()) { (void)e; ++lights; }
+        for (auto e : world.Registry.view<const CameraComponent>()) { (void)e; ++cameras; }
+        ImGui::TextDisabled("Scene");
+        ImGui::BulletText("%d object%s", objects, objects == 1 ? "" : "s");
+        ImGui::BulletText("%d level-geometry box%s", boxes, boxes == 1 ? "" : "es");
+        ImGui::BulletText("%d light%s, %d camera%s", lights, lights == 1 ? "" : "s",
+                          cameras, cameras == 1 ? "" : "s");
+
+        ImGui::Spacing();
+        ImGui::TextDisabled("Tip: press " ICON_FA_KEYBOARD " Shift+A in the viewport to add an object.");
+
+        if (!m_LastSelectedName.empty()) {
+            ImGui::Spacing();
+            ImGui::TextDisabled("Last selected: %s", m_LastSelectedName.c_str());
+        }
         ImGui::End();
         return;
     }
@@ -3561,6 +3588,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     auto& transform = registry.get<TransformComponent>(entity);
     auto& name = registry.get<NameComponent>(entity);
     bool activated = false;
+    m_LastSelectedName = name.Name; // remembered for the empty-state panel
 
     // Scopes every CollapsingHeader ID below to this entity — otherwise ImGui remembers a
     // header's open/closed state by its label text alone, so collapsing e.g. "Health" on one
