@@ -318,8 +318,9 @@ int main() {
             const std::string& scenePath = editor.CurrentScenePath();
             bool dirty = editor.IsDirty();
             if (!titleInitialized || scenePath != lastScenePath || dirty != lastDirty) {
-                std::string desiredTitle = "Tartarus Engine \xE2\x80\x94 " +
-                    std::filesystem::path(scenePath).filename().string() +
+                std::string sceneName = std::filesystem::path(scenePath).filename().string();
+                if (sceneName.empty()) sceneName = "Untitled"; // File > New Scene: no path yet
+                std::string desiredTitle = "Tartarus Engine \xE2\x80\x94 " + sceneName +
                     (dirty ? "*" : "");
                 window.SetTitle(desiredTitle);
                 lastScenePath = scenePath;
@@ -763,7 +764,12 @@ int main() {
         // Closing mid-play would otherwise auto-save the transient play state — revert to the
         // snapshot first, same as pressing Stop.
         if (playing) editor.OnExitPlayMode(world, assets);
-        SceneSerializer::Save(world, assets, editor.CurrentScenePath());
+        // An untitled scene (File > New Scene, never Saved As) has no path — do NOT write it
+        // anywhere on exit, or it would overwrite whatever scene.json last held. The user has to
+        // explicitly Save As to give it a home.
+        if (!editor.CurrentScenePath().empty()) {
+            SceneSerializer::Save(world, assets, editor.CurrentScenePath());
+        }
 
         editor.Shutdown();
         AudioEngine::Shutdown();
