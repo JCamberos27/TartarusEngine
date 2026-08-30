@@ -351,6 +351,14 @@ int main() {
                     }
                 }
                 prevEscape = escNow;
+
+                // Safety net: if the window loses focus while the game has grabbed the cursor
+                // (alt-tab, a notification steals focus), release it — otherwise you can come
+                // back to a captured view with a hidden cursor and no obvious way out.
+                if (gameInputEngaged && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED)) {
+                    gameInputEngaged = false;
+                    window.SetCursorLocked(false);
+                }
             }
 
             editor.BeginFrame();
