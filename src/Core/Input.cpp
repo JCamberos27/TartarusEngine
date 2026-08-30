@@ -25,6 +25,20 @@ void Input::Init(GLFWwindow* window) {
 }
 
 void Input::Update() {
+    // A GLFW_CURSOR mode change (lock <-> unlock, e.g. clicking into or Esc-ing out of a
+    // captured game view) makes the next reported cursor position jump: GLFW switches between
+    // real screen coords and virtualized deltas, and may recenter a frame late. Feeding that
+    // jump into mouse-look whips the camera. Zero the look delta for a couple of frames after
+    // any such transition; s_LastX/Y still track the real position so the frame after settles
+    // cleanly with no residual spike.
+    static int prevCursorMode = -1;
+    static int cursorSettleFrames = 0;
+    int curCursorMode = glfwGetInputMode(s_Window, GLFW_CURSOR);
+    if (curCursorMode != prevCursorMode) {
+        prevCursorMode = curCursorMode;
+        cursorSettleFrames = 2;
+    }
+
     double x, y;
     glfwGetCursorPos(s_Window, &x, &y);
     if (s_FirstMouse) {
@@ -36,6 +50,11 @@ void Input::Update() {
     s_DeltaY = s_LastY - y; // inverted: up is positive
     s_LastX = x;
     s_LastY = y;
+    if (cursorSettleFrames > 0) {
+        s_DeltaX = 0.0;
+        s_DeltaY = 0.0;
+        --cursorSettleFrames;
+    }
 
     s_ScrollY = s_ScrollAccum;
     s_ScrollAccum = 0.0;
