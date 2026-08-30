@@ -674,6 +674,7 @@ private:
     bool m_ConsoleShowWarning = true;
     bool m_ConsoleShowError = true;
     bool m_ConsoleAutoScroll = true;
+    bool m_ConsoleShowTimestamps = true;
     std::string m_ConsoleFilter;
     unsigned int m_ConsoleSeenRevision = 0; // only auto-scroll when Log actually gained an entry
 
