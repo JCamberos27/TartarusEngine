@@ -5033,6 +5033,12 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
         }
 
         if (clicked) {
+            // One selection context at a time: clicking an asset drops the scene-entity
+            // selection, so the Inspector shows this asset's Import Settings instead of staying
+            // on whatever object was selected (it otherwise always wins, so an asset click
+            // right after e.g. a Hierarchy rename appeared to do nothing).
+            ClearSelection();
+
             ImGuiIO& assetIO = ImGui::GetIO();
             if (assetIO.KeyShift && !m_SelectedAssetKey.empty()) {
                 // Range-select from the anchor to here, replacing the current selection —
