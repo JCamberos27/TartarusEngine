@@ -2978,18 +2978,29 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     };
 
     // Icon-only + a tooltip carrying the full name/shortcut — keeps this row compact instead
-    // of spelling every label out.
+    // of spelling every label out. An "active" button (selected tool / enabled toggle) gets an
+    // accent-filled body plus a bright underline bar so the current state reads at a glance
+    // instead of the near-invisible grey the default ButtonActive gave it (audit #64).
     auto iconButton = [](const char* icon, const char* tooltip, bool active = false) {
-        if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        const ImVec4 accent(1.00f, 0.55f, 0.10f, 1.0f);
+        if (active) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(accent.x, accent.y, accent.z, 0.30f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(accent.x, accent.y, accent.z, 0.42f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(accent.x, accent.y, accent.z, 0.55f));
+        }
         // ImGui::Button() uses its label text as its ID too — two buttons that ever show the
-        // same icon glyph (e.g. a state-dependent icon reusing another tool's icon) would
-        // collide. Scoping the ID to the tooltip instead — always unique, since every button
-        // here has a distinct description — makes that class of bug impossible regardless of
-        // which icon two buttons happen to display.
+        // same icon glyph would collide. Scope the ID to the (always-unique) tooltip instead.
         ImGui::PushID(tooltip);
         bool clicked = ImGui::Button(icon);
         ImGui::PopID();
-        if (active) ImGui::PopStyleColor();
+        if (active) {
+            ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+            float y = mx.y - 2.0f * ImGui::GetIO().DisplayFramebufferScale.y;
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImVec2(mn.x + 3.0f, y), ImVec2(mx.x - 3.0f, mx.y - 1.0f),
+                ImGui::ColorConvertFloat4ToU32(accent), 1.0f);
+            ImGui::PopStyleColor(3);
+        }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
         return clicked;
     };
@@ -3001,7 +3012,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     divider();
     if (iconButton(ICON_FA_UP_DOWN_LEFT_RIGHT, "Translate (W)", m_GizmoOp == GizmoOp::Translate)) m_GizmoOp = GizmoOp::Translate;
     ImGui::SameLine();
-    if (iconButton(ICON_FA_ROTATE, "Rotate (E)", m_GizmoOp == GizmoOp::Rotate)) m_GizmoOp = GizmoOp::Rotate;
+    if (iconButton(ICON_FA_ARROWS_SPIN, "Rotate (E)", m_GizmoOp == GizmoOp::Rotate)) m_GizmoOp = GizmoOp::Rotate;
     ImGui::SameLine();
     if (iconButton(ICON_FA_EXPAND, "Scale (R)", m_GizmoOp == GizmoOp::Scale)) m_GizmoOp = GizmoOp::Scale;
     ImGui::SameLine();
