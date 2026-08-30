@@ -535,6 +535,7 @@ std::string EditorLayer::RecoveryPathFor(const std::string& scenePath) {
 }
 
 void EditorLayer::WriteRecoverySnapshot(const World& world, const AssetLibrary& assets) {
+    if (m_CurrentScenePath.empty()) return; // untitled scene (New Scene) has no sidecar location
     const std::string path = RecoveryPathFor(m_CurrentScenePath);
     if (SceneSerializer::Save(world, assets, path)) {
         Log::Info("Auto-save: wrote recovery snapshot (unsaved changes are safe if the editor closes unexpectedly).");
@@ -542,8 +543,31 @@ void EditorLayer::WriteRecoverySnapshot(const World& world, const AssetLibrary& 
 }
 
 void EditorLayer::ClearRecoverySnapshot() {
+    if (m_CurrentScenePath.empty()) return;
     std::error_code ec;
     std::filesystem::remove(RecoveryPathFor(m_CurrentScenePath), ec); // absent file is not an error
+}
+
+bool EditorLayer::DoSaveAs(World& world, AssetLibrary& assets) {
+    std::string path = FileDialog::SaveFile("Scene Files\0*.json\0All Files\0*.*\0", "json", m_Window);
+    if (path.empty()) return false; // user cancelled
+    if (!SceneSerializer::Save(world, assets, path)) return false;
+    ClearRecoverySnapshot();       // clears the snapshot for the PREVIOUS path (still current here)
+    m_CurrentScenePath = path;
+    m_Dirty = false;
+    m_AutoSaveTimer = 0.0f;
+    return true;
+}
+
+void EditorLayer::DoSave(World& world, AssetLibrary& assets) {
+    if (m_CurrentScenePath.empty()) {   // untitled -> must choose a location
+        DoSaveAs(world, assets);
+        return;
+    }
+    SceneSerializer::Save(world, assets, m_CurrentScenePath);
+    m_Dirty = false;
+    m_AutoSaveTimer = 0.0f;
+    ClearRecoverySnapshot();            // the real file is now current — the snapshot is stale
 }
 
 void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
@@ -1530,10 +1554,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) Undo(world, assets);
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) Redo(world, assets);
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S)) {
-            SceneSerializer::Save(world, assets, m_CurrentScenePath);
-            m_Dirty = false;
-            m_AutoSaveTimer = 0.0f; // don't auto-save again just seconds after a manual save
-            ClearRecoverySnapshot(); // the real file is now current — the snapshot is stale
+            DoSave(world, assets); // prompts for a location if the scene is untitled (New Scene)
         }
         if (HasAnySelection() && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
             DeleteSelection(world);
@@ -2043,13 +2064,17 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu(ICON_FA_FOLDER_OPEN " File")) {
             if (ImGui::MenuItem(ICON_FA_FILE "  New Scene")) {
+                ClearRecoverySnapshot();     // drop the OUTGOING scene's snapshot before we let go of its path
                 world = World();
                 ClearSelection();
                 m_UndoStack.clear();
                 m_RedoStack.clear();
-                m_Dirty = false;
+                // Untitled: no file to silently overwrite on exit. Save / Ctrl+S now prompts for a
+                // location (DoSave -> DoSaveAs); main.cpp skips its save-on-exit while the path is
+                // empty. Marked dirty so the title shows * and a future close-prompt fires.
+                m_CurrentScenePath.clear();
+                m_Dirty = true;
                 m_AutoSaveTimer = 0.0f;
-                ClearRecoverySnapshot(); // starting fresh — a leftover snapshot must not prompt next launch
             }
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open...")) {
@@ -2057,24 +2082,17 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                     "Scene Files\0*.json\0All Files\0*.*\0", m_Window));
             }
             if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save")) {
-                SceneSerializer::Save(world, assets, m_CurrentScenePath);
-                m_Dirty = false;
-                m_AutoSaveTimer = 0.0f;
-                ClearRecoverySnapshot();
+                DoSave(world, assets);
             }
             if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As...")) {
-                std::string path = FileDialog::SaveFile(
-                    "Scene Files\0*.json\0All Files\0*.*\0", "json", m_Window);
-                if (!path.empty()) {
-                    SceneSerializer::Save(world, assets, path);
-                    ClearRecoverySnapshot();   // clears the snapshot for the PREVIOUS path (still current here)
-                    m_CurrentScenePath = path;
-                    m_Dirty = false;
-                    m_AutoSaveTimer = 0.0f;
-                }
+                DoSaveAs(world, assets);
             }
             ImGui::Separator();
-            ImGui::TextDisabled("Current: %s%s", std::filesystem::path(m_CurrentScenePath).filename().string().c_str(), m_Dirty ? " (unsaved)" : "");
+            {
+                std::string cur = std::filesystem::path(m_CurrentScenePath).filename().string();
+                if (cur.empty()) cur = "Untitled";
+                ImGui::TextDisabled("Current: %s%s", cur.c_str(), m_Dirty ? " (unsaved)" : "");
+            }
             ImGui::TextDisabled("Saves on exit; auto-loads on launch.\nAuto-save keeps a crash-recovery snapshot\nbetween manual saves.");
             if (EditorSettings::Get().AutoSaveEnabled) {
                 float remaining = std::max(0.0f, EditorSettings::Get().AutoSaveIntervalMinutes * 60.0f - m_AutoSaveTimer);

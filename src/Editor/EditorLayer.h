@@ -334,6 +334,13 @@ private:
     void DrawRecoveryPrompt(World& world, AssetLibrary& assets);
     bool m_RecoveryPromptPending = false;
 
+    // Save routing. m_CurrentScenePath is EMPTY for an untitled scene (File > New Scene): it has
+    // no file to overwrite, so main.cpp skips the save-on-exit and DoSave() must prompt for a
+    // location. DoSaveAs() always prompts. Both reset dirty/timer and clear the stale recovery
+    // snapshot on success.
+    void DoSave(World& world, AssetLibrary& assets);
+    bool DoSaveAs(World& world, AssetLibrary& assets);
+
     GizmoOp m_GizmoOp = GizmoOp::Translate;
     bool m_GizmoLocalSpace = false; // false = world-aligned handles, true = aligned to the object's own rotation
     float m_GizmoSize = 0.1f;       // ImGuizmo's clip-space size units; 0.1 is its own built-in default
