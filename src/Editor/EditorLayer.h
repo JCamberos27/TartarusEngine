@@ -429,6 +429,10 @@ private:
     // main.cpp owns exactly one AssetLibrary for the life of the program.
     AssetLibrary* m_AssetsPtr = nullptr;
 
+    // Also set at the top of every Draw() - lets deep Inspector code (e.g. the Camera section's
+    // "Align to View") reach the editor camera without threading it through every draw helper.
+    Camera* m_EditorCameraPtr = nullptr;
+
     void PushUndo(const World& world, const std::string& label = "Edit");
     void Undo(World& world, AssetLibrary& assets);
     void Redo(World& world, AssetLibrary& assets);
@@ -497,6 +501,9 @@ private:
     // holds what used to be a separate always-open side panel: environment, grid/snap tuning,
     // vertex snap tuning, controls reference).
     void DrawTopToolbar(World& world, AssetLibrary& assets, Camera& editorCamera);
+    // Add-menu contents, shared by the menu bar and the Shift+A quick-add popup.
+    void DrawAddEntityItems(World& world, AssetLibrary& assets, Camera& editorCamera);
+    bool m_OpenQuickAdd = false; // set by the Shift+A shortcut, consumed next frame in Draw()
     void DrawHierarchy(World& world, AssetLibrary& assets);
     void DrawInspector(World& world, AssetLibrary& assets, float dt);
     void DrawAssetBrowser(World& world, AssetLibrary& assets);

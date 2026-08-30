@@ -1617,6 +1617,7 @@ void EditorLayer::ApplyPendingViewportTabFocus() {
 void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera, float dt) {
     m_AssetsPtr = &assets; // see the member comment - lets PushUndo() snapshot AssetLibrary
                            // state without needing every one of its call sites to pass it in
+    m_EditorCameraPtr = &editorCamera;
 
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
 
@@ -1977,6 +1978,11 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             if (ImGui::IsKeyPressed(ImGuiKey_E)) m_GizmoOp = GizmoOp::Rotate;
             if (ImGui::IsKeyPressed(ImGuiKey_R)) m_GizmoOp = GizmoOp::Scale;
             if (ImGui::IsKeyPressed(ImGuiKey_T)) m_GizmoOp = GizmoOp::Rect;
+            // Shift+A quick-add (Blender's binding) — opens the Add menu as a popup at the
+            // cursor. Guarded with the others so fly-mode's A (strafe left) doesn't trigger it.
+            if (io.KeyShift && !io.KeyCtrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_A)) {
+                m_OpenQuickAdd = true;
+            }
         }
 
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) Undo(world, assets);
@@ -2002,6 +2008,21 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         }
         if (HasAnySelection() && !m_AssetBrowserFocused && ImGui::IsKeyPressed(ImGuiKey_F)) FocusOnSelection(world, editorCamera);
         if (HasAnySelection() && !m_AssetBrowserFocused && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) DuplicateSelection(world, assets);
+
+        // Ctrl+Shift+F — snap the selected Camera entity to the editor viewport (Unity's Align
+        // With View). Mirrors the Inspector's "Align to View" button.
+        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_F) &&
+                m_Selected != entt::null && world.Registry.valid(m_Selected) &&
+                world.Registry.all_of<CameraComponent>(m_Selected)) {
+            PushUndo(world, "Align Camera to View");
+            auto& t = world.Registry.get<TransformComponent>(m_Selected);
+            t.Position = editorCamera.Position;
+            glm::vec3 d = glm::normalize(editorCamera.Front());
+            t.RotationEuler = glm::vec3(
+                glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
+                glm::degrees(std::atan2(-d.x, -d.z)), 0.0f);
+            world.Registry.get<CameraComponent>(m_Selected).FovDegrees = editorCamera.Fov;
+        }
 
         // Unity Project-window-style Asset Browser shortcuts — only while it has focus, so they
         // don't collide with the scene-selection F/Ctrl+D bindings above. Tab (two-column focus
@@ -2512,6 +2533,51 @@ void EditorLayer::DrawHistoryPanel(World& world, AssetLibrary& assets) {
     ImGui::End();
 }
 
+// The Add-menu body, shared verbatim by the File-menu-bar "Add" menu and the Shift+A quick-add
+// popup (ImGui::MenuItem works inside BeginMenu and BeginPopup alike).
+void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera& editorCamera) {
+    auto spawnPrimitive = [&](const char* kind, const char* displayName) {
+        PushUndo(world, std::string("Create ") + displayName);
+        auto model = assets.CreatePrimitive(kind);
+        glm::vec3 position = editorCamera.Position + editorCamera.Front() * 5.0f;
+        entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), displayName);
+        SelectItem(e, false);
+        Log::Info(std::string("Added ") + displayName + ".");
+    };
+    if (ImGui::MenuItem(ICON_FA_CUBE "  Cube")) spawnPrimitive("cube", "Cube");
+    if (ImGui::MenuItem(ICON_FA_CIRCLE "  Sphere")) spawnPrimitive("sphere", "Sphere");
+    if (ImGui::MenuItem(ICON_FA_SHAPES "  Cylinder")) spawnPrimitive("cylinder", "Cylinder");
+    if (ImGui::MenuItem(ICON_FA_SHAPES "  Cone")) spawnPrimitive("cone", "Cone");
+    if (ImGui::MenuItem(ICON_FA_SHAPES "  Plane")) spawnPrimitive("plane", "Plane");
+
+    ImGui::SeparatorText("Objects");
+    if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Empty")) {
+        CreateEmptyAt(world, &editorCamera, "Empty", false);
+    }
+    if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) {
+        CreateEmptyAt(world, &editorCamera, "Point Light", true);
+    }
+    if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light")) {
+        entt::entity e = CreateEmptyAt(world, &editorCamera, "Spot Light", true);
+        world.Registry.get<LightComponent>(e).Kind = LightComponent::Type::Spot;
+    }
+    if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera")) {
+        entt::entity e = CreateEmptyAt(world, &editorCamera, "Camera", false);
+        world.Registry.emplace<CameraComponent>(e);
+        // Aim it back at the world origin so its Game-view preview isn't just black —
+        // ComposeTransform rotates Y(yaw) then X(pitch), local -Z is forward.
+        auto& t = world.Registry.get<TransformComponent>(e);
+        glm::vec3 d = t.Position;
+        if (glm::dot(d, d) > 1.0e-4f) {
+            d = glm::normalize(-d); // direction from the camera toward the origin
+            t.RotationEuler = glm::vec3(
+                glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
+                glm::degrees(std::atan2(-d.x, -d.z)),
+                0.0f);
+        }
+    }
+}
+
 void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& editorCamera) {
     // Always pinned regardless of Lock Layout — pos/size are forced every frame by the caller.
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar |
@@ -2577,47 +2643,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         }
 
         if (ImGui::BeginMenu(ICON_FA_CUBES " Add")) {
-            auto spawnPrimitive = [&](const char* kind, const char* displayName) {
-                PushUndo(world, std::string("Create ") + displayName);
-                auto model = assets.CreatePrimitive(kind);
-                glm::vec3 position = editorCamera.Position + editorCamera.Front() * 5.0f;
-                entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), displayName);
-                SelectItem(e, false);
-                Log::Info(std::string("Added ") + displayName + ".");
-            };
-            if (ImGui::MenuItem(ICON_FA_CUBE "  Cube")) spawnPrimitive("cube", "Cube");
-            if (ImGui::MenuItem(ICON_FA_CIRCLE "  Sphere")) spawnPrimitive("sphere", "Sphere");
-            if (ImGui::MenuItem(ICON_FA_SHAPES "  Cylinder")) spawnPrimitive("cylinder", "Cylinder");
-            if (ImGui::MenuItem(ICON_FA_SHAPES "  Cone")) spawnPrimitive("cone", "Cone");
-            if (ImGui::MenuItem(ICON_FA_SHAPES "  Plane")) spawnPrimitive("plane", "Plane");
-
-            ImGui::SeparatorText("Objects");
-            if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Empty")) {
-                CreateEmptyAt(world, &editorCamera, "Empty", false);
-            }
-            if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) {
-                CreateEmptyAt(world, &editorCamera, "Point Light", true);
-            }
-            if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light")) {
-                entt::entity e = CreateEmptyAt(world, &editorCamera, "Spot Light", true);
-                world.Registry.get<LightComponent>(e).Kind = LightComponent::Type::Spot;
-            }
-            if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera")) {
-                entt::entity e = CreateEmptyAt(world, &editorCamera, "Camera", false);
-                world.Registry.emplace<CameraComponent>(e);
-                // Aim it back at the world origin so its Game-view preview isn't just black —
-                // ComposeTransform rotates Y(yaw) then X(pitch), local -Z is forward.
-                auto& t = world.Registry.get<TransformComponent>(e);
-                glm::vec3 d = t.Position;
-                if (glm::dot(d, d) > 1.0e-4f) {
-                    d = glm::normalize(-d); // direction from the camera toward the origin
-                    t.RotationEuler = glm::vec3(
-                        glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
-                        glm::degrees(std::atan2(-d.x, -d.z)),
-                        0.0f);
-                }
-            }
-
+            DrawAddEntityItems(world, assets, editorCamera);
             ImGui::EndMenu();
         }
 
@@ -2787,6 +2813,8 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 "Copy / Cut / Paste: Ctrl+C / Ctrl+X / Ctrl+V\n"
                 "Rename selection: F2 (or double-click in Hierarchy)\n"
                 "Focus selection: F\n"
+                "Quick add (Add menu at cursor): Shift+A\n"
+                "Align selected Camera to view: Ctrl+Shift+F\n"
                 "Toggle fullscreen: F11\n"
                 "Return to game / editor: F1");
             ImGui::EndMenu();
@@ -2891,6 +2919,18 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     if (iconButton(unlocked ? ICON_FA_LOCK_OPEN : ICON_FA_LOCK,
             unlocked ? "Layout unlocked — click to lock panels in place" : "Layout locked — panels can still be resized; click to allow moving/rearranging too", unlocked)) {
         m_LayoutLocked = !m_LayoutLocked;
+    }
+
+    // Shift+A quick-add popup (opened by the shortcut handler in Draw()). Rendered here because
+    // this window is always present; ImGui positions the popup at the cursor.
+    if (m_OpenQuickAdd) {
+        ImGui::OpenPopup("##QuickAdd");
+        m_OpenQuickAdd = false;
+    }
+    if (ImGui::BeginPopup("##QuickAdd")) {
+        ImGui::SeparatorText(ICON_FA_CUBES "  Add");
+        DrawAddEntityItems(world, assets, editorCamera);
+        ImGui::EndPopup();
     }
 
     ImGui::End();
@@ -3772,6 +3812,26 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             ImGui::DragFloat("##Far", &cam->FarPlane, 1.0f, 1.0f, 100000.0f, "%.0f");
             if (ImGui::IsItemActivated()) PushUndo(world, "Edit Camera");
             if (cam->FarPlane <= cam->NearPlane) cam->FarPlane = cam->NearPlane + 1.0f;
+
+            ImGui::Spacing();
+            if (ImGui::Button(ICON_FA_VIDEO "  Align to View", ImVec2(-FLT_MIN, 0.0f)) && m_EditorCameraPtr) {
+                PushUndo(world, "Align Camera to View");
+                const Camera& ec = *m_EditorCameraPtr;
+                auto& t = registry.get<TransformComponent>(entity);
+                t.Position = ec.Position;
+                glm::vec3 d = glm::normalize(ec.Front());
+                // Match the Add > Camera convention: ComposeTransform yaws (Y) then pitches (X),
+                // local -Z is forward.
+                t.RotationEuler = glm::vec3(
+                    glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
+                    glm::degrees(std::atan2(-d.x, -d.z)),
+                    0.0f);
+                cam->FovDegrees = ec.Fov;
+            }
+            if (ImGui::IsItemHovered()) {
+                EditorUI::SetTooltip("Snap this camera to the editor viewport's current position, aim and FOV.");
+            }
+
             EndComponentSection();
         }
         if (removed) {
