@@ -370,6 +370,12 @@ private:
     bool m_ShowPreferences = false;
     int m_PrefsCategory = 0;
     std::string m_PrefsShortcutFilter;
+public:
+    // The launch-time system report (OS/CPU/RAM/GPU/GL/display/build), built by main.cpp.
+    // Shown in Preferences > About.
+    void SetSystemReport(const std::vector<std::string>& lines) { m_SystemReport = lines; }
+private:
+    std::vector<std::string> m_SystemReport;
 
     // Save routing. m_CurrentScenePath is EMPTY for an untitled scene (File > New Scene): it has
     // no file to overwrite, so main.cpp skips the save-on-exit and DoSave() must prompt for a

@@ -836,7 +836,7 @@ void EditorLayer::DrawExitPrompt() {
 void EditorLayer::DrawPreferencesWindow(World& world) {
     if (!m_ShowPreferences) return;
 
-    ImGui::SetNextWindowSize(ImVec2(560.0f * m_UIScale, 420.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(660.0f * m_UIScale, 440.0f * m_UIScale), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(ICON_FA_GEAR "  Preferences", &m_ShowPreferences)) { ImGui::End(); return; }
 
     static const char* kCats[] = {
@@ -934,8 +934,8 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             {"Zoom / dolly", "scroll wheel  ·  Alt+RMB drag"},
             {"Pan view", "middle-drag"},
             {"Orbit selection", "Alt + left-drag"},
-            {"View presets", "Numpad 1/3/7/0  (Ctrl = opposite side)"},
-            {"Toggle orthographic", "Numpad 5"},
+            {"View presets", "1 / 3 / 7 / 0  (or numpad; Ctrl = opposite side)"},
+            {"Toggle orthographic", "5  (or numpad 5)"},
             {"Frame selection", "F"},
             {"Quick add (Add menu at cursor)", "Shift+A"},
             {"Align selected Camera to view", "Ctrl+Shift+F"},
@@ -968,14 +968,30 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         break;
     }
 
-    case 6: // About
+    case 6: { // About
         ImGui::SeparatorText("About");
         ImGui::TextUnformatted("Tartarus Engine");
         ImGui::TextDisabled("Hand-rolled C++17 / OpenGL 3.3 editor.");
         ImGui::Spacing();
-        ImGui::Text("Build: %s", __DATE__);
-        ImGui::TextDisabled("Full GPU / driver / GL details are printed to the Console on launch.");
+        ImGui::SeparatorText("System");
+        if (m_SystemReport.empty()) {
+            ImGui::TextDisabled("(system report not available)");
+        } else {
+            ImGui::BeginChild("##sysreport", ImVec2(0, 220.0f * m_UIScale), ImGuiChildFlags_Borders,
+                ImGuiWindowFlags_HorizontalScrollbar);
+            for (const std::string& line : m_SystemReport) ImGui::TextUnformatted(line.c_str());
+            ImGui::EndChild();
+            if (ImGui::Button(ICON_FA_COPY "  Copy report")) {
+                std::string all;
+                for (const std::string& line : m_SystemReport) all += line + "\n";
+                ImGui::SetClipboardText(all.c_str());
+            }
+        }
+        ImGui::Spacing();
+        ImGui::SeparatorText("Built with");
+        ImGui::TextDisabled("Dear ImGui + ImGuizmo  ·  EnTT  ·  GLFW  ·  GLM  ·  Assimp  ·  nlohmann/json  ·  stb");
         break;
+    }
     }
 
     ImGui::EndChild();
@@ -2250,20 +2266,22 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         }
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V)) PasteClipboard(world, assets);
 
-        // View presets on the regular number row (Blender/Maya use the numpad for these, but
-        // plenty of keyboards — laptops especially — don't have one). Ctrl gets you the
-        // opposite side of each axis pair.
-        if (ImGui::IsKeyPressed(ImGuiKey_7)) {
+        // View presets — accepted on BOTH the number row and the numpad. Blender/Maya use the
+        // numpad; laptops often don't have one; so bind both. Ctrl gets the opposite side.
+        auto pressedDigit = [](ImGuiKey row, ImGuiKey pad) {
+            return ImGui::IsKeyPressed(row) || ImGui::IsKeyPressed(pad);
+        };
+        if (pressedDigit(ImGuiKey_7, ImGuiKey_Keypad7)) {
             SnapToView(world, editorCamera, -90.0f, io.KeyCtrl ? 89.9f : -89.9f, true);
         }
-        if (ImGui::IsKeyPressed(ImGuiKey_1)) {
+        if (pressedDigit(ImGuiKey_1, ImGuiKey_Keypad1)) {
             SnapToView(world, editorCamera, io.KeyCtrl ? 90.0f : -90.0f, 0.0f, true);
         }
-        if (ImGui::IsKeyPressed(ImGuiKey_3)) {
+        if (pressedDigit(ImGuiKey_3, ImGuiKey_Keypad3)) {
             SnapToView(world, editorCamera, io.KeyCtrl ? 0.0f : 180.0f, 0.0f, true);
         }
-        if (ImGui::IsKeyPressed(ImGuiKey_0)) SnapToView(world, editorCamera, -45.0f, -35.264f, true);
-        if (ImGui::IsKeyPressed(ImGuiKey_5)) ToggleOrthographic(world, editorCamera);
+        if (pressedDigit(ImGuiKey_0, ImGuiKey_Keypad0)) SnapToView(world, editorCamera, -45.0f, -35.264f, true);
+        if (pressedDigit(ImGuiKey_5, ImGuiKey_Keypad5)) ToggleOrthographic(world, editorCamera);
 
         // F2 renames whichever selection is "live": a scene object takes priority over an Asset
         // Browser entry, matching which panel the user most likely just clicked in.
@@ -2779,16 +2797,15 @@ void EditorLayer::DrawStatsOverlay(World& world, float dt) {
 void EditorLayer::DrawHistoryPanel(World& world, AssetLibrary& assets) {
     if (!m_ShowHistory) return;
 
-    ImGuiWindowFlags flags = m_LayoutLocked
-        ? (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)
-        : ImGuiWindowFlags_None;
-    // First-run placement: clear of the Stats overlay, which pins itself to the viewport's
-    // top-left corner — otherwise the two open stacked on top of each other (#17 P6). The user
-    // can still move or dock it anywhere afterward.
+    // Pinned to the viewport's bottom-right corner (opposite the Stats overlay's top-left).
+    // Fixed position, still resizable; not dockable, not persisted, so the pin always wins.
     const float hpad = 12.0f * m_UIScale;
-    ImGui::SetNextWindowPos(ImVec2(m_ViewportPos.x + hpad, m_ViewportPos.y + hpad + 250.0f * m_UIScale),
-                            ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(
+        ImVec2(m_ViewportPos.x + m_ViewportSize.x - hpad, m_ViewportPos.y + m_ViewportSize.y - hpad),
+        ImGuiCond_Always, ImVec2(1.0f, 1.0f));
     ImGui::SetNextWindowSize(ImVec2(260.0f * m_UIScale, 300.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking |
+                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse;
     if (!ImGui::Begin(ICON_FA_CLOCK_ROTATE_LEFT "  History", &m_ShowHistory, flags)) { ImGui::End(); return; }
 
     EditorUI::HelpMarker("Every recorded change, oldest to newest. Click any entry to jump\nstraight there - undoing or redoing everything in between automatically.");
@@ -2968,20 +2985,20 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             ImGui::MenuItem(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform Gizmo", nullptr, &m_ShowGizmos);
             ImGui::MenuItem(ICON_FA_CROSSHAIRS "  Frame on Select", nullptr, &m_FrameOnSelect);
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Move the camera to frame each object as you select it.");
-            if (ImGui::MenuItem(ICON_FA_BORDER_ALL "  Orthographic", "Numpad 5", editorCamera.Orthographic)) {
+            if (ImGui::MenuItem(ICON_FA_BORDER_ALL "  Orthographic", "5", editorCamera.Orthographic)) {
                 ToggleOrthographic(world, editorCamera);
             }
 
             ImGui::SeparatorText("Snap to view");
-            if (ImGui::MenuItem(ICON_FA_CUBES "  Iso", "Numpad 0")) {
+            if (ImGui::MenuItem(ICON_FA_CUBES "  Iso", "0")) {
                 SnapToView(world, editorCamera, -45.0f, -35.264f, true);
             }
-            if (ImGui::MenuItem("  Front", "Numpad 1")) SnapToView(world, editorCamera, -90.0f, 0.0f, true);
-            if (ImGui::MenuItem("  Back", "Ctrl+Numpad 1")) SnapToView(world, editorCamera, 90.0f, 0.0f, true);
-            if (ImGui::MenuItem("  Right", "Numpad 3")) SnapToView(world, editorCamera, 180.0f, 0.0f, true);
-            if (ImGui::MenuItem("  Left", "Ctrl+Numpad 3")) SnapToView(world, editorCamera, 0.0f, 0.0f, true);
-            if (ImGui::MenuItem("  Top", "Numpad 7")) SnapToView(world, editorCamera, -90.0f, -89.9f, true);
-            if (ImGui::MenuItem("  Bottom", "Ctrl+Numpad 7")) SnapToView(world, editorCamera, -90.0f, 89.9f, true);
+            if (ImGui::MenuItem("  Front", "1")) SnapToView(world, editorCamera, -90.0f, 0.0f, true);
+            if (ImGui::MenuItem("  Back", "Ctrl+1")) SnapToView(world, editorCamera, 90.0f, 0.0f, true);
+            if (ImGui::MenuItem("  Right", "3")) SnapToView(world, editorCamera, 180.0f, 0.0f, true);
+            if (ImGui::MenuItem("  Left", "Ctrl+3")) SnapToView(world, editorCamera, 0.0f, 0.0f, true);
+            if (ImGui::MenuItem("  Top", "7")) SnapToView(world, editorCamera, -90.0f, -89.9f, true);
+            if (ImGui::MenuItem("  Bottom", "Ctrl+7")) SnapToView(world, editorCamera, -90.0f, 89.9f, true);
             ImGui::EndMenu();
         }
 
@@ -3765,6 +3782,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         if (bCommitted) { CommitStagedUndo(world, "Batch Scale"); m_BatchNudgeScale = glm::vec3(1.0f); }
 
         ImGui::Spacing();
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
         float halfWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
         if (ImGui::Button(ICON_FA_CLONE "  Duplicate", ImVec2(halfWidth, 0.0f))) {
             DuplicateSelection(world, assets);
@@ -3780,6 +3798,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete every selected object (Del)");
             if (del) DeleteSelection(world);
         }
+        ImGui::PopStyleVar();
         ImGui::End();
         return;
     }
@@ -3967,6 +3986,38 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             "Size multiplier per axis - 1 is the original imported/created size.");
         if (rowActive) StageUndo(world);
         if (rowCommitted) CommitStagedUndo(world, "Scale");
+
+        // Compact Reset / Copy / Paste for this Transform's values (audit #77). Small buttons so
+        // they don't dominate the section.
+        ImGui::Spacing();
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
+        float tw = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2.0f) / 3.0f;
+        if (ImGui::Button(ICON_FA_ROTATE_LEFT "  Reset##xf", ImVec2(tw, 0.0f))) {
+            PushUndo(world, "Reset Transform");
+            transform.Position = glm::vec3(0.0f);
+            transform.RotationEuler = glm::vec3(0.0f);
+            transform.Scale = glm::vec3(1.0f);
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Position 0, rotation 0, scale 1");
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_COPY "  Copy##xf", ImVec2(tw, 0.0f))) {
+            m_TransformClipPos = transform.Position;
+            m_TransformClipRot = transform.RotationEuler;
+            m_TransformClipScale = transform.Scale;
+            m_HasTransformClipboard = true;
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Copy this Transform's position/rotation/scale");
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!m_HasTransformClipboard);
+        if (ImGui::Button(ICON_FA_PASTE "  Paste##xf", ImVec2(tw, 0.0f))) {
+            PushUndo(world, "Paste Transform");
+            transform.Position = m_TransformClipPos;
+            transform.RotationEuler = m_TransformClipRot;
+            transform.Scale = m_TransformClipScale;
+        }
+        if (ImGui::IsItemHovered() && m_HasTransformClipboard) EditorUI::SetTooltip("Paste the copied Transform values");
+        ImGui::EndDisabled();
+        ImGui::PopStyleVar();
 
         // Re-parenting lives in the Hierarchy panel (drag one row onto another), and Snap to
         // Ground lives in the toolbar now — neither duplicated here.
@@ -4183,38 +4234,9 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // Transform value ops (audit #77) — kept down here with the other whole-object actions.
-    {
-        auto& xf = registry.get<TransformComponent>(entity);
-        float t = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2.0f) / 3.0f;
-        if (ImGui::Button(ICON_FA_ROTATE_LEFT "  Reset Xform", ImVec2(t, 0.0f))) {
-            PushUndo(world, "Reset Transform");
-            xf.Position = glm::vec3(0.0f);
-            xf.RotationEuler = glm::vec3(0.0f);
-            xf.Scale = glm::vec3(1.0f);
-        }
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Reset this object's Transform: position 0, rotation 0, scale 1");
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_COPY "  Copy Xform", ImVec2(t, 0.0f))) {
-            m_TransformClipPos = xf.Position;
-            m_TransformClipRot = xf.RotationEuler;
-            m_TransformClipScale = xf.Scale;
-            m_HasTransformClipboard = true;
-        }
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Copy this Transform's position/rotation/scale");
-        ImGui::SameLine();
-        ImGui::BeginDisabled(!m_HasTransformClipboard);
-        if (ImGui::Button(ICON_FA_PASTE "  Paste Xform", ImVec2(t, 0.0f))) {
-            PushUndo(world, "Paste Transform");
-            xf.Position = m_TransformClipPos;
-            xf.RotationEuler = m_TransformClipRot;
-            xf.Scale = m_TransformClipScale;
-        }
-        if (ImGui::IsItemHovered() && m_HasTransformClipboard) EditorUI::SetTooltip("Paste the copied Transform values onto this object");
-        ImGui::EndDisabled();
-    }
+    // Compact footer actions — smaller than the default so this row doesn't feel heavy.
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
 
-    ImGui::Spacing();
     DrawAddComponentMenu(world, assets, entity);
 
     ImGui::Spacing();
@@ -4238,6 +4260,8 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete this object (Del)");
         if (del) DeleteSelection(world);
     }
+
+    ImGui::PopStyleVar();
 
     ImGui::PopID();
     ImGui::End();
