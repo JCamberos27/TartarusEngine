@@ -514,12 +514,13 @@ void EditorLayer::Init(GLFWwindow* window) {
     // Layout/spacing polish: a bit more breathing room and softened corners read as more
     // deliberate than ImGui's sharp-cornered, tightly-packed defaults.
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding = 5.0f;
-    style.ChildRounding = 4.0f;
-    style.FrameRounding = 3.0f;
-    style.GrabRounding = 3.0f;
-    style.ScrollbarRounding = 4.0f;
-    style.PopupRounding = 4.0f;
+    style.WindowRounding = 8.0f;
+    style.ChildRounding = 6.0f;
+    style.FrameRounding = 6.0f;   // buttons, inputs, combos, checkboxes — the most visible one
+    style.GrabRounding = 6.0f;
+    style.ScrollbarRounding = 8.0f;
+    style.PopupRounding = 8.0f;   // menus and tooltips
+    style.TabRounding = 6.0f;
     style.WindowPadding = ImVec2(10.0f, 10.0f);
     style.FramePadding = ImVec2(6.0f, 4.0f);
     style.ItemSpacing = ImVec2(8.0f, 6.0f);
@@ -572,6 +573,22 @@ void EditorLayer::Init(GLFWwindow* window) {
     // content scale, so spacing keeps its proportions instead of staying pinned to 96-DPI pixel
     // counts while the fonts below grow to match.
     style.ScaleAllSizes(m_UIScale);
+
+    // ImGuizmo palette. Its stock plane-drag squares are the R/G/B axis colours at 38% alpha,
+    // so PLANE_X reads as an off-palette pink/salmon over the dark viewport (audit #84). Give
+    // all three plane handles one neutral amber instead, brighten the axis lines slightly so
+    // they don't muddy against dark geometry, and point SELECTION at the editor accent so a
+    // hovered handle matches the rest of the UI.
+    {
+        ImGuizmo::Style& gz = ImGuizmo::GetStyle();
+        gz.Colors[ImGuizmo::DIRECTION_X] = ImVec4(0.86f, 0.24f, 0.28f, 1.00f);
+        gz.Colors[ImGuizmo::DIRECTION_Y] = ImVec4(0.35f, 0.78f, 0.30f, 1.00f);
+        gz.Colors[ImGuizmo::DIRECTION_Z] = ImVec4(0.28f, 0.52f, 0.92f, 1.00f);
+        gz.Colors[ImGuizmo::PLANE_X] = ImVec4(0.95f, 0.78f, 0.25f, 0.42f);
+        gz.Colors[ImGuizmo::PLANE_Y] = ImVec4(0.95f, 0.78f, 0.25f, 0.42f);
+        gz.Colors[ImGuizmo::PLANE_Z] = ImVec4(0.95f, 0.78f, 0.25f, 0.42f);
+        gz.Colors[ImGuizmo::SELECTION] = ImVec4(1.00f, 0.55f, 0.10f, 0.60f);
+    }
 
     // UI text font. Loaded straight from the Windows system font directory rather than
     // bundled into the repo (Segoe UI is Microsoft-licensed, not ours to redistribute).
@@ -1195,6 +1212,15 @@ bool EditorLayer::GetSelectionCenter(World& world, glm::vec3& outCenter) const {
     return true;
 }
 
+void EditorLayer::FrameSceneBounds(World& world, Camera& editorCamera) {
+    glm::vec3 mn, mx;
+    if (!ComputeSceneBounds(world, mn, mx)) return;
+    glm::vec3 center = (mn + mx) * 0.5f;
+    float radius = std::max(glm::length(mx - mn) * 0.5f, 0.5f);
+    float distance = (radius / std::sin(glm::radians(editorCamera.Fov) * 0.5f)) * 1.35f;
+    editorCamera.Position = center - editorCamera.Front() * distance;
+}
+
 void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
     glm::vec3 boundsMin, boundsMax;
     if (!ComputeSelectionBounds(world, boundsMin, boundsMax)) return;
@@ -1720,6 +1746,11 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_EditorDockspaceId = dockspaceId;
     bool rebuildLayout = m_ResetLayoutRequested;
     m_ResetLayoutRequested = false;
+    // Reset Layout also un-hides any panel the user closed — otherwise "restore the default
+    // layout" would leave a panel missing with no obvious way to get it back.
+    if (rebuildLayout) {
+        m_ShowHierarchy = m_ShowInspector = m_ShowAssetBrowser = true;
+    }
     // One-time migration: builds before this seeded the Scene/Game viewport as the dockspace's
     // "central node". ImGui's DockNodeTreeUpdatePosSize() then hands every panel sharing a split
     // with the central node a FIXED pixel size on window resize and lets the viewport absorb all
@@ -1841,9 +1872,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
     if (m_ShowEngineMark) DrawEngineMark(dt);
 
-    DrawHierarchy(world, assets);
-    DrawInspector(world, assets, dt);
-    DrawAssetBrowser(world, assets);
+    if (m_ShowHierarchy) DrawHierarchy(world, assets);
+    if (m_ShowInspector) DrawInspector(world, assets, dt);
+    if (m_ShowAssetBrowser) DrawAssetBrowser(world, assets);
     DrawConsole();
     DrawStatsOverlay(world, dt);
     DrawHistoryPanel(world, assets);
@@ -1905,7 +1936,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
     if (!vHeld) {
         HandleViewportPicking(world, editorCamera);
-        DrawGizmo(world, editorCamera);
+        if (m_ShowGizmos) DrawGizmo(world, editorCamera);
     }
 
     // Anchored to the actual viewport's top-center (a pivot, not a fixed-width guess) so it
@@ -2514,34 +2545,33 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 ImGui::TextDisabled("Current: %s%s", cur.c_str(), m_Dirty ? " (unsaved)" : "");
             }
             if (EditorSettings::Get().AutoSaveEnabled) {
-                ImGui::TextDisabled("Saves on exit; auto-loads on launch.\nAuto-save keeps a crash-recovery snapshot\nbetween manual saves.");
                 float remaining = std::max(0.0f, EditorSettings::Get().AutoSaveIntervalMinutes * 60.0f - m_AutoSaveTimer);
                 ImGui::TextDisabled("Next auto-save in %.0fs%s", remaining, m_Dirty ? "" : " (nothing to save)");
-            } else {
-                // Don't imply crash-recovery protection that's switched off (#47 P30).
-                ImGui::TextDisabled("Saves on exit; auto-loads on launch.\nAuto-save is off - enable it in Settings > Auto-Save\nto keep a crash-recovery snapshot between saves.");
             }
-            ImGui::EndMenu();
-        }
 
-        if (ImGui::BeginMenu(ICON_FA_FILE_IMPORT " Import")) {
-            if (ImGui::MenuItem(ICON_FA_CUBE "  Model  (FBX / OBJ / glTF)...")) {
-                std::string path = FileDialog::OpenFile(
-                    "3D Models\0*.fbx;*.obj;*.gltf;*.glb\0All Files\0*.*\0", m_Window);
-                // Imports into the library only, same as Texture/Sound import right below -
-                // doesn't place an instance in the scene. Drag it from the Asset Browser into
-                // the Viewport when you actually want one placed.
-                if (!path.empty()) assets.LoadModel(path);
-            }
-            if (ImGui::MenuItem(ICON_FA_IMAGE "  Texture  (PNG / JPG / TGA)...")) {
-                std::string path = FileDialog::OpenFile(
-                    "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
-                if (!path.empty()) assets.LoadTexture(path);
-            }
-            if (ImGui::MenuItem(ICON_FA_MUSIC "  Sound  (WAV / MP3 / OGG)...")) {
-                std::string path = FileDialog::OpenFile(
-                    "Audio\0*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0", m_Window);
-                if (!path.empty() && AudioEngine::Load(path)) assets.RegisterSound(path);
+            ImGui::Separator();
+            if (ImGui::BeginMenu(ICON_FA_FILE_IMPORT "  Import")) {
+                if (ImGui::MenuItem(ICON_FA_CUBE "  Model...")) {
+                    std::string path = FileDialog::OpenFile(
+                        "3D Models\0*.fbx;*.obj;*.gltf;*.glb\0All Files\0*.*\0", m_Window);
+                    // Imports into the library only — doesn't place an instance in the scene.
+                    // Drag it from the Asset Browser into the Viewport to place one.
+                    if (!path.empty()) assets.LoadModel(path);
+                }
+                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("FBX / OBJ / glTF - added to the asset library");
+                if (ImGui::MenuItem(ICON_FA_IMAGE "  Texture...")) {
+                    std::string path = FileDialog::OpenFile(
+                        "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
+                    if (!path.empty()) assets.LoadTexture(path);
+                }
+                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("PNG / JPG / TGA / BMP");
+                if (ImGui::MenuItem(ICON_FA_MUSIC "  Sound...")) {
+                    std::string path = FileDialog::OpenFile(
+                        "Audio\0*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0", m_Window);
+                    if (!path.empty() && AudioEngine::Load(path)) assets.RegisterSound(path);
+                }
+                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("WAV / MP3 / OGG / FLAC");
+                ImGui::EndMenu();
             }
             ImGui::EndMenu();
         }
@@ -2588,41 +2618,64 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 }
             }
 
-            ImGui::Separator();
-            ImGui::TextDisabled("Primitives carry real mesh data — materials,\nvertex snapping, gizmos. Add a Box Collider\nin the Inspector to make one solid.");
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu(ICON_FA_CAMERA " View")) {
-            if (ImGui::MenuItem(ICON_FA_BORDER_ALL "  Orthographic", "5", editorCamera.Orthographic)) {
+            if (ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS_PLUS "  Frame Selected", "F", false, HasAnySelection())) {
+                FocusOnSelection(world, editorCamera);
+            }
+            if (ImGui::MenuItem(ICON_FA_EXPAND "  Frame All")) {
+                glm::vec3 mn, mx;
+                if (ComputeSceneBounds(world, mn, mx)) {
+                    glm::vec3 c = (mn + mx) * 0.5f;
+                    float radius = std::max(glm::length(mx - mn) * 0.5f, 0.5f);
+                    float dist = (radius / std::sin(glm::radians(editorCamera.Fov) * 0.5f)) * 1.35f;
+                    editorCamera.Position = c - editorCamera.Front() * dist;
+                }
+            }
+
+            ImGui::SeparatorText("Shading");
+            if (ImGui::MenuItem("  Shaded", nullptr, m_ShadingMode == ShadingMode::Shaded))
+                m_ShadingMode = ShadingMode::Shaded;
+            if (ImGui::MenuItem("  Wireframe", nullptr, m_ShadingMode == ShadingMode::Wireframe))
+                m_ShadingMode = ShadingMode::Wireframe;
+            if (ImGui::MenuItem("  Unlit", nullptr, m_ShadingMode == ShadingMode::Unlit))
+                m_ShadingMode = ShadingMode::Unlit;
+
+            ImGui::SeparatorText("Overlays");
+            ImGui::MenuItem(ICON_FA_TABLE_CELLS "  Grid", nullptr, &m_ShowGrid);
+            ImGui::MenuItem(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform Gizmo", nullptr, &m_ShowGizmos);
+            if (ImGui::MenuItem(ICON_FA_BORDER_ALL "  Orthographic", "Numpad 5", editorCamera.Orthographic)) {
                 ToggleOrthographic(world, editorCamera);
             }
-            ImGui::Separator();
-            ImGui::TextDisabled("Snap to view");
-            if (ImGui::MenuItem(ICON_FA_CUBES "  Iso", "0")) {
+
+            ImGui::SeparatorText("Snap to view");
+            if (ImGui::MenuItem(ICON_FA_CUBES "  Iso", "Numpad 0")) {
                 SnapToView(world, editorCamera, -45.0f, -35.264f, true);
             }
-            if (ImGui::MenuItem("  Front", "1")) SnapToView(world, editorCamera, -90.0f, 0.0f, true);
-            if (ImGui::MenuItem("  Back", "Ctrl+1")) SnapToView(world, editorCamera, 90.0f, 0.0f, true);
-            if (ImGui::MenuItem("  Right", "3")) SnapToView(world, editorCamera, 180.0f, 0.0f, true);
-            if (ImGui::MenuItem("  Left", "Ctrl+3")) SnapToView(world, editorCamera, 0.0f, 0.0f, true);
-            if (ImGui::MenuItem("  Top", "7")) SnapToView(world, editorCamera, -90.0f, -89.9f, true);
-            if (ImGui::MenuItem("  Bottom", "Ctrl+7")) SnapToView(world, editorCamera, -90.0f, 89.9f, true);
-            ImGui::Separator();
-            ImGui::TextDisabled(
-                "Views snap around the current selection\n"
-                "if there is one, else whatever the camera\n"
-                "is currently looking at.");
+            if (ImGui::MenuItem("  Front", "Numpad 1")) SnapToView(world, editorCamera, -90.0f, 0.0f, true);
+            if (ImGui::MenuItem("  Back", "Ctrl+Numpad 1")) SnapToView(world, editorCamera, 90.0f, 0.0f, true);
+            if (ImGui::MenuItem("  Right", "Numpad 3")) SnapToView(world, editorCamera, 180.0f, 0.0f, true);
+            if (ImGui::MenuItem("  Left", "Ctrl+Numpad 3")) SnapToView(world, editorCamera, 0.0f, 0.0f, true);
+            if (ImGui::MenuItem("  Top", "Numpad 7")) SnapToView(world, editorCamera, -90.0f, -89.9f, true);
+            if (ImGui::MenuItem("  Bottom", "Ctrl+Numpad 7")) SnapToView(world, editorCamera, -90.0f, 89.9f, true);
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu(ICON_FA_TABLE_COLUMNS " Window")) {
+            ImGui::MenuItem(ICON_FA_SITEMAP "  Scene Hierarchy", nullptr, &m_ShowHierarchy);
+            ImGui::MenuItem(ICON_FA_SLIDERS "  Inspector", nullptr, &m_ShowInspector);
+            ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Asset Browser", nullptr, &m_ShowAssetBrowser);
+            ImGui::Separator();
             ImGui::MenuItem(ICON_FA_TERMINAL "  Console", nullptr, &m_ShowConsole);
             ImGui::MenuItem(ICON_FA_CHART_SIMPLE "  Statistics", nullptr, &m_ShowStats);
             ImGui::MenuItem(ICON_FA_CLOCK_ROTATE_LEFT "  History", nullptr, &m_ShowHistory);
             ImGui::MenuItem(ICON_FA_CERTIFICATE "  Engine Mark", nullptr, &m_ShowEngineMark);
             ImGui::Separator();
-            ImGui::TextDisabled("Scene Hierarchy, Inspector and Asset\nBrowser are always open — use Settings >\nReset Layout to restore their positions.");
+            if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
+                m_ResetLayoutRequested = true;
+            }
             ImGui::EndMenu();
         }
 
@@ -2669,14 +2722,6 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 if (!prefs.AutoSaveEnabled) ImGui::EndDisabled();
             }
 
-            ImGui::SeparatorText(ICON_FA_TABLE_COLUMNS "  Layout");
-            if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
-                m_ResetLayoutRequested = true;
-            }
-            if (ImGui::IsItemHovered()) {
-                EditorUI::SetTooltip("Puts Scene Hierarchy / Inspector / Asset Browser back\nin their default docked positions and sizes.");
-            }
-
             ImGui::SeparatorText(ICON_FA_SUN "  Environment");
             ImGui::ColorEdit3("Horizon Color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
             if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
@@ -2700,7 +2745,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             ImGui::DragFloat("Scale Snap", &m_SnapScale, 0.01f, 0.01f, 5.0f, "%.2f");
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Amount the Scale gizmo jumps per step when grid snap is on");
             ImGui::SetNextItemWidth(140.0f);
-            ImGui::SliderFloat("Gizmo Size", &m_GizmoSize, 0.03f, 0.3f, "%.2f");
+            ImGui::SliderFloat("Gizmo Size", &m_GizmoSize, 0.05f, 0.40f, "%.2f");
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("On-screen size of the viewport transform gizmo");
 
             ImGui::SeparatorText(ICON_FA_CIRCLE_DOT "  Vertex Snap");
@@ -2749,7 +2794,15 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         ImGui::EndMenuBar();
     }
 
-    auto divider = []() { ImGui::SameLine(); ImGui::TextDisabled("|"); ImGui::SameLine(); };
+    // A spaced group separator — real breathing room on both sides of the rule so the toolbar
+    // reads as distinct clusters (history · tools · grid/snap · view · panels · lock) instead of
+    // one dense left-jammed run of identical squares (audit #66).
+    auto divider = []() {
+        const float pad = ImGui::GetStyle().ItemSpacing.x * 1.5f;
+        ImGui::SameLine(0.0f, pad);
+        ImGui::TextDisabled("|");
+        ImGui::SameLine(0.0f, pad);
+    };
 
     // Icon-only + a tooltip carrying the full name/shortcut — keeps this row compact instead
     // of spelling every label out.
@@ -2825,7 +2878,8 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 : (m_ShadingMode == ShadingMode::Wireframe ? ShadingMode::Unlit : ShadingMode::Shaded);
         }
     }
-    ImGui::SameLine();
+
+    divider();
     if (iconButton(ICON_FA_CHART_SIMPLE, "Toggle Statistics overlay", m_ShowStats)) m_ShowStats = !m_ShowStats;
     ImGui::SameLine();
     if (iconButton(ICON_FA_TERMINAL, "Toggle Console", m_ShowConsole)) m_ShowConsole = !m_ShowConsole;
@@ -2839,7 +2893,6 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         m_LayoutLocked = !m_LayoutLocked;
     }
 
-
     ImGui::End();
 }
 
@@ -2849,7 +2902,7 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
     ImGuiWindowFlags flags = m_LayoutLocked
         ? (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)
         : ImGuiWindowFlags_None;
-    if (!ImGui::Begin("Scene Hierarchy", nullptr, flags)) { ImGui::End(); return; }
+    if (!ImGui::Begin("Scene Hierarchy", &m_ShowHierarchy, flags)) { ImGui::End(); return; }
 
     // Search box. A bare string matches names; the "t:" prefix matches TagComponent instead,
     // the same shorthand Unity's Hierarchy search uses.
@@ -2871,33 +2924,22 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
     int boxCount = 0, boxMatches = 0;
     for (auto e : boxView) { boxCount++; if (MatchesHierarchyFilter(world, e)) boxMatches++; }
 
-    char geoHeader[64];
-    if (filtering)
-        snprintf(geoHeader, sizeof(geoHeader), "Level Geometry (%d / %d)###LevelGeo", boxMatches, boxCount);
-    else
-        snprintf(geoHeader, sizeof(geoHeader), "Level Geometry (%d)###LevelGeo", boxCount);
-    if (ImGui::TreeNodeEx(geoHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Solid boxes with collision built in - always block movement.");
-        for (auto entity : ViewInCreationOrder(world.Registry, boxView)) {
-            if (!MatchesHierarchyFilter(world, entity)) continue;
-            DrawHierarchyNode(world, assets, entity, /*isLevelGeometry=*/true);
-        }
-        ImGui::TreePop();
-    }
-
     auto objectView = world.Registry.view<const NameComponent>(entt::exclude<LevelGeometryTag>);
     int objectCount = 0, objectMatches = 0;
     for (auto e : objectView) { objectCount++; if (MatchesHierarchyFilter(world, e)) objectMatches++; }
 
-    char objectHeader[64];
-    if (filtering)
-        snprintf(objectHeader, sizeof(objectHeader), "Objects (%d / %d)###Objects", objectMatches, objectCount);
-    else
-        snprintf(objectHeader, sizeof(objectHeader), "Objects (%d)###Objects", objectCount);
-    if (ImGui::TreeNodeEx(objectHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
-        if (ImGui::IsItemHovered()) {
-            EditorUI::SetTooltip("Models, lights, and empties. Drag one row onto another to parent it;\ndrag onto empty space below to un-parent.");
+    // Only split into "Level Geometry" / "Objects" groups when BOTH actually have entities —
+    // an empty "Level Geometry (0)" header above every scene was just noise (audit #68). With
+    // one kind present, the list is flat and unheadered.
+    const bool splitGroups = boxCount > 0 && objectCount > 0;
+
+    auto drawBoxes = [&]() {
+        for (auto entity : ViewInCreationOrder(world.Registry, boxView)) {
+            if (!MatchesHierarchyFilter(world, entity)) continue;
+            DrawHierarchyNode(world, assets, entity, /*isLevelGeometry=*/true);
         }
+    };
+    auto drawObjects = [&]() {
         for (auto entity : ViewInCreationOrder(world.Registry, objectView)) {
             const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
             // A parented entity draws nested under its parent instead of as a sibling — except
@@ -2907,7 +2949,35 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
             if (filtering && !MatchesHierarchyFilter(world, entity)) continue;
             DrawHierarchyNode(world, assets, entity, /*isLevelGeometry=*/false);
         }
-        ImGui::TreePop();
+    };
+
+    if (splitGroups) {
+        char geoHeader[64];
+        if (filtering)
+            snprintf(geoHeader, sizeof(geoHeader), "Level Geometry (%d / %d)###LevelGeo", boxMatches, boxCount);
+        else
+            snprintf(geoHeader, sizeof(geoHeader), "Level Geometry (%d)###LevelGeo", boxCount);
+        if (ImGui::TreeNodeEx(geoHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Solid boxes with collision built in - always block movement.");
+            drawBoxes();
+            ImGui::TreePop();
+        }
+
+        char objectHeader[64];
+        if (filtering)
+            snprintf(objectHeader, sizeof(objectHeader), "Objects (%d / %d)###Objects", objectMatches, objectCount);
+        else
+            snprintf(objectHeader, sizeof(objectHeader), "Objects (%d)###Objects", objectCount);
+        if (ImGui::TreeNodeEx(objectHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::IsItemHovered()) {
+                EditorUI::SetTooltip("Models, lights, and empties. Drag one row onto another to parent it;\ndrag onto empty space below to un-parent.");
+            }
+            drawObjects();
+            ImGui::TreePop();
+        }
+    } else {
+        drawBoxes();
+        drawObjects();
     }
 
     // Dropping onto empty space below the tree un-parents (Unity's "drag to the root") — and
@@ -3022,6 +3092,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
 
     if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
         SelectItem(entity, ImGui::GetIO().KeyCtrl);
+        m_HierarchyRowHintDone = true; // learned the row interaction — stop showing the hint
     }
     if (ImGui::IsItemToggledOpen() && ImGui::GetIO().KeyAlt && hasChildren) {
         // `open` already reflects the state ImGui just toggled this entity's own row to —
@@ -3033,7 +3104,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
         BeginRenameEntity(entity);
     }
-    if (ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+    if (!m_HierarchyRowHintDone && ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
         EditorUI::SetTooltip("Click to select (Ctrl+Click to add/remove).\nDouble-click or F2 to rename. Drag onto another row to parent it.\nRight-click for more options.");
     }
 
@@ -3345,7 +3416,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     ImGuiWindowFlags flags = m_LayoutLocked
         ? (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)
         : ImGuiWindowFlags_None;
-    if (!ImGui::Begin("Inspector", nullptr, flags)) { ImGui::End(); return; }
+    if (!ImGui::Begin("Inspector", &m_ShowInspector, flags)) { ImGui::End(); return; }
 
     if (HasGroupSelection()) {
         int count = (m_Selected != entt::null ? 1 : 0) + (int)m_ExtraSelection.size();
@@ -3411,12 +3482,19 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
 
         ImGui::Spacing();
         float halfWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
-        if (ActionButton(ICON_FA_CLONE, "Duplicate (Ctrl+D)", ImVec2(halfWidth, 0.0f))) {
+        if (ImGui::Button(ICON_FA_CLONE "  Duplicate", ImVec2(halfWidth, 0.0f))) {
             DuplicateSelection(world, assets);
         }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Duplicate every selected object (Ctrl+D)");
         ImGui::SameLine();
-        if (DeleteIconButton("Delete Selected", ImVec2(halfWidth, 0.0f))) {
-            DeleteSelection(world);
+        {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.16f, 0.16f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.20f, 0.20f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.80f, 0.24f, 0.24f, 1.0f));
+            bool del = ImGui::Button(ICON_FA_TRASH "  Delete", ImVec2(halfWidth, 0.0f));
+            ImGui::PopStyleColor(3);
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete every selected object (Del)");
+            if (del) DeleteSelection(world);
         }
         ImGui::End();
         return;
@@ -3495,7 +3573,11 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         // Leaves room for the Static checkbox after it instead of claiming the row's full width
         // the way a plain PropertyLabel field would — this row is the one place two fields
         // deliberately share a line, to keep the header block compact.
-        float staticReserve = ImGui::CalcTextSize("Static").x + ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+        // checkbox widget width = box (FrameHeight) + inner gap + label text; plus the SameLine
+        // ItemSpacing before it and a few px so the label never kisses the panel's right edge.
+        const ImGuiStyle& st = ImGui::GetStyle();
+        float staticReserve = ImGui::GetFrameHeight() + st.ItemInnerSpacing.x + ImGui::CalcTextSize("Static").x
+            + st.ItemSpacing.x + 6.0f;
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - staticReserve);
         if (ImGui::InputText("##Tag", tagBuf, sizeof(tagBuf))) {
             registry.emplace_or_replace<TagComponent>(entity, std::string(tagBuf));
@@ -3603,6 +3685,19 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 if (ImGui::Selectable(ICON_FA_SHAPES "  Plane")) pick("plane");
                 ImGui::EndPopup();
             }
+
+            // Material is part of the renderer, so it nests here as a sub-tree rather than
+            // sitting at the same indent as real components. Collapsed by default — usually
+            // set once and left alone.
+            ImGui::Spacing();
+            if (ImGui::TreeNodeEx(ICON_FA_PALETTE "  Material", ImGuiTreeNodeFlags_SpanAvailWidth)) {
+                DrawMaterialEditor(world, assets);
+                ImGui::TreePop();
+            }
+            if (ImGui::IsItemHovered()) {
+                EditorUI::SetTooltip("Surface appearance: color, metallic/roughness, emissive glow, and texture maps.");
+            }
+
             EndComponentSection();
         }
         if (removed) {
@@ -3611,16 +3706,6 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             // it back — otherwise re-adding gives a fresh cube and the original model is lost.
             registry.emplace_or_replace<DetachedMeshComponent>(entity, std::move(renderable->ModelRef));
             registry.remove<RenderableComponent>(entity);
-        }
-    }
-
-    // --- PBR Material (part of the renderer, so only shown when there is one; collapsed by
-    // default since it's usually set once and left alone) -----------------------------------
-    if (registry.all_of<RenderableComponent>(entity)) {
-        if (BeginComponentSection(world, entity, ICON_FA_PALETTE, "Material", false, removed, /*defaultOpen=*/false,
-                "Surface appearance: color, metallic/roughness, emissive glow, and texture maps.")) {
-            DrawMaterialEditor(world, assets);
-            EndComponentSection();
         }
     }
 
@@ -3730,15 +3815,26 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     DrawAddComponentMenu(world, assets, entity);
 
     ImGui::Spacing();
+    // Labelled, not icon-only — the archive glyph in particular was unguessable (audit #76).
     float thirdWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2.0f) / 3.0f;
-    if (ActionButton(ICON_FA_CLONE, "Duplicate (Ctrl+D)", ImVec2(thirdWidth, 0.0f))) DuplicateSelection(world, assets);
+    if (ImGui::Button(ICON_FA_CLONE "  Duplicate", ImVec2(thirdWidth, 0.0f))) DuplicateSelection(world, assets);
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Duplicate this object (Ctrl+D)");
     ImGui::SameLine();
-    if (ActionButton(ICON_FA_BOX_ARCHIVE, "Save as Prefab...", ImVec2(thirdWidth, 0.0f))) {
+    if (ImGui::Button(ICON_FA_BOX_ARCHIVE "  Prefab", ImVec2(thirdWidth, 0.0f))) {
         std::string path = FileDialog::SaveFile("Prefab Files\0*.prefab\0All Files\0*.*\0", "prefab", m_Window);
         if (!path.empty() && SceneSerializer::SavePrefab(world, entity, path)) assets.RegisterPrefab(path);
     }
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Save this object as a reusable .prefab asset");
     ImGui::SameLine();
-    if (DeleteIconButton("Delete (Del)", ImVec2(thirdWidth, 0.0f))) DeleteSelection(world);
+    {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.16f, 0.16f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.20f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.80f, 0.24f, 0.24f, 1.0f));
+        bool del = ImGui::Button(ICON_FA_TRASH "  Delete", ImVec2(thirdWidth, 0.0f));
+        ImGui::PopStyleColor(3);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete this object (Del)");
+        if (del) DeleteSelection(world);
+    }
 
     ImGui::PopID();
     ImGui::End();
@@ -5232,7 +5328,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     // Tighter vertical padding than the default so the toolbar hugs the tab bar instead of
     // floating below a large gap.
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
-    bool open = ImGui::Begin("Asset Browser", nullptr, flags);
+    bool open = ImGui::Begin("Asset Browser", &m_ShowAssetBrowser, flags);
     ImGui::PopStyleVar();
     if (!open) { ImGui::End(); return; }
     m_AssetBrowserFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);

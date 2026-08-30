@@ -23,6 +23,7 @@
 #include "ProjectPaths.h"
 #include "SplashScreen.h"
 #include "GLDebug.h"
+#include "Log.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -31,6 +32,22 @@
 #include <string>
 #include <algorithm>
 #include <cmath>
+#include <thread>
+#include <vector>
+#include <cstring>
+#include <cstdlib>
+#include <intrin.h>   // __cpuid — CPU brand string for the boot log
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifdef APIENTRY
+#undef APIENTRY  // GLFW already defined it; let windows.h redefine identically without warning C4005
+#endif
+#include <windows.h>  // GlobalMemoryStatusEx, registry, GetLogicalProcessorInformationEx — rig info
+#pragma comment(lib, "Advapi32.lib") // RegGetValueA
 
 // Selection outline (editor-only): the classic "inverted hull" technique — draw the object
 // again, offset a little along its normal, with front-face culling so only the silhouette
@@ -221,12 +238,165 @@ int main() {
         // build/, where it was gitignored and a clean rebuild would delete it.
         const std::string scenePath = ProjectPaths::Resolve("scene.json");
         AssetLibrary assets;
-        if (SceneSerializer::Load(world, assets, scenePath)) {
+        bool sceneLoaded = SceneSerializer::Load(world, assets, scenePath);
+        if (sceneLoaded) {
             std::cout << "Loaded scene from " << scenePath << std::endl;
         }
 
         EditorLayer editor;
         editor.Init(window.Handle());
+
+        // Boot log — a pro console says what came up on launch instead of sitting empty
+        // (audit #82). A one-shot rig dump: OS, CPU, RAM, GPU, driver, display, build.
+        {
+            constexpr GLenum kGL_VENDOR = 0x1F00, kGL_RENDERER = 0x1F01, kGL_VERSION = 0x1F02,
+                             kGL_GLSL_VERSION = 0x8B8C, kGL_MAX_TEXTURE_SIZE = 0x0D33,
+                             kGL_MAX_SAMPLES = 0x8D57,
+                             kGL_GPU_MEM_TOTAL_NVX = 0x9048, kGL_GPU_MEM_AVAIL_NVX = 0x9049;
+            auto glStr = [](GLenum e) {
+                const GLubyte* s = glGetString(e);
+                return s ? std::string(reinterpret_cast<const char*>(s)) : std::string("(unknown)");
+            };
+            auto glInt = [](GLenum e) { GLint v = 0; glGetIntegerv(e, &v); return v; };
+
+            // --- CPU: brand string from CPUID leaves 0x80000002..4 (16 bytes each), space-padded.
+            auto cpuName = []() -> std::string {
+                int regs[4] = {0};
+                __cpuid(regs, 0x80000000);
+                if (static_cast<unsigned>(regs[0]) < 0x80000004u) return "(unknown CPU)";
+                char brand[49] = {0};
+                for (unsigned leaf = 0; leaf < 3; ++leaf) {
+                    __cpuid(regs, 0x80000002 + leaf);
+                    std::memcpy(brand + leaf * 16, regs, 16);
+                }
+                std::string s(brand);
+                size_t a = s.find_first_not_of(' ');
+                size_t b = s.find_last_not_of(' ');
+                return (a == std::string::npos) ? "(unknown CPU)" : s.substr(a, b - a + 1);
+            };
+            // Physical core count (distinct from logical/HW-thread count).
+            auto physicalCores = []() -> unsigned {
+                DWORD len = 0;
+                GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &len);
+                if (!len) return 0;
+                std::vector<char> buf(len);
+                if (!GetLogicalProcessorInformationEx(RelationProcessorCore,
+                        reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buf.data()), &len))
+                    return 0;
+                unsigned n = 0;
+                for (char* p = buf.data(); p < buf.data() + len; ) {
+                    auto* info = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(p);
+                    if (info->Relationship == RelationProcessorCore) ++n;
+                    p += info->Size;
+                }
+                return n;
+            };
+            // --- Windows edition/version from the registry (GetVersionEx lies without a manifest).
+            auto regStr = [](const char* value) -> std::string {
+                char b[256]; DWORD sz = sizeof(b);
+                if (RegGetValueA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+                        value, RRF_RT_REG_SZ, nullptr, b, &sz) == ERROR_SUCCESS)
+                    return std::string(b);
+                return {};
+            };
+            auto regDword = [](const char* value) -> DWORD {
+                DWORD v = 0, sz = sizeof(v);
+                RegGetValueA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+                    value, RRF_RT_REG_DWORD, nullptr, &v, &sz);
+                return v;
+            };
+
+            int fbw = 0, fbh = 0;
+            glfwGetFramebufferSize(window.Handle(), &fbw, &fbh);
+
+            unsigned threads = std::thread::hardware_concurrency();
+            unsigned pcores = physicalCores();
+
+            MEMORYSTATUSEX mem{}; mem.dwLength = sizeof(mem); GlobalMemoryStatusEx(&mem);
+            double ramTotGiB = mem.ullTotalPhys / (1024.0 * 1024.0 * 1024.0);
+            double ramAvailGiB = mem.ullAvailPhys / (1024.0 * 1024.0 * 1024.0);
+
+            auto gib = [](double v) {
+                char b[32]; snprintf(b, sizeof(b), "%.1f", v); return std::string(b);
+            };
+
+            // Windows line
+            {
+                std::string prod = regStr("ProductName");                 // e.g. "Windows 10 Pro"
+                std::string disp = regStr("DisplayVersion");              // e.g. "23H2"
+                std::string build = regStr("CurrentBuildNumber");
+                DWORD ubr = regDword("UBR");
+                // Registry still says "Windows 10 ..." on 11; correct it from the build number.
+                long bn = build.empty() ? 0 : std::atol(build.c_str());
+                if (bn >= 22000 && prod.rfind("Windows 10", 0) == 0) prod.replace(0, 10, "Windows 11");
+                std::string line = "OS: " + (prod.empty() ? "Windows" : prod);
+                if (!disp.empty())  line += " " + disp;
+                if (!build.empty()) line += "  (build " + build + (ubr ? "." + std::to_string(ubr) : "") + ")";
+                Log::Info(line);
+            }
+
+            Log::Info("Tartarus Engine - editor up.");
+
+            {
+                std::string line = "CPU: " + cpuName() + "  (";
+                if (pcores) line += std::to_string(pcores) + " cores / ";
+                line += (threads ? std::to_string(threads) : std::string("?")) + " threads)";
+                Log::Info(line);
+            }
+            Log::Info("RAM: " + gib(ramTotGiB) + " GiB total  (" + gib(ramAvailGiB) + " GiB free)");
+
+            Log::Info("GPU: " + glStr(kGL_RENDERER) + "  (" + glStr(kGL_VENDOR) + ")");
+            // VRAM via GL_NVX_gpu_memory_info (NVIDIA). This build's GL loader has no
+            // glGetStringi to enumerate a core-profile extension list, so just probe the enum:
+            // on a driver without the extension glGetIntegerv leaves the value at 0.
+            {
+                GLint totKiB = 0, availKiB = 0;
+                glGetIntegerv(kGL_GPU_MEM_TOTAL_NVX, &totKiB);
+                glGetIntegerv(kGL_GPU_MEM_AVAIL_NVX, &availKiB);
+                if (totKiB > 0) {
+                    char b[96];
+                    snprintf(b, sizeof(b), "VRAM: %.0f MiB total  (%.0f MiB free)",
+                             totKiB / 1024.0, availKiB / 1024.0);
+                    Log::Info(b);
+                }
+            }
+            Log::Info("OpenGL " + glStr(kGL_VERSION) + "  |  GLSL " + glStr(kGL_GLSL_VERSION));
+            Log::Info("GL limits: max texture " + std::to_string(glInt(kGL_MAX_TEXTURE_SIZE)) +
+                      " px, max MSAA " + std::to_string(glInt(kGL_MAX_SAMPLES)) + "x");
+
+            // Display line — primary monitor mode.
+            if (GLFWmonitor* mon = glfwGetPrimaryMonitor()) {
+                if (const GLFWvidmode* vm = glfwGetVideoMode(mon)) {
+                    const char* mname = glfwGetMonitorName(mon);
+                    char b[160];
+                    snprintf(b, sizeof(b), "Display: %s  %d x %d @ %d Hz",
+                             mname ? mname : "primary", vm->width, vm->height, vm->refreshRate);
+                    Log::Info(b);
+                }
+            }
+            Log::Info("Framebuffer: " + std::to_string(fbw) + " x " + std::to_string(fbh));
+
+            // Build line
+            {
+#if defined(NDEBUG)
+                const char* cfg = "Release";
+#else
+                const char* cfg = "Debug";
+#endif
+                char b[128];
+                snprintf(b, sizeof(b), "Build: %s x64, MSVC %d, %s", cfg, (int)_MSC_VER, __DATE__);
+                Log::Info(b);
+            }
+            {
+                std::size_t objs = 0;
+                world.Registry.view<TransformComponent>().each([&](auto...) { ++objs; });
+                if (sceneLoaded)
+                    Log::Info("Scene loaded from " + scenePath + " - " + std::to_string(objs) +
+                              (objs == 1 ? " object." : " objects."));
+                else
+                    Log::Info("No scene file - started empty.");
+            }
+        }
 
         GameViewPanel gameView;
         gameView.LoadSettings();
@@ -251,6 +421,8 @@ int main() {
         editorCamera.Position = player.Cam.Position;
         editorCamera.Yaw = player.Cam.Yaw;
         editorCamera.Pitch = player.Cam.Pitch;
+        // Open framed on the scene instead of staring at empty space beside it (audit #87).
+        editor.FrameSceneBounds(world, editorCamera);
         window.SetCursorLocked(false);
 
         // OS-level drag-and-drop (e.g. dragging a file in from Windows Explorer) — routes

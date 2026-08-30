@@ -66,7 +66,7 @@ unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, 
     glViewport(0, 0, previewW, previewH);
 
     glEnable(GL_DEPTH_TEST);
-    glClearColor(0.12f, 0.12f, 0.14f, 1.0f); // neutral dark-slate backdrop, distinct from the panel behind it
+    glClearColor(0.24f, 0.24f, 0.27f, 1.0f); // mid-grey backdrop so dark models read against it (audit #78)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glm::vec3 boundsMin = model.BoundsMin();
