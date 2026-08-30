@@ -1434,8 +1434,22 @@ void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
 
     // Keep the camera's current aim, just slide it back along that same ray until the
     // selection's bounding sphere fits inside the vertical field of view, with a margin.
-    float distance = (radius / std::sin(glm::radians(editorCamera.Fov) * 0.5f)) * 1.35f;
-    editorCamera.Position = center - editorCamera.Front() * distance;
+    float halfFov = glm::radians(editorCamera.Fov) * 0.5f;
+    float distance = (radius / std::sin(halfFov)) * 1.35f;
+    glm::vec3 targetPos = center - editorCamera.Front() * distance;
+
+    // Glide there rather than teleport — same eased transition SnapToView uses (audit follow-up).
+    m_ViewTransition.Active = true;
+    m_ViewTransition.T = 0.0f;
+    m_ViewTransition.FromPos = editorCamera.Position;
+    m_ViewTransition.FromYaw = editorCamera.Yaw;
+    m_ViewTransition.FromPitch = editorCamera.Pitch;
+    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
+    m_ViewTransition.ToPos = targetPos;
+    m_ViewTransition.ToYaw = editorCamera.Yaw;     // aim unchanged
+    m_ViewTransition.ToPitch = editorCamera.Pitch;
+    m_ViewTransition.ToOrthoHalfHeight = editorCamera.Orthographic
+        ? (distance * std::tan(halfFov)) : editorCamera.OrthoHalfHeight;
 }
 
 bool EditorLayer::CanSnapSelectionToGround(World& world) const {
