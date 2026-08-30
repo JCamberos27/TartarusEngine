@@ -734,6 +734,7 @@ private:
     // Spawns a Transform+Name entity at the given spot and selects it (Unity's Create Empty),
     // optionally with a LightComponent already attached.
     entt::entity CreateEmptyAt(World& world, Camera* editorCamera, const char* name, bool asLight);
+    void CreateEmptyParentForSelection(World& world); // Hierarchy right-click "Group into Empty Parent" (#71)
 
     // --- Inspector: Add / Remove Component -------------------------------------------------
     void DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity);
