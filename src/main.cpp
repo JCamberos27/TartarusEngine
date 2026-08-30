@@ -106,6 +106,47 @@ void main() {
 }
 )";
 
+// Screen-space selection outline: a fullscreen pass that reads a 1-bit "is this pixel part of
+// the selection" mask (rendered by the outline shader above into its own target) and paints a
+// uniform-width ring in the gap just outside the silhouette. Works for any shape/orientation —
+// unlike an inverted-hull, which can't widen a flat mesh's screen silhouette at all (audit #51).
+static const char* kOutlineDilateVertSrc = R"(
+#version 330 core
+out vec2 vUV;
+const vec2 kQuad[6] = vec2[](
+    vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(1.0, 1.0),
+    vec2(-1.0, -1.0), vec2(1.0, 1.0), vec2(-1.0, 1.0)
+);
+void main() {
+    vec2 p = kQuad[gl_VertexID];
+    vUV = p * 0.5 + 0.5;
+    gl_Position = vec4(p, 0.0, 1.0);
+}
+)";
+
+static const char* kOutlineDilateFragSrc = R"(
+#version 330 core
+in vec2 vUV;
+out vec4 FragColor;
+uniform sampler2D uMask;
+uniform vec3 uTexel;     // xy = 1.0 / mask size, in texels
+uniform vec3 uColor;
+uniform int uRadius;     // outline half-width, in pixels
+void main() {
+    float here = texture(uMask, vUV).r;
+    if (here > 0.5) discard;                 // inside the selection: leave the surface alone
+    float adj = 0.0;
+    for (int y = -uRadius; y <= uRadius; ++y) {
+        for (int x = -uRadius; x <= uRadius; ++x) {
+            if (x * x + y * y > uRadius * uRadius) continue; // round brush
+            adj = max(adj, texture(uMask, vUV + vec2(float(x), float(y)) * uTexel.xy).r);
+        }
+    }
+    if (adj < 0.5) discard;                  // not adjacent to the selection
+    FragColor = vec4(uColor, 1.0);
+}
+)";
+
 // Simple fly-camera controls used only while the editor overlay is open. `orbitPivot`, when
 // non-null, is the current selection's world-space center (see EditorLayer::GetSelectionCenter)
 // — Alt+Left-drag orbits around it instead of the plain free-look that Right-drag still does.
@@ -225,6 +266,9 @@ int main() {
 
         Shader modelShader(kModelVertexSrc, kModelFragmentSrc);
         Shader outlineModelShader(kOutlineModelVertexSrc, kOutlineFragmentSrc);
+        Shader outlineDilateShader(kOutlineDilateVertSrc, kOutlineDilateFragSrc);
+        unsigned int fsQuadVao = 0;
+        glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
         TintOverlayRenderer tintOverlay;
         Grid grid;
         Sky sky;
@@ -403,6 +447,7 @@ int main() {
         // The editor's own "Scene" tab renders into this rather than straight into the
         // backbuffer — see the "Scene tab offscreen pass" comment below for why.
         Framebuffer sceneFramebuffer;
+        Framebuffer selectionMaskFbo; // 1-bit silhouette mask for the screen-space selection outline
 
         Camera editorCamera;
         // Play is no longer a whole-screen mode swap. Three independent bits describe the state:
@@ -746,56 +791,70 @@ int main() {
                 // wireframe over the object rather than a filled orange silhouette that buries
                 // its own wireframe (#13 P2). Reset to GL_FILL before the drag-preview ghost.
 
-                // Selection outline: inverted-hull technique — draw each selected object again,
-                // pushed out along its own normal, keeping only the back faces (front-face
-                // culled) so a thin silhouette rim survives around the normal draw. Depth-tested
-                // against the rest of the scene like everything else, so it's still occluded
-                // correctly by other objects in front of it.
+                // Selection outline: screen-space. Render the selected meshes' silhouettes to a
+                // 1-bit mask target, then a fullscreen pass paints a uniform-width ring in the
+                // pixels just OUTSIDE that mask. No surface wash — the wash + an inverted-hull
+                // that couldn't widen a flat mesh's silhouette were what turned a selected
+                // flat/thin object into a solid orange blob (audit #51).
                 auto selection = editor.GetSelectedItems();
                 if (!selection.empty()) {
                     const glm::vec3 kOutlineColor(1.0f, 0.55f, 0.1f);
-                    const float kOutlineThickness = 0.015f;
-                    glCullFace(GL_FRONT);
-                    outlineModelShader.Bind();
-                    outlineModelShader.SetMat4("uView", sceneViewMat);
-                    outlineModelShader.SetMat4("uProj", sceneProjMat);
-                    outlineModelShader.SetFloat("uThickness", kOutlineThickness);
-                    outlineModelShader.SetVec3("uOutlineColor", kOutlineColor);
+                    const int kOutlinePixels = 3;
 
+                    std::vector<glm::mat4> xforms;
+                    std::vector<Model*> models;
                     for (entt::entity entity : selection) {
                         if (!world.Registry.valid(entity)) continue; // may have been deleted this same frame
                         // Lights and empties have nothing to outline — they get a screen-space
                         // selection ring from EditorLayer::DrawEntityIcons instead.
                         auto* renderablePtr = world.Registry.try_get<RenderableComponent>(entity);
                         if (!renderablePtr) continue;
-                        auto& renderable = *renderablePtr;
-                        glm::mat4 model = world.ComposeWorldTransform(entity);
-                        outlineModelShader.SetMat4("uModel", model);
-                        renderable.ModelRef->Draw(outlineModelShader); // also uploads bone matrices; unused material uniforms are harmless no-ops here
+                        xforms.push_back(world.ComposeWorldTransform(entity));
+                        models.push_back(renderablePtr->ModelRef.get());
                     }
 
-                    glCullFace(GL_BACK);
-
-                    // Selection highlight wash: the outline above only draws a thin rim around
-                    // the silhouette, which reads poorly on a small, thin, or distant object -
-                    // this washes the whole visible surface in the same outline color at low
-                    // alpha (redrawn exactly on top of the object's own already-rendered
-                    // geometry, via TintOverlayRenderer's GL_LEQUAL trick) so a selected mesh is
-                    // unambiguous at a glance regardless of size or how much of it is on screen.
-                    //
-                    // Skipped in Wireframe/Unlit: there the wash was the ONLY thing you could see
-                    // of the selected object, hiding its wireframe/shape (#13 P2). And kept
-                    // light enough in Shaded mode that the surface's own shading still reads
-                    // through instead of flattening imported meshes to an orange blob (#41 P24).
-                    const float kHighlightAlpha = 0.10f;
-                    if (!sceneWireframe && !sceneUnlit) {
-                        for (entt::entity entity : selection) {
-                            if (!world.Registry.valid(entity)) continue;
-                            auto* renderablePtr = world.Registry.try_get<RenderableComponent>(entity);
-                            if (!renderablePtr) continue;
-                            glm::mat4 model = world.ComposeWorldTransform(entity);
-                            tintOverlay.Render(*renderablePtr->ModelRef, model, sceneViewMat, sceneProjMat, kOutlineColor, kHighlightAlpha);
+                    if (!models.empty()) {
+                        // --- Silhouette mask pass: flat white where a selected mesh is, into its
+                        // own target. Depth test off so a partly-occluded selection is still fully
+                        // outlined (Unity's behaviour).
+                        selectionMaskFbo.Resize(scW, scH);
+                        selectionMaskFbo.Bind();
+                        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                        glClear(GL_COLOR_BUFFER_BIT);
+                        glDisable(GL_DEPTH_TEST);
+                        glDepthMask(GL_FALSE);
+                        outlineModelShader.Bind();
+                        outlineModelShader.SetMat4("uView", sceneViewMat);
+                        outlineModelShader.SetMat4("uProj", sceneProjMat);
+                        outlineModelShader.SetFloat("uThickness", 0.0f);
+                        outlineModelShader.SetVec3("uOutlineColor", glm::vec3(1.0f));
+                        if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); // mask must be solid
+                        for (size_t i = 0; i < models.size(); ++i) {
+                            outlineModelShader.SetMat4("uModel", xforms[i]);
+                            models[i]->Draw(outlineModelShader);
                         }
+                        if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+                        // --- Dilate pass: back to the scene target, paint the ring.
+                        sceneFramebuffer.Bind();
+                        glEnable(GL_BLEND);
+                        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                        outlineDilateShader.Bind();
+                        glActiveTexture(GL_TEXTURE0);
+                        glBindTexture(GL_TEXTURE_2D, selectionMaskFbo.ColorTexture());
+                        outlineDilateShader.SetInt("uMask", 0);
+                        outlineDilateShader.SetVec3("uTexel", glm::vec3(1.0f / (float)scW, 1.0f / (float)scH, 0.0f));
+                        outlineDilateShader.SetVec3("uColor", kOutlineColor);
+                        outlineDilateShader.SetInt("uRadius", kOutlinePixels);
+                        glBindVertexArray(fsQuadVao);
+                        glDrawArrays(GL_TRIANGLES, 0, 6);
+                        glBindVertexArray(0);
+
+                        // Restore.
+                        glDisable(GL_BLEND);
+                        glEnable(GL_DEPTH_TEST);
+                        glDepthMask(GL_TRUE);
+                        GLStateCache::Invalidate(); // raw shader/VAO/texture binds above bypass the cache
                     }
                 }
 
