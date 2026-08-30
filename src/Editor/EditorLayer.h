@@ -505,6 +505,11 @@ private:
     void DrawAddEntityItems(World& world, AssetLibrary& assets, Camera& editorCamera);
     bool m_OpenQuickAdd = false; // set by the Shift+A shortcut, consumed next frame in Draw()
     std::string m_LastSelectedName; // last valid scene selection, shown in the Inspector empty state
+
+    // Inspector Tag field: dropdown of known tags with an inline "New tag..." entry mode.
+    bool m_TagAdding = false;
+    bool m_TagAddingJustOpened = false;
+    char m_TagAddBuf[64] = "";
     void DrawHierarchy(World& world, AssetLibrary& assets);
     void DrawInspector(World& world, AssetLibrary& assets, float dt);
     void DrawAssetBrowser(World& world, AssetLibrary& assets);
