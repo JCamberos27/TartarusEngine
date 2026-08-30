@@ -833,6 +833,155 @@ void EditorLayer::DrawExitPrompt() {
     }
 }
 
+void EditorLayer::DrawPreferencesWindow(World& world) {
+    if (!m_ShowPreferences) return;
+
+    ImGui::SetNextWindowSize(ImVec2(560.0f * m_UIScale, 420.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin(ICON_FA_GEAR "  Preferences", &m_ShowPreferences)) { ImGui::End(); return; }
+
+    static const char* kCats[] = {
+        ICON_FA_UNIVERSAL_ACCESS "  General",
+        ICON_FA_CAMERA "  Viewport",
+        ICON_FA_TABLE_CELLS "  Grid & Snapping",
+        ICON_FA_SUN "  Environment",
+        ICON_FA_CLOCK "  Auto-Save",
+        ICON_FA_KEYBOARD "  Shortcuts",
+        ICON_FA_CIRCLE_INFO "  About",
+    };
+    const int kCatCount = (int)(sizeof(kCats) / sizeof(kCats[0]));
+    m_PrefsCategory = std::clamp(m_PrefsCategory, 0, kCatCount - 1);
+
+    ImGui::BeginChild("##PrefCats", ImVec2(150.0f * m_UIScale, 0), ImGuiChildFlags_Borders);
+    for (int i = 0; i < kCatCount; ++i) {
+        if (ImGui::Selectable(kCats[i], m_PrefsCategory == i)) m_PrefsCategory = i;
+    }
+    ImGui::EndChild();
+    ImGui::SameLine();
+    ImGui::BeginChild("##PrefBody", ImVec2(0, 0), ImGuiChildFlags_Borders);
+
+    EditorSettings& prefs = EditorSettings::Get();
+    const float kw = 160.0f * m_UIScale;
+
+    switch (m_PrefsCategory) {
+    case 0: // General
+        ImGui::SeparatorText("General");
+        if (ImGui::Checkbox("Show editor tooltips", &prefs.ShowTooltips)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Hover hints on Inspector fields, Hierarchy rows and toolbar buttons.");
+        break;
+
+    case 1: // Viewport
+        ImGui::SeparatorText("Viewport");
+        ImGui::SetNextItemWidth(kw);
+        ImGui::SliderFloat("Gizmo size", &m_GizmoSize, 0.05f, 0.40f, "%.2f");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("On-screen size of the transform gizmo.");
+        ImGui::SetNextItemWidth(kw);
+        ImGui::SliderFloat("Vertex pick radius (px)", &m_VertexPickPixels, 5.0f, 150.0f, "%.0f");
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("How close (screen pixels) the cursor must be to a vertex to hover/grab/snap it while holding V.");
+        ImGui::Checkbox("Show grid", &m_ShowGrid);
+        ImGui::Checkbox("Show transform gizmo", &m_ShowGizmos);
+        ImGui::Checkbox("Frame camera on select", &m_FrameOnSelect);
+        break;
+
+    case 2: // Grid & Snapping
+        ImGui::SeparatorText("Grid & Snapping");
+        ImGui::SetNextItemWidth(kw);
+        ImGui::DragFloat("Grid size", &m_GridSize, 0.05f, 0.05f, 50.0f, "%.2f");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Spacing between minor grid lines, in world units.");
+        ImGui::SetNextItemWidth(kw);
+        ImGui::DragFloat("Position snap", &m_SnapTranslation, 0.05f, 0.01f, 50.0f, "%.2f");
+        ImGui::SetNextItemWidth(kw);
+        ImGui::SliderFloat("Rotation snap", &m_SnapRotationDeg, 1.0f, 180.0f, "%.1f deg");
+        ImGui::SetNextItemWidth(kw);
+        ImGui::DragFloat("Scale snap", &m_SnapScale, 0.01f, 0.01f, 5.0f, "%.2f");
+        ImGui::TextDisabled("The grid + snap on/off toggles are on the toolbar.");
+        break;
+
+    case 3: // Environment
+        ImGui::SeparatorText("Environment");
+        ImGui::ColorEdit3("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
+        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour at the horizon.");
+        ImGui::ColorEdit3("Zenith color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
+        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour straight up.");
+        break;
+
+    case 4: // Auto-Save
+        ImGui::SeparatorText("Auto-Save");
+        if (ImGui::Checkbox("Enable auto-save", &prefs.AutoSaveEnabled)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Periodically writes the scene to its file while you work, on top of the save on exit. Only writes when there are unsaved changes.");
+        if (!prefs.AutoSaveEnabled) ImGui::BeginDisabled();
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::DragFloat("Interval (minutes)", &prefs.AutoSaveIntervalMinutes, 0.5f, 1.0f, 60.0f, "%.1f")) {
+            prefs.AutoSaveIntervalMinutes = std::clamp(prefs.AutoSaveIntervalMinutes, 1.0f, 60.0f);
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        if (!prefs.AutoSaveEnabled) ImGui::EndDisabled();
+        break;
+
+    case 5: { // Shortcuts
+        ImGui::SeparatorText("Shortcuts");
+        ImGui::SetNextItemWidth(-1.0f);
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%s", m_PrefsShortcutFilter.c_str());
+        if (ImGui::InputTextWithHint("##scfilter", ICON_FA_MAGNIFYING_GLASS "  Filter...", buf, sizeof(buf)))
+            m_PrefsShortcutFilter = buf;
+        static const std::pair<const char*, const char*> kShortcuts[] = {
+            {"Fly camera", "hold RMB + WASDQE"},
+            {"Zoom / dolly", "scroll wheel  ·  Alt+RMB drag"},
+            {"Pan view", "middle-drag"},
+            {"Orbit selection", "Alt + left-drag"},
+            {"View presets", "Numpad 1/3/7/0  (Ctrl = opposite side)"},
+            {"Toggle orthographic", "Numpad 5"},
+            {"Frame selection", "F"},
+            {"Quick add (Add menu at cursor)", "Shift+A"},
+            {"Align selected Camera to view", "Ctrl+Shift+F"},
+            {"Gizmo: move / rotate / scale / rect", "W / E / R / T"},
+            {"Vertex grab", "hold V"},
+            {"Multi-select", "Ctrl+Click  ·  drag a box"},
+            {"Undo / Redo", "Ctrl+Z / Ctrl+Y"},
+            {"Save / Save As", "Ctrl+S / Ctrl+Shift+S"},
+            {"New / Open scene", "Ctrl+N / Ctrl+O"},
+            {"Duplicate", "Ctrl+D"},
+            {"Copy / Cut / Paste", "Ctrl+C / Ctrl+X / Ctrl+V"},
+            {"Delete selection", "Delete"},
+            {"Rename selection", "F2  (or double-click in Hierarchy)"},
+            {"Open Preferences", "Ctrl+,"},
+            {"Toggle fullscreen", "F11"},
+            {"Return to game / editor", "F1"},
+        };
+        if (ImGui::BeginTable("##sctable", 2,
+                ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_ScrollY)) {
+            ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Keys", ImGuiTableColumnFlags_WidthStretch);
+            for (const auto& [action, keys] : kShortcuts) {
+                if (!MatchesFilter(m_PrefsShortcutFilter, std::string(action) + " " + keys)) continue;
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn(); ImGui::TextUnformatted(action);
+                ImGui::TableNextColumn(); ImGui::TextDisabled("%s", keys);
+            }
+            ImGui::EndTable();
+        }
+        break;
+    }
+
+    case 6: // About
+        ImGui::SeparatorText("About");
+        ImGui::TextUnformatted("Tartarus Engine");
+        ImGui::TextDisabled("Hand-rolled C++17 / OpenGL 3.3 editor.");
+        ImGui::Spacing();
+        ImGui::Text("Build: %s", __DATE__);
+        ImGui::TextDisabled("Full GPU / driver / GL details are printed to the Console on launch.");
+        break;
+    }
+
+    ImGui::EndChild();
+    ImGui::End();
+}
+
 void EditorLayer::BeginFrame() {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -1663,6 +1812,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // recovery snapshot. No-op unless Init() flagged one as newer than the scene file.
     DrawRecoveryPrompt(world, assets);
     DrawExitPrompt();
+    DrawPreferencesWindow(world);
 
     // Auto-save: only ticks here (Draw() is editor-mode-only, per main.cpp) so it never fires
     // mid-Play - the same reason OnExitPlayMode's revert-to-snapshot exists, autosaving
@@ -2034,6 +2184,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N)) {
             NewScene(world);
         }
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Comma)) m_ShowPreferences = true;
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O)) {
             OpenScene(world, assets, FileDialog::OpenFile("Scene Files\0*.json\0All Files\0*.*\0", m_Window));
         }
@@ -2850,120 +3001,8 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu(ICON_FA_GEAR " Settings")) {
-            ImGui::SeparatorText(ICON_FA_UNIVERSAL_ACCESS "  General");
-            {
-                EditorSettings& prefs = EditorSettings::Get();
-                if (ImGui::Checkbox("Show Editor Tooltips", &prefs.ShowTooltips)) {
-                    EditorSettings::Save();
-                }
-                // Raw ImGui::SetTooltip, deliberately NOT the gated EditorUI::SetTooltip every
-                // other hover hint in the editor uses — this is the one explanation that must
-                // stay visible even with the setting OFF, or turning tooltips off would also
-                // hide the only text explaining how to turn them back on.
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(
-                        "When enabled, hovering over Inspector fields, Hierarchy rows,\n"
-                        "and Toolbar options displays helpful usage context.");
-                }
-            }
-
-            ImGui::SeparatorText(ICON_FA_CLOCK "  Auto-Save");
-            {
-                EditorSettings& prefs = EditorSettings::Get();
-                if (ImGui::Checkbox("Enable Auto-Save", &prefs.AutoSaveEnabled)) {
-                    EditorSettings::Save();
-                }
-                if (ImGui::IsItemHovered()) {
-                    EditorUI::SetTooltip(
-                        "Periodically saves the current scene to its own file while you\n"
-                        "work, in addition to the always-on save on exit. Only saves when\n"
-                        "there are actually unsaved changes - an idle session never writes\n"
-                        "the file over and over.");
-                }
-                if (!prefs.AutoSaveEnabled) ImGui::BeginDisabled();
-                ImGui::SetNextItemWidth(140.0f);
-                if (ImGui::DragFloat("Interval (minutes)", &prefs.AutoSaveIntervalMinutes, 0.5f, 1.0f, 60.0f, "%.1f")) {
-                    prefs.AutoSaveIntervalMinutes = std::clamp(prefs.AutoSaveIntervalMinutes, 1.0f, 60.0f);
-                }
-                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
-                if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) {
-                    EditorUI::SetTooltip("How often the scene auto-saves while there are unsaved changes.");
-                }
-                if (!prefs.AutoSaveEnabled) ImGui::EndDisabled();
-            }
-
-            ImGui::SeparatorText(ICON_FA_SUN "  Environment");
-            ImGui::ColorEdit3("Horizon Color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky color at the horizon (the world's XZ plane)");
-            ImGui::ColorEdit3("Zenith Color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky color straight up");
-
-            ImGui::SeparatorText(ICON_FA_TABLE_CELLS "  Grid & Snapping");
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Grid/Snap toggles are in the row below.");
-            ImGui::SetNextItemWidth(140.0f);
-            ImGui::DragFloat("Grid Size", &m_GridSize, 0.05f, 0.05f, 50.0f, "%.2f");
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Spacing between minor grid lines, in world units");
-            ImGui::SetNextItemWidth(140.0f);
-            ImGui::DragFloat("Position Snap", &m_SnapTranslation, 0.05f, 0.01f, 50.0f, "%.2f");
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Distance the Translate gizmo jumps per step when grid snap is on");
-            ImGui::SetNextItemWidth(140.0f);
-            ImGui::SliderFloat("Rotation Snap", &m_SnapRotationDeg, 1.0f, 180.0f, "%.1f°");
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Degrees the Rotate gizmo jumps per step when grid snap is on");
-            ImGui::SetNextItemWidth(140.0f);
-            ImGui::DragFloat("Scale Snap", &m_SnapScale, 0.01f, 0.01f, 5.0f, "%.2f");
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Amount the Scale gizmo jumps per step when grid snap is on");
-            ImGui::SetNextItemWidth(140.0f);
-            ImGui::SliderFloat("Gizmo Size", &m_GizmoSize, 0.05f, 0.40f, "%.2f");
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("On-screen size of the viewport transform gizmo");
-
-            ImGui::SeparatorText(ICON_FA_CIRCLE_DOT "  Vertex Snap");
-            if (ImGui::IsItemHovered()) {
-                EditorUI::SetTooltip(
-                    "Select a model, hold V near one of its\n"
-                    "vertices (shown in yellow), click and\n"
-                    "drag to move it — it snaps onto whichever\n"
-                    "vertex of any other model is closest to\n"
-                    "your cursor ON SCREEN (same radius as the\n"
-                    "hover circle below), regardless of how\n"
-                    "far that object actually is in the scene.\n"
-                    "Release the click or V to drop it.\n"
-                    "With a group selected, the rest of the\n"
-                    "group rides along by the same offset.");
-            }
-            ImGui::SetNextItemWidth(140.0f);
-            ImGui::SliderFloat("Pick Radius (px)", &m_VertexPickPixels, 5.0f, 150.0f, "%.0f");
-            if (ImGui::IsItemHovered()) {
-                EditorUI::SetTooltip("How close (in screen pixels) the cursor must be to a vertex\nto hover, grab, or snap onto it.");
-            }
-
-            ImGui::SeparatorText(ICON_FA_KEYBOARD "  Controls");
-            ImGui::TextDisabled(
-                "Fly camera: hold right-drag + WASDQE\n"
-                "Zoom: scroll wheel\n"
-                "Pan: middle-drag\n"
-                "Orbit selection: Alt + left-drag\n"
-                "View presets: 1/3/7/0 (Ctrl for opposite side)\n"
-                "Toggle orthographic: 5\n"
-                "Undo/Redo: Ctrl+Z / Ctrl+Y\n"
-                "Save: Ctrl+S\n"
-                "Gizmo mode: W (move) / E (rotate) / R (scale) / T (rect)\n"
-                "Vertex grab: hold V\n"
-                "Multi-select: Ctrl+Click or drag a box\n"
-                "Delete selection: Delete key\n"
-                "Delete selected asset: Delete key (in Asset Browser)\n"
-                "Duplicate selection: Ctrl+D\n"
-                "Copy / Cut / Paste: Ctrl+C / Ctrl+X / Ctrl+V\n"
-                "Rename selection: F2 (or double-click in Hierarchy)\n"
-                "Focus selection: F\n"
-                "Quick add (Add menu at cursor): Shift+A\n"
-                "Align selected Camera to view: Ctrl+Shift+F\n"
-                "Toggle fullscreen: F11\n"
-                "Return to game / editor: F1");
-            ImGui::EndMenu();
-        }
+        if (ImGui::MenuItem(ICON_FA_GEAR " Preferences")) m_ShowPreferences = true;
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Editor settings, environment, shortcuts (Ctrl+,)");
         ImGui::EndMenuBar();
     }
 

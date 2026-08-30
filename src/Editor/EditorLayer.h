@@ -365,6 +365,12 @@ private:
     bool m_ExitPromptPending = false;
     ExitDecision m_ExitDecision = ExitDecision::None;
 
+    // Preferences window (Ctrl+,) — replaces the old giant Settings menu-bar dropdown (#53).
+    void DrawPreferencesWindow(World& world);
+    bool m_ShowPreferences = false;
+    int m_PrefsCategory = 0;
+    std::string m_PrefsShortcutFilter;
+
     // Save routing. m_CurrentScenePath is EMPTY for an untitled scene (File > New Scene): it has
     // no file to overwrite, so main.cpp skips the save-on-exit and DoSave() must prompt for a
     // location. DoSaveAs() always prompts. Both reset dirty/timer and clear the stale recovery
