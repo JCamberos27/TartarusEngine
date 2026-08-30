@@ -798,6 +798,41 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
     }
 }
 
+void EditorLayer::DrawExitPrompt() {
+    if (!m_ExitPromptPending) return;
+
+    if (!ImGui::IsPopupOpen("Save changes?")) ImGui::OpenPopup("Save changes?");
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (ImGui::BeginPopupModal("Save changes?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        std::string sceneName = std::filesystem::path(m_CurrentScenePath).filename().string();
+        if (sceneName.empty()) sceneName = "Untitled";
+        ImGui::Text("\"%s\" has unsaved changes.", sceneName.c_str());
+        ImGui::TextUnformatted("Save them before closing?");
+        ImGui::Separator();
+
+        if (ImGui::Button("Save", ImVec2(110.0f, 0.0f))) {
+            m_ExitDecision = ExitDecision::SaveAndExit;
+            m_ExitPromptPending = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Don't Save", ImVec2(110.0f, 0.0f))) {
+            m_ExitDecision = ExitDecision::DiscardAndExit;
+            m_ExitPromptPending = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            m_ExitDecision = ExitDecision::None;
+            m_ExitPromptPending = false; // main sees ExitPromptActive() == false -> stays open
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
 void EditorLayer::BeginFrame() {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -1626,6 +1661,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // First editor frame after a crash-interrupted session: offer to restore the auto-saved
     // recovery snapshot. No-op unless Init() flagged one as newer than the scene file.
     DrawRecoveryPrompt(world, assets);
+    DrawExitPrompt();
 
     // Auto-save: only ticks here (Draw() is editor-mode-only, per main.cpp) so it never fires
     // mid-Play - the same reason OnExitPlayMode's revert-to-snapshot exists, autosaving

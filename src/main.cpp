@@ -489,7 +489,13 @@ int main() {
             if (!maximize) editor.RequestGameTabFocus();
         };
 
-        while (!window.ShouldClose()) {
+        // On-exit "Save changes?" flow (audit #56). When the window-close request arrives with a
+        // dirty, titled scene, swallow it and let the editor raise a modal; `exitApproved` is set
+        // once the user has chosen Save or Don't Save so the next close request goes through.
+        bool exitApproved = false;
+        bool exitSkipFinalSave = false;
+
+        while (true) {
             Clock::Update();
             float dt = Clock::DeltaTime();
             Profiler::BeginFrame();
@@ -497,6 +503,13 @@ int main() {
 
             window.PollEvents();
             Input::Update();
+
+            if (window.ShouldClose()) {
+                bool dirtyTitled = editor.IsDirty() && !editor.CurrentScenePath().empty();
+                if (exitApproved || !dirtyTitled) break;
+                window.SetShouldClose(false);          // veto this close; ask first
+                if (!editor.ExitPromptActive()) editor.OpenExitPrompt();
+            }
 
             // Rebuilding this (filesystem::path parse + string concat) is wasted work on the
             // ~99.9% of frames where neither input changed, so gate it on the inputs themselves
@@ -971,6 +984,24 @@ int main() {
             // frame's 3D pass last bound is still active, and wrongly skip the real rebind.
             GLStateCache::Invalidate();
 
+            // Act on the "Save changes?" modal's outcome (see the exit-flow comment above).
+            switch (editor.TakeExitDecision()) {
+                case EditorLayer::ExitDecision::SaveAndExit:
+                    if (!editor.CurrentScenePath().empty())
+                        SceneSerializer::Save(world, assets, editor.CurrentScenePath());
+                    exitApproved = true;
+                    exitSkipFinalSave = true;
+                    window.SetShouldClose(true);
+                    break;
+                case EditorLayer::ExitDecision::DiscardAndExit:
+                    exitApproved = true;
+                    exitSkipFinalSave = true; // user explicitly chose not to save
+                    window.SetShouldClose(true);
+                    break;
+                case EditorLayer::ExitDecision::None:
+                    break;
+            }
+
             window.SwapBuffers();
 
             // The editor has now actually presented a frame, so revealing the window shows
@@ -989,7 +1020,7 @@ int main() {
         // An untitled scene (File > New Scene, never Saved As) has no path — do NOT write it
         // anywhere on exit, or it would overwrite whatever scene.json last held. The user has to
         // explicitly Save As to give it a home.
-        if (!editor.CurrentScenePath().empty()) {
+        if (!exitSkipFinalSave && !editor.CurrentScenePath().empty()) {
             SceneSerializer::Save(world, assets, editor.CurrentScenePath());
         }
 
