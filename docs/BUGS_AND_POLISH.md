@@ -102,3 +102,36 @@ Fixed & pushed:
 - **Still open:** [#11 B8] history entry count grows on undo-then-jump — `needs-repro`,
   low confidence; leave for a hands-on session.
 - **Not started:** all polish (#12–#32), #33 manual-verification checklist.
+
+### 2026-08-30 — session 3  (polish + feature tier)
+
+Polish and feature sweep over issues [#11–#50]. One uncommitted batch. Verified in a Release
+build unless noted.
+
+**Fixed & verified in-editor:** [#12 P1], [#13 P2] (+ a wireframe-mode outline tweak in
+`main.cpp`), [#16 P5], [#17 P6], [#20 P9], [#25 P14], [#26 P15], [#27 P16], [#31 P20],
+[#34 D4], [#39 P22], [#42 P25], [#44 P27], [#45 P28], [#47 P30], plus [#36 B10] and the
+Add ▸ Camera flow.
+
+**Fixed, build-clean, not individually eyeballed:** [#18 P7], [#19 P8], [#21 P10],
+[#28 P17], [#43 P26], [#48 P31] (ctrl-click multi-select couldn't be driven by automation),
+[#50 P33] (needs a CJK-named entity to see).
+
+**Already fixed in code, just needs closing:** [#14 P3], [#49 P32].
+
+**Cannot reproduce against this build (documented, not code-changed):**
+[#11 B8], [#23 P12], [#37 B11], [#22 P11].
+
+**Deliberately not changed:** [#32 P21] group-delete confirm (scene deletes are instant +
+undoable by design); [#46 P29] near-black sky (per author — it's scene data, not the
+engine default).
+
+**Left for a follow-up:** [#29 P18] model thumbnails (needs a per-model render cache),
+[#30 P19] corner mark (art asset), [#33 MV] manual keyboard/Play-mode checklist,
+[#35 B9] restore-from-maximized ghost frame (hands-on check),
+[#38 B12] rename length/sanitisation, [#40 P23] (largely covered by the no-op-edit dedup).
+
+Side note: the color-picker *swatch* path can drop an undo step when the popup closes on a
+frame the stale-staged-undo cleanup (`EditorLayer.cpp`, added in `5faa4de`) also fires —
+predates this sweep; worth a hands-on look. The hex-field path records one entry per edit,
+as intended.

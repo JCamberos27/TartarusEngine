@@ -1,7 +1,7 @@
 {
   "assetBrowserIconSize": 96.0,
   "assetBrowserTreeWidth": 230.0,
-  "autoSaveEnabled": true,
+  "autoSaveEnabled": false,
   "autoSaveIntervalMinutes": 5.0,
   "gameViewMaximizeOnPlay": false,
   "gameViewPresetHeight": 0,

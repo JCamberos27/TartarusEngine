@@ -17,6 +17,7 @@
 #include "Profiler.h"
 #include "ProjectPaths.h"
 #include "GLStateCache.h"
+#include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
 
 #include <imgui.h>
 #include <imgui_internal.h> // DockBuilder* — only used once, to lay out the default dock tree on first run
@@ -130,6 +131,30 @@ std::vector<entt::entity> ViewInCreationOrder(const entt::registry& reg, View vi
         return va != vb ? va < vb : a < b;
     });
     return entities;
+}
+
+// 1-based position of `entity` within its kind's creation-ordered list — the number behind the
+// "Box 3" / "Object 7" fallback shown for entities the user never named (#21 P10).
+int CreationOrdinal(const entt::registry& reg, entt::entity entity, bool levelGeometry) {
+    auto list = levelGeometry
+        ? ViewInCreationOrder(reg, reg.view<const NameComponent, const LevelGeometryTag>())
+        : ViewInCreationOrder(reg, reg.view<const NameComponent>(entt::exclude<LevelGeometryTag>));
+    for (size_t i = 0; i < list.size(); ++i)
+        if (list[i] == entity) return static_cast<int>(i) + 1;
+    return 0;
+}
+
+// The gizmo drag and the Inspector's own number fields edit the same thing; give the History
+// entry the same verb either way ("Move" / "Rotate" / "Scale") instead of a generic
+// "Transform" from the gizmo path only (#19 P8).
+const char* GizmoOpUndoLabel(GizmoOp op) {
+    switch (op) {
+        case GizmoOp::Rotate: return "Rotate";
+        case GizmoOp::Scale:  return "Scale";
+        case GizmoOp::Rect:   return "Edit Bounds";
+        case GizmoOp::Translate:
+        default:              return "Move";
+    }
 }
 
 std::string UsageTooltip(const std::vector<std::string>& users) {
@@ -317,8 +342,9 @@ void PropertyLabel(const char* label, const char* tooltip = nullptr) {
 // each drag field, instead of ImGui's plain unlabeled DragFloat3. `activatedOut` is set when
 // any axis field starts being dragged this frame, for undo-snapshot timing at the call site.
 bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float maxV, bool& activatedOut,
-    const char* tooltip = nullptr) {
+    bool& committedOut, const char* tooltip = nullptr) {
     activatedOut = false;
+    committedOut = false;
     bool changed = false;
 
     ImGui::PushID(label);
@@ -352,15 +378,38 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
         if (ImGui::Button(axes[i].name, ImVec2(buttonW, lineHeight))) {
             *axes[i].value = 0.0f;
             changed = true;
+            activatedOut = true;   // an instant, one-shot edit — stage + commit it as one step
+            committedOut = true;
         }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Click to zero the %s axis", axes[i].name);
         ImGui::PopStyleColor(3);
 
         ImGui::SameLine(0.0f, innerSpacing);
         ImGui::SetNextItemWidth(dragW);
-        bool itemChanged = ImGui::DragFloat("##v", axes[i].value, speed, minV, maxV, "%.3f");
-        if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) EditorUI::SetTooltip("Click and drag to change; double-click to type a value");
+        const float before = *axes[i].value;
+        // Big magnitudes get %g so they don't overflow the field as a ~30-digit decimal (#44
+        // P27). Small values are left to "%.3f" — anything under 0.001 just reads as "0.000",
+        // which is fine and far less alarming than "6.5e-09" of floating-point dust; the exact
+        // value is still in the hover tooltip.
+        const float mag = std::fabs(before);
+        const char* fmt = (mag >= 1.0e6f) ? "%.4g" : "%.3f";
+        bool itemChanged = ImGui::DragFloat("##v", axes[i].value, speed, minV, maxV, fmt);
+        if (ImGui::IsItemHovered() && !ImGui::IsItemActive())
+            EditorUI::SetTooltip("%.9g\nClick and drag to change; double-click to type a value", *axes[i].value);
         if (ImGui::IsItemActivated()) activatedOut = true;
+        if (ImGui::IsItemDeactivatedAfterEdit()) committedOut = true;
+        if (itemChanged) {
+            float& val = *axes[i].value;
+            if (!std::isfinite(val)) {
+                // nan / inf / -inf would poison the transform matrix and, on save, write
+                // tokens that are not valid JSON — scene.json then fails to reload (#34 D4).
+                Log::Warn(std::string("Inspector: ignored non-finite value typed into ") + label + "." + axes[i].name);
+                val = before;
+                itemChanged = false;
+            } else if (val == 0.0f) {
+                val = 0.0f; // collapse -0.0 so the field never shows "-0.000" (#24 P13)
+            }
+        }
         changed |= itemChanged;
 
         ImGui::PopID();
@@ -386,6 +435,10 @@ void EditorLayer::Init(GLFWwindow* window) {
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see ProjectPaths.h. main.cpp resolves the same path for its initial load.
     m_CurrentScenePath = ProjectPaths::Resolve("scene.json");
+
+    // So Import / Open / Save dialogs start in the project folder instead of build/Release/,
+    // then follow the user around from there (#15 P4).
+    FileDialog::SetDefaultDirectory(ProjectPaths::Root());
 
     // Crash recovery: if the auto-save timer wrote a recovery snapshot in a previous session
     // that never got an explicit Save afterward, that file is now newer than the scene file
@@ -514,6 +567,25 @@ void EditorLayer::Init(GLFWwindow* window) {
     iconConfig.GlyphMinAdvanceX = baseFontPx;
     io.Fonts->AddFontFromFileTTF("assets/fonts/fa-solid-900.ttf", baseFontPx, &iconConfig, iconRanges);
 
+    // CJK fallback: Segoe UI has no CJK glyphs, so entity names with Chinese/Japanese/Korean
+    // text rendered as tofu boxes in the Hierarchy and Inspector (#50 P33). Merge a system CJK
+    // face over the Japanese range (Kana + ~2000 common Kanji, which also covers most everyday
+    // Simplified Chinese). Loaded from the Windows font dir like Segoe UI above; silently skipped
+    // if absent (Wine / stripped install), so this never hard-fails.
+    ImFontConfig cjkConfig;
+    cjkConfig.MergeMode = true;
+    cjkConfig.PixelSnapH = true;
+    const char* kCjkFonts[] = {
+        "C:\\Windows\\Fonts\\msyh.ttc",     // Microsoft YaHei (Simplified Chinese)
+        "C:\\Windows\\Fonts\\msgothic.ttc", // MS Gothic (Japanese)
+        "C:\\Windows\\Fonts\\malgun.ttf",   // Malgun Gothic (Korean)
+    };
+    for (const char* path : kCjkFonts) {
+        if (io.Fonts->AddFontFromFileTTF(path, baseFontPx, &cjkConfig, io.Fonts->GetGlyphRangesJapanese())) break;
+    }
+    // NB: colour emoji (Segoe UI Emoji is COLR/CPAL) needs the FreeType backend with colour
+    // glyphs enabled, which this build doesn't compile in — emoji in names still render as tofu.
+
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
@@ -529,6 +601,8 @@ void EditorLayer::Shutdown() {
     // before calling it — so any recovery snapshot is now stale and would otherwise trigger a
     // spurious "restore unsaved changes?" prompt on the next launch.
     ClearRecoverySnapshot();
+
+    if (m_MarkSampleFbo) { glDeleteFramebuffers(1, &m_MarkSampleFbo); m_MarkSampleFbo = 0; }
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -562,6 +636,7 @@ bool EditorLayer::DoSaveAs(World& world, AssetLibrary& assets) {
     ClearRecoverySnapshot();       // clears the snapshot for the PREVIOUS path (still current here)
     m_CurrentScenePath = path;
     m_Dirty = false;
+    m_SavedUndoDepth = (int)m_UndoStack.size(); // this history position now matches disk
     m_AutoSaveTimer = 0.0f;
     return true;
 }
@@ -573,6 +648,7 @@ void EditorLayer::DoSave(World& world, AssetLibrary& assets) {
     }
     SceneSerializer::Save(world, assets, m_CurrentScenePath);
     m_Dirty = false;
+    m_SavedUndoDepth = (int)m_UndoStack.size(); // this history position now matches disk
     m_AutoSaveTimer = 0.0f;
     ClearRecoverySnapshot();            // the real file is now current — the snapshot is stale
 }
@@ -600,6 +676,7 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
                 m_UndoStack.clear();
                 m_RedoStack.clear();
                 m_Dirty = true; // recovered content isn't in the real scene file yet
+                m_SavedUndoDepth = -1;
                 Log::Info("Restored unsaved changes from the recovery snapshot.");
             } else {
                 Log::Error("Recovery snapshot could not be read - kept the saved scene instead.");
@@ -655,11 +732,12 @@ void EditorLayer::RestoreSelectionByName(World& world, const std::vector<std::st
     std::unordered_map<std::string, entt::entity> byName;
     for (auto e : world.Registry.view<NameComponent>()) {
         const std::string& n = world.Registry.get<NameComponent>(e).Name;
-        byName.try_emplace(n, e);
+        if (!n.empty()) byName.try_emplace(n, e); // an "" name can't identify one entity among many
     }
 
     bool first = true;
     for (const std::string& wantedName : names) {
+        if (wantedName.empty()) continue; // unnamed entity — nothing reliable to re-pick by (#18 P7)
         auto it = byName.find(wantedName);
         if (it == byName.end()) continue; // that object doesn't exist at this point in history
         if (first) { m_Selected = it->second; first = false; }
@@ -671,14 +749,27 @@ void EditorLayer::PushUndo(const World& world, const std::string& label) {
     UndoEntry entry;
     entry.SceneJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                    : SceneSerializer::SaveToString(world);
+    // Plenty of call sites fire on "field focused" / "gizmo grabbed" before anything actually
+    // changes — a double-click-to-type on a Transform field lands here twice with no edit
+    // between. Don't stack a byte-identical snapshot on the last one: it produced phantom
+    // History entries and left extra Ctrl+Z presses that did nothing (#19 P8, #23 P23).
+    if (!m_UndoStack.empty() && m_UndoStack.back().SceneJson == entry.SceneJson) {
+        m_RedoStack.clear(); // still a fresh edit intent — a stale redo branch shouldn't survive it
+        RefreshDirtyFromHistory();
+        return;
+    }
     entry.SelectedNames = CaptureSelectedNames(world);
     entry.Label = label;
+    // Branching off a mid-history position discards the redo entries — the saved state may be
+    // among them, in which case there's no longer a clean point to return to (#22 P22).
+    if (m_SavedUndoDepth >= 0 && !m_RedoStack.empty()) m_SavedUndoDepth = -1;
     m_UndoStack.push_back(std::move(entry));
     if (m_UndoStack.size() > kMaxHistory) {
         m_UndoStack.erase(m_UndoStack.begin());
+        if (m_SavedUndoDepth > 0) m_SavedUndoDepth--; // the whole stack shifted down by one
     }
     m_RedoStack.clear(); // a fresh edit invalidates whatever redo history existed
-    m_Dirty = true; // every discrete edit already snapshots here first, so this is the one spot that needs to set it
+    RefreshDirtyFromHistory();
 }
 
 void EditorLayer::StageUndo(const World& world) {
@@ -689,16 +780,33 @@ void EditorLayer::StageUndo(const World& world) {
     m_HasStagedUndo = true;
 }
 
-void EditorLayer::CommitStagedUndo(const std::string& label) {
+void EditorLayer::CommitStagedUndo(const World& world, const std::string& label) {
     if (!m_HasStagedUndo) return;
+    m_HasStagedUndo = false;
+
+    // If the interaction ended on the same state it began — a no-op drag, a value typed back to
+    // what it was, or an input the commit path rejected (non-finite) — record nothing, so it
+    // neither adds a phantom History entry nor dirties the scene (#22 P22, #23 P23, #34 D4).
+    const std::string currentJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
+                                                : SceneSerializer::SaveToString(world);
+    if (currentJson == m_StagedUndoJson) {
+        m_StagedUndoJson.clear();
+        m_StagedUndoSelectedNames.clear();
+        return;
+    }
+
     UndoEntry entry;
     entry.SceneJson = std::move(m_StagedUndoJson);
     entry.SelectedNames = std::move(m_StagedUndoSelectedNames);
     entry.Label = label;
+    if (m_SavedUndoDepth >= 0 && !m_RedoStack.empty()) m_SavedUndoDepth = -1;
     m_UndoStack.push_back(std::move(entry));
-    if (m_UndoStack.size() > kMaxHistory) m_UndoStack.erase(m_UndoStack.begin());
+    if (m_UndoStack.size() > kMaxHistory) {
+        m_UndoStack.erase(m_UndoStack.begin());
+        if (m_SavedUndoDepth > 0) m_SavedUndoDepth--;
+    }
     m_RedoStack.clear();
-    m_Dirty = true;
+    RefreshDirtyFromHistory();
     m_HasStagedUndo = false;
 }
 
@@ -715,7 +823,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     m_UndoStack.pop_back();
     SceneSerializer::LoadFromString(world, assets, entry.SceneJson);
     RestoreSelectionByName(world, entry.SelectedNames);
-    m_Dirty = true;
+    RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
 }
 
 void EditorLayer::Redo(World& world, AssetLibrary& assets) {
@@ -731,7 +839,7 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     m_RedoStack.pop_back();
     SceneSerializer::LoadFromString(world, assets, entry.SceneJson);
     RestoreSelectionByName(world, entry.SelectedNames);
-    m_Dirty = true;
+    RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
 }
 
 void EditorLayer::JumpToUndoEntry(World& world, AssetLibrary& assets, size_t undoStackIndex) {
@@ -849,12 +957,14 @@ void EditorLayer::DeleteSelection(World& world) {
     // and no more separate "boxes soft-delete, models hard-erase" split, either.
     // Destroys children recursively too, so parenting one entity under another means deleting
     // the parent doesn't leave the child pointing at a dead entt::entity.
+    int count = (m_Selected != entt::null ? 1 : 0) + (int)m_ExtraSelection.size();
     if (m_Selected != entt::null) world.DestroyEntityAndChildren(m_Selected);
     for (entt::entity e : m_ExtraSelection) {
         if (world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
     }
 
     ClearSelection();
+    Log::Info("Deleted " + std::to_string(count) + (count == 1 ? " object." : " objects."));
 }
 
 namespace {
@@ -955,6 +1065,7 @@ void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets) {
         if (i == 0) m_Selected = created[i];
         else m_ExtraSelection.push_back(created[i]);
     }
+    Log::Info("Duplicated " + std::to_string(created.size()) + (created.size() == 1 ? " object." : " objects."));
 }
 
 bool EditorLayer::ComputeSelectionBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) const {
@@ -1174,10 +1285,122 @@ void EditorLayer::DrawEngineMark(float dt) {
     const float kTwoPi = 6.28318530718f;
     m_MarkSpinAngle = fmodf(m_MarkSpinAngle + dt * kSpinSpeed, kTwoPi);
 
-    float size = 40.0f * m_UIScale; // "not too big" — a small corner decoration, not a feature
+    float size = 60.0f * m_UIScale; // 1.5x the original 40 — a touch bigger so it reads, not a feature
     float margin = 14.0f * m_UIScale;
     float half = size * 0.5f;
-    ImVec2 center(m_ViewportPos.x + margin + half, m_ViewportPos.y + m_ViewportSize.y - margin - half);
+    ImVec2 cornerC(m_ViewportPos.x + margin + half, m_ViewportPos.y + m_ViewportSize.y - margin - half);
+
+    // dt is used to drive motion/eases below — clamp it so a one-off hitch (first frame, a stall
+    // elsewhere in the frame) can't teleport the mark. Motion is otherwise fully dt-scaled, so
+    // it runs identically smooth at any refresh rate.
+    float sdt = dt; if (sdt < 0.0f) sdt = 0.0f; if (sdt > 0.05f) sdt = 0.05f;
+
+    // --- idle detection -> DVD-screensaver bounce ----------------------------------------------
+    ImGuiIO& io = ImGui::GetIO();
+    bool userActive =
+        io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f ||
+        io.MouseWheel != 0.0f || io.MouseWheelH != 0.0f ||
+        io.MouseDown[0] || io.MouseDown[1] || io.MouseDown[2] ||
+        io.InputQueueCharacters.Size > 0 ||
+        io.KeyCtrl || io.KeyShift || io.KeyAlt || io.KeySuper;
+    if (!userActive) {
+        for (int i = 0; i < ImGuiKey_NamedKey_COUNT; ++i)
+            if (io.KeysData[i].Down) { userActive = true; break; }
+    }
+    if (userActive) m_MarkIdleTime = 0.0f; else m_MarkIdleTime += dt;
+
+    const float kIdleDelay = 30.0f;
+    if (!m_MarkPosValid) { m_MarkPos = {cornerC.x, cornerC.y}; m_MarkPosValid = true; }
+
+    // Rect the mark centre must stay within so the whole quad fits inside the viewport.
+    float minX = m_ViewportPos.x + half, maxX = m_ViewportPos.x + m_ViewportSize.x - half;
+    float minY = m_ViewportPos.y + half, maxY = m_ViewportPos.y + m_ViewportSize.y - half;
+    if (maxX < minX) maxX = minX;
+    if (maxY < minY) maxY = minY;
+
+    if (m_MarkIdleTime >= kIdleDelay) {
+        if (!m_MarkBouncing) {
+            m_MarkBouncing = true;
+            // Launch from the current spot on a diagonal; the exact angle drifts with the spin
+            // phase so it isn't identical every time, no RNG needed.
+            const float kSpeed = 230.0f * m_UIScale; // px/sec
+            float ang = 0.6f + 0.9f * m_MarkSpinAngle / kTwoPi + kTwoPi * 0.125f;
+            m_MarkVel = {cosf(ang) * kSpeed, sinf(ang) * kSpeed};
+            const float kMin = 90.0f * m_UIScale; // keep both components lively (no near-vertical/horizontal crawl)
+            if (fabsf(m_MarkVel.x) < kMin) m_MarkVel.x = (m_MarkVel.x < 0.0f ? -kMin : kMin);
+            if (fabsf(m_MarkVel.y) < kMin) m_MarkVel.y = (m_MarkVel.y < 0.0f ? -kMin : kMin);
+        }
+        m_MarkPos += m_MarkVel * sdt;
+        if (m_MarkPos.x <= minX) { m_MarkPos.x = minX; m_MarkVel.x =  fabsf(m_MarkVel.x); }
+        if (m_MarkPos.x >= maxX) { m_MarkPos.x = maxX; m_MarkVel.x = -fabsf(m_MarkVel.x); }
+        if (m_MarkPos.y <= minY) { m_MarkPos.y = minY; m_MarkVel.y =  fabsf(m_MarkVel.y); }
+        if (m_MarkPos.y >= maxY) { m_MarkPos.y = maxY; m_MarkVel.y = -fabsf(m_MarkVel.y); }
+    } else {
+        m_MarkBouncing = false;
+        m_MarkVel = {0.0f, 0.0f};
+        // Critically-damped-ish ease back to the corner — ~0.16 s to settle, no overshoot.
+        float k = 1.0f - expf(-sdt / 0.16f);
+        m_MarkPos += (glm::vec2{cornerC.x, cornerC.y} - m_MarkPos) * k;
+    }
+    // Keep it inside even across a viewport resize.
+    m_MarkPos.x = m_MarkPos.x < minX ? minX : (m_MarkPos.x > maxX ? maxX : m_MarkPos.x);
+    m_MarkPos.y = m_MarkPos.y < minY ? minY : (m_MarkPos.y > maxY ? maxY : m_MarkPos.y);
+    ImVec2 center(m_MarkPos.x, m_MarkPos.y);
+
+    // --- contrast-adaptive tint --------------------------------------------------------------
+    // Read back the little patch of the already-rendered scene texture directly behind the mark
+    // and steer the tint toward white over dark content / black over light content, so it stays
+    // legible wherever it is. m_SceneColorTexture is this frame's finished editor-viewport render
+    // (set by main.cpp right before Draw()), sized 1:1 with m_ViewportSize, GL bottom-left origin.
+    // Sampled at ~10 Hz, NOT every frame: the readback's GPU->CPU sync would otherwise be the one
+    // thing in here that could cost a frame. The per-frame ease below hides the low sample rate.
+    m_MarkSampleAccum += dt;
+    const float kSampleInterval = 0.1f;
+    if (m_SceneColorTexture != 0 && m_MarkSampleAccum >= kSampleInterval) {
+        m_MarkSampleAccum = 0.0f;
+        int vw = (int)m_ViewportSize.x, vh = (int)m_ViewportSize.y;
+        const int kMaxPatch = 64;
+        // mark centre -> viewport-local top-left -> bottom-left-origin texels
+        int rx = (int)(center.x - m_ViewportPos.x - half);
+        int ry = (int)(m_ViewportSize.y - ((center.y - m_ViewportPos.y - half) + size));
+        int rw = (int)size, rh = (int)size;
+        if (rx < 0) { rw += rx; rx = 0; }
+        if (ry < 0) { rh += ry; ry = 0; }
+        if (rx + rw > vw) rw = vw - rx;
+        if (ry + rh > vh) rh = vh - ry;
+        if (rw > kMaxPatch) { rx += (rw - kMaxPatch) / 2; rw = kMaxPatch; }
+        if (rh > kMaxPatch) { ry += (rh - kMaxPatch) / 2; rh = kMaxPatch; }
+        if (rx >= 0 && ry >= 0 && rw >= 1 && rh >= 1) {
+            if (m_MarkSampleFbo == 0) glGenFramebuffers(1, &m_MarkSampleFbo);
+            GLint prevReadFbo = 0;
+            glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFbo);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, m_MarkSampleFbo);
+            glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_SceneColorTexture, 0);
+
+            unsigned char px[kMaxPatch * kMaxPatch * 4];
+            glReadPixels(rx, ry, rw, rh, GL_RGBA, GL_UNSIGNED_BYTE, px);
+
+            glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevReadFbo);
+
+            double sum = 0.0;
+            const int n = rw * rh;
+            for (int i = 0; i < n; ++i)
+                sum += 0.2126 * px[i * 4] + 0.7152 * px[i * 4 + 1] + 0.0722 * px[i * 4 + 2];
+            float avgLum = (float)(sum / (n * 255.0)); // 0 = black behind the mark, 1 = white
+
+            float t = (avgLum - 0.30f) / (0.62f - 0.30f);
+            t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+            m_MarkContrastTarget = 1.0f - t * t * (3.0f - 2.0f * t); // white on dark, black on light
+        }
+    }
+    // Ease toward the target every frame — ~0.15 s time constant, a smooth cross-fade.
+    {
+        float k = 1.0f - expf(-sdt / 0.15f);
+        m_MarkContrastLum += (m_MarkContrastTarget - m_MarkContrastLum) * k;
+    }
+    int markV = (int)(m_MarkContrastLum * 255.0f + 0.5f);
+    markV = markV < 0 ? 0 : (markV > 255 ? 255 : markV);
 
     // Drawn via the foreground draw list rather than an ImGui::Image in its own window: this
     // needs per-vertex placement ImGui's Image widget can't do directly, and the foreground
@@ -1192,6 +1415,7 @@ void EditorLayer::DrawEngineMark(float dt) {
     // cos(angle) each frame, full width when face-on, collapsing to a sliver edge-on. abs()
     // keeps it from mirroring through a negative scale, since there's no distinct "back" face
     // texture — it just squashes to a line and un-squashes, reading as a continuous spin.
+    // Slow sign-on-a-post spin, running whether it's parked in the corner or bouncing around.
     float halfX = half * fabsf(cosf(m_MarkSpinAngle));
     ImVec2 p1(center.x - halfX, center.y - half);
     ImVec2 p2(center.x + halfX, center.y - half);
@@ -1200,7 +1424,7 @@ void EditorLayer::DrawEngineMark(float dt) {
 
     ImGui::GetForegroundDrawList()->AddImageQuad((ImTextureID)(intptr_t)m_MarkTexture->GLHandle(),
         p1, p2, p3, p4, ImVec2(0, 0), ImVec2(1, 0), ImVec2(1, 1), ImVec2(0, 1),
-        IM_COL32(255, 255, 255, 140));
+        IM_COL32(markV, markV, markV, 150));
 }
 
 bool EditorLayer::IsMouseOverSceneViewport() const {
@@ -1363,24 +1587,34 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGuiWindow* inspectorWin = ImGui::FindWindowByName("Inspector");
         float centerX = inspectorWin ? (inspectorWin->Pos.x + inspectorWin->Size.x * 0.5f) : (w * 0.89f);
 
-        ImGui::SetNextWindowPos(ImVec2(centerX - logoW * 0.5f, topMargin), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(logoW, logoH), ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-        ImGui::Begin("##EngineWordmark", nullptr,
-            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground |
-            ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoSavedSettings |
-            ImGuiWindowFlags_NoDocking);
-        // Without NoDocking this is technically a dockable floating window, and Reset Layout's
-        // DockBuilderRemoveNode + full dockspace rebuild (below) can knock an undocked-but-
-        // dockable window out of the visible window list entirely. Also force it to the front
-        // of the display order every frame so the rebuild can't bury it behind whatever the
-        // freshly recreated dock host window ends up as.
-        ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
-        ImGui::ImageWithBg((ImTextureID)(intptr_t)m_LogoTexture->GLHandle(), ImVec2(logoW, logoH),
-            ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), ImVec4(1, 1, 1, 0.6f));
-        ImGui::End();
-        ImGui::PopStyleVar();
+        // Drawn straight onto the foreground draw list (like the viewport monogram) rather than
+        // an ImGui::Image in its own tiny window: the white "glow" is stacked scaled-up copies of
+        // the wordmark behind the crisp one, and those halo layers extend past logoW×logoH — a
+        // window would clip them. The foreground list also always renders on top and can't be
+        // buried by a Reset Layout dock rebuild, so the NoDocking/BringWindowToDisplayFront
+        // scaffolding the old windowed version needed is gone.
+        ImTextureID logoTex = (ImTextureID)(intptr_t)m_LogoTexture->GLHandle();
+        ImVec2 pMin(centerX - logoW * 0.5f, topMargin);
+        ImVec2 pMax(pMin.x + logoW, pMin.y + logoH);
+        ImDrawList* dl = ImGui::GetForegroundDrawList();
+
+        // Slow "breathing" pulse so it reads as a glow, not a flat wash — subtle, ~4 s period.
+        float pulse = 0.5f + 0.5f * sinf((float)ImGui::GetTime() * 1.6f); // 0..1
+        float lit = 0.7f + 0.3f * pulse;
+
+        const int kGlowLayers = 4;
+        for (int i = kGlowLayers; i >= 1; --i) {
+            float grow = (float)i * 5.0f * m_UIScale; // each halo ring bigger than the last
+            float fade = 1.0f - (float)(i - 1) / (float)kGlowLayers;
+            int a = (int)(255.0f * 0.13f * fade * lit);
+            a = a < 0 ? 0 : (a > 255 ? 255 : a);
+            dl->AddImage(logoTex, ImVec2(pMin.x - grow, pMin.y - grow), ImVec2(pMax.x + grow, pMax.y + grow),
+                ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, a));
+        }
+        // Crisp wordmark on top, bright white with a faint brightness pulse.
+        int coreA = (int)(255.0f * (0.15f + 0.85f * lit));
+        coreA = coreA < 0 ? 0 : (coreA > 255 ? 255 : coreA);
+        dl->AddImage(logoTex, pMin, pMax, ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, coreA));
     }
 
     ImGui::SetNextWindowPos(ImVec2(0, toolbarH));
@@ -1629,8 +1863,16 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) Undo(world, assets);
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) Redo(world, assets);
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S)) {
+        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S)) {
+            DoSaveAs(world, assets);
+        } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S)) {
             DoSave(world, assets); // prompts for a location if the scene is untitled (New Scene)
+        }
+        if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N)) {
+            NewScene(world);
+        }
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O)) {
+            OpenScene(world, assets, FileDialog::OpenFile("Scene Files\0*.json\0All Files\0*.*\0", m_Window));
         }
         if (HasAnySelection() && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
             DeleteSelection(world);
@@ -1802,6 +2044,21 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
     ImGui::End();
 }
 
+void EditorLayer::NewScene(World& world) {
+    ClearRecoverySnapshot();     // drop the OUTGOING scene's snapshot before we let go of its path
+    world = World();
+    ClearSelection();
+    m_UndoStack.clear();
+    m_RedoStack.clear();
+    // Untitled: no file to silently overwrite on exit. Save / Ctrl+S now prompts for a location
+    // (DoSave -> DoSaveAs); main.cpp skips its save-on-exit while the path is empty. Marked dirty
+    // so the title shows * and a future close-prompt fires.
+    m_CurrentScenePath.clear();
+    m_Dirty = true;
+    m_SavedUndoDepth = -1; // untitled — nothing on disk to match
+    m_AutoSaveTimer = 0.0f;
+}
+
 void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::string& path) {
     if (path.empty() || !SceneSerializer::Load(world, assets, path)) return;
     ClearRecoverySnapshot(); // drop the outgoing scene's snapshot before switching away from it
@@ -1810,6 +2067,7 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     m_UndoStack.clear();
     m_RedoStack.clear();
     m_Dirty = false;
+    m_SavedUndoDepth = 0; // freshly loaded — empty history == on disk
     m_AutoSaveTimer = 0.0f;
     Log::Info("Opened scene '" + path + "'.");
 }
@@ -2089,6 +2347,13 @@ void EditorLayer::DrawHistoryPanel(World& world, AssetLibrary& assets) {
     ImGuiWindowFlags flags = m_LayoutLocked
         ? (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)
         : ImGuiWindowFlags_None;
+    // First-run placement: clear of the Stats overlay, which pins itself to the viewport's
+    // top-left corner — otherwise the two open stacked on top of each other (#17 P6). The user
+    // can still move or dock it anywhere afterward.
+    const float hpad = 12.0f * m_UIScale;
+    ImGui::SetNextWindowPos(ImVec2(m_ViewportPos.x + hpad, m_ViewportPos.y + hpad + 250.0f * m_UIScale),
+                            ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(260.0f * m_UIScale, 300.0f * m_UIScale), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(ICON_FA_CLOCK_ROTATE_LEFT "  History", &m_ShowHistory, flags)) { ImGui::End(); return; }
 
     EditorUI::HelpMarker("Every recorded change, oldest to newest. Click any entry to jump\nstraight there - undoing or redoing everything in between automatically.");
@@ -2139,28 +2404,18 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     // scene save/load) — keeps the always-visible row below reserved for one-click toggles.
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu(ICON_FA_FOLDER_OPEN " File")) {
-            if (ImGui::MenuItem(ICON_FA_FILE "  New Scene")) {
-                ClearRecoverySnapshot();     // drop the OUTGOING scene's snapshot before we let go of its path
-                world = World();
-                ClearSelection();
-                m_UndoStack.clear();
-                m_RedoStack.clear();
-                // Untitled: no file to silently overwrite on exit. Save / Ctrl+S now prompts for a
-                // location (DoSave -> DoSaveAs); main.cpp skips its save-on-exit while the path is
-                // empty. Marked dirty so the title shows * and a future close-prompt fires.
-                m_CurrentScenePath.clear();
-                m_Dirty = true;
-                m_AutoSaveTimer = 0.0f;
+            if (ImGui::MenuItem(ICON_FA_FILE "  New Scene", "Ctrl+N")) {
+                NewScene(world);
             }
             ImGui::Separator();
-            if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open...")) {
+            if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open...", "Ctrl+O")) {
                 OpenScene(world, assets, FileDialog::OpenFile(
                     "Scene Files\0*.json\0All Files\0*.*\0", m_Window));
             }
-            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save")) {
+            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save", "Ctrl+S")) {
                 DoSave(world, assets);
             }
-            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As...")) {
+            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As...", "Ctrl+Shift+S")) {
                 DoSaveAs(world, assets);
             }
             ImGui::Separator();
@@ -2169,10 +2424,13 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 if (cur.empty()) cur = "Untitled";
                 ImGui::TextDisabled("Current: %s%s", cur.c_str(), m_Dirty ? " (unsaved)" : "");
             }
-            ImGui::TextDisabled("Saves on exit; auto-loads on launch.\nAuto-save keeps a crash-recovery snapshot\nbetween manual saves.");
             if (EditorSettings::Get().AutoSaveEnabled) {
+                ImGui::TextDisabled("Saves on exit; auto-loads on launch.\nAuto-save keeps a crash-recovery snapshot\nbetween manual saves.");
                 float remaining = std::max(0.0f, EditorSettings::Get().AutoSaveIntervalMinutes * 60.0f - m_AutoSaveTimer);
                 ImGui::TextDisabled("Next auto-save in %.0fs%s", remaining, m_Dirty ? "" : " (nothing to save)");
+            } else {
+                // Don't imply crash-recovery protection that's switched off (#47 P30).
+                ImGui::TextDisabled("Saves on exit; auto-loads on launch.\nAuto-save is off - enable it in Settings > Auto-Save\nto keep a crash-recovery snapshot between saves.");
             }
             ImGui::EndMenu();
         }
@@ -2206,6 +2464,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 glm::vec3 position = editorCamera.Position + editorCamera.Front() * 5.0f;
                 entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), displayName);
                 SelectItem(e, false);
+                Log::Info(std::string("Added ") + displayName + ".");
             };
             if (ImGui::MenuItem(ICON_FA_CUBE "  Cube")) spawnPrimitive("cube", "Cube");
             if (ImGui::MenuItem(ICON_FA_CIRCLE "  Sphere")) spawnPrimitive("sphere", "Sphere");
@@ -2223,6 +2482,21 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light")) {
                 entt::entity e = CreateEmptyAt(world, &editorCamera, "Spot Light", true);
                 world.Registry.get<LightComponent>(e).Kind = LightComponent::Type::Spot;
+            }
+            if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera")) {
+                entt::entity e = CreateEmptyAt(world, &editorCamera, "Camera", false);
+                world.Registry.emplace<CameraComponent>(e);
+                // Aim it back at the world origin so its Game-view preview isn't just black —
+                // ComposeTransform rotates Y(yaw) then X(pitch), local -Z is forward.
+                auto& t = world.Registry.get<TransformComponent>(e);
+                glm::vec3 d = t.Position;
+                if (glm::dot(d, d) > 1.0e-4f) {
+                    d = glm::normalize(-d); // direction from the camera toward the origin
+                    t.RotationEuler = glm::vec3(
+                        glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
+                        glm::degrees(std::atan2(-d.x, -d.z)),
+                        0.0f);
+                }
             }
 
             ImGui::Separator();
@@ -2501,12 +2775,17 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
     }
     ImGui::Separator();
 
-    auto boxView = world.Registry.view<const NameComponent, const LevelGeometryTag>();
-    int boxCount = 0;
-    for (auto e : boxView) { (void)e; boxCount++; }
+    const bool filtering = !m_HierarchyFilter.empty();
 
-    char geoHeader[48];
-    snprintf(geoHeader, sizeof(geoHeader), "Level Geometry (%d)###LevelGeo", boxCount);
+    auto boxView = world.Registry.view<const NameComponent, const LevelGeometryTag>();
+    int boxCount = 0, boxMatches = 0;
+    for (auto e : boxView) { boxCount++; if (MatchesHierarchyFilter(world, e)) boxMatches++; }
+
+    char geoHeader[64];
+    if (filtering)
+        snprintf(geoHeader, sizeof(geoHeader), "Level Geometry (%d / %d)###LevelGeo", boxMatches, boxCount);
+    else
+        snprintf(geoHeader, sizeof(geoHeader), "Level Geometry (%d)###LevelGeo", boxCount);
     if (ImGui::TreeNodeEx(geoHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Solid boxes with collision built in - always block movement.");
         for (auto entity : ViewInCreationOrder(world.Registry, boxView)) {
@@ -2517,11 +2796,14 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
     }
 
     auto objectView = world.Registry.view<const NameComponent>(entt::exclude<LevelGeometryTag>);
-    int objectCount = 0;
-    for (auto e : objectView) { (void)e; objectCount++; }
+    int objectCount = 0, objectMatches = 0;
+    for (auto e : objectView) { objectCount++; if (MatchesHierarchyFilter(world, e)) objectMatches++; }
 
-    char objectHeader[48];
-    snprintf(objectHeader, sizeof(objectHeader), "Objects (%d)###Objects", objectCount);
+    char objectHeader[64];
+    if (filtering)
+        snprintf(objectHeader, sizeof(objectHeader), "Objects (%d / %d)###Objects", objectMatches, objectCount);
+    else
+        snprintf(objectHeader, sizeof(objectHeader), "Objects (%d)###Objects", objectCount);
     if (ImGui::TreeNodeEx(objectHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::IsItemHovered()) {
             EditorUI::SetTooltip("Models, lights, and empties. Drag one row onto another to parent it;\ndrag onto empty space below to un-parent.");
@@ -2531,7 +2813,6 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
             // A parented entity draws nested under its parent instead of as a sibling — except
             // while filtering, where the parent may be filtered out and the match would then
             // never be reachable, so matches are listed flat instead.
-            bool filtering = !m_HierarchyFilter.empty();
             if (!filtering && hier && hier->Parent != entt::null) continue;
             if (filtering && !MatchesHierarchyFilter(world, entity)) continue;
             DrawHierarchyNode(world, assets, entity, /*isLevelGeometry=*/false);
@@ -2617,14 +2898,29 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         return; // children stay collapsed for the one frame a rename is open — deliberate, keeps the field stable
     }
 
-    // Icon reflects what the entity actually is, so lights and empties are distinguishable at a
-    // glance from meshes rather than all sharing one generic icon.
-    const char* icon = ICON_FA_DRAW_POLYGON;
-    if (isLevelGeometry) icon = ICON_FA_CUBE;
-    else if (world.Registry.all_of<LightComponent>(entity)) icon = ICON_FA_LIGHTBULB;
-    else if (!world.Registry.all_of<RenderableComponent>(entity)) icon = ICON_FA_DIAGRAM_PROJECT;
+    // Icon reflects what the entity actually is. A mesh that also carries a light shows BOTH
+    // glyphs, so mesh indication isn't lost the moment a light is added (#27 P16).
+    std::string icon;
+    if (isLevelGeometry) {
+        icon = ICON_FA_CUBE;
+    } else {
+        const bool hasMesh   = world.Registry.all_of<RenderableComponent>(entity);
+        const bool hasLight  = world.Registry.all_of<LightComponent>(entity);
+        const bool hasCamera = world.Registry.all_of<CameraComponent>(entity);
+        if (hasMesh)   icon += ICON_FA_DRAW_POLYGON;
+        if (hasLight)  { if (!icon.empty()) icon += " "; icon += ICON_FA_LIGHTBULB; }
+        if (hasCamera) { if (!icon.empty()) icon += " "; icon += ICON_FA_VIDEO; }
+        if (icon.empty()) icon = ICON_FA_DIAGRAM_PROJECT; // no mesh/light/camera — an empty/null object
+    }
 
-    std::string label = std::string(icon) + "  " + (name.Name.empty() ? std::string("(unnamed)") : name.Name);
+    // Never-named entities get a positional fallback instead of a wall of identical
+    // "(unnamed)" rows (#21 P10).
+    std::string shownName = name.Name;
+    if (shownName.empty())
+        shownName = (isLevelGeometry ? "Box " : "Object ")
+                  + std::to_string(CreationOrdinal(world.Registry, entity, isLevelGeometry));
+
+    std::string label = icon + "  " + shownName;
 
     ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth |
         (selected ? ImGuiTreeNodeFlags_Selected : 0) |
@@ -2776,6 +3072,7 @@ entt::entity EditorLayer::CreateEmptyAt(World& world, Camera* editorCamera, cons
     entt::entity e = world.CreateEmptyEntity(position, glm::vec3(0.0f), glm::vec3(1.0f), name);
     if (asLight) world.Registry.emplace<LightComponent>(e);
     SelectItem(e, false);
+    Log::Info(std::string("Added ") + name + ".");
     return e;
 }
 
@@ -2974,6 +3271,53 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         if (m_Selected != entt::null) listOne(m_Selected);
         for (entt::entity e : m_ExtraSelection) listOne(e);
 
+        // Batch Transform: relative nudges applied to every selected entity at once — the
+        // multi-select Inspector otherwise had no shared transform fields at all (#48 P31).
+        ImGui::Spacing();
+        ImGui::SeparatorText(ICON_FA_UP_DOWN_LEFT_RIGHT "  Batch Transform");
+        ImGui::TextDisabled("Relative — applied to all %d, then reset to 0 / x1.", count);
+
+        auto applyToSelection = [&](const std::function<void(TransformComponent&)>& fn) {
+            if (m_Selected != entt::null && world.Registry.valid(m_Selected))
+                fn(world.Registry.get<TransformComponent>(m_Selected));
+            for (entt::entity e : m_ExtraSelection)
+                if (world.Registry.valid(e)) fn(world.Registry.get<TransformComponent>(e));
+        };
+        // Fresh visit starts from identity; a value part-way through a drag is left alone.
+        if (!ImGui::IsAnyItemActive()) {
+            m_BatchNudgePos = glm::vec3(0.0f);
+            m_BatchNudgeRot = glm::vec3(0.0f);
+            m_BatchNudgeScale = glm::vec3(1.0f);
+        }
+
+        bool bActive = false, bCommitted = false;
+        glm::vec3 posBefore = m_BatchNudgePos;
+        if (DrawVec3Row("Move", m_BatchNudgePos, 0.1f, 0.0f, 0.0f, bActive, bCommitted,
+                "Adds this offset to every selected object's position.")) {
+            glm::vec3 d = m_BatchNudgePos - posBefore;
+            if (d != glm::vec3(0.0f)) applyToSelection([&](TransformComponent& t){ t.Position += d; });
+        }
+        if (bActive) StageUndo(world);
+        if (bCommitted) { CommitStagedUndo(world, "Batch Move"); m_BatchNudgePos = glm::vec3(0.0f); }
+
+        glm::vec3 rotBefore = m_BatchNudgeRot;
+        if (DrawVec3Row("Rotate", m_BatchNudgeRot, 1.0f, 0.0f, 0.0f, bActive, bCommitted,
+                "Adds this rotation (degrees per axis) to every selected object.")) {
+            glm::vec3 d = m_BatchNudgeRot - rotBefore;
+            if (d != glm::vec3(0.0f)) applyToSelection([&](TransformComponent& t){ t.RotationEuler += d; });
+        }
+        if (bActive) StageUndo(world);
+        if (bCommitted) { CommitStagedUndo(world, "Batch Rotate"); m_BatchNudgeRot = glm::vec3(0.0f); }
+
+        glm::vec3 sclBefore = m_BatchNudgeScale;
+        if (DrawVec3Row("Scale", m_BatchNudgeScale, 0.01f, 0.001f, 1000.0f, bActive, bCommitted,
+                "Multiplies every selected object's scale by this.")) {
+            glm::vec3 ratio = m_BatchNudgeScale / glm::max(sclBefore, glm::vec3(1.0e-6f));
+            if (ratio != glm::vec3(1.0f)) applyToSelection([&](TransformComponent& t){ t.Scale *= ratio; });
+        }
+        if (bActive) StageUndo(world);
+        if (bCommitted) { CommitStagedUndo(world, "Batch Scale"); m_BatchNudgeScale = glm::vec3(1.0f); }
+
         ImGui::Spacing();
         float halfWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
         if (ActionButton(ICON_FA_CLONE, "Duplicate (Ctrl+D)", ImVec2(halfWidth, 0.0f))) {
@@ -3012,8 +3356,16 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     // Scopes every CollapsingHeader ID below to this entity — otherwise ImGui remembers a
     // header's open/closed state by its label text alone, so collapsing e.g. "Health" on one
     // object would also show it collapsed on the next, unrelated object that happens to have
-    // the same component.
-    ImGui::PushID((int)entt::to_integral(entity));
+    // the same component. Keyed by a value that SURVIVES an undo/redo snapshot reload (which
+    // recreates the entity with a fresh handle) so expanded sections don't snap shut on every
+    // undo (#20 P9): the name if it has one, else its stable creation order.
+    if (!name.Name.empty()) {
+        ImGui::PushID(name.Name.c_str());
+    } else if (const auto* ord = registry.try_get<OrderComponent>(entity)) {
+        ImGui::PushID(0x0DE00000 + ord->Value);
+    } else {
+        ImGui::PushID((int)entt::to_integral(entity));
+    }
 
     // --- Header: active checkbox + icon + name, then tag/static, matching Unity's Inspector
     // top block but with the same per-kind icon the Hierarchy already uses, so the two panels
@@ -3077,15 +3429,21 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     bool removed = false;
     if (BeginComponentSection(world, entity, ICON_FA_UP_DOWN_LEFT_RIGHT, "Transform", false, removed,
             /*defaultOpen=*/true, "Position, rotation, and scale in the world. Every object has one.")) {
-        DrawVec3Row("Position", transform.Position, 0.1f, 0.0f, 0.0f, activated,
+        // Stage on first touch, commit on release — one History entry per edit, and a
+        // rejected (non-finite) or no-op edit records nothing (its snapshot dedupes away).
+        bool rowActive = false, rowCommitted = false;
+        DrawVec3Row("Position", transform.Position, 0.1f, 0.0f, 0.0f, rowActive, rowCommitted,
             "World-space position in units. Drag a number to change it, or\nclick a colored letter to zero that axis.");
-        if (activated) PushUndo(world, "Move");
-        DrawVec3Row("Rotation", transform.RotationEuler, 1.0f, 0.0f, 0.0f, activated,
+        if (rowActive) StageUndo(world);
+        if (rowCommitted) CommitStagedUndo(world, "Move");
+        DrawVec3Row("Rotation", transform.RotationEuler, 1.0f, 0.0f, 0.0f, rowActive, rowCommitted,
             "Rotation in degrees around each axis.");
-        if (activated) PushUndo(world, "Rotate");
-        DrawVec3Row("Scale", transform.Scale, isLevelGeometry ? 0.1f : 0.05f, 0.01f, 100.0f, activated,
+        if (rowActive) StageUndo(world);
+        if (rowCommitted) CommitStagedUndo(world, "Rotate");
+        DrawVec3Row("Scale", transform.Scale, isLevelGeometry ? 0.1f : 0.05f, 0.01f, 100.0f, rowActive, rowCommitted,
             "Size multiplier per axis - 1 is the original imported/created size.");
-        if (activated) PushUndo(world, "Scale");
+        if (rowActive) StageUndo(world);
+        if (rowCommitted) CommitStagedUndo(world, "Scale");
 
         // Re-parenting lives in the Hierarchy panel (drag one row onto another), and Snap to
         // Ground lives in the toolbar now — neither duplicated here.
@@ -3221,6 +3579,31 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         }
     }
 
+    // --- Camera (the Game view previews through this while editing) ------------------------
+    if (auto* cam = registry.try_get<CameraComponent>(entity)) {
+        if (BeginComponentSection(world, entity, ICON_FA_VIDEO, "Camera", true, removed, /*defaultOpen=*/true,
+                "The Game view renders through this camera while editing, so you can frame a\nshot without walking there. Play mode still uses the first-person controller.")) {
+            PropertyLabel("Field of View", "Vertical FOV in degrees.");
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::SliderFloat("##Fov", &cam->FovDegrees, 20.0f, 120.0f, "%.0f deg");
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Camera");
+            PropertyLabel("Near", "Closest distance the camera renders.");
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::DragFloat("##Near", &cam->NearPlane, 0.01f, 0.001f, 10.0f, "%.3f");
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Camera");
+            PropertyLabel("Far", "Farthest distance the camera renders.");
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::DragFloat("##Far", &cam->FarPlane, 1.0f, 1.0f, 100000.0f, "%.0f");
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Camera");
+            if (cam->FarPlane <= cam->NearPlane) cam->FarPlane = cam->NearPlane + 1.0f;
+            EndComponentSection();
+        }
+        if (removed) {
+            PushUndo(world, "Remove Camera");
+            registry.remove<CameraComponent>(entity);
+        }
+    }
+
     // --- Audio Source (collapsed by default: set-and-forget once a clip is chosen) ---------
     if (auto* audio = registry.try_get<AudioSourceComponent>(entity)) {
         if (BeginComponentSection(world, entity, ICON_FA_VOLUME_HIGH, "Audio Source", true, removed, /*defaultOpen=*/false,
@@ -3343,6 +3726,8 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
         });
     entry(ICON_FA_LIGHTBULB, "Light", registry.all_of<LightComponent>(entity),
         [&] { registry.emplace<LightComponent>(entity); });
+    entry(ICON_FA_VIDEO, "Camera", registry.all_of<CameraComponent>(entity),
+        [&] { registry.emplace<CameraComponent>(entity); });
 
     ImGui::SeparatorText("Physics");
     entry(ICON_FA_CUBE, "Box Collider", registry.all_of<ColliderComponent>(entity),
@@ -3358,6 +3743,10 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
 void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets) {
     if (m_Selected == entt::null || !world.Registry.valid(m_Selected)) return;
     Model* model = world.Registry.get<RenderableComponent>(m_Selected).ModelRef.get();
+
+    // Primitives (cube/sphere/...) are generated, not imported, so "the source file" wording
+    // doesn't apply to them (#16 P5).
+    const bool isPrimitive = model->Path().rfind("primitive://", 0) == 0;
 
     bool useCustom = (bool)model->MaterialOverride();
     if (ImGui::Checkbox("Use Custom Material", &useCustom)) {
@@ -3384,12 +3773,16 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets) {
         }
     }
     if (ImGui::IsItemHovered()) {
-        EditorUI::SetTooltip("Override with a fully editable PBR material.\nUnchecking goes back to whatever the source file imported.");
+        EditorUI::SetTooltip(isPrimitive
+            ? "Override with a fully editable PBR material.\nUnchecking goes back to the default primitive material."
+            : "Override with a fully editable PBR material.\nUnchecking goes back to whatever the source file imported.");
     }
 
     auto mat = model->MaterialOverride();
     if (!mat) {
-        ImGui::TextDisabled("Using material(s) imported from the source file.");
+        ImGui::TextDisabled(isPrimitive
+            ? "Using the default primitive material."
+            : "Using material(s) imported from the source file.");
         return;
     }
 
@@ -3400,23 +3793,23 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets) {
     PropertyLabel("Base Color", "The surface's tint, multiplied with the Albedo map if one is set.");
     ImGui::ColorEdit3("##BaseColor", &mat->BaseColor.x, ImGuiColorEditFlags_DisplayHex);
     if (ImGui::IsItemActivated()) StageUndo(world);
-    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo("Edit Material");
+    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
     PropertyLabel("Metallic", "0 = non-metal (plastic, wood, skin), 1 = pure metal.\nIgnored where a Metallic map is set.");
     ImGui::SliderFloat("##Metallic", &mat->Metallic, 0.0f, 1.0f);
     if (ImGui::IsItemActivated()) StageUndo(world);
-    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo("Edit Material");
+    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
     PropertyLabel("Roughness", "0 = mirror-smooth, 1 = fully matte.\nIgnored where a Roughness map is set.");
     ImGui::SliderFloat("##Roughness", &mat->Roughness, 0.04f, 1.0f);
     if (ImGui::IsItemActivated()) StageUndo(world);
-    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo("Edit Material");
+    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
     PropertyLabel("Emissive Color", "Color this surface glows, independent of scene lighting.");
     ImGui::ColorEdit3("##EmissiveColor", &mat->EmissiveColor.x, ImGuiColorEditFlags_DisplayHex);
     if (ImGui::IsItemActivated()) StageUndo(world);
-    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo("Edit Material");
+    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
     PropertyLabel("Emissive Strength", "Brightness multiplier for the Emissive Color/map - above 1 for a strong glow.");
     ImGui::SliderFloat("##EmissiveStrength", &mat->EmissiveStrength, 0.0f, 10.0f);
     if (ImGui::IsItemActivated()) StageUndo(world);
-    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo("Edit Material");
+    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
 
     ImGui::SeparatorText("Texture Maps");
 
@@ -4063,7 +4456,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     if (isUsingNow && !m_GizmoWasUsing) {
         // Drag just started this frame: snapshot the still-unmodified transform (pos/rot/scale
         // below haven't been written yet) so undo restores to exactly where the drag began.
-        PushUndo(world, "Transform");
+        PushUndo(world, GizmoOpUndoLabel(m_GizmoOp));
     }
     m_GizmoWasUsing = isUsingNow;
 
@@ -4078,9 +4471,24 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         glm::mat4 newLocal = glm::inverse(parentWorld) * adjusted;
         float nt[3], nr[3], ns[3];
         ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(newLocal), nt, nr, ns);
-        transform.Position = {nt[0], nt[1], nt[2]};
-        transform.RotationEuler = {nr[0], nr[1], nr[2]};
-        transform.Scale = {ns[0], ns[1], ns[2]};
+        glm::vec3 newPos{nt[0], nt[1], nt[2]};
+        glm::vec3 newRot{nr[0], nr[1], nr[2]};
+        glm::vec3 newScale{ns[0], ns[1], ns[2]};
+        for (int i = 0; i < 3; ++i) if (std::fabs(newRot[i]) < 1.0e-4f) newRot[i] = 0.0f; // kill decompose dust / -0.0
+
+        // Write back only the channel this gizmo actually drives — ImGuizmo's decompose leaks
+        // float noise into the other two, and a pure translate drag was nudging Rotation
+        // 0.000 -> -0.000 every time, accumulating over many drags (#12 P1).
+        switch (m_GizmoOp) {
+            case GizmoOp::Translate: transform.Position = newPos;      break;
+            case GizmoOp::Rotate:    transform.RotationEuler = newRot;  break;
+            case GizmoOp::Scale:     transform.Scale = newScale;        break;
+            default: // Rect / bounds edit resizes from a handle — position and scale both move
+                transform.Position = newPos;
+                transform.RotationEuler = newRot;
+                transform.Scale = newScale;
+                break;
+        }
     }
 
     ImGui::End();
@@ -4186,7 +4594,20 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     // current viewing angle. Manually hit-tested against the raw mouse position, same as the
     // tool buttons above, since this overlay window is ImGuiWindowFlags_NoInputs.
     {
-        const char* isoLabel = editorCamera.Orthographic ? "Iso" : "Persp";
+        // Name the view when the camera is aligned to a canonical axis (Front/Right/Top/...),
+        // as set by the nav-gizmo axis handles or the numpad views — falling back to
+        // Persp/Iso only when it's a free angle (#25 P14).
+        const char* isoLabel = [&]() -> const char* {
+            const glm::vec3 f = editorCamera.Front();
+            const float k = 0.999f; // within ~2.5 degrees of dead-on
+            if (f.z < -k) return "Front";
+            if (f.z >  k) return "Back";
+            if (f.x < -k) return "Right";
+            if (f.x >  k) return "Left";
+            if (f.y < -k) return "Top";
+            if (f.y >  k) return "Bottom";
+            return editorCamera.Orthographic ? "Iso" : "Persp";
+        }();
         ImFont* font = ImGui::GetFont();
         float labelFontSize = ImGui::GetFontSize();
         ImVec2 textSize = font->CalcTextSizeA(labelFontSize, FLT_MAX, 0.0f, isoLabel);
@@ -4296,7 +4717,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
 
     bool isUsingNow = ImGuizmo::IsUsing();
     if (isUsingNow && !m_GizmoWasUsing) {
-        PushUndo(world, "Transform");
+        PushUndo(world, GizmoOpUndoLabel(m_GizmoOp));
     }
 
     if (isUsingNow) {
@@ -4309,6 +4730,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
             glm::mat4 newMatrix = delta * objMatrix;
             float nt[3], nr[3], ns[3];
             ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(newMatrix), nt, nr, ns);
+            for (int i = 0; i < 3; ++i) if (std::fabs(nr[i]) < 1.0e-4f) nr[i] = 0.0f; // decompose dust / -0.0 (#12 P1)
             *r.pos = {nt[0], nt[1], nt[2]};
             *r.rot = {nr[0], nr[1], nr[2]};
             *r.scale = {ns[0], ns[1], ns[2]};
@@ -5237,6 +5659,23 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
                 }
                 ImGui::EndPopup();
             }
+            // Reimport straight from the context menu instead of only via Import Settings >
+            // Apply (#28 P17). Single selection, real imported assets only.
+            if (!isFolder && m_ExtraAssetSelection.empty() &&
+                (cell.kind == Cell::Kind::Model || cell.kind == Cell::Kind::Texture)) {
+                if (ImGui::MenuItem(ICON_FA_ROTATE "  Reimport")) {
+                    if (cell.kind == Cell::Kind::Model) {
+                        PushUndo(world, "Reimport Model");
+                        if (assets.ReimportModel(cell.key)) Log::Info("Reimported model '" + cell.key + "'.");
+                        else Log::Error("Reimport failed for '" + cell.key + "' - see Console.");
+                    } else {
+                        PushUndo(world, "Reimport Texture");
+                        if (assets.ReimportTexture(cell.key)) Log::Info("Reimported texture '" + cell.key + "'.");
+                        else Log::Error("Reimport failed for '" + cell.key + "' - see Console.");
+                    }
+                }
+            }
+
             // Everything currently selected, whenever the right-clicked item is part of a
             // multi-selection - so Delete/Remove from Library act on the whole group rather
             // than just the one cell that happened to receive the right-click.

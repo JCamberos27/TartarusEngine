@@ -124,7 +124,8 @@ void GameViewPanel::DrawCustomResolutionModal() {
     }
 }
 
-void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bool playing, bool inputEngaged) {
+void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bool playing, bool inputEngaged,
+                            bool noSceneCamera) {
     m_LastKnownOsFullscreen = isOsFullscreen;
     m_ViewHovered = false;
 
@@ -178,6 +179,15 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
                               ImVec2(anchor.x + ts.x + 10.0f, anchor.y + ts.y + 6.0f),
                               IM_COL32(0, 0, 0, 150), 4.0f);
             dl->AddText(anchor, IM_COL32(255, 255, 255, 230), hint);
+        } else if (!playing && noSceneCamera) {
+            const char* hint = "No Camera in scene  \xE2\x80\xA2  previewing the editor view.  Add \xE2\x96\xB8 Camera to place one.";
+            ImVec2 ts = ImGui::CalcTextSize(hint);
+            ImVec2 anchor(imagePos.x + (rect.Size.x - ts.x) * 0.5f,
+                          imagePos.y + rect.Size.y - ts.y - 14.0f);
+            dl->AddRectFilled(ImVec2(anchor.x - 10.0f, anchor.y - 6.0f),
+                              ImVec2(anchor.x + ts.x + 10.0f, anchor.y + ts.y + 6.0f),
+                              IM_COL32(0, 0, 0, 140), 4.0f);
+            dl->AddText(anchor, IM_COL32(230, 230, 230, 210), hint);
         } else if (playing && inputEngaged) {
             // While captured the cursor is hidden and the Stop button can't be clicked, so keep
             // a persistent reminder of the way out on screen (top-centre, out of the way).

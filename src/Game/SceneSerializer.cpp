@@ -17,16 +17,32 @@
 #include <algorithm>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/euler_angles.hpp>
+#include <cmath>
 
 using json = nlohmann::json;
 
 namespace {
 
-json Vec3ToJson(const glm::vec3& v) { return json::array({v.x, v.y, v.z}); }
+// A non-finite component anywhere in the scene (nan/inf slipped past the Inspector, or a
+// corrupt file) serializes as JSON `null` / a bare `nan` token, neither of which reloads —
+// the whole scene is then lost. Scrub to 0 at the one choke point every vector passes
+// through, on both write and read, and say so in the Console (#34 D4).
+inline float FiniteOr(float x, float fallback, const char* what) {
+    if (std::isfinite(x)) return x;
+    Log::Warn(std::string("Scene: non-finite ") + what + " value replaced with " + std::to_string(fallback));
+    return fallback;
+}
+
+json Vec3ToJson(const glm::vec3& v) {
+    return json::array({FiniteOr(v.x, 0.0f, "vector"), FiniteOr(v.y, 0.0f, "vector"), FiniteOr(v.z, 0.0f, "vector")});
+}
 
 glm::vec3 JsonToVec3(const json& j, const glm::vec3& fallback = glm::vec3(0.0f)) {
     if (!j.is_array() || j.size() != 3) return fallback;
-    return glm::vec3(j[0].get<float>(), j[1].get<float>(), j[2].get<float>());
+    if (!j[0].is_number() || !j[1].is_number() || !j[2].is_number()) return fallback;
+    return glm::vec3(FiniteOr(j[0].get<float>(), fallback.x, "vector"),
+                     FiniteOr(j[1].get<float>(), fallback.y, "vector"),
+                     FiniteOr(j[2].get<float>(), fallback.z, "vector"));
 }
 
 std::string PathOrEmpty(const std::shared_ptr<Texture>& tex) {
@@ -65,6 +81,13 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
     if (const auto* collider = world.Registry.try_get<ColliderComponent>(entity)) {
         j["collider"] = {{"isTrigger", collider->IsTrigger}};
     }
+    if (const auto* cam = world.Registry.try_get<CameraComponent>(entity)) {
+        j["camera"] = {
+            {"fov", cam->FovDegrees},
+            {"near", cam->NearPlane},
+            {"far", cam->FarPlane},
+        };
+    }
 }
 
 void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
@@ -87,6 +110,14 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
         ColliderComponent collider;
         collider.IsTrigger = j["collider"].value("isTrigger", false);
         world.Registry.emplace_or_replace<ColliderComponent>(entity, collider);
+    }
+    if (j.contains("camera")) {
+        const json& c = j["camera"];
+        CameraComponent cam;
+        cam.FovDegrees = c.value("fov", 60.0f);
+        cam.NearPlane = c.value("near", 0.1f);
+        cam.FarPlane = c.value("far", 1000.0f);
+        world.Registry.emplace_or_replace<CameraComponent>(entity, cam);
     }
 }
 

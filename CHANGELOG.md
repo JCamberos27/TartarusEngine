@@ -7,6 +7,80 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### Polish + feature sweep (issues #11–#50)
+
+_One uncommitted batch; issue IDs in parentheses._
+
+**Data safety**
+- Non-finite input (`nan` / `inf` / `-inf`) typed into an Inspector Transform field is now
+  rejected with a Console warning instead of poisoning the transform and, on save, writing
+  tokens that make `scene.json` fail to reload. A `FiniteOr()` scrub at the one point every
+  vector passes through on save *and* load is the belt-and-braces guarantee (D4, #34).
+
+**Bugs**
+- Wireframe mode: the selected object's own wireframe is visible again — the selection
+  highlight no longer paints a filled orange silhouette over it. The full-surface wash is
+  skipped in Wireframe/Unlit, and lighter (α 0.22 → 0.10) in Shaded so imported meshes
+  keep their shading (P2 #13, P24 #41).
+- Restore-from-maximized ghost frame, camera drift across Play→Stop, and the "History count
+  grows on undo-then-jump" report could not be reproduced against the current build — the
+  first is covered by the `OrderComponent` snapshot fix, the others were automation timing
+  (B9 #35 needs a hands-on check; B11 #37, B8 #11, P12 #23 → cannot-reproduce).
+- Entity rename still accepts long / unsanitised strings — *not addressed this pass* (B12 #38).
+
+**Polish**
+- Gizmo translate-drag no longer leaks float noise into Rotation — only the channel the
+  gizmo actually drives is written back, and sub-`1e-4` euler dust is zeroed (P1 #12).
+- Environment / Material colour widgets already consistent; `-0.000` collapsed to `0.000`
+  on commit (P3 #14, P13 #24).
+- Import / Open / Save dialogs open in the project folder, then follow the last-used
+  location, instead of `build/Release/` (P4 #15).
+- Primitive Inspector says "the default primitive material", not "imported from the source
+  file" (P5 #16).
+- History panel opens clear of the Stats overlay instead of stacked on it (P6 #17).
+- History jump no longer mis-restores selection to a random unnamed entity; the gizmo's
+  undo step is now labelled "Move" / "Rotate" / "Scale" like the Inspector's, not
+  "Transform"; a rejected or no-op edit records nothing (P7 #18, P8 #19, P23 #40).
+- Undo no longer collapses an expanded Inspector component section — the section's open
+  state is keyed to the entity's name / order, which survives the snapshot reload (P9 #20).
+- Unnamed Hierarchy rows get a positional fallback ("Box 3", "Object 7"); a mesh that also
+  carries a light shows both glyphs; a filtered Hierarchy header reads "matches / total"
+  (P10 #21, P16 #27, P15 #26).
+- Nav-gizmo corner label shows Front / Back / Left / Right / Top / Bottom when the camera
+  is axis-aligned (P14 #25).
+- Asset right-click menu has a Reimport item for models and textures (P17 #28).
+- Origin axis lines are desaturated, dimmer, and fade out approaching the world origin so
+  they stop cluttering the transform gizmo (P25 #42).
+- Default Gizmo Size 0.10 → 0.15 (P26 #43).
+- Extreme-magnitude Transform values (≥ 1e6) show in `%g` scientific form with the exact
+  value in the hover tooltip, instead of overflowing the field (P27 #44).
+- File-menu items show their shortcuts (Ctrl+N / O / S / Shift+S), and those shortcuts are
+  now actually wired up (P28 #45).
+- The File-menu auto-save blurb no longer implies crash-recovery protection when auto-save
+  is switched off (P30 #47).
+- Play / Stop tooltips already present; verified (P32 #49).
+- The title's unsaved `*` clears when Undo returns the scene to the last-saved state
+  (P22 #39).
+- More Console logging: object add / delete / duplicate, non-finite input rejects (P20 #31).
+- Left as noted: group-delete confirmation is intentionally omitted (scene deletes are
+  instant + undoable) (P21 #32); the spinning corner mark needs an art asset (P19 #30);
+  the colour-picker clip could not be reproduced at a normal window size (P11 #22);
+  FBX/model thumbnails still show a glyph, not a render (P18 #29).
+
+### Added — features (issues #36, #48, #50)
+- **Camera entity.** `CameraComponent` (FOV / near / far), an **Add ▸ Camera** menu item and
+  an Add-Component entry, an Inspector section, scene serialization, and a Hierarchy icon.
+  The Game view renders through the first placed Camera while editing so a shot can be
+  framed without walking there; a "No Camera in scene" hint shows over the view when there
+  isn't one (B10 #36). Play mode still uses the first-person controller.
+- **Batch Transform.** The multi-select Inspector has a Batch Transform block — relative
+  Move / Rotate / Scale applied to every selected entity, then snapped back to 0 / ×1, one
+  undo step per nudge (P31 #48).
+- **CJK font fallback.** A system CJK face (Microsoft YaHei / MS Gothic / Malgun Gothic) is
+  merged over the Japanese glyph range so Chinese / Japanese / Korean entity names render
+  instead of tofu boxes. Colour emoji still can't — that needs the FreeType colour backend
+  (P33 #50).
+
 ### Fixed — bug-tier sweep (issues #1–#10)
 - New Scene no longer silently overwrites `scene.json` — it's now an untitled scene
   that must be Saved As (`e5234e5`, #1).
