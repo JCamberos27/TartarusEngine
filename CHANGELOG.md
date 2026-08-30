@@ -7,6 +7,21 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### Fixed — bug-tier sweep (issues #1–#10)
+- New Scene no longer silently overwrites `scene.json` — it's now an untitled scene
+  that must be Saved As (`e5234e5`, #1).
+- Removing then re-adding a Mesh Renderer restores the original mesh instead of a
+  default cube (`b04b320`, #2).
+- Undo/redo/Play-Stop no longer reorders the Hierarchy — entities carry a stable
+  `OrderComponent` serialized as `order` (`f2aafde`, #3).
+- Play mode: persistent "Esc to release" hint + auto-release on focus loss (`e309e81`, #4).
+- No camera whip when the cursor lock toggles (`039f781`, #5).
+- View presets / nav-gizmo frame the whole scene when nothing is selected (`6291405`, #6).
+- `primitive://` meshes no longer appear as Asset Browser entries (`6f7a02a`, #7).
+- Duplicate offsets copies by (1,0,1), matching Paste (`03be6ce`, #8).
+- Import-Settings model preview clamps zoom and has a Reset view button (`65018b3`, #9).
+- Clicking an asset clears the scene selection so its Import Settings show (`4426832`, #10).
+
 ### Added
 - **GL/GLFW diagnostics.** `glfwSetErrorCallback` now routes GLFW errors into the engine
   Log (previously unset, so every GLFW error was silent). Optional OpenGL debug-output
