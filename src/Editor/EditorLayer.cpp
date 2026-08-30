@@ -1051,6 +1051,7 @@ void EditorLayer::SelectItem(entt::entity entity, bool addToSelection) {
     if (!addToSelection) {
         m_ExtraSelection.clear();
         m_Selected = entity;
+        if (m_FrameOnSelect && entity != entt::null) m_PendingFrameSelect = true;
         return;
     }
 
@@ -2160,6 +2161,50 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         }
     }
 
+    // Frame-on-select (opt-in, #69): SelectItem set this when the selection changed.
+    if (m_PendingFrameSelect) {
+        m_PendingFrameSelect = false;
+        if (HasAnySelection()) FocusOnSelection(world, editorCamera);
+    }
+
+    // Off-screen selection indicator (#69): if the selected object is outside the viewport,
+    // draw a marker clamped to the nearest edge, pointing toward it, so a selection made in the
+    // Hierarchy isn't invisible with no hint where it is.
+    if (HasAnySelection() && m_ViewportSize.x > 1.0f && m_ViewportSize.y > 1.0f) {
+        glm::vec3 center;
+        if (GetSelectionCenter(world, center)) {
+            glm::mat4 vp = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) * editorCamera.ViewMatrix();
+            glm::vec4 clip = vp * glm::vec4(center, 1.0f);
+            bool behind = clip.w <= 0.0001f;
+            glm::vec2 ndc = behind ? glm::vec2(0.0f) : glm::vec2(clip.x, clip.y) / clip.w;
+            bool offscreen = behind || ndc.x < -1.0f || ndc.x > 1.0f || ndc.y < -1.0f || ndc.y > 1.0f;
+            if (offscreen) {
+                // Direction from viewport center toward the target, in screen space.
+                glm::vec2 dir = behind ? glm::vec2(-ndc.x, ndc.y) : glm::vec2(ndc.x, -ndc.y);
+                if (glm::dot(dir, dir) < 1.0e-6f) dir = glm::vec2(0.0f, 1.0f);
+                dir = glm::normalize(dir);
+                ImVec2 vpCenter(m_ViewportPos.x + m_ViewportSize.x * 0.5f, m_ViewportPos.y + m_ViewportSize.y * 0.5f);
+                float mx = m_ViewportSize.x * 0.5f - 28.0f;
+                float my = m_ViewportSize.y * 0.5f - 28.0f;
+                // Scale the unit direction out to whichever axis hits the inset edge first.
+                float sx = std::fabs(dir.x) > 1.0e-4f ? mx / std::fabs(dir.x) : 1.0e9f;
+                float sy = std::fabs(dir.y) > 1.0e-4f ? my / std::fabs(dir.y) : 1.0e9f;
+                float s = std::min(sx, sy);
+                ImVec2 p(vpCenter.x + dir.x * s, vpCenter.y + dir.y * s);
+
+                ImDrawList* dl = ImGui::GetForegroundDrawList();
+                const ImU32 col = IM_COL32(255, 140, 26, 235);
+                // A small triangle pointing along `dir`.
+                ImVec2 perp(-dir.y, dir.x);
+                ImVec2 tip(p.x + dir.x * 11.0f, p.y + dir.y * 11.0f);
+                ImVec2 b1(p.x - dir.x * 6.0f + perp.x * 8.0f, p.y - dir.y * 6.0f + perp.y * 8.0f);
+                ImVec2 b2(p.x - dir.x * 6.0f - perp.x * 8.0f, p.y - dir.y * 6.0f - perp.y * 8.0f);
+                dl->AddCircleFilled(p, 13.0f, IM_COL32(20, 20, 20, 170));
+                dl->AddTriangleFilled(tip, b1, b2, col);
+            }
+        }
+    }
+
     // Quick-add popup — opened by Shift+A (shortcut handler above) or the Inspector empty
     // state's "Add to Scene" button. Handled here, at the very end of the frame's UI, so it
     // works no matter which earlier panel set the flag. Positioned at the cursor.
@@ -2770,6 +2815,8 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             ImGui::SeparatorText("Overlays");
             ImGui::MenuItem(ICON_FA_TABLE_CELLS "  Grid", nullptr, &m_ShowGrid);
             ImGui::MenuItem(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform Gizmo", nullptr, &m_ShowGizmos);
+            ImGui::MenuItem(ICON_FA_CROSSHAIRS "  Frame on Select", nullptr, &m_FrameOnSelect);
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Move the camera to frame each object as you select it.");
             if (ImGui::MenuItem(ICON_FA_BORDER_ALL "  Orthographic", "Numpad 5", editorCamera.Orthographic)) {
                 ToggleOrthographic(world, editorCamera);
             }

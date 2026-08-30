@@ -390,6 +390,8 @@ private:
 
     bool m_ShowGrid = true;
     bool m_ShowGizmos = true; // View menu toggle for the viewport transform gizmo (audit #60)
+    bool m_FrameOnSelect = false;   // auto-frame the editor camera when the selection changes (#69)
+    bool m_PendingFrameSelect = false; // set by SelectItem, consumed in Draw() where the camera is in scope
     float m_GridSize = 1.0f;          // minor grid line spacing, world units
     bool m_GridSnapEnabled = true;    // hold Ctrl to invert momentarily, Blender-style
     float m_SnapTranslation = 1.0f;
