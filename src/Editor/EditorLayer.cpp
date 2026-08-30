@@ -1005,12 +1005,42 @@ void EditorLayer::SnapSelectionToGround(World& world) {
     }
 }
 
-void EditorLayer::ComputeViewPivot(World& world, Camera& editorCamera, glm::vec3& outPivot) const {
+bool EditorLayer::ComputeSceneBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) const {
+    glm::vec3 boundsMin(1e30f), boundsMax(-1e30f);
+    bool any = false;
+    for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
+        auto& renderable = world.Registry.get<RenderableComponent>(entity);
+        glm::mat4 m = world.ComposeWorldTransform(entity);
+        AABB bounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(m);
+        boundsMin = glm::min(boundsMin, bounds.Min);
+        boundsMax = glm::max(boundsMax, bounds.Max);
+        any = true;
+    }
+    if (!any) return false;
+    outMin = boundsMin;
+    outMax = boundsMax;
+    return true;
+}
+
+void EditorLayer::ComputeViewPivot(World& world, Camera& editorCamera, glm::vec3& outPivot,
+                                   float& outFrameRadius) const {
+    outFrameRadius = 0.0f;
+
     if (GetSelectionCenter(world, outPivot)) return;
 
     float t;
     if (world.Raycast(editorCamera.Position, editorCamera.Front(), 1000.0f, t) != entt::null) {
         outPivot = editorCamera.Position + editorCamera.Front() * t;
+        return;
+    }
+
+    // Nothing selected and not pointed at anything — frame the whole scene rather than orbiting
+    // a fixed point 15 units ahead (which, if the camera had drifted off, left the viewport
+    // black with no recovery).
+    glm::vec3 sceneMin, sceneMax;
+    if (ComputeSceneBounds(world, sceneMin, sceneMax)) {
+        outPivot = (sceneMin + sceneMax) * 0.5f;
+        outFrameRadius = std::max(glm::length(sceneMax - sceneMin) * 0.5f, 0.5f);
         return;
     }
 
@@ -1020,7 +1050,8 @@ void EditorLayer::ComputeViewPivot(World& world, Camera& editorCamera, glm::vec3
 
 void EditorLayer::SnapToView(World& world, Camera& editorCamera, float yaw, float pitch, bool orthographic) {
     glm::vec3 pivot;
-    ComputeViewPivot(world, editorCamera, pivot);
+    float frameRadius = 0.0f;
+    ComputeViewPivot(world, editorCamera, pivot, frameRadius);
 
     // A "distance to pivot" that means the same thing regardless of the CURRENT projection mode.
     // In orthographic mode the camera's literal position is decoupled from zoom level (scroll
@@ -1028,9 +1059,17 @@ void EditorLayer::SnapToView(World& world, Camera& editorCamera, float yaw, floa
     // computing distance from Position here would use a stale, arbitrary number; derive the
     // perspective-equivalent distance from the current ortho size instead.
     float halfFovTan = tan(glm::radians(editorCamera.Fov) * 0.5f);
-    float distance = editorCamera.Orthographic
-        ? editorCamera.OrthoHalfHeight / halfFovTan
-        : glm::length(editorCamera.Position - pivot);
+    float distance;
+    if (frameRadius > 0.0f) {
+        // Whole-scene fallback (no selection, not pointed at anything): don't keep the old
+        // distance — it could be anywhere. Pull back far enough to fit the scene's bounding
+        // sphere in view, same formula FocusOnSelection uses.
+        distance = (frameRadius / std::sin(glm::radians(editorCamera.Fov) * 0.5f)) * 1.35f;
+    } else {
+        distance = editorCamera.Orthographic
+            ? editorCamera.OrthoHalfHeight / halfFovTan
+            : glm::length(editorCamera.Position - pivot);
+    }
     distance = std::max(distance, 0.5f);
 
     glm::vec3 newFront;

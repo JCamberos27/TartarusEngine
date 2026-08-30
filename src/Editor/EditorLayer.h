@@ -302,6 +302,10 @@ private:
     // Shared bounds computation behind FocusOnSelection() and GetSelectionCenter() — world-space
     // AABB of the current selection (single object or group). False if nothing is selected.
     bool ComputeSelectionBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) const;
+    // World-space AABB over every renderable/placed entity in the scene. False if the scene has
+    // nothing to frame. Used as the last resort for view snapping when there's no selection and
+    // the camera isn't pointed at anything.
+    bool ComputeSceneBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) const;
     // Repositions the camera along its current view direction so the whole selection (single
     // or group) fits in frame, without changing where it's looking (matches most editors'
     // basic "frame selection" behavior — it centers distance, not aim).
@@ -695,9 +699,12 @@ private:
 
     // What to orbit/frame around for a view snap: the current selection's bounds center if
     // there is one, else whatever the camera is currently looking straight at (a raycast into
-    // the world), else a fixed distance in front of the camera. Same "what am I looking at"
-    // concept Alt-drag-orbit and F-to-focus already use, just also feeding the preset views.
-    void ComputeViewPivot(World& world, Camera& editorCamera, glm::vec3& outPivot) const;
+    // the world), else the whole scene's bounds centre, else a fixed distance in front of the
+    // camera. `outFrameRadius` is >0 only for the whole-scene fallback — SnapToView uses it to
+    // pull the camera to a distance that actually fits the scene in view (rather than keeping
+    // whatever distance it had, which is how a preset used to leave you staring at black).
+    void ComputeViewPivot(World& world, Camera& editorCamera, glm::vec3& outPivot,
+                          float& outFrameRadius) const;
     // Smoothly (see UpdateViewTransition) reorients the camera to `yaw`/`pitch`, switches
     // projection mode, and repositions it to keep the same pivot centered and the same apparent
     // scale (the ortho<->perspective size conversion uses Fov, so switching mid-view doesn't jump).
