@@ -2212,8 +2212,16 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             for (const auto& e : m_ExtraAssetSelection) toDelete.push_back(e);
             RequestDeleteAssets(world, assets, toDelete, io.KeyShift);
         }
-        if (HasAnySelection() && !m_AssetBrowserFocused && ImGui::IsKeyPressed(ImGuiKey_F)) FocusOnSelection(world, editorCamera);
-        if (HasAnySelection() && !m_AssetBrowserFocused && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) DuplicateSelection(world, assets);
+        // The Asset Browser "owns" Ctrl+D / F / Delete only when it's focused AND actually has
+        // an asset selected — otherwise those keys belong to the scene selection. Without the
+        // second half, m_AssetBrowserFocused stays sticky-true after any Asset Browser click
+        // (clicking the 3D viewport can't move ImGui focus off it — the viewport is just an
+        // ImGui::Image), which silently swallowed scene-object Ctrl+D forever.
+        bool assetBrowserOwnsKeys = m_AssetBrowserFocused &&
+            (!m_SelectedAssetKey.empty() || !m_ExtraAssetSelection.empty());
+
+        if (HasAnySelection() && !assetBrowserOwnsKeys && ImGui::IsKeyPressed(ImGuiKey_F)) FocusOnSelection(world, editorCamera);
+        if (HasAnySelection() && !assetBrowserOwnsKeys && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) DuplicateSelection(world, assets);
 
         // Ctrl+Shift+F — snap the selected Camera entity to the editor viewport (Unity's Align
         // With View). Mirrors the Inspector's "Align to View" button.
@@ -2243,7 +2251,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
                 // just means navigating the browser to it, since it's already always visible
                 // once you're in the right folder.
                 if (!m_SelectedAssetIsFolder) m_CurrentAssetFolder = assets.AssetFolder(m_SelectedAssetKey);
-            } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) {
+            } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !m_SelectedAssetKey.empty()) {
                 DuplicateSelectedAsset(world, assets);
             } else if (ImGui::IsKeyPressed(ImGuiKey_Enter)) {
                 if (m_SelectedAssetIsFolder) m_CurrentAssetFolder = m_SelectedAssetKey;
