@@ -7,6 +7,25 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### Second polish sweep — remaining open issues
+
+- **#29 (P18)** — Asset Browser now shows a rendered thumbnail for each model instead of a
+  generic cube glyph. Each `Model` is drawn once into its own small GL texture and cached
+  (a few per frame, so opening a big folder doesn't stall); the cache is dropped on
+  reimport / scene change / undo. `glCopyTexSubImage2D` added to the GL loader for the copy.
+- **#38 (B12)** — entity rename is sanitised on commit: C0 control chars + DEL stripped, length
+  capped at 64, ends trimmed, UTF-8 multibyte kept intact. No printf-family call was using a
+  name as a format string, so the `%n` concern was already moot.
+- **#30 (P19)** — the spinning corner wordmark is bigger, and a **Window ▸ Engine Mark** toggle
+  hides it for anyone who reads it as an unreadable glyph rather than branding.
+- **#40 (P23)** — verified by hand: three separate Position edits are three History entries,
+  and one Ctrl+Z reverts only the last. The earlier "reverts all four at once" report does
+  not reproduce (covered by the no-op-edit dedup from the first sweep).
+- **#35 (B9)** — restore-from-maximised ghost frame does not reproduce against the current
+  build (tried both maximise→restore and restore→maximise; the window repaints cleanly).
+- Not changed: **#46 (P29)** near-black sky (scene data, author's call); **#33 (MV)** still
+  needs hand-testing for real key events / Play-mode movement.
+
 ### Polish + feature sweep (issues #11–#50)
 
 _One uncommitted batch; issue IDs in parentheses._

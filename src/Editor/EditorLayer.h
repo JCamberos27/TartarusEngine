@@ -545,6 +545,17 @@ private:
     bool m_ModelPreviewDragging = false; // press started while hovering the preview image
     ModelPreviewRenderer m_ModelPreview;
 
+    // Asset Browser model thumbnails (#18 P18): each Model rendered once into its own small GL
+    // texture and cached, so a folder of FBXs shows real previews instead of a generic cube
+    // glyph. A per-frame budget keeps opening a big folder from stalling; the blit FBO copies
+    // the shared preview render into the per-model texture (GL 3.3-core, no glCopyImageSubData).
+    ModelPreviewRenderer m_ThumbnailPreview;
+    std::map<const Model*, unsigned int> m_ModelThumbnails;
+    unsigned int m_ThumbnailBlitFbo = 0;
+    int m_ThumbnailBudgetThisFrame = 0;
+    unsigned int ModelThumbnail(Model& model); // cached GL texture, or 0 while over this frame's budget
+    void InvalidateModelThumbnail(const Model* model);
+
     // Drains dropped/imported files a few per frame instead of all at once in a single
     // synchronous stall — see ImportQueueManager.h for why this isn't a background thread.
     // ImportQueueManager only carries plain paths, so the virtual Asset Browser folder each
@@ -636,6 +647,10 @@ private:
     bool m_ConsoleAutoScroll = true;
     std::string m_ConsoleFilter;
     unsigned int m_ConsoleSeenRevision = 0; // only auto-scroll when Log actually gained an entry
+
+    // The spinning corner wordmark. On by default; a Window-menu toggle for anyone who reads
+    // it as an unreadable glyph rather than branding (#19 P19).
+    bool m_ShowEngineMark = true;
 
     // --- Statistics overlay --------------------------------------------------------------
     void DrawStatsOverlay(World& world, float dt);

@@ -273,6 +273,31 @@ std::string LeafNameOf(const std::string& folderPath) {
     return slash == std::string::npos ? folderPath : folderPath.substr(slash + 1);
 }
 
+// A rename field otherwise takes an arbitrary-length string with raw control bytes in it, which
+// truncate oddly in the Hierarchy/Inspector and could reach a log or label path (#38 B12).
+// Strip C0 controls + DEL, cap the length, and (on commit) trim the ends. UTF-8 multibyte
+// (>= 0x80) is kept so CJK / emoji names still round-trip.
+inline std::string SanitizeEntityName(const std::string& in, bool trimEnds = true) {
+    std::string out;
+    out.reserve(in.size());
+    for (unsigned char c : in)
+        if (c >= 0x20 && c != 0x7F) out.push_back(static_cast<char>(c));
+
+    if (trimEnds) {
+        size_t b = out.find_first_not_of(" \t");
+        size_t e = out.find_last_not_of(" \t");
+        out = (b == std::string::npos) ? std::string() : out.substr(b, e - b + 1);
+    }
+
+    constexpr size_t kMaxEntityNameLen = 64;
+    if (out.size() > kMaxEntityNameLen) {
+        out.resize(kMaxEntityNameLen);
+        while (!out.empty() && (static_cast<unsigned char>(out.back()) & 0xC0) == 0x80)
+            out.pop_back(); // don't leave a half UTF-8 sequence
+    }
+    return out;
+}
+
 // Editable name field bound to a std::string, without depending on imgui_stdlib.h — copies
 // into a fixed local buffer, writes back only on edit. Returns true the moment editing starts
 // (for undo-snapshot timing), via activatedOut, same convention as DrawVec3Row below.
@@ -282,7 +307,10 @@ bool DrawNameField(const char* label, std::string& name, const char* placeholder
     snprintf(buf, sizeof(buf), "%s", name.c_str());
     bool changed = ImGui::InputTextWithHint(label, placeholder, buf, sizeof(buf));
     if (ImGui::IsItemActivated()) activatedOut = true;
-    if (changed) name = buf;
+    // Strip control chars / cap length as the user types; leave end-trimming for when the field
+    // is committed, so typing "Room " -> "Room 2" isn't fought mid-word.
+    if (changed) name = SanitizeEntityName(buf, /*trimEnds=*/false);
+    if (ImGui::IsItemDeactivatedAfterEdit()) name = SanitizeEntityName(name);
     return changed;
 }
 
@@ -604,9 +632,64 @@ void EditorLayer::Shutdown() {
 
     if (m_MarkSampleFbo) { glDeleteFramebuffers(1, &m_MarkSampleFbo); m_MarkSampleFbo = 0; }
 
+    for (auto& [model, tex] : m_ModelThumbnails) { (void)model; if (tex) glDeleteTextures(1, &tex); }
+    m_ModelThumbnails.clear();
+    if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
+
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
+}
+
+// Rendered once per Model into its own small texture, then cached. Returns 0 while this frame's
+// render budget is spent — the caller falls back to the type glyph and picks it up next frame.
+unsigned int EditorLayer::ModelThumbnail(Model& model) {
+    auto it = m_ModelThumbnails.find(&model);
+    if (it != m_ModelThumbnails.end()) return it->second;
+    if (m_ThumbnailBudgetThisFrame <= 0) return 0;
+    m_ThumbnailBudgetThisFrame--;
+
+    const int kSize = 128;
+    const float dist = ModelPreviewRenderer::ComputeFramingDistance(model);
+    const unsigned int src = m_ThumbnailPreview.Render(model, 0.7f, 0.5f, dist, kSize, kSize);
+
+    unsigned int dst = 0;
+    glGenTextures(1, &dst);
+    glBindTexture(GL_TEXTURE_2D, dst);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kSize, kSize, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    // Copy the shared preview render into `dst` via a scratch read-FBO. GL 3.3 core has no
+    // glCopyImageSubData, but glCopyTexSubImage2D from a bound READ framebuffer works.
+    GLint prevRead = 0, prevDraw = 0;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevDraw);
+    if (!m_ThumbnailBlitFbo) glGenFramebuffers(1, &m_ThumbnailBlitFbo);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, m_ThumbnailBlitFbo);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, src, 0);
+    glBindTexture(GL_TEXTURE_2D, dst);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, kSize, kSize);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevRead);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (unsigned int)prevDraw);
+
+    m_ModelThumbnails[&model] = dst;
+    return dst;
+}
+
+void EditorLayer::InvalidateModelThumbnail(const Model* model) {
+    if (!model) { // clear all — a reimport can rebuild any model in place
+        for (auto& [m, tex] : m_ModelThumbnails) { (void)m; if (tex) glDeleteTextures(1, &tex); }
+        m_ModelThumbnails.clear();
+        return;
+    }
+    auto it = m_ModelThumbnails.find(model);
+    if (it == m_ModelThumbnails.end()) return;
+    if (it->second) glDeleteTextures(1, &it->second);
+    m_ModelThumbnails.erase(it);
 }
 
 std::string EditorLayer::RecoveryPathFor(const std::string& scenePath) {
@@ -823,6 +906,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     m_UndoStack.pop_back();
     SceneSerializer::LoadFromString(world, assets, entry.SceneJson);
     RestoreSelectionByName(world, entry.SelectedNames);
+    InvalidateModelThumbnail(nullptr); // LoadFromString may rebuild the asset library
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
 }
 
@@ -839,6 +923,7 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     m_RedoStack.pop_back();
     SceneSerializer::LoadFromString(world, assets, entry.SceneJson);
     RestoreSelectionByName(world, entry.SelectedNames);
+    InvalidateModelThumbnail(nullptr); // LoadFromString may rebuild the asset library
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
 }
 
@@ -1285,7 +1370,7 @@ void EditorLayer::DrawEngineMark(float dt) {
     const float kTwoPi = 6.28318530718f;
     m_MarkSpinAngle = fmodf(m_MarkSpinAngle + dt * kSpinSpeed, kTwoPi);
 
-    float size = 60.0f * m_UIScale; // 1.5x the original 40 — a touch bigger so it reads, not a feature
+    float size = 72.0f * m_UIScale; // bumped again so the wordmark reads rather than smearing (#19 P19)
     float margin = 14.0f * m_UIScale;
     float half = size * 0.5f;
     ImVec2 cornerC(m_ViewportPos.x + margin + half, m_ViewportPos.y + m_ViewportSize.y - margin - half);
@@ -1506,6 +1591,8 @@ void EditorLayer::ApplyPendingViewportTabFocus() {
 void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera, float dt) {
     m_AssetsPtr = &assets; // see the member comment - lets PushUndo() snapshot AssetLibrary
                            // state without needing every one of its call sites to pass it in
+
+    m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
 
     // First editor frame after a crash-interrupted session: offer to restore the auto-saved
     // recovery snapshot. No-op unless Init() flagged one as newer than the scene file.
@@ -1752,7 +1839,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
     ImGui::End();
 
-    DrawEngineMark(dt);
+    if (m_ShowEngineMark) DrawEngineMark(dt);
 
     DrawHierarchy(world, assets);
     DrawInspector(world, assets, dt);
@@ -2047,6 +2134,7 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
 void EditorLayer::NewScene(World& world) {
     ClearRecoverySnapshot();     // drop the OUTGOING scene's snapshot before we let go of its path
     world = World();
+    InvalidateModelThumbnail(nullptr);
     ClearSelection();
     m_UndoStack.clear();
     m_RedoStack.clear();
@@ -2061,6 +2149,7 @@ void EditorLayer::NewScene(World& world) {
 
 void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::string& path) {
     if (path.empty() || !SceneSerializer::Load(world, assets, path)) return;
+    InvalidateModelThumbnail(nullptr);
     ClearRecoverySnapshot(); // drop the outgoing scene's snapshot before switching away from it
     m_CurrentScenePath = path;
     ClearSelection();
@@ -2531,6 +2620,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             ImGui::MenuItem(ICON_FA_TERMINAL "  Console", nullptr, &m_ShowConsole);
             ImGui::MenuItem(ICON_FA_CHART_SIMPLE "  Statistics", nullptr, &m_ShowStats);
             ImGui::MenuItem(ICON_FA_CLOCK_ROTATE_LEFT "  History", nullptr, &m_ShowHistory);
+            ImGui::MenuItem(ICON_FA_CERTIFICATE "  Engine Mark", nullptr, &m_ShowEngineMark);
             ImGui::Separator();
             ImGui::TextDisabled("Scene Hierarchy, Inspector and Asset\nBrowser are always open — use Settings >\nReset Layout to restore their positions.");
             ImGui::EndMenu();
@@ -2890,7 +2980,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         if (ImGui::InputText("##Rename", m_EntityRenameBuffer, sizeof(m_EntityRenameBuffer),
                 ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
             PushUndo(world, "Rename");
-            name.Name = m_EntityRenameBuffer;
+            name.Name = SanitizeEntityName(m_EntityRenameBuffer);
             m_RenamingEntity = entt::null;
         }
         if (ImGui::IsItemDeactivated()) m_RenamingEntity = entt::null;
@@ -3239,6 +3329,7 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
                 assets.SetModelSettings(key, m_PendingModelSettings);
                 if (assets.ReimportModel(key)) Log::Info("Reimported model '" + key + "'.");
                 else Log::Error("Reimport failed for '" + key + "' - see Console.");
+                InvalidateModelThumbnail(nullptr); // re-render the Asset Browser preview
                 m_ImportSettingsDirty = false;
             },
             [&]() {
@@ -4808,6 +4899,7 @@ void EditorLayer::RequestDeleteAssets(World& world, AssetLibrary& assets, const 
 }
 
 void EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const std::string& key, bool isFolder) {
+    InvalidateModelThumbnail(nullptr); // a freed Model could be reallocated at the same address
     if (isFolder) {
         PushUndo(world, "Delete Folder");
         assets.DeleteFolderRecursive(key);
@@ -5428,11 +5520,16 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
 
             ImDrawList* dl = ImGui::GetWindowDrawList();
             ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
+            unsigned int modelThumb = (cell.kind == Cell::Kind::Model) ? ModelThumbnail(*cell.model) : 0u;
             if (cell.kind == Cell::Kind::Texture) {
                 float aspect = cell.texture->Height() > 0 ? (float)cell.texture->Width() / (float)cell.texture->Height() : 1.0f;
                 ImVec2 imgSize = aspect >= 1.0f ? ImVec2(m_AssetIconSize, m_AssetIconSize / aspect) : ImVec2(m_AssetIconSize * aspect, m_AssetIconSize);
                 ImVec2 imgPos(tileMin.x + (cellWidth - imgSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - imgSize.y) * 0.5f);
                 dl->AddImage((ImTextureID)(intptr_t)cell.texture->GLHandle(), imgPos, ImVec2(imgPos.x + imgSize.x, imgPos.y + imgSize.y));
+            } else if (modelThumb) {
+                ImVec2 imgSize(m_AssetIconSize, m_AssetIconSize);
+                ImVec2 imgPos(tileMin.x + (cellWidth - imgSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f);
+                dl->AddImage((ImTextureID)(intptr_t)modelThumb, imgPos, ImVec2(imgPos.x + imgSize.x, imgPos.y + imgSize.y));
             } else {
                 ImFont* font = ImGui::GetFont();
                 ImVec2 glyphSize = font->CalcTextSizeA(m_AssetIconSize, FLT_MAX, 0.0f, icon);
@@ -5469,8 +5566,11 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             // List mode: little icon (real thumbnail for textures, a Font Awesome glyph
             // otherwise) followed by the name, mirroring how the Scene Hierarchy lists rows.
             float rowIconSize = ImGui::GetTextLineHeight();
+            unsigned int rowModelThumb = (cell.kind == Cell::Kind::Model) ? ModelThumbnail(*cell.model) : 0u;
             if (cell.kind == Cell::Kind::Texture) {
                 ImGui::Image((ImTextureID)(intptr_t)cell.texture->GLHandle(), ImVec2(rowIconSize, rowIconSize));
+            } else if (rowModelThumb) {
+                ImGui::Image((ImTextureID)(intptr_t)rowModelThumb, ImVec2(rowIconSize, rowIconSize));
             } else {
                 ImGui::TextUnformatted(icon);
             }
@@ -5668,6 +5768,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
                         PushUndo(world, "Reimport Model");
                         if (assets.ReimportModel(cell.key)) Log::Info("Reimported model '" + cell.key + "'.");
                         else Log::Error("Reimport failed for '" + cell.key + "' - see Console.");
+                        InvalidateModelThumbnail(nullptr);
                     } else {
                         PushUndo(world, "Reimport Texture");
                         if (assets.ReimportTexture(cell.key)) Log::Info("Reimported texture '" + cell.key + "'.");
