@@ -3060,11 +3060,11 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     // accent-filled body plus a bright underline bar so the current state reads at a glance
     // instead of the near-invisible grey the default ButtonActive gave it (audit #64).
     auto iconButton = [](const char* icon, const char* tooltip, bool active = false) {
-        const ImVec4 accent(1.00f, 0.55f, 0.10f, 1.0f);
+        const ImVec4 accent(0.15f, 0.72f, 0.92f, 1.0f); // cyan-blue active highlight
         if (active) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(accent.x, accent.y, accent.z, 0.30f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(accent.x, accent.y, accent.z, 0.42f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(accent.x, accent.y, accent.z, 0.55f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(accent.x, accent.y, accent.z, 0.32f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(accent.x, accent.y, accent.z, 0.45f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(accent.x, accent.y, accent.z, 0.60f));
         }
         // ImGui::Button() uses its label text as its ID too — two buttons that ever show the
         // same icon glyph would collide. Scope the ID to the (always-unique) tooltip instead.
