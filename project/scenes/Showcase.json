@@ -1,32 +1,122 @@
 {
   "assetFolders": [
+    "BuildingKit",
+    "BuildingKit/Meshes",
+    "BuildingKit/Textures",
+    "BuildingKit/Textures/Ceilings",
+    "BuildingKit/Textures/Floors",
+    "BuildingKit/Textures/Walls",
     "Scenes",
     "Shapes"
   ],
   "assetMeta": [
     {
-      "folder": "Shapes",
-      "path": "primitive://plane#0"
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_3m_3m.FBX"
     },
     {
-      "folder": "Shapes",
-      "path": "primitive://cube#1"
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_5m_3m.FBX"
     },
     {
-      "folder": "Shapes",
-      "path": "primitive://sphere#2"
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Floor_3m_3m.FBX"
     },
     {
-      "folder": "Shapes",
-      "path": "primitive://cube#3"
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Floor_5m_3m.FBX"
     },
     {
-      "folder": "Shapes",
-      "path": "primitive://cylinder#4"
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_3m.FBX"
     },
     {
-      "folder": "Shapes",
-      "path": "primitive://cube#5"
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_3m_door.FBX"
+    },
+    {
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_5m.FBX"
+    },
+    {
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Window_fake.FBX"
+    },
+    {
+      "folder": "BuildingKit/Meshes",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Window_tall_fake.FBX"
+    },
+    {
+      "folder": "BuildingKit/Textures/Ceilings",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Ceilings",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_MaskMap.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Ceilings",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_Normal.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Floors",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_concrete_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Floors",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_concrete_MaskMap.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Floors",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_concrete_Normal.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Floors",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Floors",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_MaskMap.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Floors",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_Normal.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_blue_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_brown_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_concrete_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_concrete_MaskMap.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_concrete_Normal.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_BaseColor.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_MaskMap.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_Normal.png"
+    },
+    {
+      "folder": "BuildingKit/Textures/Walls",
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_green_BaseColor.png"
     },
     {
       "folder": "Shapes",
@@ -34,11 +124,27 @@
     },
     {
       "folder": "Shapes",
+      "path": "primitive://cube#1"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://cube#10"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://cube#3"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://cube#5"
+    },
+    {
+      "folder": "Shapes",
       "path": "primitive://cube#7"
     },
     {
       "folder": "Shapes",
-      "path": "primitive://sphere#8"
+      "path": "primitive://cylinder#4"
     },
     {
       "folder": "Shapes",
@@ -46,7 +152,15 @@
     },
     {
       "folder": "Shapes",
-      "path": "primitive://cube#10"
+      "path": "primitive://plane#0"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://plane#1"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://sphere#0"
     },
     {
       "folder": "Shapes",
@@ -55,768 +169,788 @@
     {
       "folder": "Shapes",
       "path": "primitive://sphere#13"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://sphere#2"
+    },
+    {
+      "folder": "Shapes",
+      "path": "primitive://sphere#8"
     }
   ],
   "boxes": [],
   "empties": [
     {
-      "id": 12,
-      "name": "Key Warm",
-      "parentId": -1,
-      "position": [
-        -3.5,
-        4.2,
-        -5.5
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ],
+      "id": 13,
       "light": {
         "color": [
           1.0,
-          0.55,
+          0.550000011920929,
           0.25
         ],
         "intensity": 90.0,
         "kind": "point",
         "range": 26.0,
         "spotAngle": 35.0
-      }
+      },
+      "name": "Key Warm",
+      "order": 13,
+      "parentId": -1,
+      "position": [
+        -3.5,
+        4.199999809265137,
+        -5.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
     },
     {
       "id": 14,
-      "name": "Key Cool",
-      "parentId": -1,
-      "position": [
-        4.0,
-        3.6,
-        -12.0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ],
       "light": {
         "color": [
-          0.35,
-          0.6,
+          0.3499999940395355,
+          0.6000000238418579,
           1.0
         ],
         "intensity": 85.0,
         "kind": "point",
         "range": 26.0,
         "spotAngle": 35.0
-      }
+      },
+      "name": "Key Cool",
+      "order": 14,
+      "parentId": -1,
+      "position": [
+        4.0,
+        3.5999999046325684,
+        -12.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
     },
     {
       "id": 15,
-      "name": "Fill",
-      "parentId": -1,
-      "position": [
-        0,
-        8.5,
-        -11.0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ],
       "light": {
         "color": [
-          0.8,
-          0.84,
+          0.800000011920929,
+          0.8399999737739563,
           1.0
         ],
         "intensity": 38.0,
         "kind": "point",
         "range": 34.0,
         "spotAngle": 35.0
-      }
+      },
+      "name": "Fill",
+      "order": 15,
+      "parentId": -1,
+      "position": [
+        0.0,
+        8.5,
+        -11.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
     },
     {
       "id": 16,
-      "name": "Rim Back",
-      "parentId": -1,
-      "position": [
-        0,
-        3.0,
-        -22.0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ],
       "light": {
         "color": [
-          0.55,
-          0.45,
-          0.95
+          0.550000011920929,
+          0.44999998807907104,
+          0.949999988079071
         ],
         "intensity": 60.0,
         "kind": "point",
         "range": 30.0,
         "spotAngle": 35.0
-      }
+      },
+      "name": "Rim Back",
+      "order": 16,
+      "parentId": -1,
+      "position": [
+        0.0,
+        3.0,
+        -22.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
     }
   ],
   "libraryModels": [
-    "primitive://plane#0",
-    "primitive://cube#1",
-    "primitive://sphere#2",
-    "primitive://cube#3",
-    "primitive://cylinder#4",
-    "primitive://cube#5",
-    "primitive://cone#6",
-    "primitive://cube#7",
-    "primitive://sphere#8",
-    "primitive://cylinder#9",
-    "primitive://cube#10",
-    "primitive://sphere#11",
-    "primitive://sphere#13"
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_3m_3m.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_5m_3m.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Floor_3m_3m.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Floor_5m_3m.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_3m.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_3m_door.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_5m.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Window_fake.FBX",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Window_tall_fake.FBX",
+    "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Floor_3m_3m.FBX",
+    "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Wall_3m.FBX"
   ],
   "libraryPrefabs": [],
   "librarySounds": [],
-  "libraryTextures": [],
+  "libraryTextures": [
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_MaskMap.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_Normal.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_concrete_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_concrete_MaskMap.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_concrete_Normal.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_MaskMap.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_Normal.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_blue_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_brown_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_concrete_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_concrete_MaskMap.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_concrete_Normal.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_BaseColor.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_MaskMap.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_Normal.png",
+    "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_green_BaseColor.png"
+  ],
   "models": [
     {
+      "collider": {
+        "isTrigger": false
+      },
       "id": 0,
       "name": "Ground",
+      "order": 0,
       "parentId": -1,
       "path": "primitive://plane#0",
       "position": [
-        0,
-        0,
-        -12
+        0.0,
+        0.0,
+        -12.0
       ],
       "rotation": [
-        0,
-        0,
-        0
+        0.0,
+        0.0,
+        0.0
       ],
       "scale": [
-        70,
-        1,
-        70
+        70.0,
+        1.0,
+        70.0
       ],
-      "soundPath": "",
-      "material": {
-        "baseColor": [
-          0.13,
-          0.13,
-          0.16
-        ],
-        "metallic": 0.0,
-        "roughness": 0.8,
-        "emissiveColor": [
-          0,
-          0,
-          0
-        ],
-        "emissiveStrength": 1.0,
-        "albedoMap": "",
-        "normalMap": "",
-        "metallicRoughnessMap": "",
-        "metallicMap": "",
-        "roughnessMap": "",
-        "aoMap": "",
-        "emissiveMap": ""
-      },
-      "collider": {
-        "isTrigger": false
-      }
+      "soundPath": ""
     },
     {
+      "collider": {
+        "isTrigger": false
+      },
       "id": 1,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.2800000011920929,
+          0.2800000011920929,
+          0.3199999928474426
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.550000011920929,
+        "roughnessMap": ""
+      },
       "name": "Plinth",
+      "order": 1,
       "parentId": -1,
       "path": "primitive://cube#1",
       "position": [
-        0,
-        0.35,
-        -10
+        0.0,
+        0.3499999940395355,
+        -10.0
       ],
       "rotation": [
-        0,
-        0,
-        0
+        0.0,
+        0.0,
+        0.0
       ],
       "scale": [
-        3.6,
-        0.7,
-        3.6
+        3.5999999046325684,
+        0.699999988079071,
+        3.5999999046325684
       ],
-      "soundPath": "",
-      "material": {
-        "baseColor": [
-          0.28,
-          0.28,
-          0.32
-        ],
-        "metallic": 0.0,
-        "roughness": 0.55,
-        "emissiveColor": [
-          0,
-          0,
-          0
-        ],
-        "emissiveStrength": 1.0,
-        "albedoMap": "",
-        "normalMap": "",
-        "metallicRoughnessMap": "",
-        "metallicMap": "",
-        "roughnessMap": "",
-        "aoMap": "",
-        "emissiveMap": ""
-      },
-      "collider": {
-        "isTrigger": false
-      }
+      "soundPath": ""
     },
     {
+      "collider": {
+        "isTrigger": false
+      },
       "id": 2,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8999999761581421,
+          0.8999999761581421,
+          0.9300000071525574
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.10000000149011612,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.2199999988079071,
+        "roughnessMap": ""
+      },
       "name": "Pearl Ball",
+      "order": 2,
       "parentId": -1,
       "path": "primitive://sphere#2",
       "position": [
-        0,
-        2.05,
-        -10
+        0.0,
+        2.049999952316284,
+        -10.0
       ],
       "rotation": [
-        0,
-        0,
-        0
+        0.0,
+        0.0,
+        0.0
       ],
       "scale": [
-        2.7,
-        2.7,
-        2.7
+        2.700000047683716,
+        2.700000047683716,
+        2.700000047683716
       ],
-      "soundPath": "",
-      "material": {
-        "baseColor": [
-          0.9,
-          0.9,
-          0.93
-        ],
-        "metallic": 0.1,
-        "roughness": 0.22,
-        "emissiveColor": [
-          0,
-          0,
-          0
-        ],
-        "emissiveStrength": 1.0,
-        "albedoMap": "",
-        "normalMap": "",
-        "metallicRoughnessMap": "",
-        "metallicMap": "",
-        "roughnessMap": "",
-        "aoMap": "",
-        "emissiveMap": ""
-      },
-      "collider": {
-        "isTrigger": false
-      }
+      "soundPath": ""
     },
     {
+      "collider": {
+        "isTrigger": false
+      },
       "id": 3,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.2800000011920929,
+          0.2800000011920929,
+          0.3199999928474426
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.550000011920929,
+        "roughnessMap": ""
+      },
       "name": "Plinth L",
+      "order": 3,
       "parentId": -1,
       "path": "primitive://cube#3",
       "position": [
-        -5.4,
-        0.3,
+        -5.400000095367432,
+        0.30000001192092896,
         -8.5
       ],
       "rotation": [
-        0,
-        0,
-        0
+        0.0,
+        0.0,
+        0.0
       ],
       "scale": [
-        2.4,
-        0.6,
-        2.4
+        2.4000000953674316,
+        0.6000000238418579,
+        2.4000000953674316
       ],
-      "soundPath": "",
-      "material": {
-        "baseColor": [
-          0.28,
-          0.28,
-          0.32
-        ],
-        "metallic": 0.0,
-        "roughness": 0.55,
-        "emissiveColor": [
-          0,
-          0,
-          0
-        ],
-        "emissiveStrength": 1.0,
-        "albedoMap": "",
-        "normalMap": "",
-        "metallicRoughnessMap": "",
-        "metallicMap": "",
-        "roughnessMap": "",
-        "aoMap": "",
-        "emissiveMap": ""
-      },
-      "collider": {
-        "isTrigger": false
-      }
+      "soundPath": ""
     },
     {
+      "collider": {
+        "isTrigger": false
+      },
       "id": 4,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.949999988079071,
+          0.550000011920929,
+          0.18000000715255737
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.05000000074505806,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.44999998807907104,
+        "roughnessMap": ""
+      },
       "name": "Amber",
+      "order": 4,
       "parentId": -1,
       "path": "primitive://cylinder#4",
       "position": [
-        -5.4,
-        1.45,
+        -5.400000095367432,
+        1.4500000476837158,
         -8.5
       ],
       "rotation": [
-        0,
-        0,
-        0
+        0.0,
+        0.0,
+        0.0
       ],
       "scale": [
-        1.4,
-        1.7,
-        1.4
+        1.399999976158142,
+        1.7000000476837158,
+        1.399999976158142
       ],
-      "soundPath": "",
-      "material": {
-        "baseColor": [
-          0.95,
-          0.55,
-          0.18
-        ],
-        "metallic": 0.05,
-        "roughness": 0.45,
-        "emissiveColor": [
-          0,
-          0,
-          0
-        ],
-        "emissiveStrength": 1.0,
-        "albedoMap": "",
-        "normalMap": "",
-        "metallicRoughnessMap": "",
-        "metallicMap": "",
-        "roughnessMap": "",
-        "aoMap": "",
-        "emissiveMap": ""
-      },
-      "collider": {
-        "isTrigger": false
-      }
+      "soundPath": ""
     },
     {
+      "collider": {
+        "isTrigger": false
+      },
       "id": 5,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.2800000011920929,
+          0.2800000011920929,
+          0.3199999928474426
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.550000011920929,
+        "roughnessMap": ""
+      },
       "name": "Plinth R",
+      "order": 5,
       "parentId": -1,
       "path": "primitive://cube#5",
       "position": [
-        5.4,
-        0.3,
+        5.400000095367432,
+        0.30000001192092896,
         -8.5
       ],
       "rotation": [
-        0,
-        0,
-        0
+        0.0,
+        0.0,
+        0.0
       ],
       "scale": [
-        2.4,
-        0.6,
-        2.4
+        2.4000000953674316,
+        0.6000000238418579,
+        2.4000000953674316
       ],
-      "soundPath": "",
-      "material": {
-        "baseColor": [
-          0.28,
-          0.28,
-          0.32
-        ],
-        "metallic": 0.0,
-        "roughness": 0.55,
-        "emissiveColor": [
-          0,
-          0,
-          0
-        ],
-        "emissiveStrength": 1.0,
-        "albedoMap": "",
-        "normalMap": "",
-        "metallicRoughnessMap": "",
-        "metallicMap": "",
-        "roughnessMap": "",
-        "aoMap": "",
-        "emissiveMap": ""
-      },
-      "collider": {
-        "isTrigger": false
-      }
+      "soundPath": ""
     },
     {
+      "collider": {
+        "isTrigger": false
+      },
       "id": 6,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.20000000298023224,
+          0.699999988079071,
+          0.7799999713897705
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.05000000074505806,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.4000000059604645,
+        "roughnessMap": ""
+      },
       "name": "Teal",
+      "order": 6,
       "parentId": -1,
       "path": "primitive://cone#6",
       "position": [
-        5.4,
-        1.55,
+        5.400000095367432,
+        1.5499999523162842,
         -8.5
       ],
       "rotation": [
-        0,
-        0,
-        0
+        0.0,
+        0.0,
+        0.0
       ],
       "scale": [
-        1.7,
+        1.7000000476837158,
         2.0,
-        1.7
+        1.7000000476837158
       ],
-      "soundPath": "",
-      "material": {
-        "baseColor": [
-          0.2,
-          0.7,
-          0.78
-        ],
-        "metallic": 0.05,
-        "roughness": 0.4,
-        "emissiveColor": [
-          0,
-          0,
-          0
-        ],
-        "emissiveStrength": 1.0,
-        "albedoMap": "",
-        "normalMap": "",
-        "metallicRoughnessMap": "",
-        "metallicMap": "",
-        "roughnessMap": "",
-        "aoMap": "",
-        "emissiveMap": ""
-      },
-      "collider": {
-        "isTrigger": false
-      }
+      "soundPath": ""
     },
     {
+      "collider": {
+        "isTrigger": false
+      },
       "id": 7,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.550000011920929,
+          0.2800000011920929,
+          0.7200000286102295
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.05000000074505806,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
       "name": "Violet Block",
+      "order": 7,
       "parentId": -1,
       "path": "primitive://cube#7",
       "position": [
-        -8.6,
-        1.1,
+        -8.600000381469727,
+        1.100000023841858,
         -15.0
       ],
       "rotation": [
-        0,
-        25,
-        0
+        0.0,
+        25.0,
+        0.0
       ],
       "scale": [
-        2.2,
-        2.2,
-        2.2
+        2.200000047683716,
+        2.200000047683716,
+        2.200000047683716
       ],
-      "soundPath": "",
-      "material": {
-        "baseColor": [
-          0.55,
-          0.28,
-          0.72
-        ],
-        "metallic": 0.05,
-        "roughness": 0.5,
-        "emissiveColor": [
-          0,
-          0,
-          0
-        ],
-        "emissiveStrength": 1.0,
-        "albedoMap": "",
-        "normalMap": "",
-        "metallicRoughnessMap": "",
-        "metallicMap": "",
-        "roughnessMap": "",
-        "aoMap": "",
-        "emissiveMap": ""
-      },
-      "collider": {
-        "isTrigger": false
-      }
+      "soundPath": ""
     },
     {
+      "collider": {
+        "isTrigger": false
+      },
       "id": 8,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8799999952316284,
+          0.30000001192092896,
+          0.41999998688697815
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.05000000074505806,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.44999998807907104,
+        "roughnessMap": ""
+      },
       "name": "Rose Ball",
+      "order": 8,
       "parentId": -1,
       "path": "primitive://sphere#8",
       "position": [
-        8.6,
-        1.2,
+        8.600000381469727,
+        1.2000000476837158,
         -15.5
       ],
       "rotation": [
-        0,
-        0,
-        0
+        0.0,
+        0.0,
+        0.0
       ],
       "scale": [
-        2.4,
-        2.4,
-        2.4
+        2.4000000953674316,
+        2.4000000953674316,
+        2.4000000953674316
       ],
-      "soundPath": "",
-      "material": {
-        "baseColor": [
-          0.88,
-          0.3,
-          0.42
-        ],
-        "metallic": 0.05,
-        "roughness": 0.45,
-        "emissiveColor": [
-          0,
-          0,
-          0
-        ],
-        "emissiveStrength": 1.0,
-        "albedoMap": "",
-        "normalMap": "",
-        "metallicRoughnessMap": "",
-        "metallicMap": "",
-        "roughnessMap": "",
-        "aoMap": "",
-        "emissiveMap": ""
-      },
-      "collider": {
-        "isTrigger": false
-      }
+      "soundPath": ""
     },
     {
+      "collider": {
+        "isTrigger": false
+      },
       "id": 9,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.550000011920929,
+          0.8500000238418579,
+          0.30000001192092896
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.05000000074505806,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
       "name": "Lime Post",
+      "order": 9,
       "parentId": -1,
       "path": "primitive://cylinder#9",
       "position": [
-        -2.6,
-        1.6,
+        -2.5999999046325684,
+        1.600000023841858,
         -18.0
       ],
       "rotation": [
-        0,
-        0,
-        0
+        0.0,
+        0.0,
+        0.0
       ],
       "scale": [
-        0.9,
-        3.2,
-        0.9
+        0.8999999761581421,
+        3.200000047683716,
+        0.8999999761581421
       ],
-      "soundPath": "",
-      "material": {
-        "baseColor": [
-          0.55,
-          0.85,
-          0.3
-        ],
-        "metallic": 0.05,
-        "roughness": 0.5,
-        "emissiveColor": [
-          0,
-          0,
-          0
-        ],
-        "emissiveStrength": 1.0,
-        "albedoMap": "",
-        "normalMap": "",
-        "metallicRoughnessMap": "",
-        "metallicMap": "",
-        "roughnessMap": "",
-        "aoMap": "",
-        "emissiveMap": ""
-      },
-      "collider": {
-        "isTrigger": false
-      }
+      "soundPath": ""
     },
     {
+      "collider": {
+        "isTrigger": false
+      },
       "id": 10,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.30000001192092896,
+          0.3400000035762787,
+          0.4399999976158142
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.05000000074505806,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.6499999761581421,
+        "roughnessMap": ""
+      },
       "name": "Slate Step",
+      "order": 10,
       "parentId": -1,
       "path": "primitive://cube#10",
       "position": [
         3.0,
-        0.55,
+        0.550000011920929,
         -18.5
       ],
       "rotation": [
-        0,
-        -18,
-        0
+        0.0,
+        -18.0,
+        0.0
       ],
       "scale": [
         3.0,
-        1.1,
+        1.100000023841858,
         3.0
       ],
-      "soundPath": "",
-      "material": {
-        "baseColor": [
-          0.3,
-          0.34,
-          0.44
-        ],
-        "metallic": 0.05,
-        "roughness": 0.65,
-        "emissiveColor": [
-          0,
-          0,
-          0
-        ],
-        "emissiveStrength": 1.0,
-        "albedoMap": "",
-        "normalMap": "",
-        "metallicRoughnessMap": "",
-        "metallicMap": "",
-        "roughnessMap": "",
-        "aoMap": "",
-        "emissiveMap": ""
-      },
-      "collider": {
-        "isTrigger": false
-      }
+      "soundPath": ""
     },
     {
       "id": 11,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveColor": [
+          1.0,
+          0.550000011920929,
+          0.20000000298023224
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 6.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 1.0,
+        "roughnessMap": ""
+      },
       "name": "Orb Warm",
+      "order": 11,
       "parentId": -1,
       "path": "primitive://sphere#11",
       "position": [
         -3.5,
-        4.2,
+        4.199999809265137,
         -5.5
       ],
       "rotation": [
-        0,
-        0,
-        0
+        0.0,
+        0.0,
+        0.0
       ],
       "scale": [
-        0.4,
-        0.4,
-        0.4
+        0.4000000059604645,
+        0.4000000059604645,
+        0.4000000059604645
       ],
-      "soundPath": "",
-      "material": {
-        "baseColor": [
-          0,
-          0,
-          0
-        ],
-        "metallic": 0.0,
-        "roughness": 1.0,
-        "emissiveColor": [
-          1.0,
-          0.55,
-          0.2
-        ],
-        "emissiveStrength": 6.0,
-        "albedoMap": "",
-        "normalMap": "",
-        "metallicRoughnessMap": "",
-        "metallicMap": "",
-        "roughnessMap": "",
-        "aoMap": "",
-        "emissiveMap": ""
-      }
+      "soundPath": ""
     },
     {
-      "id": 13,
+      "id": 12,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveColor": [
+          0.30000001192092896,
+          0.6000000238418579,
+          1.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 6.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 1.0,
+        "roughnessMap": ""
+      },
       "name": "Orb Cool",
+      "order": 12,
       "parentId": -1,
       "path": "primitive://sphere#13",
       "position": [
         4.0,
-        3.6,
+        3.5999999046325684,
         -12.0
       ],
       "rotation": [
-        0,
-        0,
-        0
+        0.0,
+        0.0,
+        0.0
       ],
       "scale": [
-        0.35,
-        0.35,
-        0.35
+        0.3499999940395355,
+        0.3499999940395355,
+        0.3499999940395355
       ],
-      "soundPath": "",
-      "material": {
-        "baseColor": [
-          0,
-          0,
-          0
-        ],
-        "metallic": 0.0,
-        "roughness": 1.0,
-        "emissiveColor": [
-          0.3,
-          0.6,
-          1.0
-        ],
-        "emissiveStrength": 6.0,
-        "albedoMap": "",
-        "normalMap": "",
-        "metallicRoughnessMap": "",
-        "metallicMap": "",
-        "roughnessMap": "",
-        "aoMap": "",
-        "emissiveMap": ""
-      }
+      "soundPath": ""
     }
   ],
   "skyHorizonColor": [
-    0.16,
-    0.15,
-    0.24
+    0.1599999964237213,
+    0.15000000596046448,
+    0.23999999463558197
   ],
   "skyZenithColor": [
-    0.03,
-    0.03,
-    0.07
+    0.029999999329447746,
+    0.029999999329447746,
+    0.07000000029802322
   ]
 }

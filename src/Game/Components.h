@@ -92,6 +92,16 @@ struct LightComponent {
     float SpotAngleDegrees = 35.0f; // Spot only: half-angle of the cone
 };
 
+// A game camera placed in the scene. The Game view renders through the first active one of
+// these (in creation order) while editing, so you can frame a shot without walking there in
+// Play mode; Play mode still uses the first-person Player controller. Absent == the Game view
+// falls back to the editor camera and shows a "No camera in scene" hint (#36 B10).
+struct CameraComponent {
+    float FovDegrees = 60.0f;
+    float NearPlane = 0.1f;
+    float FarPlane = 1000.0f;
+};
+
 // Present only on entities that are parented, or that have at least one child — an entity with
 // no relationships at all simply lacks this component, so the common (flat) case pays no cost.
 // When Parent is not entt::null, this entity's TransformComponent is interpreted as LOCAL space

@@ -127,39 +127,7 @@
     }
   ],
   "boxes": [],
-  "empties": [
-    {
-      "id": 4,
-      "light": {
-        "color": [
-          1.0,
-          0.949999988079071,
-          0.8500000238418579
-        ],
-        "intensity": 31.700000762939453,
-        "kind": "point",
-        "range": 12.0,
-        "spotAngle": 35.0
-      },
-      "name": "Point Light",
-      "parentId": -1,
-      "position": [
-        -1.033726453781128,
-        0.4608643651008606,
-        -0.06424456089735031
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        0.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    }
-  ],
+  "empties": [],
   "libraryModels": [
     "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_3m_3m.FBX",
     "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_5m_3m.FBX",
@@ -170,7 +138,8 @@
     "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_5m.FBX",
     "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Window_fake.FBX",
     "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Window_tall_fake.FBX",
-    "primitive://sphere#0"
+    "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Floor_3m_3m.FBX",
+    "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Wall_3m.FBX"
   ],
   "libraryPrefabs": [],
   "librarySounds": [],
@@ -200,17 +169,40 @@
         "isTrigger": false
       },
       "id": 0,
-      "name": "Floor_3m_3m",
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Floor_0",
+      "order": 0,
       "parentId": -1,
-      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Floor_3m_3m.FBX",
+      "path": "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Floor_3m_3m.FBX",
       "position": [
-        1.4027862548828125,
-        -2.384185791015625e-07,
-        -2.7419166564941406
+        1.5,
+        0.0,
+        0.0
       ],
       "rotation": [
         0.0,
-        -0.0,
+        0.0,
         0.0
       ],
       "scale": [
@@ -225,17 +217,40 @@
         "isTrigger": false
       },
       "id": 1,
-      "name": "Wall_3m",
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Floor_1",
+      "order": 1,
       "parentId": -1,
-      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_3m.FBX",
+      "path": "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Floor_3m_3m.FBX",
       "position": [
-        1.4027862548828125,
-        -2.384185791015625e-07,
-        -2.8520193099975586
+        1.5,
+        0.0,
+        3.0
       ],
       "rotation": [
         0.0,
-        -0.0,
+        0.0,
         0.0
       ],
       "scale": [
@@ -250,17 +265,40 @@
         "isTrigger": false
       },
       "id": 2,
-      "name": "Wall_3m Copy",
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Floor_2",
+      "order": 2,
       "parentId": -1,
-      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Wall_3m.FBX",
+      "path": "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Floor_3m_3m.FBX",
       "position": [
-        -1.5972137451171875,
-        -2.384185791015625e-07,
-        -2.8520193099975586
+        4.5,
+        0.0,
+        0.0
       ],
       "rotation": [
         0.0,
-        -0.0,
+        0.0,
         0.0
       ],
       "scale": [
@@ -275,13 +313,600 @@
         "isTrigger": false
       },
       "id": 3,
-      "name": "Floor_3m_3m Copy",
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Floors\\Floor_hardwood_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Floor_3",
+      "order": 3,
       "parentId": -1,
-      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Floor_3m_3m.FBX",
+      "path": "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Floor_3m_3m.FBX",
       "position": [
-        -1.5972137451171875,
-        -2.384185791015625e-07,
-        -2.7419166564941406
+        4.5,
+        0.0,
+        3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 4,
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_brown_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Wall_S_8",
+      "order": 8,
+      "parentId": -1,
+      "path": "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Wall_3m.FBX",
+      "position": [
+        1.5,
+        6.51925802230835e-09,
+        -0.11010242253541946
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 5,
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_brown_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Wall_S_9",
+      "order": 9,
+      "parentId": -1,
+      "path": "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Wall_3m.FBX",
+      "position": [
+        4.5,
+        7.450580596923828e-09,
+        -0.11010242253541946
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 6,
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_brown_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Wall_N_10",
+      "order": 10,
+      "parentId": -1,
+      "path": "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Wall_3m.FBX",
+      "position": [
+        1.5,
+        0.0,
+        5.900000095367432
+      ],
+      "rotation": [
+        0.0,
+        180.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 7,
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_brown_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Wall_N_11",
+      "order": 11,
+      "parentId": -1,
+      "path": "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Wall_3m.FBX",
+      "position": [
+        4.5,
+        0.0,
+        5.900000095367432
+      ],
+      "rotation": [
+        0.0,
+        180.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 8,
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_brown_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Wall_W_12",
+      "order": 12,
+      "parentId": -1,
+      "path": "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Wall_3m.FBX",
+      "position": [
+        0.10000000149011612,
+        0.0,
+        1.5
+      ],
+      "rotation": [
+        0.0,
+        90.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 9,
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_brown_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Wall_W_13",
+      "order": 13,
+      "parentId": -1,
+      "path": "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Wall_3m.FBX",
+      "position": [
+        0.10000000149011612,
+        0.0,
+        4.5
+      ],
+      "rotation": [
+        0.0,
+        90.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 10,
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_brown_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Wall_E_14",
+      "order": 14,
+      "parentId": -1,
+      "path": "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Wall_3m.FBX",
+      "position": [
+        5.900000095367432,
+        0.0,
+        1.5
+      ],
+      "rotation": [
+        0.0,
+        -90.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 11,
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_brown_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Walls\\Wall_default_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Wall_E_15",
+      "order": 15,
+      "parentId": -1,
+      "path": "C:\\\\Users\\\\jacob\\\\OneDrive\\\\Desktop\\\\BuildingKit\\\\Meshes\\\\Wall_3m.FBX",
+      "position": [
+        5.900000095367432,
+        0.0,
+        4.5
+      ],
+      "rotation": [
+        0.0,
+        -90.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "id": 12,
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Ceiling_3m_3m",
+      "order": 546,
+      "parentId": -1,
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_3m_3m.FBX",
+      "position": [
+        4.799999713897705,
+        2.500000476837158,
+        4.76837158203125e-07
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "id": 13,
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Ceiling_3m_3m (1)",
+      "order": 547,
+      "parentId": -1,
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_3m_3m.FBX",
+      "position": [
+        4.799999713897705,
+        2.499999761581421,
+        3.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "id": 14,
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Ceiling_3m_3m (2)",
+      "order": 548,
+      "parentId": -1,
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_3m_3m.FBX",
+      "position": [
+        7.799999713897705,
+        2.499999761581421,
+        3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "id": 15,
+      "material": {
+        "albedoMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_BaseColor.png",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Textures\\Ceilings\\Ceiling_default_Normal.png",
+        "roughness": 0.5,
+        "roughnessMap": ""
+      },
+      "name": "Ceiling_3m_3m (3)",
+      "order": 549,
+      "parentId": -1,
+      "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\BuildingKit\\Meshes\\Ceiling_3m_3m.FBX",
+      "position": [
+        7.799999237060547,
+        2.499999761581421,
+        0.0
       ],
       "rotation": [
         0.0,
@@ -297,13 +922,13 @@
     }
   ],
   "skyHorizonColor": [
-    0.0,
-    0.0,
-    0.0
+    0.11999999731779099,
+    0.12999999523162842,
+    0.1599999964237213
   ],
   "skyZenithColor": [
-    0.0,
-    0.0,
-    0.0
+    0.029999999329447746,
+    0.029999999329447746,
+    0.05000000074505806
   ]
 }

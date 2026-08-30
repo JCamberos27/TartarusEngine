@@ -63,13 +63,13 @@ the roadmap honest.
 | | |
 |---|---|
 | **Dockable layout** | Scene, Game, Hierarchy, Inspector, Asset Browser, Console, Stats, and History panels in a real ImGui dock tree — drag any border to resize neighbours, panels scale proportionally with the window, and the arrangement persists between sessions |
-| **Transform gizmos** | Translate / rotate / scale / rect tools with local vs. world space, pivot vs. bounds-center, and a combined gizmo for multi-object selections |
+| **Transform gizmos** | Translate / rotate / scale / rect tools with local vs. world space, pivot vs. bounds-center, a combined gizmo for multi-object selections, and a relative Batch Transform panel for nudging a whole selection at once |
 | **Selection** | Click-to-pick, box/marquee select, `Ctrl`-click multi-select, hierarchy parenting, per-entity active toggle |
 | **Snapping** | Grid snap (hold `Ctrl` to invert), configurable translate/rotate/scale increments, hold-`V` vertex snapping between meshes, and snap-to-ground |
 | **Navigation** | Fly camera, Alt-orbit, pan, dolly, frame-selection, orthographic/perspective toggle, axis view presets with animated transitions, plus an on-screen orientation gizmo |
 | **Undo / redo** | Whole-scene snapshots with a History panel you can jump around in |
 | **Play mode** | Runs inside the docked Game panel with the editor still live; scene state is snapshotted on entry and restored on exit, so play never becomes an edit. Click to capture input, `Esc` to release, and a fullscreen toggle for the whole window |
-| **Game View** | Resolution and aspect-ratio presets with letterboxing, custom resolutions, maximize-on-play, and an FPS/draw-call/triangle overlay |
+| **Game View** | Resolution and aspect-ratio presets with letterboxing, custom resolutions, maximize-on-play, and an FPS/draw-call/triangle overlay. Add a **Camera** entity to frame a shot — the Game view previews through it while editing |
 | **Quality of life** | Auto-save, copy/paste/duplicate, filtered console, statistics overlay, DPI-aware scaling, persisted preferences |
 
 ### Assets
@@ -78,7 +78,7 @@ the roadmap honest.
 - **Browse** with a folder tree, resizable icon grid or compact list, search, and labels
 - **Drag and drop** — from the OS into the editor, or from the browser into the viewport with a live translucent placement preview that grid-snaps and rests on the surface below
 - **Import settings** per asset (Unity-style): texture filtering, wrap, sRGB, mipmaps, max size; model scale, normals, tangents, skeleton, animation, and material handling — all re-importable in place
-- **Previews** including live thumbnails, an orbitable 3D model preview, and R/G/B/A channel isolation for textures
+- **Previews** including live texture thumbnails, an orbitable 3D model preview, and R/G/B/A channel isolation for textures
 - **Prefabs** — save an entity as a reusable asset and instantiate it by drag or double-click
 
 ### Renderer

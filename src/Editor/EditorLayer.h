@@ -320,6 +320,14 @@ private:
     // working directory. Left as a bare filename here only as a harmless pre-Init default.
     std::string m_CurrentScenePath = "scene.json";
     bool m_Dirty = false;
+    // Undo-stack depth at the last save. When history is walked back to exactly this point the
+    // scene matches disk again, so the title should drop its "*" (#22 P22). -1 = no clean point
+    // (untitled, or a branching edit discarded the saved state from the redo stack). Starts at 0:
+    // the initial scene load in main.cpp leaves an empty history that matches the file on disk.
+    int m_SavedUndoDepth = 0;
+    void RefreshDirtyFromHistory() {
+        m_Dirty = (m_SavedUndoDepth < 0) || ((int)m_UndoStack.size() != m_SavedUndoDepth);
+    }
     // Seconds since the last save (manual or auto) — ticked in Draw(), reset by any of the
     // manual Save/Save As/Open/New Scene paths so auto-save never fires moments after one of
     // those. Session-local (not persisted) - EditorSettings::AutoSaveEnabled/IntervalMinutes are
@@ -347,7 +355,8 @@ private:
 
     GizmoOp m_GizmoOp = GizmoOp::Translate;
     bool m_GizmoLocalSpace = false; // false = world-aligned handles, true = aligned to the object's own rotation
-    float m_GizmoSize = 0.1f;       // ImGuizmo's clip-space size units; 0.1 is its own built-in default
+    float m_GizmoSize = 0.15f;      // ImGuizmo clip-space units; 0.1 is its stock default but reads too
+                                    // small against typical geometry and the origin axes (#43 P26)
     bool m_GizmoEngaged = false;
     bool m_GizmoWasUsing = false;
     bool m_PrevLeftMouseDown = false;
@@ -378,6 +387,13 @@ private:
     glm::vec3 m_VertexDragLocal{0.0f};       // grabbed vertex, in the selected model's local space
     glm::vec3 m_VertexDragPlanePoint{0.0f};  // grabbed vertex's world position at drag start (fixes the drag depth)
     glm::vec3 m_VertexDragOffset{0.0f};      // object pivot position minus grabbed-vertex world position, held constant
+
+    // Multi-select Inspector "Batch Transform" fields (#48 P31): relative nudges applied to every
+    // selected entity, then snapped back to identity. Held across frames only for the duration of
+    // one drag.
+    glm::vec3 m_BatchNudgePos{0.0f};
+    glm::vec3 m_BatchNudgeRot{0.0f};
+    glm::vec3 m_BatchNudgeScale{1.0f};
 
     // Nearest vertex on the SELECTED model to the cursor, in local space. Used both for the
     // continuous hover preview (so you can see you're in range before clicking) and to start
@@ -420,7 +436,7 @@ private:
     std::string m_StagedUndoJson;
     std::vector<std::string> m_StagedUndoSelectedNames;
     void StageUndo(const World& world);
-    void CommitStagedUndo(const std::string& label);
+    void CommitStagedUndo(const World& world, const std::string& label);
     // Repeatedly calls Undo()/Redo() until the entry at this position in the visible history
     // list (see DrawHistoryPanel) becomes current - each step is still a single full-snapshot
     // load, not incremental replay, so this stays cheap even jumping many steps at once.
@@ -442,6 +458,22 @@ private:
     // corner — same load treatment as m_LogoTexture, just the other half of the full lockup.
     std::unique_ptr<Texture> m_MarkTexture;
     float m_MarkSpinAngle = 0.0f; // radians, advanced by dt each frame in DrawEngineMark()
+    // Contrast-adaptive tint for the mark: each frame DrawEngineMark reads back the little patch
+    // of the scene texture directly behind the mark, and eases this toward white over dark
+    // content / black over light content. 1 = white, 0 = black; starts white (matches the old
+    // fixed colour) so the first frame before any readback looks unchanged.
+    unsigned int m_MarkSampleFbo = 0; // scratch read-FBO wrapping m_SceneColorTexture for the readback
+    float m_MarkContrastLum = 1.0f;    // eased, per-frame
+    float m_MarkContrastTarget = 1.0f; // refreshed by the throttled readback
+    float m_MarkSampleAccum = 0.0f;    // seconds since last readback (sampled ~10 Hz, not per-frame,
+                                       // so the GPU->CPU sync never touches the 60 fps frame budget)
+    // DVD-screensaver idle bounce: after 30 s with no mouse/keyboard input the mark launches out
+    // of its corner and ricochets around the viewport edges; any input eases it back home.
+    float m_MarkIdleTime = 0.0f;
+    glm::vec2 m_MarkPos{0.0f, 0.0f}; // drawn centre, screen px — eases to the corner, or bounces
+    glm::vec2 m_MarkVel{0.0f, 0.0f}; // px/sec, non-zero only while bouncing
+    bool m_MarkBouncing = false;
+    bool m_MarkPosValid = false;     // false until first laid out, so it doesn't fly in from (0,0)
     void DrawEngineMark(float dt);
 
     // Full-width strip above the viewport: everything lives here now — one-click toggles in
@@ -460,6 +492,7 @@ private:
     // File > Open... dialog does — shared so the Asset Browser's Scenes folder can open a
     // scene with one double-click instead of going through the OS file dialog.
     void OpenScene(World& world, AssetLibrary& assets, const std::string& path);
+    void NewScene(World& world); // untitled scene; shared by File > New Scene and Ctrl+N
 
     // Unity Project-window style browsing: the current virtual folder ("" = root), the
     // browser-local selection (separate from the scene selection — this is for F2/right-click

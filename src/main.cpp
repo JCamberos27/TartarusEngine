@@ -175,6 +175,20 @@ static void UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm:
     }
 }
 
+// The first active in-scene Camera entity (creation order), or entt::null. The Game view
+// previews through it while editing so a shot can be framed without walking there (#36 B10).
+static entt::entity FindActiveSceneCamera(const World& world) {
+    entt::entity best = entt::null;
+    int bestOrder = 0x7fffffff;
+    for (auto e : world.Registry.view<const CameraComponent, const TransformComponent>()) {
+        if (world.Registry.all_of<InactiveTag>(e)) continue;
+        const auto* ord = world.Registry.try_get<OrderComponent>(e);
+        int o = ord ? ord->Value : 0;
+        if (o < bestOrder) { bestOrder = o; best = e; }
+    }
+    return best;
+}
+
 int main() {
     try {
         // Up before anything else so it covers the whole startup, including the GL context
@@ -541,8 +555,11 @@ int main() {
                 EditorLayer::RenderStats sceneStats;
                 drawScene(sceneViewMat, sceneProjMat, editorCamera.Position, sceneUnlit, &sceneStats);
 
-                if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
                 editor.SetRenderStats(sceneStats);
+                // NB: in Wireframe mode the polygon mode stays GL_LINE through the selection
+                // passes below, so the inverted-hull "outline" draws as an enlarged orange
+                // wireframe over the object rather than a filled orange silhouette that buries
+                // its own wireframe (#13 P2). Reset to GL_FILL before the drag-preview ghost.
 
                 // Selection outline: inverted-hull technique — draw each selected object again,
                 // pushed out along its own normal, keeping only the back faces (front-face
@@ -580,15 +597,24 @@ int main() {
                     // alpha (redrawn exactly on top of the object's own already-rendered
                     // geometry, via TintOverlayRenderer's GL_LEQUAL trick) so a selected mesh is
                     // unambiguous at a glance regardless of size or how much of it is on screen.
-                    const float kHighlightAlpha = 0.22f;
-                    for (entt::entity entity : selection) {
-                        if (!world.Registry.valid(entity)) continue;
-                        auto* renderablePtr = world.Registry.try_get<RenderableComponent>(entity);
-                        if (!renderablePtr) continue;
-                        glm::mat4 model = world.ComposeWorldTransform(entity);
-                        tintOverlay.Render(*renderablePtr->ModelRef, model, sceneViewMat, sceneProjMat, kOutlineColor, kHighlightAlpha);
+                    //
+                    // Skipped in Wireframe/Unlit: there the wash was the ONLY thing you could see
+                    // of the selected object, hiding its wireframe/shape (#13 P2). And kept
+                    // light enough in Shaded mode that the surface's own shading still reads
+                    // through instead of flattening imported meshes to an orange blob (#41 P24).
+                    const float kHighlightAlpha = 0.10f;
+                    if (!sceneWireframe && !sceneUnlit) {
+                        for (entt::entity entity : selection) {
+                            if (!world.Registry.valid(entity)) continue;
+                            auto* renderablePtr = world.Registry.try_get<RenderableComponent>(entity);
+                            if (!renderablePtr) continue;
+                            glm::mat4 model = world.ComposeWorldTransform(entity);
+                            tintOverlay.Render(*renderablePtr->ModelRef, model, sceneViewMat, sceneProjMat, kOutlineColor, kHighlightAlpha);
+                        }
                     }
                 }
+
+                if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
                 // "Drag from Asset Browser" placement preview: a translucent ghost at wherever
                 // the dragged model would land if released right now (raycast + grid-snap +
@@ -665,10 +691,25 @@ int main() {
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
                 float gvAspect = (float)gvWidth / (float)gvHeight;
-                glm::mat4 gvView = gameCam->ViewMatrix();
-                glm::mat4 gvProj = gameCam->ProjectionMatrix(gvAspect);
+                glm::mat4 gvView, gvProj;
+                glm::vec3 gvEye;
+                // While editing, render through a placed Camera entity if the scene has one, so
+                // the Game panel previews the framed shot (#36 B10). Play mode always uses the
+                // first-person controller camera.
+                entt::entity sceneCamEnt = playing ? entt::null : FindActiveSceneCamera(world);
+                if (sceneCamEnt != entt::null) {
+                    const auto& cc = world.Registry.get<CameraComponent>(sceneCamEnt);
+                    glm::mat4 camModel = world.ComposeWorldTransform(sceneCamEnt);
+                    gvView = glm::inverse(camModel);
+                    gvProj = glm::perspective(glm::radians(cc.FovDegrees), gvAspect, cc.NearPlane, cc.FarPlane);
+                    gvEye = glm::vec3(camModel[3]);
+                } else {
+                    gvView = gameCam->ViewMatrix();
+                    gvProj = gameCam->ProjectionMatrix(gvAspect);
+                    gvEye = gameCam->Position;
+                }
                 EditorLayer::RenderStats gvRenderStats;
-                drawScene(gvView, gvProj, gameCam->Position, /*unlit=*/false, &gvRenderStats);
+                drawScene(gvView, gvProj, gvEye, /*unlit=*/false, &gvRenderStats);
 
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
 
@@ -692,7 +733,8 @@ int main() {
                 if (sceneGameDockId != 0) {
                     ImGui::SetNextWindowDockID(sceneGameDockId, ImGuiCond_Appearing);
                 }
-                gameView.RenderUI(&gameViewStats, window.IsFullscreen(), playing, gameInputEngaged);
+                gameView.RenderUI(&gameViewStats, window.IsFullscreen(), playing, gameInputEngaged,
+                                  /*noSceneCamera=*/!playing && FindActiveSceneCamera(world) == entt::null);
 
                 // Click inside the running Game view (while it doesn't yet own input) captures
                 // the cursor for the player. Esc / Stop release it (handled above / in stopPlay).

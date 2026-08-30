@@ -37,7 +37,10 @@ public:
     // running but the player hasn't clicked in yet, a "Click to control / Esc to release"
     // hint is drawn over the view and a left-click inside it is latched (see
     // ConsumeEngageClick) so main.cpp can lock the cursor to the game.
-    void RenderUI(const GameViewStats* stats, bool isOsFullscreen, bool playing, bool inputEngaged);
+    // `noSceneCamera` (editing only): the scene has no Camera entity, so the view below is the
+    // editor camera's — a hint says so, distinguishing it from a render failure (#36 B10).
+    void RenderUI(const GameViewStats* stats, bool isOsFullscreen, bool playing, bool inputEngaged,
+                  bool noSceneCamera = false);
 
     // True exactly once, the frame the user left-clicked inside the running Game view while
     // it wasn't yet controlling input — main.cpp turns that into "capture mouse/keyboard".

@@ -70,6 +70,7 @@
 #define GL_READ_FRAMEBUFFER 0x8CA8
 #define GL_DRAW_FRAMEBUFFER 0x8CA9
 #define GL_FRAMEBUFFER_BINDING 0x8CA6
+#define GL_READ_FRAMEBUFFER_BINDING 0x8CAA
 #define GL_COLOR_ATTACHMENT0 0x8CE0
 #define GL_DEPTH_ATTACHMENT 0x8D00
 #define GL_DEPTH_STENCIL_ATTACHMENT 0x821A
@@ -118,6 +119,7 @@ GLboolean __stdcall glIsEnabled(GLenum cap);
 const GLubyte* __stdcall glGetString(GLenum name);
 void __stdcall glPixelStorei(GLenum pname, GLint param);
 void __stdcall glScissor(GLint x, GLint y, GLsizei width, GLsizei height);
+void __stdcall glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void* pixels);
 }
 
 // --- functions requiring wglGetProcAddress (GL >= 1.2 extras used here) ---
