@@ -60,13 +60,16 @@ void main() {
     float alpha = max(minor * 0.35, major * 0.75);
 
     float axisWidth = fwidth(worldPos.x) * 1.5 + 0.02;
-    // Fade the coloured axis lines out as they approach the world origin: that patch belongs to
-    // the transform gizmo, and a full-brightness bar running straight through the manipulator
-    // reads as clutter (#42 P25). Also drop the peak alpha so they hint at the axes rather than
-    // laser through the scene.
-    float originClear = smoothstep(0.4, 2.0, length(worldPos.xz));
-    if (abs(worldPos.x) < axisWidth) { color = vec3(0.62, 0.28, 0.28); alpha = max(alpha, 0.55 * originClear); } // Z axis (world X=0)
-    if (abs(worldPos.z) < axisWidth) { color = vec3(0.30, 0.42, 0.66); alpha = max(alpha, 0.55 * originClear); } // X axis (world Z=0)
+    // The coloured axis lines are a local orientation hint, not scene furniture. Fade them out
+    // right at the origin (that patch belongs to the transform gizmo — a bar through the
+    // manipulator reads as clutter, #42 P25) AND fade them out again past a short radius, so
+    // from an empty Front view they no longer laser across the whole viewport (audit #86).
+    float r = length(worldPos.xz);
+    float gizmoClear = smoothstep(0.4, 2.0, r);            // 0 at origin, 1 past ~2 units
+    float shortRange = 1.0 - smoothstep(6.0, 20.0, r);     // 1 up to ~6 units, 0 past ~20
+    float axisVis = 0.42 * gizmoClear * shortRange;
+    if (abs(worldPos.x) < axisWidth) { color = vec3(0.58, 0.30, 0.30); alpha = max(alpha, axisVis); } // Z axis (world X=0)
+    if (abs(worldPos.z) < axisWidth) { color = vec3(0.32, 0.42, 0.60); alpha = max(alpha, axisVis); } // X axis (world Z=0)
 
     float dist = length(worldPos.xz - uCameraPos.xz);
     float fade = clamp(1.0 - dist / uFadeDistance, 0.0, 1.0);

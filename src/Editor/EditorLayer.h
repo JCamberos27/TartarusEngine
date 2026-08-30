@@ -41,6 +41,11 @@ public:
     void Draw(World& world, AssetLibrary& assets, Camera& editorCamera, float dt);
     void EndFrame();
 
+    // Pull the editor camera back to fit the whole scene's bounds in view, keeping its current
+    // aim. No-op on an empty scene. Called once on startup so the editor doesn't open staring
+    // at empty space next to the geometry (audit #87).
+    void FrameSceneBounds(World& world, Camera& editorCamera);
+
     // The Play/Stop control cluster, drawn every frame in every state (unlike Draw(), which is
     // editor-UI-only). While editing it's a lone green Play in the toolbar strip; while playing
     // it's a red Stop plus a Fullscreen/Restore toggle (maximize the Game view over the editor
@@ -355,8 +360,8 @@ private:
 
     GizmoOp m_GizmoOp = GizmoOp::Translate;
     bool m_GizmoLocalSpace = false; // false = world-aligned handles, true = aligned to the object's own rotation
-    float m_GizmoSize = 0.15f;      // ImGuizmo clip-space units; 0.1 is its stock default but reads too
-                                    // small against typical geometry and the origin axes (#43 P26)
+    float m_GizmoSize = 0.20f;      // ImGuizmo clip-space units; 0.1 is its stock default but reads too
+                                    // small against typical geometry and the origin axes (#43 P26, audit #85)
     bool m_GizmoEngaged = false;
     bool m_GizmoWasUsing = false;
     bool m_PrevLeftMouseDown = false;
@@ -370,6 +375,7 @@ private:
     bool m_LayoutLocked = true;
 
     bool m_ShowGrid = true;
+    bool m_ShowGizmos = true; // View menu toggle for the viewport transform gizmo (audit #60)
     float m_GridSize = 1.0f;          // minor grid line spacing, world units
     bool m_GridSnapEnabled = true;    // hold Ctrl to invert momentarily, Blender-style
     float m_SnapTranslation = 1.0f;
@@ -448,6 +454,16 @@ private:
 
     bool m_ShowHistory = false;
     void DrawHistoryPanel(World& world, AssetLibrary& assets);
+
+    // The three "core" docked panels. Always started visible; the Window menu (and each
+    // window's own close button) can hide them, Reset Layout brings them all back.
+    bool m_ShowHierarchy = true;
+    bool m_ShowInspector = true;
+    bool m_ShowAssetBrowser = true;
+
+    // The Hierarchy row usage hint is helpful once and noise forever — show it only until the
+    // user has actually clicked a row, then never again this session (audit #70).
+    bool m_HierarchyRowHintDone = false;
 
     // Engine wordmark ("TARTARUS ENGINE" text, no icon), drawn small and translucent above the
     // Inspector panel — loaded once in Init() from assets/branding/ (a build-time copy of
