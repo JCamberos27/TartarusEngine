@@ -2881,8 +2881,19 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
                 m_ModelPreviewYaw += delta.x * 0.01f;
                 m_ModelPreviewPitch = std::clamp(m_ModelPreviewPitch - delta.y * 0.01f, -1.5f, 1.5f);
             }
-            m_ModelPreviewDistance = std::max(0.01f, m_ModelPreviewDistance);
+            // Keep the model in frame however hard you scroll: clamp the orbit distance to a
+            // band around this model's own auto-framing distance, so it can't be zoomed to a
+            // black preview with no way back.
+            float fitDistance = ModelPreviewRenderer::ComputeFramingDistance(*model);
+            m_ModelPreviewDistance = std::clamp(m_ModelPreviewDistance, fitDistance * 0.15f, fitDistance * 8.0f);
+
             ImGui::TextDisabled("Drag to orbit, scroll to zoom");
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Reset view")) {
+                m_ModelPreviewYaw = 0.6f;
+                m_ModelPreviewPitch = 0.35f;
+                m_ModelPreviewDistance = fitDistance;
+            }
         }
 
         ImGui::Spacing();
