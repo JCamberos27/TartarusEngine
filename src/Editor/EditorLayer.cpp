@@ -681,6 +681,27 @@ void EditorLayer::PushUndo(const World& world, const std::string& label) {
     m_Dirty = true; // every discrete edit already snapshots here first, so this is the one spot that needs to set it
 }
 
+void EditorLayer::StageUndo(const World& world) {
+    if (m_HasStagedUndo) return; // keep the FIRST (true pre-edit) snapshot of this interaction
+    m_StagedUndoJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
+                                   : SceneSerializer::SaveToString(world);
+    m_StagedUndoSelectedNames = CaptureSelectedNames(world);
+    m_HasStagedUndo = true;
+}
+
+void EditorLayer::CommitStagedUndo(const std::string& label) {
+    if (!m_HasStagedUndo) return;
+    UndoEntry entry;
+    entry.SceneJson = std::move(m_StagedUndoJson);
+    entry.SelectedNames = std::move(m_StagedUndoSelectedNames);
+    entry.Label = label;
+    m_UndoStack.push_back(std::move(entry));
+    if (m_UndoStack.size() > kMaxHistory) m_UndoStack.erase(m_UndoStack.begin());
+    m_RedoStack.clear();
+    m_Dirty = true;
+    m_HasStagedUndo = false;
+}
+
 void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     if (m_UndoStack.empty()) return;
 
@@ -1285,6 +1306,15 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         }
     } else {
         m_AutoSaveTimer = 0.0f; // don't let it silently accumulate while disabled
+    }
+
+    // Drop a staged-but-never-committed undo snapshot once the interaction is definitely over
+    // (its widget vanished mid-edit, e.g. the selection changed before IsItemDeactivatedAfterEdit
+    // could fire) so the next StageUndo captures fresh state instead of a stale one.
+    if (m_HasStagedUndo && !ImGui::IsAnyItemActive() && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        m_HasStagedUndo = false;
+        m_StagedUndoJson.clear();
+        m_StagedUndoSelectedNames.clear();
     }
 
     UpdateViewTransition(editorCamera, dt);
@@ -3363,21 +3393,30 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets) {
         return;
     }
 
+    // Stage-on-activate / commit-on-finish: a ColorEdit's popup re-activates the parent widget
+    // several times during one pick, and the old "PushUndo on IsItemActivated" fired an undo
+    // step for each. Now one edit session = one "Edit Material" step (issue #11), and opening a
+    // picker without changing anything adds nothing.
     PropertyLabel("Base Color", "The surface's tint, multiplied with the Albedo map if one is set.");
     ImGui::ColorEdit3("##BaseColor", &mat->BaseColor.x, ImGuiColorEditFlags_DisplayHex);
-    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Material");
+    if (ImGui::IsItemActivated()) StageUndo(world);
+    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo("Edit Material");
     PropertyLabel("Metallic", "0 = non-metal (plastic, wood, skin), 1 = pure metal.\nIgnored where a Metallic map is set.");
     ImGui::SliderFloat("##Metallic", &mat->Metallic, 0.0f, 1.0f);
-    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Material");
+    if (ImGui::IsItemActivated()) StageUndo(world);
+    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo("Edit Material");
     PropertyLabel("Roughness", "0 = mirror-smooth, 1 = fully matte.\nIgnored where a Roughness map is set.");
     ImGui::SliderFloat("##Roughness", &mat->Roughness, 0.04f, 1.0f);
-    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Material");
+    if (ImGui::IsItemActivated()) StageUndo(world);
+    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo("Edit Material");
     PropertyLabel("Emissive Color", "Color this surface glows, independent of scene lighting.");
     ImGui::ColorEdit3("##EmissiveColor", &mat->EmissiveColor.x, ImGuiColorEditFlags_DisplayHex);
-    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Material");
+    if (ImGui::IsItemActivated()) StageUndo(world);
+    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo("Edit Material");
     PropertyLabel("Emissive Strength", "Brightness multiplier for the Emissive Color/map - above 1 for a strong glow.");
     ImGui::SliderFloat("##EmissiveStrength", &mat->EmissiveStrength, 0.0f, 10.0f);
-    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Material");
+    if (ImGui::IsItemActivated()) StageUndo(world);
+    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo("Edit Material");
 
     ImGui::SeparatorText("Texture Maps");
 
