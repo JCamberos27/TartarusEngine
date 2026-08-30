@@ -848,10 +848,11 @@ void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets) {
         if (!world.Registry.valid(srcEntity)) continue;
         const auto& transform = world.Registry.get<TransformComponent>(srcEntity);
         const auto& name = world.Registry.get<NameComponent>(srcEntity);
-        // Exact same Transform as the source - no offset. NextDuplicateName already guarantees a
-        // unique name, so an in-place duplicate is still easy to tell apart in the Hierarchy even
-        // though it's sitting exactly on top of the original in the viewport.
-        glm::vec3 newPos = transform.Position;
+        // Nudge the copy off the original by the same (1,0,1) offset Paste uses, so a duplicate
+        // is visibly distinct in the viewport (not just by its unique Hierarchy name) and the two
+        // paths behave consistently. A multi-selection duplicate shifts every copy by the same
+        // amount, preserving the group's internal layout.
+        glm::vec3 newPos = transform.Position + glm::vec3(1.0f, 0.0f, 1.0f);
 
         // Mesh-less entity (a light or empty) — nothing to clone via AssetLibrary, so it gets
         // its own branch instead of falling into the box/model paths below, both of which
