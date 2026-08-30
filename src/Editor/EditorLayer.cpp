@@ -3912,6 +3912,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     bool removed = false;
     if (BeginComponentSection(world, entity, ICON_FA_UP_DOWN_LEFT_RIGHT, "Transform", false, removed,
             /*defaultOpen=*/true, "Position, rotation, and scale in the world. Every object has one.")) {
+
         // Stage on first touch, commit on release — one History entry per edit, and a
         // rejected (non-finite) or no-op edit records nothing (its snapshot dedupes away).
         bool rowActive = false, rowCommitted = false;
@@ -4141,6 +4142,39 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
 
     ImGui::Spacing();
     ImGui::Separator();
+    ImGui::Spacing();
+
+    // Transform value ops (audit #77) — kept down here with the other whole-object actions.
+    {
+        auto& xf = registry.get<TransformComponent>(entity);
+        float t = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2.0f) / 3.0f;
+        if (ImGui::Button(ICON_FA_ROTATE_LEFT "  Reset Xform", ImVec2(t, 0.0f))) {
+            PushUndo(world, "Reset Transform");
+            xf.Position = glm::vec3(0.0f);
+            xf.RotationEuler = glm::vec3(0.0f);
+            xf.Scale = glm::vec3(1.0f);
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Reset this object's Transform: position 0, rotation 0, scale 1");
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_COPY "  Copy Xform", ImVec2(t, 0.0f))) {
+            m_TransformClipPos = xf.Position;
+            m_TransformClipRot = xf.RotationEuler;
+            m_TransformClipScale = xf.Scale;
+            m_HasTransformClipboard = true;
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Copy this Transform's position/rotation/scale");
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!m_HasTransformClipboard);
+        if (ImGui::Button(ICON_FA_PASTE "  Paste Xform", ImVec2(t, 0.0f))) {
+            PushUndo(world, "Paste Transform");
+            xf.Position = m_TransformClipPos;
+            xf.RotationEuler = m_TransformClipRot;
+            xf.Scale = m_TransformClipScale;
+        }
+        if (ImGui::IsItemHovered() && m_HasTransformClipboard) EditorUI::SetTooltip("Paste the copied Transform values onto this object");
+        ImGui::EndDisabled();
+    }
+
     ImGui::Spacing();
     DrawAddComponentMenu(world, assets, entity);
 
