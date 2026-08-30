@@ -28,6 +28,13 @@ struct RenderableComponent {
     std::shared_ptr<Model> ModelRef;
 };
 
+// Holds the mesh that was on a RenderableComponent when the user removed "Mesh Renderer" from
+// the Inspector, so re-adding the component restores the same mesh instead of a default cube.
+// Editor-only and NOT serialized: saving the scene with the mesh removed makes that permanent.
+struct DetachedMeshComponent {
+    std::shared_ptr<Model> ModelRef;
+};
+
 // Presence of this component means the entity participates in collision/raycasting. The actual
 // AABB is derived from the entity's RenderableComponent bounds (or, absent one, from
 // TransformComponent Position/Scale as a plain unit box) — axis-aligned, ignoring rotation; see

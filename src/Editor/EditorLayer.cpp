@@ -3110,6 +3110,9 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         }
         if (removed) {
             PushUndo(world, "Remove Renderer");
+            // Keep the mesh on the entity (detached) so Add Component > Mesh Renderer can put
+            // it back — otherwise re-adding gives a fresh cube and the original model is lost.
+            registry.emplace_or_replace<DetachedMeshComponent>(entity, std::move(renderable->ModelRef));
             registry.remove<RenderableComponent>(entity);
         }
     }
@@ -3277,10 +3280,19 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     };
 
     ImGui::SeparatorText("Rendering");
-    // Defaults to a cube — the Mesh Renderer section's own "Replace Mesh" drop target (drag a
-    // Model from the Asset Browser onto it) is how you point it at something else afterward.
+    // Restores the mesh the entity had before "Mesh Renderer" was removed (DetachedMeshComponent),
+    // or a fresh cube if there's nothing to restore — the section's own drop target (drag a Model
+    // from the Asset Browser onto it) then repoints it.
     entry(ICON_FA_DRAW_POLYGON, "Mesh Renderer", registry.all_of<RenderableComponent>(entity),
-        [&] { registry.emplace<RenderableComponent>(entity, assets.CreatePrimitive("cube")); });
+        [&] {
+            std::shared_ptr<Model> mesh;
+            if (auto* detached = registry.try_get<DetachedMeshComponent>(entity)) {
+                mesh = std::move(detached->ModelRef);
+                registry.remove<DetachedMeshComponent>(entity);
+            }
+            if (!mesh) mesh = assets.CreatePrimitive("cube");
+            registry.emplace<RenderableComponent>(entity, std::move(mesh));
+        });
     entry(ICON_FA_LIGHTBULB, "Light", registry.all_of<LightComponent>(entity),
         [&] { registry.emplace<LightComponent>(entity); });
 
