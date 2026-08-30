@@ -76,14 +76,29 @@ drag-FBX-to-place), Environment colour live-update, Reset Layout + dock resize, 
 
 ## Progress log
 
-### 2026-08-29
-### 2026-08-29 (session 2)
-- **Fixed & verified live:** B4 (#7), B5 (#8), D1 (#1), B2 (#5), B1 (#4).
-- **Fixed, builds clean, live-check pending:** B3 (#6).
-- Commits `6f7a02a`..`0-b3`. Not yet triaged: D2, D3, B6, B7, B8, all polish.
+Date-stamped each working session. See [`CHANGELOG.md`](../CHANGELOG.md) for what has shipped.
 
-- **Initial sweep** — 33 findings filed as issues [#1–#33](https://github.com/JCamberos27/TartarusEngine/issues).
-- **Fixed:** `Input` was polling invalid GLFW key codes every frame (`301f865`).
-- **Landed alongside (not from this list):** GL/GLFW error diagnostics (`301f865`),
-  recovery-file auto-save (`58641e5`).
-- **Open:** all of Data loss / Bugs / Polish — none triaged into fixes yet.
+### 2026-08-29 — session 1
+- Editor QA sweep: 33 findings filed as issues [#1–#33](https://github.com/JCamberos27/TartarusEngine/issues).
+- Fixed: `Input` polled invalid GLFW key codes every frame (`301f865`).
+- Landed alongside: GL/GLFW error diagnostics (`301f865`), recovery-file auto-save (`58641e5`).
+
+### 2026-08-29 — session 2  (bug tier)
+Fixed & pushed:
+
+| Issue | Commit | Live-verified |
+|---|---|---|
+| [#1 D1] New Scene overwrites scene.json | `e5234e5` | yes |
+| [#2 D2] Mesh Renderer re-add → cube      | `b04b320` | code review + build only |
+| [#3 D3] undo reorders the Hierarchy      | `f2aafde` | yes |
+| [#4 B1] trapped in Play mode             | `e309e81` | yes |
+| [#5 B2] camera jump on Game-view click   | `039f781` | yes |
+| [#6 B3] view presets don't frame scene   | `6291405` | code review + build only |
+| [#7 B4] primitives clutter Asset Browser | `6f7a02a` | yes |
+| [#8 B5] Duplicate doesn't offset         | `03be6ce` | yes |
+| [#9 B6] model preview lost, no reset     | `65018b3` | yes |
+| [#10 B7] asset click ignored after rename| `4426832` | yes |
+
+- **Still open:** [#11 B8] history entry count grows on undo-then-jump — `needs-repro`,
+  low confidence; leave for a hands-on session.
+- **Not started:** all polish (#12–#32), #33 manual-verification checklist.
