@@ -12,7 +12,8 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
     if (it != m_ModelCache.end()) return it->second;
 
     std::shared_ptr<Model> model;
-    if (path.rfind(kPrimitivePrefix, 0) == 0) {
+    bool isPrimitive = path.rfind(kPrimitivePrefix, 0) == 0;
+    if (isPrimitive) {
         // "primitive://<kind>#<id>" — reconstruct on load (e.g. after relaunch) the same way
         // CreatePrimitive builds it fresh; any saved material override is reapplied separately
         // by SceneSerializer right after this returns.
@@ -24,7 +25,11 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
     }
 
     m_ModelCache[path] = model;
-    m_ModelList.push_back(model);
+    // A primitive:// entry is a per-instance procedural mesh (one per placed Add > Cube / Duplicate),
+    // not an importable asset — it's cached above so scene entities resolve their path, but it must
+    // NOT appear in the Asset Browser listing or get written into libraryModels. Scene boxes[]/
+    // models[] recreate their own primitives from their path on load, independent of that list.
+    if (!isPrimitive) m_ModelList.push_back(model);
     return model;
 }
 
