@@ -5676,7 +5676,25 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
 
     const float searchWidth = 200.0f;
 
-    if (ActionButton(ICON_FA_FOLDER_PLUS, "New Folder")) makeNewFolder();
+    // One "+ Create / Import" entry point instead of New-Folder-only up front and Import buried
+    // in the menu bar (audit #79).
+    if (ActionButton(ICON_FA_PLUS, "Create / Import")) ImGui::OpenPopup("##AssetCreateMenu");
+    if (ImGui::BeginPopup("##AssetCreateMenu")) {
+        if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS "  New Folder")) makeNewFolder();
+        ImGui::Separator();
+        auto importInto = [&](const char* filter) {
+            std::string p = FileDialog::OpenFile(filter, m_Window);
+            if (!p.empty() && m_EditorCameraPtr)
+                ImportDroppedFile(world, assets, *m_EditorCameraPtr, p, m_CurrentAssetFolder);
+        };
+        if (ImGui::MenuItem(ICON_FA_CUBE "  Import Model..."))
+            importInto("3D Models\0*.fbx;*.obj;*.gltf;*.glb\0All Files\0*.*\0");
+        if (ImGui::MenuItem(ICON_FA_IMAGE "  Import Texture..."))
+            importInto("Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0");
+        if (ImGui::MenuItem(ICON_FA_MUSIC "  Import Sound..."))
+            importInto("Audio\0*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0");
+        ImGui::EndPopup();
+    }
 
     ImGui::SameLine();
     ImGui::AlignTextToFramePadding();
@@ -5708,7 +5726,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     // Search box + its two filter buttons (Type, Label), pinned as one group to the toolbar's
     // right edge - falling back to a new line only if the breadcrumb has grown too long to
     // leave room for it.
-    float filterButtonsWidth = (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) * 2.0f;
+    float filterButtonsWidth = (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) * 1.0f; // one "Filters" button now
     float groupWidth = searchWidth + filterButtonsWidth;
     float targetX = ImGui::GetWindowContentRegionMax().x - groupWidth;
     if (targetX > ImGui::GetCursorPosX()) ImGui::SameLine(targetX);
@@ -5734,10 +5752,24 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             "  menu) - listing several ANDs them, requiring every one.");
     }
 
+    // One "Filters" menu instead of a separate type-filter and label-filter button next to the
+    // search box (audit #80). Both just toggle t:/l: tokens in the one search string, so folding
+    // them together removes two near-identical affordances without losing anything. The lit dot
+    // shows when any type/label token is active.
+    bool anyFilterActive = false;
+    for (const char* t : {"t:model", "t:texture", "t:sound", "t:scene", "t:prefab", "t:folder"})
+        anyFilterActive |= SearchHasToken(m_AssetSearchFilter, t);
+    for (const auto& lbl : assets.AllKnownLabels())
+        anyFilterActive |= SearchHasToken(m_AssetSearchFilter, "l:" + lbl);
+
     ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_FILTER)) ImGui::OpenPopup("##AssetTypeFilter");
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Filter by asset type");
-    if (ImGui::BeginPopup("##AssetTypeFilter")) {
+    if (anyFilterActive) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_CheckMark));
+    bool openFilters = ImGui::Button(ICON_FA_FILTER);
+    if (anyFilterActive) ImGui::PopStyleColor();
+    if (openFilters) ImGui::OpenPopup("##AssetFilters");
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Filter by asset type or label");
+    if (ImGui::BeginPopup("##AssetFilters")) {
+        ImGui::SeparatorText("Type");
         static const std::pair<const char*, const char*> kTypes[] = {
             {"Model", "model"}, {"Texture", "texture"}, {"Sound", "sound"},
             {"Scene", "scene"}, {"Prefab", "prefab"}, {"Folder", "folder"},
@@ -5747,30 +5779,40 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             bool active = SearchHasToken(m_AssetSearchFilter, full);
             if (ImGui::MenuItem(label, nullptr, active)) ToggleSearchToken(m_AssetSearchFilter, full);
         }
-        ImGui::EndPopup();
-    }
 
-    ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_TAG)) ImGui::OpenPopup("##AssetLabelFilter");
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Filter by label");
-    if (ImGui::BeginPopup("##AssetLabelFilter")) {
-        ImGui::SetNextItemWidth(160.0f);
-        char labelSearchBuf[64];
-        snprintf(labelSearchBuf, sizeof(labelSearchBuf), "%s", m_AssetLabelMenuFilter.c_str());
-        if (ImGui::InputTextWithHint("##LabelMenuFilter", ICON_FA_MAGNIFYING_GLASS "  Search labels...",
-                labelSearchBuf, sizeof(labelSearchBuf))) {
-            m_AssetLabelMenuFilter = labelSearchBuf;
-        }
-        ImGui::Separator();
+        ImGui::SeparatorText("Label");
         std::set<std::string> allLabels = assets.AllKnownLabels();
         if (allLabels.empty()) {
             ImGui::TextDisabled("No labels yet - add one from an\nasset's right-click menu.");
+        } else {
+            ImGui::SetNextItemWidth(180.0f);
+            char labelSearchBuf[64];
+            snprintf(labelSearchBuf, sizeof(labelSearchBuf), "%s", m_AssetLabelMenuFilter.c_str());
+            if (ImGui::InputTextWithHint("##LabelMenuFilter", ICON_FA_MAGNIFYING_GLASS "  Search labels...",
+                    labelSearchBuf, sizeof(labelSearchBuf))) {
+                m_AssetLabelMenuFilter = labelSearchBuf;
+            }
+            for (const auto& lbl : allLabels) {
+                if (!MatchesFilter(m_AssetLabelMenuFilter, lbl)) continue;
+                std::string full = "l:" + lbl;
+                bool active = SearchHasToken(m_AssetSearchFilter, full);
+                if (ImGui::MenuItem(lbl.c_str(), nullptr, active)) ToggleSearchToken(m_AssetSearchFilter, full);
+            }
         }
-        for (const auto& lbl : allLabels) {
-            if (!MatchesFilter(m_AssetLabelMenuFilter, lbl)) continue;
-            std::string full = "l:" + lbl;
-            bool active = SearchHasToken(m_AssetSearchFilter, full);
-            if (ImGui::MenuItem(lbl.c_str(), nullptr, active)) ToggleSearchToken(m_AssetSearchFilter, full);
+
+        if (anyFilterActive) {
+            ImGui::Separator();
+            if (ImGui::MenuItem(ICON_FA_XMARK "  Clear all filters")) {
+                // Strip every t:/l: token, leave any free-text search words.
+                std::string kept;
+                std::stringstream ss(m_AssetSearchFilter);
+                std::string w;
+                while (ss >> w) {
+                    if (w.rfind("t:", 0) == 0 || w.rfind("l:", 0) == 0) continue;
+                    kept += (kept.empty() ? "" : " ") + w;
+                }
+                m_AssetSearchFilter = kept;
+            }
         }
         ImGui::EndPopup();
     }
