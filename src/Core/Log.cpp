@@ -1,5 +1,7 @@
 #include "Log.h"
 #include <iostream>
+#include <ctime>
+#include <cstdio>
 
 namespace {
 
@@ -14,13 +16,26 @@ std::vector<LogEntry>& Storage() {
 
 unsigned int g_Revision = 0;
 
+std::string NowHMS() {
+    std::time_t t = std::time(nullptr);
+    std::tm tmv{};
+#if defined(_WIN32)
+    localtime_s(&tmv, &t);
+#else
+    localtime_r(&t, &tmv);
+#endif
+    char buf[16];
+    std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d", tmv.tm_hour, tmv.tm_min, tmv.tm_sec);
+    return buf;
+}
+
 void Push(LogLevel level, const std::string& message) {
     auto& entries = Storage();
 
     if (!entries.empty() && entries.back().Level == level && entries.back().Message == message) {
         entries.back().Count++;
     } else {
-        entries.push_back({level, message, 1});
+        entries.push_back({level, message, NowHMS(), 1});
         if (entries.size() > kMaxEntries) {
             entries.erase(entries.begin(), entries.begin() + (entries.size() - kMaxEntries));
         }

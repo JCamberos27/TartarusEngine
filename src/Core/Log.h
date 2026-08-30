@@ -11,6 +11,9 @@ enum class LogLevel { Info, Warning, Error };
 struct LogEntry {
     LogLevel Level = LogLevel::Info;
     std::string Message;
+    // Wall-clock "HH:MM:SS" of the first occurrence, formatted once at push time so the Console
+    // can show it without re-deriving anything.
+    std::string Time;
     // Consecutive identical messages collapse into one entry with a count instead of flooding
     // the panel — a per-frame error would otherwise push everything else out of the ring buffer
     // within a second.

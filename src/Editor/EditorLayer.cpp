@@ -38,6 +38,7 @@
 #include <unordered_map>
 #include <set>
 #include <sstream>
+#include <fstream>
 #include <cmath>
 #include <cctype>
 #include <cstring>
@@ -2361,11 +2362,41 @@ void EditorLayer::DrawConsole() {
         : ImGuiWindowFlags_None;
     if (!ImGui::Begin(ICON_FA_TERMINAL "  Console", &m_ShowConsole, flags)) { ImGui::End(); return; }
 
+    // Builds the plain-text dump of everything currently shown (respects the level + text
+    // filters), used by "Save..." and the right-click "Copy all shown".
+    auto buildShownText = [&]() {
+        std::string out;
+        for (const LogEntry& e : Log::Entries()) {
+            bool lv = (e.Level == LogLevel::Info && m_ConsoleShowInfo) ||
+                      (e.Level == LogLevel::Warning && m_ConsoleShowWarning) ||
+                      (e.Level == LogLevel::Error && m_ConsoleShowError);
+            if (!lv || !MatchesFilter(m_ConsoleFilter, e.Message)) continue;
+            const char* tag = e.Level == LogLevel::Error ? "ERROR" : (e.Level == LogLevel::Warning ? "WARN " : "INFO ");
+            out += "[" + e.Time + "] " + tag + "  " + e.Message;
+            if (e.Count > 1) out += "  (x" + std::to_string(e.Count) + ")";
+            out += "\n";
+        }
+        return out;
+    };
+
     if (ImGui::Button(ICON_FA_TRASH "  Clear")) Log::Clear();
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Remove every message from the console");
     ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_FLOPPY_DISK "  Save...")) {
+        std::string path = FileDialog::SaveFile("Log Files\0*.log;*.txt\0All Files\0*.*\0", "log", m_Window);
+        if (!path.empty()) {
+            std::ofstream f(path, std::ios::binary);
+            if (f) { f << buildShownText(); Log::Info("Console saved to " + path); }
+            else Log::Error("Couldn't write " + path);
+        }
+    }
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Write the messages currently shown to a text file");
+    ImGui::SameLine();
     ImGui::Checkbox("Auto-scroll", &m_ConsoleAutoScroll);
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Automatically jump to the newest message as it arrives");
+    ImGui::SameLine();
+    ImGui::Checkbox("Timestamps", &m_ConsoleShowTimestamps);
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show the HH:MM:SS each message first arrived");
 
     // Per-level toggles double as counters, the way Unity's console header does.
     ImGui::SameLine();
@@ -2410,15 +2441,32 @@ void EditorLayer::DrawConsole() {
             if (entry.Level == LogLevel::Warning) { color = ImVec4(1.0f, 0.80f, 0.30f, 1.0f); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
             else if (entry.Level == LogLevel::Error) { color = ImVec4(1.0f, 0.42f, 0.38f, 1.0f); icon = ICON_FA_CIRCLE_EXCLAMATION; }
 
+            std::string tsPrefix = (m_ConsoleShowTimestamps && !entry.Time.empty()) ? ("[" + entry.Time + "]  ") : "";
+            char rowLabel[1200];
+            if (entry.Count > 1)
+                snprintf(rowLabel, sizeof(rowLabel), "%s%s  %s  (x%d)##r%p", tsPrefix.c_str(), icon,
+                         entry.Message.c_str(), entry.Count, (const void*)&entry);
+            else
+                snprintf(rowLabel, sizeof(rowLabel), "%s%s  %s##r%p", tsPrefix.c_str(), icon,
+                         entry.Message.c_str(), (const void*)&entry);
+
+            // A full-width Selectable (rather than a bare Text) so the whole row is a real item
+            // with a hover rect — needed for a reliable right-click context menu.
             ImGui::PushStyleColor(ImGuiCol_Text, color);
-            if (entry.Count > 1) ImGui::Text("%s  %s  (x%d)", icon, entry.Message.c_str(), entry.Count);
-            else ImGui::Text("%s  %s", icon, entry.Message.c_str());
+            ImGui::Selectable(rowLabel, false, ImGuiSelectableFlags_AllowDoubleClick);
             ImGui::PopStyleColor();
 
-            // Right-click any line to copy its text — the usual reason to read a console entry
-            // is to paste it somewhere else.
-            if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::SetClipboardText(entry.Message.c_str());
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Right-click to copy this message");
+            if (ImGui::BeginPopupContextItem()) {
+                if (ImGui::MenuItem(ICON_FA_COPY "  Copy message")) ImGui::SetClipboardText(entry.Message.c_str());
+                if (ImGui::MenuItem(ICON_FA_COPY "  Copy all shown")) {
+                    std::string all = buildShownText();
+                    ImGui::SetClipboardText(all.c_str());
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_TRASH "  Clear console")) Log::Clear();
+                ImGui::EndPopup();
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Right-click for copy / clear");
         }
 
         // Only when something actually arrived, so scrolling back through history isn't yanked
