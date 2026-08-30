@@ -3042,6 +3042,17 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
     if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) {
         EditorUI::SetTooltip("Type a name to filter the list below.\nType \"t:\" followed by a tag (e.g. t:Enemy) to filter by Tag instead.");
     }
+
+    // Expand / collapse every root's whole subtree at once (audit #71).
+    auto setAllExpanded = [&](bool open) {
+        for (auto e : world.Registry.view<const NameComponent>()) {
+            const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+            if (!h || h->Parent == entt::null) SetHierarchyExpandedRecursive(world, e, open);
+        }
+    };
+    if (ImGui::SmallButton(ICON_FA_ANGLES_DOWN "  Expand all")) setAllExpanded(true);
+    ImGui::SameLine();
+    if (ImGui::SmallButton(ICON_FA_ANGLES_UP "  Collapse all")) setAllExpanded(false);
     ImGui::Separator();
 
     const bool filtering = !m_HierarchyFilter.empty();
@@ -3318,6 +3329,12 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
         if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) CreateEmptyAt(world, nullptr, "Point Light", true);
         ImGui::EndMenu();
     }
+    if (ImGui::MenuItem(ICON_FA_OBJECT_GROUP "  Group into Empty Parent", nullptr, false, HasAnySelection())) {
+        CreateEmptyParentForSelection(world);
+    }
+    if (ImGui::IsItemHovered() && HasAnySelection()) {
+        EditorUI::SetTooltip("Create a new Empty at the selection's center and parent every\nselected object under it. Positions are preserved.");
+    }
     ImGui::Separator();
 
     if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C", false, hasEntity)) CopySelection(world);
@@ -3349,6 +3366,50 @@ void EditorLayer::BeginRenameEntity(entt::entity entity) {
     if (entity == entt::null) return;
     m_RenamingEntity = entity;
     m_EntityRenameJustStarted = true;
+}
+
+void EditorLayer::CreateEmptyParentForSelection(World& world) {
+    std::vector<entt::entity> sel = GetSelectedItems();
+    sel.erase(std::remove_if(sel.begin(), sel.end(),
+        [&](entt::entity e) { return !world.Registry.valid(e); }), sel.end());
+    if (sel.empty()) return;
+
+    // Nothing with a Box Collider can be re-parented yet (SetParent refuses it) — check up front
+    // so we don't create a stray "Group" empty that ends up with no children.
+    bool anyReparentable = false;
+    for (entt::entity e : sel) {
+        if (!world.Registry.all_of<ColliderComponent>(e)) { anyReparentable = true; break; }
+    }
+    if (!anyReparentable) {
+        Log::Warn("Couldn't group: objects with a Box Collider can't be re-parented yet.");
+        return;
+    }
+
+    glm::vec3 center(0.0f);
+    if (!GetSelectionCenter(world, center)) center = glm::vec3(0.0f);
+
+    PushUndo(world, "Create Empty Parent");
+    entt::entity parent = world.CreateEmptyEntity(center, glm::vec3(0.0f), glm::vec3(1.0f), "Group");
+
+    // If every selected entity already shares one parent, slot the new group in under it so the
+    // grouping doesn't yank the objects to the scene root.
+    entt::entity commonParent = entt::null;
+    bool sameParent = true;
+    for (size_t i = 0; i < sel.size(); ++i) {
+        const auto* h = world.Registry.try_get<HierarchyComponent>(sel[i]);
+        entt::entity p = h ? h->Parent : entt::null;
+        if (i == 0) commonParent = p;
+        else if (p != commonParent) { sameParent = false; break; }
+    }
+    if (sameParent && commonParent != entt::null) world.SetParent(parent, commonParent);
+
+    int parented = 0;
+    for (entt::entity e : sel) {
+        if (world.SetParent(e, parent)) ++parented; // preserves world transform; refuses colliders
+    }
+    SelectItem(parent, false);
+    Log::Info("Grouped " + std::to_string(parented) + " object(s) under a new Empty" +
+              (parented < (int)sel.size() ? " (some couldn't be re-parented)." : "."));
 }
 
 entt::entity EditorLayer::CreateEmptyAt(World& world, Camera* editorCamera, const char* name, bool asLight) {
