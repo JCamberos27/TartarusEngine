@@ -120,6 +120,7 @@ const GLubyte* __stdcall glGetString(GLenum name);
 void __stdcall glPixelStorei(GLenum pname, GLint param);
 void __stdcall glScissor(GLint x, GLint y, GLsizei width, GLsizei height);
 void __stdcall glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void* pixels);
+void __stdcall glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height);
 }
 
 // --- functions requiring wglGetProcAddress (GL >= 1.2 extras used here) ---
