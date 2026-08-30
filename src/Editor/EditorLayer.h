@@ -504,6 +504,7 @@ private:
     // Add-menu contents, shared by the menu bar and the Shift+A quick-add popup.
     void DrawAddEntityItems(World& world, AssetLibrary& assets, Camera& editorCamera);
     bool m_OpenQuickAdd = false; // set by the Shift+A shortcut, consumed next frame in Draw()
+    std::string m_LastSelectedName; // last valid scene selection, shown in the Inspector empty state
     void DrawHierarchy(World& world, AssetLibrary& assets);
     void DrawInspector(World& world, AssetLibrary& assets, float dt);
     void DrawAssetBrowser(World& world, AssetLibrary& assets);
