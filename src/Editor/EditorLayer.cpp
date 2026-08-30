@@ -116,12 +116,19 @@ bool IsVertexDraggable(World& world, entt::entity entity) {
     return true;
 }
 
-// EnTT views iterate newest-entity-first; the Hierarchy reads far more naturally in creation
-// order (the way every scene editor lists objects), so panel iteration goes through this.
+// The Hierarchy lists entities by OrderComponent (a stable per-entity sequence assigned at
+// creation and preserved through save/load), so a snapshot round-trip — undo/redo, Play->Stop —
+// no longer reshuffles the list. Entities predating OrderComponent (0) keep a stable relative
+// order via the entity-handle tiebreak.
 template <typename View>
-std::vector<entt::entity> ViewInCreationOrder(View view) {
+std::vector<entt::entity> ViewInCreationOrder(const entt::registry& reg, View view) {
     std::vector<entt::entity> entities(view.begin(), view.end());
-    std::reverse(entities.begin(), entities.end());
+    std::sort(entities.begin(), entities.end(), [&](entt::entity a, entt::entity b) {
+        const auto* oa = reg.try_get<OrderComponent>(a);
+        const auto* ob = reg.try_get<OrderComponent>(b);
+        int va = oa ? oa->Value : 0, vb = ob ? ob->Value : 0;
+        return va != vb ? va < vb : a < b;
+    });
     return entities;
 }
 
@@ -2472,7 +2479,7 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
     snprintf(geoHeader, sizeof(geoHeader), "Level Geometry (%d)###LevelGeo", boxCount);
     if (ImGui::TreeNodeEx(geoHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Solid boxes with collision built in - always block movement.");
-        for (auto entity : ViewInCreationOrder(boxView)) {
+        for (auto entity : ViewInCreationOrder(world.Registry, boxView)) {
             if (!MatchesHierarchyFilter(world, entity)) continue;
             DrawHierarchyNode(world, assets, entity, /*isLevelGeometry=*/true);
         }
@@ -2489,7 +2496,7 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
         if (ImGui::IsItemHovered()) {
             EditorUI::SetTooltip("Models, lights, and empties. Drag one row onto another to parent it;\ndrag onto empty space below to un-parent.");
         }
-        for (auto entity : ViewInCreationOrder(objectView)) {
+        for (auto entity : ViewInCreationOrder(world.Registry, objectView)) {
             const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
             // A parented entity draws nested under its parent instead of as a sibling — except
             // while filtering, where the parent may be filtered out and the match would then

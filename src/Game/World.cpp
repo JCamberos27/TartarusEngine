@@ -59,6 +59,7 @@ entt::entity World::CreateBox(const glm::vec3& center, const glm::vec3& size, co
     entt::entity e = Registry.create();
     Registry.emplace<TransformComponent>(e, center, rotationEuler, size);
     Registry.emplace<NameComponent>(e, name);
+    Registry.emplace<OrderComponent>(e, AllocateOrder());
 
     auto model = Model::CreatePrimitive("cube", NextPrimitivePath());
     model->MeshMaterial(0).BaseColor = color;
@@ -74,6 +75,7 @@ entt::entity World::CreateModelEntity(std::shared_ptr<Model> modelRef, const glm
     entt::entity e = Registry.create();
     Registry.emplace<TransformComponent>(e, position, rotationEuler, scale);
     Registry.emplace<NameComponent>(e, name);
+    Registry.emplace<OrderComponent>(e, AllocateOrder());
     Registry.emplace<RenderableComponent>(e, std::move(modelRef));
     return e;
 }
@@ -83,6 +85,7 @@ entt::entity World::CreateEmptyEntity(const glm::vec3& position, const glm::vec3
     entt::entity e = Registry.create();
     Registry.emplace<TransformComponent>(e, position, rotationEuler, scale);
     Registry.emplace<NameComponent>(e, name);
+    Registry.emplace<OrderComponent>(e, AllocateOrder());
     return e;
 }
 

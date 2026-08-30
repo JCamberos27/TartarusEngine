@@ -73,8 +73,15 @@ public:
     // deleting a parent doesn't leave orphaned children pointing at a dead entt::entity.
     void DestroyEntityAndChildren(entt::entity entity);
 
+    // Next value for OrderComponent (see Components.h). CreateBox/Model/Empty consume one each.
+    // SceneSerializer bumps this above the highest value it loads, so entities added after a
+    // load still sort after everything that came from the file.
+    int AllocateOrder() { return m_NextOrder++; }
+    void EnsureNextOrderAtLeast(int value) { if (value > m_NextOrder) m_NextOrder = value; }
+
 private:
     int m_NextPrimitiveId = 0;
+    int m_NextOrder = 0;
     // Level-geometry entities own an unshared cube Model (never looked up by path elsewhere,
     // unlike imported/library models), so each just needs a unique synthetic path to satisfy
     // Model's constructor bookkeeping — this generates one.

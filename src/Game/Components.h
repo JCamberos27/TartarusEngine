@@ -22,6 +22,16 @@ struct NameComponent {
     std::string Name; // empty = display falls back to a positional name in the Hierarchy
 };
 
+// Stable per-entity sequence number, assigned once when the entity is created (World's factory
+// methods) and preserved through save/load. The Hierarchy and the scene serializer both order
+// entities by this instead of trusting EnTT's live creation order, which a snapshot round-trip
+// (undo/redo, Play->Stop) would otherwise flatten - it re-creates every entity in file order,
+// so lights/empties (written last) sank permanently below every mesh. Legacy scene files with
+// no "order" field fall back to file order on load, matching the old behaviour for them.
+struct OrderComponent {
+    int Value = 0;
+};
+
 // What to draw. Every entity — including former "boxes", which now render through the same
 // cube-primitive Model + PBR material as everything else instead of a separate flat-shaded mesh.
 struct RenderableComponent {

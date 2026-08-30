@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <set>
 #include <functional>
+#include <algorithm>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/euler_angles.hpp>
 
@@ -45,6 +46,7 @@ std::shared_ptr<Texture> LoadIfPresent(AssetLibrary& assets, const json& obj, co
 // these components existed — and keeping every field optional on load, so an older file that
 // predates any of them still parses.
 void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
+    if (const auto* order = world.Registry.try_get<OrderComponent>(entity)) j["order"] = order->Value;
     if (const auto* tag = world.Registry.try_get<TagComponent>(entity)) j["tag"] = tag->Tag;
     if (world.Registry.all_of<InactiveTag>(entity)) j["active"] = false;
     if (world.Registry.all_of<StaticTag>(entity)) j["static"] = true;
@@ -93,9 +95,14 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
 // churns and the Hierarchy's ordering flips each time. Collecting and reversing restores
 // creation order, which is stable across any number of round-trips.
 template <typename View>
-std::vector<entt::entity> InCreationOrder(View view) {
+std::vector<entt::entity> InCreationOrder(const entt::registry& reg, View view) {
     std::vector<entt::entity> entities(view.begin(), view.end());
-    std::reverse(entities.begin(), entities.end());
+    std::sort(entities.begin(), entities.end(), [&](entt::entity a, entt::entity b) {
+        const auto* oa = reg.try_get<OrderComponent>(a);
+        const auto* ob = reg.try_get<OrderComponent>(b);
+        int va = oa ? oa->Value : 0, vb = ob ? ob->Value : 0;
+        return va != vb ? va < vb : a < b; // stable tiebreak for pre-OrderComponent data
+    });
     return entities;
 }
 
@@ -163,9 +170,9 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
     auto emptyViewForIds = world.Registry.view<const TransformComponent, const NameComponent>(
         entt::exclude<RenderableComponent>);
 
-    std::vector<entt::entity> boxEntities = InCreationOrder(boxView);
-    std::vector<entt::entity> modelEntities = InCreationOrder(modelViewForIds);
-    std::vector<entt::entity> emptyEntities = InCreationOrder(emptyViewForIds);
+    std::vector<entt::entity> boxEntities = InCreationOrder(world.Registry, boxView);
+    std::vector<entt::entity> modelEntities = InCreationOrder(world.Registry, modelViewForIds);
+    std::vector<entt::entity> emptyEntities = InCreationOrder(world.Registry, emptyViewForIds);
 
     for (auto entity : boxEntities) { if (included(entity)) assignId(entity); }
     for (auto entity : modelEntities) { if (included(entity)) assignId(entity); }
@@ -282,6 +289,20 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
     std::unordered_map<int, entt::entity> idToEntity;
     std::vector<std::pair<entt::entity, int>> pendingParents;
 
+    // OrderComponent (see Components.h): a full load restores it verbatim so save->load->save is
+    // order-stable; a paste/prefab append (!clearFirst) keeps the fresh trailing value CreateXxx
+    // already assigned, so it lands after the current scene. Legacy files with no "order" field
+    // get sequential file-order values here, matching the old boxes->models->empties behaviour.
+    int fallbackOrder = 0;
+    int maxLoadedOrder = -1;
+    auto applyOrder = [&](entt::entity e, const json& j) {
+        if (!clearFirst) return;
+        int order = j.value("order", fallbackOrder);
+        fallbackOrder = std::max(fallbackOrder, order) + 1;
+        maxLoadedOrder = std::max(maxLoadedOrder, order);
+        world.Registry.emplace_or_replace<OrderComponent>(e, order);
+    };
+
     if (root.contains("boxes")) {
         for (const auto& b : root["boxes"]) {
             // "alive" is a pre-ECS field: a shot-dead box used to be soft-deleted (kept in the
@@ -297,6 +318,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             std::string name = b.value("name", std::string());
             entt::entity e = world.CreateBox(center, size, color, rotation, name);
             ReadCommonComponents(b, world, e);
+            applyOrder(e, b);
             created(e);
 
             int id = b.value("id", -1);
@@ -346,6 +368,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             entt::entity e = world.CreateModelEntity(model, position, rotation, scale, name);
             if (!soundPath.empty()) world.Registry.emplace<AudioSourceComponent>(e, soundPath);
             ReadCommonComponents(m, world, e);
+            applyOrder(e, m);
             created(e);
 
             int id = m.value("id", -1);
@@ -363,6 +386,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             entt::entity e = world.CreateEmptyEntity(position, rotation, scale,
                 en.value("name", std::string("Empty")));
             ReadCommonComponents(en, world, e);
+            applyOrder(e, en);
             created(e);
 
             int id = en.value("id", -1);
@@ -371,6 +395,8 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             if (parentId >= 0) pendingParents.emplace_back(e, parentId);
         }
     }
+
+    if (clearFirst && maxLoadedOrder >= 0) world.EnsureNextOrderAtLeast(maxLoadedOrder + 1);
 
     for (const auto& [child, parentId] : pendingParents) {
         auto it = idToEntity.find(parentId);
