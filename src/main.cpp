@@ -290,9 +290,12 @@ int main() {
         EditorLayer editor;
         editor.Init(window.Handle());
 
-        // Boot log — a pro console says what came up on launch instead of sitting empty
-        // (audit #82). A one-shot rig dump: OS, CPU, RAM, GPU, driver, display, build.
+        // One-shot rig dump: OS, CPU, RAM, GPU, driver, display, build. Mirrored to the Console
+        // on launch (audit #82) AND kept as a block for Preferences > About (each line goes to
+        // both via report()).
+        std::vector<std::string> sysReport;
         {
+            auto report = [&](const std::string& s) { sysReport.push_back(s); Log::Info(s); };
             constexpr GLenum kGL_VENDOR = 0x1F00, kGL_RENDERER = 0x1F01, kGL_VERSION = 0x1F02,
                              kGL_GLSL_VERSION = 0x8B8C, kGL_MAX_TEXTURE_SIZE = 0x0D33,
                              kGL_MAX_SAMPLES = 0x8D57,
@@ -376,20 +379,20 @@ int main() {
                 std::string line = "OS: " + (prod.empty() ? "Windows" : prod);
                 if (!disp.empty())  line += " " + disp;
                 if (!build.empty()) line += "  (build " + build + (ubr ? "." + std::to_string(ubr) : "") + ")";
-                Log::Info(line);
+                report(line);
             }
 
-            Log::Info("Tartarus Engine - editor up.");
+            report("Tartarus Engine - editor up.");
 
             {
                 std::string line = "CPU: " + cpuName() + "  (";
                 if (pcores) line += std::to_string(pcores) + " cores / ";
                 line += (threads ? std::to_string(threads) : std::string("?")) + " threads)";
-                Log::Info(line);
+                report(line);
             }
-            Log::Info("RAM: " + gib(ramTotGiB) + " GiB total  (" + gib(ramAvailGiB) + " GiB free)");
+            report("RAM: " + gib(ramTotGiB) + " GiB total  (" + gib(ramAvailGiB) + " GiB free)");
 
-            Log::Info("GPU: " + glStr(kGL_RENDERER) + "  (" + glStr(kGL_VENDOR) + ")");
+            report("GPU: " + glStr(kGL_RENDERER) + "  (" + glStr(kGL_VENDOR) + ")");
             // VRAM via GL_NVX_gpu_memory_info (NVIDIA). This build's GL loader has no
             // glGetStringi to enumerate a core-profile extension list, so just probe the enum:
             // on a driver without the extension glGetIntegerv leaves the value at 0.
@@ -401,11 +404,11 @@ int main() {
                     char b[96];
                     snprintf(b, sizeof(b), "VRAM: %.0f MiB total  (%.0f MiB free)",
                              totKiB / 1024.0, availKiB / 1024.0);
-                    Log::Info(b);
+                    report(b);
                 }
             }
-            Log::Info("OpenGL " + glStr(kGL_VERSION) + "  |  GLSL " + glStr(kGL_GLSL_VERSION));
-            Log::Info("GL limits: max texture " + std::to_string(glInt(kGL_MAX_TEXTURE_SIZE)) +
+            report("OpenGL " + glStr(kGL_VERSION) + "  |  GLSL " + glStr(kGL_GLSL_VERSION));
+            report("GL limits: max texture " + std::to_string(glInt(kGL_MAX_TEXTURE_SIZE)) +
                       " px, max MSAA " + std::to_string(glInt(kGL_MAX_SAMPLES)) + "x");
 
             // Display line — primary monitor mode.
@@ -415,10 +418,10 @@ int main() {
                     char b[160];
                     snprintf(b, sizeof(b), "Display: %s  %d x %d @ %d Hz",
                              mname ? mname : "primary", vm->width, vm->height, vm->refreshRate);
-                    Log::Info(b);
+                    report(b);
                 }
             }
-            Log::Info("Framebuffer: " + std::to_string(fbw) + " x " + std::to_string(fbh));
+            report("Framebuffer: " + std::to_string(fbw) + " x " + std::to_string(fbh));
 
             // Build line
             {
@@ -429,7 +432,7 @@ int main() {
 #endif
                 char b[128];
                 snprintf(b, sizeof(b), "Build: %s x64, MSVC %d, %s", cfg, (int)_MSC_VER, __DATE__);
-                Log::Info(b);
+                report(b);
             }
             {
                 std::size_t objs = 0;
@@ -441,6 +444,7 @@ int main() {
                     Log::Info("No scene file - started empty.");
             }
         }
+        editor.SetSystemReport(sysReport); // shown in Preferences > About
 
         GameViewPanel gameView;
         gameView.LoadSettings();
