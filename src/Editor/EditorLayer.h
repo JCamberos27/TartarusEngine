@@ -410,6 +410,17 @@ private:
     void PushUndo(const World& world, const std::string& label = "Edit");
     void Undo(World& world, AssetLibrary& assets);
     void Redo(World& world, AssetLibrary& assets);
+
+    // Staged undo for widgets whose one logical edit spans many frames / a popup (colour
+    // pickers, sliders). StageUndo snapshots once, on the first activation of the interaction;
+    // CommitStagedUndo pushes that snapshot onto the stack only when the edit actually finishes
+    // with a change. So a colour-pick session is ONE undo step, not one per popup sub-widget
+    // re-activation, and opening a picker without changing anything adds nothing (issue #11).
+    bool m_HasStagedUndo = false;
+    std::string m_StagedUndoJson;
+    std::vector<std::string> m_StagedUndoSelectedNames;
+    void StageUndo(const World& world);
+    void CommitStagedUndo(const std::string& label);
     // Repeatedly calls Undo()/Redo() until the entry at this position in the visible history
     // list (see DrawHistoryPanel) becomes current - each step is still a single full-snapshot
     // load, not incremental replay, so this stays cheap even jumping many steps at once.
