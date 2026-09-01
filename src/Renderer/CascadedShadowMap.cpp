@@ -99,6 +99,7 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
         float radius = 0.0f;
         for (auto& p : corners) radius = std::max(radius, glm::length(p - center));
         radius = std::ceil(radius * 16.0f) / 16.0f; // quantize -> less edge shimmer as the camera moves
+        m_TexelWorld[c] = (2.0f * radius) / float(std::max(m_Resolution, 1)); // world units / texel (#117)
 
         glm::vec3 up = std::abs(L.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
         float pullback = radius + 50.0f; // capture occluders behind the slice along the light axis
@@ -130,5 +131,11 @@ void CascadedShadowMap::Begin(int i) const {
 glm::vec4 CascadedShadowMap::SplitDepthsVec4() const {
     glm::vec4 v(m_SplitFar[m_Count - 1]);
     for (int i = 0; i < m_Count; ++i) v[i] = m_SplitFar[i];
+    return v;
+}
+
+glm::vec4 CascadedShadowMap::TexelWorldSizesVec4() const {
+    glm::vec4 v(m_TexelWorld[m_Count - 1]);
+    for (int i = 0; i < m_Count; ++i) v[i] = m_TexelWorld[i];
     return v;
 }
