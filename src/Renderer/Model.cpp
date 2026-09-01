@@ -507,7 +507,20 @@ void Model::Draw(Shader& shader) {
 
 void Model::DrawDepthOnly(Shader& shader) {
     UploadBoneMatrices(shader);
-    for (auto& mesh : m_Meshes) mesh->Draw();
+    for (auto& mesh : m_Meshes) {
+        const Material& mat = m_MaterialOverride ? *m_MaterialOverride : mesh->Mat;
+        // Only cost paid over a pure depth draw: one texture bind + two uniforms, and only for
+        // meshes that actually have an albedo map (cutout foliage/fences) — the shadow then
+        // follows the cutout instead of a solid silhouette (#116).
+        if (mat.AlbedoMap) {
+            mat.AlbedoMap->Bind(0);
+            shader.SetInt("uAlbedo", 0);
+            shader.SetInt("uAlphaTest", 1);
+        } else {
+            shader.SetInt("uAlphaTest", 0);
+        }
+        mesh->Draw();
+    }
 }
 
 unsigned int Model::TriangleCount() const {

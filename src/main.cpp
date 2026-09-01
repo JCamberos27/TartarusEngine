@@ -75,12 +75,14 @@ extern "C" {
 static const char* kShadowDepthVertexSrc = R"(
 #version 460 core
 layout (location = 0) in vec3 aPos;
+layout (location = 2) in vec2 aUV;
 layout (location = 4) in ivec4 aBoneIDs;
 layout (location = 5) in vec4 aWeights;
 uniform mat4 uModel;
 uniform mat4 uLightViewProj;
 uniform int uUseSkinning;
 uniform mat4 uBones[100];
+out vec2 vUV;
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
     if (uUseSkinning == 1) {
@@ -92,12 +94,21 @@ void main() {
         if (tw <= 0.0001) skinMat = mat4(1.0);
         localPos = skinMat * localPos;
     }
+    vUV = aUV;
     gl_Position = uLightViewProj * uModel * localPos;
 }
 )";
+// Alpha-tested casters (foliage, chain-link, decals): when a mesh has an albedo map its alpha
+// is sampled and cut below 0.5 so the shadow follows the cutout, not a solid quad (#116). Opaque
+// meshes leave uAlphaTest 0 and this is a no-op.
 static const char* kShadowDepthFragmentSrc = R"(
 #version 460 core
-void main() {}
+in vec2 vUV;
+uniform int uAlphaTest;
+uniform sampler2D uAlbedo;
+void main() {
+    if (uAlphaTest == 1 && texture(uAlbedo, vUV).a < 0.5) discard;
+}
 )";
 
 // Selection outline (editor-only): the classic "inverted hull" technique — draw the object
@@ -776,16 +787,38 @@ int main() {
             // every drawScene() below only samples them.
             const EditorSettings& frameSettings = EditorSettings::Get();
 
+            // Build the light SSBO ONCE per frame — it used to be rebuilt inside every
+            // drawScene(), i.e. per viewport, though the light set is identical across the
+            // Scene/Game views of one frame (#122). This same walk captures the first active
+            // directional light's aim + disc size for the shadow pass below.
             glm::vec3 frameSunDir = lightDir;
             float frameSunAngularDeg = 0.53f; // Earth's sun; drives the penumbra width
+            lightBuffer.Clear();
+            bool frameHaveDirectional = false;
             for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
+                if (lightBuffer.Count() >= LightBuffer::kMaxLights) break;
                 if (world.Registry.all_of<InactiveTag>(e)) continue;
                 const auto& lc = world.Registry.get<LightComponent>(e);
-                if (lc.Kind != LightComponent::Type::Directional) continue;
-                frameSunDir = glm::normalize(glm::vec3(world.ComposeWorldTransform(e) * glm::vec4(0, 0, -1, 0)));
-                frameSunAngularDeg = lc.AngularSizeDegrees;
-                break;
+                glm::mat4 m = world.ComposeWorldTransform(e);
+                glm::vec3 pos = glm::vec3(m[3]);
+                glm::vec3 aim = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
+                if (lc.Kind == LightComponent::Type::Directional) {
+                    lightBuffer.AddDirectional(aim, lc.Color, lc.Intensity);
+                    if (!frameHaveDirectional) { frameSunDir = aim; frameSunAngularDeg = lc.AngularSizeDegrees; }
+                    frameHaveDirectional = true;
+                } else if (lc.Kind == LightComponent::Type::Spot) {
+                    float cosOuter = cosf(glm::radians(lc.SpotAngleDegrees));
+                    float cosInner = cosf(glm::radians(lc.SpotAngleDegrees * 0.9f));
+                    lightBuffer.AddSpot(pos, aim, lc.Color, lc.Intensity, lc.Range, cosOuter, cosInner);
+                } else {
+                    lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range);
+                }
             }
+            // A scene whose sun the user deleted still gets the engine's historical key light.
+            if (!frameHaveDirectional)
+                lightBuffer.AddDirectional(lightDir, glm::vec3(1.0f), 3.0f);
+            lightBuffer.Upload();
+            const int frameLightCount = lightBuffer.Count();
 
             bool sunShadowsReady = false;
             if (frameSettings.ShadowsEnabled) {
@@ -886,38 +919,7 @@ int main() {
                 modelShader.SetInt("uShadowMap", 8);
                 glActiveTexture(GL_TEXTURE0);
 
-                // Build the scene's light list into the SSBO the model shader reads (binding 0).
-                // Every kind (directional sun / point / spot) goes in the same list. Inactive
-                // entities are skipped so the Hierarchy eye toggle turns a light off for real.
-                lightBuffer.Clear();
-                bool haveDirectional = false;
-                for (auto entity : world.Registry.view<TransformComponent, LightComponent>()) {
-                    if (lightBuffer.Count() >= LightBuffer::kMaxLights) break;
-                    if (world.Registry.all_of<InactiveTag>(entity)) continue;
-
-                    const auto& light = world.Registry.get<LightComponent>(entity);
-                    glm::mat4 lightModel = world.ComposeWorldTransform(entity);
-                    glm::vec3 pos = glm::vec3(lightModel[3]);
-                    // Spot cones and the directional sun both aim along the entity's -Z axis.
-                    glm::vec3 aim = glm::normalize(glm::vec3(lightModel * glm::vec4(0, 0, -1, 0)));
-
-                    if (light.Kind == LightComponent::Type::Directional) {
-                        lightBuffer.AddDirectional(aim, light.Color, light.Intensity);
-                        haveDirectional = true;
-                    } else if (light.Kind == LightComponent::Type::Spot) {
-                        float cosOuter = cosf(glm::radians(light.SpotAngleDegrees));
-                        float cosInner = cosf(glm::radians(light.SpotAngleDegrees * 0.9f));
-                        lightBuffer.AddSpot(pos, aim, light.Color, light.Intensity, light.Range, cosOuter, cosInner);
-                    } else {
-                        lightBuffer.AddPoint(pos, light.Color, light.Intensity, light.Range);
-                    }
-                }
-                // Safety net: a scene with no sun at all (user deleted it) still gets the
-                // engine's historical key light so it isn't pitch black.
-                if (!haveDirectional)
-                    lightBuffer.AddDirectional(lightDir, glm::vec3(1.0f), 3.0f);
-
-                lightBuffer.Upload();
+                // The light SSBO (binding 0) is built once per frame above — just bind it.
                 lightBuffer.Bind(0);
 
                 modelShader.SetInt("uUnlit", unlit ? 1 : 0);
@@ -929,7 +931,7 @@ int main() {
                 // boxes render through the exact same PBR path as imported/primitive models now,
                 // since both are just entities with a Transform + Renderable.
                 EditorLayer::RenderStats localStats;
-                localStats.PointLights = std::max(0, lightBuffer.Count() - 1); // minus the directional sun
+                localStats.PointLights = std::max(0, frameLightCount - 1); // minus the directional sun
                 Frustum camFrustum = Frustum::FromViewProj(sceneProj * sceneView);
                 { // scope limits PROFILE_SCOPE to just this loop, not the rest of the frame
                 PROFILE_SCOPE("Scene Draw");
