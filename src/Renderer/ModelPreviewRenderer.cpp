@@ -103,6 +103,7 @@ unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, 
     m_Shader->SetMat4("uView", view);
     m_Shader->SetMat4("uProj", proj);
     m_Shader->SetMat4("uModel", glm::mat4(1.0f));
+    m_Shader->SetMat4("uNormalMatrix", glm::mat4(1.0f)); // model is identity here (#104)
     m_Shader->SetVec3("uViewPos", eye);
     // Fixed, preview-only key light - independent of the real scene's light so the preview
     // always reads consistently regardless of where/how the asset will actually be placed.

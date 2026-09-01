@@ -331,8 +331,16 @@ int main() {
 
         // Resolved under the project folder (see ProjectPaths.h) rather than the working
         // directory, so the scene being edited lives alongside the source instead of inside
-        // build/, where it was gitignored and a clean rebuild would delete it.
-        const std::string scenePath = ProjectPaths::Resolve("scenes/Test.json");
+        // build/, where it was gitignored and a clean rebuild would delete it. Prefer the scene
+        // that was open when the editor last closed, if it still exists (#95).
+        EditorSettings::Load();
+        std::string scenePath = ProjectPaths::Resolve("scenes/Test.json");
+        {
+            const std::string& last = EditorSettings::Get().LastScenePath;
+            std::error_code sceneEc;
+            if (!last.empty() && std::filesystem::exists(last, sceneEc) && !sceneEc)
+                scenePath = last;
+        }
         AssetLibrary assets;
         bool sceneLoaded = SceneSerializer::Load(world, assets, scenePath);
         if (sceneLoaded) {
@@ -794,7 +802,7 @@ int main() {
                 glm::mat4 fitView = fitCam.ViewMatrix();
                 glm::mat4 fitProj = fitCam.ProjectionMatrix(fitRegion.x / fitRegion.y);
 
-                shadowMap.Configure(frameSettings.ShadowResolution, 4);
+                shadowMap.Configure(frameSettings.ShadowResolution, frameSettings.ShadowCascades);
                 shadowMap.Update(fitView, fitProj, frameSunDir, frameSettings.ShadowDistance);
 
                 glEnable(GL_DEPTH_TEST);
@@ -946,6 +954,9 @@ int main() {
                     }
 
                     modelShader.SetMat4("uModel", model);
+                    // Normal matrix (inverse-transpose) computed here, not per-vertex (#104).
+                    modelShader.SetMat4("uNormalMatrix",
+                        glm::mat4(glm::transpose(glm::inverse(glm::mat3(model)))));
                     renderable.ModelRef->Draw(modelShader);
 
                     localStats.DrawCalls += renderable.ModelRef->MeshCount();
