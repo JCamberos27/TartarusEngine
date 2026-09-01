@@ -2,7 +2,10 @@
 #include "Model.h"
 #include "Shader.h"
 #include "ModelShaderSource.h"
+#include "Log.h"
 #include "gl.h"
+
+#include <string>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
@@ -63,6 +66,16 @@ unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, 
     glBindFramebuffer(GL_FRAMEBUFFER, m_FBO);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_ColorTex, 0);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_DepthRBO);
+
+    GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
+        Log::Error("ModelPreviewRenderer: FBO incomplete (0x" + std::to_string(fboStatus) + ") at " +
+                   std::to_string(previewW) + "x" + std::to_string(previewH) + " - skipping preview");
+        glBindFramebuffer(GL_FRAMEBUFFER, (unsigned int)prevFBO);
+        glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+        return m_ColorTex;
+    }
+
     glViewport(0, 0, previewW, previewH);
 
     glEnable(GL_DEPTH_TEST);
