@@ -1445,6 +1445,14 @@ void EditorLayer::JumpToRedoEntry(World& world, AssetLibrary& assets, size_t red
 
 void EditorLayer::OnEnterPlayMode(const World& world) {
     m_PlayModeSnapshot = SceneSerializer::SaveToString(world);
+    // Remember what's selected by OrderComponent value, not entt id: Stop rebuilds the whole
+    // registry and entt recycles ids, so a retained handle can pass valid() yet denote a
+    // different object afterward (#110).
+    m_PlaySelectionOrders.clear();
+    for (entt::entity e : GetSelectedItems()) {
+        if (const auto* o = world.Registry.try_get<OrderComponent>(e))
+            m_PlaySelectionOrders.push_back(o->Value);
+    }
     Log::Info("Entered play mode - scene state saved, changes will be reverted on exit.");
 }
 
@@ -1452,7 +1460,26 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     if (m_PlayModeSnapshot.empty()) return;
     SceneSerializer::LoadFromString(world, assets, m_PlayModeSnapshot);
     m_PlayModeSnapshot.clear();
+
+    // Drop every retained handle before it can rebind to a recycled id (#110).
     ClearSelection();
+    m_HierarchyVisibleOrder.clear();
+    m_HierarchyVisibleBuild.clear();
+
+    // Re-resolve the pre-Play selection against the freshly rebuilt entities by OrderComponent.
+    if (!m_PlaySelectionOrders.empty()) {
+        std::unordered_map<int, entt::entity> byOrder;
+        for (entt::entity e : world.Registry.view<OrderComponent>())
+            byOrder[world.Registry.get<OrderComponent>(e).Value] = e;
+        bool first = true;
+        for (int ord : m_PlaySelectionOrders) {
+            auto it = byOrder.find(ord);
+            if (it == byOrder.end() || !world.Registry.valid(it->second)) continue;
+            SelectItem(it->second, /*addToSelection=*/!first);
+            first = false;
+        }
+        m_PlaySelectionOrders.clear();
+    }
     // Deliberately does NOT set m_Dirty: the scene is back exactly as it was before Play, so
     // there's nothing new to save — the same reason Unity doesn't dirty a scene on play/stop.
     Log::Info("Exited play mode - scene state restored.");
