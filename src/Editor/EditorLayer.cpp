@@ -31,6 +31,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/euler_angles.hpp> // extractEulerAngleYXZ — must match ComposeTransform's order (#108)
 
 #include <filesystem>
 #include <memory>
@@ -58,6 +59,25 @@ inline glm::vec3 SafeSpawnInFrontOf(const Camera& cam, float distance = 5.0f) {
     glm::vec3 p = cam.Position + cam.Front() * distance;
     if (std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z)) return p;
     return glm::vec3(0.0f);
+}
+
+// Euler angles in degrees (X,Y,Z as stored in TransformComponent::RotationEuler) from a matrix,
+// using the SAME Ry*Rx*Rz decomposition ComposeTransform builds it with — so a gizmo-set
+// rotation and an Inspector-typed one agree and compose(decompose(M)) == M (#108). ImGuizmo's
+// own DecomposeMatrixToComponents uses a different order, which made objects jump when a gizmo
+// rotate was followed by an Inspector nudge (or vice versa).
+inline glm::vec3 EulerYXZFromMatrix(const glm::mat4& m) {
+    glm::mat3 b(m);
+    for (int c = 0; c < 3; ++c) {
+        float len = glm::length(b[c]);
+        if (len > 1e-8f) b[c] /= len;
+    }
+    if (glm::determinant(b) < 0.0f) b[0] = -b[0]; // mirrored basis (negative scale) has no clean Euler
+    float ey, ex, ez;
+    glm::extractEulerAngleYXZ(glm::mat4(b), ey, ex, ez);
+    glm::vec3 d = glm::degrees(glm::vec3(ex, ey, ez));
+    for (int i = 0; i < 3; ++i) if (std::fabs(d[i]) < 1.0e-4f) d[i] = 0.0f; // kill dust / -0.0
+    return d;
 }
 
 // Turn a freshly created light entity into a sun: same raking angle / intensity / disc size the
@@ -5799,7 +5819,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     // the alternative window is ImGuizmo's supported way to say "the user hovers there, not here".
     ImGuizmo::SetAlternativeWindow(ImGui::FindWindowByName("Scene"));
 
-    ImGuizmo::SetOrthographic(false);
+    ImGuizmo::SetOrthographic(editorCamera.Orthographic); // #107 — ortho views used to offset the handles
     ImGuizmo::SetDrawlist();
     ImGuizmo::SetRect(m_ViewportPos.x, m_ViewportPos.y, m_ViewportSize.x, m_ViewportSize.y);
     ImGuizmo::SetGizmoSizeClipSpace(m_GizmoSize);
@@ -5862,9 +5882,9 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         float nt[3], nr[3], ns[3];
         ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(newLocal), nt, nr, ns);
         glm::vec3 newPos{nt[0], nt[1], nt[2]};
-        glm::vec3 newRot{nr[0], nr[1], nr[2]};
         glm::vec3 newScale{ns[0], ns[1], ns[2]};
-        for (int i = 0; i < 3; ++i) if (std::fabs(newRot[i]) < 1.0e-4f) newRot[i] = 0.0f; // kill decompose dust / -0.0
+        // Rotation via the ComposeTransform-matching order, NOT ImGuizmo's decompose (#108).
+        glm::vec3 newRot = EulerYXZFromMatrix(newLocal);
 
         // Write back only the channel this gizmo actually drives — ImGuizmo's decompose leaks
         // float noise into the other two, and a pure translate drag was nudging Rotation
@@ -6069,7 +6089,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     // the alternative window is ImGuizmo's supported way to say "the user hovers there, not here".
     ImGuizmo::SetAlternativeWindow(ImGui::FindWindowByName("Scene"));
 
-    ImGuizmo::SetOrthographic(false);
+    ImGuizmo::SetOrthographic(editorCamera.Orthographic); // #107 — ortho views used to offset the handles
     ImGuizmo::SetDrawlist();
     ImGuizmo::SetRect(m_ViewportPos.x, m_ViewportPos.y, m_ViewportSize.x, m_ViewportSize.y);
     ImGuizmo::SetGizmoSizeClipSpace(m_GizmoSize);
@@ -6120,9 +6140,8 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
             glm::mat4 newMatrix = delta * objMatrix;
             float nt[3], nr[3], ns[3];
             ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(newMatrix), nt, nr, ns);
-            for (int i = 0; i < 3; ++i) if (std::fabs(nr[i]) < 1.0e-4f) nr[i] = 0.0f; // decompose dust / -0.0 (#12 P1)
             *r.pos = {nt[0], nt[1], nt[2]};
-            *r.rot = {nr[0], nr[1], nr[2]};
+            *r.rot = EulerYXZFromMatrix(newMatrix); // ComposeTransform order, not ImGuizmo's (#108)
             *r.scale = {ns[0], ns[1], ns[2]};
         }
     }
