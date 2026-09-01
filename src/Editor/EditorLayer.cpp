@@ -2112,14 +2112,11 @@ void EditorLayer::DrawEngineMark(float dt) {
     // renders on top, full stop, with no window of its own to get knocked around by a dock
     // rebuild.
     //
-    // Spinning around the Y axis (a vertical axis through the mark's center, like a sign
-    // swinging on a post) rather than the screen-plane Z axis: a flat sprite can't actually
-    // turn in depth, so this fakes it the standard way — foreshorten the horizontal extent by
-    // cos(angle) each frame, full width when face-on, collapsing to a sliver edge-on. abs()
-    // keeps it from mirroring through a negative scale, since there's no distinct "back" face
-    // texture — it just squashes to a line and un-squashes, reading as a continuous spin.
-    // Slow sign-on-a-post spin, running whether it's parked in the corner or bouncing around.
-    float halfX = half * fabsf(cosf(m_MarkSpinAngle));
+    // Drawn face-on at full width. The old "sign on a post" fake-3D spin foreshortened the
+    // horizontal extent by cos(angle), so for most of each rotation the wordmark collapsed to a
+    // near-vertical sliver and read as a couple of strokes rather than a logo (#30). The spin
+    // phase is still advanced above — it only seeds the idle-bounce launch angle now.
+    float halfX = half;
     ImVec2 p1(center.x - halfX, center.y - half);
     ImVec2 p2(center.x + halfX, center.y - half);
     ImVec2 p3(center.x + halfX, center.y + half);
@@ -2127,7 +2124,7 @@ void EditorLayer::DrawEngineMark(float dt) {
 
     ImGui::GetForegroundDrawList()->AddImageQuad((ImTextureID)(intptr_t)m_MarkTexture->GLHandle(),
         p1, p2, p3, p4, ImVec2(0, 0), ImVec2(1, 0), ImVec2(1, 1), ImVec2(0, 1),
-        IM_COL32(markV, markV, markV, 150));
+        IM_COL32(markV, markV, markV, 190));
 }
 
 bool EditorLayer::IsMouseOverSceneViewport() const {
