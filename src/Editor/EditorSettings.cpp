@@ -32,8 +32,11 @@ void EditorSettings::Load() {
     s.ShowTooltips = root.value("showTooltips", s.ShowTooltips);
     s.AutoSaveEnabled = root.value("autoSaveEnabled", s.AutoSaveEnabled);
     s.AutoSaveIntervalMinutes = root.value("autoSaveIntervalMinutes", s.AutoSaveIntervalMinutes);
+    s.VSyncMode = root.value("vsyncMode", s.VSyncMode);
+    s.FpsLimit = root.value("fpsLimit", s.FpsLimit);
     s.GameViewMaximizeOnPlay = root.value("gameViewMaximizeOnPlay", s.GameViewMaximizeOnPlay);
     s.GameViewShowStats = root.value("gameViewShowStats", s.GameViewShowStats);
+    s.SceneShowStats = root.value("sceneShowStats", s.SceneShowStats);
     s.GameViewPresetLabel = root.value("gameViewPresetLabel", s.GameViewPresetLabel);
     s.GameViewPresetWidth = root.value("gameViewPresetWidth", s.GameViewPresetWidth);
     s.GameViewPresetHeight = root.value("gameViewPresetHeight", s.GameViewPresetHeight);
@@ -52,8 +55,11 @@ void EditorSettings::Save() {
     root["showTooltips"] = Get().ShowTooltips;
     root["autoSaveEnabled"] = Get().AutoSaveEnabled;
     root["autoSaveIntervalMinutes"] = Get().AutoSaveIntervalMinutes;
+    root["vsyncMode"] = Get().VSyncMode;
+    root["fpsLimit"] = Get().FpsLimit;
     root["gameViewMaximizeOnPlay"] = Get().GameViewMaximizeOnPlay;
     root["gameViewShowStats"] = Get().GameViewShowStats;
+    root["sceneShowStats"] = Get().SceneShowStats;
     root["gameViewPresetLabel"] = Get().GameViewPresetLabel;
     root["gameViewPresetWidth"] = Get().GameViewPresetWidth;
     root["gameViewPresetHeight"] = Get().GameViewPresetHeight;

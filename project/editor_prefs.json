@@ -1,12 +1,14 @@
 {
-  "assetBrowserIconSize": 96.0,
+  "assetBrowserIconSize": 30.190475463867188,
   "assetBrowserTreeWidth": 230.0,
-  "autoSaveEnabled": false,
+  "autoSaveEnabled": true,
   "autoSaveIntervalMinutes": 5.0,
+  "fpsLimit": 240,
   "gameViewMaximizeOnPlay": false,
   "gameViewPresetHeight": 0,
   "gameViewPresetLabel": "16:9 Aspect",
   "gameViewPresetWidth": 0,
   "gameViewShowStats": true,
-  "showTooltips": true
+  "showTooltips": true,
+  "vsyncMode": 1
 }

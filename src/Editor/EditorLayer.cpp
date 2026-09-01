@@ -975,6 +975,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ICON_FA_TABLE_CELLS "  Grid & Snapping",
         ICON_FA_SUN "  Environment",
         ICON_FA_CLOCK "  Auto-Save",
+        ICON_FA_GAUGE_HIGH "  Performance",
         ICON_FA_KEYBOARD "  Shortcuts",
         ICON_FA_CIRCLE_INFO "  About",
     };
@@ -1052,7 +1053,52 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         if (!prefs.AutoSaveEnabled) ImGui::EndDisabled();
         break;
 
-    case 5: { // Shortcuts
+    case 5: { // Performance
+        ImGui::SeparatorText("Frame Pacing");
+
+        static const char* kVSyncLabels[] = { "Off", "On", "Adaptive" };
+        int vsync = std::clamp(prefs.VSyncMode, 0, 2);
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::Combo("VSync", &vsync, kVSyncLabels, IM_ARRAYSIZE(kVSyncLabels))) {
+            prefs.VSyncMode = vsync;
+            EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Off: render as fast as possible (use the FPS limit below).\n"
+                                 "On: sync to the monitor refresh, no tearing.\n"
+                                 "Adaptive: sync when frames are on time, tear instead of stalling when they're late.");
+
+        // The FPS cap is what actually 'unlocks' or re-limits the framerate when VSync is Off.
+        // It still works with VSync On (e.g. cap to 60 on a 144 Hz panel) but that pairing can
+        // beat against the refresh, so it's presented as the VSync-Off companion.
+        static const char* kFpsPresets[] = { "Unlimited", "30", "60", "120", "144", "240", "Custom" };
+        static const int   kFpsValues[]  = { 0, 30, 60, 120, 144, 240, -1 };
+        int fpsIdx = IM_ARRAYSIZE(kFpsValues) - 1; // "Custom" unless an exact preset matches
+        for (int i = 0; i < IM_ARRAYSIZE(kFpsValues); ++i)
+            if (kFpsValues[i] == prefs.FpsLimit) { fpsIdx = i; break; }
+
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::Combo("FPS limit", &fpsIdx, kFpsPresets, IM_ARRAYSIZE(kFpsPresets))) {
+            if (kFpsValues[fpsIdx] >= 0) prefs.FpsLimit = kFpsValues[fpsIdx];
+            else if (prefs.FpsLimit <= 0) prefs.FpsLimit = 60; // seed Custom with something sane
+            EditorSettings::Save();
+        }
+        if (fpsIdx == IM_ARRAYSIZE(kFpsValues) - 1) { // Custom: expose the raw number
+            ImGui::SetNextItemWidth(kw);
+            if (ImGui::DragInt("Target FPS", &prefs.FpsLimit, 1.0f, 1, 1000)) {
+                prefs.FpsLimit = std::clamp(prefs.FpsLimit, 1, 1000);
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("0 / Unlimited removes the software cap. Applies to the whole editor and the game simulation.");
+
+        ImGui::Spacing();
+        ImGui::TextDisabled("Changes apply immediately. Both settings persist in editor_prefs.json.");
+        break;
+    }
+
+    case 6: { // Shortcuts
         ImGui::SeparatorText("Shortcuts");
         ImGui::SetNextItemWidth(-1.0f);
         char buf[64];
@@ -1098,7 +1144,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         break;
     }
 
-    case 6: { // About
+    case 7: { // About
         ImGui::SeparatorText("About");
         ImGui::TextUnformatted("Tartarus Engine");
         ImGui::TextDisabled("Hand-rolled C++17 / OpenGL 4.6 editor.");
@@ -2936,7 +2982,7 @@ void EditorLayer::DrawConsole() {
 }
 
 void EditorLayer::DrawStatsOverlay(World& world, float dt) {
-    if (!m_ShowStats) return;
+    if (!EditorSettings::Get().SceneShowStats) return;
 
     // Exponential smoothing: a raw per-frame ms figure flickers too fast to read.
     float frameMs = dt * 1000.0f;
@@ -3214,7 +3260,8 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Asset Browser", nullptr, &m_ShowAssetBrowser);
             ImGui::Separator();
             ImGui::MenuItem(ICON_FA_TERMINAL "  Console", nullptr, &m_ShowConsole);
-            ImGui::MenuItem(ICON_FA_CHART_SIMPLE "  Statistics", nullptr, &m_ShowStats);
+            if (ImGui::MenuItem(ICON_FA_CHART_SIMPLE "  Statistics", nullptr, &EditorSettings::Get().SceneShowStats))
+                EditorSettings::Save();
             ImGui::MenuItem(ICON_FA_CLOCK_ROTATE_LEFT "  History", nullptr, &m_ShowHistory);
             ImGui::MenuItem(ICON_FA_CERTIFICATE "  Engine Mark", nullptr, &m_ShowEngineMark);
             ImGui::Separator();
@@ -3326,7 +3373,10 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     }
 
     divider();
-    if (iconButton(ICON_FA_CHART_SIMPLE, "Toggle Statistics overlay", m_ShowStats)) m_ShowStats = !m_ShowStats;
+    if (iconButton(ICON_FA_CHART_SIMPLE, "Toggle Statistics overlay", EditorSettings::Get().SceneShowStats)) {
+        EditorSettings::Get().SceneShowStats = !EditorSettings::Get().SceneShowStats;
+        EditorSettings::Save();
+    }
     ImGui::SameLine();
     if (iconButton(ICON_FA_TERMINAL, "Toggle Console", m_ShowConsole)) m_ShowConsole = !m_ShowConsole;
     ImGui::SameLine();

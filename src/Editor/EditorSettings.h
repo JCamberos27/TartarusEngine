@@ -22,12 +22,27 @@ struct EditorSettings {
     bool AutoSaveEnabled = true;
     float AutoSaveIntervalMinutes = 5.0f;
 
+    // Frame pacing for the whole editor + game loop (main.cpp reads these every frame, so a
+    // change in Preferences takes effect immediately).
+    //   VSyncMode: 0 = off (uncapped unless FpsLimit is set), 1 = on (swap synced to the
+    //   monitor refresh), 2 = adaptive (sync when the frame is on time, tear when it's late —
+    //   needs EXT_swap_control_tear; drivers without it fall back to plain vsync).
+    //   FpsLimit: 0 = no software cap; otherwise the loop sleeps each frame to hold this rate.
+    //   The cap is applied whatever VSyncMode is, but it's really meant for VSyncMode 0.
+    int VSyncMode = 1;
+    int FpsLimit = 0;
+
     // GameViewPanel's own preferences (see GameViewPanel::LoadSettings/SaveSettings) — kept here
     // rather than in a separate file so they persist through the same Load()/Save() call every
     // other editor preference already goes through. GameViewPresetWidth/Height are only
     // meaningful (nonzero) when the saved preset was a custom fixed resolution, not a built-in.
     bool GameViewMaximizeOnPlay = false;
     bool GameViewShowStats = true;
+
+    // Scene viewport's Statistics overlay (FPS / frame ms / draw calls / triangles / vertices /
+    // entity counts) — the editor-side counterpart of GameViewShowStats. Toggled from
+    // View > Statistics or the toolbar chart button; persisted so the choice survives a restart.
+    bool SceneShowStats = false;
     std::string GameViewPresetLabel = "Free Aspect";
     int GameViewPresetWidth = 0;
     int GameViewPresetHeight = 0;

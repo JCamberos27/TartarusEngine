@@ -136,7 +136,7 @@ target_include_directories(TartarusEngine PRIVATE
 target_link_libraries(TartarusEngine PRIVATE glfw glm::glm assimp EnTT::EnTT)
 
 if(WIN32)
-  target_link_libraries(TartarusEngine PRIVATE opengl32 comdlg32 dwmapi)
+  target_link_libraries(TartarusEngine PRIVATE opengl32 comdlg32 dwmapi winmm)
 endif()
 
 target_compile_definitions(TartarusEngine PRIVATE GLM_ENABLE_EXPERIMENTAL GLFW_INCLUDE_NONE IMGUI_DEFINE_MATH_OPERATORS)

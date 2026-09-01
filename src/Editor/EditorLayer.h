@@ -733,7 +733,7 @@ private:
 
     // --- Statistics overlay --------------------------------------------------------------
     void DrawStatsOverlay(World& world, float dt);
-    bool m_ShowStats = false;
+    // Visibility lives in EditorSettings::SceneShowStats (persisted), not a plain member.
     RenderStats m_RenderStats;
     // Smoothed so the number is readable instead of flickering every frame.
     float m_SmoothedFrameMs = 16.6f;
