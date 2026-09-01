@@ -25,7 +25,9 @@ uniform mat4 uNormalMatrix; // mat3 inverse-transpose of uModel in a mat4 (loade
 uniform mat4 uView;
 uniform mat4 uProj;
 uniform int uUseSkinning;
-uniform mat4 uBones[100];
+// Bone palette as an std430 SSBO (binding 1), uploaded per skinned draw (#104). MAX_BONES=100
+// entries; the index is still clamped to [0,99] below so a >100-bone rig can't read past it.
+layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; };
 
 out vec3 vWorldPos;
 out vec3 vNormal;
