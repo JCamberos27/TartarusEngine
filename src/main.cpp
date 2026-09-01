@@ -22,6 +22,7 @@
 #include "Tonemapper.h"
 #include "LightBuffer.h"
 #include "CascadedShadowMap.h"
+#include "SpotShadowMap.h"
 #include "GLStateCache.h"
 #include "Profiler.h"
 #include "Frustum.h"
@@ -533,6 +534,7 @@ int main() {
         Tonemapper tonemapper;
         LightBuffer lightBuffer; // scene lights -> std430 SSBO the model shader reads at binding 0
         CascadedShadowMap shadowMap; // directional-sun CSM; depth array sampled by the model shader
+        SpotShadowMap spotShadowMap; // perspective depth per shadow-casting spot light (#119)
 
         Camera editorCamera;
         // Play is no longer a whole-screen mode swap. Three independent bits describe the state:
@@ -795,6 +797,8 @@ int main() {
             float frameSunAngularDeg = 0.53f; // Earth's sun; drives the penumbra width
             lightBuffer.Clear();
             bool frameHaveDirectional = false;
+            glm::mat4 spotShadowVP[SpotShadowMap::kMaxSpots];
+            int spotShadowCount = 0; // shadow-casting spots that got a slot this frame (#119)
             for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
                 if (lightBuffer.Count() >= LightBuffer::kMaxLights) break;
                 if (world.Registry.all_of<InactiveTag>(e)) continue;
@@ -809,7 +813,16 @@ int main() {
                 } else if (lc.Kind == LightComponent::Type::Spot) {
                     float cosOuter = cosf(glm::radians(lc.SpotAngleDegrees));
                     float cosInner = cosf(glm::radians(lc.SpotAngleDegrees * 0.9f));
-                    lightBuffer.AddSpot(pos, aim, lc.Color, lc.Intensity, lc.Range, cosOuter, cosInner);
+                    int slot = -1;
+                    if (lc.CastShadows && frameSettings.ShadowsEnabled &&
+                        spotShadowCount < SpotShadowMap::kMaxSpots) {
+                        slot = spotShadowCount++;
+                        glm::vec3 up = std::abs(aim.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
+                        float fov = glm::radians(std::min(lc.SpotAngleDegrees * 2.0f + 4.0f, 175.0f));
+                        spotShadowVP[slot] = glm::perspective(fov, 1.0f, 0.05f, std::max(lc.Range, 0.2f)) *
+                                             glm::lookAt(pos, pos + aim, up);
+                    }
+                    lightBuffer.AddSpot(pos, aim, lc.Color, lc.Intensity, lc.Range, cosOuter, cosInner, slot);
                 } else {
                     lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range);
                 }
@@ -878,6 +891,46 @@ int main() {
                 sunShadowsReady = true;
             }
 
+            // --- Spot-light shadow maps (#119) — once per frame, like the sun CSM ------------
+            if (frameSettings.ShadowsEnabled) {
+                spotShadowMap.Configure(std::min(frameSettings.ShadowResolution, 2048));
+            }
+            if (frameSettings.ShadowsEnabled && spotShadowCount > 0) {
+                PROFILE_SCOPE("Spot Shadow Pass");
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glCullFace(GL_FRONT);
+                glEnable(GL_POLYGON_OFFSET_FILL);
+                glPolygonOffset(2.0f, 4.0f);
+
+                shadowShader.Bind();
+                auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
+                for (int s = 0; s < spotShadowCount; ++s) {
+                    spotShadowMap.Begin(s);
+                    shadowShader.SetMat4("uLightViewProj", spotShadowVP[s]);
+                    Frustum lf = Frustum::FromViewProj(spotShadowVP[s]);
+                    for (auto entity : casters) {
+                        if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                        auto& r = world.Registry.get<RenderableComponent>(entity);
+                        glm::mat4 model = world.ComposeWorldTransform(entity);
+                        glm::vec3 bmin = r.ModelRef->BoundsMin();
+                        glm::vec3 bmax = r.ModelRef->BoundsMax();
+                        bool vb = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
+                        if (vb && !r.ModelRef->HasAnimations() &&
+                            !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
+                            continue;
+                        shadowShader.SetMat4("uModel", model);
+                        r.ModelRef->DrawDepthOnly(shadowShader);
+                    }
+                }
+
+                glDisable(GL_POLYGON_OFFSET_FILL);
+                glCullFace(GL_BACK);
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, window.GetWidth(), window.GetHeight());
+                GLStateCache::Invalidate();
+            }
+
             // Renders the lit scene (sky + every Transform+Renderable entity) into whatever
             // framebuffer/viewport is currently bound. Shared by the real on-screen pass below
             // and GameViewPanel's offscreen framebuffer pass, so the two can never silently
@@ -917,6 +970,16 @@ int main() {
                 glActiveTexture(GL_TEXTURE0 + 8);
                 glBindTexture(GL_TEXTURE_2D_ARRAY, shadowMap.DepthArray());
                 modelShader.SetInt("uShadowMap", 8);
+
+                // Spot-light shadow maps on unit 9 (#119). Count is zeroed when shadows are off
+                // or in Unlit so the shader's SpotShadow() early-outs.
+                int spotCountForView = shadowsOn ? spotShadowCount : 0;
+                modelShader.SetInt("uSpotShadowCount", spotCountForView);
+                if (spotCountForView > 0)
+                    modelShader.SetMat4Array("uSpotShadowVP[0]", spotCountForView, spotShadowVP);
+                glActiveTexture(GL_TEXTURE0 + 9);
+                glBindTexture(GL_TEXTURE_2D_ARRAY, spotShadowMap.DepthArray());
+                modelShader.SetInt("uSpotShadowMap", 9);
                 glActiveTexture(GL_TEXTURE0);
 
                 // The light SSBO (binding 0) is built once per frame above — just bind it.
