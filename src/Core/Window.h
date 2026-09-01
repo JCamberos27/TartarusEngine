@@ -25,6 +25,13 @@ public:
     void SetTitle(const std::string& title);
     void Maximize();
 
+    // Swap-interval control for the current GL context. mode: 0 = off, 1 = on (sync to
+    // refresh), 2 = adaptive (late-swap tear). Adaptive silently degrades to plain vsync on
+    // drivers without EXT_swap_control_tear. Safe to call every frame; only hits the driver
+    // when the mode actually changes.
+    void SetVSync(int mode);
+    int VSyncMode() const { return m_VSyncMode; }
+
     // The window is created hidden and stays hidden until this is called — see the constructor.
     // Call it only after a frame has actually been presented, so it appears already painted
     // instead of flashing an undefined framebuffer.
@@ -53,6 +60,7 @@ private:
     int m_Width, m_Height;
     bool m_CursorLocked = false;
 
+    int m_VSyncMode = 1;
     bool m_IsFullscreen = false;
     int m_WindowedX = 0, m_WindowedY = 0, m_WindowedW = 0, m_WindowedH = 0;
 

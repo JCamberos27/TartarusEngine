@@ -19,6 +19,8 @@ void GlfwErrorCallback(int code, const char* description) {
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 #include <dwmapi.h>
+#include <timeapi.h>            // timeBeginPeriod — tighten the scheduler quantum for the FPS cap
+#pragma comment(lib, "winmm.lib")
 
 // Present in the Windows 11 SDK's dwmapi.h, but guarded here in case an older SDK is used
 // to build this — DwmSetWindowAttribute itself just ignores attributes it doesn't recognize
@@ -84,7 +86,13 @@ Window::Window(int width, int height, const std::string& title)
     // Show() once the first real frame has been rendered; the splash covers the gap.
 
     glfwMakeContextCurrent(m_Handle);
-    glfwSwapInterval(1); // vsync
+    SetVSync(m_VSyncMode); // vsync on by default; main() re-applies the saved preference
+
+#if defined(_WIN32)
+    // Without this, this_thread::sleep_for rounds up to the default ~15.6ms tick, which makes
+    // any FPS cap wildly inaccurate. 1ms for the whole session; paired timeEndPeriod in dtor.
+    timeBeginPeriod(1);
+#endif
 
     if (!GLLoader_Init()) {
         throw std::runtime_error("Failed to load OpenGL functions");
@@ -101,10 +109,20 @@ Window::Window(int width, int height, const std::string& title)
 }
 
 Window::~Window() {
+#if defined(_WIN32)
+    timeEndPeriod(1);
+#endif
     if (m_Handle) {
         glfwDestroyWindow(m_Handle);
     }
     glfwTerminate();
+}
+
+void Window::SetVSync(int mode) {
+    m_VSyncMode = mode;
+    // 0 -> no sync, 1 -> sync to refresh, 2 -> adaptive (negative interval = late-swap tear).
+    int interval = mode == 0 ? 0 : (mode == 2 ? -1 : 1);
+    glfwSwapInterval(interval);
 }
 
 bool Window::ShouldClose() const {

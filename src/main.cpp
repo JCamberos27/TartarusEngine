@@ -10,6 +10,7 @@
 #include "AudioEngine.h"
 #include "AssetLibrary.h"
 #include "EditorLayer.h"
+#include "EditorSettings.h"
 #include "Model.h"
 #include "SceneSerializer.h"
 #include "AnimationSystem.h"
@@ -485,6 +486,8 @@ int main() {
         });
 
         bool firstFramePresented = false; // gates the splash -> editor handoff at the loop's end
+        int appliedVSyncMode = -1; // != any real mode, so the first iteration applies the saved pref
+        bool camDragActive = false; // OS cursor disabled for the duration of a look/pan/orbit drag
         bool prevF1 = false;
         bool prevF11 = false;
         bool prevEscape = false;
@@ -551,6 +554,13 @@ int main() {
             float dt = Clock::DeltaTime();
             Profiler::BeginFrame();
             GLStateCache::ResetFrameStats();
+
+            // Frame-pacing preferences are live: changing VSync / FPS Limit in Preferences takes
+            // effect on the very next frame. SetVSync only touches the driver on an actual change.
+            if (EditorSettings::Get().VSyncMode != appliedVSyncMode) {
+                appliedVSyncMode = EditorSettings::Get().VSyncMode;
+                window.SetVSync(appliedVSyncMode);
+            }
 
             window.PollEvents();
             Input::Update();
@@ -637,9 +647,30 @@ int main() {
             if (editorUIVisible) {
                 glm::vec3 selectionCenter;
                 bool hasSelection = editor.GetSelectionCenter(world, selectionCenter);
-                UpdateEditorCamera(editorCamera, dt,
-                    !editor.WantsCaptureMouse() && !editor.GizmoEngaged() && !gameHasInput,
+                bool allowLook = !editor.WantsCaptureMouse() && !editor.GizmoEngaged() && !gameHasInput;
+
+                // Infinite drag: while a look (RMB), pan (MMB) or orbit (Alt+LMB) drag is held,
+                // disable the OS cursor so mouse motion is delivered as unbounded deltas instead
+                // of dead-ending at the monitor edge. Latched on the button press so a transient
+                // ImGui mouse-capture flip mid-drag can't drop the lock; released once every drag
+                // button is up. Input::Update() already swallows the position jump on the mode
+                // switch, and Window::SetCursorLocked restores the pointer on release.
+                bool altHeld = Input::IsKeyDown(GLFW_KEY_LEFT_ALT) || Input::IsKeyDown(GLFW_KEY_RIGHT_ALT);
+                bool dragBtnHeld = Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)
+                                || Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_MIDDLE)
+                                || (altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT));
+                if (!camDragActive && dragBtnHeld && allowLook) {
+                    camDragActive = true;
+                    window.SetCursorLocked(true);
+                } else if (camDragActive && !dragBtnHeld) {
+                    camDragActive = false;
+                    window.SetCursorLocked(false);
+                }
+
+                UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive,
                     hasSelection ? &selectionCenter : nullptr);
+            } else if (camDragActive) {
+                camDragActive = false; // dropped into maximized play mid-drag; it owns the cursor now
             }
 
             // Simulate the player whenever playing. When the game doesn't have input (in-panel
@@ -1071,6 +1102,10 @@ int main() {
             }
 
             window.SwapBuffers();
+
+            // Software frame cap. Runs whatever the VSync mode is, but it's really for VSync Off
+            // (with VSync On the driver already blocks in SwapBuffers). 0 = uncapped.
+            Clock::LimitFps(EditorSettings::Get().FpsLimit);
 
             // The editor has now actually presented a frame, so revealing the window shows
             // finished content rather than an unpainted framebuffer. Ordered swap -> show ->
