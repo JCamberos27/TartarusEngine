@@ -12,6 +12,7 @@
 #include "EditorLayer.h"
 #include "Model.h"
 #include "SceneSerializer.h"
+#include "AnimationSystem.h"
 #include "Grid.h"
 #include "Sky.h"
 #include "ModelShaderSource.h"
@@ -280,7 +281,7 @@ int main() {
         // Resolved under the project folder (see ProjectPaths.h) rather than the working
         // directory, so the scene being edited lives alongside the source instead of inside
         // build/, where it was gitignored and a clean rebuild would delete it.
-        const std::string scenePath = ProjectPaths::Resolve("scene.json");
+        const std::string scenePath = ProjectPaths::Resolve("scenes/Test.json");
         AssetLibrary assets;
         bool sceneLoaded = SceneSerializer::Load(world, assets, scenePath);
         if (sceneLoaded) {
@@ -646,6 +647,9 @@ int main() {
             // look (see Player::Update's readInput).
             if (playing) {
                 player.Update(dt, world, window.Handle(), gameHasInput);
+                // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
+                // pose, and the play-mode snapshot restores everything this touched on Stop.
+                UpdateAnimators(world, dt);
             }
 
             // Animations advance whenever something is showing them: the editor viewport, or the

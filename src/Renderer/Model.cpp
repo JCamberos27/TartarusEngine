@@ -63,6 +63,11 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
 
     if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
         Log::Error("Model: import failed for '" + m_Path + "': " + importer.GetErrorString());
+        // A failed import leaves m_Meshes empty; collapse the bounds to a finite point too, so
+        // anything that folds this model into a wider AABB (scene framing, focus) can't inherit
+        // the inverted 1e30 sentinel and blow the result up to inf/NaN.
+        m_BoundsMin = glm::vec3(0.0f);
+        m_BoundsMax = glm::vec3(0.0f);
         return;
     }
 

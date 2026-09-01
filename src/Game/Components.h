@@ -102,6 +102,30 @@ struct CameraComponent {
     float FarPlane = 1000.0f;
 };
 
+// Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue
+// cycling. Applied only while the scene is playing — edit mode always shows the authored
+// pose. All parameters are authored/serialized; the Base* fields and Initialized are runtime
+// scratch, captured from the entity's authored transform the first frame play runs and never
+// written to the scene file, so Play -> Stop restores everything cleanly.
+struct AnimatorComponent {
+    glm::vec3 SpinDegPerSec{0.0f};   // continuous local rotation, degrees/second per axis
+
+    glm::vec3 OrbitAxis{0.0f, 1.0f, 0.0f};
+    float OrbitDegPerSec = 0.0f;     // revolve around Base position on this axis
+    float OrbitRadius = 0.0f;
+
+    float BobAmplitude = 0.0f;       // vertical sine offset from Base position, world units
+    float BobFreqHz = 0.0f;
+
+    float ColorCycleHzPerSec = 0.0f; // LightComponent hue revolutions/second (0 = leave color alone)
+
+    // --- runtime scratch (not serialized) ---
+    bool Initialized = false;
+    glm::vec3 BasePosition{0.0f};
+    glm::vec3 BaseColor{1.0f};
+    float Elapsed = 0.0f;
+};
+
 // Present only on entities that are parented, or that have at least one child — an entity with
 // no relationships at all simply lacks this component, so the common (flat) case pays no cost.
 // When Parent is not entt::null, this entity's TransformComponent is interpreted as LOCAL space

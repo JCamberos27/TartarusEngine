@@ -292,10 +292,33 @@ private:
 
     // Additional objects co-selected with the primary via Ctrl+Click, for group operations
     // (move/rotate/scale several objects together with the gizmo, delete them all at once).
-    // The Inspector still edits only the primary's fields — syncing N objects' individual
-    // material/animation state is a much bigger feature this doesn't attempt.
+    // The multi-select Inspector edits properties shared by the whole selection (Transform,
+    // Active/Tag/Static, and any component common to every selected entity — including the PBR
+    // material and its texture maps), Unity-style, with a mixed-value dash for properties that
+    // differ across the selection.
     std::vector<entt::entity> m_ExtraSelection;
     glm::mat4 m_GroupGizmoMatrix{1.0f}; // pivot frame for the multi-select gizmo, updated across a drag
+
+    // The Hierarchy's flattened top-to-bottom order of currently-visible rows (respects group
+    // headers, expand/collapse state, and the search filter). Ctrl+A selects all of it;
+    // Shift+Click selects the contiguous run between the anchor and the clicked row along it.
+    // Two buffers: rows accumulate into ...Build as DrawHierarchyNode draws them, then it is
+    // published to ...Order at the end of the pass. A click handler fires PART-WAY through the
+    // draw (only rows above the clicked one exist in ...Build yet), so it must read the
+    // fully-populated ...Order from the previous frame instead — otherwise an upward range
+    // (anchor below the clicked row) would see the anchor missing and fall back to a single
+    // pick.
+    std::vector<entt::entity> m_HierarchyVisibleOrder;
+    std::vector<entt::entity> m_HierarchyVisibleBuild;
+    // Range-select anchor: the last row picked with a plain or Ctrl+Click. Shift+Click extends
+    // from here without moving it, so the range can be grown or shrunk by clicking again.
+    entt::entity m_SelectionAnchor = entt::null;
+    // Ctrl+A while the Hierarchy is focused: replace the selection with every visible row.
+    void SelectAllVisibleInHierarchy();
+    // Shift+Click on `target`: select every row between m_SelectionAnchor and `target`
+    // inclusive along m_HierarchyVisibleOrder. `additive` (Ctrl+Shift) keeps the existing
+    // selection and adds the range; otherwise the range replaces it. `target` becomes primary.
+    void SelectHierarchyRange(World& world, entt::entity target, bool additive);
 
     bool HasGroupSelection() const { return !m_ExtraSelection.empty(); }
     bool HasAnySelection() const { return m_Selected != entt::null; }
@@ -331,9 +354,9 @@ private:
     bool CanSnapSelectionToGround(World& world) const;
     void SnapSelectionToGround(World& world);
 
-    // Set in Init() to ProjectPaths::Resolve("scene.json") — the project folder, not the
+    // Set in Init() to ProjectPaths::Resolve("scenes/Test.json") — the project folder, not the
     // working directory. Left as a bare filename here only as a harmless pre-Init default.
-    std::string m_CurrentScenePath = "scene.json";
+    std::string m_CurrentScenePath = "scenes/Test.json";
     bool m_Dirty = false;
     // Undo-stack depth at the last save. When history is walked back to exactly this point the
     // scene matches disk again, so the title should drop its "*" (#22 P22). -1 = no clean point
@@ -421,13 +444,6 @@ private:
     glm::vec3 m_VertexDragLocal{0.0f};       // grabbed vertex, in the selected model's local space
     glm::vec3 m_VertexDragPlanePoint{0.0f};  // grabbed vertex's world position at drag start (fixes the drag depth)
     glm::vec3 m_VertexDragOffset{0.0f};      // object pivot position minus grabbed-vertex world position, held constant
-
-    // Multi-select Inspector "Batch Transform" fields (#48 P31): relative nudges applied to every
-    // selected entity, then snapped back to identity. Held across frames only for the duration of
-    // one drag.
-    glm::vec3 m_BatchNudgePos{0.0f};
-    glm::vec3 m_BatchNudgeRot{0.0f};
-    glm::vec3 m_BatchNudgeScale{1.0f};
 
     // Nearest vertex on the SELECTED model to the cursor, in local space. Used both for the
     // continuous hover preview (so you can see you're in range before clicking) and to start
@@ -774,6 +790,11 @@ private:
     bool m_GizmoPivotCenter = false;
 
     void DrawMaterialEditor(World& world, AssetLibrary& assets);
+    // Multi-select variant: PBR + texture-map editing across every selected mesh at once, with
+    // a mixed-value dash for fields the selected materials disagree on. Only meaningful when
+    // every entity in `sel` has a mesh; the caller checks that.
+    void DrawMultiMaterialEditor(World& world, AssetLibrary& assets,
+                                 const std::vector<entt::entity>& sel);
     void DrawGizmo(World& world, Camera& editorCamera);
     // Small screen-space markers for entities with no mesh (lights, empties) — without these
     // they'd be invisible and unclickable in the viewport, since there's nothing to rasterize.
