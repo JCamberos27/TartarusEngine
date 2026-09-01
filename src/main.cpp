@@ -18,6 +18,10 @@
 #include "Sky.h"
 #include "ModelShaderSource.h"
 #include "TintOverlayRenderer.h"
+#include "HdrTarget.h"
+#include "Tonemapper.h"
+#include "LightBuffer.h"
+#include "CascadedShadowMap.h"
 #include "GLStateCache.h"
 #include "Profiler.h"
 #include "Frustum.h"
@@ -50,6 +54,40 @@
 #endif
 #include <windows.h>  // GlobalMemoryStatusEx, registry, GetLogicalProcessorInformationEx — rig info
 #pragma comment(lib, "Advapi32.lib") // RegGetValueA
+
+// Selection outline (editor-only): the classic "inverted hull" technique — draw the object
+// again, offset a little along its normal, with front-face culling so only the silhouette
+// peeking out from behind the normal draw survives. One flat fragment shader shared by both
+// variants below; only the vertex stage differs, matching each mesh's own attribute layout.
+// Depth-only pass for cascaded shadow maps. Mirrors kModelVertexSrc's skinning so animated
+// occluders cast a deforming shadow; writes nothing but depth.
+static const char* kShadowDepthVertexSrc = R"(
+#version 460 core
+layout (location = 0) in vec3 aPos;
+layout (location = 4) in ivec4 aBoneIDs;
+layout (location = 5) in vec4 aWeights;
+uniform mat4 uModel;
+uniform mat4 uLightViewProj;
+uniform int uUseSkinning;
+uniform mat4 uBones[100];
+void main() {
+    vec4 localPos = vec4(aPos, 1.0);
+    if (uUseSkinning == 1) {
+        mat4 skinMat = mat4(0.0);
+        float tw = 0.0;
+        for (int i = 0; i < 4; ++i) {
+            if (aBoneIDs[i] >= 0) { skinMat += uBones[aBoneIDs[i]] * aWeights[i]; tw += aWeights[i]; }
+        }
+        if (tw <= 0.0001) skinMat = mat4(1.0);
+        localPos = skinMat * localPos;
+    }
+    gl_Position = uLightViewProj * uModel * localPos;
+}
+)";
+static const char* kShadowDepthFragmentSrc = R"(
+#version 460 core
+void main() {}
+)";
 
 // Selection outline (editor-only): the classic "inverted hull" technique — draw the object
 // again, offset a little along its normal, with front-face culling so only the silhouette
@@ -269,6 +307,7 @@ int main() {
         Shader modelShader(kModelVertexSrc, kModelFragmentSrc);
         Shader outlineModelShader(kOutlineModelVertexSrc, kOutlineFragmentSrc);
         Shader outlineDilateShader(kOutlineDilateVertSrc, kOutlineDilateFragSrc);
+        Shader shadowShader(kShadowDepthVertexSrc, kShadowDepthFragmentSrc);
         unsigned int fsQuadVao = 0;
         glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
         TintOverlayRenderer tintOverlay;
@@ -453,8 +492,17 @@ int main() {
         gameView.LoadSettings();
         // The editor's own "Scene" tab renders into this rather than straight into the
         // backbuffer — see the "Scene tab offscreen pass" comment below for why.
-        Framebuffer sceneFramebuffer;
+        Framebuffer sceneFramebuffer;   // LDR: tonemap output the Scene tab shows via ImGui::Image
         Framebuffer selectionMaskFbo; // 1-bit silhouette mask for the screen-space selection outline
+
+        // The lighting overhaul renders the scene + editor overlays into these linear RGBA16F
+        // MSAA targets, then a shared Tonemapper pass resolves + maps them into the LDR
+        // framebuffers above (and into FBO 0 for free-aspect maximized play).
+        HdrTarget sceneHdr;
+        HdrTarget gameHdr;
+        Tonemapper tonemapper;
+        LightBuffer lightBuffer; // scene lights -> std430 SSBO the model shader reads at binding 0
+        CascadedShadowMap shadowMap; // directional-sun CSM; depth array sampled by the model shader
 
         Camera editorCamera;
         // Play is no longer a whole-screen mode swap. Three independent bits describe the state:
@@ -710,53 +758,128 @@ int main() {
             // show exactly what Play Mode does, never editor debug shading.
             auto drawScene = [&](const glm::mat4& sceneView, const glm::mat4& sceneProj,
                                   const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats) {
+                const EditorSettings& gs = EditorSettings::Get();
+
+                // Sun direction for shadows: the first active Directional light, else the legacy
+                // constant. (drawScene runs before the LightBuffer is built below, so this small
+                // extra scan is unavoidable for now.)
+                glm::vec3 sunDir = lightDir;
+                float sunAngularDeg = 0.53f; // Earth's sun; drives the shadow penumbra width below
+                for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
+                    if (world.Registry.all_of<InactiveTag>(e)) continue;
+                    const auto& lc = world.Registry.get<LightComponent>(e);
+                    if (lc.Kind != LightComponent::Type::Directional) continue;
+                    glm::mat4 m = world.ComposeWorldTransform(e);
+                    sunDir = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
+                    sunAngularDeg = lc.AngularSizeDegrees;
+                    break;
+                }
+
+                bool shadowsOn = gs.ShadowsEnabled && !unlit;
+                shadowMap.Configure(gs.ShadowResolution, 4);
+                shadowMap.Update(sceneView, sceneProj, sunDir, gs.ShadowDistance);
+
+                if (shadowsOn) {
+                    PROFILE_SCOPE("Sun Shadow Pass");
+                    GLint prevFbo = 0, prevVp[4];
+                    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+                    glGetIntegerv(GL_VIEWPORT, prevVp);
+
+                    glEnable(GL_DEPTH_TEST);
+                    glDepthMask(GL_TRUE);
+                    glCullFace(GL_FRONT);                 // shadow-caster front-face cull: less peter-panning
+                    glEnable(GL_POLYGON_OFFSET_FILL);
+                    glPolygonOffset(2.0f, 4.0f);
+
+                    shadowShader.Bind();
+                    for (int c = 0; c < shadowMap.Count(); ++c) {
+                        shadowMap.Begin(c);
+                        shadowShader.SetMat4("uLightViewProj", shadowMap.LightViewProj(c));
+                        for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
+                            if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                            shadowShader.SetMat4("uModel", world.ComposeWorldTransform(entity));
+                            world.Registry.get<RenderableComponent>(entity).ModelRef->Draw(shadowShader);
+                        }
+                    }
+
+                    glDisable(GL_POLYGON_OFFSET_FILL);
+                    glCullFace(GL_BACK);
+                    glBindFramebuffer(GL_FRAMEBUFFER, (unsigned int)prevFbo);
+                    glViewport(prevVp[0], prevVp[1], prevVp[2], prevVp[3]);
+                    GLStateCache::Invalidate();
+                }
+
                 sky.Draw(sceneView, sceneProj, world.SkyHorizonColor, world.SkyZenithColor);
 
                 modelShader.Bind();
                 modelShader.SetMat4("uView", sceneView);
                 modelShader.SetMat4("uProj", sceneProj);
-                modelShader.SetVec3("uLightDir", lightDir);
-                modelShader.SetVec3("uLightColor", glm::vec3(3.0f));
                 modelShader.SetVec3("uViewPos", viewPos);
 
-                // Gather every active LightComponent into the shader's fixed-size arrays.
-                // Inactive entities are skipped so the Hierarchy's eye toggle turns a light off
-                // for real.
-                int pointLightCount = 0;
+                // Cascaded-shadow uniforms + the depth array on unit 8 (material maps use 1..7).
+                modelShader.SetInt("uShadowEnabled", shadowsOn ? 1 : 0);
+                modelShader.SetInt("uShadowCascadeCount", shadowMap.Count());
+                {
+                    glm::mat4 mats[CascadedShadowMap::kMaxCascades];
+                    for (int i = 0; i < shadowMap.Count(); ++i) mats[i] = shadowMap.LightViewProj(i);
+                    modelShader.SetMat4Array("uShadowMatrices[0]", shadowMap.Count(), mats);
+                }
+                modelShader.SetVec4("uCascadeSplits", shadowMap.SplitDepthsVec4());
+                modelShader.SetFloat("uShadowNormalBias",
+                    gs.ShadowDistance / (float)std::max(shadowMap.Resolution(), 1) * 2.0f);
+                // Penumbra width in shadow-map texels, from the sun's apparent size. 0.53 deg
+                // (real sun) -> a tight ~2 texel edge; crank the light's Angular Size for softer.
+                modelShader.SetFloat("uShadowSoftness",
+                    std::clamp(sunAngularDeg * 3.0f, 1.0f, 14.0f));
+                glActiveTexture(GL_TEXTURE0 + 8);
+                glBindTexture(GL_TEXTURE_2D_ARRAY, shadowMap.DepthArray());
+                modelShader.SetInt("uShadowMap", 8);
+                glActiveTexture(GL_TEXTURE0);
+
+                // Build the scene's light list into the SSBO the model shader reads (binding 0).
+                // Every kind (directional sun / point / spot) goes in the same list. Inactive
+                // entities are skipped so the Hierarchy eye toggle turns a light off for real.
+                lightBuffer.Clear();
+                bool haveDirectional = false;
                 for (auto entity : world.Registry.view<TransformComponent, LightComponent>()) {
-                    if (pointLightCount >= kMaxPointLights) break;
+                    if (lightBuffer.Count() >= LightBuffer::kMaxLights) break;
                     if (world.Registry.all_of<InactiveTag>(entity)) continue;
 
                     const auto& light = world.Registry.get<LightComponent>(entity);
                     glm::mat4 lightModel = world.ComposeWorldTransform(entity);
+                    glm::vec3 pos = glm::vec3(lightModel[3]);
+                    // Spot cones and the directional sun both aim along the entity's -Z axis.
+                    glm::vec3 aim = glm::normalize(glm::vec3(lightModel * glm::vec4(0, 0, -1, 0)));
 
-                    char name[64];
-                    snprintf(name, sizeof(name), "uPointLightPos[%d]", pointLightCount);
-                    modelShader.SetVec3(name, glm::vec3(lightModel[3]));
-                    snprintf(name, sizeof(name), "uPointLightColor[%d]", pointLightCount);
-                    modelShader.SetVec3(name, light.Color * light.Intensity);
-                    snprintf(name, sizeof(name), "uPointLightRange[%d]", pointLightCount);
-                    modelShader.SetFloat(name, light.Range);
-
-                    // A spot aims along its own -Z (the usual "forward" convention), so rotating
-                    // the entity aims the cone. -1 in the cutoff slot marks an omnidirectional
-                    // point light.
-                    snprintf(name, sizeof(name), "uPointLightDir[%d]", pointLightCount);
-                    modelShader.SetVec3(name, glm::normalize(glm::vec3(lightModel * glm::vec4(0, 0, -1, 0))));
-                    snprintf(name, sizeof(name), "uPointLightCosCutoff[%d]", pointLightCount);
-                    modelShader.SetFloat(name, light.Kind == LightComponent::Type::Spot
-                        ? cosf(glm::radians(light.SpotAngleDegrees)) : -1.0f);
-
-                    pointLightCount++;
+                    if (light.Kind == LightComponent::Type::Directional) {
+                        lightBuffer.AddDirectional(aim, light.Color, light.Intensity);
+                        haveDirectional = true;
+                    } else if (light.Kind == LightComponent::Type::Spot) {
+                        float cosOuter = cosf(glm::radians(light.SpotAngleDegrees));
+                        float cosInner = cosf(glm::radians(light.SpotAngleDegrees * 0.9f));
+                        lightBuffer.AddSpot(pos, aim, light.Color, light.Intensity, light.Range, cosOuter, cosInner);
+                    } else {
+                        lightBuffer.AddPoint(pos, light.Color, light.Intensity, light.Range);
+                    }
                 }
-                modelShader.SetInt("uPointLightCount", pointLightCount);
+                // Safety net: a scene with no sun at all (user deleted it) still gets the
+                // engine's historical key light so it isn't pitch black.
+                if (!haveDirectional)
+                    lightBuffer.AddDirectional(lightDir, glm::vec3(1.0f), 3.0f);
+
+                lightBuffer.Upload();
+                lightBuffer.Bind(0);
+
                 modelShader.SetInt("uUnlit", unlit ? 1 : 0);
+                // Real scene path: emit linear HDR; the shared Tonemapper pass maps it after
+                // MSAA resolve. (Offscreen model thumbnails set this to 1 to self-tonemap.)
+                modelShader.SetInt("uApplyTonemap", 0);
 
                 // One draw loop for everything placed in the world — former level-geometry
                 // boxes render through the exact same PBR path as imported/primitive models now,
                 // since both are just entities with a Transform + Renderable.
                 EditorLayer::RenderStats localStats;
-                localStats.PointLights = pointLightCount;
+                localStats.PointLights = std::max(0, lightBuffer.Count() - 1); // minus the directional sun
                 Frustum camFrustum = Frustum::FromViewProj(sceneProj * sceneView);
                 { // scope limits PROFILE_SCOPE to just this loop, not the rest of the frame
                 PROFILE_SCOPE("Scene Draw");
@@ -809,7 +932,8 @@ int main() {
                 int scH = std::max((int)available.y, 1);
 
                 sceneFramebuffer.Resize(scW, scH);
-                sceneFramebuffer.Bind();
+                sceneHdr.Resize(scW, scH, EditorSettings::Get().MsaaSamples);
+                sceneHdr.BindForRender();
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -876,7 +1000,7 @@ int main() {
                         if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
                         // --- Dilate pass: back to the scene target, paint the ring.
-                        sceneFramebuffer.Bind();
+                        sceneHdr.BindForRender();
                         glEnable(GL_BLEND);
                         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                         outlineDilateShader.Bind();
@@ -925,6 +1049,13 @@ int main() {
                     grid.Draw(sceneViewMat, sceneProjMat, editorCamera.Position, editor.GridMinorSpacing(), 10.0f, gridFade);
                 }
 
+                // Resolve MSAA + tonemap the linear-HDR scene into the LDR texture the Scene tab
+                // displays (exposure -> curve -> gamma, once, in Tonemapper).
+                sceneHdr.ResolveTo();
+                tonemapper.Apply(sceneHdr.ResolvedColorTexture(), sceneFramebuffer.Handle(), scW, scH,
+                                 EditorSettings::Get().ExposureEV,
+                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator);
+
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
                 editor.SetSceneTexture(sceneFramebuffer.ColorTexture());
             }
@@ -970,7 +1101,8 @@ int main() {
                 int gvWidth, gvHeight;
                 gameView.ComputeTargetSize(available, gvWidth, gvHeight);
                 gameView.GetFramebuffer().Resize(gvWidth, gvHeight);
-                gameView.GetFramebuffer().Bind();
+                gameHdr.Resize(gvWidth, gvHeight, EditorSettings::Get().MsaaSamples);
+                gameHdr.BindForRender();
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -995,6 +1127,10 @@ int main() {
                 EditorLayer::RenderStats gvRenderStats;
                 drawScene(gvView, gvProj, gvEye, /*unlit=*/false, &gvRenderStats);
 
+                gameHdr.ResolveTo();
+                tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameView.GetFramebuffer().Handle(),
+                                 gvWidth, gvHeight, EditorSettings::Get().ExposureEV,
+                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator);
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
 
                 gameViewStats.FPS = dt > 0.0f ? (int)(1.0f / dt) : 0;
@@ -1062,15 +1198,23 @@ int main() {
                     GL_COLOR_BUFFER_BIT, GL_LINEAR);
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
             } else if (playMaximized) {
-                // Free-Aspect maximized play: render straight to the backbuffer at the window's
-                // own native aspect.
-                glViewport(0, 0, window.GetWidth(), window.GetHeight());
-                float aspect = (float)window.GetWidth() / (float)window.GetHeight();
+                // Free-Aspect maximized play: render the scene into the HDR target at the
+                // window's native aspect, then tonemap straight onto the backbuffer.
+                int mw = window.GetWidth(), mh = window.GetHeight();
+                gameHdr.Resize(mw, mh, EditorSettings::Get().MsaaSamples);
+                gameHdr.BindForRender();
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                float aspect = (float)mw / (float)mh;
                 glm::mat4 view = gameCam->ViewMatrix();
                 glm::mat4 proj = gameCam->ProjectionMatrix(aspect);
                 EditorLayer::RenderStats stats;
                 drawScene(view, proj, gameCam->Position, /*unlit=*/false, &stats);
                 editor.SetRenderStats(stats);
+                gameHdr.ResolveTo();
+                tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh,
+                                 EditorSettings::Get().ExposureEV,
+                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator);
             }
 
             {

@@ -86,6 +86,46 @@
 #define GL_UNSIGNED_INT_24_8 0x84FA
 #define GL_RENDERBUFFER 0x8D41
 #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
+#define GL_MAX_SAMPLES 0x8D57
+
+// ---- Lighting / HDR overhaul: extended core (GL 4.3-4.6) --------------------------------
+// Buffer objects for UBO/SSBO light data + immutable (DSA) storage.
+#define GL_UNIFORM_BUFFER 0x8A11
+#define GL_SHADER_STORAGE_BUFFER 0x90D2
+#define GL_MAP_READ_BIT 0x0001
+#define GL_MAP_WRITE_BIT 0x0002
+#define GL_MAP_PERSISTENT_BIT 0x0040
+#define GL_MAP_COHERENT_BIT 0x0080
+#define GL_DYNAMIC_STORAGE_BIT 0x0100
+// Floating-point / HDR internal formats.
+#define GL_RGBA16F 0x881A
+#define GL_RGBA32F 0x8814
+#define GL_RGB16F 0x881B
+#define GL_RGB32F 0x8815
+#define GL_RG16F 0x822F
+#define GL_R16F 0x822D
+#define GL_R11F_G11F_B10F 0x8C3A
+#define GL_HALF_FLOAT 0x140B
+#define GL_DEPTH_COMPONENT32F 0x8CAC
+// Multisample + layered texture targets (MSAA HDR target, shadow-map arrays, cubemaps).
+#define GL_TEXTURE_2D_MULTISAMPLE 0x9100
+#define GL_TEXTURE_2D_ARRAY 0x8C1A
+#define GL_TEXTURE_CUBE_MAP_ARRAY 0x9009
+#define GL_TEXTURE_CUBE_MAP_SEAMLESS 0x884F
+#define GL_TEXTURE_MAX_LEVEL 0x813D
+#define GL_TEXTURE_WRAP_R 0x8072
+#define GL_CLAMP_TO_BORDER 0x812D
+#define GL_TEXTURE_BORDER_COLOR 0x1004
+#define GL_TEXTURE_COMPARE_MODE 0x884C
+#define GL_TEXTURE_COMPARE_FUNC 0x884D
+#define GL_COMPARE_REF_TO_TEXTURE 0x884E
+#define GL_NONE 0
+#define GL_DEPTH_COMPONENT 0x1902
+// Extra colour attachments for the future G-buffer-ish passes (bloom, SSAO, motion).
+#define GL_COLOR_ATTACHMENT1 0x8CE1
+#define GL_COLOR_ATTACHMENT2 0x8CE2
+#define GL_COLOR_ATTACHMENT3 0x8CE3
+#define GL_FRAMEBUFFER_SRGB 0x8DB9
 
 typedef char GLchar;
 typedef ptrdiff_t GLsizeiptr;
@@ -184,6 +224,37 @@ typedef void (__stdcall* PFNGLFRAMEBUFFERRENDERBUFFERPROC)(GLenum, GLenum, GLenu
 typedef void (__stdcall* PFNGLDELETERENDERBUFFERSPROC)(GLsizei, const GLuint*);
 typedef void (__stdcall* PFNGLBLITFRAMEBUFFERPROC)(GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum);
 
+// ---- Lighting / HDR overhaul: extended entry points -----------------------------------
+typedef const GLubyte* (__stdcall* PFNGLGETSTRINGIPROC)(GLenum, GLuint);
+typedef void (__stdcall* PFNGLBINDBUFFERBASEPROC)(GLenum, GLuint, GLuint);
+typedef void (__stdcall* PFNGLBINDBUFFERRANGEPROC)(GLenum, GLuint, GLuint, GLintptr, GLsizeiptr);
+typedef void (__stdcall* PFNGLDRAWBUFFERSPROC)(GLsizei, const GLenum*);
+typedef void (__stdcall* PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC)(GLenum, GLsizei, GLenum, GLsizei, GLsizei);
+typedef void (__stdcall* PFNGLTEXIMAGE2DMULTISAMPLEPROC)(GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLboolean);
+// Direct State Access (GL 4.5) — buffers.
+typedef void (__stdcall* PFNGLCREATEBUFFERSPROC)(GLsizei, GLuint*);
+typedef void (__stdcall* PFNGLNAMEDBUFFERSTORAGEPROC)(GLuint, GLsizeiptr, const void*, GLbitfield);
+typedef void (__stdcall* PFNGLNAMEDBUFFERSUBDATAPROC)(GLuint, GLintptr, GLsizeiptr, const void*);
+// DSA — textures.
+typedef void (__stdcall* PFNGLCREATETEXTURESPROC)(GLenum, GLsizei, GLuint*);
+typedef void (__stdcall* PFNGLTEXTURESTORAGE2DPROC)(GLuint, GLsizei, GLenum, GLsizei, GLsizei);
+typedef void (__stdcall* PFNGLTEXTURESTORAGE3DPROC)(GLuint, GLsizei, GLenum, GLsizei, GLsizei, GLsizei);
+typedef void (__stdcall* PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC)(GLuint, GLsizei, GLenum, GLsizei, GLsizei, GLboolean);
+typedef void (__stdcall* PFNGLTEXTURESUBIMAGE2DPROC)(GLuint, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*);
+typedef void (__stdcall* PFNGLTEXTURESUBIMAGE3DPROC)(GLuint, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLenum, const void*);
+typedef void (__stdcall* PFNGLTEXTUREPARAMETERIPROC)(GLuint, GLenum, GLint);
+typedef void (__stdcall* PFNGLTEXTUREPARAMETERFVPROC)(GLuint, GLenum, const GLfloat*);
+typedef void (__stdcall* PFNGLGENERATETEXTUREMIPMAPPROC)(GLuint);
+typedef void (__stdcall* PFNGLBINDTEXTUREUNITPROC)(GLuint, GLuint);
+// DSA — framebuffers.
+typedef void (__stdcall* PFNGLCREATEFRAMEBUFFERSPROC)(GLsizei, GLuint*);
+typedef void (__stdcall* PFNGLNAMEDFRAMEBUFFERTEXTUREPROC)(GLuint, GLenum, GLuint, GLint);
+typedef void (__stdcall* PFNGLNAMEDFRAMEBUFFERTEXTURELAYERPROC)(GLuint, GLenum, GLuint, GLint, GLint);
+typedef void (__stdcall* PFNGLNAMEDFRAMEBUFFERDRAWBUFFERSPROC)(GLuint, GLsizei, const GLenum*);
+typedef GLenum (__stdcall* PFNGLCHECKNAMEDFRAMEBUFFERSTATUSPROC)(GLuint, GLenum);
+typedef void (__stdcall* PFNGLBLITNAMEDFRAMEBUFFERPROC)(GLuint, GLuint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum);
+typedef void (__stdcall* PFNGLCLEARNAMEDFRAMEBUFFERFVPROC)(GLuint, GLenum, GLint, const GLfloat*);
+
 extern PFNGLGENVERTEXARRAYSPROC glGenVertexArrays;
 extern PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
 extern PFNGLDELETEVERTEXARRAYSPROC glDeleteVertexArrays;
@@ -236,6 +307,34 @@ extern PFNGLRENDERBUFFERSTORAGEPROC glRenderbufferStorage;
 extern PFNGLFRAMEBUFFERRENDERBUFFERPROC glFramebufferRenderbuffer;
 extern PFNGLDELETERENDERBUFFERSPROC glDeleteRenderbuffers;
 extern PFNGLBLITFRAMEBUFFERPROC glBlitFramebuffer;
+
+// ---- Lighting / HDR overhaul: extended entry points -----------------------------------
+extern PFNGLGETSTRINGIPROC glGetStringi;
+extern PFNGLBINDBUFFERBASEPROC glBindBufferBase;
+extern PFNGLBINDBUFFERRANGEPROC glBindBufferRange;
+extern PFNGLDRAWBUFFERSPROC glDrawBuffers;
+extern PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC glRenderbufferStorageMultisample;
+extern PFNGLTEXIMAGE2DMULTISAMPLEPROC glTexImage2DMultisample;
+extern PFNGLCREATEBUFFERSPROC glCreateBuffers;
+extern PFNGLNAMEDBUFFERSTORAGEPROC glNamedBufferStorage;
+extern PFNGLNAMEDBUFFERSUBDATAPROC glNamedBufferSubData;
+extern PFNGLCREATETEXTURESPROC glCreateTextures;
+extern PFNGLTEXTURESTORAGE2DPROC glTextureStorage2D;
+extern PFNGLTEXTURESTORAGE3DPROC glTextureStorage3D;
+extern PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC glTextureStorage2DMultisample;
+extern PFNGLTEXTURESUBIMAGE2DPROC glTextureSubImage2D;
+extern PFNGLTEXTURESUBIMAGE3DPROC glTextureSubImage3D;
+extern PFNGLTEXTUREPARAMETERIPROC glTextureParameteri;
+extern PFNGLTEXTUREPARAMETERFVPROC glTextureParameterfv;
+extern PFNGLGENERATETEXTUREMIPMAPPROC glGenerateTextureMipmap;
+extern PFNGLBINDTEXTUREUNITPROC glBindTextureUnit;
+extern PFNGLCREATEFRAMEBUFFERSPROC glCreateFramebuffers;
+extern PFNGLNAMEDFRAMEBUFFERTEXTUREPROC glNamedFramebufferTexture;
+extern PFNGLNAMEDFRAMEBUFFERTEXTURELAYERPROC glNamedFramebufferTextureLayer;
+extern PFNGLNAMEDFRAMEBUFFERDRAWBUFFERSPROC glNamedFramebufferDrawBuffers;
+extern PFNGLCHECKNAMEDFRAMEBUFFERSTATUSPROC glCheckNamedFramebufferStatus;
+extern PFNGLBLITNAMEDFRAMEBUFFERPROC glBlitNamedFramebuffer;
+extern PFNGLCLEARNAMEDFRAMEBUFFERFVPROC glClearNamedFramebufferfv;
 
 // Call once after a GL context is current (e.g. right after glfwMakeContextCurrent).
 bool GLLoader_Init();

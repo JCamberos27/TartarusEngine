@@ -93,10 +93,17 @@ unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, 
     m_Shader->SetVec3("uViewPos", eye);
     // Fixed, preview-only key light - independent of the real scene's light so the preview
     // always reads consistently regardless of where/how the asset will actually be placed.
-    m_Shader->SetVec3("uLightDir", glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f)));
-    m_Shader->SetVec3("uLightColor", glm::vec3(3.0f));
-    m_Shader->SetInt("uPointLightCount", 0);
+    // Fixed preview key light, into the SSBO the shared model shader reads at binding 0.
+    m_Lights.Clear();
+    m_Lights.AddDirectional(glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f)), glm::vec3(1.0f), 3.0f);
+    m_Lights.Upload();
+    m_Lights.Bind(0);
     m_Shader->SetInt("uUnlit", 0);
+    // This offscreen preview has no shared Tonemapper pass, so keep the baked Reinhard + gamma
+    // in the model shader for it (the real scene sets this to 0 and tonemaps separately).
+    m_Shader->SetInt("uApplyTonemap", 1);
+    m_Shader->SetInt("uShadowEnabled", 0); // preview has no shadow pass
+    m_Shader->SetInt("uShadowCascadeCount", 0);
 
     model.Draw(*m_Shader);
 

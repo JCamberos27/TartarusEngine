@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <glm/glm.hpp>
+#include "LightBuffer.h"
 
 class Model;
 class Shader;
@@ -32,4 +33,5 @@ private:
     unsigned int m_DepthRBO = 0;
     int m_TexW = 0, m_TexH = 0;
     std::unique_ptr<Shader> m_Shader;
+    LightBuffer m_Lights; // a single fixed key light, so the shared model shader's SSBO read is valid
 };

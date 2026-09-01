@@ -12,6 +12,7 @@ public:
 
     void SetMat4(const std::string& name, const glm::mat4& m) const;
     void SetVec3(const std::string& name, const glm::vec3& v) const;
+    void SetVec4(const std::string& name, const glm::vec4& v) const;
     void SetFloat(const std::string& name, float v) const;
     void SetInt(const std::string& name, int v) const;
     // Uploads `count` consecutive matrices in one driver call — e.g. `SetMat4Array("uBones[0]",
