@@ -8,7 +8,7 @@
 
 namespace {
 
-// KHR_debug / GL 4.3 constants. gl.h is a minimal core-3.3 subset and doesn't define these;
+// KHR_debug constants. gl.h is a minimal core subset and doesn't define these;
 // they're ordinary GLenum values, so passing them to glEnable / the loaded entry points is
 // fine without the loader knowing about them.
 constexpr GLenum kDebugOutput             = 0x92E0; // GL_DEBUG_OUTPUT

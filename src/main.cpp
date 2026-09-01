@@ -55,7 +55,7 @@
 // peeking out from behind the normal draw survives. One flat fragment shader shared by both
 // variants below; only the vertex stage differs, matching each mesh's own attribute layout.
 static const char* kOutlineFragmentSrc = R"(
-#version 330 core
+#version 460 core
 out vec4 FragColor;
 uniform vec3 uOutlineColor;
 void main() {
@@ -66,7 +66,7 @@ void main() {
 // Mirrors kModelVertexSrc's skinning block so an animated model's outline deforms with it,
 // then offsets along the (skinned) normal instead of computing UV/TBN — outline doesn't need them.
 static const char* kOutlineModelVertexSrc = R"(
-#version 330 core
+#version 460 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aNormal;
 layout (location = 2) in vec2 aUV;
@@ -112,7 +112,7 @@ void main() {
 // uniform-width ring in the gap just outside the silhouette. Works for any shape/orientation —
 // unlike an inverted-hull, which can't widen a flat mesh's screen silhouette at all (audit #51).
 static const char* kOutlineDilateVertSrc = R"(
-#version 330 core
+#version 460 core
 out vec2 vUV;
 const vec2 kQuad[6] = vec2[](
     vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(1.0, 1.0),
@@ -126,7 +126,7 @@ void main() {
 )";
 
 static const char* kOutlineDilateFragSrc = R"(
-#version 330 core
+#version 460 core
 in vec2 vUV;
 out vec4 FragColor;
 uniform sampler2D uMask;

@@ -1,5 +1,7 @@
-// Minimal hand-rolled OpenGL 3.3 core loader (Windows).
-// Loads only the subset of GL used by this engine's renderer.
+// Minimal hand-rolled OpenGL 4.6 core loader (Windows).
+// Loads only the subset of GL used by this engine's renderer. The engine still targets a small,
+// conservative slice of the API — the 4.6 context mainly buys guaranteed KHR_debug, core
+// anisotropic filtering, and headroom for future features — so this stays deliberately short.
 #pragma once
 #include <cstddef>
 
@@ -40,6 +42,10 @@
 #define GL_RGB 0x1907
 #define GL_TEXTURE_MIN_FILTER 0x2801
 #define GL_TEXTURE_MAG_FILTER 0x2800
+#define GL_TEXTURE_LOD_BIAS 0x8501
+// Anisotropic filtering — an extension since 2000, promoted to core in GL 4.6.
+#define GL_TEXTURE_MAX_ANISOTROPY 0x84FE
+#define GL_MAX_TEXTURE_MAX_ANISOTROPY 0x84FF
 #define GL_LINEAR 0x2601
 #define GL_LINEAR_MIPMAP_LINEAR 0x2703
 #define GL_LINEAR_MIPMAP_NEAREST 0x2701
@@ -112,6 +118,7 @@ void __stdcall glBlendFunc(GLenum sfactor, GLenum dfactor);
 void __stdcall glGenTextures(GLsizei n, GLuint* textures);
 void __stdcall glBindTexture(GLenum target, GLuint texture);
 void __stdcall glTexParameteri(GLenum target, GLenum pname, GLint param);
+void __stdcall glTexParameterf(GLenum target, GLenum pname, GLfloat param);
 void __stdcall glTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void* pixels);
 void __stdcall glDeleteTextures(GLsizei n, const GLuint* textures);
 void __stdcall glGetIntegerv(GLenum pname, GLint* data);

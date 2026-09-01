@@ -138,6 +138,18 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
 
+    // Anisotropic filtering — core in GL 4.6. Cleans up textures viewed at a shallow angle
+    // (floors, walls receding to the horizon) that trilinear alone leaves blurry. Only
+    // meaningful with a mip chain and a linear filter; clamp our request to the driver's max.
+    if (settings.GenerateMipmaps && settings.FilterMode != TextureImportSettings::Filter::Point) {
+        static GLfloat s_MaxAniso = []() {
+            GLint m = 0; glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &m);
+            return (GLfloat)m;
+        }();
+        if (s_MaxAniso >= 2.0f)
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, s_MaxAniso < 8.0f ? s_MaxAniso : 8.0f);
+    }
+
     if (data) stbi_image_free(data); // null on the cache-hit path, where stb never ran
     m_Settings = settings;
 }

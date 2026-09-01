@@ -750,7 +750,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     // glyphs enabled, which this build doesn't compile in — emoji in names still render as tofu.
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
+    ImGui_ImplOpenGL3_Init("#version 460");
 
     // The wordmark PNG is pre-scaled offline (bicubic) to 900px wide, close to the ~2-3x of
     // its on-screen size — small enough that runtime sampling stays near 1:1 instead of the
@@ -810,8 +810,9 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    // Copy the shared preview render into `dst` via a scratch read-FBO. GL 3.3 core has no
-    // glCopyImageSubData, but glCopyTexSubImage2D from a bound READ framebuffer works.
+    // Copy the shared preview render into `dst` via a scratch read-FBO. Predates the 4.6
+    // upgrade (4.3+ has glCopyImageSubData) but glCopyTexSubImage2D from a bound READ
+    // framebuffer works fine and is already loaded, so it's kept as-is.
     GLint prevRead = 0, prevDraw = 0;
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevDraw);
@@ -1100,7 +1101,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
     case 6: { // About
         ImGui::SeparatorText("About");
         ImGui::TextUnformatted("Tartarus Engine");
-        ImGui::TextDisabled("Hand-rolled C++17 / OpenGL 3.3 editor.");
+        ImGui::TextDisabled("Hand-rolled C++17 / OpenGL 4.6 editor.");
         ImGui::Spacing();
         ImGui::SeparatorText("System");
         if (m_SystemReport.empty()) {

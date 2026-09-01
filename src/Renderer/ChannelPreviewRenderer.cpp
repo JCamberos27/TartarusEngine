@@ -6,7 +6,7 @@
 namespace {
 
 const char* kVertexSrc = R"(
-#version 330 core
+#version 460 core
 out vec2 vUV;
 void main() {
     // "Big triangle" trick: 3 vertices covering the whole viewport with no VBO at all - the
@@ -18,7 +18,7 @@ void main() {
 )";
 
 const char* kFragmentSrc = R"(
-#version 330 core
+#version 460 core
 in vec2 vUV;
 out vec4 FragColor;
 uniform sampler2D uTex;

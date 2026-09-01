@@ -7,3 +7,6 @@ Library/
 
 # Auto-save crash-recovery snapshots — regenerated at runtime, never authoritative
 *.recovery.json
+
+# Local scratch backups (not authoritative)
+*.json.bak

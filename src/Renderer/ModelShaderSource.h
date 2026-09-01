@@ -11,7 +11,7 @@
 // those exact uniform names will actually receive. `inline constexpr` (not `static`) so this
 // header can be included from more than one translation unit without violating ODR.
 inline constexpr const char* kModelVertexSrc = R"(
-#version 330 core
+#version 460 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aNormal;
 layout (location = 2) in vec2 aUV;
@@ -75,7 +75,7 @@ void main() {
 inline constexpr int kMaxPointLights = 16;
 
 inline constexpr const char* kModelFragmentSrc = R"(
-#version 330 core
+#version 460 core
 in vec3 vWorldPos;
 in vec3 vNormal;
 in vec2 vUV;
@@ -86,8 +86,8 @@ uniform vec3 uViewPos;
 uniform vec3 uLightDir;   // direction light travels (points away from the light)
 uniform vec3 uLightColor;
 
-// Placed LightComponent entities. Fixed-size arrays (rather than a UBO/SSBO) keep this on
-// plain GL 3.3 — kMaxPointLights in main.cpp must match this bound.
+// Placed LightComponent entities. Fixed-size uniform arrays (a UBO/SSBO would be the 4.6-era
+// choice; kept simple for now) — kMaxPointLights in main.cpp must match this bound.
 #define MAX_POINT_LIGHTS 16
 uniform int uPointLightCount;
 uniform vec3 uPointLightPos[MAX_POINT_LIGHTS];

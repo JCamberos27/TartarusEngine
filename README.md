@@ -5,7 +5,7 @@
 **A C++17 / OpenGL game engine and scene editor for first-person games.**
 
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square&logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/17)
-[![OpenGL 3.3](https://img.shields.io/badge/OpenGL-3.3%20core-5586A4?style=flat-square&logo=opengl&logoColor=white)](https://www.khronos.org/opengl/)
+[![OpenGL 4.6](https://img.shields.io/badge/OpenGL-4.6%20core-5586A4?style=flat-square&logo=opengl&logoColor=white)](https://www.khronos.org/opengl/)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](#building)
 [![CMake](https://img.shields.io/badge/build-CMake-064F8C?style=flat-square&logo=cmake&logoColor=white)](#building)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
@@ -17,7 +17,7 @@
 Tartarus is a from-scratch game engine with a full editor front-end — dockable panels,
 transform gizmos, an asset browser, prefabs, undo/redo, and an in-editor play mode. It renders
 imported FBX/glTF/OBJ models with PBR-style materials and skeletal animation through a
-hand-rolled OpenGL 3.3 core loader, with no glad/Python codegen step in the build.
+hand-rolled OpenGL 4.6 core loader, with no glad/Python codegen step in the build.
 
 ## Screenshots
 
@@ -133,9 +133,10 @@ convert it in place.
 
 ## Building
 
-Requires **CMake 3.16+** and an **MSVC** toolset (Visual Studio 2022 or newer). GLFW, GLM,
-Assimp, EnTT, Dear ImGui, and ImGuizmo are fetched automatically by CMake on first configure
-— that step needs an internet connection; later builds are offline.
+Requires **CMake 3.16+**, an **MSVC** toolset (Visual Studio 2022 or newer), and a GPU/driver
+that can create an **OpenGL 4.6 core** context (any NVIDIA/AMD/Intel driver from the last
+several years). GLFW, GLM, Assimp, EnTT, Dear ImGui, and ImGuizmo are fetched automatically by
+CMake on first configure — that step needs an internet connection; later builds are offline.
 
 ```bash
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
