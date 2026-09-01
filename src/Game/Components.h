@@ -81,15 +81,20 @@ struct InactiveTag {};
 // the distinction already recorded, rather than needing a re-pass once that optimization lands.
 struct StaticTag {};
 
-// A dynamic light. The renderer supports one directional sun (fixed, from main.cpp) plus up to
-// kMaxPointLights of these — a placed light entity's TransformComponent supplies the position.
+// A dynamic light. Point/Spot use the entity's world position; Directional (the sun) ignores
+// position and takes its travel direction from the entity's -Z axis (rotate the entity to aim
+// it), matching the spot-cone convention. Every kind goes through the same LightBuffer SSBO and
+// the same clustered-forward path; the renderer no longer has a hard-coded sun.
 struct LightComponent {
-    enum class Type { Point, Spot };
+    enum class Type { Point, Spot, Directional };
     Type Kind = Type::Point;
     glm::vec3 Color{1.0f, 0.95f, 0.85f};
     float Intensity = 5.0f;
-    float Range = 12.0f;         // distance at which the light's contribution reaches zero
-    float SpotAngleDegrees = 35.0f; // Spot only: half-angle of the cone
+    float Range = 12.0f;             // Point/Spot: distance at which the contribution reaches zero
+    float SpotAngleDegrees = 35.0f;  // Spot: half-angle of the cone
+    // Directional: angular diameter of the sun disc, in degrees (~0.53 for Earth's sun). Drives
+    // soft-shadow penumbra width once CSM lands; ignored by the other kinds.
+    float AngularSizeDegrees = 0.53f;
 };
 
 // A game camera placed in the scene. The Game view renders through the first active one of

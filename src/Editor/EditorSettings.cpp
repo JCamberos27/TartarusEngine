@@ -34,6 +34,12 @@ void EditorSettings::Load() {
     s.AutoSaveIntervalMinutes = root.value("autoSaveIntervalMinutes", s.AutoSaveIntervalMinutes);
     s.VSyncMode = root.value("vsyncMode", s.VSyncMode);
     s.FpsLimit = root.value("fpsLimit", s.FpsLimit);
+    s.ExposureEV = root.value("exposureEV", s.ExposureEV);
+    s.TonemapOperator = root.value("tonemapOperator", s.TonemapOperator);
+    s.MsaaSamples = root.value("msaaSamples", s.MsaaSamples);
+    s.ShadowsEnabled = root.value("shadowsEnabled", s.ShadowsEnabled);
+    s.ShadowResolution = root.value("shadowResolution", s.ShadowResolution);
+    s.ShadowDistance = root.value("shadowDistance", s.ShadowDistance);
     s.GameViewMaximizeOnPlay = root.value("gameViewMaximizeOnPlay", s.GameViewMaximizeOnPlay);
     s.GameViewShowStats = root.value("gameViewShowStats", s.GameViewShowStats);
     s.SceneShowStats = root.value("sceneShowStats", s.SceneShowStats);
@@ -57,6 +63,12 @@ void EditorSettings::Save() {
     root["autoSaveIntervalMinutes"] = Get().AutoSaveIntervalMinutes;
     root["vsyncMode"] = Get().VSyncMode;
     root["fpsLimit"] = Get().FpsLimit;
+    root["exposureEV"] = Get().ExposureEV;
+    root["tonemapOperator"] = Get().TonemapOperator;
+    root["msaaSamples"] = Get().MsaaSamples;
+    root["shadowsEnabled"] = Get().ShadowsEnabled;
+    root["shadowResolution"] = Get().ShadowResolution;
+    root["shadowDistance"] = Get().ShadowDistance;
     root["gameViewMaximizeOnPlay"] = Get().GameViewMaximizeOnPlay;
     root["gameViewShowStats"] = Get().GameViewShowStats;
     root["sceneShowStats"] = Get().SceneShowStats;

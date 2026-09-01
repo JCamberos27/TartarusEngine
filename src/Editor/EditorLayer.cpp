@@ -1094,7 +1094,65 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             EditorUI::SetTooltip("0 / Unlimited removes the software cap. Applies to the whole editor and the game simulation.");
 
         ImGui::Spacing();
-        ImGui::TextDisabled("Changes apply immediately. Both settings persist in editor_prefs.json.");
+        ImGui::SeparatorText("Rendering (HDR)");
+
+        ImGui::SetNextItemWidth(kw);
+        ImGui::SliderFloat("Exposure (EV)", &prefs.ExposureEV, -6.0f, 6.0f, "%+.2f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Photographic stops applied before the tone curve. 0 = neutral. Applies live.");
+
+        static const char* kTonemapLabels[] = { "Reinhard", "ACES", "AgX" };
+        int tm = std::clamp(prefs.TonemapOperator, 0, 2);
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::Combo("Tone mapping", &tm, kTonemapLabels, IM_ARRAYSIZE(kTonemapLabels))) {
+            prefs.TonemapOperator = tm;
+            EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Curve that maps linear HDR to display. ACES = punchy filmic; AgX = gentler, less hue shift.");
+
+        static const char* kMsaaLabels[] = { "Off", "2x", "4x", "8x" };
+        static const int   kMsaaValues[] = { 1, 2, 4, 8 };
+        int msIdx = 2;
+        for (int i = 0; i < 4; ++i) if (kMsaaValues[i] == prefs.MsaaSamples) { msIdx = i; break; }
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::Combo("MSAA", &msIdx, kMsaaLabels, IM_ARRAYSIZE(kMsaaLabels))) {
+            prefs.MsaaSamples = kMsaaValues[msIdx];
+            EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Multisample level of the HDR scene/game target. Takes effect next frame.");
+
+        ImGui::Spacing();
+        ImGui::SeparatorText("Shadows (Directional Sun)");
+
+        if (ImGui::Checkbox("Cast sun shadows", &prefs.ShadowsEnabled)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("4-cascade shadow maps for the Directional light. Point/spot shadows are a later milestone.");
+
+        static const char* kShadowResLabels[] = { "1024", "2048", "4096" };
+        static const int   kShadowResValues[] = { 1024, 2048, 4096 };
+        int srIdx = 1;
+        for (int i = 0; i < 3; ++i) if (kShadowResValues[i] == prefs.ShadowResolution) { srIdx = i; break; }
+        if (!prefs.ShadowsEnabled) ImGui::BeginDisabled();
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::Combo("Shadow resolution", &srIdx, kShadowResLabels, IM_ARRAYSIZE(kShadowResLabels))) {
+            prefs.ShadowResolution = kShadowResValues[srIdx];
+            EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Per-cascade shadow map size. 4x memory + fill from 2048 to 4096.");
+
+        ImGui::SetNextItemWidth(kw);
+        ImGui::SliderFloat("Shadow distance", &prefs.ShadowDistance, 10.0f, 500.0f, "%.0f m");
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("How far from the camera the cascades cover. Shorter = crisper shadows.");
+        if (!prefs.ShadowsEnabled) ImGui::EndDisabled();
+
+        ImGui::Spacing();
+        ImGui::TextDisabled("Changes apply immediately. All of these persist in editor_prefs.json.");
         break;
     }
 
@@ -4166,18 +4224,16 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
 
             int kind = -1; bool kindMixed = false;
             forEach([&](entt::entity e) {
-                int k = L(e).Kind == LightComponent::Type::Spot ? 1 : 0;
+                int k = (int)L(e).Kind; // Point=0, Spot=1, Directional=2
                 if (kind < 0) kind = k; else if (k != kind) kindMixed = true;
             });
-            const char* kinds[] = {"Point", "Spot"};
+            const char* kinds[] = {"Point", "Spot", "Directional"};
             PropertyLabel("Kind", "Sets the light type on every selected light.");
             if (ImGui::BeginCombo("##mlkind", kindMixed ? "\xE2\x80\x94" : kinds[kind < 0 ? 0 : kind])) {
-                for (int k = 0; k < 2; ++k)
+                for (int k = 0; k < 3; ++k)
                     if (ImGui::Selectable(kinds[k], !kindMixed && k == kind)) {
                         PushUndo(world, "Set Light Kind");
-                        forEach([&](entt::entity e) {
-                            L(e).Kind = k == 1 ? LightComponent::Type::Spot : LightComponent::Type::Point;
-                        });
+                        forEach([&](entt::entity e) { L(e).Kind = (LightComponent::Type)k; });
                     }
                 ImGui::EndCombo();
             }
@@ -4613,24 +4669,32 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     if (auto* light = registry.try_get<LightComponent>(entity)) {
         if (BeginComponentSection(world, entity, ICON_FA_LIGHTBULB, "Light", true, removed,
             /*defaultOpen=*/true, "Casts light into the scene from this object's position.")) {
-            PropertyLabel("Type", "Point shines in all directions; Spot shines in a cone.");
-            int kind = light->Kind == LightComponent::Type::Spot ? 1 : 0;
-            if (ImGui::Combo("##Type", &kind, "Point\0Spot\0")) {
+            PropertyLabel("Type", "Point: all directions. Spot: a cone. Directional: a sun (parallel rays, no position or range).");
+            int kind = (int)light->Kind; // Point=0, Spot=1, Directional=2
+            if (ImGui::Combo("##Type", &kind, "Point\0Spot\0Directional\0")) {
                 PushUndo(world, "Edit Light");
-                light->Kind = kind == 1 ? LightComponent::Type::Spot : LightComponent::Type::Point;
+                light->Kind = (LightComponent::Type)kind;
             }
+            const bool isDir = light->Kind == LightComponent::Type::Directional;
             PropertyLabel("Color", "The light's color.");
             ImGui::ColorEdit3("##Color", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
             if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
             PropertyLabel("Intensity", "Brightness multiplier - higher is brighter.");
             ImGui::DragFloat("##Intensity", &light->Intensity, 0.1f, 0.0f, 100.0f, "%.2f");
             if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
-            PropertyLabel("Range", "Distance (in world units) at which the light's effect fades to zero.");
-            ImGui::DragFloat("##Range", &light->Range, 0.2f, 0.1f, 200.0f, "%.1f");
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+            if (!isDir) {
+                PropertyLabel("Range", "Distance (in world units) at which the light's effect fades to zero.");
+                ImGui::DragFloat("##Range", &light->Range, 0.2f, 0.1f, 200.0f, "%.1f");
+                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+            }
             if (light->Kind == LightComponent::Type::Spot) {
                 PropertyLabel("Spot Angle", "Half-angle of the light cone, in degrees.\nThe cone points along the entity's -Z axis - use Rotation to aim it.");
                 ImGui::SliderFloat("##SpotAngle", &light->SpotAngleDegrees, 1.0f, 89.0f, "%.0f deg");
+                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+            }
+            if (isDir) {
+                PropertyLabel("Angular Size", "Apparent diameter of the sun disc, in degrees (~0.53 = Earth's sun).\nWider = softer shadows once cascaded shadow maps land.\nAim the sun with the entity's Rotation (it shines along -Z).");
+                ImGui::SliderFloat("##AngularSize", &light->AngularSizeDegrees, 0.1f, 20.0f, "%.2f deg");
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
             }
             EndComponentSection();

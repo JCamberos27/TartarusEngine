@@ -71,6 +71,10 @@ void Shader::SetVec3(const std::string& name, const glm::vec3& v) const {
     glUniform3f(Loc(name), v.x, v.y, v.z);
 }
 
+void Shader::SetVec4(const std::string& name, const glm::vec4& v) const {
+    glUniform4f(Loc(name), v.x, v.y, v.z, v.w);
+}
+
 void Shader::SetFloat(const std::string& name, float v) const {
     glUniform1f(Loc(name), v);
 }
