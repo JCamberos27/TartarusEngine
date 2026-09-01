@@ -3,6 +3,7 @@
 #include "Texture.h"
 #include "Shader.h"
 #include "PrimitiveMeshes.h"
+#include "gl.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -459,12 +460,29 @@ void Model::CalculateBoneTransform(const AssimpNodeData& node, const glm::mat4& 
     }
 }
 
+namespace {
+// One shared bone-palette SSBO (binding 1), re-uploaded before each skinned draw. Replaces the
+// 100-element glUniformMatrix4fv array (#104). Single-threaded, sequential draws, so one buffer
+// is enough; process-lifetime, never freed (like the other engine-lifetime GL objects).
+unsigned int g_BoneSsbo = 0;
+void EnsureBoneSsbo() {
+    if (g_BoneSsbo) return;
+    glCreateBuffers(1, &g_BoneSsbo);
+    glNamedBufferStorage(g_BoneSsbo, MAX_BONES * (GLsizeiptr)sizeof(glm::mat4), nullptr, GL_DYNAMIC_STORAGE_BIT);
+}
+} // namespace
+
 void Model::UploadBoneMatrices(Shader& shader) const {
     bool skinning = m_CurrentAnimation >= 0;
     shader.SetInt("uUseSkinning", skinning ? 1 : 0);
-    if (!skinning) return;
 
-    shader.SetMat4Array("uBones[0]", MAX_BONES, m_FinalBoneMatrices.data());
+    EnsureBoneSsbo();
+    if (skinning)
+        glNamedBufferSubData(g_BoneSsbo, 0, MAX_BONES * (GLsizeiptr)sizeof(glm::mat4),
+                             m_FinalBoneMatrices.data());
+    // Bind even when not skinning: the vertex shader still declares the block, and leaving
+    // binding 1 dangling from a previous model is asking for trouble on stricter drivers.
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, g_BoneSsbo);
 }
 
 namespace {

@@ -81,7 +81,7 @@ layout (location = 5) in vec4 aWeights;
 uniform mat4 uModel;
 uniform mat4 uLightViewProj;
 uniform int uUseSkinning;
-uniform mat4 uBones[100];
+layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; }; // shared with the model VS (#104)
 out vec2 vUV;
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
