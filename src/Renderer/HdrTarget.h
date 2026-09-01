@@ -33,6 +33,7 @@ public:
     void ResolveTo() const;
 
     unsigned int ResolvedColorTexture() const { return m_ResolveColor; } // RGBA16F, linear-filtered, sampleable
+    unsigned int ResolvedDepthTexture() const { return m_ResolveDepth; } // single-sample DEPTH_COMPONENT32F (#121)
     unsigned int MultisampleFbo() const { return m_MsFbo; }
     unsigned int DepthTexture() const { return m_MsDepth; }              // GL_TEXTURE_2D_MULTISAMPLE, DEPTH_COMPONENT32F
 
@@ -43,7 +44,7 @@ public:
 
 private:
     unsigned int m_MsFbo = 0, m_MsColor = 0, m_MsDepth = 0;
-    unsigned int m_ResolveFbo = 0, m_ResolveColor = 0;
+    unsigned int m_ResolveFbo = 0, m_ResolveColor = 0, m_ResolveDepth = 0;
     int m_Width = 0, m_Height = 0, m_Samples = 0;
 
     void Release();

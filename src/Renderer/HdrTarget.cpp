@@ -23,6 +23,7 @@ void HdrTarget::Release() {
     // not, so no special-casing here.
     if (m_ResolveFbo)   { glDeleteFramebuffers(1, &m_ResolveFbo); m_ResolveFbo = 0; }
     if (m_ResolveColor) { glDeleteTextures(1, &m_ResolveColor);   m_ResolveColor = 0; }
+    if (m_ResolveDepth) { glDeleteTextures(1, &m_ResolveDepth);   m_ResolveDepth = 0; }
     if (m_MsFbo)        { glDeleteFramebuffers(1, &m_MsFbo);       m_MsFbo = 0; }
     if (m_MsColor)      { glDeleteTextures(1, &m_MsColor);         m_MsColor = 0; }
     if (m_MsDepth)      { glDeleteTextures(1, &m_MsDepth);         m_MsDepth = 0; }
@@ -64,8 +65,19 @@ void HdrTarget::Create(int width, int height, int samples) {
     glTextureParameteri(m_ResolveColor, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTextureParameteri(m_ResolveColor, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+    // Single-sample depth in the same resolve FBO, so a screen-space pass after ResolveTo() has
+    // a plain sampler2D depth to read instead of decoding sampler2DMS by hand (#121). NEAREST —
+    // depth must not be linearly filtered.
+    glCreateTextures(GL_TEXTURE_2D, 1, &m_ResolveDepth);
+    glTextureStorage2D(m_ResolveDepth, 1, GL_DEPTH_COMPONENT32F, width, height);
+    glTextureParameteri(m_ResolveDepth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(m_ResolveDepth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTextureParameteri(m_ResolveDepth, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(m_ResolveDepth, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
     glCreateFramebuffers(1, &m_ResolveFbo);
     glNamedFramebufferTexture(m_ResolveFbo, GL_COLOR_ATTACHMENT0, m_ResolveColor, 0);
+    glNamedFramebufferTexture(m_ResolveFbo, GL_DEPTH_ATTACHMENT, m_ResolveDepth, 0);
     glNamedFramebufferDrawBuffers(m_ResolveFbo, 1, &drawBuf);
 
     GLenum ms = glCheckNamedFramebufferStatus(m_MsFbo, GL_FRAMEBUFFER);
@@ -85,10 +97,15 @@ void HdrTarget::BindForRender() const {
 
 void HdrTarget::ResolveTo() const {
     if (!m_MsFbo || !m_ResolveFbo) return;
-    // MSAA down-resolve (a plain copy when m_Samples == 1). Colour only — depth stays in the
-    // multisample texture for anything that still wants it this frame.
+    // MSAA down-resolve (a plain copy when m_Samples == 1). Colour + depth: colour for the
+    // tonemap pass, depth (#121) so any screen-space pass after this has a single-sample
+    // sampler2D depth. Depth must use GL_NEAREST. m_MsDepth stays available too.
     glBlitNamedFramebuffer(m_MsFbo, m_ResolveFbo,
         0, 0, m_Width, m_Height,
         0, 0, m_Width, m_Height,
         GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBlitNamedFramebuffer(m_MsFbo, m_ResolveFbo,
+        0, 0, m_Width, m_Height,
+        0, 0, m_Width, m_Height,
+        GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 }

@@ -946,6 +946,16 @@ int main() {
                     glm::vec3 boundsMax = renderable.ModelRef->BoundsMax();
                     bool validBounds = boundsMin.x <= boundsMax.x && boundsMin.y <= boundsMax.y && boundsMin.z <= boundsMax.z;
                     if (validBounds) {
+                        // Bounds are bind-pose only. A skinned model's limbs can swing well past
+                        // them (reach, jump, weapon), so inflate around the centre before the
+                        // frustum test for animated models — still culls one that's genuinely
+                        // far off-screen, without popping the shadow/mesh of one at the edge (#113).
+                        if (renderable.ModelRef->HasAnimations()) {
+                            glm::vec3 c = (boundsMin + boundsMax) * 0.5f;
+                            glm::vec3 h = (boundsMax - boundsMin) * 0.5f * 1.75f;
+                            boundsMin = c - h;
+                            boundsMax = c + h;
+                        }
                         AABB worldBounds = AABB{boundsMin, boundsMax}.Transformed(model);
                         if (!camFrustum.Intersects(worldBounds)) {
                             localStats.Culled++;
