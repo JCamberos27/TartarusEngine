@@ -493,6 +493,11 @@ void Model::Draw(Shader& shader) {
     }
 }
 
+void Model::DrawDepthOnly(Shader& shader) {
+    UploadBoneMatrices(shader);
+    for (auto& mesh : m_Meshes) mesh->Draw();
+}
+
 unsigned int Model::TriangleCount() const {
     unsigned int total = 0;
     for (const auto& mesh : m_Meshes) total += mesh->IndexCount() / 3;

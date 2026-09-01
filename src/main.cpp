@@ -55,6 +55,17 @@
 #include <windows.h>  // GlobalMemoryStatusEx, registry, GetLogicalProcessorInformationEx — rig info
 #pragma comment(lib, "Advapi32.lib") // RegGetValueA
 
+// Ask the vendor drivers to run this process on the discrete GPU. On a multi-adapter box
+// (laptop Optimus, or a desktop with the monitor cabled to the motherboard) the GL context
+// otherwise lands on the integrated GPU — observed here as Intel UHD 630 instead of an RTX
+// 4060, which turned this trivial scene into a 50-100 ms frame: the CPU raced ahead and then
+// blocked in SwapBuffers waiting for the iGPU to drain the HDR + MSAA + multi-light + CSM
+// pipeline. These must be *exported* symbols in the .exe for the NVIDIA / AMD drivers to see them.
+extern "C" {
+    __declspec(dllexport) DWORD NvOptimusEnablement = 1;
+    __declspec(dllexport) int   AmdPowerXpressRequestHighPerformance = 1;
+}
+
 // Selection outline (editor-only): the classic "inverted hull" technique — draw the object
 // again, offset a little along its normal, with front-face culling so only the silhouette
 // peeking out from behind the normal draw survives. One flat fragment shader shared by both
@@ -750,6 +761,79 @@ int main() {
 
             glm::vec3 lightDir(-0.4f, -1.0f, -0.3f);
 
+            // --- Sun shadow map: built ONCE per frame, from the primary view -------------------
+            // This used to live inside drawScene, i.e. it ran once per viewport (Scene + Game)
+            // every frame — 8 cascade renders of the entire scene when the sun and the geometry
+            // are identical between the two views. Now the 4 depth slices render once, here, and
+            // every drawScene() below only samples them.
+            const EditorSettings& frameSettings = EditorSettings::Get();
+
+            glm::vec3 frameSunDir = lightDir;
+            float frameSunAngularDeg = 0.53f; // Earth's sun; drives the penumbra width
+            for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
+                if (world.Registry.all_of<InactiveTag>(e)) continue;
+                const auto& lc = world.Registry.get<LightComponent>(e);
+                if (lc.Kind != LightComponent::Type::Directional) continue;
+                frameSunDir = glm::normalize(glm::vec3(world.ComposeWorldTransform(e) * glm::vec4(0, 0, -1, 0)));
+                frameSunAngularDeg = lc.AngularSizeDegrees;
+                break;
+            }
+
+            bool sunShadowsReady = false;
+            if (frameSettings.ShadowsEnabled) {
+                PROFILE_SCOPE("Sun Shadow Pass");
+
+                // Fit the cascades to whichever camera drives this frame's main view: the game
+                // camera while playing, else the editor free-cam (the Scene tab is the working
+                // view). The other viewport samples the same cascades — a looser texel fit there
+                // is invisible next to rebuilding the whole map a second time.
+                Camera& fitCam = playing ? *gameCam : editorCamera;
+                glm::vec2 fitRegion = editor.GetLastSceneContentRegion();
+                if (fitRegion.x < 1.0f || fitRegion.y < 1.0f)
+                    fitRegion = { (float)window.GetWidth(), (float)window.GetHeight() };
+                glm::mat4 fitView = fitCam.ViewMatrix();
+                glm::mat4 fitProj = fitCam.ProjectionMatrix(fitRegion.x / fitRegion.y);
+
+                shadowMap.Configure(frameSettings.ShadowResolution, 4);
+                shadowMap.Update(fitView, fitProj, frameSunDir, frameSettings.ShadowDistance);
+
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glCullFace(GL_FRONT);                 // front-face cull the casters: less peter-panning
+                glEnable(GL_POLYGON_OFFSET_FILL);
+                glPolygonOffset(2.0f, 4.0f);
+
+                shadowShader.Bind();
+                auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
+                for (int c = 0; c < shadowMap.Count(); ++c) {
+                    shadowMap.Begin(c);
+                    shadowShader.SetMat4("uLightViewProj", shadowMap.LightViewProj(c));
+                    // Cull each cascade's caster list against that cascade's own ortho frustum —
+                    // the near slice covers a few metres yet used to redraw the whole level x4.
+                    Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
+                    for (auto entity : casters) {
+                        if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                        auto& renderable = world.Registry.get<RenderableComponent>(entity);
+                        glm::mat4 model = world.ComposeWorldTransform(entity);
+                        glm::vec3 bmin = renderable.ModelRef->BoundsMin();
+                        glm::vec3 bmax = renderable.ModelRef->BoundsMax();
+                        bool validBounds = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
+                        if (validBounds &&
+                            !cascadeFrustum.Intersects(AABB{bmin, bmax}.Transformed(model)))
+                            continue;
+                        shadowShader.SetMat4("uModel", model);
+                        renderable.ModelRef->DrawDepthOnly(shadowShader);
+                    }
+                }
+
+                glDisable(GL_POLYGON_OFFSET_FILL);
+                glCullFace(GL_BACK);
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, window.GetWidth(), window.GetHeight());
+                GLStateCache::Invalidate();
+                sunShadowsReady = true;
+            }
+
             // Renders the lit scene (sky + every Transform+Renderable entity) into whatever
             // framebuffer/viewport is currently bound. Shared by the real on-screen pass below
             // and GameViewPanel's offscreen framebuffer pass, so the two can never silently
@@ -760,54 +844,7 @@ int main() {
                                   const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats) {
                 const EditorSettings& gs = EditorSettings::Get();
 
-                // Sun direction for shadows: the first active Directional light, else the legacy
-                // constant. (drawScene runs before the LightBuffer is built below, so this small
-                // extra scan is unavoidable for now.)
-                glm::vec3 sunDir = lightDir;
-                float sunAngularDeg = 0.53f; // Earth's sun; drives the shadow penumbra width below
-                for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
-                    if (world.Registry.all_of<InactiveTag>(e)) continue;
-                    const auto& lc = world.Registry.get<LightComponent>(e);
-                    if (lc.Kind != LightComponent::Type::Directional) continue;
-                    glm::mat4 m = world.ComposeWorldTransform(e);
-                    sunDir = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
-                    sunAngularDeg = lc.AngularSizeDegrees;
-                    break;
-                }
-
-                bool shadowsOn = gs.ShadowsEnabled && !unlit;
-                shadowMap.Configure(gs.ShadowResolution, 4);
-                shadowMap.Update(sceneView, sceneProj, sunDir, gs.ShadowDistance);
-
-                if (shadowsOn) {
-                    PROFILE_SCOPE("Sun Shadow Pass");
-                    GLint prevFbo = 0, prevVp[4];
-                    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
-                    glGetIntegerv(GL_VIEWPORT, prevVp);
-
-                    glEnable(GL_DEPTH_TEST);
-                    glDepthMask(GL_TRUE);
-                    glCullFace(GL_FRONT);                 // shadow-caster front-face cull: less peter-panning
-                    glEnable(GL_POLYGON_OFFSET_FILL);
-                    glPolygonOffset(2.0f, 4.0f);
-
-                    shadowShader.Bind();
-                    for (int c = 0; c < shadowMap.Count(); ++c) {
-                        shadowMap.Begin(c);
-                        shadowShader.SetMat4("uLightViewProj", shadowMap.LightViewProj(c));
-                        for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-                            if (world.Registry.all_of<InactiveTag>(entity)) continue;
-                            shadowShader.SetMat4("uModel", world.ComposeWorldTransform(entity));
-                            world.Registry.get<RenderableComponent>(entity).ModelRef->Draw(shadowShader);
-                        }
-                    }
-
-                    glDisable(GL_POLYGON_OFFSET_FILL);
-                    glCullFace(GL_BACK);
-                    glBindFramebuffer(GL_FRAMEBUFFER, (unsigned int)prevFbo);
-                    glViewport(prevVp[0], prevVp[1], prevVp[2], prevVp[3]);
-                    GLStateCache::Invalidate();
-                }
+                bool shadowsOn = sunShadowsReady && !unlit;
 
                 sky.Draw(sceneView, sceneProj, world.SkyHorizonColor, world.SkyZenithColor);
 
@@ -830,7 +867,7 @@ int main() {
                 // Penumbra width in shadow-map texels, from the sun's apparent size. 0.53 deg
                 // (real sun) -> a tight ~2 texel edge; crank the light's Angular Size for softer.
                 modelShader.SetFloat("uShadowSoftness",
-                    std::clamp(sunAngularDeg * 3.0f, 1.0f, 14.0f));
+                    std::clamp(frameSunAngularDeg * 3.0f, 1.0f, 14.0f));
                 glActiveTexture(GL_TEXTURE0 + 8);
                 glBindTexture(GL_TEXTURE_2D_ARRAY, shadowMap.DepthArray());
                 modelShader.SetInt("uShadowMap", 8);
