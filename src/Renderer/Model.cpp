@@ -334,6 +334,7 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
 }
 
 void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh) {
+    bool overflowWarned = false;
     for (unsigned int boneIdx = 0; boneIdx < mesh->mNumBones; ++boneIdx) {
         aiBone* bone = mesh->mBones[boneIdx];
         std::string boneName = bone->mName.C_Str();
@@ -341,6 +342,17 @@ void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh)
         int boneID;
         auto it = m_BoneInfoMap.find(boneName);
         if (it == m_BoneInfoMap.end()) {
+            // uBones[] is a fixed mat4[MAX_BONES] in the shader; a rig with more unique bones
+            // would index it out of bounds (undefined in GLSL, TDR/black on many drivers).
+            // Drop the extra bone's influences rather than let that reach the GPU (#98).
+            if (m_BoneCounter >= MAX_BONES) {
+                if (!overflowWarned) {
+                    Log::Warn("Model '" + m_Path + "' has more than " + std::to_string(MAX_BONES) +
+                              " bones - influences past that are dropped (skinning will be wrong).");
+                    overflowWarned = true;
+                }
+                continue;
+            }
             BoneInfo info{m_BoneCounter, AiToGlm(bone->mOffsetMatrix)};
             m_BoneInfoMap[boneName] = info;
             boneID = m_BoneCounter++;

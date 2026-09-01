@@ -87,7 +87,7 @@ void main() {
         mat4 skinMat = mat4(0.0);
         float tw = 0.0;
         for (int i = 0; i < 4; ++i) {
-            if (aBoneIDs[i] >= 0) { skinMat += uBones[aBoneIDs[i]] * aWeights[i]; tw += aWeights[i]; }
+            if (aBoneIDs[i] >= 0) { skinMat += uBones[clamp(aBoneIDs[i], 0, 99)] * aWeights[i]; tw += aWeights[i]; }
         }
         if (tw <= 0.0001) skinMat = mat4(1.0);
         localPos = skinMat * localPos;

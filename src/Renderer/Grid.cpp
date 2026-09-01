@@ -95,6 +95,12 @@ void Grid::Draw(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& c
                  float minorSpacing, float majorEvery, float fadeDistance) {
     glm::mat4 invViewProj = glm::inverse(proj * view);
 
+    // Save exactly what this pass mutates and restore it — the fixed drawScene call order is
+    // the only reason unconditional glDisable(GL_BLEND) at the end works today (#112).
+    const GLboolean wasBlend = glIsEnabled(GL_BLEND);
+    GLint prevDepthMask = GL_TRUE;
+    glGetIntegerv(GL_DEPTH_WRITEMASK, &prevDepthMask);
+
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDepthMask(GL_FALSE);
@@ -109,6 +115,6 @@ void Grid::Draw(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& c
     glBindVertexArray(m_VAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    glDepthMask(GL_TRUE);
-    glDisable(GL_BLEND);
+    glDepthMask((GLboolean)prevDepthMask);
+    if (!wasBlend) glDisable(GL_BLEND);
 }

@@ -41,7 +41,7 @@ void main() {
         float totalWeight = 0.0;
         for (int i = 0; i < 4; ++i) {
             if (aBoneIDs[i] >= 0) {
-                skinMat += uBones[aBoneIDs[i]] * aWeights[i];
+                skinMat += uBones[clamp(aBoneIDs[i], 0, 99)] * aWeights[i]; // clamp: never index uBones[] OOB (#98)
                 totalWeight += aWeights[i];
             }
         }
