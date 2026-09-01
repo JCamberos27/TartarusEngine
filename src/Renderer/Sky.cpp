@@ -61,6 +61,12 @@ void Sky::Draw(const glm::mat4& view, const glm::mat4& proj,
                const glm::vec3& horizonColor, const glm::vec3& zenithColor) {
     glm::mat4 invViewProj = glm::inverse(proj * view);
 
+    // Save exactly what this pass mutates (#112) — the unconditional glEnable(GL_DEPTH_TEST)
+    // at the end is wrong if depth test was off on entry; it only works because of call order.
+    const GLboolean wasDepthTest = glIsEnabled(GL_DEPTH_TEST);
+    GLint prevDepthMask = GL_TRUE;
+    glGetIntegerv(GL_DEPTH_WRITEMASK, &prevDepthMask);
+
     glDepthMask(GL_FALSE);
     glDisable(GL_DEPTH_TEST);
 
@@ -72,6 +78,6 @@ void Sky::Draw(const glm::mat4& view, const glm::mat4& proj,
     glBindVertexArray(m_VAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
+    if (wasDepthTest) glEnable(GL_DEPTH_TEST);
+    glDepthMask((GLboolean)prevDepthMask);
 }

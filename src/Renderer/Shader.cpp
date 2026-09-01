@@ -8,23 +8,32 @@
 
 Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc) {
     unsigned int vs = Compile(GL_VERTEX_SHADER, vertexSrc);
-    unsigned int fs = Compile(GL_FRAGMENT_SHADER, fragmentSrc);
+    unsigned int fs = 0;
+    try {
+        fs = Compile(GL_FRAGMENT_SHADER, fragmentSrc);
+    } catch (...) {
+        glDeleteShader(vs); // the fragment stage failed to compile — don't leak the vertex one
+        throw;
+    }
 
     m_Program = glCreateProgram();
     glAttachShader(m_Program, vs);
     glAttachShader(m_Program, fs);
     glLinkProgram(m_Program);
+    // Flagged for deletion now; the driver frees them once they're detached at link time.
+    // Doing it here (not after the status check) means a link failure below can't leak them.
+    glDeleteShader(vs);
+    glDeleteShader(fs);
 
     int success;
     glGetProgramiv(m_Program, GL_LINK_STATUS, &success);
     if (!success) {
         char log[1024];
         glGetProgramInfoLog(m_Program, 1024, nullptr, log);
+        glDeleteProgram(m_Program);
+        m_Program = 0;
         throw std::runtime_error(std::string("Shader link error: ") + log);
     }
-
-    glDeleteShader(vs);
-    glDeleteShader(fs);
 }
 
 Shader::~Shader() {
@@ -42,6 +51,7 @@ unsigned int Shader::Compile(unsigned int type, const std::string& src) {
     if (!success) {
         char log[1024];
         glGetShaderInfoLog(shader, 1024, nullptr, log);
+        glDeleteShader(shader);
         throw std::runtime_error(std::string("Shader compile error: ") + log);
     }
     return shader;
@@ -69,6 +79,10 @@ void Shader::SetMat4Array(const std::string& name, int count, const glm::mat4* d
 
 void Shader::SetVec3(const std::string& name, const glm::vec3& v) const {
     glUniform3f(Loc(name), v.x, v.y, v.z);
+}
+
+void Shader::SetVec4(const std::string& name, const glm::vec4& v) const {
+    glUniform4f(Loc(name), v.x, v.y, v.z, v.w);
 }
 
 void Shader::SetFloat(const std::string& name, float v) const {

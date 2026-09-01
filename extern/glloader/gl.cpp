@@ -54,6 +54,34 @@ PFNGLFRAMEBUFFERRENDERBUFFERPROC glFramebufferRenderbuffer = nullptr;
 PFNGLDELETERENDERBUFFERSPROC glDeleteRenderbuffers = nullptr;
 PFNGLBLITFRAMEBUFFERPROC glBlitFramebuffer = nullptr;
 
+// ---- Lighting / HDR overhaul: extended entry points -----------------------------------
+PFNGLGETSTRINGIPROC glGetStringi = nullptr;
+PFNGLBINDBUFFERBASEPROC glBindBufferBase = nullptr;
+PFNGLBINDBUFFERRANGEPROC glBindBufferRange = nullptr;
+PFNGLDRAWBUFFERSPROC glDrawBuffers = nullptr;
+PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC glRenderbufferStorageMultisample = nullptr;
+PFNGLTEXIMAGE2DMULTISAMPLEPROC glTexImage2DMultisample = nullptr;
+PFNGLCREATEBUFFERSPROC glCreateBuffers = nullptr;
+PFNGLNAMEDBUFFERSTORAGEPROC glNamedBufferStorage = nullptr;
+PFNGLNAMEDBUFFERSUBDATAPROC glNamedBufferSubData = nullptr;
+PFNGLCREATETEXTURESPROC glCreateTextures = nullptr;
+PFNGLTEXTURESTORAGE2DPROC glTextureStorage2D = nullptr;
+PFNGLTEXTURESTORAGE3DPROC glTextureStorage3D = nullptr;
+PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC glTextureStorage2DMultisample = nullptr;
+PFNGLTEXTURESUBIMAGE2DPROC glTextureSubImage2D = nullptr;
+PFNGLTEXTURESUBIMAGE3DPROC glTextureSubImage3D = nullptr;
+PFNGLTEXTUREPARAMETERIPROC glTextureParameteri = nullptr;
+PFNGLTEXTUREPARAMETERFVPROC glTextureParameterfv = nullptr;
+PFNGLGENERATETEXTUREMIPMAPPROC glGenerateTextureMipmap = nullptr;
+PFNGLBINDTEXTUREUNITPROC glBindTextureUnit = nullptr;
+PFNGLCREATEFRAMEBUFFERSPROC glCreateFramebuffers = nullptr;
+PFNGLNAMEDFRAMEBUFFERTEXTUREPROC glNamedFramebufferTexture = nullptr;
+PFNGLNAMEDFRAMEBUFFERTEXTURELAYERPROC glNamedFramebufferTextureLayer = nullptr;
+PFNGLNAMEDFRAMEBUFFERDRAWBUFFERSPROC glNamedFramebufferDrawBuffers = nullptr;
+PFNGLCHECKNAMEDFRAMEBUFFERSTATUSPROC glCheckNamedFramebufferStatus = nullptr;
+PFNGLBLITNAMEDFRAMEBUFFERPROC glBlitNamedFramebuffer = nullptr;
+PFNGLCLEARNAMEDFRAMEBUFFERFVPROC glClearNamedFramebufferfv = nullptr;
+
 namespace {
 void* LoadGLFunc(const char* name) {
     void* p = (void*)wglGetProcAddress(name);
@@ -120,6 +148,34 @@ bool GLLoader_Init() {
     LOAD(PFNGLFRAMEBUFFERRENDERBUFFERPROC, glFramebufferRenderbuffer)
     LOAD(PFNGLDELETERENDERBUFFERSPROC, glDeleteRenderbuffers)
     LOAD(PFNGLBLITFRAMEBUFFERPROC, glBlitFramebuffer)
+
+    // ---- Lighting / HDR overhaul: extended entry points -------------------------------
+    LOAD(PFNGLGETSTRINGIPROC, glGetStringi)
+    LOAD(PFNGLBINDBUFFERBASEPROC, glBindBufferBase)
+    LOAD(PFNGLBINDBUFFERRANGEPROC, glBindBufferRange)
+    LOAD(PFNGLDRAWBUFFERSPROC, glDrawBuffers)
+    LOAD(PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC, glRenderbufferStorageMultisample)
+    LOAD(PFNGLTEXIMAGE2DMULTISAMPLEPROC, glTexImage2DMultisample)
+    LOAD(PFNGLCREATEBUFFERSPROC, glCreateBuffers)
+    LOAD(PFNGLNAMEDBUFFERSTORAGEPROC, glNamedBufferStorage)
+    LOAD(PFNGLNAMEDBUFFERSUBDATAPROC, glNamedBufferSubData)
+    LOAD(PFNGLCREATETEXTURESPROC, glCreateTextures)
+    LOAD(PFNGLTEXTURESTORAGE2DPROC, glTextureStorage2D)
+    LOAD(PFNGLTEXTURESTORAGE3DPROC, glTextureStorage3D)
+    LOAD(PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC, glTextureStorage2DMultisample)
+    LOAD(PFNGLTEXTURESUBIMAGE2DPROC, glTextureSubImage2D)
+    LOAD(PFNGLTEXTURESUBIMAGE3DPROC, glTextureSubImage3D)
+    LOAD(PFNGLTEXTUREPARAMETERIPROC, glTextureParameteri)
+    LOAD(PFNGLTEXTUREPARAMETERFVPROC, glTextureParameterfv)
+    LOAD(PFNGLGENERATETEXTUREMIPMAPPROC, glGenerateTextureMipmap)
+    LOAD(PFNGLBINDTEXTUREUNITPROC, glBindTextureUnit)
+    LOAD(PFNGLCREATEFRAMEBUFFERSPROC, glCreateFramebuffers)
+    LOAD(PFNGLNAMEDFRAMEBUFFERTEXTUREPROC, glNamedFramebufferTexture)
+    LOAD(PFNGLNAMEDFRAMEBUFFERTEXTURELAYERPROC, glNamedFramebufferTextureLayer)
+    LOAD(PFNGLNAMEDFRAMEBUFFERDRAWBUFFERSPROC, glNamedFramebufferDrawBuffers)
+    LOAD(PFNGLCHECKNAMEDFRAMEBUFFERSTATUSPROC, glCheckNamedFramebufferStatus)
+    LOAD(PFNGLBLITNAMEDFRAMEBUFFERPROC, glBlitNamedFramebuffer)
+    LOAD(PFNGLCLEARNAMEDFRAMEBUFFERFVPROC, glClearNamedFramebufferfv)
 #undef LOAD
     return ok;
 }
