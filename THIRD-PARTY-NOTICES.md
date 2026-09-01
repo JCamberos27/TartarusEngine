@@ -56,7 +56,7 @@ Engine means complying with these licenses even though no source is redistribute
 
 ## First-party
 
-`extern/glloader/` is a minimal hand-written OpenGL 3.3 core loader authored for this project
+`extern/glloader/` is a minimal hand-written OpenGL 4.6 core loader authored for this project
 (it exists specifically to avoid a glad/Python code-generation dependency). The OpenGL enum
 values and function signatures it declares come from the Khronos OpenGL Registry.
 

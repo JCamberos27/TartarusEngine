@@ -9,7 +9,7 @@ namespace {
 // the same VAO are simply never read by this shader, which is fine; Model::Draw()'s material/
 // bone uniform uploads become harmless no-ops against a shader that never declares those names.
 const char* kOverlayVertexSrc = R"(
-#version 330 core
+#version 460 core
 layout (location = 0) in vec3 aPos;
 uniform mat4 uModel;
 uniform mat4 uView;
@@ -20,7 +20,7 @@ void main() {
 )";
 
 const char* kOverlayFragmentSrc = R"(
-#version 330 core
+#version 460 core
 out vec4 FragColor;
 uniform vec3 uTintColor;
 uniform float uAlpha;

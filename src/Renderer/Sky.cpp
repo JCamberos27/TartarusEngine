@@ -5,7 +5,7 @@
 namespace {
 
 const char* kVertexSrc = R"(
-#version 330 core
+#version 460 core
 out vec3 vNearPoint;
 out vec3 vFarPoint;
 
@@ -30,7 +30,7 @@ void main() {
 )";
 
 const char* kFragmentSrc = R"(
-#version 330 core
+#version 460 core
 in vec3 vNearPoint;
 in vec3 vFarPoint;
 out vec4 FragColor;

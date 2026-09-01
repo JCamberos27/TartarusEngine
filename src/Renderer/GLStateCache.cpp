@@ -7,7 +7,7 @@ namespace {
 unsigned int g_CurrentProgram = 0;
 bool g_ProgramValid = false;
 
-// GL 3.3 core guarantees at least 16 combined texture units - this engine's own material
+// GL core guarantees at least 16 combined texture units (4.6 mandates more) - this engine's own material
 // binding (Model.cpp's BindMaterial) never uses more than 7, so 16 is comfortable headroom.
 constexpr int kMaxCachedTextureUnits = 16;
 std::array<unsigned int, kMaxCachedTextureUnits> g_BoundTextures{};

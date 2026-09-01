@@ -626,7 +626,7 @@ private:
     // Asset Browser model thumbnails (#18 P18): each Model rendered once into its own small GL
     // texture and cached, so a folder of FBXs shows real previews instead of a generic cube
     // glyph. A per-frame budget keeps opening a big folder from stalling; the blit FBO copies
-    // the shared preview render into the per-model texture (GL 3.3-core, no glCopyImageSubData).
+    // the shared preview render into the per-model texture (via glCopyTexSubImage2D).
     ModelPreviewRenderer m_ThumbnailPreview;
     std::map<const Model*, unsigned int> m_ModelThumbnails;
     unsigned int m_ThumbnailBlitFbo = 0;

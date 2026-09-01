@@ -54,9 +54,13 @@ Window::Window(int width, int height, const std::string& title)
         throw std::runtime_error("Failed to initialize GLFW");
     }
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+    // Ask for a debug context so KHR_debug output is available (GLDebug wires the callback when
+    // a Debug build or TARTARUS_GL_DEBUG=1 turns it on). Free on a release driver when unused.
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
     glfwWindowHint(GLFW_SAMPLES, 4);
     // Report the real per-monitor content scale (e.g. 2.0 at Windows' 200% scaling, common on
     // 4K displays) so the editor can bake it into font sizes and layout instead of rendering a
