@@ -4776,6 +4776,13 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 PropertyLabel("Spot Angle", "Half-angle of the light cone, in degrees.\nThe cone points along the entity's -Z axis - use Rotation to aim it.");
                 ImGui::SliderFloat("##SpotAngle", &light->SpotAngleDegrees, 1.0f, 89.0f, "%.0f deg");
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+
+                PropertyLabel("Cast Shadows", "Render a perspective shadow map for this spot light.\nEach casting spot is an extra full-scene depth pass; up to 4 take effect at once.\nRequires Preferences > Performance > Cast sun shadows to be on.");
+                bool castShadows = light->CastShadows;
+                if (ImGui::Checkbox("##SpotCastShadows", &castShadows)) {
+                    PushUndo(world, "Edit Light");           // snapshot the pre-change state
+                    light->CastShadows = castShadows;
+                }
             }
             if (isDir) {
                 PropertyLabel("Angular Size", "Apparent diameter of the sun disc, in degrees (~0.53 = Earth's sun).\nWider = softer shadows once cascaded shadow maps land.\nAim the sun with the entity's Rotation (it shines along -Z).");

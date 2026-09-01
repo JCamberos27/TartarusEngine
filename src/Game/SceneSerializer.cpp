@@ -77,6 +77,7 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
             {"range", light->Range},
             {"spotAngle", light->SpotAngleDegrees},
             {"angularSize", light->AngularSizeDegrees},
+            {"castShadows", light->CastShadows},
         };
     }
     // Boxes get a Collider from World::CreateBox already; this only records one that was added
@@ -123,6 +124,7 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
         light.Range = l.value("range", 12.0f);
         light.SpotAngleDegrees = l.value("spotAngle", 35.0f);
         light.AngularSizeDegrees = l.value("angularSize", 0.53f);
+        light.CastShadows = l.value("castShadows", false);
         world.Registry.emplace_or_replace<LightComponent>(entity, light);
     }
     if (j.contains("collider")) {

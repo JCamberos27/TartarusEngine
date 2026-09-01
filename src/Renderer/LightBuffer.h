@@ -34,7 +34,7 @@ public:
     void AddDirectional(const glm::vec3& dirWorld, const glm::vec3& colorLinear, float intensity);
     void AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLinear, float intensity, float range);
     void AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, const glm::vec3& colorLinear,
-                 float intensity, float range, float cosOuter, float cosInner);
+                 float intensity, float range, float cosOuter, float cosInner, int shadowSlot = -1);
 
     // (Lazily creates the SSBO on first call.) Uploads the current list.
     void Upload();
