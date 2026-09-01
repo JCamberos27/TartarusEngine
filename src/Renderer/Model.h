@@ -67,6 +67,12 @@ public:
 
     void Draw(Shader& shader);
 
+    // Geometry only — no material binds, no texture units. For the shadow / depth pre-pass,
+    // whose fragment shader has none of the PBR uniforms, so the ~23 SetX + 7 texture binds
+    // BindMaterial does per mesh are all wasted (and it runs per cascade). Still uploads bone
+    // matrices + uUseSkinning: the depth vertex shader skins too, so skinned casters animate.
+    void DrawDepthOnly(Shader& shader);
+
     bool HasAnimations() const { return !m_Animations.empty(); }
     int AnimationCount() const { return (int)m_Animations.size(); }
     const std::string& AnimationName(int index) const { return m_Animations[index].Name; }

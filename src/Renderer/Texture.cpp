@@ -93,23 +93,31 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
         TextureCache::Store(m_Path, settings, entry);
     }
 
+    // Sized internal formats on both branches (#100) — the sRGB branch already used them;
+    // the linear branch used to pass bare GL_RGB/GL_RGBA/GL_RED, leaving precision to the driver
+    // and blocking immutable-storage attachment.
     GLenum format = GL_RGB;
-    GLint internalFormat = GL_RGB;
+    GLint internalFormat = GL_RGB8;
     if (m_Channels == 1) {
         format = GL_RED;
-        internalFormat = GL_RED; // no single-channel sRGB format in core GL - not a color texture anyway
+        internalFormat = GL_R8; // no single-channel sRGB format in core GL - not a color texture anyway
     } else if (m_Channels == 3) {
         format = GL_RGB;
-        internalFormat = settings.IsSRGB ? GL_SRGB8 : GL_RGB;
+        internalFormat = settings.IsSRGB ? GL_SRGB8 : GL_RGB8;
     } else if (m_Channels == 4) {
         format = GL_RGBA;
-        internalFormat = settings.IsSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA;
+        internalFormat = settings.IsSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
     }
 
     glGenTextures(1, &m_ID);
     glBindTexture(GL_TEXTURE_2D, m_ID);
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    // The decode/cache path hands us tightly packed rows (stride = w*channels). Without this,
+    // GL assumes 4-byte row alignment and shears any RGB texture whose width isn't a multiple
+    // of 4 (#99). Restored to the 4 default right after.
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, uploadW, uploadH, 0, format, GL_UNSIGNED_BYTE, uploadData);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 
     if (settings.GenerateMipmaps) glGenerateMipmap(GL_TEXTURE_2D);
 

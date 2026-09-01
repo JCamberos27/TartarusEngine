@@ -7,6 +7,78 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### Lighting + HDR overhaul (branch `lighting-overhaul`)
+
+_One uncommitted batch. Establishes the linear-HDR pipeline and the first real GL 4.6
+feature use. Behind a draft PR into `main` for review._
+
+**Rendering pipeline**
+
+- The scene now renders into a **multisampled linear `RGBA16F` + `DEPTH_COMPONENT32F`
+  target** (`HdrTarget`), resolves once, and a **single fullscreen tonemap pass**
+  (`Tonemapper`) applies exposure → curve → gamma. The Reinhard+gamma that used to be
+  baked into the model fragment shader is gone from the real scene path (kept only for the
+  offscreen model-preview thumbnails, which have no tonemap pass — `uApplyTonemap`).
+- Tone-mapping operators: **Reinhard / ACES (Narkowicz) / AgX**, switchable live.
+- **Exposure (EV)** control, photographic stops, applied before the curve.
+- **MSAA** for the HDR target is configurable again (Off/2×/4×/8×) — closes the regression
+  where the offscreen-pass migration dropped MSAA (**#101**).
+- New Preferences ▸ Performance section: *Rendering (HDR)* + *Shadows (Directional Sun)*.
+  All six keys persist in `editor_prefs.json`.
+
+**Lights**
+
+- Every light (directional / point / spot) now uploads through one **`std430` SSBO**
+  (`LightBuffer`, binding 0) instead of per-frame `snprintf`-built `uPointLightPos[i]`
+  uniform arrays. This is the layout a clustered-forward cull pass will consume later
+  (addresses the SSBO half of **#104**; the per-vertex `inverse(uModel)` half remains).
+- **Directional light is now a real entity**, not a hard-coded `main.cpp` constant. Aim it
+  with the entity's rotation (shines along −Z, same convention as a spot). A migration
+  synthesises one on load of any scene that has none, so old scenes keep a sun.
+  `LightComponent` gained `Type::Directional` and `AngularSizeDegrees` (sun disc size →
+  soft-shadow penumbra width).
+
+**Shadows**
+
+- **Cascaded shadow maps** for the directional sun (`CascadedShadowMap`): 4 cascades,
+  `DEPTH_COMPONENT32F` 2D-array, practical (log/uniform blend) split scheme, texel-snapped
+  ortho frusta, hardware depth-compare (`sampler2DArrayShadow`).
+- Fragment side: **16-tap Poisson-disk PCF**, rotated per-fragment (banding → noise),
+  kernel radius driven by the sun's `AngularSizeDegrees` (`uShadowSoftness`), plus a smooth
+  cross-fade across the cascade seam.
+- Synthesised sun tuned so shadows actually read: ~36° raking elevation (was near-overhead),
+  intensity 6.0, angular size 2.0°.
+
+**GL loader**
+
+- `extern/glloader` extended from a ~GL 3.3 set to the **DSA + buffer-storage + SSBO +
+  MSAA-texture + `glGetStringi`** subset (`glCreateBuffers`, `glNamedBufferStorage`,
+  `glCreate/TextureStorage*`, `glCreateFramebuffers`, `glNamedFramebuffer*`,
+  `glBlitNamedFramebuffer`, `glBindBufferBase`, …). `GLLoader_Init()` now fails if any are
+  missing, so a sub-4.6 driver stops at "Failed to load OpenGL functions" instead of a
+  cryptic shader error (partial **#105**). This is the bulk of **#96** fix-option (b);
+  `Texture`, `ModelMesh`, `Framebuffer` are not yet ported.
+- `Shader::SetVec4` added.
+
+**Testing done**
+
+- Built Release, launched, driven via computer-use. No GL/console errors. Verified: HDR
+  render in Scene + Game + Play; exposure slider; all three tonemap operators; MSAA toggle;
+  shadow on/off, resolution, distance; 7-light SSBO scene renders correct colours/falloff;
+  soft Poisson shadows on floor / box→pedestal / cones with no acne or peter-panning;
+  ~3–5 FPS cost for the shadow pass; settings round-trip through `editor_prefs.json`.
+
+**Known gaps / follow-ups** — filed as issues, see the PR.
+
+- Shadow pass has no per-cascade frustum culling (draws the whole scene ×4).
+- Shadow pass ignores materials — alpha-tested geometry casts a solid silhouette.
+- `uShadowNormalBias` is a single world-space value, not cascade-aware.
+- Cascade count hardcoded to 4 at the call site; no UI.
+- Point / spot lights still cast no shadows.
+- No clustered/tiled light culling yet — every fragment loops every light.
+- `HdrTarget::ResolveTo` resolves colour only; a future depth-consuming post pass (SSAO)
+  will need the MS depth texture or a depth resolve.
+
 ### Second polish sweep — remaining open issues
 
 - **#29 (P18)** — Asset Browser now shows a rendered thumbnail for each model instead of a

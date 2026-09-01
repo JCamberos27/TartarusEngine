@@ -68,12 +68,15 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
     if (world.Registry.all_of<StaticTag>(entity)) j["static"] = true;
 
     if (const auto* light = world.Registry.try_get<LightComponent>(entity)) {
+        const char* kindStr = light->Kind == LightComponent::Type::Spot ? "spot"
+                            : light->Kind == LightComponent::Type::Directional ? "directional" : "point";
         j["light"] = {
-            {"kind", light->Kind == LightComponent::Type::Spot ? "spot" : "point"},
+            {"kind", kindStr},
             {"color", Vec3ToJson(light->Color)},
             {"intensity", light->Intensity},
             {"range", light->Range},
             {"spotAngle", light->SpotAngleDegrees},
+            {"angularSize", light->AngularSizeDegrees},
         };
     }
     // Boxes get a Collider from World::CreateBox already; this only records one that was added
@@ -111,12 +114,15 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
     if (j.contains("light")) {
         const json& l = j["light"];
         LightComponent light;
-        light.Kind = l.value("kind", std::string("point")) == "spot"
-            ? LightComponent::Type::Spot : LightComponent::Type::Point;
+        std::string lightKind = l.value("kind", std::string("point"));
+        light.Kind = lightKind == "spot" ? LightComponent::Type::Spot
+                   : lightKind == "directional" ? LightComponent::Type::Directional
+                   : LightComponent::Type::Point;
         light.Color = JsonToVec3(l.value("color", json::array({1, 1, 1})), glm::vec3(1.0f));
         light.Intensity = l.value("intensity", 5.0f);
         light.Range = l.value("range", 12.0f);
         light.SpotAngleDegrees = l.value("spotAngle", 35.0f);
+        light.AngularSizeDegrees = l.value("angularSize", 0.53f);
         world.Registry.emplace_or_replace<LightComponent>(entity, light);
     }
     if (j.contains("collider")) {
@@ -457,6 +463,32 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
     for (const auto& [child, parentId] : pendingParents) {
         auto it = idToEntity.find(parentId);
         if (it != idToEntity.end()) world.AttachChildRaw(child, it->second);
+    }
+
+    // Migration: the sun used to be a hard-coded constant in main.cpp. It's an entity now, so a
+    // full load of any scene without a Directional light synthesises one from the engine's
+    // historical key light (direction, warmth, intensity) — now editable / removable like any
+    // other light. Not done for fragment paste/prefab (`!clearFirst`).
+    if (clearFirst) {
+        bool hasSun = false;
+        for (auto e : world.Registry.view<LightComponent>())
+            if (world.Registry.get<LightComponent>(e).Kind == LightComponent::Type::Directional) { hasSun = true; break; }
+        if (!hasSun) {
+            // A raking ~36 deg elevation (not the old near-overhead angle) so objects throw long,
+            // legible shadows the moment cascaded shadow maps are on, while the floor stays lit.
+            glm::vec3 dir = glm::normalize(glm::vec3(-0.6f, -0.55f, -0.45f));
+            // Entity -Z must equal `dir` after ComposeTransform's Ry*Rx*Rz. Solve X,Y euler:
+            float ex = glm::degrees(std::asin(std::clamp(dir.y, -1.0f, 1.0f)));
+            float ey = glm::degrees(std::atan2(-dir.x, -dir.z));
+            entt::entity sun = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(ex, ey, 0.0f),
+                                                       glm::vec3(1.0f), "Directional Light");
+            LightComponent lc;
+            lc.Kind = LightComponent::Type::Directional;
+            lc.Color = glm::vec3(1.0f, 0.93f, 0.84f);
+            lc.Intensity = 6.0f;               // a real key light, so its cast shadows actually read
+            lc.AngularSizeDegrees = 2.0f;      // a soft, cinematic penumbra out of the box
+            world.Registry.emplace<LightComponent>(sun, lc);
+        }
     }
 
     return true;

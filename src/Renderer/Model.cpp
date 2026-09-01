@@ -3,6 +3,7 @@
 #include "Texture.h"
 #include "Shader.h"
 #include "PrimitiveMeshes.h"
+#include "gl.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -334,6 +335,7 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
 }
 
 void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh) {
+    bool overflowWarned = false;
     for (unsigned int boneIdx = 0; boneIdx < mesh->mNumBones; ++boneIdx) {
         aiBone* bone = mesh->mBones[boneIdx];
         std::string boneName = bone->mName.C_Str();
@@ -341,6 +343,17 @@ void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh)
         int boneID;
         auto it = m_BoneInfoMap.find(boneName);
         if (it == m_BoneInfoMap.end()) {
+            // uBones[] is a fixed mat4[MAX_BONES] in the shader; a rig with more unique bones
+            // would index it out of bounds (undefined in GLSL, TDR/black on many drivers).
+            // Drop the extra bone's influences rather than let that reach the GPU (#98).
+            if (m_BoneCounter >= MAX_BONES) {
+                if (!overflowWarned) {
+                    Log::Warn("Model '" + m_Path + "' has more than " + std::to_string(MAX_BONES) +
+                              " bones - influences past that are dropped (skinning will be wrong).");
+                    overflowWarned = true;
+                }
+                continue;
+            }
             BoneInfo info{m_BoneCounter, AiToGlm(bone->mOffsetMatrix)};
             m_BoneInfoMap[boneName] = info;
             boneID = m_BoneCounter++;
@@ -447,12 +460,29 @@ void Model::CalculateBoneTransform(const AssimpNodeData& node, const glm::mat4& 
     }
 }
 
+namespace {
+// One shared bone-palette SSBO (binding 1), re-uploaded before each skinned draw. Replaces the
+// 100-element glUniformMatrix4fv array (#104). Single-threaded, sequential draws, so one buffer
+// is enough; process-lifetime, never freed (like the other engine-lifetime GL objects).
+unsigned int g_BoneSsbo = 0;
+void EnsureBoneSsbo() {
+    if (g_BoneSsbo) return;
+    glCreateBuffers(1, &g_BoneSsbo);
+    glNamedBufferStorage(g_BoneSsbo, MAX_BONES * (GLsizeiptr)sizeof(glm::mat4), nullptr, GL_DYNAMIC_STORAGE_BIT);
+}
+} // namespace
+
 void Model::UploadBoneMatrices(Shader& shader) const {
     bool skinning = m_CurrentAnimation >= 0;
     shader.SetInt("uUseSkinning", skinning ? 1 : 0);
-    if (!skinning) return;
 
-    shader.SetMat4Array("uBones[0]", MAX_BONES, m_FinalBoneMatrices.data());
+    EnsureBoneSsbo();
+    if (skinning)
+        glNamedBufferSubData(g_BoneSsbo, 0, MAX_BONES * (GLsizeiptr)sizeof(glm::mat4),
+                             m_FinalBoneMatrices.data());
+    // Bind even when not skinning: the vertex shader still declares the block, and leaving
+    // binding 1 dangling from a previous model is asking for trouble on stricter drivers.
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, g_BoneSsbo);
 }
 
 namespace {
@@ -489,6 +519,24 @@ void Model::Draw(Shader& shader) {
     for (auto& mesh : m_Meshes) {
         const Material& mat = m_MaterialOverride ? *m_MaterialOverride : mesh->Mat;
         BindMaterial(shader, mat);
+        mesh->Draw();
+    }
+}
+
+void Model::DrawDepthOnly(Shader& shader) {
+    UploadBoneMatrices(shader);
+    for (auto& mesh : m_Meshes) {
+        const Material& mat = m_MaterialOverride ? *m_MaterialOverride : mesh->Mat;
+        // Only cost paid over a pure depth draw: one texture bind + two uniforms, and only for
+        // meshes that actually have an albedo map (cutout foliage/fences) — the shadow then
+        // follows the cutout instead of a solid silhouette (#116).
+        if (mat.AlbedoMap) {
+            mat.AlbedoMap->Bind(0);
+            shader.SetInt("uAlbedo", 0);
+            shader.SetInt("uAlphaTest", 1);
+        } else {
+            shader.SetInt("uAlphaTest", 0);
+        }
         mesh->Draw();
     }
 }

@@ -715,6 +715,9 @@ private:
     // The scene as it was the instant Play was pressed, as a SceneSerializer JSON string — the
     // same snapshot format undo/redo already uses. Empty when not in (or never entered) play.
     std::string m_PlayModeSnapshot;
+    // Selection captured by stable OrderComponent value on Play, re-resolved to fresh entity
+    // ids on Stop — the registry is rebuilt in between and entt recycles ids (#110).
+    std::vector<int> m_PlaySelectionOrders;
 
     // --- Console ------------------------------------------------------------------------
     void DrawConsole();

@@ -31,6 +31,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/euler_angles.hpp> // extractEulerAngleYXZ — must match ComposeTransform's order (#108)
 
 #include <filesystem>
 #include <memory>
@@ -58,6 +59,37 @@ inline glm::vec3 SafeSpawnInFrontOf(const Camera& cam, float distance = 5.0f) {
     glm::vec3 p = cam.Position + cam.Front() * distance;
     if (std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z)) return p;
     return glm::vec3(0.0f);
+}
+
+// Euler angles in degrees (X,Y,Z as stored in TransformComponent::RotationEuler) from a matrix,
+// using the SAME Ry*Rx*Rz decomposition ComposeTransform builds it with — so a gizmo-set
+// rotation and an Inspector-typed one agree and compose(decompose(M)) == M (#108). ImGuizmo's
+// own DecomposeMatrixToComponents uses a different order, which made objects jump when a gizmo
+// rotate was followed by an Inspector nudge (or vice versa).
+inline glm::vec3 EulerYXZFromMatrix(const glm::mat4& m) {
+    glm::mat3 b(m);
+    for (int c = 0; c < 3; ++c) {
+        float len = glm::length(b[c]);
+        if (len > 1e-8f) b[c] /= len;
+    }
+    if (glm::determinant(b) < 0.0f) b[0] = -b[0]; // mirrored basis (negative scale) has no clean Euler
+    float ey, ex, ez;
+    glm::extractEulerAngleYXZ(glm::mat4(b), ey, ex, ez);
+    glm::vec3 d = glm::degrees(glm::vec3(ex, ey, ez));
+    for (int i = 0; i < 3; ++i) if (std::fabs(d[i]) < 1.0e-4f) d[i] = 0.0f; // kill dust / -0.0
+    return d;
+}
+
+// Turn a freshly created light entity into a sun: same raking angle / intensity / disc size the
+// SceneSerializer synthesises for a scene with no directional light, so an added one casts a
+// readable shadow immediately rather than sitting near-overhead and washed out (#125).
+inline void MakeDirectionalLight(World& world, entt::entity e) {
+    if (e == entt::null || !world.Registry.valid(e)) return;
+    auto& lc = world.Registry.get<LightComponent>(e);
+    lc.Kind = LightComponent::Type::Directional;
+    lc.Intensity = 6.0f;
+    lc.AngularSizeDegrees = 2.0f;
+    world.Registry.get<TransformComponent>(e).RotationEuler = glm::vec3(-36.25f, 53.13f, 0.0f);
 }
 
 // Reverse lookup for the Asset Browser: which placed objects reference a given asset.
@@ -579,8 +611,14 @@ void EditorLayer::Init(GLFWwindow* window) {
     EditorSettings::Load();
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
-    // — see ProjectPaths.h. main.cpp resolves the same path for its initial load.
-    m_CurrentScenePath = ProjectPaths::Resolve("scenes/Test.json");
+    // — see ProjectPaths.h. Must match main.cpp's initial load: prefer the last-open scene if
+    // it still exists, else the built-in default (#95).
+    {
+        std::error_code ec;
+        const std::string& last = EditorSettings::Get().LastScenePath;
+        m_CurrentScenePath = (!last.empty() && std::filesystem::exists(last, ec) && !ec)
+            ? last : ProjectPaths::Resolve("scenes/Test.json");
+    }
 
     // So Import / Open / Save dialogs start in the project folder instead of build/Release/,
     // then follow the user around from there (#15 P4).
@@ -867,6 +905,8 @@ bool EditorLayer::DoSaveAs(World& world, AssetLibrary& assets) {
     if (!SceneSerializer::Save(world, assets, path)) return false;
     ClearRecoverySnapshot();       // clears the snapshot for the PREVIOUS path (still current here)
     m_CurrentScenePath = path;
+    EditorSettings::Get().LastScenePath = path; // reopen this one next launch (#95)
+    EditorSettings::Save();
     m_Dirty = false;
     m_SavedUndoDepth = (int)m_UndoStack.size(); // this history position now matches disk
     m_AutoSaveTimer = 0.0f;
@@ -1094,7 +1134,75 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             EditorUI::SetTooltip("0 / Unlimited removes the software cap. Applies to the whole editor and the game simulation.");
 
         ImGui::Spacing();
-        ImGui::TextDisabled("Changes apply immediately. Both settings persist in editor_prefs.json.");
+        ImGui::SeparatorText("Rendering (HDR)");
+
+        ImGui::SetNextItemWidth(kw);
+        ImGui::SliderFloat("Exposure (EV)", &prefs.ExposureEV, -6.0f, 6.0f, "%+.2f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Photographic stops applied before the tone curve. 0 = neutral. Applies live.");
+
+        static const char* kTonemapLabels[] = { "Reinhard", "ACES", "AgX" };
+        int tm = std::clamp(prefs.TonemapOperator, 0, 2);
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::Combo("Tone mapping", &tm, kTonemapLabels, IM_ARRAYSIZE(kTonemapLabels))) {
+            prefs.TonemapOperator = tm;
+            EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Curve that maps linear HDR to display. ACES = punchy filmic; AgX = gentler, less hue shift.");
+
+        static const char* kMsaaLabels[] = { "Off", "2x", "4x", "8x" };
+        static const int   kMsaaValues[] = { 1, 2, 4, 8 };
+        int msIdx = 2;
+        for (int i = 0; i < 4; ++i) if (kMsaaValues[i] == prefs.MsaaSamples) { msIdx = i; break; }
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::Combo("MSAA", &msIdx, kMsaaLabels, IM_ARRAYSIZE(kMsaaLabels))) {
+            prefs.MsaaSamples = kMsaaValues[msIdx];
+            EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Multisample level of the HDR scene/game target. Takes effect next frame.");
+
+        ImGui::Spacing();
+        ImGui::SeparatorText("Shadows (Directional Sun)");
+
+        if (ImGui::Checkbox("Cast sun shadows", &prefs.ShadowsEnabled)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Cascaded shadow maps for the Directional light. Point/spot shadows are a later milestone.");
+
+        static const char* kShadowResLabels[] = { "1024", "2048", "4096" };
+        static const int   kShadowResValues[] = { 1024, 2048, 4096 };
+        int srIdx = 1;
+        for (int i = 0; i < 3; ++i) if (kShadowResValues[i] == prefs.ShadowResolution) { srIdx = i; break; }
+        if (!prefs.ShadowsEnabled) ImGui::BeginDisabled();
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::Combo("Shadow resolution", &srIdx, kShadowResLabels, IM_ARRAYSIZE(kShadowResLabels))) {
+            prefs.ShadowResolution = kShadowResValues[srIdx];
+            EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Per-cascade shadow map size. 4x memory + fill from 2048 to 4096.");
+
+        static const char* kCascadeLabels[] = { "2", "3", "4" };
+        int ccIdx = std::clamp(prefs.ShadowCascades - 2, 0, 2);
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::Combo("Cascades", &ccIdx, kCascadeLabels, IM_ARRAYSIZE(kCascadeLabels))) {
+            prefs.ShadowCascades = ccIdx + 2;
+            EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Number of shadow cascades. Fewer = cheaper depth passes, coarser shadows far from the camera.");
+
+        ImGui::SetNextItemWidth(kw);
+        ImGui::SliderFloat("Shadow distance", &prefs.ShadowDistance, 10.0f, 500.0f, "%.0f m");
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("How far from the camera the cascades cover. Shorter = crisper shadows.");
+        if (!prefs.ShadowsEnabled) ImGui::EndDisabled();
+
+        ImGui::Spacing();
+        ImGui::TextDisabled("Changes apply immediately. All of these persist in editor_prefs.json.");
         break;
     }
 
@@ -1337,6 +1445,14 @@ void EditorLayer::JumpToRedoEntry(World& world, AssetLibrary& assets, size_t red
 
 void EditorLayer::OnEnterPlayMode(const World& world) {
     m_PlayModeSnapshot = SceneSerializer::SaveToString(world);
+    // Remember what's selected by OrderComponent value, not entt id: Stop rebuilds the whole
+    // registry and entt recycles ids, so a retained handle can pass valid() yet denote a
+    // different object afterward (#110).
+    m_PlaySelectionOrders.clear();
+    for (entt::entity e : GetSelectedItems()) {
+        if (const auto* o = world.Registry.try_get<OrderComponent>(e))
+            m_PlaySelectionOrders.push_back(o->Value);
+    }
     Log::Info("Entered play mode - scene state saved, changes will be reverted on exit.");
 }
 
@@ -1344,7 +1460,26 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     if (m_PlayModeSnapshot.empty()) return;
     SceneSerializer::LoadFromString(world, assets, m_PlayModeSnapshot);
     m_PlayModeSnapshot.clear();
+
+    // Drop every retained handle before it can rebind to a recycled id (#110).
     ClearSelection();
+    m_HierarchyVisibleOrder.clear();
+    m_HierarchyVisibleBuild.clear();
+
+    // Re-resolve the pre-Play selection against the freshly rebuilt entities by OrderComponent.
+    if (!m_PlaySelectionOrders.empty()) {
+        std::unordered_map<int, entt::entity> byOrder;
+        for (entt::entity e : world.Registry.view<OrderComponent>())
+            byOrder[world.Registry.get<OrderComponent>(e).Value] = e;
+        bool first = true;
+        for (int ord : m_PlaySelectionOrders) {
+            auto it = byOrder.find(ord);
+            if (it == byOrder.end() || !world.Registry.valid(it->second)) continue;
+            SelectItem(it->second, /*addToSelection=*/!first);
+            first = false;
+        }
+        m_PlaySelectionOrders.clear();
+    }
     // Deliberately does NOT set m_Dirty: the scene is back exactly as it was before Play, so
     // there's nothing new to save — the same reason Unity doesn't dirty a scene on play/stop.
     Log::Info("Exited play mode - scene state restored.");
@@ -1977,14 +2112,11 @@ void EditorLayer::DrawEngineMark(float dt) {
     // renders on top, full stop, with no window of its own to get knocked around by a dock
     // rebuild.
     //
-    // Spinning around the Y axis (a vertical axis through the mark's center, like a sign
-    // swinging on a post) rather than the screen-plane Z axis: a flat sprite can't actually
-    // turn in depth, so this fakes it the standard way — foreshorten the horizontal extent by
-    // cos(angle) each frame, full width when face-on, collapsing to a sliver edge-on. abs()
-    // keeps it from mirroring through a negative scale, since there's no distinct "back" face
-    // texture — it just squashes to a line and un-squashes, reading as a continuous spin.
-    // Slow sign-on-a-post spin, running whether it's parked in the corner or bouncing around.
-    float halfX = half * fabsf(cosf(m_MarkSpinAngle));
+    // Drawn face-on at full width. The old "sign on a post" fake-3D spin foreshortened the
+    // horizontal extent by cos(angle), so for most of each rotation the wordmark collapsed to a
+    // near-vertical sliver and read as a couple of strokes rather than a logo (#30). The spin
+    // phase is still advanced above — it only seeds the idle-bounce launch angle now.
+    float halfX = half;
     ImVec2 p1(center.x - halfX, center.y - half);
     ImVec2 p2(center.x + halfX, center.y - half);
     ImVec2 p3(center.x + halfX, center.y + half);
@@ -1992,7 +2124,7 @@ void EditorLayer::DrawEngineMark(float dt) {
 
     ImGui::GetForegroundDrawList()->AddImageQuad((ImTextureID)(intptr_t)m_MarkTexture->GLHandle(),
         p1, p2, p3, p4, ImVec2(0, 0), ImVec2(1, 0), ImVec2(1, 1), ImVec2(0, 1),
-        IM_COL32(markV, markV, markV, 150));
+        IM_COL32(markV, markV, markV, 190));
 }
 
 bool EditorLayer::IsMouseOverSceneViewport() const {
@@ -2719,6 +2851,8 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     InvalidateModelThumbnail(nullptr);
     ClearRecoverySnapshot(); // drop the outgoing scene's snapshot before switching away from it
     m_CurrentScenePath = path;
+    EditorSettings::Get().LastScenePath = path; // reopen this one next launch (#95)
+    EditorSettings::Save();
     ClearSelection();
     m_UndoStack.clear();
     m_RedoStack.clear();
@@ -3121,6 +3255,9 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
     if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light")) {
         entt::entity e = CreateEmptyAt(world, &editorCamera, "Spot Light", true);
         world.Registry.get<LightComponent>(e).Kind = LightComponent::Type::Spot;
+    }
+    if (ImGui::MenuItem(ICON_FA_SUN "  Directional Light")) {
+        MakeDirectionalLight(world, CreateEmptyAt(world, &editorCamera, "Directional Light", true));
     }
     if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera")) {
         entt::entity e = CreateEmptyAt(world, &editorCamera, "Camera", false);
@@ -3725,6 +3862,12 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     if (ImGui::BeginMenu(ICON_FA_PLUS "  Create")) {
         if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Empty")) CreateEmptyAt(world, nullptr, "Empty", false);
         if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) CreateEmptyAt(world, nullptr, "Point Light", true);
+        if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light")) {
+            world.Registry.get<LightComponent>(CreateEmptyAt(world, nullptr, "Spot Light", true)).Kind = LightComponent::Type::Spot;
+        }
+        if (ImGui::MenuItem(ICON_FA_SUN "  Directional Light")) {
+            MakeDirectionalLight(world, CreateEmptyAt(world, nullptr, "Directional Light", true));
+        }
         ImGui::EndMenu();
     }
     if (ImGui::MenuItem(ICON_FA_OBJECT_GROUP "  Group into Empty Parent", nullptr, false, HasAnySelection())) {
@@ -4166,18 +4309,16 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
 
             int kind = -1; bool kindMixed = false;
             forEach([&](entt::entity e) {
-                int k = L(e).Kind == LightComponent::Type::Spot ? 1 : 0;
+                int k = (int)L(e).Kind; // Point=0, Spot=1, Directional=2
                 if (kind < 0) kind = k; else if (k != kind) kindMixed = true;
             });
-            const char* kinds[] = {"Point", "Spot"};
+            const char* kinds[] = {"Point", "Spot", "Directional"};
             PropertyLabel("Kind", "Sets the light type on every selected light.");
             if (ImGui::BeginCombo("##mlkind", kindMixed ? "\xE2\x80\x94" : kinds[kind < 0 ? 0 : kind])) {
-                for (int k = 0; k < 2; ++k)
+                for (int k = 0; k < 3; ++k)
                     if (ImGui::Selectable(kinds[k], !kindMixed && k == kind)) {
                         PushUndo(world, "Set Light Kind");
-                        forEach([&](entt::entity e) {
-                            L(e).Kind = k == 1 ? LightComponent::Type::Spot : LightComponent::Type::Point;
-                        });
+                        forEach([&](entt::entity e) { L(e).Kind = (LightComponent::Type)k; });
                     }
                 ImGui::EndCombo();
             }
@@ -4613,24 +4754,32 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     if (auto* light = registry.try_get<LightComponent>(entity)) {
         if (BeginComponentSection(world, entity, ICON_FA_LIGHTBULB, "Light", true, removed,
             /*defaultOpen=*/true, "Casts light into the scene from this object's position.")) {
-            PropertyLabel("Type", "Point shines in all directions; Spot shines in a cone.");
-            int kind = light->Kind == LightComponent::Type::Spot ? 1 : 0;
-            if (ImGui::Combo("##Type", &kind, "Point\0Spot\0")) {
+            PropertyLabel("Type", "Point: all directions. Spot: a cone. Directional: a sun (parallel rays, no position or range).");
+            int kind = (int)light->Kind; // Point=0, Spot=1, Directional=2
+            if (ImGui::Combo("##Type", &kind, "Point\0Spot\0Directional\0")) {
                 PushUndo(world, "Edit Light");
-                light->Kind = kind == 1 ? LightComponent::Type::Spot : LightComponent::Type::Point;
+                light->Kind = (LightComponent::Type)kind;
             }
+            const bool isDir = light->Kind == LightComponent::Type::Directional;
             PropertyLabel("Color", "The light's color.");
             ImGui::ColorEdit3("##Color", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
             if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
             PropertyLabel("Intensity", "Brightness multiplier - higher is brighter.");
             ImGui::DragFloat("##Intensity", &light->Intensity, 0.1f, 0.0f, 100.0f, "%.2f");
             if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
-            PropertyLabel("Range", "Distance (in world units) at which the light's effect fades to zero.");
-            ImGui::DragFloat("##Range", &light->Range, 0.2f, 0.1f, 200.0f, "%.1f");
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+            if (!isDir) {
+                PropertyLabel("Range", "Distance (in world units) at which the light's effect fades to zero.");
+                ImGui::DragFloat("##Range", &light->Range, 0.2f, 0.1f, 200.0f, "%.1f");
+                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+            }
             if (light->Kind == LightComponent::Type::Spot) {
                 PropertyLabel("Spot Angle", "Half-angle of the light cone, in degrees.\nThe cone points along the entity's -Z axis - use Rotation to aim it.");
                 ImGui::SliderFloat("##SpotAngle", &light->SpotAngleDegrees, 1.0f, 89.0f, "%.0f deg");
+                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+            }
+            if (isDir) {
+                PropertyLabel("Angular Size", "Apparent diameter of the sun disc, in degrees (~0.53 = Earth's sun).\nWider = softer shadows once cascaded shadow maps land.\nAim the sun with the entity's Rotation (it shines along -Z).");
+                ImGui::SliderFloat("##AngularSize", &light->AngularSizeDegrees, 0.1f, 20.0f, "%.2f deg");
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
             }
             EndComponentSection();
@@ -5694,7 +5843,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     // the alternative window is ImGuizmo's supported way to say "the user hovers there, not here".
     ImGuizmo::SetAlternativeWindow(ImGui::FindWindowByName("Scene"));
 
-    ImGuizmo::SetOrthographic(false);
+    ImGuizmo::SetOrthographic(editorCamera.Orthographic); // #107 — ortho views used to offset the handles
     ImGuizmo::SetDrawlist();
     ImGuizmo::SetRect(m_ViewportPos.x, m_ViewportPos.y, m_ViewportSize.x, m_ViewportSize.y);
     ImGuizmo::SetGizmoSizeClipSpace(m_GizmoSize);
@@ -5757,9 +5906,9 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         float nt[3], nr[3], ns[3];
         ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(newLocal), nt, nr, ns);
         glm::vec3 newPos{nt[0], nt[1], nt[2]};
-        glm::vec3 newRot{nr[0], nr[1], nr[2]};
         glm::vec3 newScale{ns[0], ns[1], ns[2]};
-        for (int i = 0; i < 3; ++i) if (std::fabs(newRot[i]) < 1.0e-4f) newRot[i] = 0.0f; // kill decompose dust / -0.0
+        // Rotation via the ComposeTransform-matching order, NOT ImGuizmo's decompose (#108).
+        glm::vec3 newRot = EulerYXZFromMatrix(newLocal);
 
         // Write back only the channel this gizmo actually drives — ImGuizmo's decompose leaks
         // float noise into the other two, and a pure translate drag was nudging Rotation
@@ -5964,7 +6113,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     // the alternative window is ImGuizmo's supported way to say "the user hovers there, not here".
     ImGuizmo::SetAlternativeWindow(ImGui::FindWindowByName("Scene"));
 
-    ImGuizmo::SetOrthographic(false);
+    ImGuizmo::SetOrthographic(editorCamera.Orthographic); // #107 — ortho views used to offset the handles
     ImGuizmo::SetDrawlist();
     ImGuizmo::SetRect(m_ViewportPos.x, m_ViewportPos.y, m_ViewportSize.x, m_ViewportSize.y);
     ImGuizmo::SetGizmoSizeClipSpace(m_GizmoSize);
@@ -6015,9 +6164,8 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
             glm::mat4 newMatrix = delta * objMatrix;
             float nt[3], nr[3], ns[3];
             ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(newMatrix), nt, nr, ns);
-            for (int i = 0; i < 3; ++i) if (std::fabs(nr[i]) < 1.0e-4f) nr[i] = 0.0f; // decompose dust / -0.0 (#12 P1)
             *r.pos = {nt[0], nt[1], nt[2]};
-            *r.rot = {nr[0], nr[1], nr[2]};
+            *r.rot = EulerYXZFromMatrix(newMatrix); // ComposeTransform order, not ImGuizmo's (#108)
             *r.scale = {ns[0], ns[1], ns[2]};
         }
     }

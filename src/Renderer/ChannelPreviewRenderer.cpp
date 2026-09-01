@@ -1,7 +1,10 @@
 #include "ChannelPreviewRenderer.h"
 #include "Texture.h"
 #include "Shader.h"
+#include "Log.h"
 #include "gl.h"
+
+#include <string>
 
 namespace {
 
@@ -71,6 +74,16 @@ unsigned int ChannelPreviewRenderer::Render(const Texture& source, int channel, 
 
     glBindFramebuffer(GL_FRAMEBUFFER, m_FBO);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_ColorTex, 0);
+
+    GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
+        Log::Error("ChannelPreviewRenderer: FBO incomplete (0x" + std::to_string(fboStatus) + ") at " +
+                   std::to_string(previewW) + "x" + std::to_string(previewH) + " - skipping preview");
+        glBindFramebuffer(GL_FRAMEBUFFER, (unsigned int)prevFBO);
+        glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+        return m_ColorTex;
+    }
+
     glViewport(0, 0, previewW, previewH);
 
     m_Shader->Bind();

@@ -98,6 +98,22 @@ Window::Window(int width, int height, const std::string& title)
         throw std::runtime_error("Failed to load OpenGL functions");
     }
 
+    // The loader's pointers resolve on any 3.3+ context, but every shader is `#version 460`.
+    // Without this check a downgraded context (RDP, llvmpipe, an old driver) dies later with a
+    // cryptic "Shader compile error: ... version 460" instead of naming the real problem (#105).
+    {
+        int glMajor = glfwGetWindowAttrib(m_Handle, GLFW_CONTEXT_VERSION_MAJOR);
+        int glMinor = glfwGetWindowAttrib(m_Handle, GLFW_CONTEXT_VERSION_MINOR);
+        if (glMajor < 4 || (glMajor == 4 && glMinor < 6)) {
+            const char* ver = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+            throw std::runtime_error(
+                "Tartarus needs an OpenGL 4.6 core context. This GPU/driver reports OpenGL " +
+                std::to_string(glMajor) + "." + std::to_string(glMinor) +
+                (ver ? std::string(" (\"") + ver + "\")" : std::string()) +
+                ".\n\nUpdate your graphics driver, or run on a machine with a GPU that supports OpenGL 4.6.");
+        }
+    }
+
     glfwSetWindowUserPointer(m_Handle, this);
     glfwSetFramebufferSizeCallback(m_Handle, FramebufferSizeCallback);
     glfwSetDropCallback(m_Handle, DropCallbackTrampoline);
