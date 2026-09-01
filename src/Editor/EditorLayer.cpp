@@ -51,6 +51,15 @@ namespace {
 // the Play/Stop button, which is positioned relative to it, stays in sync if that ever changes.
 constexpr float kToolbarHeight = 84.0f;
 
+// Where a newly added object goes: a few units in front of the editor camera. If the camera
+// has somehow gone non-finite, fall back to the origin so the object is still findable rather
+// than spawned at inf/NaN and lost.
+inline glm::vec3 SafeSpawnInFrontOf(const Camera& cam, float distance = 5.0f) {
+    glm::vec3 p = cam.Position + cam.Front() * distance;
+    if (std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z)) return p;
+    return glm::vec3(0.0f);
+}
+
 // Reverse lookup for the Asset Browser: which placed objects reference a given asset.
 // Compared by raw pointer (Model/Texture) since two placed objects can share one instance.
 // Level-geometry entities excluded — their cube Model is private/unshared, never an "asset".
@@ -450,6 +459,113 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
     return changed;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Multi-object ("mixed value") editing helpers. Unity's rule: show the shared value, or an em
+// dash when the selected objects disagree on that field; any edit writes an ABSOLUTE value to
+// every selected object. Each returns, via out-params, whether an edit began this frame
+// (activated — for StageUndo), finished (committed — for CommitStagedUndo), and which
+// component(s) the caller should now write to the whole selection.
+
+struct MultiEditResult {
+    bool activated = false;   // an interaction started this frame
+    bool committed = false;   // an interaction finished this frame (mouse released / Enter)
+    bool changed = false;     // the value moved this frame (may fire many times mid-drag)
+};
+
+// One X/Y/Z row. `mixedAxis[k]` true => that axis differs across the selection and shows "—"
+// until the user grabs it. On any change, `value` holds the new absolute vector and
+// `axisTouched[k]` marks which axes the caller should push to every selected object (so an
+// untouched mixed axis is left alone rather than flattened to whatever axis 0 happened to be).
+MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool mixedAxis[3],
+                                 bool axisTouched[3], float speed, float minV, float maxV,
+                                 const char* tooltip = nullptr) {
+    MultiEditResult r;
+    axisTouched[0] = axisTouched[1] = axisTouched[2] = false;
+
+    ImGui::PushID(label);
+    static const float col = ImGui::CalcTextSize("Rotation").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+    AlignToColumn(label, col, tooltip);
+
+    float lineHeight = ImGui::GetFrameHeight();
+    float buttonW = lineHeight + 4.0f;
+    float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x;
+    float fullWidth = ImGui::GetContentRegionAvail().x;
+    float dragW = (fullWidth - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f;
+
+    struct Axis { const char* name; float* v; ImVec4 c, h; };
+    Axis axes[3] = {
+        {"X", &value.x, ImVec4(0.66f, 0.20f, 0.20f, 1.0f), ImVec4(0.80f, 0.27f, 0.27f, 1.0f)},
+        {"Y", &value.y, ImVec4(0.22f, 0.52f, 0.22f, 1.0f), ImVec4(0.30f, 0.68f, 0.30f, 1.0f)},
+        {"Z", &value.z, ImVec4(0.18f, 0.38f, 0.72f, 1.0f), ImVec4(0.24f, 0.48f, 0.88f, 1.0f)},
+    };
+
+    for (int i = 0; i < 3; ++i) {
+        ImGui::PushID(i);
+        ImGui::PushStyleColor(ImGuiCol_Button, axes[i].c);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, axes[i].h);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, axes[i].c);
+        if (ImGui::Button(axes[i].name, ImVec2(buttonW, lineHeight))) {
+            *axes[i].v = 0.0f;
+            axisTouched[i] = true;
+            r.changed = r.activated = r.committed = true;
+        }
+        ImGui::PopStyleColor(3);
+        ImGui::SameLine(0.0f, innerSpacing);
+
+        ImGui::SetNextItemWidth(dragW);
+        ImGuiID fieldId = ImGui::GetID("##v");
+        bool editing = ImGui::GetActiveID() == fieldId;
+        const char* fmt = (mixedAxis[i] && !editing) ? "\xE2\x80\x94" : "%.3f"; // em dash while untouched
+        float before = *axes[i].v;
+        bool fieldChanged = ImGui::DragFloat("##v", axes[i].v, speed, minV, maxV, fmt);
+        if (ImGui::IsItemActivated()) r.activated = true;
+        if (ImGui::IsItemDeactivatedAfterEdit()) r.committed = true;
+        if (fieldChanged) {
+            if (!std::isfinite(*axes[i].v)) { *axes[i].v = before; }
+            else { axisTouched[i] = true; r.changed = true; }
+        }
+        ImGui::PopID();
+        if (i < 2) ImGui::SameLine(0.0f, innerSpacing);
+    }
+    ImGui::PopID();
+    return r;
+}
+
+// A single scalar row with the same mixed-value behaviour.
+MultiEditResult MultiEditFloatRow(const char* label, float& value, bool mixed, float speed,
+                                  float minV, float maxV, const char* tooltip = nullptr) {
+    MultiEditResult r;
+    ImGui::PushID(label);
+    PropertyLabel(label, tooltip);
+    ImGuiID fieldId = ImGui::GetID("##mf");
+    bool editing = ImGui::GetActiveID() == fieldId;
+    const char* fmt = (mixed && !editing) ? "\xE2\x80\x94" : "%.3f";
+    float before = value;
+    bool fieldChanged = ImGui::DragFloat("##mf", &value, speed, minV, maxV, fmt);
+    if (ImGui::IsItemActivated()) r.activated = true;
+    if (ImGui::IsItemDeactivatedAfterEdit()) r.committed = true;
+    if (fieldChanged) {
+        if (!std::isfinite(value)) value = before;
+        else r.changed = true;
+    }
+    ImGui::PopID();
+    return r;
+}
+
+// Checkbox that renders a filled-square "mixed" state when the selection disagrees. Returns
+// true when the user clicks it; `out` then holds the value to apply to every object (a click
+// on a mixed box resolves the whole selection to checked, like Unity).
+bool MultiEditCheckbox(const char* label, bool anyOn, bool mixed, bool& out) {
+    bool value = anyOn;
+    if (mixed) {
+        ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
+    }
+    bool clicked = ImGui::Checkbox(label, &value);
+    if (mixed) ImGui::PopItemFlag();
+    if (clicked) out = mixed ? true : value;
+    return clicked;
+}
+
 } // namespace
 
 EditorLayer::EditorLayer() = default;
@@ -464,7 +580,7 @@ void EditorLayer::Init(GLFWwindow* window) {
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see ProjectPaths.h. main.cpp resolves the same path for its initial load.
-    m_CurrentScenePath = ProjectPaths::Resolve("scene.json");
+    m_CurrentScenePath = ProjectPaths::Resolve("scenes/Test.json");
 
     // So Import / Open / Save dialogs start in the project folder instead of build/Release/,
     // then follow the user around from there (#15 P4).
@@ -636,7 +752,20 @@ void EditorLayer::Init(GLFWwindow* window) {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
-    m_LogoTexture = std::make_unique<Texture>("assets/branding/tartarus_wordmark.png");
+    // The wordmark PNG is pre-scaled offline (bicubic) to 900px wide, close to the ~2-3x of
+    // its on-screen size — small enough that runtime sampling stays near 1:1 instead of the
+    // heavy minification (from the old 3111px source) that shredded thin strokes and curves.
+    // Still mip + trilinear for shimmer-free stability at any DPI; IsSRGB off so the baked
+    // edge alpha composites 1:1 in ImGui's non-sRGB pipeline; clamp so no edge bleed.
+    {
+        TextureImportSettings logoSettings;
+        logoSettings.MaxTextureSize = 0;
+        logoSettings.GenerateMipmaps = true;
+        logoSettings.FilterMode = TextureImportSettings::Filter::Trilinear;
+        logoSettings.IsSRGB = false;
+        logoSettings.WrapMode = TextureImportSettings::Wrap::ClampToEdge;
+        m_LogoTexture = std::make_unique<Texture>("assets/branding/tartarus_wordmark.png", logoSettings);
+    }
     if (!m_LogoTexture->IsValid()) m_LogoTexture.reset(); // missing file — just skip the watermark
 
     m_MarkTexture = std::make_unique<Texture>("assets/branding/tartarus_engine_mark.png");
@@ -1207,6 +1336,7 @@ void EditorLayer::PasteClipboard(World& world, AssetLibrary& assets) {
 void EditorLayer::ClearSelection() {
     m_Selected = entt::null;
     m_ExtraSelection.clear();
+    m_SelectionAnchor = entt::null;
     m_RenamingEntity = entt::null;
 }
 
@@ -1216,9 +1346,13 @@ void EditorLayer::SelectItem(entt::entity entity, bool addToSelection) {
     if (!addToSelection) {
         m_ExtraSelection.clear();
         m_Selected = entity;
+        m_SelectionAnchor = entity; // plain click (re)anchors range selection here
         if (m_FrameOnSelect && entity != entt::null) m_PendingFrameSelect = true;
         return;
     }
+
+    // Any Ctrl+Click also moves the range anchor to the clicked row, matching Unity.
+    m_SelectionAnchor = entity;
 
     if (isPrimary) {
         // Demote: promote the most recently added extra to primary, or clear if none left.
@@ -1252,6 +1386,55 @@ void EditorLayer::AddToSelectionIfAbsent(entt::entity entity) {
     } else {
         m_ExtraSelection.push_back(entity);
     }
+}
+
+void EditorLayer::SelectAllVisibleInHierarchy() {
+    if (m_HierarchyVisibleOrder.empty()) return;
+    m_Selected = entt::null;
+    m_ExtraSelection.clear();
+    m_RenamingEntity = entt::null;
+    for (entt::entity e : m_HierarchyVisibleOrder) AddToSelectionIfAbsent(e);
+    m_SelectionAnchor = m_HierarchyVisibleOrder.front();
+    // Deliberately no m_PendingFrameSelect here — snapping the camera to fit the entire scene
+    // every time the user hits Ctrl+A would be more disruptive than helpful.
+}
+
+void EditorLayer::SelectHierarchyRange(World& world, entt::entity target, bool additive) {
+    // No usable anchor (first click was Shift, or the anchor row was deleted / scrolled out of
+    // the visible set): fall back to a plain pick so Shift+Click is never a dead input.
+    const auto& order = m_HierarchyVisibleOrder;
+    auto indexOf = [&](entt::entity e) -> int {
+        for (int i = 0; i < (int)order.size(); ++i) if (order[i] == e) return i;
+        return -1;
+    };
+    int ai = (m_SelectionAnchor != entt::null && world.Registry.valid(m_SelectionAnchor))
+                 ? indexOf(m_SelectionAnchor) : -1;
+    int ti = indexOf(target);
+    if (ai < 0 || ti < 0) {
+        SelectItem(target, additive);
+        return;
+    }
+    int lo = ai < ti ? ai : ti;
+    int hi = ai < ti ? ti : ai;
+
+    std::vector<entt::entity> keep;
+    if (additive) { // Ctrl+Shift: preserve whatever was already selected, then union the range in
+        keep = m_ExtraSelection;
+        if (m_Selected != entt::null) keep.push_back(m_Selected);
+    }
+
+    m_ExtraSelection.clear();
+    m_Selected = target;              // the row just clicked is the active object
+    m_RenamingEntity = entt::null;
+    auto addUnique = [&](entt::entity e) {
+        if (e == m_Selected) return;
+        if (std::find(m_ExtraSelection.begin(), m_ExtraSelection.end(), e) == m_ExtraSelection.end())
+            m_ExtraSelection.push_back(e);
+    };
+    for (int i = lo; i <= hi; ++i) addUnique(order[i]);
+    for (entt::entity e : keep) if (world.Registry.valid(e)) addUnique(e);
+    // m_SelectionAnchor intentionally left untouched — Unity keeps it fixed so the next
+    // Shift+Click can grow or shrink the same range.
 }
 
 void EditorLayer::DeleteSelection(World& world) {
@@ -1390,7 +1573,8 @@ bool EditorLayer::ComputeSelectionBounds(World& world, glm::vec3& outMin, glm::v
         if (!world.Registry.valid(entity)) return;
         glm::mat4 m = world.ComposeWorldTransform(entity);
         glm::vec3 localMin(-0.5f), localMax(0.5f);
-        if (const auto* renderable = world.Registry.try_get<RenderableComponent>(entity)) {
+        if (const auto* renderable = world.Registry.try_get<RenderableComponent>(entity);
+            renderable && renderable->ModelRef && renderable->ModelRef->MeshCount() > 0) {
             localMin = renderable->ModelRef->BoundsMin();
             localMax = renderable->ModelRef->BoundsMax();
         }
@@ -1421,7 +1605,11 @@ void EditorLayer::FrameSceneBounds(World& world, Camera& editorCamera) {
     glm::vec3 center = (mn + mx) * 0.5f;
     float radius = std::max(glm::length(mx - mn) * 0.5f, 0.5f);
     float distance = (radius / std::sin(glm::radians(editorCamera.Fov) * 0.5f)) * 1.35f;
-    editorCamera.Position = center - editorCamera.Front() * distance;
+    glm::vec3 target = center - editorCamera.Front() * distance;
+    // Last line of defence: a bounds value that still went non-finite (huge scene, overflow)
+    // must not strand the camera at inf/NaN — leave it where it is instead.
+    if (!std::isfinite(target.x) || !std::isfinite(target.y) || !std::isfinite(target.z)) return;
+    editorCamera.Position = target;
 }
 
 void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
@@ -1437,6 +1625,7 @@ void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
     float halfFov = glm::radians(editorCamera.Fov) * 0.5f;
     float distance = (radius / std::sin(halfFov)) * 1.35f;
     glm::vec3 targetPos = center - editorCamera.Front() * distance;
+    if (!std::isfinite(targetPos.x) || !std::isfinite(targetPos.y) || !std::isfinite(targetPos.z)) return;
 
     // Glide there rather than teleport — same eased transition SnapToView uses (audit follow-up).
     m_ViewTransition.Active = true;
@@ -1477,6 +1666,10 @@ bool EditorLayer::ComputeSceneBounds(World& world, glm::vec3& outMin, glm::vec3&
     bool any = false;
     for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
         auto& renderable = world.Registry.get<RenderableComponent>(entity);
+        // A model that failed to import contributes no geometry and carries a degenerate
+        // (inverted-sentinel) bounds — folding it in poisons the whole scene AABB with
+        // ±1e30, which then overflows to inf when FrameSceneBounds takes its length. Skip it.
+        if (!renderable.ModelRef || renderable.ModelRef->MeshCount() == 0) continue;
         glm::mat4 m = world.ComposeWorldTransform(entity);
         AABB bounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(m);
         boundsMin = glm::min(boundsMin, bounds.Min);
@@ -1909,45 +2102,33 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // the "TE" monogram half of that moved elsewhere; this is text-only.
     if (m_LogoTexture) {
         float aspect = (float)m_LogoTexture->Width() / (float)m_LogoTexture->Height();
-        float logoH = 50.0f * m_UIScale;
+        // Drawn a hair under 1:1 with the pre-scaled 760px source (logoW lands near mip 1),
+        // so letterforms have enough destination pixels to stay clean — the old 50px height
+        // undersampled the "ENGINE" subline badly.
+        float logoH = 64.0f * m_UIScale;
         float logoW = logoH * aspect;
-        float topMargin = 30.0f * m_UIScale;
+        float topMargin = 26.0f * m_UIScale;
 
-        // Centered over the Inspector panel's actual live rect (one frame stale — it hasn't
-        // been drawn yet this frame — which is imperceptible) rather than a fixed margin from
-        // the window edge, so it stays centered on that column even if it's resized, instead of
-        // just approximating where the column's default width happens to put it.
+        // Right-aligned to the Inspector column's right edge (its live rect, one frame stale —
+        // imperceptible) with a small margin, rather than centered on the column: right-align
+        // lets it be drawn larger (= crisper) without the wider quad clipping off the window.
         ImGuiWindow* inspectorWin = ImGui::FindWindowByName("Inspector");
-        float centerX = inspectorWin ? (inspectorWin->Pos.x + inspectorWin->Size.x * 0.5f) : (w * 0.89f);
+        float rightEdge = inspectorWin ? (inspectorWin->Pos.x + inspectorWin->Size.x) : w;
+        float rightMargin = 16.0f * m_UIScale;
+        float centerX = rightEdge - rightMargin - logoW * 0.5f;
 
         // Drawn straight onto the foreground draw list (like the viewport monogram) rather than
-        // an ImGui::Image in its own tiny window: the white "glow" is stacked scaled-up copies of
-        // the wordmark behind the crisp one, and those halo layers extend past logoW×logoH — a
-        // window would clip them. The foreground list also always renders on top and can't be
-        // buried by a Reset Layout dock rebuild, so the NoDocking/BringWindowToDisplayFront
+        // an ImGui::Image in its own tiny window: the foreground list always renders on top and
+        // can't be buried by a Reset Layout dock rebuild, so the NoDocking/BringWindowToDisplayFront
         // scaffolding the old windowed version needed is gone.
         ImTextureID logoTex = (ImTextureID)(intptr_t)m_LogoTexture->GLHandle();
         ImVec2 pMin(centerX - logoW * 0.5f, topMargin);
         ImVec2 pMax(pMin.x + logoW, pMin.y + logoH);
         ImDrawList* dl = ImGui::GetForegroundDrawList();
 
-        // Slow "breathing" pulse so it reads as a glow, not a flat wash — subtle, ~4 s period.
-        float pulse = 0.5f + 0.5f * sinf((float)ImGui::GetTime() * 1.6f); // 0..1
-        float lit = 0.7f + 0.3f * pulse;
-
-        const int kGlowLayers = 4;
-        for (int i = kGlowLayers; i >= 1; --i) {
-            float grow = (float)i * 5.0f * m_UIScale; // each halo ring bigger than the last
-            float fade = 1.0f - (float)(i - 1) / (float)kGlowLayers;
-            int a = (int)(255.0f * 0.13f * fade * lit);
-            a = a < 0 ? 0 : (a > 255 ? 255 : a);
-            dl->AddImage(logoTex, ImVec2(pMin.x - grow, pMin.y - grow), ImVec2(pMax.x + grow, pMax.y + grow),
-                ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, a));
-        }
-        // Crisp wordmark on top, bright white with a faint brightness pulse.
-        int coreA = (int)(255.0f * (0.15f + 0.85f * lit));
-        coreA = coreA < 0 ? 0 : (coreA > 255 ? 255 : coreA);
-        dl->AddImage(logoTex, pMin, pMax, ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, coreA));
+        // Plain static wordmark — no glow halo, no breathing pulse. One flat, slightly
+        // translucent draw so it reads as a watermark rather than a live element.
+        dl->AddImage(logoTex, pMin, pMax, ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, 235));
     }
 
     ImGui::SetNextWindowPos(ImVec2(0, toolbarH));
@@ -2872,7 +3053,7 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
     auto spawnPrimitive = [&](const char* kind, const char* displayName) {
         PushUndo(world, std::string("Create ") + displayName);
         auto model = assets.CreatePrimitive(kind);
-        glm::vec3 position = editorCamera.Position + editorCamera.Front() * 5.0f;
+        glm::vec3 position = SafeSpawnInFrontOf(editorCamera);
         entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), displayName);
         SelectItem(e, false);
         Log::Info(std::string("Added ") + displayName + ".");
@@ -2990,7 +3171,9 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                     glm::vec3 c = (mn + mx) * 0.5f;
                     float radius = std::max(glm::length(mx - mn) * 0.5f, 0.5f);
                     float dist = (radius / std::sin(glm::radians(editorCamera.Fov) * 0.5f)) * 1.35f;
-                    editorCamera.Position = c - editorCamera.Front() * dist;
+                    glm::vec3 target = c - editorCamera.Front() * dist;
+                    if (std::isfinite(target.x) && std::isfinite(target.y) && std::isfinite(target.z))
+                        editorCamera.Position = target;
                 }
             }
 
@@ -3166,6 +3349,10 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
         : ImGuiWindowFlags_None;
     if (!ImGui::Begin("Scene Hierarchy", &m_ShowHierarchy, flags)) { ImGui::End(); return; }
 
+    // Accumulates as each row is drawn (DrawHierarchyNode); published to m_HierarchyVisibleOrder
+    // just before this function returns. See the header for why the two buffers are separate.
+    m_HierarchyVisibleBuild.clear();
+
     // Search box. A bare string matches names; the "t:" prefix matches TagComponent instead,
     // the same shorthand Unity's Hierarchy search uses.
     ImGui::SetNextItemWidth(-1.0f);
@@ -3274,6 +3461,19 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
         ImGui::EndPopup();
     }
 
+    // Publish the row order this pass built, for next frame's click handlers (and the Ctrl+A
+    // check just below, which runs after every row is in).
+    m_HierarchyVisibleOrder = m_HierarchyVisibleBuild;
+
+    // Ctrl+A — select every visible row, matching Unity's Hierarchy shortcut. Gated on the
+    // panel (or one of its children) being focused, and skipped while a text field here has
+    // the keyboard (so Ctrl+A still means "select all text" in the search box).
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+        !ImGui::GetIO().WantTextInput &&
+        ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_A)) {
+        SelectAllVisibleInHierarchy();
+    }
+
     ImGui::End();
 }
 
@@ -3293,6 +3493,11 @@ bool EditorLayer::MatchesHierarchyFilter(const World& world, entt::entity entity
 
 void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::entity entity, bool isLevelGeometry) {
     if (!world.Registry.valid(entity)) return;
+
+    // This row is about to be drawn — record it in visible top-to-bottom order for Ctrl+A and
+    // Shift+Click. Children append themselves in the recursive calls below, and only when this
+    // node is expanded, so the list mirrors exactly what the user sees.
+    m_HierarchyVisibleBuild.push_back(entity);
 
     auto& name = world.Registry.get<NameComponent>(entity);
     bool selected = IsSelected(entity);
@@ -3364,7 +3569,13 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     if (inactive) ImGui::PopStyleColor();
 
     if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
-        SelectItem(entity, ImGui::GetIO().KeyCtrl);
+        const ImGuiIO& io = ImGui::GetIO();
+        if (io.KeyShift) {
+            // Shift (or Ctrl+Shift) — contiguous range from the anchor to this row.
+            SelectHierarchyRange(world, entity, io.KeyCtrl);
+        } else {
+            SelectItem(entity, io.KeyCtrl); // plain click replaces; Ctrl+Click toggles. Both re-anchor.
+        }
         m_HierarchyRowHintDone = true; // learned the row interaction — stop showing the hint
     }
     if (ImGui::IsItemToggledOpen() && ImGui::GetIO().KeyAlt && hasChildren) {
@@ -3378,7 +3589,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         BeginRenameEntity(entity);
     }
     if (!m_HierarchyRowHintDone && ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-        EditorUI::SetTooltip("Click to select (Ctrl+Click to add/remove).\nDouble-click or F2 to rename. Drag onto another row to parent it.\nRight-click for more options.");
+        EditorUI::SetTooltip("Click to select (Ctrl+Click to add/remove, Shift+Click for a range, Ctrl+A for all).\nDouble-click or F2 to rename. Drag onto another row to parent it.\nRight-click for more options.");
     }
 
     if (ImGui::BeginPopupContextItem("##RowContext")) {
@@ -3552,7 +3763,7 @@ entt::entity EditorLayer::CreateEmptyAt(World& world, Camera* editorCamera, cons
     PushUndo(world, std::string("Create ") + name);
     // Spawned in front of the camera when there is one (menu invoked from the viewport/toolbar),
     // else at the origin — the Hierarchy's own context menu has no camera to reference.
-    glm::vec3 position = editorCamera ? editorCamera->Position + editorCamera->Front() * 5.0f : glm::vec3(0.0f);
+    glm::vec3 position = editorCamera ? SafeSpawnInFrontOf(*editorCamera) : glm::vec3(0.0f);
     entt::entity e = world.CreateEmptyEntity(position, glm::vec3(0.0f), glm::vec3(1.0f), name);
     if (asLight) world.Registry.emplace<LightComponent>(e);
     SelectItem(e, false);
@@ -3741,74 +3952,275 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         : ImGuiWindowFlags_None;
     if (!ImGui::Begin("Inspector", &m_ShowInspector, flags)) { ImGui::End(); return; }
 
+    // Prune handles for objects deleted since the selection was made, so the multi/single
+    // Inspector split below (and everything downstream) sees an accurate count.
+    m_ExtraSelection.erase(std::remove_if(m_ExtraSelection.begin(), m_ExtraSelection.end(),
+        [&](entt::entity e) { return !world.Registry.valid(e) || e == m_Selected; }),
+        m_ExtraSelection.end());
+    if (m_Selected != entt::null && !world.Registry.valid(m_Selected)) {
+        m_Selected = m_ExtraSelection.empty() ? entt::null : m_ExtraSelection.back();
+        if (!m_ExtraSelection.empty()) m_ExtraSelection.pop_back();
+    }
+
     if (HasGroupSelection()) {
-        int count = (m_Selected != entt::null ? 1 : 0) + (int)m_ExtraSelection.size();
-        std::string header = std::to_string(count) + " objects selected";
-        ImGui::SeparatorText(header.c_str());
-        EditorUI::HelpMarker("Move/rotate/scale together with the viewport gizmo.\nCtrl+Click to add or remove objects from the selection.");
+        std::vector<entt::entity> sel;
+        sel.push_back(m_Selected);
+        for (entt::entity e : m_ExtraSelection) sel.push_back(e);
+        const int count = (int)sel.size();
+        auto forEach = [&](const std::function<void(entt::entity)>& fn) { for (entt::entity e : sel) fn(e); };
 
-        auto listOne = [&](entt::entity entity) {
-            if (!world.Registry.valid(entity)) return;
-            const auto& name = world.Registry.get<NameComponent>(entity);
-            if (name.Name.empty()) ImGui::BulletText("(unnamed)");
-            else ImGui::BulletText("%s", name.Name.c_str());
-        };
-        if (m_Selected != entt::null) listOne(m_Selected);
-        for (entt::entity e : m_ExtraSelection) listOne(e);
+        ImGui::SeparatorText((std::to_string(count) + " objects selected").c_str());
+        EditorUI::HelpMarker(
+            "Editing a field here writes it to EVERY selected object.\n"
+            "A field showing \xE2\x80\x94 (an em dash) means the selected objects currently\n"
+            "hold different values; set it to give them all the same value.\n\n"
+            "Build the selection with Shift+Click (a range) or Ctrl+A (all) in the\n"
+            "Hierarchy; Ctrl+Click adds or removes a single object.");
 
-        // Batch Transform: relative nudges applied to every selected entity at once — the
-        // multi-select Inspector otherwise had no shared transform fields at all (#48 P31).
+        if (ImGui::TreeNodeEx("Selected objects", ImGuiTreeNodeFlags_SpanAvailWidth)) {
+            for (entt::entity e : sel) {
+                const auto& nm = world.Registry.get<NameComponent>(e);
+                ImGui::BulletText("%s", nm.Name.empty() ? "(unnamed)" : nm.Name.c_str());
+            }
+            ImGui::TreePop();
+        }
+
+        // ---- Common components: those present on the WHOLE selection ----
+        bool allMesh = true, allLight = true, allCamera = true, allCollider = true,
+             allAudio = true, allAnimator = true;
+        forEach([&](entt::entity e) {
+            allMesh     &= world.Registry.all_of<RenderableComponent>(e);
+            allLight    &= world.Registry.all_of<LightComponent>(e);
+            allCamera   &= world.Registry.all_of<CameraComponent>(e);
+            allCollider &= world.Registry.all_of<ColliderComponent>(e);
+            allAudio    &= world.Registry.all_of<AudioSourceComponent>(e);
+            allAnimator &= world.Registry.all_of<AnimatorComponent>(e);
+        });
+        {
+            std::string common = "Transform";
+            if (allMesh)     common += ", Mesh Renderer";
+            if (allLight)    common += ", Light";
+            if (allCamera)   common += ", Camera";
+            if (allCollider) common += ", Box Collider";
+            if (allAudio)    common += ", Audio Source";
+            if (allAnimator) common += ", Animator";
+            ImGui::TextDisabled("Common: %s", common.c_str());
+        }
+
+        // ===== Transform (absolute, mixed-value) =====
+        // Edits the raw TransformComponent, exactly what the single-object Inspector shows for
+        // each entity — i.e. local space for a parented object, world space otherwise.
         ImGui::Spacing();
-        ImGui::SeparatorText(ICON_FA_UP_DOWN_LEFT_RIGHT "  Batch Transform");
-        ImGui::TextDisabled("Relative — applied to all %d, then reset to 0 / x1.", count);
+        ImGui::SeparatorText(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform");
 
-        auto applyToSelection = [&](const std::function<void(TransformComponent&)>& fn) {
-            if (m_Selected != entt::null && world.Registry.valid(m_Selected))
-                fn(world.Registry.get<TransformComponent>(m_Selected));
-            for (entt::entity e : m_ExtraSelection)
-                if (world.Registry.valid(e)) fn(world.Registry.get<TransformComponent>(e));
+        auto reduceVec3 = [&](const std::function<glm::vec3(const TransformComponent&)>& get,
+                              glm::vec3& shared, bool mixed[3]) {
+            mixed[0] = mixed[1] = mixed[2] = false;
+            bool first = true;
+            forEach([&](entt::entity e) {
+                glm::vec3 v = get(world.Registry.get<TransformComponent>(e));
+                if (first) { shared = v; first = false; return; }
+                for (int a = 0; a < 3; ++a)
+                    if (std::fabs(v[a] - shared[a]) > 1.0e-4f) mixed[a] = true;
+            });
         };
-        // Fresh visit starts from identity; a value part-way through a drag is left alone.
-        if (!ImGui::IsAnyItemActive()) {
-            m_BatchNudgePos = glm::vec3(0.0f);
-            m_BatchNudgeRot = glm::vec3(0.0f);
-            m_BatchNudgeScale = glm::vec3(1.0f);
+
+        auto transformRow = [&](const char* label, float speed, float minV, float maxV,
+                                const std::function<glm::vec3&(TransformComponent&)>& ref,
+                                const char* tip, const char* undoLabel) {
+            glm::vec3 shared(0.0f); bool mixed[3];
+            reduceVec3([&](const TransformComponent& t) { return ref(const_cast<TransformComponent&>(t)); },
+                       shared, mixed);
+            glm::vec3 edit = shared; bool touched[3];
+            MultiEditResult res = MultiEditVec3Row(label, edit, mixed, touched, speed, minV, maxV, tip);
+            if (res.activated) StageUndo(world);
+            if (res.changed) {
+                forEach([&](entt::entity e) {
+                    glm::vec3& target = ref(world.Registry.get<TransformComponent>(e));
+                    for (int a = 0; a < 3; ++a) if (touched[a]) target[a] = edit[a];
+                });
+            }
+            if (res.committed) CommitStagedUndo(world, undoLabel);
+        };
+
+        transformRow("Position", 0.05f, 0.0f, 0.0f,
+            [](TransformComponent& t) -> glm::vec3& { return t.Position; },
+            "Sets X / Y / Z on every selected object.", "Set Position");
+        transformRow("Rotation", 0.5f, 0.0f, 0.0f,
+            [](TransformComponent& t) -> glm::vec3& { return t.RotationEuler; },
+            "Sets Euler rotation (degrees) on every selected object.", "Set Rotation");
+        transformRow("Scale", 0.01f, 0.0f, 0.0f,
+            [](TransformComponent& t) -> glm::vec3& { return t.Scale; },
+            "Sets scale on every selected object.", "Set Scale");
+
+        // ===== Object: Active / Static / Tag, tri-state =====
+        ImGui::Spacing();
+        ImGui::SeparatorText("Object");
+
+        int nActive = 0, nStatic = 0;
+        forEach([&](entt::entity e) {
+            if (!world.Registry.all_of<InactiveTag>(e)) nActive++;
+            if (world.Registry.all_of<StaticTag>(e)) nStatic++;
+        });
+        bool setVal = false;
+        if (MultiEditCheckbox("Active", nActive > 0, nActive != 0 && nActive != count, setVal)) {
+            PushUndo(world, "Toggle Active");
+            forEach([&](entt::entity e) {
+                if (setVal) world.Registry.remove<InactiveTag>(e);
+                else        world.Registry.emplace_or_replace<InactiveTag>(e);
+            });
+        }
+        if (MultiEditCheckbox("Static", nStatic > 0, nStatic != 0 && nStatic != count, setVal)) {
+            PushUndo(world, "Set Static");
+            forEach([&](entt::entity e) {
+                if (setVal) world.Registry.emplace_or_replace<StaticTag>(e);
+                else        world.Registry.remove<StaticTag>(e);
+            });
         }
 
-        bool bActive = false, bCommitted = false;
-        glm::vec3 posBefore = m_BatchNudgePos;
-        if (DrawVec3Row("Move", m_BatchNudgePos, 0.1f, 0.0f, 0.0f, bActive, bCommitted,
-                "Adds this offset to every selected object's position.")) {
-            glm::vec3 d = m_BatchNudgePos - posBefore;
-            if (d != glm::vec3(0.0f)) applyToSelection([&](TransformComponent& t){ t.Position += d; });
+        {
+            std::set<std::string> tagChoices{"Untagged"};
+            for (auto e : world.Registry.view<const TagComponent>())
+                tagChoices.insert(world.Registry.get<TagComponent>(e).Tag);
+            std::string sharedTag; bool tagMixed = false, first = true;
+            forEach([&](entt::entity e) {
+                const auto* tc = world.Registry.try_get<TagComponent>(e);
+                std::string t = tc ? tc->Tag : std::string("Untagged");
+                if (first) { sharedTag = t; first = false; }
+                else if (t != sharedTag) tagMixed = true;
+            });
+            PropertyLabel("Tag", "Sets the Tag on every selected object.");
+            if (ImGui::BeginCombo("##mtag", tagMixed ? "\xE2\x80\x94" : sharedTag.c_str())) {
+                for (const std::string& t : tagChoices) {
+                    if (ImGui::Selectable(t.c_str(), !tagMixed && t == sharedTag)) {
+                        PushUndo(world, "Set Tag");
+                        forEach([&](entt::entity e) {
+                            if (t == "Untagged") world.Registry.remove<TagComponent>(e);
+                            else {
+                                TagComponent tc; tc.Tag = t;
+                                world.Registry.emplace_or_replace<TagComponent>(e, tc);
+                            }
+                        });
+                    }
+                }
+                ImGui::EndCombo();
+            }
         }
-        if (bActive) StageUndo(world);
-        if (bCommitted) { CommitStagedUndo(world, "Batch Move"); m_BatchNudgePos = glm::vec3(0.0f); }
 
-        glm::vec3 rotBefore = m_BatchNudgeRot;
-        if (DrawVec3Row("Rotate", m_BatchNudgeRot, 1.0f, 0.0f, 0.0f, bActive, bCommitted,
-                "Adds this rotation (degrees per axis) to every selected object.")) {
-            glm::vec3 d = m_BatchNudgeRot - rotBefore;
-            if (d != glm::vec3(0.0f)) applyToSelection([&](TransformComponent& t){ t.RotationEuler += d; });
-        }
-        if (bActive) StageUndo(world);
-        if (bCommitted) { CommitStagedUndo(world, "Batch Rotate"); m_BatchNudgeRot = glm::vec3(0.0f); }
+        // ===== Light (only when every selected object has one) =====
+        if (allLight) {
+            ImGui::Spacing();
+            ImGui::SeparatorText(ICON_FA_LIGHTBULB "  Light");
+            auto L = [&](entt::entity e) -> LightComponent& { return world.Registry.get<LightComponent>(e); };
 
-        glm::vec3 sclBefore = m_BatchNudgeScale;
-        if (DrawVec3Row("Scale", m_BatchNudgeScale, 0.01f, 0.001f, 1000.0f, bActive, bCommitted,
-                "Multiplies every selected object's scale by this.")) {
-            glm::vec3 ratio = m_BatchNudgeScale / glm::max(sclBefore, glm::vec3(1.0e-6f));
-            if (ratio != glm::vec3(1.0f)) applyToSelection([&](TransformComponent& t){ t.Scale *= ratio; });
+            int kind = -1; bool kindMixed = false;
+            forEach([&](entt::entity e) {
+                int k = L(e).Kind == LightComponent::Type::Spot ? 1 : 0;
+                if (kind < 0) kind = k; else if (k != kind) kindMixed = true;
+            });
+            const char* kinds[] = {"Point", "Spot"};
+            PropertyLabel("Kind", "Sets the light type on every selected light.");
+            if (ImGui::BeginCombo("##mlkind", kindMixed ? "\xE2\x80\x94" : kinds[kind < 0 ? 0 : kind])) {
+                for (int k = 0; k < 2; ++k)
+                    if (ImGui::Selectable(kinds[k], !kindMixed && k == kind)) {
+                        PushUndo(world, "Set Light Kind");
+                        forEach([&](entt::entity e) {
+                            L(e).Kind = k == 1 ? LightComponent::Type::Spot : LightComponent::Type::Point;
+                        });
+                    }
+                ImGui::EndCombo();
+            }
+
+            glm::vec3 col(1.0f); bool colMixed = false, cf = true;
+            forEach([&](entt::entity e) {
+                glm::vec3 c = L(e).Color;
+                if (cf) { col = c; cf = false; return; }
+                for (int a = 0; a < 3; ++a) if (std::fabs(c[a] - col[a]) > 1.0e-4f) colMixed = true;
+            });
+            PropertyLabel("Color", "Sets the color on every selected light.");
+            glm::vec3 colEdit = col;
+            bool colChanged = ImGui::ColorEdit3("##mlcol", &colEdit.x, ImGuiColorEditFlags_NoInputs);
+            if (ImGui::IsItemActivated()) StageUndo(world);
+            if (colChanged) forEach([&](entt::entity e) { L(e).Color = colEdit; });
+            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Set Light Color");
+            if (colMixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
+
+            auto lightFloatRow = [&](const char* label, float speed, float minV, float maxV,
+                                     const std::function<float&(LightComponent&)>& ref,
+                                     const char* tip, const char* undoLabel) {
+                float shared = 0.0f; bool mixed = false, f = true;
+                forEach([&](entt::entity e) {
+                    float v = ref(L(e));
+                    if (f) { shared = v; f = false; } else if (std::fabs(v - shared) > 1.0e-4f) mixed = true;
+                });
+                float edit = shared;
+                MultiEditResult r = MultiEditFloatRow(label, edit, mixed, speed, minV, maxV, tip);
+                if (r.activated) StageUndo(world);
+                if (r.changed) forEach([&](entt::entity e) { ref(L(e)) = edit; });
+                if (r.committed) CommitStagedUndo(world, undoLabel);
+            };
+            lightFloatRow("Intensity", 0.05f, 0.0f, 100.0f,
+                [](LightComponent& l) -> float& { return l.Intensity; },
+                "Brightness for every selected light.", "Set Light Intensity");
+            lightFloatRow("Range", 0.1f, 0.0f, 500.0f,
+                [](LightComponent& l) -> float& { return l.Range; },
+                "Falloff distance for every selected light.", "Set Light Range");
+
+            bool allSpot = true;
+            forEach([&](entt::entity e) { allSpot &= L(e).Kind == LightComponent::Type::Spot; });
+            if (allSpot)
+                lightFloatRow("Spot Angle", 0.5f, 1.0f, 89.0f,
+                    [](LightComponent& l) -> float& { return l.SpotAngleDegrees; },
+                    "Cone half-angle for every selected spot light.", "Set Spot Angle");
         }
-        if (bActive) StageUndo(world);
-        if (bCommitted) { CommitStagedUndo(world, "Batch Scale"); m_BatchNudgeScale = glm::vec3(1.0f); }
+
+        // ===== Camera (only when every selected object has one) =====
+        if (allCamera) {
+            ImGui::Spacing();
+            ImGui::SeparatorText(ICON_FA_VIDEO "  Camera");
+            auto C = [&](entt::entity e) -> CameraComponent& { return world.Registry.get<CameraComponent>(e); };
+            auto camFloatRow = [&](const char* label, float speed, float minV, float maxV,
+                                   const std::function<float&(CameraComponent&)>& ref,
+                                   const char* tip, const char* undoLabel) {
+                float shared = 0.0f; bool mixed = false, f = true;
+                forEach([&](entt::entity e) {
+                    float v = ref(C(e));
+                    if (f) { shared = v; f = false; } else if (std::fabs(v - shared) > 1.0e-4f) mixed = true;
+                });
+                float edit = shared;
+                MultiEditResult r = MultiEditFloatRow(label, edit, mixed, speed, minV, maxV, tip);
+                if (r.activated) StageUndo(world);
+                if (r.changed) forEach([&](entt::entity e) { ref(C(e)) = edit; });
+                if (r.committed) CommitStagedUndo(world, undoLabel);
+            };
+            camFloatRow("Field of View", 0.25f, 1.0f, 179.0f,
+                [](CameraComponent& c) -> float& { return c.FovDegrees; },
+                "Vertical FOV for every selected camera.", "Set Camera FOV");
+            camFloatRow("Near", 0.01f, 0.001f, 100.0f,
+                [](CameraComponent& c) -> float& { return c.NearPlane; },
+                "Near clip plane for every selected camera.", "Set Camera Near");
+            camFloatRow("Far", 1.0f, 0.1f, 100000.0f,
+                [](CameraComponent& c) -> float& { return c.FarPlane; },
+                "Far clip plane for every selected camera.", "Set Camera Far");
+        }
+
+        // ===== Material / PBR (only when every selected object has a mesh) =====
+        if (allMesh) {
+            ImGui::Spacing();
+            if (ImGui::TreeNodeEx(ICON_FA_PALETTE "  Material", ImGuiTreeNodeFlags_SpanAvailWidth)) {
+                DrawMultiMaterialEditor(world, assets, sel);
+                ImGui::TreePop();
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Shared PBR material and texture maps for every selected mesh.\n"
+                                     "A field showing \xE2\x80\x94 differs across the selection.");
+        }
 
         ImGui::Spacing();
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
         float halfWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
-        if (ImGui::Button(ICON_FA_CLONE "  Duplicate", ImVec2(halfWidth, 0.0f))) {
+        if (ImGui::Button(ICON_FA_CLONE "  Duplicate", ImVec2(halfWidth, 0.0f)))
             DuplicateSelection(world, assets);
-        }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Duplicate every selected object (Ctrl+D)");
         ImGui::SameLine();
         {
@@ -4509,6 +4921,192 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets) {
     mapRow("Roughness", mat->RoughnessMap, "Grayscale: white = matte, black = mirror-smooth. Overrides the Roughness slider above.");
     mapRow("AO", mat->AOMap, "Ambient occlusion - darkens crevices/contact points for added depth.");
     mapRow("Emissive", mat->EmissiveMap, "Texture for glowing areas (e.g. windows, screens). Tinted by Emissive Color.");
+}
+
+void EditorLayer::DrawMultiMaterialEditor(World& world, AssetLibrary& assets,
+                                          const std::vector<entt::entity>& sel) {
+    // Two placed instances of the same imported file share one Model — and therefore one
+    // MaterialOverride. Collapse to the distinct Model* set so each override is read/written
+    // exactly once (and one undo step covers the lot).
+    std::vector<Model*> models;
+    for (entt::entity e : sel) {
+        if (!world.Registry.valid(e)) continue;
+        auto* rc = world.Registry.try_get<RenderableComponent>(e);
+        if (!rc || !rc->ModelRef) { ImGui::TextDisabled("A selected object has no mesh."); return; }
+        if (rc->ModelRef->MeshCount() == 0) { ImGui::TextDisabled("A selected mesh failed to load."); return; }
+        Model* m = rc->ModelRef.get();
+        if (std::find(models.begin(), models.end(), m) == models.end()) models.push_back(m);
+    }
+    if (models.empty()) return;
+
+    const int total = (int)models.size();
+    int nCustom = 0;
+    for (Model* m : models) if (m->MaterialOverride()) nCustom++;
+
+    // Tri-state "Use Custom Material": create a fresh override on every model that lacks one
+    // (keeping its imported texture maps, dropping the leftover diffuse factors — same recipe
+    // as the single-object editor), or clear it from all.
+    bool customMixed = nCustom != 0 && nCustom != total;
+    {
+        bool value = nCustom > 0;
+        if (customMixed) ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
+        bool clicked = ImGui::Checkbox("Use Custom Material", &value);
+        if (customMixed) ImGui::PopItemFlag();
+        if (clicked) {
+            bool enable = customMixed ? true : value;
+            PushUndo(world, "Edit Material");
+            for (Model* m : models) {
+                if (enable && !m->MaterialOverride()) {
+                    auto mat = std::make_shared<Material>();
+                    if (m->MeshCount() > 0) {
+                        const Material& imported = m->MeshMaterial(0);
+                        mat->AlbedoMap = imported.AlbedoMap;
+                        mat->NormalMap = imported.NormalMap;
+                        mat->MetallicMap = imported.MetallicMap;
+                        mat->RoughnessMap = imported.RoughnessMap;
+                        mat->AOMap = imported.AOMap;
+                        mat->EmissiveMap = imported.EmissiveMap;
+                    }
+                    m->SetMaterialOverride(mat);
+                } else if (!enable) {
+                    m->SetMaterialOverride(nullptr);
+                }
+            }
+            nCustom = enable ? total : 0;
+        }
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Override every selected object with one editable PBR material.\n"
+                             "Unchecking restores each object's imported / default material.");
+
+    if (nCustom != total) {
+        ImGui::TextDisabled(nCustom == 0
+            ? "Using imported / default materials.\nEnable a custom material to edit shared PBR properties."
+            : "Only some selected objects use a custom material.\nEnable it on all of them to edit shared properties here.");
+        return;
+    }
+
+    std::vector<Material*> mats;
+    for (Model* m : models) mats.push_back(m->MaterialOverride().get());
+
+    auto vec3Shared = [&](glm::vec3 Material::* field, glm::vec3& shared) {
+        shared = mats[0]->*field;
+        bool mixed = false;
+        for (Material* mm : mats)
+            for (int a = 0; a < 3; ++a)
+                if (std::fabs((mm->*field)[a] - shared[a]) > 1.0e-4f) mixed = true;
+        return mixed;
+    };
+    auto floatShared = [&](float Material::* field, float& shared) {
+        shared = mats[0]->*field;
+        bool mixed = false;
+        for (Material* mm : mats) if (std::fabs(mm->*field - shared) > 1.0e-4f) mixed = true;
+        return mixed;
+    };
+
+    // --- Colors: shared swatch, "(mixed)" tag when they disagree; one edit writes all. ---
+    auto colorRow = [&](const char* label, glm::vec3 Material::* field, const char* tip) {
+        glm::vec3 shared; bool mixed = vec3Shared(field, shared);
+        PropertyLabel(label, tip);
+        // PropertyLabel just set the widget to fill to the right edge; when a "(mixed)" tag
+        // has to follow, claw back exactly its width so it isn't clipped off-panel.
+        if (mixed) {
+            float w = ImGui::GetContentRegionAvail().x -
+                      ImGui::CalcTextSize(" (mixed)").x - ImGui::GetStyle().ItemSpacing.x;
+            ImGui::SetNextItemWidth(w > 40.0f ? w : 40.0f);
+        }
+        glm::vec3 edit = shared;
+        ImGui::PushID(label);
+        bool changed = ImGui::ColorEdit3("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
+        if (ImGui::IsItemActivated()) StageUndo(world);
+        if (changed) for (Material* mm : mats) mm->*field = edit;
+        if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
+        if (mixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
+        ImGui::PopID();
+    };
+    auto scalarRow = [&](const char* label, float Material::* field, float lo, float hi, const char* tip) {
+        float shared; bool mixed = floatShared(field, shared);
+        float edit = shared;
+        MultiEditResult r = MultiEditFloatRow(label, edit, mixed, (hi - lo) * 0.004f, lo, hi, tip);
+        if (r.activated) StageUndo(world);
+        if (r.changed) for (Material* mm : mats) mm->*field = edit;
+        if (r.committed) CommitStagedUndo(world, "Edit Material");
+    };
+
+    colorRow("Base Color", &Material::BaseColor,
+             "Surface tint, multiplied with the Albedo map. Applied to every selected material.");
+    scalarRow("Metallic", &Material::Metallic, 0.0f, 1.0f,
+              "0 = non-metal, 1 = pure metal. Ignored where a Metallic map is set.");
+    scalarRow("Roughness", &Material::Roughness, 0.04f, 1.0f,
+              "0 = mirror-smooth, 1 = fully matte. Ignored where a Roughness map is set.");
+    colorRow("Emissive Color", &Material::EmissiveColor,
+             "Color this surface glows, independent of scene lighting.");
+    scalarRow("Emissive Strength", &Material::EmissiveStrength, 0.0f, 10.0f,
+              "Brightness multiplier for the Emissive Color / map.");
+
+    ImGui::SeparatorText("Texture Maps");
+
+    auto mapRow = [&](const char* label, std::shared_ptr<Texture> Material::* slot, const char* help) {
+        ImGui::PushID(label);
+        PropertyLabel(label);
+
+        Texture* first = (mats[0]->*slot).get();
+        bool mixed = false, anySet = false;
+        for (Material* mm : mats) {
+            Texture* t = (mm->*slot).get();
+            if (t) anySet = true;
+            if (t != first) mixed = true;
+        }
+        std::string preview = mixed ? std::string("\xE2\x80\x94  (mixed)")
+                              : first ? std::filesystem::path(first->Path()).filename().string()
+                                      : std::string("(none)");
+        float clearReserve = anySet ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+        if (ImGui::Button(preview.c_str(), ImVec2(anySet ? -clearReserve : -FLT_MIN, 0.0f))) {
+            std::string path = FileDialog::OpenFile(
+                "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
+            if (!path.empty()) {
+                PushUndo(world, std::string("Set ") + label + " Map");
+                auto tex = assets.LoadTexture(path);
+                for (Material* mm : mats) mm->*slot = tex;
+            }
+        }
+        if (ImGui::IsItemHovered()) {
+            if (!mixed && first) {
+                ImGui::BeginTooltip();
+                ImGui::Image((ImTextureID)(intptr_t)first->GLHandle(), ImVec2(96, 96));
+                ImGui::TextUnformatted(first->Path().c_str());
+                ImGui::EndTooltip();
+            } else {
+                EditorUI::SetTooltip("Click to import an image, or drag one from the Asset Browser.\n"
+                                     "Assigned to every selected material.");
+            }
+        }
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
+                std::string texPath((const char*)payload->Data);
+                PushUndo(world, std::string("Set ") + label + " Map");
+                auto tex = assets.LoadTexture(texPath);
+                for (Material* mm : mats) mm->*slot = tex;
+            }
+            ImGui::EndDragDropTarget();
+        }
+        if (anySet) {
+            ImGui::SameLine();
+            if (ActionButton(ICON_FA_XMARK, "Clear on all", ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+                PushUndo(world, std::string("Clear ") + label + " Map");
+                for (Material* mm : mats) mm->*slot = nullptr;
+            }
+        }
+        if (help) EditorUI::HelpMarker(help);
+        ImGui::PopID();
+    };
+
+    mapRow("Albedo", &Material::AlbedoMap, "The base color texture (diffuse / base color map).");
+    mapRow("Normal", &Material::NormalMap, "Fine surface detail (bumps, grooves) without extra geometry.");
+    mapRow("Metallic", &Material::MetallicMap, "Grayscale: white = metal. Overrides the Metallic value above.");
+    mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = matte. Overrides the Roughness value above.");
+    mapRow("AO", &Material::AOMap, "Ambient occlusion - darkens crevices and contact points.");
+    mapRow("Emissive", &Material::EmissiveMap, "Texture for glowing areas, tinted by Emissive Color.");
 }
 
 glm::vec3 EditorLayer::ComputeDropRayPosition(World& world, Camera& editorCamera) const {

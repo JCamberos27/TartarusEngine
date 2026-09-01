@@ -88,6 +88,19 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
             {"far", cam->FarPlane},
         };
     }
+    if (const auto* anim = world.Registry.try_get<AnimatorComponent>(entity)) {
+        // Authored parameters only — the Base*/Initialized runtime scratch is deliberately not
+        // written, so a scene saved mid-play still reloads to the authored pose.
+        j["animator"] = {
+            {"spin", Vec3ToJson(anim->SpinDegPerSec)},
+            {"orbitAxis", Vec3ToJson(anim->OrbitAxis)},
+            {"orbitDegPerSec", anim->OrbitDegPerSec},
+            {"orbitRadius", anim->OrbitRadius},
+            {"bobAmplitude", anim->BobAmplitude},
+            {"bobFreqHz", anim->BobFreqHz},
+            {"colorCycleHzPerSec", anim->ColorCycleHzPerSec},
+        };
+    }
 }
 
 void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
@@ -118,6 +131,18 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
         cam.NearPlane = c.value("near", 0.1f);
         cam.FarPlane = c.value("far", 1000.0f);
         world.Registry.emplace_or_replace<CameraComponent>(entity, cam);
+    }
+    if (j.contains("animator")) {
+        const json& a = j["animator"];
+        AnimatorComponent anim;
+        anim.SpinDegPerSec = JsonToVec3(a.value("spin", json::array({0, 0, 0})));
+        anim.OrbitAxis = JsonToVec3(a.value("orbitAxis", json::array({0, 1, 0})), glm::vec3(0.0f, 1.0f, 0.0f));
+        anim.OrbitDegPerSec = a.value("orbitDegPerSec", 0.0f);
+        anim.OrbitRadius = a.value("orbitRadius", 0.0f);
+        anim.BobAmplitude = a.value("bobAmplitude", 0.0f);
+        anim.BobFreqHz = a.value("bobFreqHz", 0.0f);
+        anim.ColorCycleHzPerSec = a.value("colorCycleHzPerSec", 0.0f);
+        world.Registry.emplace_or_replace<AnimatorComponent>(entity, anim);
     }
 }
 
