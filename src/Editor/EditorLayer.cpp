@@ -591,8 +591,14 @@ void EditorLayer::Init(GLFWwindow* window) {
     EditorSettings::Load();
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
-    // — see ProjectPaths.h. main.cpp resolves the same path for its initial load.
-    m_CurrentScenePath = ProjectPaths::Resolve("scenes/Test.json");
+    // — see ProjectPaths.h. Must match main.cpp's initial load: prefer the last-open scene if
+    // it still exists, else the built-in default (#95).
+    {
+        std::error_code ec;
+        const std::string& last = EditorSettings::Get().LastScenePath;
+        m_CurrentScenePath = (!last.empty() && std::filesystem::exists(last, ec) && !ec)
+            ? last : ProjectPaths::Resolve("scenes/Test.json");
+    }
 
     // So Import / Open / Save dialogs start in the project folder instead of build/Release/,
     // then follow the user around from there (#15 P4).
@@ -879,6 +885,8 @@ bool EditorLayer::DoSaveAs(World& world, AssetLibrary& assets) {
     if (!SceneSerializer::Save(world, assets, path)) return false;
     ClearRecoverySnapshot();       // clears the snapshot for the PREVIOUS path (still current here)
     m_CurrentScenePath = path;
+    EditorSettings::Get().LastScenePath = path; // reopen this one next launch (#95)
+    EditorSettings::Save();
     m_Dirty = false;
     m_SavedUndoDepth = (int)m_UndoStack.size(); // this history position now matches disk
     m_AutoSaveTimer = 0.0f;
@@ -1141,7 +1149,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
 
         if (ImGui::Checkbox("Cast sun shadows", &prefs.ShadowsEnabled)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("4-cascade shadow maps for the Directional light. Point/spot shadows are a later milestone.");
+            EditorUI::SetTooltip("Cascaded shadow maps for the Directional light. Point/spot shadows are a later milestone.");
 
         static const char* kShadowResLabels[] = { "1024", "2048", "4096" };
         static const int   kShadowResValues[] = { 1024, 2048, 4096 };
@@ -1155,6 +1163,16 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Per-cascade shadow map size. 4x memory + fill from 2048 to 4096.");
+
+        static const char* kCascadeLabels[] = { "2", "3", "4" };
+        int ccIdx = std::clamp(prefs.ShadowCascades - 2, 0, 2);
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::Combo("Cascades", &ccIdx, kCascadeLabels, IM_ARRAYSIZE(kCascadeLabels))) {
+            prefs.ShadowCascades = ccIdx + 2;
+            EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Number of shadow cascades. Fewer = cheaper depth passes, coarser shadows far from the camera.");
 
         ImGui::SetNextItemWidth(kw);
         ImGui::SliderFloat("Shadow distance", &prefs.ShadowDistance, 10.0f, 500.0f, "%.0f m");
@@ -2789,6 +2807,8 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     InvalidateModelThumbnail(nullptr);
     ClearRecoverySnapshot(); // drop the outgoing scene's snapshot before switching away from it
     m_CurrentScenePath = path;
+    EditorSettings::Get().LastScenePath = path; // reopen this one next launch (#95)
+    EditorSettings::Save();
     ClearSelection();
     m_UndoStack.clear();
     m_RedoStack.clear();

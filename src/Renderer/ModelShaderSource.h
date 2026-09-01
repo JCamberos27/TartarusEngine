@@ -21,6 +21,7 @@ layout (location = 5) in vec4 aWeights;
 layout (location = 6) in float aTangentSign;
 
 uniform mat4 uModel;
+uniform mat4 uNormalMatrix; // mat3 inverse-transpose of uModel in a mat4 (loader has no mat3fv)
 uniform mat4 uView;
 uniform mat4 uProj;
 uniform int uUseSkinning;
@@ -56,7 +57,7 @@ void main() {
     vec4 world = uModel * localPos;
     vWorldPos = world.xyz;
 
-    mat3 normalMat = mat3(transpose(inverse(uModel)));
+    mat3 normalMat = mat3(uNormalMatrix); // inverse-transpose of uModel, computed once on the CPU (#104)
     vNormal = normalize(normalMat * localNormal);
     // Tangents transform with the model matrix's linear part directly (not the
     // inverse-transpose used for normals) — using normalMat here would skew tangents

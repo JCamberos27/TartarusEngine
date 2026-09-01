@@ -39,7 +39,9 @@ void EditorSettings::Load() {
     s.MsaaSamples = root.value("msaaSamples", s.MsaaSamples);
     s.ShadowsEnabled = root.value("shadowsEnabled", s.ShadowsEnabled);
     s.ShadowResolution = root.value("shadowResolution", s.ShadowResolution);
+    s.ShadowCascades = root.value("shadowCascades", s.ShadowCascades);
     s.ShadowDistance = root.value("shadowDistance", s.ShadowDistance);
+    s.LastScenePath = root.value("lastScenePath", s.LastScenePath);
     s.GameViewMaximizeOnPlay = root.value("gameViewMaximizeOnPlay", s.GameViewMaximizeOnPlay);
     s.GameViewShowStats = root.value("gameViewShowStats", s.GameViewShowStats);
     s.SceneShowStats = root.value("sceneShowStats", s.SceneShowStats);
@@ -68,7 +70,9 @@ void EditorSettings::Save() {
     root["msaaSamples"] = Get().MsaaSamples;
     root["shadowsEnabled"] = Get().ShadowsEnabled;
     root["shadowResolution"] = Get().ShadowResolution;
+    root["shadowCascades"] = Get().ShadowCascades;
     root["shadowDistance"] = Get().ShadowDistance;
+    root["lastScenePath"] = Get().LastScenePath;
     root["gameViewMaximizeOnPlay"] = Get().GameViewMaximizeOnPlay;
     root["gameViewShowStats"] = Get().GameViewShowStats;
     root["sceneShowStats"] = Get().SceneShowStats;
