@@ -865,8 +865,10 @@ int main() {
                     modelShader.SetMat4Array("uShadowMatrices[0]", shadowMap.Count(), mats);
                 }
                 modelShader.SetVec4("uCascadeSplits", shadowMap.SplitDepthsVec4());
-                modelShader.SetFloat("uShadowNormalBias",
-                    gs.ShadowDistance / (float)std::max(shadowMap.Resolution(), 1) * 2.0f);
+                // World units per shadow texel, per cascade — the shader scales its normal
+                // offset + depth bias by the selected cascade's value so one number isn't
+                // simultaneously too much for cascade 0 and too little for cascade 3 (#117).
+                modelShader.SetVec4("uShadowTexelWorld", shadowMap.TexelWorldSizesVec4());
                 // Penumbra width in shadow-map texels, from the sun's apparent size. 0.53 deg
                 // (real sun) -> a tight ~2 texel edge; crank the light's Angular Size for softer.
                 modelShader.SetFloat("uShadowSoftness",

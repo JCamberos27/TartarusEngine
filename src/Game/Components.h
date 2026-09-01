@@ -127,6 +127,7 @@ struct AnimatorComponent {
     // --- runtime scratch (not serialized) ---
     bool Initialized = false;
     glm::vec3 BasePosition{0.0f};
+    glm::vec3 BaseRotation{0.0f};   // authored RotationEuler, so spin is reversible like orbit/bob (#109)
     glm::vec3 BaseColor{1.0f};
     float Elapsed = 0.0f;
 };

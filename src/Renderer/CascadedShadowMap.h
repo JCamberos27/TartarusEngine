@@ -43,6 +43,10 @@ public:
     // Cascade split far-distances in *view space* (positive), one per cascade; [i] is the far
     // edge of cascade i. Packed into a vec4 for the shader (unused lanes hold the last split).
     glm::vec4 SplitDepthsVec4() const;
+    // World units covered by one shadow-map texel in cascade i (= 2*fit-radius / resolution).
+    // The shader scales its normal offset + depth bias by this so one bias value isn't wrong
+    // for cascade 0 and cascade 3 at the same time (#117). Packed into a vec4 like the splits.
+    glm::vec4 TexelWorldSizesVec4() const;
 
 private:
     unsigned int m_DepthArray = 0;
@@ -52,6 +56,7 @@ private:
 
     std::array<glm::mat4, kMaxCascades> m_LightViewProj{};
     std::array<float, kMaxCascades> m_SplitFar{};
+    std::array<float, kMaxCascades> m_TexelWorld{}; // 2*radius/resolution per cascade, from Update()
 
     void Release();
 };

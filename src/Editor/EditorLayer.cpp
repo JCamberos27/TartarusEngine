@@ -60,6 +60,18 @@ inline glm::vec3 SafeSpawnInFrontOf(const Camera& cam, float distance = 5.0f) {
     return glm::vec3(0.0f);
 }
 
+// Turn a freshly created light entity into a sun: same raking angle / intensity / disc size the
+// SceneSerializer synthesises for a scene with no directional light, so an added one casts a
+// readable shadow immediately rather than sitting near-overhead and washed out (#125).
+inline void MakeDirectionalLight(World& world, entt::entity e) {
+    if (e == entt::null || !world.Registry.valid(e)) return;
+    auto& lc = world.Registry.get<LightComponent>(e);
+    lc.Kind = LightComponent::Type::Directional;
+    lc.Intensity = 6.0f;
+    lc.AngularSizeDegrees = 2.0f;
+    world.Registry.get<TransformComponent>(e).RotationEuler = glm::vec3(-36.25f, 53.13f, 0.0f);
+}
+
 // Reverse lookup for the Asset Browser: which placed objects reference a given asset.
 // Compared by raw pointer (Model/Texture) since two placed objects can share one instance.
 // Level-geometry entities excluded — their cube Model is private/unshared, never an "asset".
@@ -3180,6 +3192,9 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
         entt::entity e = CreateEmptyAt(world, &editorCamera, "Spot Light", true);
         world.Registry.get<LightComponent>(e).Kind = LightComponent::Type::Spot;
     }
+    if (ImGui::MenuItem(ICON_FA_SUN "  Directional Light")) {
+        MakeDirectionalLight(world, CreateEmptyAt(world, &editorCamera, "Directional Light", true));
+    }
     if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera")) {
         entt::entity e = CreateEmptyAt(world, &editorCamera, "Camera", false);
         world.Registry.emplace<CameraComponent>(e);
@@ -3783,6 +3798,12 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     if (ImGui::BeginMenu(ICON_FA_PLUS "  Create")) {
         if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Empty")) CreateEmptyAt(world, nullptr, "Empty", false);
         if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) CreateEmptyAt(world, nullptr, "Point Light", true);
+        if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light")) {
+            world.Registry.get<LightComponent>(CreateEmptyAt(world, nullptr, "Spot Light", true)).Kind = LightComponent::Type::Spot;
+        }
+        if (ImGui::MenuItem(ICON_FA_SUN "  Directional Light")) {
+            MakeDirectionalLight(world, CreateEmptyAt(world, nullptr, "Directional Light", true));
+        }
         ImGui::EndMenu();
     }
     if (ImGui::MenuItem(ICON_FA_OBJECT_GROUP "  Group into Empty Parent", nullptr, false, HasAnySelection())) {

@@ -102,7 +102,7 @@ uniform int  uShadowEnabled;
 uniform int  uShadowCascadeCount;
 uniform vec4 uCascadeSplits;          // per-cascade far distance, view space (positive)
 uniform mat4 uShadowMatrices[4];
-uniform float uShadowNormalBias;      // world units, offset along N before projection
+uniform vec4  uShadowTexelWorld;      // world units per shadow texel, per cascade (#117)
 uniform float uShadowSoftness;        // PCF kernel radius in shadow-map texels (from the sun's angular size)
 uniform sampler2DArrayShadow uShadowMap;
 
@@ -195,14 +195,18 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
     }
 
     float ndl = max(dot(N, L), 0.0);
-    float nBias = uShadowNormalBias * (2.0 - ndl);   // push harder along N at grazing angles
-    vec3 offsetPos = worldPos + N * nBias;
+    // Normal offset and depth bias both scale with the *selected cascade's* world texel size
+    // (#117): cascade 3 covers many times the world per texel that cascade 0 does, so a fixed
+    // bias is peter-panning in one and shadow-acne in the other. ~2 texels along N, more at
+    // grazing angles; the depth bias grows mildly with cascade index too.
+    float texel = uShadowTexelWorld[c];
+    vec3 offsetPos = worldPos + N * (texel * 2.0 * (2.0 - ndl));
 
     vec4 lp = uShadowMatrices[c] * vec4(offsetPos, 1.0);
     vec3 proj = (lp.xyz / lp.w) * 0.5 + 0.5;
     if (proj.z >= 1.0) return 1.0;
 
-    float bias = mix(0.0016, 0.0005, ndl);
+    float bias = mix(0.0016, 0.0005, ndl) * (1.0 + 0.5 * float(c));
     // Hash gl_FragCoord to a rotation angle — turns kernel banding into per-pixel noise.
     float rot = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
     // Farther cascades cover more world per texel, so widen the kernel a little to keep the
@@ -216,10 +220,12 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
         float edge = uCascadeSplits[c];
         float band = edge * 0.12;
         if (viewDepth > edge - band) {
-            vec4 lp2 = uShadowMatrices[c + 1] * vec4(offsetPos, 1.0);
+            vec3 offsetPos2 = worldPos + N * (uShadowTexelWorld[c + 1] * 2.0 * (2.0 - ndl));
+            vec4 lp2 = uShadowMatrices[c + 1] * vec4(offsetPos2, 1.0);
             vec3 p2 = (lp2.xyz / lp2.w) * 0.5 + 0.5;
             if (p2.z < 1.0) {
-                float v2 = SampleCascade(c + 1, p2.xy, p2.z - bias,
+                float bias2 = mix(0.0016, 0.0005, ndl) * (1.0 + 0.5 * float(c + 1));
+                float v2 = SampleCascade(c + 1, p2.xy, p2.z - bias2,
                                          max(uShadowSoftness, 0.5) * (1.0 + 0.35 * float(c + 1)), rot);
                 vis = mix(vis, v2, smoothstep(edge - band, edge, viewDepth));
             }
