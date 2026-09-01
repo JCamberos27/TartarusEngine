@@ -818,7 +818,10 @@ int main() {
                         glm::vec3 bmin = renderable.ModelRef->BoundsMin();
                         glm::vec3 bmax = renderable.ModelRef->BoundsMax();
                         bool validBounds = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
-                        if (validBounds &&
+                        // Bounds are bind-pose only (#113), so an animated limb can swing
+                        // outside them — conservatively keep every skinned caster rather than
+                        // risk its shadow popping at a cascade edge. Static geometry culls.
+                        if (validBounds && !renderable.ModelRef->HasAnimations() &&
                             !cascadeFrustum.Intersects(AABB{bmin, bmax}.Transformed(model)))
                             continue;
                         shadowShader.SetMat4("uModel", model);
