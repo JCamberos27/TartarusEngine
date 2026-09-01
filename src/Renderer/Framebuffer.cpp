@@ -1,5 +1,8 @@
 #include "Framebuffer.h"
+#include "Log.h"
 #include "gl.h"
+
+#include <string>
 
 Framebuffer::~Framebuffer() { Release(); }
 
@@ -30,6 +33,12 @@ void Framebuffer::Create(int width, int height) {
     glBindRenderbuffer(GL_RENDERBUFFER, m_DepthRbo);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_DepthRbo);
+
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        Log::Error("Framebuffer incomplete (0x" + std::to_string(status) + ") at " +
+                   std::to_string(width) + "x" + std::to_string(height));
+    }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }

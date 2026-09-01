@@ -18,6 +18,10 @@
 #include "Sky.h"
 #include "ModelShaderSource.h"
 #include "TintOverlayRenderer.h"
+#include "HdrTarget.h"
+#include "Tonemapper.h"
+#include "LightBuffer.h"
+#include "CascadedShadowMap.h"
 #include "GLStateCache.h"
 #include "Profiler.h"
 #include "Frustum.h"
@@ -50,6 +54,62 @@
 #endif
 #include <windows.h>  // GlobalMemoryStatusEx, registry, GetLogicalProcessorInformationEx — rig info
 #pragma comment(lib, "Advapi32.lib") // RegGetValueA
+
+// Ask the vendor drivers to run this process on the discrete GPU. On a multi-adapter box
+// (laptop Optimus, or a desktop with the monitor cabled to the motherboard) the GL context
+// otherwise lands on the integrated GPU — observed here as Intel UHD 630 instead of an RTX
+// 4060, which turned this trivial scene into a 50-100 ms frame: the CPU raced ahead and then
+// blocked in SwapBuffers waiting for the iGPU to drain the HDR + MSAA + multi-light + CSM
+// pipeline. These must be *exported* symbols in the .exe for the NVIDIA / AMD drivers to see them.
+extern "C" {
+    __declspec(dllexport) DWORD NvOptimusEnablement = 1;
+    __declspec(dllexport) int   AmdPowerXpressRequestHighPerformance = 1;
+}
+
+// Selection outline (editor-only): the classic "inverted hull" technique — draw the object
+// again, offset a little along its normal, with front-face culling so only the silhouette
+// peeking out from behind the normal draw survives. One flat fragment shader shared by both
+// variants below; only the vertex stage differs, matching each mesh's own attribute layout.
+// Depth-only pass for cascaded shadow maps. Mirrors kModelVertexSrc's skinning so animated
+// occluders cast a deforming shadow; writes nothing but depth.
+static const char* kShadowDepthVertexSrc = R"(
+#version 460 core
+layout (location = 0) in vec3 aPos;
+layout (location = 2) in vec2 aUV;
+layout (location = 4) in ivec4 aBoneIDs;
+layout (location = 5) in vec4 aWeights;
+uniform mat4 uModel;
+uniform mat4 uLightViewProj;
+uniform int uUseSkinning;
+layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; }; // shared with the model VS (#104)
+out vec2 vUV;
+void main() {
+    vec4 localPos = vec4(aPos, 1.0);
+    if (uUseSkinning == 1) {
+        mat4 skinMat = mat4(0.0);
+        float tw = 0.0;
+        for (int i = 0; i < 4; ++i) {
+            if (aBoneIDs[i] >= 0) { skinMat += uBones[clamp(aBoneIDs[i], 0, 99)] * aWeights[i]; tw += aWeights[i]; }
+        }
+        if (tw <= 0.0001) skinMat = mat4(1.0);
+        localPos = skinMat * localPos;
+    }
+    vUV = aUV;
+    gl_Position = uLightViewProj * uModel * localPos;
+}
+)";
+// Alpha-tested casters (foliage, chain-link, decals): when a mesh has an albedo map its alpha
+// is sampled and cut below 0.5 so the shadow follows the cutout, not a solid quad (#116). Opaque
+// meshes leave uAlphaTest 0 and this is a no-op.
+static const char* kShadowDepthFragmentSrc = R"(
+#version 460 core
+in vec2 vUV;
+uniform int uAlphaTest;
+uniform sampler2D uAlbedo;
+void main() {
+    if (uAlphaTest == 1 && texture(uAlbedo, vUV).a < 0.5) discard;
+}
+)";
 
 // Selection outline (editor-only): the classic "inverted hull" technique — draw the object
 // again, offset a little along its normal, with front-face culling so only the silhouette
@@ -269,6 +329,7 @@ int main() {
         Shader modelShader(kModelVertexSrc, kModelFragmentSrc);
         Shader outlineModelShader(kOutlineModelVertexSrc, kOutlineFragmentSrc);
         Shader outlineDilateShader(kOutlineDilateVertSrc, kOutlineDilateFragSrc);
+        Shader shadowShader(kShadowDepthVertexSrc, kShadowDepthFragmentSrc);
         unsigned int fsQuadVao = 0;
         glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
         TintOverlayRenderer tintOverlay;
@@ -281,8 +342,16 @@ int main() {
 
         // Resolved under the project folder (see ProjectPaths.h) rather than the working
         // directory, so the scene being edited lives alongside the source instead of inside
-        // build/, where it was gitignored and a clean rebuild would delete it.
-        const std::string scenePath = ProjectPaths::Resolve("scenes/Test.json");
+        // build/, where it was gitignored and a clean rebuild would delete it. Prefer the scene
+        // that was open when the editor last closed, if it still exists (#95).
+        EditorSettings::Load();
+        std::string scenePath = ProjectPaths::Resolve("scenes/Test.json");
+        {
+            const std::string& last = EditorSettings::Get().LastScenePath;
+            std::error_code sceneEc;
+            if (!last.empty() && std::filesystem::exists(last, sceneEc) && !sceneEc)
+                scenePath = last;
+        }
         AssetLibrary assets;
         bool sceneLoaded = SceneSerializer::Load(world, assets, scenePath);
         if (sceneLoaded) {
@@ -453,8 +522,17 @@ int main() {
         gameView.LoadSettings();
         // The editor's own "Scene" tab renders into this rather than straight into the
         // backbuffer — see the "Scene tab offscreen pass" comment below for why.
-        Framebuffer sceneFramebuffer;
+        Framebuffer sceneFramebuffer;   // LDR: tonemap output the Scene tab shows via ImGui::Image
         Framebuffer selectionMaskFbo; // 1-bit silhouette mask for the screen-space selection outline
+
+        // The lighting overhaul renders the scene + editor overlays into these linear RGBA16F
+        // MSAA targets, then a shared Tonemapper pass resolves + maps them into the LDR
+        // framebuffers above (and into FBO 0 for free-aspect maximized play).
+        HdrTarget sceneHdr;
+        HdrTarget gameHdr;
+        Tonemapper tonemapper;
+        LightBuffer lightBuffer; // scene lights -> std430 SSBO the model shader reads at binding 0
+        CascadedShadowMap shadowMap; // directional-sun CSM; depth array sampled by the model shader
 
         Camera editorCamera;
         // Play is no longer a whole-screen mode swap. Three independent bits describe the state:
@@ -702,6 +780,104 @@ int main() {
 
             glm::vec3 lightDir(-0.4f, -1.0f, -0.3f);
 
+            // --- Sun shadow map: built ONCE per frame, from the primary view -------------------
+            // This used to live inside drawScene, i.e. it ran once per viewport (Scene + Game)
+            // every frame — 8 cascade renders of the entire scene when the sun and the geometry
+            // are identical between the two views. Now the 4 depth slices render once, here, and
+            // every drawScene() below only samples them.
+            const EditorSettings& frameSettings = EditorSettings::Get();
+
+            // Build the light SSBO ONCE per frame — it used to be rebuilt inside every
+            // drawScene(), i.e. per viewport, though the light set is identical across the
+            // Scene/Game views of one frame (#122). This same walk captures the first active
+            // directional light's aim + disc size for the shadow pass below.
+            glm::vec3 frameSunDir = lightDir;
+            float frameSunAngularDeg = 0.53f; // Earth's sun; drives the penumbra width
+            lightBuffer.Clear();
+            bool frameHaveDirectional = false;
+            for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
+                if (lightBuffer.Count() >= LightBuffer::kMaxLights) break;
+                if (world.Registry.all_of<InactiveTag>(e)) continue;
+                const auto& lc = world.Registry.get<LightComponent>(e);
+                glm::mat4 m = world.ComposeWorldTransform(e);
+                glm::vec3 pos = glm::vec3(m[3]);
+                glm::vec3 aim = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
+                if (lc.Kind == LightComponent::Type::Directional) {
+                    lightBuffer.AddDirectional(aim, lc.Color, lc.Intensity);
+                    if (!frameHaveDirectional) { frameSunDir = aim; frameSunAngularDeg = lc.AngularSizeDegrees; }
+                    frameHaveDirectional = true;
+                } else if (lc.Kind == LightComponent::Type::Spot) {
+                    float cosOuter = cosf(glm::radians(lc.SpotAngleDegrees));
+                    float cosInner = cosf(glm::radians(lc.SpotAngleDegrees * 0.9f));
+                    lightBuffer.AddSpot(pos, aim, lc.Color, lc.Intensity, lc.Range, cosOuter, cosInner);
+                } else {
+                    lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range);
+                }
+            }
+            // A scene whose sun the user deleted still gets the engine's historical key light.
+            if (!frameHaveDirectional)
+                lightBuffer.AddDirectional(lightDir, glm::vec3(1.0f), 3.0f);
+            lightBuffer.Upload();
+            const int frameLightCount = lightBuffer.Count();
+
+            bool sunShadowsReady = false;
+            if (frameSettings.ShadowsEnabled) {
+                PROFILE_SCOPE("Sun Shadow Pass");
+
+                // Fit the cascades to whichever camera drives this frame's main view: the game
+                // camera while playing, else the editor free-cam (the Scene tab is the working
+                // view). The other viewport samples the same cascades — a looser texel fit there
+                // is invisible next to rebuilding the whole map a second time.
+                Camera& fitCam = playing ? *gameCam : editorCamera;
+                glm::vec2 fitRegion = editor.GetLastSceneContentRegion();
+                if (fitRegion.x < 1.0f || fitRegion.y < 1.0f)
+                    fitRegion = { (float)window.GetWidth(), (float)window.GetHeight() };
+                glm::mat4 fitView = fitCam.ViewMatrix();
+                glm::mat4 fitProj = fitCam.ProjectionMatrix(fitRegion.x / fitRegion.y);
+
+                shadowMap.Configure(frameSettings.ShadowResolution, frameSettings.ShadowCascades);
+                shadowMap.Update(fitView, fitProj, frameSunDir, frameSettings.ShadowDistance);
+
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glCullFace(GL_FRONT);                 // front-face cull the casters: less peter-panning
+                glEnable(GL_POLYGON_OFFSET_FILL);
+                glPolygonOffset(2.0f, 4.0f);
+
+                shadowShader.Bind();
+                auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
+                for (int c = 0; c < shadowMap.Count(); ++c) {
+                    shadowMap.Begin(c);
+                    shadowShader.SetMat4("uLightViewProj", shadowMap.LightViewProj(c));
+                    // Cull each cascade's caster list against that cascade's own ortho frustum —
+                    // the near slice covers a few metres yet used to redraw the whole level x4.
+                    Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
+                    for (auto entity : casters) {
+                        if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                        auto& renderable = world.Registry.get<RenderableComponent>(entity);
+                        glm::mat4 model = world.ComposeWorldTransform(entity);
+                        glm::vec3 bmin = renderable.ModelRef->BoundsMin();
+                        glm::vec3 bmax = renderable.ModelRef->BoundsMax();
+                        bool validBounds = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
+                        // Bounds are bind-pose only (#113), so an animated limb can swing
+                        // outside them — conservatively keep every skinned caster rather than
+                        // risk its shadow popping at a cascade edge. Static geometry culls.
+                        if (validBounds && !renderable.ModelRef->HasAnimations() &&
+                            !cascadeFrustum.Intersects(AABB{bmin, bmax}.Transformed(model)))
+                            continue;
+                        shadowShader.SetMat4("uModel", model);
+                        renderable.ModelRef->DrawDepthOnly(shadowShader);
+                    }
+                }
+
+                glDisable(GL_POLYGON_OFFSET_FILL);
+                glCullFace(GL_BACK);
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, window.GetWidth(), window.GetHeight());
+                GLStateCache::Invalidate();
+                sunShadowsReady = true;
+            }
+
             // Renders the lit scene (sky + every Transform+Renderable entity) into whatever
             // framebuffer/viewport is currently bound. Shared by the real on-screen pass below
             // and GameViewPanel's offscreen framebuffer pass, so the two can never silently
@@ -710,53 +886,52 @@ int main() {
             // show exactly what Play Mode does, never editor debug shading.
             auto drawScene = [&](const glm::mat4& sceneView, const glm::mat4& sceneProj,
                                   const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats) {
+                const EditorSettings& gs = EditorSettings::Get();
+
+                bool shadowsOn = sunShadowsReady && !unlit;
+
                 sky.Draw(sceneView, sceneProj, world.SkyHorizonColor, world.SkyZenithColor);
 
                 modelShader.Bind();
                 modelShader.SetMat4("uView", sceneView);
                 modelShader.SetMat4("uProj", sceneProj);
-                modelShader.SetVec3("uLightDir", lightDir);
-                modelShader.SetVec3("uLightColor", glm::vec3(3.0f));
                 modelShader.SetVec3("uViewPos", viewPos);
 
-                // Gather every active LightComponent into the shader's fixed-size arrays.
-                // Inactive entities are skipped so the Hierarchy's eye toggle turns a light off
-                // for real.
-                int pointLightCount = 0;
-                for (auto entity : world.Registry.view<TransformComponent, LightComponent>()) {
-                    if (pointLightCount >= kMaxPointLights) break;
-                    if (world.Registry.all_of<InactiveTag>(entity)) continue;
-
-                    const auto& light = world.Registry.get<LightComponent>(entity);
-                    glm::mat4 lightModel = world.ComposeWorldTransform(entity);
-
-                    char name[64];
-                    snprintf(name, sizeof(name), "uPointLightPos[%d]", pointLightCount);
-                    modelShader.SetVec3(name, glm::vec3(lightModel[3]));
-                    snprintf(name, sizeof(name), "uPointLightColor[%d]", pointLightCount);
-                    modelShader.SetVec3(name, light.Color * light.Intensity);
-                    snprintf(name, sizeof(name), "uPointLightRange[%d]", pointLightCount);
-                    modelShader.SetFloat(name, light.Range);
-
-                    // A spot aims along its own -Z (the usual "forward" convention), so rotating
-                    // the entity aims the cone. -1 in the cutoff slot marks an omnidirectional
-                    // point light.
-                    snprintf(name, sizeof(name), "uPointLightDir[%d]", pointLightCount);
-                    modelShader.SetVec3(name, glm::normalize(glm::vec3(lightModel * glm::vec4(0, 0, -1, 0))));
-                    snprintf(name, sizeof(name), "uPointLightCosCutoff[%d]", pointLightCount);
-                    modelShader.SetFloat(name, light.Kind == LightComponent::Type::Spot
-                        ? cosf(glm::radians(light.SpotAngleDegrees)) : -1.0f);
-
-                    pointLightCount++;
+                // Cascaded-shadow uniforms + the depth array on unit 8 (material maps use 1..7).
+                modelShader.SetInt("uShadowEnabled", shadowsOn ? 1 : 0);
+                modelShader.SetInt("uShadowCascadeCount", shadowMap.Count());
+                {
+                    glm::mat4 mats[CascadedShadowMap::kMaxCascades];
+                    for (int i = 0; i < shadowMap.Count(); ++i) mats[i] = shadowMap.LightViewProj(i);
+                    modelShader.SetMat4Array("uShadowMatrices[0]", shadowMap.Count(), mats);
                 }
-                modelShader.SetInt("uPointLightCount", pointLightCount);
+                modelShader.SetVec4("uCascadeSplits", shadowMap.SplitDepthsVec4());
+                // World units per shadow texel, per cascade — the shader scales its normal
+                // offset + depth bias by the selected cascade's value so one number isn't
+                // simultaneously too much for cascade 0 and too little for cascade 3 (#117).
+                modelShader.SetVec4("uShadowTexelWorld", shadowMap.TexelWorldSizesVec4());
+                // Penumbra width in shadow-map texels, from the sun's apparent size. 0.53 deg
+                // (real sun) -> a tight ~2 texel edge; crank the light's Angular Size for softer.
+                modelShader.SetFloat("uShadowSoftness",
+                    std::clamp(frameSunAngularDeg * 3.0f, 1.0f, 14.0f));
+                glActiveTexture(GL_TEXTURE0 + 8);
+                glBindTexture(GL_TEXTURE_2D_ARRAY, shadowMap.DepthArray());
+                modelShader.SetInt("uShadowMap", 8);
+                glActiveTexture(GL_TEXTURE0);
+
+                // The light SSBO (binding 0) is built once per frame above — just bind it.
+                lightBuffer.Bind(0);
+
                 modelShader.SetInt("uUnlit", unlit ? 1 : 0);
+                // Real scene path: emit linear HDR; the shared Tonemapper pass maps it after
+                // MSAA resolve. (Offscreen model thumbnails set this to 1 to self-tonemap.)
+                modelShader.SetInt("uApplyTonemap", 0);
 
                 // One draw loop for everything placed in the world — former level-geometry
                 // boxes render through the exact same PBR path as imported/primitive models now,
                 // since both are just entities with a Transform + Renderable.
                 EditorLayer::RenderStats localStats;
-                localStats.PointLights = pointLightCount;
+                localStats.PointLights = std::max(0, frameLightCount - 1); // minus the directional sun
                 Frustum camFrustum = Frustum::FromViewProj(sceneProj * sceneView);
                 { // scope limits PROFILE_SCOPE to just this loop, not the rest of the frame
                 PROFILE_SCOPE("Scene Draw");
@@ -773,6 +948,16 @@ int main() {
                     glm::vec3 boundsMax = renderable.ModelRef->BoundsMax();
                     bool validBounds = boundsMin.x <= boundsMax.x && boundsMin.y <= boundsMax.y && boundsMin.z <= boundsMax.z;
                     if (validBounds) {
+                        // Bounds are bind-pose only. A skinned model's limbs can swing well past
+                        // them (reach, jump, weapon), so inflate around the centre before the
+                        // frustum test for animated models — still culls one that's genuinely
+                        // far off-screen, without popping the shadow/mesh of one at the edge (#113).
+                        if (renderable.ModelRef->HasAnimations()) {
+                            glm::vec3 c = (boundsMin + boundsMax) * 0.5f;
+                            glm::vec3 h = (boundsMax - boundsMin) * 0.5f * 1.75f;
+                            boundsMin = c - h;
+                            boundsMax = c + h;
+                        }
                         AABB worldBounds = AABB{boundsMin, boundsMax}.Transformed(model);
                         if (!camFrustum.Intersects(worldBounds)) {
                             localStats.Culled++;
@@ -781,6 +966,9 @@ int main() {
                     }
 
                     modelShader.SetMat4("uModel", model);
+                    // Normal matrix (inverse-transpose) computed here, not per-vertex (#104).
+                    modelShader.SetMat4("uNormalMatrix",
+                        glm::mat4(glm::transpose(glm::inverse(glm::mat3(model)))));
                     renderable.ModelRef->Draw(modelShader);
 
                     localStats.DrawCalls += renderable.ModelRef->MeshCount();
@@ -809,7 +997,8 @@ int main() {
                 int scH = std::max((int)available.y, 1);
 
                 sceneFramebuffer.Resize(scW, scH);
-                sceneFramebuffer.Bind();
+                sceneHdr.Resize(scW, scH, EditorSettings::Get().MsaaSamples);
+                sceneHdr.BindForRender();
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -876,7 +1065,7 @@ int main() {
                         if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
                         // --- Dilate pass: back to the scene target, paint the ring.
-                        sceneFramebuffer.Bind();
+                        sceneHdr.BindForRender();
                         glEnable(GL_BLEND);
                         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                         outlineDilateShader.Bind();
@@ -925,6 +1114,13 @@ int main() {
                     grid.Draw(sceneViewMat, sceneProjMat, editorCamera.Position, editor.GridMinorSpacing(), 10.0f, gridFade);
                 }
 
+                // Resolve MSAA + tonemap the linear-HDR scene into the LDR texture the Scene tab
+                // displays (exposure -> curve -> gamma, once, in Tonemapper).
+                sceneHdr.ResolveTo();
+                tonemapper.Apply(sceneHdr.ResolvedColorTexture(), sceneFramebuffer.Handle(), scW, scH,
+                                 EditorSettings::Get().ExposureEV,
+                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator);
+
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
                 editor.SetSceneTexture(sceneFramebuffer.ColorTexture());
             }
@@ -970,7 +1166,8 @@ int main() {
                 int gvWidth, gvHeight;
                 gameView.ComputeTargetSize(available, gvWidth, gvHeight);
                 gameView.GetFramebuffer().Resize(gvWidth, gvHeight);
-                gameView.GetFramebuffer().Bind();
+                gameHdr.Resize(gvWidth, gvHeight, EditorSettings::Get().MsaaSamples);
+                gameHdr.BindForRender();
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -995,6 +1192,10 @@ int main() {
                 EditorLayer::RenderStats gvRenderStats;
                 drawScene(gvView, gvProj, gvEye, /*unlit=*/false, &gvRenderStats);
 
+                gameHdr.ResolveTo();
+                tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameView.GetFramebuffer().Handle(),
+                                 gvWidth, gvHeight, EditorSettings::Get().ExposureEV,
+                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator);
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
 
                 gameViewStats.FPS = dt > 0.0f ? (int)(1.0f / dt) : 0;
@@ -1062,15 +1263,23 @@ int main() {
                     GL_COLOR_BUFFER_BIT, GL_LINEAR);
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
             } else if (playMaximized) {
-                // Free-Aspect maximized play: render straight to the backbuffer at the window's
-                // own native aspect.
-                glViewport(0, 0, window.GetWidth(), window.GetHeight());
-                float aspect = (float)window.GetWidth() / (float)window.GetHeight();
+                // Free-Aspect maximized play: render the scene into the HDR target at the
+                // window's native aspect, then tonemap straight onto the backbuffer.
+                int mw = window.GetWidth(), mh = window.GetHeight();
+                gameHdr.Resize(mw, mh, EditorSettings::Get().MsaaSamples);
+                gameHdr.BindForRender();
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                float aspect = (float)mw / (float)mh;
                 glm::mat4 view = gameCam->ViewMatrix();
                 glm::mat4 proj = gameCam->ProjectionMatrix(aspect);
                 EditorLayer::RenderStats stats;
                 drawScene(view, proj, gameCam->Position, /*unlit=*/false, &stats);
                 editor.SetRenderStats(stats);
+                gameHdr.ResolveTo();
+                tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh,
+                                 EditorSettings::Get().ExposureEV,
+                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator);
             }
 
             {

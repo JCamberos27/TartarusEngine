@@ -84,12 +84,15 @@ the roadmap honest.
 ### Renderer
 
 - Forward PBR-style shading — albedo, normal, metallic, roughness, ambient occlusion, and emissive maps
-- Point and spot lights with range and cone falloff
+- **Linear HDR pipeline** — the scene renders into a multisampled `RGBA16F` target and a single fullscreen pass applies exposure, a tone-mapping curve (**Reinhard / ACES / AgX**), and gamma
+- **Directional, point, and spot lights** in one GPU light buffer (`std430` SSBO) — the sun is a placeable entity you aim with its rotation; point/spot have range and cone falloff
+- **Cascaded shadow maps** for the directional sun — 4 texel-snapped cascades, soft rotated-Poisson PCF whose penumbra follows the sun's angular size, seam-blended between cascades
 - Skeletal animation with up to 100 bones per model
 - Frustum culling, a redundant-state-change cache, and per-frame draw statistics
-- Offscreen framebuffers per viewport, so Scene and Game render independently at their own resolutions
+- Offscreen HDR targets per viewport, so Scene and Game render independently at their own resolutions and MSAA levels
 - Procedural sky, distance-faded infinite grid, inverted-hull selection outlines, translucent drag previews
 - Shaded / wireframe / unlit view modes
+- Uses real OpenGL 4.6 — direct state access, immutable texture storage, and shader storage buffers, all through the hand-rolled loader
 
 ### Core
 
@@ -183,11 +186,15 @@ project/      The scene and editor preferences being authored
 
 ## Roadmap
 
-- Shadow mapping
+**Shipped** — linear HDR pipeline with tone mapping · cascaded shadow maps for the sun · GPU (SSBO) light buffer
+
+**Next**
+
+- Shadows for point and spot lights; clustered light culling
+- Screen-space effects on the HDR buffer — SSAO, bloom
 - A behaviour/scripting layer, so entities can do more than sit still
 - Project-relative asset pipeline with a baked import cache
 - Standalone build export
-- HDR pipeline with tonemapping and post-processing
 
 ## License
 

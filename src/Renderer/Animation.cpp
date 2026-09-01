@@ -4,12 +4,15 @@
 
 namespace {
 
-template <typename Key, typename Value>
-size_t FindKeyIndex(const std::vector<Key>& keys, float timeTicks) {
-    for (size_t i = 0; i + 1 < keys.size(); ++i) {
-        if (timeTicks < keys[i + 1].TimeTicks) return i;
-    }
-    return keys.empty() ? 0 : keys.size() - 1;
+// Index of the key segment containing timeTicks (the last key with TimeTicks <= timeTicks).
+// Keys are sorted by time, so this is a binary search rather than the old per-call linear scan
+// over the whole track — which ran 3x per bone per frame (#111).
+template <typename Keys>
+size_t FindKeyIndex(const Keys& keys, float timeTicks) {
+    if (keys.size() <= 1) return 0;
+    auto it = std::upper_bound(keys.begin(), keys.end(), timeTicks,
+        [](float t, const auto& k) { return t < k.TimeTicks; });
+    return it == keys.begin() ? 0 : size_t((it - keys.begin()) - 1);
 }
 
 float Factor(float lastTime, float nextTime, float timeTicks) {
@@ -23,7 +26,7 @@ float Factor(float lastTime, float nextTime, float timeTicks) {
 glm::mat4 BoneAnimChannel::Interpolate(float timeTicks) const {
     glm::vec3 pos(0.0f);
     if (!Positions.empty()) {
-        size_t i = FindKeyIndex<PositionKey, glm::vec3>(Positions, timeTicks);
+        size_t i = FindKeyIndex(Positions, timeTicks);
         size_t j = std::min(i + 1, Positions.size() - 1);
         float f = Factor(Positions[i].TimeTicks, Positions[j].TimeTicks, timeTicks);
         pos = glm::mix(Positions[i].Value, Positions[j].Value, f);
@@ -31,7 +34,7 @@ glm::mat4 BoneAnimChannel::Interpolate(float timeTicks) const {
 
     glm::quat rot(1, 0, 0, 0);
     if (!Rotations.empty()) {
-        size_t i = FindKeyIndex<RotationKey, glm::quat>(Rotations, timeTicks);
+        size_t i = FindKeyIndex(Rotations, timeTicks);
         size_t j = std::min(i + 1, Rotations.size() - 1);
         float f = Factor(Rotations[i].TimeTicks, Rotations[j].TimeTicks, timeTicks);
         rot = glm::slerp(Rotations[i].Value, Rotations[j].Value, f);
@@ -40,7 +43,7 @@ glm::mat4 BoneAnimChannel::Interpolate(float timeTicks) const {
 
     glm::vec3 scale(1.0f);
     if (!Scales.empty()) {
-        size_t i = FindKeyIndex<ScaleKey, glm::vec3>(Scales, timeTicks);
+        size_t i = FindKeyIndex(Scales, timeTicks);
         size_t j = std::min(i + 1, Scales.size() - 1);
         float f = Factor(Scales[i].TimeTicks, Scales[j].TimeTicks, timeTicks);
         scale = glm::mix(Scales[i].Value, Scales[j].Value, f);

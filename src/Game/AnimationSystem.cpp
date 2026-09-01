@@ -45,6 +45,7 @@ void UpdateAnimators(World& world, float dt) {
 
         if (!anim.Initialized) {
             anim.BasePosition = transform.Position;
+            anim.BaseRotation = transform.RotationEuler;
             anim.BaseColor = light ? light->Color : glm::vec3(1.0f);
             anim.Elapsed = 0.0f;
             anim.Initialized = true;
@@ -52,8 +53,15 @@ void UpdateAnimators(World& world, float dt) {
         anim.Elapsed += dt;
         const float t = anim.Elapsed;
 
-        // Spin: accumulate into the authored rotation.
-        transform.RotationEuler += anim.SpinDegPerSec * dt;
+        // Spin: authored base + offset(Elapsed), same reversible form as orbit/bob (#109) —
+        // no unbounded accumulation into RotationEuler. Wrap only the axes that actually spin
+        // so an authored tilt on a still axis isn't snapped into [0,360).
+        glm::vec3 rot = anim.BaseRotation + anim.SpinDegPerSec * t;
+        for (int k = 0; k < 3; ++k) {
+            if (anim.SpinDegPerSec[k] != 0.0f)
+                rot[k] = std::fmod(std::fmod(rot[k], 360.0f) + 360.0f, 360.0f);
+        }
+        transform.RotationEuler = rot;
 
         // Position = authored base + orbit + bob.
         glm::vec3 pos = anim.BasePosition;

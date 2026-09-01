@@ -36,6 +36,8 @@ void PrintUsage(const char* exeName) {
         "  --no-normalize          Don't contrast-stretch split channels to fill\n"
         "                          0..255 (on by default, since heightmap data\n"
         "                          rarely uses its full source bit range)\n"
+        "  --pause                 Wait for Enter before exiting (default: only on a\n"
+        "                          bare drag-and-drop launch, never for an explicit CLI run)\n"
         "  -h, --help              Show this message\n\n"
         "Examples:\n"
         "  " << exeName << " -i Terrain_Height.tif -o Output --tile-size 1024\n"
@@ -58,6 +60,8 @@ int main(int argc, char** argv) {
     bool outputExplicit = false;
     int maxThreads = 0;
     bool showHelp = false;
+    bool pauseExplicit = false; // --pause: force the "Press Enter" wait even for an explicit CLI run
+    bool sawDashedArg = false;  // any -x / --x present => treat as an explicit CLI invocation, not a drop
 
     // Single-file mode inputs.
     std::string singleInput;
@@ -73,6 +77,7 @@ int main(int argc, char** argv) {
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
+        if (!arg.empty() && arg[0] == '-') sawDashedArg = true;
         auto nextArg = [&](const char* flag) -> std::string {
             if (i + 1 >= argc) {
                 std::cerr << "[Error] " << flag << " requires a value.\n";
@@ -100,6 +105,8 @@ int main(int argc, char** argv) {
             flipY = true;
         } else if (arg == "--no-normalize") {
             normalize = false;
+        } else if (arg == "--pause") {
+            pauseExplicit = true;
         } else if (arg == "--threads") {
             maxThreads = std::atoi(nextArg(arg.c_str()).c_str());
         } else if (arg == "-h" || arg == "--help") {
@@ -120,6 +127,13 @@ int main(int argc, char** argv) {
         PrintUsage(argv[0]);
         return 0;
     }
+
+    // "Press Enter to exit" is only useful when the window would otherwise vanish before the
+    // result can be read — i.e. an Explorer drag-and-drop launch (bare paths, no flags). An
+    // explicit CLI invocation should just return to the prompt. `--pause` forces it either way;
+    // redirected stdin never pauses (would hang scripts/CI). (#126)
+    const bool dragDropLaunch = !sawDashedArg && !positionalInputs.empty();
+    const bool shouldPause = _isatty(_fileno(stdin)) && (pauseExplicit || dragDropLaunch);
 
     // Dropping several files onto the exe/shortcut at once (as opposed to just one) means
     // Windows handed us multiple bare positional args - route those into batch mode too, not
@@ -159,7 +173,7 @@ int main(int argc, char** argv) {
                        << " (failed: " << p.FailedFiles << ") - finished: " << p.CurrentFileName << "\n";
         });
 
-        if (_isatty(_fileno(stdin))) {
+        if (shouldPause) {
             std::cout << "\nPress Enter to exit...";
             std::cin.get();
         }
@@ -196,8 +210,8 @@ int main(int argc, char** argv) {
 
     // Only when running interactively (a real console, not piped/redirected input) - a drag-
     // and-drop launch would otherwise flash the result and close before it can be read.
-    // Skipped when input is redirected so this never hangs a script or CI run.
-    if (_isatty(_fileno(stdin))) {
+    // Skipped for an explicit CLI run and for redirected stdin (see shouldPause above, #126).
+    if (shouldPause) {
         std::cout << "\nPress Enter to exit...";
         std::cin.get();
     }

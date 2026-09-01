@@ -2,7 +2,10 @@
 #include "Model.h"
 #include "Shader.h"
 #include "ModelShaderSource.h"
+#include "Log.h"
 #include "gl.h"
+
+#include <string>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
@@ -63,6 +66,16 @@ unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, 
     glBindFramebuffer(GL_FRAMEBUFFER, m_FBO);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_ColorTex, 0);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_DepthRBO);
+
+    GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
+        Log::Error("ModelPreviewRenderer: FBO incomplete (0x" + std::to_string(fboStatus) + ") at " +
+                   std::to_string(previewW) + "x" + std::to_string(previewH) + " - skipping preview");
+        glBindFramebuffer(GL_FRAMEBUFFER, (unsigned int)prevFBO);
+        glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+        return m_ColorTex;
+    }
+
     glViewport(0, 0, previewW, previewH);
 
     glEnable(GL_DEPTH_TEST);
@@ -90,13 +103,21 @@ unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, 
     m_Shader->SetMat4("uView", view);
     m_Shader->SetMat4("uProj", proj);
     m_Shader->SetMat4("uModel", glm::mat4(1.0f));
+    m_Shader->SetMat4("uNormalMatrix", glm::mat4(1.0f)); // model is identity here (#104)
     m_Shader->SetVec3("uViewPos", eye);
     // Fixed, preview-only key light - independent of the real scene's light so the preview
     // always reads consistently regardless of where/how the asset will actually be placed.
-    m_Shader->SetVec3("uLightDir", glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f)));
-    m_Shader->SetVec3("uLightColor", glm::vec3(3.0f));
-    m_Shader->SetInt("uPointLightCount", 0);
+    // Fixed preview key light, into the SSBO the shared model shader reads at binding 0.
+    m_Lights.Clear();
+    m_Lights.AddDirectional(glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f)), glm::vec3(1.0f), 3.0f);
+    m_Lights.Upload();
+    m_Lights.Bind(0);
     m_Shader->SetInt("uUnlit", 0);
+    // This offscreen preview has no shared Tonemapper pass, so keep the baked Reinhard + gamma
+    // in the model shader for it (the real scene sets this to 0 and tonemaps separately).
+    m_Shader->SetInt("uApplyTonemap", 1);
+    m_Shader->SetInt("uShadowEnabled", 0); // preview has no shadow pass
+    m_Shader->SetInt("uShadowCascadeCount", 0);
 
     model.Draw(*m_Shader);
 
