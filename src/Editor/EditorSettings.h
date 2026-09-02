@@ -15,6 +15,13 @@ struct EditorSettings {
     // ImGui::SetTooltip directly, so this one flag actually governs all of them.
     bool ShowTooltips = true;
 
+    // Editor UI scale. 0 = follow the monitor's content scale (Windows display-scaling %), which
+    // is right most of the time. Set a value (e.g. 1.25) to override it — useful when a project
+    // authored on a high-DPI 4K panel is opened on a plain 1080p monitor and the whole editor
+    // reads too small (or vice-versa). Fonts bake at this scale, so a change applies on the next
+    // launch. Range clamped to [0.75, 2.5] by the Preferences slider.
+    float UiScaleOverride = 0.0f;
+
     // Periodically re-saves the current scene to its own file while editing (only when there
     // are actually unsaved changes) — a safety net against a crash/force-quit losing work,
     // independent of the existing always-on "save on clean exit" behavior. Interval is in
@@ -46,6 +53,17 @@ struct EditorSettings {
     int ShadowResolution = 4096;
     int ShadowCascades = 4;          // 2..4 — fewer = cheaper, coarser far shadows
     float ShadowDistance = 500.0f;
+
+    // --- Scene-view ground grid. GridOpacity is a 0..1 master multiplier on the shader's line
+    // alpha; the grid also dissolves as the view tilts toward the horizon, like Unity's. The
+    // axis lines are the coloured rules through the origin — X (red) and Z (blue) on the
+    // ground, plus a green Y line running straight up.
+    float GridOpacity = 0.6f;
+    float GridMinorSpacing = 1.0f;   // world units between minor lines (also the grid-snap step)
+    int   GridMajorEvery = 10;       // a brighter major line every N minor cells
+    float GridFadeDistance = 80.0f;  // world units from the camera where the grid fully fades
+    bool  GridShowAxisLines = true;
+    float GridAxisThickness = 0.5f;  // screen-pixel width of the coloured X/Y/Z axis lines (slider min)
 
     // Absolute path of the scene open when the editor last closed / last Open'd / Saved As.
     // Loaded on startup when the file still exists; empty (or missing file) falls back to the

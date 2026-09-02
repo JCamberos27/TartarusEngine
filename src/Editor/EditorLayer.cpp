@@ -646,6 +646,14 @@ void EditorLayer::Init(GLFWwindow* window) {
     glfwGetWindowContentScale(window, &xscale, &yscale);
     m_UIScale = xscale > 0.0f ? xscale : 1.0f;
 
+    // Manual override (Preferences > General > "UI scale"). A project authored on a 4K panel at
+    // 200% Windows scaling and then opened on a plain 1080p monitor gets m_UIScale 1.0 and the
+    // whole editor reads half the physical size it used to — this lets the user pin it back
+    // (0 = keep following the monitor). Clamped to the same range the slider offers.
+    if (EditorSettings::Get().UiScaleOverride > 0.0f) {
+        m_UIScale = std::clamp(EditorSettings::Get().UiScaleOverride, 0.75f, 2.5f);
+    }
+
     // Asset Browser tree width / icon size: restore the user's last size, or fall back to a
     // roomy DPI-scaled default (folder names like "Chesterfield Sofa" fit without a manual drag,
     // and thumbnails start Large rather than as tiny 32px chips).
@@ -663,63 +671,86 @@ void EditorLayer::Init(GLFWwindow* window) {
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    // Layout/spacing polish: a bit more breathing room and softened corners read as more
-    // deliberate than ImGui's sharp-cornered, tightly-packed defaults.
+    // --- Editor theme: a modern, dark-slate look (not pitch black), monochrome with one
+    // restrained cool accent. Square-ish corners and compact spacing; the 3D viewport still
+    // owns all the saturated colour (axis R/G/B, the warm selection outline). (#92)
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding = 8.0f;
-    style.ChildRounding = 6.0f;
-    style.FrameRounding = 6.0f;   // buttons, inputs, combos, checkboxes — the most visible one
-    style.GrabRounding = 6.0f;
-    style.ScrollbarRounding = 8.0f;
-    style.PopupRounding = 8.0f;   // menus and tooltips
-    style.TabRounding = 6.0f;
-    style.WindowPadding = ImVec2(10.0f, 10.0f);
-    style.FramePadding = ImVec2(6.0f, 4.0f);
-    style.ItemSpacing = ImVec2(8.0f, 6.0f);
-    style.IndentSpacing = 18.0f;
+    style.WindowRounding = 0.0f;
+    style.ChildRounding = 3.0f;
+    style.FrameRounding = 3.0f;   // buttons, inputs, combos, checkboxes — the most visible one
+    style.GrabRounding = 3.0f;
+    style.ScrollbarRounding = 3.0f;
+    style.PopupRounding = 4.0f;   // menus and tooltips
+    style.TabRounding = 3.0f;
+    style.WindowPadding = ImVec2(9.0f, 7.0f);
+    style.FramePadding = ImVec2(7.0f, 4.0f);
+    style.ItemSpacing = ImVec2(7.0f, 5.0f);
+    style.ItemInnerSpacing = ImVec2(5.0f, 4.0f);
+    style.IndentSpacing = 16.0f;
+    style.ScrollbarSize = 12.0f;
+    style.GrabMinSize = 9.0f;
     style.WindowBorderSize = 1.0f;
-    style.Colors[ImGuiCol_Border] = ImVec4(0.22f, 0.22f, 0.24f, 0.60f);
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.015f, 0.015f, 0.015f, 0.97f);
-    style.Colors[ImGuiCol_ChildBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-    style.Colors[ImGuiCol_PopupBg] = ImVec4(0.03f, 0.03f, 0.03f, 0.98f);
-    style.Colors[ImGuiCol_TitleBg] = ImVec4(0.02f, 0.02f, 0.02f, 1.00f);
-    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.05f, 0.05f, 0.05f, 1.00f);
-    style.Colors[ImGuiCol_FrameBg] = ImVec4(0.08f, 0.08f, 0.09f, 1.00f);
-    style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.13f, 0.13f, 0.14f, 1.00f);
-    style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.4f);
+    style.FrameBorderSize = 0.0f;
+    style.TabBarBorderSize = 1.0f;
+    style.SeparatorTextBorderSize = 1.0f;
+    style.WindowTitleAlign = ImVec2(0.0f, 0.5f);
 
-    // Replace the default blue accent with a neutral dark grey across every widget that
-    // uses it (checkmarks, sliders, buttons, selected tree/hierarchy rows, tabs, nav highlight).
-    ImVec4 accent(0.32f, 0.32f, 0.34f, 1.00f);
-    ImVec4 accentHovered(0.42f, 0.42f, 0.45f, 1.00f);
-    ImVec4 accentActive(0.52f, 0.52f, 0.55f, 1.00f);
+    // Base greys (dark slate). Panels sit a couple of steps above pure black; inputs are
+    // recessed a step below the panel; popups/menus match the panel.
+    style.Colors[ImGuiCol_WindowBg]        = ImVec4(0.137f, 0.137f, 0.145f, 1.00f);
+    style.Colors[ImGuiCol_ChildBg]         = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
+    style.Colors[ImGuiCol_PopupBg]         = ImVec4(0.117f, 0.117f, 0.125f, 0.98f);
+    style.Colors[ImGuiCol_MenuBarBg]       = ImVec4(0.117f, 0.117f, 0.125f, 1.00f);
+    style.Colors[ImGuiCol_TitleBg]         = ImVec4(0.098f, 0.098f, 0.105f, 1.00f);
+    style.Colors[ImGuiCol_TitleBgActive]   = ImVec4(0.125f, 0.125f, 0.133f, 1.00f);
+    style.Colors[ImGuiCol_TitleBgCollapsed]= ImVec4(0.098f, 0.098f, 0.105f, 1.00f);
+    style.Colors[ImGuiCol_Border]          = ImVec4(0.290f, 0.290f, 0.320f, 0.50f);
+    style.Colors[ImGuiCol_BorderShadow]    = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
+    style.Colors[ImGuiCol_Separator]       = ImVec4(0.240f, 0.240f, 0.270f, 0.55f);
+    style.Colors[ImGuiCol_FrameBg]         = ImVec4(0.100f, 0.100f, 0.108f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgHovered]  = ImVec4(0.160f, 0.160f, 0.172f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgActive]   = ImVec4(0.196f, 0.200f, 0.223f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarBg]     = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
+    style.Colors[ImGuiCol_ScrollbarGrab]        = ImVec4(0.300f, 0.300f, 0.330f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.380f, 0.380f, 0.420f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarGrabActive]  = ImVec4(0.460f, 0.460f, 0.510f, 1.00f);
+    style.Colors[ImGuiCol_Text]            = ImVec4(0.860f, 0.870f, 0.890f, 1.00f);
+    style.Colors[ImGuiCol_TextDisabled]    = ImVec4(0.450f, 0.460f, 0.500f, 1.00f);
 
-    style.Colors[ImGuiCol_CheckMark] = accentActive;
-    style.Colors[ImGuiCol_SliderGrab] = accent;
-    style.Colors[ImGuiCol_SliderGrabActive] = accentActive;
-    style.Colors[ImGuiCol_Button] = accent;
-    style.Colors[ImGuiCol_ButtonHovered] = accentHovered;
-    style.Colors[ImGuiCol_ButtonActive] = accentActive;
-    style.Colors[ImGuiCol_Header] = accent;
-    style.Colors[ImGuiCol_HeaderHovered] = accentHovered;
-    style.Colors[ImGuiCol_HeaderActive] = accentActive;
-    style.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.30f, 0.30f, 0.32f, 1.00f);
-    style.Colors[ImGuiCol_SeparatorHovered] = accentHovered;
-    style.Colors[ImGuiCol_SeparatorActive] = accentActive;
+    // The one accent: a desaturated cool slate. Drives selected rows, active toggles, hovered
+    // separators/grips, nav — present enough to read at a glance, never a saturated blue.
+    ImVec4 accent(0.255f, 0.275f, 0.325f, 1.00f);
+    ImVec4 accentHovered(0.325f, 0.350f, 0.415f, 1.00f);
+    ImVec4 accentActive(0.400f, 0.435f, 0.520f, 1.00f);
+
+    style.Colors[ImGuiCol_CheckMark]         = ImVec4(0.640f, 0.680f, 0.780f, 1.00f);
+    style.Colors[ImGuiCol_SliderGrab]        = accentActive;
+    style.Colors[ImGuiCol_SliderGrabActive]  = ImVec4(0.520f, 0.560f, 0.660f, 1.00f);
+    // Real labelled buttons (Add Component, Duplicate, dialogs) keep a subtle raised body;
+    // the toolbar's icon strip overrides this locally to draw flat (see DrawTopToolbar).
+    style.Colors[ImGuiCol_Button]            = ImVec4(0.185f, 0.185f, 0.200f, 1.00f);
+    style.Colors[ImGuiCol_ButtonHovered]     = ImVec4(0.245f, 0.250f, 0.275f, 1.00f);
+    style.Colors[ImGuiCol_ButtonActive]      = ImVec4(0.300f, 0.310f, 0.345f, 1.00f);
+    style.Colors[ImGuiCol_Header]            = accent;         // selected hierarchy / tree row
+    style.Colors[ImGuiCol_HeaderHovered]     = accentHovered;
+    style.Colors[ImGuiCol_HeaderActive]      = accentActive;
+    style.Colors[ImGuiCol_SeparatorHovered]  = accentHovered;
+    style.Colors[ImGuiCol_SeparatorActive]   = accentActive;
+    style.Colors[ImGuiCol_ResizeGrip]        = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
     style.Colors[ImGuiCol_ResizeGripHovered] = accentHovered;
-    style.Colors[ImGuiCol_ResizeGripActive] = accentActive;
-    // Tabs: fully neutral grays, no accent — the selected tab reads by being a distinctly
-    // lighter step, not by color. (ImGui 1.93 names; TabActive/TabUnfocused/TabUnfocusedActive
-    // are compat aliases for TabSelected/TabDimmed/TabDimmedSelected.)
-    style.Colors[ImGuiCol_Tab]                       = ImVec4(0.15f, 0.15f, 0.15f, 1.00f); // focused bar, unselected
-    style.Colors[ImGuiCol_TabHovered]               = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
-    style.Colors[ImGuiCol_TabSelected]             = ImVec4(0.28f, 0.28f, 0.28f, 1.00f); // focused bar, selected
-    style.Colors[ImGuiCol_TabDimmed]              = ImVec4(0.12f, 0.12f, 0.12f, 1.00f); // unfocused bar, unselected
-    style.Colors[ImGuiCol_TabDimmedSelected]     = ImVec4(0.22f, 0.22f, 0.22f, 1.00f); // unfocused bar, selected
-    style.Colors[ImGuiCol_TabSelectedOverline]  = ImVec4(0.00f, 0.00f, 0.00f, 0.00f); // no accent line
-    style.Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-    style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(accent.x, accent.y, accent.z, 0.45f);
-    style.Colors[ImGuiCol_NavCursor] = accentActive;
+    style.Colors[ImGuiCol_ResizeGripActive]  = accentActive;
+    // Tabs: neutral greys; the active tab reads by a lighter body plus one thin cool keyline.
+    style.Colors[ImGuiCol_Tab]                        = ImVec4(0.130f, 0.130f, 0.138f, 1.00f);
+    style.Colors[ImGuiCol_TabHovered]                 = ImVec4(0.220f, 0.225f, 0.245f, 1.00f);
+    style.Colors[ImGuiCol_TabSelected]                = ImVec4(0.185f, 0.190f, 0.205f, 1.00f);
+    style.Colors[ImGuiCol_TabDimmed]                  = ImVec4(0.110f, 0.110f, 0.118f, 1.00f);
+    style.Colors[ImGuiCol_TabDimmedSelected]          = ImVec4(0.155f, 0.158f, 0.170f, 1.00f);
+    style.Colors[ImGuiCol_TabSelectedOverline]        = ImVec4(0.450f, 0.490f, 0.600f, 0.90f);
+    style.Colors[ImGuiCol_TabDimmedSelectedOverline]  = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
+    style.Colors[ImGuiCol_TextSelectedBg]   = ImVec4(accent.x, accent.y, accent.z, 0.55f);
+    style.Colors[ImGuiCol_NavCursor]        = accentActive;
+    style.Colors[ImGuiCol_DockingPreview]   = ImVec4(accentActive.x, accentActive.y, accentActive.z, 0.55f);
+    style.Colors[ImGuiCol_DockingEmptyBg]   = ImVec4(0.090f, 0.090f, 0.098f, 1.00f);
 
     // Scale every size/padding/rounding set above (and ImGui's own defaults) by the monitor's
     // content scale, so spacing keeps its proportions instead of staying pinned to 96-DPI pixel
@@ -786,21 +817,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
 
-    // The wordmark PNG is pre-scaled offline (bicubic) to 900px wide, close to the ~2-3x of
-    // its on-screen size — small enough that runtime sampling stays near 1:1 instead of the
-    // heavy minification (from the old 3111px source) that shredded thin strokes and curves.
-    // Still mip + trilinear for shimmer-free stability at any DPI; IsSRGB off so the baked
-    // edge alpha composites 1:1 in ImGui's non-sRGB pipeline; clamp so no edge bleed.
-    {
-        TextureImportSettings logoSettings;
-        logoSettings.MaxTextureSize = 0;
-        logoSettings.GenerateMipmaps = true;
-        logoSettings.FilterMode = TextureImportSettings::Filter::Trilinear;
-        logoSettings.IsSRGB = false;
-        logoSettings.WrapMode = TextureImportSettings::Wrap::ClampToEdge;
-        m_LogoTexture = std::make_unique<Texture>("assets/branding/tartarus_wordmark.png", logoSettings);
-    }
-    if (!m_LogoTexture->IsValid()) m_LogoTexture.reset(); // missing file — just skip the watermark
+    // Wordmark removed in the #92 UI pass — only the corner monogram remains as branding.
 
     m_MarkTexture = std::make_unique<Texture>("assets/branding/tartarus_engine_mark.png");
     if (!m_MarkTexture->IsValid()) m_MarkTexture.reset();
@@ -1030,12 +1047,35 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
     const float kw = 160.0f * m_UIScale;
 
     switch (m_PrefsCategory) {
-    case 0: // General
+    case 0: { // General
         ImGui::SeparatorText("General");
         if (ImGui::Checkbox("Show editor tooltips", &prefs.ShowTooltips)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Hover hints on Inspector fields, Hierarchy rows and toolbar buttons.");
+
+        ImGui::SeparatorText("Display");
+        // 0 = auto (follow the monitor). Present the slider from 0.75; a value at/below the
+        // floor snaps back to Auto so there's one obvious "let the OS decide" position.
+        float uiScale = prefs.UiScaleOverride <= 0.0f ? m_UIScale : prefs.UiScaleOverride;
+        ImGui::SetNextItemWidth(kw);
+        bool isAuto = prefs.UiScaleOverride <= 0.0f;
+        if (ImGui::SliderFloat("UI scale", &uiScale, 0.70f, 2.50f,
+                               isAuto ? "Auto (%.2f)" : "%.2f")) {
+            prefs.UiScaleOverride = uiScale < 0.75f ? 0.0f : uiScale;
+            EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Scales the whole editor UI (fonts, panels, spacing).\n"
+                                 "Auto follows the monitor's display-scaling %%. Override it when a\n"
+                                 "layout built on a 4K panel opens too small on a 1080p monitor.\n"
+                                 "Takes effect on the next launch.");
+        if (!isAuto) {
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Auto##uiscale")) { prefs.UiScaleOverride = 0.0f; EditorSettings::Save(); }
+        }
+        ImGui::TextDisabled("Active: %.2fx%s", m_UIScale, isAuto ? "  (from monitor)" : "  (override)");
         break;
+    }
 
     case 1: // Viewport
         ImGui::SeparatorText("Viewport");
@@ -1052,10 +1092,39 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         break;
 
     case 2: // Grid & Snapping
-        ImGui::SeparatorText("Grid & Snapping");
+        ImGui::SeparatorText("Grid");
         ImGui::SetNextItemWidth(kw);
-        ImGui::DragFloat("Grid size", &m_GridSize, 0.05f, 0.05f, 50.0f, "%.2f");
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Spacing between minor grid lines, in world units.");
+        if (ImGui::SliderFloat("Opacity", &prefs.GridOpacity, 0.0f, 1.0f, "%.2f")) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Master strength of the grid lines. The grid also fades out on its own as the view tilts toward the horizon.");
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::DragFloat("Line spacing", &prefs.GridMinorSpacing, 0.05f, 0.05f, 50.0f, "%.2f")) {
+            prefs.GridMinorSpacing = std::clamp(prefs.GridMinorSpacing, 0.05f, 50.0f);
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("World units between minor lines. Also the step used by grid-snapped placement.");
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::DragInt("Major line every", &prefs.GridMajorEvery, 0.2f, 2, 50, "%d cells")) {
+            prefs.GridMajorEvery = std::clamp(prefs.GridMajorEvery, 2, 50);
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("A brighter major line is drawn every N minor cells.");
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::DragFloat("Fade distance", &prefs.GridFadeDistance, 1.0f, 10.0f, 1000.0f, "%.0f m")) {
+            prefs.GridFadeDistance = std::clamp(prefs.GridFadeDistance, 10.0f, 1000.0f);
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Distance from the camera at which the grid has fully faded out.");
+        if (ImGui::Checkbox("Show axis lines", &prefs.GridShowAxisLines)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("The coloured rules through the origin: X (red) and Z (blue) on the ground, and a green Y line straight up.");
+        if (!prefs.GridShowAxisLines) ImGui::BeginDisabled();
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::SliderFloat("Axis line thickness", &prefs.GridAxisThickness, 0.5f, 4.0f, "%.1f px")) EditorSettings::Save();
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Screen-pixel width of the red / green / blue axis lines.");
+        if (!prefs.GridShowAxisLines) ImGui::EndDisabled();
+
+        ImGui::SeparatorText("Snapping");
         ImGui::SetNextItemWidth(kw);
         ImGui::DragFloat("Position snap", &m_SnapTranslation, 0.05f, 0.01f, 50.0f, "%.2f");
         ImGui::SetNextItemWidth(kw);
@@ -2124,15 +2193,28 @@ void EditorLayer::DrawEngineMark(float dt) {
 }
 
 bool EditorLayer::IsMouseOverSceneViewport() const {
-    // Pure geometric test against the same rect picking/gizmos already trust (ViewportPos()/
+    // Geometric test against the same rect picking/gizmos already trust (ViewportPos()/
     // ViewportSize(), zeroed whenever the "Scene" tab isn't the active one) — deliberately NOT
-    // ImGui::IsWindowHovered(), which can read false in edge cases involving overlapping
-    // transparent gizmo-overlay windows or an active drag elsewhere, none of which should affect
-    // whether the mouse is, geometrically, over the viewport.
+    // ImGui::IsWindowHovered(), which can read false in edge cases involving the Scene window's
+    // own transparent gizmo-overlay children.
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return false;
     ImVec2 mouse = ImGui::GetIO().MousePos;
-    return mouse.x >= m_ViewportPos.x && mouse.x <= m_ViewportPos.x + m_ViewportSize.x &&
-           mouse.y >= m_ViewportPos.y && mouse.y <= m_ViewportPos.y + m_ViewportSize.y;
+    bool inRect = mouse.x >= m_ViewportPos.x && mouse.x <= m_ViewportPos.x + m_ViewportSize.x &&
+                  mouse.y >= m_ViewportPos.y && mouse.y <= m_ViewportPos.y + m_ViewportSize.y;
+    if (!inRect) return false;
+
+    // ...but the viewport stands down whenever the mouse belongs to another window sitting on
+    // top of it: a floating Preferences window (being dragged over the viewport, or just open
+    // and hovered), a popup, an undocked panel. Without this the pure rect test reads "over the
+    // viewport" and the fly-camera / scroll-zoom / picking / box-select all fire underneath the
+    // window the user is actually interacting with.
+    ImGuiContext& g = *GImGui;
+    if (g.MovingWindow != nullptr) return false; // any window is being dragged right now
+    ImGuiWindow* hovered = g.HoveredWindow;
+    if (!hovered) return true; // nothing on top — genuinely over the viewport
+    ImGuiWindow* scene = ImGui::FindWindowByName("Scene");
+    if (!scene) return true;
+    return hovered->RootWindowDockTree == scene->RootWindowDockTree;
 }
 
 bool EditorLayer::WantsCaptureMouse() const {
@@ -2152,6 +2234,23 @@ bool EditorLayer::WantsCaptureMouse() const {
 
 bool EditorLayer::WantsCaptureKeyboard() const {
     return ImGui::GetIO().WantCaptureKeyboard || m_GameInputActive;
+}
+
+bool EditorLayer::OtherWindowOwnsKeyboard() const {
+    // True when a real floating window (Preferences, an undocked panel) or an open menu/popup
+    // holds keyboard focus — its interactions shouldn't leak into the viewport as tool switches,
+    // view snaps, framing, quick-add, etc. Docked panels (Hierarchy/Inspector/Console) are NOT
+    // counted: pressing W right after clicking an object in the Hierarchy to switch to the Move
+    // tool is a normal, expected flow.
+    ImGuiContext& g = *GImGui;
+    ImGuiWindow* nav = g.NavWindow ? g.NavWindow->RootWindow : nullptr;
+    if (!nav) return false;
+    if (nav->Flags & (ImGuiWindowFlags_ChildWindow | ImGuiWindowFlags_Tooltip)) return false;
+    if (nav->Flags & ImGuiWindowFlags_Popup) return true;      // a menu / popup owns the keys
+    if (nav->DockIsActive || nav->DockNode) return false;      // a docked panel — allow shortcuts
+    if (nav == ImGui::FindWindowByName("Scene")) return false; // the viewport itself
+    if (nav == ImGui::FindWindowByName("##DockHost")) return false; // "the dockspace"
+    return true;                                               // a real floating window has focus
 }
 
 void EditorLayer::KeepDockspaceAlive() {
@@ -2269,42 +2368,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     ImGui::SetNextWindowViewport(ImGui::GetMainViewport()->ID);
     DrawTopToolbar(world, assets, editorCamera);
 
-    // Engine wordmark: a standalone overlay (not embedded in the toolbar's own layout, so it
-    // isn't clipped by the toolbar's height), fixed-size (scaled only by DPI, NOT by window
-    // width — sizing it as a fraction of window width blows up way past the Inspector panel's
-    // actual width on a large/high-res monitor) and pinned to the top-right corner with fixed
-    // margins. Non-interactive, like the old bottom-right viewport watermark this replaces —
-    // the "TE" monogram half of that moved elsewhere; this is text-only.
-    if (m_LogoTexture) {
-        float aspect = (float)m_LogoTexture->Width() / (float)m_LogoTexture->Height();
-        // Drawn a hair under 1:1 with the pre-scaled 760px source (logoW lands near mip 1),
-        // so letterforms have enough destination pixels to stay clean — the old 50px height
-        // undersampled the "ENGINE" subline badly.
-        float logoH = 64.0f * m_UIScale;
-        float logoW = logoH * aspect;
-        float topMargin = 26.0f * m_UIScale;
-
-        // Right-aligned to the Inspector column's right edge (its live rect, one frame stale —
-        // imperceptible) with a small margin, rather than centered on the column: right-align
-        // lets it be drawn larger (= crisper) without the wider quad clipping off the window.
-        ImGuiWindow* inspectorWin = ImGui::FindWindowByName("Inspector");
-        float rightEdge = inspectorWin ? (inspectorWin->Pos.x + inspectorWin->Size.x) : w;
-        float rightMargin = 16.0f * m_UIScale;
-        float centerX = rightEdge - rightMargin - logoW * 0.5f;
-
-        // Drawn straight onto the foreground draw list (like the viewport monogram) rather than
-        // an ImGui::Image in its own tiny window: the foreground list always renders on top and
-        // can't be buried by a Reset Layout dock rebuild, so the NoDocking/BringWindowToDisplayFront
-        // scaffolding the old windowed version needed is gone.
-        ImTextureID logoTex = (ImTextureID)(intptr_t)m_LogoTexture->GLHandle();
-        ImVec2 pMin(centerX - logoW * 0.5f, topMargin);
-        ImVec2 pMax(pMin.x + logoW, pMin.y + logoH);
-        ImDrawList* dl = ImGui::GetForegroundDrawList();
-
-        // Plain static wordmark — no glow halo, no breathing pulse. One flat, slightly
-        // translucent draw so it reads as a watermark rather than a live element.
-        dl->AddImage(logoTex, pMin, pMax, ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, 235));
-    }
+    // (The top-right wordmark overlay was removed in the #92 UI pass — the corner monogram
+    // (DrawEngineMark) is the only branding mark now.)
 
     ImGui::SetNextWindowPos(ImVec2(0, toolbarH));
     ImGui::SetNextWindowSize(ImVec2(w, h - toolbarH));
@@ -2323,9 +2388,17 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     bool rebuildLayout = m_ResetLayoutRequested;
     m_ResetLayoutRequested = false;
     // Reset Layout also un-hides any panel the user closed — otherwise "restore the default
-    // layout" would leave a panel missing with no obvious way to get it back.
+    // layout" would leave a panel missing with no obvious way to get it back — and re-derives
+    // the Asset Browser's tree width / icon size from the current UI scale. Those are stored as
+    // raw pixels, so a layout saved on a 4K panel leaves them oversized on a 1080p monitor;
+    // this makes one button recover a display change end-to-end.
     if (rebuildLayout) {
         m_ShowHierarchy = m_ShowInspector = m_ShowAssetBrowser = true;
+        m_AssetTreeWidth = 230.0f * m_UIScale;
+        m_AssetIconSize = 96.0f * m_UIScale;
+        EditorSettings::Get().AssetBrowserTreeWidth = 0.0f;
+        EditorSettings::Get().AssetBrowserIconSize = 0.0f;
+        EditorSettings::Save();
     }
     // One-time migration: builds before this seeded the Scene/Game viewport as the dockspace's
     // "central node". ImGui's DockNodeTreeUpdatePosSize() then hands every panel sharing a split
@@ -2453,6 +2526,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if (m_ShowAssetBrowser) DrawAssetBrowser(world, assets);
     DrawConsole();
     DrawStatsOverlay(world, dt);
+    DrawViewportStatusBar();
     DrawHistoryPanel(world, assets);
 
     // Drains a couple of queued imports per frame (see ImportQueueManager.h) and, while any
@@ -2542,7 +2616,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGui::End();
     }
 
-    if (!ImGui::GetIO().WantTextInput && !m_GameInputActive) {
+    if (!ImGui::GetIO().WantTextInput && !m_GameInputActive && !OtherWindowOwnsKeyboard()) {
         ImGuiIO& io = ImGui::GetIO();
 
         // W/E/R/T gizmo-tool shortcuts (Unity's own scheme) only when Right-drag isn't held —
@@ -3170,6 +3244,59 @@ void EditorLayer::DrawStatsOverlay(World& world, float dt) {
     ImGui::End();
 }
 
+void EditorLayer::DrawViewportStatusBar() {
+    if (!m_SceneViewportVisible || m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
+
+    const char* toolName =
+        m_GizmoOp == GizmoOp::Translate ? "Translate" :
+        m_GizmoOp == GizmoOp::Rotate    ? "Rotate"    :
+        m_GizmoOp == GizmoOp::Scale     ? "Scale"     : "Rect";
+
+    int selCount = (int)GetSelectedItems().size();
+    float fps = m_SmoothedFrameMs > 0.0001f ? 1000.0f / m_SmoothedFrameMs : 0.0f;
+
+    auto compact = [](int n) -> std::string {
+        if (n >= 1000000) { char b[32]; snprintf(b, sizeof(b), "%.1fM", n / 1e6); return b; }
+        if (n >= 1000)    { char b[32]; snprintf(b, sizeof(b), "%.1fk", n / 1e3); return b; }
+        return std::to_string(n);
+    };
+
+    const float barH = ImGui::GetTextLineHeight() + 8.0f * m_UIScale;
+    ImGui::SetNextWindowPos(ImVec2(m_ViewportPos.x, m_ViewportPos.y + m_ViewportSize.y - barH), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(m_ViewportSize.x, barH), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.85f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f * m_UIScale, 3.0f * m_UIScale));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    if (ImGui::Begin("##ViewportStatusBar", nullptr,
+            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings |
+            ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoInputs)) {
+        // Hairline along the top edge so the strip reads as chrome, not a floating label.
+        ImVec2 wp = ImGui::GetWindowPos(), ws = ImGui::GetWindowSize();
+        ImGui::GetWindowDrawList()->AddLine(wp, ImVec2(wp.x + ws.x, wp.y),
+            ImGui::GetColorU32(ImGuiCol_Border), 1.0f);
+
+        auto sep = [&]() { ImGui::SameLine(0, 6); ImGui::TextDisabled("\xc2\xb7"); ImGui::SameLine(0, 6); };
+
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("%.0f FPS", fps);
+        sep(); ImGui::TextDisabled("%.1f ms", m_SmoothedFrameMs);
+        sep(); ImGui::Text("%s draws", compact(m_RenderStats.DrawCalls).c_str());
+        sep(); ImGui::TextDisabled("%s tris", compact(m_RenderStats.Triangles).c_str());
+        sep();
+        if (selCount == 0) ImGui::TextDisabled("no selection");
+        else               ImGui::Text("%d selected", selCount);
+
+        // Active tool pinned to the right.
+        char toolBuf[32]; snprintf(toolBuf, sizeof(toolBuf), "%s  %s", ICON_FA_UP_DOWN_LEFT_RIGHT, toolName);
+        float tw = ImGui::CalcTextSize(toolBuf).x;
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - tw);
+        ImGui::TextUnformatted(toolBuf);
+    }
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+}
+
 // Unity-style Undo History: every recorded change, oldest to newest, with the current position
 // highlighted. Clicking any entry jumps straight there via JumpToUndoEntry/JumpToRedoEntry -
 // each step is still a single full-snapshot load (see PushUndo's own comment), not incremental
@@ -3419,16 +3546,19 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         ImGui::SameLine(0.0f, pad);
     };
 
-    // Icon-only + a tooltip carrying the full name/shortcut — keeps this row compact instead
-    // of spelling every label out. An "active" button (selected tool / enabled toggle) gets an
-    // accent-filled body plus a bright underline bar so the current state reads at a glance
-    // instead of the near-invisible grey the default ButtonActive gave it (audit #64).
+    // Flat icon buttons: no button body at rest (just the glyph), a faint grey wash on hover,
+    // and for an "active" toggle/tool an accent-tinted body plus one thin keyline along the
+    // bottom so the current state reads at a glance (#92 / audit #64).
     auto iconButton = [](const char* icon, const char* tooltip, bool active = false) {
-        const ImVec4 accent(0.15f, 0.72f, 0.92f, 1.0f); // cyan-blue active highlight
+        const ImVec4 keyline(0.55f, 0.60f, 0.72f, 1.0f); // cool neutral, matches the UI accent
         if (active) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(accent.x, accent.y, accent.z, 0.32f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(accent.x, accent.y, accent.z, 0.45f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(accent.x, accent.y, accent.z, 0.60f));
+            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.400f, 0.435f, 0.520f, 0.32f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.400f, 0.435f, 0.520f, 0.45f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.400f, 0.435f, 0.520f, 0.60f));
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f)); // flat at rest
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.245f, 0.250f, 0.275f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.300f, 0.310f, 0.345f, 1.0f));
         }
         // ImGui::Button() uses its label text as its ID too — two buttons that ever show the
         // same icon glyph would collide. Scope the ID to the (always-unique) tooltip instead.
@@ -3440,9 +3570,9 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             float y = mx.y - 2.0f * ImGui::GetIO().DisplayFramebufferScale.y;
             ImGui::GetWindowDrawList()->AddRectFilled(
                 ImVec2(mn.x + 3.0f, y), ImVec2(mx.x - 3.0f, mx.y - 1.0f),
-                ImGui::ColorConvertFloat4ToU32(accent), 1.0f);
-            ImGui::PopStyleColor(3);
+                ImGui::ColorConvertFloat4ToU32(keyline), 1.0f);
         }
+        ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
         return clicked;
     };
@@ -5301,9 +5431,10 @@ glm::vec3 EditorLayer::ComputeDropRayPosition(World& world, Camera& editorCamera
     // momentarily) - XZ only, since Y is about to be re-derived from where the object actually
     // sits (either here directly, for a prefab, or bottom-aligned in ComputeModelDropPosition).
     bool snapActive = m_GridSnapEnabled != ImGui::GetIO().KeyCtrl;
-    if (snapActive && m_GridSize > 0.0001f) {
-        position.x = std::round(position.x / m_GridSize) * m_GridSize;
-        position.z = std::round(position.z / m_GridSize) * m_GridSize;
+    float step = EditorSettings::Get().GridMinorSpacing;
+    if (snapActive && step > 0.0001f) {
+        position.x = std::round(position.x / step) * step;
+        position.z = std::round(position.z / step) * step;
     }
     return position;
 }
@@ -5690,7 +5821,17 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
 
     glm::mat4 viewProj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) * editorCamera.ViewMatrix();
-    ImDrawList* draw = ImGui::GetForegroundDrawList();
+
+    // Draw into the Scene window's own draw list (clipped to the viewport rect), NOT the
+    // foreground list — the foreground list renders on top of every panel, so light/empty
+    // icons would punch through the Inspector, Preferences, any window overlapping the
+    // viewport. Appended to the Scene window's list, they sit at its z-order and a panel on
+    // top correctly covers them.
+    ImGuiWindow* sceneWin = ImGui::FindWindowByName("Scene");
+    ImDrawList* draw = sceneWin ? sceneWin->DrawList : ImGui::GetForegroundDrawList();
+    const ImVec2 clipMin(m_ViewportPos.x, m_ViewportPos.y);
+    const ImVec2 clipMax(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y);
+    draw->PushClipRect(clipMin, clipMax, true);
 
     // Mesh-less entities would otherwise be invisible in the viewport — a light you can't see
     // is a light you can't select or aim.
@@ -5739,6 +5880,8 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
 
         if (selected) draw->AddCircle(screen, r * 1.6f, IM_COL32(255, 140, 25, 255), 0, 2.0f);
     }
+
+    draw->PopClipRect();
 }
 
 void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
