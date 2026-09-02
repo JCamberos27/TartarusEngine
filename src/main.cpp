@@ -21,6 +21,8 @@
 #include "HdrTarget.h"
 #include "Tonemapper.h"
 #include "LightBuffer.h"
+#include "ClusterGrid.h"
+#include "ClusterShaderSource.h"
 #include "CascadedShadowMap.h"
 #include "SpotShadowMap.h"
 #include "PointShadowMap.h"
@@ -355,6 +357,8 @@ int main() {
         Shader outlineDilateShader(kOutlineDilateVertSrc, kOutlineDilateFragSrc);
         Shader shadowShader(kShadowDepthVertexSrc, kShadowDepthFragmentSrc);
         Shader localShadowShader(kShadowDepthVertexSrc, kLocalShadowDepthFragmentSrc); // spot/point: linear depth
+        Shader clusterBuildShader(kBuildClustersCompute); // #120: per-view froxel AABBs
+        Shader clusterCullShader(kCullLightsCompute);     // #120: point/spot lights -> froxel lists
         unsigned int fsQuadVao = 0;
         glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
         TintOverlayRenderer tintOverlay;
@@ -557,6 +561,7 @@ int main() {
         HdrTarget gameHdr;
         Tonemapper tonemapper;
         LightBuffer lightBuffer; // scene lights -> std430 SSBO the model shader reads at binding 0
+        ClusterGrid clusterGrid; // #120: froxel light lists, rebuilt per rendered view each frame
         CascadedShadowMap shadowMap; // directional-sun CSM; depth array sampled by the model shader
         SpotShadowMap spotShadowMap; // perspective depth per shadow-casting spot light (#119)
         PointShadowMap pointShadowMap; // depth cube per shadow-casting point light (#119)
@@ -1110,6 +1115,27 @@ int main() {
 
                 // The light SSBO (binding 0) is built once per frame above — just bind it.
                 lightBuffer.Bind(0);
+
+                // Clustered-forward light culling (#120). Dice this view's frustum and assign
+                // every point/spot light to the froxels it reaches, so the fragment shader loops
+                // a short per-froxel list instead of all uLightCount lights. Perspective views
+                // only — the froxel AABB build assumes rays from the eye, so an orthographic
+                // editor view (not perf-critical) falls back to the full loop.
+                GLint vp[4] = {0, 0, 0, 0};
+                glGetIntegerv(GL_VIEWPORT, vp);
+                bool perspective = std::abs(sceneProj[3][3]) < 0.5f; // proj[3][3] == 1 for ortho
+                bool clusterOn = perspective && !unlit && vp[2] > 0 && vp[3] > 0;
+                if (clusterOn) {
+                    float nearZ = std::abs(sceneProj[3][2] / (sceneProj[2][2] - 1.0f));
+                    float farZ  = std::abs(sceneProj[3][2] / (sceneProj[2][2] + 1.0f));
+                    clusterGrid.Cull(clusterBuildShader, clusterCullShader, sceneView, sceneProj,
+                                     nearZ, farZ, vp[2], vp[3]);
+                    modelShader.Bind(); // Cull() left a compute program bound
+                    clusterGrid.BindForShading();
+                    modelShader.SetVec2("uClusterScreenSize", glm::vec2((float)vp[2], (float)vp[3]));
+                    modelShader.SetVec4("uClusterZParams", ClusterGrid::ZParams(nearZ, farZ));
+                }
+                modelShader.SetInt("uClusterEnabled", clusterOn ? 1 : 0);
 
                 modelShader.SetInt("uUnlit", unlit ? 1 : 0);
                 // Real scene path: emit linear HDR; the shared Tonemapper pass maps it after
