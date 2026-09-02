@@ -110,10 +110,21 @@ uniform float uShadowSoftness;        // PCF kernel radius in shadow-map texels 
 uniform sampler2DArrayShadow uShadowMap;
 
 // Spot-light shadow maps (#119): one perspective depth layer per casting spot, indexed by the
-// light's Params.y. Unit 9 (the sun CSM is unit 8, material maps 1..7).
+// light's Params.y. The map stores LINEAR distance-to-light / far, so the compare below is
+// against distance(fragment, uSpotShadowPos) / uSpotShadowFar — bias uniform in world space,
+// shadow reaches the full light Range. Unit 9 (the sun CSM is unit 8, material maps 1..7).
 uniform int  uSpotShadowCount;
 uniform mat4 uSpotShadowVP[4];
+uniform vec3 uSpotShadowPos[4];
+uniform float uSpotShadowFar[4];
 uniform sampler2DArrayShadow uSpotShadowMap;
+
+// Point-light cube shadow maps (#119): one depth cube per casting point light, indexed by the
+// light's Params.y. Also stores linear distance / uPointShadowFar[slot] (the light's Range).
+// Unit 10.
+uniform int   uPointShadowCount;
+uniform float uPointShadowFar[2];
+uniform samplerCubeArrayShadow uPointShadowMap;
 
 // Set for the editor's Unlit shading mode: skips all lighting and shows flat albedo, so
 // geometry/UV problems read clearly without shading hiding them.
@@ -243,22 +254,40 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
     return vis;
 }
 
-// Visibility from a spot light's perspective shadow map. 1 = lit, 0 = shadowed. 4-tap PCF.
+// Visibility from a spot light's shadow map. 1 = lit, 0 = shadowed. The map stores LINEAR
+// distance-to-light / far, so the compare reference is distance(fragment, light) / far and a
+// constant bias is uniform in world space — the shadow reaches the whole light Range. 4-tap PCF.
 float SpotShadow(int slot, vec3 worldPos, vec3 N) {
     if (slot < 0 || slot >= uSpotShadowCount) return 1.0;
-    vec4 lp = uSpotShadowVP[slot] * vec4(worldPos + N * 0.03, 1.0);
+    vec3 biasedPos = worldPos + N * 0.03;
+    vec4 lp = uSpotShadowVP[slot] * vec4(biasedPos, 1.0);
     if (lp.w <= 0.0) return 1.0;                       // behind the light
     vec3 p = (lp.xyz / lp.w) * 0.5 + 0.5;
-    if (p.z >= 1.0 || any(lessThan(p.xy, vec2(0.0))) || any(greaterThan(p.xy, vec2(1.0))))
-        return 1.0;                                    // outside the cone frustum -> unshadowed
+    if (any(lessThan(p.xy, vec2(0.0))) || any(greaterThan(p.xy, vec2(1.0))))
+        return 1.0;                                    // outside the cone -> unshadowed
+    float far = max(uSpotShadowFar[slot], 1e-3);
+    float d = distance(biasedPos, uSpotShadowPos[slot]);
+    if (d >= far) return 1.0;                          // past the shadow range
+    float ref = d / far - 0.0018;                      // uniform world-space bias
     vec2 texel = 1.0 / vec2(textureSize(uSpotShadowMap, 0).xy);
-    float ref = p.z - 0.0015;
     float vis = 0.0;
     vis += texture(uSpotShadowMap, vec4(p.xy + vec2(-0.5, -0.5) * texel, float(slot), ref));
     vis += texture(uSpotShadowMap, vec4(p.xy + vec2( 0.5, -0.5) * texel, float(slot), ref));
     vis += texture(uSpotShadowMap, vec4(p.xy + vec2(-0.5,  0.5) * texel, float(slot), ref));
     vis += texture(uSpotShadowMap, vec4(p.xy + vec2( 0.5,  0.5) * texel, float(slot), ref));
     return vis * 0.25;
+}
+
+// Visibility from a point light's depth cube. 1 = lit, 0 = shadowed. Cube stores linear
+// distance / far, so this is a direct distance compare — no dominant-axis NDC reconstruction.
+float PointShadow(int slot, vec3 worldPos, vec3 lightPos) {
+    if (slot < 0 || slot >= uPointShadowCount) return 1.0;
+    vec3 dir = worldPos - lightPos;          // cube lookup direction
+    float far = max(uPointShadowFar[slot], 1e-3);
+    float d = length(dir);
+    if (d >= far) return 1.0;                // past the shadow range
+    float ref = d / far - 0.0018;            // uniform world-space bias
+    return texture(uPointShadowMap, vec4(dir, float(slot)), ref);
 }
 
 // Cook-Torrance contribution for one light direction L delivering `radiance` to the fragment.
@@ -336,6 +365,8 @@ void main() {
                 if (cosAngle < outerCos) continue;
                 atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
                 atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #119
+            } else {
+                atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz); // #119
             }
             if (atten <= 0.0) continue;
             radiance *= atten;

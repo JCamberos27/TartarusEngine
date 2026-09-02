@@ -122,6 +122,7 @@ Window::Window(int width, int height, const std::string& title)
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glEnable(GL_MULTISAMPLE);
+    glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS); // smooth filtering across point-shadow cube face edges (#119)
 }
 
 Window::~Window() {

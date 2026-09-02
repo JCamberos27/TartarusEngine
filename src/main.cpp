@@ -23,6 +23,7 @@
 #include "LightBuffer.h"
 #include "CascadedShadowMap.h"
 #include "SpotShadowMap.h"
+#include "PointShadowMap.h"
 #include "GLStateCache.h"
 #include "Profiler.h"
 #include "Frustum.h"
@@ -84,6 +85,7 @@ uniform mat4 uLightViewProj;
 uniform int uUseSkinning;
 layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; }; // shared with the model VS (#104)
 out vec2 vUV;
+out vec3 vWorldPos; // used by the local-light (spot/point) depth FS; the sun FS ignores it
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
     if (uUseSkinning == 1) {
@@ -96,12 +98,15 @@ void main() {
         localPos = skinMat * localPos;
     }
     vUV = aUV;
-    gl_Position = uLightViewProj * uModel * localPos;
+    vec4 worldPos = uModel * localPos;
+    vWorldPos = worldPos.xyz;
+    gl_Position = uLightViewProj * worldPos;
 }
 )";
 // Alpha-tested casters (foliage, chain-link, decals): when a mesh has an albedo map its alpha
 // is sampled and cut below 0.5 so the shadow follows the cutout, not a solid quad (#116). Opaque
-// meshes leave uAlphaTest 0 and this is a no-op.
+// meshes leave uAlphaTest 0 and this is a no-op. Plain hardware depth (keeps early-Z) — used
+// for the cascaded SUN shadow, whose ortho projection is already linear.
 static const char* kShadowDepthFragmentSrc = R"(
 #version 460 core
 in vec2 vUV;
@@ -109,6 +114,23 @@ uniform int uAlphaTest;
 uniform sampler2D uAlbedo;
 void main() {
     if (uAlphaTest == 1 && texture(uAlbedo, vUV).a < 0.5) discard;
+}
+)";
+// Spot / point-light depth: store LINEAR distance-to-light / far rather than the perspective
+// projection's non-linear depth. A constant compare bias is then uniform in world space, so a
+// shadow reaches the full light Range instead of the far part of the frustum losing depth
+// precision (and the shadow with it). Writing gl_FragDepth forfeits early-Z — acceptable here.
+static const char* kLocalShadowDepthFragmentSrc = R"(
+#version 460 core
+in vec2 vUV;
+in vec3 vWorldPos;
+uniform int uAlphaTest;
+uniform sampler2D uAlbedo;
+uniform vec3 uShadowLightPos;
+uniform float uShadowFar;
+void main() {
+    if (uAlphaTest == 1 && texture(uAlbedo, vUV).a < 0.5) discard;
+    gl_FragDepth = clamp(distance(vWorldPos, uShadowLightPos) / max(uShadowFar, 1e-3), 0.0, 1.0);
 }
 )";
 
@@ -331,6 +353,7 @@ int main() {
         Shader outlineModelShader(kOutlineModelVertexSrc, kOutlineFragmentSrc);
         Shader outlineDilateShader(kOutlineDilateVertSrc, kOutlineDilateFragSrc);
         Shader shadowShader(kShadowDepthVertexSrc, kShadowDepthFragmentSrc);
+        Shader localShadowShader(kShadowDepthVertexSrc, kLocalShadowDepthFragmentSrc); // spot/point: linear depth
         unsigned int fsQuadVao = 0;
         glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
         TintOverlayRenderer tintOverlay;
@@ -346,7 +369,7 @@ int main() {
         // build/, where it was gitignored and a clean rebuild would delete it. Prefer the scene
         // that was open when the editor last closed, if it still exists (#95).
         EditorSettings::Load();
-        std::string scenePath = ProjectPaths::Resolve("scenes/Test.json");
+        std::string scenePath = ProjectPaths::Resolve("scenes/Showcase.json");
         {
             const std::string& last = EditorSettings::Get().LastScenePath;
             std::error_code sceneEc;
@@ -535,6 +558,7 @@ int main() {
         LightBuffer lightBuffer; // scene lights -> std430 SSBO the model shader reads at binding 0
         CascadedShadowMap shadowMap; // directional-sun CSM; depth array sampled by the model shader
         SpotShadowMap spotShadowMap; // perspective depth per shadow-casting spot light (#119)
+        PointShadowMap pointShadowMap; // depth cube per shadow-casting point light (#119)
 
         Camera editorCamera;
         // Play is no longer a whole-screen mode swap. Three independent bits describe the state:
@@ -798,7 +822,12 @@ int main() {
             lightBuffer.Clear();
             bool frameHaveDirectional = false;
             glm::mat4 spotShadowVP[SpotShadowMap::kMaxSpots];
+            glm::vec3 spotShadowPos[SpotShadowMap::kMaxSpots];
+            float spotShadowFar[SpotShadowMap::kMaxSpots];
             int spotShadowCount = 0; // shadow-casting spots that got a slot this frame (#119)
+            glm::vec3 pointShadowPos[PointShadowMap::kMaxPoints];
+            float pointShadowFar[PointShadowMap::kMaxPoints];
+            int pointShadowCount = 0; // shadow-casting point lights that got a cube this frame (#119)
             for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
                 if (lightBuffer.Count() >= LightBuffer::kMaxLights) break;
                 if (world.Registry.all_of<InactiveTag>(e)) continue;
@@ -808,8 +837,14 @@ int main() {
                 glm::vec3 aim = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
                 if (lc.Kind == LightComponent::Type::Directional) {
                     lightBuffer.AddDirectional(aim, lc.Color, lc.Intensity);
-                    if (!frameHaveDirectional) { frameSunDir = aim; frameSunAngularDeg = lc.AngularSizeDegrees; }
-                    frameHaveDirectional = true;
+                    // A zero-intensity sun contributes no light, so it must not drive the
+                    // cascaded shadow pass either — it's the way a scene opts out of having a
+                    // directional at all while still suppressing SceneSerializer's synthesised
+                    // fallback sun (which keys off a Directional existing, not its intensity).
+                    if (lc.Intensity > 0.0f) {
+                        if (!frameHaveDirectional) { frameSunDir = aim; frameSunAngularDeg = lc.AngularSizeDegrees; }
+                        frameHaveDirectional = true;
+                    }
                 } else if (lc.Kind == LightComponent::Type::Spot) {
                     float cosOuter = cosf(glm::radians(lc.SpotAngleDegrees));
                     float cosInner = cosf(glm::radians(lc.SpotAngleDegrees * 0.9f));
@@ -819,12 +854,21 @@ int main() {
                         slot = spotShadowCount++;
                         glm::vec3 up = std::abs(aim.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
                         float fov = glm::radians(std::min(lc.SpotAngleDegrees * 2.0f + 4.0f, 175.0f));
-                        spotShadowVP[slot] = glm::perspective(fov, 1.0f, 0.05f, std::max(lc.Range, 0.2f)) *
+                        spotShadowFar[slot] = std::max(lc.Range, 0.2f);
+                        spotShadowPos[slot] = pos;
+                        spotShadowVP[slot] = glm::perspective(fov, 1.0f, 0.05f, spotShadowFar[slot]) *
                                              glm::lookAt(pos, pos + aim, up);
                     }
                     lightBuffer.AddSpot(pos, aim, lc.Color, lc.Intensity, lc.Range, cosOuter, cosInner, slot);
                 } else {
-                    lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range);
+                    int slot = -1;
+                    if (lc.CastShadows && frameSettings.ShadowsEnabled &&
+                        pointShadowCount < PointShadowMap::kMaxPoints) {
+                        slot = pointShadowCount++;
+                        pointShadowPos[slot] = pos;
+                        pointShadowFar[slot] = std::max(lc.Range, 0.2f);
+                    }
+                    lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range, slot);
                 }
             }
             // No phantom fallback light here: turning every light off (or deleting the sun) now
@@ -905,11 +949,13 @@ int main() {
                 glEnable(GL_POLYGON_OFFSET_FILL);
                 glPolygonOffset(2.0f, 4.0f);
 
-                shadowShader.Bind();
+                localShadowShader.Bind(); // linear distance-to-light depth
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
                 for (int s = 0; s < spotShadowCount; ++s) {
                     spotShadowMap.Begin(s);
-                    shadowShader.SetMat4("uLightViewProj", spotShadowVP[s]);
+                    localShadowShader.SetMat4("uLightViewProj", spotShadowVP[s]);
+                    localShadowShader.SetVec3("uShadowLightPos", spotShadowPos[s]);
+                    localShadowShader.SetFloat("uShadowFar", spotShadowFar[s]);
                     Frustum lf = Frustum::FromViewProj(spotShadowVP[s]);
                     for (auto entity : casters) {
                         if (world.Registry.all_of<InactiveTag>(entity)) continue;
@@ -921,12 +967,66 @@ int main() {
                         if (vb && !r.ModelRef->HasAnimations() &&
                             !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
                             continue;
-                        shadowShader.SetMat4("uModel", model);
-                        r.ModelRef->DrawDepthOnly(shadowShader);
+                        localShadowShader.SetMat4("uModel", model);
+                        r.ModelRef->DrawDepthOnly(localShadowShader);
                     }
                 }
 
                 glDisable(GL_POLYGON_OFFSET_FILL);
+                glCullFace(GL_BACK);
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, window.GetWidth(), window.GetHeight());
+                GLStateCache::Invalidate();
+            }
+
+            // --- Point-light cube shadow maps (#119) — six faces per casting point light ------
+            if (frameSettings.ShadowsEnabled) {
+                pointShadowMap.Configure(std::min(frameSettings.ShadowResolution, 1024));
+            }
+            if (frameSettings.ShadowsEnabled && pointShadowCount > 0) {
+                PROFILE_SCOPE("Point Shadow Pass");
+                // Standard GL cube-map face order: +X -X +Y -Y +Z -Z, with the conventional ups.
+                static const glm::vec3 kFaceDir[6] = {
+                    { 1, 0, 0}, {-1, 0, 0}, {0,  1, 0}, {0, -1, 0}, {0, 0,  1}, {0, 0, -1} };
+                static const glm::vec3 kFaceUp[6] = {
+                    {0, -1, 0}, {0, -1, 0}, {0, 0,  1}, {0, 0, -1}, {0, -1, 0}, {0, -1, 0} };
+
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glDisable(GL_CULL_FACE); // omni light in an enclosed room: every wall must occlude
+                glEnable(GL_POLYGON_OFFSET_FILL);
+                glPolygonOffset(2.5f, 4.0f);
+
+                localShadowShader.Bind(); // linear distance-to-light depth
+                auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
+                for (int s = 0; s < pointShadowCount; ++s) {
+                    glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.05f, pointShadowFar[s]);
+                    localShadowShader.SetVec3("uShadowLightPos", pointShadowPos[s]);
+                    localShadowShader.SetFloat("uShadowFar", pointShadowFar[s]);
+                    for (int f = 0; f < 6; ++f) {
+                        pointShadowMap.BeginFace(s, f);
+                        glm::mat4 vp = proj * glm::lookAt(pointShadowPos[s],
+                                                         pointShadowPos[s] + kFaceDir[f], kFaceUp[f]);
+                        localShadowShader.SetMat4("uLightViewProj", vp);
+                        Frustum lf = Frustum::FromViewProj(vp);
+                        for (auto entity : casters) {
+                            if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                            auto& r = world.Registry.get<RenderableComponent>(entity);
+                            glm::mat4 model = world.ComposeWorldTransform(entity);
+                            glm::vec3 bmin = r.ModelRef->BoundsMin();
+                            glm::vec3 bmax = r.ModelRef->BoundsMax();
+                            bool vb = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
+                            if (vb && !r.ModelRef->HasAnimations() &&
+                                !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
+                                continue;
+                            localShadowShader.SetMat4("uModel", model);
+                            r.ModelRef->DrawDepthOnly(localShadowShader);
+                        }
+                    }
+                }
+
+                glDisable(GL_POLYGON_OFFSET_FILL);
+                glEnable(GL_CULL_FACE);
                 glCullFace(GL_BACK);
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glViewport(0, 0, window.GetWidth(), window.GetHeight());
@@ -943,7 +1043,12 @@ int main() {
                                   const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats) {
                 const EditorSettings& gs = EditorSettings::Get();
 
-                bool shadowsOn = sunShadowsReady && !unlit;
+                // Shadows for this view. Spot and point shadows only need shadows-enabled +
+                // a lit pass; the cascaded SUN shadow additionally needs its once-per-frame
+                // pass to have actually run (which requires a directional light). These used to
+                // share one flag, so deleting the sun silently killed spot/point shadows too.
+                bool shadowsOn = gs.ShadowsEnabled && !unlit;
+                bool sunShadowsOn = shadowsOn && sunShadowsReady;
 
                 sky.Draw(sceneView, sceneProj, world.SkyHorizonColor, world.SkyZenithColor);
 
@@ -953,7 +1058,7 @@ int main() {
                 modelShader.SetVec3("uViewPos", viewPos);
 
                 // Cascaded-shadow uniforms + the depth array on unit 8 (material maps use 1..7).
-                modelShader.SetInt("uShadowEnabled", shadowsOn ? 1 : 0);
+                modelShader.SetInt("uShadowEnabled", sunShadowsOn ? 1 : 0);
                 modelShader.SetInt("uShadowCascadeCount", shadowMap.Count());
                 {
                     glm::mat4 mats[CascadedShadowMap::kMaxCascades];
@@ -979,9 +1084,22 @@ int main() {
                 modelShader.SetInt("uSpotShadowCount", spotCountForView);
                 if (spotCountForView > 0)
                     modelShader.SetMat4Array("uSpotShadowVP[0]", spotCountForView, spotShadowVP);
+                for (int s = 0; s < spotCountForView; ++s) {
+                    modelShader.SetVec3("uSpotShadowPos[" + std::to_string(s) + "]", spotShadowPos[s]);
+                    modelShader.SetFloat("uSpotShadowFar[" + std::to_string(s) + "]", spotShadowFar[s]);
+                }
                 glActiveTexture(GL_TEXTURE0 + 9);
                 glBindTexture(GL_TEXTURE_2D_ARRAY, spotShadowMap.DepthArray());
                 modelShader.SetInt("uSpotShadowMap", 9);
+
+                // Point-light cube shadow maps on unit 10 (#119).
+                int pointCountForView = shadowsOn ? pointShadowCount : 0;
+                modelShader.SetInt("uPointShadowCount", pointCountForView);
+                for (int s = 0; s < pointCountForView; ++s)
+                    modelShader.SetFloat("uPointShadowFar[" + std::to_string(s) + "]", pointShadowFar[s]);
+                glActiveTexture(GL_TEXTURE0 + 10);
+                glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, pointShadowMap.DepthCubeArray());
+                modelShader.SetInt("uPointShadowMap", 10);
                 glActiveTexture(GL_TEXTURE0);
 
                 // The light SSBO (binding 0) is built once per frame above — just bind it.

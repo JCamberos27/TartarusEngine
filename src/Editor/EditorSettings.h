@@ -30,7 +30,7 @@ struct EditorSettings {
     //   FpsLimit: 0 = no software cap; otherwise the loop sleeps each frame to hold this rate.
     //   The cap is applied whatever VSyncMode is, but it's really meant for VSyncMode 0.
     int VSyncMode = 1;
-    int FpsLimit = 0;
+    int FpsLimit = 240;
 
     // --- HDR / tone mapping (lighting overhaul). The scene renders to a linear RGBA16F MSAA
     // target; a fullscreen pass then applies exposure -> curve -> gamma. ExposureEV is in
@@ -43,13 +43,13 @@ struct EditorSettings {
     // --- Directional-sun cascaded shadow maps. 4 cascades, PCF, resolution per layer.
     // ShadowDistance caps how far (world units) the cascades reach from the camera.
     bool ShadowsEnabled = true;
-    int ShadowResolution = 2048;
+    int ShadowResolution = 4096;
     int ShadowCascades = 4;          // 2..4 — fewer = cheaper, coarser far shadows
-    float ShadowDistance = 80.0f;
+    float ShadowDistance = 500.0f;
 
     // Absolute path of the scene open when the editor last closed / last Open'd / Saved As.
     // Loaded on startup when the file still exists; empty (or missing file) falls back to the
-    // built-in default (project/scenes/Test.json). Written by OpenScene / DoSaveAs. (#95)
+    // built-in default (project/scenes/Showcase.json). Written by OpenScene / DoSaveAs. (#95)
     std::string LastScenePath;
 
     // GameViewPanel's own preferences (see GameViewPanel::LoadSettings/SaveSettings) — kept here
