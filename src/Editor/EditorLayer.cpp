@@ -139,12 +139,10 @@ std::vector<std::string> FindSoundUsages(const World& world, const std::string& 
     return names;
 }
 
-// True only for entities the vertex-grab workflow applies to — level-geometry boxes are
-// excluded, matching the original "models only" restriction (a box's geometry is just its
-// private cube primitive; there's nothing meaningful to snap onto vertex-by-vertex).
+// True only for entities the vertex-grab workflow applies to. Level-geometry boxes qualify now
+// too — their cube primitive has real vertices to grab, same as any placed cube.
 bool IsVertexDraggable(World& world, entt::entity entity) {
-    if (entity == entt::null || !world.Registry.valid(entity) ||
-        world.Registry.all_of<LevelGeometryTag>(entity)) return false;
+    if (entity == entt::null || !world.Registry.valid(entity)) return false;
     // There has to be a mesh to grab a vertex FROM — a light or empty has none. Without this,
     // holding V over a selected light/empty would reach FindVertexUnderCursor's unchecked
     // get<RenderableComponent>(), which is undefined behavior (a crash) on an entity that
@@ -153,7 +151,7 @@ bool IsVertexDraggable(World& world, entt::entity entity) {
     // Vertex-drag math below works entirely in local space (matching TransformComponent for an
     // unparented entity); a parented entity's TransformComponent is local-relative-to-parent, so
     // mixing it with the world-space grab point would move the object to the wrong place. Not
-    // supported for now — same kind of deliberate scope line as the LevelGeometryTag exclusion.
+    // supported for now.
     if (const auto* hier = world.Registry.try_get<HierarchyComponent>(entity)) {
         if (hier->Parent != entt::null) return false;
     }
@@ -178,10 +176,8 @@ std::vector<entt::entity> ViewInCreationOrder(const entt::registry& reg, View vi
 
 // 1-based position of `entity` within its kind's creation-ordered list — the number behind the
 // "Box 3" / "Object 7" fallback shown for entities the user never named (#21 P10).
-int CreationOrdinal(const entt::registry& reg, entt::entity entity, bool levelGeometry) {
-    auto list = levelGeometry
-        ? ViewInCreationOrder(reg, reg.view<const NameComponent, const LevelGeometryTag>())
-        : ViewInCreationOrder(reg, reg.view<const NameComponent>(entt::exclude<LevelGeometryTag>));
+int CreationOrdinal(const entt::registry& reg, entt::entity entity) {
+    auto list = ViewInCreationOrder(reg, reg.view<const NameComponent>());
     for (size_t i = 0; i < list.size(); ++i)
         if (list[i] == entity) return static_cast<int>(i) + 1;
     return 0;
@@ -3568,64 +3564,19 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
 
     const bool filtering = !m_HierarchyFilter.empty();
 
-    auto boxView = world.Registry.view<const NameComponent, const LevelGeometryTag>();
-    int boxCount = 0, boxMatches = 0;
-    for (auto e : boxView) { boxCount++; if (MatchesHierarchyFilter(world, e)) boxMatches++; }
-
-    auto objectView = world.Registry.view<const NameComponent>(entt::exclude<LevelGeometryTag>);
-    int objectCount = 0, objectMatches = 0;
-    for (auto e : objectView) { objectCount++; if (MatchesHierarchyFilter(world, e)) objectMatches++; }
-
-    // Only split into "Level Geometry" / "Objects" groups when BOTH actually have entities —
-    // an empty "Level Geometry (0)" header above every scene was just noise (audit #68). With
-    // one kind present, the list is flat and unheadered.
-    const bool splitGroups = boxCount > 0 && objectCount > 0;
-
-    auto drawBoxes = [&]() {
-        for (auto entity : ViewInCreationOrder(world.Registry, boxView)) {
-            if (!MatchesHierarchyFilter(world, entity)) continue;
-            DrawHierarchyNode(world, assets, entity, /*isLevelGeometry=*/true);
-        }
-    };
-    auto drawObjects = [&]() {
-        for (auto entity : ViewInCreationOrder(world.Registry, objectView)) {
+    // One flat list — every entity in creation order, no "Level Geometry" / "Objects" split.
+    // A box, a model, a light and an empty are all just entities; the old grouping only ever
+    // added a header to scroll past. LevelGeometryTag survives as an invisible serialization /
+    // built-in-collider detail, nothing the Hierarchy shows.
+    for (auto entity : ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>())) {
+        if (!MatchesHierarchyFilter(world, entity)) continue;
+        // A parented entity draws nested under its parent, not as a sibling — except while
+        // filtering, where the parent may be filtered out, so matches are shown flat instead.
+        if (!filtering) {
             const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
-            // A parented entity draws nested under its parent instead of as a sibling — except
-            // while filtering, where the parent may be filtered out and the match would then
-            // never be reachable, so matches are listed flat instead.
-            if (!filtering && hier && hier->Parent != entt::null) continue;
-            if (filtering && !MatchesHierarchyFilter(world, entity)) continue;
-            DrawHierarchyNode(world, assets, entity, /*isLevelGeometry=*/false);
+            if (hier && hier->Parent != entt::null) continue;
         }
-    };
-
-    if (splitGroups) {
-        char geoHeader[64];
-        if (filtering)
-            snprintf(geoHeader, sizeof(geoHeader), "Level Geometry (%d / %d)###LevelGeo", boxMatches, boxCount);
-        else
-            snprintf(geoHeader, sizeof(geoHeader), "Level Geometry (%d)###LevelGeo", boxCount);
-        if (ImGui::TreeNodeEx(geoHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Solid boxes with collision built in - always block movement.");
-            drawBoxes();
-            ImGui::TreePop();
-        }
-
-        char objectHeader[64];
-        if (filtering)
-            snprintf(objectHeader, sizeof(objectHeader), "Objects (%d / %d)###Objects", objectMatches, objectCount);
-        else
-            snprintf(objectHeader, sizeof(objectHeader), "Objects (%d)###Objects", objectCount);
-        if (ImGui::TreeNodeEx(objectHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
-            if (ImGui::IsItemHovered()) {
-                EditorUI::SetTooltip("Models, lights, and empties. Drag one row onto another to parent it;\ndrag onto empty space below to un-parent.");
-            }
-            drawObjects();
-            ImGui::TreePop();
-        }
-    } else {
-        drawBoxes();
-        drawObjects();
+        DrawHierarchyNode(world, assets, entity, world.Registry.all_of<LevelGeometryTag>(entity));
     }
 
     // Dropping onto empty space below the tree un-parents (Unity's "drag to the root") — and
@@ -3724,12 +3675,11 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         return; // children stay collapsed for the one frame a rename is open — deliberate, keeps the field stable
     }
 
-    // Icon reflects what the entity actually is. A mesh that also carries a light shows BOTH
-    // glyphs, so mesh indication isn't lost the moment a light is added (#27 P16).
+    // Icon reflects what the entity actually is — same rule for a level-geometry box as for any
+    // other mesh (it has a RenderableComponent like everything else). A mesh that also carries a
+    // light shows BOTH glyphs, so mesh indication isn't lost the moment a light is added (#27 P16).
     std::string icon;
-    if (isLevelGeometry) {
-        icon = ICON_FA_CUBE;
-    } else {
+    {
         const bool hasMesh   = world.Registry.all_of<RenderableComponent>(entity);
         const bool hasLight  = world.Registry.all_of<LightComponent>(entity);
         const bool hasCamera = world.Registry.all_of<CameraComponent>(entity);
@@ -3743,8 +3693,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     // "(unnamed)" rows (#21 P10).
     std::string shownName = name.Name;
     if (shownName.empty())
-        shownName = (isLevelGeometry ? "Box " : "Object ")
-                  + std::to_string(CreationOrdinal(world.Registry, entity, isLevelGeometry));
+        shownName = "Object " + std::to_string(CreationOrdinal(world.Registry, entity));
 
     std::string label = icon + "  " + shownName;
 
@@ -4448,14 +4397,14 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         ImGui::Separator();
         ImGui::Spacing();
 
-        int boxes = 0, objects = 0, lights = 0, cameras = 0;
-        for (auto e : world.Registry.view<const NameComponent, const LevelGeometryTag>()) { (void)e; ++boxes; }
-        for (auto e : world.Registry.view<const NameComponent>(entt::exclude<LevelGeometryTag>)) { (void)e; ++objects; }
+        int objects = 0, meshes = 0, lights = 0, cameras = 0;
+        for (auto e : world.Registry.view<const NameComponent>()) { (void)e; ++objects; }
+        for (auto e : world.Registry.view<const RenderableComponent>()) { (void)e; ++meshes; }
         for (auto e : world.Registry.view<const LightComponent>()) { (void)e; ++lights; }
         for (auto e : world.Registry.view<const CameraComponent>()) { (void)e; ++cameras; }
         ImGui::TextDisabled("Scene");
         ImGui::BulletText("%d object%s", objects, objects == 1 ? "" : "s");
-        ImGui::BulletText("%d level-geometry box%s", boxes, boxes == 1 ? "" : "es");
+        ImGui::BulletText("%d mesh%s", meshes, meshes == 1 ? "" : "es");
         ImGui::BulletText("%d light%s, %d camera%s", lights, lights == 1 ? "" : "s",
                           cameras, cameras == 1 ? "" : "s");
 
@@ -4506,8 +4455,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
 
     const char* kindIcon = ICON_FA_DRAW_POLYGON;
     const char* kindTip = "Model - an imported or primitive mesh";
-    if (isLevelGeometry) { kindIcon = ICON_FA_CUBE; kindTip = "Level Geometry - a solid box with collision"; }
-    else if (registry.all_of<LightComponent>(entity)) { kindIcon = ICON_FA_LIGHTBULB; kindTip = "Light - casts light into the scene"; }
+    if (registry.all_of<LightComponent>(entity)) { kindIcon = ICON_FA_LIGHTBULB; kindTip = "Light - casts light into the scene"; }
     else if (!registry.all_of<RenderableComponent>(entity)) { kindIcon = ICON_FA_DIAGRAM_PROJECT; kindTip = "Empty - a transform with no mesh, useful as a grouping pivot"; }
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted(kindIcon);
