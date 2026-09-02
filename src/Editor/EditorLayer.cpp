@@ -1089,6 +1089,20 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ImGui::Checkbox("Show grid", &m_ShowGrid);
         ImGui::Checkbox("Show transform gizmo", &m_ShowGizmos);
         ImGui::Checkbox("Frame camera on select", &m_FrameOnSelect);
+
+        ImGui::SeparatorText("Corner monogram");
+        if (ImGui::Checkbox("Show engine mark", &prefs.EngineMarkEnabled)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("The spinning TE monogram in the viewport's bottom-left corner.");
+        if (!prefs.EngineMarkEnabled) ImGui::BeginDisabled();
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::SliderFloat("Spin speed", &prefs.EngineMarkSpinSpeed, 0.0f, 4.0f, "%.2f rad/s")) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("How fast the monogram turns. 0 parks it; the default 0.52 is one revolution every ~12 s.");
+        if (ImGui::Checkbox("Prism", &prefs.EngineMarkPrism)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Paint the monogram with a slowly-drifting spectral gradient instead of the contrast-adaptive grey.");
+        if (!prefs.EngineMarkEnabled) ImGui::EndDisabled();
         break;
 
     case 2: // Grid & Snapping
@@ -2048,10 +2062,15 @@ void EditorLayer::DrawEngineMark(float dt) {
     if (!m_MarkTexture) return;
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
 
-    // Slow, subtle spin — a full rotation every ~12 seconds, not a dizzying logo-spinner.
-    const float kSpinSpeed = 0.52f; // radians/sec
+    // Spin rate is user-set (Preferences > Viewport). Default 0.52 rad/s is a full turn every
+    // ~12 s — a slow idle spin, not a dizzying logo-spinner; 0 parks it.
     const float kTwoPi = 6.28318530718f;
-    m_MarkSpinAngle = fmodf(m_MarkSpinAngle + dt * kSpinSpeed, kTwoPi);
+    float spinSpeed = EditorSettings::Get().EngineMarkSpinSpeed;
+    m_MarkSpinAngle = fmodf(m_MarkSpinAngle + dt * spinSpeed, kTwoPi);
+    if (m_MarkSpinAngle < 0.0f) m_MarkSpinAngle += kTwoPi; // stay in [0, 2pi) even for a negative speed
+    // Prism mode's spectral band drifts through the wheel on its own clock, independent of spin
+    // (so it still moves at spin speed 0). Gentle — this is ambient colour, not a strobe.
+    m_MarkHue = fmodf(m_MarkHue + dt * 0.6f, 1.0f); // ~1.7 s per full sweep of the wheel
 
     float size = 54.0f * m_UIScale; // 25% down from the #19-P19 bump; still reads as a mark, less visual weight
     float margin = 14.0f * m_UIScale;
@@ -2129,7 +2148,8 @@ void EditorLayer::DrawEngineMark(float dt) {
     // thing in here that could cost a frame. The per-frame ease below hides the low sample rate.
     m_MarkSampleAccum += dt;
     const float kSampleInterval = 0.1f;
-    if (m_SceneColorTexture != 0 && m_MarkSampleAccum >= kSampleInterval) {
+    const bool prism = EditorSettings::Get().EngineMarkPrism;
+    if (!prism && m_SceneColorTexture != 0 && m_MarkSampleAccum >= kSampleInterval) {
         m_MarkSampleAccum = 0.0f;
         int vw = (int)m_ViewportSize.x, vh = (int)m_ViewportSize.y;
         const int kMaxPatch = 64;
@@ -2175,26 +2195,52 @@ void EditorLayer::DrawEngineMark(float dt) {
     int markV = (int)(m_MarkContrastLum * 255.0f + 0.5f);
     markV = markV < 0 ? 0 : (markV > 255 ? 255 : markV);
 
-    // Drawn via the foreground draw list rather than an ImGui::Image in its own window: this
-    // needs per-vertex placement ImGui's Image widget can't do directly, and the foreground
-    // list also sidesteps the docking/z-order pitfalls the toolbar overlays needed NoDocking +
-    // explicit front-ordering to avoid (see DrawPlayStopButton/DrawViewGizmo) — it always
-    // renders on top, full stop, with no window of its own to get knocked around by a dock
-    // rebuild.
-    //
-    // Drawn face-on at full width. The old "sign on a post" fake-3D spin foreshortened the
-    // horizontal extent by cos(angle), so for most of each rotation the wordmark collapsed to a
-    // near-vertical sliver and read as a couple of strokes rather than a logo (#30). The spin
-    // phase is still advanced above — it only seeds the idle-bounce launch angle now.
-    float halfX = half;
-    ImVec2 p1(center.x - halfX, center.y - half);
-    ImVec2 p2(center.x + halfX, center.y - half);
-    ImVec2 p3(center.x + halfX, center.y + half);
-    ImVec2 p4(center.x - halfX, center.y + half);
+    // Appended to the Scene window's own draw list and clipped to the viewport rect — NOT the
+    // foreground list, which paints over every panel (the mark would then sit on top of the
+    // Preferences window, the Inspector, any popup overlapping the viewport). At the Scene
+    // window's z-order a panel on top correctly covers it. Same treatment as DrawEntityIcons.
+    ImGuiWindow* sceneWin = ImGui::FindWindowByName("Scene");
+    ImDrawList* dl = sceneWin ? sceneWin->DrawList : ImGui::GetForegroundDrawList();
+    dl->PushClipRect(ImVec2(m_ViewportPos.x, m_ViewportPos.y),
+                     ImVec2(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y), true);
 
-    ImGui::GetForegroundDrawList()->AddImageQuad((ImTextureID)(intptr_t)m_MarkTexture->GLHandle(),
-        p1, p2, p3, p4, ImVec2(0, 0), ImVec2(1, 0), ImVec2(1, 1), ImVec2(0, 1),
-        IM_COL32(markV, markV, markV, 190));
+    // Spin about the vertical (Y) axis — a sign turning on a post. The horizontal extent
+    // foreshortens by cos(angle), collapses to a line edge-on, then comes back mirrored. Full
+    // height is kept; only the left/right edges move.
+    float hx = half * cosf(m_MarkSpinAngle);
+    ImVec2 p1(center.x - hx, center.y - half); // top-left
+    ImVec2 p2(center.x + hx, center.y - half); // top-right
+    ImVec2 p3(center.x + hx, center.y + half); // bottom-right
+    ImVec2 p4(center.x - hx, center.y + half); // bottom-left
+    const ImVec2 uv1(0, 0), uv2(1, 0), uv3(1, 1), uv4(0, 1);
+    const ImTextureID tex = (ImTextureID)(intptr_t)m_MarkTexture->GLHandle();
+
+    if (prism) {
+        // A spectral band smeared left -> right across the mark, the whole band drifting slowly
+        // through the wheel — dispersion through glass, not a flat strobing hue. Needs per-vertex
+        // colour, so the quad is written into the draw list by hand (AddImageQuad is one colour).
+        float rL, gL, bL, rR, gR, bR;
+        ImGui::ColorConvertHSVtoRGB(m_MarkHue,                        0.62f, 1.0f, rL, gL, bL);
+        ImGui::ColorConvertHSVtoRGB(fmodf(m_MarkHue + 0.30f, 1.0f),   0.62f, 1.0f, rR, gR, bR);
+        const int a = 205;
+        ImU32 colL = IM_COL32((int)(rL*255+0.5f), (int)(gL*255+0.5f), (int)(bL*255+0.5f), a);
+        ImU32 colR = IM_COL32((int)(rR*255+0.5f), (int)(gR*255+0.5f), (int)(bR*255+0.5f), a);
+        dl->PushTextureID(tex);
+        dl->PrimReserve(6, 4);
+        ImDrawIdx v = (ImDrawIdx)dl->_VtxCurrentIdx;
+        dl->PrimWriteIdx(v); dl->PrimWriteIdx((ImDrawIdx)(v + 1)); dl->PrimWriteIdx((ImDrawIdx)(v + 2));
+        dl->PrimWriteIdx(v); dl->PrimWriteIdx((ImDrawIdx)(v + 2)); dl->PrimWriteIdx((ImDrawIdx)(v + 3));
+        dl->PrimWriteVtx(p1, uv1, colL);
+        dl->PrimWriteVtx(p2, uv2, colR);
+        dl->PrimWriteVtx(p3, uv3, colR);
+        dl->PrimWriteVtx(p4, uv4, colL);
+        dl->PopTextureID();
+    } else {
+        dl->AddImageQuad(tex, p1, p2, p3, p4, uv1, uv2, uv3, uv4,
+                         IM_COL32(markV, markV, markV, 190)); // contrast-adaptive grey
+    }
+
+    dl->PopClipRect();
 }
 
 bool EditorLayer::IsMouseOverSceneViewport() const {
@@ -2524,7 +2570,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
     ImGui::End();
 
-    if (m_ShowEngineMark) DrawEngineMark(dt);
+    if (EditorSettings::Get().EngineMarkEnabled) DrawEngineMark(dt);
 
     if (m_ShowHierarchy) DrawHierarchy(world, assets);
     if (m_ShowInspector) DrawInspector(world, assets, dt);
@@ -3528,7 +3574,8 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem(ICON_FA_CHART_SIMPLE "  Statistics", nullptr, &EditorSettings::Get().SceneShowStats))
                 EditorSettings::Save();
             ImGui::MenuItem(ICON_FA_CLOCK_ROTATE_LEFT "  History", nullptr, &m_ShowHistory);
-            ImGui::MenuItem(ICON_FA_CERTIFICATE "  Engine Mark", nullptr, &m_ShowEngineMark);
+            if (ImGui::MenuItem(ICON_FA_CERTIFICATE "  Engine Mark", nullptr, &EditorSettings::Get().EngineMarkEnabled))
+                EditorSettings::Save();
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
                 m_ResetLayoutRequested = true;
