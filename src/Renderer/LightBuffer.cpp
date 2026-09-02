@@ -40,14 +40,14 @@ void LightBuffer::AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLine
 }
 
 void LightBuffer::AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, const glm::vec3& colorLinear,
-                          float intensity, float range, float cosOuter, float cosInner) {
+                          float intensity, float range, float cosOuter, float cosInner, int shadowSlot) {
     if ((int)m_Lights.size() >= kMaxLights) return;
     glm::vec3 d = glm::length(dirWorld) > 1e-8f ? glm::normalize(dirWorld) : glm::vec3(0, -1, 0);
     GpuLight l{};
     l.PositionType = glm::vec4(posWorld, (float)Type::Spot);
     l.ColorRange   = glm::vec4(colorLinear * intensity, range);
     l.DirCutoff    = glm::vec4(d, cosOuter);
-    l.Params       = glm::vec4(cosInner, -1.0f, 0.0f, 0.0f);
+    l.Params       = glm::vec4(cosInner, (float)shadowSlot, 0.0f, 0.0f); // .y = spot shadow slot, -1 = none (#119)
     m_Lights.push_back(l);
 }
 

@@ -109,6 +109,12 @@ uniform vec4  uShadowTexelWorld;      // world units per shadow texel, per casca
 uniform float uShadowSoftness;        // PCF kernel radius in shadow-map texels (from the sun's angular size)
 uniform sampler2DArrayShadow uShadowMap;
 
+// Spot-light shadow maps (#119): one perspective depth layer per casting spot, indexed by the
+// light's Params.y. Unit 9 (the sun CSM is unit 8, material maps 1..7).
+uniform int  uSpotShadowCount;
+uniform mat4 uSpotShadowVP[4];
+uniform sampler2DArrayShadow uSpotShadowMap;
+
 // Set for the editor's Unlit shading mode: skips all lighting and shows flat albedo, so
 // geometry/UV problems read clearly without shading hiding them.
 uniform int uUnlit;
@@ -237,6 +243,24 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
     return vis;
 }
 
+// Visibility from a spot light's perspective shadow map. 1 = lit, 0 = shadowed. 4-tap PCF.
+float SpotShadow(int slot, vec3 worldPos, vec3 N) {
+    if (slot < 0 || slot >= uSpotShadowCount) return 1.0;
+    vec4 lp = uSpotShadowVP[slot] * vec4(worldPos + N * 0.03, 1.0);
+    if (lp.w <= 0.0) return 1.0;                       // behind the light
+    vec3 p = (lp.xyz / lp.w) * 0.5 + 0.5;
+    if (p.z >= 1.0 || any(lessThan(p.xy, vec2(0.0))) || any(greaterThan(p.xy, vec2(1.0))))
+        return 1.0;                                    // outside the cone frustum -> unshadowed
+    vec2 texel = 1.0 / vec2(textureSize(uSpotShadowMap, 0).xy);
+    float ref = p.z - 0.0015;
+    float vis = 0.0;
+    vis += texture(uSpotShadowMap, vec4(p.xy + vec2(-0.5, -0.5) * texel, float(slot), ref));
+    vis += texture(uSpotShadowMap, vec4(p.xy + vec2( 0.5, -0.5) * texel, float(slot), ref));
+    vis += texture(uSpotShadowMap, vec4(p.xy + vec2(-0.5,  0.5) * texel, float(slot), ref));
+    vis += texture(uSpotShadowMap, vec4(p.xy + vec2( 0.5,  0.5) * texel, float(slot), ref));
+    return vis * 0.25;
+}
+
 // Cook-Torrance contribution for one light direction L delivering `radiance` to the fragment.
 // The sun and every point/spot light differ only in L and how much radiance survives to here.
 vec3 ShadeLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0,
@@ -311,6 +335,7 @@ void main() {
                 float innerCos = lt.Params.x;
                 if (cosAngle < outerCos) continue;
                 atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
+                atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #119
             }
             if (atten <= 0.0) continue;
             radiance *= atten;

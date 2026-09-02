@@ -118,6 +118,7 @@ unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, 
     m_Shader->SetInt("uApplyTonemap", 1);
     m_Shader->SetInt("uShadowEnabled", 0); // preview has no shadow pass
     m_Shader->SetInt("uShadowCascadeCount", 0);
+    m_Shader->SetInt("uSpotShadowCount", 0);
 
     model.Draw(*m_Shader);
 
