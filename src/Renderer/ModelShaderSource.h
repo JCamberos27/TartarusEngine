@@ -228,18 +228,22 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
     }
 
     float ndl = max(dot(N, L), 0.0);
-    // Normal offset and depth bias both scale with the *selected cascade's* world texel size
-    // (#117): cascade 3 covers many times the world per texel that cascade 0 does, so a fixed
-    // bias is peter-panning in one and shadow-acne in the other. ~2 texels along N, more at
-    // grazing angles; the depth bias grows mildly with cascade index too.
+    // Normal offset + depth bias both scale with the selected cascade's world texel size (#117).
+    // The normal offset is the main peter-panning lever — push the receiver sample just clear of
+    // the surface (~0.5 texel face-on, ~1.3 grazing), no more, or the shadow's contact edge
+    // visibly retreats from the base of whatever cast it.
     float texel = uShadowTexelWorld[c];
-    vec3 offsetPos = worldPos + N * (texel * 2.0 * (2.0 - ndl));
+    // The CSM pass front-face-culls casters, so this is just a ~1-texel normal nudge (in world
+    // units via the cascade's texel size) + a hair of depth bias, expressed in world units and
+    // divided into the cascade's [0,1] depth span so it's a constant physical offset regardless
+    // of cascade size. Span = 2*radius + pullback; 2*radius == texel*resolution, pullback == 50.
+    vec3 offsetPos = worldPos + N * (texel * mix(1.0, 0.35, ndl));
 
     vec4 lp = uShadowMatrices[c] * vec4(offsetPos, 1.0);
     vec3 proj = (lp.xyz / lp.w) * 0.5 + 0.5;
     if (proj.z >= 1.0) return 1.0;
 
-    float bias = mix(0.0016, 0.0005, ndl) * (1.0 + 0.5 * float(c));
+    float bias = (texel * mix(0.9, 0.3, ndl)) / (texel * float(textureSize(uShadowMap, 0).x) + 50.0);
     // Hash gl_FragCoord to a rotation angle — turns kernel banding into per-pixel noise.
     float rot = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
     // Farther cascades cover more world per texel, so widen the kernel a little to keep the
@@ -253,11 +257,12 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
         float edge = uCascadeSplits[c];
         float band = edge * 0.12;
         if (viewDepth > edge - band) {
-            vec3 offsetPos2 = worldPos + N * (uShadowTexelWorld[c + 1] * 2.0 * (2.0 - ndl));
+            float texel2 = uShadowTexelWorld[c + 1];
+            vec3 offsetPos2 = worldPos + N * (texel2 * mix(1.0, 0.35, ndl));
             vec4 lp2 = uShadowMatrices[c + 1] * vec4(offsetPos2, 1.0);
             vec3 p2 = (lp2.xyz / lp2.w) * 0.5 + 0.5;
             if (p2.z < 1.0) {
-                float bias2 = mix(0.0016, 0.0005, ndl) * (1.0 + 0.5 * float(c + 1));
+                float bias2 = (texel2 * mix(0.9, 0.3, ndl)) / (texel2 * float(textureSize(uShadowMap, 0).x) + 50.0);
                 float v2 = SampleCascade(c + 1, p2.xy, p2.z - bias2,
                                          max(uShadowSoftness, 0.5) * (1.0 + 0.35 * float(c + 1)), rot);
                 vis = mix(vis, v2, smoothstep(edge - band, edge, viewDepth));
@@ -272,7 +277,15 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
 // constant bias is uniform in world space — the shadow reaches the whole light Range. 4-tap PCF.
 float SpotShadow(int slot, vec3 worldPos, vec3 N) {
     if (slot < 0 || slot >= uSpotShadowCount) return 1.0;
-    vec3 biasedPos = worldPos + N * 0.03;
+    // The shadow pass front-face-culls the casters, so the lit side can't self-shadow and this
+    // only needs a ~1-texel normal nudge (sized in shadow-map texels at THIS distance from the
+    // light, not in world cm) plus a hair of depth bias. That keeps the contact shadow welded
+    // to the object's base instead of peter-panning away from it.
+    vec3 toL = uSpotShadowPos[slot] - worldPos;
+    float d0 = length(toL);
+    float nl = max(dot(N, toL / max(d0, 1e-4)), 0.0);
+    float texelW = 2.0 * d0 / float(textureSize(uSpotShadowMap, 0).x);
+    vec3 biasedPos = worldPos + N * (texelW * (0.9 + 1.6 * (1.0 - nl)));
     vec4 lp = uSpotShadowVP[slot] * vec4(biasedPos, 1.0);
     if (lp.w <= 0.0) return 1.0;                       // behind the light
     vec3 p = (lp.xyz / lp.w) * 0.5 + 0.5;
@@ -281,7 +294,7 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N) {
     float far = max(uSpotShadowFar[slot], 1e-3);
     float d = distance(biasedPos, uSpotShadowPos[slot]);
     if (d >= far) return 1.0;                          // past the shadow range
-    float ref = d / far - 0.0018;                      // uniform world-space bias
+    float ref = d / far - 0.00035;
     vec2 texel = 1.0 / vec2(textureSize(uSpotShadowMap, 0).xy);
     float vis = 0.0;
     vis += texture(uSpotShadowMap, vec4(p.xy + vec2(-0.5, -0.5) * texel, float(slot), ref));
@@ -293,13 +306,19 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N) {
 
 // Visibility from a point light's depth cube. 1 = lit, 0 = shadowed. Cube stores linear
 // distance / far, so this is a direct distance compare — no dominant-axis NDC reconstruction.
-float PointShadow(int slot, vec3 worldPos, vec3 lightPos) {
+float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N) {
     if (slot < 0 || slot >= uPointShadowCount) return 1.0;
-    vec3 dir = worldPos - lightPos;          // cube lookup direction
     float far = max(uPointShadowFar[slot], 1e-3);
+    // Same as SpotShadow: the cube pass front-face-culls casters, so this needs only a ~1-texel
+    // normal nudge (texel size ≈ 2*d/res on a 90° cube face) plus a hair of bias.
+    vec3 toLight = lightPos - worldPos;
+    float d0 = length(toLight);
+    float nl = max(dot(N, toLight / max(d0, 1e-4)), 0.0);
+    float texelW = 2.0 * d0 / float(textureSize(uPointShadowMap, 0).x);
+    vec3 dir = (worldPos + N * (texelW * (0.9 + 1.6 * (1.0 - nl)))) - lightPos; // cube lookup + distance
     float d = length(dir);
     if (d >= far) return 1.0;                // past the shadow range
-    float ref = d / far - 0.0018;            // uniform world-space bias
+    float ref = d / far - 0.00035;
     return texture(uPointShadowMap, vec4(dir, float(slot)), ref);
 }
 
@@ -343,7 +362,7 @@ vec3 ShadePointSpot(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float metallic
         atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
         atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #119
     } else {
-        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz); // #119
+        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N); // #119
     }
     if (atten <= 0.0) return vec3(0.0);
     return ShadeLight(N, V, L, lt.ColorRange.rgb * atten, albedo, F0, metallic, roughness);

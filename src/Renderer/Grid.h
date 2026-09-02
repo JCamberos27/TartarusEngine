@@ -14,7 +14,8 @@ public:
     ~Grid();
 
     void Draw(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos,
-              float minorSpacing, float majorEvery, float fadeDistance);
+              float minorSpacing, float majorEvery, float fadeDistance,
+              float opacity, bool showAxisLines, float axisThickness);
 
 private:
     unsigned int m_VAO = 0;
