@@ -814,14 +814,16 @@ int main() {
                     lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range);
                 }
             }
-            // A scene whose sun the user deleted still gets the engine's historical key light.
-            if (!frameHaveDirectional)
-                lightBuffer.AddDirectional(lightDir, glm::vec3(1.0f), 3.0f);
+            // No phantom fallback light here: turning every light off (or deleting the sun) now
+            // means the scene really is unlit — ambient only. `SceneSerializer` already
+            // synthesises a real, visible, deletable "Directional Light" entity when a sun-less
+            // scene is opened, so a fresh scene still lights up; re-injecting an invisible one
+            // every frame just overrode the user when they deliberately switched it off.
             lightBuffer.Upload();
             const int frameLightCount = lightBuffer.Count();
 
             bool sunShadowsReady = false;
-            if (frameSettings.ShadowsEnabled) {
+            if (frameSettings.ShadowsEnabled && frameHaveDirectional) {
                 PROFILE_SCOPE("Sun Shadow Pass");
 
                 // Fit the cascades to whichever camera drives this frame's main view: the game
