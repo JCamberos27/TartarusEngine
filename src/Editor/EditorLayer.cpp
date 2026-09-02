@@ -52,6 +52,79 @@ namespace {
 // the Play/Stop button, which is positioned relative to it, stays in sync if that ever changes.
 constexpr float kToolbarHeight = 84.0f;
 
+// Approximate blackbody colour (linear RGB, normalised so the brightest channel is 1) for a
+// colour temperature in Kelvin. Cheap piecewise fit — good enough for authoring a warm lamp vs
+// a cool overcast sky; not a physically exact locus. Clamped to 1000-40000 K.
+inline glm::vec3 KelvinToRGB(float kelvin) {
+    float t = std::clamp(kelvin, 1000.0f, 40000.0f) / 100.0f;
+    float r, g, b;
+    if (t <= 66.0f) {
+        r = 1.0f;
+        g = std::clamp(0.39008157f * std::log(std::max(t, 1e-3f)) - 0.63184144f, 0.0f, 1.0f);
+    } else {
+        r = std::clamp(1.29293618f * std::pow(t - 60.0f, -0.1332047592f), 0.0f, 1.0f);
+        g = std::clamp(1.12989086f * std::pow(t - 60.0f, -0.0755148492f), 0.0f, 1.0f);
+    }
+    if (t >= 66.0f)      b = 1.0f;
+    else if (t <= 19.0f) b = 0.0f;
+    else                 b = std::clamp(0.54320679f * std::log(t - 10.0f) - 1.19625408f, 0.0f, 1.0f);
+    return glm::vec3(r, g, b);
+}
+
+// The colour-temperature drag bar: the strip IS the 1500-15000 K blackbody spectrum, drag
+// anywhere on it to set `k`. One InvisibleButton so it sits on the row PropertyLabel() opened
+// (a plain slider under a Dummy drops to the window's left edge). Reserves room for a trailing
+// button — caller draws that with SameLine. `mixed` shows an em-dash instead of a marker for a
+// multi-selection whose temperatures differ. Shared by the single- and multi-light Inspectors.
+struct KelvinBarResult { bool changed = false; bool activated = false; bool deactivated = false; };
+inline KelvinBarResult KelvinBar(const char* id, float& k, bool mixed = false) {
+    KelvinBarResult r;
+    constexpr float kKMin = 1500.0f, kKMax = 15000.0f;
+    k = std::clamp(k, kKMin, kKMax);
+    const float innerSp = ImGui::GetStyle().ItemInnerSpacing.x;
+    const float btnW = ImGui::CalcTextSize("RGB").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float barW = std::max(40.0f, ImGui::GetContentRegionAvail().x - btnW - innerSp);
+    const float barH = ImGui::GetFrameHeight();
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+
+    ImGui::InvisibleButton(id, ImVec2(barW, barH));
+    r.activated = ImGui::IsItemActivated();
+    if (ImGui::IsItemActive()) {
+        float t = std::clamp((ImGui::GetIO().MousePos.x - p.x) / barW, 0.0f, 1.0f);
+        k = kKMin + (kKMax - kKMin) * t;
+        r.changed = true;
+    }
+    r.deactivated = ImGui::IsItemDeactivatedAfterEdit();
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Drag to set colour temperature (1500-15000 K).");
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const int kSeg = 48;
+    for (int i = 0; i < kSeg; ++i) {
+        float t0 = (float)i / kSeg, t1 = (float)(i + 1) / kSeg;
+        glm::vec3 c0 = KelvinToRGB(kKMin + (kKMax - kKMin) * t0);
+        glm::vec3 c1 = KelvinToRGB(kKMin + (kKMax - kKMin) * t1);
+        ImU32 lc = ImGui::ColorConvertFloat4ToU32(ImVec4(c0.r, c0.g, c0.b, 1.0f));
+        ImU32 rc = ImGui::ColorConvertFloat4ToU32(ImVec4(c1.r, c1.g, c1.b, 1.0f));
+        dl->AddRectFilledMultiColor(ImVec2(p.x + barW * t0, p.y),
+                                    ImVec2(p.x + barW * t1, p.y + barH), lc, rc, rc, lc);
+    }
+    dl->AddRect(p, ImVec2(p.x + barW, p.y + barH), IM_COL32(0, 0, 0, 130));
+
+    char label[24];
+    if (mixed) snprintf(label, sizeof(label), "\xE2\x80\x94 mixed \xE2\x80\x94");
+    else {
+        float hx = p.x + barW * ((k - kKMin) / (kKMax - kKMin));
+        dl->AddRectFilled(ImVec2(hx - 2.0f, p.y - 1.0f), ImVec2(hx + 2.0f, p.y + barH + 1.0f), IM_COL32(20, 20, 20, 255));
+        dl->AddRectFilled(ImVec2(hx - 1.0f, p.y), ImVec2(hx + 1.0f, p.y + barH), IM_COL32(255, 255, 255, 255));
+        snprintf(label, sizeof(label), "%.0f K", k);
+    }
+    ImVec2 ts = ImGui::CalcTextSize(label);
+    ImVec2 tp(p.x + (barW - ts.x) * 0.5f, p.y + (barH - ts.y) * 0.5f);
+    dl->AddText(ImVec2(tp.x + 1.0f, tp.y + 1.0f), IM_COL32(0, 0, 0, 190), label);
+    dl->AddText(tp, IM_COL32(255, 255, 255, 255), label);
+    return r;
+}
+
 // Where a newly added object goes: a few units in front of the editor camera. If the camera
 // has somehow gone non-finite, fall back to the origin so the object is still findable rather
 // than spawned at inf/NaN and lost.
@@ -89,6 +162,7 @@ inline void MakeDirectionalLight(World& world, entt::entity e) {
     lc.Kind = LightComponent::Type::Directional;
     lc.Intensity = 6.0f;
     lc.AngularSizeDegrees = 2.0f;
+    lc.Shadow.Enabled = true; // a freshly added sun casts shadows by default
     world.Registry.get<TransformComponent>(e).RotationEuler = glm::vec3(-36.25f, 53.13f, 0.0f);
 }
 
@@ -1735,9 +1809,13 @@ void EditorLayer::ClearSelection() {
     m_ExtraSelection.clear();
     m_SelectionAnchor = entt::null;
     m_RenamingEntity = entt::null;
+    m_LightHandleArmedFor = entt::null;
 }
 
 void EditorLayer::SelectItem(entt::entity entity, bool addToSelection) {
+    // Any selection that isn't a viewport icon-click disarms the light grab handles;
+    // HandleViewportPicking re-arms them right after it calls this for a light it picked.
+    m_LightHandleArmedFor = entt::null;
     bool isPrimary = m_Selected == entity;
 
     if (!addToSelection) {
@@ -2031,6 +2109,7 @@ void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
     m_ViewTransition.FromYaw = editorCamera.Yaw;
     m_ViewTransition.FromPitch = editorCamera.Pitch;
     m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
+    m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
     m_ViewTransition.ToPos = targetPos;
     m_ViewTransition.ToYaw = editorCamera.Yaw;     // aim unchanged
     m_ViewTransition.ToPitch = editorCamera.Pitch;
@@ -2141,6 +2220,7 @@ void EditorLayer::SnapToView(World& world, Camera& editorCamera, float yaw, floa
     m_ViewTransition.FromYaw = editorCamera.Yaw;
     m_ViewTransition.FromPitch = editorCamera.Pitch;
     m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
+    m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
     m_ViewTransition.ToYaw = yaw;
     m_ViewTransition.ToPitch = pitch;
     m_ViewTransition.ToPos = pivot - newFront * distance;
@@ -2190,8 +2270,184 @@ void EditorLayer::UpdateViewTransition(Camera& editorCamera, float dt) {
     editorCamera.Position = glm::mix(m_ViewTransition.FromPos, m_ViewTransition.ToPos, eased);
     editorCamera.OrthoHalfHeight = m_ViewTransition.FromOrthoHalfHeight +
         (m_ViewTransition.ToOrthoHalfHeight - m_ViewTransition.FromOrthoHalfHeight) * eased;
+    editorCamera.Fov = m_ViewTransition.FromFov +
+        (m_ViewTransition.ToFov - m_ViewTransition.FromFov) * eased;
 
     if (m_ViewTransition.T >= 1.0f) m_ViewTransition.Active = false;
+}
+
+// --- Look through light (#140 phase 4) -------------------------------------------------------
+void EditorLayer::LookThroughLight(World& world, Camera& editorCamera, entt::entity light) {
+    if (light == entt::null || !world.Registry.valid(light) ||
+        !world.Registry.all_of<TransformComponent, LightComponent>(light))
+        return;
+
+    // Stash the camera only on the FIRST entry — hopping between lights keeps the original.
+    if (!m_LookThroughActive) {
+        m_LookThroughRestore = {editorCamera.Position, editorCamera.Yaw, editorCamera.Pitch,
+                                editorCamera.Fov, editorCamera.OrthoHalfHeight, editorCamera.Orthographic};
+    }
+    // Remember this light's pose so the first frame the flown camera diverges from it counts as
+    // a real reposition and gets its own undo entry. Re-armed per light when hopping.
+    {
+        const auto& tf0 = world.Registry.get<const TransformComponent>(light);
+        m_LookThroughStartPos = tf0.Position;
+        m_LookThroughStartRot = tf0.RotationEuler;
+        m_LookThroughMoved = false;
+    }
+
+    const auto& lc = world.Registry.get<const LightComponent>(light);
+    glm::mat4 m = world.ComposeWorldTransform(light);
+    glm::vec3 pos = glm::vec3(m[3]);
+    glm::vec3 aim = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
+
+    float yaw = glm::degrees(std::atan2(aim.z, aim.x));
+    float pitch = glm::degrees(std::asin(std::clamp(aim.y, -1.0f, 1.0f)));
+
+    bool ortho = lc.Kind == LightComponent::Type::Directional;
+    float fov = lc.Kind == LightComponent::Type::Spot
+                    ? std::clamp(lc.SpotAngleDegrees * 2.0f, 10.0f, 150.0f)
+                : lc.Kind == LightComponent::Type::Point ? 90.0f
+                : editorCamera.Fov;
+
+    m_ViewTransition.Active = true;
+    m_ViewTransition.T = 0.0f;
+    m_ViewTransition.FromPos = editorCamera.Position;
+    m_ViewTransition.FromYaw = editorCamera.Yaw;
+    m_ViewTransition.FromPitch = editorCamera.Pitch;
+    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
+    m_ViewTransition.FromFov = editorCamera.Fov;
+    m_ViewTransition.ToPos = pos;
+    m_ViewTransition.ToYaw = yaw;
+    m_ViewTransition.ToPitch = pitch;
+    m_ViewTransition.ToFov = fov;
+    // Perspective near a light POV is fine as-is; for a directional, size the ortho box to its
+    // range if it's a spot/point (n/a) — just pick a readable default for the sun.
+    m_ViewTransition.ToOrthoHalfHeight = ortho ? 12.0f : editorCamera.OrthoHalfHeight;
+    editorCamera.Orthographic = ortho; // matches SnapToView: switches now, the rest animates
+
+    m_LookThroughActive = true;
+    m_LookThroughLight = light;
+    SelectItem(light, false);
+}
+
+void EditorLayer::ExitLookThrough(Camera& editorCamera) {
+    if (!m_LookThroughActive) return;
+    const CameraPose& r = m_LookThroughRestore;
+    m_ViewTransition.Active = true;
+    m_ViewTransition.T = 0.0f;
+    m_ViewTransition.FromPos = editorCamera.Position;
+    m_ViewTransition.FromYaw = editorCamera.Yaw;
+    m_ViewTransition.FromPitch = editorCamera.Pitch;
+    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
+    m_ViewTransition.FromFov = editorCamera.Fov;
+    m_ViewTransition.ToPos = r.Pos;
+    m_ViewTransition.ToYaw = r.Yaw;
+    m_ViewTransition.ToPitch = r.Pitch;
+    m_ViewTransition.ToFov = r.Fov;
+    m_ViewTransition.ToOrthoHalfHeight = r.OrthoHalfHeight;
+    editorCamera.Orthographic = r.Ortho;
+    m_LookThroughActive = false;
+    m_LookThroughLight = entt::null;
+}
+
+void EditorLayer::UpdateLookThrough(World& world, Camera& editorCamera) {
+    if (!m_LookThroughActive) return;
+
+    // Light deleted / scene swapped out from under us — just bail (camera stays where it is).
+    if (m_LookThroughLight == entt::null || !world.Registry.valid(m_LookThroughLight) ||
+        !world.Registry.all_of<LightComponent>(m_LookThroughLight)) {
+        m_LookThroughActive = false;
+        m_LookThroughLight = entt::null;
+        return;
+    }
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+        ExitLookThrough(editorCamera);
+        return;
+    }
+
+    // Live-drive: once the entry glide has settled (or the user cancelled it by flying), the
+    // light rides with the editor camera — WASD/look moves and re-aims it from its own POV.
+    // main.cpp has already applied this frame's camera nav by the time Draw() calls us.
+    if (!m_ViewTransition.Active && world.Registry.all_of<TransformComponent>(m_LookThroughLight)) {
+        auto& tf = world.Registry.get<TransformComponent>(m_LookThroughLight);
+
+        entt::entity parent = entt::null;
+        if (auto* h = world.Registry.try_get<HierarchyComponent>(m_LookThroughLight)) parent = h->Parent;
+        glm::mat4 invParent = parent != entt::null
+            ? glm::inverse(world.ComposeWorldTransform(parent)) : glm::mat4(1.0f);
+
+        glm::vec3 newPos = glm::vec3(invParent * glm::vec4(editorCamera.Position, 1.0f));
+        glm::vec3 fwd = editorCamera.Front();
+        glm::vec3 up = std::fabs(fwd.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
+        glm::vec3 newRot = EulerYXZFromMatrix(invParent *
+            glm::inverse(glm::lookAt(glm::vec3(0.0f), fwd, up)));
+
+        bool moved = glm::length(newPos - tf.Position) > 1e-4f ||
+                     glm::length(newRot - tf.RotationEuler) > 1e-3f;
+        if (moved) {
+            if (!m_LookThroughMoved) {           // first real move -> one undo point, light still at entry pose
+                PushUndo(world, "Reposition Light (Look Through)");
+                m_LookThroughMoved = true;
+            }
+            tf.Position = newPos;
+            tf.RotationEuler = newRot;
+        }
+    }
+
+    // Banner across the top of the viewport.
+    const char* nm = "light";
+    if (const auto* n = world.Registry.try_get<const NameComponent>(m_LookThroughLight))
+        if (!n->Name.empty()) nm = n->Name.c_str();
+    char buf[160];
+    snprintf(buf, sizeof(buf),
+             ICON_FA_EYE "  Looking through \"%s\"  —  fly to move / re-aim it  ·  Esc to exit", nm);
+
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    ImVec2 ts = ImGui::CalcTextSize(buf);
+    float padX = 14.0f * m_UIScale, padY = 6.0f * m_UIScale;
+    ImVec2 c(m_ViewportPos.x + m_ViewportSize.x * 0.5f, m_ViewportPos.y + 14.0f * m_UIScale);
+    ImVec2 bmin(c.x - ts.x * 0.5f - padX, c.y - padY);
+    ImVec2 bmax(c.x + ts.x * 0.5f + padX, c.y + ts.y + padY);
+    dl->AddRectFilled(bmin, bmax, IM_COL32(20, 22, 28, 225), 5.0f);
+    dl->AddRect(bmin, bmax, IM_COL32(255, 210, 90, 220), 5.0f);
+    dl->AddText(ImVec2(c.x - ts.x * 0.5f, c.y), IM_COL32(240, 240, 245, 255), buf);
+}
+
+// --- Drop light to surface (#140 phase 4) --------------------------------------------------
+bool EditorLayer::DropLightToSurface(World& world, entt::entity light) {
+    if (light == entt::null || !world.Registry.valid(light) ||
+        !world.Registry.all_of<TransformComponent, LightComponent>(light))
+        return false;
+
+    glm::vec3 origin = glm::vec3(world.ComposeWorldTransform(light)[3]);
+    const glm::vec3 down(0.0f, -1.0f, 0.0f);
+
+    float bestT = 1e30f;
+    bool hit = false;
+    for (auto ent : world.Registry.view<const RenderableComponent>()) {
+        if (ent == light) continue;
+        const auto& r = world.Registry.get<const RenderableComponent>(ent);
+        if (!r.ModelRef) continue;
+        glm::mat4 model = world.ComposeWorldTransform(ent);
+        AABB wb = AABB{r.ModelRef->BoundsMin(), r.ModelRef->BoundsMax()}.Transformed(model);
+        float t;
+        if (wb.RayIntersect(origin, down, t) && t > 1e-3f && t < bestT) { bestT = t; hit = true; }
+    }
+    if (!hit) return false;
+
+    PushUndo(world, "Drop Light to Surface");
+    glm::vec3 landing = origin + down * bestT + glm::vec3(0.0f, 0.1f, 0.0f);
+
+    // Write the LOCAL translation, so a parented light lands on the surface in world space.
+    entt::entity parent = entt::null;
+    if (auto* h = world.Registry.try_get<HierarchyComponent>(light)) parent = h->Parent;
+    glm::mat4 parentWorld = parent != entt::null ? world.ComposeWorldTransform(parent) : glm::mat4(1.0f);
+    world.Registry.get<TransformComponent>(light).Position =
+        glm::vec3(glm::inverse(parentWorld) * glm::vec4(landing, 1.0f));
+    return true;
 }
 
 void EditorLayer::DrawEngineMark(float dt) {
@@ -2724,6 +2980,15 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawStatsOverlay(world, dt);
     DrawViewportStatusBar();
     DrawHistoryPanel(world, assets);
+    DrawLightsPanel(world, editorCamera);
+
+    // "Look through light" (#140 phase 4): the Inspector/Lights-panel buttons can't see the
+    // camera, so they queue a light here; act on it once, then run the per-frame Esc/banner.
+    if (m_PendingLookThrough != entt::null) {
+        LookThroughLight(world, editorCamera, m_PendingLookThrough);
+        m_PendingLookThrough = entt::null;
+    }
+    UpdateLookThrough(world, editorCamera);
 
     // Drains a couple of queued imports per frame (see ImportQueueManager.h) and, while any
     // remain, draws the bottom-right progress window with the current file / X of N / Cancel.
@@ -3103,6 +3368,12 @@ void EditorLayer::NewScene(World& world) {
     world = World();
     InvalidateModelThumbnail(nullptr);
     ClearSelection();
+    m_SoloLights.clear();
+    m_MutedLights.clear();
+    m_LookThroughActive = false;
+    m_LookThroughLight = entt::null;
+    m_LookThroughMoved = false;
+    m_PendingLookThrough = entt::null;
     m_UndoStack.clear();
     m_RedoStack.clear();
     // Untitled: no file to silently overwrite on exit. Save / Ctrl+S now prompts for a location
@@ -3122,6 +3393,12 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     EditorSettings::Get().LastScenePath = path; // reopen this one next launch (#95)
     EditorSettings::Save();
     ClearSelection();
+    m_SoloLights.clear();
+    m_MutedLights.clear();
+    m_LookThroughActive = false;
+    m_LookThroughLight = entt::null;
+    m_LookThroughMoved = false;
+    m_PendingLookThrough = entt::null;
     m_UndoStack.clear();
     m_RedoStack.clear();
     m_Dirty = false;
@@ -3549,6 +3826,148 @@ void EditorLayer::DrawHistoryPanel(World& world, AssetLibrary& assets) {
     ImGui::End();
 }
 
+// Scene-wide light overview (#140 phase 4): every LightComponent entity as one row — swatch,
+// type, name (click to select), and per-light Enable / Solo / Mute / Frame. Solo & Mute are
+// editor-only (see IsLightSuppressed); Enable toggles the real InactiveTag.
+void EditorLayer::DrawLightsPanel(World& world, Camera& editorCamera) {
+    if (!m_ShowLightsPanel) return;
+
+    ImGuiWindowFlags flags = m_LayoutLocked ? (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)
+                                            : ImGuiWindowFlags_None;
+    if (!ImGui::Begin(ICON_FA_LIGHTBULB "  Lights", &m_ShowLightsPanel, flags)) { ImGui::End(); return; }
+
+    const bool anySoloOrMute = !m_SoloLights.empty() || !m_MutedLights.empty();
+    ImGui::BeginDisabled(!anySoloOrMute);
+    if (ImGui::SmallButton("Clear Solo / Mute")) { m_SoloLights.clear(); m_MutedLights.clear(); }
+    ImGui::EndDisabled();
+    if (!m_SoloLights.empty()) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), ICON_FA_CIRCLE_EXCLAMATION " Solo active");
+    }
+    ImGui::Separator();
+
+    // A small toggle button: accent body + keyline when `on`, flat otherwise. Returns clicked.
+    auto toggleBtn = [](const char* label, bool on, const ImVec4& tint) {
+        if (on) {
+            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(tint.x, tint.y, tint.z, 0.35f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(tint.x, tint.y, tint.z, 0.50f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(tint.x, tint.y, tint.z, 0.65f));
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0, 0, 0, 0));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.25f, 0.28f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.30f, 0.31f, 0.35f, 1.0f));
+        }
+        bool c = ImGui::SmallButton(label);
+        ImGui::PopStyleColor(3);
+        return c;
+    };
+
+    int lightCount = 0;
+    if (ImGui::BeginTable("##LightsTable", 7,
+            ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_PadOuterX)) {
+        ImGui::TableSetupColumn("##swatch", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("##en", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("##solo", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("##mute", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("##frame", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("##look", ImGuiTableColumnFlags_WidthFixed);
+
+        for (auto e : ViewInCreationOrder(world.Registry, world.Registry.view<const LightComponent>())) {
+            ++lightCount;
+            const auto& lc = world.Registry.get<const LightComponent>(e);
+            const auto* nc = world.Registry.try_get<const NameComponent>(e);
+            std::string name = (nc && !nc->Name.empty()) ? nc->Name : std::string("(light)");
+            const bool inactive   = world.Registry.all_of<InactiveTag>(e);
+            const bool suppressed  = IsLightSuppressed(e);
+            const bool soloed = m_SoloLights.count(e) > 0;
+            const bool muted  = m_MutedLights.count(e) > 0;
+
+            ImGui::TableNextRow();
+            ImGui::PushID((int)entt::to_integral(e));
+
+            ImGui::TableNextColumn();
+            ImGui::ColorButton("##col", ImVec4(lc.Color.r, lc.Color.g, lc.Color.b, 1.0f),
+                ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoPicker,
+                ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight()));
+
+            ImGui::TableNextColumn();
+            const char* typeIcon = lc.Kind == LightComponent::Type::Spot ? ICON_FA_FILTER
+                                 : lc.Kind == LightComponent::Type::Directional ? ICON_FA_SUN
+                                 : ICON_FA_LIGHTBULB;
+            const bool isSel = (e == m_Selected);
+            if (inactive || suppressed)
+                ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+            // SpanAllColumns for a full-width row highlight; AllowOverlap so the Enable/Solo/
+            // Mute/Frame buttons in the later columns still take clicks instead of the row.
+            bool clicked = ImGui::Selectable((std::string(typeIcon) + "  " + name).c_str(), isSel,
+                ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap);
+            if (inactive || suppressed) ImGui::PopStyleColor();
+            if (clicked) SelectItem(e, ImGui::GetIO().KeyCtrl);
+
+            ImGui::TableNextColumn();
+            if (toggleBtn(inactive ? ICON_FA_EYE_SLASH : ICON_FA_EYE, !inactive,
+                          ImVec4(0.40f, 0.44f, 0.52f, 1.0f))) {
+                PushUndo(world, "Toggle Light Active");
+                if (inactive) world.Registry.remove<InactiveTag>(e);
+                else world.Registry.emplace<InactiveTag>(e);
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Enabled — the real InactiveTag (serialized, affects Play too)");
+
+            ImGui::TableNextColumn();
+            if (toggleBtn("S", soloed, ImVec4(1.0f, 0.80f, 0.25f, 1.0f))) {
+                if (soloed) m_SoloLights.erase(e); else m_SoloLights.insert(e);
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Solo — while any light is soloed, only soloed lights render (editor only)");
+
+            ImGui::TableNextColumn();
+            if (toggleBtn("M", muted, ImVec4(0.90f, 0.35f, 0.35f, 1.0f))) {
+                if (muted) m_MutedLights.erase(e); else m_MutedLights.insert(e);
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Mute — hide this light in the editor (not serialized, not in Play)");
+
+            ImGui::TableNextColumn();
+            if (ImGui::SmallButton(ICON_FA_MAGNIFYING_GLASS)) {
+                SelectItem(e, false);
+                glm::vec3 c = glm::vec3(world.ComposeWorldTransform(e)[3]);
+                float halfFov = glm::radians(editorCamera.Fov) * 0.5f;
+                float dist = (2.0f / std::sin(halfFov)) * 1.6f;
+                glm::vec3 target = c - editorCamera.Front() * dist;
+                if (std::isfinite(target.x) && std::isfinite(target.y) && std::isfinite(target.z)) {
+                    m_ViewTransition.Active = true;
+                    m_ViewTransition.T = 0.0f;
+                    m_ViewTransition.FromPos = editorCamera.Position;
+                    m_ViewTransition.FromYaw = editorCamera.Yaw;
+                    m_ViewTransition.FromPitch = editorCamera.Pitch;
+                    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
+                    m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
+                    m_ViewTransition.ToPos = target;
+                    m_ViewTransition.ToYaw = editorCamera.Yaw;
+                    m_ViewTransition.ToPitch = editorCamera.Pitch;
+                    m_ViewTransition.ToOrthoHalfHeight = editorCamera.Orthographic
+                        ? (dist * std::tan(halfFov)) : editorCamera.OrthoHalfHeight;
+                }
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Frame — glide the camera to this light");
+
+            ImGui::TableNextColumn();
+            const bool lookingThis = m_LookThroughActive && m_LookThroughLight == e;
+            if (toggleBtn(ICON_FA_VIDEO, lookingThis, ImVec4(0.45f, 0.65f, 1.0f, 1.0f))) {
+                if (lookingThis) ExitLookThrough(editorCamera);
+                else m_PendingLookThrough = e;
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Look through — view from this light's POV; fly to move / re-aim it (Esc to exit)");
+
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+
+    if (lightCount == 0) ImGui::TextDisabled("No lights in the scene.");
+    ImGui::End();
+}
+
 // The Add-menu body, shared verbatim by the File-menu-bar "Add" menu and the Shift+A quick-add
 // popup (ImGui::MenuItem works inside BeginMenu and BeginPopup alike).
 void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera& editorCamera) {
@@ -3721,6 +4140,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem(ICON_FA_CHART_SIMPLE "  Statistics", nullptr, &EditorSettings::Get().SceneShowStats))
                 EditorSettings::Save();
             ImGui::MenuItem(ICON_FA_CLOCK_ROTATE_LEFT "  History", nullptr, &m_ShowHistory);
+            ImGui::MenuItem(ICON_FA_LIGHTBULB "  Lights", nullptr, &m_ShowLightsPanel);
             if (ImGui::MenuItem(ICON_FA_CERTIFICATE "  Engine Mark", nullptr, &EditorSettings::Get().EngineMarkEnabled))
                 EditorSettings::Save();
             if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Light Gizmos", nullptr, &EditorSettings::Get().ShowLightGizmos))
@@ -3816,6 +4236,15 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         ImGui::BeginDisabled(!canSnap);
         if (iconButton(ICON_FA_DOWN_LONG, "Snap selection to ground")) SnapSelectionToGround(world);
         ImGui::EndDisabled();
+    }
+    ImGui::SameLine();
+    {
+        auto& prefs = EditorSettings::Get();
+        if (iconButton(ICON_FA_LIGHTBULB, "Toggle Light Gizmos (range/cone/aim in the viewport)",
+                prefs.ShowLightGizmos)) {
+            prefs.ShowLightGizmos = !prefs.ShowLightGizmos;
+            EditorSettings::Save();
+        }
     }
 
     divider();
@@ -4168,6 +4597,15 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     }
     if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", "Ctrl+D", false, hasEntity)) {
         DuplicateSelection(world, assets);
+    }
+
+    const bool isLight = hasEntity && world.Registry.all_of<LightComponent>(entity);
+    if (isLight) {
+        ImGui::Separator();
+        if (ImGui::MenuItem(ICON_FA_DOWN_LONG "  Drop Light to Surface")) {
+            if (!DropLightToSurface(world, entity))
+                Log::Info("Drop to surface: nothing directly below this light.");
+        }
     }
     ImGui::Separator();
 
@@ -4603,19 +5041,46 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 ImGui::EndCombo();
             }
 
-            glm::vec3 col(1.0f); bool colMixed = false, cf = true;
+            // Colour: an RGB swatch, or the shared Kelvin spectrum bar when every selected light
+            // is colour-temperature driven. "K" / "RGB" flips the whole selection between the two.
+            int nKelvin = 0; float kShared = 0.0f; bool kMixed = false, kf = true;
             forEach([&](entt::entity e) {
-                glm::vec3 c = L(e).Color;
-                if (cf) { col = c; cf = false; return; }
-                for (int a = 0; a < 3; ++a) if (std::fabs(c[a] - col[a]) > 1.0e-4f) colMixed = true;
+                float kv = L(e).ColorTempK;
+                if (kv > 0.0f) nKelvin++;
+                if (kf) { kShared = kv; kf = false; } else if (std::fabs(kv - kShared) > 0.5f) kMixed = true;
             });
-            PropertyLabel("Color", "Sets the color on every selected light.");
-            glm::vec3 colEdit = col;
-            bool colChanged = ImGui::ColorEdit3("##mlcol", &colEdit.x, ImGuiColorEditFlags_NoInputs);
-            if (ImGui::IsItemActivated()) StageUndo(world);
-            if (colChanged) forEach([&](entt::entity e) { L(e).Color = colEdit; });
-            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Set Light Color");
-            if (colMixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
+            const float mlInnerSp = ImGui::GetStyle().ItemInnerSpacing.x;
+            PropertyLabel("Color", "Sets the colour on every selected light. 'K' drives it from a temperature.");
+            if (nKelvin == count && count > 0) {
+                float k = (!kMixed && kShared > 0.0f) ? kShared : 6500.0f;
+                KelvinBarResult kr = KelvinBar("##mlKelvin", k, kMixed);
+                if (kr.activated) StageUndo(world);
+                if (kr.changed) forEach([&](entt::entity e) { L(e).ColorTempK = k; L(e).Color = KelvinToRGB(k); });
+                if (kr.deactivated) CommitStagedUndo(world, "Set Light Colour Temperature");
+                ImGui::SameLine(0.0f, mlInnerSp);
+                if (ImGui::SmallButton("RGB##mlKelvinOff")) {
+                    PushUndo(world, "Set Light Colour");
+                    forEach([&](entt::entity e) { L(e).ColorTempK = 0.0f; });
+                }
+            } else {
+                glm::vec3 col(1.0f); bool colMixed = false, cf = true;
+                forEach([&](entt::entity e) {
+                    glm::vec3 c = L(e).Color;
+                    if (cf) { col = c; cf = false; return; }
+                    for (int a = 0; a < 3; ++a) if (std::fabs(c[a] - col[a]) > 1.0e-4f) colMixed = true;
+                });
+                glm::vec3 colEdit = col;
+                bool colChanged = ImGui::ColorEdit3("##mlcol", &colEdit.x, ImGuiColorEditFlags_NoInputs);
+                if (ImGui::IsItemActivated()) StageUndo(world);
+                if (colChanged) forEach([&](entt::entity e) { L(e).Color = colEdit; });
+                if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Set Light Color");
+                ImGui::SameLine(0.0f, mlInnerSp);
+                if (ImGui::SmallButton("K##mlKelvinOn")) {
+                    PushUndo(world, "Set Light Colour Temperature");
+                    forEach([&](entt::entity e) { L(e).ColorTempK = 6500.0f; L(e).Color = KelvinToRGB(6500.0f); });
+                }
+                if (colMixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
+            }
 
             auto lightFloatRow = [&](const char* label, float speed, float minV, float maxV,
                                      const std::function<float&(LightComponent&)>& ref,
@@ -4638,12 +5103,48 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 [](LightComponent& l) -> float& { return l.Range; },
                 "Falloff distance for every selected light.", "Set Light Range");
 
-            bool allSpot = true;
-            forEach([&](entt::entity e) { allSpot &= L(e).Kind == LightComponent::Type::Spot; });
+            bool allSpot = true, anyDir = false, allDir = true;
+            forEach([&](entt::entity e) {
+                bool d = L(e).Kind == LightComponent::Type::Directional;
+                allSpot &= L(e).Kind == LightComponent::Type::Spot;
+                anyDir |= d;
+                allDir &= d;
+            });
             if (allSpot)
                 lightFloatRow("Spot Angle", 0.5f, 1.0f, 89.0f,
                     [](LightComponent& l) -> float& { return l.SpotAngleDegrees; },
                     "Cone half-angle for every selected spot light.", "Set Spot Angle");
+            if (allDir)
+                lightFloatRow("Angular Size", 0.05f, 0.1f, 20.0f,
+                    [](LightComponent& l) -> float& { return l.AngularSizeDegrees; },
+                    "Sun disc diameter (deg) for every selected directional light.", "Set Angular Size");
+
+            // ---- Shadows (mirrors the single-edit Shadows sub-block) ------------------------
+            ImGui::Spacing();
+            ImGui::SeparatorText(ICON_FA_MOON "  Shadows");
+
+            int nShadow = 0;
+            forEach([&](entt::entity e) { if (L(e).Shadow.Enabled) nShadow++; });
+            bool shVal = false;
+            if (MultiEditCheckbox("Cast Shadows", nShadow > 0, nShadow != 0 && nShadow != count, shVal)) {
+                PushUndo(world, "Toggle Cast Shadows");
+                forEach([&](entt::entity e) { L(e).Shadow.Enabled = shVal; });
+            }
+
+            lightFloatRow("Bias", 0.02f, 0.0f, 4.0f,
+                [](LightComponent& l) -> float& { return l.Shadow.Bias; },
+                "Depth-bias multiplier for every selected light.", "Set Shadow Bias");
+            lightFloatRow("Normal Bias", 0.02f, 0.0f, 4.0f,
+                [](LightComponent& l) -> float& { return l.Shadow.NormalBias; },
+                "Normal-offset multiplier for every selected light.", "Set Shadow Normal Bias");
+            lightFloatRow("Softness", 0.02f, 0.0f, 4.0f,
+                [](LightComponent& l) -> float& { return l.Shadow.Softness; },
+                "PCF-radius multiplier for every selected light.", "Set Shadow Softness");
+            if (!anyDir)
+                lightFloatRow("Near Plane", 0.01f, 0.001f, 10.0f,
+                    [](LightComponent& l) -> float& { return l.Shadow.NearPlane; },
+                    "Perspective near distance for every selected spot/point light's depth pass.",
+                    "Set Shadow Near Plane");
         }
 
         // ===== Camera (only when every selected object has one) =====
@@ -5033,6 +5534,11 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     if (auto* light = registry.try_get<LightComponent>(entity)) {
         if (BeginComponentSection(world, entity, ICON_FA_LIGHTBULB, "Light", true, removed,
             /*defaultOpen=*/true, "Casts light into the scene from this object's position.")) {
+            // Slightly slimmer rows for this block — the light sliders read better less chunky.
+            const ImVec2 lightFramePad(ImGui::GetStyle().FramePadding.x,
+                                       std::max(1.0f, ImGui::GetStyle().FramePadding.y - 2.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, lightFramePad);
+
             PropertyLabel("Type", "Point: all directions. Spot: a cone. Directional: a sun (parallel rays, no position or range).");
             int kind = (int)light->Kind; // Point=0, Spot=1, Directional=2
             if (ImGui::Combo("##Type", &kind, "Point\0Spot\0Directional\0")) {
@@ -5040,9 +5546,33 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 light->Kind = (LightComponent::Type)kind;
             }
             const bool isDir = light->Kind == LightComponent::Type::Directional;
-            PropertyLabel("Color", "The light's color.");
-            ImGui::ColorEdit3("##Color", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+            const bool isSpot = light->Kind == LightComponent::Type::Spot;
+            const bool isPoint = light->Kind == LightComponent::Type::Point;
+
+            // Color: raw swatch, or a Kelvin slider when ColorTempK > 0 (the swatch is then
+            // driven, not authored). The K / RGB button flips between the two.
+            PropertyLabel("Color", "The light's color. Toggle 'K' to drive it from a colour temperature instead.");
+            if (light->ColorTempK > 0.0f) {
+                float k = light->ColorTempK;
+                KelvinBarResult kr = KelvinBar("##KelvinBar", k);
+                if (kr.activated) PushUndo(world, "Edit Light");
+                if (kr.changed) { light->ColorTempK = k; light->Color = KelvinToRGB(k); }
+                ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+                if (ImGui::SmallButton("RGB##KelvinOff")) { PushUndo(world, "Edit Light"); light->ColorTempK = 0.0f; }
+                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Switch back to a custom RGB swatch.");
+            } else {
+                ImGui::SetNextItemWidth(-60.0f);
+                ImGui::ColorEdit3("##Color", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
+                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+                ImGui::SameLine();
+                if (ImGui::SmallButton("K##KelvinOn")) {
+                    PushUndo(world, "Edit Light");
+                    light->ColorTempK = 6500.0f;
+                    light->Color = KelvinToRGB(6500.0f);
+                }
+                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Drive the colour from a temperature in Kelvin (1500-15000).");
+            }
+
             PropertyLabel("Intensity", "Brightness multiplier - higher is brighter.");
             ImGui::DragFloat("##Intensity", &light->Intensity, 0.1f, 0.0f, 100.0f, "%.2f");
             if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
@@ -5051,28 +5581,70 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 ImGui::DragFloat("##Range", &light->Range, 0.2f, 0.1f, 200.0f, "%.1f");
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
             }
-            if (light->Kind == LightComponent::Type::Spot) {
+            if (isSpot) {
                 PropertyLabel("Spot Angle", "Half-angle of the light cone, in degrees.\nThe cone points along the entity's -Z axis - use Rotation to aim it.");
                 ImGui::SliderFloat("##SpotAngle", &light->SpotAngleDegrees, 1.0f, 89.0f, "%.0f deg");
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
             }
-            if (light->Kind == LightComponent::Type::Spot || light->Kind == LightComponent::Type::Point) {
-                const std::string shadowTip = std::string(light->Kind == LightComponent::Type::Spot
-                    ? "Render a perspective shadow map for this spot light.\nEach casting spot is an extra full-scene depth pass; up to 4 at once."
-                    : "Render a 6-face cube shadow map for this point light.\nSix full-scene depth passes per casting light; up to 2 at once.")
-                    + "\nRequires Preferences > Performance > Cast sun shadows to be on.";
-                PropertyLabel("Cast Shadows", shadowTip.c_str());
-                bool castShadows = light->CastShadows;
-                if (ImGui::Checkbox("##LightCastShadows", &castShadows)) {
-                    PushUndo(world, "Edit Light");           // snapshot the pre-change state
-                    light->CastShadows = castShadows;
-                }
-            }
             if (isDir) {
-                PropertyLabel("Angular Size", "Apparent diameter of the sun disc, in degrees (~0.53 = Earth's sun).\nWider = softer shadows once cascaded shadow maps land.\nAim the sun with the entity's Rotation (it shines along -Z).");
+                PropertyLabel("Angular Size", "Apparent diameter of the sun disc, in degrees (~0.53 = Earth's sun).\nWider = softer shadows.\nAim the sun with the entity's Rotation (it shines along -Z).");
                 ImGui::SliderFloat("##AngularSize", &light->AngularSizeDegrees, 0.1f, 20.0f, "%.2f deg");
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
             }
+
+            // --- Shadows sub-block, bound to light->Shadow --------------------------------
+            auto& sh = light->Shadow;
+            ImGui::Spacing();
+            if (ImGui::TreeNodeEx(ICON_FA_MOON "  Shadows", ImGuiTreeNodeFlags_SpanAvailWidth)) {
+                const char* castTip = isSpot
+                    ? "Render a perspective shadow map for this spot light.\nEach casting spot is an extra full-scene depth pass; up to 4 at once."
+                    : isPoint
+                    ? "Render a 6-face cube shadow map for this point light.\nSix full-scene depth passes per casting light; up to 2 at once."
+                    : "Render cascaded shadow maps for this sun.";
+                PropertyLabel("Cast Shadows", castTip);
+                bool en = sh.Enabled;
+                if (ImGui::Checkbox("##LightCastShadows", &en)) { PushUndo(world, "Edit Light"); sh.Enabled = en; }
+                PropertyLabel("Bias", "Multiplier on the shader's depth bias. >1 pushes the shadow off contact\n(fixes acne); <1 pulls it back toward the caster.");
+                ImGui::SliderFloat("##ShadowBias", &sh.Bias, 0.0f, 4.0f, "x%.2f");
+                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+                PropertyLabel("Normal Bias", "Multiplier on the normal-offset term (moves the sample along the surface\nnormal before comparing). Widen if edges show light bleed.");
+                ImGui::SliderFloat("##ShadowNormalBias", &sh.NormalBias, 0.0f, 4.0f, "x%.2f");
+                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+                PropertyLabel("Softness", "Multiplier on the PCF filter radius. Higher = wider, softer penumbra.");
+                ImGui::SliderFloat("##ShadowSoftness", &sh.Softness, 0.0f, 4.0f, "x%.2f");
+                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+                if (isSpot || isPoint) {
+                    PropertyLabel("Near Plane", "Perspective near distance for this light's depth pass.\nRaise it to reclaim depth precision when the light sits far from what it lights.");
+                    ImGui::DragFloat("##ShadowNear", &sh.NearPlane, 0.01f, 0.001f, 10.0f, "%.3f");
+                    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+                    PropertyLabel("Resolution", "Per-light shadow-map size (applies after per-light shadow maps).");
+                    int res = sh.Resolution;
+                    if (ImGui::Combo("##ShadowRes", &res, "Follow global\0" "512\0" "1024\0" "2048\0" "4096\0")) {
+                        PushUndo(world, "Edit Light"); sh.Resolution = res;
+                    }
+                    PropertyLabel("Update Mode", "Dynamic re-renders every frame; Static bakes once (applies after per-light shadow maps).");
+                    int um = sh.UpdateMode;
+                    if (ImGui::Combo("##ShadowUpdate", &um, "Dynamic\0" "Static (bake once)\0" "Off\0")) {
+                        PushUndo(world, "Edit Light"); sh.UpdateMode = um;
+                    }
+                }
+                ImGui::TreePop();
+            }
+
+            // --- Workflow: look through this light / drop it to the surface below (#140 phase 4)
+            ImGui::Spacing();
+            if (ImGui::Button(ICON_FA_EYE "  Look through", ImVec2(-FLT_MIN, 0.0f)))
+                m_PendingLookThrough = entity;
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("View from this light's POV. Fly the camera to move / re-aim the\nlight from there. Spot uses its cone angle for FOV; Esc restores the camera.");
+            if (ImGui::Button(ICON_FA_DOWN_LONG "  Drop to surface", ImVec2(-FLT_MIN, 0.0f))) {
+                if (!DropLightToSurface(world, entity))
+                    Log::Info("Drop to surface: nothing directly below this light.");
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Move the light straight down onto the nearest mesh surface below it.");
+
+            ImGui::PopStyleVar(); // lightFramePad
             EndComponentSection();
         }
         if (removed) {
@@ -5824,12 +6396,17 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         }
 
         // Mesh-less entities (lights, empties) have no geometry to hit, so they're picked by
-        // proximity to their on-screen icon instead — same rule that draws the icon in
-        // DrawEntityIcons. Only considered when nothing solid was hit closer to the camera.
+        // proximity to their on-screen icon instead. The icon is a screen-space overlay drawn
+        // ON TOP of everything, so a click that lands on it selects that entity even when a mesh
+        // is in front — that's what you see, and what you want when deliberately clicking a
+        // light's icon (#140). Grab the mesh by clicking it away from the icon. Nearest icon to
+        // the cursor wins when several overlap.
         {
-            const float kIconPickPixels = 14.0f * m_UIScale;
+            const float kIconPickPixels = 12.0f * m_UIScale;
             glm::mat4 viewProj = proj * view;
             float bestPixelDist = kIconPickPixels;
+            entt::entity iconHit = entt::null;
+            float iconDepth = 1e30f;
             for (auto entity : world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent>)) {
                 glm::mat4 model = world.ComposeWorldTransform(entity);
                 glm::vec3 worldPos = glm::vec3(model[3]);
@@ -5842,19 +6419,23 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
                 float pixelDist = glm::length(screen - current);
                 if (pixelDist > bestPixelDist) continue;
 
-                // An icon only wins over a mesh if it's actually in front of it — otherwise a
-                // light behind a wall would be clickable through the wall.
-                float depth = glm::length(worldPos - origin);
-                if (best != entt::null && depth > bestT) continue;
-
                 bestPixelDist = pixelDist;
-                best = entity;
-                bestT = depth;
+                iconHit = entity;
+                iconDepth = glm::length(worldPos - origin);
+            }
+            if (iconHit != entt::null) { // an icon under the cursor beats any mesh behind it
+                best = iconHit;
+                bestT = iconDepth;
             }
         }
 
         if (best != entt::null) SelectItem(best, io.KeyCtrl);
         else if (!io.KeyCtrl) ClearSelection(); // clicked empty space -> deselect (unless Ctrl-clicking to preserve a group)
+
+        // Grab handles arm only when the click resolved to a light IN THE VIEWPORT (#140
+        // follow-up). SelectItem() cleared m_LightHandleArmedFor a moment ago; re-set it here.
+        m_LightHandleArmedFor =
+            (best != entt::null && world.Registry.all_of<LightComponent>(best)) ? best : entt::null;
         return;
     }
 
@@ -6223,7 +6804,11 @@ void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
         return;
     }
     entt::entity e = m_Selected;
-    if (e == entt::null || !world.Registry.valid(e) || !world.Registry.all_of<LightComponent>(e)) {
+    // Only for a light that was clicked in the viewport (its icon) — not one selected from the
+    // Hierarchy / Lights panel / box-select. m_LightHandleArmedFor is set by HandleViewportPicking
+    // and cleared by every other selection path (#140 follow-up).
+    if (e == entt::null || e != m_LightHandleArmedFor || !world.Registry.valid(e) ||
+        !world.Registry.all_of<LightComponent>(e)) {
         m_LightHandleDragging = false;
         m_HotLightHandle = LightHandle::None;
         return;
