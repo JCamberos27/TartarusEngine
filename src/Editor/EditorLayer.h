@@ -71,6 +71,9 @@ public:
     // working inside the one place they need to.
     bool WantsCaptureMouse() const;
     bool WantsCaptureKeyboard() const;
+    // A floating window (Preferences, an undocked panel) or an open menu has keyboard focus, so
+    // the viewport's own shortcuts (tools, view snaps, frame, quick-add) should stand down.
+    bool OtherWindowOwnsKeyboard() const;
     // Pure geometric point-in-rect test against ViewportPos()/ViewportSize() — used by
     // WantsCaptureMouse() above, and by main.cpp to decide whether the fly-camera should read
     // input this frame.
@@ -136,7 +139,6 @@ public:
     // Grid settings, read by main.cpp to draw the actual 3D grid (an OpenGL draw call
     // outside ImGui's frame, so EditorLayer only owns the settings, not the rendering).
     bool ShowGrid() const { return m_ShowGrid; }
-    float GridMinorSpacing() const { return m_GridSize; }
 
     // A model currently being dragged from the Asset Browser over the Viewport, and where it
     // would land if released right now — recomputed every frame in DrawViewportDropTarget()
@@ -427,7 +429,6 @@ private:
     bool m_ShowGizmos = true; // View menu toggle for the viewport transform gizmo (audit #60)
     bool m_FrameOnSelect = false;   // auto-frame the editor camera when the selection changes (#69)
     bool m_PendingFrameSelect = false; // set by SelectItem, consumed in Draw() where the camera is in scope
-    float m_GridSize = 1.0f;          // minor grid line spacing, world units
     bool m_GridSnapEnabled = true;    // hold Ctrl to invert momentarily, Blender-style
     float m_SnapTranslation = 1.0f;
     float m_SnapRotationDeg = 15.0f;
@@ -736,6 +737,10 @@ private:
 
     // --- Statistics overlay --------------------------------------------------------------
     void DrawStatsOverlay(World& world, float dt);
+    // Thin always-on strip along the bottom of the Scene viewport: FPS / ms / draws / tris /
+    // selection count / active tool. The toggleable Statistics box (DrawStatsOverlay) is the
+    // deeper readout; this is the at-a-glance one (#92).
+    void DrawViewportStatusBar();
     // Visibility lives in EditorSettings::SceneShowStats (persisted), not a plain member.
     RenderStats m_RenderStats;
     // Smoothed so the number is readable instead of flickering every frame.

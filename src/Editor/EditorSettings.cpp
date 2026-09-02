@@ -30,6 +30,7 @@ void EditorSettings::Load() {
 
     EditorSettings& s = Get();
     s.ShowTooltips = root.value("showTooltips", s.ShowTooltips);
+    s.UiScaleOverride = root.value("uiScaleOverride", s.UiScaleOverride);
     s.AutoSaveEnabled = root.value("autoSaveEnabled", s.AutoSaveEnabled);
     s.AutoSaveIntervalMinutes = root.value("autoSaveIntervalMinutes", s.AutoSaveIntervalMinutes);
     s.VSyncMode = root.value("vsyncMode", s.VSyncMode);
@@ -41,6 +42,12 @@ void EditorSettings::Load() {
     s.ShadowResolution = root.value("shadowResolution", s.ShadowResolution);
     s.ShadowCascades = root.value("shadowCascades", s.ShadowCascades);
     s.ShadowDistance = root.value("shadowDistance", s.ShadowDistance);
+    s.GridOpacity = root.value("gridOpacity", s.GridOpacity);
+    s.GridMinorSpacing = root.value("gridMinorSpacing", s.GridMinorSpacing);
+    s.GridMajorEvery = root.value("gridMajorEvery", s.GridMajorEvery);
+    s.GridFadeDistance = root.value("gridFadeDistance", s.GridFadeDistance);
+    s.GridShowAxisLines = root.value("gridShowAxisLines", s.GridShowAxisLines);
+    s.GridAxisThickness = root.value("gridAxisThickness", s.GridAxisThickness);
     s.LastScenePath = root.value("lastScenePath", s.LastScenePath);
     s.GameViewMaximizeOnPlay = root.value("gameViewMaximizeOnPlay", s.GameViewMaximizeOnPlay);
     s.GameViewShowStats = root.value("gameViewShowStats", s.GameViewShowStats);
@@ -61,6 +68,7 @@ void EditorSettings::Save() {
 
     json root;
     root["showTooltips"] = Get().ShowTooltips;
+    root["uiScaleOverride"] = Get().UiScaleOverride;
     root["autoSaveEnabled"] = Get().AutoSaveEnabled;
     root["autoSaveIntervalMinutes"] = Get().AutoSaveIntervalMinutes;
     root["vsyncMode"] = Get().VSyncMode;
@@ -72,6 +80,12 @@ void EditorSettings::Save() {
     root["shadowResolution"] = Get().ShadowResolution;
     root["shadowCascades"] = Get().ShadowCascades;
     root["shadowDistance"] = Get().ShadowDistance;
+    root["gridOpacity"] = Get().GridOpacity;
+    root["gridMinorSpacing"] = Get().GridMinorSpacing;
+    root["gridMajorEvery"] = Get().GridMajorEvery;
+    root["gridFadeDistance"] = Get().GridFadeDistance;
+    root["gridShowAxisLines"] = Get().GridShowAxisLines;
+    root["gridAxisThickness"] = Get().GridAxisThickness;
     root["lastScenePath"] = Get().LastScenePath;
     root["gameViewMaximizeOnPlay"] = Get().GameViewMaximizeOnPlay;
     root["gameViewShowStats"] = Get().GameViewShowStats;
