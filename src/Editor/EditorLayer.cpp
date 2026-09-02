@@ -2053,10 +2053,15 @@ void EditorLayer::DrawEngineMark(float dt) {
     const float kTwoPi = 6.28318530718f;
     m_MarkSpinAngle = fmodf(m_MarkSpinAngle + dt * kSpinSpeed, kTwoPi);
 
-    float size = 72.0f * m_UIScale; // bumped again so the wordmark reads rather than smearing (#19 P19)
+    float size = 54.0f * m_UIScale; // 25% down from the #19-P19 bump; still reads as a mark, less visual weight
     float margin = 14.0f * m_UIScale;
     float half = size * 0.5f;
-    ImVec2 cornerC(m_ViewportPos.x + margin + half, m_ViewportPos.y + m_ViewportSize.y - margin - half);
+    // DrawViewportStatusBar draws an overlay strip across the bottom of this same rect (its height
+    // isn't subtracted from m_ViewportSize). Reserve it here so the mark's bottom inset matches its
+    // left inset instead of tucking behind the strip. Height mirrors that function's barH.
+    float statusBarH = ImGui::GetTextLineHeight() + 8.0f * m_UIScale;
+    ImVec2 cornerC(m_ViewportPos.x + margin + half,
+                   m_ViewportPos.y + m_ViewportSize.y - statusBarH - margin - half);
 
     // dt is used to drive motion/eases below — clamp it so a one-off hitch (first frame, a stall
     // elsewhere in the frame) can't teleport the mark. Motion is otherwise fully dt-scaled, so
@@ -2082,7 +2087,7 @@ void EditorLayer::DrawEngineMark(float dt) {
 
     // Rect the mark centre must stay within so the whole quad fits inside the viewport.
     float minX = m_ViewportPos.x + half, maxX = m_ViewportPos.x + m_ViewportSize.x - half;
-    float minY = m_ViewportPos.y + half, maxY = m_ViewportPos.y + m_ViewportSize.y - half;
+    float minY = m_ViewportPos.y + half, maxY = m_ViewportPos.y + m_ViewportSize.y - statusBarH - half;
     if (maxX < minX) maxX = minX;
     if (maxY < minY) maxY = minY;
 
