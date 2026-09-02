@@ -85,6 +85,7 @@ uniform mat4 uLightViewProj;
 uniform int uUseSkinning;
 layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; }; // shared with the model VS (#104)
 out vec2 vUV;
+out vec3 vWorldPos; // used by the local-light (spot/point) depth FS; the sun FS ignores it
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
     if (uUseSkinning == 1) {
@@ -97,12 +98,15 @@ void main() {
         localPos = skinMat * localPos;
     }
     vUV = aUV;
-    gl_Position = uLightViewProj * uModel * localPos;
+    vec4 worldPos = uModel * localPos;
+    vWorldPos = worldPos.xyz;
+    gl_Position = uLightViewProj * worldPos;
 }
 )";
 // Alpha-tested casters (foliage, chain-link, decals): when a mesh has an albedo map its alpha
 // is sampled and cut below 0.5 so the shadow follows the cutout, not a solid quad (#116). Opaque
-// meshes leave uAlphaTest 0 and this is a no-op.
+// meshes leave uAlphaTest 0 and this is a no-op. Plain hardware depth (keeps early-Z) — used
+// for the cascaded SUN shadow, whose ortho projection is already linear.
 static const char* kShadowDepthFragmentSrc = R"(
 #version 460 core
 in vec2 vUV;
@@ -110,6 +114,23 @@ uniform int uAlphaTest;
 uniform sampler2D uAlbedo;
 void main() {
     if (uAlphaTest == 1 && texture(uAlbedo, vUV).a < 0.5) discard;
+}
+)";
+// Spot / point-light depth: store LINEAR distance-to-light / far rather than the perspective
+// projection's non-linear depth. A constant compare bias is then uniform in world space, so a
+// shadow reaches the full light Range instead of the far part of the frustum losing depth
+// precision (and the shadow with it). Writing gl_FragDepth forfeits early-Z — acceptable here.
+static const char* kLocalShadowDepthFragmentSrc = R"(
+#version 460 core
+in vec2 vUV;
+in vec3 vWorldPos;
+uniform int uAlphaTest;
+uniform sampler2D uAlbedo;
+uniform vec3 uShadowLightPos;
+uniform float uShadowFar;
+void main() {
+    if (uAlphaTest == 1 && texture(uAlbedo, vUV).a < 0.5) discard;
+    gl_FragDepth = clamp(distance(vWorldPos, uShadowLightPos) / max(uShadowFar, 1e-3), 0.0, 1.0);
 }
 )";
 
@@ -332,6 +353,7 @@ int main() {
         Shader outlineModelShader(kOutlineModelVertexSrc, kOutlineFragmentSrc);
         Shader outlineDilateShader(kOutlineDilateVertSrc, kOutlineDilateFragSrc);
         Shader shadowShader(kShadowDepthVertexSrc, kShadowDepthFragmentSrc);
+        Shader localShadowShader(kShadowDepthVertexSrc, kLocalShadowDepthFragmentSrc); // spot/point: linear depth
         unsigned int fsQuadVao = 0;
         glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
         TintOverlayRenderer tintOverlay;
@@ -800,6 +822,8 @@ int main() {
             lightBuffer.Clear();
             bool frameHaveDirectional = false;
             glm::mat4 spotShadowVP[SpotShadowMap::kMaxSpots];
+            glm::vec3 spotShadowPos[SpotShadowMap::kMaxSpots];
+            float spotShadowFar[SpotShadowMap::kMaxSpots];
             int spotShadowCount = 0; // shadow-casting spots that got a slot this frame (#119)
             glm::vec3 pointShadowPos[PointShadowMap::kMaxPoints];
             float pointShadowFar[PointShadowMap::kMaxPoints];
@@ -824,7 +848,9 @@ int main() {
                         slot = spotShadowCount++;
                         glm::vec3 up = std::abs(aim.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
                         float fov = glm::radians(std::min(lc.SpotAngleDegrees * 2.0f + 4.0f, 175.0f));
-                        spotShadowVP[slot] = glm::perspective(fov, 1.0f, 0.05f, std::max(lc.Range, 0.2f)) *
+                        spotShadowFar[slot] = std::max(lc.Range, 0.2f);
+                        spotShadowPos[slot] = pos;
+                        spotShadowVP[slot] = glm::perspective(fov, 1.0f, 0.05f, spotShadowFar[slot]) *
                                              glm::lookAt(pos, pos + aim, up);
                     }
                     lightBuffer.AddSpot(pos, aim, lc.Color, lc.Intensity, lc.Range, cosOuter, cosInner, slot);
@@ -917,11 +943,13 @@ int main() {
                 glEnable(GL_POLYGON_OFFSET_FILL);
                 glPolygonOffset(2.0f, 4.0f);
 
-                shadowShader.Bind();
+                localShadowShader.Bind(); // linear distance-to-light depth
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
                 for (int s = 0; s < spotShadowCount; ++s) {
                     spotShadowMap.Begin(s);
-                    shadowShader.SetMat4("uLightViewProj", spotShadowVP[s]);
+                    localShadowShader.SetMat4("uLightViewProj", spotShadowVP[s]);
+                    localShadowShader.SetVec3("uShadowLightPos", spotShadowPos[s]);
+                    localShadowShader.SetFloat("uShadowFar", spotShadowFar[s]);
                     Frustum lf = Frustum::FromViewProj(spotShadowVP[s]);
                     for (auto entity : casters) {
                         if (world.Registry.all_of<InactiveTag>(entity)) continue;
@@ -933,8 +961,8 @@ int main() {
                         if (vb && !r.ModelRef->HasAnimations() &&
                             !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
                             continue;
-                        shadowShader.SetMat4("uModel", model);
-                        r.ModelRef->DrawDepthOnly(shadowShader);
+                        localShadowShader.SetMat4("uModel", model);
+                        r.ModelRef->DrawDepthOnly(localShadowShader);
                     }
                 }
 
@@ -963,15 +991,17 @@ int main() {
                 glEnable(GL_POLYGON_OFFSET_FILL);
                 glPolygonOffset(2.5f, 4.0f);
 
-                shadowShader.Bind();
+                localShadowShader.Bind(); // linear distance-to-light depth
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
                 for (int s = 0; s < pointShadowCount; ++s) {
                     glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.05f, pointShadowFar[s]);
+                    localShadowShader.SetVec3("uShadowLightPos", pointShadowPos[s]);
+                    localShadowShader.SetFloat("uShadowFar", pointShadowFar[s]);
                     for (int f = 0; f < 6; ++f) {
                         pointShadowMap.BeginFace(s, f);
                         glm::mat4 vp = proj * glm::lookAt(pointShadowPos[s],
                                                          pointShadowPos[s] + kFaceDir[f], kFaceUp[f]);
-                        shadowShader.SetMat4("uLightViewProj", vp);
+                        localShadowShader.SetMat4("uLightViewProj", vp);
                         Frustum lf = Frustum::FromViewProj(vp);
                         for (auto entity : casters) {
                             if (world.Registry.all_of<InactiveTag>(entity)) continue;
@@ -983,8 +1013,8 @@ int main() {
                             if (vb && !r.ModelRef->HasAnimations() &&
                                 !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
                                 continue;
-                            shadowShader.SetMat4("uModel", model);
-                            r.ModelRef->DrawDepthOnly(shadowShader);
+                            localShadowShader.SetMat4("uModel", model);
+                            r.ModelRef->DrawDepthOnly(localShadowShader);
                         }
                     }
                 }
@@ -1048,6 +1078,10 @@ int main() {
                 modelShader.SetInt("uSpotShadowCount", spotCountForView);
                 if (spotCountForView > 0)
                     modelShader.SetMat4Array("uSpotShadowVP[0]", spotCountForView, spotShadowVP);
+                for (int s = 0; s < spotCountForView; ++s) {
+                    modelShader.SetVec3("uSpotShadowPos[" + std::to_string(s) + "]", spotShadowPos[s]);
+                    modelShader.SetFloat("uSpotShadowFar[" + std::to_string(s) + "]", spotShadowFar[s]);
+                }
                 glActiveTexture(GL_TEXTURE0 + 9);
                 glBindTexture(GL_TEXTURE_2D_ARRAY, spotShadowMap.DepthArray());
                 modelShader.SetInt("uSpotShadowMap", 9);
