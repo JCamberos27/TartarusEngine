@@ -130,6 +130,13 @@
 #define GL_COLOR_ATTACHMENT3 0x8CE3
 #define GL_FRAMEBUFFER_SRGB 0x8DB9
 
+// Compute shaders + memory barriers — clustered light-culling pass (#120).
+#define GL_COMPUTE_SHADER 0x91B9
+#define GL_SHADER_STORAGE_BARRIER_BIT 0x00002000
+#define GL_BUFFER_UPDATE_BARRIER_BIT 0x00000200
+#define GL_ALL_BARRIER_BITS 0xFFFFFFFF
+#define GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS 0x90EB
+
 typedef char GLchar;
 typedef ptrdiff_t GLsizeiptr;
 typedef ptrdiff_t GLintptr;
@@ -200,6 +207,7 @@ typedef void (__stdcall* PFNGLUSEPROGRAMPROC)(GLuint);
 typedef void (__stdcall* PFNGLDELETEPROGRAMPROC)(GLuint);
 typedef GLint (__stdcall* PFNGLGETUNIFORMLOCATIONPROC)(GLuint, const GLchar*);
 typedef void (__stdcall* PFNGLUNIFORMMATRIX4FVPROC)(GLint, GLsizei, GLboolean, const GLfloat*);
+typedef void (__stdcall* PFNGLUNIFORM2FPROC)(GLint, GLfloat, GLfloat);
 typedef void (__stdcall* PFNGLUNIFORM1IPROC)(GLint, GLint);
 typedef void (__stdcall* PFNGLUNIFORM1FPROC)(GLint, GLfloat);
 typedef void (__stdcall* PFNGLUNIFORM3FPROC)(GLint, GLfloat, GLfloat, GLfloat);
@@ -267,6 +275,9 @@ typedef void (__stdcall* PFNGLVERTEXARRAYATTRIBIFORMATPROC)(GLuint, GLuint, GLin
 typedef void (__stdcall* PFNGLVERTEXARRAYATTRIBBINDINGPROC)(GLuint, GLuint, GLuint);
 typedef void (__stdcall* PFNGLVERTEXARRAYVERTEXBUFFERPROC)(GLuint, GLuint, GLuint, GLintptr, GLsizei);
 typedef void (__stdcall* PFNGLVERTEXARRAYELEMENTBUFFERPROC)(GLuint, GLuint);
+// Compute dispatch + memory barrier (GL 4.3) — clustered light culling (#120).
+typedef void (__stdcall* PFNGLDISPATCHCOMPUTEPROC)(GLuint, GLuint, GLuint);
+typedef void (__stdcall* PFNGLMEMORYBARRIERPROC)(GLbitfield);
 
 extern PFNGLGENVERTEXARRAYSPROC glGenVertexArrays;
 extern PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
@@ -294,6 +305,7 @@ extern PFNGLUSEPROGRAMPROC glUseProgram;
 extern PFNGLDELETEPROGRAMPROC glDeleteProgram;
 extern PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;
 extern PFNGLUNIFORMMATRIX4FVPROC glUniformMatrix4fv;
+extern PFNGLUNIFORM2FPROC glUniform2f;
 extern PFNGLUNIFORM1IPROC glUniform1i;
 extern PFNGLUNIFORM1FPROC glUniform1f;
 extern PFNGLUNIFORM3FPROC glUniform3f;
@@ -356,6 +368,8 @@ extern PFNGLVERTEXARRAYATTRIBIFORMATPROC glVertexArrayAttribIFormat;
 extern PFNGLVERTEXARRAYATTRIBBINDINGPROC glVertexArrayAttribBinding;
 extern PFNGLVERTEXARRAYVERTEXBUFFERPROC glVertexArrayVertexBuffer;
 extern PFNGLVERTEXARRAYELEMENTBUFFERPROC glVertexArrayElementBuffer;
+extern PFNGLDISPATCHCOMPUTEPROC glDispatchCompute;
+extern PFNGLMEMORYBARRIERPROC glMemoryBarrier;
 
 // Call once after a GL context is current (e.g. right after glfwMakeContextCurrent).
 bool GLLoader_Init();
