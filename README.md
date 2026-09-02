@@ -42,13 +42,14 @@ the roadmap honest.
 |---|---|
 | **Dockable layout** | Scene, Game, Hierarchy, Inspector, Asset Browser, Console, Stats, and History panels in a real ImGui dock tree — drag any border to resize neighbours, panels scale proportionally with the window, and the arrangement persists between sessions |
 | **Transform gizmos** | Translate / rotate / scale / rect tools with local vs. world space, pivot vs. bounds-center, a combined gizmo for multi-object selections, and a relative Batch Transform panel for nudging a whole selection at once |
+| **Lights** | Select a light and its shape draws in the viewport — a range sphere for point lights, an angle-and-range cone for spots, aim arrows for the sun, tinted by the light's colour — with drag handles to scale range, open or close the cone, or re-aim without leaving the viewport. A dockable **Lights panel** lists every light with solo / mute / frame; any light can be flown through (**look through light**, and fly the camera to reposition it from its own POV) or **dropped onto the surface** below it. The Inspector picks colour directly or from a **colour temperature** (Kelvin) and exposes per-light shadow tuning; a whole multi-selection edits together |
 | **Selection** | Click-to-pick, box/marquee select, `Ctrl`-click multi-select, hierarchy parenting, per-entity active toggle |
 | **Snapping** | Grid snap (hold `Ctrl` to invert), configurable translate/rotate/scale increments, hold-`V` vertex snapping between meshes, and snap-to-ground |
 | **Navigation** | Fly camera, Alt-orbit, pan, dolly, frame-selection, orthographic/perspective toggle, axis view presets with animated transitions, plus an on-screen orientation gizmo |
 | **Undo / redo** | Whole-scene snapshots with a History panel you can jump around in |
 | **Play mode** | Runs inside the docked Game panel with the editor still live; scene state is snapshotted on entry and restored on exit, so play never becomes an edit. Click to capture input, `Esc` to release, and a fullscreen toggle for the whole window |
 | **Game View** | Resolution and aspect-ratio presets with letterboxing, custom resolutions, maximize-on-play, and an FPS/draw-call/triangle overlay. Add a **Camera** entity to frame a shot — the Game view previews through it while editing |
-| **Quality of life** | Auto-save, copy/paste/duplicate, filtered console, statistics overlay, DPI-aware scaling, persisted preferences |
+| **Quality of life** | Auto-save, copy/paste/duplicate, filtered console, statistics overlay, DPI-aware scaling, switchable colour themes, persisted preferences |
 
 ### Assets
 
@@ -63,7 +64,7 @@ the roadmap honest.
 
 - Forward PBR-style shading — albedo, normal, metallic, roughness, ambient occlusion, and emissive maps
 - **Linear HDR pipeline** — the scene renders into a multisampled `RGBA16F` target and a single fullscreen pass applies exposure, a tone-mapping curve (**Reinhard / ACES / AgX**), and gamma
-- **Directional, point, and spot lights** in one GPU light buffer (`std430` SSBO) — the sun is a placeable entity you aim with its rotation; point/spot have range and cone falloff, and each light has a per-entity **Cast Shadows** toggle
+- **Directional, point, and spot lights** in one GPU light buffer (`std430` SSBO) — the sun is a placeable entity you aim with its rotation; point/spot have range and cone falloff. Each light's colour is set directly or from a **colour temperature** (Kelvin), and each carries its own shadow settings — cast on/off plus bias / normal-bias / softness / near-plane — layered on the global cascade config. In the editor every light shows an editable gizmo — range sphere, spot cone, or aim arrow — with drag handles for range, cone angle, and aim
 - **Clustered-forward light culling** — a per-view compute pass bins point/spot lights into a 16 × 9 × 24 froxel grid, so a fragment loops only the lights that actually reach its cluster instead of every light in the scene
 - **Cascaded shadow maps** for the directional sun — 2–4 texel-snapped cascades, soft rotated-Poisson PCF whose penumbra follows the sun's angular size, seam-blended between cascades, with per-cascade frustum culling
 - **Point-light shadows** via a depth cube-map array, and **spot-light shadows** via a perspective depth array — both store linear distance-to-light so a shadow reaches the light's full range, and share the light SSBO's per-light shadow slot
