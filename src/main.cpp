@@ -1007,7 +1007,12 @@ int main() {
                                   const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats) {
                 const EditorSettings& gs = EditorSettings::Get();
 
-                bool shadowsOn = sunShadowsReady && !unlit;
+                // Shadows for this view. Spot and point shadows only need shadows-enabled +
+                // a lit pass; the cascaded SUN shadow additionally needs its once-per-frame
+                // pass to have actually run (which requires a directional light). These used to
+                // share one flag, so deleting the sun silently killed spot/point shadows too.
+                bool shadowsOn = gs.ShadowsEnabled && !unlit;
+                bool sunShadowsOn = shadowsOn && sunShadowsReady;
 
                 sky.Draw(sceneView, sceneProj, world.SkyHorizonColor, world.SkyZenithColor);
 
@@ -1017,7 +1022,7 @@ int main() {
                 modelShader.SetVec3("uViewPos", viewPos);
 
                 // Cascaded-shadow uniforms + the depth array on unit 8 (material maps use 1..7).
-                modelShader.SetInt("uShadowEnabled", shadowsOn ? 1 : 0);
+                modelShader.SetInt("uShadowEnabled", sunShadowsOn ? 1 : 0);
                 modelShader.SetInt("uShadowCascadeCount", shadowMap.Count());
                 {
                     glm::mat4 mats[CascadedShadowMap::kMaxCascades];
