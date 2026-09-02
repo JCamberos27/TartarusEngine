@@ -27,6 +27,7 @@ PFNGLUSEPROGRAMPROC glUseProgram = nullptr;
 PFNGLDELETEPROGRAMPROC glDeleteProgram = nullptr;
 PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation = nullptr;
 PFNGLUNIFORMMATRIX4FVPROC glUniformMatrix4fv = nullptr;
+PFNGLUNIFORM2FPROC glUniform2f = nullptr;
 PFNGLUNIFORM1IPROC glUniform1i = nullptr;
 PFNGLUNIFORM1FPROC glUniform1f = nullptr;
 PFNGLUNIFORM3FPROC glUniform3f = nullptr;
@@ -89,6 +90,8 @@ PFNGLVERTEXARRAYATTRIBIFORMATPROC glVertexArrayAttribIFormat = nullptr;
 PFNGLVERTEXARRAYATTRIBBINDINGPROC glVertexArrayAttribBinding = nullptr;
 PFNGLVERTEXARRAYVERTEXBUFFERPROC glVertexArrayVertexBuffer = nullptr;
 PFNGLVERTEXARRAYELEMENTBUFFERPROC glVertexArrayElementBuffer = nullptr;
+PFNGLDISPATCHCOMPUTEPROC glDispatchCompute = nullptr;
+PFNGLMEMORYBARRIERPROC glMemoryBarrier = nullptr;
 
 namespace {
 void* LoadGLFunc(const char* name) {
@@ -130,6 +133,7 @@ bool GLLoader_Init() {
     LOAD(PFNGLDELETEPROGRAMPROC, glDeleteProgram)
     LOAD(PFNGLGETUNIFORMLOCATIONPROC, glGetUniformLocation)
     LOAD(PFNGLUNIFORMMATRIX4FVPROC, glUniformMatrix4fv)
+    LOAD(PFNGLUNIFORM2FPROC, glUniform2f)
     LOAD(PFNGLUNIFORM1IPROC, glUniform1i)
     LOAD(PFNGLUNIFORM1FPROC, glUniform1f)
     LOAD(PFNGLUNIFORM3FPROC, glUniform3f)
@@ -192,6 +196,8 @@ bool GLLoader_Init() {
     LOAD(PFNGLVERTEXARRAYATTRIBBINDINGPROC, glVertexArrayAttribBinding)
     LOAD(PFNGLVERTEXARRAYVERTEXBUFFERPROC, glVertexArrayVertexBuffer)
     LOAD(PFNGLVERTEXARRAYELEMENTBUFFERPROC, glVertexArrayElementBuffer)
+    LOAD(PFNGLDISPATCHCOMPUTEPROC, glDispatchCompute)
+    LOAD(PFNGLMEMORYBARRIERPROC, glMemoryBarrier)
 #undef LOAD
     return ok;
 }
