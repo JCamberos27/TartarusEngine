@@ -49,7 +49,12 @@ std::shared_ptr<Model> AssetLibrary::CloneModel(const std::shared_ptr<Model>& or
     // Re-import a standalone instance rather than returning the cached one LoadModel would —
     // deliberately NOT added to m_ModelCache/m_ModelList, so it doesn't show up as a second
     // "same file" entry in the Asset Browser and doesn't get reused by a later LoadModel(path).
-    return std::make_shared<Model>(path);
+    // Uses the asset's own import settings so the copy matches the library entry's geometry.
+    return std::make_shared<Model>(path, GetModelSettings(path));
+}
+
+std::shared_ptr<Model> AssetLibrary::InstantiateModel(const std::string& path) {
+    return CloneModel(LoadModel(path));
 }
 
 std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path) {

@@ -32,6 +32,13 @@ public:
     // original's (which is what happens if two PlacedModels just point at the same Model).
     std::shared_ptr<Model> CloneModel(const std::shared_ptr<Model>& original);
 
+    // The one call every *scene entity* should use to get its Model: registers the asset in
+    // the library (so it lists in the Asset Browser and its per-path import settings exist),
+    // then returns an independent instance of it — never the cached shared_ptr. Two entities
+    // of the same imported file therefore each own their animation time and material override
+    // instead of fighting over one shared Model (#106). Equivalent to CloneModel(LoadModel(path)).
+    std::shared_ptr<Model> InstantiateModel(const std::string& path);
+
     const std::vector<std::shared_ptr<Model>>& Models() const { return m_ModelList; }
     const std::vector<std::shared_ptr<Texture>>& Textures() const { return m_TextureList; }
     const std::vector<std::string>& Sounds() const { return m_Sounds; }
