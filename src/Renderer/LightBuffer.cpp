@@ -29,13 +29,14 @@ void LightBuffer::AddDirectional(const glm::vec3& dirWorld, const glm::vec3& col
     m_Lights.push_back(l);
 }
 
-void LightBuffer::AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLinear, float intensity, float range) {
+void LightBuffer::AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLinear, float intensity, float range,
+                          int shadowSlot) {
     if ((int)m_Lights.size() >= kMaxLights) return;
     GpuLight l{};
     l.PositionType = glm::vec4(posWorld, (float)Type::Point);
     l.ColorRange   = glm::vec4(colorLinear * intensity, range);
     l.DirCutoff    = glm::vec4(0.0f, 0.0f, -1.0f, -1.0f);
-    l.Params       = glm::vec4(-1.0f, -1.0f, 0.0f, 0.0f);
+    l.Params       = glm::vec4(-1.0f, (float)shadowSlot, 0.0f, 0.0f); // .y = point cube-shadow slot, -1 = none (#119)
     m_Lights.push_back(l);
 }
 

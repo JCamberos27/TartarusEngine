@@ -115,6 +115,12 @@ uniform int  uSpotShadowCount;
 uniform mat4 uSpotShadowVP[4];
 uniform sampler2DArrayShadow uSpotShadowMap;
 
+// Point-light cube shadow maps (#119): one depth cube per casting point light, indexed by the
+// light's Params.y; uPointShadowFar[slot] is that light's range (the cube's far plane). Unit 10.
+uniform int   uPointShadowCount;
+uniform float uPointShadowFar[2];
+uniform samplerCubeArrayShadow uPointShadowMap;
+
 // Set for the editor's Unlit shading mode: skips all lighting and shows flat albedo, so
 // geometry/UV problems read clearly without shading hiding them.
 uniform int uUnlit;
@@ -261,6 +267,21 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N) {
     return vis * 0.25;
 }
 
+// Visibility from a point light's depth cube. 1 = lit, 0 = shadowed. The cube stores the
+// non-linear NDC depth a 90-degree perspective face wrote; reconstruct that for the fragment's
+// dominant axis from the fragment->light vector, then a single hardware depth-compare.
+float PointShadow(int slot, vec3 worldPos, vec3 lightPos) {
+    if (slot < 0 || slot >= uPointShadowCount) return 1.0;
+    vec3 dir = worldPos - lightPos;          // cube lookup direction
+    float far = uPointShadowFar[slot];
+    float nearP = 0.05;
+    float zc = max(max(abs(dir.x), abs(dir.y)), abs(dir.z)); // = view-space z of the hit face
+    if (zc >= far) return 1.0;
+    float ndc = (far + nearP) / (far - nearP) - (2.0 * far * nearP) / ((far - nearP) * zc);
+    float ref = ndc * 0.5 + 0.5 - 0.0025;    // to [0,1] with a small constant bias
+    return texture(uPointShadowMap, vec4(dir, float(slot)), ref);
+}
+
 // Cook-Torrance contribution for one light direction L delivering `radiance` to the fragment.
 // The sun and every point/spot light differ only in L and how much radiance survives to here.
 vec3 ShadeLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0,
@@ -336,6 +357,8 @@ void main() {
                 if (cosAngle < outerCos) continue;
                 atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
                 atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #119
+            } else {
+                atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz); // #119
             }
             if (atten <= 0.0) continue;
             radiance *= atten;
