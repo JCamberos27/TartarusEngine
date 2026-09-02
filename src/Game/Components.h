@@ -95,10 +95,28 @@ struct LightComponent {
     // Directional: angular diameter of the sun disc, in degrees (~0.53 for Earth's sun). Drives
     // soft-shadow penumbra width once CSM lands; ignored by the other kinds.
     float AngularSizeDegrees = 0.53f;
-    // Spot: render a perspective shadow map for this light (#119). Off by default — each casting
-    // spot is an extra full-scene depth pass. Up to SpotShadowMap::kMaxSpots take effect at once;
-    // ignored for Point (cube shadows are a later milestone) and Directional (always the CSM).
-    bool CastShadows = false;
+    // 0 = author Color directly (the swatch is live). >0 = Color is driven from this colour
+    // temperature in Kelvin (1500-15000 typical); the Inspector shows a Kelvin slider instead of
+    // the raw swatch until you hit "Custom RGB", which zeroes this again.
+    float ColorTempK = 0.0f;
+
+    // Per-light shadow tuning. Always present (not a separate ECS component) so every light can be
+    // authored with shadow settings recorded even when it isn't currently casting. `Enabled`
+    // replaces the old `CastShadows` bool; the legacy `"castShadows"` scene key still loads into
+    // it and is still written for one release. Bias/NormalBias/Softness are multipliers on the
+    // shader's existing texel-proportional depth bias / normal-offset / PCF-radius terms — all
+    // default 1.0, i.e. byte-identical to pre-phase-2 output. NearPlane feeds the perspective
+    // near for spot/point depth passes. Resolution + UpdateMode are authored and serialized now
+    // but don't take effect until the shadow maps support per-slot sizes.
+    struct ShadowSettings {
+        bool  Enabled    = false;   // was LightComponent::CastShadows
+        float Bias       = 1.0f;    // x the shader's texel-proportional depth bias
+        float NormalBias = 1.0f;    // x the normal-offset term
+        float Softness   = 1.0f;    // x the PCF radius
+        float NearPlane  = 0.05f;   // perspective near for spot/point depth
+        int   Resolution = 0;       // 0 = follow global; else 512/1024/2048/4096 (authored-only v1)
+        int   UpdateMode = 0;       // 0 Dynamic, 1 Static (bake once), 2 Off        (authored-only v1)
+    } Shadow;
 };
 
 // A game camera placed in the scene. The Game view renders through the first active one of
