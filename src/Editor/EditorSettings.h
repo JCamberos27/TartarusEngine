@@ -107,10 +107,12 @@ struct EditorSettings {
 
     // --- Light gizmos: the 3D wireframe shapes drawn for each light in the Scene viewport
     // (range sphere for point, cone for spot, aim arrow for directional). Controls live in
-    // Preferences > Viewport and the Window menu. LightGizmoSelectedOnly hides every light's
-    // shape except the selected one; opacity/scale tune how loud they read.
+    // Preferences > Viewport and the Window menu. LightGizmoSelectedOnly (default: on) draws
+    // the shape only for lights in the current selection, so a scene full of lights isn't a
+    // wall of overlapping rings; turn it off for a whole-scene lighting overview. Opacity/scale
+    // tune how loud they read.
     bool  ShowLightGizmos        = true;
-    bool  LightGizmoSelectedOnly = false;
+    bool  LightGizmoSelectedOnly = true;
     float LightGizmoOpacity      = 0.5f;
     float LightGizmoScale        = 1.0f;
 
