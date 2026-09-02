@@ -105,6 +105,15 @@ struct EditorSettings {
     float EngineMarkSpinSpeed = 0.52f;
     bool  EngineMarkPrism     = false;
 
+    // --- Light gizmos: the 3D wireframe shapes drawn for each light in the Scene viewport
+    // (range sphere for point, cone for spot, aim arrow for directional). Controls live in
+    // Preferences > Viewport and the Window menu. LightGizmoSelectedOnly hides every light's
+    // shape except the selected one; opacity/scale tune how loud they read.
+    bool  ShowLightGizmos        = true;
+    bool  LightGizmoSelectedOnly = false;
+    float LightGizmoOpacity      = 0.5f;
+    float LightGizmoScale        = 1.0f;
+
     static EditorSettings& Get() {
         static EditorSettings instance;
         return instance;
