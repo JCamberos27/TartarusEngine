@@ -835,6 +835,7 @@ int main() {
             glm::mat4 spotShadowVP[SpotShadowMap::kMaxSpots];
             glm::vec3 spotShadowPos[SpotShadowMap::kMaxSpots];
             float spotShadowFar[SpotShadowMap::kMaxSpots];
+            float spotShadowHalfTan[SpotShadowMap::kMaxSpots]; // tan(half-FOV) of the map — sizes the shader's texel estimate to the real cone, not an assumed 90° (#134)
             int spotShadowCount = 0; // shadow-casting spots that got a slot this frame (#119)
             glm::vec3 pointShadowPos[PointShadowMap::kMaxPoints];
             float pointShadowFar[PointShadowMap::kMaxPoints];
@@ -867,6 +868,7 @@ int main() {
                         float fov = glm::radians(std::min(lc.SpotAngleDegrees * 2.0f + 4.0f, 175.0f));
                         spotShadowFar[slot] = std::max(lc.Range, 0.2f);
                         spotShadowPos[slot] = pos;
+                        spotShadowHalfTan[slot] = std::tan(0.5f * fov);
                         spotShadowVP[slot] = glm::perspective(fov, 1.0f, 0.05f, spotShadowFar[slot]) *
                                              glm::lookAt(pos, pos + aim, up);
                     }
@@ -910,9 +912,16 @@ int main() {
 
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
-                glCullFace(GL_FRONT);                 // store back faces only — the lit side never self-shadows
+                // Store the LIGHT-FACING surface (back-face cull), matching the spot/point passes.
+                // Front-face culling stored a caster's far side, which under any convex/curved
+                // occluder (sphere worst) sits far enough behind the contact that the shadow
+                // detached from the object's base at grazing sun angles — the #134 sun-bay gap.
+                // SunShadow()'s bias is texel-proportional and now carries the acne protection;
+                // this polygon offset is just a hair of extra slack for flat lit receivers.
+                glEnable(GL_CULL_FACE);
+                glCullFace(GL_BACK);
                 glEnable(GL_POLYGON_OFFSET_FILL);
-                glPolygonOffset(1.0f, 1.5f);          // small: front-face culling already prevents acne
+                glPolygonOffset(1.0f, 2.0f);
 
                 shadowShader.Bind();
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
@@ -956,9 +965,13 @@ int main() {
                 PROFILE_SCOPE("Spot Shadow Pass");
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
-                glCullFace(GL_FRONT);                 // store back faces only — see the sun pass
-                glEnable(GL_POLYGON_OFFSET_FILL);
-                glPolygonOffset(1.0f, 1.5f);
+                // Store the LIGHT-FACING surface (back-face cull), NOT the far side. The sun CSM
+                // front-face-culls fine because its rays are parallel, but a perspective spot's
+                // rays diverge and a curved caster's back face sits far enough past the contact
+                // that culling front faces detached the contact shadow — the sphere gap in #134.
+                // gl_FragDepth is written linearly here, so glPolygonOffset does nothing; the
+                // bias lives entirely in SpotShadow()'s texel-proportional `ref` term.
+                glCullFace(GL_BACK);
 
                 localShadowShader.Bind(); // linear distance-to-light depth
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
@@ -1004,15 +1017,13 @@ int main() {
 
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
-                // Front-face cull the occluders (store only their BACK faces' distance), same as
-                // the sun + spot passes. The lit side of a caster then can't self-shadow, so the
-                // model shader's PointShadow() needs almost no bias — which is what stops the
-                // contact shadow peter-panning away from the object's base. Closed meshes only;
-                // a paper-thin plane has no back face and won't occlude (rare as a caster).
+                // Store the LIGHT-FACING surface (back-face cull), matching the spot pass. Front-
+                // face culling here stored a sphere's FAR hemisphere, which under this 90°
+                // perspective sits well past the true contact — that was the sphere peter-panning
+                // in #134. gl_FragDepth is linear, so glPolygonOffset is inert; PointShadow()'s
+                // texel-proportional `ref` term carries all the bias.
                 glEnable(GL_CULL_FACE);
-                glCullFace(GL_FRONT);
-                glEnable(GL_POLYGON_OFFSET_FILL);
-                glPolygonOffset(1.1f, 1.5f);
+                glCullFace(GL_BACK);
 
                 localShadowShader.Bind(); // linear distance-to-light depth
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
@@ -1104,6 +1115,7 @@ int main() {
                 for (int s = 0; s < spotCountForView; ++s) {
                     modelShader.SetVec3("uSpotShadowPos[" + std::to_string(s) + "]", spotShadowPos[s]);
                     modelShader.SetFloat("uSpotShadowFar[" + std::to_string(s) + "]", spotShadowFar[s]);
+                    modelShader.SetFloat("uSpotShadowHalfTan[" + std::to_string(s) + "]", spotShadowHalfTan[s]);
                 }
                 glActiveTexture(GL_TEXTURE0 + 9);
                 glBindTexture(GL_TEXTURE_2D_ARRAY, spotShadowMap.DepthArray());
