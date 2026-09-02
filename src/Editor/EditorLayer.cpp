@@ -4398,9 +4398,32 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
     // just before this function returns. See the header for why the two buffers are separate.
     m_HierarchyVisibleBuild.clear();
 
+    // Expand / collapse every root's whole subtree at once (audit #71). Two flat glyph buttons
+    // pinned to the right of the search row (#151) instead of a whole dedicated button row.
+    auto setAllExpanded = [&](bool open) {
+        for (auto e : world.Registry.view<const NameComponent>()) {
+            const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+            if (!h || h->Parent == entt::null) SetHierarchyExpandedRecursive(world, e, open);
+        }
+    };
+    auto flatGlyphButton = [](const char* icon, const char* tip) {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f)); // flat at rest
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.245f, 0.250f, 0.275f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.300f, 0.310f, 0.345f, 1.0f));
+        ImGui::PushID(tip);
+        bool clicked = ImGui::Button(icon);
+        ImGui::PopID();
+        ImGui::PopStyleColor(3);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+        return clicked;
+    };
+
     // Search box. A bare string matches names; the "t:" prefix matches TagComponent instead,
-    // the same shorthand Unity's Hierarchy search uses.
-    ImGui::SetNextItemWidth(-1.0f);
+    // the same shorthand Unity's Hierarchy search uses. Width leaves room for the two glyph
+    // buttons + the spacing on either side of them.
+    const ImGuiStyle& hstyle = ImGui::GetStyle();
+    const float glyphBtnW = ImGui::CalcTextSize(ICON_FA_ANGLES_UP).x + hstyle.FramePadding.x * 2.0f;
+    ImGui::SetNextItemWidth(-(glyphBtnW * 2.0f + hstyle.ItemSpacing.x * 2.0f));
     char filterBuf[128];
     snprintf(filterBuf, sizeof(filterBuf), "%s", m_HierarchyFilter.c_str());
     if (ImGui::InputTextWithHint("##HierarchyFilter", ICON_FA_MAGNIFYING_GLASS "  Search (t:Tag to filter by tag)",
@@ -4411,17 +4434,10 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
         EditorUI::SetTooltip("Type a name to filter the list below.\nType \"t:\" followed by a tag (e.g. t:Enemy) to filter by Tag instead.");
     }
 
-    // Expand / collapse every root's whole subtree at once (audit #71).
-    auto setAllExpanded = [&](bool open) {
-        for (auto e : world.Registry.view<const NameComponent>()) {
-            const auto* h = world.Registry.try_get<HierarchyComponent>(e);
-            if (!h || h->Parent == entt::null) SetHierarchyExpandedRecursive(world, e, open);
-        }
-    };
-    if (ImGui::SmallButton(ICON_FA_ANGLES_DOWN "  Expand all")) setAllExpanded(true);
     ImGui::SameLine();
-    if (ImGui::SmallButton(ICON_FA_ANGLES_UP "  Collapse all")) setAllExpanded(false);
-    ImGui::Separator();
+    if (flatGlyphButton(ICON_FA_ANGLES_DOWN, "Expand all")) setAllExpanded(true);
+    ImGui::SameLine();
+    if (flatGlyphButton(ICON_FA_ANGLES_UP, "Collapse all")) setAllExpanded(false);
 
     const bool filtering = !m_HierarchyFilter.empty();
 
