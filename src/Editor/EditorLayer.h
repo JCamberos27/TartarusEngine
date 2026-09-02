@@ -354,9 +354,9 @@ private:
     bool CanSnapSelectionToGround(World& world) const;
     void SnapSelectionToGround(World& world);
 
-    // Set in Init() to ProjectPaths::Resolve("scenes/Test.json") — the project folder, not the
+    // Set in Init() to ProjectPaths::Resolve("scenes/Showcase.json") — the project folder, not the
     // working directory. Left as a bare filename here only as a harmless pre-Init default.
-    std::string m_CurrentScenePath = "scenes/Test.json";
+    std::string m_CurrentScenePath = "scenes/Showcase.json";
     bool m_Dirty = false;
     // Undo-stack depth at the last save. When history is walked back to exactly this point the
     // scene matches disk again, so the title should drop its "*" (#22 P22). -1 = no clean point

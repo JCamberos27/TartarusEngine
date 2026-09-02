@@ -369,7 +369,7 @@ int main() {
         // build/, where it was gitignored and a clean rebuild would delete it. Prefer the scene
         // that was open when the editor last closed, if it still exists (#95).
         EditorSettings::Load();
-        std::string scenePath = ProjectPaths::Resolve("scenes/Test.json");
+        std::string scenePath = ProjectPaths::Resolve("scenes/Showcase.json");
         {
             const std::string& last = EditorSettings::Get().LastScenePath;
             std::error_code sceneEc;

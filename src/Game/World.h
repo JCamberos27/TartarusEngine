@@ -20,8 +20,10 @@ public:
     entt::registry Registry;
 
     // Vertical gradient sky (see Sky.h) — horizon at the world's XZ plane, zenith straight up.
-    glm::vec3 SkyHorizonColor{0.53f, 0.72f, 0.86f};
-    glm::vec3 SkyZenithColor{0.20f, 0.40f, 0.75f};
+    // Default is pure black: a fresh scene reads as a dark stage, and the sky never washes out
+    // the HDR tonemapper or fights a scene's own lighting until it's set deliberately.
+    glm::vec3 SkyHorizonColor{0.0f, 0.0f, 0.0f};
+    glm::vec3 SkyZenithColor{0.0f, 0.0f, 0.0f};
 
     // Creates a level-geometry entity: a fresh (unshared) cube-primitive Model tinted `color`,
     // a Collider, and LevelGeometryTag. `size` becomes the entity's Transform Scale, matching
