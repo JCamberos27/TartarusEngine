@@ -138,6 +138,7 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
     // guessed) - both windows need it, since either one's auto-focus alone can win this fight.
     if (!ImGui::Begin("Game", &m_WindowOpen, ImGuiWindowFlags_NoFocusOnAppearing)) {
         m_LastAvailableRegion = ImVec2(0.0f, 0.0f);
+        m_ViewImageSize = ImVec2(0.0f, 0.0f);
         ImGui::End();
         return;
     }
@@ -147,6 +148,7 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
 
     ImVec2 avail = ImGui::GetContentRegionAvail();
     m_LastAvailableRegion = avail;
+    m_ViewImageSize = ImVec2(0.0f, 0.0f);
 
     if (avail.x > 1.0f && avail.y > 1.0f && m_Framebuffer.IsValid()) {
         float targetAspect = m_CurrentPreset.Mode == AspectRatioMode::FreeAspect ? -1.0f : m_CurrentPreset.AspectRatio;
@@ -159,6 +161,8 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         dl->AddRectFilled(containerStart, ImVec2(containerStart.x + avail.x, containerStart.y + avail.y), IM_COL32(0, 0, 0, 255));
 
         ImVec2 imagePos(containerStart.x + rect.Offset.x, containerStart.y + rect.Offset.y);
+        m_ViewImagePos = imagePos;
+        m_ViewImageSize = rect.Size;
         ImGui::SetCursorScreenPos(imagePos);
         // uv0=(0,1)/uv1=(1,0): OpenGL textures are bottom-left origin, ImGui::Image expects
         // top-left, so this flips the framebuffer's color attachment right-side up.
@@ -188,17 +192,9 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
                               ImVec2(anchor.x + ts.x + 10.0f, anchor.y + ts.y + 6.0f),
                               IM_COL32(0, 0, 0, 140), 4.0f);
             dl->AddText(anchor, IM_COL32(230, 230, 230, 210), hint);
-        } else if (playing && inputEngaged) {
-            // While captured the cursor is hidden and the Stop button can't be clicked, so keep
-            // a persistent reminder of the way out on screen (top-centre, out of the way).
-            const char* hint = "Esc to release the cursor";
-            ImVec2 ts = ImGui::CalcTextSize(hint);
-            ImVec2 anchor(imagePos.x + (rect.Size.x - ts.x) * 0.5f, imagePos.y + 12.0f);
-            dl->AddRectFilled(ImVec2(anchor.x - 10.0f, anchor.y - 5.0f),
-                              ImVec2(anchor.x + ts.x + 10.0f, anchor.y + ts.y + 5.0f),
-                              IM_COL32(0, 0, 0, 120), 4.0f);
-            dl->AddText(anchor, IM_COL32(255, 255, 255, 190), hint);
         }
+        // (The persistent "Esc to release the cursor" banner was removed — that binding now
+        // lives in Preferences ▸ Shortcuts like every other key.)
 
         if (m_ShowStatsOverlay && stats) {
             ImVec2 statsPos(imagePos.x + 8.0f, imagePos.y + 8.0f);
