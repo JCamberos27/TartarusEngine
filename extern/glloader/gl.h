@@ -253,10 +253,20 @@ typedef void (__stdcall* PFNGLBINDTEXTUREUNITPROC)(GLuint, GLuint);
 typedef void (__stdcall* PFNGLCREATEFRAMEBUFFERSPROC)(GLsizei, GLuint*);
 typedef void (__stdcall* PFNGLNAMEDFRAMEBUFFERTEXTUREPROC)(GLuint, GLenum, GLuint, GLint);
 typedef void (__stdcall* PFNGLNAMEDFRAMEBUFFERTEXTURELAYERPROC)(GLuint, GLenum, GLuint, GLint, GLint);
+typedef void (__stdcall* PFNGLNAMEDFRAMEBUFFERRENDERBUFFERPROC)(GLuint, GLenum, GLenum, GLuint);
 typedef void (__stdcall* PFNGLNAMEDFRAMEBUFFERDRAWBUFFERSPROC)(GLuint, GLsizei, const GLenum*);
 typedef GLenum (__stdcall* PFNGLCHECKNAMEDFRAMEBUFFERSTATUSPROC)(GLuint, GLenum);
 typedef void (__stdcall* PFNGLBLITNAMEDFRAMEBUFFERPROC)(GLuint, GLuint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum);
 typedef void (__stdcall* PFNGLCLEARNAMEDFRAMEBUFFERFVPROC)(GLuint, GLenum, GLint, const GLfloat*);
+// DSA — vertex arrays (GL 4.5). Used by ModelMesh so building a mesh mid-frame no longer
+// binds/mutates the renderer's current VAO + array/element-buffer state (#97).
+typedef void (__stdcall* PFNGLCREATEVERTEXARRAYSPROC)(GLsizei, GLuint*);
+typedef void (__stdcall* PFNGLENABLEVERTEXARRAYATTRIBPROC)(GLuint, GLuint);
+typedef void (__stdcall* PFNGLVERTEXARRAYATTRIBFORMATPROC)(GLuint, GLuint, GLint, GLenum, GLboolean, GLuint);
+typedef void (__stdcall* PFNGLVERTEXARRAYATTRIBIFORMATPROC)(GLuint, GLuint, GLint, GLenum, GLuint);
+typedef void (__stdcall* PFNGLVERTEXARRAYATTRIBBINDINGPROC)(GLuint, GLuint, GLuint);
+typedef void (__stdcall* PFNGLVERTEXARRAYVERTEXBUFFERPROC)(GLuint, GLuint, GLuint, GLintptr, GLsizei);
+typedef void (__stdcall* PFNGLVERTEXARRAYELEMENTBUFFERPROC)(GLuint, GLuint);
 
 extern PFNGLGENVERTEXARRAYSPROC glGenVertexArrays;
 extern PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
@@ -334,10 +344,18 @@ extern PFNGLBINDTEXTUREUNITPROC glBindTextureUnit;
 extern PFNGLCREATEFRAMEBUFFERSPROC glCreateFramebuffers;
 extern PFNGLNAMEDFRAMEBUFFERTEXTUREPROC glNamedFramebufferTexture;
 extern PFNGLNAMEDFRAMEBUFFERTEXTURELAYERPROC glNamedFramebufferTextureLayer;
+extern PFNGLNAMEDFRAMEBUFFERRENDERBUFFERPROC glNamedFramebufferRenderbuffer;
 extern PFNGLNAMEDFRAMEBUFFERDRAWBUFFERSPROC glNamedFramebufferDrawBuffers;
 extern PFNGLCHECKNAMEDFRAMEBUFFERSTATUSPROC glCheckNamedFramebufferStatus;
 extern PFNGLBLITNAMEDFRAMEBUFFERPROC glBlitNamedFramebuffer;
 extern PFNGLCLEARNAMEDFRAMEBUFFERFVPROC glClearNamedFramebufferfv;
+extern PFNGLCREATEVERTEXARRAYSPROC glCreateVertexArrays;
+extern PFNGLENABLEVERTEXARRAYATTRIBPROC glEnableVertexArrayAttrib;
+extern PFNGLVERTEXARRAYATTRIBFORMATPROC glVertexArrayAttribFormat;
+extern PFNGLVERTEXARRAYATTRIBIFORMATPROC glVertexArrayAttribIFormat;
+extern PFNGLVERTEXARRAYATTRIBBINDINGPROC glVertexArrayAttribBinding;
+extern PFNGLVERTEXARRAYVERTEXBUFFERPROC glVertexArrayVertexBuffer;
+extern PFNGLVERTEXARRAYELEMENTBUFFERPROC glVertexArrayElementBuffer;
 
 // Call once after a GL context is current (e.g. right after glfwMakeContextCurrent).
 bool GLLoader_Init();
