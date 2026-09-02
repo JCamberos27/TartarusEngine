@@ -1199,6 +1199,20 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ImGui::Checkbox("Show transform gizmo", &m_ShowGizmos);
         ImGui::Checkbox("Frame camera on select", &m_FrameOnSelect);
 
+        ImGui::SeparatorText("Light gizmos");
+        if (ImGui::Checkbox("Show light gizmos", &prefs.ShowLightGizmos)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("3D wireframe shapes in the viewport: range sphere for point lights, cone for spots, aim arrow for directional.");
+        if (!prefs.ShowLightGizmos) ImGui::BeginDisabled();
+        if (ImGui::Checkbox("Only for the selected light", &prefs.LightGizmoSelectedOnly)) EditorSettings::Save();
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::SliderFloat("Opacity", &prefs.LightGizmoOpacity, 0.0f, 1.0f, "%.2f")) EditorSettings::Save();
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::SliderFloat("Arrow / disc scale", &prefs.LightGizmoScale, 0.25f, 3.0f, "%.2fx")) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Screen size of the parts that aren't tied to a world measurement (the directional arrow, the sun disc).");
+        if (!prefs.ShowLightGizmos) ImGui::EndDisabled();
+
         ImGui::SeparatorText("Corner monogram");
         if (ImGui::Checkbox("Show engine mark", &prefs.EngineMarkEnabled)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
@@ -2760,6 +2774,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
 
     DrawEntityIcons(world, editorCamera);
+    DrawLightGizmos(world, editorCamera);
 
     // Drawn (and its hover/drag state refreshed) before picking runs below, so a click that
     // lands on the nav gizmo's rotate ring or tool buttons doesn't also start a viewport
@@ -3706,6 +3721,8 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 EditorSettings::Save();
             ImGui::MenuItem(ICON_FA_CLOCK_ROTATE_LEFT "  History", nullptr, &m_ShowHistory);
             if (ImGui::MenuItem(ICON_FA_CERTIFICATE "  Engine Mark", nullptr, &EditorSettings::Get().EngineMarkEnabled))
+                EditorSettings::Save();
+            if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Light Gizmos", nullptr, &EditorSettings::Get().ShowLightGizmos))
                 EditorSettings::Save();
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
@@ -6062,6 +6079,131 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
         }
 
         if (selected) draw->AddCircle(screen, r * 1.6f, IM_COL32(255, 140, 25, 255), 0, 2.0f);
+    }
+
+    draw->PopClipRect();
+}
+
+void EditorLayer::DrawLightGizmos(World& world, Camera& editorCamera) {
+    const EditorSettings& prefs = EditorSettings::Get();
+    if (!prefs.ShowLightGizmos) return;
+    if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
+
+    const glm::mat4 view = editorCamera.ViewMatrix();
+    const glm::mat4 proj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y);
+    const glm::mat4 viewProj = proj * view;
+
+    // Same draw target + clipping as DrawEntityIcons: the Scene window's own list, bounded to
+    // the viewport rect, so panels over the viewport cover the shapes instead of them bleeding.
+    ImGuiWindow* sceneWin = ImGui::FindWindowByName("Scene");
+    ImDrawList* draw = sceneWin ? sceneWin->DrawList : ImGui::GetForegroundDrawList();
+    const ImVec2 clipMin(m_ViewportPos.x, m_ViewportPos.y);
+    const ImVec2 clipMax(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y);
+    draw->PushClipRect(clipMin, clipMax, true);
+
+    auto project = [&](const glm::vec3& wp, ImVec2& out) -> bool {
+        glm::vec4 clip = viewProj * glm::vec4(wp, 1.0f);
+        if (clip.w <= 0.0001f) return false;               // at/behind the eye
+        glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        out = ImVec2(m_ViewportPos.x + (ndc.x * 0.5f + 0.5f) * m_ViewportSize.x,
+                     m_ViewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * m_ViewportSize.y);
+        return true;
+    };
+    // Project a world-space polyline and stroke it, dropping any segment with an endpoint that
+    // failed to project (behind the camera) rather than drawing a wild line across the screen.
+    auto stroke = [&](const std::vector<glm::vec3>& pts, bool closed, ImU32 col, float thick) {
+        const int n = (int)pts.size();
+        for (int i = 0; i < n - (closed ? 0 : 1); ++i) {
+            ImVec2 a, b;
+            if (project(pts[i], a) && project(pts[(i + 1) % n], b)) draw->AddLine(a, b, col, thick);
+        }
+    };
+    auto circle = [](const glm::vec3& c, const glm::vec3& u, const glm::vec3& v, float r, int seg) {
+        std::vector<glm::vec3> pts;
+        pts.reserve(seg);
+        for (int i = 0; i < seg; ++i) {
+            float t = (float)i / (float)seg * 6.28318530718f;
+            pts.push_back(c + (cosf(t) * u + sinf(t) * v) * r);
+        }
+        return pts;
+    };
+    auto basis = [](const glm::vec3& dir, glm::vec3& u, glm::vec3& v) {
+        glm::vec3 up = std::fabs(dir.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
+        u = glm::normalize(glm::cross(dir, up));
+        v = glm::cross(dir, u);
+    };
+
+    const float gscale = std::max(prefs.LightGizmoScale, 0.05f);
+
+    for (auto entity : world.Registry.view<const TransformComponent, const LightComponent>()) {
+        if (world.Registry.all_of<InactiveTag>(entity)) continue;
+        const bool selected = IsSelected(entity);
+        if (prefs.LightGizmoSelectedOnly && !selected) continue;
+
+        const auto& light = world.Registry.get<const LightComponent>(entity);
+        const glm::mat4 model = world.ComposeWorldTransform(entity);
+        const glm::vec3 pos = glm::vec3(model[3]);
+        const glm::vec3 dir = glm::normalize(glm::vec3(model * glm::vec4(0, 0, -1, 0)));
+
+        glm::vec3 c = glm::clamp(light.Color, 0.0f, 1.0f);
+        int a = (int)(std::clamp(prefs.LightGizmoOpacity, 0.0f, 1.0f) * 200.0f) + 25;
+        if (selected) a = std::min(255, a + 100);
+        const ImU32 col = IM_COL32((int)(c.r * 255), (int)(c.g * 255), (int)(c.b * 255), a);
+        const float thick = selected ? 2.0f : 1.3f;
+
+        if (light.Kind == LightComponent::Type::Point) {
+            float r = std::max(light.Range, 0.01f);
+            stroke(circle(pos, glm::vec3(1, 0, 0), glm::vec3(0, 1, 0), r, 48), true, col, thick);
+            stroke(circle(pos, glm::vec3(1, 0, 0), glm::vec3(0, 0, 1), r, 48), true, col, thick);
+            stroke(circle(pos, glm::vec3(0, 1, 0), glm::vec3(0, 0, 1), r, 48), true, col, thick);
+        } else if (light.Kind == LightComponent::Type::Spot) {
+            float range = std::max(light.Range, 0.05f);
+            float half = glm::radians(std::clamp(light.SpotAngleDegrees, 1.0f, 89.0f));
+            glm::vec3 u, v; basis(dir, u, v);
+            glm::vec3 apex = pos;
+            glm::vec3 center = pos + dir * range;
+            float rimR = range * tanf(half);
+            stroke(circle(center, u, v, rimR, 48), true, col, thick);
+            // inner falloff cone, dimmer — matches main.cpp's 0.9 * SpotAngle inner cutoff
+            float innerR = range * tanf(half * 0.9f);
+            stroke(circle(center, u, v, innerR, 40), true, IM_COL32((int)(c.r * 255), (int)(c.g * 255), (int)(c.b * 255), a / 2), 1.0f);
+            for (int k = 0; k < 4; ++k) {
+                float t = (float)k * 1.57079632679f;
+                std::vector<glm::vec3> edge = { apex, center + (cosf(t) * u + sinf(t) * v) * rimR };
+                stroke(edge, false, col, thick);
+            }
+        } else { // Directional
+            float L = 2.6f * gscale;
+            glm::vec3 u, v; basis(dir, u, v);
+            // two parallel shafts to read as parallel rays, each with a small chevron head
+            for (int s = -1; s <= 1; s += 2) {
+                glm::vec3 o = pos + u * (0.5f * gscale * (float)s);
+                glm::vec3 tip = o + dir * L;
+                std::vector<glm::vec3> shaft = { o, tip };
+                stroke(shaft, false, col, thick);
+                std::vector<glm::vec3> head1 = { tip, tip - dir * (0.5f * gscale) + u * (0.28f * gscale) };
+                std::vector<glm::vec3> head2 = { tip, tip - dir * (0.5f * gscale) - u * (0.28f * gscale) };
+                stroke(head1, false, col, thick);
+                stroke(head2, false, col, thick);
+            }
+            stroke(circle(pos, u, v, 0.38f * gscale, 32), true, col, thick); // sun disc
+        }
+
+        if (selected) {
+            ImVec2 sp;
+            if (project(pos, sp)) {
+                char buf[96];
+                if (light.Kind == LightComponent::Type::Spot)
+                    snprintf(buf, sizeof(buf), "%.0f deg  |  range %.1f", light.SpotAngleDegrees, light.Range);
+                else if (light.Kind == LightComponent::Type::Point)
+                    snprintf(buf, sizeof(buf), "range %.1f", light.Range);
+                else
+                    snprintf(buf, sizeof(buf), "sun  %.2f deg", light.AngularSizeDegrees);
+                ImVec2 tp(sp.x + 12.0f * m_UIScale, sp.y - 6.0f * m_UIScale);
+                draw->AddText(ImVec2(tp.x + 1, tp.y + 1), IM_COL32(0, 0, 0, 180), buf);
+                draw->AddText(tp, IM_COL32(255, 255, 255, 235), buf);
+            }
+        }
     }
 
     draw->PopClipRect();
