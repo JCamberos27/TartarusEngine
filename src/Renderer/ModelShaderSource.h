@@ -98,6 +98,19 @@ layout(std430, binding = 0) readonly buffer LightBuffer {
     Light uLights[];
 };
 
+// Clustered-forward light culling (#120). The view frustum is diced into a fixed
+// 16 x 9 x 24 grid of froxels; a per-frame compute pass (ClusterGrid) fills, for each
+// froxel, a count of the point/spot lights whose range reaches it plus their indices into
+// uLights. This fragment finds its own froxel from gl_FragCoord + view depth and loops only
+// that list. uClusterEnabled == 0 (the offscreen model preview, which runs no compute pass)
+// falls back to looping every light.
+layout(std430, binding = 3) readonly buffer ClusterCounts { uint uClusterLightCount[]; };
+layout(std430, binding = 4) readonly buffer ClusterIndex  { uint uClusterLightIndices[]; };
+uniform int  uClusterEnabled;
+uniform vec2 uClusterScreenSize;
+uniform vec4 uClusterZParams; // (near, far, GZ/ln(far/near), -GZ*ln(near)/ln(far/near))
+const uint C_GX = 16u, C_GY = 9u, C_GZ = 24u, C_MAXL = 100u;
+
 // Cascaded shadow maps for the directional sun (see CascadedShadowMap). uView is also used to
 // pick the cascade by view-space depth.
 uniform mat4 uView;
@@ -303,6 +316,50 @@ vec3 ShadeLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0,
     return (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
 }
 
+// Full shading for one point or spot light (index into uLights): range check, windowed
+// inverse-square falloff, spot cone + shadow, point shadow. Returns its Lo contribution, or
+// zero if the fragment is out of range / outside the cone. Shared by the clustered loop and
+// the non-clustered fallback.
+vec3 ShadePointSpot(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float metallic, float roughness) {
+    Light lt = uLights[i];
+    int type = int(lt.PositionType.w);
+
+    vec3 toLight = lt.PositionType.xyz - vWorldPos;
+    float dist = length(toLight);
+    float range = lt.ColorRange.a;
+    if (dist > range) return vec3(0.0);
+    vec3 L = toLight / max(dist, 1e-4);
+
+    // Windowed inverse-square: contribution reaches exactly zero at Range, no hard clip.
+    float t = dist / max(range, 1e-4);
+    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
+    float atten = window * window / (1.0 + dist * dist);
+
+    if (type == 2) {
+        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float outerCos = lt.DirCutoff.w;
+        float innerCos = lt.Params.x;
+        if (cosAngle < outerCos) return vec3(0.0);
+        atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
+        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #119
+    } else {
+        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz); // #119
+    }
+    if (atten <= 0.0) return vec3(0.0);
+    return ShadeLight(N, V, L, lt.ColorRange.rgb * atten, albedo, F0, metallic, roughness);
+}
+
+// This fragment's froxel index in the 16 x 9 x 24 cluster grid (#120).
+uint clusterIndex() {
+    uvec2 tile = uvec2(gl_FragCoord.xy / (uClusterScreenSize / vec2(float(C_GX), float(C_GY))));
+    tile = min(tile, uvec2(C_GX - 1u, C_GY - 1u));
+    float viewZ = -(uView * vec4(vWorldPos, 1.0)).z;             // positive view-space distance
+    viewZ = clamp(viewZ, uClusterZParams.x, uClusterZParams.y);
+    uint slice = uint(max(log(viewZ) * uClusterZParams.z + uClusterZParams.w, 0.0));
+    slice = min(slice, C_GZ - 1u);
+    return tile.x + tile.y * C_GX + slice * C_GX * C_GY;
+}
+
 void main() {
     vec3 albedo = (uHasAlbedoMap == 1 ? texture(uAlbedoMap, vUV).rgb : vec3(1.0)) * uBaseColor;
 
@@ -335,44 +392,29 @@ void main() {
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
     vec3 Lo = vec3(0.0);
+
+    // Directional lights are not clustered (infinite extent) — one cheap pass for type 0.
     for (uint i = 0u; i < uLightCount; ++i) {
-        Light lt = uLights[i];
-        int type = int(lt.PositionType.w);
-
-        vec3 L;
-        vec3 radiance = lt.ColorRange.rgb;
-
-        if (type == 0) {
-            // Directional: DirCutoff.xyz is the direction light travels; L points back at it.
-            L = normalize(-lt.DirCutoff.xyz);
-            radiance *= SunShadow(vWorldPos, N, L);
-        } else {
-            vec3 toLight = lt.PositionType.xyz - vWorldPos;
-            float dist = length(toLight);
-            float range = lt.ColorRange.a;
-            if (dist > range) continue;
-            L = toLight / max(dist, 1e-4);
-
-            // Windowed inverse-square: contribution reaches exactly zero at Range, no hard clip.
-            float t = dist / max(range, 1e-4);
-            float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
-            float atten = window * window / (1.0 + dist * dist);
-
-            if (type == 2) {
-                float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
-                float outerCos = lt.DirCutoff.w;
-                float innerCos = lt.Params.x;
-                if (cosAngle < outerCos) continue;
-                atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
-                atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #119
-            } else {
-                atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz); // #119
-            }
-            if (atten <= 0.0) continue;
-            radiance *= atten;
-        }
-
+        if (int(uLights[i].PositionType.w) != 0) continue;
+        vec3 L = normalize(-uLights[i].DirCutoff.xyz); // DirCutoff.xyz travels forward; L points back
+        vec3 radiance = uLights[i].ColorRange.rgb * SunShadow(vWorldPos, N, L);
         Lo += ShadeLight(N, V, L, radiance, albedo, F0, metallic, roughness);
+    }
+
+    // Point + spot lights: this fragment's froxel list when clustering is active (#120),
+    // otherwise every light (offscreen preview path, no compute pass).
+    if (uClusterEnabled == 1) {
+        uint cl = clusterIndex();
+        uint count = uClusterLightCount[cl];
+        for (uint j = 0u; j < count; ++j) {
+            uint li = uClusterLightIndices[cl * C_MAXL + j];
+            Lo += ShadePointSpot(li, N, V, albedo, F0, metallic, roughness);
+        }
+    } else {
+        for (uint i = 0u; i < uLightCount; ++i) {
+            if (int(uLights[i].PositionType.w) == 0) continue;
+            Lo += ShadePointSpot(i, N, V, albedo, F0, metallic, roughness);
+        }
     }
 
     vec3 ambient = vec3(0.03) * albedo * ao;

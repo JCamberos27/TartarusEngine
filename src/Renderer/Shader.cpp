@@ -36,8 +36,32 @@ Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc) {
     }
 }
 
+Shader::Shader(const std::string& computeSrc) {
+    unsigned int cs = Compile(GL_COMPUTE_SHADER, computeSrc);
+
+    m_Program = glCreateProgram();
+    glAttachShader(m_Program, cs);
+    glLinkProgram(m_Program);
+    glDeleteShader(cs);
+
+    int success;
+    glGetProgramiv(m_Program, GL_LINK_STATUS, &success);
+    if (!success) {
+        char log[1024];
+        glGetProgramInfoLog(m_Program, 1024, nullptr, log);
+        glDeleteProgram(m_Program);
+        m_Program = 0;
+        throw std::runtime_error(std::string("Compute shader link error: ") + log);
+    }
+}
+
 Shader::~Shader() {
     glDeleteProgram(m_Program);
+}
+
+void Shader::DispatchCompute(unsigned int gx, unsigned int gy, unsigned int gz) const {
+    GLStateCache::UseProgram(m_Program);
+    glDispatchCompute(gx, gy, gz);
 }
 
 unsigned int Shader::Compile(unsigned int type, const std::string& src) {
@@ -75,6 +99,10 @@ void Shader::SetMat4(const std::string& name, const glm::mat4& m) const {
 
 void Shader::SetMat4Array(const std::string& name, int count, const glm::mat4* data) const {
     glUniformMatrix4fv(Loc(name), count, GL_FALSE, glm::value_ptr(data[0]));
+}
+
+void Shader::SetVec2(const std::string& name, const glm::vec2& v) const {
+    glUniform2f(Loc(name), v.x, v.y);
 }
 
 void Shader::SetVec3(const std::string& name, const glm::vec3& v) const {
