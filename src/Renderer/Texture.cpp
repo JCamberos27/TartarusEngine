@@ -109,21 +109,31 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
         internalFormat = settings.IsSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
     }
 
-    glGenTextures(1, &m_ID);
-    glBindTexture(GL_TEXTURE_2D, m_ID);
+    // Immutable storage + Direct State Access (#96): no glBindTexture to set this texture up,
+    // so importing a texture mid-frame can't disturb whatever's bound for rendering. Immutable
+    // storage needs the full mip level count up front.
+    int levels = 1;
+    if (settings.GenerateMipmaps) {
+        int longEdge = uploadW > uploadH ? uploadW : uploadH;
+        while (longEdge > 1) { longEdge >>= 1; ++levels; }
+    }
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &m_ID);
+    glTextureStorage2D(m_ID, levels, (GLenum)internalFormat, uploadW, uploadH);
+
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
     // The decode/cache path hands us tightly packed rows (stride = w*channels). Without this,
     // GL assumes 4-byte row alignment and shears any RGB texture whose width isn't a multiple
     // of 4 (#99). Restored to the 4 default right after.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, uploadW, uploadH, 0, format, GL_UNSIGNED_BYTE, uploadData);
+    glTextureSubImage2D(m_ID, 0, 0, 0, uploadW, uploadH, format, GL_UNSIGNED_BYTE, uploadData);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 
-    if (settings.GenerateMipmaps) glGenerateMipmap(GL_TEXTURE_2D);
+    if (settings.GenerateMipmaps) glGenerateTextureMipmap(m_ID);
 
     GLint wrap = settings.WrapMode == TextureImportSettings::Wrap::ClampToEdge ? GL_CLAMP_TO_EDGE : GL_REPEAT;
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
+    glTextureParameteri(m_ID, GL_TEXTURE_WRAP_S, wrap);
+    glTextureParameteri(m_ID, GL_TEXTURE_WRAP_T, wrap);
 
     GLint minFilter, magFilter;
     switch (settings.FilterMode) {
@@ -143,8 +153,8 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
             magFilter = GL_LINEAR;
             break;
     }
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
+    glTextureParameteri(m_ID, GL_TEXTURE_MIN_FILTER, minFilter);
+    glTextureParameteri(m_ID, GL_TEXTURE_MAG_FILTER, magFilter);
 
     // Anisotropic filtering — core in GL 4.6. Cleans up textures viewed at a shallow angle
     // (floors, walls receding to the horizon) that trilinear alone leaves blurry. Only
@@ -154,8 +164,10 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
             GLint m = 0; glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &m);
             return (GLfloat)m;
         }();
-        if (s_MaxAniso >= 2.0f)
-            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, s_MaxAniso < 8.0f ? s_MaxAniso : 8.0f);
+        if (s_MaxAniso >= 2.0f) {
+            GLfloat aniso = s_MaxAniso < 8.0f ? s_MaxAniso : 8.0f;
+            glTextureParameterfv(m_ID, GL_TEXTURE_MAX_ANISOTROPY, &aniso);
+        }
     }
 
     if (data) stbi_image_free(data); // null on the cache-hit path, where stb never ran
