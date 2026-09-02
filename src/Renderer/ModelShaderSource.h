@@ -120,6 +120,9 @@ uniform vec4 uCascadeSplits;          // per-cascade far distance, view space (p
 uniform mat4 uShadowMatrices[4];
 uniform vec4  uShadowTexelWorld;      // world units per shadow texel, per cascade (#117)
 uniform float uShadowSoftness;        // PCF kernel radius in shadow-map texels (from the sun's angular size)
+// Per-light shadow multipliers (#140 phase 2). All default 1.0 -> identical to pre-phase-2.
+uniform float uSunShadowBias;        // x the sun's texel-proportional depth bias
+uniform float uSunShadowNormalBias;  // x the sun's normal-offset term
 uniform sampler2DArrayShadow uShadowMap;
 
 // Spot-light shadow maps (#119): one perspective depth layer per casting spot, indexed by the
@@ -133,6 +136,9 @@ uniform float uSpotShadowFar[4];
 uniform float uSpotShadowHalfTan[4]; // tan(half-FOV) of each spot's map — the world texel footprint
                                      // at distance d is 2*d*halfTan/res, NOT the 2*d/res that a
                                      // 90° cube face gives; a narrow spot was over-offsetting (#134)
+uniform float uSpotShadowBias[4];       // per-light x depth bias   (#140 phase 2, default 1.0)
+uniform float uSpotShadowNormalBias[4]; // per-light x normal offset
+uniform float uSpotShadowSoftness[4];   // per-light x PCF tap spread
 uniform sampler2DArrayShadow uSpotShadowMap;
 
 // Point-light cube shadow maps (#119): one depth cube per casting point light, indexed by the
@@ -140,6 +146,8 @@ uniform sampler2DArrayShadow uSpotShadowMap;
 // Unit 10.
 uniform int   uPointShadowCount;
 uniform float uPointShadowFar[2];
+uniform float uPointShadowBias[2];       // per-light x depth bias   (#140 phase 2, default 1.0)
+uniform float uPointShadowNormalBias[2]; // per-light x normal offset
 uniform samplerCubeArrayShadow uPointShadowMap;
 
 // Set for the editor's Unlit shading mode: skips all lighting and shows flat albedo, so
@@ -240,13 +248,13 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
     // Bias is expressed in world units (multiples of the cascade texel) and divided into the
     // cascade's [0,1] depth span so it stays a constant physical offset regardless of cascade
     // size. Span = 2*radius + pullback; 2*radius == texel*resolution, pullback == 50.
-    vec3 offsetPos = worldPos + N * (texel * (0.5 + 0.5 * (1.0 - ndl)));
+    vec3 offsetPos = worldPos + N * (texel * (0.5 + 0.5 * (1.0 - ndl)) * uSunShadowNormalBias);
 
     vec4 lp = uShadowMatrices[c] * vec4(offsetPos, 1.0);
     vec3 proj = (lp.xyz / lp.w) * 0.5 + 0.5;
     if (proj.z >= 1.0) return 1.0;
 
-    float bias = (texel * (1.0 + 2.0 * (1.0 - ndl))) / (texel * float(textureSize(uShadowMap, 0).x) + 50.0);
+    float bias = (texel * (1.0 + 2.0 * (1.0 - ndl)) * uSunShadowBias) / (texel * float(textureSize(uShadowMap, 0).x) + 50.0);
     // Hash gl_FragCoord to a rotation angle — turns kernel banding into per-pixel noise.
     float rot = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
     // Farther cascades cover more world per texel, so widen the kernel a little to keep the
@@ -261,11 +269,11 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
         float band = edge * 0.12;
         if (viewDepth > edge - band) {
             float texel2 = uShadowTexelWorld[c + 1];
-            vec3 offsetPos2 = worldPos + N * (texel2 * (0.5 + 0.5 * (1.0 - ndl)));
+            vec3 offsetPos2 = worldPos + N * (texel2 * (0.5 + 0.5 * (1.0 - ndl)) * uSunShadowNormalBias);
             vec4 lp2 = uShadowMatrices[c + 1] * vec4(offsetPos2, 1.0);
             vec3 p2 = (lp2.xyz / lp2.w) * 0.5 + 0.5;
             if (p2.z < 1.0) {
-                float bias2 = (texel2 * (1.0 + 2.0 * (1.0 - ndl))) / (texel2 * float(textureSize(uShadowMap, 0).x) + 50.0);
+                float bias2 = (texel2 * (1.0 + 2.0 * (1.0 - ndl)) * uSunShadowBias) / (texel2 * float(textureSize(uShadowMap, 0).x) + 50.0);
                 float v2 = SampleCascade(c + 1, p2.xy, p2.z - bias2,
                                          max(uShadowSoftness, 0.5) * (1.0 + 0.35 * float(c + 1)), rot);
                 vis = mix(vis, v2, smoothstep(edge - band, edge, viewDepth));
@@ -291,7 +299,7 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N) {
     // and the depth bias are expressed as multiples of this, so they auto-scale with distance and
     // are independent of the light Range (#134).
     float texelW = 2.0 * d0 * uSpotShadowHalfTan[slot] / float(textureSize(uSpotShadowMap, 0).x);
-    vec3 biasedPos = worldPos + N * (texelW * (0.5 + 0.5 * (1.0 - nl))); // clears PCF kernel bleed at edges
+    vec3 biasedPos = worldPos + N * (texelW * (0.5 + 0.5 * (1.0 - nl)) * uSpotShadowNormalBias[slot]); // clears PCF kernel bleed at edges
     vec4 lp = uSpotShadowVP[slot] * vec4(biasedPos, 1.0);
     if (lp.w <= 0.0) return 1.0;                       // behind the light
     vec3 p = (lp.xyz / lp.w) * 0.5 + 0.5;
@@ -303,8 +311,8 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N) {
     // Depth bias = one shadow texel of world size (a bit more at grazing angles, where the stored
     // surface slopes fastest across a texel). Range-independent, unlike the old `d/far - 0.00035`
     // whose gap grew to centimetres on a long-range light (#134).
-    float ref = (d - texelW * (1.0 + 2.0 * (1.0 - nl))) / far;
-    vec2 texel = 1.0 / vec2(textureSize(uSpotShadowMap, 0).xy);
+    float ref = (d - texelW * (1.0 + 2.0 * (1.0 - nl)) * uSpotShadowBias[slot]) / far;
+    vec2 texel = (1.0 / vec2(textureSize(uSpotShadowMap, 0).xy)) * max(uSpotShadowSoftness[slot], 0.0);
     float vis = 0.0;
     vis += texture(uSpotShadowMap, vec4(p.xy + vec2(-0.5, -0.5) * texel, float(slot), ref));
     vis += texture(uSpotShadowMap, vec4(p.xy + vec2( 0.5, -0.5) * texel, float(slot), ref));
@@ -324,11 +332,11 @@ float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N) {
     float d0 = length(toLight);
     float nl = max(dot(N, toLight / max(d0, 1e-4)), 0.0);
     float texelW = 2.0 * d0 / float(textureSize(uPointShadowMap, 0).x); // 90° cube face: 2*d/res is exact
-    vec3 dir = (worldPos + N * (texelW * (0.5 + 0.5 * (1.0 - nl)))) - lightPos; // cube lookup + distance
+    vec3 dir = (worldPos + N * (texelW * (0.5 + 0.5 * (1.0 - nl)) * uPointShadowNormalBias[slot])) - lightPos; // cube lookup + distance
     float d = length(dir);
     if (d >= far) return 1.0;                // past the shadow range
     // Texel-proportional, Range-independent depth bias — see SpotShadow (#134).
-    float ref = (d - texelW * (1.0 + 2.0 * (1.0 - nl))) / far;
+    float ref = (d - texelW * (1.0 + 2.0 * (1.0 - nl)) * uPointShadowBias[slot]) / far;
     return texture(uPointShadowMap, vec4(dir, float(slot)), ref);
 }
 

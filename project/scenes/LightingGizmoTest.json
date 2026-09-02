@@ -1,0 +1,1193 @@
+{
+  "assetFolders": [
+    "Scenes"
+  ],
+  "assetMeta": [],
+  "boxes": [
+    {
+      "center": [
+        0.0,
+        -0.25,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.5,
+        0.5,
+        0.5199999809265137
+      ],
+      "id": 0,
+      "name": "Floor",
+      "order": 0,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        32.0,
+        0.5,
+        24.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        4.0,
+        -12.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.3400000035762787,
+        0.3400000035762787,
+        0.3700000047683716
+      ],
+      "id": 1,
+      "name": "BackWall",
+      "order": 1,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        32.0,
+        8.0,
+        0.5
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -8.0,
+        4.0,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.30000001192092896,
+        0.30000001192092896,
+        0.33000001311302185
+      ],
+      "id": 2,
+      "name": "Divider_Sun_Spot",
+      "order": 2,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.6000000238418579,
+        8.0,
+        20.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        8.0,
+        4.0,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.30000001192092896,
+        0.30000001192092896,
+        0.33000001311302185
+      ],
+      "id": 3,
+      "name": "Divider_Spot_Point",
+      "order": 3,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.6000000238418579,
+        8.0,
+        20.0
+      ],
+      "static": true
+    }
+  ],
+  "empties": [
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 14,
+      "light": {
+        "angularSize": 1.5,
+        "castShadows": true,
+        "color": [
+          1.0,
+          0.949999988079071,
+          0.8799999952316284
+        ],
+        "colorTempK": 0.0,
+        "intensity": 3.200000047683716,
+        "kind": "directional",
+        "range": 12.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "Sun",
+      "order": 4,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        -27.0,
+        -118.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 15,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": true,
+        "color": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "colorTempK": 0.0,
+        "intensity": 600.0,
+        "kind": "spot",
+        "range": 26.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 12.0
+      },
+      "name": "Spot_Narrow",
+      "order": 5,
+      "parentId": -1,
+      "position": [
+        -4.0,
+        9.0,
+        5.0
+      ],
+      "rotation": [
+        -58.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 16,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": true,
+        "color": [
+          0.8999999761581421,
+          0.949999988079071,
+          1.0
+        ],
+        "colorTempK": 0.0,
+        "intensity": 450.0,
+        "kind": "spot",
+        "range": 24.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 52.0
+      },
+      "name": "Spot_Wide",
+      "order": 6,
+      "parentId": -1,
+      "position": [
+        0.0,
+        8.0,
+        6.0
+      ],
+      "rotation": [
+        -62.0,
+        8.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 17,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          1.0,
+          0.8500000238418579,
+          0.699999988079071
+        ],
+        "colorTempK": 0.0,
+        "intensity": 350.0,
+        "kind": "spot",
+        "range": 20.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 30.0
+      },
+      "name": "Spot_Odd",
+      "order": 7,
+      "parentId": -1,
+      "position": [
+        5.0,
+        6.0,
+        4.0
+      ],
+      "rotation": [
+        -34.0,
+        46.0,
+        26.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 18,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": true,
+        "color": [
+          1.0,
+          0.8999999761581421,
+          0.800000011920929
+        ],
+        "colorTempK": 0.0,
+        "intensity": 45.0,
+        "kind": "point",
+        "range": 6.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "Point_Tight",
+      "order": 8,
+      "parentId": -1,
+      "position": [
+        10.0,
+        2.5,
+        -4.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 19,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          0.6000000238418579,
+          0.699999988079071,
+          1.0
+        ],
+        "colorTempK": 0.0,
+        "intensity": 30.0,
+        "kind": "point",
+        "range": 40.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "Point_Huge",
+      "order": 9,
+      "parentId": -1,
+      "position": [
+        8.0,
+        6.0,
+        2.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 20,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          1.0,
+          0.699999988079071,
+          0.4300000071525574
+        ],
+        "colorTempK": 3000.0,
+        "intensity": 40.0,
+        "kind": "point",
+        "range": 14.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "Point_Warm3000K",
+      "order": 10,
+      "parentId": -1,
+      "position": [
+        0.5,
+        4.0,
+        5.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "libraryModels": [],
+  "libraryPrefabs": [],
+  "librarySounds": [],
+  "libraryTextures": [],
+  "models": [
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 4,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.6200000047683716,
+          0.6200000047683716,
+          0.6399999856948853
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.800000011920929,
+        "roughnessMap": ""
+      },
+      "name": "Sun_Cube",
+      "order": 11,
+      "parentId": -1,
+      "path": "primitive://cube#0",
+      "position": [
+        -11.0,
+        1.0,
+        -3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 5,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.6200000047683716,
+          0.6200000047683716,
+          0.6399999856948853
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.800000011920929,
+        "roughnessMap": ""
+      },
+      "name": "Sun_Sphere",
+      "order": 12,
+      "parentId": -1,
+      "path": "primitive://sphere#1",
+      "position": [
+        -9.0,
+        1.0,
+        2.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 6,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.6200000047683716,
+          0.6200000047683716,
+          0.6399999856948853
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.800000011920929,
+        "roughnessMap": ""
+      },
+      "name": "Sun_Cylinder",
+      "order": 13,
+      "parentId": -1,
+      "path": "primitive://cylinder#2",
+      "position": [
+        -12.0,
+        1.2000000476837158,
+        5.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.2000000476837158,
+        2.4000000953674316,
+        1.2000000476837158
+      ],
+      "soundPath": ""
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 7,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.6200000047683716,
+          0.6200000047683716,
+          0.6399999856948853
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.800000011920929,
+        "roughnessMap": ""
+      },
+      "name": "Mid_Cube",
+      "order": 14,
+      "parentId": -1,
+      "path": "primitive://cube#3",
+      "position": [
+        -1.0,
+        1.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 8,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.6200000047683716,
+          0.6200000047683716,
+          0.6399999856948853
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.800000011920929,
+        "roughnessMap": ""
+      },
+      "name": "Mid_Sphere",
+      "order": 15,
+      "parentId": -1,
+      "path": "primitive://sphere#4",
+      "position": [
+        2.0,
+        0.8999999761581421,
+        3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.7999999523162842,
+        1.7999999523162842,
+        1.7999999523162842
+      ],
+      "soundPath": ""
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 9,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.6200000047683716,
+          0.6200000047683716,
+          0.6399999856948853
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.800000011920929,
+        "roughnessMap": ""
+      },
+      "name": "Mid_Cone",
+      "order": 16,
+      "parentId": -1,
+      "path": "primitive://cone#5",
+      "position": [
+        4.0,
+        1.2999999523162842,
+        -2.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.600000023841858,
+        2.5999999046325684,
+        1.600000023841858
+      ],
+      "soundPath": ""
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 10,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.6200000047683716,
+          0.6200000047683716,
+          0.6399999856948853
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.800000011920929,
+        "roughnessMap": ""
+      },
+      "name": "Mid_SmallCube",
+      "order": 17,
+      "parentId": -1,
+      "path": "primitive://cube#6",
+      "position": [
+        0.0,
+        0.4000000059604645,
+        6.0
+      ],
+      "rotation": [
+        0.0,
+        20.0,
+        0.0
+      ],
+      "scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "soundPath": ""
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 11,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.6200000047683716,
+          0.6200000047683716,
+          0.6399999856948853
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.800000011920929,
+        "roughnessMap": ""
+      },
+      "name": "Point_Cube",
+      "order": 18,
+      "parentId": -1,
+      "path": "primitive://cube#7",
+      "position": [
+        11.0,
+        1.0,
+        -3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 12,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.6200000047683716,
+          0.6200000047683716,
+          0.6399999856948853
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.800000011920929,
+        "roughnessMap": ""
+      },
+      "name": "Point_Cylinder",
+      "order": 19,
+      "parentId": -1,
+      "path": "primitive://cylinder#8",
+      "position": [
+        9.0,
+        1.2000000476837158,
+        1.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.2000000476837158,
+        2.4000000953674316,
+        1.2000000476837158
+      ],
+      "soundPath": ""
+    },
+    {
+      "animator": {
+        "bobAmplitude": 0.0,
+        "bobFreqHz": 0.0,
+        "colorCycleHzPerSec": 0.0,
+        "orbitAxis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "orbitDegPerSec": 0.0,
+        "orbitRadius": 0.0,
+        "spin": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 13,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.6200000047683716,
+          0.6200000047683716,
+          0.6399999856948853
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.800000011920929,
+        "roughnessMap": ""
+      },
+      "name": "Point_Sphere",
+      "order": 20,
+      "parentId": -1,
+      "path": "primitive://sphere#9",
+      "position": [
+        12.0,
+        0.8999999761581421,
+        5.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.7999999523162842,
+        1.7999999523162842,
+        1.7999999523162842
+      ],
+      "soundPath": ""
+    }
+  ],
+  "skyHorizonColor": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "skyZenithColor": [
+    0.0,
+    0.0,
+    0.0
+  ]
+}
