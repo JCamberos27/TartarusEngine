@@ -397,7 +397,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             std::string modelPath = m.value("path", "");
             if (modelPath.empty()) continue;
 
-            auto model = assets.LoadModel(modelPath);
+            auto model = assets.InstantiateModel(modelPath);
 
             std::string name = m.value("name", std::string("Model"));
             glm::vec3 position = JsonToVec3(m.value("position", json::array({0, 0, 0})));
@@ -423,9 +423,8 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
                 mat->EmissiveMap = LoadIfPresent(assets, mj, "emissiveMap");
                 model->SetMaterialOverride(mat);
             } else {
-                // Model instances are cached/shared by path in AssetLibrary — if an earlier
-                // action set an override on this same Model, restoring a snapshot from before
-                // that must clear it, or the "old" state would still show the override.
+                // InstantiateModel already hands back a fresh instance with no override; the
+                // explicit clear just keeps this branch obviously correct if that ever changes.
                 model->SetMaterialOverride(nullptr);
             }
 

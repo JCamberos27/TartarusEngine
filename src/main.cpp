@@ -43,6 +43,7 @@
 #include <thread>
 #include <vector>
 #include <cstring>
+#include <unordered_set>
 #include <cstdlib>
 #include <intrin.h>   // __cpuid — CPU brand string for the boot log
 #ifndef NOMINMAX
@@ -791,8 +792,13 @@ int main() {
             // running game.
             if (editorUIVisible || playing) {
                 PROFILE_SCOPE("Animation Update");
+                // Advance each distinct Model once. Scene entities get their own instance
+                // (AssetLibrary::InstantiateModel), so this is normally 1:1 — but dedupe
+                // defensively so a future shared-Model path can't tick one player N*dt (#106).
+                std::unordered_set<Model*> advanced;
                 for (auto entity : world.Registry.view<RenderableComponent>()) {
-                    world.Registry.get<RenderableComponent>(entity).ModelRef->UpdateAnimation(dt);
+                    Model* m = world.Registry.get<RenderableComponent>(entity).ModelRef.get();
+                    if (m && advanced.insert(m).second) m->UpdateAnimation(dt);
                 }
             }
 
