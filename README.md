@@ -19,28 +19,6 @@ transform gizmos, an asset browser, prefabs, undo/redo, and an in-editor play mo
 imported FBX/glTF/OBJ models with PBR-style materials and skeletal animation through a
 hand-rolled OpenGL 4.6 core loader, with no glad/Python codegen step in the build.
 
-## Screenshots
-
-<div align="center">
-
-<img src="docs/images/editor.png" alt="The Tartarus editor" width="100%">
-
-<sub>The editor: dockable Scene/Game viewports, Hierarchy, Inspector, and Asset Browser, with a transform gizmo on the selected object.</sub>
-
-<br><br>
-
-<img src="docs/images/playmode.png" alt="Play mode running in the docked Game panel" width="100%">
-
-<sub>Play mode runs <em>inside</em> the docked Game panel — the editor stays live, the scene is snapshotted on entry and restored on Stop, and the Fullscreen button beside Stop maximises the view when you want it.</sub>
-
-<br><br>
-
-<img src="docs/images/viewport.png" alt="Scene viewport" width="100%">
-
-<sub>Scene view — coloured point lights, PBR-style materials, and the distance-faded grid. Included as <code>project/scenes/Showcase.json</code>.</sub>
-
-</div>
-
 ## Built with Tartarus
 
 <div align="center">
@@ -85,14 +63,15 @@ the roadmap honest.
 
 - Forward PBR-style shading — albedo, normal, metallic, roughness, ambient occlusion, and emissive maps
 - **Linear HDR pipeline** — the scene renders into a multisampled `RGBA16F` target and a single fullscreen pass applies exposure, a tone-mapping curve (**Reinhard / ACES / AgX**), and gamma
-- **Directional, point, and spot lights** in one GPU light buffer (`std430` SSBO) — the sun is a placeable entity you aim with its rotation; point/spot have range and cone falloff
-- **Cascaded shadow maps** for the directional sun — 4 texel-snapped cascades, soft rotated-Poisson PCF whose penumbra follows the sun's angular size, seam-blended between cascades
+- **Directional, point, and spot lights** in one GPU light buffer (`std430` SSBO) — the sun is a placeable entity you aim with its rotation; point/spot have range and cone falloff, and each light has a per-entity **Cast Shadows** toggle
+- **Cascaded shadow maps** for the directional sun — 2–4 texel-snapped cascades, soft rotated-Poisson PCF whose penumbra follows the sun's angular size, seam-blended between cascades, with per-cascade frustum culling
+- **Point-light shadows** via a depth cube-map array, and **spot-light shadows** via a perspective depth array — both store linear distance-to-light so a shadow reaches the light's full range, and share the light SSBO's per-light shadow slot
 - Skeletal animation with up to 100 bones per model
 - Frustum culling, a redundant-state-change cache, and per-frame draw statistics
 - Offscreen HDR targets per viewport, so Scene and Game render independently at their own resolutions and MSAA levels
 - Procedural sky, distance-faded infinite grid, inverted-hull selection outlines, translucent drag previews
 - Shaded / wireframe / unlit view modes
-- Uses real OpenGL 4.6 — direct state access, immutable texture storage, and shader storage buffers, all through the hand-rolled loader
+- Targets OpenGL 4.6 core through the hand-rolled loader — immutable texture storage and `std430` shader storage buffers today, with the mesh path moving to direct state access next
 
 ### Core
 
@@ -147,7 +126,9 @@ cmake --build build --config Release
 ```
 
 The executable lands at `build/Release/TartarusEngine.exe`. Icon fonts and branding are copied
-next to it automatically by a post-build step — no other assets or DLLs required.
+next to it automatically by a post-build step — no other assets or DLLs required. On first
+launch it opens `project/scenes/Showcase.json` — a first-person hall lit entirely by moving,
+colour-cycling point and spot lights — and thereafter reopens whatever scene you last had open.
 
 > **Note:** the engine must be closed before rebuilding, or the linker can't overwrite the exe.
 
@@ -186,11 +167,11 @@ project/      The scene and editor preferences being authored
 
 ## Roadmap
 
-**Shipped** — linear HDR pipeline with tone mapping · cascaded shadow maps for the sun · GPU (SSBO) light buffer
+**Shipped** — linear HDR pipeline with tone mapping · cascaded shadow maps for the sun · point- and spot-light shadows · GPU (SSBO) light buffer
 
 **Next**
 
-- Shadows for point and spot lights; clustered light culling
+- Clustered / tiled light culling, so a fragment stops looping every light
 - Screen-space effects on the HDR buffer — SSAO, bloom
 - A behaviour/scripting layer, so entities can do more than sit still
 - Project-relative asset pipeline with a baked import cache
