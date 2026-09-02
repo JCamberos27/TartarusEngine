@@ -17,6 +17,23 @@ void EditorUI::SetTooltip(const char* fmt, ...) {
     va_end(args);
 }
 
+void EditorUI::VSeparator(float gapScale) {
+    const float gap = ImGui::GetStyle().ItemSpacing.x * gapScale;
+    ImGui::SameLine(0.0f, gap);
+
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+    const float  h = ImGui::GetFrameHeight();
+    ImGui::GetWindowDrawList()->AddLine(
+        ImVec2(p.x, p.y), ImVec2(p.x, p.y + h),
+        ImGui::GetColorU32(ImGuiCol_Separator));
+
+    // Reserve a real 1px-wide item so the layout cursor advances past the rule and the caller's
+    // following SameLine() spaces off it correctly (a bare SameLine here would measure from the
+    // item *before* the rule).
+    ImGui::Dummy(ImVec2(1.0f, h));
+    ImGui::SameLine(0.0f, gap);
+}
+
 void EditorUI::HelpMarker(const char* desc) {
     if (!EditorSettings::Get().ShowTooltips) return;
 

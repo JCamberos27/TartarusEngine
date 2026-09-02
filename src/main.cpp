@@ -1494,6 +1494,14 @@ int main() {
                 gameView.RenderUI(&gameViewStats, window.IsFullscreen(), playing, gameInputEngaged,
                                   /*noSceneCamera=*/!playing && FindActiveSceneCamera(world) == entt::null);
 
+                // Hand the editor this frame's Game-view image rect + framebuffer so the Play-Mode
+                // Stop/Fullscreen overlay can sit over the game viewport and adapt its tint to it.
+                {
+                    Framebuffer& gvfb = gameView.GetFramebuffer();
+                    editor.SetGameViewRect(gameView.GetViewImagePos(), gameView.GetViewImageSize(),
+                                           gvfb.ColorTexture(), gvfb.Width(), gvfb.Height());
+                }
+
                 // Click inside the running Game view (while it doesn't yet own input) captures
                 // the cursor for the player. Esc / Stop release it (handled above / in stopPlay).
                 if (playing && !playMaximized && gameView.ConsumeEngageClick()) {
@@ -1506,6 +1514,10 @@ int main() {
                 // frame, and ImGui's reappear-in-a-tab-bar handling otherwise leaves whichever
                 // it processed LAST (Game, after Scene) as the active tab if this ran earlier.
                 editor.ApplyPendingViewportTabFocus();
+            } else {
+                // Maximized play / editor hidden — no docked Game panel this frame; clear the rect
+                // so the Stop overlay falls back to its window-anchored position.
+                editor.SetGameViewRect(ImVec2(0.0f, 0.0f), ImVec2(0.0f, 0.0f), 0, 0, 0);
             }
 
             // Maximized play's actual on-screen output — the editor path never reaches here: the

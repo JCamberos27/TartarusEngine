@@ -59,6 +59,21 @@ public:
     // is hidden then. Clicks only raise request flags — main.cpp owns the play/maximize/cursor
     // state itself.
     void DrawPlayStopButton(bool playing, bool maximized);
+    // Screen-space rect of the live Game view image + its framebuffer's colour texture/size, so
+    // the Play-Mode Stop/Fullscreen overlay can anchor to the game viewport and adapt its tint
+    // to what's rendered there. Pass a zero size to say "no game view this frame".
+    void SetGameViewRect(ImVec2 imgPos, ImVec2 imgSize, unsigned int colorTex, int texW, int texH) {
+        m_GameViewImgPos = imgPos; m_GameViewImgSize = imgSize;
+        m_GameViewTex = colorTex; m_GameViewTexW = texW; m_GameViewTexH = texH;
+    }
+    // Average luminance (0..1) of this frame's rendered Scene viewport inside a screen-space box
+    // of `boxPx` centered at `centerScreen`; -1 when it can't be sampled (no scene texture yet,
+    // box entirely outside the viewport). Throttle calls yourself — it does a GPU->CPU readback.
+    float SampleSceneLuminance(ImVec2 centerScreen, float boxPx);
+    // General form: sample `colorTex` (texW x texH) as if it were displayed in screen rect
+    // imgPos..imgPos+imgSize, in a screen-space box of `boxPx` at `centerScreen`. -1 if unusable.
+    float SampleTextureLuminance(unsigned int colorTex, int texW, int texH,
+                                 ImVec2 imgPos, ImVec2 imgSize, ImVec2 centerScreen, float boxPx);
     bool ConsumePlayStopRequest() {
         bool requested = m_PlayStopRequested;
         m_PlayStopRequested = false;
@@ -555,6 +570,30 @@ private:
     float m_MarkContrastTarget = 1.0f; // refreshed by the throttled readback
     float m_MarkSampleAccum = 0.0f;    // seconds since last readback (sampled ~10 Hz, not per-frame,
                                        // so the GPU->CPU sync never touches the 60 fps frame budget)
+    // Same contrast-adaptive trick for the viewport-top-center Play/Stop button: sample the scene
+    // luminance behind it and steer the glyph white-on-dark / dark-on-light. Its own eased state
+    // because it sits far from the corner mark and reads a different patch of the scene.
+    float m_PlayBtnContrastLum = 1.0f;
+    float m_PlayBtnContrastTarget = 1.0f;
+    float m_PlayBtnSampleAccum = 0.0f;
+    // Same again for the top-right nav-gizmo cluster (dolly / pan tool buttons + the Persp/axis
+    // label): its own sample because the corner it lives in can differ in brightness from the
+    // top-center where the Play button sits.
+    float m_NavGizmoContrastLum = 1.0f;
+    float m_NavGizmoContrastTarget = 1.0f;
+    float m_NavGizmoSampleAccum = 0.0f;
+    // ...and for the bottom-of-viewport status readout, now a bare adaptive-tinted line of text
+    // with no strip behind it.
+    float m_StatusBarContrastLum = 1.0f;
+    float m_StatusBarContrastTarget = 1.0f;
+    float m_StatusBarSampleAccum = 0.0f;
+    // Live Game-view rect + texture, pushed in each frame by main.cpp (zero size = none). Used by
+    // DrawPlayStopButton to place the Stop/Fullscreen control over the game viewport and tint it.
+    ImVec2 m_GameViewImgPos{0.0f, 0.0f};
+    ImVec2 m_GameViewImgSize{0.0f, 0.0f};
+    unsigned int m_GameViewTex = 0;
+    int m_GameViewTexW = 0;
+    int m_GameViewTexH = 0;
     // DVD-screensaver idle bounce: after 30 s with no mouse/keyboard input the mark launches out
     // of its corner and ricochets around the viewport edges; any input eases it back home.
     float m_MarkIdleTime = 0.0f;

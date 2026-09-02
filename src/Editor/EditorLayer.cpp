@@ -48,9 +48,9 @@
 
 namespace {
 
-// Height of the two-row top toolbar (dropdown menu bar + one-click toggle row) — shared so
-// the Play/Stop button, which is positioned relative to it, stays in sync if that ever changes.
-constexpr float kToolbarHeight = 84.0f;
+// Height of the top toolbar: the dropdown menu bar row + the one-click icon row, trimmed so the
+// icons sit snug against the bottom edge instead of floating in a tall strip of dead space.
+constexpr float kToolbarHeight = 52.0f;
 
 // Approximate blackbody colour (linear RGB, normalised so the brightest channel is 1) for a
 // colour temperature in Kelvin. Cheap piecewise fit — good enough for authoring a warm lamp vs
@@ -1524,7 +1524,8 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             {"Rename selection", "F2  (or double-click in Hierarchy)"},
             {"Open Preferences", "Ctrl+,"},
             {"Toggle fullscreen", "F11"},
-            {"Return to game / editor", "F1"},
+            {"Play / Stop", "F1"},
+            {"Release mouse & keyboard from the running game", "Esc"},
         };
         if (ImGui::BeginTable("##sctable", 2,
                 ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_ScrollY)) {
@@ -3303,6 +3304,53 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
 }
 
+float EditorLayer::SampleTextureLuminance(unsigned int colorTex, int texW, int texH,
+                                          ImVec2 imgPos, ImVec2 imgSize, ImVec2 centerScreen, float boxPx) {
+    if (colorTex == 0 || texW < 1 || texH < 1 || imgSize.x < 1.0f || imgSize.y < 1.0f) return -1.0f;
+
+    const int kMaxPatch = 64;
+    // screen box -> fraction of the displayed image -> texels (GL bottom-left origin). Handles
+    // the Game view too, where the on-screen image is letterboxed and a different size than the
+    // framebuffer it samples.
+    const float sx = texW / imgSize.x, sy = texH / imgSize.y;
+    int rw = (int)(boxPx * sx), rh = (int)(boxPx * sy);
+    int rx = (int)((centerScreen.x - imgPos.x - boxPx * 0.5f) * sx);
+    int ry = (int)((imgSize.y - ((centerScreen.y - imgPos.y) + boxPx * 0.5f)) * sy);
+    if (rx < 0) { rw += rx; rx = 0; }
+    if (ry < 0) { rh += ry; ry = 0; }
+    if (rx + rw > texW) rw = texW - rx;
+    if (ry + rh > texH) rh = texH - ry;
+    if (rw > kMaxPatch) { rx += (rw - kMaxPatch) / 2; rw = kMaxPatch; }
+    if (rh > kMaxPatch) { ry += (rh - kMaxPatch) / 2; rh = kMaxPatch; }
+    if (rx < 0 || ry < 0 || rw < 1 || rh < 1) return -1.0f;
+
+    if (m_MarkSampleFbo == 0) glGenFramebuffers(1, &m_MarkSampleFbo);
+    GLint prevReadFbo = 0;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFbo);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, m_MarkSampleFbo);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex, 0);
+
+    unsigned char px[kMaxPatch * kMaxPatch * 4];
+    glReadPixels(rx, ry, rw, rh, GL_RGBA, GL_UNSIGNED_BYTE, px);
+
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevReadFbo);
+
+    double sum = 0.0;
+    const int n = rw * rh;
+    for (int i = 0; i < n; ++i)
+        sum += 0.2126 * px[i * 4] + 0.7152 * px[i * 4 + 1] + 0.0722 * px[i * 4 + 2];
+    return (float)(sum / (n * 255.0)); // 0 = black behind the box, 1 = white
+}
+
+float EditorLayer::SampleSceneLuminance(ImVec2 centerScreen, float boxPx) {
+    // The editor Scene framebuffer is sized 1:1 with the on-screen viewport, so texW/texH ARE
+    // the viewport size.
+    return SampleTextureLuminance(m_SceneColorTexture, (int)m_ViewportSize.x, (int)m_ViewportSize.y,
+                                  ImVec2(m_ViewportPos.x, m_ViewportPos.y),
+                                  ImVec2(m_ViewportSize.x, m_ViewportSize.y), centerScreen, boxPx);
+}
+
 void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
     int ww, wh;
     glfwGetWindowSize(m_Window, &ww, &wh);
@@ -3315,39 +3363,70 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
         ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize;
 
-    if (!maximized) {
-        // Editor UI is up (editing, or in-panel play) — sit in the toolbar strip's icon row,
-        // transparent so it reads as part of that already-dark toolbar. Called after
-        // DrawTopToolbar this frame so it layers on top.
-        float y = kToolbarHeight * m_UIScale * 0.64f; // icon row's vertical center, below the menu bar row
-        ImGui::SetNextWindowPos(ImVec2(w * 0.5f, y), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    // Where the control lives: over the Scene viewport while editing, over the Game viewport while
+    // playing. Both are the same flat "vector + label" treatment with the engine-mark contrast
+    // readback (throttled ~10 Hz, eased per frame) so the glyph rides white-on-dark / dark-on-
+    // light against whatever's rendered behind it.
+    const bool overScene = !playing && m_ViewportSize.x > 1.0f && m_ViewportSize.y > 1.0f;
+    const bool overGame  =  playing && m_GameViewImgSize.x > 1.0f && m_GameViewImgSize.y > 1.0f;
+
+    int fgV = 235; // near-white until the first sample lands
+
+    if (overScene || overGame) {
+        const ImVec2 imgPos  = overGame ? m_GameViewImgPos  : ImVec2(m_ViewportPos.x, m_ViewportPos.y);
+        const ImVec2 imgSize = overGame ? m_GameViewImgSize : ImVec2(m_ViewportSize.x, m_ViewportSize.y);
+        const float cx = imgPos.x + imgSize.x * 0.5f;
+        const float cy = imgPos.y + 8.0f * m_UIScale;
+
+        m_PlayBtnSampleAccum += ImGui::GetIO().DeltaTime;
+        if (m_PlayBtnSampleAccum >= 0.1f) {
+            m_PlayBtnSampleAccum = 0.0f;
+            const ImVec2 probe(cx, cy + 14.0f * m_UIScale);
+            const float box = 48.0f * m_UIScale;
+            float lum = overGame
+                ? SampleTextureLuminance(m_GameViewTex, m_GameViewTexW, m_GameViewTexH, imgPos, imgSize, probe, box)
+                : SampleSceneLuminance(probe, box);
+            if (lum >= 0.0f) {
+                float t = (lum - 0.30f) / (0.62f - 0.30f);
+                t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+                m_PlayBtnContrastTarget = 1.0f - t * t * (3.0f - 2.0f * t); // 1 = white on dark, 0 = black on light
+            }
+        }
+        float k = 1.0f - expf(-ImGui::GetIO().DeltaTime / 0.15f);
+        m_PlayBtnContrastLum += (m_PlayBtnContrastTarget - m_PlayBtnContrastLum) * k;
+        fgV = (int)(m_PlayBtnContrastLum * 255.0f + 0.5f);
+        fgV = fgV < 0 ? 0 : (fgV > 255 ? 255 : fgV);
+
+        ImGui::SetNextWindowPos(ImVec2(cx, cy), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
         ImGui::SetNextWindowBgAlpha(0.0f);
         flags |= ImGuiWindowFlags_NoBackground;
     } else {
-        // Game view maximized over the editor — no toolbar to sit in, so float near the top of
-        // the window, opaque enough to read over the 3D scene.
+        // No viewport rect to anchor to (maximized play before the first Game-panel frame, or
+        // editor UI hidden) — float near the top of the window with a faint plate to stay legible.
         ImGui::SetNextWindowPos(ImVec2(w * 0.5f, 10.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
-        ImGui::SetNextWindowBgAlpha(0.85f);
+        ImGui::SetNextWindowBgAlpha(0.6f);
     }
+
     ImGui::Begin("##PlayStopButton", nullptr, flags);
     // Forces this to the front of the display order every frame so a dock rebuild elsewhere
     // (Reset Layout) can't bury it behind whatever the freshly recreated dock host window
     // ends up as.
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 
+    // Flat "vector" button: no body at rest, just the white (or dark) PLAY glyph + label; a faint
+    // plate of the inverse grey on hover/press so it still reads as pressable.
+    const float f  = fgV / 255.0f;
+    const float iv = 1.0f - f;
+    ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(f, f, f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(iv, iv, iv, 0.16f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(iv, iv, iv, 0.28f));
+
     if (!playing) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.55f, 0.24f, 1.00f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.68f, 0.30f, 1.00f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.26f, 0.80f, 0.36f, 1.00f));
         if (ImGui::Button(ICON_FA_PLAY "  Play")) m_PlayStopRequested = true;
-        ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Play the scene in the Game panel (F1)");
     } else {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.18f, 0.18f, 1.00f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.68f, 0.22f, 0.22f, 1.00f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.80f, 0.26f, 0.26f, 1.00f));
         if (ImGui::Button(ICON_FA_STOP "  Stop")) m_PlayStopRequested = true;
-        ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Stop and revert the scene (F1)");
 
         ImGui::SameLine();
@@ -3360,6 +3439,7 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
         }
     }
 
+    ImGui::PopStyleColor(4);
     ImGui::End();
 }
 
@@ -3578,9 +3658,7 @@ void EditorLayer::DrawConsole() {
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show the HH:MM:SS each message first arrived");
 
     // Per-level toggles double as counters, the way Unity's console header does.
-    ImGui::SameLine();
-    ImGui::TextDisabled("|");
-    ImGui::SameLine();
+    EditorUI::VSeparator();
     char infoLabel[32], warnLabel[32], errorLabel[32];
     snprintf(infoLabel, sizeof(infoLabel), ICON_FA_CIRCLE_INFO " %d", Log::CountOf(LogLevel::Info));
     snprintf(warnLabel, sizeof(warnLabel), ICON_FA_TRIANGLE_EXCLAMATION " %d", Log::CountOf(LogLevel::Warning));
@@ -3737,19 +3815,40 @@ void EditorLayer::DrawViewportStatusBar() {
     };
 
     const float barH = ImGui::GetTextLineHeight() + 8.0f * m_UIScale;
+
+    // No strip behind the readout any more — it's a bare line of text over the 3D view. To stay
+    // legible it borrows the engine mark's contrast-adaptive trick: sample the scene luminance
+    // behind it and steer the text white-on-dark / dark-on-light (throttled ~10 Hz, eased).
+    {
+        m_StatusBarSampleAccum += ImGui::GetIO().DeltaTime;
+        if (m_StatusBarSampleAccum >= 0.1f) {
+            m_StatusBarSampleAccum = 0.0f;
+            float lum = SampleSceneLuminance(
+                ImVec2(m_ViewportPos.x + m_ViewportSize.x * 0.5f,
+                       m_ViewportPos.y + m_ViewportSize.y - barH * 0.5f),
+                barH);
+            if (lum >= 0.0f) {
+                float t = (lum - 0.30f) / (0.62f - 0.30f);
+                t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+                m_StatusBarContrastTarget = 1.0f - t * t * (3.0f - 2.0f * t); // 1 = white on dark, 0 = black on light
+            }
+        }
+        float k = 1.0f - expf(-ImGui::GetIO().DeltaTime / 0.15f);
+        m_StatusBarContrastLum += (m_StatusBarContrastTarget - m_StatusBarContrastLum) * k;
+    }
+    int sbV = (int)(m_StatusBarContrastLum * 255.0f + 0.5f);
+    sbV = sbV < 0 ? 0 : (sbV > 255 ? 255 : sbV);
+
     ImGui::SetNextWindowPos(ImVec2(m_ViewportPos.x, m_ViewportPos.y + m_ViewportSize.y - barH), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(m_ViewportSize.x, barH), ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.85f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f * m_UIScale, 3.0f * m_UIScale));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text,         IM_COL32(sbV, sbV, sbV, 240));
+    ImGui::PushStyleColor(ImGuiCol_TextDisabled, IM_COL32(sbV, sbV, sbV, 150));
     if (ImGui::Begin("##ViewportStatusBar", nullptr,
-            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings |
-            ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoInputs)) {
-        // Hairline along the top edge so the strip reads as chrome, not a floating label.
-        ImVec2 wp = ImGui::GetWindowPos(), ws = ImGui::GetWindowSize();
-        ImGui::GetWindowDrawList()->AddLine(wp, ImVec2(wp.x + ws.x, wp.y),
-            ImGui::GetColorU32(ImGuiCol_Border), 1.0f);
+            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoDocking |
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs)) {
 
         auto sep = [&]() { ImGui::SameLine(0, 6); ImGui::TextDisabled("\xc2\xb7"); ImGui::SameLine(0, 6); };
 
@@ -3769,6 +3868,7 @@ void EditorLayer::DrawViewportStatusBar() {
         ImGui::TextUnformatted(toolBuf);
     }
     ImGui::End();
+    ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
 }
 
@@ -4022,7 +4122,10 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoNavFocus |
         ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings;
-    if (!ImGui::Begin("##Toolbar", nullptr, flags)) { ImGui::End(); return; }
+    // Tight vertical window padding so the icon row hugs the menu bar and the bottom edge — the
+    // strip is only as tall as its two rows now (kToolbarHeight).
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9.0f, 3.0f));
+    if (!ImGui::Begin("##Toolbar", nullptr, flags)) { ImGui::End(); ImGui::PopStyleVar(); return; }
 
     // Real dropdown menus for the stuff you reach for occasionally (import, add primitive,
     // scene save/load) — keeps the always-visible row below reserved for one-click toggles.
@@ -4157,15 +4260,10 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         ImGui::EndMenuBar();
     }
 
-    // A spaced group separator — real breathing room on both sides of the rule so the toolbar
+    // A spaced group separator — a real 1px rule with breathing room on both sides so the toolbar
     // reads as distinct clusters (history · tools · grid/snap · view · panels · lock) instead of
-    // one dense left-jammed run of identical squares (audit #66).
-    auto divider = []() {
-        const float pad = ImGui::GetStyle().ItemSpacing.x * 1.5f;
-        ImGui::SameLine(0.0f, pad);
-        ImGui::TextDisabled("|");
-        ImGui::SameLine(0.0f, pad);
-    };
+    // one dense left-jammed run of identical squares (audit #66 / #147).
+    auto divider = []() { EditorUI::VSeparator(1.5f); };
 
     // Flat icon buttons: no button body at rest (just the glyph), a faint grey wash on hover,
     // and for an "active" toggle/tool an accent-tinted body plus one thin keyline along the
@@ -4211,7 +4309,8 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     ImGui::SameLine();
     if (iconButton(ICON_FA_VECTOR_SQUARE, "Rect — move + non-uniform scale via corner/edge handles (T)",
             m_GizmoOp == GizmoOp::Rect)) m_GizmoOp = GizmoOp::Rect;
-    ImGui::SameLine();
+
+    divider(); // transform tools | gizmo-space modifiers
     if (iconButton(m_GizmoLocalSpace ? ICON_FA_CUBE : ICON_FA_GLOBE,
             m_GizmoLocalSpace ? "Local space (click for World)" : "World space (click for Local)")) {
         m_GizmoLocalSpace = !m_GizmoLocalSpace;
@@ -4247,8 +4346,9 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         }
     }
 
-    divider();
-    // Scene-view shading, cycling Shaded -> Wireframe -> Unlit like a draw-mode dropdown.
+    ImGui::SameLine();
+    // Scene-view shading, cycling Shaded -> Wireframe -> Unlit like a draw-mode dropdown — part of
+    // the same "what the viewport shows" cluster as grid / snap / light gizmos.
     {
         const char* shadingIcon = ICON_FA_CIRCLE_HALF_STROKE;
         const char* shadingTip = "Shaded (click for Wireframe)";
@@ -4283,6 +4383,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     }
 
     ImGui::End();
+    ImGui::PopStyleVar(); // WindowPadding
 }
 
 void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
@@ -7139,6 +7240,31 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     ImVec2 dollyPos(dollyCenter.x - toolRadius, dollyCenter.y - toolRadius);
     ImVec2 panPos(panCenter.x - toolRadius, panCenter.y - toolRadius);
 
+    // Contrast-adaptive tint for the dolly / pan tool buttons and the projection label: sample the
+    // scene luminance behind the cluster and steer the glyphs white-on-dark / dark-on-light — the
+    // same readback the corner engine mark and the viewport Play button use (throttled ~10 Hz,
+    // eased per frame). The rotate ball keeps its own red/green/blue axis colours untouched.
+    {
+        m_NavGizmoSampleAccum += ImGui::GetIO().DeltaTime;
+        if (m_NavGizmoSampleAccum >= 0.1f) {
+            m_NavGizmoSampleAccum = 0.0f;
+            float lum = SampleSceneLuminance(ImVec2(rotateCenter.x, toolCenterY), 48.0f * m_UIScale);
+            if (lum >= 0.0f) {
+                float t = (lum - 0.30f) / (0.62f - 0.30f);
+                t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+                m_NavGizmoContrastTarget = 1.0f - t * t * (3.0f - 2.0f * t); // 1 = white on dark, 0 = black on light
+            }
+        }
+        float k = 1.0f - expf(-ImGui::GetIO().DeltaTime / 0.15f);
+        m_NavGizmoContrastLum += (m_NavGizmoContrastTarget - m_NavGizmoContrastLum) * k;
+    }
+    int navV = (int)(m_NavGizmoContrastLum * 255.0f + 0.5f);
+    navV = navV < 0 ? 0 : (navV > 255 ? 255 : navV);
+    const int navInv = 255 - navV;
+    style.toolButtonIconColor    = IM_COL32(navV, navV, navV, 235);
+    style.toolButtonColor        = IM_COL32(navInv, navInv, navInv, 40);
+    style.toolButtonHoveredColor = IM_COL32(navInv, navInv, navInv, 64);
+
     // Same fullscreen-transparent-overlay trick as DrawGizmo(): the library hit-tests against
     // raw mouse position within ImGui::GetWindowDrawList()'s owning window, so it needs a real
     // hoverable window as the "current window"; NoInputs keeps it from stealing
@@ -7238,7 +7364,8 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
                 ToggleOrthographic(world, editorCamera);
             }
         }
-        ImU32 isoTextColor = ImGui::GetColorU32(isoHovered ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+        // Same contrast-adaptive grey as the tool buttons above (full-strength on hover).
+        ImU32 isoTextColor = IM_COL32(navV, navV, navV, isoHovered ? 255 : 200);
         labelDl->AddText(font, labelFontSize, textPos, isoTextColor, isoLabel);
     }
 
@@ -7801,10 +7928,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
         ImGui::EndPopup();
     }
 
-    ImGui::SameLine();
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextDisabled("|");
-    ImGui::SameLine();
+    EditorUI::VSeparator();
 
     // Breadcrumb: "Assets" root plus one clickable button per path segment.
     ImGui::AlignTextToFramePadding();
