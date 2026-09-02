@@ -832,6 +832,7 @@ int main() {
             float frameSunAngularDeg = 0.53f; // Earth's sun; drives the penumbra width
             lightBuffer.Clear();
             bool frameHaveDirectional = false;
+            bool frameSunCastShadows = false; // the active directional's per-light Shadow.Enabled
             glm::mat4 spotShadowVP[SpotShadowMap::kMaxSpots];
             glm::vec3 spotShadowPos[SpotShadowMap::kMaxSpots];
             float spotShadowFar[SpotShadowMap::kMaxSpots];
@@ -840,9 +841,21 @@ int main() {
             glm::vec3 pointShadowPos[PointShadowMap::kMaxPoints];
             float pointShadowFar[PointShadowMap::kMaxPoints];
             int pointShadowCount = 0; // shadow-casting point lights that got a cube this frame (#119)
+            // Per-light shadow multipliers (#140 phase 2), parallel to the slot arrays above.
+            // All 1.0 unless the light's ShadowSettings override them -> byte-identical to before.
+            float spotShadowBias[SpotShadowMap::kMaxSpots];
+            float spotShadowNormalBias[SpotShadowMap::kMaxSpots];
+            float spotShadowSoftness[SpotShadowMap::kMaxSpots];
+            float spotShadowNear[SpotShadowMap::kMaxSpots];
+            float pointShadowBias[PointShadowMap::kMaxPoints];
+            float pointShadowNormalBias[PointShadowMap::kMaxPoints];
+            float pointShadowNear[PointShadowMap::kMaxPoints];
+            float frameSunShadowBias = 1.0f, frameSunShadowNormalBias = 1.0f, frameSunShadowSoftness = 1.0f;
             for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
                 if (lightBuffer.Count() >= LightBuffer::kMaxLights) break;
                 if (world.Registry.all_of<InactiveTag>(e)) continue;
+                // Lights panel solo/mute is an editing aid only — Play renders every light (#140).
+                if (!playing && editor.IsLightSuppressed(e)) continue;
                 const auto& lc = world.Registry.get<LightComponent>(e);
                 glm::mat4 m = world.ComposeWorldTransform(e);
                 glm::vec3 pos = glm::vec3(m[3]);
@@ -854,32 +867,47 @@ int main() {
                     // directional at all while still suppressing SceneSerializer's synthesised
                     // fallback sun (which keys off a Directional existing, not its intensity).
                     if (lc.Intensity > 0.0f) {
-                        if (!frameHaveDirectional) { frameSunDir = aim; frameSunAngularDeg = lc.AngularSizeDegrees; }
+                        if (!frameHaveDirectional) {
+                            frameSunDir = aim;
+                            frameSunAngularDeg = lc.AngularSizeDegrees;
+                            frameSunCastShadows = lc.Shadow.Enabled;
+                            frameSunShadowBias = lc.Shadow.Bias;
+                            frameSunShadowNormalBias = lc.Shadow.NormalBias;
+                            frameSunShadowSoftness = lc.Shadow.Softness;
+                        }
                         frameHaveDirectional = true;
                     }
                 } else if (lc.Kind == LightComponent::Type::Spot) {
                     float cosOuter = cosf(glm::radians(lc.SpotAngleDegrees));
                     float cosInner = cosf(glm::radians(lc.SpotAngleDegrees * 0.9f));
                     int slot = -1;
-                    if (lc.CastShadows && frameSettings.ShadowsEnabled &&
+                    if (lc.Shadow.Enabled && frameSettings.ShadowsEnabled &&
                         spotShadowCount < SpotShadowMap::kMaxSpots) {
                         slot = spotShadowCount++;
                         glm::vec3 up = std::abs(aim.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
                         float fov = glm::radians(std::min(lc.SpotAngleDegrees * 2.0f + 4.0f, 175.0f));
+                        float nearP = std::max(lc.Shadow.NearPlane, 1e-3f);
                         spotShadowFar[slot] = std::max(lc.Range, 0.2f);
                         spotShadowPos[slot] = pos;
                         spotShadowHalfTan[slot] = std::tan(0.5f * fov);
-                        spotShadowVP[slot] = glm::perspective(fov, 1.0f, 0.05f, spotShadowFar[slot]) *
+                        spotShadowNear[slot] = nearP;
+                        spotShadowBias[slot] = lc.Shadow.Bias;
+                        spotShadowNormalBias[slot] = lc.Shadow.NormalBias;
+                        spotShadowSoftness[slot] = lc.Shadow.Softness;
+                        spotShadowVP[slot] = glm::perspective(fov, 1.0f, nearP, spotShadowFar[slot]) *
                                              glm::lookAt(pos, pos + aim, up);
                     }
                     lightBuffer.AddSpot(pos, aim, lc.Color, lc.Intensity, lc.Range, cosOuter, cosInner, slot);
                 } else {
                     int slot = -1;
-                    if (lc.CastShadows && frameSettings.ShadowsEnabled &&
+                    if (lc.Shadow.Enabled && frameSettings.ShadowsEnabled &&
                         pointShadowCount < PointShadowMap::kMaxPoints) {
                         slot = pointShadowCount++;
                         pointShadowPos[slot] = pos;
                         pointShadowFar[slot] = std::max(lc.Range, 0.2f);
+                        pointShadowNear[slot] = std::max(lc.Shadow.NearPlane, 1e-3f);
+                        pointShadowBias[slot] = lc.Shadow.Bias;
+                        pointShadowNormalBias[slot] = lc.Shadow.NormalBias;
                     }
                     lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range, slot);
                 }
@@ -893,7 +921,7 @@ int main() {
             const int frameLightCount = lightBuffer.Count();
 
             bool sunShadowsReady = false;
-            if (frameSettings.ShadowsEnabled && frameHaveDirectional) {
+            if (frameSettings.ShadowsEnabled && frameHaveDirectional && frameSunCastShadows) {
                 PROFILE_SCOPE("Sun Shadow Pass");
 
                 // Fit the cascades to whichever camera drives this frame's main view: the game
@@ -1028,7 +1056,7 @@ int main() {
                 localShadowShader.Bind(); // linear distance-to-light depth
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
                 for (int s = 0; s < pointShadowCount; ++s) {
-                    glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.05f, pointShadowFar[s]);
+                    glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, pointShadowNear[s], pointShadowFar[s]);
                     localShadowShader.SetVec3("uShadowLightPos", pointShadowPos[s]);
                     localShadowShader.SetFloat("uShadowFar", pointShadowFar[s]);
                     for (int f = 0; f < 6; ++f) {
@@ -1101,7 +1129,10 @@ int main() {
                 // Penumbra width in shadow-map texels, from the sun's apparent size. 0.53 deg
                 // (real sun) -> a tight ~2 texel edge; crank the light's Angular Size for softer.
                 modelShader.SetFloat("uShadowSoftness",
-                    std::clamp(frameSunAngularDeg * 3.0f, 1.0f, 14.0f));
+                    std::clamp(frameSunAngularDeg * 3.0f, 1.0f, 14.0f) * frameSunShadowSoftness);
+                // Per-light sun shadow multipliers (#140 phase 2); 1.0 == pre-phase-2 output.
+                modelShader.SetFloat("uSunShadowBias", frameSunShadowBias);
+                modelShader.SetFloat("uSunShadowNormalBias", frameSunShadowNormalBias);
                 glActiveTexture(GL_TEXTURE0 + 8);
                 glBindTexture(GL_TEXTURE_2D_ARRAY, shadowMap.DepthArray());
                 modelShader.SetInt("uShadowMap", 8);
@@ -1116,6 +1147,9 @@ int main() {
                     modelShader.SetVec3("uSpotShadowPos[" + std::to_string(s) + "]", spotShadowPos[s]);
                     modelShader.SetFloat("uSpotShadowFar[" + std::to_string(s) + "]", spotShadowFar[s]);
                     modelShader.SetFloat("uSpotShadowHalfTan[" + std::to_string(s) + "]", spotShadowHalfTan[s]);
+                    modelShader.SetFloat("uSpotShadowBias[" + std::to_string(s) + "]", spotShadowBias[s]);
+                    modelShader.SetFloat("uSpotShadowNormalBias[" + std::to_string(s) + "]", spotShadowNormalBias[s]);
+                    modelShader.SetFloat("uSpotShadowSoftness[" + std::to_string(s) + "]", spotShadowSoftness[s]);
                 }
                 glActiveTexture(GL_TEXTURE0 + 9);
                 glBindTexture(GL_TEXTURE_2D_ARRAY, spotShadowMap.DepthArray());
@@ -1124,8 +1158,11 @@ int main() {
                 // Point-light cube shadow maps on unit 10 (#119).
                 int pointCountForView = shadowsOn ? pointShadowCount : 0;
                 modelShader.SetInt("uPointShadowCount", pointCountForView);
-                for (int s = 0; s < pointCountForView; ++s)
+                for (int s = 0; s < pointCountForView; ++s) {
                     modelShader.SetFloat("uPointShadowFar[" + std::to_string(s) + "]", pointShadowFar[s]);
+                    modelShader.SetFloat("uPointShadowBias[" + std::to_string(s) + "]", pointShadowBias[s]);
+                    modelShader.SetFloat("uPointShadowNormalBias[" + std::to_string(s) + "]", pointShadowNormalBias[s]);
+                }
                 glActiveTexture(GL_TEXTURE0 + 10);
                 glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, pointShadowMap.DepthCubeArray());
                 modelShader.SetInt("uPointShadowMap", 10);
