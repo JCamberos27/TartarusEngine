@@ -910,9 +910,9 @@ int main() {
 
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
-                glCullFace(GL_FRONT);                 // front-face cull the casters: less peter-panning
+                glCullFace(GL_FRONT);                 // store back faces only — the lit side never self-shadows
                 glEnable(GL_POLYGON_OFFSET_FILL);
-                glPolygonOffset(2.0f, 4.0f);
+                glPolygonOffset(1.0f, 1.5f);          // small: front-face culling already prevents acne
 
                 shadowShader.Bind();
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
@@ -956,9 +956,9 @@ int main() {
                 PROFILE_SCOPE("Spot Shadow Pass");
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
-                glCullFace(GL_FRONT);
+                glCullFace(GL_FRONT);                 // store back faces only — see the sun pass
                 glEnable(GL_POLYGON_OFFSET_FILL);
-                glPolygonOffset(2.0f, 4.0f);
+                glPolygonOffset(1.0f, 1.5f);
 
                 localShadowShader.Bind(); // linear distance-to-light depth
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
@@ -1004,9 +1004,15 @@ int main() {
 
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
-                glDisable(GL_CULL_FACE); // omni light in an enclosed room: every wall must occlude
+                // Front-face cull the occluders (store only their BACK faces' distance), same as
+                // the sun + spot passes. The lit side of a caster then can't self-shadow, so the
+                // model shader's PointShadow() needs almost no bias — which is what stops the
+                // contact shadow peter-panning away from the object's base. Closed meshes only;
+                // a paper-thin plane has no back face and won't occlude (rare as a caster).
+                glEnable(GL_CULL_FACE);
+                glCullFace(GL_FRONT);
                 glEnable(GL_POLYGON_OFFSET_FILL);
-                glPolygonOffset(2.5f, 4.0f);
+                glPolygonOffset(1.1f, 1.5f);
 
                 localShadowShader.Bind(); // linear distance-to-light depth
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
@@ -1325,8 +1331,11 @@ int main() {
                     // out at high zoom for no visual reason. Orthographic views don't need the
                     // radial fade anyway (no perspective depth cue to blend into), so just push
                     // it out far enough to never kick in.
-                    float gridFade = editorCamera.Orthographic ? 100000.0f : 80.0f;
-                    grid.Draw(sceneViewMat, sceneProjMat, editorCamera.Position, editor.GridMinorSpacing(), 10.0f, gridFade);
+                    const EditorSettings& gset = EditorSettings::Get();
+                    float gridFade = editorCamera.Orthographic ? 100000.0f : gset.GridFadeDistance;
+                    grid.Draw(sceneViewMat, sceneProjMat, editorCamera.Position,
+                              gset.GridMinorSpacing, (float)gset.GridMajorEvery, gridFade,
+                              gset.GridOpacity, gset.GridShowAxisLines, gset.GridAxisThickness);
                 }
 
                 // Resolve MSAA + tonemap the linear-HDR scene into the LDR texture the Scene tab
