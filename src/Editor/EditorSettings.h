@@ -9,6 +9,12 @@
 // a heap-allocated singleton: single-threaded UI code, no dynamic-initialization-order concerns,
 // and every call site just writes EditorSettings::Get().Field like a normal member access.
 struct EditorSettings {
+    // Editor colour theme, applied by EditorLayer::ApplyEditorTheme() at launch and live when
+    // changed in Preferences > General. 0 = Dark Slate (monochrome + one cool accent),
+    // 1 = Prism (near-black chrome; accent/buttons/text hue drift through the spectrum each
+    // frame, spread across ~half the wheel so several spectrum colours show at once).
+    int EditorTheme = 0;
+
     // Master switch for every contextual tooltip/help-marker in the editor (Inspector fields,
     // Hierarchy rows, Console controls, Asset Browser, Toolbar Settings). Route all tooltip
     // calls through EditorUI::SetTooltip/HelpMarker (see EditorUIHelpers.h) rather than calling
@@ -90,6 +96,14 @@ struct EditorSettings {
     // the user's last splitter drag / icon-size slider position is written back here.
     float AssetBrowserTreeWidth = 0.0f;
     float AssetBrowserIconSize = 0.0f;
+
+    // --- Corner "engine mark": the spinning TE monogram in the Scene viewport's bottom-left.
+    // EngineMarkSpinSpeed is radians/sec (0 parks it). EngineMarkPrism paints the monogram with
+    // a slowly-drifting spectral gradient instead of the default contrast-adaptive grey.
+    // Controls live in Preferences > Viewport and the Window menu.
+    bool  EngineMarkEnabled   = true;
+    float EngineMarkSpinSpeed = 0.52f;
+    bool  EngineMarkPrism     = false;
 
     static EditorSettings& Get() {
         static EditorSettings instance;
