@@ -29,6 +29,7 @@ void EditorSettings::Load() {
     }
 
     EditorSettings& s = Get();
+    s.EditorTheme = root.value("editorTheme", s.EditorTheme);
     s.ShowTooltips = root.value("showTooltips", s.ShowTooltips);
     s.UiScaleOverride = root.value("uiScaleOverride", s.UiScaleOverride);
     s.AutoSaveEnabled = root.value("autoSaveEnabled", s.AutoSaveEnabled);
@@ -70,6 +71,7 @@ void EditorSettings::Save() {
     }
 
     json root;
+    root["editorTheme"] = Get().EditorTheme;
     root["showTooltips"] = Get().ShowTooltips;
     root["uiScaleOverride"] = Get().UiScaleOverride;
     root["autoSaveEnabled"] = Get().AutoSaveEnabled;

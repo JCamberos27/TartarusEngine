@@ -37,6 +37,11 @@ public:
     void Init(GLFWwindow* window);
     void Shutdown();
 
+    // Writes the colour palette for EditorSettings::EditorTheme into ImGui's live style. Called
+    // once from Init() and again (colours only — no size/font rebuild) whenever the theme combo
+    // in Preferences changes. For the Prism theme it also seeds the animated colours below.
+    void ApplyEditorTheme();
+
     void BeginFrame();
     void Draw(World& world, AssetLibrary& assets, Camera& editorCamera, float dt);
     void EndFrame();
@@ -541,6 +546,13 @@ private:
     bool m_MarkBouncing = false;
     bool m_MarkPosValid = false;     // false until first laid out, so it doesn't fly in from (0,0)
     void DrawEngineMark(float dt);
+
+    // Prism theme: a hue phase [0,1) advanced every frame in Draw() while EditorTheme == 1, and
+    // the routine that repaints all the hue-driven style colours (accent, buttons, text tint,
+    // tab keyline, ...) from it. ApplyEditorTheme() sets the static near-black backgrounds; this
+    // rides on top each frame so the palette drifts through the spectrum. No-op for Dark Slate.
+    float m_ThemeHue = 0.0f;
+    void ApplyPrismAnimation(float hue);
 
     // Full-width strip above the viewport: everything lives here now — one-click toggles in
     // the row below the menu bar, and File/Import/Add/Settings as dropdown menus (Settings
