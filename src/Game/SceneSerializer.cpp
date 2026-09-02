@@ -70,6 +70,7 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
     if (const auto* light = world.Registry.try_get<LightComponent>(entity)) {
         const char* kindStr = light->Kind == LightComponent::Type::Spot ? "spot"
                             : light->Kind == LightComponent::Type::Directional ? "directional" : "point";
+        const auto& sh = light->Shadow;
         j["light"] = {
             {"kind", kindStr},
             {"color", Vec3ToJson(light->Color)},
@@ -77,7 +78,19 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
             {"range", light->Range},
             {"spotAngle", light->SpotAngleDegrees},
             {"angularSize", light->AngularSizeDegrees},
-            {"castShadows", light->CastShadows},
+            {"colorTempK", light->ColorTempK},
+            // Legacy key, still written for one release so a scene saved here loads on an older
+            // build; new readers prefer the nested "shadow" object below.
+            {"castShadows", sh.Enabled},
+            {"shadow", {
+                {"enabled", sh.Enabled},
+                {"bias", sh.Bias},
+                {"normalBias", sh.NormalBias},
+                {"softness", sh.Softness},
+                {"nearPlane", sh.NearPlane},
+                {"resolution", sh.Resolution},
+                {"updateMode", sh.UpdateMode},
+            }},
         };
     }
     // Boxes get a Collider from World::CreateBox already; this only records one that was added
@@ -124,7 +137,25 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
         light.Range = l.value("range", 12.0f);
         light.SpotAngleDegrees = l.value("spotAngle", 35.0f);
         light.AngularSizeDegrees = l.value("angularSize", 0.53f);
-        light.CastShadows = l.value("castShadows", false);
+        light.ColorTempK = l.value("colorTempK", 0.0f);
+        // Nested "shadow" object (phase 2) with a fallback to the legacy flat "castShadows" bool
+        // so pre-phase-2 scenes still light up their shadow casters. A directional light with no
+        // shadow info at all predates per-light control, when the sun always cast under the global
+        // toggle — default it on so those scenes look unchanged; point/spot stay opt-in.
+        bool sunDefault = light.Kind == LightComponent::Type::Directional;
+        bool legacyCast = l.value("castShadows", sunDefault);
+        if (l.contains("shadow") && l["shadow"].is_object()) {
+            const json& s = l["shadow"];
+            light.Shadow.Enabled    = s.value("enabled", legacyCast);
+            light.Shadow.Bias       = s.value("bias", 1.0f);
+            light.Shadow.NormalBias = s.value("normalBias", 1.0f);
+            light.Shadow.Softness   = s.value("softness", 1.0f);
+            light.Shadow.NearPlane  = s.value("nearPlane", 0.05f);
+            light.Shadow.Resolution = s.value("resolution", 0);
+            light.Shadow.UpdateMode = s.value("updateMode", 0);
+        } else {
+            light.Shadow.Enabled = legacyCast;
+        }
         world.Registry.emplace_or_replace<LightComponent>(entity, light);
     }
     if (j.contains("collider")) {
@@ -488,6 +519,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             lc.Color = glm::vec3(1.0f, 0.93f, 0.84f);
             lc.Intensity = 6.0f;               // a real key light, so its cast shadows actually read
             lc.AngularSizeDegrees = 2.0f;      // a soft, cinematic penumbra out of the box
+            lc.Shadow.Enabled = true;          // the synthesised sun casts by default
             world.Registry.emplace<LightComponent>(sun, lc);
         }
     }

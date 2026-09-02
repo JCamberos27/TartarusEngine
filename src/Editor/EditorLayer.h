@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <unordered_set>
 #include <map>
 #include <memory>
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
@@ -213,6 +214,14 @@ public:
         if (m_Selected != entt::null) result.push_back(m_Selected);
         for (entt::entity e : m_ExtraSelection) result.push_back(e);
         return result;
+    }
+
+    // Lights panel solo/mute (#140 phase 4). main.cpp's per-frame light gather skips a light
+    // this returns true for, but only while editing (Play mode always renders every light).
+    // Muted lights are always suppressed; if ANY light is soloed, every non-soloed one is too.
+    bool IsLightSuppressed(entt::entity e) const {
+        if (m_MutedLights.count(e)) return true;
+        return !m_SoloLights.empty() && !m_SoloLights.count(e);
     }
 
     // World-space center of the current selection's bounding box (single object or group) —
@@ -508,6 +517,14 @@ private:
 
     bool m_ShowHistory = false;
     void DrawHistoryPanel(World& world, AssetLibrary& assets);
+
+    // Lights panel (#140 phase 4): one row per LightComponent entity — swatch, type, name,
+    // enable, solo, mute, frame. Dockable; visibility not persisted (matches History/Console).
+    bool m_ShowLightsPanel = false;
+    void DrawLightsPanel(World& world, Camera& editorCamera);
+    // Editor-only, never serialized, cleared by NewScene/OpenScene. See IsLightSuppressed().
+    std::unordered_set<entt::entity> m_SoloLights;
+    std::unordered_set<entt::entity> m_MutedLights;
 
     // The three "core" docked panels. Always started visible; the Window menu (and each
     // window's own close button) can hide them, Reset Layout brings them all back.
@@ -831,6 +848,10 @@ private:
     // handle grab suppresses the box-select/deselect click.
     enum class LightHandle { None, Range, SpotAngle, Aim };
     void UpdateLightHandles(World& world, Camera& editorCamera);
+    // The grab dots only appear once you've clicked the light in the VIEWPORT (its icon) — not
+    // when it's selected from the Hierarchy / Lights panel / a box-select. Holds that light;
+    // cleared by any other selection change. (#140 follow-up.)
+    entt::entity m_LightHandleArmedFor = entt::null;
     LightHandle m_HotLightHandle = LightHandle::None; // hovered, or (while dragging) the grabbed one
     int   m_HotLightHandleIndex  = -1;   // which dot of that kind, for the hover highlight
     bool  m_LightHandleDragging  = false;
@@ -876,8 +897,37 @@ private:
         glm::vec3 FromPos{0.0f}, ToPos{0.0f};
         float FromYaw = 0.0f, ToYaw = 0.0f, FromPitch = 0.0f, ToPitch = 0.0f;
         float FromOrthoHalfHeight = 0.0f, ToOrthoHalfHeight = 0.0f;
+        float FromFov = 60.0f, ToFov = 60.0f; // eased too, for "look through light" (#140 phase 4)
     };
     ViewTransition m_ViewTransition;
+
+    // Look through a light (#140 phase 4): move the editor camera to the light's POV — spot uses
+    // 2x its cone angle for FOV, point ~90, directional goes orthographic. Esc restores the
+    // camera that was stashed on entry. State is transient, never serialized.
+    bool m_LookThroughActive = false;
+    entt::entity m_LookThroughLight = entt::null;
+    struct CameraPose {
+        glm::vec3 Pos{0.0f};
+        float Yaw = 0.0f, Pitch = 0.0f, Fov = 60.0f, OrthoHalfHeight = 0.0f;
+        bool Ortho = false;
+    };
+    CameraPose m_LookThroughRestore;
+    // While looking through a light, flying the editor camera drives the light with it (fly it
+    // into place / re-aim it from its own POV). One undo point is captured the first frame it
+    // actually moves; these hold the light's pose at entry so that first move is detectable.
+    bool m_LookThroughMoved = false;
+    glm::vec3 m_LookThroughStartPos{0.0f};
+    glm::vec3 m_LookThroughStartRot{0.0f};
+    // The Inspector has no camera in scope, so its "Look through" button just records the light
+    // here; Draw() acts on it once, with editorCamera available.
+    entt::entity m_PendingLookThrough = entt::null;
+    void LookThroughLight(World& world, Camera& editorCamera, entt::entity light);
+    void ExitLookThrough(Camera& editorCamera);
+    // Per-frame: consume Esc, drop out if the light is gone, draw the "Looking through…" banner.
+    void UpdateLookThrough(World& world, Camera& editorCamera);
+    // Drop `light` straight down onto the nearest mesh AABB below it (+ a small lift). Returns
+    // false (and does nothing) if there's no geometry under it. One PushUndo.
+    bool DropLightToSurface(World& world, entt::entity light);
 
     // What to orbit/frame around for a view snap: the current selection's bounds center if
     // there is one, else whatever the camera is currently looking straight at (a raycast into
