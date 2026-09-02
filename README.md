@@ -64,6 +64,7 @@ the roadmap honest.
 - Forward PBR-style shading — albedo, normal, metallic, roughness, ambient occlusion, and emissive maps
 - **Linear HDR pipeline** — the scene renders into a multisampled `RGBA16F` target and a single fullscreen pass applies exposure, a tone-mapping curve (**Reinhard / ACES / AgX**), and gamma
 - **Directional, point, and spot lights** in one GPU light buffer (`std430` SSBO) — the sun is a placeable entity you aim with its rotation; point/spot have range and cone falloff, and each light has a per-entity **Cast Shadows** toggle
+- **Clustered-forward light culling** — a per-view compute pass bins point/spot lights into a 16 × 9 × 24 froxel grid, so a fragment loops only the lights that actually reach its cluster instead of every light in the scene
 - **Cascaded shadow maps** for the directional sun — 2–4 texel-snapped cascades, soft rotated-Poisson PCF whose penumbra follows the sun's angular size, seam-blended between cascades, with per-cascade frustum culling
 - **Point-light shadows** via a depth cube-map array, and **spot-light shadows** via a perspective depth array — both store linear distance-to-light so a shadow reaches the light's full range, and share the light SSBO's per-light shadow slot
 - Skeletal animation with up to 100 bones per model
@@ -167,11 +168,10 @@ project/      The scene and editor preferences being authored
 
 ## Roadmap
 
-**Shipped** — linear HDR pipeline with tone mapping · cascaded shadow maps for the sun · point- and spot-light shadows · GPU (SSBO) light buffer
+**Shipped** — linear HDR pipeline with tone mapping · cascaded shadow maps for the sun · point- and spot-light shadows · GPU (SSBO) light buffer · clustered-forward light culling (16 × 9 × 24 froxel grid, compute-driven)
 
 **Next**
 
-- Clustered / tiled light culling, so a fragment stops looping every light
 - Screen-space effects on the HDR buffer — SSAO, bloom
 - A behaviour/scripting layer, so entities can do more than sit still
 - Project-relative asset pipeline with a baked import cache
