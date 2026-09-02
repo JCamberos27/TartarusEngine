@@ -837,8 +837,14 @@ int main() {
                 glm::vec3 aim = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
                 if (lc.Kind == LightComponent::Type::Directional) {
                     lightBuffer.AddDirectional(aim, lc.Color, lc.Intensity);
-                    if (!frameHaveDirectional) { frameSunDir = aim; frameSunAngularDeg = lc.AngularSizeDegrees; }
-                    frameHaveDirectional = true;
+                    // A zero-intensity sun contributes no light, so it must not drive the
+                    // cascaded shadow pass either — it's the way a scene opts out of having a
+                    // directional at all while still suppressing SceneSerializer's synthesised
+                    // fallback sun (which keys off a Directional existing, not its intensity).
+                    if (lc.Intensity > 0.0f) {
+                        if (!frameHaveDirectional) { frameSunDir = aim; frameSunAngularDeg = lc.AngularSizeDegrees; }
+                        frameHaveDirectional = true;
+                    }
                 } else if (lc.Kind == LightComponent::Type::Spot) {
                     float cosOuter = cosf(glm::radians(lc.SpotAngleDegrees));
                     float cosInner = cosf(glm::radians(lc.SpotAngleDegrees * 0.9f));
