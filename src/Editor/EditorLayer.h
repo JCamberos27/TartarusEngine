@@ -824,6 +824,19 @@ private:
     // (directional) — projected to screen and drawn into the Scene window's draw list, same
     // clipping treatment as DrawEntityIcons. Gated on EditorSettings::ShowLightGizmos.
     void DrawLightGizmos(World& world, Camera& editorCamera);
+
+    // Unity-style grab dots on the selected light's gizmo: drag to scale Range, open/close the
+    // spot cone, or re-aim a spot/directional light — no trip to the Inspector. Draws the dots
+    // and runs their hover/drag; called from Draw() just before HandleViewportPicking so a
+    // handle grab suppresses the box-select/deselect click.
+    enum class LightHandle { None, Range, SpotAngle, Aim };
+    void UpdateLightHandles(World& world, Camera& editorCamera);
+    LightHandle m_HotLightHandle = LightHandle::None; // hovered, or (while dragging) the grabbed one
+    int   m_HotLightHandleIndex  = -1;   // which dot of that kind, for the hover highlight
+    bool  m_LightHandleDragging  = false;
+    bool  m_LightHandleEngaged   = false; // this frame a handle owns the cursor -> no viewport pick
+    glm::vec3 m_LightHandleGrabAxis{0.0f}; // world direction the grabbed dot slides along
+    float m_LightHandleGrabParam = 0.0f;  // aim-handle distance captured at grab time
     void HandleViewportPicking(World& world, Camera& editorCamera);
     // Blender/Godot-style navigation gizmo (ImViewGuizmo) pinned to the viewport's top-right
     // corner: a rotate ring plus small dolly/pan buttons underneath. Camera is yaw/pitch, not
