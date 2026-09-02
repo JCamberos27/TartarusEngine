@@ -95,6 +95,10 @@ struct LightComponent {
     // Directional: angular diameter of the sun disc, in degrees (~0.53 for Earth's sun). Drives
     // soft-shadow penumbra width once CSM lands; ignored by the other kinds.
     float AngularSizeDegrees = 0.53f;
+    // Spot: render a perspective shadow map for this light (#119). Off by default — each casting
+    // spot is an extra full-scene depth pass. Up to SpotShadowMap::kMaxSpots take effect at once;
+    // ignored for Point (cube shadows are a later milestone) and Directional (always the CSM).
+    bool CastShadows = false;
 };
 
 // A game camera placed in the scene. The Game view renders through the first active one of
