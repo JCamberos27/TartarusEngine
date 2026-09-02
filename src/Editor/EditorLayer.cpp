@@ -617,7 +617,7 @@ void EditorLayer::Init(GLFWwindow* window) {
         std::error_code ec;
         const std::string& last = EditorSettings::Get().LastScenePath;
         m_CurrentScenePath = (!last.empty() && std::filesystem::exists(last, ec) && !ec)
-            ? last : ProjectPaths::Resolve("scenes/Test.json");
+            ? last : ProjectPaths::Resolve("scenes/Showcase.json");
     }
 
     // So Import / Open / Save dialogs start in the project folder instead of build/Release/,
