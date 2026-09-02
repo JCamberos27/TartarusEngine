@@ -2782,6 +2782,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawViewGizmo(world, editorCamera);
 
     if (!vHeld) {
+        UpdateLightHandles(world, editorCamera);
         HandleViewportPicking(world, editorCamera);
         if (m_ShowGizmos) DrawGizmo(world, editorCamera);
     }
@@ -5773,7 +5774,8 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         // ImGui panel, the transform gizmo, or the nav gizmo (rotate ring / dolly / pan
         // buttons) already owns this click; Alt+Left-drag is reserved for orbiting the camera
         // around the current selection (see main.cpp's UpdateEditorCamera).
-        m_BoxSelectActive = !WantsCaptureMouse() && !m_GizmoEngaged && !m_ViewGizmoBlocking && !io.KeyAlt;
+        m_BoxSelectActive = !WantsCaptureMouse() && !m_GizmoEngaged && !m_ViewGizmoBlocking &&
+                            !m_LightHandleEngaged && !io.KeyAlt;
         m_BoxSelectStart = {io.MousePos.x, io.MousePos.y};
         return; // click vs. drag is only decided on release, below
     }
@@ -6152,10 +6154,12 @@ void EditorLayer::DrawLightGizmos(World& world, Camera& editorCamera) {
         const float thick = selected ? 2.0f : 1.3f;
 
         if (light.Kind == LightComponent::Type::Point) {
+            // One clean view-facing ring for the range (like Unity), plus a faint ground circle
+            // so it still reads as a sphere sitting in space rather than a flat disc.
             float r = std::max(light.Range, 0.01f);
-            stroke(circle(pos, glm::vec3(1, 0, 0), glm::vec3(0, 1, 0), r, 48), true, col, thick);
-            stroke(circle(pos, glm::vec3(1, 0, 0), glm::vec3(0, 0, 1), r, 48), true, col, thick);
-            stroke(circle(pos, glm::vec3(0, 1, 0), glm::vec3(0, 0, 1), r, 48), true, col, thick);
+            stroke(circle(pos, editorCamera.Right(), editorCamera.Up(), r, 56), true, col, thick);
+            stroke(circle(pos, glm::vec3(1, 0, 0), glm::vec3(0, 0, 1), r, 48), true,
+                   IM_COL32((int)(c.r * 255), (int)(c.g * 255), (int)(c.b * 255), a / 3), 1.0f);
         } else if (light.Kind == LightComponent::Type::Spot) {
             float range = std::max(light.Range, 0.05f);
             float half = glm::radians(std::clamp(light.SpotAngleDegrees, 1.0f, 89.0f));
@@ -6204,6 +6208,167 @@ void EditorLayer::DrawLightGizmos(World& world, Camera& editorCamera) {
                 draw->AddText(tp, IM_COL32(255, 255, 255, 235), buf);
             }
         }
+    }
+
+    draw->PopClipRect();
+}
+
+void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
+    m_LightHandleEngaged = false;
+    const EditorSettings& prefs = EditorSettings::Get();
+    if (!prefs.ShowLightGizmos || m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f ||
+        m_GizmoEngaged || HasGroupSelection()) {
+        m_LightHandleDragging = false;
+        m_HotLightHandle = LightHandle::None;
+        return;
+    }
+    entt::entity e = m_Selected;
+    if (e == entt::null || !world.Registry.valid(e) || !world.Registry.all_of<LightComponent>(e)) {
+        m_LightHandleDragging = false;
+        m_HotLightHandle = LightHandle::None;
+        return;
+    }
+
+    auto& light = world.Registry.get<LightComponent>(e);
+    auto& xf = world.Registry.get<TransformComponent>(e);
+    entt::entity parent = entt::null;
+    if (auto* h = world.Registry.try_get<HierarchyComponent>(e)) parent = h->Parent;
+    glm::mat4 parentWorld = parent != entt::null ? world.ComposeWorldTransform(parent) : glm::mat4(1.0f);
+    glm::mat4 model = world.ComposeWorldTransform(e);
+    glm::vec3 pos = glm::vec3(model[3]);
+    glm::vec3 dir = glm::normalize(glm::vec3(model * glm::vec4(0, 0, -1, 0)));
+
+    glm::mat4 view = editorCamera.ViewMatrix();
+    glm::mat4 proj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y);
+    glm::mat4 vp = proj * view;
+    auto project = [&](const glm::vec3& w, ImVec2& out) -> bool {
+        glm::vec4 c = vp * glm::vec4(w, 1.0f);
+        if (c.w <= 0.0001f) return false;
+        glm::vec3 n = glm::vec3(c) / c.w;
+        out = ImVec2(m_ViewportPos.x + (n.x * 0.5f + 0.5f) * m_ViewportSize.x,
+                     m_ViewportPos.y + (1.0f - (n.y * 0.5f + 0.5f)) * m_ViewportSize.y);
+        return true;
+    };
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 mouse = io.MousePos;
+    glm::mat4 invVP = glm::inverse(vp);
+    float ndcX = 2.0f * (mouse.x - m_ViewportPos.x) / m_ViewportSize.x - 1.0f;
+    float ndcY = 1.0f - 2.0f * (mouse.y - m_ViewportPos.y) / m_ViewportSize.y;
+    glm::vec4 rn = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f); rn /= rn.w;
+    glm::vec4 rf = invVP * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);  rf /= rf.w;
+    glm::vec3 rayO = glm::vec3(rn);
+    glm::vec3 rayD = glm::normalize(glm::vec3(rf) - glm::vec3(rn));
+
+    // Parameter t of the point on the line (P0 + A*t, A unit) closest to the cursor ray.
+    auto lineParamNearestRay = [&](const glm::vec3& P0, const glm::vec3& A) -> float {
+        glm::vec3 w0 = P0 - rayO;
+        float b = glm::dot(A, rayD);
+        float d = glm::dot(A, w0);
+        float ee = glm::dot(rayD, w0);
+        float denom = 1.0f - b * b;                 // a*c - b*b, with a=c=1
+        if (std::fabs(denom) < 1e-5f) return -d;    // ray ~parallel to the axis
+        return (b * ee - d) / denom;
+    };
+
+    // Build this light's dot list: {kind, world position, slide axis}.
+    struct Dot { LightHandle kind; glm::vec3 world; glm::vec3 axis; };
+    std::vector<Dot> dots;
+    float range = std::max(light.Range, 0.05f);
+    float halfDeg = std::clamp(light.SpotAngleDegrees, 1.0f, 89.0f);
+    glm::vec3 u, v;
+    {
+        glm::vec3 up = std::fabs(dir.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
+        u = glm::normalize(glm::cross(dir, up));
+        v = glm::cross(dir, u);
+    }
+    if (light.Kind == LightComponent::Type::Point) {
+        // Four dots on the view-facing range ring (matches the single ring the gizmo now draws).
+        const glm::vec3 rr = editorCamera.Right(), uu = editorCamera.Up();
+        dots.push_back({LightHandle::Range, pos + rr * range, rr});
+        dots.push_back({LightHandle::Range, pos - rr * range, -rr});
+        dots.push_back({LightHandle::Range, pos + uu * range, uu});
+        dots.push_back({LightHandle::Range, pos - uu * range, -uu});
+    } else if (light.Kind == LightComponent::Type::Spot) {
+        glm::vec3 center = pos + dir * range;
+        float rimR = range * tanf(glm::radians(halfDeg));
+        dots.push_back({LightHandle::Range, center, dir});
+        dots.push_back({LightHandle::SpotAngle, center + u * rimR, u});
+        dots.push_back({LightHandle::SpotAngle, center - u * rimR, -u});
+        dots.push_back({LightHandle::SpotAngle, center + v * rimR, v});
+        dots.push_back({LightHandle::SpotAngle, center - v * rimR, -v});
+        dots.push_back({LightHandle::Aim, pos + dir * std::clamp(range * 0.4f, 1.0f, 6.0f), dir});
+    } else { // Directional
+        dots.push_back({LightHandle::Aim, pos + dir * (2.6f * std::max(prefs.LightGizmoScale, 0.05f)), dir});
+    }
+
+    ImGuiWindow* sceneWin = ImGui::FindWindowByName("Scene");
+    ImDrawList* draw = sceneWin ? sceneWin->DrawList : ImGui::GetForegroundDrawList();
+    draw->PushClipRect(ImVec2(m_ViewportPos.x, m_ViewportPos.y),
+                       ImVec2(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y), true);
+
+    const bool leftDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+
+    if (m_LightHandleDragging) {
+        m_LightHandleEngaged = true;
+        if (!leftDown) {
+            m_LightHandleDragging = false;
+            m_HotLightHandle = LightHandle::None;
+        } else if (m_HotLightHandle == LightHandle::Range) {
+            float t = lineParamNearestRay(pos, m_LightHandleGrabAxis);
+            light.Range = std::clamp(t, 0.05f, 100000.0f);
+        } else if (m_HotLightHandle == LightHandle::SpotAngle) {
+            glm::vec3 center = pos + dir * std::max(light.Range, 0.05f);
+            float t = lineParamNearestRay(center, m_LightHandleGrabAxis);
+            float newHalf = glm::degrees(atanf(std::max(t, 1e-4f) / std::max(light.Range, 0.05f)));
+            light.SpotAngleDegrees = std::clamp(newHalf, 1.0f, 89.0f);
+        } else if (m_HotLightHandle == LightHandle::Aim) {
+            glm::vec3 handlePos = pos + dir * m_LightHandleGrabParam;
+            glm::vec3 nrm = -editorCamera.Front();
+            float denom = glm::dot(rayD, nrm);
+            if (std::fabs(denom) > 1e-5f) {
+                float s = glm::dot(handlePos - rayO, nrm) / denom;
+                glm::vec3 fwd = (rayO + rayD * s) - pos;
+                if (glm::length(fwd) > 1e-4f) {
+                    fwd = glm::normalize(fwd);
+                    glm::vec3 up = std::fabs(fwd.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
+                    glm::mat4 rot = glm::inverse(glm::lookAt(glm::vec3(0.0f), fwd, up));
+                    xf.RotationEuler = EulerYXZFromMatrix(glm::inverse(parentWorld) * rot);
+                }
+            }
+        }
+    } else {
+        m_HotLightHandle = LightHandle::None;
+        m_HotLightHandleIndex = -1;
+        float best = 11.0f * m_UIScale;
+        for (int i = 0; i < (int)dots.size(); ++i) {
+            ImVec2 sp;
+            if (!project(dots[i].world, sp)) continue;
+            float d = std::sqrt((sp.x - mouse.x) * (sp.x - mouse.x) + (sp.y - mouse.y) * (sp.y - mouse.y));
+            if (d < best) { best = d; m_HotLightHandleIndex = i; m_HotLightHandle = dots[i].kind; }
+        }
+        if (m_HotLightHandleIndex >= 0) {
+            m_LightHandleEngaged = true; // hovering a dot claims the click (no deselect / box-select)
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !WantsCaptureMouse()) {
+                const Dot& g = dots[m_HotLightHandleIndex];
+                m_LightHandleDragging = true;
+                m_LightHandleGrabAxis = g.axis;
+                if (g.kind == LightHandle::Aim) m_LightHandleGrabParam = glm::length(g.world - pos);
+                PushUndo(world, g.kind == LightHandle::Aim ? "Aim Light"
+                              : g.kind == LightHandle::SpotAngle ? "Set Spot Angle" : "Set Light Range");
+            }
+        }
+    }
+
+    for (int i = 0; i < (int)dots.size(); ++i) {
+        ImVec2 sp;
+        if (!project(dots[i].world, sp)) continue;
+        bool hot = m_LightHandleDragging
+                       ? (dots[i].kind == m_HotLightHandle &&
+                          glm::dot(dots[i].axis, m_LightHandleGrabAxis) > 0.999f)
+                       : (i == m_HotLightHandleIndex);
+        float r = (hot ? 6.0f : 4.0f) * m_UIScale;
+        draw->AddCircleFilled(sp, r, hot ? IM_COL32(255, 200, 60, 255) : IM_COL32(245, 245, 245, 225));
+        draw->AddCircle(sp, r, IM_COL32(0, 0, 0, 190), 0, 1.5f);
     }
 
     draw->PopClipRect();
