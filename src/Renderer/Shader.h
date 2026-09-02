@@ -6,11 +6,17 @@
 class Shader {
 public:
     Shader(const std::string& vertexSrc, const std::string& fragmentSrc);
+    // Compute-only program (single GL_COMPUTE_SHADER stage) — clustered light culling (#120).
+    explicit Shader(const std::string& computeSrc);
     ~Shader();
 
     void Bind() const;
 
+    // Dispatches this (compute) program over an x*y*z grid of work groups.
+    void DispatchCompute(unsigned int groupsX, unsigned int groupsY, unsigned int groupsZ) const;
+
     void SetMat4(const std::string& name, const glm::mat4& m) const;
+    void SetVec2(const std::string& name, const glm::vec2& v) const;
     void SetVec3(const std::string& name, const glm::vec3& v) const;
     void SetVec4(const std::string& name, const glm::vec4& v) const;
     void SetFloat(const std::string& name, float v) const;
