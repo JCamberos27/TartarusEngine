@@ -4644,7 +4644,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
                     std::string path((const char*)payload->Data);
                     PushUndo(world, "Change Mesh");
-                    renderable->ModelRef = assets.LoadModel(path);
+                    renderable->ModelRef = assets.InstantiateModel(path);
                 }
                 ImGui::EndDragDropTarget();
             }
@@ -5396,7 +5396,7 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
             PushUndo(world, modelPayload ? "Place Model" : "Place Prefab Instance");
 
             if (modelPayload) {
-                auto model = assets.LoadModel(path);
+                auto model = assets.InstantiateModel(path);
                 glm::vec3 position = ComputeModelDropPosition(world, *model, editorCamera);
                 std::string name = std::filesystem::path(path).stem().string();
                 entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), name);
