@@ -83,6 +83,12 @@ public:
     // resolution for that ordering problem.
     ImVec2 GetLastAvailableRegion() const { return m_LastAvailableRegion; }
 
+    // Screen-space rect of the rendered game image (inside the letterbox) as of the last
+    // RenderUI call; zero size before the first draw or when the panel is too small to draw
+    // into. Lets an overlay (the viewport Stop/Fullscreen control) anchor to the game view.
+    ImVec2 GetViewImagePos() const { return m_ViewImagePos; }
+    ImVec2 GetViewImageSize() const { return m_ViewImageSize; }
+
     Framebuffer& GetFramebuffer() { return m_Framebuffer; }
     bool IsWindowOpen() const { return m_WindowOpen; }
 
@@ -97,6 +103,8 @@ private:
     ResolutionPreset m_CurrentPreset = ResolutionManager::BuiltInPresets()[0];
     std::vector<ResolutionPreset> m_CustomPresets;
     ImVec2 m_LastAvailableRegion{0.0f, 0.0f};
+    ImVec2 m_ViewImagePos{0.0f, 0.0f};
+    ImVec2 m_ViewImageSize{0.0f, 0.0f};
 
     bool m_WindowOpen = true;
     bool m_EngageClickPending = false;
