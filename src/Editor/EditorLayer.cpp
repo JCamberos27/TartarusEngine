@@ -695,62 +695,9 @@ void EditorLayer::Init(GLFWwindow* window) {
     style.SeparatorTextBorderSize = 1.0f;
     style.WindowTitleAlign = ImVec2(0.0f, 0.5f);
 
-    // Base greys (dark slate). Panels sit a couple of steps above pure black; inputs are
-    // recessed a step below the panel; popups/menus match the panel.
-    style.Colors[ImGuiCol_WindowBg]        = ImVec4(0.137f, 0.137f, 0.145f, 1.00f);
-    style.Colors[ImGuiCol_ChildBg]         = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
-    style.Colors[ImGuiCol_PopupBg]         = ImVec4(0.117f, 0.117f, 0.125f, 0.98f);
-    style.Colors[ImGuiCol_MenuBarBg]       = ImVec4(0.117f, 0.117f, 0.125f, 1.00f);
-    style.Colors[ImGuiCol_TitleBg]         = ImVec4(0.098f, 0.098f, 0.105f, 1.00f);
-    style.Colors[ImGuiCol_TitleBgActive]   = ImVec4(0.125f, 0.125f, 0.133f, 1.00f);
-    style.Colors[ImGuiCol_TitleBgCollapsed]= ImVec4(0.098f, 0.098f, 0.105f, 1.00f);
-    style.Colors[ImGuiCol_Border]          = ImVec4(0.290f, 0.290f, 0.320f, 0.50f);
-    style.Colors[ImGuiCol_BorderShadow]    = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
-    style.Colors[ImGuiCol_Separator]       = ImVec4(0.240f, 0.240f, 0.270f, 0.55f);
-    style.Colors[ImGuiCol_FrameBg]         = ImVec4(0.100f, 0.100f, 0.108f, 1.00f);
-    style.Colors[ImGuiCol_FrameBgHovered]  = ImVec4(0.160f, 0.160f, 0.172f, 1.00f);
-    style.Colors[ImGuiCol_FrameBgActive]   = ImVec4(0.196f, 0.200f, 0.223f, 1.00f);
-    style.Colors[ImGuiCol_ScrollbarBg]     = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
-    style.Colors[ImGuiCol_ScrollbarGrab]        = ImVec4(0.300f, 0.300f, 0.330f, 1.00f);
-    style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.380f, 0.380f, 0.420f, 1.00f);
-    style.Colors[ImGuiCol_ScrollbarGrabActive]  = ImVec4(0.460f, 0.460f, 0.510f, 1.00f);
-    style.Colors[ImGuiCol_Text]            = ImVec4(0.860f, 0.870f, 0.890f, 1.00f);
-    style.Colors[ImGuiCol_TextDisabled]    = ImVec4(0.450f, 0.460f, 0.500f, 1.00f);
-
-    // The one accent: a desaturated cool slate. Drives selected rows, active toggles, hovered
-    // separators/grips, nav — present enough to read at a glance, never a saturated blue.
-    ImVec4 accent(0.255f, 0.275f, 0.325f, 1.00f);
-    ImVec4 accentHovered(0.325f, 0.350f, 0.415f, 1.00f);
-    ImVec4 accentActive(0.400f, 0.435f, 0.520f, 1.00f);
-
-    style.Colors[ImGuiCol_CheckMark]         = ImVec4(0.640f, 0.680f, 0.780f, 1.00f);
-    style.Colors[ImGuiCol_SliderGrab]        = accentActive;
-    style.Colors[ImGuiCol_SliderGrabActive]  = ImVec4(0.520f, 0.560f, 0.660f, 1.00f);
-    // Real labelled buttons (Add Component, Duplicate, dialogs) keep a subtle raised body;
-    // the toolbar's icon strip overrides this locally to draw flat (see DrawTopToolbar).
-    style.Colors[ImGuiCol_Button]            = ImVec4(0.185f, 0.185f, 0.200f, 1.00f);
-    style.Colors[ImGuiCol_ButtonHovered]     = ImVec4(0.245f, 0.250f, 0.275f, 1.00f);
-    style.Colors[ImGuiCol_ButtonActive]      = ImVec4(0.300f, 0.310f, 0.345f, 1.00f);
-    style.Colors[ImGuiCol_Header]            = accent;         // selected hierarchy / tree row
-    style.Colors[ImGuiCol_HeaderHovered]     = accentHovered;
-    style.Colors[ImGuiCol_HeaderActive]      = accentActive;
-    style.Colors[ImGuiCol_SeparatorHovered]  = accentHovered;
-    style.Colors[ImGuiCol_SeparatorActive]   = accentActive;
-    style.Colors[ImGuiCol_ResizeGrip]        = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
-    style.Colors[ImGuiCol_ResizeGripHovered] = accentHovered;
-    style.Colors[ImGuiCol_ResizeGripActive]  = accentActive;
-    // Tabs: neutral greys; the active tab reads by a lighter body plus one thin cool keyline.
-    style.Colors[ImGuiCol_Tab]                        = ImVec4(0.130f, 0.130f, 0.138f, 1.00f);
-    style.Colors[ImGuiCol_TabHovered]                 = ImVec4(0.220f, 0.225f, 0.245f, 1.00f);
-    style.Colors[ImGuiCol_TabSelected]                = ImVec4(0.185f, 0.190f, 0.205f, 1.00f);
-    style.Colors[ImGuiCol_TabDimmed]                  = ImVec4(0.110f, 0.110f, 0.118f, 1.00f);
-    style.Colors[ImGuiCol_TabDimmedSelected]          = ImVec4(0.155f, 0.158f, 0.170f, 1.00f);
-    style.Colors[ImGuiCol_TabSelectedOverline]        = ImVec4(0.450f, 0.490f, 0.600f, 0.90f);
-    style.Colors[ImGuiCol_TabDimmedSelectedOverline]  = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
-    style.Colors[ImGuiCol_TextSelectedBg]   = ImVec4(accent.x, accent.y, accent.z, 0.55f);
-    style.Colors[ImGuiCol_NavCursor]        = accentActive;
-    style.Colors[ImGuiCol_DockingPreview]   = ImVec4(accentActive.x, accentActive.y, accentActive.z, 0.55f);
-    style.Colors[ImGuiCol_DockingEmptyBg]   = ImVec4(0.090f, 0.090f, 0.098f, 1.00f);
+    // Palette (base greys + accent) is theme-dependent — set by ApplyEditorTheme() so the
+    // Preferences > General theme combo can re-run it live. Sizes/rounding above are shared.
+    ApplyEditorTheme();
 
     // Scale every size/padding/rounding set above (and ImGui's own defaults) by the monitor's
     // content scale, so spacing keeps its proportions instead of staying pinned to 96-DPI pixel
@@ -821,6 +768,153 @@ void EditorLayer::Init(GLFWwindow* window) {
 
     m_MarkTexture = std::make_unique<Texture>("assets/branding/tartarus_engine_mark.png");
     if (!m_MarkTexture->IsValid()) m_MarkTexture.reset();
+}
+
+// The editor's colour palette. Both themes share the sizes/rounding set in Init(); this only
+// writes style.Colors[], so Preferences can swap it live with no font/size rebuild.
+//   0 Dark Slate — monochrome greys + one desaturated cool-slate accent (the #92 default).
+//   1 Prism      — near-black backgrounds; the accent, buttons, text tint and tab keyline are
+//                  all hue-driven, spread across ~half the wheel and drifting through the
+//                  spectrum together every frame (ApplyPrismAnimation, phase advanced in Draw()).
+void EditorLayer::ApplyEditorTheme() {
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    if (EditorSettings::Get().EditorTheme == 1) {
+        // Prism: static near-black chrome. Everything with colour is set by ApplyPrismAnimation,
+        // called here so a fresh switch looks right and then again every frame from Draw().
+        style.Colors[ImGuiCol_WindowBg]        = ImVec4(0.030f, 0.030f, 0.036f, 1.00f);
+        style.Colors[ImGuiCol_PopupBg]         = ImVec4(0.020f, 0.020f, 0.026f, 0.98f);
+        style.Colors[ImGuiCol_MenuBarBg]       = ImVec4(0.020f, 0.020f, 0.026f, 1.00f);
+        style.Colors[ImGuiCol_TitleBg]         = ImVec4(0.012f, 0.012f, 0.016f, 1.00f);
+        style.Colors[ImGuiCol_TitleBgCollapsed]= ImVec4(0.012f, 0.012f, 0.016f, 1.00f);
+        style.Colors[ImGuiCol_FrameBg]         = ImVec4(0.045f, 0.045f, 0.055f, 1.00f);
+        style.Colors[ImGuiCol_FrameBgHovered]  = ImVec4(0.085f, 0.085f, 0.105f, 1.00f);
+        style.Colors[ImGuiCol_FrameBgActive]   = ImVec4(0.120f, 0.120f, 0.150f, 1.00f);
+        style.Colors[ImGuiCol_ChildBg]         = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
+        style.Colors[ImGuiCol_BorderShadow]    = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
+        style.Colors[ImGuiCol_ScrollbarBg]     = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
+        style.Colors[ImGuiCol_Tab]             = ImVec4(0.022f, 0.022f, 0.028f, 1.00f);
+        style.Colors[ImGuiCol_TabSelected]     = ImVec4(0.050f, 0.050f, 0.062f, 1.00f);
+        style.Colors[ImGuiCol_TabDimmed]       = ImVec4(0.016f, 0.016f, 0.020f, 1.00f);
+        style.Colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.030f, 0.030f, 0.038f, 1.00f);
+        style.Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
+        style.Colors[ImGuiCol_DockingEmptyBg]  = ImVec4(0.016f, 0.016f, 0.020f, 1.00f);
+        ApplyPrismAnimation(m_ThemeHue);
+        return;
+    }
+
+    // --- Dark Slate ------------------------------------------------------------------------
+    // Panels sit a couple of steps above pure black; inputs recess a step below the panel;
+    // popups/menus match the panel.
+    style.Colors[ImGuiCol_WindowBg]        = ImVec4(0.137f, 0.137f, 0.145f, 1.00f);
+    style.Colors[ImGuiCol_ChildBg]         = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
+    style.Colors[ImGuiCol_PopupBg]         = ImVec4(0.117f, 0.117f, 0.125f, 0.98f);
+    style.Colors[ImGuiCol_MenuBarBg]       = ImVec4(0.117f, 0.117f, 0.125f, 1.00f);
+    style.Colors[ImGuiCol_TitleBg]         = ImVec4(0.098f, 0.098f, 0.105f, 1.00f);
+    style.Colors[ImGuiCol_TitleBgActive]   = ImVec4(0.125f, 0.125f, 0.133f, 1.00f);
+    style.Colors[ImGuiCol_TitleBgCollapsed]= ImVec4(0.098f, 0.098f, 0.105f, 1.00f);
+    style.Colors[ImGuiCol_Border]          = ImVec4(0.290f, 0.290f, 0.320f, 0.50f);
+    style.Colors[ImGuiCol_BorderShadow]    = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
+    style.Colors[ImGuiCol_Separator]       = ImVec4(0.240f, 0.240f, 0.270f, 0.55f);
+    style.Colors[ImGuiCol_FrameBg]         = ImVec4(0.100f, 0.100f, 0.108f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgHovered]  = ImVec4(0.160f, 0.160f, 0.172f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgActive]   = ImVec4(0.196f, 0.200f, 0.223f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarBg]     = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
+    style.Colors[ImGuiCol_ScrollbarGrab]        = ImVec4(0.300f, 0.300f, 0.330f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.380f, 0.380f, 0.420f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarGrabActive]  = ImVec4(0.460f, 0.460f, 0.510f, 1.00f);
+    style.Colors[ImGuiCol_Text]            = ImVec4(0.860f, 0.870f, 0.890f, 1.00f);
+    style.Colors[ImGuiCol_TextDisabled]    = ImVec4(0.450f, 0.460f, 0.500f, 1.00f);
+
+    // The one accent: a desaturated cool slate.
+    ImVec4 accent(0.255f, 0.275f, 0.325f, 1.00f);
+    ImVec4 accentHovered(0.325f, 0.350f, 0.415f, 1.00f);
+    ImVec4 accentActive(0.400f, 0.435f, 0.520f, 1.00f);
+
+    style.Colors[ImGuiCol_CheckMark]         = ImVec4(0.640f, 0.680f, 0.780f, 1.00f);
+    style.Colors[ImGuiCol_SliderGrab]        = accentActive;
+    style.Colors[ImGuiCol_SliderGrabActive]  = ImVec4(0.520f, 0.560f, 0.660f, 1.00f);
+    style.Colors[ImGuiCol_Button]            = ImVec4(0.185f, 0.185f, 0.200f, 1.00f);
+    style.Colors[ImGuiCol_ButtonHovered]     = ImVec4(0.245f, 0.250f, 0.275f, 1.00f);
+    style.Colors[ImGuiCol_ButtonActive]      = ImVec4(0.300f, 0.310f, 0.345f, 1.00f);
+    style.Colors[ImGuiCol_Header]            = accent;
+    style.Colors[ImGuiCol_HeaderHovered]     = accentHovered;
+    style.Colors[ImGuiCol_HeaderActive]      = accentActive;
+    style.Colors[ImGuiCol_SeparatorHovered]  = accentHovered;
+    style.Colors[ImGuiCol_SeparatorActive]   = accentActive;
+    style.Colors[ImGuiCol_ResizeGrip]        = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
+    style.Colors[ImGuiCol_ResizeGripHovered] = accentHovered;
+    style.Colors[ImGuiCol_ResizeGripActive]  = accentActive;
+    style.Colors[ImGuiCol_Tab]                        = ImVec4(0.130f, 0.130f, 0.138f, 1.00f);
+    style.Colors[ImGuiCol_TabHovered]                 = ImVec4(0.220f, 0.225f, 0.245f, 1.00f);
+    style.Colors[ImGuiCol_TabSelected]                = ImVec4(0.185f, 0.190f, 0.205f, 1.00f);
+    style.Colors[ImGuiCol_TabDimmed]                  = ImVec4(0.110f, 0.110f, 0.118f, 1.00f);
+    style.Colors[ImGuiCol_TabDimmedSelected]          = ImVec4(0.155f, 0.158f, 0.170f, 1.00f);
+    style.Colors[ImGuiCol_TabSelectedOverline]        = ImVec4(0.450f, 0.490f, 0.600f, 0.90f);
+    style.Colors[ImGuiCol_TabDimmedSelectedOverline]  = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
+    style.Colors[ImGuiCol_TextSelectedBg]   = ImVec4(accent.x, accent.y, accent.z, 0.55f);
+    style.Colors[ImGuiCol_NavCursor]        = accentActive;
+    style.Colors[ImGuiCol_DockingPreview]   = ImVec4(accentActive.x, accentActive.y, accentActive.z, 0.55f);
+    style.Colors[ImGuiCol_DockingEmptyBg]   = ImVec4(0.090f, 0.090f, 0.098f, 1.00f);
+}
+
+// Prism theme, per-frame: every hue-carrying style colour is derived from one drifting phase
+// `h`, so accent / buttons / text tint / tab keyline all slide around the wheel together (with
+// fixed hue offsets between them, so they stay a coordinated set rather than one flat colour).
+// Backgrounds are left as ApplyEditorTheme set them — near-black, stationary.
+void EditorLayer::ApplyPrismAnimation(float hue) {
+    ImGuiStyle& style = ImGui::GetStyle();
+    auto hsv = [](float h, float s, float v, float a = 1.0f) {
+        h -= floorf(h);
+        float r, g, b;
+        ImGui::ColorConvertHSVtoRGB(h, s, v, r, g, b);
+        return ImVec4(r, g, b, a);
+    };
+    const float h = hue;
+
+    // Element roles are spread across ~half the wheel from the base phase `h`, so at any instant
+    // the UI shows a spectral spread (indigo-ish here, teal there, magenta keyline) rather than
+    // one flat colour — the same read as the monogram's left-to-right gradient — and the whole
+    // set slides around together as `h` drifts.
+
+    // Body text: a pale tint (low saturation, full value) so it stays legible while the hue walks.
+    style.Colors[ImGuiCol_Text]            = hsv(h,          0.18f, 1.00f);
+    style.Colors[ImGuiCol_TextDisabled]    = hsv(h,          0.14f, 0.55f);
+
+    // Buttons carry real colour now (not grey with a coloured highlight): each state a good step
+    // further along the wheel, so hover/press visibly shift hue.
+    style.Colors[ImGuiCol_Button]          = hsv(h,          0.55f, 0.42f);
+    style.Colors[ImGuiCol_ButtonHovered]   = hsv(h + 0.10f,  0.62f, 0.55f);
+    style.Colors[ImGuiCol_ButtonActive]    = hsv(h + 0.20f,  0.68f, 0.66f);
+
+    ImVec4 accent        = hsv(h + 0.06f,  0.52f, 0.44f);
+    ImVec4 accentHovered = hsv(h + 0.16f,  0.55f, 0.56f);
+    ImVec4 accentActive  = hsv(h + 0.30f,  0.58f, 0.64f);
+    style.Colors[ImGuiCol_Header]            = accent;
+    style.Colors[ImGuiCol_HeaderHovered]     = accentHovered;
+    style.Colors[ImGuiCol_HeaderActive]      = accentActive;
+    style.Colors[ImGuiCol_SeparatorHovered]  = accentHovered;
+    style.Colors[ImGuiCol_SeparatorActive]   = accentActive;
+    style.Colors[ImGuiCol_ResizeGrip]        = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    style.Colors[ImGuiCol_ResizeGripHovered] = accentHovered;
+    style.Colors[ImGuiCol_ResizeGripActive]  = accentActive;
+    style.Colors[ImGuiCol_NavCursor]         = accentActive;
+    style.Colors[ImGuiCol_DockingPreview]    = ImVec4(accentActive.x, accentActive.y, accentActive.z, 0.55f);
+    style.Colors[ImGuiCol_TextSelectedBg]    = ImVec4(accent.x, accent.y, accent.z, 0.55f);
+
+    style.Colors[ImGuiCol_CheckMark]         = hsv(h + 0.45f,  0.70f, 0.98f); // far side of the spread, pops
+    style.Colors[ImGuiCol_SliderGrab]        = hsv(h + 0.22f,  0.55f, 0.62f);
+    style.Colors[ImGuiCol_SliderGrabActive]  = hsv(h + 0.34f,  0.60f, 0.82f);
+
+    style.Colors[ImGuiCol_Border]            = hsv(h + 0.12f,  0.45f, 0.50f, 0.45f);
+    style.Colors[ImGuiCol_Separator]         = hsv(h + 0.20f,  0.40f, 0.34f, 0.55f);
+    style.Colors[ImGuiCol_ScrollbarGrab]        = hsv(h,        0.30f, 0.34f);
+    style.Colors[ImGuiCol_ScrollbarGrabHovered] = hsv(h + 0.10f, 0.42f, 0.46f);
+    style.Colors[ImGuiCol_ScrollbarGrabActive]  = hsv(h + 0.20f, 0.52f, 0.58f);
+
+    style.Colors[ImGuiCol_TitleBgActive]    = hsv(h + 0.06f,  0.45f, 0.16f); // faint colour on the focused window bar
+    style.Colors[ImGuiCol_TabHovered]       = hsv(h + 0.16f,  0.42f, 0.20f);
+    style.Colors[ImGuiCol_TabSelectedOverline] = hsv(h + 0.50f, 0.80f, 0.98f, 0.95f); // far end of the spread
 }
 
 void EditorLayer::Shutdown() {
@@ -1053,6 +1147,21 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Hover hints on Inspector fields, Hierarchy rows and toolbar buttons.");
 
+        {
+            static const char* kThemeLabels[] = { "Dark Slate", "Prism" };
+            int theme = std::clamp(prefs.EditorTheme, 0, (int)IM_ARRAYSIZE(kThemeLabels) - 1);
+            ImGui::SetNextItemWidth(kw);
+            if (ImGui::Combo("Theme", &theme, kThemeLabels, IM_ARRAYSIZE(kThemeLabels))) {
+                prefs.EditorTheme = theme;
+                ApplyEditorTheme();      // colours only — applies immediately, no restart
+                EditorSettings::Save();
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Dark Slate: monochrome greys + one cool accent.\n"
+                                     "Prism: near-black chrome; the accent, buttons and text\n"
+                                     "tint drift through the spectrum together.");
+        }
+
         ImGui::SeparatorText("Display");
         // 0 = auto (follow the monitor). Present the slider from 0.75; a value at/below the
         // floor snaps back to Auto so there's one obvious "let the OS decide" position.
@@ -1089,6 +1198,33 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ImGui::Checkbox("Show grid", &m_ShowGrid);
         ImGui::Checkbox("Show transform gizmo", &m_ShowGizmos);
         ImGui::Checkbox("Frame camera on select", &m_FrameOnSelect);
+
+        ImGui::SeparatorText("Corner monogram");
+        if (ImGui::Checkbox("Show engine mark", &prefs.EngineMarkEnabled)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("The spinning TE monogram in the viewport's bottom-left corner.");
+        if (!prefs.EngineMarkEnabled) ImGui::BeginDisabled();
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::SliderFloat("Spin speed", &prefs.EngineMarkSpinSpeed, 0.0f, 4.0f, "%.2f rad/s")) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("How fast the monogram turns. 0 parks it; the default 0.52 is one revolution every ~12 s.");
+        {
+            // The Prism editor theme forces the monogram prism on too, so show it ticked and
+            // locked while that theme is active.
+            const bool themeForces = prefs.EditorTheme == 1;
+            ImGui::BeginDisabled(themeForces);
+            bool prismShown = prefs.EngineMarkPrism || themeForces;
+            if (ImGui::Checkbox("Prism", &prismShown) && !themeForces) {
+                prefs.EngineMarkPrism = prismShown;
+                EditorSettings::Save();
+            }
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip(themeForces
+                    ? "On automatically while the Prism editor theme is selected."
+                    : "Paint the monogram with a slowly-drifting spectral gradient instead of the contrast-adaptive grey.");
+        }
+        if (!prefs.EngineMarkEnabled) ImGui::EndDisabled();
         break;
 
     case 2: // Grid & Snapping
@@ -2048,10 +2184,15 @@ void EditorLayer::DrawEngineMark(float dt) {
     if (!m_MarkTexture) return;
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
 
-    // Slow, subtle spin — a full rotation every ~12 seconds, not a dizzying logo-spinner.
-    const float kSpinSpeed = 0.52f; // radians/sec
+    // Spin rate is user-set (Preferences > Viewport). Default 0.52 rad/s is a full turn every
+    // ~12 s — a slow idle spin, not a dizzying logo-spinner; 0 parks it.
     const float kTwoPi = 6.28318530718f;
-    m_MarkSpinAngle = fmodf(m_MarkSpinAngle + dt * kSpinSpeed, kTwoPi);
+    float spinSpeed = EditorSettings::Get().EngineMarkSpinSpeed;
+    m_MarkSpinAngle = fmodf(m_MarkSpinAngle + dt * spinSpeed, kTwoPi);
+    if (m_MarkSpinAngle < 0.0f) m_MarkSpinAngle += kTwoPi; // stay in [0, 2pi) even for a negative speed
+    // Prism mode's spectral band drifts through the wheel on its own clock, independent of spin
+    // (so it still moves at spin speed 0). Gentle — this is ambient colour, not a strobe.
+    m_MarkHue = fmodf(m_MarkHue + dt * 0.6f, 1.0f); // ~1.7 s per full sweep of the wheel
 
     float size = 54.0f * m_UIScale; // 25% down from the #19-P19 bump; still reads as a mark, less visual weight
     float margin = 14.0f * m_UIScale;
@@ -2129,7 +2270,9 @@ void EditorLayer::DrawEngineMark(float dt) {
     // thing in here that could cost a frame. The per-frame ease below hides the low sample rate.
     m_MarkSampleAccum += dt;
     const float kSampleInterval = 0.1f;
-    if (m_SceneColorTexture != 0 && m_MarkSampleAccum >= kSampleInterval) {
+    // Prism monogram: its own setting, OR forced on whenever the Prism editor theme is active.
+    const bool prism = EditorSettings::Get().EngineMarkPrism || EditorSettings::Get().EditorTheme == 1;
+    if (!prism && m_SceneColorTexture != 0 && m_MarkSampleAccum >= kSampleInterval) {
         m_MarkSampleAccum = 0.0f;
         int vw = (int)m_ViewportSize.x, vh = (int)m_ViewportSize.y;
         const int kMaxPatch = 64;
@@ -2175,26 +2318,52 @@ void EditorLayer::DrawEngineMark(float dt) {
     int markV = (int)(m_MarkContrastLum * 255.0f + 0.5f);
     markV = markV < 0 ? 0 : (markV > 255 ? 255 : markV);
 
-    // Drawn via the foreground draw list rather than an ImGui::Image in its own window: this
-    // needs per-vertex placement ImGui's Image widget can't do directly, and the foreground
-    // list also sidesteps the docking/z-order pitfalls the toolbar overlays needed NoDocking +
-    // explicit front-ordering to avoid (see DrawPlayStopButton/DrawViewGizmo) — it always
-    // renders on top, full stop, with no window of its own to get knocked around by a dock
-    // rebuild.
-    //
-    // Drawn face-on at full width. The old "sign on a post" fake-3D spin foreshortened the
-    // horizontal extent by cos(angle), so for most of each rotation the wordmark collapsed to a
-    // near-vertical sliver and read as a couple of strokes rather than a logo (#30). The spin
-    // phase is still advanced above — it only seeds the idle-bounce launch angle now.
-    float halfX = half;
-    ImVec2 p1(center.x - halfX, center.y - half);
-    ImVec2 p2(center.x + halfX, center.y - half);
-    ImVec2 p3(center.x + halfX, center.y + half);
-    ImVec2 p4(center.x - halfX, center.y + half);
+    // Appended to the Scene window's own draw list and clipped to the viewport rect — NOT the
+    // foreground list, which paints over every panel (the mark would then sit on top of the
+    // Preferences window, the Inspector, any popup overlapping the viewport). At the Scene
+    // window's z-order a panel on top correctly covers it. Same treatment as DrawEntityIcons.
+    ImGuiWindow* sceneWin = ImGui::FindWindowByName("Scene");
+    ImDrawList* dl = sceneWin ? sceneWin->DrawList : ImGui::GetForegroundDrawList();
+    dl->PushClipRect(ImVec2(m_ViewportPos.x, m_ViewportPos.y),
+                     ImVec2(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y), true);
 
-    ImGui::GetForegroundDrawList()->AddImageQuad((ImTextureID)(intptr_t)m_MarkTexture->GLHandle(),
-        p1, p2, p3, p4, ImVec2(0, 0), ImVec2(1, 0), ImVec2(1, 1), ImVec2(0, 1),
-        IM_COL32(markV, markV, markV, 190));
+    // Spin about the vertical (Y) axis — a sign turning on a post. The horizontal extent
+    // foreshortens by cos(angle), collapses to a line edge-on, then comes back mirrored. Full
+    // height is kept; only the left/right edges move.
+    float hx = half * cosf(m_MarkSpinAngle);
+    ImVec2 p1(center.x - hx, center.y - half); // top-left
+    ImVec2 p2(center.x + hx, center.y - half); // top-right
+    ImVec2 p3(center.x + hx, center.y + half); // bottom-right
+    ImVec2 p4(center.x - hx, center.y + half); // bottom-left
+    const ImVec2 uv1(0, 0), uv2(1, 0), uv3(1, 1), uv4(0, 1);
+    const ImTextureID tex = (ImTextureID)(intptr_t)m_MarkTexture->GLHandle();
+
+    if (prism) {
+        // A spectral band smeared left -> right across the mark, the whole band drifting slowly
+        // through the wheel — dispersion through glass, not a flat strobing hue. Needs per-vertex
+        // colour, so the quad is written into the draw list by hand (AddImageQuad is one colour).
+        float rL, gL, bL, rR, gR, bR;
+        ImGui::ColorConvertHSVtoRGB(m_MarkHue,                        0.62f, 1.0f, rL, gL, bL);
+        ImGui::ColorConvertHSVtoRGB(fmodf(m_MarkHue + 0.30f, 1.0f),   0.62f, 1.0f, rR, gR, bR);
+        const int a = 205;
+        ImU32 colL = IM_COL32((int)(rL*255+0.5f), (int)(gL*255+0.5f), (int)(bL*255+0.5f), a);
+        ImU32 colR = IM_COL32((int)(rR*255+0.5f), (int)(gR*255+0.5f), (int)(bR*255+0.5f), a);
+        dl->PushTextureID(tex);
+        dl->PrimReserve(6, 4);
+        ImDrawIdx v = (ImDrawIdx)dl->_VtxCurrentIdx;
+        dl->PrimWriteIdx(v); dl->PrimWriteIdx((ImDrawIdx)(v + 1)); dl->PrimWriteIdx((ImDrawIdx)(v + 2));
+        dl->PrimWriteIdx(v); dl->PrimWriteIdx((ImDrawIdx)(v + 2)); dl->PrimWriteIdx((ImDrawIdx)(v + 3));
+        dl->PrimWriteVtx(p1, uv1, colL);
+        dl->PrimWriteVtx(p2, uv2, colR);
+        dl->PrimWriteVtx(p3, uv3, colR);
+        dl->PrimWriteVtx(p4, uv4, colL);
+        dl->PopTextureID();
+    } else {
+        dl->AddImageQuad(tex, p1, p2, p3, p4, uv1, uv2, uv3, uv4,
+                         IM_COL32(markV, markV, markV, 190)); // contrast-adaptive grey
+    }
+
+    dl->PopClipRect();
 }
 
 bool EditorLayer::IsMouseOverSceneViewport() const {
@@ -2309,6 +2478,14 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_EditorCameraPtr = &editorCamera;
 
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
+
+    // Prism theme: drift the palette's hue phase and repaint the hue-driven style colours before
+    // any window is submitted this frame. Same rate as the corner monogram's colour sweep so the
+    // two move together. Dark Slate: nothing to do.
+    if (EditorSettings::Get().EditorTheme == 1) {
+        m_ThemeHue = fmodf(m_ThemeHue + dt * 0.6f, 1.0f);
+        ApplyPrismAnimation(m_ThemeHue);
+    }
 
     // First editor frame after a crash-interrupted session: offer to restore the auto-saved
     // recovery snapshot. No-op unless Init() flagged one as newer than the scene file.
@@ -2524,7 +2701,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
     ImGui::End();
 
-    if (m_ShowEngineMark) DrawEngineMark(dt);
+    if (EditorSettings::Get().EngineMarkEnabled) DrawEngineMark(dt);
 
     if (m_ShowHierarchy) DrawHierarchy(world, assets);
     if (m_ShowInspector) DrawInspector(world, assets, dt);
@@ -3528,7 +3705,8 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem(ICON_FA_CHART_SIMPLE "  Statistics", nullptr, &EditorSettings::Get().SceneShowStats))
                 EditorSettings::Save();
             ImGui::MenuItem(ICON_FA_CLOCK_ROTATE_LEFT "  History", nullptr, &m_ShowHistory);
-            ImGui::MenuItem(ICON_FA_CERTIFICATE "  Engine Mark", nullptr, &m_ShowEngineMark);
+            if (ImGui::MenuItem(ICON_FA_CERTIFICATE "  Engine Mark", nullptr, &EditorSettings::Get().EngineMarkEnabled))
+                EditorSettings::Save();
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
                 m_ResetLayoutRequested = true;
