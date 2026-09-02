@@ -4328,6 +4328,10 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
     // A box, a model, a light and an empty are all just entities; the old grouping only ever
     // added a header to scroll past. LevelGeometryTag survives as an invisible serialization /
     // built-in-collider detail, nothing the Hierarchy shows.
+    //
+    // Tighter per-level indent than the editor-wide default — this panel is narrow, so a few
+    // levels of nesting otherwise push names off the right edge fast (#153).
+    ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 13.0f * m_UIScale);
     for (auto entity : ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>())) {
         if (!MatchesHierarchyFilter(world, entity)) continue;
         // A parented entity draws nested under its parent, not as a sibling — except while
@@ -4338,6 +4342,7 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
         }
         DrawHierarchyNode(world, assets, entity, world.Registry.all_of<LevelGeometryTag>(entity));
     }
+    ImGui::PopStyleVar();
 
     // Dropping onto empty space below the tree un-parents (Unity's "drag to the root") — and
     // right-clicking there opens the create/paste menu.
@@ -4435,19 +4440,22 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         return; // children stay collapsed for the one frame a rename is open — deliberate, keeps the field stable
     }
 
-    // Icon reflects what the entity actually is — same rule for a level-geometry box as for any
-    // other mesh (it has a RenderableComponent like everything else). A mesh that also carries a
-    // light shows BOTH glyphs, so mesh indication isn't lost the moment a light is added (#27 P16).
-    std::string icon;
-    {
-        const bool hasMesh   = world.Registry.all_of<RenderableComponent>(entity);
-        const bool hasLight  = world.Registry.all_of<LightComponent>(entity);
-        const bool hasCamera = world.Registry.all_of<CameraComponent>(entity);
-        if (hasMesh)   icon += ICON_FA_DRAW_POLYGON;
-        if (hasLight)  { if (!icon.empty()) icon += " "; icon += ICON_FA_LIGHTBULB; }
-        if (hasCamera) { if (!icon.empty()) icon += " "; icon += ICON_FA_VIDEO; }
-        if (icon.empty()) icon = ICON_FA_DIAGRAM_PROJECT; // no mesh/light/camera — an empty/null object
-    }
+    // Kind badge: ONE primary glyph (mesh > light > camera > empty priority) drawn in a fixed-
+    // width leading slot so a name's left edge is identical on every row no matter how many kinds
+    // it has (#153). A mesh that also carries a light still reads as both — the second kind shows
+    // as a small badge inside that same slot (#27 P16) — without shifting the name; a rare third
+    // kind is dropped (the Inspector lists every component anyway).
+    const bool hasMesh   = world.Registry.all_of<RenderableComponent>(entity);
+    const bool hasLight  = world.Registry.all_of<LightComponent>(entity);
+    const bool hasCamera = world.Registry.all_of<CameraComponent>(entity);
+    const char* primaryGlyph =
+        hasMesh   ? ICON_FA_DRAW_POLYGON  :
+        hasLight  ? ICON_FA_LIGHTBULB     :
+        hasCamera ? ICON_FA_VIDEO         : ICON_FA_DIAGRAM_PROJECT;
+    const char* secondaryGlyph =
+        (hasMesh && hasLight)   ? ICON_FA_LIGHTBULB :
+        (hasMesh && hasCamera)  ? ICON_FA_VIDEO     :
+        (hasLight && hasCamera) ? ICON_FA_VIDEO     : nullptr;
 
     // Never-named entities get a positional fallback instead of a wall of identical
     // "(unnamed)" rows (#21 P10).
@@ -4455,15 +4463,17 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     if (shownName.empty())
         shownName = "Object " + std::to_string(CreationOrdinal(world.Registry, entity));
 
-    std::string label = icon + "  " + shownName;
+    // Only feeds the drag preview below — the row paints its own glyph + name after the node.
+    std::string label = std::string(primaryGlyph) + "  " + shownName;
 
     ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth |
         (selected ? ImGuiTreeNodeFlags_Selected : 0) |
         (hasChildren ? ImGuiTreeNodeFlags_DefaultOpen : (ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen));
 
-    if (inactive) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    bool open = ImGui::TreeNodeEx("##node", nodeFlags, "%s", label.c_str());
-    if (inactive) ImGui::PopStyleColor();
+    // Empty label: the tree node owns the arrow / indent / full-row hitbox / open-close and every
+    // interaction handler below; the glyph slot + name are painted afterward at a constant X.
+    bool open = ImGui::TreeNodeEx("##node", nodeFlags, "%s", "");
+    const ImVec2 rowMin = ImGui::GetItemRectMin();
 
     if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
         const ImGuiIO& io = ImGui::GetIO();
@@ -4537,6 +4547,25 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
             }
         }
         ImGui::EndDragDropTarget();
+    }
+
+    // Paint the kind glyph(s) + name at a fixed X off the row's left edge — see the primaryGlyph
+    // comment above. Drawn straight into the window draw list so it never becomes "the last item"
+    // and disturb the interaction handlers, selection rect or drag/drop that key off the node.
+    {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const float fontSize = ImGui::GetFontSize();
+        const float slotW    = fontSize * 1.45f;
+        const float labelX   = rowMin.x + ImGui::GetTreeNodeToLabelSpacing();
+        const ImU32 col = ImGui::GetColorU32(inactive ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+        dl->AddText(ImVec2(labelX, rowMin.y), col, primaryGlyph);
+        if (secondaryGlyph) {
+            const float sub = fontSize * 0.68f;
+            dl->AddText(ImGui::GetFont(), sub,
+                        ImVec2(labelX + slotW - sub, rowMin.y + fontSize - sub),
+                        (col & 0x00FFFFFFu) | 0x9E000000u, secondaryGlyph);
+        }
+        dl->AddText(ImVec2(labelX + slotW, rowMin.y), col, shownName.c_str());
     }
 
     if (hasChildren && open) {
