@@ -91,6 +91,14 @@ struct EditorSettings {
     float AssetBrowserTreeWidth = 0.0f;
     float AssetBrowserIconSize = 0.0f;
 
+    // --- Corner "engine mark": the spinning TE monogram in the Scene viewport's bottom-left.
+    // EngineMarkSpinSpeed is radians/sec (0 parks it). EngineMarkPrism paints the monogram with
+    // a slowly-drifting spectral gradient instead of the default contrast-adaptive grey.
+    // Controls live in Preferences > Viewport and the Window menu.
+    bool  EngineMarkEnabled   = true;
+    float EngineMarkSpinSpeed = 0.52f;
+    bool  EngineMarkPrism     = false;
+
     static EditorSettings& Get() {
         static EditorSettings instance;
         return instance;

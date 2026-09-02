@@ -522,7 +522,8 @@ private:
     // Engine mark (the "TE" monogram, no text), spinning slowly in the viewport's bottom-left
     // corner — same load treatment as m_LogoTexture, just the other half of the full lockup.
     std::unique_ptr<Texture> m_MarkTexture;
-    float m_MarkSpinAngle = 0.0f; // radians, advanced by dt each frame in DrawEngineMark()
+    float m_MarkSpinAngle = 0.0f; // radians, advanced by dt * EngineMarkSpinSpeed each frame in DrawEngineMark()
+    float m_MarkHue = 0.0f;        // 0..1, advanced each frame; drives the tint when EngineMarkRgb is on
     // Contrast-adaptive tint for the mark: each frame DrawEngineMark reads back the little patch
     // of the scene texture directly behind the mark, and eases this toward white over dark
     // content / black over light content. 1 = white, 0 = black; starts white (matches the old
@@ -731,9 +732,9 @@ private:
     std::string m_ConsoleFilter;
     unsigned int m_ConsoleSeenRevision = 0; // only auto-scroll when Log actually gained an entry
 
-    // The spinning corner wordmark. On by default; a Window-menu toggle for anyone who reads
-    // it as an unreadable glyph rather than branding (#19 P19).
-    bool m_ShowEngineMark = true;
+    // The spinning corner monogram is governed by EditorSettings (EngineMarkEnabled / SpinSpeed /
+    // Rgb) so the choice persists and the Preferences + Window-menu controls share one source of
+    // truth. (Was m_ShowEngineMark — a session-only bool — before the Preferences controls landed.)
 
     // --- Statistics overlay --------------------------------------------------------------
     void DrawStatsOverlay(World& world, float dt);
