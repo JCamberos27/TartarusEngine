@@ -820,6 +820,10 @@ private:
     // Small screen-space markers for entities with no mesh (lights, empties) — without these
     // they'd be invisible and unclickable in the viewport, since there's nothing to rasterize.
     void DrawEntityIcons(World& world, Camera& editorCamera);
+    // 3D wireframe shapes for lights — range sphere (point), cone (spot), aim arrow
+    // (directional) — projected to screen and drawn into the Scene window's draw list, same
+    // clipping treatment as DrawEntityIcons. Gated on EditorSettings::ShowLightGizmos.
+    void DrawLightGizmos(World& world, Camera& editorCamera);
     void HandleViewportPicking(World& world, Camera& editorCamera);
     // Blender/Godot-style navigation gizmo (ImViewGuizmo) pinned to the viewport's top-right
     // corner: a rotate ring plus small dolly/pan buttons underneath. Camera is yaw/pitch, not
