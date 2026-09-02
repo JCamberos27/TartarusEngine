@@ -32,7 +32,8 @@ public:
     // `colorLinear` is the light's colour, `intensity` its scalar strength — stored pre-multiplied,
     // matching what the old shader received. Silently drops lights past kMaxLights.
     void AddDirectional(const glm::vec3& dirWorld, const glm::vec3& colorLinear, float intensity);
-    void AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLinear, float intensity, float range);
+    void AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLinear, float intensity, float range,
+                  int shadowSlot = -1);
     void AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, const glm::vec3& colorLinear,
                  float intensity, float range, float cosOuter, float cosInner, int shadowSlot = -1);
 
