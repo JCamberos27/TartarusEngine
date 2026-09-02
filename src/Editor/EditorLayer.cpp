@@ -4776,10 +4776,15 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 PropertyLabel("Spot Angle", "Half-angle of the light cone, in degrees.\nThe cone points along the entity's -Z axis - use Rotation to aim it.");
                 ImGui::SliderFloat("##SpotAngle", &light->SpotAngleDegrees, 1.0f, 89.0f, "%.0f deg");
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
-
-                PropertyLabel("Cast Shadows", "Render a perspective shadow map for this spot light.\nEach casting spot is an extra full-scene depth pass; up to 4 take effect at once.\nRequires Preferences > Performance > Cast sun shadows to be on.");
+            }
+            if (light->Kind == LightComponent::Type::Spot || light->Kind == LightComponent::Type::Point) {
+                const std::string shadowTip = std::string(light->Kind == LightComponent::Type::Spot
+                    ? "Render a perspective shadow map for this spot light.\nEach casting spot is an extra full-scene depth pass; up to 4 at once."
+                    : "Render a 6-face cube shadow map for this point light.\nSix full-scene depth passes per casting light; up to 2 at once.")
+                    + "\nRequires Preferences > Performance > Cast sun shadows to be on.";
+                PropertyLabel("Cast Shadows", shadowTip.c_str());
                 bool castShadows = light->CastShadows;
-                if (ImGui::Checkbox("##SpotCastShadows", &castShadows)) {
+                if (ImGui::Checkbox("##LightCastShadows", &castShadows)) {
                     PushUndo(world, "Edit Light");           // snapshot the pre-change state
                     light->CastShadows = castShadows;
                 }
