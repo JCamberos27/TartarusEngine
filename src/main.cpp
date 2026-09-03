@@ -597,6 +597,7 @@ int main() {
         });
 
         bool firstFramePresented = false; // gates the splash -> editor handoff at the loop's end
+
         int appliedVSyncMode = -1; // != any real mode, so the first iteration applies the saved pref
         bool camDragActive = false; // OS cursor disabled for the duration of a look/pan/orbit drag
         bool prevF1 = false;
@@ -1271,6 +1272,18 @@ int main() {
             // regardless of whether Scene or Game is the currently active tab — cheap enough not
             // to bother skipping, and keeps this block's shape identical to the Game View pass
             // just below it. Runs during in-panel play too — the Scene tab stays live then.
+            // Capture prep: a pending Scene/clean-viewport shot renders THIS frame at the
+            // requested supersample (capped so a 4K viewport can't ask for a 16K MSAA target)
+            // and, for "clean", with editor overlays suppressed. The grab itself happens after
+            // the frame is composed (below).
+            EditorLayer::CaptureRequest capReq = editor.PeekCaptureRequest();
+            int capScale = 1;
+            if (capReq.pending && (capReq.mode == 1 || capReq.mode == 2)) {
+                capScale = std::max(1, capReq.scale);
+                editor.SetHideOverlaysThisFrame(capReq.mode == 2);
+                editor.PrimeCaptureRequest();  // this frame's Scene render IS the one we grab
+            }
+
             if (editorUIVisible) {
                 PROFILE_SCOPE("Scene View Render");
                 glm::vec2 available = editor.GetLastSceneContentRegion();
@@ -1279,6 +1292,17 @@ int main() {
                 }
                 int scW = std::max((int)available.x, 1);
                 int scH = std::max((int)available.y, 1);
+                while (capScale > 1 && ((long long)scW * capScale > 8192 || (long long)scH * capScale > 8192))
+                    capScale /= 2;
+                scW *= capScale;
+                scH *= capScale;
+
+                // A pending viewport shot with a fixed Resolution preset overrides the live
+                // viewport size entirely (Supersample is forced off in that case by the UI).
+                if (capReq.pending && (capReq.mode == 1 || capReq.mode == 2) && capReq.resW > 0) {
+                    scW = capReq.resW;
+                    scH = capReq.resH;
+                }
 
                 sceneFramebuffer.Resize(scW, scH);
                 sceneHdr.Resize(scW, scH, EditorSettings::Get().MsaaSamples);
@@ -1310,7 +1334,7 @@ int main() {
                 // that couldn't widen a flat mesh's silhouette were what turned a selected
                 // flat/thin object into a solid orange blob (audit #51).
                 auto selection = editor.GetSelectedItems();
-                if (!selection.empty()) {
+                if (!selection.empty() && !editor.OverlaysHidden()) {
                     const glm::vec3 kOutlineColor(1.0f, 0.55f, 0.1f);
                     const int kOutlinePixels = 3;
 
@@ -1385,7 +1409,7 @@ int main() {
                         glm::vec3(0.3f, 0.85f, 1.0f), 0.45f);
                 }
 
-                if (editor.ShowGrid()) {
+                if (editor.ShowGrid() && !editor.OverlaysHidden()) {
                     // The grid shader fades lines by literal world-space distance from the
                     // camera. That distance is meaningless in orthographic mode — scroll-zoom
                     // there resizes OrthoHalfHeight without moving the camera (see
@@ -1615,18 +1639,54 @@ int main() {
                     break;
             }
 
-            // Screenshot: F12, or a ".shot" sentinel file dropped next to the exe (so it can be
-            // triggered without keyboard focus). Grabs the composited back buffer before the swap.
+            // Capture: PrintScreen, or a ".shot" sentinel file next to the exe (triggerable
+            // without keyboard focus). Both just raise a request; it's serviced next.
             {
-                static bool prevF12 = false;
-                bool f12 = Input::IsKeyDown(GLFW_KEY_F12);
+                static bool prevPS = false;
+                bool ps = Input::IsKeyDown(GLFW_KEY_PRINT_SCREEN);
                 std::error_code shotEc;
                 bool sentinel = std::filesystem::exists(".shot", shotEc);
-                if ((f12 && !prevF12) || sentinel) {
-                    Screenshot::SaveBackbuffer(window.GetWidth(), window.GetHeight());
-                    if (sentinel) std::filesystem::remove(".shot", shotEc);
+                if ((ps && !prevPS) || sentinel) editor.RequestCapture();
+                if (sentinel) std::filesystem::remove(".shot", shotEc);
+                prevPS = ps;
+            }
+
+            // Service a pending capture now that the frame is fully composited on the back
+            // buffer. Full-editor grabs the back buffer; the viewport modes grab the offscreen
+            // FBOs they already rendered into this frame (clean/supersampled where asked).
+            {
+                EditorLayer::CaptureRequest cap = editor.PeekCaptureRequest();
+                // Viewport modes need the Scene view re-rendered at the target size first; that
+                // happens at the top of the NEXT frame, which sets `primed`. Full-editor / Game
+                // modes read a buffer that's already correct, so they fire the same frame.
+                const bool needsResizedRender = cap.mode == 1 || cap.mode == 2;
+                if (cap.pending && needsResizedRender && !cap.primed) {
+                    // wait one frame — leave the request pending, skip the grab
+                } else if (cap.pending) {
+                    editor.ConsumeCaptureRequest();
+                    const std::string sceneName =
+                        std::filesystem::path(editor.CurrentScenePath()).stem().string();
+                    std::string outPath; int outW = 0, outH = 0;
+                    if (cap.mode == 3) {
+                        Framebuffer& gv = gameView.GetFramebuffer();
+                        if (gv.IsValid()) {
+                            outW = gv.Width(); outH = gv.Height();
+                            glBindFramebuffer(GL_READ_FRAMEBUFFER, gv.Handle());
+                            auto px = Screenshot::GrabRegion(0, 0, outW, outH);
+                            outPath = Screenshot::Save(px.data(), outW, outH, true, cap.format, sceneName);
+                        }
+                    } else if (cap.mode == 1 || cap.mode == 2) {
+                        outW = sceneFramebuffer.Width(); outH = sceneFramebuffer.Height();
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, sceneFramebuffer.Handle());
+                        auto px = Screenshot::GrabRegion(0, 0, outW, outH);
+                        outPath = Screenshot::Save(px.data(), outW, outH, true, cap.format, sceneName);
+                    } else { // 0 = full editor window
+                        outW = window.GetWidth(); outH = window.GetHeight();
+                        outPath = Screenshot::SaveBackbuffer(outW, outH, cap.format, sceneName);
+                    }
+                    editor.OnCaptureDone(outPath, outW, outH);
                 }
-                prevF12 = f12;
+                editor.SetHideOverlaysThisFrame(false);
             }
 
             window.SwapBuffers();
