@@ -181,3 +181,124 @@ void PrimitiveMeshes::GenerateCone(std::vector<ModelVertex>& vertices, std::vect
 
     FixWinding(vertices, indices);
 }
+
+void PrimitiveMeshes::GeneratePyramid(std::vector<ModelVertex>& vertices, std::vector<unsigned int>& indices) {
+    const float h = 0.5f;
+    const glm::vec3 apex(0.0f, h, 0.0f);
+    const glm::vec3 base[4] = {{-h, -h, -h}, {h, -h, -h}, {h, -h, h}, {-h, -h, h}}; // CCW from +Y
+    const glm::vec2 sideUV[3] = {{0.5f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}};
+
+    for (int i = 0; i < 4; ++i) {
+        const glm::vec3 a = base[i], b = base[(i + 1) % 4];
+        // Outward face normal: (apex-a) x (b-a). The other operand order points inward, which
+        // left every side face shaded inside-out.
+        const glm::vec3 n = glm::normalize(glm::cross(apex - a, b - a));
+        const glm::vec3 tan = glm::normalize(b - a);
+        unsigned int s = (unsigned int)vertices.size();
+        vertices.push_back(MakeVertex(apex, n, sideUV[0], tan));
+        vertices.push_back(MakeVertex(a, n, sideUV[1], tan));
+        vertices.push_back(MakeVertex(b, n, sideUV[2], tan));
+        indices.push_back(s); indices.push_back(s + 1); indices.push_back(s + 2);
+    }
+
+    unsigned int s = (unsigned int)vertices.size();
+    const glm::vec2 baseUV[4] = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+    for (int i = 0; i < 4; ++i) vertices.push_back(MakeVertex(base[i], {0, -1, 0}, baseUV[i], {1, 0, 0}));
+    indices.push_back(s); indices.push_back(s + 1); indices.push_back(s + 2);
+    indices.push_back(s + 2); indices.push_back(s + 3); indices.push_back(s);
+
+    FixWinding(vertices, indices);
+}
+
+void PrimitiveMeshes::GenerateWedge(std::vector<ModelVertex>& vertices, std::vector<unsigned int>& indices) {
+    const float h = 0.5f;
+    // Y-Z profile triangle (right angle at bottom-back), extruded along X.
+    const glm::vec3 L0(-h, -h, -h), L1(-h, h, -h), L2(-h, -h, h);
+    const glm::vec3 R0(h, -h, -h),  R1(h, h, -h),  R2(h, -h, h);
+
+    auto tri = [&](glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 n) {
+        const glm::vec3 t = glm::normalize(b - a);
+        unsigned int s = (unsigned int)vertices.size();
+        vertices.push_back(MakeVertex(a, n, {0, 0}, t));
+        vertices.push_back(MakeVertex(b, n, {1, 0}, t));
+        vertices.push_back(MakeVertex(c, n, {0, 1}, t));
+        indices.push_back(s); indices.push_back(s + 1); indices.push_back(s + 2);
+    };
+    auto quad = [&](glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 d, glm::vec3 n) {
+        const glm::vec3 t = glm::normalize(b - a);
+        unsigned int s = (unsigned int)vertices.size();
+        vertices.push_back(MakeVertex(a, n, {0, 0}, t));
+        vertices.push_back(MakeVertex(b, n, {1, 0}, t));
+        vertices.push_back(MakeVertex(c, n, {1, 1}, t));
+        vertices.push_back(MakeVertex(d, n, {0, 1}, t));
+        indices.push_back(s); indices.push_back(s + 1); indices.push_back(s + 2);
+        indices.push_back(s + 2); indices.push_back(s + 3); indices.push_back(s);
+    };
+
+    tri(L0, L1, L2, {-1, 0, 0});                                  // left end
+    tri(R0, R2, R1, {1, 0, 0});                                   // right end
+    quad(L0, R0, R1, L1, {0, 0, -1});                             // vertical back
+    quad(L0, L2, R2, R0, {0, -1, 0});                             // bottom
+    quad(L1, R1, R2, L2, glm::normalize(glm::vec3(0, 1, 1)));     // slope
+
+    FixWinding(vertices, indices);
+}
+
+void PrimitiveMeshes::GenerateTorus(std::vector<ModelVertex>& vertices, std::vector<unsigned int>& indices, int majorSegments, int minorSegments) {
+    const float majorR = 0.35f, minorR = 0.15f;
+    const int cols = minorSegments + 1;
+
+    for (int i = 0; i <= majorSegments; ++i) {
+        const float u = (float)i / majorSegments * 2.0f * kPi;
+        const glm::vec3 radial(std::cos(u), 0.0f, std::sin(u));
+        const glm::vec3 center = radial * majorR;
+        const glm::vec3 tan = glm::normalize(glm::vec3(-std::sin(u), 0.0f, std::cos(u)));
+        for (int j = 0; j <= minorSegments; ++j) {
+            const float w = (float)j / minorSegments * 2.0f * kPi;
+            const glm::vec3 n = radial * std::cos(w) + glm::vec3(0.0f, 1.0f, 0.0f) * std::sin(w);
+            vertices.push_back(MakeVertex(center + n * minorR, n,
+                {(float)i / majorSegments, (float)j / minorSegments}, tan));
+        }
+    }
+    for (int i = 0; i < majorSegments; ++i) {
+        for (int j = 0; j < minorSegments; ++j) {
+            unsigned int a = i * cols + j, b = a + 1, c = a + cols, d = c + 1;
+            indices.push_back(a); indices.push_back(c); indices.push_back(b);
+            indices.push_back(b); indices.push_back(c); indices.push_back(d);
+        }
+    }
+    FixWinding(vertices, indices);
+}
+
+void PrimitiveMeshes::GenerateCapsule(std::vector<ModelVertex>& vertices, std::vector<unsigned int>& indices, int segments, int capRings) {
+    const float radius = 0.25f, cylHalf = 0.25f;
+    const int cols = segments + 1;
+
+    auto ring = [&](float theta, float yCenter, float vCoord) {
+        const float st = std::sin(theta), ct = std::cos(theta);
+        for (int s = 0; s <= segments; ++s) {
+            const float phi = (float)s / segments * 2.0f * kPi;
+            const float cp = std::cos(phi), sp = std::sin(phi);
+            const glm::vec3 n = glm::normalize(glm::vec3(st * cp, ct, st * sp));
+            const glm::vec3 pos(radius * st * cp, yCenter + radius * ct, radius * st * sp);
+            const glm::vec3 tan = glm::normalize(glm::vec3(-sp, 0.0f, cp));
+            vertices.push_back(MakeVertex(pos, n, {(float)s / segments, vCoord}, tan));
+        }
+    };
+
+    const int totalRows = 2 * (capRings + 1);
+    int row = 0;
+    for (int i = 0; i <= capRings; ++i, ++row)                    // top cap: theta 0 -> pi/2
+        ring((float)i / capRings * (kPi * 0.5f), cylHalf, (float)row / (totalRows - 1));
+    for (int i = 0; i <= capRings; ++i, ++row)                    // bottom cap: pi/2 -> pi
+        ring(kPi * 0.5f + (float)i / capRings * (kPi * 0.5f), -cylHalf, (float)row / (totalRows - 1));
+
+    for (int r = 0; r < totalRows - 1; ++r) {
+        for (int s = 0; s < segments; ++s) {
+            unsigned int a = r * cols + s, b = a + 1, c = a + cols, d = c + 1;
+            indices.push_back(a); indices.push_back(c); indices.push_back(b);
+            indices.push_back(b); indices.push_back(c); indices.push_back(d);
+        }
+    }
+    FixWinding(vertices, indices);
+}

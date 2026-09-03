@@ -207,6 +207,9 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         }
 
         ImGui::SetCursorScreenPos(ImVec2(containerStart.x, containerStart.y + avail.y));
+        // Submit a zero-size item so ImGui registers the extended content bounds - without a
+        // trailing item after SetCursorScreenPos() its error-recovery check flags this as a bug.
+        ImGui::Dummy(ImVec2(0.0f, 0.0f));
     }
 
     ImGui::End();
