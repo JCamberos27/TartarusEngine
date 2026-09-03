@@ -28,6 +28,22 @@
 #include <ImGuizmo.h>
 #include <ImViewGuizmo.h>
 #include <IconsFontAwesome6.h>
+// One glyph = one meaning (#161). Where two unrelated actions used to share a picture:
+//   Scale tool            ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER  (was EXPAND — clashed with
+//                                                                     Frame All / Fullscreen)
+//   View > Frame All      ICON_FA_MAGNIFYING_GLASS                    (pairs with Frame Selected's
+//                                                                     magnifier-plus)
+//   Fullscreen button     ICON_FA_EXPAND / ICON_FA_COMPRESS          (now the only EXPAND user)
+//   Wireframe shading      ICON_FA_BORDER_NONE                        (was VECTOR_SQUARE — clashed
+//                                                                     with the Rect tool)
+//   Rect tool              ICON_FA_VECTOR_SQUARE                      (kept)
+//   View > Iso             (no glyph — matches its text-only sibling view items)
+//   Gizmo Local / World    ICON_FA_ARROWS_TO_DOT / ICON_FA_GLOBE      (was CUBE — clashed with
+//                                                                     Box Collider / primitive cube)
+//   Light Gizmos toggle    ICON_FA_CIRCLE_NODES                       (LIGHTBULB reserved for the
+//                                                                     light entity / component)
+//   Empty entity           ICON_FA_DIAGRAM_PROJECT                    (everywhere — Add menu,
+//                                                                     Hierarchy, Inspector, viewport)
 #include <GLFW/glfw3.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -4255,7 +4271,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS_PLUS "  Frame Selected", "F", false, HasAnySelection())) {
                 FocusOnSelection(world, editorCamera);
             }
-            if (ImGui::MenuItem(ICON_FA_EXPAND "  Frame All")) {
+            if (ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS "  Frame All")) {
                 glm::vec3 mn, mx;
                 if (ComputeSceneBounds(world, mn, mx)) {
                     glm::vec3 c = (mn + mx) * 0.5f;
@@ -4286,7 +4302,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             }
 
             ImGui::SeparatorText("Snap to view");
-            if (ImGui::MenuItem(ICON_FA_CUBES "  Iso", "0")) {
+            if (ImGui::MenuItem("  Iso", "0")) {
                 SnapToView(world, editorCamera, -45.0f, -35.264f, true);
             }
             if (ImGui::MenuItem("  Front", "1")) SnapToView(world, editorCamera, -90.0f, 0.0f, true);
@@ -4340,13 +4356,13 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     ImGui::SameLine();
     if (iconButton(ICON_FA_ARROWS_SPIN, "Rotate (E)", m_GizmoOp == GizmoOp::Rotate)) m_GizmoOp = GizmoOp::Rotate;
     ImGui::SameLine();
-    if (iconButton(ICON_FA_EXPAND, "Scale (R)", m_GizmoOp == GizmoOp::Scale)) m_GizmoOp = GizmoOp::Scale;
+    if (iconButton(ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER, "Scale (R)", m_GizmoOp == GizmoOp::Scale)) m_GizmoOp = GizmoOp::Scale;
     ImGui::SameLine();
     if (iconButton(ICON_FA_VECTOR_SQUARE, "Rect — move + non-uniform scale via corner/edge handles (T)",
             m_GizmoOp == GizmoOp::Rect)) m_GizmoOp = GizmoOp::Rect;
 
     divider(); // transform tools | gizmo-space modifiers
-    if (iconButton(m_GizmoLocalSpace ? ICON_FA_CUBE : ICON_FA_GLOBE,
+    if (iconButton(m_GizmoLocalSpace ? ICON_FA_ARROWS_TO_DOT : ICON_FA_GLOBE,
             m_GizmoLocalSpace ? "Local space (click for World)" : "World space (click for Local)")) {
         m_GizmoLocalSpace = !m_GizmoLocalSpace;
     }
@@ -4374,7 +4390,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     ImGui::SameLine();
     {
         auto& prefs = EditorSettings::Get();
-        if (iconButton(ICON_FA_LIGHTBULB, "Toggle Light Gizmos (range/cone/aim in the viewport)",
+        if (iconButton(ICON_FA_CIRCLE_NODES, "Toggle Light Gizmos (range/cone/aim in the viewport)",
                 prefs.ShowLightGizmos)) {
             prefs.ShowLightGizmos = !prefs.ShowLightGizmos;
             EditorSettings::Save();
@@ -4388,7 +4404,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         const char* shadingIcon = ICON_FA_CIRCLE_HALF_STROKE;
         const char* shadingTip = "Shaded (click for Wireframe)";
         if (m_ShadingMode == ShadingMode::Wireframe) {
-            shadingIcon = ICON_FA_VECTOR_SQUARE;
+            shadingIcon = ICON_FA_BORDER_NONE;
             shadingTip = "Wireframe (click for Unlit)";
         } else if (m_ShadingMode == ShadingMode::Unlit) {
             shadingIcon = ICON_FA_SUN;
@@ -6889,7 +6905,7 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
                   : light->Kind == LightComponent::Type::Directional ? ICON_FA_SUN
                                                                      : ICON_FA_LIGHTBULB; // Point
         } else {
-            glyph = isCamera ? ICON_FA_VIDEO : ICON_FA_VECTOR_SQUARE;
+            glyph = isCamera ? ICON_FA_VIDEO : ICON_FA_DIAGRAM_PROJECT;
         }
 
         ImU32 color;
