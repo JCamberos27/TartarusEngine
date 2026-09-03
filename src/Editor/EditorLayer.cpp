@@ -429,30 +429,67 @@ bool DrawNameField(const char* label, std::string& name, const char* placeholder
     return changed;
 }
 
-// Flat action button — no body at rest, just the glyph (or glyph + short label); a faint wash
-// on hover. The Inspector's whole button language (footers, Add Component, material-map Clear,
-// Asset Browser create) so nothing reads as a heavy raised control. Tooltip carries the full
-// name.
-bool ActionButton(const char* icon, const char* tooltip, ImVec2 size = ImVec2(0, 0)) {
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.14f));
+// ============================================================================================
+// Two — and only two — button treatments across the whole editor (#160):
+//
+//   ActionButton   flat: no body at rest, just the glyph (or glyph + short label), faint wash
+//                  on hover. `active` gives it an accent-tinted body + a 2px bottom keyline for
+//                  toggles that are "on". This is every toolbar tool, every panel toggle, every
+//                  low-frequency icon action (eye, expand/collapse, breadcrumb, kelvin mode, +).
+//                  DangerIconButton is the same treatment with a red-on-hover wash, for
+//                  destructive icons (Delete, the component-remove ✕).
+//
+//   PrimaryButton  the one filled/emphasis style: modal-dialog buttons only (Save / Don't Save
+//                  / Restore / Cancel …), where a raised body helps them read as the choice.
+//
+// Nothing else. No raw ImGui::Button / ImGui::SmallButton for chrome; no per-site colour pushes.
+// ============================================================================================
+bool ActionButton(const char* icon, const char* tooltip, bool active = false, ImVec2 size = ImVec2(0, 0)) {
+    const ImVec4 keyline(0.55f, 0.60f, 0.72f, 1.0f);
+    if (active) {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.400f, 0.435f, 0.520f, 0.32f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.400f, 0.435f, 0.520f, 0.45f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.400f, 0.435f, 0.520f, 0.60f));
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.14f));
+    }
+    // Button() folds its label into its ID, so two buttons that ever show the same glyph would
+    // collide — scope the ID to the (unique) tooltip string instead.
+    ImGui::PushID(tooltip);
     bool clicked = ImGui::Button(icon, size);
+    ImGui::PopID();
+    if (active) {
+        const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+        const float y = mx.y - 2.0f;
+        ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x + 3.0f, y), ImVec2(mx.x - 3.0f, mx.y - 1.0f),
+                                                  ImGui::ColorConvertFloat4ToU32(keyline), 1.0f);
+    }
     ImGui::PopStyleColor(3);
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
     return clicked;
 }
 
-// Destructive action button: flat / neutral at rest, red only on hover or press — a warning
-// that shows up under the pointer instead of a permanent red slab. One helper for every
-// "delete / remove" control (footer Delete, the component-remove ✕, ...). Icon + tooltip.
 bool DangerIconButton(const char* icon, const char* tooltip, ImVec2 size = ImVec2(0, 0)) {
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.72f, 0.20f, 0.20f, 0.92f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.82f, 0.24f, 0.24f, 1.00f));
+    ImGui::PushID(tooltip);
     bool clicked = ImGui::Button(icon, size);
+    ImGui::PopID();
     ImGui::PopStyleColor(3);
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
+    return clicked;
+}
+
+// The one filled treatment — theme accent body, for prominent/rare actions only.
+bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImGui::GetStyleColorVec4(ImGuiCol_Header));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive));
+    bool clicked = ImGui::Button(label, size);
+    ImGui::PopStyleColor(3);
     return clicked;
 }
 
@@ -1136,7 +1173,7 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
             "Restore the unsaved changes, or discard them and keep the saved scene?");
         ImGui::Separator();
 
-        if (ImGui::Button("Restore", ImVec2(120.0f, 0.0f))) {
+        if (PrimaryButton("Restore", ImVec2(120.0f, 0.0f))) {
             const std::string recoveryPath = RecoveryPathFor(m_CurrentScenePath);
             if (SceneSerializer::Load(world, assets, recoveryPath)) {
                 ClearSelection();
@@ -1153,7 +1190,7 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Discard", ImVec2(120.0f, 0.0f))) {
+        if (PrimaryButton("Discard", ImVec2(120.0f, 0.0f))) {
             ClearRecoverySnapshot();
             m_RecoveryPromptPending = false;
             Log::Info("Discarded the recovery snapshot; opened the saved scene.");
@@ -1177,19 +1214,19 @@ void EditorLayer::DrawExitPrompt() {
         ImGui::TextUnformatted("Save them before closing?");
         ImGui::Separator();
 
-        if (ImGui::Button("Save", ImVec2(110.0f, 0.0f))) {
+        if (PrimaryButton("Save", ImVec2(110.0f, 0.0f))) {
             m_ExitDecision = ExitDecision::SaveAndExit;
             m_ExitPromptPending = false;
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Don't Save", ImVec2(110.0f, 0.0f))) {
+        if (PrimaryButton("Don't Save", ImVec2(110.0f, 0.0f))) {
             m_ExitDecision = ExitDecision::DiscardAndExit;
             m_ExitPromptPending = false;
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        if (PrimaryButton("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
             m_ExitDecision = ExitDecision::None;
             m_ExitPromptPending = false; // main sees ExitPromptActive() == false -> stays open
             ImGui::CloseCurrentPopup();
@@ -1268,7 +1305,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
                                  "Takes effect on the next launch.");
         if (!isAuto) {
             ImGui::SameLine();
-            if (ImGui::SmallButton("Auto##uiscale")) { prefs.UiScaleOverride = 0.0f; EditorSettings::Save(); }
+            if (ActionButton("Auto##uiscale", "Reset to the monitor's detected scale")) { prefs.UiScaleOverride = 0.0f; EditorSettings::Save(); }
         }
         ImGui::TextDisabled("Active: %.2fx%s", m_UIScale, isAuto ? "  (from monitor)" : "  (override)");
         break;
@@ -3682,10 +3719,9 @@ void EditorLayer::DrawConsole() {
         return out;
     };
 
-    if (ImGui::Button(ICON_FA_TRASH "  Clear")) Log::Clear();
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Remove every message from the console");
+    if (ActionButton(ICON_FA_TRASH "  Clear", "Remove every message from the console")) Log::Clear();
     ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_FLOPPY_DISK "  Save...")) {
+    if (ActionButton(ICON_FA_FLOPPY_DISK "  Save...", "Write the messages currently shown to a text file")) {
         std::string path = FileDialog::SaveFile("Log Files\0*.log;*.txt\0All Files\0*.*\0", "log", m_Window);
         if (!path.empty()) {
             std::ofstream f(path, std::ios::binary);
@@ -3693,7 +3729,6 @@ void EditorLayer::DrawConsole() {
             else Log::Error("Couldn't write " + path);
         }
     }
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Write the messages currently shown to a text file");
     ImGui::SameLine();
     ImGui::Checkbox("Auto-scroll", &m_ConsoleAutoScroll);
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Automatically jump to the newest message as it arrives");
@@ -4261,35 +4296,9 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     // one dense left-jammed run of identical squares (audit #66 / #147).
     auto divider = []() { EditorUI::VSeparator(1.5f); };
 
-    // Flat icon buttons: no button body at rest (just the glyph), a faint grey wash on hover,
-    // and for an "active" toggle/tool an accent-tinted body plus one thin keyline along the
-    // bottom so the current state reads at a glance (#92 / audit #64).
+    // Toolbar tools/toggles use the shared flat treatment (#160): ActionButton(icon, tip, active).
     auto iconButton = [](const char* icon, const char* tooltip, bool active = false) {
-        const ImVec4 keyline(0.55f, 0.60f, 0.72f, 1.0f); // cool neutral, matches the UI accent
-        if (active) {
-            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.400f, 0.435f, 0.520f, 0.32f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.400f, 0.435f, 0.520f, 0.45f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.400f, 0.435f, 0.520f, 0.60f));
-        } else {
-            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f)); // flat at rest
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.245f, 0.250f, 0.275f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.300f, 0.310f, 0.345f, 1.0f));
-        }
-        // ImGui::Button() uses its label text as its ID too — two buttons that ever show the
-        // same icon glyph would collide. Scope the ID to the (always-unique) tooltip instead.
-        ImGui::PushID(tooltip);
-        bool clicked = ImGui::Button(icon);
-        ImGui::PopID();
-        if (active) {
-            ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
-            float y = mx.y - 2.0f * ImGui::GetIO().DisplayFramebufferScale.y;
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                ImVec2(mn.x + 3.0f, y), ImVec2(mx.x - 3.0f, mx.y - 1.0f),
-                ImGui::ColorConvertFloat4ToU32(keyline), 1.0f);
-        }
-        ImGui::PopStyleColor(3);
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
-        return clicked;
+        return ActionButton(icon, tooltip, active);
     };
 
     if (iconButton(ICON_FA_ROTATE_LEFT, "Undo (Ctrl+Z)")) Undo(world, assets);
@@ -4578,7 +4587,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
 
     // Leading eye toggle = Unity's active checkbox. Drawn before the row so clicking it never
     // also changes the selection.
-    if (ImGui::SmallButton(inactive ? ICON_FA_EYE_SLASH : ICON_FA_EYE)) {
+    if (ActionButton(inactive ? ICON_FA_EYE_SLASH : ICON_FA_EYE, inactive ? "Show in the scene" : "Hide from the scene")) {
         PushUndo(world, "Toggle Active");
         if (inactive) world.Registry.remove<InactiveTag>(entity);
         else world.Registry.emplace<InactiveTag>(entity);
@@ -5024,7 +5033,7 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
 
             ImGui::TextDisabled("Drag to orbit, scroll to zoom");
             ImGui::SameLine();
-            if (ImGui::SmallButton("Reset view")) {
+            if (ActionButton("Reset view", "Reset the preview camera")) {
                 m_ModelPreviewYaw = 0.6f;
                 m_ModelPreviewPitch = 0.35f;
                 m_ModelPreviewDistance = fitDistance;
@@ -5259,7 +5268,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 if (kr.changed) forEach([&](entt::entity e) { L(e).ColorTempK = k; L(e).Color = KelvinToRGB(k); });
                 if (kr.deactivated) CommitStagedUndo(world, "Set Light Colour Temperature");
                 ImGui::SameLine(0.0f, mlInnerSp);
-                if (ImGui::SmallButton("RGB##mlKelvinOff")) {
+                if (ActionButton("RGB##mlKelvinOff", "Switch this selection to a direct RGB colour")) {
                     PushUndo(world, "Set Light Colour");
                     forEach([&](entt::entity e) { L(e).ColorTempK = 0.0f; });
                 }
@@ -5276,7 +5285,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 if (colChanged) forEach([&](entt::entity e) { L(e).Color = colEdit; });
                 if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Set Light Color");
                 ImGui::SameLine(0.0f, mlInnerSp);
-                if (ImGui::SmallButton("K##mlKelvinOn")) {
+                if (ActionButton("K##mlKelvinOn", "Drive this selection's colour from a temperature (Kelvin)")) {
                     PushUndo(world, "Set Light Colour Temperature");
                     forEach([&](entt::entity e) { L(e).ColorTempK = 6500.0f; L(e).Color = KelvinToRGB(6500.0f); });
                 }
@@ -5396,7 +5405,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         {
             const float bw = ImGui::GetFrameHeight() + 8.0f;
             ImGui::SameLine(ImGui::GetContentRegionMax().x - bw * 2.0f - ImGui::GetStyle().ItemSpacing.x);
-            if (ActionButton(ICON_FA_CLONE, "Duplicate every selected object (Ctrl+D)", ImVec2(bw, 0.0f)))
+            if (ActionButton(ICON_FA_CLONE, "Duplicate every selected object (Ctrl+D)", false, ImVec2(bw, 0.0f)))
                 DuplicateSelection(world, assets);
             ImGui::SameLine();
             if (DangerIconButton(ICON_FA_TRASH, "Delete every selected object (Del)", ImVec2(bw, 0.0f)))
@@ -5755,14 +5764,14 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 if (kr.activated) PushUndo(world, "Edit Light");
                 if (kr.changed) { light->ColorTempK = k; light->Color = KelvinToRGB(k); }
                 ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-                if (ImGui::SmallButton("RGB##KelvinOff")) { PushUndo(world, "Edit Light"); light->ColorTempK = 0.0f; }
+                if (ActionButton("RGB##KelvinOff", "Set the colour directly (RGB)")) { PushUndo(world, "Edit Light"); light->ColorTempK = 0.0f; }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Switch back to a custom RGB swatch.");
             } else {
                 ImGui::SetNextItemWidth(-60.0f);
                 ImGui::ColorEdit3("##Color", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
                 ImGui::SameLine();
-                if (ImGui::SmallButton("K##KelvinOn")) {
+                if (ActionButton("K##KelvinOn", "Drive the colour from a temperature (Kelvin)")) {
                     PushUndo(world, "Edit Light");
                     light->ColorTempK = 6500.0f;
                     light->Color = KelvinToRGB(6500.0f);
@@ -5771,11 +5780,13 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             }
 
             PropertyLabel("Intensity", "Brightness multiplier - higher is brighter.");
-            ImGui::DragFloat("##Intensity", &light->Intensity, 0.1f, 0.0f, 100.0f, "%.2f");
+            EditorUI::SliderFloat("##Intensity", &light->Intensity, 0.0f, 100.0f, "%.2f",
+                                  ImGuiSliderFlags_Logarithmic);
             if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
             if (!isDir) {
                 PropertyLabel("Range", "Distance (in world units) at which the light's effect fades to zero.");
-                ImGui::DragFloat("##Range", &light->Range, 0.2f, 0.1f, 200.0f, "%.1f");
+                EditorUI::SliderFloat("##Range", &light->Range, 0.1f, 200.0f, "%.1f",
+                                      ImGuiSliderFlags_Logarithmic);
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
             }
             if (isSpot) {
@@ -5812,7 +5823,8 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
                 if (isSpot || isPoint) {
                     PropertyLabel("Near Plane", "Perspective near distance for this light's depth pass.\nRaise it to reclaim depth precision when the light sits far from what it lights.");
-                    ImGui::DragFloat("##ShadowNear", &sh.NearPlane, 0.01f, 0.001f, 10.0f, "%.3f");
+                    EditorUI::SliderFloat("##ShadowNear", &sh.NearPlane, 0.001f, 10.0f, "%.3f",
+                                          ImGuiSliderFlags_Logarithmic);
                     if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
                     PropertyLabel("Resolution", "Per-light shadow-map size (applies after per-light shadow maps).");
                     int res = sh.Resolution;
@@ -5937,10 +5949,10 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     // Right-aligned flat icon row — Duplicate / Prefab / Delete, names + shortcuts in tooltips.
     const float ib = ImGui::GetFrameHeight() + 8.0f;
     ImGui::SameLine(ImGui::GetContentRegionMax().x - ib * 3.0f - ImGui::GetStyle().ItemSpacing.x * 2.0f);
-    if (ActionButton(ICON_FA_CLONE, "Duplicate this object (Ctrl+D)", ImVec2(ib, 0.0f)))
+    if (ActionButton(ICON_FA_CLONE, "Duplicate this object (Ctrl+D)", false, ImVec2(ib, 0.0f)))
         DuplicateSelection(world, assets);
     ImGui::SameLine();
-    if (ActionButton(ICON_FA_BOX_ARCHIVE, "Save this object as a reusable .prefab asset", ImVec2(ib, 0.0f))) {
+    if (ActionButton(ICON_FA_BOX_ARCHIVE, "Save this object as a reusable .prefab asset", false, ImVec2(ib, 0.0f))) {
         std::string path = FileDialog::SaveFile("Prefab Files\0*.prefab\0All Files\0*.*\0", "prefab", m_Window);
         if (!path.empty() && SceneSerializer::SavePrefab(world, entity, path)) assets.RegisterPrefab(path);
     }
@@ -6011,7 +6023,7 @@ bool EditorLayer::AnyModalOpen() const {
 
 void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity) {
     if (ActionButton(ICON_FA_PLUS "  Add Component", "Attach a new capability to this object",
-                     ImVec2(-1.0f, 0.0f))) {
+                     false, ImVec2(-1.0f, 0.0f))) {
         ImGui::OpenPopup("##AddComponentPopup");
     }
     if (!ImGui::BeginPopup("##AddComponentPopup")) return;
@@ -6175,7 +6187,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets) {
         }
         if (hasSlot) {
             ImGui::SameLine();
-            if (ActionButton(ICON_FA_XMARK, "Clear", ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+            if (ActionButton(ICON_FA_XMARK, "Clear", false, ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
                 PushUndo(world, std::string("Clear ") + label + " Map");
                 slot = nullptr;
             }
@@ -6361,7 +6373,7 @@ void EditorLayer::DrawMultiMaterialEditor(World& world, AssetLibrary& assets,
         }
         if (anySet) {
             ImGui::SameLine();
-            if (ActionButton(ICON_FA_XMARK, "Clear on all", ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+            if (ActionButton(ICON_FA_XMARK, "Clear on all", false, ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
                 PushUndo(world, std::string("Clear ") + label + " Map");
                 for (Material* mm : mats) mm->*slot = nullptr;
             }
@@ -6837,37 +6849,38 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
         bool selected = IsSelected(entity);
         bool inactive = world.Registry.all_of<InactiveTag>(entity);
         const auto* light = world.Registry.try_get<LightComponent>(entity);
+        const bool isCamera = world.Registry.all_of<CameraComponent>(entity);
+
+        // One glyph per kind (#159), and per light type so point / spot / sun read apart at a
+        // glance — matching the Add menu's glyphs.
+        const char* glyph;
+        if (light) {
+            glyph = light->Kind == LightComponent::Type::Spot        ? ICON_FA_BULLSEYE
+                  : light->Kind == LightComponent::Type::Directional ? ICON_FA_SUN
+                                                                     : ICON_FA_LIGHTBULB; // Point
+        } else {
+            glyph = isCamera ? ICON_FA_VIDEO : ICON_FA_VECTOR_SQUARE;
+        }
 
         ImU32 color;
         if (inactive) {
             color = IM_COL32(140, 140, 140, 170);
         } else if (light) {
-            // Tinted with the light's own color so what you see in the viewport reads as what
-            // it'll actually cast.
+            // Tinted with the light's own colour so the marker previews what it casts.
             glm::vec3 c = glm::clamp(light->Color, 0.0f, 1.0f) * 255.0f;
-            color = IM_COL32((int)c.r, (int)c.g, (int)c.b, 235);
+            color = IM_COL32((int)c.r, (int)c.g, (int)c.b, selected ? 255 : 235);
         } else {
-            color = IM_COL32(190, 200, 210, 220);
+            color = selected ? IM_COL32(230, 238, 245, 255) : IM_COL32(190, 200, 210, 220);
         }
 
-        const float r = 9.0f * m_UIScale;
-        if (light) {
-            draw->AddCircleFilled(screen, r * 0.45f, color);
-            // Short rays, so a light icon reads as a light rather than a generic dot.
-            for (int i = 0; i < 8; ++i) {
-                float a = (float)i * 0.7853981f; // 2*pi / 8
-                ImVec2 from(screen.x + cosf(a) * r * 0.72f, screen.y + sinf(a) * r * 0.72f);
-                ImVec2 to(screen.x + cosf(a) * r * 1.15f, screen.y + sinf(a) * r * 1.15f);
-                draw->AddLine(from, to, color, 1.6f);
-            }
-        } else {
-            // Empties get an axis cross — the same "there is a transform here" shorthand most
-            // editors use.
-            draw->AddLine(ImVec2(screen.x - r, screen.y), ImVec2(screen.x + r, screen.y), color, 1.6f);
-            draw->AddLine(ImVec2(screen.x, screen.y - r), ImVec2(screen.x, screen.y + r), color, 1.6f);
-        }
+        ImFont* font = ImGui::GetFont();
+        const float iconPx = 16.0f * m_UIScale;
+        const ImVec2 gs = font->CalcTextSizeA(iconPx, FLT_MAX, 0.0f, glyph);
+        draw->AddText(font, iconPx, ImVec2(screen.x - gs.x * 0.5f, screen.y - gs.y * 0.5f), color, glyph);
 
-        if (selected) draw->AddCircle(screen, r * 1.6f, IM_COL32(255, 140, 25, 255), 0, 2.0f);
+        // Selected state = a subtle ring, not extra geometry inside the marker.
+        if (selected)
+            draw->AddCircle(screen, iconPx * 0.72f, IM_COL32(255, 150, 30, 230), 0, 1.5f * m_UIScale);
     }
 
     draw->PopClipRect();
@@ -7705,7 +7718,7 @@ void EditorLayer::DrawDeleteConfirmPopup(World& world, AssetLibrary& assets) {
         ImGui::Spacing();
 
         float buttonWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
-        if (ImGui::Button("Cancel", ImVec2(buttonWidth, 0.0f))) {
+        if (PrimaryButton("Cancel", ImVec2(buttonWidth, 0.0f))) {
             m_PendingDelete.clear();
             ImGui::CloseCurrentPopup();
         }
@@ -8035,7 +8048,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
 
     // Breadcrumb: "Assets" root plus one clickable button per path segment.
     ImGui::AlignTextToFramePadding();
-    if (ImGui::SmallButton(ICON_FA_FOLDER_OPEN " Assets")) m_CurrentAssetFolder.clear();
+    if (ActionButton(ICON_FA_FOLDER_OPEN " Assets", "Go to the root folder")) m_CurrentAssetFolder.clear();
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Go to the root folder");
     if (!m_CurrentAssetFolder.empty()) {
         std::string accum;
@@ -8048,7 +8061,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             ImGui::AlignTextToFramePadding();
             ImGui::TextDisabled("/");
             ImGui::SameLine();
-            if (ImGui::SmallButton(part.c_str())) m_CurrentAssetFolder = accum;
+            if (ActionButton(part.c_str(), "Jump to this folder")) m_CurrentAssetFolder = accum;
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Go to \"%s\"", part.c_str());
             if (slash == std::string::npos) break;
             start = slash + 1;
