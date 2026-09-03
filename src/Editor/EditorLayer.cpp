@@ -3189,7 +3189,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             DoSave(world, assets); // prompts for a location if the scene is untitled (New Scene)
         }
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N)) {
-            NewScene(world);
+            NewScene(world, assets);
         }
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Comma)) m_ShowPreferences = true;
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O)) {
@@ -3526,7 +3526,7 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
     ImGui::End();
 }
 
-void EditorLayer::NewScene(World& world) {
+void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
     ClearRecoverySnapshot();     // drop the OUTGOING scene's snapshot before we let go of its path
     world = World();
     InvalidateModelThumbnail(nullptr);
@@ -3539,13 +3539,33 @@ void EditorLayer::NewScene(World& world) {
     m_PendingLookThrough = entt::null;
     m_UndoStack.clear();
     m_RedoStack.clear();
-    // Untitled: no file to silently overwrite on exit. Save / Ctrl+S now prompts for a location
-    // (DoSave -> DoSaveAs); main.cpp skips its save-on-exit while the path is empty. Marked dirty
-    // so the title shows * and a future close-prompt fires.
-    m_CurrentScenePath.clear();
-    m_Dirty = true;
-    m_SavedUndoDepth = -1; // untitled — nothing on disk to match
     m_AutoSaveTimer = 0.0f;
+
+    // Write the fresh scene to disk right away — the first free "Untitled N.json" under
+    // project/scenes/ — so it shows in the Asset Browser's Scenes folder immediately and can be
+    // renamed / deleted / reopened like any other scene.
+    std::error_code ec;
+    const std::filesystem::path dir = ProjectPaths::Resolve("scenes");
+    std::filesystem::create_directories(dir, ec);
+    std::filesystem::path scenePath = dir / "Untitled.json";
+    for (int n = 2; std::filesystem::exists(scenePath, ec); ++n)
+        scenePath = dir / ("Untitled " + std::to_string(n) + ".json");
+
+    const std::string pathStr = scenePath.generic_string();
+    if (SceneSerializer::Save(world, assets, pathStr)) {
+        m_CurrentScenePath = pathStr;
+        m_Dirty = false;                       // matches disk
+        m_SavedUndoDepth = (int)m_UndoStack.size();
+        EditorSettings::Get().LastScenePath = pathStr;
+        EditorSettings::Save();
+    } else {
+        // Couldn't write (read-only project dir, …) — fall back to untitled-in-memory: Save
+        // prompts for a location, main.cpp skips save-on-exit while the path is empty.
+        Log::Error("New Scene: couldn't create '" + pathStr + "' — scene is untitled/in-memory.");
+        m_CurrentScenePath.clear();
+        m_Dirty = true;
+        m_SavedUndoDepth = -1;
+    }
 }
 
 void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::string& path) {
@@ -4165,7 +4185,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu(ICON_FA_FOLDER_OPEN " File")) {
             if (ImGui::MenuItem(ICON_FA_FILE "  New Scene", "Ctrl+N")) {
-                NewScene(world);
+                NewScene(world, assets);
             }
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open...", "Ctrl+O")) {
@@ -7655,16 +7675,19 @@ void EditorLayer::RequestDeleteAsset(World& world, AssetLibrary& assets, const s
 void EditorLayer::RequestDeleteAssets(World& world, AssetLibrary& assets, const std::vector<AssetKeyRef>& items, bool skipDialog) {
     if (items.empty()) return;
     if (skipDialog) {
+        m_DeleteError.clear();
         for (const auto& item : items) PerformAssetDelete(world, assets, item.Key, item.IsFolder);
         ClearAssetSelection();
+        if (!m_DeleteError.empty()) m_OpenDeleteErrorRequested = true;
         return;
     }
     m_PendingDelete = items;
     m_OpenDeleteConfirmRequested = true;
 }
 
-void EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const std::string& key, bool isFolder) {
+bool EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const std::string& key, bool isFolder) {
     InvalidateModelThumbnail(nullptr); // a freed Model could be reallocated at the same address
+    const std::string leaf = std::filesystem::path(key).filename().string();
     if (isFolder) {
         PushUndo(world, "Delete Folder");
         assets.DeleteFolderRecursive(key);
@@ -7685,10 +7708,38 @@ void EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const s
         for (const auto& prefab : assets.Prefabs()) {
             if (prefab == key) { PushUndo(world, "Delete Asset"); assets.RemovePrefab(prefab); break; }
         }
-        // Otherwise it's a Scene entry (a real file, not an AssetLibrary asset) — deliberately
-        // left alone, same as the right-click menu which doesn't offer delete for scenes.
+        // A Scene entry is a real .json file, not an AssetLibrary asset — remove it from disk
+        // directly, and report why if that fails.
+        std::error_code ec;
+        const bool isScene = std::filesystem::path(key).extension() == ".json" &&
+                             std::filesystem::exists(key, ec);
+        if (isScene) {
+            // Accumulate reasons so a batch delete reports every item that couldn't be removed.
+            auto fail = [&](const std::string& msg) {
+                if (!m_DeleteError.empty()) m_DeleteError += "\n";
+                m_DeleteError += "\xE2\x80\xA2 " + msg; // "• "
+            };
+            if (key == m_CurrentScenePath) {
+                fail("\"" + leaf + "\" is the scene you have open.");
+                return false;
+            }
+            if (std::filesystem::remove(key, ec)) {
+                Log::Info("Deleted scene file: " + leaf);
+                if (EditorSettings::Get().LastScenePath == key) {
+                    EditorSettings::Get().LastScenePath.clear();
+                    EditorSettings::Save();
+                }
+            } else {
+                std::string why = ec.message();
+                if (why.empty()) why = "the file may be open in another program or write-protected";
+                fail("\"" + leaf + "\" — " + why + ".");
+                Log::Error("Couldn't delete scene file '" + key + "': " + why);
+                return false;
+            }
+        }
     }
     if (m_SelectedAssetKey == key) m_SelectedAssetKey.clear();
+    return true;
 }
 
 void EditorLayer::DrawDeleteConfirmPopup(World& world, AssetLibrary& assets) {
@@ -7717,16 +7768,49 @@ void EditorLayer::DrawDeleteConfirmPopup(World& world, AssetLibrary& assets) {
         ImGui::PopTextWrapPos();
         ImGui::Spacing();
 
+        // Enter or Delete confirms, Esc cancels — the prompt can be cleared without the mouse.
+        const bool keyConfirm = ImGui::IsKeyPressed(ImGuiKey_Enter) ||
+                                ImGui::IsKeyPressed(ImGuiKey_KeypadEnter) ||
+                                ImGui::IsKeyPressed(ImGuiKey_Delete);
+        const bool keyCancel  = ImGui::IsKeyPressed(ImGuiKey_Escape);
+
         float buttonWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
-        if (PrimaryButton("Cancel", ImVec2(buttonWidth, 0.0f))) {
+        if (PrimaryButton("Cancel", ImVec2(buttonWidth, 0.0f)) || keyCancel) {
             m_PendingDelete.clear();
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Delete", ImVec2(buttonWidth, 0.0f))) {
+        if (PrimaryButton("Delete", ImVec2(buttonWidth, 0.0f)) || keyConfirm) {
+            m_DeleteError.clear();
             for (const auto& item : m_PendingDelete) PerformAssetDelete(world, assets, item.Key, item.IsFolder);
             m_PendingDelete.clear();
             ClearAssetSelection();
+            ImGui::CloseCurrentPopup();
+            if (!m_DeleteError.empty()) m_OpenDeleteErrorRequested = true;
+        }
+        ImGui::EndPopup();
+    }
+
+    // Follow-up modal: something couldn't be deleted — explain why, OK to dismiss.
+    const char* kErrPopupId = "Can't Delete";
+    if (m_OpenDeleteErrorRequested) {
+        ImGui::OpenPopup(kErrPopupId);
+        m_OpenDeleteErrorRequested = false;
+    }
+    ImGui::SetNextWindowSize(ImVec2(340.0f * m_UIScale, 0.0f));
+    if (ImGui::BeginPopupModal(kErrPopupId, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 300.0f * m_UIScale);
+        const bool several = m_DeleteError.find('\n') != std::string::npos;
+        ImGui::TextUnformatted(several ? "Some items couldn't be deleted:" : "That item couldn't be deleted:");
+        ImGui::Spacing();
+        ImGui::TextUnformatted(m_DeleteError.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::Spacing();
+        const bool dismiss = ImGui::IsKeyPressed(ImGuiKey_Enter) ||
+                             ImGui::IsKeyPressed(ImGuiKey_KeypadEnter) ||
+                             ImGui::IsKeyPressed(ImGuiKey_Escape);
+        if (PrimaryButton("OK", ImVec2(-FLT_MIN, 0.0f)) || dismiss) {
+            m_DeleteError.clear();
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -8522,8 +8606,8 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
         }
 
         if (cell.kind == Cell::Kind::Scene) {
-            // Scenes aren't AssetLibrary entries (no rename/remove-from-library — they're
-            // real files on disk), so they get their own, much shorter context menu.
+            // Scenes aren't AssetLibrary entries (no rename / remove-from-library — they're real
+            // .json files on disk), so they get their own short context menu: Open + Delete.
             if (ImGui::BeginPopupContextItem()) {
                 if (!IsAssetSelected(cell.key, false)) {
                     ClearAssetSelection();
@@ -8531,6 +8615,20 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
                     m_SelectedAssetIsFolder = false;
                 }
                 if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open")) OpenScene(world, assets, cell.key);
+
+                // Act on the whole selection when the right-clicked scene is part of a
+                // multi-selection, same as the generic asset menu.
+                std::vector<AssetKeyRef> scenesForAction;
+                scenesForAction.push_back({m_SelectedAssetKey, false});
+                for (const auto& e : m_ExtraAssetSelection) scenesForAction.push_back(e);
+                const bool multi = scenesForAction.size() > 1;
+                const bool anyOpen = std::any_of(scenesForAction.begin(), scenesForAction.end(),
+                    [&](const AssetKeyRef& r) { return r.Key == m_CurrentScenePath; });
+                if (ImGui::MenuItem(multi ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete",
+                                    nullptr, false, !(!multi && anyOpen)))
+                    RequestDeleteAssets(world, assets, scenesForAction, /*skipDialog=*/false);
+                if (!multi && anyOpen && ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("This scene is open — open a different scene first.");
                 ImGui::EndPopup();
             }
         } else if (ImGui::BeginPopupContextItem()) {
