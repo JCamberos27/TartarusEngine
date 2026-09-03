@@ -987,34 +987,39 @@ void EditorLayer::ApplyEditorTheme() {
 // `h`, so accent / buttons / text tint / tab keyline all slide around the wheel together (with
 // fixed hue offsets between them, so they stay a coordinated set rather than one flat colour).
 // Backgrounds are left as ApplyEditorTheme set them — near-black, stationary.
-void EditorLayer::ApplyPrismAnimation(float hue) {
+void EditorLayer::ApplyPrismAnimation(float phase) {
     ImGuiStyle& style = ImGui::GetStyle();
     auto hsv = [](float h, float s, float v, float a = 1.0f) {
-        h -= floorf(h);
+        h = h < 0.0f ? 0.0f : (h > 1.0f ? 1.0f : h); // clamp, never wrap — the wrap is the "rainbow"
         float r, g, b;
         ImGui::ColorConvertHSVtoRGB(h, s, v, r, g, b);
         return ImVec4(r, g, b, a);
     };
-    const float h = hue;
 
-    // Element roles are spread across ~half the wheel from the base phase `h`, so at any instant
-    // the UI shows a spectral spread (indigo-ish here, teal there, magenta keyline) rather than
-    // one flat colour — the same read as the monogram's left-to-right gradient — and the whole
-    // set slides around together as `h` drifts.
+    // Match the corner monogram's prism read: a NARROW left→right dispersion — the monogram
+    // smears ~0.30 of the wheel from one side to the other (sat ~0.6, bright) and drifts the
+    // whole smear through the spectrum. So every role here sits at a fixed fraction of that same
+    // 0.30 span from the shared base phase: at any instant the editor is one coherent
+    // adjacent-hue wash (blue→violet, green→cyan, …), never a full red-to-red rainbow, and it
+    // slides around as a unit exactly like the mark.
+    const float h = phase;
+    const float kSpan = 0.30f;
+    auto band = [&](float frac, float s, float v, float a = 1.0f) {
+        return hsv(h + frac * kSpan, s, v, a);
+    };
 
-    // Body text: a pale tint (low saturation, full value) so it stays legible while the hue walks.
-    style.Colors[ImGuiCol_Text]            = hsv(h,          0.18f, 1.00f);
-    style.Colors[ImGuiCol_TextDisabled]    = hsv(h,          0.14f, 0.55f);
+    // Body text: lightly tinted, full value — legible as the wash drifts.
+    style.Colors[ImGuiCol_Text]            = band(0.50f, 0.16f, 1.00f);
+    style.Colors[ImGuiCol_TextDisabled]    = band(0.50f, 0.12f, 0.55f);
 
-    // Buttons carry real colour now (not grey with a coloured highlight): each state a good step
-    // further along the wheel, so hover/press visibly shift hue.
-    style.Colors[ImGuiCol_Button]          = hsv(h,          0.55f, 0.42f);
-    style.Colors[ImGuiCol_ButtonHovered]   = hsv(h + 0.10f,  0.62f, 0.55f);
-    style.Colors[ImGuiCol_ButtonActive]    = hsv(h + 0.20f,  0.68f, 0.66f);
+    // Colourful roles at the monogram's saturation/brightness; each state a step along the span.
+    style.Colors[ImGuiCol_Button]          = band(0.10f, 0.55f, 0.48f);
+    style.Colors[ImGuiCol_ButtonHovered]   = band(0.35f, 0.60f, 0.62f);
+    style.Colors[ImGuiCol_ButtonActive]    = band(0.60f, 0.62f, 0.74f);
 
-    ImVec4 accent        = hsv(h + 0.06f,  0.52f, 0.44f);
-    ImVec4 accentHovered = hsv(h + 0.16f,  0.55f, 0.56f);
-    ImVec4 accentActive  = hsv(h + 0.30f,  0.58f, 0.64f);
+    ImVec4 accent        = band(0.20f, 0.55f, 0.50f);
+    ImVec4 accentHovered = band(0.45f, 0.58f, 0.62f);
+    ImVec4 accentActive  = band(0.70f, 0.60f, 0.72f);
     style.Colors[ImGuiCol_Header]            = accent;
     style.Colors[ImGuiCol_HeaderHovered]     = accentHovered;
     style.Colors[ImGuiCol_HeaderActive]      = accentActive;
@@ -1027,19 +1032,19 @@ void EditorLayer::ApplyPrismAnimation(float hue) {
     style.Colors[ImGuiCol_DockingPreview]    = ImVec4(accentActive.x, accentActive.y, accentActive.z, 0.55f);
     style.Colors[ImGuiCol_TextSelectedBg]    = ImVec4(accent.x, accent.y, accent.z, 0.55f);
 
-    style.Colors[ImGuiCol_CheckMark]         = hsv(h + 0.45f,  0.70f, 0.98f); // far side of the spread, pops
-    style.Colors[ImGuiCol_SliderGrab]        = hsv(h + 0.22f,  0.55f, 0.62f);
-    style.Colors[ImGuiCol_SliderGrabActive]  = hsv(h + 0.34f,  0.60f, 0.82f);
+    style.Colors[ImGuiCol_CheckMark]         = band(1.00f, 0.62f, 1.00f); // far end of the smear, pops
+    style.Colors[ImGuiCol_SliderGrab]        = band(0.45f, 0.58f, 0.66f);
+    style.Colors[ImGuiCol_SliderGrabActive]  = band(0.80f, 0.62f, 0.88f);
 
-    style.Colors[ImGuiCol_Border]            = hsv(h + 0.12f,  0.45f, 0.50f, 0.45f);
-    style.Colors[ImGuiCol_Separator]         = hsv(h + 0.20f,  0.40f, 0.34f, 0.55f);
-    style.Colors[ImGuiCol_ScrollbarGrab]        = hsv(h,        0.30f, 0.34f);
-    style.Colors[ImGuiCol_ScrollbarGrabHovered] = hsv(h + 0.10f, 0.42f, 0.46f);
-    style.Colors[ImGuiCol_ScrollbarGrabActive]  = hsv(h + 0.20f, 0.52f, 0.58f);
+    style.Colors[ImGuiCol_Border]            = band(0.30f, 0.48f, 0.55f, 0.45f);
+    style.Colors[ImGuiCol_Separator]         = band(0.45f, 0.42f, 0.38f, 0.55f);
+    style.Colors[ImGuiCol_ScrollbarGrab]        = band(0.10f, 0.34f, 0.38f);
+    style.Colors[ImGuiCol_ScrollbarGrabHovered] = band(0.35f, 0.46f, 0.50f);
+    style.Colors[ImGuiCol_ScrollbarGrabActive]  = band(0.60f, 0.55f, 0.62f);
 
-    style.Colors[ImGuiCol_TitleBgActive]    = hsv(h + 0.06f,  0.45f, 0.16f); // faint colour on the focused window bar
-    style.Colors[ImGuiCol_TabHovered]       = hsv(h + 0.16f,  0.42f, 0.20f);
-    style.Colors[ImGuiCol_TabSelectedOverline] = hsv(h + 0.50f, 0.80f, 0.98f, 0.95f); // far end of the spread
+    style.Colors[ImGuiCol_TitleBgActive]    = band(0.20f, 0.48f, 0.17f); // faint colour on the focused window bar
+    style.Colors[ImGuiCol_TabHovered]       = band(0.45f, 0.44f, 0.22f);
+    style.Colors[ImGuiCol_TabSelectedOverline] = band(1.00f, 0.78f, 1.00f, 0.95f); // far end of the smear
 }
 
 void EditorLayer::Shutdown() {
@@ -2697,9 +2702,12 @@ void EditorLayer::DrawEngineMark(float dt) {
         // A spectral band smeared left -> right across the mark, the whole band drifting slowly
         // through the wheel — dispersion through glass, not a flat strobing hue. Needs per-vertex
         // colour, so the quad is written into the draw list by hand (AddImageQuad is one colour).
+        // In the Prism editor theme the whole UI is driven by m_ThemeHue — use it here too so the
+        // mark's dispersion and the editor's sweep the spectrum in lock-step.
+        const float markHue = (EditorSettings::Get().EditorTheme == 1) ? m_ThemeHue : m_MarkHue;
         float rL, gL, bL, rR, gR, bR;
-        ImGui::ColorConvertHSVtoRGB(m_MarkHue,                        0.62f, 1.0f, rL, gL, bL);
-        ImGui::ColorConvertHSVtoRGB(fmodf(m_MarkHue + 0.30f, 1.0f),   0.62f, 1.0f, rR, gR, bR);
+        ImGui::ColorConvertHSVtoRGB(markHue,                        0.62f, 1.0f, rL, gL, bL);
+        ImGui::ColorConvertHSVtoRGB(fmodf(markHue + 0.30f, 1.0f),   0.62f, 1.0f, rR, gR, bR);
         const int a = 205;
         ImU32 colL = IM_COL32((int)(rL*255+0.5f), (int)(gL*255+0.5f), (int)(bL*255+0.5f), a);
         ImU32 colR = IM_COL32((int)(rR*255+0.5f), (int)(gR*255+0.5f), (int)(bR*255+0.5f), a);
@@ -2834,10 +2842,12 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
 
-    // Prism theme: drift the palette's hue phase and repaint the hue-driven style colours before
-    // any window is submitted this frame. Same rate as the corner monogram's colour sweep so the
-    // two move together. Dark Slate: nothing to do.
+    // Prism theme: drift the palette's spectral phase and repaint the hue-driven style colours
+    // before any window is submitted this frame. Slow — the band should look like it's tilting,
+    // not spinning. Dark Slate: nothing to do.
     if (EditorSettings::Get().EditorTheme == 1) {
+        // Same phase + rate as the corner monogram's dispersion, so the editor and the mark
+        // sweep the spectrum in lock-step (DrawEngineMark reads m_ThemeHue in Prism mode too).
         m_ThemeHue = fmodf(m_ThemeHue + dt * 0.6f, 1.0f);
         ApplyPrismAnimation(m_ThemeHue);
     }
