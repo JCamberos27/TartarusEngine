@@ -65,6 +65,12 @@ void EditorSettings::Load() {
     s.LightGizmoSelectedOnly = root.value("lightGizmoSelectedOnly", s.LightGizmoSelectedOnly);
     s.LightGizmoOpacity = root.value("lightGizmoOpacity", s.LightGizmoOpacity);
     s.LightGizmoScale = root.value("lightGizmoScale", s.LightGizmoScale);
+    s.CaptureMode = root.value("captureMode", s.CaptureMode);
+    s.CaptureScale = root.value("captureScale", s.CaptureScale);
+    s.CaptureResPreset = root.value("captureResPreset", s.CaptureResPreset);
+    s.CaptureFormat = root.value("captureFormat", s.CaptureFormat);
+    s.CaptureFlash = root.value("captureFlash", s.CaptureFlash);
+    s.CaptureSound = root.value("captureSound", s.CaptureSound);
 }
 
 void EditorSettings::Save() {
@@ -111,5 +117,11 @@ void EditorSettings::Save() {
     root["lightGizmoSelectedOnly"] = Get().LightGizmoSelectedOnly;
     root["lightGizmoOpacity"] = Get().LightGizmoOpacity;
     root["lightGizmoScale"] = Get().LightGizmoScale;
+    root["captureMode"] = Get().CaptureMode;
+    root["captureScale"] = Get().CaptureScale;
+    root["captureResPreset"] = Get().CaptureResPreset;
+    root["captureFormat"] = Get().CaptureFormat;
+    root["captureFlash"] = Get().CaptureFlash;
+    root["captureSound"] = Get().CaptureSound;
     out << root.dump(2);
 }

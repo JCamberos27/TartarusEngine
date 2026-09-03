@@ -116,6 +116,19 @@ struct EditorSettings {
     float LightGizmoOpacity      = 0.5f;
     float LightGizmoScale        = 1.0f;
 
+    // --- Capture (screenshot) tool. Images always write to project/screenshots/ (so the Asset
+    // Browser's "Screenshots" folder finds them). Controls live in Preferences > Capture and the
+    // toolbar's camera button. CaptureMode: 0 full editor window, 1 Scene viewport only,
+    // 2 Scene viewport with all editor overlays hidden, 3 Game view. CaptureScale (1/2/4)
+    // supersamples the viewport modes. CaptureResPreset: 0 = match the viewport (with
+    // CaptureScale applied), 1..4 = a fixed 720p/1080p/1440p/2160p render. CaptureFormat: 0 PNG, 1 JPG.
+    int  CaptureMode      = 1;
+    int  CaptureScale     = 1;
+    int  CaptureResPreset = 0;
+    int  CaptureFormat    = 0;
+    bool CaptureFlash  = true;
+    bool CaptureSound  = true;
+
     static EditorSettings& Get() {
         static EditorSettings instance;
         return instance;
