@@ -19,6 +19,7 @@
 #include "ModelShaderSource.h"
 #include "TintOverlayRenderer.h"
 #include "HdrTarget.h"
+#include "Screenshot.h"
 #include "Tonemapper.h"
 #include "LightBuffer.h"
 #include "ClusterGrid.h"
@@ -1612,6 +1613,20 @@ int main() {
                     break;
                 case EditorLayer::ExitDecision::None:
                     break;
+            }
+
+            // Screenshot: F12, or a ".shot" sentinel file dropped next to the exe (so it can be
+            // triggered without keyboard focus). Grabs the composited back buffer before the swap.
+            {
+                static bool prevF12 = false;
+                bool f12 = Input::IsKeyDown(GLFW_KEY_F12);
+                std::error_code shotEc;
+                bool sentinel = std::filesystem::exists(".shot", shotEc);
+                if ((f12 && !prevF12) || sentinel) {
+                    Screenshot::SaveBackbuffer(window.GetWidth(), window.GetHeight());
+                    if (sentinel) std::filesystem::remove(".shot", shotEc);
+                }
+                prevF12 = f12;
             }
 
             window.SwapBuffers();
