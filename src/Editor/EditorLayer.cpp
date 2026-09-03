@@ -18,6 +18,8 @@
 #include "ProjectPaths.h"
 #include "GLStateCache.h"
 #include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
+#include "ScreenBlur.h"
+#include "Framebuffer.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // DockBuilder* — only used once, to lay out the default dock tree on first run
@@ -427,20 +429,28 @@ bool DrawNameField(const char* label, std::string& name, const char* placeholder
     return changed;
 }
 
-// Icon-only action button with a tooltip carrying the full name — shared by DrawInspector and
-// DrawMaterialEditor so both get the same compact single-row style instead of stacked
-// full-width text buttons.
+// Flat action button — no body at rest, just the glyph (or glyph + short label); a faint wash
+// on hover. The Inspector's whole button language (footers, Add Component, material-map Clear,
+// Asset Browser create) so nothing reads as a heavy raised control. Tooltip carries the full
+// name.
 bool ActionButton(const char* icon, const char* tooltip, ImVec2 size = ImVec2(0, 0)) {
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.14f));
     bool clicked = ImGui::Button(icon, size);
+    ImGui::PopStyleColor(3);
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
     return clicked;
 }
 
-bool DeleteIconButton(const char* tooltip, ImVec2 size = ImVec2(0, 0)) {
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.18f, 0.18f, 1.00f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.68f, 0.22f, 0.22f, 1.00f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.80f, 0.26f, 0.26f, 1.00f));
-    bool clicked = ImGui::Button(ICON_FA_TRASH, size);
+// Destructive action button: flat / neutral at rest, red only on hover or press — a warning
+// that shows up under the pointer instead of a permanent red slab. One helper for every
+// "delete / remove" control (footer Delete, the component-remove ✕, ...). Icon + tooltip.
+bool DangerIconButton(const char* icon, const char* tooltip, ImVec2 size = ImVec2(0, 0)) {
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.72f, 0.20f, 0.20f, 0.92f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.82f, 0.24f, 0.24f, 1.00f));
+    bool clicked = ImGui::Button(icon, size);
     ImGui::PopStyleColor(3);
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
     return clicked;
@@ -873,6 +883,7 @@ void EditorLayer::ApplyEditorTheme() {
         style.Colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.030f, 0.030f, 0.038f, 1.00f);
         style.Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.000f, 0.000f, 0.000f, 0.00f);
         style.Colors[ImGuiCol_DockingEmptyBg]  = ImVec4(0.016f, 0.016f, 0.020f, 1.00f);
+        style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.010f, 0.010f, 0.016f, 0.32f);
         ApplyPrismAnimation(m_ThemeHue);
         return;
     }
@@ -930,6 +941,9 @@ void EditorLayer::ApplyEditorTheme() {
     style.Colors[ImGuiCol_NavCursor]        = accentActive;
     style.Colors[ImGuiCol_DockingPreview]   = ImVec4(accentActive.x, accentActive.y, accentActive.z, 0.55f);
     style.Colors[ImGuiCol_DockingEmptyBg]   = ImVec4(0.090f, 0.090f, 0.098f, 1.00f);
+    // A quiet dark scrim, not ImGui's default 35% white wash — paired with the viewport frost
+    // (main.cpp) it reads as a blurred backdrop behind modal dialogs.
+    style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.020f, 0.020f, 0.028f, 0.32f);
 }
 
 // Prism theme, per-frame: every hue-carrying style colour is derived from one drifting phase
@@ -1242,7 +1256,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         float uiScale = prefs.UiScaleOverride <= 0.0f ? m_UIScale : prefs.UiScaleOverride;
         ImGui::SetNextItemWidth(kw);
         bool isAuto = prefs.UiScaleOverride <= 0.0f;
-        if (ImGui::SliderFloat("UI scale", &uiScale, 0.70f, 2.50f,
+        if (EditorUI::SliderFloat("UI scale", &uiScale, 0.70f, 2.50f,
                                isAuto ? "Auto (%.2f)" : "%.2f")) {
             prefs.UiScaleOverride = uiScale < 0.75f ? 0.0f : uiScale;
             EditorSettings::Save();
@@ -1263,10 +1277,10 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
     case 1: // Viewport
         ImGui::SeparatorText("Viewport");
         ImGui::SetNextItemWidth(kw);
-        ImGui::SliderFloat("Gizmo size", &m_GizmoSize, 0.05f, 0.40f, "%.2f");
+        EditorUI::SliderFloat("Gizmo size", &m_GizmoSize, 0.05f, 0.40f, "%.2f");
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("On-screen size of the transform gizmo.");
         ImGui::SetNextItemWidth(kw);
-        ImGui::SliderFloat("Vertex pick radius (px)", &m_VertexPickPixels, 5.0f, 150.0f, "%.0f");
+        EditorUI::SliderFloat("Vertex pick radius (px)", &m_VertexPickPixels, 5.0f, 150.0f, "%.0f");
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("How close (screen pixels) the cursor must be to a vertex to hover/grab/snap it while holding V.");
         ImGui::Checkbox("Show grid", &m_ShowGrid);
@@ -1280,9 +1294,9 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         if (!prefs.ShowLightGizmos) ImGui::BeginDisabled();
         if (ImGui::Checkbox("Only for the selected light", &prefs.LightGizmoSelectedOnly)) EditorSettings::Save();
         ImGui::SetNextItemWidth(kw);
-        if (ImGui::SliderFloat("Opacity", &prefs.LightGizmoOpacity, 0.0f, 1.0f, "%.2f")) EditorSettings::Save();
+        if (EditorUI::SliderFloat("Opacity", &prefs.LightGizmoOpacity, 0.0f, 1.0f, "%.2f")) EditorSettings::Save();
         ImGui::SetNextItemWidth(kw);
-        if (ImGui::SliderFloat("Arrow / disc scale", &prefs.LightGizmoScale, 0.25f, 3.0f, "%.2fx")) EditorSettings::Save();
+        if (EditorUI::SliderFloat("Arrow / disc scale", &prefs.LightGizmoScale, 0.25f, 3.0f, "%.2fx")) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Screen size of the parts that aren't tied to a world measurement (the directional arrow, the sun disc).");
         if (!prefs.ShowLightGizmos) ImGui::EndDisabled();
@@ -1293,7 +1307,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             EditorUI::SetTooltip("The spinning TE monogram in the viewport's bottom-left corner.");
         if (!prefs.EngineMarkEnabled) ImGui::BeginDisabled();
         ImGui::SetNextItemWidth(kw);
-        if (ImGui::SliderFloat("Spin speed", &prefs.EngineMarkSpinSpeed, 0.0f, 4.0f, "%.2f rad/s")) EditorSettings::Save();
+        if (EditorUI::SliderFloat("Spin speed", &prefs.EngineMarkSpinSpeed, 0.0f, 4.0f, "%.2f rad/s")) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("How fast the monogram turns. 0 parks it; the default 0.52 is one revolution every ~12 s.");
         {
@@ -1318,7 +1332,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
     case 2: // Grid & Snapping
         ImGui::SeparatorText("Grid");
         ImGui::SetNextItemWidth(kw);
-        if (ImGui::SliderFloat("Opacity", &prefs.GridOpacity, 0.0f, 1.0f, "%.2f")) EditorSettings::Save();
+        if (EditorUI::SliderFloat("Opacity", &prefs.GridOpacity, 0.0f, 1.0f, "%.2f")) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Master strength of the grid lines. The grid also fades out on its own as the view tilts toward the horizon.");
         ImGui::SetNextItemWidth(kw);
@@ -1344,7 +1358,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             EditorUI::SetTooltip("The coloured rules through the origin: X (red) and Z (blue) on the ground, and a green Y line straight up.");
         if (!prefs.GridShowAxisLines) ImGui::BeginDisabled();
         ImGui::SetNextItemWidth(kw);
-        if (ImGui::SliderFloat("Axis line thickness", &prefs.GridAxisThickness, 0.5f, 4.0f, "%.1f px")) EditorSettings::Save();
+        if (EditorUI::SliderFloat("Axis line thickness", &prefs.GridAxisThickness, 0.5f, 4.0f, "%.1f px")) EditorSettings::Save();
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Screen-pixel width of the red / green / blue axis lines.");
         if (!prefs.GridShowAxisLines) ImGui::EndDisabled();
 
@@ -1352,7 +1366,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ImGui::SetNextItemWidth(kw);
         ImGui::DragFloat("Position snap", &m_SnapTranslation, 0.05f, 0.01f, 50.0f, "%.2f");
         ImGui::SetNextItemWidth(kw);
-        ImGui::SliderFloat("Rotation snap", &m_SnapRotationDeg, 1.0f, 180.0f, "%.1f deg");
+        EditorUI::SliderFloat("Rotation snap", &m_SnapRotationDeg, 1.0f, 180.0f, "%.1f deg");
         ImGui::SetNextItemWidth(kw);
         ImGui::DragFloat("Scale snap", &m_SnapScale, 0.01f, 0.01f, 5.0f, "%.2f");
         ImGui::TextDisabled("The grid + snap on/off toggles are on the toolbar.");
@@ -1426,7 +1440,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ImGui::SeparatorText("Rendering (HDR)");
 
         ImGui::SetNextItemWidth(kw);
-        ImGui::SliderFloat("Exposure (EV)", &prefs.ExposureEV, -6.0f, 6.0f, "%+.2f");
+        EditorUI::SliderFloat("Exposure (EV)", &prefs.ExposureEV, -6.0f, 6.0f, "%+.2f");
         if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Photographic stops applied before the tone curve. 0 = neutral. Applies live.");
@@ -1484,7 +1498,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             EditorUI::SetTooltip("Number of shadow cascades. Fewer = cheaper depth passes, coarser shadows far from the camera.");
 
         ImGui::SetNextItemWidth(kw);
-        ImGui::SliderFloat("Shadow distance", &prefs.ShadowDistance, 10.0f, 500.0f, "%.0f m");
+        EditorUI::SliderFloat("Shadow distance", &prefs.ShadowDistance, 10.0f, 500.0f, "%.0f m");
         if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("How far from the camera the cascades cover. Shorter = crisper shadows.");
@@ -1582,7 +1596,40 @@ void EditorLayer::BeginFrame() {
 
 void EditorLayer::EndFrame() {
     ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    ImDrawData* dd = ImGui::GetDrawData();
+    ImGui_ImplOpenGL3_RenderDrawData(dd);
+
+    // Frosted backdrop: with the whole editor frame now on FBO 0, if a modal dialog is open,
+    // blur the entire framebuffer and redraw just the dialog window crisp on top. Nothing
+    // behind a modal is interactive, so freezing + blurring it costs nothing the user misses.
+    ImGuiWindow* modal = ImGui::GetTopMostPopupModal();
+    if (modal && dd && dd->Valid && dd->DisplaySize.x > 1.0f && dd->DisplaySize.y > 1.0f) {
+        const int w = (int)(dd->DisplaySize.x * dd->FramebufferScale.x);
+        const int h = (int)(dd->DisplaySize.y * dd->FramebufferScale.y);
+        if (w > 8 && h > 8) {
+            if (!m_ModalBlur) m_ModalBlur = std::make_unique<ScreenBlur>();
+            if (!m_FrostCapture) m_FrostCapture = std::make_unique<Framebuffer>();
+            m_FrostCapture->Resize(w, h);
+
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_FrostCapture->Handle());
+            glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            m_ModalBlur->Apply(m_FrostCapture->ColorTexture(), w, h, /*dstFbo=*/0, /*iterations=*/4);
+
+            ImDrawData sub;
+            sub.DisplayPos = dd->DisplayPos;
+            sub.DisplaySize = dd->DisplaySize;
+            sub.FramebufferScale = dd->FramebufferScale;
+            sub.OwnerViewport = dd->OwnerViewport;
+            sub.Textures = dd->Textures;
+            sub.AddDrawList(modal->DrawList);
+            sub.Valid = true;
+            ImGui_ImplOpenGL3_RenderDrawData(&sub);
+            GLStateCache::Invalidate();
+        }
+    }
 }
 
 std::vector<std::string> EditorLayer::CaptureSelectedNames(const World& world) const {
@@ -2972,16 +3019,15 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
     ImGui::End();
 
-    if (EditorSettings::Get().EngineMarkEnabled) DrawEngineMark(dt);
+    if (EditorSettings::Get().EngineMarkEnabled && !m_HideEngineMarkForStats) DrawEngineMark(dt);
 
     if (m_ShowHierarchy) DrawHierarchy(world, assets);
     if (m_ShowInspector) DrawInspector(world, assets, dt);
     if (m_ShowAssetBrowser) DrawAssetBrowser(world, assets);
     DrawConsole();
-    DrawStatsOverlay(world, dt);
+    DrawStatsPanel(world, dt);
     DrawViewportStatusBar();
     DrawHistoryPanel(world, assets);
-    DrawLightsPanel(world, editorCamera);
 
     // "Look through light" (#140 phase 4): the Inspector/Lights-panel buttons can't see the
     // camera, so they queue a light here; act on it once, then run the per-frame Esc/banner.
@@ -3616,9 +3662,7 @@ void EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera&
 void EditorLayer::DrawConsole() {
     if (!m_ShowConsole) return;
 
-    ImGuiWindowFlags flags = m_LayoutLocked
-        ? (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)
-        : ImGuiWindowFlags_None;
+    ImGuiWindowFlags flags = ImGuiWindowFlags_None;
     if (!ImGui::Begin(ICON_FA_TERMINAL "  Console", &m_ShowConsole, flags)) { ImGui::End(); return; }
 
     // Builds the plain-text dump of everything currently shown (respects the level + text
@@ -3738,12 +3782,39 @@ void EditorLayer::DrawConsole() {
     ImGui::End();
 }
 
-void EditorLayer::DrawStatsOverlay(World& world, float dt) {
-    if (!EditorSettings::Get().SceneShowStats) return;
+void EditorLayer::PushAdaptiveHudText(ImVec2 centerScreen, float boxPx, float dt,
+                                     float& easedLum, float& targetLum, float& sampleAccum) {
+    // Throttled GPU->CPU readback (~10 Hz) — the sync is too costly to do every frame.
+    sampleAccum += dt;
+    if (sampleAccum >= 0.1f) {
+        sampleAccum = 0.0f;
+        float lum = SampleSceneLuminance(centerScreen, boxPx);
+        if (lum >= 0.0f) {
+            float t = (lum - 0.30f) / (0.62f - 0.30f);
+            t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+            targetLum = 1.0f - t * t * (3.0f - 2.0f * t); // 1 = white on dark, 0 = black on light
+        }
+    }
+    float k = 1.0f - expf(-dt / 0.15f);
+    easedLum += (targetLum - easedLum) * k;
+    int v = (int)(easedLum * 255.0f + 0.5f);
+    v = v < 0 ? 0 : (v > 255 ? 255 : v);
+    ImGui::PushStyleColor(ImGuiCol_Text,         IM_COL32(v, v, v, 240));
+    ImGui::PushStyleColor(ImGuiCol_TextDisabled, IM_COL32(v, v, v, 150));
+}
 
-    // Exponential smoothing: a raw per-frame ms figure flickers too fast to read.
+void EditorLayer::DrawStatsPanel(World& world, float dt) {
+    // Exponential smoothing: a raw per-frame ms figure flickers too fast to read. Kept running
+    // every frame (even while the panel is hidden) so the status-bar FPS/ms stays smooth too.
     float frameMs = dt * 1000.0f;
     m_SmoothedFrameMs = m_SmoothedFrameMs * 0.92f + frameMs * 0.08f;
+
+    m_HideEngineMarkForStats = false;
+
+    if (!EditorSettings::Get().SceneShowStats) return;
+    // Tied to the Scene view — the numbers describe that render, and the pin needs a live
+    // viewport rect to anchor to.
+    if (!m_SceneViewportVisible || m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
 
     int entityCount = 0, renderableCount = 0, lightCount = 0, colliderCount = 0, inactiveCount = 0;
     for (auto entity : world.Registry.view<TransformComponent>()) {
@@ -3754,17 +3825,46 @@ void EditorLayer::DrawStatsOverlay(World& world, float dt) {
         if (world.Registry.all_of<InactiveTag>(entity)) inactiveCount++;
     }
 
-    // Pinned to the viewport's top-left, inside it rather than docked, so it reads as a scene
-    // overlay (Unity's Stats panel) instead of stealing panel space. NoInputs is essential here,
-    // not optional — without it this rectangle would swallow camera-look/click-to-pick input
-    // for whatever's underneath it (the same reason DrawViewGizmo's overlay uses it).
+    // A compact HUD pinned to the viewport's top-left corner (#149): fully transparent so it
+    // doesn't box off the scene, click-through (NoInputs) so it never eats camera-look. Height
+    // is measured from its content and capped so it never spills past the status bar into the
+    // panels below (same treatment as the History HUD); the profiler tail clips rather than
+    // overflowing. Toggled via SceneShowStats; not dockable, not persisted — the pin wins.
     const float pad = 12.0f * m_UIScale;
-    ImGui::SetNextWindowPos(ImVec2(m_ViewportPos.x + pad, m_ViewportPos.y + pad), ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.78f);
+    const float statusBarH = ImGui::GetTextLineHeight() + 8.0f * m_UIScale;
+    const ImGuiStyle& stStats = ImGui::GetStyle();
+    const float lineH = ImGui::GetTextLineHeightWithSpacing();
+    const int profN = (int)Profiler::GetLastFrame().size();
+    const int rows = 1 /*fps*/ + 3 /*draw/tri/vert*/ + (m_RenderStats.Culled > 0 ? 1 : 0)
+                   + 4 /*ent/rend/coll/light*/ + (inactiveCount > 0 ? 1 : 0)
+                   + profN + 2 /*shader/texture binds*/;
+    const float chromeH = lineH * 2.0f                                  // "Statistics" + "Profiler"
+                        + 4.0f * (stStats.ItemSpacing.y + 2.0f)         // four Separator() rules
+                        + stStats.WindowPadding.y * 2.0f + 4.0f;
+    const float desiredH = chromeH + rows * lineH;
+    const float maxH = std::max(120.0f * m_UIScale,
+                                m_ViewportSize.y - statusBarH - 2.0f * pad);
+    const float winH = std::min(desiredH, maxH);
+
+    // If the box would reach down into the corner monogram, hide the monogram until it doesn't
+    // (checked in Draw() at the DrawEngineMark call site).
+    const float markTop = m_ViewportSize.y - statusBarH - 14.0f * m_UIScale - 54.0f * m_UIScale;
+    m_HideEngineMarkForStats = (pad + winH + 8.0f * m_UIScale) > markTop;
+
+    ImGui::SetNextWindowPos(
+        ImVec2(m_ViewportPos.x + pad, m_ViewportPos.y + pad),
+        ImGuiCond_Always, ImVec2(0.0f, 0.0f));
+    ImGui::SetNextWindowSize(ImVec2(0.0f, winH)); // x=0 → auto-fit width; height clamped
+    ImGui::SetNextWindowBgAlpha(0.0f);
     if (ImGui::Begin("##Stats", nullptr,
-            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking |
+            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs)) {
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground)) {
+        // Contrast-adaptive tint (like the corner mark): sample the scene behind the HUD so the
+        // text stays legible white-on-dark / dark-on-light with no plate behind it.
+        const ImVec2 wpos = ImGui::GetWindowPos(), wsz = ImGui::GetWindowSize();
+        PushAdaptiveHudText(ImVec2(wpos.x + wsz.x * 0.5f, wpos.y + wsz.y * 0.5f), 48.0f * m_UIScale,
+                            dt, m_StatsHudContrastLum, m_StatsHudContrastTarget, m_StatsHudSampleAccum);
         ImGui::TextUnformatted(ICON_FA_CHART_SIMPLE "  Statistics");
         ImGui::Separator();
         ImGui::Text("%.1f FPS  (%.2f ms)", m_SmoothedFrameMs > 0.0001f ? 1000.0f / m_SmoothedFrameMs : 0.0f, m_SmoothedFrameMs);
@@ -3783,16 +3883,15 @@ void EditorLayer::DrawStatsOverlay(World& world, float dt) {
         // Numbers from the frame that just finished (this frame's own "Scene Draw"/"ImGui
         // Render" scopes haven't run yet at this point) - same one-frame-behind convention the
         // smoothed FPS figure above already uses, so it's not called out as its own oddity.
-        if (ImGui::TreeNode("Profiler")) {
-            for (const auto& sample : Profiler::GetLastFrame()) {
-                ImGui::Text("%-16s %.3f ms", sample.Name.c_str(), sample.Milliseconds);
-            }
-            ImGui::Separator();
-            const auto& gl = GLStateCache::GetFrameStats();
-            ImGui::Text("Shader binds   %d (%d skipped)", gl.ProgramBinds, gl.ProgramBindsSkipped);
-            ImGui::Text("Texture binds  %d (%d skipped)", gl.TextureBinds, gl.TextureBindsSkipped);
-            ImGui::TreePop();
+        ImGui::SeparatorText("Profiler");
+        for (const auto& sample : Profiler::GetLastFrame()) {
+            ImGui::Text("%-16s %.3f ms", sample.Name.c_str(), sample.Milliseconds);
         }
+        ImGui::Separator();
+        const auto& gl = GLStateCache::GetFrameStats();
+        ImGui::Text("Shader binds   %d (%d skipped)", gl.ProgramBinds, gl.ProgramBindsSkipped);
+        ImGui::Text("Texture binds  %d (%d skipped)", gl.TextureBinds, gl.TextureBindsSkipped);
+        ImGui::PopStyleColor(2); // adaptive Text + TextDisabled
     }
     ImGui::End();
 }
@@ -3879,22 +3978,58 @@ void EditorLayer::DrawViewportStatusBar() {
 void EditorLayer::DrawHistoryPanel(World& world, AssetLibrary& assets) {
     if (!m_ShowHistory) return;
 
-    // Pinned to the viewport's bottom-right corner (opposite the Stats overlay's top-left).
-    // Fixed position, still resizable; not dockable, not persisted, so the pin always wins.
+    // Compact transparent HUD pinned to the viewport's bottom-right corner, matching the Stats
+    // HUD at top-left (#149 follow-up): sized to its text, fully transparent, not dockable, not
+    // persisted so the pin always wins. Unlike Stats it stays interactive — the rows are
+    // click-to-jump.
     const float hpad = 12.0f * m_UIScale;
+    const float statusBarH = ImGui::GetTextLineHeight() + 8.0f * m_UIScale;
+    // Height ceiling: grow upward from the pin only until a clear line below the top-right nav
+    // cluster, so a long history never climbs into that corner (or past it into the toolbar).
+    // Derived from DrawViewGizmo's layout: margin 14 + rotate-ring Ø128*0.5 + spacing 8 + the
+    // dolly/pan button box + the "Persp" label, all *m_UIScale, plus headroom (~220px @ 1x).
+    // Beyond the ceiling the list scrolls internally instead.
+    const float gizmoZoneH = 220.0f * m_UIScale;
+    const float maxH = std::max(120.0f * m_UIScale,
+                                m_ViewportSize.y - hpad - statusBarH - gizmoZoneH);
+
+    // Rows + chrome, measured directly so the window is exactly as tall as its content up to maxH.
+    const int rowCount = (int)m_UndoStack.size() + 1 /*Current*/ + (int)m_RedoStack.size();
+    const ImGuiStyle& st = ImGui::GetStyle();
+    const float chromeH = ImGui::GetTextLineHeightWithSpacing()       // "History" line
+                        + st.ItemSpacing.y + 2.0f                     // separator
+                        + st.WindowPadding.y * 2.0f;
+    const float desiredH = chromeH + std::max(rowCount, 1) * ImGui::GetTextLineHeightWithSpacing();
+    const float winH = std::min(desiredH, maxH);
+
     ImGui::SetNextWindowPos(
-        ImVec2(m_ViewportPos.x + m_ViewportSize.x - hpad, m_ViewportPos.y + m_ViewportSize.y - hpad),
+        ImVec2(m_ViewportPos.x + m_ViewportSize.x - hpad,
+               m_ViewportPos.y + m_ViewportSize.y - hpad - statusBarH),
         ImGuiCond_Always, ImVec2(1.0f, 1.0f));
-    ImGui::SetNextWindowSize(ImVec2(260.0f * m_UIScale, 300.0f * m_UIScale), ImGuiCond_FirstUseEver);
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking |
-                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse;
+    ImGui::SetNextWindowSize(ImVec2(0.0f, winH)); // x=0 → auto-fit width, height clamped to the ceiling
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
+                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+                             ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground;
     if (!ImGui::Begin(ICON_FA_CLOCK_ROTATE_LEFT "  History", &m_ShowHistory, flags)) { ImGui::End(); return; }
 
-    EditorUI::HelpMarker("Every recorded change, oldest to newest. Click any entry to jump\nstraight there - undoing or redoing everything in between automatically.");
+    // Contrast-adaptive tint (like the corner mark): sample the scene behind the HUD so the text
+    // stays legible white-on-dark / dark-on-light with no plate behind it.
+    const ImVec2 wpos = ImGui::GetWindowPos(), wsz = ImGui::GetWindowSize();
+    PushAdaptiveHudText(ImVec2(wpos.x + wsz.x * 0.5f, wpos.y + wsz.y * 0.5f), 48.0f * m_UIScale,
+                        ImGui::GetIO().DeltaTime, m_HistoryHudContrastLum, m_HistoryHudContrastTarget,
+                        m_HistoryHudSampleAccum);
+
+    ImGui::TextUnformatted(ICON_FA_CLOCK_ROTATE_LEFT "  History");
+    // Explanation on the heading tooltip (#156) — no persistent "(?)" glyph.
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip(
+        "Every recorded change, oldest to newest. Click any entry to jump\nstraight there - undoing or redoing everything in between automatically.");
     ImGui::Separator();
 
     if (m_UndoStack.empty() && m_RedoStack.empty()) {
         ImGui::TextDisabled("No changes yet.");
+        ImGui::PopStyleColor(2); // adaptive Text + TextDisabled
         ImGui::End();
         return;
     }
@@ -3923,148 +4058,7 @@ void EditorLayer::DrawHistoryPanel(World& world, AssetLibrary& assets) {
         ImGui::PopID();
     }
 
-    ImGui::End();
-}
-
-// Scene-wide light overview (#140 phase 4): every LightComponent entity as one row — swatch,
-// type, name (click to select), and per-light Enable / Solo / Mute / Frame. Solo & Mute are
-// editor-only (see IsLightSuppressed); Enable toggles the real InactiveTag.
-void EditorLayer::DrawLightsPanel(World& world, Camera& editorCamera) {
-    if (!m_ShowLightsPanel) return;
-
-    ImGuiWindowFlags flags = m_LayoutLocked ? (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)
-                                            : ImGuiWindowFlags_None;
-    if (!ImGui::Begin(ICON_FA_LIGHTBULB "  Lights", &m_ShowLightsPanel, flags)) { ImGui::End(); return; }
-
-    const bool anySoloOrMute = !m_SoloLights.empty() || !m_MutedLights.empty();
-    ImGui::BeginDisabled(!anySoloOrMute);
-    if (ImGui::SmallButton("Clear Solo / Mute")) { m_SoloLights.clear(); m_MutedLights.clear(); }
-    ImGui::EndDisabled();
-    if (!m_SoloLights.empty()) {
-        ImGui::SameLine();
-        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), ICON_FA_CIRCLE_EXCLAMATION " Solo active");
-    }
-    ImGui::Separator();
-
-    // A small toggle button: accent body + keyline when `on`, flat otherwise. Returns clicked.
-    auto toggleBtn = [](const char* label, bool on, const ImVec4& tint) {
-        if (on) {
-            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(tint.x, tint.y, tint.z, 0.35f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(tint.x, tint.y, tint.z, 0.50f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(tint.x, tint.y, tint.z, 0.65f));
-        } else {
-            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0, 0, 0, 0));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.25f, 0.28f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.30f, 0.31f, 0.35f, 1.0f));
-        }
-        bool c = ImGui::SmallButton(label);
-        ImGui::PopStyleColor(3);
-        return c;
-    };
-
-    int lightCount = 0;
-    if (ImGui::BeginTable("##LightsTable", 7,
-            ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_PadOuterX)) {
-        ImGui::TableSetupColumn("##swatch", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("##en", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("##solo", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("##mute", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("##frame", ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("##look", ImGuiTableColumnFlags_WidthFixed);
-
-        for (auto e : ViewInCreationOrder(world.Registry, world.Registry.view<const LightComponent>())) {
-            ++lightCount;
-            const auto& lc = world.Registry.get<const LightComponent>(e);
-            const auto* nc = world.Registry.try_get<const NameComponent>(e);
-            std::string name = (nc && !nc->Name.empty()) ? nc->Name : std::string("(light)");
-            const bool inactive   = world.Registry.all_of<InactiveTag>(e);
-            const bool suppressed  = IsLightSuppressed(e);
-            const bool soloed = m_SoloLights.count(e) > 0;
-            const bool muted  = m_MutedLights.count(e) > 0;
-
-            ImGui::TableNextRow();
-            ImGui::PushID((int)entt::to_integral(e));
-
-            ImGui::TableNextColumn();
-            ImGui::ColorButton("##col", ImVec4(lc.Color.r, lc.Color.g, lc.Color.b, 1.0f),
-                ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoPicker,
-                ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight()));
-
-            ImGui::TableNextColumn();
-            const char* typeIcon = lc.Kind == LightComponent::Type::Spot ? ICON_FA_FILTER
-                                 : lc.Kind == LightComponent::Type::Directional ? ICON_FA_SUN
-                                 : ICON_FA_LIGHTBULB;
-            const bool isSel = (e == m_Selected);
-            if (inactive || suppressed)
-                ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-            // SpanAllColumns for a full-width row highlight; AllowOverlap so the Enable/Solo/
-            // Mute/Frame buttons in the later columns still take clicks instead of the row.
-            bool clicked = ImGui::Selectable((std::string(typeIcon) + "  " + name).c_str(), isSel,
-                ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap);
-            if (inactive || suppressed) ImGui::PopStyleColor();
-            if (clicked) SelectItem(e, ImGui::GetIO().KeyCtrl);
-
-            ImGui::TableNextColumn();
-            if (toggleBtn(inactive ? ICON_FA_EYE_SLASH : ICON_FA_EYE, !inactive,
-                          ImVec4(0.40f, 0.44f, 0.52f, 1.0f))) {
-                PushUndo(world, "Toggle Light Active");
-                if (inactive) world.Registry.remove<InactiveTag>(e);
-                else world.Registry.emplace<InactiveTag>(e);
-            }
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Enabled — the real InactiveTag (serialized, affects Play too)");
-
-            ImGui::TableNextColumn();
-            if (toggleBtn("S", soloed, ImVec4(1.0f, 0.80f, 0.25f, 1.0f))) {
-                if (soloed) m_SoloLights.erase(e); else m_SoloLights.insert(e);
-            }
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Solo — while any light is soloed, only soloed lights render (editor only)");
-
-            ImGui::TableNextColumn();
-            if (toggleBtn("M", muted, ImVec4(0.90f, 0.35f, 0.35f, 1.0f))) {
-                if (muted) m_MutedLights.erase(e); else m_MutedLights.insert(e);
-            }
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Mute — hide this light in the editor (not serialized, not in Play)");
-
-            ImGui::TableNextColumn();
-            if (ImGui::SmallButton(ICON_FA_MAGNIFYING_GLASS)) {
-                SelectItem(e, false);
-                glm::vec3 c = glm::vec3(world.ComposeWorldTransform(e)[3]);
-                float halfFov = glm::radians(editorCamera.Fov) * 0.5f;
-                float dist = (2.0f / std::sin(halfFov)) * 1.6f;
-                glm::vec3 target = c - editorCamera.Front() * dist;
-                if (std::isfinite(target.x) && std::isfinite(target.y) && std::isfinite(target.z)) {
-                    m_ViewTransition.Active = true;
-                    m_ViewTransition.T = 0.0f;
-                    m_ViewTransition.FromPos = editorCamera.Position;
-                    m_ViewTransition.FromYaw = editorCamera.Yaw;
-                    m_ViewTransition.FromPitch = editorCamera.Pitch;
-                    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
-                    m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
-                    m_ViewTransition.ToPos = target;
-                    m_ViewTransition.ToYaw = editorCamera.Yaw;
-                    m_ViewTransition.ToPitch = editorCamera.Pitch;
-                    m_ViewTransition.ToOrthoHalfHeight = editorCamera.Orthographic
-                        ? (dist * std::tan(halfFov)) : editorCamera.OrthoHalfHeight;
-                }
-            }
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Frame — glide the camera to this light");
-
-            ImGui::TableNextColumn();
-            const bool lookingThis = m_LookThroughActive && m_LookThroughLight == e;
-            if (toggleBtn(ICON_FA_VIDEO, lookingThis, ImVec4(0.45f, 0.65f, 1.0f, 1.0f))) {
-                if (lookingThis) ExitLookThrough(editorCamera);
-                else m_PendingLookThrough = e;
-            }
-            if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("Look through — view from this light's POV; fly to move / re-aim it (Esc to exit)");
-
-            ImGui::PopID();
-        }
-        ImGui::EndTable();
-    }
-
-    if (lightCount == 0) ImGui::TextDisabled("No lights in the scene.");
+    ImGui::PopStyleColor(2); // adaptive Text + TextDisabled
     ImGui::End();
 }
 
@@ -4081,9 +4075,13 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
     };
     if (ImGui::MenuItem(ICON_FA_CUBE "  Cube")) spawnPrimitive("cube", "Cube");
     if (ImGui::MenuItem(ICON_FA_CIRCLE "  Sphere")) spawnPrimitive("sphere", "Sphere");
-    if (ImGui::MenuItem(ICON_FA_SHAPES "  Cylinder")) spawnPrimitive("cylinder", "Cylinder");
-    if (ImGui::MenuItem(ICON_FA_SHAPES "  Cone")) spawnPrimitive("cone", "Cone");
-    if (ImGui::MenuItem(ICON_FA_SHAPES "  Plane")) spawnPrimitive("plane", "Plane");
+    if (ImGui::MenuItem(ICON_FA_DATABASE "  Cylinder")) spawnPrimitive("cylinder", "Cylinder");
+    if (ImGui::MenuItem(ICON_FA_CAPSULES "  Capsule")) spawnPrimitive("capsule", "Capsule");
+    if (ImGui::MenuItem(ICON_FA_FILTER "  Cone")) spawnPrimitive("cone", "Cone");
+    if (ImGui::MenuItem(ICON_FA_MOUNTAIN "  Pyramid")) spawnPrimitive("pyramid", "Pyramid");
+    if (ImGui::MenuItem(ICON_FA_LIFE_RING "  Torus")) spawnPrimitive("torus", "Torus");
+    if (ImGui::MenuItem(ICON_FA_SQUARE "  Plane")) spawnPrimitive("plane", "Plane");
+    if (ImGui::MenuItem(ICON_FA_STAIRS "  Wedge")) spawnPrimitive("wedge", "Wedge");
 
     ImGui::SeparatorText("Objects");
     if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Empty")) {
@@ -4092,7 +4090,7 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
     if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) {
         CreateEmptyAt(world, &editorCamera, "Point Light", true);
     }
-    if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light")) {
+    if (ImGui::MenuItem(ICON_FA_BULLSEYE "  Spot Light")) {
         entt::entity e = CreateEmptyAt(world, &editorCamera, "Spot Light", true);
         world.Registry.get<LightComponent>(e).Kind = LightComponent::Type::Spot;
     }
@@ -4212,8 +4210,9 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem("  Unlit", nullptr, m_ShadingMode == ShadingMode::Unlit))
                 m_ShadingMode = ShadingMode::Unlit;
 
-            ImGui::SeparatorText("Overlays");
-            ImGui::MenuItem(ICON_FA_TABLE_CELLS "  Grid", nullptr, &m_ShowGrid);
+            // Grid lives only on the toolbar now (#148) — the menu keeps just the toggles that
+            // have no toolbar home.
+            ImGui::SeparatorText("Options");
             ImGui::MenuItem(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform Gizmo", nullptr, &m_ShowGizmos);
             ImGui::MenuItem(ICON_FA_CROSSHAIRS "  Frame on Select", nullptr, &m_FrameOnSelect);
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Move the camera to frame each object as you select it.");
@@ -4239,16 +4238,8 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             ImGui::MenuItem(ICON_FA_SLIDERS "  Inspector", nullptr, &m_ShowInspector);
             ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Asset Browser", nullptr, &m_ShowAssetBrowser);
             ImGui::Separator();
-            ImGui::MenuItem(ICON_FA_TERMINAL "  Console", nullptr, &m_ShowConsole);
-            if (ImGui::MenuItem(ICON_FA_CHART_SIMPLE "  Statistics", nullptr, &EditorSettings::Get().SceneShowStats))
-                EditorSettings::Save();
-            ImGui::MenuItem(ICON_FA_CLOCK_ROTATE_LEFT "  History", nullptr, &m_ShowHistory);
-            ImGui::MenuItem(ICON_FA_LIGHTBULB "  Lights", nullptr, &m_ShowLightsPanel);
-            if (ImGui::MenuItem(ICON_FA_CERTIFICATE "  Engine Mark", nullptr, &EditorSettings::Get().EngineMarkEnabled))
-                EditorSettings::Save();
-            if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Light Gizmos", nullptr, &EditorSettings::Get().ShowLightGizmos))
-                EditorSettings::Save();
-            ImGui::Separator();
+            // Console / Statistics / History / Light Gizmos have dedicated toolbar toggles (#148);
+            // the engine mark lives in Preferences ▸ Viewport.
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
                 m_ResetLayoutRequested = true;
             }
@@ -4257,6 +4248,11 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
 
         if (ImGui::MenuItem(ICON_FA_GEAR " Preferences")) m_ShowPreferences = true;
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Editor settings, environment, shortcuts (Ctrl+,)");
+
+        // Custom window controls, right-aligned — the OS title bar is gone (Win32 custom frame,
+        // Window.cpp), so minimize / maximize-restore / close live here instead.
+        DrawWindowControls();
+
         ImGui::EndMenuBar();
     }
 
@@ -4365,8 +4361,18 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         }
     }
 
+    ImGui::SameLine();
+    // Orthographic / perspective toggle (shortcut 5) — was menu-only; it has a distinct on/off
+    // state so it belongs on the strip beside the shading mode (#148).
+    if (iconButton(ICON_FA_BORDER_ALL,
+            editorCamera.Orthographic ? "Orthographic (click for Perspective) — 5"
+                                      : "Perspective (click for Orthographic) — 5",
+            editorCamera.Orthographic)) {
+        ToggleOrthographic(world, editorCamera);
+    }
+
     divider();
-    if (iconButton(ICON_FA_CHART_SIMPLE, "Toggle Statistics overlay", EditorSettings::Get().SceneShowStats)) {
+    if (iconButton(ICON_FA_CHART_SIMPLE, "Toggle Statistics", EditorSettings::Get().SceneShowStats)) {
         EditorSettings::Get().SceneShowStats = !EditorSettings::Get().SceneShowStats;
         EditorSettings::Save();
     }
@@ -4375,23 +4381,65 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     ImGui::SameLine();
     if (iconButton(ICON_FA_CLOCK_ROTATE_LEFT, "Toggle History", m_ShowHistory)) m_ShowHistory = !m_ShowHistory;
 
-    divider();
-    bool unlocked = !m_LayoutLocked;
-    if (iconButton(unlocked ? ICON_FA_LOCK_OPEN : ICON_FA_LOCK,
-            unlocked ? "Layout unlocked — click to lock panels in place" : "Layout locked — panels can still be resized; click to allow moving/rearranging too", unlocked)) {
-        m_LayoutLocked = !m_LayoutLocked;
-    }
+    // The toolbar's empty space is the window drag handle (the OS caption is gone). True only
+    // when the cursor is over this strip and not over any widget / open menu / active drag —
+    // Window.cpp's WM_NCHITTEST reads this to return HTCAPTION.
+    m_TitleBarDragHovered =
+        ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+        !ImGui::IsAnyItemHovered() &&
+        !ImGui::IsAnyItemActive() &&
+        !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
 
     ImGui::End();
     ImGui::PopStyleVar(); // WindowPadding
 }
 
+// Minimize / maximize-restore / close, right-aligned in the toolbar's menu-bar row. Operates
+// directly on the GLFW window; the visual frame removal happens in Window.cpp.
+void EditorLayer::DrawWindowControls() {
+    const float h = ImGui::GetFrameHeight();
+    const float bw = std::floor(h * 1.6f);
+    const ImGuiStyle& st = ImGui::GetStyle();
+    const float startX = ImGui::GetWindowWidth() - bw * 3.0f - st.WindowPadding.x;
+    ImGui::SameLine(startX > 0.0f ? startX : 0.0f);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, st.ItemSpacing.y));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.09f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 1.0f, 1.0f, 0.16f));
+
+    ImGui::PushID("win_min");
+    if (ImGui::Button(ICON_FA_MINUS, ImVec2(bw, 0.0f))) glfwIconifyWindow(m_Window);
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Minimize");
+    ImGui::PopID();
+    ImGui::SameLine();
+
+    const bool maxed = glfwGetWindowAttrib(m_Window, GLFW_MAXIMIZED) != 0;
+    ImGui::PushID("win_max");
+    if (ImGui::Button(maxed ? ICON_FA_COMPRESS : ICON_FA_EXPAND, ImVec2(bw, 0.0f))) {
+        if (maxed) glfwRestoreWindow(m_Window); else glfwMaximizeWindow(m_Window);
+    }
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip(maxed ? "Restore" : "Maximize");
+    ImGui::PopID();
+    ImGui::SameLine();
+
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.86f, 0.15f, 0.18f, 0.92f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.78f, 0.12f, 0.15f, 1.0f));
+    ImGui::PushID("win_close");
+    if (ImGui::Button(ICON_FA_XMARK, ImVec2(bw, 0.0f))) glfwSetWindowShouldClose(m_Window, GLFW_TRUE);
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Close");
+    ImGui::PopID();
+    ImGui::PopStyleColor(2);
+
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar(2);
+}
+
 void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
     // Locked only blocks dragging the tab to move/undock/rearrange the panel — resizing its
     // dock node (and the neighbors that share that border) always works, locked or not.
-    ImGuiWindowFlags flags = m_LayoutLocked
-        ? (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)
-        : ImGuiWindowFlags_None;
+    ImGuiWindowFlags flags = ImGuiWindowFlags_None;
     if (!ImGui::Begin("Scene Hierarchy", &m_ShowHierarchy, flags)) { ImGui::End(); return; }
 
     // Accumulates as each row is drawn (DrawHierarchyNode); published to m_HierarchyVisibleOrder
@@ -5005,10 +5053,16 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
 void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     // Locked only blocks dragging the tab to move/undock/rearrange the panel — resizing its
     // dock node (and the neighbors that share that border) always works, locked or not.
-    ImGuiWindowFlags flags = m_LayoutLocked
-        ? (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)
-        : ImGuiWindowFlags_None;
+    ImGuiWindowFlags flags = ImGuiWindowFlags_None;
     if (!ImGui::Begin("Inspector", &m_ShowInspector, flags)) { ImGui::End(); return; }
+
+    // Flat button language for the whole panel (#155/#156): no raised body at rest, a faint wash
+    // on hover. Every ImGui::Button below inherits it; ActionButton / DangerIconButton push their
+    // own on top. Popped before each ImGui::End() via InspectorEnd().
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.14f));
+    auto InspectorEnd = []() { ImGui::PopStyleColor(3); ImGui::End(); };
 
     // Prune handles for objects deleted since the selection was made, so the multi/single
     // Inspector split below (and everything downstream) sees an accurate count.
@@ -5028,7 +5082,8 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         auto forEach = [&](const std::function<void(entt::entity)>& fn) { for (entt::entity e : sel) fn(e); };
 
         ImGui::SeparatorText((std::to_string(count) + " objects selected").c_str());
-        EditorUI::HelpMarker(
+        // Explanation moved onto the heading's own tooltip (#156) — no persistent "(?)" glyph.
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip(
             "Editing a field here writes it to EVERY selected object.\n"
             "A field showing \xE2\x80\x94 (an em dash) means the selected objects currently\n"
             "hold different values; set it to give them all the same value.\n\n"
@@ -5336,23 +5391,19 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         }
 
         ImGui::Spacing();
+        // Compact, right-aligned, icon-only (#156) — names + shortcuts live in the tooltips.
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
-        float halfWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
-        if (ImGui::Button(ICON_FA_CLONE "  Duplicate", ImVec2(halfWidth, 0.0f)))
-            DuplicateSelection(world, assets);
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Duplicate every selected object (Ctrl+D)");
-        ImGui::SameLine();
         {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.16f, 0.16f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.20f, 0.20f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.80f, 0.24f, 0.24f, 1.0f));
-            bool del = ImGui::Button(ICON_FA_TRASH "  Delete", ImVec2(halfWidth, 0.0f));
-            ImGui::PopStyleColor(3);
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete every selected object (Del)");
-            if (del) DeleteSelection(world);
+            const float bw = ImGui::GetFrameHeight() + 8.0f;
+            ImGui::SameLine(ImGui::GetContentRegionMax().x - bw * 2.0f - ImGui::GetStyle().ItemSpacing.x);
+            if (ActionButton(ICON_FA_CLONE, "Duplicate every selected object (Ctrl+D)", ImVec2(bw, 0.0f)))
+                DuplicateSelection(world, assets);
+            ImGui::SameLine();
+            if (DangerIconButton(ICON_FA_TRASH, "Delete every selected object (Del)", ImVec2(bw, 0.0f)))
+                DeleteSelection(world);
         }
         ImGui::PopStyleVar();
-        ImGui::End();
+        InspectorEnd();
         return;
     }
 
@@ -5362,7 +5413,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         // anything, and show its Import Settings instead of just an empty placeholder.
         if (!m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder) {
             DrawAssetImportInspector(world, assets, m_SelectedAssetKey);
-            ImGui::End();
+            InspectorEnd();
             return;
         }
         // Nothing selected anywhere — instead of a near-black void with one line of grey text,
@@ -5393,7 +5444,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             ImGui::Spacing();
             ImGui::TextDisabled("Last selected: %s", m_LastSelectedName.c_str());
         }
-        ImGui::End();
+        InspectorEnd();
         return;
     }
 
@@ -5729,12 +5780,12 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             }
             if (isSpot) {
                 PropertyLabel("Spot Angle", "Half-angle of the light cone, in degrees.\nThe cone points along the entity's -Z axis - use Rotation to aim it.");
-                ImGui::SliderFloat("##SpotAngle", &light->SpotAngleDegrees, 1.0f, 89.0f, "%.0f deg");
+                EditorUI::SliderFloat("##SpotAngle", &light->SpotAngleDegrees, 1.0f, 89.0f, "%.0f deg");
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
             }
             if (isDir) {
                 PropertyLabel("Angular Size", "Apparent diameter of the sun disc, in degrees (~0.53 = Earth's sun).\nWider = softer shadows.\nAim the sun with the entity's Rotation (it shines along -Z).");
-                ImGui::SliderFloat("##AngularSize", &light->AngularSizeDegrees, 0.1f, 20.0f, "%.2f deg");
+                EditorUI::SliderFloat("##AngularSize", &light->AngularSizeDegrees, 0.1f, 20.0f, "%.2f deg");
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
             }
 
@@ -5751,13 +5802,13 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 bool en = sh.Enabled;
                 if (ImGui::Checkbox("##LightCastShadows", &en)) { PushUndo(world, "Edit Light"); sh.Enabled = en; }
                 PropertyLabel("Bias", "Multiplier on the shader's depth bias. >1 pushes the shadow off contact\n(fixes acne); <1 pulls it back toward the caster.");
-                ImGui::SliderFloat("##ShadowBias", &sh.Bias, 0.0f, 4.0f, "x%.2f");
+                EditorUI::SliderFloat("##ShadowBias", &sh.Bias, 0.0f, 4.0f, "x%.2f");
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
                 PropertyLabel("Normal Bias", "Multiplier on the normal-offset term (moves the sample along the surface\nnormal before comparing). Widen if edges show light bleed.");
-                ImGui::SliderFloat("##ShadowNormalBias", &sh.NormalBias, 0.0f, 4.0f, "x%.2f");
+                EditorUI::SliderFloat("##ShadowNormalBias", &sh.NormalBias, 0.0f, 4.0f, "x%.2f");
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
                 PropertyLabel("Softness", "Multiplier on the PCF filter radius. Higher = wider, softer penumbra.");
-                ImGui::SliderFloat("##ShadowSoftness", &sh.Softness, 0.0f, 4.0f, "x%.2f");
+                EditorUI::SliderFloat("##ShadowSoftness", &sh.Softness, 0.0f, 4.0f, "x%.2f");
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
                 if (isSpot || isPoint) {
                     PropertyLabel("Near Plane", "Perspective near distance for this light's depth pass.\nRaise it to reclaim depth precision when the light sits far from what it lights.");
@@ -5805,7 +5856,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 "The Game view renders through this camera while editing, so you can frame a\nshot without walking there. Play mode still uses the first-person controller.")) {
             PropertyLabel("Field of View", "Vertical FOV in degrees.");
             ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::SliderFloat("##Fov", &cam->FovDegrees, 20.0f, 120.0f, "%.0f deg");
+            EditorUI::SliderFloat("##Fov", &cam->FovDegrees, 20.0f, 120.0f, "%.0f deg");
             if (ImGui::IsItemActivated()) PushUndo(world, "Edit Camera");
             PropertyLabel("Near", "Closest distance the camera renders.");
             ImGui::SetNextItemWidth(-FLT_MIN);
@@ -5861,10 +5912,10 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 }
                 ImGui::EndCombo();
             }
-            if (!audio->SoundPath.empty() && ImGui::Button(ICON_FA_PLAY "  Preview")) {
+            if (!audio->SoundPath.empty() &&
+                ActionButton(ICON_FA_PLAY "  Preview", "Play the clip once, right now, to check how it sounds")) {
                 AudioEngine::Play(audio->SoundPath);
             }
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Play the clip once, right now, to check how it sounds");
             EndComponentSection();
         }
         if (removed) {
@@ -5883,31 +5934,24 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     DrawAddComponentMenu(world, assets, entity);
 
     ImGui::Spacing();
-    // Labelled, not icon-only — the archive glyph in particular was unguessable (audit #76).
-    float thirdWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2.0f) / 3.0f;
-    if (ImGui::Button(ICON_FA_CLONE "  Duplicate", ImVec2(thirdWidth, 0.0f))) DuplicateSelection(world, assets);
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Duplicate this object (Ctrl+D)");
+    // Right-aligned flat icon row — Duplicate / Prefab / Delete, names + shortcuts in tooltips.
+    const float ib = ImGui::GetFrameHeight() + 8.0f;
+    ImGui::SameLine(ImGui::GetContentRegionMax().x - ib * 3.0f - ImGui::GetStyle().ItemSpacing.x * 2.0f);
+    if (ActionButton(ICON_FA_CLONE, "Duplicate this object (Ctrl+D)", ImVec2(ib, 0.0f)))
+        DuplicateSelection(world, assets);
     ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_BOX_ARCHIVE "  Prefab", ImVec2(thirdWidth, 0.0f))) {
+    if (ActionButton(ICON_FA_BOX_ARCHIVE, "Save this object as a reusable .prefab asset", ImVec2(ib, 0.0f))) {
         std::string path = FileDialog::SaveFile("Prefab Files\0*.prefab\0All Files\0*.*\0", "prefab", m_Window);
         if (!path.empty() && SceneSerializer::SavePrefab(world, entity, path)) assets.RegisterPrefab(path);
     }
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Save this object as a reusable .prefab asset");
     ImGui::SameLine();
-    {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.16f, 0.16f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.20f, 0.20f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.80f, 0.24f, 0.24f, 1.0f));
-        bool del = ImGui::Button(ICON_FA_TRASH "  Delete", ImVec2(thirdWidth, 0.0f));
-        ImGui::PopStyleColor(3);
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete this object (Del)");
-        if (del) DeleteSelection(world);
-    }
+    if (DangerIconButton(ICON_FA_TRASH, "Delete this object (Del)", ImVec2(ib, 0.0f)))
+        DeleteSelection(world);
 
     ImGui::PopStyleVar();
 
     ImGui::PopID();
-    ImGui::End();
+    InspectorEnd();
 }
 
 bool EditorLayer::BeginComponentSection(World& world, entt::entity entity, const char* icon,
@@ -5921,8 +5965,19 @@ bool EditorLayer::BeginComponentSection(World& world, entt::entity entity, const
     // the click — it lands on the header's own collapse-toggle instead, which is exactly why
     // pressing it only expanded/collapsed the section instead of removing anything.
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_AllowOverlap | (defaultOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0);
+    // Flat heading (#155): no filled bar — the triangle + icon + label sit on the panel, with a
+    // hairline under them for separation. A barely-there wash marks hover.
+    ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.05f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
     bool open = ImGui::CollapsingHeader(header.c_str(), flags);
+    ImGui::PopStyleColor(3);
     if (tooltip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
+    {
+        const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+        ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y - 0.5f), ImVec2(mx.x, mx.y - 0.5f),
+                                            ImGui::GetColorU32(ImGuiCol_Separator));
+    }
 
     if (removable) {
         // Right-aligned "x" sharing the header's line, the way Unity puts a component's context
@@ -5931,8 +5986,9 @@ bool EditorLayer::BeginComponentSection(World& world, entt::entity entity, const
         float x = ImGui::GetWindowContentRegionMax().x - buttonWidth;
         ImGui::SameLine(x);
         ImGui::PushID(label);
-        if (ImGui::SmallButton(ICON_FA_XMARK)) removedOut = true;
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Remove this component");
+        // Same danger treatment as every other destructive control (#156): flat at rest, red on hover.
+        if (DangerIconButton(ICON_FA_XMARK, "Remove this component", ImVec2(buttonWidth, 0.0f)))
+            removedOut = true;
         ImGui::PopID();
     }
 
@@ -5949,11 +6005,15 @@ void EditorLayer::EndComponentSection() {
     ImGui::Spacing();
 }
 
+bool EditorLayer::AnyModalOpen() const {
+    return ImGui::GetTopMostPopupModal() != nullptr;
+}
+
 void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity) {
-    if (ImGui::Button(ICON_FA_PLUS "  Add Component", ImVec2(-1.0f, 0.0f))) {
+    if (ActionButton(ICON_FA_PLUS "  Add Component", "Attach a new capability to this object",
+                     ImVec2(-1.0f, 0.0f))) {
         ImGui::OpenPopup("##AddComponentPopup");
     }
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Attach a new capability to this object");
     if (!ImGui::BeginPopup("##AddComponentPopup")) return;
 
     auto& registry = world.Registry;
@@ -6052,11 +6112,11 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets) {
     if (ImGui::IsItemActivated()) StageUndo(world);
     if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
     PropertyLabel("Metallic", "0 = non-metal (plastic, wood, skin), 1 = pure metal.\nIgnored where a Metallic map is set.");
-    ImGui::SliderFloat("##Metallic", &mat->Metallic, 0.0f, 1.0f);
+    EditorUI::SliderFloat("##Metallic", &mat->Metallic, 0.0f, 1.0f);
     if (ImGui::IsItemActivated()) StageUndo(world);
     if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
     PropertyLabel("Roughness", "0 = mirror-smooth, 1 = fully matte.\nIgnored where a Roughness map is set.");
-    ImGui::SliderFloat("##Roughness", &mat->Roughness, 0.04f, 1.0f);
+    EditorUI::SliderFloat("##Roughness", &mat->Roughness, 0.04f, 1.0f);
     if (ImGui::IsItemActivated()) StageUndo(world);
     if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
     PropertyLabel("Emissive Color", "Color this surface glows, independent of scene lighting.");
@@ -6064,7 +6124,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets) {
     if (ImGui::IsItemActivated()) StageUndo(world);
     if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
     PropertyLabel("Emissive Strength", "Brightness multiplier for the Emissive Color/map - above 1 for a strong glow.");
-    ImGui::SliderFloat("##EmissiveStrength", &mat->EmissiveStrength, 0.0f, 10.0f);
+    EditorUI::SliderFloat("##EmissiveStrength", &mat->EmissiveStrength, 0.0f, 10.0f);
     if (ImGui::IsItemActivated()) StageUndo(world);
     if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
 
@@ -7918,9 +7978,7 @@ void EditorLayer::DrawFolderTreeNode(World& world, AssetLibrary& assets, const s
 void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     // Locked only blocks dragging the tab to move/undock/rearrange the panel — resizing its
     // dock node (and the neighbors that share that border) always works, locked or not.
-    ImGuiWindowFlags flags = m_LayoutLocked
-        ? (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)
-        : ImGuiWindowFlags_None;
+    ImGuiWindowFlags flags = ImGuiWindowFlags_None;
     // Tighter vertical padding than the default so the toolbar hugs the tab bar instead of
     // floating below a large gap.
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
@@ -8101,16 +8159,28 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     float footerHeight = ImGui::GetFrameHeightWithSpacing() + 4.0f;
     float contentHeight = ImGui::GetContentRegionAvail().y - footerHeight;
 
-    ImGui::BeginChild("##AssetTree", ImVec2(m_AssetTreeWidth, contentHeight), ImGuiChildFlags_Borders);
+    // No child borders on either pane (#158) — the splitter alone is the divider: a hairline in
+    // ImGuiCol_Border at rest, brightening + thickening on hover/drag, inside a 6px hit target.
+    ImGui::BeginChild("##AssetTree", ImVec2(m_AssetTreeWidth, contentHeight), ImGuiChildFlags_None);
     DrawFolderTreeNode(world, assets, "", true);
     ImGui::EndChild();
 
     ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ChildBg));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_SeparatorHovered));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_SeparatorActive));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
     ImGui::Button("##AssetTreeSplitter", ImVec2(6.0f, contentHeight));
     ImGui::PopStyleColor(3);
+    {
+        const bool active = ImGui::IsItemActive();
+        const bool hot = active || ImGui::IsItemHovered();
+        const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+        const float cx = ImFloor((mn.x + mx.x) * 0.5f) + 0.5f;
+        const ImU32 col = ImGui::GetColorU32(active ? ImGuiCol_SeparatorActive
+                                           : hot ? ImGuiCol_SeparatorHovered : ImGuiCol_Border);
+        ImGui::GetWindowDrawList()->AddLine(ImVec2(cx, mn.y + 2.0f), ImVec2(cx, mx.y - 2.0f),
+                                            col, hot ? 2.0f : 1.0f);
+    }
     if (ImGui::IsItemHovered() || ImGui::IsItemActive()) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
     if (ImGui::IsItemActive()) m_AssetTreeWidth += ImGui::GetIO().MouseDelta.x;
     m_AssetTreeWidth = std::clamp(m_AssetTreeWidth, 140.0f * m_UIScale, 460.0f * m_UIScale);
@@ -8120,7 +8190,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     }
     ImGui::SameLine();
 
-    ImGui::BeginChild("##AssetList", ImVec2(0, contentHeight), ImGuiChildFlags_Borders);
+    ImGui::BeginChild("##AssetList", ImVec2(0, contentHeight), ImGuiChildFlags_None);
 
     bool searching = !m_AssetSearchFilter.empty();
     ParsedAssetSearch parsedSearch = ParseAssetSearch(m_AssetSearchFilter);
@@ -8213,7 +8283,9 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     bool gridMode = m_AssetIconSize > kListViewIconSize * m_UIScale;
     const float cellPadding = 8.0f;
     const float cellWidth = m_AssetIconSize + cellPadding * 2.0f;
-    const float cellHeight = m_AssetIconSize + cellPadding + ImGui::GetTextLineHeightWithSpacing() * 2.0f;
+    // One text line reserved under the thumbnail (#158) — long names truncate with "…" and show
+    // the full string on hover; every grid row is a line shorter than the old two-line reserve.
+    const float cellHeight = m_AssetIconSize + cellPadding + ImGui::GetTextLineHeightWithSpacing();
 
     if (!filtering && !m_CurrentAssetFolder.empty()) {
         if (ImGui::Selectable(ICON_FA_ARROW_UP "  ..")) {
@@ -8274,7 +8346,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
                 // DrawClampedGridLabel centres each line within this box.
                 ImVec2 labelPos(tileMin.x + 3.0f, tileMin.y + m_AssetIconSize + cellPadding);
                 bool truncated = DrawClampedGridLabel(dl, labelPos, cellWidth - 6.0f,
-                    ImGui::GetTextLineHeightWithSpacing(), textColor, cell.display.c_str());
+                    ImGui::GetTextLineHeightWithSpacing(), textColor, cell.display.c_str(), /*maxLines=*/1);
                 if (truncated && ImGui::IsItemHovered()) {
                     EditorUI::SetTooltip(cell.display.c_str());
                 }
@@ -8578,7 +8650,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     if (sliderX > ImGui::GetCursorPosX()) ImGui::SameLine(sliderX);
     else ImGui::NewLine();
     ImGui::SetNextItemWidth(sliderWidth);
-    ImGui::SliderFloat("##IconSize", &m_AssetIconSize,
+    EditorUI::SliderFloat("##IconSize", &m_AssetIconSize,
         kListViewIconSize * m_UIScale, 128.0f * m_UIScale, "");
     if (ImGui::IsItemHovered()) {
         EditorUI::SetTooltip("Icon size - drag all the way to the left for a compact list view.");

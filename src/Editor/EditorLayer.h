@@ -18,6 +18,8 @@ struct GLFWwindow;
 class World;
 class Camera;
 class AssetLibrary;
+class ScreenBlur;
+class Framebuffer;
 
 // Rect = Unity's "Rect Tool" adapted to 3D: translate handles plus bounding-box corner/edge
 // handles for non-uniform scaling, in one combined gizmo (ImGuizmo's TRANSLATE | BOUNDS).
@@ -59,6 +61,14 @@ public:
     // is hidden then. Clicks only raise request flags — main.cpp owns the play/maximize/cursor
     // state itself.
     void DrawPlayStopButton(bool playing, bool maximized);
+
+    // Minimize / maximize-restore / close buttons, right-aligned in the top toolbar — the OS
+    // title bar is removed (Win32 custom frame in Window.cpp). Called from DrawTopToolbar.
+    void DrawWindowControls();
+    // True when the cursor is over the toolbar's empty (draggable) area this frame; main.cpp
+    // forwards it to Window so its WM_NCHITTEST can treat that region as the window's caption.
+    bool WantsWindowDrag() const { return m_TitleBarDragHovered; }
+    bool m_TitleBarDragHovered = false;
     // Screen-space rect of the live Game view image + its framebuffer's colour texture/size, so
     // the Play-Mode Stop/Fullscreen overlay can anchor to the game viewport and adapt its tint
     // to what's rendered there. Pass a zero size to say "no game view this frame".
@@ -198,6 +208,10 @@ public:
     // content, in the same draw-list ordering as anything else in that window, always on top of
     // its own host background rather than underneath it.
     void SetSceneTexture(unsigned int glColorTexture) { m_SceneColorTexture = glColorTexture; }
+
+    // True while a modal dialog (Save changes?, Recover unsaved changes?, a confirm prompt) is
+    // open. main.cpp reads it to frost the Scene viewport behind the dim scrim.
+    bool AnyModalOpen() const;
     // The Scene window's own content-region size as of the LAST frame it was drawn (zero before
     // the first draw) — one-frame-stale for the same reason GameViewPanel's equivalent is: this
     // frame's texture has to already exist before Draw() can Image() it, but the window's actual
@@ -289,6 +303,12 @@ private:
         const std::string& path, const std::string& targetFolder);
 
     GLFWwindow* m_Window = nullptr;
+
+    // Frosted backdrop behind modal dialogs — created lazily the first time a modal opens (see
+    // EndFrame): the whole framebuffer is blurred and the dialog window redrawn crisp on top.
+    std::unique_ptr<ScreenBlur> m_ModalBlur;
+    std::unique_ptr<Framebuffer> m_FrostCapture;
+
     // Monitor content-scale factor (1.0 = 96 DPI, 2.0 = 200% Windows scaling, etc.), read once
     // at Init and baked into font sizes and the handful of raw-pixel layout constants below —
     // so the UI reads at a consistent physical size instead of shrinking to illegible on a
@@ -452,7 +472,6 @@ private:
     bool m_BoxSelectActive = false;
     glm::vec2 m_BoxSelectStart{0.0f, 0.0f};
     void AddToSelectionIfAbsent(entt::entity entity); // additive-only: never toggles an already-selected item off
-    bool m_LayoutLocked = true;
 
     bool m_ShowGrid = true;
     bool m_ShowGizmos = true; // View menu toggle for the viewport transform gizmo (audit #60)
@@ -533,11 +552,8 @@ private:
     bool m_ShowHistory = false;
     void DrawHistoryPanel(World& world, AssetLibrary& assets);
 
-    // Lights panel (#140 phase 4): one row per LightComponent entity — swatch, type, name,
-    // enable, solo, mute, frame. Dockable; visibility not persisted (matches History/Console).
-    bool m_ShowLightsPanel = false;
-    void DrawLightsPanel(World& world, Camera& editorCamera);
-    // Editor-only, never serialized, cleared by NewScene/OpenScene. See IsLightSuppressed().
+    // Per-light solo / mute — editor-only, never serialized, cleared by NewScene/OpenScene.
+    // See IsLightSuppressed(); consumed by main.cpp's per-frame light gather.
     std::unordered_set<entt::entity> m_SoloLights;
     std::unordered_set<entt::entity> m_MutedLights;
 
@@ -587,6 +603,17 @@ private:
     float m_StatusBarContrastLum = 1.0f;
     float m_StatusBarContrastTarget = 1.0f;
     float m_StatusBarSampleAccum = 0.0f;
+    // ...and for the two transparent viewport HUDs — Statistics (top-left) and History (bottom-
+    // right). Each reads the patch of scene directly behind it, so they tint independently.
+    float m_StatsHudContrastLum = 1.0f;
+    float m_StatsHudContrastTarget = 1.0f;
+    float m_StatsHudSampleAccum = 0.0f;
+    // Set each frame by DrawStatsPanel: true when the (capped) Statistics HUD reaches far enough
+    // down the left edge to collide with the corner monogram — the mark is skipped while so.
+    bool m_HideEngineMarkForStats = false;
+    float m_HistoryHudContrastLum = 1.0f;
+    float m_HistoryHudContrastTarget = 1.0f;
+    float m_HistoryHudSampleAccum = 0.0f;
     // Live Game-view rect + texture, pushed in each frame by main.cpp (zero size = none). Used by
     // DrawPlayStopButton to place the Stop/Fullscreen control over the game viewport and tint it.
     ImVec2 m_GameViewImgPos{0.0f, 0.0f};
@@ -804,13 +831,25 @@ private:
     // Rgb) so the choice persists and the Preferences + Window-menu controls share one source of
     // truth. (Was m_ShowEngineMark — a session-only bool — before the Preferences controls landed.)
 
-    // --- Statistics overlay --------------------------------------------------------------
-    void DrawStatsOverlay(World& world, float dt);
+    // Contrast-adaptive text tint for the transparent viewport HUDs: sample the scene behind a
+    // screen-space box, ease the eased/target luminance pair (throttled ~10 Hz via `accum`), and
+    // push ImGuiCol_Text + ImGuiCol_TextDisabled so the readout rides white-on-dark / dark-on-
+    // light like the corner mark. Always pushes exactly 2 style colours — caller pops them after
+    // its content. Same maths as DrawEngineMark / DrawViewportStatusBar.
+    void PushAdaptiveHudText(ImVec2 centerScreen, float boxPx, float dt,
+                             float& easedLum, float& targetLum, float& sampleAccum);
+
+    // --- Statistics --------------------------------------------------------------------
+    // Compact transparent HUD pinned to the Scene viewport's top-left corner (#149): FPS/ms,
+    // draw/tri/vert counts, per-category entity counts, the Profiler sample list, and the
+    // GL-state-cache bind table. Auto-sized to its text, click-through, toggled via
+    // EditorSettings::SceneShowStats.
+    void DrawStatsPanel(World& world, float dt);
     // Thin always-on strip along the bottom of the Scene viewport: FPS / ms / draws / tris /
-    // selection count / active tool. The toggleable Statistics box (DrawStatsOverlay) is the
-    // deeper readout; this is the at-a-glance one (#92).
+    // selection count / active tool — the at-a-glance surface (#92). The Statistics panel above
+    // is the deeper readout.
     void DrawViewportStatusBar();
-    // Visibility lives in EditorSettings::SceneShowStats (persisted), not a plain member.
+    // Panel visibility lives in EditorSettings::SceneShowStats (persisted), not a plain member.
     RenderStats m_RenderStats;
     // Smoothed so the number is readable instead of flickering every frame.
     float m_SmoothedFrameMs = 16.6f;
