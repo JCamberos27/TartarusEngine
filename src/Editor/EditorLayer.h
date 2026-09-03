@@ -667,7 +667,7 @@ private:
     // File > Open... dialog does — shared so the Asset Browser's Scenes folder can open a
     // scene with one double-click instead of going through the OS file dialog.
     void OpenScene(World& world, AssetLibrary& assets, const std::string& path);
-    void NewScene(World& world); // untitled scene; shared by File > New Scene and Ctrl+N
+    void NewScene(World& world, AssetLibrary& assets); // fresh scene, written to disk immediately; File > New Scene / Ctrl+N
 
     // Unity Project-window style browsing: the current virtual folder ("" = root), the
     // browser-local selection (separate from the scene selection — this is for F2/right-click
@@ -783,12 +783,16 @@ private:
     // The actual removal of one item, called either directly (skipDialog) or from the
     // confirmation popup's Delete button, once per pending item. No-op for a key that isn't a
     // recognized AssetLibrary entry (e.g. a Scene).
-    void PerformAssetDelete(World& world, AssetLibrary& assets, const std::string& key, bool isFolder);
+    // Returns false and fills m_DeleteError with a human-readable reason when the item can't be
+    // removed (e.g. a scene file that's write-protected or currently open).
+    bool PerformAssetDelete(World& world, AssetLibrary& assets, const std::string& key, bool isFolder);
     // Drawn once at the Asset Browser's top level (not nested under any per-cell PushID) so it's
     // reachable by name regardless of which cell's context menu requested it.
     void DrawDeleteConfirmPopup(World& world, AssetLibrary& assets);
     std::vector<AssetKeyRef> m_PendingDelete;
     bool m_OpenDeleteConfirmRequested = false;
+    std::string m_DeleteError;                  // non-empty -> the "Can't Delete" modal shows it
+    bool m_OpenDeleteErrorRequested = false;
 
     // Copies every selected asset's file on disk (Model/Texture/Sound/Prefab only - not a Scene
     // or a folder; non-duplicable entries in the selection are silently skipped) to a numbered
