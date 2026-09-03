@@ -57,7 +57,7 @@ namespace {
 // position come from ImGui::SliderBehavior so keyboard, gamepad, Ctrl+click and range clamping
 // all behave exactly like a stock slider; only the paint and the trailing box are custom.
 bool SliderStyled(const char* label, ImGuiDataType dt, void* p_v,
-                  const void* p_min, const void* p_max, const char* format) {
+                  const void* p_min, const void* p_max, const char* format, ImGuiSliderFlags flags) {
     ImGuiWindow* window = ImGui::GetCurrentWindow();
     if (window->SkipItems) return false;
 
@@ -93,7 +93,7 @@ bool SliderStyled(const char* label, ImGuiDataType dt, void* p_v,
 
     ImRect grab_bb;
     bool changed = ImGui::SliderBehavior(frame_bb, id, dt, p_v, p_min, p_max, format,
-                                         ImGuiSliderFlags_AlwaysClamp, &grab_bb);
+                                         flags | ImGuiSliderFlags_AlwaysClamp, &grab_bb);
     if (changed) ImGui::MarkItemEdited(id);
 
     // --- paint: thin track, filled portion, circular grab ---
@@ -163,13 +163,13 @@ bool SliderStyled(const char* label, ImGuiDataType dt, void* p_v,
 } // namespace
 
 bool EditorUI::SliderFloat(const char* label, float* v, float v_min, float v_max,
-                           const char* format, ImGuiSliderFlags /*flags*/) {
+                           const char* format, ImGuiSliderFlags flags) {
     if (!format) format = "%.3f";
-    return SliderStyled(label, ImGuiDataType_Float, v, &v_min, &v_max, format);
+    return SliderStyled(label, ImGuiDataType_Float, v, &v_min, &v_max, format, flags);
 }
 
 bool EditorUI::SliderInt(const char* label, int* v, int v_min, int v_max,
-                         const char* format, ImGuiSliderFlags /*flags*/) {
+                         const char* format, ImGuiSliderFlags flags) {
     if (!format) format = "%d";
-    return SliderStyled(label, ImGuiDataType_S32, v, &v_min, &v_max, format);
+    return SliderStyled(label, ImGuiDataType_S32, v, &v_min, &v_max, format, flags);
 }
