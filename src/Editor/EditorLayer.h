@@ -212,6 +212,30 @@ public:
     // True while a modal dialog (Save changes?, Recover unsaved changes?, a confirm prompt) is
     // open. main.cpp reads it to frost the Scene viewport behind the dim scrim.
     bool AnyModalOpen() const;
+
+    // --- Capture (screenshot) tool -----------------------------------------------------------
+    // The toolbar camera button, the PrintScreen key and Preferences all call RequestCapture();
+    // main.cpp does the grab from the right framebuffer for the chosen mode, then OnCaptureDone.
+    // `primed` guards the one-frame ordering gap: the trigger (toolbar / key / sentinel) fires
+    // after the Scene view has already rendered for the frame, so a viewport shot that needs a
+    // resized render target waits until the NEXT frame — main.cpp sets primed once it has
+    // rendered the scene at the requested size, and only then does the grab run.
+    struct CaptureRequest { bool pending = false; bool primed = false; int mode = 0; int scale = 1; int format = 0; int resW = 0; int resH = 0; };
+    void RequestCapture();                       // snapshots the current EditorSettings capture prefs
+    CaptureRequest PeekCaptureRequest() const { return m_CaptureReq; }
+    void PrimeCaptureRequest() { m_CaptureReq.primed = true; }
+    CaptureRequest ConsumeCaptureRequest() { CaptureRequest r = m_CaptureReq; m_CaptureReq.pending = false; m_CaptureReq.primed = false; return r; }
+    void OnCaptureDone(const std::string& path, int w, int h);
+    void DrawCaptureFeedback(float dt);          // fading flash + "saved" toast; called from Draw()
+    // Double-clicking a shot in the Asset Browser's Screenshots folder opens a centred, sleek
+    // in-editor lightbox instead of shelling out to the OS viewer.
+    void OpenScreenshotPreview(const std::string& path);
+    void DrawScreenshotPreview();                // centred image lightbox; called from Draw()
+    // Set by main.cpp for the single frame a "clean viewport" capture renders — every editor
+    // overlay (grid, gizmos, entity icons, light gizmos, engine mark, HUDs, status bar) skips.
+    void SetHideOverlaysThisFrame(bool v) { m_HideOverlaysThisFrame = v; }
+    bool OverlaysHidden() const { return m_HideOverlaysThisFrame; }
+
     // The Scene window's own content-region size as of the LAST frame it was drawn (zero before
     // the first draw) — one-frame-stale for the same reason GameViewPanel's equivalent is: this
     // frame's texture has to already exist before Draw() can Image() it, but the window's actual
@@ -304,6 +328,13 @@ private:
 
     GLFWwindow* m_Window = nullptr;
 
+    CaptureRequest m_CaptureReq;
+    bool m_HideOverlaysThisFrame = false;
+    float m_CaptureFlashT = 0.0f;              // eased 1 -> 0 over ~0.35s after a shot
+    std::string m_LastCapturePath;
+    std::string m_CaptureToast;               // shown in a corner for a few seconds after a shot
+    float m_CaptureToastT = 0.0f;
+
     // Frosted backdrop behind modal dialogs — created lazily the first time a modal opens (see
     // EndFrame): the whole framebuffer is blurred and the dialog window redrawn crisp on top.
     std::unique_ptr<ScreenBlur> m_ModalBlur;
@@ -325,6 +356,11 @@ private:
     // these before the first Draw() has run; overwritten every editor-mode frame after that.
     bool m_FocusSceneTabRequested = true;
     bool m_FocusGameTabRequested = false;
+    // Seed the bottom dock node showing the Asset Browser tab (not Console) whenever the default
+    // layout is (re)built. Retried each frame until its dock node exists — same pattern as the
+    // Scene/Game tab focus above.
+    int  m_SelectAssetBrowserTabFrames = 90;  // force the Asset Browser tab active for this many
+                                              // startup frames, outlasting ImGui's .ini dock restore
     ImGuiID m_SceneGameDockNodeId = 0;
     // The editor dockspace id as resolved inside "##DockHost" during Draw() — stashed so
     // KeepDockspaceAlive() (which runs with no window pushed) keeps the RIGHT node alive
@@ -730,6 +766,21 @@ private:
     int m_ThumbnailBudgetThisFrame = 0;
     unsigned int ModelThumbnail(Model& model); // cached GL texture, or 0 while over this frame's budget
     void InvalidateModelThumbnail(const Model* model);
+
+    // Thumbnails for the Asset Browser's "Screenshots" folder — keyed by file path, kept in sync
+    // with what's on disk each frame (entries drop when their file is gone).
+    std::unordered_map<std::string, std::shared_ptr<Texture>> m_ShotThumbs;
+
+    // The screenshot lightbox (DrawScreenshotPreview). Its own full-res Texture, not a m_ShotThumbs
+    // entry, so it survives that map being pruned and isn't size-capped to the thumbnail budget.
+    std::string m_ShotPreviewPath;
+    std::shared_ptr<Texture> m_ShotPreviewTex;
+    bool m_ShotPreviewOpen = false;
+    float m_ShotPreviewAnim = 0.0f;              // 0->1 pop-in ease
+    float m_ShotPreviewZoom = 1.0f;              // 1 = fit-to-canvas; scroll wheel scales it
+    ImVec2 m_ShotPreviewPan{0.0f, 0.0f};         // image offset within the canvas, in pixels
+    bool m_ShotPreviewPanning = false;
+    bool m_ShotPreviewPressOutside = false;       // the active L-press began on the dimmed backdrop
 
     // Drains dropped/imported files a few per frame instead of all at once in a single
     // synchronous stall — see ImportQueueManager.h for why this isn't a background thread.

@@ -7,6 +7,7 @@
 #include "Texture.h"
 #include "Material.h"
 #include "AudioEngine.h"
+#include "Screenshot.h"
 #include "SceneSerializer.h"
 #include "AABB.h"
 #include "Texture.h"
@@ -1596,6 +1597,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             {"Rename selection", "F2  (or double-click in Hierarchy)"},
             {"Open Preferences", "Ctrl+,"},
             {"Toggle fullscreen", "F11"},
+            {"Screenshot (Capture tool)", "Print Screen"},
             {"Play / Stop", "F1"},
             {"Release mouse & keyboard from the running game", "Esc"},
         };
@@ -2849,6 +2851,29 @@ void EditorLayer::ApplyPendingViewportTabFocus() {
     } else if (m_FocusSceneTabRequested) {
         if (SelectDockedTab("Scene")) m_FocusSceneTabRequested = false;
     }
+
+    // Seed the bottom dock node on the Asset Browser tab (ImGui otherwise leaves Console, the
+    // last one docked, active). Runs here — after every panel's Begin/End for the frame — for
+    // the same reason the viewport tab focus does: an earlier poke gets overwritten. ImGui's
+    // .ini dock restore also re-asserts its saved tab for the first few frames, so keep poking
+    // for a short grace window rather than stopping at the first apparent success.
+    // For the first stretch of editor frames, hold the bottom dock node on the Asset Browser tab
+    // (ImGui's .ini restore keeps re-asserting its saved tab — Console — for several frames, so a
+    // one-shot poke loses). After the counter runs out the user is free to switch tabs.
+    if (m_SelectAssetBrowserTabFrames > 0) {
+        --m_SelectAssetBrowserTabFrames;
+        // DockNodeUpdateTabBar() snaps the node's selected tab back to whatever holds nav focus
+        // every frame, so poking the tab bar alone (SelectDockedTab) loses to the Console window.
+        // Focus the Asset Browser window itself — the tab selection follows — and stop as soon as
+        // it's taken so we're not stealing focus for longer than the .ini restore needs.
+        ImGuiWindow* ab = ImGui::FindWindowByName("Asset Browser");
+        if (ab && ab->DockNode && ab->DockNode->SelectedTabId == ab->TabId) {
+            m_SelectAssetBrowserTabFrames = 0;
+        } else if (ab) {
+            SelectDockedTab("Asset Browser");
+            ImGui::FocusWindow(ab);
+        }
+    }
 }
 
 void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera, float dt) {
@@ -2873,6 +2898,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawRecoveryPrompt(world, assets);
     DrawExitPrompt();
     DrawPreferencesWindow(world);
+    DrawScreenshotPreview();
 
     // Auto-save: only ticks here (Draw() is editor-mode-only, per main.cpp) so it never fires
     // mid-Play - the same reason OnExitPlayMode's revert-to-snapshot exists, autosaving
@@ -3011,6 +3037,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGui::DockBuilderDockWindow("Game", center);
         ImGui::DockBuilderFinish(dockspaceId);
         m_SceneGameDockNodeId = center;
+        m_SelectAssetBrowserTabFrames = 90;  // land on Asset Browser, not Console
     }
     ImGui::DockSpace(dockspaceId, ImVec2(0, 0), ImGuiDockNodeFlags_None);
     ImGui::End();
@@ -3082,15 +3109,19 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
     ImGui::End();
 
-    if (EditorSettings::Get().EngineMarkEnabled && !m_HideEngineMarkForStats) DrawEngineMark(dt);
+    if (EditorSettings::Get().EngineMarkEnabled && !m_HideEngineMarkForStats && !m_HideOverlaysThisFrame)
+        DrawEngineMark(dt);
 
     if (m_ShowHierarchy) DrawHierarchy(world, assets);
     if (m_ShowInspector) DrawInspector(world, assets, dt);
     if (m_ShowAssetBrowser) DrawAssetBrowser(world, assets);
     DrawConsole();
-    DrawStatsPanel(world, dt);
-    DrawViewportStatusBar();
-    DrawHistoryPanel(world, assets);
+    if (!m_HideOverlaysThisFrame) {
+        DrawStatsPanel(world, dt);
+        DrawViewportStatusBar();
+        DrawHistoryPanel(world, assets);
+    }
+    DrawCaptureFeedback(dt);
 
     // "Look through light" (#140 phase 4): the Inspector/Lights-panel buttons can't see the
     // camera, so they queue a light here; act on it once, then run the per-frame Esc/banner.
@@ -3148,18 +3179,20 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         UpdateVertexDrag(world, editorCamera);
     }
 
-    DrawEntityIcons(world, editorCamera);
-    DrawLightGizmos(world, editorCamera);
+    if (!m_HideOverlaysThisFrame) {
+        DrawEntityIcons(world, editorCamera);
+        DrawLightGizmos(world, editorCamera);
+    }
 
     // Drawn (and its hover/drag state refreshed) before picking runs below, so a click that
     // lands on the nav gizmo's rotate ring or tool buttons doesn't also start a viewport
     // box-select/pick underneath it.
-    DrawViewGizmo(world, editorCamera);
+    if (!m_HideOverlaysThisFrame) DrawViewGizmo(world, editorCamera);
 
     if (!vHeld) {
         UpdateLightHandles(world, editorCamera);
         HandleViewportPicking(world, editorCamera);
-        if (m_ShowGizmos) DrawGizmo(world, editorCamera);
+        if (m_ShowGizmos && !m_HideOverlaysThisFrame) DrawGizmo(world, editorCamera);
     }
 
     // Anchored to the actual viewport's top-center (a pivot, not a fixed-width guess) so it
@@ -3519,8 +3552,10 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
     ImGui::Begin("##PlayStopButton", nullptr, flags);
     // Forces this to the front of the display order every frame so a dock rebuild elsewhere
     // (Reset Layout) can't bury it behind whatever the freshly recreated dock host window
-    // ends up as.
-    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+    // ends up as. Skipped while a popup is open (e.g. the toolbar's Capture options) so the
+    // button doesn't punch through a menu that legitimately overlays the viewport top-centre.
+    if (!ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
+        ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 
     // Flat "vector" button: no body at rest, just the white (or dark) PLAY glyph + label; a faint
     // plate of the inverse grey on hover/press so it still reads as pressable.
@@ -4195,6 +4230,17 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
     }
 }
 
+// Fixed output sizes offered by the Capture popup's "Resolution" dropdown. Index 0 keeps the
+// live viewport size (and lets Supersample apply); the rest force an exact render target.
+// Shared by the toolbar popup and RequestCapture().
+static const struct { const char* label; int w, h; } kCaptureRes[] = {
+    { "Match viewport", 0,    0    },
+    { "1280 x 720",     1280, 720  },
+    { "1920 x 1080",    1920, 1080 },
+    { "2560 x 1440",    2560, 1440 },
+    { "3840 x 2160",    3840, 2160 },
+};
+
 void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& editorCamera) {
     // Always pinned regardless of Lock Layout — pos/size are forced every frame by the caller.
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar |
@@ -4435,6 +4481,57 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     if (iconButton(ICON_FA_TERMINAL, "Toggle Console", m_ShowConsole)) m_ShowConsole = !m_ShowConsole;
     ImGui::SameLine();
     if (iconButton(ICON_FA_CLOCK_ROTATE_LEFT, "Toggle History", m_ShowHistory)) m_ShowHistory = !m_ShowHistory;
+
+    divider();
+    // Capture: click = shoot with the current settings; the caret opens the options popup.
+    {
+        auto& cs = EditorSettings::Get();
+        static const char* kModes[] = { "Full editor window", "Scene viewport", "Scene viewport (clean)", "Game view" };
+        const int cm = std::clamp(cs.CaptureMode, 0, 3);
+        char tip[128];
+        snprintf(tip, sizeof(tip), "Capture screenshot — %s%s (Print Screen)",
+                 kModes[cm], (cm == 1 || cm == 2) && cs.CaptureScale > 1 ? " x2+" : "");
+        if (iconButton(ICON_FA_CAMERA_RETRO, tip)) RequestCapture();
+        ImGui::SameLine(0.0f, 1.0f);
+        ImGui::PushID("##capOpts");
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+        if (ImGui::Button(ICON_FA_CARET_DOWN)) ImGui::OpenPopup("##CapturePopup");
+        ImGui::PopStyleColor(2);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Capture options");
+        if (ImGui::BeginPopup("##CapturePopup")) {
+            ImGui::PushItemWidth(150.0f * m_UIScale);
+            ImGui::TextDisabled("Capture");
+            if (ImGui::Combo("Mode", &cs.CaptureMode, kModes, IM_ARRAYSIZE(kModes))) EditorSettings::Save();
+            const bool viewportMode = (cs.CaptureMode == 1 || cs.CaptureMode == 2);
+            ImGui::BeginDisabled(!viewportMode);
+            const char* kResLabels[IM_ARRAYSIZE(kCaptureRes)];
+            for (int i = 0; i < IM_ARRAYSIZE(kCaptureRes); ++i) kResLabels[i] = kCaptureRes[i].label;
+            if (ImGui::Combo("Resolution", &cs.CaptureResPreset, kResLabels, IM_ARRAYSIZE(kResLabels)))
+                EditorSettings::Save();
+            ImGui::EndDisabled();
+            ImGui::BeginDisabled(!viewportMode || cs.CaptureResPreset != 0);
+            static const char* kScales[] = { "1x", "2x", "4x" };
+            int si = cs.CaptureScale >= 4 ? 2 : (cs.CaptureScale >= 2 ? 1 : 0);
+            if (ImGui::Combo("Supersample", &si, kScales, IM_ARRAYSIZE(kScales))) {
+                cs.CaptureScale = si == 2 ? 4 : (si == 1 ? 2 : 1); EditorSettings::Save();
+            }
+            ImGui::EndDisabled();
+            static const char* kFmt[] = { "PNG", "JPG" };
+            if (ImGui::Combo("Format", &cs.CaptureFormat, kFmt, IM_ARRAYSIZE(kFmt))) EditorSettings::Save();
+            if (ImGui::Checkbox("Flash", &cs.CaptureFlash)) EditorSettings::Save();
+            ImGui::SameLine();
+            if (ImGui::Checkbox("Sound", &cs.CaptureSound)) EditorSettings::Save();
+            ImGui::Separator();
+            if (ImGui::MenuItem(ICON_FA_CAMERA_RETRO "  Capture now")) { RequestCapture(); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open screenshots folder"))
+                Screenshot::ShowInFolder(m_LastCapturePath.empty() ? Screenshot::Dir() : m_LastCapturePath);
+            ImGui::PopItemWidth();
+            ImGui::EndPopup();
+        }
+        ImGui::PopID();
+    }
+
 
     // The toolbar's empty space is the window drag handle (the OS caption is gone). True only
     // when the cursor is over this strip and not over any widget / open menu / active drag —
@@ -6065,6 +6162,235 @@ void EditorLayer::EndComponentSection() {
 
 bool EditorLayer::AnyModalOpen() const {
     return ImGui::GetTopMostPopupModal() != nullptr;
+}
+
+void EditorLayer::RequestCapture() {
+    const auto& s = EditorSettings::Get();
+    const int rp = std::clamp(s.CaptureResPreset, 0, (int)IM_ARRAYSIZE(kCaptureRes) - 1);
+    m_CaptureReq = { /*pending*/ true, /*primed*/ false, s.CaptureMode, std::max(1, s.CaptureScale),
+                     s.CaptureFormat, kCaptureRes[rp].w, kCaptureRes[rp].h };
+}
+
+void EditorLayer::OnCaptureDone(const std::string& path, int w, int h) {
+    m_LastCapturePath = path;
+    if (path.empty()) { m_CaptureToast = "Screenshot failed — see Console"; m_CaptureToastT = 3.0f; return; }
+    const auto& s = EditorSettings::Get();
+    if (s.CaptureFlash) m_CaptureFlashT = 1.0f;
+    if (s.CaptureSound) {
+        std::string clip = Screenshot::ShutterClipPath();
+        if (!clip.empty()) AudioEngine::Play(clip, 0.6f);
+    }
+    m_CaptureToast = std::filesystem::path(path).filename().string() + "   " +
+                     std::to_string(w) + "x" + std::to_string(h);
+    m_CaptureToastT = 3.5f;
+}
+
+// Called once per frame from Draw() — the fading white flash over the Scene viewport and the
+// little "saved" toast in its bottom-right.
+void EditorLayer::DrawCaptureFeedback(float dt) {
+    if (m_CaptureFlashT <= 0.0f && m_CaptureToastT <= 0.0f) return;
+    if (m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
+
+    ImGuiWindow* sceneWin = ImGui::FindWindowByName("Scene");
+    ImDrawList* dl = sceneWin ? sceneWin->DrawList : ImGui::GetForegroundDrawList();
+    const ImVec2 mn(m_ViewportPos.x, m_ViewportPos.y);
+    const ImVec2 mx(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y);
+    dl->PushClipRect(mn, mx, true);
+
+    if (m_CaptureFlashT > 0.0f) {
+        m_CaptureFlashT -= dt / 0.35f;
+        float a = m_CaptureFlashT;
+        a = a < 0.0f ? 0.0f : a * a; // ease out
+        dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, (int)(a * 220.0f)));
+    }
+    if (m_CaptureToastT > 0.0f) {
+        m_CaptureToastT -= dt;
+        float a = m_CaptureToastT > 0.4f ? 1.0f : m_CaptureToastT / 0.4f;
+        const ImVec2 ts = ImGui::CalcTextSize(m_CaptureToast.c_str());
+        const float pad = 8.0f * m_UIScale;
+        ImVec2 p1(mx.x - ts.x - pad * 2.0f - 16.0f * m_UIScale, mx.y - ts.y - pad * 2.0f - 16.0f * m_UIScale);
+        ImVec2 p2(mx.x - 16.0f * m_UIScale, mx.y - 16.0f * m_UIScale);
+        dl->AddRectFilled(p1, p2, IM_COL32(20, 20, 24, (int)(a * 220.0f)), 4.0f);
+        dl->AddText(ImVec2(p1.x + pad, p1.y + pad), IM_COL32(235, 238, 245, (int)(a * 255.0f)), m_CaptureToast.c_str());
+    }
+    dl->PopClipRect();
+}
+
+// A screenshot on disk already holds display-encoded (sRGB) bytes. Load it as literal color
+// (IsSRGB = false) so the Asset Browser thumbnail and the lightbox render it at true brightness
+// — the default sRGB path hardware-linearizes on sample, which is right for a 3D albedo map but
+// visibly darkens a UI image.
+static std::shared_ptr<Texture> LoadScreenshotTexture(const std::string& path) {
+    TextureImportSettings s;
+    s.IsSRGB = false;
+    s.WrapMode = TextureImportSettings::Wrap::ClampToEdge;
+    return std::make_shared<Texture>(path, s);
+}
+
+void EditorLayer::OpenScreenshotPreview(const std::string& path) {
+    m_ShotPreviewPath = path;
+    m_ShotPreviewTex.reset();
+    std::error_code ec;
+    if (std::filesystem::exists(path, ec)) {
+        auto tex = LoadScreenshotTexture(path);
+        if (tex->IsValid()) m_ShotPreviewTex = std::move(tex);
+    }
+    if (m_ShotPreviewTex) {
+        m_ShotPreviewOpen = true;
+        m_ShotPreviewAnim = 0.0f;
+        m_ShotPreviewZoom = 1.0f;
+        m_ShotPreviewPan = ImVec2(0.0f, 0.0f);
+        m_ShotPreviewPanning = false;
+        m_ShotPreviewPressOutside = false; // stale from a previous close would insta-dismiss
+    } else {
+        // Couldn't decode it here — fall back to the OS viewer rather than an empty window.
+        m_ShotPreviewPath.clear();
+        Screenshot::ShowInFolder(path);
+    }
+}
+
+// A centred, chrome-light lightbox for a saved screenshot. The backdrop gets the same frosted
+// blur as the delete-confirmation modal (EndFrame() blurs whatever's behind the top-most modal),
+// so no extra dim is applied here. The window is freely movable and resizable; over the image,
+// the scroll wheel zooms about the cursor and left-drag pans. Esc / X / a backdrop click closes.
+void EditorLayer::DrawScreenshotPreview() {
+    if (!m_ShotPreviewOpen) return;
+
+    if (!ImGui::IsPopupOpen("##ShotPreview")) ImGui::OpenPopup("##ShotPreview");
+
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    Texture* tex = m_ShotPreviewTex.get();
+    const float iw = (tex && tex->Width()  > 0) ? (float)tex->Width()  : 1.0f;
+    const float ih = (tex && tex->Height() > 0) ? (float)tex->Height() : 1.0f;
+
+    // First-show size: fit the native image into ~3/4 of the work area (never upscaled past 1:1),
+    // plus room for padding and the header row. After that the user owns the window size.
+    float initFit = std::min((vp->WorkSize.x * 0.74f) / iw, (vp->WorkSize.y * 0.80f) / ih);
+    initFit = std::clamp(initFit, 0.05f, m_UIScale);
+    const ImVec2 initSize(iw * initFit + 28.0f * m_UIScale, ih * initFit + 66.0f * m_UIScale);
+    ImGui::SetNextWindowPos(vp->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(initSize, ImGuiCond_Appearing);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(300.0f * m_UIScale, 220.0f * m_UIScale),
+                                        ImVec2(FLT_MAX, FLT_MAX));
+
+    m_ShotPreviewAnim += (1.0f - m_ShotPreviewAnim) * 0.30f;
+    if (m_ShotPreviewAnim > 0.999f) m_ShotPreviewAnim = 1.0f;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 12.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * m_ShotPreviewAnim);
+
+    bool open = true;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+
+    if (ImGui::BeginPopupModal("##ShotPreview", &open, flags)) {
+        // Slim header: filename + native size + current zoom, then icon actions pinned right.
+        const std::string name = std::filesystem::path(m_ShotPreviewPath).filename().string();
+        ImGui::TextUnformatted(name.c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled("%d x %d", (int)iw, (int)ih);
+        ImGui::SameLine();
+        ImGui::TextDisabled("\xE2\x80\xA2  %.0f%%", m_ShotPreviewZoom * 100.0f);
+
+        const float btnW = 26.0f * m_UIScale;
+        float rightX = ImGui::GetContentRegionMax().x - btnW * 2.0f - 6.0f;
+        if (rightX > ImGui::GetCursorPosX()) ImGui::SameLine(rightX);
+        else ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+        if (ImGui::Button(ICON_FA_FOLDER_OPEN, ImVec2(btnW, 0.0f))) Screenshot::ShowInFolder(m_ShotPreviewPath);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show in folder");
+        ImGui::SameLine(0.0f, 6.0f);
+        if (ImGui::Button(ICON_FA_XMARK, ImVec2(btnW, 0.0f))) { open = false; ImGui::CloseCurrentPopup(); }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Close (Esc)");
+        ImGui::PopStyleColor(2);
+
+        ImGui::Spacing();
+
+        // The image canvas fills the rest of the window. An InvisibleButton over it captures
+        // hover / drag without turning the image into a "widget".
+        ImVec2 canvas = ImGui::GetContentRegionAvail();
+        canvas.x = std::max(canvas.x, 32.0f);
+        canvas.y = std::max(canvas.y, 32.0f);
+        const ImVec2 cpos = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton("##shotcanvas", canvas,
+                               ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonMiddle);
+        const bool canvasHovered = ImGui::IsItemHovered();
+        const bool canvasActive  = ImGui::IsItemActive();
+
+        const float fit = std::min(canvas.x / iw, canvas.y / ih); // image fits canvas at zoom 1
+
+        // Scroll wheel -> zoom about the cursor (keep the point under the pointer anchored).
+        if (canvasHovered) {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f) {
+                const float prev = m_ShotPreviewZoom;
+                m_ShotPreviewZoom = std::clamp(m_ShotPreviewZoom * std::pow(1.15f, wheel), 0.1f, 16.0f);
+                const float k = m_ShotPreviewZoom / prev;
+                const ImVec2 mouse = ImGui::GetIO().MousePos;
+                const ImVec2 imgCtr(cpos.x + canvas.x * 0.5f + m_ShotPreviewPan.x,
+                                    cpos.y + canvas.y * 0.5f + m_ShotPreviewPan.y);
+                m_ShotPreviewPan.x += (imgCtr.x - mouse.x) * (k - 1.0f);
+                m_ShotPreviewPan.y += (imgCtr.y - mouse.y) * (k - 1.0f);
+            }
+        }
+        // Left / middle drag pans.
+        if (canvasActive && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
+            const ImVec2 d = ImGui::GetIO().MouseDelta;
+            m_ShotPreviewPan.x += d.x;
+            m_ShotPreviewPan.y += d.y;
+            m_ShotPreviewPanning = true;
+        } else {
+            m_ShotPreviewPanning = false;
+        }
+        // Double-click resets to fit.
+        if (canvasHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+            m_ShotPreviewZoom = 1.0f;
+            m_ShotPreviewPan = ImVec2(0.0f, 0.0f);
+        }
+        if (canvasHovered && !m_ShotPreviewPanning)
+            EditorUI::SetTooltip("Scroll to zoom  \xE2\x80\xA2  drag to pan  \xE2\x80\xA2  double-click to reset");
+
+        const float dispW = iw * fit * m_ShotPreviewZoom;
+        const float dispH = ih * fit * m_ShotPreviewZoom;
+        const ImVec2 ic(cpos.x + canvas.x * 0.5f + m_ShotPreviewPan.x,
+                        cpos.y + canvas.y * 0.5f + m_ShotPreviewPan.y);
+        const ImVec2 a(ic.x - dispW * 0.5f, ic.y - dispH * 0.5f);
+        const ImVec2 b(a.x + dispW, a.y + dispH);
+
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->PushClipRect(cpos, ImVec2(cpos.x + canvas.x, cpos.y + canvas.y), true);
+        if (tex && tex->IsValid())
+            dl->AddImage((ImTextureID)(intptr_t)tex->GLHandle(), a, b);
+        dl->AddRect(a, b, IM_COL32(255, 255, 255, 26));
+        dl->PopClipRect();
+
+        // Backdrop dismissal: close only on a press-and-release that BOTH land on the dimmed
+        // area outside the window. Tracking the press origin keeps a resize-grip drag (which
+        // starts on the window edge and can wander outside) or a pan from closing the lightbox.
+        const bool overWindow = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            m_ShotPreviewPressOutside = !overWindow;
+        if (m_ShotPreviewAnim > 0.5f && m_ShotPreviewPressOutside && !canvasActive &&
+            !ImGui::IsAnyItemActive() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !overWindow) {
+            open = false;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+
+    ImGui::PopStyleVar(4);
+
+    if (!open) {
+        m_ShotPreviewOpen = false;
+        m_ShotPreviewTex.reset();
+        m_ShotPreviewPath.clear();
+        m_ShotPreviewAnim = 0.0f;
+    }
 }
 
 void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity) {
@@ -7763,6 +8089,22 @@ bool EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const s
                 return false;
             }
         }
+
+        // A screenshot is also a plain file on disk (project/screenshots/).
+        std::string ext = std::filesystem::path(key).extension().string();
+        for (char& c : ext) c = (char)tolower((unsigned char)c);
+        if ((ext == ".png" || ext == ".jpg" || ext == ".jpeg") && std::filesystem::exists(key, ec)) {
+            m_ShotThumbs.erase(key);
+            if (std::filesystem::remove(key, ec)) {
+                Log::Info("Deleted screenshot: " + leaf);
+            } else {
+                std::string why = ec.message();
+                if (why.empty()) why = "the file may be open in another program or write-protected";
+                if (!m_DeleteError.empty()) m_DeleteError += "\n";
+                m_DeleteError += "\xE2\x80\xA2 \"" + leaf + "\" — " + why + ".";
+                return false;
+            }
+        }
     }
     if (m_SelectedAssetKey == key) m_SelectedAssetKey.clear();
     return true;
@@ -8323,7 +8665,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     bool filtering = searching || !parsedSearch.typeTerms.empty() || !parsedSearch.labelTerms.empty();
 
     struct Cell {
-        enum class Kind { Folder, Model, Texture, Sound, Scene, Prefab } kind;
+        enum class Kind { Folder, Model, Texture, Sound, Scene, Prefab, Screenshot } kind;
         std::string key;
         std::string display;
         std::shared_ptr<Model> model;
@@ -8349,6 +8691,36 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             if (!MatchesAssetSearch(parsedSearch, name, "scene", assets.Labels(path))) continue;
             cells.push_back({Cell::Kind::Scene, path, name, nullptr, nullptr});
         }
+    }
+
+    // Same idea for the Capture tool's output: a "Screenshots" folder listing every PNG/JPG
+    // under project/screenshots/ (thumbnails loaded lazily, cached, and dropped when the file
+    // disappears). Not AssetLibrary entries — real image files, browsable and deletable here.
+    static const std::string kShotsFolder = "Screenshots";
+    assets.CreateFolder(kShotsFolder);
+    if (filtering || m_CurrentAssetFolder == kShotsFolder) {
+        std::error_code ec;
+        const std::string shotsDir = Screenshot::Dir();
+        std::vector<std::string> seen;
+        for (const auto& entry : std::filesystem::directory_iterator(shotsDir, ec)) {
+            if (!entry.is_regular_file()) continue;
+            std::string ext = entry.path().extension().string();
+            for (char& c : ext) c = (char)tolower((unsigned char)c);
+            if (ext != ".png" && ext != ".jpg" && ext != ".jpeg") continue;
+            if (entry.path().filename().string().rfind('.', 0) == 0) continue; // .shutter.wav etc.
+            std::string path = entry.path().generic_string();
+            std::string name = entry.path().stem().string();
+            if (!MatchesAssetSearch(parsedSearch, name, "texture", {})) continue;
+            seen.push_back(path);
+            auto it = m_ShotThumbs.find(path);
+            if (it == m_ShotThumbs.end())
+                it = m_ShotThumbs.emplace(path, LoadScreenshotTexture(path)).first;
+            cells.push_back({Cell::Kind::Screenshot, path, name, nullptr, it->second});
+        }
+        // Drop thumbnails for files that were deleted since last frame.
+        for (auto it = m_ShotThumbs.begin(); it != m_ShotThumbs.end();)
+            it = (std::find(seen.begin(), seen.end(), it->first) == seen.end())
+                     ? m_ShotThumbs.erase(it) : std::next(it);
     }
 
     for (const auto& folder : assets.Folders()) {
@@ -8428,6 +8800,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             : cell.kind == Cell::Kind::Model ? (cell.model->HasAnimations() ? ICON_FA_FILM : ICON_FA_CUBE)
             : cell.kind == Cell::Kind::Scene ? ICON_FA_MAP
             : cell.kind == Cell::Kind::Prefab ? ICON_FA_BOX_ARCHIVE
+            : cell.kind == Cell::Kind::Screenshot ? ICON_FA_IMAGE
             : (playing ? ICON_FA_STOP : ICON_FA_MUSIC);
 
         bool clicked = false;
@@ -8447,7 +8820,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             ImDrawList* dl = ImGui::GetWindowDrawList();
             ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
             unsigned int modelThumb = (cell.kind == Cell::Kind::Model) ? ModelThumbnail(*cell.model) : 0u;
-            if (cell.kind == Cell::Kind::Texture) {
+            if (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Screenshot) {
                 float aspect = cell.texture->Height() > 0 ? (float)cell.texture->Width() / (float)cell.texture->Height() : 1.0f;
                 ImVec2 imgSize = aspect >= 1.0f ? ImVec2(m_AssetIconSize, m_AssetIconSize / aspect) : ImVec2(m_AssetIconSize * aspect, m_AssetIconSize);
                 ImVec2 imgPos(tileMin.x + (cellWidth - imgSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - imgSize.y) * 0.5f);
@@ -8493,7 +8866,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             // otherwise) followed by the name, mirroring how the Scene Hierarchy lists rows.
             float rowIconSize = ImGui::GetTextLineHeight();
             unsigned int rowModelThumb = (cell.kind == Cell::Kind::Model) ? ModelThumbnail(*cell.model) : 0u;
-            if (cell.kind == Cell::Kind::Texture) {
+            if (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Screenshot) {
                 ImGui::Image((ImTextureID)(intptr_t)cell.texture->GLHandle(), ImVec2(rowIconSize, rowIconSize));
             } else if (rowModelThumb) {
                 ImGui::Image((ImTextureID)(intptr_t)rowModelThumb, ImVec2(rowIconSize, rowIconSize));
@@ -8561,6 +8934,9 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
         if (cell.kind == Cell::Kind::Scene && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             OpenScene(world, assets, cell.key);
         }
+        if (cell.kind == Cell::Kind::Screenshot && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+            OpenScreenshotPreview(cell.key); // centred in-editor lightbox (Show in folder is on the context menu)
+        }
         if (cell.kind == Cell::Kind::Prefab && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             PushUndo(world, "Place Prefab Instance");
             entt::entity spawned = SceneSerializer::InstantiatePrefab(world, assets, cell.key);
@@ -8599,7 +8975,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
                 }
                 ImGui::EndDragDropTarget();
             }
-        } else if (cell.kind != Cell::Kind::Scene) { // scenes aren't placeable — nothing to drag into the viewport
+        } else if (cell.kind != Cell::Kind::Scene && cell.kind != Cell::Kind::Screenshot) { // not placeable — nothing to drag into the viewport
             const char* payloadType = cell.kind == Cell::Kind::Model ? "ASSET_MODEL_PATH"
                 : cell.kind == Cell::Kind::Texture ? "ASSET_TEXTURE_PATH"
                 : cell.kind == Cell::Kind::Prefab ? "ASSET_PREFAB_PATH" : "ASSET_SOUND_PATH";
@@ -8655,6 +9031,23 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
                     RequestDeleteAssets(world, assets, scenesForAction, /*skipDialog=*/false);
                 if (!multi && anyOpen && ImGui::IsItemHovered())
                     EditorUI::SetTooltip("This scene is open — open a different scene first.");
+                ImGui::EndPopup();
+            }
+        } else if (cell.kind == Cell::Kind::Screenshot) {
+            // Also a real file on disk, not a library asset: Show in folder + Delete.
+            if (ImGui::BeginPopupContextItem()) {
+                if (!IsAssetSelected(cell.key, false)) {
+                    ClearAssetSelection();
+                    m_SelectedAssetKey = cell.key;
+                    m_SelectedAssetIsFolder = false;
+                }
+                if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Show in folder")) Screenshot::ShowInFolder(cell.key);
+                std::vector<AssetKeyRef> shotsForAction;
+                shotsForAction.push_back({m_SelectedAssetKey, false});
+                for (const auto& e : m_ExtraAssetSelection) shotsForAction.push_back(e);
+                const bool multi = shotsForAction.size() > 1;
+                if (ImGui::MenuItem(multi ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete"))
+                    RequestDeleteAssets(world, assets, shotsForAction, /*skipDialog=*/false);
                 ImGui::EndPopup();
             }
         } else if (ImGui::BeginPopupContextItem()) {
