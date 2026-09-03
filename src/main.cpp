@@ -731,6 +731,19 @@ int main() {
                 }
             }
 
+            // While the running game owns the mouse (cursor locked to it), stop ImGui from
+            // tracking pointer movement — GLFW still streams virtual mouse deltas with the cursor
+            // disabled, so without this the editor panels behind the Game view keep highlighting
+            // rows and firing tooltips as you mouse-look. Cleared the instant input is released
+            // (Esc / Stop / focus loss), so it never leaves the UI dead.
+            {
+                ImGuiIO& imguiIO = ImGui::GetIO();
+                const bool gameOwnsMouse =
+                    playing && (playMaximized ? window.IsCursorLocked() : gameInputEngaged);
+                if (gameOwnsMouse) imguiIO.ConfigFlags |= ImGuiConfigFlags_NoMouse;
+                else               imguiIO.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+            }
+
             editor.BeginFrame();
 
             // Cleared once, up front, regardless of mode — Scene/Game now render into their own
@@ -1405,6 +1418,12 @@ int main() {
                 editor.SetGameInputActive(gameHasInput);
                 if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
             }
+
+            // The OS title bar is gone — the toolbar's empty area is the window drag handle.
+            // Report it to the Window so its WM_NCHITTEST can hand that region to Windows as the
+            // caption (drag + Aero-snap + double-click maximize). False whenever the editor UI is
+            // hidden (maximized play) so the game view never becomes draggable.
+            window.SetTitleBarDragActive(editorUIVisible && editor.WantsWindowDrag());
 
             // Drawn every frame in every state (unlike editor.Draw(), which is editor-UI-only) so
             // there's always an on-screen Play/Stop, not just F1. Drawn AFTER editor.Draw() so it
