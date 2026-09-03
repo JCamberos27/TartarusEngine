@@ -29,4 +29,14 @@ namespace EditorUI {
     // `SameLine()` would go; it advances the cursor itself, so the next widget just calls
     // SameLine() as usual.
     void VSeparator(float gapScale = 1.0f);
+
+    // Styled slider: a thin rounded track with a circular grab handle, plus an editable numeric
+    // box on the right — click it and type a value in directly. Drop-in replacement for
+    // ImGui::SliderFloat / ImGui::SliderInt: identical signature, identical return (true on the
+    // frame the value changes). Honors SetNextItemWidth / PushItemWidth for the whole widget
+    // (track + box together). Pass "" as the format to drop the number box (track + handle only).
+    bool SliderFloat(const char* label, float* v, float v_min, float v_max,
+                     const char* format = "%.3f", ImGuiSliderFlags flags = 0);
+    bool SliderInt(const char* label, int* v, int v_min, int v_max,
+                   const char* format = "%d", ImGuiSliderFlags flags = 0);
 }
