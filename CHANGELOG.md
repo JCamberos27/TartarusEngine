@@ -7,6 +7,28 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### Editor UI audit (#145) — 2026-09-03
+
+- **#157 (audit)** — Asset Browser folder navigation is now tree-driven only. The toolbar
+  breadcrumb went from a run of framed per-segment buttons with `/` glyphs to a single dim
+  non-interactive `Assets / Sub / Folder` string (context, not a control). The `".."` go-up
+  row at the top of every non-root folder grid is gone — the tree and the Backspace shortcut
+  cover "go to parent". Selecting a folder from anywhere else (a folder tile, a search-result
+  click) now force-opens its ancestors in the tree and scrolls that node into view, once per
+  change so a manual collapse still sticks.
+- **#162 (audit)** — Light grab-handle dots no longer hard-vanish the instant the transform
+  gizmo is touched. While the gizmo is hovered they fade to ~28% and stop taking the cursor
+  (the gizmo always wins the click); a dot within roughly one gizmo-arm's length of the
+  light origin fades further on a radial falloff so it never fights the gizmo's own arrows.
+  They still disappear entirely while the gizmo is actually being dragged, and the dot being
+  dragged always stays full-opacity. Draw order pinned so the gizmo paints over the dots.
+- **#152 (audit)** — The three different "is this object active" controls (a framed eye
+  button on every Hierarchy row, an Inspector checkbox, a multi-select tri-state checkbox)
+  are now one shared borderless eye. Inactive objects show a dim eye-slash; active objects
+  show only a 2px hint dot until the row/header is hovered, then a faint clickable eye. The
+  multi-select row keeps its tri-state (a "mixed" dash), styled to match. Hierarchy rows
+  lose the always-on framed button, and the kind glyph + name pull in toward the eye.
+
 ### Lighting + HDR overhaul (branch `lighting-overhaul`)
 
 _One uncommitted batch. Establishes the linear-HDR pipeline and the first real GL 4.6
