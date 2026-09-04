@@ -732,6 +732,76 @@ bool MultiEditCheckbox(const char* label, bool anyOn, bool mixed, bool& out) {
     return clicked;
 }
 
+// #152 — the one "is this object active" control, shared by the Hierarchy row and the Inspector
+// header so both panels speak the same language. Borderless (matches ActionButton). It always
+// occupies one frame-height slot so the layout never shifts:
+//   inactive          -> a dim EYE_SLASH, always visible (this is the state worth surfacing)
+//   active + hovered   -> a faint EYE the user can click to disable (row- or self-hover)
+//   active + at rest   -> just a 2px dot, so the slot stays discoverable without adding chrome
+// `rowHovered` is the caller's hit-test of the whole row/header line (the glyph is drawn before
+// the rest of the row, so it can't rely on its own hover alone). Returns true on click.
+// `alignTop`: place the glyph with its line-box at the row top (matches the Hierarchy's kind
+// glyph). False = frame-centred, matching a framed widget on the same line (Inspector header).
+bool ActiveToggle(const char* id, bool active, bool rowHovered, const char* tip, bool alignTop) {
+    const float sz = ImGui::GetFrameHeight();
+    // Width hugs the glyph (+2px) instead of a full sz-square, so the slot doesn't push the
+    // rest of the row across the way the old sz-wide Button did (#152 follow-up).
+    const float w = ImMax(ImGui::CalcTextSize(ICON_FA_EYE).x, ImGui::CalcTextSize(ICON_FA_EYE_SLASH).x) + 2.0f;
+    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    ImGui::PushID(id);
+    bool clicked = ImGui::InvisibleButton("##active", ImVec2(w, sz));
+    bool selfHover = ImGui::IsItemHovered();
+    ImGui::PopID();
+    if (selfHover) EditorUI::SetTooltip("%s", tip);
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    // Align to the Hierarchy's kind glyph, which is painted with its line-box top at the row
+    // top (rowMin.y) rather than at FramePadding.y — so draw the eye the same way, not
+    // frame-centred, or it rides ~FramePadding.y too low next to the cube/light icon.
+    const float glyphTop = alignTop ? p0.y : p0.y + (sz - ImGui::GetTextLineHeight()) * 0.5f;
+    const ImVec2 c(p0.x + w * 0.5f, glyphTop + ImGui::GetTextLineHeight() * 0.5f);
+    auto glyph = [&](const char* g, ImU32 col) {
+        const ImVec2 ts = ImGui::CalcTextSize(g);
+        dl->AddText(ImVec2(c.x - ts.x * 0.5f, glyphTop), col, g);
+    };
+    if (!active) {
+        glyph(ICON_FA_EYE_SLASH, ImGui::GetColorU32(ImGuiCol_TextDisabled, selfHover ? 1.0f : 0.90f));
+    } else if (rowHovered || selfHover) {
+        glyph(ICON_FA_EYE, ImGui::GetColorU32(ImGuiCol_Text, selfHover ? 0.85f : 0.45f));
+    } else {
+        dl->AddCircleFilled(c, ImMax(1.5f, sz * 0.06f), ImGui::GetColorU32(ImGuiCol_TextDisabled, 0.50f));
+    }
+    return clicked;
+}
+
+// The same eye language for a labelled property row (multi-select Inspector). No hover-reveal —
+// a property row is always "there" — but it keeps MultiEditCheckbox's tri-state semantics: a
+// click on a mixed selection resolves everything to active. `out` receives the value to apply.
+bool ActiveToggleRow(const char* label, bool anyActive, bool mixed, bool& out, const char* tip) {
+    PropertyLabel(label, tip);
+    const float sz = ImGui::GetFrameHeight();
+    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    ImGui::PushID(label);
+    bool clicked = ImGui::InvisibleButton("##activerow", ImVec2(sz, sz));
+    bool hover = ImGui::IsItemHovered();
+    ImGui::PopID();
+    if (hover) EditorUI::SetTooltip("%s", tip);
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 c(p0.x + sz * 0.5f, p0.y + sz * 0.5f);
+    const char* g = anyActive ? ICON_FA_EYE : ICON_FA_EYE_SLASH;
+    const ImVec2 ts = ImGui::CalcTextSize(g);
+    float a = mixed ? 0.45f : (hover ? 0.9f : 0.7f);
+    dl->AddText(ImVec2(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f),
+                ImGui::GetColorU32(ImGuiCol_Text, a), g);
+    if (mixed) // a short dash under the glyph = "the selection disagrees", matching the "—" fields
+        dl->AddLine(ImVec2(c.x - ts.x * 0.30f, c.y + ts.y * 0.5f + 1.0f),
+                    ImVec2(c.x + ts.x * 0.30f, c.y + ts.y * 0.5f + 1.0f),
+                    ImGui::GetColorU32(ImGuiCol_Text, 0.7f), 1.5f);
+    if (clicked) out = mixed ? true : !anyActive;
+    return clicked;
+}
+
 } // namespace
 
 EditorLayer::EditorLayer() = default;
@@ -4728,15 +4798,24 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
 
     ImGui::PushID((int)entt::to_integral(entity));
 
-    // Leading eye toggle = Unity's active checkbox. Drawn before the row so clicking it never
-    // also changes the selection.
-    if (ActionButton(inactive ? ICON_FA_EYE_SLASH : ICON_FA_EYE, inactive ? "Show in the scene" : "Hide from the scene")) {
-        PushUndo(world, "Toggle Active");
-        if (inactive) world.Registry.remove<InactiveTag>(entity);
-        else world.Registry.emplace<InactiveTag>(entity);
+    // Leading eye toggle = Unity's active checkbox (#152: shared ActiveToggle). Drawn before the
+    // row so clicking it never also changes the selection; hover-reveals on the whole row so an
+    // active object carries no per-row chrome at rest.
+    {
+        const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+        const ImVec2 rowMax(rowMin.x + ImGui::GetContentRegionAvail().x, rowMin.y + ImGui::GetFrameHeight());
+        const bool rowHovered = ImGui::IsMouseHoveringRect(rowMin, rowMax);
+        if (ActiveToggle("##rowactive", !inactive, rowHovered,
+                         inactive ? "Inactive - click to enable" : "Active - click to disable",
+                         /*alignTop=*/true)) {
+            PushUndo(world, "Toggle Active");
+            if (inactive) world.Registry.remove<InactiveTag>(entity);
+            else world.Registry.emplace<InactiveTag>(entity);
+        }
     }
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip(inactive ? "Inactive - click to enable" : "Active - click to disable");
-    ImGui::SameLine();
+    // Tight against the tree node — the node's own arrow gap already separates the eye from the
+    // kind glyph, so the default ItemSpacing here just reads as a hole (#152 follow-up).
+    ImGui::SameLine(0.0f, 2.0f);
 
     // Inline rename (F2 / context menu) replaces the row with an edit field in place.
     if (m_RenamingEntity == entity) {
@@ -4873,7 +4952,9 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         ImDrawList* dl = ImGui::GetWindowDrawList();
         const float fontSize = ImGui::GetFontSize();
         const float slotW    = fontSize * 1.45f;
-        const float labelX   = rowMin.x + ImGui::GetTreeNodeToLabelSpacing();
+        // Pull the kind glyph + name in toward the eye (#152 follow-up). Parent rows keep enough
+        // lead for the disclosure arrow; leaf rows (no arrow) only need a hair of separation.
+        const float labelX   = rowMin.x + (hasChildren ? fontSize * 1.15f : fontSize * 0.35f);
         const ImU32 col = ImGui::GetColorU32(inactive ? ImGuiCol_TextDisabled : ImGuiCol_Text);
         dl->AddText(ImVec2(labelX, rowMin.y), col, primaryGlyph);
         if (secondaryGlyph) {
@@ -5328,7 +5409,8 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             if (world.Registry.all_of<StaticTag>(e)) nStatic++;
         });
         bool setVal = false;
-        if (MultiEditCheckbox("Active", nActive > 0, nActive != 0 && nActive != count, setVal)) {
+        if (ActiveToggleRow("Active", nActive > 0, nActive != 0 && nActive != count, setVal,
+                            "Active - inactive objects are not drawn and don't collide")) {
             PushUndo(world, "Toggle Active");
             forEach([&](entt::entity e) {
                 if (setVal) world.Registry.remove<InactiveTag>(e);
@@ -5626,12 +5708,20 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     // top block but with the same per-kind icon the Hierarchy already uses, so the two panels
     // read as one consistent visual language instead of the Inspector being icon-less.
     bool active = !registry.all_of<InactiveTag>(entity);
-    if (ImGui::Checkbox("##Active", &active)) {
-        PushUndo(world, "Toggle Active");
-        if (active) registry.remove<InactiveTag>(entity);
-        else registry.emplace<InactiveTag>(entity);
+    {
+        // #152 — same eye control as the Hierarchy. The header line hover-reveals it for an
+        // active object; an inactive one always shows the dim eye-slash.
+        const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+        const ImVec2 rowMax(rowMin.x + ImGui::GetContentRegionAvail().x, rowMin.y + ImGui::GetFrameHeight());
+        const bool rowHovered = ImGui::IsMouseHoveringRect(rowMin, rowMax);
+        if (ActiveToggle("##hdractive", active, rowHovered,
+                         "Active - inactive objects are not drawn and don't collide",
+                         /*alignTop=*/false)) {
+            PushUndo(world, "Toggle Active");
+            if (active) registry.emplace<InactiveTag>(entity);   // was active, now hide
+            else        registry.remove<InactiveTag>(entity);
+        }
     }
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Active - inactive objects are not drawn and don't collide");
     ImGui::SameLine();
 
     const char* kindIcon = ICON_FA_DRAW_POLYGON;
@@ -7388,8 +7478,14 @@ void EditorLayer::DrawLightGizmos(World& world, Camera& editorCamera) {
 void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
     m_LightHandleEngaged = false;
     const EditorSettings& prefs = EditorSettings::Get();
+    // #162 — de-conflict with the transform gizmo instead of hard-vanishing the dots.
+    // While the gizmo is actually being dragged, the dots go away entirely. While it's only
+    // hovered (m_GizmoEngaged carries last frame's ImGuizmo::IsOver() || IsUsing()), keep the
+    // dots on screen but faded and non-interactive so the gizmo always wins the cursor.
+    const bool gizmoDragging = ImGuizmo::IsUsing();
+    const bool gizmoHot = m_GizmoEngaged;
     if (!prefs.ShowLightGizmos || m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f ||
-        m_GizmoEngaged || HasGroupSelection()) {
+        gizmoDragging || HasGroupSelection()) {
         m_LightHandleDragging = false;
         m_HotLightHandle = LightHandle::None;
         return;
@@ -7516,7 +7612,9 @@ void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
         m_HotLightHandle = LightHandle::None;
         m_HotLightHandleIndex = -1;
         float best = 11.0f * m_UIScale;
-        for (int i = 0; i < (int)dots.size(); ++i) {
+        // #162 — the gizmo owns the cursor while it's hovered; don't let a dot under one of
+        // its arrows claim the hover/click.
+        for (int i = 0; !gizmoHot && i < (int)dots.size(); ++i) {
             ImVec2 sp;
             if (!project(dots[i].world, sp)) continue;
             float d = std::sqrt((sp.x - mouse.x) * (sp.x - mouse.x) + (sp.y - mouse.y) * (sp.y - mouse.y));
@@ -7535,6 +7633,14 @@ void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
         }
     }
 
+    // #162 — dots draw here, before DrawGizmo() runs later this frame into the same Scene
+    // draw list, so the transform gizmo always paints on top. Two fades keep them from
+    // fighting the gizmo visually: a flat dim while the gizmo is hovered, and a radial
+    // falloff for any dot sitting within ~one gizmo-arm's length of the light's origin.
+    ImVec2 originSP;
+    const bool haveOrigin = project(pos, originSP);
+    const float gizmoPx = std::max(m_GizmoSize * m_ViewportSize.y * 0.5f, 1.0f);
+    const float baseAlpha = gizmoHot ? 0.28f : 1.0f;
     for (int i = 0; i < (int)dots.size(); ++i) {
         ImVec2 sp;
         if (!project(dots[i].world, sp)) continue;
@@ -7542,9 +7648,19 @@ void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
                        ? (dots[i].kind == m_HotLightHandle &&
                           glm::dot(dots[i].axis, m_LightHandleGrabAxis) > 0.999f)
                        : (i == m_HotLightHandleIndex);
+        float alpha = baseAlpha;
+        if (haveOrigin && !hot) {
+            float dOrigin = std::sqrt((sp.x - originSP.x) * (sp.x - originSP.x) +
+                                      (sp.y - originSP.y) * (sp.y - originSP.y));
+            if (dOrigin < gizmoPx)
+                alpha *= std::clamp(0.12f + 0.88f * (dOrigin / gizmoPx), 0.0f, 1.0f);
+        }
+        if (hot) alpha = 1.0f; // the dot you're dragging stays fully legible
         float r = (hot ? 6.0f : 4.0f) * m_UIScale;
-        draw->AddCircleFilled(sp, r, hot ? IM_COL32(255, 200, 60, 255) : IM_COL32(245, 245, 245, 225));
-        draw->AddCircle(sp, r, IM_COL32(0, 0, 0, 190), 0, 1.5f);
+        int fillA = (int)((hot ? 255.0f : 225.0f) * alpha);
+        int lineA = (int)(190.0f * alpha);
+        draw->AddCircleFilled(sp, r, hot ? IM_COL32(255, 200, 60, fillA) : IM_COL32(245, 245, 245, fillA));
+        draw->AddCircle(sp, r, IM_COL32(0, 0, 0, lineA), 0, 1.5f);
     }
 
     draw->PopClipRect();
@@ -8379,6 +8495,12 @@ void EditorLayer::DrawFolderTreeNode(World& world, AssetLibrary& assets, const s
     ImGui::PushID(folderPath.c_str());
     bool open = ImGui::TreeNodeEx("##node", nodeFlags, "%s", label.c_str());
 
+    // (#157) One-shot scroll so a folder selected from elsewhere lands in view.
+    if (!isRoot && m_RevealAssetFolderInTree && folderPath == m_CurrentAssetFolder) {
+        ImGui::SetScrollHereY(0.5f);
+        m_RevealAssetFolderInTree = false;
+    }
+
     if (!isRoot && open != wasExpanded) {
         // The user just clicked THIS node's arrow this frame (ImGui's own toggle already ran,
         // which is why `open` differs from what we told it to be) - Alt turns it into "and
@@ -8498,26 +8620,17 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
 
     EditorUI::VSeparator();
 
-    // Breadcrumb: "Assets" root plus one clickable button per path segment.
-    ImGui::AlignTextToFramePadding();
-    if (ActionButton(ICON_FA_FOLDER_OPEN " Assets", "Go to the root folder")) m_CurrentAssetFolder.clear();
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Go to the root folder");
-    if (!m_CurrentAssetFolder.empty()) {
-        std::string accum;
-        size_t start = 0;
-        while (start <= m_CurrentAssetFolder.size()) {
-            size_t slash = m_CurrentAssetFolder.find('/', start);
-            std::string part = m_CurrentAssetFolder.substr(start, slash == std::string::npos ? std::string::npos : slash - start);
-            accum = accum.empty() ? part : accum + "/" + part;
-            ImGui::SameLine();
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextDisabled("/");
-            ImGui::SameLine();
-            if (ActionButton(part.c_str(), "Jump to this folder")) m_CurrentAssetFolder = accum;
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Go to \"%s\"", part.c_str());
-            if (slash == std::string::npos) break;
-            start = slash + 1;
+    // Breadcrumb (#157): non-interactive path text for context only — "Assets / Sub / Folder".
+    // The folder tree on the left is how you actually move; this just says where you are, so
+    // it's a single dim string with no framed per-segment buttons or "/" glyphs.
+    {
+        std::string crumb = "Assets";
+        for (char c : m_CurrentAssetFolder) {
+            if (c == '/') crumb += " / ";
+            else          crumb += c;
         }
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("%s", crumb.c_str());
     }
 
     // Search box + its two filter buttons (Type, Label), pinned as one group to the toolbar's
@@ -8626,6 +8739,22 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
 
     // No child borders on either pane (#158) — the splitter alone is the divider: a hairline in
     // ImGuiCol_Border at rest, brightening + thickening on hover/drag, inside a 6px hit target.
+    // (#157) The tree is the only folder navigator now, so whenever the current folder changes
+    // from anywhere else (a folder tile, a search-result click, Backspace), force its ancestors
+    // open in the tree and ask the matching node to scroll itself into view. Only fires on an
+    // actual change, so the user can still collapse things afterward.
+    if (m_CurrentAssetFolder != m_AssetFolderTreeRevealed) {
+        m_AssetFolderTreeRevealed = m_CurrentAssetFolder;
+        m_RevealAssetFolderInTree = !m_CurrentAssetFolder.empty();
+        for (size_t s = 0; s < m_CurrentAssetFolder.size();) {
+            size_t slash = m_CurrentAssetFolder.find('/', s);
+            m_ExpandedAssetFolders.insert(m_CurrentAssetFolder.substr(
+                0, slash == std::string::npos ? m_CurrentAssetFolder.size() : slash));
+            if (slash == std::string::npos) break;
+            s = slash + 1;
+        }
+    }
+
     ImGui::BeginChild("##AssetTree", ImVec2(m_AssetTreeWidth, contentHeight), ImGuiChildFlags_None);
     DrawFolderTreeNode(world, assets, "", true);
     ImGui::EndChild();
@@ -8782,11 +8911,8 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     // the full string on hover; every grid row is a line shorter than the old two-line reserve.
     const float cellHeight = m_AssetIconSize + cellPadding + ImGui::GetTextLineHeightWithSpacing();
 
-    if (!filtering && !m_CurrentAssetFolder.empty()) {
-        if (ImGui::Selectable(ICON_FA_ARROW_UP "  ..")) {
-            m_CurrentAssetFolder = ParentFolderOf(m_CurrentAssetFolder);
-        }
-    }
+    // (#157) The ".." go-up row is gone — the folder tree and the Backspace shortcut cover
+    // "go to parent"; it no longer costs a row at the top of every non-root folder.
 
     for (size_t cellIndex = 0; cellIndex < cells.size(); ++cellIndex) {
         const auto& cell = cells[cellIndex];
