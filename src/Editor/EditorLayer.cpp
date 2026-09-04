@@ -5353,11 +5353,16 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             ImGui::TextDisabled("Common: %s", common.c_str());
         }
 
+        // #155 — the multi-select sections go through the same flat collapsible
+        // BeginComponentSection as the single-select Inspector, so the two read identically.
+        // Nothing here is per-entity removable, so `mrm` is an ignored sink.
+        bool mrm = false;
+
         // ===== Transform (absolute, mixed-value) =====
         // Edits the raw TransformComponent, exactly what the single-object Inspector shows for
         // each entity — i.e. local space for a parented object, world space otherwise.
         ImGui::Spacing();
-        ImGui::SeparatorText(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform");
+        if (BeginComponentSection(ICON_FA_UP_DOWN_LEFT_RIGHT, "Transform", false, mrm)) {
 
         auto reduceVec3 = [&](const std::function<glm::vec3(const TransformComponent&)>& get,
                               glm::vec3& shared, bool mixed[3]) {
@@ -5399,9 +5404,12 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             [](TransformComponent& t) -> glm::vec3& { return t.Scale; },
             "Sets scale on every selected object.", "Set Scale");
 
+        EndComponentSection();
+        }
+
         // ===== Object: Active / Static / Tag, tri-state =====
         ImGui::Spacing();
-        ImGui::SeparatorText("Object");
+        if (BeginComponentSection(ICON_FA_TAG, "Object", false, mrm)) {
 
         int nActive = 0, nStatic = 0;
         forEach([&](entt::entity e) {
@@ -5454,10 +5462,13 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             }
         }
 
+        EndComponentSection();
+        }
+
         // ===== Light (only when every selected object has one) =====
         if (allLight) {
             ImGui::Spacing();
-            ImGui::SeparatorText(ICON_FA_LIGHTBULB "  Light");
+            if (BeginComponentSection(ICON_FA_LIGHTBULB, "Light", false, mrm)) {
             auto L = [&](entt::entity e) -> LightComponent& { return world.Registry.get<LightComponent>(e); };
 
             int kind = -1; bool kindMixed = false;
@@ -5556,7 +5567,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
 
             // ---- Shadows (mirrors the single-edit Shadows sub-block) ------------------------
             ImGui::Spacing();
-            ImGui::SeparatorText(ICON_FA_MOON "  Shadows");
+            if (BeginComponentSection(ICON_FA_MOON, "Shadows", false, mrm)) {
 
             int nShadow = 0;
             forEach([&](entt::entity e) { if (L(e).Shadow.Enabled) nShadow++; });
@@ -5580,12 +5591,18 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                     [](LightComponent& l) -> float& { return l.Shadow.NearPlane; },
                     "Perspective near distance for every selected spot/point light's depth pass.",
                     "Set Shadow Near Plane");
+
+            EndComponentSection(); // Shadows
+            }
+
+            EndComponentSection(); // Light
+            }
         }
 
         // ===== Camera (only when every selected object has one) =====
         if (allCamera) {
             ImGui::Spacing();
-            ImGui::SeparatorText(ICON_FA_VIDEO "  Camera");
+            if (BeginComponentSection(ICON_FA_VIDEO, "Camera", false, mrm)) {
             auto C = [&](entt::entity e) -> CameraComponent& { return world.Registry.get<CameraComponent>(e); };
             auto camFloatRow = [&](const char* label, float speed, float minV, float maxV,
                                    const std::function<float&(CameraComponent&)>& ref,
@@ -5610,18 +5627,22 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             camFloatRow("Far", 1.0f, 0.1f, 100000.0f,
                 [](CameraComponent& c) -> float& { return c.FarPlane; },
                 "Far clip plane for every selected camera.", "Set Camera Far");
+
+            EndComponentSection(); // Camera
+            }
         }
 
         // ===== Material / PBR (only when every selected object has a mesh) =====
         if (allMesh) {
             ImGui::Spacing();
-            if (ImGui::TreeNodeEx(ICON_FA_PALETTE "  Material", ImGuiTreeNodeFlags_SpanAvailWidth)) {
+            bool matOpen = BeginComponentSection(ICON_FA_PALETTE, "Material", false, mrm,
+                /*defaultOpen=*/true,
+                "Shared PBR material and texture maps for every selected mesh.\n"
+                "A field showing \xE2\x80\x94 differs across the selection.");
+            if (matOpen) {
                 DrawMultiMaterialEditor(world, assets, sel);
-                ImGui::TreePop();
+                EndComponentSection();
             }
-            if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("Shared PBR material and texture maps for every selected mesh.\n"
-                                     "A field showing \xE2\x80\x94 differs across the selection.");
         }
 
         ImGui::Spacing();
@@ -5813,7 +5834,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
 
     // --- Transform (every entity has one; not removable, same as Unity) --------------------
     bool removed = false;
-    if (BeginComponentSection(world, entity, ICON_FA_UP_DOWN_LEFT_RIGHT, "Transform", false, removed,
+    if (BeginComponentSection(ICON_FA_UP_DOWN_LEFT_RIGHT, "Transform", false, removed,
             /*defaultOpen=*/true, "Position, rotation, and scale in the world. Every object has one.")) {
 
         // Stage on first touch, commit on release — one History entry per edit, and a
@@ -5873,7 +5894,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     if (auto* renderable = registry.try_get<RenderableComponent>(entity)) {
         // Not removable on level geometry: a box IS its cube mesh, and removing it would leave
         // an invisible collider that the Hierarchy still lists under "Level Geometry".
-        if (BeginComponentSection(world, entity, ICON_FA_DRAW_POLYGON, "Mesh Renderer", !isLevelGeometry, removed,
+        if (BeginComponentSection(ICON_FA_DRAW_POLYGON, "Mesh Renderer", !isLevelGeometry, removed,
                 /*defaultOpen=*/true, "The mesh this object draws, and its material color/texture options.")) {
             std::string meshName = std::filesystem::path(renderable->ModelRef->Path()).filename().string();
 
@@ -5932,18 +5953,6 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 ImGui::EndPopup();
             }
 
-            // Material is part of the renderer, so it nests here as a sub-tree rather than
-            // sitting at the same indent as real components. Collapsed by default — usually
-            // set once and left alone.
-            ImGui::Spacing();
-            if (ImGui::TreeNodeEx(ICON_FA_PALETTE "  Material", ImGuiTreeNodeFlags_SpanAvailWidth)) {
-                DrawMaterialEditor(world, assets);
-                ImGui::TreePop();
-            }
-            if (ImGui::IsItemHovered()) {
-                EditorUI::SetTooltip("Surface appearance: color, metallic/roughness, emissive glow, and texture maps.");
-            }
-
             EndComponentSection();
         }
         if (removed) {
@@ -5955,9 +5964,23 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         }
     }
 
+    // --- Material -----------------------------------------------------------------------------
+    // Its own top-level section now (not nested under Mesh Renderer), so single- and multi-select
+    // present it the same way. Only meaningful when the object has a mesh to shade. Collapsed by
+    // default — usually set once and left alone. Not removable (it's the model's material, not a
+    // detachable component).
+    if (registry.all_of<RenderableComponent>(entity)) {
+        bool matRemoved = false;
+        if (BeginComponentSection(ICON_FA_PALETTE, "Material", false, matRemoved, /*defaultOpen=*/false,
+                "Surface appearance: color, metallic/roughness, emissive glow, and texture maps.")) {
+            DrawMaterialEditor(world, assets);
+            EndComponentSection();
+        }
+    }
+
     // --- Collider (collapsed by default: a single checkbox, rarely revisited) --------------
     if (auto* collider = registry.try_get<ColliderComponent>(entity)) {
-        if (BeginComponentSection(world, entity, ICON_FA_CUBE, "Box Collider", true, removed, /*defaultOpen=*/false,
+        if (BeginComponentSection(ICON_FA_CUBE, "Box Collider", true, removed, /*defaultOpen=*/false,
                 "Lets this object block movement and be hit by raycasts.\nBounds follow its Transform/mesh automatically.")) {
             PropertyLabel("Is Trigger", "If checked, this object doesn't block movement -\nit's solid (blocking) by default.");
             if (ImGui::Checkbox("##IsTrigger", &collider->IsTrigger)) PushUndo(world, "Edit Collider");
@@ -5971,7 +5994,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
 
     // --- Light (open by default — usually the main thing being tuned on a light entity) ----
     if (auto* light = registry.try_get<LightComponent>(entity)) {
-        if (BeginComponentSection(world, entity, ICON_FA_LIGHTBULB, "Light", true, removed,
+        if (BeginComponentSection(ICON_FA_LIGHTBULB, "Light", true, removed,
             /*defaultOpen=*/true, "Casts light into the scene from this object's position.")) {
             // Slightly slimmer rows for this block — the light sliders read better less chunky.
             const ImVec2 lightFramePad(ImGui::GetStyle().FramePadding.x,
@@ -6097,7 +6120,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
 
     // --- Camera (the Game view previews through this while editing) ------------------------
     if (auto* cam = registry.try_get<CameraComponent>(entity)) {
-        if (BeginComponentSection(world, entity, ICON_FA_VIDEO, "Camera", true, removed, /*defaultOpen=*/true,
+        if (BeginComponentSection(ICON_FA_VIDEO, "Camera", true, removed, /*defaultOpen=*/true,
                 "The Game view renders through this camera while editing, so you can frame a\nshot without walking there. Play mode still uses the first-person controller.")) {
             PropertyLabel("Field of View", "Vertical FOV in degrees.");
             ImGui::SetNextItemWidth(-FLT_MIN);
@@ -6142,7 +6165,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
 
     // --- Audio Source (collapsed by default: set-and-forget once a clip is chosen) ---------
     if (auto* audio = registry.try_get<AudioSourceComponent>(entity)) {
-        if (BeginComponentSection(world, entity, ICON_FA_VOLUME_HIGH, "Audio Source", true, removed, /*defaultOpen=*/false,
+        if (BeginComponentSection(ICON_FA_VOLUME_HIGH, "Audio Source", true, removed, /*defaultOpen=*/false,
                 "A sound clip that can be played from this object.")) {
             const std::string preview = audio->SoundPath.empty()
                 ? "(none)" : std::filesystem::path(audio->SoundPath).filename().string();
@@ -6199,9 +6222,8 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     InspectorEnd();
 }
 
-bool EditorLayer::BeginComponentSection(World& world, entt::entity entity, const char* icon,
+bool EditorLayer::BeginComponentSection(const char* icon,
     const char* label, bool removable, bool& removedOut, bool defaultOpen, const char* tooltip) {
-    (void)world; (void)entity;
     removedOut = false;
 
     std::string header = std::string(icon) + "  " + label;
@@ -6217,7 +6239,8 @@ bool EditorLayer::BeginComponentSection(World& world, entt::entity entity, const
     ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
     bool open = ImGui::CollapsingHeader(header.c_str(), flags);
     ImGui::PopStyleColor(3);
-    if (tooltip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
+    const bool headerHovered = ImGui::IsItemHovered();
+    if (tooltip && headerHovered) EditorUI::SetTooltip("%s", tooltip);
     {
         const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
         ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y - 0.5f), ImVec2(mx.x, mx.y - 0.5f),
@@ -6225,14 +6248,12 @@ bool EditorLayer::BeginComponentSection(World& world, entt::entity entity, const
     }
 
     if (removable) {
-        // Right-aligned "x" sharing the header's line, the way Unity puts a component's context
-        // menu at the far right of its header bar.
-        float buttonWidth = ImGui::GetFrameHeight();
-        float x = ImGui::GetWindowContentRegionMax().x - buttonWidth;
-        ImGui::SameLine(x);
+        // Right-aligned remove control on the header's line, always visible so it's discoverable
+        // (#155): flat at rest, red on hover — the shared destructive-icon treatment (#156).
+        const float bw = ImGui::GetFrameHeight();
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - bw);
         ImGui::PushID(label);
-        // Same danger treatment as every other destructive control (#156): flat at rest, red on hover.
-        if (DangerIconButton(ICON_FA_XMARK, "Remove this component", ImVec2(buttonWidth, 0.0f)))
+        if (DangerIconButton(ICON_FA_XMARK, "Remove this component", ImVec2(bw, 0.0f)))
             removedOut = true;
         ImGui::PopID();
     }

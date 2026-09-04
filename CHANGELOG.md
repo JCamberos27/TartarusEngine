@@ -9,6 +9,14 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ### Editor UI audit (#145) — 2026-09-03
 
+- **#155 (audit)** — The multi-select Inspector now draws its component groups through the
+  same flat collapsible `BeginComponentSection` as the single-select Inspector (Transform,
+  Object, Light, Shadows, Camera, Material), instead of bare `SeparatorText` rules — so the
+  two selection modes read identically and every section collapses. `BeginComponentSection`
+  lost its unused `world`/`entity` params. **Material is its own top-level section** now in
+  both modes (was nested inside Mesh Renderer for single-select). The remove-component ✕
+  stays always-visible on the header (not hover-revealed). The resizable property-table half
+  of the audit (#154) is still open — an attempt was reverted as not an improvement.
 - **#157 (audit)** — Asset Browser folder navigation is now tree-driven only. The toolbar
   breadcrumb went from a run of framed per-segment buttons with `/` glyphs to a single dim
   non-interactive `Assets / Sub / Folder` string (context, not a control). The `".."` go-up
