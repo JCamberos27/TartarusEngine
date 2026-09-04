@@ -957,7 +957,9 @@ private:
     // frequently-tweaked component (Transform) start expanded while a set-and-forget one
     // (Audio Source) starts collapsed, so a component-heavy Inspector doesn't open as one long
     // wall of fields.
-    bool BeginComponentSection(World& world, entt::entity entity, const char* icon, const char* label,
+    // Used by both the single-select and multi-select Inspector paths (#155) so they share one
+    // heading language — hence no entity argument. Collapse state is keyed by `label`.
+    bool BeginComponentSection(const char* icon, const char* label,
         bool removable, bool& removedOut, bool defaultOpen = true, const char* tooltip = nullptr);
     void EndComponentSection();
 
