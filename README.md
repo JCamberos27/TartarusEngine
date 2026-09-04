@@ -40,11 +40,11 @@ the roadmap honest.
 
 | | |
 |---|---|
-| **Dockable layout** | Scene, Game, Hierarchy, Inspector, Asset Browser, Console, Stats, and History panels in a real ImGui dock tree — drag any border to resize neighbours, panels scale proportionally with the window, and the arrangement persists between sessions |
+| **Dockable layout** | Scene, Game, Hierarchy, Inspector, Asset Browser, and Console panels in a real ImGui dock tree — drag any border to resize neighbours, panels scale proportionally with the window, and the arrangement persists between sessions. Statistics and History sit as transparent viewport overlays, pinned to the corners |
 | **Transform gizmos** | Translate / rotate / scale / rect tools with local vs. world space, pivot vs. bounds-center, a combined gizmo for multi-object selections, and a relative Batch Transform panel for nudging a whole selection at once |
 | **Lights** | Select a light and its shape draws in the viewport — a range sphere for point lights, an angle-and-range cone for spots, aim arrows for the sun, tinted by the light's colour — with drag handles to scale range, open or close the cone, or re-aim without leaving the viewport. A dockable **Lights panel** lists every light with solo / mute / frame; any light can be flown through (**look through light**, and fly the camera to reposition it from its own POV) or **dropped onto the surface** below it. The Inspector picks colour directly or from a **colour temperature** (Kelvin) and exposes per-light shadow tuning; a whole multi-selection edits together |
-| **Selection** | Click-to-pick, box/marquee select, `Ctrl`-click multi-select, hierarchy parenting, per-entity active toggle |
-| **Snapping** | Grid snap (hold `Ctrl` to invert), configurable translate/rotate/scale increments, hold-`V` vertex snapping between meshes, and snap-to-ground |
+| **Selection** | Click-to-pick, box/marquee select, `Ctrl`-click multi-select, hierarchy parenting for mesh-less and imported objects, per-entity active toggle |
+| **Snapping** | Grid snap (hold `Ctrl` to invert), configurable translate/rotate/scale increments, hold-`V` vertex snapping between unparented meshes, and snap-to-ground |
 | **Navigation** | Fly camera, Alt-orbit, pan, dolly, frame-selection, orthographic/perspective toggle, axis view presets with animated transitions, plus an on-screen orientation gizmo |
 | **Undo / redo** | Whole-scene snapshots with a History panel you can jump around in |
 | **Play mode** | Runs inside the docked Game panel with the editor still live; scene state is snapshotted on entry and restored on exit, so play never becomes an edit. Click to capture input, `Esc` to release, and a fullscreen toggle for the whole window |
@@ -73,16 +73,46 @@ the roadmap honest.
 - Offscreen HDR targets per viewport, so Scene and Game render independently at their own resolutions and MSAA levels
 - Procedural sky, distance-faded infinite grid, inverted-hull selection outlines, translucent drag previews
 - Shaded / wireframe / unlit view modes
-- Targets OpenGL 4.6 core through the hand-rolled loader — immutable texture storage and `std430` shader storage buffers today, with the mesh path moving to direct state access next
+- Targets OpenGL 4.6 core through the hand-rolled loader — immutable texture and buffer storage, `std430` shader storage buffers, and direct state access throughout the mesh path (`glCreateBuffers` / `glNamedBufferStorage` / `glVertexArray*`), so building a mesh mid-frame never disturbs the bound render state
 
 ### Core
 
 - **EnTT** entity-component system with a full transform hierarchy
 - JSON scene serialization, including the asset library and per-asset import settings
 - First-person controller — WASD, sprint, jump, gravity, and sub-stepped AABB collision that won't tunnel through thin geometry
-- AABB physics primitives with ray/box intersection for hitscan queries
-- Audio playback and in-editor preview via miniaudio
-- Frame profiler, and a log that streams into the editor Console
+- AABB physics primitives with ray/box intersection, driving editor picking and the player's collision resolution
+- In-editor audio preview via miniaudio
+- Decoded-texture disk cache (`Library/Textures`) keyed on source size, mtime and import settings — a warm scene load skips PNG decoding entirely, written atomically so a crash can't leave a corrupt entry
+- Frame profiler with per-pass CPU timings, and a log that streams into the editor Console
+
+## Performance
+
+Measured on the bundled `Showcase` scene — a first-person hall lit entirely by moving,
+colour-cycling point and spot lights.
+
+| | |
+|---|---|
+| **142 FPS** (7.0 ms/frame) | uncapped, editor running |
+| Resolution | 3840 × 2160, 4× MSAA |
+| Shadows | 4096² maps, 4 cascades, 500 m distance |
+| Scene | 83 entities · 65 renderers · **18 lights** · 19,380 triangles |
+| Draw calls | 65 · 9 shader binds (2 redundant skipped) · 1 texture bind |
+| CPU per frame | **≈ 2.2 ms** — the remainder is GPU |
+
+Per-pass CPU timings from the built-in profiler: point shadows 0.47 ms · spot shadows 0.36 ms ·
+scene draw 0.24 ms · editor UI build 0.26 ms · ImGui render 0.21 ms.
+
+*One scene, one machine — indicative, not a benchmark suite. GPU-side timing is not yet
+instrumented.*
+
+## Project status
+
+Actively developed alongside **Atrocity Exhibition**. The engine has just been through a
+full seven-round source audit — every file in `src/` was read — and the findings are tracked in
+**[issue #187](https://github.com/JCamberos27/TartarusEngine/issues/187)**, which doubles as the
+work plan: measured baseline, prioritised phases, and a per-issue difficulty label.
+
+The open issue count reflects that audit's backlog, not neglect.
 
 ## Tools
 
@@ -169,13 +199,25 @@ project/      The scene and editor preferences being authored
 
 ## Roadmap
 
-**Shipped** — linear HDR pipeline with tone mapping · cascaded shadow maps for the sun · point- and spot-light shadows · GPU (SSBO) light buffer · clustered-forward light culling (16 × 9 × 24 froxel grid, compute-driven)
+**Shipped** — linear HDR pipeline with tone mapping · cascaded shadow maps for the sun ·
+point- and spot-light shadows · GPU (SSBO) light buffer · clustered-forward light culling
+(16 × 9 × 24 froxel grid, compute-driven) · decoded-texture disk cache with source and
+settings invalidation
 
 **Next**
 
+- **GPU timer queries** — the CPU profiler accounts for only ~2 ms of a 7 ms frame; the rest is
+  unmeasured ([#197](https://github.com/JCamberos27/TartarusEngine/issues/197))
+- **Image-based lighting** — irradiance + prefiltered specular probes and a BRDF LUT, so
+  surfaces out of direct light stop reading flat
+  ([#196](https://github.com/JCamberos27/TartarusEngine/issues/196))
+- **A behaviour/component layer**, so entities can do more than sit still
+  ([#184](https://github.com/JCamberos27/TartarusEngine/issues/184))
+- **Collision beyond AABB** — triggers, gameplay raycasts, capsule and mesh colliders
+  ([#185](https://github.com/JCamberos27/TartarusEngine/issues/185))
+- **Runtime audio** — positional sound and per-source playback control
+  ([#201](https://github.com/JCamberos27/TartarusEngine/issues/201))
 - Screen-space effects on the HDR buffer — SSAO, bloom
-- A behaviour/scripting layer, so entities can do more than sit still
-- Project-relative asset pipeline with a baked import cache
 - Standalone build export
 
 ## License
