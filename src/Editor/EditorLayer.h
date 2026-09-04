@@ -718,6 +718,12 @@ private:
     // ImGui's own per-ID tree state) so Alt+click can recursively force every descendant open
     // or closed in one pass - something ImGui's own TreeNode open-state has no hook for.
     std::set<std::string> m_ExpandedAssetFolders;
+    // #157 — the folder tree is the only navigator now (breadcrumb is plain text, no ".." row),
+    // so when the current folder changes from anywhere its ancestors are force-opened in the
+    // tree and it's scrolled into view. Tracks the folder we last did that for + a one-shot
+    // scroll request the tree node consumes.
+    std::string m_AssetFolderTreeRevealed;
+    bool m_RevealAssetFolderInTree = false;
     float m_AssetTreeWidth = 180.0f; // drag-resizable via the splitter between tree and grid
     void DrawFolderTreeNode(World& world, AssetLibrary& assets, const std::string& folderPath, bool isRoot);
     void SetFolderExpandedRecursive(AssetLibrary& assets, const std::string& folderPath, bool expand, bool recursive);
