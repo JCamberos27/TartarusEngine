@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <map>
@@ -79,6 +80,19 @@ public:
 
     void PlayAnimation(int index);
     void UpdateAnimation(float dt);
+
+    // Advances this model's animation at most once per engine frame. Scene entities each get
+    // their own Model instance (AssetLibrary::InstantiateModel), so this is normally a 1:1 call
+    // anyway — but a future shared-Model path could otherwise tick one player N*dt in a single
+    // frame if N entities reference the same Model (#106). frameIndex is a monotonically
+    // increasing per-frame counter owned by the caller; comparing against it needs no
+    // allocation or hashing, unlike the per-frame std::unordered_set<Model*> this replaced.
+    void TickAnimationOnce(uint64_t frameIndex, float dt) {
+        if (m_LastTickedFrame == frameIndex) return;
+        m_LastTickedFrame = frameIndex;
+        UpdateAnimation(dt);
+    }
+
     void UploadBoneMatrices(Shader& shader) const;
     bool IsPlayingAnimation() const { return m_CurrentAnimation >= 0; }
 
@@ -130,6 +144,10 @@ private:
     int m_CurrentAnimation = -1;
     float m_CurrentTimeTicks = 0.0f;
     std::vector<glm::mat4> m_FinalBoneMatrices;
+
+    // Last engine frame index on which TickAnimationOnce() actually advanced this model; an
+    // impossible sentinel (uint64_t max) so frame index 0 doesn't look "already ticked".
+    uint64_t m_LastTickedFrame = ~0ull;
 
     glm::vec3 m_BoundsMin{1e30f}, m_BoundsMax{-1e30f};
     ModelImportSettings m_Settings;
