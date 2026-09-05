@@ -591,18 +591,46 @@ private:
     // right before the edit — restored by stable OrderComponent value (not raw entt::entity,
     // which a full scene reload invalidates, and not by name, which collides whenever two
     // entities share a name - #217) when undoing back to this point.
+    //
+    // Storage (#174 stage 2): an entry no longer holds a full scene snapshot. 100 entries of a
+    // multi-MB scene meant hundreds of MB of retained JSON text. Instead each stack is a
+    // delta chain anchored at its TOP entry:
+    //   - the top entry's state is held in full, once, in m_UndoBaseJson / m_RedoBaseJson;
+    //   - every entry below the top stores `Delta`, an RFC 6902 JSON Patch
+    //     (nlohmann::json::diff, dumped to text) that turns the state of the entry ABOVE it
+    //     back into its own state.
+    // The top is the only end either stack is pushed to or popped from, so a push re-encodes
+    // exactly one entry and a pop applies exactly one patch - no replay, no keyframes. See
+    // PushHistoryEntry / PopHistoryEntry in EditorLayer_Scene.cpp for the whole mechanism.
     struct UndoEntry {
-        std::string SceneJson;
+        // JSON Patch from the entry above this one to this one. Empty on the top entry (its
+        // full state is the base string) and, as a failure sentinel, on an entry whose patch
+        // could not be produced - see ApplyScenePatch.
+        std::string Delta;
         std::vector<int> SelectedOrders;
         std::string Label;
-        // Cheap FNV-1a hash of SceneJson (#174 stage 1), used instead of a full string compare
-        // to detect a no-op push. SceneJson itself is still what's stored/restored - this is
-        // only ever compared against another entry's hash, never used on its own.
+        // Cheap FNV-1a hash of this entry's full scene JSON (#174 stage 1), used instead of a
+        // full string compare to detect a no-op push. Only ever compared against another
+        // entry's hash, never used on its own - which is why it survives delta encoding.
         uint64_t Hash = 0;
     };
     std::vector<UndoEntry> m_UndoStack;
     std::vector<UndoEntry> m_RedoStack;
+    // Full scene JSON of each stack's TOP entry; empty exactly when that stack is empty.
+    std::string m_UndoBaseJson;
+    std::string m_RedoBaseJson;
     static constexpr size_t kMaxHistory = 100;
+
+    // Delta-chain plumbing. `entry`'s own full state is `newFullJson`: it becomes the stack's
+    // new top (held in full in `baseJson`), and the outgoing top is re-encoded as a patch off it.
+    static void PushHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
+                                 UndoEntry&& entry, const std::string& newFullJson);
+    // Removes the top entry, handing back the entry itself and its full scene JSON, and
+    // re-anchors `baseJson` on the entry underneath. Returns false only if the stack was empty.
+    static bool PopHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
+                                UndoEntry& outEntry, std::string& outFullJson);
+    void ClearRedoHistory();  // redo stack + its base, kept in lockstep
+    void ClearUndoHistory();  // both stacks and both bases - for New/Open/recovery-restore
 
     // Set at the top of every Draw() call - PushUndo needs AssetLibrary to snapshot its state
     // (folders, display names, import settings) alongside the entity graph, but threading an
@@ -631,8 +659,8 @@ private:
     void StageUndo(const World& world);
     void CommitStagedUndo(const World& world, const std::string& label);
     // Repeatedly calls Undo()/Redo() until the entry at this position in the visible history
-    // list (see DrawHistoryPanel) becomes current - each step is still a single full-snapshot
-    // load, not incremental replay, so this stays cheap even jumping many steps at once.
+    // list (see DrawHistoryPanel) becomes current - each step costs one patch application plus
+    // the scene load it was already doing, so this stays cheap even jumping many steps at once.
     void JumpToUndoEntry(World& world, AssetLibrary& assets, size_t undoStackIndex);
     void JumpToRedoEntry(World& world, AssetLibrary& assets, size_t redoStackIndex);
 
