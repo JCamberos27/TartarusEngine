@@ -331,6 +331,9 @@ public:
         bool ClusterSaturated = false;
     };
     void SetRenderStats(const RenderStats& stats) { m_RenderStats = stats; }
+    // Last frame's stats, as set above — read by the --smoke-test harness (main.cpp) to check
+    // a loaded scene actually issued draw calls rather than rendering silently empty.
+    const RenderStats& GetRenderStats() const { return m_RenderStats; }
 
     // Files (or whole folders) dropped onto the window from the OS (e.g. dragged in from
     // Explorer) — routed by extension through the exact same AssetLibrary calls File > Import

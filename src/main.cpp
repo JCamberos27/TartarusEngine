@@ -337,7 +337,19 @@ static entt::entity FindActiveSceneCamera(const World& world) {
     return best;
 }
 
-int main() {
+int main(int argc, char** argv) {
+    // --smoke-test: headless-as-possible CI/manual smoke check (audit #187). Loads every scene
+    // under project/scenes/, renders a fixed number of frames of each through the exact same
+    // per-frame render path the interactive editor uses (see the `smokeTestMode` branches
+    // sprinkled through the main loop below), then checks for new GL debug-callback errors and
+    // a nonzero draw count before moving to the next scene. Exits 0 if every scene passed, or a
+    // nonzero code if any failed — parsed here, before anything else, so it can never be
+    // confused with a scene-path or other future argument.
+    bool smokeTestMode = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--smoke-test") smokeTestMode = true;
+    }
+
     try {
         // Up before anything else so it covers the whole startup, including the GL context
         // creation and shader compiles below. The main window stays hidden until its first
@@ -691,8 +703,53 @@ int main() {
         // per-frame heap allocation.
         uint64_t frameIndex = 0;
 
+        // --smoke-test state (audit #187). Deliberately driven from inside the normal render
+        // loop below rather than a separate loop of its own, so it exercises the exact same
+        // per-frame path (light gather, shadow passes, drawScene, editor.Draw/EndFrame) as an
+        // interactive session — the whole point of the harness is catching a regression that
+        // path could introduce, not a hand-rolled approximation of it.
+        constexpr int kSmokeTestFrames = 100;
+        struct SmokeResult { std::string scenePath; int frames; int newGlErrors; int drawCalls; bool pass; };
+        std::vector<std::string> smokeScenePaths;
+        std::vector<SmokeResult> smokeResults;
+        size_t smokeSceneIndex = 0;
+        int smokeFramesRendered = 0;
+        int smokeBaselineGlErrors = 0;
+        bool smokeSceneActive = false;
+        if (smokeTestMode) {
+            std::string scenesDir = ProjectPaths::Resolve("scenes");
+            std::error_code dirEc;
+            for (auto& entry : std::filesystem::directory_iterator(scenesDir, dirEc)) {
+                if (dirEc) break;
+                if (entry.is_regular_file() && entry.path().extension() == ".json")
+                    smokeScenePaths.push_back(entry.path().string());
+            }
+            std::sort(smokeScenePaths.begin(), smokeScenePaths.end());
+            std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
+                      << scenesDir << std::endl;
+            if (!GLDebug::IsEnabled()) {
+                std::cout << "[SmokeTest] WARNING: GLDebug is not active in this build (needs a "
+                             "Debug build or TARTARUS_GL_DEBUG=1) - GL error counts will always "
+                             "read 0." << std::endl;
+            }
+        }
+
         while (true) {
             ++frameIndex;
+            // Advance the smoke test: load the next scene (or, once every scene's frame quota is
+            // met, fall through and stop the whole loop below).
+            if (smokeTestMode) {
+                if (smokeSceneIndex >= smokeScenePaths.size()) break;
+                if (!smokeSceneActive) {
+                    const std::string& path = smokeScenePaths[smokeSceneIndex];
+                    bool loadOk = SceneSerializer::Load(world, assets, path);
+                    std::cout << "[SmokeTest] Loading " << path
+                              << (loadOk ? "" : "  (Load() reported failure)") << std::endl;
+                    smokeBaselineGlErrors = GLDebug::ErrorCount();
+                    smokeFramesRendered = 0;
+                    smokeSceneActive = true;
+                }
+            }
             Clock::Update();
             float dt = Clock::DeltaTime();
             Profiler::BeginFrame();
@@ -1829,6 +1886,46 @@ int main() {
                 window.Show();
                 splash.Close(); // blocks out any remainder of the minimum display time
             }
+
+            // Count this frame toward the active scene's quota; once it's rendered enough,
+            // score it (new GL errors + draw count) and advance to the next scene.
+            if (smokeTestMode && smokeSceneActive) {
+                ++smokeFramesRendered;
+                if (smokeFramesRendered >= kSmokeTestFrames) {
+                    int newErrors = GLDebug::ErrorCount() - smokeBaselineGlErrors;
+                    int drawCalls = editor.GetRenderStats().DrawCalls;
+                    bool pass = newErrors == 0 && drawCalls > 0;
+                    const std::string& path = smokeScenePaths[smokeSceneIndex];
+                    smokeResults.push_back({path, smokeFramesRendered, newErrors, drawCalls, pass});
+                    std::cout << "[SmokeTest] " << (pass ? "PASS" : "FAIL") << "  "
+                              << std::filesystem::path(path).filename().string()
+                              << "  frames=" << smokeFramesRendered
+                              << " newGlErrors=" << newErrors
+                              << " drawCalls=" << drawCalls << std::endl;
+                    ++smokeSceneIndex;
+                    smokeSceneActive = false;
+                }
+            }
+        }
+
+        if (smokeTestMode) {
+            // Deliberately skip the normal exit path entirely (no play-mode revert, no
+            // save-on-exit) — smoke-tested scenes were never really "open" from the user's
+            // point of view and must not get written back to disk.
+            std::cout << "\n[SmokeTest] ==== Summary ====" << std::endl;
+            bool allPassed = !smokeResults.empty();
+            for (const auto& r : smokeResults) {
+                std::cout << "[SmokeTest] " << (r.pass ? "PASS" : "FAIL") << "  "
+                          << std::filesystem::path(r.scenePath).filename().string()
+                          << "  frames=" << r.frames << " newGlErrors=" << r.newGlErrors
+                          << " drawCalls=" << r.drawCalls << std::endl;
+                if (!r.pass) allPassed = false;
+            }
+            std::cout << "[SmokeTest] " << smokeResults.size() << " scene(s) - "
+                      << (allPassed ? "ALL PASSED" : "FAILURES DETECTED") << std::endl;
+            editor.Shutdown();
+            AudioEngine::Shutdown();
+            return allPassed ? 0 : 1;
         }
 
         // Closing mid-play would otherwise auto-save the transient play state — revert to the
