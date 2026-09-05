@@ -4,12 +4,20 @@
 class Shader;
 
 // Clustered-forward light culling (#120). Owns three SSBOs — per-cluster view-space AABBs
-// (binding 2, compute-internal), per-cluster light count (binding 3), and a fixed-stride
-// per-cluster light-index list (binding 4) — and drives the two compute passes that fill
-// them (see ClusterShaderSource.h). The model fragment shader reads bindings 3 and 4.
+// (binding 2, compute-internal), a per-cluster (offset, count) range into the global index
+// list (binding 3), and one global compacted light-index list that every cluster's lights are
+// appended into (binding 4) — and drives the two compute passes that fill them (see
+// ClusterShaderSource.h). The model fragment shader reads bindings 3 and 4.
 //
 // The grid is a fixed GRID_X x GRID_Y screen tiling by GRID_Z exponential depth slices, so a
 // fragment maps to its cluster with cheap arithmetic on gl_FragCoord + view depth.
+//
+// Compacted layout (#208): earlier versions gave every cluster a fixed MAX_LIGHTS_PER_CLUSTER
+// slots regardless of how many lights actually touched it (3,456 * 100 * 4 bytes = 1.38 MB,
+// scattered reads). Now the cull pass reserves a right-sized, contiguous block per cluster in
+// one global index list (binding 4) via an atomic counter, and each cluster just records where
+// its block starts and how long it is (binding 3). Total memory scales with actual light
+// coverage instead of worst case, and the fragment shader's per-cluster loop reads contiguously.
 //
 // Optimization (#205): The build pass (AABB computation) only needs to run when the projection
 // matrix or screen size changes (expensive operation: 3,456 froxel AABBs + glMemoryBarrier).
@@ -21,7 +29,12 @@ public:
     static constexpr int GRID_Y = 9;
     static constexpr int GRID_Z = 24;
     static constexpr int CLUSTERS = GRID_X * GRID_Y * GRID_Z; // 3456
-    static constexpr int MAX_LIGHTS_PER_CLUSTER = 100;        // must match kCullLightsCompute MAXL
+    // Total capacity of the global compacted light-index list (#208), shared across all
+    // clusters instead of each reserving its own fixed slot range. Generously sized relative to
+    // typical light coverage (16x the old average of ~4 lights/cluster) while still being ~5.6x
+    // smaller than the old fixed-stride buffer (65536 * 4 bytes = 256 KB vs. 1.38 MB). Must
+    // match kCullLightsCompute's GLOBAL_CAPACITY.
+    static constexpr int GLOBAL_INDEX_CAPACITY = 65536;
 
     ~ClusterGrid();
 
@@ -33,13 +46,15 @@ public:
     void Cull(Shader& buildShader, Shader& cullShader, const glm::mat4& view, const glm::mat4& proj,
               float nearZ, float farZ, int screenW, int screenH);
 
-    // Bind the count (3) and index (4) SSBOs for the model fragment shader's per-cluster loop.
+    // Bind the range (3) and index (4) SSBOs for the model fragment shader's per-cluster loop.
     void BindForShading() const;
 
-    // True if any cluster hit MAX_LIGHTS_PER_CLUSTER during the most recent Cull() — i.e. that
-    // cluster's light list was capped and may be missing lights that should shade it (#204). A
-    // single-uint readback taken once per Cull() call; cheap enough to always do, not something
-    // to poll every fragment. Drives the Stats panel warning, nothing render-critical.
+    // True if the global index list (binding 4) would have overflowed its GLOBAL_INDEX_CAPACITY
+    // during the most recent Cull() — i.e. at least one cluster's reserved block was truncated
+    // and some lights that should shade it were dropped (#204, adapted for #208's global list:
+    // the failure mode moved from "one cluster's 100-light cap" to "the shared list is full").
+    // A single-uint readback taken once per Cull() call; cheap enough to always do, not
+    // something to poll every fragment. Drives the Stats panel warning, nothing render-critical.
     bool Saturated() const { return m_LastSaturated; }
 
     // (nearZ, farZ, GRID_Z / ln(far/near), -GRID_Z * ln(near) / ln(far/near)) — lets the
@@ -48,10 +63,14 @@ public:
 
 private:
     void EnsureCreated();
-    unsigned int m_AABBs = 0;    // binding 2
-    unsigned int m_Counts = 0;   // binding 3
-    unsigned int m_Indices = 0;  // binding 4
-    unsigned int m_Overflow = 0; // binding 5: single uint, atomicOr'd by kCullLightsCompute (#204)
+    unsigned int m_AABBs = 0;   // binding 2
+    unsigned int m_Counts = 0;  // binding 3: per-cluster {offset, count} pairs (#208)
+    unsigned int m_Indices = 0; // binding 4: global compacted light-index list (#208)
+    // binding 5: {globalCounter, overflowFlag} — globalCounter is the atomic append cursor into
+    // m_Indices (reset to 0 before every cull dispatch); overflowFlag is atomicOr'd by
+    // kCullLightsCompute when a cluster's reserved block ran past GLOBAL_INDEX_CAPACITY (#204,
+    // adapted for #208).
+    unsigned int m_Overflow = 0;
     bool m_LastSaturated = false;
 
     // Cached projection state for build-pass optimization (#205)

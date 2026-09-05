@@ -101,16 +101,18 @@ layout(std430, binding = 0) readonly buffer LightBuffer {
 
 // Clustered-forward light culling (#120). The view frustum is diced into a fixed
 // 16 x 9 x 24 grid of froxels; a per-frame compute pass (ClusterGrid) fills, for each
-// froxel, a count of the point/spot lights whose range reaches it plus their indices into
-// uLights. This fragment finds its own froxel from gl_FragCoord + view depth and loops only
-// that list. uClusterEnabled == 0 (the offscreen model preview, which runs no compute pass)
+// froxel, a {offset, count} range into one global compacted light-index list (#208) covering
+// the point/spot lights whose range reaches it. This fragment finds its own froxel from
+// gl_FragCoord + view depth and loops only that froxel's [offset, offset+count) slice of the
+// global list. uClusterEnabled == 0 (the offscreen model preview, which runs no compute pass)
 // falls back to looping every light.
-layout(std430, binding = 3) readonly buffer ClusterCounts { uint uClusterLightCount[]; };
+struct ClusterRange { uint offset; uint count; };
+layout(std430, binding = 3) readonly buffer ClusterCounts { ClusterRange uClusterRange[]; };
 layout(std430, binding = 4) readonly buffer ClusterIndex  { uint uClusterLightIndices[]; };
 uniform int  uClusterEnabled;
 uniform vec2 uClusterScreenSize;
 uniform vec4 uClusterZParams; // (near, far, GZ/ln(far/near), -GZ*ln(near)/ln(far/near))
-const uint C_GX = 16u, C_GY = 9u, C_GZ = 24u, C_MAXL = 100u;
+const uint C_GX = 16u, C_GY = 9u, C_GZ = 24u;
 
 // Cascaded shadow maps for the directional sun (see CascadedShadowMap). uView is also used to
 // pick the cascade by view-space depth.
@@ -506,9 +508,10 @@ void main() {
     // otherwise every light (offscreen preview path, no compute pass).
     if (uClusterEnabled == 1) {
         uint cl = clusterIndex();
-        uint count = uClusterLightCount[cl];
+        uint offset = uClusterRange[cl].offset;
+        uint count = uClusterRange[cl].count;
         for (uint j = 0u; j < count; ++j) {
-            uint li = uClusterLightIndices[cl * C_MAXL + j];
+            uint li = uClusterLightIndices[offset + j];
             Lo += ShadePointSpot(li, N, V, albedo, F0, metallic, roughness);
         }
     } else {
