@@ -157,12 +157,27 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 ```
 
-The executable lands at `build/Release/TartarusEngine.exe`. Icon fonts and branding are copied
-next to it automatically by a post-build step — no other assets or DLLs required. On first
-launch it opens `project/scenes/Showcase.json` — a first-person hall lit entirely by moving,
-colour-cycling point and spot lights — and thereafter reopens whatever scene you last had open.
+The executable lands at `build/Release/TartarusEngine.exe`; its reloadable gameplay module,
+`TartarusGame.dll`, is built beside it. Icon fonts and branding are copied next to them
+automatically. On first launch it opens `project/scenes/Showcase.json` — a first-person hall lit
+entirely by moving, colour-cycling point and spot lights — and thereafter reopens whatever scene
+you last had open.
 
 > **Note:** the engine must be closed before rebuilding, or the linker can't overwrite the exe.
+
+### Gameplay hot reload
+
+After launching a build that includes the hot-reload host, gameplay code in `TartarusGame.dll`
+can be rebuilt without closing the editor:
+
+```bash
+cmake --build build --config Release --target TartarusGame
+```
+
+The editor checks for a rebuilt DLL every 0.35 seconds, loads a private copy, and swaps it at the
+next safe frame. The current module runs `TransformControllerSystem`; future game systems belong
+in `src/Game/GameModule.cpp`. The editor, renderer, scene, and OpenGL context stay in the host,
+so the open scene is preserved. Rebuilding `TartarusEngine.exe` itself still requires closing it.
 
 ## Controls
 
