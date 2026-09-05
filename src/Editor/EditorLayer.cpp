@@ -1312,6 +1312,7 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
         if (PrimaryButton("Restore", ImVec2(120.0f, 0.0f))) {
             const std::string recoveryPath = RecoveryPathFor(m_CurrentScenePath);
             if (SceneSerializer::Load(world, assets, recoveryPath)) {
+                CheckSceneVersionWarning();
                 ClearSelection();
                 m_UndoStack.clear();
                 m_RedoStack.clear();
@@ -1330,6 +1331,37 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
             ClearRecoverySnapshot();
             m_RecoveryPromptPending = false;
             Log::Info("Discarded the recovery snapshot; opened the saved scene.");
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void EditorLayer::CheckSceneVersionWarning() {
+    std::string warning = SceneSerializer::TakeLoadWarning();
+    if (!warning.empty()) m_SceneVersionWarning = std::move(warning);
+}
+
+void EditorLayer::DrawSceneVersionWarningPopup() {
+    if (m_SceneVersionWarning.empty()) return;
+
+    const char* kPopupId = "Newer Scene Format";
+    if (!ImGui::IsPopupOpen(kPopupId)) ImGui::OpenPopup(kPopupId);
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(420.0f * m_UIScale, 0.0f));
+
+    if (ImGui::BeginPopupModal(kPopupId, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 380.0f * m_UIScale);
+        ImGui::TextUnformatted(m_SceneVersionWarning.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::Spacing();
+        ImGui::Separator();
+        const bool dismiss = ImGui::IsKeyPressed(ImGuiKey_Enter) ||
+                             ImGui::IsKeyPressed(ImGuiKey_KeypadEnter) ||
+                             ImGui::IsKeyPressed(ImGuiKey_Escape);
+        if (PrimaryButton("OK", ImVec2(-FLT_MIN, 0.0f)) || dismiss) {
+            m_SceneVersionWarning.clear();
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -4191,6 +4223,8 @@ void EditorLayer::DrawStatsPanel(World& world, float dt) {
     const bool hasGpuSection = profGpuN > 0;
     const int rows = 1 /*fps*/ + 3 /*draw/tri/vert*/ + (m_RenderStats.Culled > 0 ? 1 : 0)
                    + 4 /*ent/rend/coll/light*/ + (inactiveCount > 0 ? 1 : 0)
+                   + (m_RenderStats.LightBufferOverflowed ? 1 : 0) // #204
+                   + (m_RenderStats.ClusterSaturated ? 1 : 0)      // #204
                    + profN + (hasGpuSection ? profGpuN : 0) + 2 /*shader/texture binds*/;
     const float chromeH = lineH * (2.0f + (hasGpuSection ? 1.0f : 0.0f))  // "Statistics" + "Profiler (CPU)" [+ "Profiler (GPU)"]
                         + (4.0f + (hasGpuSection ? 1.0f : 0.0f)) * (stStats.ItemSpacing.y + 2.0f) // Separator() rules
@@ -6432,6 +6466,54 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         }
     }
 
+    // --- Animator (procedural motion: spin/orbit/bob/color-cycle, see #214) ----------------
+    if (auto* anim = registry.try_get<AnimatorComponent>(entity)) {
+        if (BeginComponentSection(ICON_FA_PERSON_RUNNING, "Animator", true, removed, /*defaultOpen=*/true,
+                "Procedural motion driven every frame in Play mode - continuous spin, orbit\naround an axis, vertical bob, and light hue-cycling. All fields are additive\nand reversible (turning a rate back to 0 undoes its contribution).")) {
+            bool rowActive, rowCommitted;
+
+            ImGui::TextDisabled("Spin");
+            DrawVec3Row("Spin", anim->SpinDegPerSec, 1.0f, 0.0f, 0.0f, rowActive, rowCommitted,
+                "Continuous local rotation, in degrees/second per axis.");
+            if (rowActive) StageUndo(world);
+            if (rowCommitted) CommitStagedUndo(world, "Edit Animator Spin");
+
+            ImGui::Spacing();
+            ImGui::TextDisabled("Orbit");
+            DrawVec3Row("Axis", anim->OrbitAxis, 0.01f, 0.0f, 0.0f, rowActive, rowCommitted,
+                "Axis this object revolves around, relative to its base position.");
+            if (rowActive) StageUndo(world);
+            if (rowCommitted) CommitStagedUndo(world, "Edit Animator Orbit Axis");
+            PropertyLabel("Speed", "Revolution rate around the orbit axis, in degrees/second.");
+            ImGui::DragFloat("##OrbitDegPerSec", &anim->OrbitDegPerSec, 0.5f, 0.0f, 0.0f, "%.1f deg/s");
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Animator Orbit Speed");
+            PropertyLabel("Radius", "Distance from the base position while orbiting, in world units.");
+            ImGui::DragFloat("##OrbitRadius", &anim->OrbitRadius, 0.05f, 0.0f, 0.0f, "%.2f");
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Animator Orbit Radius");
+
+            ImGui::Spacing();
+            ImGui::TextDisabled("Bob");
+            PropertyLabel("Amplitude", "Vertical sine offset from the base position, in world units.");
+            ImGui::DragFloat("##BobAmplitude", &anim->BobAmplitude, 0.01f, 0.0f, 0.0f, "%.3f");
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Animator Bob Amplitude");
+            PropertyLabel("Frequency", "Bob rate in Hz (cycles/second).");
+            ImGui::DragFloat("##BobFreqHz", &anim->BobFreqHz, 0.02f, 0.0f, 0.0f, "%.2f Hz");
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Animator Bob Frequency");
+
+            ImGui::Spacing();
+            ImGui::TextDisabled("Light Color Cycle");
+            PropertyLabel("Cycle Rate", "Hue revolutions/second for this object's Light color.\n0 leaves the color alone. Has no effect without a Light component.");
+            ImGui::DragFloat("##ColorCycleHzPerSec", &anim->ColorCycleHzPerSec, 0.01f, 0.0f, 0.0f, "%.2f Hz");
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Animator Color Cycle");
+
+            EndComponentSection();
+        }
+        if (removed) {
+            PushUndo(world, "Remove Animator");
+            registry.remove<AnimatorComponent>(entity);
+        }
+    }
+
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
@@ -6788,6 +6870,10 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     ImGui::SeparatorText("Audio");
     entry(ICON_FA_VOLUME_HIGH, "Audio Source", registry.all_of<AudioSourceComponent>(entity),
         [&] { registry.emplace<AudioSourceComponent>(entity); });
+
+    ImGui::SeparatorText("Motion");
+    entry(ICON_FA_PERSON_RUNNING, "Animator", registry.all_of<AnimatorComponent>(entity),
+        [&] { registry.emplace<AnimatorComponent>(entity); });
 
     ImGui::EndPopup();
 }

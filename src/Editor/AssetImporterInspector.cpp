@@ -24,7 +24,7 @@ void AssetImporterInspector::DrawTextureSettings(TextureImportSettings& settings
     ImGui::PushItemWidth(-1.0f);
 
     Row("Texture Type", "What this texture is used for - mainly documentation today, but\nsRGB should only ever be on for Default/Sprite, never Normal Map.");
-    const char* kTypes[] = {"Default", "Normal Map", "Sprite / 2D", "Cubemap"};
+    const char* kTypes[] = {"Default", "Normal Map", "Sprite / 2D"};
     int typeIdx = (int)settings.TextureType;
     if (ImGui::Combo("##TexType", &typeIdx, kTypes, IM_ARRAYSIZE(kTypes))) {
         settings.TextureType = (TextureImportSettings::Type)typeIdx;
@@ -39,9 +39,6 @@ void AssetImporterInspector::DrawTextureSettings(TextureImportSettings& settings
 
     Row("sRGB (Color Texture)", "On for albedo/base-color textures (authored in sRGB by every\npaint/photo tool). Off for normal maps and other data maps (roughness,\nmetallic, AO, height) - those numbers ARE linear already.");
     isDirty |= ImGui::Checkbox("##sRGB", &settings.IsSRGB);
-
-    Row("Is Readable", "Kept for parity with Unity's importer and saved with the rest of\nthese settings, but nothing in this engine reads pixel data back off the\nGPU today - this flag has no effect yet.");
-    isDirty |= ImGui::Checkbox("##Readable", &settings.IsReadable);
 
     Row("Filter Mode", "Point = blocky/pixel-art. Bilinear = smooth, no blending between\nmip levels. Trilinear = smooth with blending between mip levels too\n(best quality at oblique angles, marginally more GPU cost).");
     const char* kFilters[] = {"Point", "Bilinear", "Trilinear"};

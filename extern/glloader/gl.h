@@ -252,6 +252,7 @@ typedef void (__stdcall* PFNGLTEXIMAGE2DMULTISAMPLEPROC)(GLenum, GLsizei, GLenum
 typedef void (__stdcall* PFNGLCREATEBUFFERSPROC)(GLsizei, GLuint*);
 typedef void (__stdcall* PFNGLNAMEDBUFFERSTORAGEPROC)(GLuint, GLsizeiptr, const void*, GLbitfield);
 typedef void (__stdcall* PFNGLNAMEDBUFFERSUBDATAPROC)(GLuint, GLintptr, GLsizeiptr, const void*);
+typedef void (__stdcall* PFNGLGETNAMEDBUFFERSUBDATAPROC)(GLuint, GLintptr, GLsizeiptr, void*);
 // DSA — textures.
 typedef void (__stdcall* PFNGLCREATETEXTURESPROC)(GLenum, GLsizei, GLuint*);
 typedef void (__stdcall* PFNGLTEXTURESTORAGE2DPROC)(GLuint, GLsizei, GLenum, GLsizei, GLsizei);
@@ -349,6 +350,7 @@ extern PFNGLTEXIMAGE2DMULTISAMPLEPROC glTexImage2DMultisample;
 extern PFNGLCREATEBUFFERSPROC glCreateBuffers;
 extern PFNGLNAMEDBUFFERSTORAGEPROC glNamedBufferStorage;
 extern PFNGLNAMEDBUFFERSUBDATAPROC glNamedBufferSubData;
+extern PFNGLGETNAMEDBUFFERSUBDATAPROC glGetNamedBufferSubData;
 extern PFNGLCREATETEXTURESPROC glCreateTextures;
 extern PFNGLTEXTURESTORAGE2DPROC glTextureStorage2D;
 extern PFNGLTEXTURESTORAGE3DPROC glTextureStorage3D;
