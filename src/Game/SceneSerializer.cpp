@@ -616,21 +616,11 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets) {
 }
 
 void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
-    if (root.contains("libraryModels")) {
-        for (const auto& p : root["libraryModels"]) assets.LoadModel(p.get<std::string>());
-    }
-    if (root.contains("libraryTextures")) {
-        for (const auto& p : root["libraryTextures"]) assets.LoadTexture(p.get<std::string>());
-    }
-    if (root.contains("librarySounds")) {
-        for (const auto& p : root["librarySounds"]) assets.RegisterSound(p.get<std::string>());
-    }
-    if (root.contains("libraryPrefabs")) {
-        for (const auto& p : root["libraryPrefabs"]) assets.RegisterPrefab(p.get<std::string>());
-    }
-    if (root.contains("assetFolders")) {
-        for (const auto& f : root["assetFolders"]) assets.CreateFolder(f.get<std::string>());
-    }
+    // assetMeta is read FIRST, before any LoadModel/LoadTexture call below, so that the import
+    // settings (and folder/display-name/labels) are already known by the time an asset is
+    // actually loaded. LoadModel/LoadTexture consult GetModelSettings/GetTextureSettings
+    // themselves, so populating these maps up front makes each asset get imported exactly once,
+    // with the correct settings, instead of once with defaults and once more via Reimport.
     if (root.contains("assetMeta")) {
         for (const auto& entry : root["assetMeta"]) {
             std::string path = entry.value("path", std::string());
@@ -642,9 +632,6 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
                 for (const auto& l : entry["labels"]) labels.insert(l.get<std::string>());
                 assets.SetLabels(path, labels);
             }
-            // Settings are applied AND reimported here (rather than only stored) because
-            // LoadModel/LoadTexture above already imported this asset with default settings —
-            // this is the first point in the load sequence where the saved settings are known.
             if (entry.contains("textureImport")) {
                 const auto& t = entry["textureImport"];
                 TextureImportSettings s;
@@ -660,7 +647,6 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
                 s.WrapMode = (TextureImportSettings::Wrap)t.value("wrapMode", 0);
                 s.MaxTextureSize = t.value("maxTextureSize", 2048);
                 assets.SetTextureSettings(path, s);
-                assets.ReimportTexture(path);
             }
             if (entry.contains("modelImport")) {
                 const auto& m = entry["modelImport"];
@@ -672,9 +658,23 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
                 s.OptimizeGraph = m.value("optimizeGraph", true);
                 s.MaterialImportMode = (ModelImportSettings::MaterialMode)m.value("materialImportMode", 0);
                 assets.SetModelSettings(path, s);
-                assets.ReimportModel(path);
             }
         }
+    }
+    if (root.contains("libraryModels")) {
+        for (const auto& p : root["libraryModels"]) assets.LoadModel(p.get<std::string>());
+    }
+    if (root.contains("libraryTextures")) {
+        for (const auto& p : root["libraryTextures"]) assets.LoadTexture(p.get<std::string>());
+    }
+    if (root.contains("librarySounds")) {
+        for (const auto& p : root["librarySounds"]) assets.RegisterSound(p.get<std::string>());
+    }
+    if (root.contains("libraryPrefabs")) {
+        for (const auto& p : root["libraryPrefabs"]) assets.RegisterPrefab(p.get<std::string>());
+    }
+    if (root.contains("assetFolders")) {
+        for (const auto& f : root["assetFolders"]) assets.CreateFolder(f.get<std::string>());
     }
 }
 

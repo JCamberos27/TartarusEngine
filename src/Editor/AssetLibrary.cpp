@@ -21,7 +21,10 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
         std::string kind = rest.substr(0, rest.find('#'));
         model = Model::CreatePrimitive(kind, path);
     } else {
-        model = std::make_shared<Model>(path);
+        // Consult any settings saved for this path (e.g. from a scene's assetMeta, applied
+        // before this is called) so an asset with custom import settings is imported once,
+        // correctly, instead of once with defaults and once more via Reimport.
+        model = std::make_shared<Model>(path, GetModelSettings(path));
     }
 
     m_ModelCache[path] = model;
@@ -61,7 +64,10 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path) {
     auto it = m_TextureCache.find(path);
     if (it != m_TextureCache.end()) return it->second;
 
-    auto tex = std::make_shared<Texture>(path);
+    // Consult any settings saved for this path (e.g. from a scene's assetMeta, applied before
+    // this is called) so an asset with custom import settings is imported once, correctly,
+    // instead of once with defaults and once more via Reimport.
+    auto tex = std::make_shared<Texture>(path, GetTextureSettings(path));
     m_TextureCache[path] = tex;
     m_TextureList.push_back(tex);
     return tex;
