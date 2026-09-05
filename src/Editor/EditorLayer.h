@@ -962,6 +962,10 @@ private:
     // optionally with a LightComponent already attached.
     entt::entity CreateEmptyAt(World& world, Camera* editorCamera, const char* name, bool asLight);
     void CreateEmptyParentForSelection(World& world); // Hierarchy right-click "Group into Empty Parent" (#71)
+    // Hierarchy right-click "Unparent" (#220) — moves the whole selection to the scene root, the
+    // same operation the drag-to-empty-space gesture performs, but always reachable even once the
+    // tree fills the panel and that drop zone collapses to nothing.
+    void UnparentSelection(World& world);
 
     // --- Inspector: Add / Remove Component -------------------------------------------------
     void DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity);

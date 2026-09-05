@@ -4874,8 +4874,15 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
             entt::entity dragged = *(const entt::entity*)payload->Data;
             if (world.Registry.valid(dragged)) {
-                PushUndo(world, "Reparent");
-                world.SetParent(dragged, entt::null);
+                // Dragging a row that's part of the current multi-selection un-parents the whole
+                // selection, not just the one row the mouse happened to grab (#220).
+                std::vector<entt::entity> toUnparent = IsSelected(dragged) ? GetSelectedItems()
+                                                                            : std::vector<entt::entity>{dragged};
+                StageUndo(world);
+                for (entt::entity e : toUnparent) {
+                    if (world.Registry.valid(e)) world.SetParent(e, entt::null);
+                }
+                CommitStagedUndo(world, "Reparent");
             }
         }
         ImGui::EndDragDropTarget();
@@ -5037,17 +5044,31 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     // Drag a row onto another row to re-parent it (Unity's core Hierarchy gesture).
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoDisableHover)) {
         ImGui::SetDragDropPayload("HIERARCHY_ENTITY", &entity, sizeof(entt::entity));
-        ImGui::Text("%s", label.c_str());
+        // Dragging a row that's part of a multi-selection carries (and will re-parent) the whole
+        // selection — the preview says so instead of naming just the one row under the mouse.
+        size_t dragCount = IsSelected(entity) ? GetSelectedItems().size() : 1;
+        if (dragCount > 1) ImGui::Text("%d objects", (int)dragCount);
+        else ImGui::Text("%s", label.c_str());
         ImGui::EndDragDropSource();
     }
     if (ImGui::BeginDragDropTarget()) {
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
             entt::entity dragged = *(const entt::entity*)payload->Data;
             if (world.Registry.valid(dragged) && dragged != entity) {
-                PushUndo(world, "Reparent");
+                // Same rule as the un-parent drop below: a multi-selected dragged row re-parents
+                // the whole selection (#220), otherwise just the row itself.
+                std::vector<entt::entity> toReparent = IsSelected(dragged) ? GetSelectedItems()
+                                                                            : std::vector<entt::entity>{dragged};
+                StageUndo(world);
                 // SetParent refuses cycles and Collider-bearing children on its own; report the
                 // refusal rather than silently doing nothing, so the gesture never looks broken.
-                if (!world.SetParent(dragged, entity)) {
+                bool anyFailed = false;
+                for (entt::entity e : toReparent) {
+                    if (!world.Registry.valid(e) || e == entity) continue;
+                    if (!world.SetParent(e, entity)) anyFailed = true;
+                }
+                CommitStagedUndo(world, "Reparent");
+                if (anyFailed) {
                     Log::Warn("Can't parent that: level geometry has a collider that needs world-space "
                               "coordinates, or the target is already a child of the dragged object.");
                 }
@@ -5145,6 +5166,21 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     if (ImGui::IsItemHovered() && HasAnySelection()) {
         EditorUI::SetTooltip("Create a new Empty at the selection's center and parent every\nselected object under it. Positions are preserved.");
     }
+
+    // Always-reachable un-parent (#220): dropping onto the empty space below the tree does the
+    // same thing, but that drop zone can shrink to nothing once the tree fills the panel.
+    bool selectionHasParent = false;
+    for (entt::entity e : GetSelectedItems()) {
+        if (!world.Registry.valid(e)) continue;
+        const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+        if (h && h->Parent != entt::null) { selectionHasParent = true; break; }
+    }
+    if (ImGui::MenuItem(ICON_FA_LINK_SLASH "  Unparent", nullptr, false, selectionHasParent)) {
+        UnparentSelection(world);
+    }
+    if (ImGui::IsItemHovered() && selectionHasParent) {
+        EditorUI::SetTooltip("Move the selection to the scene root.");
+    }
     ImGui::Separator();
 
     if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C", false, hasEntity)) CopySelection(world);
@@ -5229,6 +5265,15 @@ void EditorLayer::CreateEmptyParentForSelection(World& world) {
     SelectItem(parent, false);
     Log::Info("Grouped " + std::to_string(parented) + " object(s) under a new Empty" +
               (parented < (int)sel.size() ? " (some couldn't be re-parented)." : "."));
+}
+
+void EditorLayer::UnparentSelection(World& world) {
+    std::vector<entt::entity> sel = GetSelectedItems();
+    StageUndo(world);
+    for (entt::entity e : sel) {
+        if (world.Registry.valid(e)) world.SetParent(e, entt::null);
+    }
+    CommitStagedUndo(world, "Reparent");
 }
 
 entt::entity EditorLayer::CreateEmptyAt(World& world, Camera* editorCamera, const char* name, bool asLight) {
