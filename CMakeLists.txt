@@ -89,6 +89,7 @@ file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
 list(REMOVE_ITEM ENGINE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
 )
 
 set(IMGUI_SOURCES
@@ -115,6 +116,20 @@ add_library(TartarusGame SHARED
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
 )
 
+# Reloadable editor tools intentionally use a narrow host callback table rather than sharing
+# EditorLayer's ImGui/undo/scene lifetime across a DLL boundary. That lets a tool panel reload
+# live without invalidating an open scene or an active ImGui frame.
+add_library(TartarusEditor SHARED
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
+)
+target_include_directories(TartarusEditor PRIVATE
+  ${CMAKE_SOURCE_DIR}/src/Editor
+)
+target_compile_options(TartarusEditor PRIVATE
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /MP>
+  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+)
+
 target_include_directories(TartarusGame PRIVATE
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/src/Core
@@ -129,7 +144,19 @@ target_compile_options(TartarusGame PRIVATE
 )
 
 # A normal TartarusEngine build also produces its current gameplay module next to the exe.
-add_dependencies(TartarusEngine TartarusGame)
+add_dependencies(TartarusEngine TartarusGame TartarusEditor)
+
+# The actual DLL filenames the host watches for (rather than a hardcoded "TartarusGame.dll"):
+# CMAKE_DEBUG_POSTFIX is set globally to "d" (originally for the FetchContent'd dependencies),
+# which also applies to these two library targets in Debug builds — TartarusGame.dll becomes
+# TartarusGamed.dll, TartarusEditor.dll becomes TartarusEditord.dll. A hardcoded name only ever
+# matched in Release/RelWithDebInfo, where there's no postfix; hot reload silently never found
+# either DLL in a Debug build. $<TARGET_FILE_NAME:...> always resolves to whatever the linker
+# actually produced for the active config.
+target_compile_definitions(TartarusEngine PRIVATE
+  TARTARUS_GAME_MODULE_FILENAME="$<TARGET_FILE_NAME:TartarusGame>"
+  TARTARUS_EDITOR_MODULE_FILENAME="$<TARGET_FILE_NAME:TartarusEditor>"
+)
 
 # A console-subsystem build makes Windows open a terminal window alongside the editor, which
 # looks like a launch error to anyone who didn't expect it. Release builds use the GUI

@@ -10,6 +10,7 @@
 #include "AudioEngine.h"
 #include "AssetLibrary.h"
 #include "HotReloadGameModule.h"
+#include "HotReloadEditorModule.h"
 #include "EditorLayer.h"
 #include "EditorSettings.h"
 #include "Model.h"
@@ -383,11 +384,17 @@ int main(int argc, char** argv) {
 
         World world;
         HotReloadGameModule gameModule;
+        HotReloadEditorModule editorModule;
         {
             std::error_code ec;
             std::filesystem::path executable = std::filesystem::absolute(argv[0], ec);
             if (ec) executable = std::filesystem::current_path(ec) / "TartarusEngine.exe";
-            gameModule.Initialize(executable.parent_path() / "TartarusGame.dll");
+            // Filenames come from the build system (TARTARUS_GAME_MODULE_FILENAME /
+            // TARTARUS_EDITOR_MODULE_FILENAME, see CMakeLists.txt) rather than being hardcoded
+            // here — a Debug build's CMAKE_DEBUG_POSTFIX makes these "TartarusGamed.dll" /
+            // "TartarusEditord.dll", not the plain names a Release build produces.
+            gameModule.Initialize(executable.parent_path() / TARTARUS_GAME_MODULE_FILENAME);
+            editorModule.Initialize(executable.parent_path() / TARTARUS_EDITOR_MODULE_FILENAME);
         }
         Player player;
         // Default spawn/editor-camera start: on the outdoor plaza, facing through the open
@@ -1618,6 +1625,7 @@ int main(int argc, char** argv) {
                 // stand down (a shoot-click or strafe key shouldn't also poke the editor).
                 editor.SetGameInputActive(gameHasInput);
                 if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
+                editorModule.Draw(editorUIVisible, dt);
             }
 
             // The OS title bar is gone — the toolbar's empty area is the window drag handle.
@@ -1932,6 +1940,7 @@ int main(int argc, char** argv) {
             std::cout << "[SmokeTest] " << smokeResults.size() << " scene(s) - "
                       << (allPassed ? "ALL PASSED" : "FAILURES DETECTED") << std::endl;
             editor.Shutdown();
+            editorModule.Shutdown();
             AudioEngine::Shutdown();
             return allPassed ? 0 : 1;
         }
@@ -1947,6 +1956,7 @@ int main(int argc, char** argv) {
         }
 
         editor.Shutdown();
+        editorModule.Shutdown();
         AudioEngine::Shutdown();
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
