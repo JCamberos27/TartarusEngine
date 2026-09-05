@@ -26,6 +26,17 @@ public:
     // separate SetMat4 calls (100 uniform-name lookups + 100 draw-call-adjacent GL calls).
     void SetMat4Array(const std::string& name, int count, const glm::mat4* data) const;
 
+    // Resolves (and caches) a uniform's location by name — call this ONCE outside a hot loop,
+    // then use the int-location overloads below inside it. Avoids re-constructing and re-hashing
+    // the name string on every iteration (#194: per-caster shadow loops, main draw loop).
+    int Loc(const std::string& name) const;
+    void SetMat4(int loc, const glm::mat4& m) const;
+    void SetVec2(int loc, const glm::vec2& v) const;
+    void SetVec3(int loc, const glm::vec3& v) const;
+    void SetVec4(int loc, const glm::vec4& v) const;
+    void SetFloat(int loc, float v) const;
+    void SetInt(int loc, int v) const;
+
 private:
     unsigned int m_Program = 0;
     unsigned int Compile(unsigned int type, const std::string& src);
@@ -34,5 +45,4 @@ private:
     // used to be called 100x/frame per animated model just for bone matrices). Cached here
     // since a program's uniform locations never change after linking.
     mutable std::unordered_map<std::string, int> m_UniformCache;
-    int Loc(const std::string& name) const;
 };
