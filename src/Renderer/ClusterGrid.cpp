@@ -39,13 +39,28 @@ void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4&
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_Indices);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, m_Overflow);
 
-    buildShader.Bind();
-    buildShader.SetMat4("uInvProj", glm::inverse(proj));
-    buildShader.SetVec2("uScreenSize", glm::vec2((float)screenW, (float)screenH));
-    buildShader.SetFloat("uZNear", nearZ);
-    buildShader.SetFloat("uZFar", farZ);
-    buildShader.DispatchCompute(groups, 1, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    // Optimization (#205): skip the expensive build pass if projection state is unchanged.
+    // The build pass computes all 3,456 froxel AABBs from uInvProj, uScreenSize, uZNear, uZFar,
+    // which only change on resize/FOV/near-far edit. Cache comparison avoids ~6,912 dispatches
+    // per typical gameplay frame (build runs once per view, view runs 2x: shadows+main).
+    bool buildNeeded = (proj != m_LastProj || screenW != m_LastScreenW || screenH != m_LastScreenH ||
+                        nearZ != m_LastNearZ || farZ != m_LastFarZ);
+
+    if (buildNeeded) {
+        buildShader.Bind();
+        buildShader.SetMat4("uInvProj", glm::inverse(proj));
+        buildShader.SetVec2("uScreenSize", glm::vec2((float)screenW, (float)screenH));
+        buildShader.SetFloat("uZNear", nearZ);
+        buildShader.SetFloat("uZFar", farZ);
+        buildShader.DispatchCompute(groups, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        m_LastProj = proj;
+        m_LastScreenW = screenW;
+        m_LastScreenH = screenH;
+        m_LastNearZ = nearZ;
+        m_LastFarZ = farZ;
+    }
 
     cullShader.Bind();
     cullShader.SetMat4("uView", view);
