@@ -1186,6 +1186,14 @@ void EditorLayer::Shutdown() {
 
     if (m_MarkSampleFbo) { glDeleteFramebuffers(1, &m_MarkSampleFbo); m_MarkSampleFbo = 0; }
 
+    // Async luminance-readback PBOs (#178) — one ping-ponged pair per independently-sampled HUD.
+    for (AsyncLuminanceReadback* rb : { &m_PlayBtnReadback, &m_NavGizmoReadback, &m_StatusBarReadback,
+                                        &m_StatsHudReadback, &m_HistoryHudReadback }) {
+        if (rb->Pbo[0] || rb->Pbo[1]) glDeleteBuffers(2, rb->Pbo);
+        rb->Pbo[0] = rb->Pbo[1] = 0;
+        rb->Pending[0] = rb->Pending[1] = 0;
+    }
+
     for (auto& [path, entry] : m_ModelThumbnails) { (void)path; if (entry.first) glDeleteTextures(1, &entry.first); }
     m_ModelThumbnails.clear();
     m_ThumbnailLRU.clear();
@@ -3743,11 +3751,36 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
 }
 
-float EditorLayer::SampleTextureLuminance(unsigned int colorTex, int texW, int texH,
-                                          ImVec2 imgPos, ImVec2 imgSize, ImVec2 centerScreen, float boxPx) {
-    if (colorTex == 0 || texW < 1 || texH < 1 || imgSize.x < 1.0f || imgSize.y < 1.0f) return -1.0f;
+// Max side of the sampled patch, both here and in the fixed-size PBOs in AsyncLuminanceReadback.
+static constexpr int kMaxLumPatch = 64;
 
-    const int kMaxPatch = 64;
+float EditorLayer::SampleTextureLuminance(AsyncLuminanceReadback& rb, unsigned int colorTex, int texW, int texH,
+                                          ImVec2 imgPos, ImVec2 imgSize, ImVec2 centerScreen, float boxPx) {
+    // Async readback via a ping-ponged pair of PBOs (#178): rather than glReadPixels straight into
+    // client memory (which stalls the GPU pipeline until the transfer finishes), this call kicks
+    // off a non-blocking read into one PBO — glReadPixels returns immediately when a buffer is
+    // bound to GL_PIXEL_PACK_BUFFER — and, in the same call, maps+consumes whatever the OTHER PBO
+    // was loaded with by the PREVIOUS kickoff (one throttled ~100ms tick earlier). The result is
+    // therefore a frame or two stale, which is invisible: it only steers a slowly-eased HUD tint.
+    float result = -1.0f;
+
+    // 1) Consume the other slot's pending result from the previous call, if any.
+    const int readSlot = 1 - rb.Next;
+    if (rb.Pending[readSlot] > 0) {
+        if (void* ptr = glMapNamedBuffer(rb.Pbo[readSlot], GL_READ_ONLY)) {
+            const unsigned char* px = (const unsigned char*)ptr;
+            const int n = rb.Pending[readSlot];
+            double sum = 0.0;
+            for (int i = 0; i < n; ++i)
+                sum += 0.2126 * px[i * 4] + 0.7152 * px[i * 4 + 1] + 0.0722 * px[i * 4 + 2];
+            result = (float)(sum / (n * 255.0)); // 0 = black behind the box, 1 = white
+            glUnmapNamedBuffer(rb.Pbo[readSlot]);
+        }
+        rb.Pending[readSlot] = 0;
+    }
+
+    if (colorTex == 0 || texW < 1 || texH < 1 || imgSize.x < 1.0f || imgSize.y < 1.0f) return result;
+
     // screen box -> fraction of the displayed image -> texels (GL bottom-left origin). Handles
     // the Game view too, where the on-screen image is letterboxed and a different size than the
     // framebuffer it samples.
@@ -3759,9 +3792,16 @@ float EditorLayer::SampleTextureLuminance(unsigned int colorTex, int texW, int t
     if (ry < 0) { rh += ry; ry = 0; }
     if (rx + rw > texW) rw = texW - rx;
     if (ry + rh > texH) rh = texH - ry;
-    if (rw > kMaxPatch) { rx += (rw - kMaxPatch) / 2; rw = kMaxPatch; }
-    if (rh > kMaxPatch) { ry += (rh - kMaxPatch) / 2; rh = kMaxPatch; }
-    if (rx < 0 || ry < 0 || rw < 1 || rh < 1) return -1.0f;
+    if (rw > kMaxLumPatch) { rx += (rw - kMaxLumPatch) / 2; rw = kMaxLumPatch; }
+    if (rh > kMaxLumPatch) { ry += (rh - kMaxLumPatch) / 2; rh = kMaxLumPatch; }
+    if (rx < 0 || ry < 0 || rw < 1 || rh < 1) return result;
+
+    // 2) Kick off this call's read into the OTHER slot, for a future call to consume.
+    const int writeSlot = readSlot;
+    if (rb.Pbo[writeSlot] == 0) {
+        glCreateBuffers(1, &rb.Pbo[writeSlot]);
+        glNamedBufferStorage(rb.Pbo[writeSlot], kMaxLumPatch * kMaxLumPatch * 4, nullptr, GL_MAP_READ_BIT);
+    }
 
     if (m_MarkSampleFbo == 0) glGenFramebuffers(1, &m_MarkSampleFbo);
     GLint prevReadFbo = 0;
@@ -3769,23 +3809,23 @@ float EditorLayer::SampleTextureLuminance(unsigned int colorTex, int texW, int t
     glBindFramebuffer(GL_READ_FRAMEBUFFER, m_MarkSampleFbo);
     glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex, 0);
 
-    unsigned char px[kMaxPatch * kMaxPatch * 4];
-    glReadPixels(rx, ry, rw, rh, GL_RGBA, GL_UNSIGNED_BYTE, px);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, rb.Pbo[writeSlot]);
+    glReadPixels(rx, ry, rw, rh, GL_RGBA, GL_UNSIGNED_BYTE, nullptr); // offset 0 into the bound PBO — async
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
     glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevReadFbo);
 
-    double sum = 0.0;
-    const int n = rw * rh;
-    for (int i = 0; i < n; ++i)
-        sum += 0.2126 * px[i * 4] + 0.7152 * px[i * 4 + 1] + 0.0722 * px[i * 4 + 2];
-    return (float)(sum / (n * 255.0)); // 0 = black behind the box, 1 = white
+    rb.Pending[writeSlot] = rw * rh;
+    rb.Next = readSlot; // next call reads what we just wrote and writes into what we just read
+
+    return result;
 }
 
-float EditorLayer::SampleSceneLuminance(ImVec2 centerScreen, float boxPx) {
+float EditorLayer::SampleSceneLuminance(AsyncLuminanceReadback& rb, ImVec2 centerScreen, float boxPx) {
     // The editor Scene framebuffer is sized 1:1 with the on-screen viewport, so texW/texH ARE
     // the viewport size.
-    return SampleTextureLuminance(m_SceneColorTexture, (int)m_ViewportSize.x, (int)m_ViewportSize.y,
+    return SampleTextureLuminance(rb, m_SceneColorTexture, (int)m_ViewportSize.x, (int)m_ViewportSize.y,
                                   ImVec2(m_ViewportPos.x, m_ViewportPos.y),
                                   ImVec2(m_ViewportSize.x, m_ViewportSize.y), centerScreen, boxPx);
 }
@@ -3823,8 +3863,8 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
             const ImVec2 probe(cx, cy + 14.0f * m_UIScale);
             const float box = 48.0f * m_UIScale;
             float lum = overGame
-                ? SampleTextureLuminance(m_GameViewTex, m_GameViewTexW, m_GameViewTexH, imgPos, imgSize, probe, box)
-                : SampleSceneLuminance(probe, box);
+                ? SampleTextureLuminance(m_PlayBtnReadback, m_GameViewTex, m_GameViewTexW, m_GameViewTexH, imgPos, imgSize, probe, box)
+                : SampleSceneLuminance(m_PlayBtnReadback, probe, box);
             if (lum >= 0.0f) {
                 float t = (lum - 0.30f) / (0.62f - 0.30f);
                 t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
@@ -4204,13 +4244,14 @@ void EditorLayer::DrawConsole() {
     ImGui::End();
 }
 
-void EditorLayer::PushAdaptiveHudText(ImVec2 centerScreen, float boxPx, float dt,
+void EditorLayer::PushAdaptiveHudText(AsyncLuminanceReadback& rb, ImVec2 centerScreen, float boxPx, float dt,
                                      float& easedLum, float& targetLum, float& sampleAccum) {
-    // Throttled GPU->CPU readback (~10 Hz) — the sync is too costly to do every frame.
+    // Throttled (~10 Hz) async readback — see SampleTextureLuminance for the PBO ping-pong that
+    // keeps this off the GPU pipeline's critical path.
     sampleAccum += dt;
     if (sampleAccum >= 0.1f) {
         sampleAccum = 0.0f;
-        float lum = SampleSceneLuminance(centerScreen, boxPx);
+        float lum = SampleSceneLuminance(rb, centerScreen, boxPx);
         if (lum >= 0.0f) {
             float t = (lum - 0.30f) / (0.62f - 0.30f);
             t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
@@ -4289,7 +4330,7 @@ void EditorLayer::DrawStatsPanel(World& world, float dt) {
         // Contrast-adaptive tint (like the corner mark): sample the scene behind the HUD so the
         // text stays legible white-on-dark / dark-on-light with no plate behind it.
         const ImVec2 wpos = ImGui::GetWindowPos(), wsz = ImGui::GetWindowSize();
-        PushAdaptiveHudText(ImVec2(wpos.x + wsz.x * 0.5f, wpos.y + wsz.y * 0.5f), 48.0f * m_UIScale,
+        PushAdaptiveHudText(m_StatsHudReadback, ImVec2(wpos.x + wsz.x * 0.5f, wpos.y + wsz.y * 0.5f), 48.0f * m_UIScale,
                             dt, m_StatsHudContrastLum, m_StatsHudContrastTarget, m_StatsHudSampleAccum);
         ImGui::TextUnformatted(ICON_FA_CHART_SIMPLE "  Statistics");
         ImGui::Separator();
@@ -4359,7 +4400,7 @@ void EditorLayer::DrawViewportStatusBar() {
         m_StatusBarSampleAccum += ImGui::GetIO().DeltaTime;
         if (m_StatusBarSampleAccum >= 0.1f) {
             m_StatusBarSampleAccum = 0.0f;
-            float lum = SampleSceneLuminance(
+            float lum = SampleSceneLuminance(m_StatusBarReadback,
                 ImVec2(m_ViewportPos.x + m_ViewportSize.x * 0.5f,
                        m_ViewportPos.y + m_ViewportSize.y - barH * 0.5f),
                 barH);
@@ -4454,7 +4495,7 @@ void EditorLayer::DrawHistoryPanel(World& world, AssetLibrary& assets) {
     // Contrast-adaptive tint (like the corner mark): sample the scene behind the HUD so the text
     // stays legible white-on-dark / dark-on-light with no plate behind it.
     const ImVec2 wpos = ImGui::GetWindowPos(), wsz = ImGui::GetWindowSize();
-    PushAdaptiveHudText(ImVec2(wpos.x + wsz.x * 0.5f, wpos.y + wsz.y * 0.5f), 48.0f * m_UIScale,
+    PushAdaptiveHudText(m_HistoryHudReadback, ImVec2(wpos.x + wsz.x * 0.5f, wpos.y + wsz.y * 0.5f), 48.0f * m_UIScale,
                         ImGui::GetIO().DeltaTime, m_HistoryHudContrastLum, m_HistoryHudContrastTarget,
                         m_HistoryHudSampleAccum);
 
@@ -8290,7 +8331,7 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
         m_NavGizmoSampleAccum += ImGui::GetIO().DeltaTime;
         if (m_NavGizmoSampleAccum >= 0.1f) {
             m_NavGizmoSampleAccum = 0.0f;
-            float lum = SampleSceneLuminance(ImVec2(rotateCenter.x, toolCenterY), 48.0f * m_UIScale);
+            float lum = SampleSceneLuminance(m_NavGizmoReadback, ImVec2(rotateCenter.x, toolCenterY), 48.0f * m_UIScale);
             if (lum >= 0.0f) {
                 float t = (lum - 0.30f) / (0.62f - 0.30f);
                 t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
