@@ -3149,6 +3149,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_EditorCameraPtr = &editorCamera;
 
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
+    m_ScreenshotThumbBudgetThisFrame = 8; // at most this many new Asset Browser screenshot thumbnails per frame (#176)
 
     // Prism theme: drift the palette's spectral phase and repaint the hue-driven style colours
     // before any window is submitted this frame. Slow — the band should look like it's tilting,
@@ -9282,7 +9283,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     if (filtering || m_CurrentAssetFolder == kShotsFolder) {
         std::error_code ec;
         const std::string shotsDir = Screenshot::Dir();
-        std::vector<std::string> seen;
+        std::set<std::string> seen;
         for (const auto& entry : std::filesystem::directory_iterator(shotsDir, ec)) {
             if (!entry.is_regular_file()) continue;
             std::string ext = entry.path().extension().string();
@@ -9292,15 +9293,25 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             std::string path = entry.path().generic_string();
             std::string name = entry.path().stem().string();
             if (!MatchesAssetSearch(parsedSearch, name, "texture", {})) continue;
-            seen.push_back(path);
+            seen.insert(path);
             auto it = m_ShotThumbs.find(path);
-            if (it == m_ShotThumbs.end())
-                it = m_ShotThumbs.emplace(path, LoadScreenshotThumbTexture(path)).first;
-            cells.push_back({Cell::Kind::Screenshot, path, name, nullptr, it->second});
+            std::shared_ptr<Texture> thumb;
+            if (it != m_ShotThumbs.end()) {
+                thumb = it->second;
+            } else if (m_ScreenshotThumbBudgetThisFrame > 0) {
+                // Not loaded yet and budget's still open this frame: decode/upload it now and
+                // cache it. Otherwise leave it out of the map so the cell falls back to the
+                // folder glyph (see the Cell::Kind::Screenshot draw below) and gets retried on
+                // a later frame once the budget resets (#176) — same pattern as ModelThumbnail.
+                m_ScreenshotThumbBudgetThisFrame--;
+                thumb = m_ShotThumbs.emplace(path, LoadScreenshotThumbTexture(path)).first->second;
+            }
+            cells.push_back({Cell::Kind::Screenshot, path, name, nullptr, thumb});
         }
-        // Drop thumbnails for files that were deleted since last frame.
+        // Drop thumbnails for files that were deleted since last frame. O(n) single pass against
+        // the `seen` set built above, rather than an std::find over a vector per map entry (#176).
         for (auto it = m_ShotThumbs.begin(); it != m_ShotThumbs.end();)
-            it = (std::find(seen.begin(), seen.end(), it->first) == seen.end())
+            it = (seen.find(it->first) == seen.end())
                      ? m_ShotThumbs.erase(it) : std::next(it);
     }
 
@@ -9398,7 +9409,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             ImDrawList* dl = ImGui::GetWindowDrawList();
             ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
             unsigned int modelThumb = (cell.kind == Cell::Kind::Model) ? ModelThumbnail(*cell.model) : 0u;
-            if (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Screenshot) {
+            if (cell.texture && (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Screenshot)) {
                 float aspect = cell.texture->Height() > 0 ? (float)cell.texture->Width() / (float)cell.texture->Height() : 1.0f;
                 ImVec2 imgSize = aspect >= 1.0f ? ImVec2(m_AssetIconSize, m_AssetIconSize / aspect) : ImVec2(m_AssetIconSize * aspect, m_AssetIconSize);
                 ImVec2 imgPos(tileMin.x + (cellWidth - imgSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - imgSize.y) * 0.5f);
@@ -9444,7 +9455,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             // otherwise) followed by the name, mirroring how the Scene Hierarchy lists rows.
             float rowIconSize = ImGui::GetTextLineHeight();
             unsigned int rowModelThumb = (cell.kind == Cell::Kind::Model) ? ModelThumbnail(*cell.model) : 0u;
-            if (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Screenshot) {
+            if (cell.texture && (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Screenshot)) {
                 ImGui::Image((ImTextureID)(intptr_t)cell.texture->GLHandle(), ImVec2(rowIconSize, rowIconSize));
             } else if (rowModelThumb) {
                 ImGui::Image((ImTextureID)(intptr_t)rowModelThumb, ImVec2(rowIconSize, rowIconSize));

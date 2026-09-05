@@ -805,8 +805,12 @@ private:
     void InvalidateModelThumbnail(const Model* model);
 
     // Thumbnails for the Asset Browser's "Screenshots" folder — keyed by file path, kept in sync
-    // with what's on disk each frame (entries drop when their file is gone).
+    // with what's on disk each frame (entries drop when their file is gone). Loading is capped
+    // by its own per-frame budget (#176) so opening a folder of many captures decodes/uploads a
+    // few at a time instead of stalling on the frame the folder is opened; unloaded entries just
+    // aren't inserted into the map yet, so they're retried next frame.
     std::unordered_map<std::string, std::shared_ptr<Texture>> m_ShotThumbs;
+    int m_ScreenshotThumbBudgetThisFrame = 0;
 
     // The screenshot lightbox (DrawScreenshotPreview). Its own full-res Texture, not a m_ShotThumbs
     // entry, so it survives that map being pruned and isn't size-capped to the thumbnail budget.
