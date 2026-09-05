@@ -841,6 +841,19 @@ int main() {
                 editor.KeepDockspaceAlive();
             }
 
+            // Every world matrix this frame's render passes need, computed once, top-down
+            // (#173). Placed here deliberately: player/animator/animation updates above have
+            // finished writing transforms, and the shadow + scene passes below (which each used
+            // to re-derive the same entity's parent chain per cascade, per spot, per cube face
+            // and per viewport) now just read it back. Editor edits — gizmo drags, Inspector
+            // fields — land in editor.Draw() further down and so take effect on the NEXT frame's
+            // rebuild. That is a small behavior change for the Game-view passes, which run after
+            // editor.Draw() and so used to see a mid-frame edit that the Scene pass above them
+            // did not: both views now agree on one snapshot instead of tearing between them.
+            // Entities SPAWNED after this point still resolve correctly — GetCachedWorldTransform
+            // falls back to composing on demand for anything the cache doesn't hold.
+            world.RebuildWorldTransformCache();
+
             glm::vec3 lightDir(-0.4f, -1.0f, -0.3f);
 
             // --- Sun shadow map: built ONCE per frame, from the primary view -------------------
@@ -989,7 +1002,7 @@ int main() {
                     for (auto entity : casters) {
                         if (world.Registry.all_of<InactiveTag>(entity)) continue;
                         auto& renderable = world.Registry.get<RenderableComponent>(entity);
-                        glm::mat4 model = world.ComposeWorldTransform(entity);
+                        glm::mat4 model = world.GetCachedWorldTransform(entity);
                         glm::vec3 bmin = renderable.ModelRef->BoundsMin();
                         glm::vec3 bmax = renderable.ModelRef->BoundsMax();
                         bool validBounds = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
@@ -1040,7 +1053,7 @@ int main() {
                     for (auto entity : casters) {
                         if (world.Registry.all_of<InactiveTag>(entity)) continue;
                         auto& r = world.Registry.get<RenderableComponent>(entity);
-                        glm::mat4 model = world.ComposeWorldTransform(entity);
+                        glm::mat4 model = world.GetCachedWorldTransform(entity);
                         glm::vec3 bmin = r.ModelRef->BoundsMin();
                         glm::vec3 bmax = r.ModelRef->BoundsMax();
                         bool vb = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
@@ -1097,7 +1110,7 @@ int main() {
                         for (auto entity : casters) {
                             if (world.Registry.all_of<InactiveTag>(entity)) continue;
                             auto& r = world.Registry.get<RenderableComponent>(entity);
-                            glm::mat4 model = world.ComposeWorldTransform(entity);
+                            glm::mat4 model = world.GetCachedWorldTransform(entity);
                             glm::vec3 bmin = r.ModelRef->BoundsMin();
                             glm::vec3 bmax = r.ModelRef->BoundsMax();
                             bool vb = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
@@ -1242,7 +1255,7 @@ int main() {
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.all_of<InactiveTag>(entity)) continue; // Hierarchy eye toggle / GameObject active
                     auto& renderable = world.Registry.get<RenderableComponent>(entity);
-                    glm::mat4 model = world.ComposeWorldTransform(entity);
+                    glm::mat4 model = world.GetCachedWorldTransform(entity);
 
                     // Frustum culling: skip the draw call entirely for anything outside the
                     // camera's view. Bounds come from the same Model::BoundsMin/Max already used
@@ -1368,7 +1381,7 @@ int main() {
                         // selection ring from EditorLayer::DrawEntityIcons instead.
                         auto* renderablePtr = world.Registry.try_get<RenderableComponent>(entity);
                         if (!renderablePtr) continue;
-                        xforms.push_back(world.ComposeWorldTransform(entity));
+                        xforms.push_back(world.GetCachedWorldTransform(entity));
                         models.push_back(renderablePtr->ModelRef.get());
                     }
 
