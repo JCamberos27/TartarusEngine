@@ -7,6 +7,9 @@ namespace {
 unsigned int g_CurrentProgram = 0;
 bool g_ProgramValid = false;
 
+unsigned int g_CurrentVAO = 0;
+bool g_VAOValid = false;
+
 // GL core guarantees at least 16 combined texture units (4.6 mandates more) - this engine's own material
 // binding (Model.cpp's BindMaterial) never uses more than 7, so 16 is comfortable headroom.
 constexpr int kMaxCachedTextureUnits = 16;
@@ -22,6 +25,7 @@ namespace GLStateCache {
 void Invalidate() {
     g_ProgramValid = false;
     g_TextureValid.fill(false);
+    g_VAOValid = false;
 }
 
 void UseProgram(unsigned int program) {
@@ -54,6 +58,17 @@ void BindTexture2D(unsigned int unit, unsigned int texture) {
     g_BoundTextures[unit] = texture;
     g_TextureValid[unit] = true;
     g_Stats.TextureBinds++;
+}
+
+void BindVertexArray(unsigned int vao) {
+    if (g_VAOValid && g_CurrentVAO == vao) {
+        g_Stats.VaoBindsSkipped++;
+        return;
+    }
+    glBindVertexArray(vao);
+    g_CurrentVAO = vao;
+    g_VAOValid = true;
+    g_Stats.VaoBinds++;
 }
 
 const FrameStats& GetFrameStats() { return g_Stats; }
