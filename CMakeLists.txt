@@ -90,6 +90,7 @@ list(REMOVE_ITEM ENGINE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleConsole.cpp
 )
 
 set(IMGUI_SOURCES
@@ -119,12 +120,28 @@ add_library(TartarusGame SHARED
 # Reloadable editor tools intentionally use a narrow host callback table rather than sharing
 # EditorLayer's ImGui/undo/scene lifetime across a DLL boundary. That lets a tool panel reload
 # live without invalidating an open scene or an active ImGui frame.
+#
+# The module draws real ImGui panels (the Console, as of the first migrated panel), so it compiles
+# its own ImGui core translation units and is handed the host's ImGuiContext + allocator pair at
+# Draw() time — ImGui's documented multi-module setup, where all shared state stays in that one
+# host-owned context. Backends (glfw/opengl3) are deliberately NOT built here: the host alone
+# drives platform/renderer. Core/Log.cpp is likewise NOT built here — a second copy would give the
+# DLL its own private, permanently-empty log; it reads the host's through the callback table.
 add_library(TartarusEditor SHARED
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleConsole.cpp
+  ${imgui_SOURCE_DIR}/imgui.cpp
+  ${imgui_SOURCE_DIR}/imgui_draw.cpp
+  ${imgui_SOURCE_DIR}/imgui_tables.cpp
+  ${imgui_SOURCE_DIR}/imgui_widgets.cpp
 )
 target_include_directories(TartarusEditor PRIVATE
   ${CMAKE_SOURCE_DIR}/src/Editor
+  ${CMAKE_SOURCE_DIR}/extern   # IconsFontAwesome6.h
+  ${imgui_SOURCE_DIR}
 )
+# Must match the host's ImGui configuration exactly — the two copies share one ImGuiContext.
+target_compile_definitions(TartarusEditor PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
 target_compile_options(TartarusEditor PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W4 /MP>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
