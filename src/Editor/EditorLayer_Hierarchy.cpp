@@ -1,0 +1,860 @@
+// Hierarchy panel: the entity tree, selection, rename, grouping/parenting, and the
+// Add-entity menu body. Split out of EditorLayer.cpp for build time (#179).
+
+#include "EditorLayer.h"
+#include "EditorLayerInternal.h"
+#include "FileDialog.h"
+#include "AssetLibrary.h"
+#include "World.h"
+#include "Camera.h"
+#include "Model.h"
+#include "Texture.h"
+#include "Material.h"
+#include "AudioEngine.h"
+#include "Screenshot.h"
+#include "SceneSerializer.h"
+#include "AABB.h"
+#include "Log.h"
+#include "EditorSettings.h"
+#include "EditorUIHelpers.h"
+#include "AssetImporterInspector.h"
+#include "Profiler.h"
+#include "ProjectPaths.h"
+#include "GLStateCache.h"
+#include "Framebuffer.h"
+#include "gl.h"
+
+#include <imgui.h>
+#include <imgui_internal.h> // ImMax/ImFloor, ImGuiWindow, and the item-flag helpers the panels use
+#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_opengl3.h>
+#include <IconsFontAwesome6.h>
+
+#include <GLFW/glfw3.h>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/euler_angles.hpp> // extractEulerAngleYXZ - must match ComposeTransform's order (#108)
+
+#include <filesystem>
+#include <memory>
+#include <algorithm>
+#include <unordered_map>
+#include <set>
+#include <sstream>
+#include <fstream>
+#include <cmath>
+#include <cctype>
+#include <cstring>
+#include <functional>
+#include <cfloat>
+
+using namespace EditorInternal;
+
+
+namespace {
+
+// Where a newly added object goes: a few units in front of the editor camera. If the camera
+// has somehow gone non-finite, fall back to the origin so the object is still findable rather
+// than spawned at inf/NaN and lost.
+inline glm::vec3 SafeSpawnInFrontOf(const Camera& cam, float distance = 5.0f) {
+    glm::vec3 p = cam.Position + cam.Front() * distance;
+    if (std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z)) return p;
+    return glm::vec3(0.0f);
+}
+
+// Turn a freshly created light entity into a sun: same raking angle / intensity / disc size the
+// SceneSerializer synthesises for a scene with no directional light, so an added one casts a
+// readable shadow immediately rather than sitting near-overhead and washed out (#125).
+inline void MakeDirectionalLight(World& world, entt::entity e) {
+    if (e == entt::null || !world.Registry.valid(e)) return;
+    auto& lc = world.Registry.get<LightComponent>(e);
+    lc.Kind = LightComponent::Type::Directional;
+    lc.Intensity = 6.0f;
+    lc.AngularSizeDegrees = 2.0f;
+    lc.Shadow.Enabled = true; // a freshly added sun casts shadows by default
+    world.Registry.get<TransformComponent>(e).RotationEuler = glm::vec3(-36.25f, 53.13f, 0.0f);
+}
+
+// The Hierarchy lists entities by OrderComponent (a stable per-entity sequence assigned at
+// creation and preserved through save/load), so a snapshot round-trip — undo/redo, Play->Stop —
+// no longer reshuffles the list. Entities predating OrderComponent (0) keep a stable relative
+// order via the entity-handle tiebreak.
+template <typename View>
+std::vector<entt::entity> ViewInCreationOrder(const entt::registry& reg, View view) {
+    std::vector<entt::entity> entities(view.begin(), view.end());
+    std::sort(entities.begin(), entities.end(), [&](entt::entity a, entt::entity b) {
+        const auto* oa = reg.try_get<OrderComponent>(a);
+        const auto* ob = reg.try_get<OrderComponent>(b);
+        int va = oa ? oa->Value : 0, vb = ob ? ob->Value : 0;
+        return va != vb ? va < vb : a < b;
+    });
+    return entities;
+}
+
+// 1-based position of `entity` within its kind's creation-ordered list — the number behind the
+// "Box 3" / "Object 7" fallback shown for entities the user never named (#21 P10).
+int CreationOrdinal(const entt::registry& reg, entt::entity entity) {
+    auto list = ViewInCreationOrder(reg, reg.view<const NameComponent>());
+    for (size_t i = 0; i < list.size(); ++i)
+        if (list[i] == entity) return static_cast<int>(i) + 1;
+    return 0;
+}
+
+} // namespace
+
+
+void EditorLayer::CopySelection(World& world) {
+    auto selection = GetSelectedItems();
+    if (selection.empty()) return;
+    m_Clipboard = SceneSerializer::SaveEntitiesToString(world, selection);
+    Log::Info("Copied " + std::to_string(selection.size()) +
+        (selection.size() == 1 ? " object." : " objects."));
+}
+
+void EditorLayer::PasteClipboard(World& world, AssetLibrary& assets) {
+    if (m_Clipboard.empty()) return;
+    PushUndo(world, "Paste");
+    std::vector<entt::entity> pasted;
+    if (!SceneSerializer::AppendEntitiesFromString(world, assets, m_Clipboard, pasted) || pasted.empty()) {
+        Log::Warn("Paste failed: clipboard content could not be rebuilt.");
+        return;
+    }
+    // Offset so a paste is visibly distinct from the original instead of landing exactly on top
+    // of it — matching what Duplicate already does.
+    for (entt::entity e : pasted) {
+        if (auto* transform = world.Registry.try_get<TransformComponent>(e)) {
+            const auto* hier = world.Registry.try_get<HierarchyComponent>(e);
+            bool isRoot = !hier || hier->Parent == entt::null;
+            if (isRoot) transform->Position += glm::vec3(1.0f, 0.0f, 1.0f);
+        }
+    }
+    ClearSelection();
+    for (entt::entity e : pasted) AddToSelectionIfAbsent(e);
+    if (m_Selected == entt::null && !pasted.empty()) SelectItem(pasted.front(), false);
+}
+
+void EditorLayer::ClearSelection() {
+    m_Selected = entt::null;
+    m_ExtraSelection.clear();
+    m_SelectionAnchor = entt::null;
+    m_RenamingEntity = entt::null;
+    m_LightHandleArmedFor = entt::null;
+}
+
+void EditorLayer::SelectItem(entt::entity entity, bool addToSelection) {
+    // Any selection that isn't a viewport icon-click disarms the light grab handles;
+    // HandleViewportPicking re-arms them right after it calls this for a light it picked.
+    m_LightHandleArmedFor = entt::null;
+    bool isPrimary = m_Selected == entity;
+
+    if (!addToSelection) {
+        m_ExtraSelection.clear();
+        m_Selected = entity;
+        m_SelectionAnchor = entity; // plain click (re)anchors range selection here
+        if (m_FrameOnSelect && entity != entt::null) m_PendingFrameSelect = true;
+        return;
+    }
+
+    // Any Ctrl+Click also moves the range anchor to the clicked row, matching Unity.
+    m_SelectionAnchor = entity;
+
+    if (isPrimary) {
+        // Demote: promote the most recently added extra to primary, or clear if none left.
+        if (!m_ExtraSelection.empty()) {
+            m_Selected = m_ExtraSelection.back();
+            m_ExtraSelection.pop_back();
+        } else {
+            m_Selected = entt::null;
+        }
+        return;
+    }
+
+    for (auto it = m_ExtraSelection.begin(); it != m_ExtraSelection.end(); ++it) {
+        if (*it == entity) {
+            m_ExtraSelection.erase(it); // already co-selected — toggle it back off
+            return;
+        }
+    }
+
+    if (!HasAnySelection()) {
+        m_Selected = entity;
+    } else {
+        m_ExtraSelection.push_back(entity);
+    }
+}
+
+void EditorLayer::AddToSelectionIfAbsent(entt::entity entity) {
+    if (IsSelected(entity)) return; // leave already-selected items alone — don't toggle them off
+    if (!HasAnySelection()) {
+        m_Selected = entity;
+    } else {
+        m_ExtraSelection.push_back(entity);
+    }
+}
+
+void EditorLayer::SelectAllVisibleInHierarchy() {
+    if (m_HierarchyVisibleOrder.empty()) return;
+    m_Selected = entt::null;
+    m_ExtraSelection.clear();
+    m_RenamingEntity = entt::null;
+    for (entt::entity e : m_HierarchyVisibleOrder) AddToSelectionIfAbsent(e);
+    m_SelectionAnchor = m_HierarchyVisibleOrder.front();
+    // Deliberately no m_PendingFrameSelect here — snapping the camera to fit the entire scene
+    // every time the user hits Ctrl+A would be more disruptive than helpful.
+}
+
+void EditorLayer::SelectHierarchyRange(World& world, entt::entity target, bool additive) {
+    // No usable anchor (first click was Shift, or the anchor row was deleted / scrolled out of
+    // the visible set): fall back to a plain pick so Shift+Click is never a dead input.
+    const auto& order = m_HierarchyVisibleOrder;
+    auto indexOf = [&](entt::entity e) -> int {
+        for (int i = 0; i < (int)order.size(); ++i) if (order[i] == e) return i;
+        return -1;
+    };
+    int ai = (m_SelectionAnchor != entt::null && world.Registry.valid(m_SelectionAnchor))
+                 ? indexOf(m_SelectionAnchor) : -1;
+    int ti = indexOf(target);
+    if (ai < 0 || ti < 0) {
+        SelectItem(target, additive);
+        return;
+    }
+    int lo = ai < ti ? ai : ti;
+    int hi = ai < ti ? ti : ai;
+
+    std::vector<entt::entity> keep;
+    if (additive) { // Ctrl+Shift: preserve whatever was already selected, then union the range in
+        keep = m_ExtraSelection;
+        if (m_Selected != entt::null) keep.push_back(m_Selected);
+    }
+
+    m_ExtraSelection.clear();
+    m_Selected = target;              // the row just clicked is the active object
+    m_RenamingEntity = entt::null;
+    auto addUnique = [&](entt::entity e) {
+        if (e == m_Selected) return;
+        if (std::find(m_ExtraSelection.begin(), m_ExtraSelection.end(), e) == m_ExtraSelection.end())
+            m_ExtraSelection.push_back(e);
+    };
+    for (int i = lo; i <= hi; ++i) addUnique(order[i]);
+    for (entt::entity e : keep) if (world.Registry.valid(e)) addUnique(e);
+    // m_SelectionAnchor intentionally left untouched — Unity keeps it fixed so the next
+    // Shift+Click can grow or shrink the same range.
+}
+
+void EditorLayer::DeleteSelection(World& world) {
+    PushUndo(world, "Delete");
+
+    // entt::entity handles don't shift when another entity is destroyed (unlike the vector
+    // indices this replaced), so unlike before there's no careful ordering needed here at all —
+    // and no more separate "boxes soft-delete, models hard-erase" split, either.
+    // Destroys children recursively too, so parenting one entity under another means deleting
+    // the parent doesn't leave the child pointing at a dead entt::entity.
+    int count = (m_Selected != entt::null ? 1 : 0) + (int)m_ExtraSelection.size();
+    if (m_Selected != entt::null) world.DestroyEntityAndChildren(m_Selected);
+    for (entt::entity e : m_ExtraSelection) {
+        if (world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
+    }
+
+    ClearSelection();
+    Log::Info("Deleted " + std::to_string(count) + (count == 1 ? " object." : " objects."));
+}
+void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets) {
+    if (!HasAnySelection()) return;
+    PushUndo(world, "Duplicate");
+
+    std::vector<entt::entity> source;
+    if (m_Selected != entt::null) source.push_back(m_Selected);
+    for (entt::entity e : m_ExtraSelection) source.push_back(e);
+
+    // Routed through the same save-fragment/append-fragment path Copy/Paste already use (see
+    // PasteClipboard above) instead of hand-copying components branch by branch. That old code
+    // silently dropped whatever component wasn't in its particular branch's copy list (Collider,
+    // Camera, Animator, Tag, Static/Inactive...), never copied HierarchyComponent at all (so a
+    // duplicated parent lost its children and a duplicated child came out unparented with its
+    // local-space Position reinterpreted as world-space), and offset every copy including
+    // children by (1,0,1) instead of only roots. The serializer path already solves all of that
+    // correctly for Paste, so Duplicate just reuses it.
+    std::string fragment = SceneSerializer::SaveEntitiesToString(world, source);
+    std::vector<entt::entity> created;
+    if (fragment.empty() || !SceneSerializer::AppendEntitiesFromString(world, assets, fragment, created) || created.empty()) {
+        Log::Warn("Duplicate failed: selection could not be copied.");
+        return;
+    }
+
+    // Build the scene's name set once (not once per duplicated entity) and only offset/rename
+    // roots — a duplicated child keeps its original local position and name relative to its
+    // (also-duplicated) parent, matching how Paste already treats fragment roots vs. children.
+    std::set<std::string> existingNames;
+    for (auto e : world.Registry.view<NameComponent>()) existingNames.insert(world.Registry.get<NameComponent>(e).Name);
+
+    for (entt::entity e : created) {
+        const auto* hier = world.Registry.try_get<HierarchyComponent>(e);
+        bool isRoot = !hier || hier->Parent == entt::null;
+        if (!isRoot) continue;
+        if (auto* transform = world.Registry.try_get<TransformComponent>(e)) {
+            transform->Position += glm::vec3(1.0f, 0.0f, 1.0f);
+        }
+        if (auto* name = world.Registry.try_get<NameComponent>(e)) {
+            existingNames.erase(name->Name);
+            name->Name = NextDuplicateName(existingNames, name->Name.empty() ? "Object" : name->Name);
+        }
+    }
+
+    // Select the new duplicates instead of the originals, so you can immediately drag them
+    // into place without having to re-pick them from the Hierarchy.
+    ClearSelection();
+    for (size_t i = 0; i < created.size(); ++i) {
+        if (i == 0) m_Selected = created[i];
+        else m_ExtraSelection.push_back(created[i]);
+    }
+    Log::Info("Duplicated " + std::to_string(created.size()) + (created.size() == 1 ? " object." : " objects."));
+}
+// The Add-menu body, shared verbatim by the File-menu-bar "Add" menu and the Shift+A quick-add
+// popup (ImGui::MenuItem works inside BeginMenu and BeginPopup alike).
+void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera& editorCamera) {
+    auto spawnPrimitive = [&](const char* kind, const char* displayName) {
+        PushUndo(world, std::string("Create ") + displayName);
+        auto model = assets.CreatePrimitive(kind);
+        glm::vec3 position = SafeSpawnInFrontOf(editorCamera);
+        entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), UniqueNameFor(world, displayName));
+        SelectItem(e, false);
+        Log::Info(std::string("Added ") + displayName + ".");
+    };
+    if (ImGui::MenuItem(ICON_FA_CUBE "  Cube")) spawnPrimitive("cube", "Cube");
+    if (ImGui::MenuItem(ICON_FA_CIRCLE "  Sphere")) spawnPrimitive("sphere", "Sphere");
+    if (ImGui::MenuItem(ICON_FA_DATABASE "  Cylinder")) spawnPrimitive("cylinder", "Cylinder");
+    if (ImGui::MenuItem(ICON_FA_CAPSULES "  Capsule")) spawnPrimitive("capsule", "Capsule");
+    if (ImGui::MenuItem(ICON_FA_FILTER "  Cone")) spawnPrimitive("cone", "Cone");
+    if (ImGui::MenuItem(ICON_FA_MOUNTAIN "  Pyramid")) spawnPrimitive("pyramid", "Pyramid");
+    if (ImGui::MenuItem(ICON_FA_LIFE_RING "  Torus")) spawnPrimitive("torus", "Torus");
+    if (ImGui::MenuItem(ICON_FA_SQUARE "  Plane")) spawnPrimitive("plane", "Plane");
+    if (ImGui::MenuItem(ICON_FA_STAIRS "  Wedge")) spawnPrimitive("wedge", "Wedge");
+
+    ImGui::SeparatorText("Objects");
+    if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Empty")) {
+        CreateEmptyAt(world, &editorCamera, "Empty", false);
+    }
+    if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) {
+        CreateEmptyAt(world, &editorCamera, "Point Light", true);
+    }
+    if (ImGui::MenuItem(ICON_FA_BULLSEYE "  Spot Light")) {
+        entt::entity e = CreateEmptyAt(world, &editorCamera, "Spot Light", true);
+        world.Registry.get<LightComponent>(e).Kind = LightComponent::Type::Spot;
+    }
+    if (ImGui::MenuItem(ICON_FA_SUN "  Directional Light")) {
+        MakeDirectionalLight(world, CreateEmptyAt(world, &editorCamera, "Directional Light", true));
+    }
+    if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera")) {
+        entt::entity e = CreateEmptyAt(world, &editorCamera, "Camera", false);
+        world.Registry.emplace<CameraComponent>(e);
+        // Aim it back at the world origin so its Game-view preview isn't just black —
+        // ComposeTransform rotates Y(yaw) then X(pitch), local -Z is forward.
+        auto& t = world.Registry.get<TransformComponent>(e);
+        glm::vec3 d = t.Position;
+        if (glm::dot(d, d) > 1.0e-4f) {
+            d = glm::normalize(-d); // direction from the camera toward the origin
+            t.RotationEuler = glm::vec3(
+                glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
+                glm::degrees(std::atan2(-d.x, -d.z)),
+                0.0f);
+        }
+    }
+}
+void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
+    // Locked only blocks dragging the tab to move/undock/rearrange the panel — resizing its
+    // dock node (and the neighbors that share that border) always works, locked or not.
+    ImGuiWindowFlags flags = ImGuiWindowFlags_None;
+    if (!ImGui::Begin("Scene Hierarchy", &m_ShowHierarchy, flags)) { ImGui::End(); return; }
+
+    // Accumulates as each row is drawn (DrawHierarchyNode); published to m_HierarchyVisibleOrder
+    // just before this function returns. See the header for why the two buffers are separate.
+    m_HierarchyVisibleBuild.clear();
+
+    // Expand / collapse every root's whole subtree at once (audit #71). Two flat glyph buttons
+    // pinned to the right of the search row (#151) instead of a whole dedicated button row.
+    auto setAllExpanded = [&](bool open) {
+        for (auto e : world.Registry.view<const NameComponent>()) {
+            const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+            if (!h || h->Parent == entt::null) SetHierarchyExpandedRecursive(world, e, open);
+        }
+    };
+    auto flatGlyphButton = [](const char* icon, const char* tip) {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f)); // flat at rest
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.245f, 0.250f, 0.275f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.300f, 0.310f, 0.345f, 1.0f));
+        ImGui::PushID(tip);
+        bool clicked = ImGui::Button(icon);
+        ImGui::PopID();
+        ImGui::PopStyleColor(3);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+        return clicked;
+    };
+
+    // Search box. A bare string matches names; the "t:" prefix matches TagComponent instead,
+    // the same shorthand Unity's Hierarchy search uses. Width leaves room for the two glyph
+    // buttons + the spacing on either side of them.
+    const ImGuiStyle& hstyle = ImGui::GetStyle();
+    const float glyphBtnW = ImGui::CalcTextSize(ICON_FA_ANGLES_UP).x + hstyle.FramePadding.x * 2.0f;
+    ImGui::SetNextItemWidth(-(glyphBtnW * 2.0f + hstyle.ItemSpacing.x * 2.0f));
+    char filterBuf[128];
+    snprintf(filterBuf, sizeof(filterBuf), "%s", m_HierarchyFilter.c_str());
+    if (ImGui::InputTextWithHint("##HierarchyFilter", ICON_FA_MAGNIFYING_GLASS "  Search (t:Tag to filter by tag)",
+            filterBuf, sizeof(filterBuf))) {
+        m_HierarchyFilter = filterBuf;
+    }
+    if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) {
+        EditorUI::SetTooltip("Type a name to filter the list below.\nType \"t:\" followed by a tag (e.g. t:Enemy) to filter by Tag instead.");
+    }
+
+    ImGui::SameLine();
+    if (flatGlyphButton(ICON_FA_ANGLES_DOWN, "Expand all")) setAllExpanded(true);
+    ImGui::SameLine();
+    if (flatGlyphButton(ICON_FA_ANGLES_UP, "Collapse all")) setAllExpanded(false);
+
+    const bool filtering = !m_HierarchyFilter.empty();
+
+    // One flat list — every entity in creation order, no "Level Geometry" / "Objects" split.
+    // A box, a model, a light and an empty are all just entities; the old grouping only ever
+    // added a header to scroll past. LevelGeometryTag survives as an invisible serialization /
+    // built-in-collider detail, nothing the Hierarchy shows.
+    //
+    // Tighter per-level indent than the editor-wide default — this panel is narrow, so a few
+    // levels of nesting otherwise push names off the right edge fast (#153).
+    ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 13.0f * m_UIScale);
+    for (auto entity : ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>())) {
+        if (!MatchesHierarchyFilter(world, entity)) continue;
+        // A parented entity draws nested under its parent, not as a sibling — except while
+        // filtering, where the parent may be filtered out, so matches are shown flat instead.
+        if (!filtering) {
+            const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
+            if (hier && hier->Parent != entt::null) continue;
+        }
+        DrawHierarchyNode(world, assets, entity, world.Registry.all_of<LevelGeometryTag>(entity));
+    }
+    ImGui::PopStyleVar();
+
+    // Dropping onto empty space below the tree un-parents (Unity's "drag to the root") — and
+    // right-clicking there opens the create/paste menu.
+    // Dummy needs a real size (negative width isn't valid here), so this claims whatever space
+    // is left below the tree as one big drop/right-click zone.
+    ImVec2 remaining = ImGui::GetContentRegionAvail();
+    ImGui::Dummy(ImVec2(remaining.x > 0.0f ? remaining.x : 1.0f, remaining.y > 0.0f ? remaining.y : 1.0f));
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
+            entt::entity dragged = *(const entt::entity*)payload->Data;
+            if (world.Registry.valid(dragged)) {
+                // Dragging a row that's part of the current multi-selection un-parents the whole
+                // selection, not just the one row the mouse happened to grab (#220).
+                std::vector<entt::entity> toUnparent = IsSelected(dragged) ? GetSelectedItems()
+                                                                            : std::vector<entt::entity>{dragged};
+                StageUndo(world);
+                for (entt::entity e : toUnparent) {
+                    if (world.Registry.valid(e)) world.SetParent(e, entt::null);
+                }
+                CommitStagedUndo(world, "Reparent");
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+    if (ImGui::BeginPopupContextItem("##HierarchyEmptyContext")) {
+        DrawHierarchyContextMenu(world, assets, entt::null);
+        ImGui::EndPopup();
+    }
+
+    // Publish the row order this pass built, for next frame's click handlers (and the Ctrl+A
+    // check just below, which runs after every row is in).
+    m_HierarchyVisibleOrder = m_HierarchyVisibleBuild;
+
+    // Ctrl+A — select every visible row, matching Unity's Hierarchy shortcut. Gated on the
+    // panel (or one of its children) being focused, and skipped while a text field here has
+    // the keyboard (so Ctrl+A still means "select all text" in the search box).
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+        !ImGui::GetIO().WantTextInput &&
+        ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_A)) {
+        SelectAllVisibleInHierarchy();
+    }
+
+    ImGui::End();
+}
+
+bool EditorLayer::MatchesHierarchyFilter(const World& world, entt::entity entity) const {
+    if (m_HierarchyFilter.empty()) return true;
+
+    if (m_HierarchyFilter.rfind("t:", 0) == 0) {
+        std::string wanted = m_HierarchyFilter.substr(2);
+        if (wanted.empty()) return true;
+        const auto* tag = world.Registry.try_get<TagComponent>(entity);
+        return MatchesFilter(wanted, tag ? tag->Tag : std::string("Untagged"));
+    }
+
+    const auto* name = world.Registry.try_get<NameComponent>(entity);
+    return MatchesFilter(m_HierarchyFilter, name ? name->Name : std::string());
+}
+
+void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::entity entity, bool isLevelGeometry) {
+    if (!world.Registry.valid(entity)) return;
+
+    // This row is about to be drawn — record it in visible top-to-bottom order for Ctrl+A and
+    // Shift+Click. Children append themselves in the recursive calls below, and only when this
+    // node is expanded, so the list mirrors exactly what the user sees.
+    m_HierarchyVisibleBuild.push_back(entity);
+
+    auto& name = world.Registry.get<NameComponent>(entity);
+    bool selected = IsSelected(entity);
+    bool inactive = world.Registry.all_of<InactiveTag>(entity);
+    const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
+    bool hasChildren = hier && !hier->Children.empty() && m_HierarchyFilter.empty();
+
+    ImGui::PushID((int)entt::to_integral(entity));
+
+    // Leading eye toggle = Unity's active checkbox (#152: shared ActiveToggle). Drawn before the
+    // row so clicking it never also changes the selection; hover-reveals on the whole row so an
+    // active object carries no per-row chrome at rest.
+    {
+        const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+        const ImVec2 rowMax(rowMin.x + ImGui::GetContentRegionAvail().x, rowMin.y + ImGui::GetFrameHeight());
+        const bool rowHovered = ImGui::IsMouseHoveringRect(rowMin, rowMax);
+        if (ActiveToggle("##rowactive", !inactive, rowHovered,
+                         inactive ? "Inactive - click to enable" : "Active - click to disable",
+                         /*alignTop=*/true)) {
+            PushUndo(world, "Toggle Active");
+            if (inactive) world.Registry.remove<InactiveTag>(entity);
+            else world.Registry.emplace<InactiveTag>(entity);
+        }
+    }
+    // Tight against the tree node — the node's own arrow gap already separates the eye from the
+    // kind glyph, so the default ItemSpacing here just reads as a hole (#152 follow-up).
+    ImGui::SameLine(0.0f, 2.0f);
+
+    // Inline rename (F2 / context menu) replaces the row with an edit field in place.
+    if (m_RenamingEntity == entity) {
+        ImGui::SetNextItemWidth(-1.0f);
+        if (m_EntityRenameJustStarted) {
+            ImGui::SetKeyboardFocusHere();
+            snprintf(m_EntityRenameBuffer, sizeof(m_EntityRenameBuffer), "%s", name.Name.c_str());
+            m_EntityRenameJustStarted = false;
+        }
+        if (ImGui::InputText("##Rename", m_EntityRenameBuffer, sizeof(m_EntityRenameBuffer),
+                ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+            PushUndo(world, "Rename");
+            name.Name = SanitizeEntityName(m_EntityRenameBuffer);
+            m_RenamingEntity = entt::null;
+        }
+        if (ImGui::IsItemDeactivated()) m_RenamingEntity = entt::null;
+        ImGui::PopID();
+        return; // children stay collapsed for the one frame a rename is open — deliberate, keeps the field stable
+    }
+
+    // Kind badge: ONE primary glyph (mesh > light > camera > empty priority) drawn in a fixed-
+    // width leading slot so a name's left edge is identical on every row no matter how many kinds
+    // it has (#153). A mesh that also carries a light still reads as both — the second kind shows
+    // as a small badge inside that same slot (#27 P16) — without shifting the name; a rare third
+    // kind is dropped (the Inspector lists every component anyway).
+    const bool hasMesh   = world.Registry.all_of<RenderableComponent>(entity);
+    const bool hasLight  = world.Registry.all_of<LightComponent>(entity);
+    const bool hasCamera = world.Registry.all_of<CameraComponent>(entity);
+    const char* primaryGlyph =
+        hasMesh   ? ICON_FA_DRAW_POLYGON  :
+        hasLight  ? ICON_FA_LIGHTBULB     :
+        hasCamera ? ICON_FA_VIDEO         : ICON_FA_DIAGRAM_PROJECT;
+    const char* secondaryGlyph =
+        (hasMesh && hasLight)   ? ICON_FA_LIGHTBULB :
+        (hasMesh && hasCamera)  ? ICON_FA_VIDEO     :
+        (hasLight && hasCamera) ? ICON_FA_VIDEO     : nullptr;
+
+    // Never-named entities get a positional fallback instead of a wall of identical
+    // "(unnamed)" rows (#21 P10).
+    std::string shownName = name.Name;
+    if (shownName.empty())
+        shownName = "Object " + std::to_string(CreationOrdinal(world.Registry, entity));
+
+    // Only feeds the drag preview below — the row paints its own glyph + name after the node.
+    std::string label = std::string(primaryGlyph) + "  " + shownName;
+
+    ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth |
+        (selected ? ImGuiTreeNodeFlags_Selected : 0) |
+        (hasChildren ? ImGuiTreeNodeFlags_DefaultOpen : (ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen));
+
+    // Empty label: the tree node owns the arrow / indent / full-row hitbox / open-close and every
+    // interaction handler below; the glyph slot + name are painted afterward at a constant X.
+    bool open = ImGui::TreeNodeEx("##node", nodeFlags, "%s", "");
+    const ImVec2 rowMin = ImGui::GetItemRectMin();
+
+    if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+        const ImGuiIO& io = ImGui::GetIO();
+        if (io.KeyShift) {
+            // Shift (or Ctrl+Shift) — contiguous range from the anchor to this row.
+            SelectHierarchyRange(world, entity, io.KeyCtrl);
+        } else {
+            SelectItem(entity, io.KeyCtrl); // plain click replaces; Ctrl+Click toggles. Both re-anchor.
+        }
+        m_HierarchyRowHintDone = true; // learned the row interaction — stop showing the hint
+    }
+    if (ImGui::IsItemToggledOpen() && ImGui::GetIO().KeyAlt && hasChildren) {
+        // `open` already reflects the state ImGui just toggled this entity's own row to —
+        // cascade that same state to every descendant.
+        for (entt::entity child : hier->Children) {
+            SetHierarchyExpandedRecursive(world, child, open);
+        }
+    }
+    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+        BeginRenameEntity(entity);
+    }
+    if (!m_HierarchyRowHintDone && ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+        EditorUI::SetTooltip("Click to select (Ctrl+Click to add/remove, Shift+Click for a range, Ctrl+A for all).\nDouble-click or F2 to rename. Drag onto another row to parent it.\nRight-click for more options.");
+    }
+
+    if (ImGui::BeginPopupContextItem("##RowContext")) {
+        if (!IsSelected(entity)) SelectItem(entity, false);
+        DrawHierarchyContextMenu(world, assets, entity);
+        ImGui::EndPopup();
+    }
+
+    // Drag a row onto another row to re-parent it (Unity's core Hierarchy gesture).
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoDisableHover)) {
+        ImGui::SetDragDropPayload("HIERARCHY_ENTITY", &entity, sizeof(entt::entity));
+        // Dragging a row that's part of a multi-selection carries (and will re-parent) the whole
+        // selection — the preview says so instead of naming just the one row under the mouse.
+        size_t dragCount = IsSelected(entity) ? GetSelectedItems().size() : 1;
+        if (dragCount > 1) ImGui::Text("%d objects", (int)dragCount);
+        else ImGui::Text("%s", label.c_str());
+        ImGui::EndDragDropSource();
+    }
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
+            entt::entity dragged = *(const entt::entity*)payload->Data;
+            if (world.Registry.valid(dragged) && dragged != entity) {
+                // Same rule as the un-parent drop below: a multi-selected dragged row re-parents
+                // the whole selection (#220), otherwise just the row itself.
+                std::vector<entt::entity> toReparent = IsSelected(dragged) ? GetSelectedItems()
+                                                                            : std::vector<entt::entity>{dragged};
+                StageUndo(world);
+                // SetParent refuses cycles and Collider-bearing children on its own; report the
+                // refusal rather than silently doing nothing, so the gesture never looks broken.
+                bool anyFailed = false;
+                for (entt::entity e : toReparent) {
+                    if (!world.Registry.valid(e) || e == entity) continue;
+                    if (!world.SetParent(e, entity)) anyFailed = true;
+                }
+                CommitStagedUndo(world, "Reparent");
+                if (anyFailed) {
+                    Log::Warn("Can't parent that: level geometry has a collider that needs world-space "
+                              "coordinates, or the target is already a child of the dragged object.");
+                }
+            }
+        }
+        // Existing behavior: dropping a texture from the Asset Browser assigns it as Albedo.
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
+            std::string texPath((const char*)payload->Data);
+            if (auto* renderable = world.Registry.try_get<RenderableComponent>(entity)) {
+                PushUndo(world, "Set Albedo Map");
+                Model* model = renderable->ModelRef.get();
+                auto override_ = model->MaterialOverride();
+                if (!override_) {
+                    override_ = std::make_shared<Material>();
+                    if (model->MeshCount() > 0) {
+                        const Material& imported = model->MeshMaterial(0);
+                        override_->NormalMap = imported.NormalMap;
+                        override_->MetallicMap = imported.MetallicMap;
+                        override_->RoughnessMap = imported.RoughnessMap;
+                        override_->AOMap = imported.AOMap;
+                        override_->EmissiveMap = imported.EmissiveMap;
+                    }
+                    model->SetMaterialOverride(override_);
+                }
+                override_->AlbedoMap = assets.LoadTexture(texPath);
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+
+    // Paint the kind glyph(s) + name at a fixed X off the row's left edge — see the primaryGlyph
+    // comment above. Drawn straight into the window draw list so it never becomes "the last item"
+    // and disturb the interaction handlers, selection rect or drag/drop that key off the node.
+    {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const float fontSize = ImGui::GetFontSize();
+        const float slotW    = fontSize * 1.45f;
+        // Pull the kind glyph + name in toward the eye (#152 follow-up). Parent rows keep enough
+        // lead for the disclosure arrow; leaf rows (no arrow) only need a hair of separation.
+        const float labelX   = rowMin.x + (hasChildren ? fontSize * 1.15f : fontSize * 0.35f);
+        const ImU32 col = ImGui::GetColorU32(inactive ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+        dl->AddText(ImVec2(labelX, rowMin.y), col, primaryGlyph);
+        if (secondaryGlyph) {
+            const float sub = fontSize * 0.68f;
+            dl->AddText(ImGui::GetFont(), sub,
+                        ImVec2(labelX + slotW - sub, rowMin.y + fontSize - sub),
+                        (col & 0x00FFFFFFu) | 0x9E000000u, secondaryGlyph);
+        }
+        dl->AddText(ImVec2(labelX + slotW, rowMin.y), col, shownName.c_str());
+    }
+
+    if (hasChildren && open) {
+        // Copied because a re-parent or delete triggered from a child's own context menu would
+        // otherwise mutate this vector mid-iteration.
+        std::vector<entt::entity> children = hier->Children;
+        for (entt::entity child : children) {
+            if (world.Registry.valid(child)) DrawHierarchyNode(world, assets, child, isLevelGeometry);
+        }
+        ImGui::TreePop();
+    }
+
+    ImGui::PopID();
+}
+
+void EditorLayer::SetHierarchyExpandedRecursive(World& world, entt::entity entity, bool open) {
+    if (!world.Registry.valid(entity)) return;
+    ImGui::PushID((int)entt::to_integral(entity));
+    ImGuiID nodeId = ImGui::GetID("##node");
+    ImGui::GetStateStorage()->SetInt(nodeId, open ? 1 : 0);
+    if (const auto* hier = world.Registry.try_get<HierarchyComponent>(entity)) {
+        for (entt::entity child : hier->Children) {
+            SetHierarchyExpandedRecursive(world, child, open);
+        }
+    }
+    ImGui::PopID();
+}
+
+void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, entt::entity entity) {
+    bool hasEntity = entity != entt::null && world.Registry.valid(entity);
+
+    if (ImGui::BeginMenu(ICON_FA_PLUS "  Create")) {
+        if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Empty")) CreateEmptyAt(world, nullptr, "Empty", false);
+        if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) CreateEmptyAt(world, nullptr, "Point Light", true);
+        if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light")) {
+            world.Registry.get<LightComponent>(CreateEmptyAt(world, nullptr, "Spot Light", true)).Kind = LightComponent::Type::Spot;
+        }
+        if (ImGui::MenuItem(ICON_FA_SUN "  Directional Light")) {
+            MakeDirectionalLight(world, CreateEmptyAt(world, nullptr, "Directional Light", true));
+        }
+        ImGui::EndMenu();
+    }
+    if (ImGui::MenuItem(ICON_FA_OBJECT_GROUP "  Group into Empty Parent", nullptr, false, HasAnySelection())) {
+        CreateEmptyParentForSelection(world);
+    }
+    if (ImGui::IsItemHovered() && HasAnySelection()) {
+        EditorUI::SetTooltip("Create a new Empty at the selection's center and parent every\nselected object under it. Positions are preserved.");
+    }
+
+    // Always-reachable un-parent (#220): dropping onto the empty space below the tree does the
+    // same thing, but that drop zone can shrink to nothing once the tree fills the panel.
+    bool selectionHasParent = false;
+    for (entt::entity e : GetSelectedItems()) {
+        if (!world.Registry.valid(e)) continue;
+        const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+        if (h && h->Parent != entt::null) { selectionHasParent = true; break; }
+    }
+    if (ImGui::MenuItem(ICON_FA_LINK_SLASH "  Unparent", nullptr, false, selectionHasParent)) {
+        UnparentSelection(world);
+    }
+    if (ImGui::IsItemHovered() && selectionHasParent) {
+        EditorUI::SetTooltip("Move the selection to the scene root.");
+    }
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C", false, hasEntity)) CopySelection(world);
+    if (ImGui::MenuItem(ICON_FA_SCISSORS "  Cut", "Ctrl+X", false, hasEntity)) {
+        CopySelection(world);
+        DeleteSelection(world);
+    }
+    if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", "Ctrl+V", false, !m_Clipboard.empty())) {
+        PasteClipboard(world, assets);
+    }
+    if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", "Ctrl+D", false, hasEntity)) {
+        DuplicateSelection(world, assets);
+    }
+
+    const bool isLight = hasEntity && world.Registry.all_of<LightComponent>(entity);
+    if (isLight) {
+        ImGui::Separator();
+        if (ImGui::MenuItem(ICON_FA_DOWN_LONG "  Drop Light to Surface")) {
+            if (!DropLightToSurface(world, entity))
+                Log::Info("Drop to surface: nothing directly below this light.");
+        }
+    }
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_FA_PEN "  Rename", "F2", false, hasEntity)) BeginRenameEntity(entity);
+    if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Save as Prefab...", nullptr, false, hasEntity)) {
+        std::string path = FileDialog::SaveFile("Prefab Files\0*.prefab\0All Files\0*.*\0", "prefab", m_Window);
+        if (!path.empty() && SceneSerializer::SavePrefab(world, entity, path)) {
+            assets.RegisterPrefab(path);
+        }
+    }
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_FA_TRASH "  Delete", "Del", false, hasEntity)) DeleteSelection(world);
+}
+
+void EditorLayer::BeginRenameEntity(entt::entity entity) {
+    if (entity == entt::null) return;
+    m_RenamingEntity = entity;
+    m_EntityRenameJustStarted = true;
+}
+
+void EditorLayer::CreateEmptyParentForSelection(World& world) {
+    std::vector<entt::entity> sel = GetSelectedItems();
+    sel.erase(std::remove_if(sel.begin(), sel.end(),
+        [&](entt::entity e) { return !world.Registry.valid(e); }), sel.end());
+    if (sel.empty()) return;
+
+    // Nothing with a Box Collider can be re-parented yet (SetParent refuses it) — check up front
+    // so we don't create a stray "Group" empty that ends up with no children.
+    bool anyReparentable = false;
+    for (entt::entity e : sel) {
+        if (!world.Registry.all_of<ColliderComponent>(e)) { anyReparentable = true; break; }
+    }
+    if (!anyReparentable) {
+        Log::Warn("Couldn't group: objects with a Box Collider can't be re-parented yet.");
+        return;
+    }
+
+    glm::vec3 center(0.0f);
+    if (!GetSelectionCenter(world, center)) center = glm::vec3(0.0f);
+
+    PushUndo(world, "Create Empty Parent");
+    entt::entity parent = world.CreateEmptyEntity(center, glm::vec3(0.0f), glm::vec3(1.0f), UniqueNameFor(world, "Group"));
+
+    // If every selected entity already shares one parent, slot the new group in under it so the
+    // grouping doesn't yank the objects to the scene root.
+    entt::entity commonParent = entt::null;
+    bool sameParent = true;
+    for (size_t i = 0; i < sel.size(); ++i) {
+        const auto* h = world.Registry.try_get<HierarchyComponent>(sel[i]);
+        entt::entity p = h ? h->Parent : entt::null;
+        if (i == 0) commonParent = p;
+        else if (p != commonParent) { sameParent = false; break; }
+    }
+    if (sameParent && commonParent != entt::null) world.SetParent(parent, commonParent);
+
+    int parented = 0;
+    for (entt::entity e : sel) {
+        if (world.SetParent(e, parent)) ++parented; // preserves world transform; refuses colliders
+    }
+    SelectItem(parent, false);
+    Log::Info("Grouped " + std::to_string(parented) + " object(s) under a new Empty" +
+              (parented < (int)sel.size() ? " (some couldn't be re-parented)." : "."));
+}
+
+void EditorLayer::UnparentSelection(World& world) {
+    std::vector<entt::entity> sel = GetSelectedItems();
+    StageUndo(world);
+    for (entt::entity e : sel) {
+        if (world.Registry.valid(e)) world.SetParent(e, entt::null);
+    }
+    CommitStagedUndo(world, "Reparent");
+}
+
+entt::entity EditorLayer::CreateEmptyAt(World& world, Camera* editorCamera, const char* name, bool asLight) {
+    PushUndo(world, std::string("Create ") + name);
+    // Spawned in front of the camera when there is one (menu invoked from the viewport/toolbar),
+    // else at the origin — the Hierarchy's own context menu has no camera to reference.
+    glm::vec3 position = editorCamera ? SafeSpawnInFrontOf(*editorCamera) : glm::vec3(0.0f);
+    entt::entity e = world.CreateEmptyEntity(position, glm::vec3(0.0f), glm::vec3(1.0f), UniqueNameFor(world, name));
+    if (asLight) world.Registry.emplace<LightComponent>(e);
+    SelectItem(e, false);
+    Log::Info(std::string("Added ") + name + ".");
+    return e;
+}
