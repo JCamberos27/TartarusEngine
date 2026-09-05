@@ -346,6 +346,11 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         m["rotation"] = Vec3ToJson(transform.RotationEuler);
         m["scale"] = Vec3ToJson(transform.Scale);
         m["soundPath"] = audio ? audio->SoundPath : std::string();
+        if (audio) {
+            m["soundVolume"] = audio->Volume;
+            m["soundLoop"] = audio->Loop;
+            m["soundPlayOnStart"] = audio->PlayOnStart;
+        }
         m["id"] = idOf[entity];
         m["parentId"] = parentIdOf(entity);
 
@@ -504,7 +509,12 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             }
 
             entt::entity e = world.CreateModelEntity(model, position, rotation, scale, name);
-            if (!soundPath.empty()) world.Registry.emplace<AudioSourceComponent>(e, soundPath);
+            if (!soundPath.empty()) {
+                auto& audio = world.Registry.emplace<AudioSourceComponent>(e, soundPath);
+                audio.Volume = m.value("soundVolume", 1.0f);
+                audio.Loop = m.value("soundLoop", false);
+                audio.PlayOnStart = m.value("soundPlayOnStart", false);
+            }
             ReadCommonComponents(m, world, e);
             applyOrder(e, m);
             created(e);
