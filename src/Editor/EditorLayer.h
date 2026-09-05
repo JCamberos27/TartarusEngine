@@ -323,8 +323,10 @@ public:
         // #204: the scene has more active lights than the forward LightBuffer can hold
         // (LightBuffer::kMaxLights) - the excess were silently dropped before this existed.
         bool LightBufferOverflowed = false;
-        // #204: at least one cluster's per-froxel light list filled ClusterGrid::MAX_LIGHTS_PER_CLUSTER
-        // this frame, so it may be missing lights that should be shading it.
+        // #204: the global per-frame cluster light-index list (ClusterGrid::GLOBAL_INDEX_CAPACITY)
+        // ran out of room this frame, so at least one cluster's reserved block was truncated and
+        // may be missing lights that should be shading it (#208: adapted from a per-cluster cap
+        // to this shared-list capacity).
         bool ClusterSaturated = false;
     };
     void SetRenderStats(const RenderStats& stats) { m_RenderStats = stats; }

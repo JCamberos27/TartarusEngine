@@ -16,12 +16,16 @@ void ClusterGrid::EnsureCreated() {
     glCreateBuffers(1, &m_AABBs);
     glNamedBufferStorage(m_AABBs, (GLsizeiptr)CLUSTERS * 2 * (GLsizeiptr)sizeof(glm::vec4), nullptr, 0);
     glCreateBuffers(1, &m_Counts);
-    glNamedBufferStorage(m_Counts, (GLsizeiptr)CLUSTERS * (GLsizeiptr)sizeof(unsigned int), nullptr, 0);
+    // Per-cluster {offset, count} pair (#208) instead of a bare count at a fixed slot.
+    glNamedBufferStorage(m_Counts, (GLsizeiptr)CLUSTERS * 2 * (GLsizeiptr)sizeof(unsigned int), nullptr, 0);
     glCreateBuffers(1, &m_Indices);
+    // One global compacted list every cluster appends its lights into (#208), sized well below
+    // the old worst-case fixed-stride buffer (see GLOBAL_INDEX_CAPACITY).
     glNamedBufferStorage(m_Indices,
-        (GLsizeiptr)CLUSTERS * MAX_LIGHTS_PER_CLUSTER * (GLsizeiptr)sizeof(unsigned int), nullptr, 0);
+        (GLsizeiptr)GLOBAL_INDEX_CAPACITY * (GLsizeiptr)sizeof(unsigned int), nullptr, 0);
     glCreateBuffers(1, &m_Overflow);
-    glNamedBufferStorage(m_Overflow, (GLsizeiptr)sizeof(unsigned int), nullptr, GL_DYNAMIC_STORAGE_BIT);
+    // {globalCounter, overflowFlag} — see field comment in ClusterGrid.h.
+    glNamedBufferStorage(m_Overflow, (GLsizeiptr)2 * (GLsizeiptr)sizeof(unsigned int), nullptr, GL_DYNAMIC_STORAGE_BIT);
 }
 
 void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4& view, const glm::mat4& proj,
@@ -29,10 +33,11 @@ void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4&
     EnsureCreated();
     const unsigned int groups = (CLUSTERS + 63) / 64;
 
-    // Cleared before the cull pass so kCullLightsCompute's atomicOr accumulates fresh saturation
-    // state for just this frame's dispatch (#204).
-    const unsigned int zero = 0;
-    glNamedBufferSubData(m_Overflow, 0, sizeof(unsigned int), &zero);
+    // Cleared before the cull pass so kCullLightsCompute's atomicAdd/atomicOr accumulate fresh
+    // state for just this frame's dispatch: the global append cursor restarts at 0, and the
+    // overflow flag restarts clear (#204, adapted for #208's global list).
+    const unsigned int zero2[2] = {0, 0};
+    glNamedBufferSubData(m_Overflow, 0, sizeof(zero2), zero2);
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, m_AABBs);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, m_Counts);
@@ -67,10 +72,11 @@ void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4&
     cullShader.DispatchCompute(groups, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-    // Single-uint synchronous readback: negligible cost, and only feeds the Stats panel warning
-    // (#204) — nothing on the render path depends on this frame's value.
+    // Single-uint synchronous readback of just the overflow flag (offset past the global
+    // counter): negligible cost, and only feeds the Stats panel warning (#204) — nothing on the
+    // render path depends on this frame's value.
     unsigned int flag = 0;
-    glGetNamedBufferSubData(m_Overflow, 0, sizeof(unsigned int), &flag);
+    glGetNamedBufferSubData(m_Overflow, sizeof(unsigned int), sizeof(unsigned int), &flag);
     m_LastSaturated = flag != 0;
 }
 
