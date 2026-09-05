@@ -114,11 +114,42 @@ float sqDistPointAABB(vec3 p, vec3 mn, vec3 mx) {
     return d;
 }
 
+// Conservative cone-vs-sphere test (#203). A narrow, long-range spot's sphere test (radius =
+// Range) still claims every cluster within Range of its position, even ones nowhere near its
+// cone. This narrows that down for spots by testing the cone against the cluster AABB's
+// bounding sphere -- since the AABB is contained in that sphere, "cone misses sphere" proves
+// "cone misses AABB" (safe to reject), while "cone may hit sphere" just falls back to keeping
+// the cluster (safe over-inclusion, never a false reject). Standard formulation (Wronski,
+// "cone vs sphere culling"); valid for outer half-angles < 90 degrees, true of every spot here.
+bool coneIntersectsSphere(vec3 apex, vec3 dir, float range, float cosOuter,
+                           vec3 sphereCenter, float sphereRadius) {
+    vec3  v        = sphereCenter - apex;
+    float lenSq    = dot(v, v);
+    float v1       = dot(v, dir);                                  // distance along cone axis
+    float sinOuter = sqrt(max(0.0, 1.0 - cosOuter * cosOuter));
+    float distClosestPoint = cosOuter * sqrt(max(0.0, lenSq - v1 * v1)) - v1 * sinOuter;
+
+    bool angleCull = distClosestPoint > sphereRadius;
+    bool frontCull = v1 > sphereRadius + range;
+    bool backCull  = v1 < -sphereRadius;
+    return !(angleCull || frontCull || backCull);
+}
+
 bool lightHitsCluster(uint i, vec3 mn, vec3 mx) {
-    if (int(uLights[i].PositionType.w) == 0) return false; // directional: not clustered
+    int type = int(uLights[i].PositionType.w);
+    if (type == 0) return false; // directional: not clustered
     vec3  pv = (uView * vec4(uLights[i].PositionType.xyz, 1.0)).xyz;
     float r  = uLights[i].ColorRange.a;                     // range in metres
-    return sqDistPointAABB(pv, mn, mx) <= r * r;
+    if (sqDistPointAABB(pv, mn, mx) > r * r) return false;  // sphere test: cheap first reject
+
+    if (type == 2) { // spot: narrow further with a cone test
+        vec3  dirV = normalize(mat3(uView) * uLights[i].DirCutoff.xyz);
+        vec3  sphereCenter = 0.5 * (mn + mx);
+        float sphereRadius = 0.5 * length(mx - mn);
+        if (!coneIntersectsSphere(pv, dirV, r, uLights[i].DirCutoff.w, sphereCenter, sphereRadius))
+            return false;
+    }
+    return true;
 }
 
 void main() {
