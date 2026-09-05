@@ -160,6 +160,26 @@ struct AnimatorComponent {
     float Elapsed = 0.0f;
 };
 
+// The first drag-and-drop component script. Its editable settings are intentionally data-only:
+// a Script asset attaches this component, and this runtime system applies its motion only while
+// playing. That gives the Inspector a familiar script workflow without requiring a compiler or
+// exposing native engine code to scene authors.
+struct TransformControllerComponent {
+    std::string ScriptPath = "scripts/TransformController.tescript";
+    bool Enabled = true;
+    glm::vec3 RotationDegPerSec{0.0f};
+    glm::vec3 TranslationUnitsPerSec{0.0f};
+    float ScalePulseAmplitude = 0.0f; // fraction of the authored scale (0.2 = +/-20%)
+    float ScalePulseFrequencyHz = 0.5f;
+
+    // Runtime scratch, never serialized. Play -> Stop reloads the authored scene snapshot.
+    bool Initialized = false;
+    glm::vec3 BasePosition{0.0f};
+    glm::vec3 BaseRotation{0.0f};
+    glm::vec3 BaseScale{1.0f};
+    float Elapsed = 0.0f;
+};
+
 // Present only on entities that are parented, or that have at least one child — an entity with
 // no relationships at all simply lacks this component, so the common (flat) case pays no cost.
 // When Parent is not entt::null, this entity's TransformComponent is interpreted as LOCAL space

@@ -210,41 +210,7 @@ void PrimitiveMeshes::GeneratePyramid(std::vector<ModelVertex>& vertices, std::v
     FixWinding(vertices, indices);
 }
 
-void PrimitiveMeshes::GenerateWedge(std::vector<ModelVertex>& vertices, std::vector<unsigned int>& indices) {
-    const float h = 0.5f;
-    // Y-Z profile triangle (right angle at bottom-back), extruded along X.
-    const glm::vec3 L0(-h, -h, -h), L1(-h, h, -h), L2(-h, -h, h);
-    const glm::vec3 R0(h, -h, -h),  R1(h, h, -h),  R2(h, -h, h);
-
-    auto tri = [&](glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 n) {
-        const glm::vec3 t = glm::normalize(b - a);
-        unsigned int s = (unsigned int)vertices.size();
-        vertices.push_back(MakeVertex(a, n, {0, 0}, t));
-        vertices.push_back(MakeVertex(b, n, {1, 0}, t));
-        vertices.push_back(MakeVertex(c, n, {0, 1}, t));
-        indices.push_back(s); indices.push_back(s + 1); indices.push_back(s + 2);
-    };
-    auto quad = [&](glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 d, glm::vec3 n) {
-        const glm::vec3 t = glm::normalize(b - a);
-        unsigned int s = (unsigned int)vertices.size();
-        vertices.push_back(MakeVertex(a, n, {0, 0}, t));
-        vertices.push_back(MakeVertex(b, n, {1, 0}, t));
-        vertices.push_back(MakeVertex(c, n, {1, 1}, t));
-        vertices.push_back(MakeVertex(d, n, {0, 1}, t));
-        indices.push_back(s); indices.push_back(s + 1); indices.push_back(s + 2);
-        indices.push_back(s + 2); indices.push_back(s + 3); indices.push_back(s);
-    };
-
-    tri(L0, L1, L2, {-1, 0, 0});                                  // left end
-    tri(R0, R2, R1, {1, 0, 0});                                   // right end
-    quad(L0, R0, R1, L1, {0, 0, -1});                             // vertical back
-    quad(L0, L2, R2, R0, {0, -1, 0});                             // bottom
-    quad(L1, R1, R2, L2, glm::normalize(glm::vec3(0, 1, 1)));     // slope
-
-    FixWinding(vertices, indices);
-}
-
-void PrimitiveMeshes::GenerateTorus(std::vector<ModelVertex>& vertices, std::vector<unsigned int>& indices, int majorSegments, int minorSegments) {
+void PrimitiveMeshes::GenerateDonut(std::vector<ModelVertex>& vertices, std::vector<unsigned int>& indices, int majorSegments, int minorSegments) {
     const float majorR = 0.35f, minorR = 0.15f;
     const int cols = minorSegments + 1;
 
