@@ -229,6 +229,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         root["formatVersion"] = kSceneFormatVersion;
         root["skyHorizonColor"] = Vec3ToJson(world.SkyHorizonColor);
         root["skyZenithColor"] = Vec3ToJson(world.SkyZenithColor);
+        root["skyAmbientIntensity"] = world.SkyAmbientIntensity; // #196
     }
 
     // Every box/model entity gets a stable 0-based id (assigned in the exact order written
@@ -424,6 +425,10 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
         world.SkyHorizonColor = glm::vec3(0.53f, 0.72f, 0.86f);
         world.SkyZenithColor = glm::vec3(0.20f, 0.40f, 0.75f);
     }
+    // #196: scenes saved before IBL existed carry no ambient intensity — 1.0 (the physically
+    // consistent value) is the right default for them, same as a brand-new scene.
+    if (clearFirst)
+        world.SkyAmbientIntensity = root.value("skyAmbientIntensity", 1.0f);
 
     // Reconstructs HierarchyComponent parent links from the "id"/"parentId" fields written by
     // BuildSceneJson — both entries are created first (order-independent), then parents are

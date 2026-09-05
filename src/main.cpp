@@ -27,6 +27,7 @@
 #include "CascadedShadowMap.h"
 #include "SpotShadowMap.h"
 #include "PointShadowMap.h"
+#include "IblProbe.h"
 #include "GLStateCache.h"
 #include "Profiler.h"
 #include "Frustum.h"
@@ -365,6 +366,7 @@ int main() {
         TintOverlayRenderer tintOverlay;
         Grid grid;
         Sky sky;
+        IblProbe iblProbe; // #196: sky-baked irradiance / prefiltered specular / BRDF LUT
 
         World world;
         Player player;
@@ -1166,6 +1168,21 @@ int main() {
                 GLStateCache::Invalidate();
             }
 
+            // --- IBL probes (#196) — baked from the sky, NOT per frame ------------------------
+            // NeedsBake() compares against the colours the probes were last baked with, so this
+            // is a couple of vec3 compares on the overwhelming majority of frames and a ~1 ms
+            // burst on the frame after someone drags the sky colour (or loads a scene, or
+            // undoes an edit — watching the state rather than any one writer means every path
+            // that can change the sky is covered without plumbing a dirty flag through the UI).
+            if (iblProbe.NeedsBake(world.SkyHorizonColor, world.SkyZenithColor)) {
+                PROFILE_SCOPE("IBL Bake");
+                PROFILE_GPU_SCOPE("IBL Bake");
+                iblProbe.Bake(world.SkyHorizonColor, world.SkyZenithColor);
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, window.GetWidth(), window.GetHeight());
+                GLStateCache::Invalidate();
+            }
+
             // Renders the lit scene (sky + every Transform+Renderable entity) into whatever
             // framebuffer/viewport is currently bound. Shared by the real on-screen pass below
             // and GameViewPanel's offscreen framebuffer pass, so the two can never silently
@@ -1246,6 +1263,22 @@ int main() {
                 glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, pointShadowMap.DepthCubeArray());
                 modelShader.SetInt("uPointShadowMap", 10);
                 modelShader.SetFloat("uPointShadowMapResolution", (float)pointShadowMap.Resolution()); // #190
+
+                // IBL probes on units 11/12/13 (#196). The shader declares those units with
+                // layout(binding=) qualifiers, so there's no SetInt here — just the bind. Unlit
+                // mode skips lighting entirely, so it doesn't need them either.
+                bool iblOn = iblProbe.IsValid() && !unlit;
+                if (iblOn) {
+                    glActiveTexture(GL_TEXTURE0 + 11);
+                    glBindTexture(GL_TEXTURE_CUBE_MAP, iblProbe.IrradianceMap());
+                    glActiveTexture(GL_TEXTURE0 + 12);
+                    glBindTexture(GL_TEXTURE_CUBE_MAP, iblProbe.SpecularMap());
+                    glActiveTexture(GL_TEXTURE0 + 13);
+                    glBindTexture(GL_TEXTURE_2D, iblProbe.BrdfLut());
+                    modelShader.SetFloat("uIBLIntensity", std::max(world.SkyAmbientIntensity, 0.0f));
+                    modelShader.SetFloat("uIBLSpecularMaxLod", (float)(IblProbe::kSpecularMips - 1));
+                }
+                modelShader.SetInt("uIBLEnabled", iblOn ? 1 : 0);
                 glActiveTexture(GL_TEXTURE0);
 
                 // The light SSBO (binding 0) is built once per frame above — just bind it.
