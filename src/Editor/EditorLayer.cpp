@@ -4190,47 +4190,80 @@ void EditorLayer::DrawConsole() {
     }
     if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) EditorUI::SetTooltip("Only show messages containing this text");
 
+    // #219: rebuild the filtered index list only when something that affects it actually
+    // changed (the text filter, a level toggle, or the log gaining/losing entries via
+    // Log::Revision()) rather than re-running MatchesFilter over all 1000 possible entries
+    // every single frame the panel happens to be open.
+    const std::vector<LogEntry>& logEntries = Log::Entries();
+    bool filterCacheStale =
+        m_ConsoleFilterCacheRevision != Log::Revision() ||
+        m_ConsoleFilterCacheFilter != m_ConsoleFilter ||
+        m_ConsoleFilterCacheShowInfo != m_ConsoleShowInfo ||
+        m_ConsoleFilterCacheShowWarning != m_ConsoleShowWarning ||
+        m_ConsoleFilterCacheShowError != m_ConsoleShowError;
+    if (filterCacheStale) {
+        m_ConsoleFilteredIndices.clear();
+        m_ConsoleFilteredIndices.reserve(logEntries.size());
+        for (size_t i = 0; i < logEntries.size(); ++i) {
+            const LogEntry& e = logEntries[i];
+            bool levelVisible =
+                (e.Level == LogLevel::Info && m_ConsoleShowInfo) ||
+                (e.Level == LogLevel::Warning && m_ConsoleShowWarning) ||
+                (e.Level == LogLevel::Error && m_ConsoleShowError);
+            if (!levelVisible || !MatchesFilter(m_ConsoleFilter, e.Message)) continue;
+            m_ConsoleFilteredIndices.push_back(i);
+        }
+        m_ConsoleFilterCacheRevision = Log::Revision();
+        m_ConsoleFilterCacheFilter = m_ConsoleFilter;
+        m_ConsoleFilterCacheShowInfo = m_ConsoleShowInfo;
+        m_ConsoleFilterCacheShowWarning = m_ConsoleShowWarning;
+        m_ConsoleFilterCacheShowError = m_ConsoleShowError;
+    }
+
     ImGui::Separator();
     if (ImGui::BeginChild("##ConsoleScroll", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar)) {
-        for (const LogEntry& entry : Log::Entries()) {
-            bool levelVisible =
-                (entry.Level == LogLevel::Info && m_ConsoleShowInfo) ||
-                (entry.Level == LogLevel::Warning && m_ConsoleShowWarning) ||
-                (entry.Level == LogLevel::Error && m_ConsoleShowError);
-            if (!levelVisible || !MatchesFilter(m_ConsoleFilter, entry.Message)) continue;
+        ImGuiListClipper clipper;
+        clipper.Begin((int)m_ConsoleFilteredIndices.size(), ImGui::GetTextLineHeightWithSpacing());
+        while (clipper.Step()) {
+            for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+                const LogEntry& entry = logEntries[m_ConsoleFilteredIndices[(size_t)row]];
 
-            ImVec4 color(0.82f, 0.84f, 0.86f, 1.0f);
-            const char* icon = ICON_FA_CIRCLE_INFO;
-            if (entry.Level == LogLevel::Warning) { color = ImVec4(1.0f, 0.80f, 0.30f, 1.0f); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
-            else if (entry.Level == LogLevel::Error) { color = ImVec4(1.0f, 0.42f, 0.38f, 1.0f); icon = ICON_FA_CIRCLE_EXCLAMATION; }
+                ImVec4 color(0.82f, 0.84f, 0.86f, 1.0f);
+                const char* icon = ICON_FA_CIRCLE_INFO;
+                if (entry.Level == LogLevel::Warning) { color = ImVec4(1.0f, 0.80f, 0.30f, 1.0f); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
+                else if (entry.Level == LogLevel::Error) { color = ImVec4(1.0f, 0.42f, 0.38f, 1.0f); icon = ICON_FA_CIRCLE_EXCLAMATION; }
 
-            std::string tsPrefix = (m_ConsoleShowTimestamps && !entry.Time.empty()) ? ("[" + entry.Time + "]  ") : "";
-            char rowLabel[1200];
-            if (entry.Count > 1)
-                snprintf(rowLabel, sizeof(rowLabel), "%s%s  %s  (x%d)##r%p", tsPrefix.c_str(), icon,
-                         entry.Message.c_str(), entry.Count, (const void*)&entry);
-            else
-                snprintf(rowLabel, sizeof(rowLabel), "%s%s  %s##r%p", tsPrefix.c_str(), icon,
-                         entry.Message.c_str(), (const void*)&entry);
+                std::string tsPrefix = (m_ConsoleShowTimestamps && !entry.Time.empty()) ? ("[" + entry.Time + "]  ") : "";
+                std::string rowLabel = tsPrefix + icon + "  " + entry.Message;
+                if (entry.Count > 1) rowLabel += "  (x" + std::to_string(entry.Count) + ")";
 
-            // A full-width Selectable (rather than a bare Text) so the whole row is a real item
-            // with a hover rect — needed for a reliable right-click context menu.
-            ImGui::PushStyleColor(ImGuiCol_Text, color);
-            ImGui::Selectable(rowLabel, false, ImGuiSelectableFlags_AllowDoubleClick);
-            ImGui::PopStyleColor();
+                // PushID(&entry) rather than baking a pointer into the label text: a message
+                // long enough to fill the old fixed 1200-byte buffer used to truncate away the
+                // "##r<ptr>" ID suffix entirely, silently colliding ImGui IDs between rows. A
+                // std::string label has no such cap, and PushID keeps identity independent of
+                // label content/length altogether.
+                ImGui::PushID(&entry);
+                // A full-width Selectable (rather than a bare Text) so the whole row is a real
+                // item with a hover rect — needed for a reliable right-click context menu.
+                ImGui::PushStyleColor(ImGuiCol_Text, color);
+                ImGui::Selectable(rowLabel.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+                ImGui::PopStyleColor();
 
-            if (ImGui::BeginPopupContextItem()) {
-                if (ImGui::MenuItem(ICON_FA_COPY "  Copy message")) ImGui::SetClipboardText(entry.Message.c_str());
-                if (ImGui::MenuItem(ICON_FA_COPY "  Copy all shown")) {
-                    std::string all = buildShownText();
-                    ImGui::SetClipboardText(all.c_str());
+                if (ImGui::BeginPopupContextItem()) {
+                    if (ImGui::MenuItem(ICON_FA_COPY "  Copy message")) ImGui::SetClipboardText(entry.Message.c_str());
+                    if (ImGui::MenuItem(ICON_FA_COPY "  Copy all shown")) {
+                        std::string all = buildShownText();
+                        ImGui::SetClipboardText(all.c_str());
+                    }
+                    ImGui::Separator();
+                    if (ImGui::MenuItem(ICON_FA_TRASH "  Clear console")) Log::Clear();
+                    ImGui::EndPopup();
                 }
-                ImGui::Separator();
-                if (ImGui::MenuItem(ICON_FA_TRASH "  Clear console")) Log::Clear();
-                ImGui::EndPopup();
+                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Right-click for copy / clear");
+                ImGui::PopID();
             }
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Right-click for copy / clear");
         }
+        clipper.End();
 
         // Only when something actually arrived, so scrolling back through history isn't yanked
         // to the bottom on every single frame.
@@ -9494,7 +9527,28 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     // (#157) The ".." go-up row is gone — the folder tree and the Backspace shortcut cover
     // "go to parent"; it no longer costs a row at the top of every non-root folder.
 
-    for (size_t cellIndex = 0; cellIndex < cells.size(); ++cellIndex) {
+    // #219: submitting a Selectable+thumbnail+context-menu for every cell in the folder (rather
+    // than only the visible ones) got expensive with large libraries. This is a wrapping grid,
+    // not a simple list, so clipping happens by ROW: figure out how many cells fit per row (the
+    // same fixed-width math the old per-cell wrap check below did, just computed once up front),
+    // then let ImGuiListClipper skip whole off-screen rows while each visible row still iterates
+    // its cells normally. List mode is just a grid with one cell per row.
+    int cellsPerRow = 1;
+    if (gridMode) {
+        float availW = ImGui::GetContentRegionAvail().x;
+        float spacing = ImGui::GetStyle().ItemSpacing.x;
+        cellsPerRow = std::max(1, (int)std::floor((availW + spacing) / (cellWidth + spacing)));
+    }
+    int totalRows = cells.empty() ? 0 : (int)((cells.size() + (size_t)cellsPerRow - 1) / (size_t)cellsPerRow);
+    float clipRowHeight = gridMode ? cellHeight : ImGui::GetFrameHeightWithSpacing();
+
+    ImGuiListClipper clipper;
+    clipper.Begin(totalRows, clipRowHeight);
+    while (clipper.Step()) {
+    for (int clipRow = clipper.DisplayStart; clipRow < clipper.DisplayEnd; ++clipRow) {
+    for (int clipCol = 0; clipCol < cellsPerRow; ++clipCol) {
+        size_t cellIndex = (size_t)clipRow * (size_t)cellsPerRow + (size_t)clipCol;
+        if (cellIndex >= cells.size()) break;
         const auto& cell = cells[cellIndex];
         ImGui::PushID(cell.key.c_str());
 
@@ -9853,14 +9907,13 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
 
         ImGui::PopID();
 
-        // Wrap to the next row only when there's genuinely room for another tile - the
-        // standard ImGui "wrapping button grid" idiom (imgui_demo.cpp's Layout section).
-        if (gridMode && cellIndex + 1 < cells.size()) {
-            float windowVisibleX2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
-            float nextTileX2 = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x + cellWidth;
-            if (nextTileX2 < windowVisibleX2) ImGui::SameLine();
-        }
+        // Wrap within the row: SameLine for every column but the last, provided there's
+        // actually another cell to draw (the final row of the grid may be a partial one).
+        if (gridMode && clipCol + 1 < cellsPerRow && cellIndex + 1 < cells.size()) ImGui::SameLine();
     }
+    }
+    }
+    clipper.End();
 
     if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered()) {
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ClearAssetSelection();

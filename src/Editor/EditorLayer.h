@@ -973,6 +973,17 @@ private:
     std::string m_ConsoleFilter;
     unsigned int m_ConsoleSeenRevision = 0; // only auto-scroll when Log actually gained an entry
 
+    // #219: indices into Log::Entries() that currently pass the level toggles + text filter,
+    // rebuilt only when one of those inputs (or the log itself, via Log::Revision()) changes —
+    // not every frame — so DrawConsole can drive ImGuiListClipper over a stable list instead of
+    // re-filtering and submitting all 1000 possible entries each frame.
+    std::vector<size_t> m_ConsoleFilteredIndices;
+    unsigned int m_ConsoleFilterCacheRevision = (unsigned int)-1; // forces a rebuild on first draw
+    std::string m_ConsoleFilterCacheFilter;
+    bool m_ConsoleFilterCacheShowInfo = true;
+    bool m_ConsoleFilterCacheShowWarning = true;
+    bool m_ConsoleFilterCacheShowError = true;
+
     // The spinning corner monogram is governed by EditorSettings (EngineMarkEnabled / SpinSpeed /
     // Rgb) so the choice persists and the Preferences + Window-menu controls share one source of
     // truth. (Was m_ShowEngineMark — a session-only bool — before the Preferences controls landed.)
