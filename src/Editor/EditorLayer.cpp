@@ -2265,10 +2265,16 @@ std::string NextDuplicateName(std::set<std::string>& existingNames, const std::s
 // the Inspector's per-entity collapse-state key and the Hierarchy search/tag filters still read
 // more naturally when names actually are unique.
 std::string UniqueNameFor(const World& world, const std::string& desired) {
+    bool collision = false;
     for (auto e : world.Registry.view<NameComponent>()) {
-        if (world.Registry.get<NameComponent>(e).Name == desired) return NextDuplicateName(world, desired);
+        if (world.Registry.get<NameComponent>(e).Name == desired) { collision = true; break; }
     }
-    return desired;
+    if (!collision) return desired;
+
+    std::set<std::string> existingNames;
+    for (auto e : world.Registry.view<NameComponent>())
+        existingNames.insert(world.Registry.get<NameComponent>(e).Name);
+    return NextDuplicateName(existingNames, desired);
 }
 
 // Same idea as UniqueNameFor, but for an entity that already carries the name to check (e.g. a
