@@ -1001,9 +1001,13 @@ int main() {
 
                 shadowShader.Bind();
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
+                // #194: resolve these two hot uniform locations once, outside the 6-face(ish)
+                // x N-caster loop below, instead of hashing "uLightViewProj"/"uModel" every call.
+                int shadowLightViewProjLoc = shadowShader.Loc("uLightViewProj");
+                int shadowModelLoc = shadowShader.Loc("uModel");
                 for (int c = 0; c < shadowMap.Count(); ++c) {
                     shadowMap.Begin(c);
-                    shadowShader.SetMat4("uLightViewProj", shadowMap.LightViewProj(c));
+                    shadowShader.SetMat4(shadowLightViewProjLoc, shadowMap.LightViewProj(c));
                     // Cull each cascade's caster list against that cascade's own ortho frustum —
                     // the near slice covers a few metres yet used to redraw the whole level x4.
                     Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
@@ -1020,7 +1024,7 @@ int main() {
                         if (validBounds && !renderable.ModelRef->HasAnimations() &&
                             !cascadeFrustum.Intersects(AABB{bmin, bmax}.Transformed(model)))
                             continue;
-                        shadowShader.SetMat4("uModel", model);
+                        shadowShader.SetMat4(shadowModelLoc, model);
                         renderable.ModelRef->DrawDepthOnly(shadowShader);
                     }
                 }
@@ -1052,11 +1056,16 @@ int main() {
 
                 localShadowShader.Bind(); // linear distance-to-light depth
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
+                // #194: resolve once, outside the per-spot x per-caster loop.
+                int localLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
+                int localLightPosLoc = localShadowShader.Loc("uShadowLightPos");
+                int localFarLoc = localShadowShader.Loc("uShadowFar");
+                int localModelLoc = localShadowShader.Loc("uModel");
                 for (int s = 0; s < spotShadowCount; ++s) {
                     spotShadowMap.Begin(s);
-                    localShadowShader.SetMat4("uLightViewProj", spotShadowVP[s]);
-                    localShadowShader.SetVec3("uShadowLightPos", spotShadowPos[s]);
-                    localShadowShader.SetFloat("uShadowFar", spotShadowFar[s]);
+                    localShadowShader.SetMat4(localLightViewProjLoc, spotShadowVP[s]);
+                    localShadowShader.SetVec3(localLightPosLoc, spotShadowPos[s]);
+                    localShadowShader.SetFloat(localFarLoc, spotShadowFar[s]);
                     Frustum lf = Frustum::FromViewProj(spotShadowVP[s]);
                     for (auto entity : casters) {
                         if (world.Registry.all_of<InactiveTag>(entity)) continue;
@@ -1068,7 +1077,7 @@ int main() {
                         if (vb && !r.ModelRef->HasAnimations() &&
                             !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
                             continue;
-                        localShadowShader.SetMat4("uModel", model);
+                        localShadowShader.SetMat4(localModelLoc, model);
                         r.ModelRef->DrawDepthOnly(localShadowShader);
                     }
                 }
@@ -1105,15 +1114,20 @@ int main() {
 
                 localShadowShader.Bind(); // linear distance-to-light depth
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
+                // #194: resolve once, outside the per-point x 6-face x per-caster loop.
+                int cubeLightPosLoc = localShadowShader.Loc("uShadowLightPos");
+                int cubeFarLoc = localShadowShader.Loc("uShadowFar");
+                int cubeLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
+                int cubeModelLoc = localShadowShader.Loc("uModel");
                 for (int s = 0; s < pointShadowCount; ++s) {
                     glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, pointShadowNear[s], pointShadowFar[s]);
-                    localShadowShader.SetVec3("uShadowLightPos", pointShadowPos[s]);
-                    localShadowShader.SetFloat("uShadowFar", pointShadowFar[s]);
+                    localShadowShader.SetVec3(cubeLightPosLoc, pointShadowPos[s]);
+                    localShadowShader.SetFloat(cubeFarLoc, pointShadowFar[s]);
                     for (int f = 0; f < 6; ++f) {
                         pointShadowMap.BeginFace(s, f);
                         glm::mat4 vp = proj * glm::lookAt(pointShadowPos[s],
                                                          pointShadowPos[s] + kFaceDir[f], kFaceUp[f]);
-                        localShadowShader.SetMat4("uLightViewProj", vp);
+                        localShadowShader.SetMat4(cubeLightViewProjLoc, vp);
                         Frustum lf = Frustum::FromViewProj(vp);
                         for (auto entity : casters) {
                             if (world.Registry.all_of<InactiveTag>(entity)) continue;
@@ -1125,7 +1139,7 @@ int main() {
                             if (vb && !r.ModelRef->HasAnimations() &&
                                 !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
                                 continue;
-                            localShadowShader.SetMat4("uModel", model);
+                            localShadowShader.SetMat4(cubeModelLoc, model);
                             r.ModelRef->DrawDepthOnly(localShadowShader);
                         }
                     }
@@ -1262,6 +1276,9 @@ int main() {
                 { // scope limits PROFILE_SCOPE to just this loop, not the rest of the frame
                 PROFILE_SCOPE("Scene Draw");
                 PROFILE_GPU_SCOPE("Scene Draw"); // shared by both Scene-tab and Game-tab draws
+                // #194: resolve once, outside the per-entity loop below.
+                int modelModelLoc = modelShader.Loc("uModel");
+                int modelNormalMatrixLoc = modelShader.Loc("uNormalMatrix");
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.all_of<InactiveTag>(entity)) continue; // Hierarchy eye toggle / GameObject active
                     auto& renderable = world.Registry.get<RenderableComponent>(entity);
@@ -1292,9 +1309,9 @@ int main() {
                         }
                     }
 
-                    modelShader.SetMat4("uModel", model);
+                    modelShader.SetMat4(modelModelLoc, model);
                     // Normal matrix (inverse-transpose) computed here, not per-vertex (#104).
-                    modelShader.SetMat4("uNormalMatrix",
+                    modelShader.SetMat4(modelNormalMatrixLoc,
                         glm::mat4(glm::transpose(glm::inverse(glm::mat3(model)))));
                     renderable.ModelRef->Draw(modelShader);
 

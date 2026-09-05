@@ -120,3 +120,29 @@ void Shader::SetFloat(const std::string& name, float v) const {
 void Shader::SetInt(const std::string& name, int v) const {
     glUniform1i(Loc(name), v);
 }
+
+// --- Int-location overloads (#194): same GL calls, no name lookup — the caller resolves the
+// location once (via Loc()) outside the hot loop instead of on every iteration.
+void Shader::SetMat4(int loc, const glm::mat4& m) const {
+    glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(m));
+}
+
+void Shader::SetVec2(int loc, const glm::vec2& v) const {
+    glUniform2f(loc, v.x, v.y);
+}
+
+void Shader::SetVec3(int loc, const glm::vec3& v) const {
+    glUniform3f(loc, v.x, v.y, v.z);
+}
+
+void Shader::SetVec4(int loc, const glm::vec4& v) const {
+    glUniform4f(loc, v.x, v.y, v.z, v.w);
+}
+
+void Shader::SetFloat(int loc, float v) const {
+    glUniform1f(loc, v);
+}
+
+void Shader::SetInt(int loc, int v) const {
+    glUniform1i(loc, v);
+}
