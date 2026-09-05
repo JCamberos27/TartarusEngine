@@ -9,9 +9,12 @@ class Shader;
 // them (see ClusterShaderSource.h). The model fragment shader reads bindings 3 and 4.
 //
 // The grid is a fixed GRID_X x GRID_Y screen tiling by GRID_Z exponential depth slices, so a
-// fragment maps to its cluster with cheap arithmetic on gl_FragCoord + view depth. Rebuilt
-// every rendered view every frame (a few thousand trivial compute invocations) rather than
-// tracking projection/viewport dirtiness.
+// fragment maps to its cluster with cheap arithmetic on gl_FragCoord + view depth.
+//
+// Optimization (#205): The build pass (AABB computation) only needs to run when the projection
+// matrix or screen size changes (expensive operation: 3,456 froxel AABBs + glMemoryBarrier).
+// The cull pass (light binning) runs every frame regardless, since lights move. We cache the
+// last (proj, screenW, screenH, nearZ, farZ) and skip the build dispatch when unchanged.
 class ClusterGrid {
 public:
     static constexpr int GRID_X = 16;
@@ -25,6 +28,8 @@ public:
     // Build cluster AABBs for this view and assign every point/spot light to the clusters it
     // touches. The LightBuffer SSBO must already be bound at binding 0 (LightBuffer::Bind(0)).
     // nearZ / farZ are positive view-space distances (camera near/far planes).
+    // The build pass is cached and skipped if proj/screenW/screenH/nearZ/farZ are unchanged;
+    // the cull pass always runs since lights move.
     void Cull(Shader& buildShader, Shader& cullShader, const glm::mat4& view, const glm::mat4& proj,
               float nearZ, float farZ, int screenW, int screenH);
 
@@ -48,4 +53,11 @@ private:
     unsigned int m_Indices = 0;  // binding 4
     unsigned int m_Overflow = 0; // binding 5: single uint, atomicOr'd by kCullLightsCompute (#204)
     bool m_LastSaturated = false;
+
+    // Cached projection state for build-pass optimization (#205)
+    glm::mat4 m_LastProj = glm::mat4(0.0f);
+    int m_LastScreenW = -1;
+    int m_LastScreenH = -1;
+    float m_LastNearZ = -1.0f;
+    float m_LastFarZ = -1.0f;
 };
