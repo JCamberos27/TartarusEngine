@@ -1084,12 +1084,12 @@ private:
     // center of its bounding box (or of the whole group, for a multi-selection).
     bool m_GizmoPivotCenter = false;
 
-    void DrawMaterialEditor(World& world, AssetLibrary& assets);
-    // Multi-select variant: PBR + texture-map editing across every selected mesh at once, with
-    // a mixed-value dash for fields the selected materials disagree on. Only meaningful when
-    // every entity in `sel` has a mesh; the caller checks that.
-    void DrawMultiMaterialEditor(World& world, AssetLibrary& assets,
-                                 const std::vector<entt::entity>& sel);
+    // PBR + texture-map editing for one or more selected entities, with a mixed-value dash for
+    // fields the selected materials disagree on (single selection never shows one — `sel` of
+    // size 1 can't disagree with itself). Only meaningful when every entity in `sel` has a mesh;
+    // the caller checks that (single-select callers pass a one-element `sel`).
+    void DrawMaterialEditor(World& world, AssetLibrary& assets,
+                            const std::vector<entt::entity>& sel);
     void DrawGizmo(World& world, Camera& editorCamera);
     // Small screen-space markers for entities with no mesh (lights, empties) — without these
     // they'd be invisible and unclickable in the viewport, since there's nothing to rasterize.
