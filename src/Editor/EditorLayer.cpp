@@ -2194,8 +2194,9 @@ void EditorLayer::DeleteSelection(World& world) {
 namespace {
 // Unity-style duplicate naming: "Cube" -> "Cube (1)" -> "Cube (2)". Re-derives the base name
 // from an already-numbered source first, so duplicating a duplicate produces "Cube (2)" instead
-// of chaining into "Cube (1) (1)".
-std::string NextDuplicateName(const World& world, const std::string& sourceName) {
+// of chaining into "Cube (1) (1)". Takes and updates a name set built once by the caller instead
+// of rescanning the whole scene on every call — duplicating N objects used to be O(n^2).
+std::string NextDuplicateName(std::set<std::string>& existingNames, const std::string& sourceName) {
     std::string base = sourceName;
     size_t open = base.find_last_of('(');
     if (open != std::string::npos && !base.empty() && base.back() == ')') {
@@ -2207,15 +2208,13 @@ std::string NextDuplicateName(const World& world, const std::string& sourceName)
     }
     if (base.empty()) base = "Object";
 
-    std::set<std::string> existingNames;
-    for (auto e : world.Registry.view<NameComponent>()) existingNames.insert(world.Registry.get<NameComponent>(e).Name);
-
     int n = 1;
     std::string candidate;
     do {
         candidate = base + " (" + std::to_string(n) + ")";
         n++;
     } while (existingNames.count(candidate));
+    existingNames.insert(candidate);
     return candidate;
 }
 
@@ -2257,57 +2256,37 @@ void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets) {
     if (m_Selected != entt::null) source.push_back(m_Selected);
     for (entt::entity e : m_ExtraSelection) source.push_back(e);
 
+    // Routed through the same save-fragment/append-fragment path Copy/Paste already use (see
+    // PasteClipboard above) instead of hand-copying components branch by branch. That old code
+    // silently dropped whatever component wasn't in its particular branch's copy list (Collider,
+    // Camera, Animator, Tag, Static/Inactive...), never copied HierarchyComponent at all (so a
+    // duplicated parent lost its children and a duplicated child came out unparented with its
+    // local-space Position reinterpreted as world-space), and offset every copy including
+    // children by (1,0,1) instead of only roots. The serializer path already solves all of that
+    // correctly for Paste, so Duplicate just reuses it.
+    std::string fragment = SceneSerializer::SaveEntitiesToString(world, source);
     std::vector<entt::entity> created;
+    if (fragment.empty() || !SceneSerializer::AppendEntitiesFromString(world, assets, fragment, created) || created.empty()) {
+        Log::Warn("Duplicate failed: selection could not be copied.");
+        return;
+    }
 
-    for (entt::entity srcEntity : source) {
-        if (!world.Registry.valid(srcEntity)) continue;
-        const auto& transform = world.Registry.get<TransformComponent>(srcEntity);
-        const auto& name = world.Registry.get<NameComponent>(srcEntity);
-        // Nudge the copy off the original by the same (1,0,1) offset Paste uses, so a duplicate
-        // is visibly distinct in the viewport (not just by its unique Hierarchy name) and the two
-        // paths behave consistently. A multi-selection duplicate shifts every copy by the same
-        // amount, preserving the group's internal layout.
-        glm::vec3 newPos = transform.Position + glm::vec3(1.0f, 0.0f, 1.0f);
+    // Build the scene's name set once (not once per duplicated entity) and only offset/rename
+    // roots — a duplicated child keeps its original local position and name relative to its
+    // (also-duplicated) parent, matching how Paste already treats fragment roots vs. children.
+    std::set<std::string> existingNames;
+    for (auto e : world.Registry.view<NameComponent>()) existingNames.insert(world.Registry.get<NameComponent>(e).Name);
 
-        // Mesh-less entity (a light or empty) — nothing to clone via AssetLibrary, so it gets
-        // its own branch instead of falling into the box/model paths below, both of which
-        // unconditionally read RenderableComponent (would be undefined behavior — a crash —
-        // on an entity that doesn't have one).
-        if (!world.Registry.all_of<RenderableComponent>(srcEntity)) {
-            std::string newName = NextDuplicateName(world, name.Name.empty() ? "Object" : name.Name);
-            entt::entity newEntity = world.CreateEmptyEntity(newPos, transform.RotationEuler, transform.Scale, newName);
-            if (const auto* light = world.Registry.try_get<LightComponent>(srcEntity)) {
-                world.Registry.emplace<LightComponent>(newEntity, *light);
-            }
-            if (const auto* tag = world.Registry.try_get<TagComponent>(srcEntity)) {
-                world.Registry.emplace<TagComponent>(newEntity, *tag);
-            }
-            if (world.Registry.all_of<StaticTag>(srcEntity)) world.Registry.emplace<StaticTag>(newEntity);
-            if (world.Registry.all_of<InactiveTag>(srcEntity)) world.Registry.emplace<InactiveTag>(newEntity);
-            created.push_back(newEntity);
-            continue;
+    for (entt::entity e : created) {
+        const auto* hier = world.Registry.try_get<HierarchyComponent>(e);
+        bool isRoot = !hier || hier->Parent == entt::null;
+        if (!isRoot) continue;
+        if (auto* transform = world.Registry.try_get<TransformComponent>(e)) {
+            transform->Position += glm::vec3(1.0f, 0.0f, 1.0f);
         }
-
-        const auto& renderable = world.Registry.get<RenderableComponent>(srcEntity);
-
-        if (world.Registry.all_of<LevelGeometryTag>(srcEntity)) {
-            std::string baseName = NextDuplicateName(world, name.Name.empty() ? "Box" : name.Name);
-            glm::vec3 color = renderable.ModelRef->MeshMaterial(0).BaseColor;
-            created.push_back(world.CreateBox(newPos, transform.Scale, color, transform.RotationEuler, baseName));
-        } else {
-            // Its own Model instance (own material-override/animation state), not the same
-            // shared_ptr as the original — otherwise recoloring one copy would recolor every
-            // duplicate made from it, since Model (not the entity) owns the material override.
-            auto clonedModel = assets.CloneModel(renderable.ModelRef);
-            if (auto srcMat = renderable.ModelRef->MaterialOverride()) {
-                clonedModel->SetMaterialOverride(std::make_shared<Material>(*srcMat));
-            }
-            std::string newName = NextDuplicateName(world, name.Name.empty() ? "Model" : name.Name);
-            entt::entity newEntity = world.CreateModelEntity(clonedModel, newPos, transform.RotationEuler, transform.Scale, newName);
-            if (const auto* audio = world.Registry.try_get<AudioSourceComponent>(srcEntity)) {
-                world.Registry.emplace<AudioSourceComponent>(newEntity, audio->SoundPath);
-            }
-            created.push_back(newEntity);
+        if (auto* name = world.Registry.try_get<NameComponent>(e)) {
+            existingNames.erase(name->Name);
+            name->Name = NextDuplicateName(existingNames, name->Name.empty() ? "Object" : name->Name);
         }
     }
 
