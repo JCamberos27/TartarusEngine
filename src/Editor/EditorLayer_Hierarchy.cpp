@@ -328,9 +328,8 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
     if (ImGui::MenuItem(ICON_FA_CAPSULES "  Capsule")) spawnPrimitive("capsule", "Capsule");
     if (ImGui::MenuItem(ICON_FA_FILTER "  Cone")) spawnPrimitive("cone", "Cone");
     if (ImGui::MenuItem(ICON_FA_MOUNTAIN "  Pyramid")) spawnPrimitive("pyramid", "Pyramid");
-    if (ImGui::MenuItem(ICON_FA_LIFE_RING "  Torus")) spawnPrimitive("torus", "Torus");
+    if (ImGui::MenuItem(ICON_FA_LIFE_RING "  Donut")) spawnPrimitive("donut", "Donut");
     if (ImGui::MenuItem(ICON_FA_SQUARE "  Plane")) spawnPrimitive("plane", "Plane");
-    if (ImGui::MenuItem(ICON_FA_STAIRS "  Wedge")) spawnPrimitive("wedge", "Wedge");
 
     ImGui::SeparatorText("Objects");
     if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Empty")) {

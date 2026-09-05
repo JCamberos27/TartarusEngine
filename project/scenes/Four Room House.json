@@ -1,0 +1,1168 @@
+{
+  "assetFolders": [
+    "Scenes",
+    "Screenshots"
+  ],
+  "assetMeta": [
+    {
+      "displayName": "Default Scene",
+      "path": "C:/Users/jacob/OneDrive/Desktop/TartarusEngine/project/scenes/Untitled 2.json"
+    },
+    {
+      "displayName": "Red Blocks",
+      "path": "C:/Users/jacob/OneDrive/Desktop/TartarusEngine/project/scenes/Untitled.json"
+    }
+  ],
+  "boxes": [
+    {
+      "center": [
+        0.0,
+        1.399999976158142,
+        -4.800000190734863
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.6600000262260437,
+        0.6200000047683716,
+        0.5400000214576721
+      ],
+      "id": 0,
+      "name": "Kitchen-Living Partition South",
+      "order": 4,
+      "parentId": 22,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.25,
+        2.799999952316284,
+        2.4000000953674316
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        1.399999976158142,
+        -1.2000000476837158
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.6600000262260437,
+        0.6200000047683716,
+        0.5400000214576721
+      ],
+      "id": 1,
+      "name": "Kitchen-Living Partition North",
+      "order": 5,
+      "parentId": 22,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.25,
+        2.799999952316284,
+        2.4000000953674316
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        2.549999952316284,
+        -3.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.6600000262260437,
+        0.6200000047683716,
+        0.5400000214576721
+      ],
+      "id": 2,
+      "name": "Kitchen-Living Door Lintel",
+      "order": 6,
+      "parentId": 22,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.25,
+        0.5,
+        1.2000000476837158
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        1.399999976158142,
+        1.2000000476837158
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.6000000238418579,
+        0.5699999928474426,
+        0.5099999904632568
+      ],
+      "id": 3,
+      "name": "Bathroom-Bedroom Partition South",
+      "order": 7,
+      "parentId": 24,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.25,
+        2.799999952316284,
+        2.4000000953674316
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        1.399999976158142,
+        4.800000190734863
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.6000000238418579,
+        0.5699999928474426,
+        0.5099999904632568
+      ],
+      "id": 4,
+      "name": "Bathroom-Bedroom Partition North",
+      "order": 8,
+      "parentId": 24,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.25,
+        2.799999952316284,
+        2.4000000953674316
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        2.549999952316284,
+        3.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.6000000238418579,
+        0.5699999928474426,
+        0.5099999904632568
+      ],
+      "id": 5,
+      "name": "Bathroom-Bedroom Door Lintel",
+      "order": 9,
+      "parentId": 24,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.25,
+        0.5,
+        1.2000000476837158
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -4.800000190734863,
+        1.399999976158142,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.5799999833106995,
+        0.6299999952316284,
+        0.6700000166893005
+      ],
+      "id": 6,
+      "name": "Kitchen-Bathroom Partition West",
+      "order": 10,
+      "parentId": 22,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.4000000953674316,
+        2.799999952316284,
+        0.25
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -1.2000000476837158,
+        1.399999976158142,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.5799999833106995,
+        0.6299999952316284,
+        0.6700000166893005
+      ],
+      "id": 7,
+      "name": "Kitchen-Bathroom Partition East",
+      "order": 11,
+      "parentId": 22,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.4000000953674316,
+        2.799999952316284,
+        0.25
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -3.0,
+        2.549999952316284,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.5799999833106995,
+        0.6299999952316284,
+        0.6700000166893005
+      ],
+      "id": 8,
+      "name": "Kitchen-Bathroom Door Lintel",
+      "order": 12,
+      "parentId": 22,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        1.2000000476837158,
+        0.5,
+        0.25
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        1.2000000476837158,
+        1.399999976158142,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.699999988079071,
+        0.6200000047683716,
+        0.5799999833106995
+      ],
+      "id": 9,
+      "name": "Living-Bedroom Partition West",
+      "order": 13,
+      "parentId": 23,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.4000000953674316,
+        2.799999952316284,
+        0.25
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        4.800000190734863,
+        1.399999976158142,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.699999988079071,
+        0.6200000047683716,
+        0.5799999833106995
+      ],
+      "id": 10,
+      "name": "Living-Bedroom Partition East",
+      "order": 14,
+      "parentId": 23,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.4000000953674316,
+        2.799999952316284,
+        0.25
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        3.0,
+        2.549999952316284,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.699999988079071,
+        0.6200000047683716,
+        0.5799999833106995
+      ],
+      "id": 11,
+      "name": "Living-Bedroom Door Lintel",
+      "order": 15,
+      "parentId": 23,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        1.2000000476837158,
+        0.5,
+        0.25
+      ],
+      "static": true
+    }
+  ],
+  "empties": [
+    {
+      "id": 22,
+      "name": "Kitchen",
+      "order": 24,
+      "parentId": 26,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 23,
+      "name": "Living Room",
+      "order": 25,
+      "parentId": 26,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 24,
+      "name": "Bathroom",
+      "order": 26,
+      "parentId": 26,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 25,
+      "name": "Bedroom",
+      "order": 27,
+      "parentId": 26,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 26,
+      "name": "Four Room House",
+      "order": 30,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 27,
+      "light": {
+        "angularSize": 2.0,
+        "castShadows": true,
+        "color": [
+          1.0,
+          1.0,
+          0.0
+        ],
+        "colorTempK": 0.0,
+        "intensity": 7.5,
+        "kind": "point",
+        "range": 7.5,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.0,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 0.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "Kitchen Point Light",
+      "order": 31,
+      "parentId": 22,
+      "position": [
+        -3.0,
+        2.450000047683716,
+        -3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 28,
+      "light": {
+        "angularSize": 2.0,
+        "castShadows": true,
+        "color": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "colorTempK": 0.0,
+        "intensity": 7.5,
+        "kind": "point",
+        "range": 7.5,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.0,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 0.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "Living Room Point Light",
+      "order": 32,
+      "parentId": 23,
+      "position": [
+        3.0,
+        2.450000047683716,
+        -3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 29,
+      "light": {
+        "angularSize": 2.0,
+        "castShadows": true,
+        "color": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "colorTempK": 0.0,
+        "intensity": 7.5,
+        "kind": "point",
+        "range": 7.5,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.0,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 0.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "Bathroom Point Light",
+      "order": 33,
+      "parentId": 24,
+      "position": [
+        -3.0,
+        2.450000047683716,
+        3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 30,
+      "light": {
+        "angularSize": 2.0,
+        "castShadows": true,
+        "color": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "colorTempK": 0.0,
+        "intensity": 7.5,
+        "kind": "point",
+        "range": 7.5,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.0,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 0.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "Bedroom Point Light",
+      "order": 34,
+      "parentId": 25,
+      "position": [
+        3.0,
+        2.450000047683716,
+        3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "libraryModels": [],
+  "libraryPrefabs": [],
+  "librarySounds": [],
+  "libraryTextures": [],
+  "models": [
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 12,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.5882353186607361,
+          0.5882353186607361,
+          0.5882353186607361
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 1.0,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "Kitchen Floor",
+      "order": 16,
+      "parentId": -1,
+      "path": "primitive://plane#10",
+      "position": [
+        -3.0,
+        0.0,
+        -3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        6.0,
+        1.0,
+        6.0
+      ],
+      "soundPath": "",
+      "static": true
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 13,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.5882353186607361,
+          0.5882353186607361,
+          0.5882353186607361
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 1.0,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "Living Room Floor",
+      "order": 17,
+      "parentId": -1,
+      "path": "primitive://plane#11",
+      "position": [
+        3.0,
+        0.0,
+        -3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        6.0,
+        1.0,
+        6.0
+      ],
+      "soundPath": "",
+      "static": true
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 14,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.5882353186607361,
+          0.5882353186607361,
+          0.5882353186607361
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 1.0,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "Bathroom Floor",
+      "order": 18,
+      "parentId": -1,
+      "path": "primitive://plane#12",
+      "position": [
+        -3.0,
+        0.0,
+        3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        6.0,
+        1.0,
+        6.0
+      ],
+      "soundPath": "",
+      "static": true
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 15,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.5882353186607361,
+          0.5882353186607361,
+          0.5882353186607361
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 1.0,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "Bedroom Floor",
+      "order": 19,
+      "parentId": -1,
+      "path": "primitive://plane#13",
+      "position": [
+        3.0,
+        0.0,
+        3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        6.0,
+        1.0,
+        6.0
+      ],
+      "soundPath": "",
+      "static": true
+    },
+    {
+      "id": 16,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.5882353186607361,
+          0.5882353186607361,
+          0.5882353186607361
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 1.0,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "Exterior Wall North (Plane)",
+      "order": 20,
+      "parentId": -1,
+      "path": "primitive://plane#14",
+      "position": [
+        0.0,
+        1.399999976158142,
+        6.0
+      ],
+      "rotation": [
+        -90.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        12.0,
+        1.0,
+        2.799999952316284
+      ],
+      "soundPath": "",
+      "static": true
+    },
+    {
+      "id": 17,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.5882353186607361,
+          0.5882353186607361,
+          0.5882353186607361
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 1.0,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "Exterior Wall South (Plane)",
+      "order": 21,
+      "parentId": -1,
+      "path": "primitive://plane#15",
+      "position": [
+        0.0,
+        1.399999976158142,
+        -6.0
+      ],
+      "rotation": [
+        90.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        12.0,
+        1.0,
+        2.799999952316284
+      ],
+      "soundPath": "",
+      "static": true
+    },
+    {
+      "id": 18,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.5882353186607361,
+          0.5882353186607361,
+          0.5882353186607361
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 1.0,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "Exterior Wall West (Plane)",
+      "order": 22,
+      "parentId": -1,
+      "path": "primitive://plane#16",
+      "position": [
+        -6.0,
+        1.399999976158142,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -90.0
+      ],
+      "scale": [
+        2.799999952316284,
+        1.0,
+        12.0
+      ],
+      "soundPath": "",
+      "static": true
+    },
+    {
+      "id": 19,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.5882353186607361,
+          0.5882353186607361,
+          0.5882353186607361
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 1.0,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "Exterior Wall East (Plane)",
+      "order": 23,
+      "parentId": -1,
+      "path": "primitive://plane#17",
+      "position": [
+        6.0,
+        1.399999976158142,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        90.0
+      ],
+      "scale": [
+        2.799999952316284,
+        1.0,
+        12.0
+      ],
+      "soundPath": "",
+      "static": true
+    },
+    {
+      "id": 20,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.5882353186607361,
+          0.5882353186607361,
+          0.5882353186607361
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 1.0,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "Ceiling (Plane)",
+      "order": 29,
+      "parentId": -1,
+      "path": "primitive://plane#18",
+      "position": [
+        0.0,
+        2.799999952316284,
+        0.0
+      ],
+      "rotation": [
+        180.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        12.0,
+        1.0,
+        12.0
+      ],
+      "soundPath": "",
+      "static": true
+    },
+    {
+      "id": 21,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.5882353186607361,
+          0.5882353186607361,
+          0.5882353186607361
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 1.0,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "Cube",
+      "order": 71,
+      "parentId": -1,
+      "path": "primitive://cube#19",
+      "position": [
+        3.0,
+        2.0,
+        3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.25,
+        0.25,
+        0.25
+      ],
+      "soundPath": ""
+    }
+  ],
+  "skyHorizonColor": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "skyZenithColor": [
+    0.0,
+    0.0,
+    0.0
+  ]
+}

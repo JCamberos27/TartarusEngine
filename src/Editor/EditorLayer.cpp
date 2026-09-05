@@ -194,10 +194,21 @@ void EditorLayer::Init(GLFWwindow* window) {
         gz.Colors[ImGuizmo::DIRECTION_X] = ImVec4(0.86f, 0.24f, 0.28f, 1.00f);
         gz.Colors[ImGuizmo::DIRECTION_Y] = ImVec4(0.35f, 0.78f, 0.30f, 1.00f);
         gz.Colors[ImGuizmo::DIRECTION_Z] = ImVec4(0.28f, 0.52f, 0.92f, 1.00f);
-        gz.Colors[ImGuizmo::PLANE_X] = ImVec4(0.95f, 0.78f, 0.25f, 0.42f);
-        gz.Colors[ImGuizmo::PLANE_Y] = ImVec4(0.95f, 0.78f, 0.25f, 0.42f);
-        gz.Colors[ImGuizmo::PLANE_Z] = ImVec4(0.95f, 0.78f, 0.25f, 0.42f);
+        // Keep plane drag targets functional but unfilled: opaque/dark squares beside the
+        // arrows made the compact gizmo look boxy and obscured nearby level geometry.
+        gz.Colors[ImGuizmo::PLANE_X] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
+        gz.Colors[ImGuizmo::PLANE_Y] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
+        gz.Colors[ImGuizmo::PLANE_Z] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
         gz.Colors[ImGuizmo::SELECTION] = ImVec4(1.00f, 0.55f, 0.10f, 0.60f);
+        // A compact, sturdy manipulator is easier to read against level geometry than
+        // ImGuizmo's thin default strokes. These are screen-space values, so follow the UI DPI.
+        gz.TranslationLineThickness = 7.0f * m_UIScale;
+        gz.TranslationLineArrowSize = 11.0f * m_UIScale;
+        gz.ScaleLineThickness = 6.0f * m_UIScale;
+        gz.ScaleLineCircleSize = 8.0f * m_UIScale;
+        gz.CenterCircleSize = 9.0f * m_UIScale;
+        gz.RotationLineThickness = 4.5f * m_UIScale;
+        gz.RotationOuterLineThickness = 5.5f * m_UIScale;
     }
 
     // UI text font. Loaded straight from the Windows system font directory rather than
