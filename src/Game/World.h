@@ -1,6 +1,8 @@
 #pragma once
 #include <string>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 #include <glm/glm.hpp>
 #include <entt/entt.hpp>
 #include "AABB.h"
@@ -55,6 +57,27 @@ public:
     // TransformComponent), matching every entity's behavior before parenting existed.
     glm::mat4 ComposeWorldTransform(entt::entity entity) const;
 
+    // --- Per-frame world-transform cache (#173) -------------------------------------------
+    // ComposeWorldTransform re-derives the whole parent chain on every call, so a frame that
+    // asks for the same entity's world matrix from 4 cascades + N spots + 6 point faces + 2
+    // viewport draws pays for that chain that many times. Worse, it made "world transform" the
+    // expensive path, which is why several editor features reach for TransformComponent (the
+    // LOCAL transform) and quietly break for parented entities (#224, #185).
+    //
+    // RebuildWorldTransformCache() computes every entity's world matrix ONCE, top-down (a
+    // child's world = its parent's already-cached world * its own local), and
+    // GetCachedWorldTransform() then hands it back for free. Call the rebuild once per frame
+    // AFTER that frame's transform edits and BEFORE the shadow/render passes; the whole cache
+    // is thrown away and rebuilt each time, so creation, destruction and re-parenting can never
+    // leave a stale or dangling entry.
+    void RebuildWorldTransformCache();
+
+    // World matrix of `entity` from the cache built by the last RebuildWorldTransformCache().
+    // Falls back to ComposeWorldTransform for anything the cache doesn't know about — an entity
+    // spawned after the rebuild, or a caller running before the first one — so it is always
+    // correct, never merely fast.
+    glm::mat4 GetCachedWorldTransform(entt::entity entity) const;
+
     // Re-parents `child` under `parent` (or detaches it if `parent` is entt::null), converting
     // TransformComponent in place so the entity doesn't visually jump: its world-space transform
     // is preserved, only the frame it's expressed in changes. Fails (returns false, no change)
@@ -82,6 +105,7 @@ public:
     void EnsureNextOrderAtLeast(int value) { if (value > m_NextOrder) m_NextOrder = value; }
 
 private:
+    std::unordered_map<entt::entity, glm::mat4> m_WorldTransformCache;
     int m_NextPrimitiveId = 0;
     int m_NextOrder = 0;
     // Level-geometry entities own an unshared cube Model (never looked up by path elsewhere,
