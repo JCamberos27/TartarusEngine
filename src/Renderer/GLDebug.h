@@ -18,4 +18,17 @@ namespace GLDebug {
 // Safe to call when disabled — it just returns.
 void Init();
 
+// True once Init() has actually wired up the callback (Debug build, or TARTARUS_GL_DEBUG=1,
+// AND the context exposes KHR_debug). False means ErrorCount() below can never move — there's
+// no debug output to count errors from.
+bool IsEnabled();
+
+// Running count of GL_DEBUG_TYPE_ERROR and GL_DEBUG_SEVERITY_HIGH messages seen since startup
+// (or since the last ResetErrorCount()). Used by the --smoke-test harness (main.cpp) to detect
+// whether a scene's load+render introduced any NEW driver-reported errors: it snapshots this
+// before a scene and diffs against it after N frames, rather than needing an absolute-zero
+// baseline across the whole run.
+int ErrorCount();
+void ResetErrorCount();
+
 } // namespace GLDebug
