@@ -25,8 +25,17 @@ public:
     // frame; main.cpp does.
     static void Update();
 
-    // Loads (and caches) a sound resource from disk. Returns false on failure.
+    // Decodes a sound fully into memory up front (#202) so the first Play() of it has no
+    // disk-read/decode hitch — worth it for short SFX/UI sounds, not for music/ambience (which
+    // should keep streaming; simply never call Load() on those). Idempotent: a path already
+    // preloaded returns true immediately without re-decoding. Returns false if the file doesn't
+    // exist or can't be decoded.
     static bool Load(const std::string& path);
+    // Frees one path's preloaded PCM data (or all of them). Safe to call while a Play()'d
+    // instance of that sound is still audible — each Play() takes its own private copy of the
+    // decoded data up front, so an in-flight voice never depends on the cache after it starts.
+    static bool Unload(const std::string& path);
+    static void UnloadAll();
 
     // Starts a voice and returns its handle (InvalidHandle if the engine is down or the file
     // failed to load). Voices start unspatialized — full volume regardless of listener position,
