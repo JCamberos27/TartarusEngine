@@ -812,8 +812,16 @@ int main() {
             // Simulate the player whenever playing. When the game doesn't have input (in-panel
             // play, not yet clicked in), the body still falls/rests — it just doesn't walk or
             // look (see Player::Update's readInput).
+            // Reap voices that have finished so repeated Play/Stop cycles don't accumulate
+            // ma_sound objects and open file handles (#200).
+            AudioEngine::Update();
+
             if (playing) {
                 player.Update(dt, world, window.Handle(), gameHasInput);
+                // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
+                // against wherever the player is looking from, updated after the move so the
+                // listener matches the frame that's about to be rendered.
+                AudioEngine::SetListener(player.Cam.Position, player.Cam.Front(), player.Cam.Up());
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
                 UpdateAnimators(world, dt);
