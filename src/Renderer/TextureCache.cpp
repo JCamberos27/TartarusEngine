@@ -11,7 +11,9 @@ namespace {
 
 constexpr char kMagic[4] = {'T', 'T', 'E', 'X'};
 // Bump to invalidate every existing entry after a format or decode-behaviour change.
-constexpr uint32_t kVersion = 1;
+// v2 (#207): downsample switched from nearest-neighbor to a box filter, so cached pixels baked
+// with the old point-sample must be discarded and re-baked.
+constexpr uint32_t kVersion = 2;
 
 std::string CacheDir() {
     static const std::string dir = ProjectPaths::Resolve("Library/Textures");
