@@ -1190,6 +1190,11 @@ void EditorLayer::Shutdown() {
     m_ModelThumbnails.clear();
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
 
+    // Safety net: save preferences on clean shutdown, in case a future control forgets its own
+    // save call. This is not a replacement for per-control saves; it's insurance against silent
+    // data loss if someone adds a new preference and forgets to wire it up.
+    EditorSettings::Save();
+
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
@@ -1536,8 +1541,9 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         float uiScale = prefs.UiScaleOverride <= 0.0f ? m_UIScale : prefs.UiScaleOverride;
         ImGui::SetNextItemWidth(kw);
         bool isAuto = prefs.UiScaleOverride <= 0.0f;
-        if (EditorUI::SliderFloat("UI scale", &uiScale, 0.70f, 2.50f,
-                               isAuto ? "Auto (%.2f)" : "%.2f")) {
+        EditorUI::SliderFloat("UI scale", &uiScale, 0.70f, 2.50f,
+                           isAuto ? "Auto (%.2f)" : "%.2f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
             prefs.UiScaleOverride = uiScale < 0.75f ? 0.0f : uiScale;
             EditorSettings::Save();
         }
@@ -1574,9 +1580,11 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         if (!prefs.ShowLightGizmos) ImGui::BeginDisabled();
         if (ImGui::Checkbox("Only for the selected light", &prefs.LightGizmoSelectedOnly)) EditorSettings::Save();
         ImGui::SetNextItemWidth(kw);
-        if (EditorUI::SliderFloat("Opacity", &prefs.LightGizmoOpacity, 0.0f, 1.0f, "%.2f")) EditorSettings::Save();
+        EditorUI::SliderFloat("Opacity", &prefs.LightGizmoOpacity, 0.0f, 1.0f, "%.2f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         ImGui::SetNextItemWidth(kw);
-        if (EditorUI::SliderFloat("Arrow / disc scale", &prefs.LightGizmoScale, 0.25f, 3.0f, "%.2fx")) EditorSettings::Save();
+        EditorUI::SliderFloat("Arrow / disc scale", &prefs.LightGizmoScale, 0.25f, 3.0f, "%.2fx");
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Screen size of the parts that aren't tied to a world measurement (the directional arrow, the sun disc).");
         if (!prefs.ShowLightGizmos) ImGui::EndDisabled();
@@ -1587,7 +1595,8 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             EditorUI::SetTooltip("The spinning TE monogram in the viewport's bottom-left corner.");
         if (!prefs.EngineMarkEnabled) ImGui::BeginDisabled();
         ImGui::SetNextItemWidth(kw);
-        if (EditorUI::SliderFloat("Spin speed", &prefs.EngineMarkSpinSpeed, 0.0f, 4.0f, "%.2f rad/s")) EditorSettings::Save();
+        EditorUI::SliderFloat("Spin speed", &prefs.EngineMarkSpinSpeed, 0.0f, 4.0f, "%.2f rad/s");
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("How fast the monogram turns. 0 parks it; the default 0.52 is one revolution every ~12 s.");
         {
@@ -1612,7 +1621,8 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
     case 2: // Grid & Snapping
         ImGui::SeparatorText("Grid");
         ImGui::SetNextItemWidth(kw);
-        if (EditorUI::SliderFloat("Opacity", &prefs.GridOpacity, 0.0f, 1.0f, "%.2f")) EditorSettings::Save();
+        EditorUI::SliderFloat("Opacity", &prefs.GridOpacity, 0.0f, 1.0f, "%.2f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Master strength of the grid lines. The grid also fades out on its own as the view tilts toward the horizon.");
         ImGui::SetNextItemWidth(kw);
@@ -1638,7 +1648,8 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             EditorUI::SetTooltip("The coloured rules through the origin: X (red) and Z (blue) on the ground, and a green Y line straight up.");
         if (!prefs.GridShowAxisLines) ImGui::BeginDisabled();
         ImGui::SetNextItemWidth(kw);
-        if (EditorUI::SliderFloat("Axis line thickness", &prefs.GridAxisThickness, 0.5f, 4.0f, "%.1f px")) EditorSettings::Save();
+        EditorUI::SliderFloat("Axis line thickness", &prefs.GridAxisThickness, 0.5f, 4.0f, "%.1f px");
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Screen-pixel width of the red / green / blue axis lines.");
         if (!prefs.GridShowAxisLines) ImGui::EndDisabled();
 
