@@ -5,14 +5,13 @@
 // AssetLibrary (see AssetLibrary::TextureSettings/SetTextureSettings) and applied whenever a
 // Texture is constructed or re-imported — see Texture::Reimport.
 struct TextureImportSettings {
-    enum class Type { Default, NormalMap, Sprite2D, Cubemap };
+    // Cubemap import doesn't exist in this engine (#198) — dropped rather than shipping an enum
+    // value nothing implements. Drives real behavior in Texture::Reimport: NormalMap forces
+    // IsSRGB off (normal data is never color-encoded), Sprite2D clamps to edge with no mipmaps.
+    enum class Type { Default, NormalMap, Sprite2D };
     enum class Filter { Point, Bilinear, Trilinear };
     enum class Wrap { Repeat, ClampToEdge };
 
-    // Informational for now — nothing downstream (Model's material extraction, the Inspector's
-    // map slots) branches on it yet. Kept here rather than left out because it's the field the
-    // rest of this struct's meaning depends on (e.g. sRGB should only ever be true for a color
-    // texture, never a normal/mask map) — see AssetImporterInspector's tooltip on this field.
     Type TextureType = Type::Default;
 
     bool GenerateMipmaps = true;
@@ -20,10 +19,6 @@ struct TextureImportSettings {
     // instead of raw bytes — correct for an authored color/albedo texture, wrong for a data
     // map (normal, mask, roughness) where the numbers ARE the linear values already.
     bool IsSRGB = true;
-    // Kept for parity with Unity's importer and persisted with the rest of the settings, but
-    // this engine never evicts CPU pixel data after upload in a way this flag would toggle —
-    // it has no effect on behavior today. Not wired to anything rather than faked.
-    bool IsReadable = false;
     Filter FilterMode = Filter::Bilinear;
     Wrap WrapMode = Wrap::Repeat;
     // Downscales on import (nearest-neighbor) if the source exceeds this in either dimension,

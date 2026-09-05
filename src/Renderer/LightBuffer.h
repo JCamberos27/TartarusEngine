@@ -33,10 +33,12 @@ public:
     LightBuffer(const LightBuffer&) = delete;
     LightBuffer& operator=(const LightBuffer&) = delete;
 
-    void Clear() { m_Lights.clear(); m_DirectionalCount = 0; }
+    void Clear() { m_Lights.clear(); m_DirectionalCount = 0; m_Overflowed = false; }
 
     // `colorLinear` is the light's colour, `intensity` its scalar strength — stored pre-multiplied,
-    // matching what the old shader received. Silently drops lights past kMaxLights.
+    // matching what the old shader received. Drops lights past kMaxLights rather than crashing or
+    // corrupting the buffer — but that drop is no longer silent: it flips m_Overflowed so the
+    // caller can warn (#204).
     void AddDirectional(const glm::vec3& dirWorld, const glm::vec3& colorLinear, float intensity);
     void AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLinear, float intensity, float range,
                   int shadowSlot = -1);
@@ -50,6 +52,12 @@ public:
 
     int Count() const { return (int)m_Lights.size(); }
 
+    // True if an Add* call this frame (since the last Clear()) was refused because the buffer was
+    // already at kMaxLights (#204). Also settable by a caller that stops enumerating scene lights
+    // itself once the buffer reports full, so entities it never got to are still counted as a drop.
+    bool Overflowed() const { return m_Overflowed; }
+    void MarkOverflowed() { m_Overflowed = true; }
+
 private:
     struct GpuLight {
         glm::vec4 PositionType; // xyz = world pos (point/spot); w = Type
@@ -60,6 +68,7 @@ private:
 
     std::vector<GpuLight> m_Lights;
     int m_DirectionalCount = 0; // how many of m_Lights' front entries are directional (#188)
+    bool m_Overflowed = false; // set when an Add* was dropped for being past kMaxLights (#204)
     unsigned int m_Ssbo = 0;
 
     void EnsureCreated();
