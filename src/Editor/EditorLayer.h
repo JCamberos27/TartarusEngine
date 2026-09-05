@@ -27,6 +27,19 @@ class Framebuffer;
 // handles for non-uniform scaling, in one combined gizmo (ImGuizmo's TRANSLATE | BOUNDS).
 enum class GizmoOp { Translate, Rotate, Scale, Rect };
 
+// Async (PBO-backed) state for one adaptive-contrast sampling call site (#178). SampleTextureLuminance
+// ping-pongs two pixel-pack buffer objects: each call kicks off a non-blocking glReadPixels into
+// one PBO and, in the same call, maps+consumes whatever the OTHER PBO was loaded with by the
+// previous kickoff (one throttled ~100ms tick earlier) — so the GPU is never stalled waiting for
+// the readback. Each HUD element that samples independently (Stats HUD, History HUD, status bar,
+// nav-gizmo cluster, Play/Stop button) needs its own instance so their reads don't clobber one
+// another.
+struct AsyncLuminanceReadback {
+    unsigned int Pbo[2] = { 0, 0 }; // fixed-size (kMaxLumPatch^2 * 4 bytes) buffers, DSA-mapped
+    int Pending[2] = { 0, 0 };      // pixel count kicked into that slot and not yet consumed (0 = none)
+    int Next = 0;                  // slot to write into on the next call; the other slot is read
+};
+
 // In-game editor overlay (Dear ImGui + ImGuizmo): import assets, place/inspect
 // entities, manipulate them with viewport gizmos. Toggle with F1; gameplay pauses
 // while the editor is open.
@@ -79,12 +92,14 @@ public:
         m_GameViewTex = colorTex; m_GameViewTexW = texW; m_GameViewTexH = texH;
     }
     // Average luminance (0..1) of this frame's rendered Scene viewport inside a screen-space box
-    // of `boxPx` centered at `centerScreen`; -1 when it can't be sampled (no scene texture yet,
-    // box entirely outside the viewport). Throttle calls yourself — it does a GPU->CPU readback.
-    float SampleSceneLuminance(ImVec2 centerScreen, float boxPx);
+    // of `boxPx` centered at `centerScreen`; -1 when no result is available yet (no scene texture,
+    // box entirely outside the viewport, or the async readback hasn't landed yet — see
+    // AsyncLuminanceReadback below). Throttle calls yourself — it still does a GPU->CPU sync, just
+    // a frame or two later and without stalling the pipeline.
+    float SampleSceneLuminance(AsyncLuminanceReadback& rb, ImVec2 centerScreen, float boxPx);
     // General form: sample `colorTex` (texW x texH) as if it were displayed in screen rect
     // imgPos..imgPos+imgSize, in a screen-space box of `boxPx` at `centerScreen`. -1 if unusable.
-    float SampleTextureLuminance(unsigned int colorTex, int texW, int texH,
+    float SampleTextureLuminance(AsyncLuminanceReadback& rb, unsigned int colorTex, int texW, int texH,
                                  ImVec2 imgPos, ImVec2 imgSize, ImVec2 centerScreen, float boxPx);
     bool ConsumePlayStopRequest() {
         bool requested = m_PlayStopRequested;
@@ -647,28 +662,33 @@ private:
     float m_PlayBtnContrastLum = 1.0f;
     float m_PlayBtnContrastTarget = 1.0f;
     float m_PlayBtnSampleAccum = 0.0f;
+    AsyncLuminanceReadback m_PlayBtnReadback; // ping-ponged PBOs backing the sample above (#178)
     // Same again for the top-right nav-gizmo cluster (dolly / pan tool buttons + the Persp/axis
     // label): its own sample because the corner it lives in can differ in brightness from the
     // top-center where the Play button sits.
     float m_NavGizmoContrastLum = 1.0f;
     float m_NavGizmoContrastTarget = 1.0f;
     float m_NavGizmoSampleAccum = 0.0f;
+    AsyncLuminanceReadback m_NavGizmoReadback;
     // ...and for the bottom-of-viewport status readout, now a bare adaptive-tinted line of text
     // with no strip behind it.
     float m_StatusBarContrastLum = 1.0f;
     float m_StatusBarContrastTarget = 1.0f;
     float m_StatusBarSampleAccum = 0.0f;
+    AsyncLuminanceReadback m_StatusBarReadback;
     // ...and for the two transparent viewport HUDs — Statistics (top-left) and History (bottom-
     // right). Each reads the patch of scene directly behind it, so they tint independently.
     float m_StatsHudContrastLum = 1.0f;
     float m_StatsHudContrastTarget = 1.0f;
     float m_StatsHudSampleAccum = 0.0f;
+    AsyncLuminanceReadback m_StatsHudReadback;
     // Set each frame by DrawStatsPanel: true when the (capped) Statistics HUD reaches far enough
     // down the left edge to collide with the corner monogram — the mark is skipped while so.
     bool m_HideEngineMarkForStats = false;
     float m_HistoryHudContrastLum = 1.0f;
     float m_HistoryHudContrastTarget = 1.0f;
     float m_HistoryHudSampleAccum = 0.0f;
+    AsyncLuminanceReadback m_HistoryHudReadback;
     // Live Game-view rect + texture, pushed in each frame by main.cpp (zero size = none). Used by
     // DrawPlayStopButton to place the Stop/Fullscreen control over the game viewport and tint it.
     ImVec2 m_GameViewImgPos{0.0f, 0.0f};
@@ -962,7 +982,7 @@ private:
     // push ImGuiCol_Text + ImGuiCol_TextDisabled so the readout rides white-on-dark / dark-on-
     // light like the corner mark. Always pushes exactly 2 style colours — caller pops them after
     // its content. Same maths as DrawEngineMark / DrawViewportStatusBar.
-    void PushAdaptiveHudText(ImVec2 centerScreen, float boxPx, float dt,
+    void PushAdaptiveHudText(AsyncLuminanceReadback& rb, ImVec2 centerScreen, float boxPx, float dt,
                              float& easedLum, float& targetLum, float& sampleAccum);
 
     // --- Statistics --------------------------------------------------------------------

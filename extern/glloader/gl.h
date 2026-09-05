@@ -142,6 +142,11 @@
 #define GL_QUERY_RESULT 0x8866
 #define GL_QUERY_RESULT_AVAILABLE 0x8867
 
+// Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
+#define GL_PIXEL_PACK_BUFFER 0x88EB
+#define GL_READ_ONLY 0x88B8
+#define GL_STREAM_READ 0x88E1
+
 typedef char GLchar;
 typedef ptrdiff_t GLsizeiptr;
 typedef ptrdiff_t GLintptr;
@@ -392,6 +397,12 @@ extern PFNGLBEGINQUERYPROC glBeginQuery;
 extern PFNGLENDQUERYPROC glEndQuery;
 extern PFNGLGETQUERYOBJECTIVPROC glGetQueryObjectiv;
 extern PFNGLGETQUERYOBJECTUI64VPROC glGetQueryObjectui64v;
+
+// Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
+typedef void* (__stdcall* PFNGLMAPNAMEDBUFFERPROC)(GLuint, GLenum);
+typedef GLboolean (__stdcall* PFNGLUNMAPNAMEDBUFFERPROC)(GLuint);
+extern PFNGLMAPNAMEDBUFFERPROC glMapNamedBuffer;
+extern PFNGLUNMAPNAMEDBUFFERPROC glUnmapNamedBuffer;
 
 // Call once after a GL context is current (e.g. right after glfwMakeContextCurrent).
 bool GLLoader_Init();
