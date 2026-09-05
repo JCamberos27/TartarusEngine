@@ -2369,12 +2369,26 @@ void EditorLayer::FrameSceneBounds(World& world, Camera& editorCamera) {
     if (!ComputeSceneBounds(world, mn, mx)) return;
     glm::vec3 center = (mn + mx) * 0.5f;
     float radius = std::max(glm::length(mx - mn) * 0.5f, 0.5f);
-    float distance = (radius / std::sin(glm::radians(editorCamera.Fov) * 0.5f)) * 1.35f;
-    glm::vec3 target = center - editorCamera.Front() * distance;
+    float halfFov = glm::radians(editorCamera.Fov) * 0.5f;
+    float distance = (radius / std::sin(halfFov)) * 1.35f;
+    glm::vec3 targetPos = center - editorCamera.Front() * distance;
     // Last line of defence: a bounds value that still went non-finite (huge scene, overflow)
     // must not strand the camera at inf/NaN — leave it where it is instead.
-    if (!std::isfinite(target.x) || !std::isfinite(target.y) || !std::isfinite(target.z)) return;
-    editorCamera.Position = target;
+    if (!std::isfinite(targetPos.x) || !std::isfinite(targetPos.y) || !std::isfinite(targetPos.z)) return;
+
+    // Glide there rather than teleport — same eased transition FocusOnSelection uses.
+    m_ViewTransition.Active = true;
+    m_ViewTransition.T = 0.0f;
+    m_ViewTransition.FromPos = editorCamera.Position;
+    m_ViewTransition.FromYaw = editorCamera.Yaw;
+    m_ViewTransition.FromPitch = editorCamera.Pitch;
+    m_ViewTransition.FromOrthoHalfHeight = editorCamera.OrthoHalfHeight;
+    m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
+    m_ViewTransition.ToPos = targetPos;
+    m_ViewTransition.ToYaw = editorCamera.Yaw;     // aim unchanged
+    m_ViewTransition.ToPitch = editorCamera.Pitch;
+    m_ViewTransition.ToOrthoHalfHeight = editorCamera.Orthographic
+        ? (distance * std::tan(halfFov)) : editorCamera.OrthoHalfHeight;
 }
 
 void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
@@ -4521,15 +4535,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 FocusOnSelection(world, editorCamera);
             }
             if (ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS "  Frame All")) {
-                glm::vec3 mn, mx;
-                if (ComputeSceneBounds(world, mn, mx)) {
-                    glm::vec3 c = (mn + mx) * 0.5f;
-                    float radius = std::max(glm::length(mx - mn) * 0.5f, 0.5f);
-                    float dist = (radius / std::sin(glm::radians(editorCamera.Fov) * 0.5f)) * 1.35f;
-                    glm::vec3 target = c - editorCamera.Front() * dist;
-                    if (std::isfinite(target.x) && std::isfinite(target.y) && std::isfinite(target.z))
-                        editorCamera.Position = target;
-                }
+                FrameSceneBounds(world, editorCamera);
             }
 
             ImGui::SeparatorText("Shading");
