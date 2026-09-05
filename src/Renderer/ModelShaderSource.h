@@ -1,7 +1,8 @@
 #pragma once
 
-// PBR model shader (metallic-roughness workflow, Cook-Torrance, single directional
-// light + constant ambient term — no IBL/environment reflections). Supports optional
+// PBR model shader (metallic-roughness workflow, Cook-Torrance, clustered punctual lights
+// plus split-sum image-based ambient/reflections from the sky probes in IblProbe.h, #196).
+// Supports optional
 // GPU skinning (up to 4 bone influences/vertex) for imported, animated FBX/glTF assets.
 //
 // Shared (as of the Inspector's model preview) by main.cpp's real scene render AND
@@ -157,6 +158,26 @@ uniform float uPointShadowBias[2];       // per-light x depth bias   (#140 phase
 uniform float uPointShadowNormalBias[2]; // per-light x normal offset
 uniform samplerCubeArrayShadow uPointShadowMap;
 uniform float uPointShadowMapResolution; // known CPU-side (PointShadowMap::Configure) (#190)
+
+// Image-based lighting probes baked from the procedural sky (#196, see IblProbe.h). Explicit
+// binding qualifiers rather than SetInt(): every path that uses this shader (the real scene,
+// ModelPreviewRenderer's offscreen thumbnails, ChannelPreviewRenderer) then agrees on the units
+// without each having to remember to assign them, and units 11-13 can never collide with the
+// sampler2D on unit 0. uIBLEnabled == 0 (the GLSL default for a never-set uniform int) falls
+// back to the old constant ambient, which is exactly what the preview renderers want.
+uniform int uIBLEnabled;
+uniform float uIBLIntensity;             // scene's Ambient intensity control (World::SkyAmbientIntensity)
+uniform float uIBLSpecularMaxLod;        // kSpecularMips - 1
+layout(binding = 11) uniform samplerCube uIrradianceMap;
+layout(binding = 12) uniform samplerCube uPrefilteredMap;
+layout(binding = 13) uniform sampler2D uBrdfLut;
+
+// Fresnel with a roughness term: a rough surface's grazing-angle reflectance must not exceed
+// its own specular colour, which the plain Schlick form (which goes to white at 90 degrees)
+// gets badly wrong for ambient, where every direction is grazing for someone.
+vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
 
 // Set for the editor's Unlit shading mode: skips all lighting and shows flat albedo, so
 // geometry/UV problems read clearly without shading hiding them.
@@ -521,7 +542,32 @@ void main() {
         }
     }
 
-    vec3 ambient = vec3(0.03) * albedo * ao;
+    // Ambient. With IBL probes bound (#196) this is the standard split-sum approximation:
+    // a direction-dependent diffuse term from the cosine-convolved irradiance cube, plus a
+    // specular term from the roughness-mipped prefiltered cube scaled by the BRDF LUT's
+    // (scale, bias) on F0. Purely ADDITIVE with the direct lighting in Lo above - nothing
+    // about the Cook-Torrance path changed, so directly lit surfaces shade exactly as before
+    // and only what used to be a flat vec3(0.03) is different. Without probes (the offscreen
+    // preview renderers, which have no sky to bake from) it falls back to that old constant.
+    vec3 ambient;
+    if (uIBLEnabled == 1) {
+        float NdotV = max(dot(N, V), 0.0);
+        vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+        // Metals have no diffuse; what isn't reflected is what's left to scatter.
+        vec3 kD = (1.0 - F) * (1.0 - metallic);
+
+        vec3 irradiance = texture(uIrradianceMap, N).rgb;
+        vec3 diffuseIBL = irradiance * albedo;
+
+        vec3 R = reflect(-V, N);
+        vec3 prefiltered = textureLod(uPrefilteredMap, R, roughness * uIBLSpecularMaxLod).rgb;
+        vec2 ab = texture(uBrdfLut, vec2(NdotV, roughness)).rg;
+        vec3 specularIBL = prefiltered * (F * ab.x + ab.y);
+
+        ambient = (kD * diffuseIBL + specularIBL) * ao * uIBLIntensity;
+    } else {
+        ambient = vec3(0.03) * albedo * ao;
+    }
     vec3 emissive = emissiveEarly;
 
     vec3 color = ambient + Lo + emissive;

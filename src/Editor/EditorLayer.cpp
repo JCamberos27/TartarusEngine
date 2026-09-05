@@ -1704,6 +1704,14 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ImGui::ColorEdit3("Zenith color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
         if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour straight up.");
+        // #196: the sky now lights the scene (irradiance + reflection probes baked from these
+        // two colours), so this is the ambient control the engine previously had nowhere.
+        ImGui::SetNextItemWidth(kw);
+        EditorUI::SliderFloat("Ambient intensity", &world.SkyAmbientIntensity, 0.0f, 3.0f, "%.2f x");
+        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Ambient Intensity");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip(
+            "Strength of the image-based ambient light and reflections baked from the sky colours "
+            "above. 1.0 is physically consistent; 0 disables environment lighting entirely.");
         break;
 
     case 4: // Auto-Save

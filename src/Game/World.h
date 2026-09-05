@@ -27,6 +27,13 @@ public:
     glm::vec3 SkyHorizonColor{0.0f, 0.0f, 0.0f};
     glm::vec3 SkyZenithColor{0.0f, 0.0f, 0.0f};
 
+    // Multiplier on the image-based ambient term the sky probes produce (#196). 1.0 is the
+    // physically-consistent value: a surface fully open to a sky of radiance L receives L.
+    // Exposed because the sky colours are authored by eye, not measured, so a scene lit mostly
+    // by a bright authored sky can want the ambient pulled back without darkening the sky
+    // itself. Purely a shader uniform — changing it does NOT rebake the probes.
+    float SkyAmbientIntensity{1.0f};
+
     // Creates a level-geometry entity: a fresh (unshared) cube-primitive Model tinted `color`,
     // a Collider, and LevelGeometryTag. `size` becomes the entity's Transform Scale, matching
     // the old WorldBox::Size (the native cube primitive is -0.5..0.5, so scale == world-space
