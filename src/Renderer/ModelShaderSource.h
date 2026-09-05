@@ -95,6 +95,7 @@ struct Light {
 };
 layout(std430, binding = 0) readonly buffer LightBuffer {
     uint uLightCount;
+    uint uDirectionalCount; // directional lights are packed at the front of uLights[] (#188)
     Light uLights[];
 };
 
@@ -124,6 +125,9 @@ uniform float uShadowSoftness;        // PCF kernel radius in shadow-map texels 
 uniform float uSunShadowBias;        // x the sun's texel-proportional depth bias
 uniform float uSunShadowNormalBias;  // x the sun's normal-offset term
 uniform sampler2DArrayShadow uShadowMap;
+// Resolution is already known CPU-side (CascadedShadowMap::Configure) — a uniform instead of a
+// per-fragment textureSize() call (#190).
+uniform float uShadowMapResolution;
 
 // Spot-light shadow maps (#119): one perspective depth layer per casting spot, indexed by the
 // light's Params.y. The map stores LINEAR distance-to-light / far, so the compare below is
@@ -140,6 +144,7 @@ uniform float uSpotShadowBias[4];       // per-light x depth bias   (#140 phase 
 uniform float uSpotShadowNormalBias[4]; // per-light x normal offset
 uniform float uSpotShadowSoftness[4];   // per-light x PCF tap spread
 uniform sampler2DArrayShadow uSpotShadowMap;
+uniform float uSpotShadowMapResolution; // known CPU-side (SpotShadowMap::Configure) (#190)
 
 // Point-light cube shadow maps (#119): one depth cube per casting point light, indexed by the
 // light's Params.y. Also stores linear distance / uPointShadowFar[slot] (the light's Range).
@@ -149,6 +154,7 @@ uniform float uPointShadowFar[2];
 uniform float uPointShadowBias[2];       // per-light x depth bias   (#140 phase 2, default 1.0)
 uniform float uPointShadowNormalBias[2]; // per-light x normal offset
 uniform samplerCubeArrayShadow uPointShadowMap;
+uniform float uPointShadowMapResolution; // known CPU-side (PointShadowMap::Configure) (#190)
 
 // Set for the editor's Unlit shading mode: skips all lighting and shows flat albedo, so
 // geometry/UV problems read clearly without shading hiding them.
@@ -163,6 +169,13 @@ uniform vec3 uBaseColor;
 uniform float uMetallic;
 uniform float uRoughness;
 uniform vec3 uEmissiveColor;
+
+// World-space triplanar projection (#checker-materials): projects each of the 3 axis-aligned
+// planes' UVs from world position and blends by how much the surface normal faces that axis,
+// instead of using the mesh's own (possibly badly-tiling) UVs. Used for level geometry like a
+// non-uniformly-scaled cube where 0..1 mesh UVs stretch a texture unrecognisably on long faces.
+uniform int uTriplanar;
+uniform float uTriplanarScale;
 
 uniform int uHasAlbedoMap;             uniform sampler2D uAlbedoMap;
 uniform int uHasNormalMap;             uniform sampler2D uNormalMap;
@@ -214,12 +227,28 @@ const vec2 kPoisson16[16] = vec2[](
 );
 
 // One cascade's filtered sun visibility: 16 Poisson taps, each still hardware 2x2 depth-compared.
+// Most fragments are either fully lit or fully shadowed, not near a penumbra edge - a cheap
+// 4-tap probe (spread across the disk) first, and if all four agree, the full 16 almost
+// certainly would too, so return immediately (#189). The 4 probe taps are indices 0/4/8/12; the
+// loop below sums the other 12 and combines them with the already-taken 4, so a fragment that
+// DOES need the full kernel gets an identical result to always sampling all 16 - only the
+// early-out path skips work, the average itself is unchanged.
 float SampleCascade(int c, vec2 uv, float ref, float radiusTexels, float rot) {
-    vec2 texel = 1.0 / vec2(textureSize(uShadowMap, 0).xy);
+    vec2 texel = 1.0 / vec2(uShadowMapResolution);
     float s = sin(rot), co = cos(rot);
     mat2 R = mat2(co, s, -s, co);
-    float vis = 0.0;
+
+    float v0 = texture(uShadowMap, vec4(uv + (R * kPoisson16[0])  * radiusTexels * texel, float(c), ref));
+    float v1 = texture(uShadowMap, vec4(uv + (R * kPoisson16[4])  * radiusTexels * texel, float(c), ref));
+    float v2 = texture(uShadowMap, vec4(uv + (R * kPoisson16[8])  * radiusTexels * texel, float(c), ref));
+    float v3 = texture(uShadowMap, vec4(uv + (R * kPoisson16[12]) * radiusTexels * texel, float(c), ref));
+    float probeSum = v0 + v1 + v2 + v3;
+    if (probeSum <= 0.0) return 0.0; // all 4 probes fully shadowed
+    if (probeSum >= 4.0) return 1.0; // all 4 probes fully lit
+
+    float vis = probeSum;
     for (int i = 0; i < 16; ++i) {
+        if (i == 0 || i == 4 || i == 8 || i == 12) continue; // already sampled above
         vec2 o = (R * kPoisson16[i]) * radiusTexels * texel;
         vis += texture(uShadowMap, vec4(uv + o, float(c), ref));
     }
@@ -254,7 +283,7 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
     vec3 proj = (lp.xyz / lp.w) * 0.5 + 0.5;
     if (proj.z >= 1.0) return 1.0;
 
-    float bias = (texel * (1.0 + 2.0 * (1.0 - ndl)) * uSunShadowBias) / (texel * float(textureSize(uShadowMap, 0).x) + 50.0);
+    float bias = (texel * (1.0 + 2.0 * (1.0 - ndl)) * uSunShadowBias) / (texel * uShadowMapResolution + 50.0);
     // Hash gl_FragCoord to a rotation angle — turns kernel banding into per-pixel noise.
     float rot = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
     // Farther cascades cover more world per texel, so widen the kernel a little to keep the
@@ -273,7 +302,7 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
             vec4 lp2 = uShadowMatrices[c + 1] * vec4(offsetPos2, 1.0);
             vec3 p2 = (lp2.xyz / lp2.w) * 0.5 + 0.5;
             if (p2.z < 1.0) {
-                float bias2 = (texel2 * (1.0 + 2.0 * (1.0 - ndl)) * uSunShadowBias) / (texel2 * float(textureSize(uShadowMap, 0).x) + 50.0);
+                float bias2 = (texel2 * (1.0 + 2.0 * (1.0 - ndl)) * uSunShadowBias) / (texel2 * uShadowMapResolution + 50.0);
                 float v2 = SampleCascade(c + 1, p2.xy, p2.z - bias2,
                                          max(uShadowSoftness, 0.5) * (1.0 + 0.35 * float(c + 1)), rot);
                 vis = mix(vis, v2, smoothstep(edge - band, edge, viewDepth));
@@ -298,7 +327,7 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N) {
     // 2*d/res assumed a 90° frustum and over-sized it for a tight cone). Both the normal nudge
     // and the depth bias are expressed as multiples of this, so they auto-scale with distance and
     // are independent of the light Range (#134).
-    float texelW = 2.0 * d0 * uSpotShadowHalfTan[slot] / float(textureSize(uSpotShadowMap, 0).x);
+    float texelW = 2.0 * d0 * uSpotShadowHalfTan[slot] / uSpotShadowMapResolution;
     vec3 biasedPos = worldPos + N * (texelW * (0.5 + 0.5 * (1.0 - nl)) * uSpotShadowNormalBias[slot]); // clears PCF kernel bleed at edges
     vec4 lp = uSpotShadowVP[slot] * vec4(biasedPos, 1.0);
     if (lp.w <= 0.0) return 1.0;                       // behind the light
@@ -312,7 +341,7 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N) {
     // surface slopes fastest across a texel). Range-independent, unlike the old `d/far - 0.00035`
     // whose gap grew to centimetres on a long-range light (#134).
     float ref = (d - texelW * (1.0 + 2.0 * (1.0 - nl)) * uSpotShadowBias[slot]) / far;
-    vec2 texel = (1.0 / vec2(textureSize(uSpotShadowMap, 0).xy)) * max(uSpotShadowSoftness[slot], 0.0);
+    vec2 texel = (1.0 / vec2(uSpotShadowMapResolution)) * max(uSpotShadowSoftness[slot], 0.0);
     float vis = 0.0;
     vis += texture(uSpotShadowMap, vec4(p.xy + vec2(-0.5, -0.5) * texel, float(slot), ref));
     vis += texture(uSpotShadowMap, vec4(p.xy + vec2( 0.5, -0.5) * texel, float(slot), ref));
@@ -331,7 +360,7 @@ float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N) {
     vec3 toLight = lightPos - worldPos;
     float d0 = length(toLight);
     float nl = max(dot(N, toLight / max(d0, 1e-4)), 0.0);
-    float texelW = 2.0 * d0 / float(textureSize(uPointShadowMap, 0).x); // 90° cube face: 2*d/res is exact
+    float texelW = 2.0 * d0 / uPointShadowMapResolution; // 90° cube face: 2*d/res is exact
     vec3 dir = (worldPos + N * (texelW * (0.5 + 0.5 * (1.0 - nl)) * uPointShadowNormalBias[slot])) - lightPos; // cube lookup + distance
     float d = length(dir);
     if (d >= far) return 1.0;                // past the shadow range
@@ -378,12 +407,33 @@ vec3 ShadePointSpot(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float metallic
         float innerCos = lt.Params.x;
         if (cosAngle < outerCos) return vec3(0.0);
         atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
+        // Early-out before the shadow-map sample, not just before shading (#191) — a fragment at
+        // the far edge of the cone/range falloff is already at atten==0 here, so this skips a
+        // full shadow-array texture fetch that would just get multiplied away.
+        if (atten <= 0.0) return vec3(0.0);
         atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #119
     } else {
+        if (atten <= 0.0) return vec3(0.0);
         atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N); // #119
     }
     if (atten <= 0.0) return vec3(0.0);
     return ShadeLight(N, V, L, lt.ColorRange.rgb * atten, albedo, F0, metallic, roughness);
+}
+
+// Per-axis blend weights for triplanar projection, sharpened (raised to a power) so the blend
+// zone between two faces is narrow instead of muddying most of the surface.
+vec3 TriplanarWeights(vec3 n) {
+    vec3 w = pow(abs(n), vec3(4.0));
+    return w / max(w.x + w.y + w.z, 1e-5);
+}
+
+// Blends the same texture sampled from the 3 world-space axis planes. rgba so it works for both
+// colour maps and single-channel (metallic/roughness/AO) maps read via .r/.g/.b afterward.
+vec4 SampleTriplanar(sampler2D tex, vec3 worldPos, vec3 w, float scale) {
+    vec4 cx = texture(tex, worldPos.zy * scale);
+    vec4 cy = texture(tex, worldPos.xz * scale);
+    vec4 cz = texture(tex, worldPos.xy * scale);
+    return cx * w.x + cy * w.y + cz * w.z;
 }
 
 // This fragment's froxel index in the 16 x 9 x 24 cluster grid (#120).
@@ -398,19 +448,31 @@ uint clusterIndex() {
 }
 
 void main() {
-    vec3 albedo = (uHasAlbedoMap == 1 ? texture(uAlbedoMap, vUV).rgb : vec3(1.0)) * uBaseColor;
+    // Triplanar mode skips the mesh's own UVs entirely (they're what's stretching), sampling
+    // every map from world position/normal instead. Normal maps are the one exception - proper
+    // triplanar normal blending needs a whiteout-blend reconstruction per plane, which no
+    // material here currently needs, so uHasNormalMap still just uses vUV.
+    bool tri = uTriplanar == 1;
+    vec3 triW = tri ? TriplanarWeights(normalize(vNormal)) : vec3(0.0);
+    vec4 albedoSample = tri ? SampleTriplanar(uAlbedoMap, vWorldPos, triW, uTriplanarScale)
+                             : texture(uAlbedoMap, vUV);
+    vec3 albedo = (uHasAlbedoMap == 1 ? albedoSample.rgb : vec3(1.0)) * uBaseColor;
 
     float metallic = uMetallic;
     float roughness = uRoughness;
     if (uHasMetallicRoughnessMap == 1) {
-        vec3 mr = texture(uMetallicRoughnessMap, vUV).rgb;
+        vec3 mr = (tri ? SampleTriplanar(uMetallicRoughnessMap, vWorldPos, triW, uTriplanarScale)
+                       : texture(uMetallicRoughnessMap, vUV)).rgb;
         roughness = mr.g;
         metallic = mr.b;
     } else {
-        if (uHasRoughnessMap == 1) roughness = texture(uRoughnessMap, vUV).r;
-        if (uHasMetallicMap == 1) metallic = texture(uMetallicMap, vUV).r;
+        if (uHasRoughnessMap == 1) roughness = (tri ? SampleTriplanar(uRoughnessMap, vWorldPos, triW, uTriplanarScale)
+                                                     : texture(uRoughnessMap, vUV)).r;
+        if (uHasMetallicMap == 1) metallic = (tri ? SampleTriplanar(uMetallicMap, vWorldPos, triW, uTriplanarScale)
+                                                   : texture(uMetallicMap, vUV)).r;
     }
-    float ao = uHasAOMap == 1 ? texture(uAOMap, vUV).r : 1.0;
+    float ao = uHasAOMap == 1 ? (tri ? SampleTriplanar(uAOMap, vWorldPos, triW, uTriplanarScale)
+                                      : texture(uAOMap, vUV)).r : 1.0;
 
     vec3 N = normalize(vNormal);
     if (uHasNormalMap == 1) {
@@ -418,7 +480,8 @@ void main() {
         N = normalize(vTBN * tangentNormal);
     }
 
-    vec3 emissiveEarly = uHasEmissiveMap == 1 ? texture(uEmissiveMap, vUV).rgb : uEmissiveColor;
+    vec3 emissiveEarly = uHasEmissiveMap == 1 ? (tri ? SampleTriplanar(uEmissiveMap, vWorldPos, triW, uTriplanarScale)
+                                                      : texture(uEmissiveMap, vUV)).rgb : uEmissiveColor;
     if (uUnlit == 1) {
         vec3 flatColor = albedo + emissiveEarly;
         FragColor = vec4(uApplyTonemap == 1 ? pow(flatColor, vec3(1.0 / 2.2)) : flatColor, 1.0);
@@ -431,8 +494,9 @@ void main() {
     vec3 Lo = vec3(0.0);
 
     // Directional lights are not clustered (infinite extent) — one cheap pass for type 0.
-    for (uint i = 0u; i < uLightCount; ++i) {
-        if (int(uLights[i].PositionType.w) != 0) continue;
+    // Packed at the front of uLights[] (#188), so this loops exactly uDirectionalCount entries
+    // instead of scanning the whole buffer and skipping non-directional ones by type.
+    for (uint i = 0u; i < uDirectionalCount; ++i) {
         vec3 L = normalize(-uLights[i].DirCutoff.xyz); // DirCutoff.xyz travels forward; L points back
         vec3 radiance = uLights[i].ColorRange.rgb * SunShadow(vWorldPos, N, L);
         Lo += ShadeLight(N, V, L, radiance, albedo, F0, metallic, roughness);

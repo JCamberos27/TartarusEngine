@@ -141,6 +141,29 @@ endif()
 
 target_compile_definitions(TartarusEngine PRIVATE GLM_ENABLE_EXPERIMENTAL GLFW_INCLUDE_NONE IMGUI_DEFINE_MATH_OPERATORS)
 
+# Warning flags (#180) — the build previously set none, so it ran at MSVC's default /W1 and hid
+# most latent problems (unused results, signed/unsigned mismatch, uninitialized reads, shadowed
+# variables, truncating conversions). /MP is unrelated to warnings but cheap to add here too —
+# parallel compilation noticeably cuts build times.
+target_compile_options(TartarusEngine PRIVATE
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /MP>
+  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+)
+
+# Vendored sources compiled directly into this target (ImGui, ImGuizmo, ImViewGuizmo, stb_image,
+# miniaudio) are third-party code we don't own and aren't the "fallout" #180 means to fix — dial
+# them back to the default warning level rather than flooding the build with warnings in code we
+# can't reasonably change.
+set(TARTARUS_VENDORED_SOURCES
+  ${IMGUI_SOURCES}
+  ${CMAKE_SOURCE_DIR}/extern/stb_image_impl.cpp
+  ${CMAKE_SOURCE_DIR}/extern/miniaudio_impl.cpp
+  ${CMAKE_SOURCE_DIR}/extern/ImViewGuizmo_impl.cpp
+)
+set_source_files_properties(${TARTARUS_VENDORED_SOURCES} PROPERTIES
+  COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/W1>$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-w>"
+)
+
 # Editor UI icon font (Font Awesome Free, SIL OFL 1.1) — copied next to the exe so it can be
 # loaded at runtime by a path relative to the working directory, same as scene.json.
 add_custom_command(TARGET TartarusEngine POST_BUILD

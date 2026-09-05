@@ -1,6 +1,7 @@
 #include "FileDialog.h"
 #include <windows.h>
 #include <commdlg.h>
+#include <shellapi.h>
 #include <filesystem>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3.h>
@@ -66,4 +67,25 @@ std::string FileDialog::SaveFile(const char* filter, const char* defaultExt, GLF
         return std::string(fileBuffer);
     }
     return "";
+}
+
+bool FileDialog::RecycleFile(const std::string& path, std::string& errorOut) {
+    // SHFileOperationW's pFrom wants an absolute, backslash-separated, DOUBLE-null-terminated
+    // string (a single trailing '\0' is not enough — it's a list format even for one entry).
+    std::error_code ec;
+    std::wstring wpath = std::filesystem::absolute(path, ec).wstring();
+    if (ec) { errorOut = ec.message(); return false; }
+    wpath.push_back(L'\0');
+
+    SHFILEOPSTRUCTW op = {};
+    op.wFunc = FO_DELETE;
+    op.pFrom = wpath.c_str();
+    op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI;
+
+    int result = SHFileOperationW(&op);
+    if (result != 0 || op.fAnyOperationsAborted) {
+        errorOut = "the file may be open in another program or write-protected";
+        return false;
+    }
+    return true;
 }

@@ -27,6 +27,9 @@ void HdrTarget::Release() {
     if (m_MsFbo)        { glDeleteFramebuffers(1, &m_MsFbo);       m_MsFbo = 0; }
     if (m_MsColor)      { glDeleteTextures(1, &m_MsColor);         m_MsColor = 0; }
     if (m_MsDepth)      { glDeleteTextures(1, &m_MsDepth);         m_MsDepth = 0; }
+    // m_DepthRequested is deliberately NOT reset - a Resize() calls Release() then Create(),
+    // and if depth was already provisioned before that resize, Create() needs to know to
+    // re-provision it rather than silently dropping it (#206).
 }
 
 void HdrTarget::Resize(int width, int height, int samples) {
@@ -66,18 +69,14 @@ void HdrTarget::Create(int width, int height, int samples) {
     glTextureParameteri(m_ResolveColor, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     // Single-sample depth in the same resolve FBO, so a screen-space pass after ResolveTo() has
-    // a plain sampler2D depth to read instead of decoding sampler2DMS by hand (#121). NEAREST —
-    // depth must not be linearly filtered.
-    glCreateTextures(GL_TEXTURE_2D, 1, &m_ResolveDepth);
-    glTextureStorage2D(m_ResolveDepth, 1, GL_DEPTH_COMPONENT32F, width, height);
-    glTextureParameteri(m_ResolveDepth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTextureParameteri(m_ResolveDepth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTextureParameteri(m_ResolveDepth, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(m_ResolveDepth, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // a plain sampler2D depth to read instead of decoding sampler2DMS by hand (#121). Skipped
+    // here unless something has already asked for it via ResolvedDepthTexture() - see #206: this
+    // texture and its per-frame blit are otherwise dead weight nothing reads.
+    if (m_DepthRequested) CreateResolveDepth();
 
     glCreateFramebuffers(1, &m_ResolveFbo);
     glNamedFramebufferTexture(m_ResolveFbo, GL_COLOR_ATTACHMENT0, m_ResolveColor, 0);
-    glNamedFramebufferTexture(m_ResolveFbo, GL_DEPTH_ATTACHMENT, m_ResolveDepth, 0);
+    if (m_ResolveDepth) glNamedFramebufferTexture(m_ResolveFbo, GL_DEPTH_ATTACHMENT, m_ResolveDepth, 0);
     glNamedFramebufferDrawBuffers(m_ResolveFbo, 1, &drawBuf);
 
     GLenum ms = glCheckNamedFramebufferStatus(m_MsFbo, GL_FRAMEBUFFER);
@@ -95,17 +94,40 @@ void HdrTarget::BindForRender() const {
     glViewport(0, 0, m_Width, m_Height);
 }
 
+void HdrTarget::CreateResolveDepth() const {
+    glCreateTextures(GL_TEXTURE_2D, 1, &m_ResolveDepth);
+    glTextureStorage2D(m_ResolveDepth, 1, GL_DEPTH_COMPONENT32F, m_Width, m_Height);
+    glTextureParameteri(m_ResolveDepth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(m_ResolveDepth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTextureParameteri(m_ResolveDepth, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(m_ResolveDepth, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+}
+
+unsigned int HdrTarget::ResolvedDepthTexture() const {
+    m_DepthRequested = true;
+    if (!m_ResolveDepth && m_ResolveFbo) {
+        // Target already sized - provision depth into the existing FBO right away (DSA allows
+        // attaching to a complete framebuffer without rebinding it). If not sized yet, the next
+        // Create() sees m_DepthRequested and provisions it from the start instead.
+        CreateResolveDepth();
+        glNamedFramebufferTexture(m_ResolveFbo, GL_DEPTH_ATTACHMENT, m_ResolveDepth, 0);
+    }
+    return m_ResolveDepth;
+}
+
 void HdrTarget::ResolveTo() const {
     if (!m_MsFbo || !m_ResolveFbo) return;
-    // MSAA down-resolve (a plain copy when m_Samples == 1). Colour + depth: colour for the
-    // tonemap pass, depth (#121) so any screen-space pass after this has a single-sample
-    // sampler2D depth. Depth must use GL_NEAREST. m_MsDepth stays available too.
+    // MSAA down-resolve (a plain copy when m_Samples == 1). Colour always, for the tonemap pass.
+    // Depth (#121) only once something has asked for it via ResolvedDepthTexture() - see #206.
     glBlitNamedFramebuffer(m_MsFbo, m_ResolveFbo,
         0, 0, m_Width, m_Height,
         0, 0, m_Width, m_Height,
         GL_COLOR_BUFFER_BIT, GL_NEAREST);
-    glBlitNamedFramebuffer(m_MsFbo, m_ResolveFbo,
-        0, 0, m_Width, m_Height,
-        0, 0, m_Width, m_Height,
-        GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+    if (m_ResolveDepth) {
+        // Depth must use GL_NEAREST. m_MsDepth stays available too.
+        glBlitNamedFramebuffer(m_MsFbo, m_ResolveFbo,
+            0, 0, m_Width, m_Height,
+            0, 0, m_Width, m_Height,
+            GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+    }
 }

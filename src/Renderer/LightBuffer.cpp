@@ -26,7 +26,11 @@ void LightBuffer::AddDirectional(const glm::vec3& dirWorld, const glm::vec3& col
     l.ColorRange   = glm::vec4(colorLinear * intensity, 0.0f);
     l.DirCutoff    = glm::vec4(d, -1.0f);
     l.Params       = glm::vec4(-1.0f, -1.0f, 0.0f, 0.0f);
-    m_Lights.push_back(l);
+    // Insert right after the existing directional run, not at the end - keeps every directional
+    // light packed at the front of the array so the shader can loop just uDirectionalCount
+    // entries instead of scanning the whole buffer (#188).
+    m_Lights.insert(m_Lights.begin() + m_DirectionalCount, l);
+    ++m_DirectionalCount;
 }
 
 void LightBuffer::AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLinear, float intensity, float range,
@@ -55,7 +59,9 @@ void LightBuffer::AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, 
 void LightBuffer::Upload() {
     EnsureCreated();
     uint32_t count = (uint32_t)m_Lights.size();
+    uint32_t dirCount = (uint32_t)m_DirectionalCount;
     glNamedBufferSubData(m_Ssbo, 0, sizeof(uint32_t), &count);
+    glNamedBufferSubData(m_Ssbo, sizeof(uint32_t), sizeof(uint32_t), &dirCount);
     if (count > 0) {
         glNamedBufferSubData(m_Ssbo, kHeaderBytes,
                              (GLsizeiptr)(count * sizeof(GpuLight)), m_Lights.data());

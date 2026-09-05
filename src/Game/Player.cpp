@@ -12,6 +12,7 @@ AABB Player::BodyBounds() const {
 }
 
 void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) {
+    (void)window; // kept in the signature for a future direct-input path; unused today
     // Mouse look — skipped when input is handed to the editor (see the header): the body still
     // falls/collides below, it just doesn't turn or walk.
     if (readInput) {
