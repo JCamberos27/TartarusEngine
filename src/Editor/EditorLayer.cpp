@@ -78,6 +78,43 @@ namespace {
 // icons sit snug against the bottom edge instead of floating in a tall strip of dead space.
 constexpr float kToolbarHeight = 52.0f;
 
+// TransformComponent is LOCAL space once an entity has a parent, so anything that manipulates an
+// entity in world space has to bracket the work with these two: read the world matrix, do the
+// math there, then convert the result back into the parent's frame before writing it back.
+// Unparented entities get an identity parent matrix, making both a no-op — exactly what
+// World::SetParent does with glm::inverse(newParentWorld) * worldMatrix. (#224)
+inline glm::mat4 ParentWorldMatrix(const World& world, entt::entity entity) {
+    if (entity == entt::null || !world.Registry.valid(entity)) return glm::mat4(1.0f);
+    const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
+    if (!hier || hier->Parent == entt::null) return glm::mat4(1.0f);
+    return world.ComposeWorldTransform(hier->Parent);
+}
+
+// True if any ancestor of `entity` is itself in the selection. Such an entity is already carried
+// along by that ancestor's move (that is what parenting means), so a group operation that also
+// applied its own world delta to the child would move it twice. (#224)
+inline bool HasSelectedAncestor(const World& world, entt::entity entity, entt::entity primary,
+                                const std::vector<entt::entity>& extras) {
+    const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
+    entt::entity walk = hier ? hier->Parent : entt::null;
+    while (walk != entt::null && world.Registry.valid(walk)) {
+        if (walk == primary) return true;
+        for (entt::entity e : extras) if (e == walk) return true;
+        const auto* parentHier = world.Registry.try_get<HierarchyComponent>(walk);
+        walk = parentHier ? parentHier->Parent : entt::null;
+    }
+    return false;
+}
+
+// Writes `worldPosition` (an entity ORIGIN in world space) into an entity's local
+// TransformComponent.Position. Rotation/scale are untouched, so this is only correct for pure
+// translations — which is all the vertex drag and Snap to Ground ever do.
+inline void SetWorldPosition(World& world, entt::entity entity, const glm::vec3& worldPosition) {
+    auto& transform = world.Registry.get<TransformComponent>(entity);
+    glm::mat4 toLocal = glm::inverse(ParentWorldMatrix(world, entity));
+    transform.Position = glm::vec3(toLocal * glm::vec4(worldPosition, 1.0f));
+}
+
 // Approximate blackbody colour (linear RGB, normalised so the brightest channel is 1) for a
 // colour temperature in Kelvin. Cheap piecewise fit — good enough for authoring a warm lamp vs
 // a cool overcast sky; not a physically exact locus. Clamped to 1000-40000 K.
@@ -2409,15 +2446,21 @@ void EditorLayer::SnapSelectionToGround(World& world) {
     if (!CanSnapSelectionToGround(world)) return;
     PushUndo(world, "Snap to Ground");
 
-    auto& transform = world.Registry.get<TransformComponent>(m_Selected);
     auto& renderable = world.Registry.get<RenderableComponent>(m_Selected);
-    glm::mat4 m = ComposeTransform(transform);
+    // World matrix, not ComposeTransform(transform): for a parented entity the local matrix would
+    // put the bounds in the PARENT's frame, and subtracting that from Position drops the object to
+    // the parent's Y=0 instead of the world's. Compute the drop in world space, then convert the
+    // resulting world origin back to local before writing it. (#224)
+    glm::mat4 m = world.GetCachedWorldTransform(m_Selected);
+    float dropY;
     if (world.Registry.all_of<LevelGeometryTag>(m_Selected)) {
         AABB worldBounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(m);
-        transform.Position.y -= worldBounds.Min.y;
+        dropY = worldBounds.Min.y;
     } else {
-        transform.Position.y -= renderable.ModelRef->LowestVertexWorldY(m);
+        dropY = renderable.ModelRef->LowestVertexWorldY(m);
     }
+    glm::vec3 worldOrigin = glm::vec3(m[3]);
+    SetWorldPosition(world, m_Selected, {worldOrigin.x, worldOrigin.y - dropY, worldOrigin.z});
 }
 
 bool EditorLayer::ComputeSceneBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) const {
@@ -3342,12 +3385,14 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
     if (hasHover && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         PushUndo(world, "Move Vertex");
-        auto& transform = world.Registry.get<TransformComponent>(m_Selected);
-        glm::mat4 model = ComposeTransform(transform);
+        // Both the drag plane and the offset must be world-space: the ray they get intersected
+        // against in UpdateVertexDrag is world-space, so deriving them from the local matrix (and
+        // from the local TransformComponent.Position) put the drag in the parent's frame. (#224)
+        glm::mat4 model = world.GetCachedWorldTransform(m_Selected);
         glm::vec3 grabbedWorld = glm::vec3(model * glm::vec4(hoverLocal, 1.0f));
         m_VertexDragLocal = hoverLocal;
         m_VertexDragPlanePoint = grabbedWorld;
-        m_VertexDragOffset = transform.Position - grabbedWorld;
+        m_VertexDragOffset = glm::vec3(model[3]) - grabbedWorld;
         m_VertexDragActive = true;
     }
 
@@ -3537,8 +3582,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // ratio isn't the whole window's either. Using w/h here (as this used to) computed the
         // right NDC coordinates against the wrong rect, landing the dot wherever that rect
         // mismatch happened to put it instead of on the actual vertex.
-        const auto& transform = world.Registry.get<TransformComponent>(m_Selected);
-        glm::mat4 model = ComposeTransform(transform);
+        // World matrix — viewProj is world-space, so a parented model's dot landed off its
+        // vertex when this composed the local transform instead. (#224)
+        glm::mat4 model = world.GetCachedWorldTransform(m_Selected);
         glm::mat4 viewProj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) * editorCamera.ViewMatrix();
         glm::vec4 clip = viewProj * model * glm::vec4(hoverLocal, 1.0f);
         if (clip.w > 0.0001f) {
@@ -3551,8 +3597,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
     if (m_VertexDragActive && IsVertexDraggable(world, m_Selected)) {
         // Actively grabbed: filled yellow dot tracking the vertex's live (post-drag) position.
-        const auto& transform = world.Registry.get<TransformComponent>(m_Selected);
-        glm::mat4 model = ComposeTransform(transform);
+        // World matrix, same reason as the hover circle above. (#224)
+        glm::mat4 model = world.GetCachedWorldTransform(m_Selected);
         glm::mat4 viewProj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) * editorCamera.ViewMatrix();
         glm::vec4 clip = viewProj * model * glm::vec4(m_VertexDragLocal, 1.0f);
         if (clip.w > 0.0001f) {
@@ -7392,9 +7438,11 @@ bool EditorLayer::FindVertexUnderCursor(World& world, Camera& editorCamera, glm:
     if (!IsVertexDraggable(world, m_Selected)) return false;
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return false;
 
-    const auto& transform = world.Registry.get<TransformComponent>(m_Selected);
     const auto& renderable = world.Registry.get<RenderableComponent>(m_Selected);
-    glm::mat4 model = ComposeTransform(transform);
+    // World matrix: the picked vertices are projected against a world-space view-projection, and
+    // the snap-target loop in UpdateVertexDrag already evaluates other models in world space —
+    // using the local matrix here tested the wrong screen positions for a parented model. (#224)
+    glm::mat4 model = world.GetCachedWorldTransform(m_Selected);
     glm::mat4 viewProj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) * editorCamera.ViewMatrix();
 
     ImVec2 mouse = ImGui::GetIO().MousePos;
@@ -7498,13 +7546,25 @@ void EditorLayer::UpdateVertexDrag(World& world, Camera& editorCamera) {
     // carry every other selected object along by that exact same delta so the whole group
     // moves together while only the primary's vertex does the snapping. Boxes and models both
     // just have a TransformComponent now, so there's no more per-kind branch needed here either.
-    auto& primaryTransform = world.Registry.get<TransformComponent>(m_Selected);
-    glm::vec3 delta = candidatePosition - primaryTransform.Position;
-    primaryTransform.Position = candidatePosition;
+    //
+    // candidatePosition is a WORLD-space origin (the drag plane and the snap targets are both
+    // world-space), so the delta carried to the rest of the selection is a world delta and each
+    // object's new world origin has to be converted back into its own parent's frame before it
+    // lands in TransformComponent. Every world matrix is read BEFORE any write, so moving a
+    // parent doesn't change the reading for a sibling that has already been sampled. (#224)
+    glm::vec3 primaryWorld = glm::vec3(world.GetCachedWorldTransform(m_Selected)[3]);
+    glm::vec3 delta = candidatePosition - primaryWorld;
 
+    std::vector<std::pair<entt::entity, glm::vec3>> moves;
+    moves.emplace_back(m_Selected, candidatePosition);
     for (entt::entity e : m_ExtraSelection) {
-        if (world.Registry.valid(e)) world.Registry.get<TransformComponent>(e).Position += delta;
+        if (!world.Registry.valid(e)) continue;
+        // A child of another selected object is already carried along by its parent's move —
+        // moving it a second time would double the delta.
+        if (HasSelectedAncestor(world, e, m_Selected, m_ExtraSelection)) continue;
+        moves.emplace_back(e, glm::vec3(world.GetCachedWorldTransform(e)[3]) + delta);
     }
+    for (const auto& [entity, worldPos] : moves) SetWorldPosition(world, entity, worldPos);
 }
 
 void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
@@ -8215,12 +8275,20 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
 }
 
 void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
-    struct Ref { glm::vec3* pos; glm::vec3* rot; glm::vec3* scale; };
+    // The gizmo's delta is world-space, so each member is tracked by its WORLD matrix (and its
+    // parent's, to convert the result back to local when writing). The single-object gizmo has
+    // always done this — DrawGizmo's `parentWorld * ComposeTransform(transform)` — while this one
+    // fed raw local TransformComponents into a world-space delta, so the same drag behaved
+    // differently depending on how many objects were selected. (#224)
+    struct Ref { entt::entity entity; glm::mat4 world; glm::mat4 parentWorld; };
     std::vector<Ref> refs;
     auto addRef = [&](entt::entity entity) {
         if (entity == entt::null || !world.Registry.valid(entity)) return;
-        auto& transform = world.Registry.get<TransformComponent>(entity);
-        refs.push_back({&transform.Position, &transform.RotationEuler, &transform.Scale});
+        if (!world.Registry.all_of<TransformComponent>(entity)) return;
+        // A child of another selected object rides along with its parent already; transforming it
+        // a second time here would apply the delta twice.
+        if (entity != m_Selected && HasSelectedAncestor(world, entity, m_Selected, m_ExtraSelection)) return;
+        refs.push_back({entity, world.GetCachedWorldTransform(entity), ParentWorldMatrix(world, entity)});
     };
     addRef(m_Selected);
     for (entt::entity e : m_ExtraSelection) addRef(e);
@@ -8272,7 +8340,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     // recomputing it from the (already partway-moved) objects would fight the drag.
     if (!m_GizmoWasUsing) {
         glm::vec3 pivot(0.0f);
-        for (auto& r : refs) pivot += *r.pos;
+        for (auto& r : refs) pivot += glm::vec3(r.world[3]); // world origins, not local Positions (#224)
         pivot /= (float)refs.size();
         m_GroupGizmoMatrix = glm::translate(glm::mat4(1.0f), pivot);
     }
@@ -8298,13 +8366,18 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
         // pivot instead of each object spinning in place around its own center.
         glm::mat4 delta = m_GroupGizmoMatrix * glm::inverse(matrixBefore);
         for (auto& r : refs) {
-            glm::mat4 objMatrix = ComposeTransform(*r.pos, *r.rot, *r.scale);
-            glm::mat4 newMatrix = delta * objMatrix;
+            // delta is world-space, so it composes onto the object's WORLD matrix; the result is
+            // then re-expressed in the parent's frame before it goes back into the (local)
+            // TransformComponent — identical to what DrawGizmo and World::SetParent do. Both
+            // matrices are identity-parented no-ops for an unparented object. (#224)
+            glm::mat4 newWorld = delta * r.world;
+            glm::mat4 newLocal = glm::inverse(r.parentWorld) * newWorld;
             float nt[3], nr[3], ns[3];
-            ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(newMatrix), nt, nr, ns);
-            *r.pos = {nt[0], nt[1], nt[2]};
-            *r.rot = EulerYXZFromMatrix(newMatrix); // ComposeTransform order, not ImGuizmo's (#108)
-            *r.scale = {ns[0], ns[1], ns[2]};
+            ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(newLocal), nt, nr, ns);
+            auto& transform = world.Registry.get<TransformComponent>(r.entity);
+            transform.Position = {nt[0], nt[1], nt[2]};
+            transform.RotationEuler = EulerYXZFromMatrix(newLocal); // ComposeTransform order, not ImGuizmo's (#108)
+            transform.Scale = {ns[0], ns[1], ns[2]};
         }
     }
     m_GizmoWasUsing = isUsingNow;
