@@ -15,6 +15,7 @@
 #include "ImportQueueManager.h"
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
+#include "AudioEngine.h" // AudioEngine::SoundHandle - m_PlayModeAudioHandles
 
 struct GLFWwindow;
 class World;
@@ -963,6 +964,11 @@ private:
     // Selection captured by stable OrderComponent value on Play, re-resolved to fresh entity
     // ids on Stop — the registry is rebuilt in between and entt recycles ids (#110).
     std::vector<int> m_PlaySelectionOrders;
+    // #199: handles for every AudioSourceComponent with Play On Start, begun the instant Play
+    // mode is entered. Kept per-entity (rather than relying on AudioEngine::StopAll()) so exiting
+    // Play stops exactly these voices and leaves an unrelated editor preview sound (Inspector
+    // Preview button, Asset Browser) started mid-Play alone. Cleared on both enter and exit.
+    std::unordered_map<entt::entity, AudioEngine::SoundHandle> m_PlayModeAudioHandles;
 
     // --- Console ------------------------------------------------------------------------
     void DrawConsole();

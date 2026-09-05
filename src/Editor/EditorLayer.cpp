@@ -2116,11 +2116,36 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
         if (const auto* o = world.Registry.try_get<OrderComponent>(e))
             m_PlaySelectionOrders.push_back(o->Value);
     }
+
+    // #199: AudioSourceComponent used to do nothing at runtime - start every "Play On Start"
+    // source now. Skips InactiveTag entities the same way other Play-mode iteration does (a
+    // disabled source shouldn't be heard). Positioned via the cached world transform (#173/#224)
+    // so a source under a moved/rotated parent plays from its actual world position, not its
+    // parent-local one.
+    m_PlayModeAudioHandles.clear();
+    auto audioView = world.Registry.view<const AudioSourceComponent>();
+    for (entt::entity e : audioView) {
+        if (world.Registry.all_of<InactiveTag>(e)) continue;
+        const auto& audio = audioView.get<const AudioSourceComponent>(e);
+        if (!audio.PlayOnStart || audio.SoundPath.empty()) continue;
+        AudioEngine::SoundHandle handle = AudioEngine::Play(audio.SoundPath, audio.Volume, audio.Loop);
+        if (handle == AudioEngine::InvalidHandle) continue;
+        glm::vec3 worldPos = glm::vec3(world.GetCachedWorldTransform(e)[3]);
+        AudioEngine::SetPosition(handle, worldPos);
+        m_PlayModeAudioHandles[e] = handle;
+    }
+
     Log::Info("Entered play mode - scene state saved, changes will be reverted on exit.");
 }
 
 void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     if (m_PlayModeSnapshot.empty()) return;
+
+    // Stop exactly the voices Play On Start began (not AudioEngine::StopAll(), which would also
+    // cut off an unrelated editor preview sound started while Play was running).
+    for (auto& [entity, handle] : m_PlayModeAudioHandles) AudioEngine::Stop(handle);
+    m_PlayModeAudioHandles.clear();
+
     SceneSerializer::LoadFromString(world, assets, m_PlayModeSnapshot);
     m_PlayModeSnapshot.clear();
 
@@ -6570,6 +6595,27 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             if (!audio->SoundPath.empty() &&
                 ActionButton(ICON_FA_PLAY "  Preview", "Play the clip once, right now, to check how it sounds")) {
                 AudioEngine::Play(audio->SoundPath);
+            }
+
+            PropertyLabel("Volume", "Playback volume - 1 is unattenuated.");
+            if (ImGui::DragFloat("##AudioVolume", &audio->Volume, 0.01f, 0.0f, 1.0f, "%.2f")) {
+                audio->Volume = glm::clamp(audio->Volume, 0.0f, 1.0f);
+            }
+            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Audio Volume");
+
+            bool loop = audio->Loop;
+            if (ImGui::Checkbox("Loop", &loop)) {
+                PushUndo(world, "Toggle Audio Loop");
+                audio->Loop = loop;
+            }
+            ImGui::SameLine();
+            bool playOnStart = audio->PlayOnStart;
+            if (ImGui::Checkbox("Play On Start", &playOnStart)) {
+                PushUndo(world, "Toggle Audio Play On Start");
+                audio->PlayOnStart = playOnStart;
+            }
+            if (ImGui::IsItemHovered()) {
+                EditorUI::SetTooltip("Plays this clip automatically the instant Play mode is entered.");
             }
             EndComponentSection();
         }
