@@ -1844,37 +1844,38 @@ void EditorLayer::EndFrame() {
     }
 }
 
-std::vector<std::string> EditorLayer::CaptureSelectedNames(const World& world) const {
-    std::vector<std::string> names;
+std::vector<int> EditorLayer::CaptureSelectedOrders(const World& world) const {
+    std::vector<int> orders;
     auto addIfValid = [&](entt::entity e) {
-        if (e != entt::null && world.Registry.valid(e) && world.Registry.all_of<NameComponent>(e)) {
-            names.push_back(world.Registry.get<NameComponent>(e).Name);
+        if (e != entt::null && world.Registry.valid(e) && world.Registry.all_of<OrderComponent>(e)) {
+            orders.push_back(world.Registry.get<OrderComponent>(e).Value);
         }
     };
     addIfValid(m_Selected);
     for (entt::entity e : m_ExtraSelection) addIfValid(e);
-    return names;
+    return orders;
 }
 
-void EditorLayer::RestoreSelectionByName(World& world, const std::vector<std::string>& names) {
+void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& orders) {
     ClearSelection();
-    if (names.empty()) return;
+    if (orders.empty()) return;
 
-    // Built once per restore rather than per-name lookup - cheap either way at this engine's
-    // scale, but there's no reason to re-scan the registry per selected name. A duplicate name
-    // just picks whichever entity is encountered first - the same ambiguity Search/Tag filtering
-    // already lives with elsewhere in the Hierarchy.
-    std::unordered_map<std::string, entt::entity> byName;
-    for (auto e : world.Registry.view<NameComponent>()) {
-        const std::string& n = world.Registry.get<NameComponent>(e).Name;
-        if (!n.empty()) byName.try_emplace(n, e); // an "" name can't identify one entity among many
+    // OrderComponent values are assigned once per entity and unique (unlike NameComponent,
+    // which two "Cube"s created via Add > Cube can share) and survive the scene JSON
+    // round-trip Undo/Redo does, so - unlike a raw entt::entity, invalidated by the reload -
+    // they reliably re-identify the same object. Same approach OnEnterPlayMode /
+    // OnExitPlayMode already use to re-find the selection across a registry rebuild (#110).
+    // Restoring by name instead let duplicate names collapse every match onto one entity, so
+    // a multi-selected batch edit silently applied to the same object several times (#217).
+    std::unordered_map<int, entt::entity> byOrder;
+    for (auto e : world.Registry.view<OrderComponent>()) {
+        byOrder[world.Registry.get<OrderComponent>(e).Value] = e;
     }
 
     bool first = true;
-    for (const std::string& wantedName : names) {
-        if (wantedName.empty()) continue; // unnamed entity — nothing reliable to re-pick by (#18 P7)
-        auto it = byName.find(wantedName);
-        if (it == byName.end()) continue; // that object doesn't exist at this point in history
+    for (int wantedOrder : orders) {
+        auto it = byOrder.find(wantedOrder);
+        if (it == byOrder.end()) continue; // that object doesn't exist at this point in history
         if (first) { m_Selected = it->second; first = false; }
         else m_ExtraSelection.push_back(it->second);
     }
@@ -1893,7 +1894,7 @@ void EditorLayer::PushUndo(const World& world, const std::string& label) {
         RefreshDirtyFromHistory();
         return;
     }
-    entry.SelectedNames = CaptureSelectedNames(world);
+    entry.SelectedOrders = CaptureSelectedOrders(world);
     entry.Label = label;
     // Branching off a mid-history position discards the redo entries — the saved state may be
     // among them, in which case there's no longer a clean point to return to (#22 P22).
@@ -1911,7 +1912,7 @@ void EditorLayer::StageUndo(const World& world) {
     if (m_HasStagedUndo) return; // keep the FIRST (true pre-edit) snapshot of this interaction
     m_StagedUndoJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                    : SceneSerializer::SaveToString(world);
-    m_StagedUndoSelectedNames = CaptureSelectedNames(world);
+    m_StagedUndoSelectedOrders = CaptureSelectedOrders(world);
     m_HasStagedUndo = true;
 }
 
@@ -1926,13 +1927,13 @@ void EditorLayer::CommitStagedUndo(const World& world, const std::string& label)
                                                 : SceneSerializer::SaveToString(world);
     if (currentJson == m_StagedUndoJson) {
         m_StagedUndoJson.clear();
-        m_StagedUndoSelectedNames.clear();
+        m_StagedUndoSelectedOrders.clear();
         return;
     }
 
     UndoEntry entry;
     entry.SceneJson = std::move(m_StagedUndoJson);
-    entry.SelectedNames = std::move(m_StagedUndoSelectedNames);
+    entry.SelectedOrders = std::move(m_StagedUndoSelectedOrders);
     entry.Label = label;
     if (m_SavedUndoDepth >= 0 && !m_RedoStack.empty()) m_SavedUndoDepth = -1;
     m_UndoStack.push_back(std::move(entry));
@@ -1950,14 +1951,14 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
 
     UndoEntry redoEntry;
     redoEntry.SceneJson = SceneSerializer::SaveToString(world, assets);
-    redoEntry.SelectedNames = CaptureSelectedNames(world);
+    redoEntry.SelectedOrders = CaptureSelectedOrders(world);
     redoEntry.Label = m_UndoStack.back().Label; // the action Redo would re-apply from here
     m_RedoStack.push_back(std::move(redoEntry));
 
     UndoEntry entry = std::move(m_UndoStack.back());
     m_UndoStack.pop_back();
     SceneSerializer::LoadFromString(world, assets, entry.SceneJson);
-    RestoreSelectionByName(world, entry.SelectedNames);
+    RestoreSelectionByOrder(world, entry.SelectedOrders);
     InvalidateModelThumbnail(nullptr); // LoadFromString may rebuild the asset library
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
 }
@@ -1967,14 +1968,14 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
 
     UndoEntry undoEntry;
     undoEntry.SceneJson = SceneSerializer::SaveToString(world, assets);
-    undoEntry.SelectedNames = CaptureSelectedNames(world);
+    undoEntry.SelectedOrders = CaptureSelectedOrders(world);
     undoEntry.Label = m_RedoStack.back().Label;
     m_UndoStack.push_back(std::move(undoEntry));
 
     UndoEntry entry = std::move(m_RedoStack.back());
     m_RedoStack.pop_back();
     SceneSerializer::LoadFromString(world, assets, entry.SceneJson);
-    RestoreSelectionByName(world, entry.SelectedNames);
+    RestoreSelectionByOrder(world, entry.SelectedOrders);
     InvalidateModelThumbnail(nullptr); // LoadFromString may rebuild the asset library
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
 }
@@ -2216,6 +2217,35 @@ std::string NextDuplicateName(const World& world, const std::string& sourceName)
         n++;
     } while (existingNames.count(candidate));
     return candidate;
+}
+
+// Returns `desired` unchanged if nothing in the scene already holds that name, else the next
+// free "desired (n)" via NextDuplicateName. Unlike calling NextDuplicateName directly (which
+// always appends " (1)" or higher), this lets the FIRST object of a kind keep the plain name -
+// e.g. the first Add > Cube is "Cube", only the second becomes "Cube (1)" - while still
+// guaranteeing every creation path (Add menu, viewport drop, prefab instantiate, empty/light/
+// camera spawn) hands out a name nothing else in the scene already has. Undo's selection
+// restore stopped depending on unique names (#217, now keyed by OrderComponent instead), but
+// the Inspector's per-entity collapse-state key and the Hierarchy search/tag filters still read
+// more naturally when names actually are unique.
+std::string UniqueNameFor(const World& world, const std::string& desired) {
+    for (auto e : world.Registry.view<NameComponent>()) {
+        if (world.Registry.get<NameComponent>(e).Name == desired) return NextDuplicateName(world, desired);
+    }
+    return desired;
+}
+
+// Same idea as UniqueNameFor, but for an entity that already carries the name to check (e.g. a
+// freshly-instantiated prefab, authored with whatever name it was saved under) rather than a
+// name string not yet assigned to anyone. Clears the entity's own name first so it doesn't
+// collide with itself in the scan - otherwise the first instance of every prefab would get
+// needlessly renamed "X (1)" on its very first placement.
+void UniquifyName(World& world, entt::entity e) {
+    auto* nc = world.Registry.try_get<NameComponent>(e);
+    if (!nc) return;
+    std::string desired = nc->Name;
+    nc->Name.clear();
+    nc->Name = UniqueNameFor(world, desired);
 }
 }
 
@@ -3080,7 +3110,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if (m_HasStagedUndo && !ImGui::IsAnyItemActive() && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
         m_HasStagedUndo = false;
         m_StagedUndoJson.clear();
-        m_StagedUndoSelectedNames.clear();
+        m_StagedUndoSelectedOrders.clear();
     }
 
     UpdateViewTransition(editorCamera, dt);
@@ -3854,6 +3884,7 @@ void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& 
     } else if (ext == ".prefab") {
         entt::entity e = SceneSerializer::InstantiatePrefab(world, assets, path);
         if (e != entt::null) {
+            UniquifyName(world, e);
             assets.RegisterPrefab(path);
             assets.SetAssetFolder(path, targetFolder);
             SelectItem(e, false);
@@ -4357,7 +4388,7 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
         PushUndo(world, std::string("Create ") + displayName);
         auto model = assets.CreatePrimitive(kind);
         glm::vec3 position = SafeSpawnInFrontOf(editorCamera);
-        entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), displayName);
+        entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), UniqueNameFor(world, displayName));
         SelectItem(e, false);
         Log::Info(std::string("Added ") + displayName + ".");
     };
@@ -5177,7 +5208,7 @@ void EditorLayer::CreateEmptyParentForSelection(World& world) {
     if (!GetSelectionCenter(world, center)) center = glm::vec3(0.0f);
 
     PushUndo(world, "Create Empty Parent");
-    entt::entity parent = world.CreateEmptyEntity(center, glm::vec3(0.0f), glm::vec3(1.0f), "Group");
+    entt::entity parent = world.CreateEmptyEntity(center, glm::vec3(0.0f), glm::vec3(1.0f), UniqueNameFor(world, "Group"));
 
     // If every selected entity already shares one parent, slot the new group in under it so the
     // grouping doesn't yank the objects to the scene root.
@@ -5205,7 +5236,7 @@ entt::entity EditorLayer::CreateEmptyAt(World& world, Camera* editorCamera, cons
     // Spawned in front of the camera when there is one (menu invoked from the viewport/toolbar),
     // else at the origin — the Hierarchy's own context menu has no camera to reference.
     glm::vec3 position = editorCamera ? SafeSpawnInFrontOf(*editorCamera) : glm::vec3(0.0f);
-    entt::entity e = world.CreateEmptyEntity(position, glm::vec3(0.0f), glm::vec3(1.0f), name);
+    entt::entity e = world.CreateEmptyEntity(position, glm::vec3(0.0f), glm::vec3(1.0f), UniqueNameFor(world, name));
     if (asLight) world.Registry.emplace<LightComponent>(e);
     SelectItem(e, false);
     Log::Info(std::string("Added ") + name + ".");
@@ -5819,11 +5850,13 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     // object would also show it collapsed on the next, unrelated object that happens to have
     // the same component. Keyed by a value that SURVIVES an undo/redo snapshot reload (which
     // recreates the entity with a fresh handle) so expanded sections don't snap shut on every
-    // undo (#20 P9): the name if it has one, else its stable creation order.
-    if (!name.Name.empty()) {
-        ImGui::PushID(name.Name.c_str());
-    } else if (const auto* ord = registry.try_get<OrderComponent>(entity)) {
+    // undo (#20 P9): OrderComponent's stable creation order when there is one (preferred - two
+    // entities can share a name, e.g. both named "Cube", but never an OrderComponent value;
+    // #217), else the name, else the raw entity as a last resort.
+    if (const auto* ord = registry.try_get<OrderComponent>(entity)) {
         ImGui::PushID(0x0DE00000 + ord->Value);
+    } else if (!name.Name.empty()) {
+        ImGui::PushID(name.Name.c_str());
     } else {
         ImGui::PushID((int)entt::to_integral(entity));
     }
@@ -7107,7 +7140,7 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
                 auto model = assets.InstantiateModel(path);
                 glm::vec3 position = ComputeModelDropPosition(world, *model, editorCamera);
                 std::string name = std::filesystem::path(path).stem().string();
-                entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), name);
+                entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), UniqueNameFor(world, name));
                 SelectItem(e, false);
             } else {
                 glm::vec3 position = ComputeDropRayPosition(world, editorCamera);
@@ -7115,6 +7148,7 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
                 // and then moved to the drop point (children ride along, being local-space).
                 entt::entity e = SceneSerializer::InstantiatePrefab(world, assets, path);
                 if (e != entt::null) {
+                    UniquifyName(world, e);
                     if (auto* transform = world.Registry.try_get<TransformComponent>(e)) {
                         transform->Position = position;
                     }
@@ -9215,7 +9249,10 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
         if (cell.kind == Cell::Kind::Prefab && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             PushUndo(world, "Place Prefab Instance");
             entt::entity spawned = SceneSerializer::InstantiatePrefab(world, assets, cell.key);
-            if (spawned != entt::null) SelectItem(spawned, false);
+            if (spawned != entt::null) {
+                UniquifyName(world, spawned);
+                SelectItem(spawned, false);
+            }
         }
 
         if (isFolder) {
@@ -9402,7 +9439,10 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
                 if (cell.kind == Cell::Kind::Prefab && selectionForAction.size() == 1 && ImGui::MenuItem(ICON_FA_PLUS "  Place Instance")) {
                     PushUndo(world, "Place Prefab Instance");
                     entt::entity spawned = SceneSerializer::InstantiatePrefab(world, assets, cell.key);
-                    if (spawned != entt::null) SelectItem(spawned, false);
+                    if (spawned != entt::null) {
+                        UniquifyName(world, spawned);
+                        SelectItem(spawned, false);
+                    }
                 }
                 const char* removeLabel = selectionForAction.size() > 1
                     ? ICON_FA_TRASH "  Remove Selected from Library" : ICON_FA_TRASH "  Remove from Library";
