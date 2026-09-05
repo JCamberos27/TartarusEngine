@@ -123,8 +123,7 @@ std::shared_ptr<Model> Model::CreatePrimitive(const std::string& kind, const std
     else if (kind == "cone") PrimitiveMeshes::GenerateCone(verts, indices);
     else if (kind == "plane") PrimitiveMeshes::GeneratePlane(verts, indices);
     else if (kind == "pyramid") PrimitiveMeshes::GeneratePyramid(verts, indices);
-    else if (kind == "wedge") PrimitiveMeshes::GenerateWedge(verts, indices);
-    else if (kind == "torus") PrimitiveMeshes::GenerateTorus(verts, indices);
+    else if (kind == "donut") PrimitiveMeshes::GenerateDonut(verts, indices);
     else if (kind == "capsule") PrimitiveMeshes::GenerateCapsule(verts, indices);
     else PrimitiveMeshes::GenerateCube(verts, indices); // default/"cube"
 

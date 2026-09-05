@@ -133,6 +133,16 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
             {"colorCycleHzPerSec", anim->ColorCycleHzPerSec},
         };
     }
+    if (const auto* controller = world.Registry.try_get<TransformControllerComponent>(entity)) {
+        j["transformController"] = {
+            {"script", controller->ScriptPath},
+            {"enabled", controller->Enabled},
+            {"rotationSpeed", Vec3ToJson(controller->RotationDegPerSec)},
+            {"translationSpeed", Vec3ToJson(controller->TranslationUnitsPerSec)},
+            {"scalePulseAmplitude", controller->ScalePulseAmplitude},
+            {"scalePulseFrequencyHz", controller->ScalePulseFrequencyHz},
+        };
+    }
 }
 
 void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
@@ -197,6 +207,17 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
         anim.BobFreqHz = a.value("bobFreqHz", 0.0f);
         anim.ColorCycleHzPerSec = a.value("colorCycleHzPerSec", 0.0f);
         world.Registry.emplace_or_replace<AnimatorComponent>(entity, anim);
+    }
+    if (j.contains("transformController")) {
+        const json& c = j["transformController"];
+        TransformControllerComponent controller;
+        controller.ScriptPath = c.value("script", controller.ScriptPath);
+        controller.Enabled = c.value("enabled", true);
+        controller.RotationDegPerSec = JsonToVec3(c.value("rotationSpeed", json::array({0, 0, 0})));
+        controller.TranslationUnitsPerSec = JsonToVec3(c.value("translationSpeed", json::array({0, 0, 0})));
+        controller.ScalePulseAmplitude = c.value("scalePulseAmplitude", 0.0f);
+        controller.ScalePulseFrequencyHz = c.value("scalePulseFrequencyHz", 0.5f);
+        world.Registry.emplace_or_replace<TransformControllerComponent>(entity, controller);
     }
 }
 
@@ -554,33 +575,6 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
     for (const auto& [child, parentId] : pendingParents) {
         auto it = idToEntity.find(parentId);
         if (it != idToEntity.end()) world.AttachChildRaw(child, it->second);
-    }
-
-    // Migration: the sun used to be a hard-coded constant in main.cpp. It's an entity now, so a
-    // full load of any scene without a Directional light synthesises one from the engine's
-    // historical key light (direction, warmth, intensity) — now editable / removable like any
-    // other light. Not done for fragment paste/prefab (`!clearFirst`).
-    if (clearFirst) {
-        bool hasSun = false;
-        for (auto e : world.Registry.view<LightComponent>())
-            if (world.Registry.get<LightComponent>(e).Kind == LightComponent::Type::Directional) { hasSun = true; break; }
-        if (!hasSun) {
-            // A raking ~36 deg elevation (not the old near-overhead angle) so objects throw long,
-            // legible shadows the moment cascaded shadow maps are on, while the floor stays lit.
-            glm::vec3 dir = glm::normalize(glm::vec3(-0.6f, -0.55f, -0.45f));
-            // Entity -Z must equal `dir` after ComposeTransform's Ry*Rx*Rz. Solve X,Y euler:
-            float ex = glm::degrees(std::asin(std::clamp(dir.y, -1.0f, 1.0f)));
-            float ey = glm::degrees(std::atan2(-dir.x, -dir.z));
-            entt::entity sun = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(ex, ey, 0.0f),
-                                                       glm::vec3(1.0f), "Directional Light");
-            LightComponent lc;
-            lc.Kind = LightComponent::Type::Directional;
-            lc.Color = glm::vec3(1.0f, 0.93f, 0.84f);
-            lc.Intensity = 6.0f;               // a real key light, so its cast shadows actually read
-            lc.AngularSizeDegrees = 2.0f;      // a soft, cinematic penumbra out of the box
-            lc.Shadow.Enabled = true;          // the synthesised sun casts by default
-            world.Registry.emplace<LightComponent>(sun, lc);
-        }
     }
 
     return true;

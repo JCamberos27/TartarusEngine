@@ -544,8 +544,7 @@ private:
 
     GizmoOp m_GizmoOp = GizmoOp::Translate;
     bool m_GizmoLocalSpace = false; // false = world-aligned handles, true = aligned to the object's own rotation
-    float m_GizmoSize = 0.20f;      // ImGuizmo clip-space units; 0.1 is its stock default but reads too
-                                    // small against typical geometry and the origin axes (#43 P26, audit #85)
+    float m_GizmoSize = 0.09f;      // Compact reach keeps the axes close to the selected object.
     bool m_GizmoEngaged = false;
     bool m_GizmoWasUsing = false;
     bool m_PrevLeftMouseDown = false;

@@ -26,7 +26,7 @@
   "gridMinorSpacing": 1.0,
   "gridOpacity": 0.6000000238418579,
   "gridShowAxisLines": true,
-  "lastScenePath": "C:/Users/jacob/OneDrive/Desktop/TartarusEngine/project/scenes/Development.json",
+  "lastScenePath": "C:/Users/jacob/OneDrive/Desktop/TartarusEngine/project/scenes/Four Room House.json",
   "lightGizmoOpacity": 0.5,
   "lightGizmoScale": 1.0,
   "lightGizmoSelectedOnly": true,
@@ -39,6 +39,6 @@
   "showLightGizmos": true,
   "showTooltips": true,
   "tonemapOperator": 1,
-  "uiScaleOverride": 0.0,
-  "vsyncMode": 1
+  "uiScaleOverride": 1.5,
+  "vsyncMode": 0
 }

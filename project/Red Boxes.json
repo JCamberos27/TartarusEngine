@@ -1,0 +1,404 @@
+{
+  "assetFolders": [
+    "Scenes",
+    "Screenshots"
+  ],
+  "assetMeta": [
+    {
+      "displayName": "Red Blocks",
+      "path": "C:/Users/jacob/OneDrive/Desktop/TartarusEngine/project/scenes/Untitled.json"
+    }
+  ],
+  "boxes": [
+    {
+      "center": [
+        0.0,
+        -0.5,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.09803921729326248,
+        0.09803921729326248,
+        0.09803921729326248
+      ],
+      "id": 0,
+      "name": "",
+      "order": 0,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        60.0,
+        1.0,
+        60.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        5.0,
+        1.0,
+        5.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.19607843458652496,
+        0.0,
+        0.0
+      ],
+      "id": 1,
+      "name": "",
+      "order": 1,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -6.0,
+        1.5,
+        4.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.19607843458652496,
+        0.0,
+        0.0
+      ],
+      "id": 2,
+      "name": "",
+      "order": 2,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        3.0,
+        2.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        8.0,
+        0.75,
+        -4.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.19607843458652496,
+        0.0,
+        0.0
+      ],
+      "id": 3,
+      "name": "",
+      "order": 3,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        1.5,
+        2.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -4.0,
+        1.25,
+        -11.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.19607843458652496,
+        0.0,
+        0.0
+      ],
+      "id": 4,
+      "name": "",
+      "order": 4,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        2.5,
+        2.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        12.0,
+        2.0,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.19607843458652496,
+        0.0,
+        0.0
+      ],
+      "id": 5,
+      "name": "",
+      "order": 6,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        4.0,
+        2.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -12.0,
+        1.0,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.19607843458652496,
+        0.0,
+        0.0
+      ],
+      "id": 6,
+      "name": "",
+      "order": 7,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        3.0,
+        1.0,
+        -10.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.19607843458652496,
+        0.0,
+        0.0
+      ],
+      "id": 7,
+      "name": "",
+      "order": 8,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -8.0,
+        0.75,
+        -8.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.19607843458652496,
+        0.0,
+        0.0
+      ],
+      "id": 8,
+      "name": "",
+      "order": 9,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        1.5,
+        1.5,
+        1.5
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        10.0,
+        1.0,
+        8.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.19607843458652496,
+        0.0,
+        0.0
+      ],
+      "id": 9,
+      "name": "",
+      "order": 10,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        5.0,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.19607843458652496,
+        0.9803921580314636,
+        0.9803921580314636
+      ],
+      "id": 10,
+      "name": "Object 12",
+      "order": 97,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        2.0,
+        2.0
+      ]
+    }
+  ],
+  "empties": [
+    {
+      "id": 11,
+      "light": {
+        "angularSize": 2.0,
+        "castShadows": true,
+        "color": [
+          1.0,
+          0.9300000071525574,
+          0.8399999737739563
+        ],
+        "colorTempK": 0.0,
+        "intensity": 6.0,
+        "kind": "directional",
+        "range": 12.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 0.5,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "Directional Light",
+      "order": 24,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        -36.25383758544922,
+        53.13010787963867,
+        -1.7075473124350538e-06
+      ],
+      "scale": [
+        1.0,
+        0.9999999403953552,
+        0.9999999403953552
+      ]
+    }
+  ],
+  "libraryModels": [],
+  "libraryPrefabs": [],
+  "librarySounds": [],
+  "libraryTextures": [],
+  "models": [],
+  "skyHorizonColor": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "skyZenithColor": [
+    0.0,
+    0.0,
+    0.0
+  ]
+}

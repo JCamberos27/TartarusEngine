@@ -9,6 +9,7 @@
 
 #include "AudioEngine.h"
 #include "AssetLibrary.h"
+#include "TransformControllerSystem.h"
 #include "EditorLayer.h"
 #include "EditorSettings.h"
 #include "Model.h"
@@ -382,13 +383,11 @@ int main(int argc, char** argv) {
 
         World world;
         Player player;
-        // Default spawn/editor-camera start: Room 2 (Lighting Test) of the Development scene,
-        // facing its cluster of orbiting, colour-cycling lights - the busiest, most immediately
-        // legible part of the scene rather than an arbitrary point that might sit outside any
-        // room on a future layout change.
-        player.Cam.Position = glm::vec3(18.0f, 2.0f, 6.0f);
-        player.Cam.Yaw = -90.0f;   // faces -Z, toward the room's centre
-        player.Cam.Pitch = 15.0f;  // tilted up toward the lights (they orbit up to y=7.5)
+        // Default spawn/editor-camera start: on the outdoor plaza, facing through the open
+        // entrance toward the showroom's hero display and its walkable floor.
+        player.Cam.Position = glm::vec3(0.0f, 2.0f, 11.0f);
+        player.Cam.Yaw = -90.0f;  // faces -Z, toward the shape cluster at the origin
+        player.Cam.Pitch = 5.0f;
 
         // Resolved under the project folder (see ProjectPaths.h) rather than the working
         // directory, so the scene being edited lives alongside the source instead of inside
@@ -896,6 +895,7 @@ int main(int argc, char** argv) {
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
                 UpdateAnimators(world, dt);
+                UpdateTransformControllers(world, dt);
             }
 
             // Animations advance whenever something is showing them: the editor viewport, or the
@@ -1031,11 +1031,8 @@ int main(int argc, char** argv) {
                     lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range, slot);
                 }
             }
-            // No phantom fallback light here: turning every light off (or deleting the sun) now
-            // means the scene really is unlit — ambient only. `SceneSerializer` already
-            // synthesises a real, visible, deletable "Directional Light" entity when a sun-less
-            // scene is opened, so a fresh scene still lights up; re-injecting an invisible one
-            // every frame just overrode the user when they deliberately switched it off.
+            // No fallback light: a scene with no lights is intentionally unlit, so deleting a
+            // directional light persists and fresh scenes remain black until explicitly lit.
             lightBuffer.Upload();
             const int frameLightCount = lightBuffer.Count();
 

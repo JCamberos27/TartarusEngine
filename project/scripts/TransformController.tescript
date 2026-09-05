@@ -1,0 +1,5 @@
+# Transform Controller
+#
+# Drag this asset from Asset Browser > Scripts onto a GameObject Inspector.
+# It adds the Transform Controller component. Configure rotation speed, translation
+# speed, and scale pulse in that component. The values run only in Play mode.
