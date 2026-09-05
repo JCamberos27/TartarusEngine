@@ -6653,11 +6653,28 @@ void EditorLayer::DrawCaptureFeedback(float dt) {
 // (IsSRGB = false) so the Asset Browser thumbnail and the lightbox render it at true brightness
 // — the default sRGB path hardware-linearizes on sample, which is right for a 3D albedo map but
 // visibly darkens a UI image.
-static std::shared_ptr<Texture> LoadScreenshotTexture(const std::string& path) {
+//
+// maxSize controls the two very different jobs this shares: the lightbox (DrawScreenshotPreview)
+// wants the full-quality capture since the user can scroll-to-zoom into it, so it passes 0 (no
+// cap, see TextureImportSettings::MaxTextureSize). The Asset Browser grid thumbnail renders at
+// ~96px, so it caps small to cut decode/VRAM cost (#176) instead of loading (and nearest-
+// downsampling, #207) the full-res capture just to shrink it back down for display.
+static std::shared_ptr<Texture> LoadScreenshotTexture(const std::string& path, int maxSize) {
     TextureImportSettings s;
     s.IsSRGB = false;
     s.WrapMode = TextureImportSettings::Wrap::ClampToEdge;
+    s.MaxTextureSize = maxSize;
     return std::make_shared<Texture>(path, s);
+}
+
+// Full-quality load for the lightbox — uncapped, since the user can zoom in.
+static std::shared_ptr<Texture> LoadScreenshotLightboxTexture(const std::string& path) {
+    return LoadScreenshotTexture(path, 0);
+}
+
+// Small, cheap load for the Asset Browser grid thumbnail (~96px on screen).
+static std::shared_ptr<Texture> LoadScreenshotThumbTexture(const std::string& path) {
+    return LoadScreenshotTexture(path, 384);
 }
 
 void EditorLayer::OpenScreenshotPreview(const std::string& path) {
@@ -6665,7 +6682,7 @@ void EditorLayer::OpenScreenshotPreview(const std::string& path) {
     m_ShotPreviewTex.reset();
     std::error_code ec;
     if (std::filesystem::exists(path, ec)) {
-        auto tex = LoadScreenshotTexture(path);
+        auto tex = LoadScreenshotLightboxTexture(path);
         if (tex->IsValid()) m_ShotPreviewTex = std::move(tex);
     }
     if (m_ShotPreviewTex) {
@@ -9266,7 +9283,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             seen.push_back(path);
             auto it = m_ShotThumbs.find(path);
             if (it == m_ShotThumbs.end())
-                it = m_ShotThumbs.emplace(path, LoadScreenshotTexture(path)).first;
+                it = m_ShotThumbs.emplace(path, LoadScreenshotThumbTexture(path)).first;
             cells.push_back({Cell::Kind::Screenshot, path, name, nullptr, it->second});
         }
         // Drop thumbnails for files that were deleted since last frame.
