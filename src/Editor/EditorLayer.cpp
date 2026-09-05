@@ -6043,7 +6043,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
                 "Shared PBR material and texture maps for every selected mesh.\n"
                 "A field showing \xE2\x80\x94 differs across the selection.");
             if (matOpen) {
-                DrawMultiMaterialEditor(world, assets, sel);
+                DrawMaterialEditor(world, assets, sel);
                 EndComponentSection();
             }
         }
@@ -6385,7 +6385,7 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         bool matRemoved = false;
         if (BeginComponentSection(ICON_FA_PALETTE, "Material", false, matRemoved, /*defaultOpen=*/false,
                 "Surface appearance: color, metallic/roughness, emissive glow, and texture maps.")) {
-            DrawMaterialEditor(world, assets);
+            DrawMaterialEditor(world, assets, {m_Selected});
             EndComponentSection();
         }
     }
@@ -7055,143 +7055,12 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     ImGui::EndPopup();
 }
 
-void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets) {
-    if (m_Selected == entt::null || !world.Registry.valid(m_Selected)) return;
-    Model* model = world.Registry.get<RenderableComponent>(m_Selected).ModelRef.get();
-
-    // Primitives (cube/sphere/...) are generated, not imported, so "the source file" wording
-    // doesn't apply to them (#16 P5).
-    const bool isPrimitive = model->Path().rfind("primitive://", 0) == 0;
-
-    bool useCustom = (bool)model->MaterialOverride();
-    if (ImGui::Checkbox("Use Custom Material", &useCustom)) {
-        PushUndo(world, "Edit Material");
-        if (useCustom) {
-            auto mat = std::make_shared<Material>();
-            // Keep the imported texture maps (convenient starting point) but NOT the raw
-            // diffuse-color/metallic/roughness factors — most FBX exporters leave a non-white
-            // leftover diffuse-color factor that was never meant to multiply a real texture,
-            // and it was tinting the albedo map (e.g. a reddish cast over the whole model).
-            // A fresh custom material starts neutral: white tint, non-metal, mid roughness.
-            if (model->MeshCount() > 0) {
-                const Material& imported = model->MeshMaterial(0);
-                mat->AlbedoMap = imported.AlbedoMap;
-                mat->NormalMap = imported.NormalMap;
-                mat->MetallicMap = imported.MetallicMap;
-                mat->RoughnessMap = imported.RoughnessMap;
-                mat->AOMap = imported.AOMap;
-                mat->EmissiveMap = imported.EmissiveMap;
-            }
-            model->SetMaterialOverride(mat);
-        } else {
-            model->SetMaterialOverride(nullptr);
-        }
-    }
-    if (ImGui::IsItemHovered()) {
-        EditorUI::SetTooltip(isPrimitive
-            ? "Override with a fully editable PBR material.\nUnchecking goes back to the default primitive material."
-            : "Override with a fully editable PBR material.\nUnchecking goes back to whatever the source file imported.");
-    }
-
-    auto mat = model->MaterialOverride();
-    if (!mat) {
-        ImGui::TextDisabled(isPrimitive
-            ? "Using the default primitive material."
-            : "Using material(s) imported from the source file.");
-        return;
-    }
-
-    // Stage-on-activate / commit-on-finish: a ColorEdit's popup re-activates the parent widget
-    // several times during one pick, and the old "PushUndo on IsItemActivated" fired an undo
-    // step for each. Now one edit session = one "Edit Material" step (issue #11), and opening a
-    // picker without changing anything adds nothing.
-    PropertyLabel("Base Color", "The surface's tint, multiplied with the Albedo map if one is set.");
-    ImGui::ColorEdit3("##BaseColor", &mat->BaseColor.x, ImGuiColorEditFlags_DisplayHex);
-    if (ImGui::IsItemActivated()) StageUndo(world);
-    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
-    PropertyLabel("Metallic", "0 = non-metal (plastic, wood, skin), 1 = pure metal.\nIgnored where a Metallic map is set.");
-    EditorUI::SliderFloat("##Metallic", &mat->Metallic, 0.0f, 1.0f);
-    if (ImGui::IsItemActivated()) StageUndo(world);
-    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
-    PropertyLabel("Roughness", "0 = mirror-smooth, 1 = fully matte.\nIgnored where a Roughness map is set.");
-    EditorUI::SliderFloat("##Roughness", &mat->Roughness, 0.04f, 1.0f);
-    if (ImGui::IsItemActivated()) StageUndo(world);
-    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
-    PropertyLabel("Emissive Color", "Color this surface glows, independent of scene lighting.");
-    ImGui::ColorEdit3("##EmissiveColor", &mat->EmissiveColor.x, ImGuiColorEditFlags_DisplayHex);
-    if (ImGui::IsItemActivated()) StageUndo(world);
-    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
-    PropertyLabel("Emissive Strength", "Brightness multiplier for the Emissive Color/map - above 1 for a strong glow.");
-    EditorUI::SliderFloat("##EmissiveStrength", &mat->EmissiveStrength, 0.0f, 10.0f);
-    if (ImGui::IsItemActivated()) StageUndo(world);
-    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
-
-    ImGui::SeparatorText("Texture Maps");
-
-    // Same one-button-does-everything pattern as the Mesh Renderer's "Mesh" row: a single
-    // button shows the assigned filename (or "(none)"), click opens a file picker, dragging a
-    // texture from the Asset Browser onto it assigns it, and hovering it previews the actual
-    // image instead of a permanent inline thumbnail — plus every row now shares the exact same
-    // PropertyLabel column as the rest of the Inspector, which is what actually fixes the old
-    // layout's real problem: the Import button used to sit at a different X on every row
-    // because it came right after each row's own (differently-sized) label.
-    auto mapRow = [&](const char* label, std::shared_ptr<Texture>& slot, const char* helpText) {
-        ImGui::PushID(label);
-        PropertyLabel(label);
-
-        bool hasSlot = (bool)slot;
-        std::string preview = hasSlot ? std::filesystem::path(slot->Path()).filename().string() : std::string("(none)");
-        // Negative width = "fill up to this many pixels before the right edge" (ImGui's own
-        // convention) — reserves exactly the Clear button's width when there's one to reserve
-        // for, or claims the full row when there isn't.
-        float clearReserve = hasSlot ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
-        if (ImGui::Button(preview.c_str(), ImVec2(hasSlot ? -clearReserve : -FLT_MIN, 0.0f))) {
-            std::string path = FileDialog::OpenFile(
-                "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
-            if (!path.empty()) {
-                PushUndo(world, std::string("Set ") + label + " Map");
-                slot = assets.LoadTexture(path);
-            }
-        }
-        if (ImGui::IsItemHovered()) {
-            if (hasSlot) {
-                ImGui::BeginTooltip();
-                ImGui::Image((ImTextureID)(intptr_t)slot->GLHandle(), ImVec2(96, 96));
-                ImGui::TextUnformatted(slot->Path().c_str());
-                ImGui::EndTooltip();
-            } else {
-                EditorUI::SetTooltip("Click to import an image, or drag one here from the Asset Browser.");
-            }
-        }
-        if (ImGui::BeginDragDropTarget()) {
-            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
-                std::string texPath((const char*)payload->Data);
-                PushUndo(world, std::string("Set ") + label + " Map");
-                slot = assets.LoadTexture(texPath);
-            }
-            ImGui::EndDragDropTarget();
-        }
-        if (hasSlot) {
-            ImGui::SameLine();
-            if (ActionButton(ICON_FA_XMARK, "Clear", false, ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
-                PushUndo(world, std::string("Clear ") + label + " Map");
-                slot = nullptr;
-            }
-        }
-        if (helpText) EditorUI::HelpMarker(helpText);
-        ImGui::PopID();
-    };
-
-    mapRow("Albedo", mat->AlbedoMap, "The base color texture (also called diffuse/base color map).");
-    mapRow("Normal", mat->NormalMap, "Adds fine surface detail (bumps, grooves) without extra geometry.");
-    mapRow("Metallic", mat->MetallicMap, "Grayscale: white = metal, black = non-metal. Overrides the Metallic slider above.");
-    mapRow("Roughness", mat->RoughnessMap, "Grayscale: white = matte, black = mirror-smooth. Overrides the Roughness slider above.");
-    mapRow("AO", mat->AOMap, "Ambient occlusion - darkens crevices/contact points for added depth.");
-    mapRow("Emissive", mat->EmissiveMap, "Texture for glowing areas (e.g. windows, screens). Tinted by Emissive Color.");
-}
-
-void EditorLayer::DrawMultiMaterialEditor(World& world, AssetLibrary& assets,
-                                          const std::vector<entt::entity>& sel) {
+// Unified single-/multi-select material editor (#183): a size-1 `sel` is the degenerate case of
+// the general multi-edit path below, so single-select gets the same tri-state "Use Custom
+// Material" handling and mixed-value dashes (which simply never trigger for one object) instead
+// of a second, drifting copy of every field.
+void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
+                                     const std::vector<entt::entity>& sel) {
     // Two placed instances of the same imported file share one Model — and therefore one
     // MaterialOverride. Collapse to the distinct Model* set so each override is read/written
     // exactly once (and one undo step covers the lot).
