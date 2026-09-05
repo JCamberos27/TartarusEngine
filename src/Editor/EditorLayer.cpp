@@ -4289,6 +4289,7 @@ void EditorLayer::DrawStatsPanel(World& world, float dt) {
         const auto& gl = GLStateCache::GetFrameStats();
         ImGui::Text("Shader binds   %d (%d skipped)", gl.ProgramBinds, gl.ProgramBindsSkipped);
         ImGui::Text("Texture binds  %d (%d skipped)", gl.TextureBinds, gl.TextureBindsSkipped);
+        ImGui::Text("VAO binds      %d (%d skipped)", gl.VaoBinds, gl.VaoBindsSkipped);
         ImGui::PopStyleColor(2); // adaptive Text + TextDisabled
     }
     ImGui::End();
