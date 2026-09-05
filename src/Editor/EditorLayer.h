@@ -539,12 +539,13 @@ private:
     // Undo/redo: whole-scene JSON snapshots (via SceneSerializer, entities AND AssetLibrary
     // state both), pushed at the start of a discrete edit (gizmo drag, field drag, import,
     // delete, rename, folder move...) rather than every frame. `Label` is what the History
-    // panel (DrawHistoryPanel) shows for that step, and `SelectedNames` is what was selected
-    // right before the edit — restored by name (not raw entt::entity, which a full scene reload
-    // invalidates) when undoing back to this point.
+    // panel (DrawHistoryPanel) shows for that step, and `SelectedOrders` is what was selected
+    // right before the edit — restored by stable OrderComponent value (not raw entt::entity,
+    // which a full scene reload invalidates, and not by name, which collides whenever two
+    // entities share a name - #217) when undoing back to this point.
     struct UndoEntry {
         std::string SceneJson;
-        std::vector<std::string> SelectedNames;
+        std::vector<int> SelectedOrders;
         std::string Label;
     };
     std::vector<UndoEntry> m_UndoStack;
@@ -573,7 +574,7 @@ private:
     // re-activation, and opening a picker without changing anything adds nothing (issue #11).
     bool m_HasStagedUndo = false;
     std::string m_StagedUndoJson;
-    std::vector<std::string> m_StagedUndoSelectedNames;
+    std::vector<int> m_StagedUndoSelectedOrders;
     void StageUndo(const World& world);
     void CommitStagedUndo(const World& world, const std::string& label);
     // Repeatedly calls Undo()/Redo() until the entry at this position in the visible history
@@ -582,8 +583,8 @@ private:
     void JumpToUndoEntry(World& world, AssetLibrary& assets, size_t undoStackIndex);
     void JumpToRedoEntry(World& world, AssetLibrary& assets, size_t redoStackIndex);
 
-    std::vector<std::string> CaptureSelectedNames(const World& world) const;
-    void RestoreSelectionByName(World& world, const std::vector<std::string>& names);
+    std::vector<int> CaptureSelectedOrders(const World& world) const;
+    void RestoreSelectionByOrder(World& world, const std::vector<int>& orders);
 
     bool m_ShowHistory = false;
     void DrawHistoryPanel(World& world, AssetLibrary& assets);
