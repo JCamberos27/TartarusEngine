@@ -7222,7 +7222,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
 
         float bestT = 1e30f;
         entt::entity best = entt::null;
-        auto pickView = world.Registry.view<const RenderableComponent>();
+        auto pickView = world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>);
         for (auto entity : pickView) {
             const auto& renderable = pickView.get<const RenderableComponent>(entity);
             glm::mat4 model = world.ComposeWorldTransform(entity);
@@ -7245,7 +7245,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
             float bestPixelDist = kIconPickPixels;
             entt::entity iconHit = entt::null;
             float iconDepth = 1e30f;
-            for (auto entity : world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent>)) {
+            for (auto entity : world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent, InactiveTag>)) {
                 glm::mat4 model = world.ComposeWorldTransform(entity);
                 glm::vec3 worldPos = glm::vec3(model[3]);
                 glm::vec4 clip = viewProj * glm::vec4(worldPos, 1.0f);
@@ -7307,13 +7307,30 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
 
     if (!io.KeyCtrl) ClearSelection();
 
-    auto entityView = world.Registry.view<const RenderableComponent>();
+    auto entityView = world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>);
     for (auto entity : entityView) {
         const auto& renderable = entityView.get<const RenderableComponent>(entity);
         glm::mat4 model = world.ComposeWorldTransform(entity);
         AABB bounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(model);
         glm::vec2 pMin, pMax;
         if (projectedScreenRect(bounds, pMin, pMax) && rectsOverlap(pMin, pMax, rectMin, rectMax)) {
+            AddToSelectionIfAbsent(entity);
+        }
+    }
+
+    // Mesh-less entities (lights, cameras, empties) have no AABB to project — marquee-select
+    // them the same way a plain click does: test their on-screen icon position (same math as
+    // the icon-proximity pick above) against the drag rectangle.
+    for (auto entity : world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent, InactiveTag>)) {
+        glm::mat4 model = world.ComposeWorldTransform(entity);
+        glm::vec3 worldPos = glm::vec3(model[3]);
+        glm::vec4 clip = viewProj * glm::vec4(worldPos, 1.0f);
+        if (clip.w <= 0.0001f) continue; // behind the camera
+
+        glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        glm::vec2 screen(vpPos.x + (ndc.x * 0.5f + 0.5f) * w,
+                         vpPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * h);
+        if (screen.x >= rectMin.x && screen.x <= rectMax.x && screen.y >= rectMin.y && screen.y <= rectMax.y) {
             AddToSelectionIfAbsent(entity);
         }
     }
