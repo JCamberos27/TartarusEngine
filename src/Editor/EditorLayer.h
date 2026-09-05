@@ -816,12 +816,31 @@ private:
     void InvalidateModelThumbnail(const std::string& path = ""); // empty = clear all (e.g. a freed Model could be reallocated at the same address)
 
     // Thumbnails for the Asset Browser's "Screenshots" folder — keyed by file path, kept in sync
-    // with what's on disk each frame (entries drop when their file is gone). Loading is capped
-    // by its own per-frame budget (#176) so opening a folder of many captures decodes/uploads a
-    // few at a time instead of stalling on the frame the folder is opened; unloaded entries just
-    // aren't inserted into the map yet, so they're retried next frame.
+    // with what's on disk each cache refresh (#175; entries drop when their file is gone).
+    // Loading is capped by its own per-frame budget (#176) so opening a folder of many captures
+    // decodes/uploads a few at a time instead of stalling on the frame the folder is opened;
+    // unloaded entries just aren't inserted into the map yet, so they're retried next frame.
     std::unordered_map<std::string, std::shared_ptr<Texture>> m_ShotThumbs;
     int m_ScreenshotThumbBudgetThisFrame = 0;
+
+    // Cached directory listings backing the filesystem-based "Scenes" and "Screenshots" folders
+    // (#175) — std::filesystem::directory_iterator used to run every single frame while either
+    // folder was open or a search/filter was active. Now refreshed only on a short timer, when
+    // the Asset Browser regains focus, or right after an operation that actually creates/deletes/
+    // duplicates a file in one of those folders (a rename never touches these two folders on
+    // disk — see CommitRename — so it isn't a trigger).
+    struct AssetDirListingCache {
+        std::vector<std::string> paths; // generic_string() full paths of the matching files
+        bool valid = false;
+    };
+    AssetDirListingCache m_ScenesListingCache;
+    AssetDirListingCache m_ShotsListingCache;
+    float m_AssetListingRefreshTimer = 0.0f;   // ticks up in DrawAssetBrowser; see kAssetListingRefreshInterval
+    bool m_AssetBrowserFocusedLastFrame = false; // edge-detects m_AssetBrowserFocused for "just gained focus"
+    void RefreshScenesListingIfNeeded();
+    void RefreshShotsListingIfNeeded();
+    void InvalidateScenesListing() { m_ScenesListingCache.valid = false; }
+    void InvalidateShotsListing() { m_ShotsListingCache.valid = false; }
 
     // The screenshot lightbox (DrawScreenshotPreview). Its own full-res Texture, not a m_ShotThumbs
     // entry, so it survives that map being pruned and isn't size-capped to the thumbnail budget.
