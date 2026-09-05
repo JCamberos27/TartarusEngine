@@ -18,6 +18,16 @@ namespace SceneSerializer {
     // Returns false (leaving world untouched) if the file doesn't exist or fails to parse.
     bool Load(World& world, AssetLibrary& assets, const std::string& path);
 
+    // Every full scene (not an entity-subset fragment) carries a "formatVersion" integer at its
+    // root, written by Save/SaveToString and checked on every load (#195). A file whose
+    // formatVersion is newer than this build's is still loaded best-effort — unrecognized fields
+    // are simply ignored by the existing optional-field reads — but is very likely to be missing
+    // data this build doesn't know how to read, so the load also logs to the Console and stashes
+    // a warning here for the caller to surface loudly (e.g. a modal dialog). Returns empty if the
+    // most recent Load/LoadFromString/AppendEntitiesFromString call had no such warning; reading
+    // it clears it, so the same warning is never shown twice.
+    std::string TakeLoadWarning();
+
     // Same serialization, in-memory — used for the editor's undo/redo history so it doesn't
     // have to touch disk on every step. Entity-only (no AssetLibrary state) — used for the
     // play-mode enter/exit snapshot, where nothing asset-related can change anyway.

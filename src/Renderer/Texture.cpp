@@ -41,6 +41,20 @@ Texture::Texture(const std::string& path, const TextureImportSettings& settings)
 }
 
 void Texture::UploadFromFile(const TextureImportSettings& settings) {
+    // TextureType now actually drives behavior (#198), authoritative regardless of the individual
+    // toggles — so a texture typed NormalMap can never upload as sRGB (the Inspector already
+    // flips the checkbox when you pick the type, but this covers scenes saved before that existed
+    // too), and Sprite2D gets the clamp-to-edge/no-mipmap treatment a sprite atlas wants by
+    // default. Only affects GL upload parameters below, not the decoded pixels, so the cache
+    // lookups a few lines down stay keyed on the original `settings`.
+    TextureImportSettings effective = settings;
+    if (effective.TextureType == TextureImportSettings::Type::NormalMap) {
+        effective.IsSRGB = false;
+    } else if (effective.TextureType == TextureImportSettings::Type::Sprite2D) {
+        effective.WrapMode = TextureImportSettings::Wrap::ClampToEdge;
+        effective.GenerateMipmaps = false;
+    }
+
     // Warm path: pixels already decoded and downsampled by a previous run. PNG decode dominates
     // scene-load time (measured ~4.6s of a ~5.6s cold boot on a 22-texture library), so skipping
     // it is the single biggest startup win available. See TextureCache.h.
@@ -103,17 +117,17 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
         internalFormat = GL_R8; // no single-channel sRGB format in core GL - not a color texture anyway
     } else if (m_Channels == 3) {
         format = GL_RGB;
-        internalFormat = settings.IsSRGB ? GL_SRGB8 : GL_RGB8;
+        internalFormat = effective.IsSRGB ? GL_SRGB8 : GL_RGB8;
     } else if (m_Channels == 4) {
         format = GL_RGBA;
-        internalFormat = settings.IsSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
+        internalFormat = effective.IsSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
     }
 
     // Immutable storage + Direct State Access (#96): no glBindTexture to set this texture up,
     // so importing a texture mid-frame can't disturb whatever's bound for rendering. Immutable
     // storage needs the full mip level count up front.
     int levels = 1;
-    if (settings.GenerateMipmaps) {
+    if (effective.GenerateMipmaps) {
         int longEdge = uploadW > uploadH ? uploadW : uploadH;
         while (longEdge > 1) { longEdge >>= 1; ++levels; }
     }
@@ -129,27 +143,27 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     glTextureSubImage2D(m_ID, 0, 0, 0, uploadW, uploadH, format, GL_UNSIGNED_BYTE, uploadData);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 
-    if (settings.GenerateMipmaps) glGenerateTextureMipmap(m_ID);
+    if (effective.GenerateMipmaps) glGenerateTextureMipmap(m_ID);
 
-    GLint wrap = settings.WrapMode == TextureImportSettings::Wrap::ClampToEdge ? GL_CLAMP_TO_EDGE : GL_REPEAT;
+    GLint wrap = effective.WrapMode == TextureImportSettings::Wrap::ClampToEdge ? GL_CLAMP_TO_EDGE : GL_REPEAT;
     glTextureParameteri(m_ID, GL_TEXTURE_WRAP_S, wrap);
     glTextureParameteri(m_ID, GL_TEXTURE_WRAP_T, wrap);
 
     GLint minFilter, magFilter;
-    switch (settings.FilterMode) {
+    switch (effective.FilterMode) {
         case TextureImportSettings::Filter::Point:
-            minFilter = settings.GenerateMipmaps ? GL_NEAREST_MIPMAP_NEAREST : GL_NEAREST;
+            minFilter = effective.GenerateMipmaps ? GL_NEAREST_MIPMAP_NEAREST : GL_NEAREST;
             magFilter = GL_NEAREST;
             break;
         case TextureImportSettings::Filter::Trilinear:
-            minFilter = settings.GenerateMipmaps ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR;
+            minFilter = effective.GenerateMipmaps ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR;
             magFilter = GL_LINEAR;
             break;
         case TextureImportSettings::Filter::Bilinear:
         default:
             // "Bilinear" in Unity's sense still mip-selects, it just doesn't blend BETWEEN mip
             // levels the way Trilinear does - GL_LINEAR_MIPMAP_NEAREST is the matching mode.
-            minFilter = settings.GenerateMipmaps ? GL_LINEAR_MIPMAP_NEAREST : GL_LINEAR;
+            minFilter = effective.GenerateMipmaps ? GL_LINEAR_MIPMAP_NEAREST : GL_LINEAR;
             magFilter = GL_LINEAR;
             break;
     }
@@ -159,7 +173,7 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     // Anisotropic filtering — core in GL 4.6. Cleans up textures viewed at a shallow angle
     // (floors, walls receding to the horizon) that trilinear alone leaves blurry. Only
     // meaningful with a mip chain and a linear filter; clamp our request to the driver's max.
-    if (settings.GenerateMipmaps && settings.FilterMode != TextureImportSettings::Filter::Point) {
+    if (effective.GenerateMipmaps && effective.FilterMode != TextureImportSettings::Filter::Point) {
         static GLfloat s_MaxAniso = []() {
             GLint m = 0; glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &m);
             return (GLfloat)m;
