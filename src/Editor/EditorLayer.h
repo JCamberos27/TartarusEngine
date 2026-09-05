@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <cstdint>
 #include <unordered_set>
 #include <unordered_map>
 #include <map>
@@ -594,6 +595,10 @@ private:
         std::string SceneJson;
         std::vector<int> SelectedOrders;
         std::string Label;
+        // Cheap FNV-1a hash of SceneJson (#174 stage 1), used instead of a full string compare
+        // to detect a no-op push. SceneJson itself is still what's stored/restored - this is
+        // only ever compared against another entry's hash, never used on its own.
+        uint64_t Hash = 0;
     };
     std::vector<UndoEntry> m_UndoStack;
     std::vector<UndoEntry> m_RedoStack;
@@ -621,6 +626,7 @@ private:
     // re-activation, and opening a picker without changing anything adds nothing (issue #11).
     bool m_HasStagedUndo = false;
     std::string m_StagedUndoJson;
+    uint64_t m_StagedUndoHash = 0; // hash of m_StagedUndoJson, computed once alongside it (#174)
     std::vector<int> m_StagedUndoSelectedOrders;
     void StageUndo(const World& world);
     void CommitStagedUndo(const World& world, const std::string& label);
