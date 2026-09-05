@@ -35,6 +35,7 @@
 #include "SplashScreen.h"
 #include "GLDebug.h"
 #include "Log.h"
+#include "TextureCache.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -391,6 +392,21 @@ int main() {
         bool sceneLoaded = SceneSerializer::Load(world, assets, scenePath);
         if (sceneLoaded) {
             std::cout << "Loaded scene from " << scenePath << std::endl;
+        }
+
+        // #226: TextureCache never evicted anything on its own, so a texture deleted from the
+        // project (or reimported under different settings) left its old decoded-pixel entry on
+        // disk forever — 229MB across 26 entries observed on a real dev machine. Sweep now, after
+        // the scene above has loaded its textures and their customized import settings, so the
+        // sweep knows the *current* settings for anything actually customized. An entry for a
+        // texture this scene didn't touch is left alone rather than judged by stale information.
+        {
+            const auto& textureSettings = assets.TextureSettingsMap();
+            TextureCache::Prune([&textureSettings](const std::string& sourcePath) -> std::optional<uint64_t> {
+                auto it = textureSettings.find(sourcePath);
+                if (it == textureSettings.end()) return std::nullopt;
+                return TextureCache::HashSettings(it->second);
+            });
         }
 
         EditorLayer editor;

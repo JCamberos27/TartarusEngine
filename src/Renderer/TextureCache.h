@@ -1,4 +1,7 @@
 #pragma once
+#include <cstdint>
+#include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 #include "Texture.h" // TextureImportSettings
@@ -35,5 +38,25 @@ bool Load(const std::string& sourcePath, const TextureImportSettings& settings, 
 // Writes `img` as the cache entry for this source + settings pair. Failures are silent by
 // design: a cache that can't be written costs speed, never correctness.
 void Store(const std::string& sourcePath, const TextureImportSettings& settings, const Image& img);
+
+// Hashes import settings exactly the way Store/Load do internally. Exposed so a caller (e.g. a
+// startup prune pass) can ask "what would this asset's current settings hash to" without
+// duplicating the mix logic.
+uint64_t HashSettings(const TextureImportSettings& settings);
+
+// Startup maintenance pass (#226): the cache never evicts on its own, so a texture deleted from
+// the project, or reimported under different settings, leaves its old entry on disk forever.
+// This walks the cache directory once and deletes any entry that's provably stale:
+//   - its source file no longer exists on disk, or
+//   - its format version predates the running build's kVersion (already permanently unreadable
+//     via Load, e.g. after a decode-behaviour change bumps the version), or
+//   - `currentSettingsHash` is supplied, returns a value for that entry's source path, and that
+//     value disagrees with the hash stored in the entry's header.
+// `currentSettingsHash` returning std::nullopt for a path means "unknown — don't judge this entry
+// by settings alone"; pass nullptr to skip the settings check entirely and only prune entries
+// whose source is gone or whose version is stale. Reads only each entry's header, never the pixel
+// payload, so this is cheap regardless of cache size. Safe to call every launch, and safe to call
+// with no cache directory yet (a no-op).
+void Prune(const std::function<std::optional<uint64_t>(const std::string& sourcePath)>& currentSettingsHash = nullptr);
 
 } // namespace TextureCache
