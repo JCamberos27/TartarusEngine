@@ -114,6 +114,9 @@
 #define GL_TEXTURE_2D_MULTISAMPLE 0x9100
 #define GL_TEXTURE_2D_ARRAY 0x8C1A
 #define GL_TEXTURE_CUBE_MAP_ARRAY 0x9009
+#ifndef GL_TEXTURE_CUBE_MAP
+#define GL_TEXTURE_CUBE_MAP 0x8513 // IBL probes (#196); Windows' GL 1.1 gl.h stops before 1.3
+#endif
 #define GL_TEXTURE_CUBE_MAP_SEAMLESS 0x884F
 #define GL_TEXTURE_MAX_LEVEL 0x813D
 #define GL_TEXTURE_WRAP_R 0x8072
@@ -141,6 +144,11 @@
 #define GL_TIME_ELAPSED 0x88BF
 #define GL_QUERY_RESULT 0x8866
 #define GL_QUERY_RESULT_AVAILABLE 0x8867
+
+// Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
+#define GL_PIXEL_PACK_BUFFER 0x88EB
+#define GL_READ_ONLY 0x88B8
+#define GL_STREAM_READ 0x88E1
 
 typedef char GLchar;
 typedef ptrdiff_t GLsizeiptr;
@@ -252,6 +260,7 @@ typedef void (__stdcall* PFNGLTEXIMAGE2DMULTISAMPLEPROC)(GLenum, GLsizei, GLenum
 typedef void (__stdcall* PFNGLCREATEBUFFERSPROC)(GLsizei, GLuint*);
 typedef void (__stdcall* PFNGLNAMEDBUFFERSTORAGEPROC)(GLuint, GLsizeiptr, const void*, GLbitfield);
 typedef void (__stdcall* PFNGLNAMEDBUFFERSUBDATAPROC)(GLuint, GLintptr, GLsizeiptr, const void*);
+typedef void (__stdcall* PFNGLGETNAMEDBUFFERSUBDATAPROC)(GLuint, GLintptr, GLsizeiptr, void*);
 // DSA — textures.
 typedef void (__stdcall* PFNGLCREATETEXTURESPROC)(GLenum, GLsizei, GLuint*);
 typedef void (__stdcall* PFNGLTEXTURESTORAGE2DPROC)(GLuint, GLsizei, GLenum, GLsizei, GLsizei);
@@ -349,6 +358,7 @@ extern PFNGLTEXIMAGE2DMULTISAMPLEPROC glTexImage2DMultisample;
 extern PFNGLCREATEBUFFERSPROC glCreateBuffers;
 extern PFNGLNAMEDBUFFERSTORAGEPROC glNamedBufferStorage;
 extern PFNGLNAMEDBUFFERSUBDATAPROC glNamedBufferSubData;
+extern PFNGLGETNAMEDBUFFERSUBDATAPROC glGetNamedBufferSubData;
 extern PFNGLCREATETEXTURESPROC glCreateTextures;
 extern PFNGLTEXTURESTORAGE2DPROC glTextureStorage2D;
 extern PFNGLTEXTURESTORAGE3DPROC glTextureStorage3D;
@@ -390,6 +400,12 @@ extern PFNGLBEGINQUERYPROC glBeginQuery;
 extern PFNGLENDQUERYPROC glEndQuery;
 extern PFNGLGETQUERYOBJECTIVPROC glGetQueryObjectiv;
 extern PFNGLGETQUERYOBJECTUI64VPROC glGetQueryObjectui64v;
+
+// Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
+typedef void* (__stdcall* PFNGLMAPNAMEDBUFFERPROC)(GLuint, GLenum);
+typedef GLboolean (__stdcall* PFNGLUNMAPNAMEDBUFFERPROC)(GLuint);
+extern PFNGLMAPNAMEDBUFFERPROC glMapNamedBuffer;
+extern PFNGLUNMAPNAMEDBUFFERPROC glUnmapNamedBuffer;
 
 // Call once after a GL context is current (e.g. right after glfwMakeContextCurrent).
 bool GLLoader_Init();

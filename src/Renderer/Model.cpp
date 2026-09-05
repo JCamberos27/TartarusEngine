@@ -490,47 +490,88 @@ void Model::UploadBoneMatrices(Shader& shader) const {
 }
 
 namespace {
-void BindMaterial(Shader& shader, const Material& mat) {
-    shader.SetVec3("uBaseColor", mat.BaseColor);
-    shader.SetFloat("uMetallic", mat.Metallic);
-    shader.SetFloat("uRoughness", mat.Roughness);
-    shader.SetVec3("uEmissiveColor", mat.EmissiveColor * mat.EmissiveStrength);
-    shader.SetInt("uTriplanar", mat.Triplanar ? 1 : 0);
-    shader.SetFloat("uTriplanarScale", mat.TriplanarScale);
+// #194: per-material uniform locations for one Draw() call, resolved ONCE before the per-mesh
+// loop (below) instead of re-hashing all these literal names for every mesh of every model.
+struct MaterialLocs {
+    int baseColor, metallic, roughness, emissiveColor, triplanar, triplanarScale;
+    int hasAlbedo, albedoMap;
+    int hasNormal, normalMap;
+    int hasMetallicRoughness, metallicRoughnessMap;
+    int hasMetallic, metallicMap;
+    int hasRoughness, roughnessMap;
+    int hasAO, aoMap;
+    int hasEmissive, emissiveMap;
+};
+
+MaterialLocs ResolveMaterialLocs(Shader& shader) {
+    MaterialLocs L;
+    L.baseColor = shader.Loc("uBaseColor");
+    L.metallic = shader.Loc("uMetallic");
+    L.roughness = shader.Loc("uRoughness");
+    L.emissiveColor = shader.Loc("uEmissiveColor");
+    L.triplanar = shader.Loc("uTriplanar");
+    L.triplanarScale = shader.Loc("uTriplanarScale");
+    L.hasAlbedo = shader.Loc("uHasAlbedoMap");
+    L.albedoMap = shader.Loc("uAlbedoMap");
+    L.hasNormal = shader.Loc("uHasNormalMap");
+    L.normalMap = shader.Loc("uNormalMap");
+    L.hasMetallicRoughness = shader.Loc("uHasMetallicRoughnessMap");
+    L.metallicRoughnessMap = shader.Loc("uMetallicRoughnessMap");
+    L.hasMetallic = shader.Loc("uHasMetallicMap");
+    L.metallicMap = shader.Loc("uMetallicMap");
+    L.hasRoughness = shader.Loc("uHasRoughnessMap");
+    L.roughnessMap = shader.Loc("uRoughnessMap");
+    L.hasAO = shader.Loc("uHasAOMap");
+    L.aoMap = shader.Loc("uAOMap");
+    L.hasEmissive = shader.Loc("uHasEmissiveMap");
+    L.emissiveMap = shader.Loc("uEmissiveMap");
+    return L;
+}
+
+void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs) {
+    shader.SetVec3(locs.baseColor, mat.BaseColor);
+    shader.SetFloat(locs.metallic, mat.Metallic);
+    shader.SetFloat(locs.roughness, mat.Roughness);
+    shader.SetVec3(locs.emissiveColor, mat.EmissiveColor * mat.EmissiveStrength);
+    shader.SetInt(locs.triplanar, mat.Triplanar ? 1 : 0);
+    shader.SetFloat(locs.triplanarScale, mat.TriplanarScale);
 
     int unit = 1; // unit 0 reserved by caller for nothing; start textures at 1..5
-    auto bindOptional = [&](const std::shared_ptr<Texture>& tex, const char* hasUniform, const char* samplerUniform) {
+    auto bindOptional = [&](const std::shared_ptr<Texture>& tex, int hasLoc, int samplerLoc) {
         if (tex) {
             tex->Bind(unit);
-            shader.SetInt(samplerUniform, unit);
-            shader.SetInt(hasUniform, 1);
+            shader.SetInt(samplerLoc, unit);
+            shader.SetInt(hasLoc, 1);
             unit++;
         } else {
-            shader.SetInt(hasUniform, 0);
+            shader.SetInt(hasLoc, 0);
         }
     };
 
-    bindOptional(mat.AlbedoMap, "uHasAlbedoMap", "uAlbedoMap");
-    bindOptional(mat.NormalMap, "uHasNormalMap", "uNormalMap");
-    bindOptional(mat.MetallicRoughnessMap, "uHasMetallicRoughnessMap", "uMetallicRoughnessMap");
-    bindOptional(mat.MetallicMap, "uHasMetallicMap", "uMetallicMap");
-    bindOptional(mat.RoughnessMap, "uHasRoughnessMap", "uRoughnessMap");
-    bindOptional(mat.AOMap, "uHasAOMap", "uAOMap");
-    bindOptional(mat.EmissiveMap, "uHasEmissiveMap", "uEmissiveMap");
+    bindOptional(mat.AlbedoMap, locs.hasAlbedo, locs.albedoMap);
+    bindOptional(mat.NormalMap, locs.hasNormal, locs.normalMap);
+    bindOptional(mat.MetallicRoughnessMap, locs.hasMetallicRoughness, locs.metallicRoughnessMap);
+    bindOptional(mat.MetallicMap, locs.hasMetallic, locs.metallicMap);
+    bindOptional(mat.RoughnessMap, locs.hasRoughness, locs.roughnessMap);
+    bindOptional(mat.AOMap, locs.hasAO, locs.aoMap);
+    bindOptional(mat.EmissiveMap, locs.hasEmissive, locs.emissiveMap);
 }
 } // namespace
 
 void Model::Draw(Shader& shader) {
     UploadBoneMatrices(shader);
+    MaterialLocs locs = ResolveMaterialLocs(shader);
     for (auto& mesh : m_Meshes) {
         const Material& mat = m_MaterialOverride ? *m_MaterialOverride : mesh->Mat;
-        BindMaterial(shader, mat);
+        BindMaterial(shader, mat, locs);
         mesh->Draw();
     }
 }
 
 void Model::DrawDepthOnly(Shader& shader) {
     UploadBoneMatrices(shader);
+    int albedoLoc = shader.Loc("uAlbedo");
+    int alphaTestLoc = shader.Loc("uAlphaTest");
     for (auto& mesh : m_Meshes) {
         const Material& mat = m_MaterialOverride ? *m_MaterialOverride : mesh->Mat;
         // Only cost paid over a pure depth draw: one texture bind + two uniforms, and only for
@@ -538,10 +579,10 @@ void Model::DrawDepthOnly(Shader& shader) {
         // follows the cutout instead of a solid silhouette (#116).
         if (mat.AlbedoMap) {
             mat.AlbedoMap->Bind(0);
-            shader.SetInt("uAlbedo", 0);
-            shader.SetInt("uAlphaTest", 1);
+            shader.SetInt(albedoLoc, 0);
+            shader.SetInt(alphaTestLoc, 1);
         } else {
-            shader.SetInt("uAlphaTest", 0);
+            shader.SetInt(alphaTestLoc, 0);
         }
         mesh->Draw();
     }

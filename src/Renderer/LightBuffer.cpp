@@ -19,7 +19,7 @@ void LightBuffer::EnsureCreated() {
 }
 
 void LightBuffer::AddDirectional(const glm::vec3& dirWorld, const glm::vec3& colorLinear, float intensity) {
-    if ((int)m_Lights.size() >= kMaxLights) return;
+    if ((int)m_Lights.size() >= kMaxLights) { m_Overflowed = true; return; }
     glm::vec3 d = glm::length(dirWorld) > 1e-8f ? glm::normalize(dirWorld) : glm::vec3(0, -1, 0);
     GpuLight l{};
     l.PositionType = glm::vec4(0.0f, 0.0f, 0.0f, (float)Type::Directional);
@@ -35,7 +35,7 @@ void LightBuffer::AddDirectional(const glm::vec3& dirWorld, const glm::vec3& col
 
 void LightBuffer::AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLinear, float intensity, float range,
                           int shadowSlot) {
-    if ((int)m_Lights.size() >= kMaxLights) return;
+    if ((int)m_Lights.size() >= kMaxLights) { m_Overflowed = true; return; }
     GpuLight l{};
     l.PositionType = glm::vec4(posWorld, (float)Type::Point);
     l.ColorRange   = glm::vec4(colorLinear * intensity, range);
@@ -46,7 +46,7 @@ void LightBuffer::AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLine
 
 void LightBuffer::AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, const glm::vec3& colorLinear,
                           float intensity, float range, float cosOuter, float cosInner, int shadowSlot) {
-    if ((int)m_Lights.size() >= kMaxLights) return;
+    if ((int)m_Lights.size() >= kMaxLights) { m_Overflowed = true; return; }
     glm::vec3 d = glm::length(dirWorld) > 1e-8f ? glm::normalize(dirWorld) : glm::vec3(0, -1, 0);
     GpuLight l{};
     l.PositionType = glm::vec4(posWorld, (float)Type::Spot);

@@ -65,6 +65,7 @@ PFNGLTEXIMAGE2DMULTISAMPLEPROC glTexImage2DMultisample = nullptr;
 PFNGLCREATEBUFFERSPROC glCreateBuffers = nullptr;
 PFNGLNAMEDBUFFERSTORAGEPROC glNamedBufferStorage = nullptr;
 PFNGLNAMEDBUFFERSUBDATAPROC glNamedBufferSubData = nullptr;
+PFNGLGETNAMEDBUFFERSUBDATAPROC glGetNamedBufferSubData = nullptr;
 PFNGLCREATETEXTURESPROC glCreateTextures = nullptr;
 PFNGLTEXTURESTORAGE2DPROC glTextureStorage2D = nullptr;
 PFNGLTEXTURESTORAGE3DPROC glTextureStorage3D = nullptr;
@@ -100,6 +101,10 @@ PFNGLBEGINQUERYPROC glBeginQuery = nullptr;
 PFNGLENDQUERYPROC glEndQuery = nullptr;
 PFNGLGETQUERYOBJECTIVPROC glGetQueryObjectiv = nullptr;
 PFNGLGETQUERYOBJECTUI64VPROC glGetQueryObjectui64v = nullptr;
+
+// Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
+PFNGLMAPNAMEDBUFFERPROC glMapNamedBuffer = nullptr;
+PFNGLUNMAPNAMEDBUFFERPROC glUnmapNamedBuffer = nullptr;
 
 namespace {
 void* LoadGLFunc(const char* name) {
@@ -179,6 +184,7 @@ bool GLLoader_Init() {
     LOAD(PFNGLCREATEBUFFERSPROC, glCreateBuffers)
     LOAD(PFNGLNAMEDBUFFERSTORAGEPROC, glNamedBufferStorage)
     LOAD(PFNGLNAMEDBUFFERSUBDATAPROC, glNamedBufferSubData)
+    LOAD(PFNGLGETNAMEDBUFFERSUBDATAPROC, glGetNamedBufferSubData)
     LOAD(PFNGLCREATETEXTURESPROC, glCreateTextures)
     LOAD(PFNGLTEXTURESTORAGE2DPROC, glTextureStorage2D)
     LOAD(PFNGLTEXTURESTORAGE3DPROC, glTextureStorage3D)
@@ -214,6 +220,10 @@ bool GLLoader_Init() {
     LOAD(PFNGLENDQUERYPROC, glEndQuery)
     LOAD(PFNGLGETQUERYOBJECTIVPROC, glGetQueryObjectiv)
     LOAD(PFNGLGETQUERYOBJECTUI64VPROC, glGetQueryObjectui64v)
+
+    // Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
+    LOAD(PFNGLMAPNAMEDBUFFERPROC, glMapNamedBuffer)
+    LOAD(PFNGLUNMAPNAMEDBUFFERPROC, glUnmapNamedBuffer)
 #undef LOAD
     return ok;
 }
