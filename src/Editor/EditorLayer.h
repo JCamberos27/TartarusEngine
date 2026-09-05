@@ -303,6 +303,12 @@ public:
         int Vertices = 0;
         int PointLights = 0;
         int Culled = 0; // entities skipped by frustum culling this frame - not drawn at all
+        // #204: the scene has more active lights than the forward LightBuffer can hold
+        // (LightBuffer::kMaxLights) - the excess were silently dropped before this existed.
+        bool LightBufferOverflowed = false;
+        // #204: at least one cluster's per-froxel light list filled ClusterGrid::MAX_LIGHTS_PER_CLUSTER
+        // this frame, so it may be missing lights that should be shading it.
+        bool ClusterSaturated = false;
     };
     void SetRenderStats(const RenderStats& stats) { m_RenderStats = stats; }
 
@@ -474,6 +480,16 @@ private:
     void DrawExitPrompt();
     bool m_ExitPromptPending = false;
     ExitDecision m_ExitDecision = ExitDecision::None;
+
+    // #195: a scene file whose formatVersion is newer than this build understands still loads
+    // best-effort, but SceneSerializer::TakeLoadWarning() comes back non-empty in that case — the
+    // Console already got a Log::Error line from SceneSerializer itself, and this modal is the
+    // loud, hard-to-miss half of that warning. m_SceneVersionWarning non-empty is what drives the
+    // popup open; set it right after any Load() the user can see the result of (OpenScene, the
+    // recovery-restore path) via CheckSceneVersionWarning().
+    void CheckSceneVersionWarning();
+    void DrawSceneVersionWarningPopup();
+    std::string m_SceneVersionWarning;
 
     // Preferences window (Ctrl+,) — replaces the old giant Settings menu-bar dropdown (#53).
     void DrawPreferencesWindow(World& world);

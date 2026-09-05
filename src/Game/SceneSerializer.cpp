@@ -23,6 +23,21 @@ using json = nlohmann::json;
 
 namespace {
 
+// Bumped whenever a scene-file change would make an older build misread a newer save (a field
+// whose meaning changed, not merely a new optional field — those need no bump at all, since every
+// read here already defaults gracefully when a key is absent). #195: scenes previously carried no
+// version at all, so there's no way to tell "old build, old file" apart from "old build, file from
+// a build that changed something incompatible" — this is the fix. Starting at 1 rather than 0 so
+// that 0 unambiguously means "no formatVersion field was written" (a legacy pre-#195 file), not
+// "written by version 0".
+constexpr int kSceneFormatVersion = 1;
+
+// Set by ApplySceneJson when the file being loaded declares a formatVersion newer than this build
+// understands; read (and cleared) via SceneSerializer::TakeLoadWarning() so a caller like the
+// editor can pop a dialog in addition to the Console line ApplySceneJson already logs. Plain
+// (non-thread-local) static: scene loads happen on the main thread only.
+std::string g_LastLoadWarning;
+
 // A non-finite component anywhere in the scene (nan/inf slipped past the Inspector, or a
 // corrupt file) serializes as JSON `null` / a bare `nan` token, neither of which reloads —
 // the whole scene is then lost. Scrub to 0 at the one choke point every vector passes
@@ -208,6 +223,10 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
     json root;
     auto included = [&](entt::entity e) { return !only || only->count(e) > 0; };
     if (!only) {
+        // Omitted for entity-subset fragments (clipboard/prefab) same as the sky colors below —
+        // a fragment is spliced into whatever scene is already loaded, never loaded standalone,
+        // so it has no independent format to version.
+        root["formatVersion"] = kSceneFormatVersion;
         root["skyHorizonColor"] = Vec3ToJson(world.SkyHorizonColor);
         root["skyZenithColor"] = Vec3ToJson(world.SkyZenithColor);
     }
@@ -362,6 +381,27 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
 bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
     bool clearFirst = true, std::vector<entt::entity>* outCreated = nullptr) {
     auto created = [&](entt::entity e) { if (outCreated) outCreated->push_back(e); };
+
+    // #195: 0 (the default when the key is absent) means a legacy pre-#195 file or an entity-subset
+    // fragment (BuildSceneJson never writes the field for those) — both fall straight through to
+    // the existing presence-check reads below exactly as before this field existed. A recognized
+    // version in between would take its own migration branch here as new incompatible versions are
+    // added; there's only ever been version 1 so far, so there's nothing to branch on yet. A
+    // version newer than this build knows about is still loaded best-effort (every read below
+    // already tolerates an unrecognized/missing key), but is very likely missing data this build
+    // can't interpret, so it's called out loudly rather than silently: Console now, and stashed for
+    // the caller (e.g. the editor) to also raise as a dialog via SceneSerializer::TakeLoadWarning().
+    g_LastLoadWarning.clear();
+    int formatVersion = root.value("formatVersion", 0);
+    if (formatVersion > kSceneFormatVersion) {
+        std::string msg = "Scene: this file's format version (" + std::to_string(formatVersion) +
+            ") is newer than this build supports (" + std::to_string(kSceneFormatVersion) +
+            "). It was saved by a newer version of the engine — some data may be missing or "
+            "misinterpreted after loading.";
+        Log::Error(msg);
+        g_LastLoadWarning = msg;
+    }
+
     if (clearFirst) world.Registry.clear();
     if (!clearFirst) {
         // A fragment carries no environment settings (BuildSceneJson omits them for subsets),
@@ -561,7 +601,7 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets) {
     for (const auto& [key, s] : assets.TextureSettingsMap()) {
         findOrCreate(key)["textureImport"] = {
             {"textureType", (int)s.TextureType}, {"generateMipmaps", s.GenerateMipmaps},
-            {"isSRGB", s.IsSRGB}, {"isReadable", s.IsReadable}, {"filterMode", (int)s.FilterMode},
+            {"isSRGB", s.IsSRGB}, {"filterMode", (int)s.FilterMode},
             {"wrapMode", (int)s.WrapMode}, {"maxTextureSize", s.MaxTextureSize},
         };
     }
@@ -608,10 +648,14 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
             if (entry.contains("textureImport")) {
                 const auto& t = entry["textureImport"];
                 TextureImportSettings s;
-                s.TextureType = (TextureImportSettings::Type)t.value("textureType", 0);
+                // Clamp: a scene saved before #198 removed the unused Cubemap enum value could
+                // still carry that old index (3) — fall back to Default rather than construct an
+                // out-of-range enum.
+                int rawType = t.value("textureType", 0);
+                s.TextureType = (rawType >= 0 && rawType <= (int)TextureImportSettings::Type::Sprite2D)
+                    ? (TextureImportSettings::Type)rawType : TextureImportSettings::Type::Default;
                 s.GenerateMipmaps = t.value("generateMipmaps", true);
                 s.IsSRGB = t.value("isSRGB", true);
-                s.IsReadable = t.value("isReadable", false);
                 s.FilterMode = (TextureImportSettings::Filter)t.value("filterMode", 1);
                 s.WrapMode = (TextureImportSettings::Wrap)t.value("wrapMode", 0);
                 s.MaxTextureSize = t.value("maxTextureSize", 2048);
@@ -646,6 +690,12 @@ bool SceneSerializer::Save(const World& world, const AssetLibrary& assets, const
     AppendAssetLibraryJson(root, assets);
     out << root.dump(2);
     return true;
+}
+
+std::string SceneSerializer::TakeLoadWarning() {
+    std::string warning = std::move(g_LastLoadWarning);
+    g_LastLoadWarning.clear();
+    return warning;
 }
 
 bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string& path) {

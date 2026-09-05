@@ -84,6 +84,11 @@ layout(std430, binding = 0) readonly  buffer LightBuffer   { uint uLightCount; L
 layout(std430, binding = 2) readonly  buffer ClusterAABBs  { AABB uClusters[]; };
 layout(std430, binding = 3) writeonly buffer ClusterCounts { uint uCount[]; };
 layout(std430, binding = 4) writeonly buffer ClusterIndex  { uint uIndex[]; };
+// Cleared to 0 by ClusterGrid::Cull() before this dispatch; atomicOr'd to 1 by any invocation
+// whose cluster filled its MAXL slots, i.e. some lights may have been dropped from that cluster
+// this frame. Read back (a single uint) once per Cull() call to drive the Stats panel warning
+// (#204) — not sampled per-fragment, so it costs nothing on the shading path.
+layout(std430, binding = 5) buffer ClusterOverflow { uint uOverflowFlag; };
 
 uniform mat4 uView;
 
@@ -118,5 +123,8 @@ void main() {
         }
     }
     uCount[c] = n;
+    // Hit the cap - there may be more lights overlapping this cluster than the loop above ever
+    // got to test once n reached MAXL, so flag it rather than pretend the list is complete (#204).
+    if (n >= MAXL) atomicOr(uOverflowFlag, 1u);
 }
 )";

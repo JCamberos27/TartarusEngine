@@ -891,7 +891,7 @@ int main() {
             float pointShadowNear[PointShadowMap::kMaxPoints];
             float frameSunShadowBias = 1.0f, frameSunShadowNormalBias = 1.0f, frameSunShadowSoftness = 1.0f;
             for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
-                if (lightBuffer.Count() >= LightBuffer::kMaxLights) break;
+                if (lightBuffer.Count() >= LightBuffer::kMaxLights) { lightBuffer.MarkOverflowed(); break; }
                 if (world.Registry.all_of<InactiveTag>(e)) continue;
                 // Lights panel solo/mute is an editing aid only — Play renders every light (#140).
                 if (!playing && editor.IsLightSuppressed(e)) continue;
@@ -1248,6 +1248,8 @@ int main() {
                 // since both are just entities with a Transform + Renderable.
                 EditorLayer::RenderStats localStats;
                 localStats.PointLights = std::max(0, frameLightCount - 1); // minus the directional sun
+                localStats.LightBufferOverflowed = lightBuffer.Overflowed(); // #204
+                localStats.ClusterSaturated = clusterOn && clusterGrid.Saturated(); // #204
                 Frustum camFrustum = Frustum::FromViewProj(sceneProj * sceneView);
                 { // scope limits PROFILE_SCOPE to just this loop, not the rest of the frame
                 PROFILE_SCOPE("Scene Draw");
