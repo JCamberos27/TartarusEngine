@@ -71,7 +71,10 @@ public:
     void SetLabels(const std::string& assetKey, const std::set<std::string>& labels);
     const std::set<std::string>& Labels(const std::string& assetKey) const; // empty set if none
     // Every label currently in use by anything, for the search bar's Label filter dropdown.
-    std::set<std::string> AllKnownLabels() const;
+    // Cached and rebuilt only when a label is added/removed/renamed anywhere in the library —
+    // called every frame by the Asset Browser (to decide whether the Filters button's "active"
+    // dot should show), so it must not allocate/rebuild a fresh set each call (#177).
+    const std::set<std::string>& AllKnownLabels() const;
 
     // Removes any currently-loaded model/texture/sound/prefab/folder whose path isn't in the
     // corresponding keep-set — used by undo/redo's snapshot restore to make loading a prior
@@ -145,4 +148,10 @@ private:
     std::map<std::string, TextureImportSettings> m_TextureSettings;
     std::map<std::string, ModelImportSettings> m_ModelSettings;
     std::map<std::string, std::set<std::string>> m_Labels;
+
+    // Cache for AllKnownLabels() (#177) — rebuilt lazily on next read after any mutation that
+    // could change the set of distinct labels in use (SetLabels, and every Remove*/Clear* that
+    // erases from m_Labels). Mutable because the rebuild happens inside a const getter.
+    mutable std::set<std::string> m_AllLabelsCache;
+    mutable bool m_AllLabelsDirty = true;
 };
