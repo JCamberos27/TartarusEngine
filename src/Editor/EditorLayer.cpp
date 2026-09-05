@@ -1307,6 +1307,7 @@ bool EditorLayer::DoSaveAs(World& world, AssetLibrary& assets) {
     m_Dirty = false;
     m_SavedUndoDepth = (int)m_UndoStack.size(); // this history position now matches disk
     m_AutoSaveTimer = 0.0f;
+    InvalidateScenesListing(); // (#175) may have written a new file under scenes/
     return true;
 }
 
@@ -3918,6 +3919,7 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
         m_SavedUndoDepth = (int)m_UndoStack.size();
         EditorSettings::Get().LastScenePath = pathStr;
         EditorSettings::Save();
+        InvalidateScenesListing(); // (#175) wrote a new file under scenes/
     } else {
         // Couldn't write (read-only project dir, …) — fall back to untitled-in-memory: Save
         // prompts for a location, main.cpp skips save-on-exit while the path is empty. The
@@ -6644,6 +6646,7 @@ void EditorLayer::RequestCapture() {
 void EditorLayer::OnCaptureDone(const std::string& path, int w, int h) {
     m_LastCapturePath = path;
     if (path.empty()) { m_CaptureToast = "Screenshot failed — see Console"; m_CaptureToastT = 3.0f; return; }
+    InvalidateShotsListing(); // (#175) a new file just landed under screenshots/
     const auto& s = EditorSettings::Get();
     if (s.CaptureFlash) m_CaptureFlashT = 1.0f;
     if (s.CaptureSound) {
@@ -8643,6 +8646,7 @@ bool EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const s
             std::string why;
             if (FileDialog::RecycleFile(key, why)) {
                 Log::Info("Sent scene file to Recycle Bin: " + leaf);
+                InvalidateScenesListing(); // (#175) scenes/ just lost a file
                 if (EditorSettings::Get().LastScenePath == key) {
                     EditorSettings::Get().LastScenePath.clear();
                     EditorSettings::Save();
@@ -8663,6 +8667,7 @@ bool EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const s
             std::string why;
             if (FileDialog::RecycleFile(key, why)) {
                 Log::Info("Sent screenshot to Recycle Bin: " + leaf);
+                InvalidateShotsListing(); // (#175) screenshots/ just lost a file
             } else {
                 if (why.empty()) why = "the file may be open in another program or write-protected";
                 if (!m_DeleteError.empty()) m_DeleteError += "\n";
@@ -8810,6 +8815,15 @@ void EditorLayer::DuplicateSelectedAsset(World& world, AssetLibrary& assets) {
             Log::Error("Failed to duplicate '" + key + "': " + copyErr.message());
             return {};
         }
+
+        // (#175) A duplicated Scene or Screenshot (neither is an AssetLibrary entry — see the
+        // "registered" checks below) still just copied a real file into scenes/ or screenshots/,
+        // so the corresponding cached directory listing needs invalidating same as any other
+        // create. Harmless if the extension happens to belong to something else entirely.
+        std::string dupExt = candidate.extension().string();
+        for (char& c : dupExt) c = (char)tolower((unsigned char)c);
+        if (dupExt == ".json") InvalidateScenesListing();
+        else if (dupExt == ".png" || dupExt == ".jpg" || dupExt == ".jpeg") InvalidateShotsListing();
 
         std::string newPath = candidate.generic_string();
         std::string folder = assets.AssetFolder(key);
@@ -9039,6 +9053,41 @@ void EditorLayer::DrawFolderTreeNode(World& world, AssetLibrary& assets, const s
     }
 }
 
+// Rescans scenes/ on disk into m_ScenesListingCache — only when the cache has been invalidated
+// (timer, Asset Browser focus regained, or an explicit create/delete/duplicate elsewhere in this
+// file). See the header for why this replaced a per-frame directory_iterator (#175).
+void EditorLayer::RefreshScenesListingIfNeeded() {
+    if (m_ScenesListingCache.valid) return;
+    m_ScenesListingCache.paths.clear();
+    std::error_code ec;
+    // Under the project folder, alongside scene.json — not the working directory (see
+    // ProjectPaths.h), so saved scenes are tracked content rather than build output.
+    const std::string scenesDir = ProjectPaths::Resolve("scenes");
+    std::filesystem::create_directory(scenesDir, ec);
+    for (const auto& entry : std::filesystem::directory_iterator(scenesDir, ec)) {
+        if (!entry.is_regular_file() || entry.path().extension() != ".json") continue;
+        m_ScenesListingCache.paths.push_back(entry.path().generic_string());
+    }
+    m_ScenesListingCache.valid = true;
+}
+
+// Same idea for project/screenshots/ — see RefreshScenesListingIfNeeded above.
+void EditorLayer::RefreshShotsListingIfNeeded() {
+    if (m_ShotsListingCache.valid) return;
+    m_ShotsListingCache.paths.clear();
+    std::error_code ec;
+    const std::string shotsDir = Screenshot::Dir();
+    for (const auto& entry : std::filesystem::directory_iterator(shotsDir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        std::string ext = entry.path().extension().string();
+        for (char& c : ext) c = (char)tolower((unsigned char)c);
+        if (ext != ".png" && ext != ".jpg" && ext != ".jpeg") continue;
+        if (entry.path().filename().string().rfind('.', 0) == 0) continue; // .shutter.wav etc.
+        m_ShotsListingCache.paths.push_back(entry.path().generic_string());
+    }
+    m_ShotsListingCache.valid = true;
+}
+
 void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     // Locked only blocks dragging the tab to move/undock/rearrange the panel — resizing its
     // dock node (and the neighbors that share that border) always works, locked or not.
@@ -9050,6 +9099,22 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     ImGui::PopStyleVar();
     if (!open) { ImGui::End(); return; }
     m_AssetBrowserFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
+
+    // Refresh triggers for the Scenes/Screenshots directory-listing caches (#175): a short
+    // timer, and the Asset Browser regaining focus (edge-detected off m_AssetBrowserFocused,
+    // which the line above already keeps current every frame — this just remembers last
+    // frame's value to catch the false->true transition). Explicit invalidation after any
+    // create/delete/duplicate touching those folders happens at the call sites themselves
+    // (NewScene, DoSaveAs, PerformAssetDelete, DuplicateSelectedAsset, OnCaptureDone).
+    constexpr float kAssetListingRefreshInterval = 1.5f; // seconds
+    const bool assetBrowserFocusGained = m_AssetBrowserFocused && !m_AssetBrowserFocusedLastFrame;
+    m_AssetBrowserFocusedLastFrame = m_AssetBrowserFocused;
+    m_AssetListingRefreshTimer += ImGui::GetIO().DeltaTime;
+    if (assetBrowserFocusGained || m_AssetListingRefreshTimer >= kAssetListingRefreshInterval) {
+        m_AssetListingRefreshTimer = 0.0f;
+        InvalidateScenesListing();
+        InvalidateShotsListing();
+    }
 
     auto makeNewFolder = [&]() {
         std::string base = m_CurrentAssetFolder.empty() ? "New Folder" : (m_CurrentAssetFolder + "/New Folder");
@@ -9285,15 +9350,9 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     static const std::string kScenesFolder = "Scenes";
     assets.CreateFolder(kScenesFolder);
     if (filtering || m_CurrentAssetFolder == kScenesFolder) {
-        std::error_code ec;
-        // Under the project folder, alongside scene.json — not the working directory (see
-        // ProjectPaths.h), so saved scenes are tracked content rather than build output.
-        const std::string scenesDir = ProjectPaths::Resolve("scenes");
-        std::filesystem::create_directory(scenesDir, ec);
-        for (const auto& entry : std::filesystem::directory_iterator(scenesDir, ec)) {
-            if (!entry.is_regular_file() || entry.path().extension() != ".json") continue;
-            std::string path = entry.path().generic_string();
-            std::string name = entry.path().stem().string();
+        RefreshScenesListingIfNeeded(); // (#175) cached — see m_ScenesListingCache
+        for (const auto& path : m_ScenesListingCache.paths) {
+            std::string name = std::filesystem::path(path).stem().string();
             if (!MatchesAssetSearch(parsedSearch, name, "scene", assets.Labels(path))) continue;
             cells.push_back({Cell::Kind::Scene, path, name, nullptr, nullptr});
         }
@@ -9305,17 +9364,10 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     static const std::string kShotsFolder = "Screenshots";
     assets.CreateFolder(kShotsFolder);
     if (filtering || m_CurrentAssetFolder == kShotsFolder) {
-        std::error_code ec;
-        const std::string shotsDir = Screenshot::Dir();
+        RefreshShotsListingIfNeeded(); // (#175) cached — see m_ShotsListingCache
         std::set<std::string> seen;
-        for (const auto& entry : std::filesystem::directory_iterator(shotsDir, ec)) {
-            if (!entry.is_regular_file()) continue;
-            std::string ext = entry.path().extension().string();
-            for (char& c : ext) c = (char)tolower((unsigned char)c);
-            if (ext != ".png" && ext != ".jpg" && ext != ".jpeg") continue;
-            if (entry.path().filename().string().rfind('.', 0) == 0) continue; // .shutter.wav etc.
-            std::string path = entry.path().generic_string();
-            std::string name = entry.path().stem().string();
+        for (const auto& path : m_ShotsListingCache.paths) {
+            std::string name = std::filesystem::path(path).stem().string();
             if (!MatchesAssetSearch(parsedSearch, name, "texture", {})) continue;
             seen.insert(path);
             auto it = m_ShotThumbs.find(path);
