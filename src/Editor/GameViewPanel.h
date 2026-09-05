@@ -89,6 +89,13 @@ public:
     ImVec2 GetViewImagePos() const { return m_ViewImagePos; }
     ImVec2 GetViewImageSize() const { return m_ViewImageSize; }
 
+    // True when the Game tab was the visible one (not a background dock tab) as of the last
+    // RenderUI call - the equivalent of EditorLayer::IsSceneViewportVisible() (#172), so the
+    // offscreen Game render can be skipped when the Scene tab has focus instead. One-frame-stale
+    // by the same construction as GetLastAvailableRegion() above: this frame's render (main.cpp)
+    // has to run before RenderUI does, so it reads whichever tab was active last frame.
+    bool IsVisible() const { return m_Visible; }
+
     Framebuffer& GetFramebuffer() { return m_Framebuffer; }
     bool IsWindowOpen() const { return m_WindowOpen; }
 
@@ -105,6 +112,7 @@ private:
     ImVec2 m_LastAvailableRegion{0.0f, 0.0f};
     ImVec2 m_ViewImagePos{0.0f, 0.0f};
     ImVec2 m_ViewImageSize{0.0f, 0.0f};
+    bool m_Visible = true; // see IsVisible()
 
     bool m_WindowOpen = true;
     bool m_EngageClickPending = false;

@@ -18,4 +18,10 @@ namespace FileDialog {
     // is appended automatically if the typed filename doesn't already have an extension.
     // Returns the chosen path, or an empty string if the user canceled.
     std::string SaveFile(const char* filter, const char* defaultExt, GLFWwindow* owner);
+
+    // Sends `path` to the OS Recycle Bin (SHFileOperationW + FOF_ALLOWUNDO) instead of
+    // permanently erasing it, so a delete from the editor is recoverable through the OS the same
+    // way Explorer's Delete is (#211). Returns false and fills `errorOut` on failure (open
+    // elsewhere, write-protected, etc.).
+    bool RecycleFile(const std::string& path, std::string& errorOut);
 }

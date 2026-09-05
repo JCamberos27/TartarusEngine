@@ -8,13 +8,19 @@
 // with one std430 SSBO bound at binding = 0:
 //
 //   layout(std430, binding = 0) readonly buffer LightBuffer {
-//       uint  uLightCount;   // + 12 bytes implicit pad
-//       Light uLights[];     // starts at byte 16
+//       uint  uLightCount;
+//       uint  uDirectionalCount; // + 8 bytes implicit pad
+//       Light uLights[];         // starts at byte 16
 //   };
 //
 // Every light kind (directional / point / spot) lives in the same array; the shader branches on
 // the type packed into PositionType.w. This is the shape the clustered-forward cull pass will
 // consume later, so nothing about the storage changes when that lands.
+//
+// Directional lights are kept packed at the FRONT of the array (AddDirectional inserts rather
+// than appends), and uDirectionalCount says how many - so the directional-light shading pass can
+// loop `for (i < uDirectionalCount)` instead of scanning every light in the buffer and skipping
+// non-directional ones by type (#188).
 class LightBuffer {
 public:
     // Forward path cap. Raised once clustered culling is in; 256 * 64B = 16 KB, trivial.
@@ -27,7 +33,7 @@ public:
     LightBuffer(const LightBuffer&) = delete;
     LightBuffer& operator=(const LightBuffer&) = delete;
 
-    void Clear() { m_Lights.clear(); }
+    void Clear() { m_Lights.clear(); m_DirectionalCount = 0; }
 
     // `colorLinear` is the light's colour, `intensity` its scalar strength — stored pre-multiplied,
     // matching what the old shader received. Silently drops lights past kMaxLights.
@@ -53,6 +59,7 @@ private:
     };
 
     std::vector<GpuLight> m_Lights;
+    int m_DirectionalCount = 0; // how many of m_Lights' front entries are directional (#188)
     unsigned int m_Ssbo = 0;
 
     void EnsureCreated();

@@ -27,7 +27,14 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 #include <ImGuizmo.h>
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4505) // ImViewGuizmo.h defines a couple of static helpers this TU doesn't call
+#endif
 #include <ImViewGuizmo.h>
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 #include <IconsFontAwesome6.h>
 // One glyph = one meaning (#161). Where two unrelated actions used to share a picture:
 //   Scale tool            ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER  (was EXPAND — clashed with
@@ -1321,6 +1328,81 @@ void EditorLayer::DrawExitPrompt() {
         if (PrimaryButton("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
             m_ExitDecision = ExitDecision::None;
             m_ExitPromptPending = false; // main sees ExitPromptActive() == false -> stays open
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void EditorLayer::RequestNewScene(World& world, AssetLibrary& assets) {
+    if (m_Dirty) {
+        m_PendingSceneSwitch = PendingSceneSwitch::New;
+        m_PendingScenePath.clear();
+        m_ScenePromptPending = true;
+        return;
+    }
+    NewScene(world, assets);
+}
+
+void EditorLayer::RequestOpenScene(World& world, AssetLibrary& assets, const std::string& path) {
+    if (path.empty()) return; // dialog cancelled, or an empty drag payload
+    if (m_Dirty) {
+        m_PendingSceneSwitch = PendingSceneSwitch::Open;
+        m_PendingScenePath = path;
+        m_ScenePromptPending = true;
+        return;
+    }
+    OpenScene(world, assets, path);
+}
+
+// "Save changes?" before New/Open discard the current scene (#216) — same Save / Don't Save /
+// Cancel shape as DrawExitPrompt, but for switching scenes rather than closing the window, so it
+// runs the stashed New/Open instead of exiting. A distinct popup ID ("##SceneSwitch") keeps it
+// independent of the exit prompt even though the visible title text matches.
+void EditorLayer::DrawSceneSwitchPrompt(World& world, AssetLibrary& assets) {
+    if (!m_ScenePromptPending) return;
+
+    if (!ImGui::IsPopupOpen("Save changes?##SceneSwitch")) ImGui::OpenPopup("Save changes?##SceneSwitch");
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (ImGui::BeginPopupModal("Save changes?##SceneSwitch", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        std::string sceneName = std::filesystem::path(m_CurrentScenePath).filename().string();
+        if (sceneName.empty()) sceneName = "Untitled";
+        ImGui::Text("\"%s\" has unsaved changes.", sceneName.c_str());
+        ImGui::TextUnformatted("Save them before continuing?");
+        ImGui::Separator();
+
+        auto runPendingSwitch = [&]() {
+            if (m_PendingSceneSwitch == PendingSceneSwitch::New) NewScene(world, assets);
+            else if (m_PendingSceneSwitch == PendingSceneSwitch::Open) OpenScene(world, assets, m_PendingScenePath);
+            m_PendingSceneSwitch = PendingSceneSwitch::None;
+            m_PendingScenePath.clear();
+        };
+
+        if (PrimaryButton("Save", ImVec2(110.0f, 0.0f))) {
+            // DoSaveAs returns false if the user cancels the file dialog — in that case the
+            // switch stays pending and the prompt stays open, same as a fresh Cancel would.
+            bool saved = true;
+            if (m_CurrentScenePath.empty()) saved = DoSaveAs(world, assets);
+            else DoSave(world, assets);
+            if (saved) {
+                runPendingSwitch();
+                m_ScenePromptPending = false;
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::SameLine();
+        if (PrimaryButton("Don't Save", ImVec2(110.0f, 0.0f))) {
+            runPendingSwitch();
+            m_ScenePromptPending = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (PrimaryButton("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            m_PendingSceneSwitch = PendingSceneSwitch::None;
+            m_PendingScenePath.clear();
+            m_ScenePromptPending = false; // abort entirely — nothing happens
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -2967,6 +3049,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // recovery snapshot. No-op unless Init() flagged one as newer than the scene file.
     DrawRecoveryPrompt(world, assets);
     DrawExitPrompt();
+    DrawSceneSwitchPrompt(world, assets);
     DrawPreferencesWindow(world);
     DrawScreenshotPreview();
 
@@ -3318,11 +3401,11 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             DoSave(world, assets); // prompts for a location if the scene is untitled (New Scene)
         }
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N)) {
-            NewScene(world, assets);
+            RequestNewScene(world, assets);
         }
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Comma)) m_ShowPreferences = true;
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O)) {
-            OpenScene(world, assets, FileDialog::OpenFile("Scene Files\0*.json\0All Files\0*.*\0", m_Window));
+            RequestOpenScene(world, assets, FileDialog::OpenFile("Scene Files\0*.json\0All Files\0*.*\0", m_Window));
         }
         if (HasAnySelection() && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
             DeleteSelection(world);
@@ -3658,7 +3741,6 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
 }
 
 void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
-    ClearRecoverySnapshot();     // drop the OUTGOING scene's snapshot before we let go of its path
     world = World();
     InvalidateModelThumbnail(nullptr);
     ClearSelection();
@@ -3684,6 +3766,10 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
 
     const std::string pathStr = scenePath.generic_string();
     if (SceneSerializer::Save(world, assets, pathStr)) {
+        // Only now that the fresh scene is safely on disk do we drop the OUTGOING scene's
+        // recovery snapshot (#216) — while m_CurrentScenePath still names the outgoing scene,
+        // so a failed write below leaves that snapshot in place as the way back.
+        ClearRecoverySnapshot();
         m_CurrentScenePath = pathStr;
         m_Dirty = false;                       // matches disk
         m_SavedUndoDepth = (int)m_UndoStack.size();
@@ -3691,7 +3777,9 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
         EditorSettings::Save();
     } else {
         // Couldn't write (read-only project dir, …) — fall back to untitled-in-memory: Save
-        // prompts for a location, main.cpp skips save-on-exit while the path is empty.
+        // prompts for a location, main.cpp skips save-on-exit while the path is empty. The
+        // outgoing scene's recovery snapshot is deliberately left alone: the fresh scene
+        // couldn't be persisted, so it's still the only way back if this session is lost too.
         Log::Error("New Scene: couldn't create '" + pathStr + "' — scene is untitled/in-memory.");
         m_CurrentScenePath.clear();
         m_Dirty = true;
@@ -3727,6 +3815,7 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
 // subfolder instead of everything collapsing into whichever folder happened to be open.
 void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& editorCamera,
     const std::string& path, const std::string& targetFolder) {
+    (void)editorCamera; // kept for signature symmetry with HandleDroppedFiles; not needed here
     std::string ext = std::filesystem::path(path).extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
     std::string name = std::filesystem::path(path).stem().string();
@@ -3761,7 +3850,7 @@ void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& 
     } else if (ext == ".json") {
         // A dropped scene file offers to open it rather than silently doing nothing —
         // "import" has no other meaning for a whole scene.
-        OpenScene(world, assets, path);
+        RequestOpenScene(world, assets, path);
     } else if (ext == ".prefab") {
         entt::entity e = SceneSerializer::InstantiatePrefab(world, assets, path);
         if (e != entt::null) {
@@ -3781,6 +3870,7 @@ void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& 
 
 void EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera& editorCamera,
     bool editorUIVisible, const std::vector<std::string>& paths) {
+    (void)world; (void)editorCamera; // only queued here; the actual import (ImportDroppedFile) uses them later
     if (!editorUIVisible) {
         Log::Warn("Ignored " + std::to_string(paths.size()) + " dropped file(s) - restore the editor panels to import assets.");
         return;
@@ -4021,11 +4111,13 @@ void EditorLayer::DrawStatsPanel(World& world, float dt) {
     const ImGuiStyle& stStats = ImGui::GetStyle();
     const float lineH = ImGui::GetTextLineHeightWithSpacing();
     const int profN = (int)Profiler::GetLastFrame().size();
+    const int profGpuN = (int)Profiler::GetLastFrameGpu().size();
+    const bool hasGpuSection = profGpuN > 0;
     const int rows = 1 /*fps*/ + 3 /*draw/tri/vert*/ + (m_RenderStats.Culled > 0 ? 1 : 0)
                    + 4 /*ent/rend/coll/light*/ + (inactiveCount > 0 ? 1 : 0)
-                   + profN + 2 /*shader/texture binds*/;
-    const float chromeH = lineH * 2.0f                                  // "Statistics" + "Profiler"
-                        + 4.0f * (stStats.ItemSpacing.y + 2.0f)         // four Separator() rules
+                   + profN + (hasGpuSection ? profGpuN : 0) + 2 /*shader/texture binds*/;
+    const float chromeH = lineH * (2.0f + (hasGpuSection ? 1.0f : 0.0f))  // "Statistics" + "Profiler (CPU)" [+ "Profiler (GPU)"]
+                        + (4.0f + (hasGpuSection ? 1.0f : 0.0f)) * (stStats.ItemSpacing.y + 2.0f) // Separator() rules
                         + stStats.WindowPadding.y * 2.0f + 4.0f;
     const float desiredH = chromeH + rows * lineH;
     const float maxH = std::max(120.0f * m_UIScale,
@@ -4069,9 +4161,19 @@ void EditorLayer::DrawStatsPanel(World& world, float dt) {
         // Numbers from the frame that just finished (this frame's own "Scene Draw"/"ImGui
         // Render" scopes haven't run yet at this point) - same one-frame-behind convention the
         // smoothed FPS figure above already uses, so it's not called out as its own oddity.
-        ImGui::SeparatorText("Profiler");
+        ImGui::SeparatorText("Profiler (CPU)");
         for (const auto& sample : Profiler::GetLastFrame()) {
             ImGui::Text("%-16s %.3f ms", sample.Name.c_str(), sample.Milliseconds);
+        }
+        // GPU timings land several frames later than their CPU counterparts (pipelining), so
+        // these are "most recently completed", not "this frame" - the CPU section above already
+        // reads one frame behind; this one just trails a little further (#197).
+        const auto& gpuSamples = Profiler::GetLastFrameGpu();
+        if (!gpuSamples.empty()) {
+            ImGui::SeparatorText("Profiler (GPU)");
+            for (const auto& sample : gpuSamples) {
+                ImGui::Text("%-16s %.3f ms", sample.Name.c_str(), sample.Milliseconds);
+            }
         }
         ImGui::Separator();
         const auto& gl = GLStateCache::GetFrameStats();
@@ -4327,11 +4429,11 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu(ICON_FA_FOLDER_OPEN " File")) {
             if (ImGui::MenuItem(ICON_FA_FILE "  New Scene", "Ctrl+N")) {
-                NewScene(world, assets);
+                RequestNewScene(world, assets);
             }
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open...", "Ctrl+O")) {
-                OpenScene(world, assets, FileDialog::OpenFile(
+                RequestOpenScene(world, assets, FileDialog::OpenFile(
                     "Scene Files\0*.json\0All Files\0*.*\0", m_Window));
             }
             if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save", "Ctrl+S")) {
@@ -5284,6 +5386,7 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
 }
 
 void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
+    (void)dt; // not needed today; kept for parity with the other Draw* panel signatures
     // Locked only blocks dragging the tab to move/undock/rearrange the panel — resizing its
     // dock node (and the neighbors that share that border) always works, locked or not.
     ImGuiWindowFlags flags = ImGuiWindowFlags_None;
@@ -8212,17 +8315,17 @@ bool EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const s
                 fail("\"" + leaf + "\" is the scene you have open.");
                 return false;
             }
-            if (std::filesystem::remove(key, ec)) {
-                Log::Info("Deleted scene file: " + leaf);
+            std::string why;
+            if (FileDialog::RecycleFile(key, why)) {
+                Log::Info("Sent scene file to Recycle Bin: " + leaf);
                 if (EditorSettings::Get().LastScenePath == key) {
                     EditorSettings::Get().LastScenePath.clear();
                     EditorSettings::Save();
                 }
             } else {
-                std::string why = ec.message();
                 if (why.empty()) why = "the file may be open in another program or write-protected";
                 fail("\"" + leaf + "\" — " + why + ".");
-                Log::Error("Couldn't delete scene file '" + key + "': " + why);
+                Log::Error("Couldn't recycle scene file '" + key + "': " + why);
                 return false;
             }
         }
@@ -8232,10 +8335,10 @@ bool EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const s
         for (char& c : ext) c = (char)tolower((unsigned char)c);
         if ((ext == ".png" || ext == ".jpg" || ext == ".jpeg") && std::filesystem::exists(key, ec)) {
             m_ShotThumbs.erase(key);
-            if (std::filesystem::remove(key, ec)) {
-                Log::Info("Deleted screenshot: " + leaf);
+            std::string why;
+            if (FileDialog::RecycleFile(key, why)) {
+                Log::Info("Sent screenshot to Recycle Bin: " + leaf);
             } else {
-                std::string why = ec.message();
                 if (why.empty()) why = "the file may be open in another program or write-protected";
                 if (!m_DeleteError.empty()) m_DeleteError += "\n";
                 m_DeleteError += "\xE2\x80\xA2 \"" + leaf + "\" — " + why + ".";
@@ -8269,7 +8372,28 @@ void EditorLayer::DrawDeleteConfirmPopup(World& world, AssetLibrary& assets) {
             ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.35f, 1.0f),
                 "One or more of these folders isn't empty - everything inside, including subfolders, will be removed too.");
         }
-        ImGui::TextDisabled("Objects already placed in the scene keep working - this only removes it from the Asset Browser. Undoable.");
+        // Scenes and screenshots are real files on disk, not AssetLibrary entries — deleting them
+        // erases the file (sent to the Recycle Bin, not the "Undoable" history the line below
+        // promises for library assets). Say so explicitly rather than a blanket "Undoable" (#211).
+        size_t realFileCount = 0;
+        for (const auto& item : m_PendingDelete) {
+            if (item.IsFolder) continue;
+            std::string ext = std::filesystem::path(item.Key).extension().string();
+            for (char& c : ext) c = (char)tolower((unsigned char)c);
+            if (ext == ".json" || ext == ".png" || ext == ".jpg" || ext == ".jpeg") ++realFileCount;
+        }
+        if (realFileCount == m_PendingDelete.size()) {
+            ImGui::TextDisabled(realFileCount == 1
+                ? "This is a real file on disk, not a library asset - it will be sent to the Recycle Bin."
+                : "These are real files on disk, not library assets - they will be sent to the Recycle Bin.");
+        } else {
+            ImGui::TextDisabled("Objects already placed in the scene keep working - this only removes it from the Asset Browser. Undoable.");
+            if (realFileCount == 1) {
+                ImGui::TextDisabled("1 of these is a real file on disk and will be sent to the Recycle Bin instead.");
+            } else if (realFileCount > 1) {
+                ImGui::TextDisabled("%zu of these are real files on disk and will be sent to the Recycle Bin instead.", realFileCount);
+            }
+        }
         ImGui::PopTextWrapPos();
         ImGui::Spacing();
 
@@ -8579,7 +8703,11 @@ void EditorLayer::DrawFolderTreeNode(World& world, AssetLibrary& assets, const s
 
     if (open) {
         for (const auto& child : children) DrawFolderTreeNode(world, assets, child, false);
-        if (hasChildren || isRoot) ImGui::TreePop();
+        // TreeNodeEx sets NoTreePushOnOpen (so no ID-stack push happens) whenever !hasChildren,
+        // root or not - so TreePop() must be gated on hasChildren alone. The old `|| isRoot` here
+        // called TreePop() for a root with zero folders even though nothing was pushed, a
+        // mismatch that spammed "PopID() too many times" / "Missing TreePop()" every frame.
+        if (hasChildren) ImGui::TreePop();
     }
 }
 
@@ -9079,7 +9207,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
             m_CurrentAssetFolder = cell.key;
         }
         if (cell.kind == Cell::Kind::Scene && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            OpenScene(world, assets, cell.key);
+            RequestOpenScene(world, assets, cell.key);
         }
         if (cell.kind == Cell::Kind::Screenshot && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             OpenScreenshotPreview(cell.key); // centred in-editor lightbox (Show in folder is on the context menu)
@@ -9163,7 +9291,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
                     m_SelectedAssetKey = cell.key;
                     m_SelectedAssetIsFolder = false;
                 }
-                if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open")) OpenScene(world, assets, cell.key);
+                if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open")) RequestOpenScene(world, assets, cell.key);
 
                 // Act on the whole selection when the right-clicked scene is part of a
                 // multi-selection, same as the generic asset menu.
