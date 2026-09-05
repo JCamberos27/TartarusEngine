@@ -8222,6 +8222,58 @@ void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
     draw->PopClipRect();
 }
 
+// Shared setup behind DrawGizmo() (single-object) and DrawGroupGizmo() (multi-select). See the
+// declaration in EditorLayer.h for the contract; the comments on the individual calls below
+// explain why each one is needed.
+bool EditorLayer::BeginGizmoOverlay(Camera& editorCamera, const char* overlayName) {
+    int w, h;
+    glfwGetWindowSize(m_Window, &w, &h);
+    if (w <= 0 || h <= 0) return false;
+
+    // ImGuizmo's own hover/click hit-testing needs a real, hoverable ImGui window as the
+    // "current window" — calling Manipulate() with no window active draws fine but never
+    // registers clicks. A fullscreen transparent overlay gives it that context without
+    // visually intruding or stealing focus from the other panels.
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2((float)w, (float)h));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    // NoInputs keeps this fullscreen window out of ImGui's own hover/capture bookkeeping —
+    // otherwise it would make WantCaptureMouse true everywhere on screen and block the
+    // editor fly-camera. ImGuizmo does its own hit-testing against raw mouse position, so
+    // it isn't affected by this window's own input flags.
+    ImGui::Begin(overlayName, nullptr,
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground |
+        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
+        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoInputs);
+    // NoInputs means this window can never be clicked to bring itself to front, so its z-order
+    // is otherwise whatever position it happened to land in ImGui's window stack the first time
+    // it was ever created - which put it BEHIND "Scene" once that became a real window (Scene is
+    // newer, so it was appended in front). Forced to the front explicitly, every frame, so the
+    // gizmo actually draws on top of the Scene image instead of being invisibly covered by it.
+    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+
+    // ImGuizmo hit-tests against its own draw-list window (this NoInputs overlay), which is never
+    // ImGui's g.HoveredWindow — so without this, hovering the actual "Scene" panel makes
+    // IsHoveringWindow() return false and the handles draw but never grab. Registering "Scene" as
+    // the alternative window is ImGuizmo's supported way to say "the user hovers there, not here".
+    ImGuizmo::SetAlternativeWindow(ImGui::FindWindowByName("Scene"));
+
+    ImGuizmo::SetOrthographic(editorCamera.Orthographic); // #107 — ortho views used to offset the handles
+    ImGuizmo::SetDrawlist();
+    ImGuizmo::SetRect(m_ViewportPos.x, m_ViewportPos.y, m_ViewportSize.x, m_ViewportSize.y);
+    ImGuizmo::SetGizmoSizeClipSpace(m_GizmoSize);
+    return true;
+}
+
+void EditorLayer::EndGizmoOverlay() {
+    ImGui::End();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor();
+}
+
 void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     if (HasGroupSelection()) {
         DrawGroupGizmo(world, editorCamera);
@@ -8249,45 +8301,8 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     glm::vec3 nativeBoundsMin = registryHasRenderable ? renderablePtr->ModelRef->BoundsMin() : glm::vec3(-0.5f);
     glm::vec3 nativeBoundsMax = registryHasRenderable ? renderablePtr->ModelRef->BoundsMax() : glm::vec3(0.5f);
 
-    int w, h;
-    glfwGetWindowSize(m_Window, &w, &h);
-    if (w <= 0 || h <= 0) return;
+    if (!BeginGizmoOverlay(editorCamera, "##GizmoOverlay")) return;
 
-    // ImGuizmo's own hover/click hit-testing needs a real, hoverable ImGui window as the
-    // "current window" — calling Manipulate() with no window active draws fine but never
-    // registers clicks. A fullscreen transparent overlay gives it that context without
-    // visually intruding or stealing focus from the other panels.
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2((float)w, (float)h));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    // NoInputs keeps this fullscreen window out of ImGui's own hover/capture bookkeeping —
-    // otherwise it would make WantCaptureMouse true everywhere on screen and block the
-    // editor fly-camera. ImGuizmo does its own hit-testing against raw mouse position, so
-    // it isn't affected by this window's own input flags.
-    ImGui::Begin("##GizmoOverlay", nullptr,
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground |
-        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
-        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoInputs);
-    // NoInputs means this window can never be clicked to bring itself to front, so its z-order
-    // is otherwise whatever position it happened to land in ImGui's window stack the first time
-    // it was ever created - which put it BEHIND "Scene" once that became a real window (Scene is
-    // newer, so it was appended in front). Forced to the front explicitly, every frame, so the
-    // gizmo actually draws on top of the Scene image instead of being invisibly covered by it.
-    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
-
-    // ImGuizmo hit-tests against its own draw-list window (this NoInputs overlay), which is never
-    // ImGui's g.HoveredWindow — so without this, hovering the actual "Scene" panel makes
-    // IsHoveringWindow() return false and the handles draw but never grab. Registering "Scene" as
-    // the alternative window is ImGuizmo's supported way to say "the user hovers there, not here".
-    ImGuizmo::SetAlternativeWindow(ImGui::FindWindowByName("Scene"));
-
-    ImGuizmo::SetOrthographic(editorCamera.Orthographic); // #107 — ortho views used to offset the handles
-    ImGuizmo::SetDrawlist();
-    ImGuizmo::SetRect(m_ViewportPos.x, m_ViewportPos.y, m_ViewportSize.x, m_ViewportSize.y);
-    ImGuizmo::SetGizmoSizeClipSpace(m_GizmoSize);
     ImGuizmo::MODE gizmoMode = m_GizmoLocalSpace ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
 
     glm::mat4 view = editorCamera.ViewMatrix();
@@ -8366,9 +8381,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         }
     }
 
-    ImGui::End();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
+    EndGizmoOverlay();
 }
 
 void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
@@ -8563,35 +8576,10 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     for (entt::entity e : m_ExtraSelection) addRef(e);
     if (refs.empty()) { m_GizmoEngaged = false; return; }
 
-    int w, h;
-    glfwGetWindowSize(m_Window, &w, &h);
-    if (w <= 0 || h <= 0) return;
-
-    // Same fullscreen-overlay approach as the single-object gizmo (see its comment) — needed
+    // Same fullscreen-overlay approach as the single-object gizmo (see BeginGizmoOverlay) — needed
     // so ImGuizmo's hit-testing has a real window to test hover/click against.
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2((float)w, (float)h));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::Begin("##GroupGizmoOverlay", nullptr,
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground |
-        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
-        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoInputs);
-    // See DrawGizmo's identical call for why this is needed.
-    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+    if (!BeginGizmoOverlay(editorCamera, "##GroupGizmoOverlay")) return;
 
-    // ImGuizmo hit-tests against its own draw-list window (this NoInputs overlay), which is never
-    // ImGui's g.HoveredWindow — so without this, hovering the actual "Scene" panel makes
-    // IsHoveringWindow() return false and the handles draw but never grab. Registering "Scene" as
-    // the alternative window is ImGuizmo's supported way to say "the user hovers there, not here".
-    ImGuizmo::SetAlternativeWindow(ImGui::FindWindowByName("Scene"));
-
-    ImGuizmo::SetOrthographic(editorCamera.Orthographic); // #107 — ortho views used to offset the handles
-    ImGuizmo::SetDrawlist();
-    ImGuizmo::SetRect(m_ViewportPos.x, m_ViewportPos.y, m_ViewportSize.x, m_ViewportSize.y);
-    ImGuizmo::SetGizmoSizeClipSpace(m_GizmoSize);
     ImGuizmo::MODE gizmoMode = m_GizmoLocalSpace ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
 
     glm::mat4 view = editorCamera.ViewMatrix();
@@ -8651,9 +8639,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     }
     m_GizmoWasUsing = isUsingNow;
 
-    ImGui::End();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
+    EndGizmoOverlay();
 }
 
 void EditorLayer::BeginRenameAsset(const std::string& key, bool isFolder, const std::string& currentName) {

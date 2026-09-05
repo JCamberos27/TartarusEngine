@@ -450,6 +450,14 @@ private:
     void DeleteSelection(World& world);
     void DuplicateSelection(World& world, AssetLibrary& assets);
     void DrawGroupGizmo(World& world, Camera& editorCamera);
+    // Shared setup/teardown behind DrawGizmo() (single-object) and DrawGroupGizmo() (multi-select):
+    // opens the fullscreen transparent overlay window ImGuizmo's hit-testing needs and configures
+    // its per-frame global state (ortho, drawlist, rect, gizmo size). `overlayName` is the one
+    // difference between the two call sites (distinct ImGui window IDs). Returns false — with no
+    // overlay left open — if the current window size is degenerate and the caller should bail out;
+    // EndGizmoOverlay() must only be called after a true return.
+    bool BeginGizmoOverlay(Camera& editorCamera, const char* overlayName);
+    void EndGizmoOverlay();
     // Shared bounds computation behind FocusOnSelection() and GetSelectionCenter() — world-space
     // AABB of the current selection (single object or group). False if nothing is selected.
     bool ComputeSelectionBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) const;
