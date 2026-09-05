@@ -1451,7 +1451,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if (m_ShowHierarchy) DrawHierarchy(world, assets);
     if (m_ShowInspector) DrawInspector(world, assets, dt);
     if (m_ShowAssetBrowser) DrawAssetBrowser(world, assets);
-    DrawConsole();
+    // (Console is drawn by the reloadable editor module — see main.cpp's editorModule.Draw(),
+    // which runs immediately after this call, still inside the same ImGui frame and dockspace.)
     if (!m_HideOverlaysThisFrame) {
         DrawStatsPanel(world, dt);
         DrawViewportStatusBar();

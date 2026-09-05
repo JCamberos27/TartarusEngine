@@ -1015,26 +1015,12 @@ private:
     std::unordered_map<entt::entity, AudioEngine::SoundHandle> m_PlayModeAudioHandles;
 
     // --- Console ------------------------------------------------------------------------
-    void DrawConsole();
-    bool m_ShowConsole = true;
-    bool m_ConsoleShowInfo = true;
-    bool m_ConsoleShowWarning = true;
-    bool m_ConsoleShowError = true;
-    bool m_ConsoleAutoScroll = true;
-    bool m_ConsoleShowTimestamps = true;
-    std::string m_ConsoleFilter;
-    unsigned int m_ConsoleSeenRevision = 0; // only auto-scroll when Log actually gained an entry
-
-    // #219: indices into Log::Entries() that currently pass the level toggles + text filter,
-    // rebuilt only when one of those inputs (or the log itself, via Log::Revision()) changes —
-    // not every frame — so DrawConsole can drive ImGuiListClipper over a stable list instead of
-    // re-filtering and submitting all 1000 possible entries each frame.
-    std::vector<size_t> m_ConsoleFilteredIndices;
-    unsigned int m_ConsoleFilterCacheRevision = (unsigned int)-1; // forces a rebuild on first draw
-    std::string m_ConsoleFilterCacheFilter;
-    bool m_ConsoleFilterCacheShowInfo = true;
-    bool m_ConsoleFilterCacheShowWarning = true;
-    bool m_ConsoleFilterCacheShowError = true;
+    // The panel itself now lives in TartarusEditor.dll (src/Editor/EditorModuleConsole.cpp) so
+    // editing it hot-reloads instead of needing an editor restart; main.cpp draws it through
+    // editorModule.Draw(). Its visibility, level toggles and filter text moved to the host-owned
+    // EditorModuleHost::ConsoleState() (HotReloadEditorModule.h) — host-side so they survive a
+    // module reload, and so this class's toolbar button can still toggle the panel. Nothing about
+    // the Console needs EditorLayer member state any more.
 
     // The spinning corner monogram is governed by EditorSettings (EngineMarkEnabled / SpinSpeed /
     // Rgb) so the choice persists and the Preferences + Window-menu controls share one source of

@@ -1,14 +1,21 @@
 #include "HotReloadEditorModule.h"
 
 #include "EditorModuleAPI.h"
+#include "EditorUIHelpers.h"
+#include "FileDialog.h"
 #include "Log.h"
 
+#include <cstring>
 #include <imgui.h>
 #include <windows.h>
 
 namespace fs = std::filesystem;
 
 namespace {
+
+// The window native dialogs opened on the module's behalf are parented to. File-scope because the
+// host API is a table of plain function pointers with no user-data slot.
+GLFWwindow* g_ParentWindow = nullptr;
 
 void DrawStatusPanel(const char* title, const char* message, const char* accent) {
     bool open = true;
@@ -22,19 +29,91 @@ void DrawStatusPanel(const char* title, const char* message, const char* accent)
     ImGui::End();
 }
 
+void* GetImGuiContextPtr() {
+    return ImGui::GetCurrentContext();
+}
+
+void GetImGuiAllocators(EditorModuleImGuiAllocFn* outAlloc, EditorModuleImGuiFreeFn* outFree, void** outUserData) {
+    ImGuiMemAllocFunc allocFn = nullptr;
+    ImGuiMemFreeFunc freeFn = nullptr;
+    void* userData = nullptr;
+    ImGui::GetAllocatorFunctions(&allocFn, &freeFn, &userData);
+    if (outAlloc) *outAlloc = allocFn;
+    if (outFree) *outFree = freeFn;
+    if (outUserData) *outUserData = userData;
+}
+
+// --- Log bridge -----------------------------------------------------------------------------
+// Log's entry vector is a function-local static inside Log.cpp, which is compiled into this
+// executable only. A DLL that compiled Log.cpp too would get its own separate, always-empty
+// vector, so the module reads the real log exclusively through these.
+unsigned int LogRevisionFn() { return Log::Revision(); }
+int LogEntryCountFn() { return (int)Log::Entries().size(); }
+
+bool LogGetEntryFn(int index, int* outLevel, const char** outMessage, const char** outTime, int* outCount) {
+    const std::vector<LogEntry>& entries = Log::Entries();
+    if (index < 0 || (size_t)index >= entries.size()) return false;
+    const LogEntry& e = entries[(size_t)index];
+    if (outLevel)   *outLevel = (int)e.Level;
+    if (outMessage) *outMessage = e.Message.c_str();
+    if (outTime)    *outTime = e.Time.c_str();
+    if (outCount)   *outCount = e.Count;
+    return true;
+}
+
+int LogCountOfFn(int level) { return Log::CountOf((LogLevel)level); }
+void LogClearFn() { Log::Clear(); }
+void LogInfoFn(const char* message) { Log::Info(message ? message : ""); }
+void LogErrorFn(const char* message) { Log::Error(message ? message : ""); }
+
+// --- Editor services -------------------------------------------------------------------------
+// Not variadic: a format string crossing the boundary buys nothing, and the module can format its
+// own text. Still routed here so EditorSettings::Get().ShowTooltips (another host-side singleton)
+// governs module tooltips exactly like every host panel's.
+void SetTooltipFn(const char* text) { EditorUI::SetTooltip("%s", text ? text : ""); }
+
+bool SaveFileDialogFn(const char* filter, const char* defaultExt, char* outPath, int outPathSize) {
+    if (!outPath || outPathSize <= 0) return false;
+    outPath[0] = '\0';
+    std::string path = FileDialog::SaveFile(filter, defaultExt, g_ParentWindow);
+    if (path.empty() || (int)path.size() + 1 > outPathSize) return false;
+    std::memcpy(outPath, path.c_str(), path.size() + 1);
+    return true;
+}
+
+EditorConsoleState* ConsoleStateFn() { return &EditorModuleHost::ConsoleState(); }
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
+    &GetImGuiContextPtr,
+    &GetImGuiAllocators,
+    &LogRevisionFn,
+    &LogEntryCountFn,
+    &LogGetEntryFn,
+    &LogCountOfFn,
+    &LogClearFn,
+    &LogInfoFn,
+    &LogErrorFn,
+    &SetTooltipFn,
+    &SaveFileDialogFn,
+    &ConsoleStateFn,
 };
 
 } // namespace
+
+EditorConsoleState& EditorModuleHost::ConsoleState() {
+    static EditorConsoleState state;
+    return state;
+}
 
 HotReloadEditorModule::~HotReloadEditorModule() {
     Shutdown();
 }
 
-void HotReloadEditorModule::Initialize(const fs::path& sourceModule) {
+void HotReloadEditorModule::Initialize(const fs::path& sourceModule, void* parentWindow) {
     Shutdown();
+    g_ParentWindow = static_cast<GLFWwindow*>(parentWindow);
     m_SourceModule = sourceModule;
     m_PollElapsed = 0.0f;
     Reload(true);

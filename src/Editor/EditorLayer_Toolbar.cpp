@@ -18,6 +18,8 @@
 #include "Log.h"
 #include "EditorSettings.h"
 #include "EditorUIHelpers.h"
+#include "EditorModuleAPI.h"          // EditorConsoleState — the Console panel lives in the module now
+#include "HotReloadEditorModule.h"    // EditorModuleHost::ConsoleState()
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
@@ -225,159 +227,11 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
     ImGui::PopStyleColor(4);
     ImGui::End();
 }
-void EditorLayer::DrawConsole() {
-    if (!m_ShowConsole) return;
 
-    ImGuiWindowFlags flags = ImGuiWindowFlags_None;
-    if (!ImGui::Begin(ICON_FA_TERMINAL "  Console", &m_ShowConsole, flags)) { ImGui::End(); return; }
-
-    // Builds the plain-text dump of everything currently shown (respects the level + text
-    // filters), used by "Save..." and the right-click "Copy all shown".
-    auto buildShownText = [&]() {
-        std::string out;
-        for (const LogEntry& e : Log::Entries()) {
-            bool lv = (e.Level == LogLevel::Info && m_ConsoleShowInfo) ||
-                      (e.Level == LogLevel::Warning && m_ConsoleShowWarning) ||
-                      (e.Level == LogLevel::Error && m_ConsoleShowError);
-            if (!lv || !MatchesFilter(m_ConsoleFilter, e.Message)) continue;
-            const char* tag = e.Level == LogLevel::Error ? "ERROR" : (e.Level == LogLevel::Warning ? "WARN " : "INFO ");
-            out += "[" + e.Time + "] " + tag + "  " + e.Message;
-            if (e.Count > 1) out += "  (x" + std::to_string(e.Count) + ")";
-            out += "\n";
-        }
-        return out;
-    };
-
-    if (ActionButton(ICON_FA_TRASH "  Clear", "Remove every message from the console")) Log::Clear();
-    ImGui::SameLine();
-    if (ActionButton(ICON_FA_FLOPPY_DISK "  Save...", "Write the messages currently shown to a text file")) {
-        std::string path = FileDialog::SaveFile("Log Files\0*.log;*.txt\0All Files\0*.*\0", "log", m_Window);
-        if (!path.empty()) {
-            std::ofstream f(path, std::ios::binary);
-            if (f) { f << buildShownText(); Log::Info("Console saved to " + path); }
-            else Log::Error("Couldn't write " + path);
-        }
-    }
-    ImGui::SameLine();
-    ImGui::Checkbox("Auto-scroll", &m_ConsoleAutoScroll);
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Automatically jump to the newest message as it arrives");
-    ImGui::SameLine();
-    ImGui::Checkbox("Timestamps", &m_ConsoleShowTimestamps);
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show the HH:MM:SS each message first arrived");
-
-    // Per-level toggles double as counters, the way Unity's console header does.
-    EditorUI::VSeparator();
-    char infoLabel[32], warnLabel[32], errorLabel[32];
-    snprintf(infoLabel, sizeof(infoLabel), ICON_FA_CIRCLE_INFO " %d", Log::CountOf(LogLevel::Info));
-    snprintf(warnLabel, sizeof(warnLabel), ICON_FA_TRIANGLE_EXCLAMATION " %d", Log::CountOf(LogLevel::Warning));
-    snprintf(errorLabel, sizeof(errorLabel), ICON_FA_CIRCLE_EXCLAMATION " %d", Log::CountOf(LogLevel::Error));
-    ImGui::Checkbox(infoLabel, &m_ConsoleShowInfo);
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show/hide informational messages");
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.80f, 0.30f, 1.0f));
-    ImGui::Checkbox(warnLabel, &m_ConsoleShowWarning);
-    ImGui::PopStyleColor();
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show/hide warnings");
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.42f, 0.38f, 1.0f));
-    ImGui::Checkbox(errorLabel, &m_ConsoleShowError);
-    ImGui::PopStyleColor();
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show/hide errors");
-
-    ImGui::SetNextItemWidth(-1.0f);
-    char filterBuf[128];
-    snprintf(filterBuf, sizeof(filterBuf), "%s", m_ConsoleFilter.c_str());
-    if (ImGui::InputTextWithHint("##ConsoleFilter", ICON_FA_MAGNIFYING_GLASS "  Filter messages...", filterBuf, sizeof(filterBuf))) {
-        m_ConsoleFilter = filterBuf;
-    }
-    if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) EditorUI::SetTooltip("Only show messages containing this text");
-
-    // #219: rebuild the filtered index list only when something that affects it actually
-    // changed (the text filter, a level toggle, or the log gaining/losing entries via
-    // Log::Revision()) rather than re-running MatchesFilter over all 1000 possible entries
-    // every single frame the panel happens to be open.
-    const std::vector<LogEntry>& logEntries = Log::Entries();
-    bool filterCacheStale =
-        m_ConsoleFilterCacheRevision != Log::Revision() ||
-        m_ConsoleFilterCacheFilter != m_ConsoleFilter ||
-        m_ConsoleFilterCacheShowInfo != m_ConsoleShowInfo ||
-        m_ConsoleFilterCacheShowWarning != m_ConsoleShowWarning ||
-        m_ConsoleFilterCacheShowError != m_ConsoleShowError;
-    if (filterCacheStale) {
-        m_ConsoleFilteredIndices.clear();
-        m_ConsoleFilteredIndices.reserve(logEntries.size());
-        for (size_t i = 0; i < logEntries.size(); ++i) {
-            const LogEntry& e = logEntries[i];
-            bool levelVisible =
-                (e.Level == LogLevel::Info && m_ConsoleShowInfo) ||
-                (e.Level == LogLevel::Warning && m_ConsoleShowWarning) ||
-                (e.Level == LogLevel::Error && m_ConsoleShowError);
-            if (!levelVisible || !MatchesFilter(m_ConsoleFilter, e.Message)) continue;
-            m_ConsoleFilteredIndices.push_back(i);
-        }
-        m_ConsoleFilterCacheRevision = Log::Revision();
-        m_ConsoleFilterCacheFilter = m_ConsoleFilter;
-        m_ConsoleFilterCacheShowInfo = m_ConsoleShowInfo;
-        m_ConsoleFilterCacheShowWarning = m_ConsoleShowWarning;
-        m_ConsoleFilterCacheShowError = m_ConsoleShowError;
-    }
-
-    ImGui::Separator();
-    if (ImGui::BeginChild("##ConsoleScroll", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar)) {
-        ImGuiListClipper clipper;
-        clipper.Begin((int)m_ConsoleFilteredIndices.size(), ImGui::GetTextLineHeightWithSpacing());
-        while (clipper.Step()) {
-            for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
-                const LogEntry& entry = logEntries[m_ConsoleFilteredIndices[(size_t)row]];
-
-                ImVec4 color(0.82f, 0.84f, 0.86f, 1.0f);
-                const char* icon = ICON_FA_CIRCLE_INFO;
-                if (entry.Level == LogLevel::Warning) { color = ImVec4(1.0f, 0.80f, 0.30f, 1.0f); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
-                else if (entry.Level == LogLevel::Error) { color = ImVec4(1.0f, 0.42f, 0.38f, 1.0f); icon = ICON_FA_CIRCLE_EXCLAMATION; }
-
-                std::string tsPrefix = (m_ConsoleShowTimestamps && !entry.Time.empty()) ? ("[" + entry.Time + "]  ") : "";
-                std::string rowLabel = tsPrefix + icon + "  " + entry.Message;
-                if (entry.Count > 1) rowLabel += "  (x" + std::to_string(entry.Count) + ")";
-
-                // PushID(&entry) rather than baking a pointer into the label text: a message
-                // long enough to fill the old fixed 1200-byte buffer used to truncate away the
-                // "##r<ptr>" ID suffix entirely, silently colliding ImGui IDs between rows. A
-                // std::string label has no such cap, and PushID keeps identity independent of
-                // label content/length altogether.
-                ImGui::PushID(&entry);
-                // A full-width Selectable (rather than a bare Text) so the whole row is a real
-                // item with a hover rect — needed for a reliable right-click context menu.
-                ImGui::PushStyleColor(ImGuiCol_Text, color);
-                ImGui::Selectable(rowLabel.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
-                ImGui::PopStyleColor();
-
-                if (ImGui::BeginPopupContextItem()) {
-                    if (ImGui::MenuItem(ICON_FA_COPY "  Copy message")) ImGui::SetClipboardText(entry.Message.c_str());
-                    if (ImGui::MenuItem(ICON_FA_COPY "  Copy all shown")) {
-                        std::string all = buildShownText();
-                        ImGui::SetClipboardText(all.c_str());
-                    }
-                    ImGui::Separator();
-                    if (ImGui::MenuItem(ICON_FA_TRASH "  Clear console")) Log::Clear();
-                    ImGui::EndPopup();
-                }
-                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Right-click for copy / clear");
-                ImGui::PopID();
-            }
-        }
-        clipper.End();
-
-        // Only when something actually arrived, so scrolling back through history isn't yanked
-        // to the bottom on every single frame.
-        if (m_ConsoleAutoScroll && Log::Revision() != m_ConsoleSeenRevision) {
-            ImGui::SetScrollHereY(1.0f);
-        }
-        m_ConsoleSeenRevision = Log::Revision();
-    }
-    ImGui::EndChild();
-
-    ImGui::End();
-}
+// The Console panel moved into TartarusEditor.dll (src/Editor/EditorModuleConsole.cpp) so its
+// code hot-reloads while the editor stays open. The host still owns the log itself and the
+// panel's persistent UI state (EditorModuleHost::ConsoleState()), which the module reads through
+// the EditorModuleHostAPI callback table; main.cpp draws it via editorModule.Draw().
 
 void EditorLayer::PushAdaptiveHudText(AsyncLuminanceReadback& rb, ImVec2 centerScreen, float boxPx, float dt,
                                      float& easedLum, float& targetLum, float& sampleAccum) {
@@ -914,7 +768,12 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         EditorSettings::Save();
     }
     ImGui::SameLine();
-    if (iconButton(ICON_FA_TERMINAL, "Toggle Console", m_ShowConsole)) m_ShowConsole = !m_ShowConsole;
+    {
+        // Console visibility lives host-side (not in the module) so this toggle keeps working
+        // across a TartarusEditor.dll reload, and so a hidden Console stays hidden through one.
+        bool& consoleVisible = EditorModuleHost::ConsoleState().Visible;
+        if (iconButton(ICON_FA_TERMINAL, "Toggle Console", consoleVisible)) consoleVisible = !consoleVisible;
+    }
     ImGui::SameLine();
     if (iconButton(ICON_FA_CLOCK_ROTATE_LEFT, "Toggle History", m_ShowHistory)) m_ShowHistory = !m_ShowHistory;
 

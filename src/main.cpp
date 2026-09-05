@@ -394,7 +394,9 @@ int main(int argc, char** argv) {
             // here — a Debug build's CMAKE_DEBUG_POSTFIX makes these "TartarusGamed.dll" /
             // "TartarusEditord.dll", not the plain names a Release build produces.
             gameModule.Initialize(executable.parent_path() / TARTARUS_GAME_MODULE_FILENAME);
-            editorModule.Initialize(executable.parent_path() / TARTARUS_EDITOR_MODULE_FILENAME);
+            // The window handle is what native dialogs the module opens (the Console's "Save...")
+            // are parented to.
+            editorModule.Initialize(executable.parent_path() / TARTARUS_EDITOR_MODULE_FILENAME, window.Handle());
         }
         Player player;
         // Default spawn/editor-camera start: on the outdoor plaza, facing through the open

@@ -2,6 +2,16 @@
 
 #include <filesystem>
 
+struct EditorConsoleState;
+
+// Host-side state the reloadable editor module reads through EditorModuleHostAPI. It lives in the
+// executable (not the DLL) so it survives a module reload untouched, and so host code — the
+// toolbar's "Toggle Console" button, for one — can reach it directly.
+namespace EditorModuleHost {
+    // The Console panel's visibility / level toggles / filter text.
+    EditorConsoleState& ConsoleState();
+}
+
 // Watches TartarusEditor.dll and swaps it while the host-owned ImGui frame is active.
 class HotReloadEditorModule {
 public:
@@ -11,7 +21,9 @@ public:
     HotReloadEditorModule(const HotReloadEditorModule&) = delete;
     HotReloadEditorModule& operator=(const HotReloadEditorModule&) = delete;
 
-    void Initialize(const std::filesystem::path& sourceModule);
+    // `parentWindow` is the GLFWwindow* native file dialogs opened by the module are parented to
+    // (passed as void* so this header stays GLFW-free); may be null.
+    void Initialize(const std::filesystem::path& sourceModule, void* parentWindow = nullptr);
     void Draw(bool editorUIVisible, float deltaTime);
     void Shutdown();
 
