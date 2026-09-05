@@ -53,6 +53,21 @@
 
 using namespace EditorInternal;
 
+namespace {
+// Cheap non-cryptographic hash of a serialized scene snapshot, used only to dedupe
+// consecutive undo pushes (#174 stage 1). Comparing full multi-KB/MB JSON strings byte-for-byte
+// on every edit was the actual cost being avoided - the full string is still what gets stored
+// and restored, this hash is only ever used to answer "did anything change since last time".
+// Same FNV-1a constants/style as TextureCache::HashSettings, extended to arbitrary byte spans.
+uint64_t HashSceneJson(const std::string& s) {
+    uint64_t h = 1469598103934665603ull; // FNV-1a offset basis
+    for (unsigned char c : s) {
+        h ^= c;
+        h *= 1099511628211ull; // FNV-1a prime
+    }
+    return h;
+}
+} // namespace
 
 std::string EditorLayer::RecoveryPathFor(const std::string& scenePath) {
     std::filesystem::path p(scenePath);
@@ -326,11 +341,14 @@ void EditorLayer::PushUndo(const World& world, const std::string& label) {
     UndoEntry entry;
     entry.SceneJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                    : SceneSerializer::SaveToString(world);
+    entry.Hash = HashSceneJson(entry.SceneJson);
     // Plenty of call sites fire on "field focused" / "gizmo grabbed" before anything actually
     // changes — a double-click-to-type on a Transform field lands here twice with no edit
     // between. Don't stack a byte-identical snapshot on the last one: it produced phantom
     // History entries and left extra Ctrl+Z presses that did nothing (#19 P8, #23 P23).
-    if (!m_UndoStack.empty() && m_UndoStack.back().SceneJson == entry.SceneJson) {
+    // Compared by hash rather than the full JSON string (#174 stage 1) - scenes can be
+    // megabytes, and this compare runs on every single edit.
+    if (!m_UndoStack.empty() && m_UndoStack.back().Hash == entry.Hash) {
         m_RedoStack.clear(); // still a fresh edit intent — a stale redo branch shouldn't survive it
         RefreshDirtyFromHistory();
         return;
@@ -353,6 +371,7 @@ void EditorLayer::StageUndo(const World& world) {
     if (m_HasStagedUndo) return; // keep the FIRST (true pre-edit) snapshot of this interaction
     m_StagedUndoJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                    : SceneSerializer::SaveToString(world);
+    m_StagedUndoHash = HashSceneJson(m_StagedUndoJson);
     m_StagedUndoSelectedOrders = CaptureSelectedOrders(world);
     m_HasStagedUndo = true;
 }
@@ -366,14 +385,18 @@ void EditorLayer::CommitStagedUndo(const World& world, const std::string& label)
     // neither adds a phantom History entry nor dirties the scene (#22 P22, #23 P23, #34 D4).
     const std::string currentJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                                 : SceneSerializer::SaveToString(world);
-    if (currentJson == m_StagedUndoJson) {
+    // Compared by hash rather than the full JSON string (#174 stage 1) - same reasoning as
+    // the PushUndo dedupe above.
+    if (HashSceneJson(currentJson) == m_StagedUndoHash) {
         m_StagedUndoJson.clear();
+        m_StagedUndoHash = 0;
         m_StagedUndoSelectedOrders.clear();
         return;
     }
 
     UndoEntry entry;
     entry.SceneJson = std::move(m_StagedUndoJson);
+    entry.Hash = m_StagedUndoHash;
     entry.SelectedOrders = std::move(m_StagedUndoSelectedOrders);
     entry.Label = label;
     if (m_SavedUndoDepth >= 0 && !m_RedoStack.empty()) m_SavedUndoDepth = -1;
@@ -392,6 +415,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
 
     UndoEntry redoEntry;
     redoEntry.SceneJson = SceneSerializer::SaveToString(world, assets);
+    redoEntry.Hash = HashSceneJson(redoEntry.SceneJson);
     redoEntry.SelectedOrders = CaptureSelectedOrders(world);
     redoEntry.Label = m_UndoStack.back().Label; // the action Redo would re-apply from here
     m_RedoStack.push_back(std::move(redoEntry));
@@ -409,6 +433,7 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
 
     UndoEntry undoEntry;
     undoEntry.SceneJson = SceneSerializer::SaveToString(world, assets);
+    undoEntry.Hash = HashSceneJson(undoEntry.SceneJson);
     undoEntry.SelectedOrders = CaptureSelectedOrders(world);
     undoEntry.Label = m_RedoStack.back().Label;
     m_UndoStack.push_back(std::move(undoEntry));
