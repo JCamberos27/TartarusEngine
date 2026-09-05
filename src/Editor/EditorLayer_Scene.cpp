@@ -25,6 +25,8 @@
 #include "Framebuffer.h"
 #include "gl.h"
 
+#include "UndoDeltaChain.h" // undo history stores JSON-Patch deltas, not full snapshots (#174)
+
 #include <imgui.h>
 #include <imgui_internal.h> // ImMax/ImFloor, ImGuiWindow, and the item-flag helpers the panels use
 #include <backends/imgui_impl_glfw.h>
@@ -56,8 +58,8 @@ using namespace EditorInternal;
 namespace {
 // Cheap non-cryptographic hash of a serialized scene snapshot, used only to dedupe
 // consecutive undo pushes (#174 stage 1). Comparing full multi-KB/MB JSON strings byte-for-byte
-// on every edit was the actual cost being avoided - the full string is still what gets stored
-// and restored, this hash is only ever used to answer "did anything change since last time".
+// on every edit was the actual cost being avoided; this hash is only ever used to answer "did
+// anything change since last time", never to reconstruct anything (stage 2 stores deltas).
 // Same FNV-1a constants/style as TextureCache::HashSettings, extended to arbitrary byte spans.
 uint64_t HashSceneJson(const std::string& s) {
     uint64_t h = 1469598103934665603ull; // FNV-1a offset basis
@@ -68,6 +70,35 @@ uint64_t HashSceneJson(const std::string& s) {
     return h;
 }
 } // namespace
+
+// Thin wrappers over the delta chain (UndoDeltaChain.h) - the mechanism lives there, isolated
+// from EditorLayer so it can be exercised on its own; these just bind it to UndoEntry and route
+// the one failure mode to the Console.
+void EditorLayer::PushHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
+                                   UndoEntry&& entry, const std::string& newFullJson) {
+    UndoDelta::Push(stack, baseJson, std::move(entry), newFullJson);
+}
+
+bool EditorLayer::PopHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
+                                  UndoEntry& outEntry, std::string& outFullJson) {
+    const UndoDelta::PopResult r = UndoDelta::Pop(stack, baseJson, outEntry, outFullJson);
+    if (r == UndoDelta::PopResult::TailDropped)
+        Log::Error("Undo history: a step couldn't be reconstructed - earlier history was dropped.");
+    return r != UndoDelta::PopResult::Empty;
+}
+
+void EditorLayer::ClearRedoHistory() {
+    m_RedoStack.clear();
+    m_RedoBaseJson.clear();
+    m_RedoBaseJson.shrink_to_fit();
+}
+
+void EditorLayer::ClearUndoHistory() {
+    m_UndoStack.clear();
+    m_UndoBaseJson.clear();
+    m_UndoBaseJson.shrink_to_fit();
+    ClearRedoHistory();
+}
 
 std::string EditorLayer::RecoveryPathFor(const std::string& scenePath) {
     std::filesystem::path p(scenePath);
@@ -137,8 +168,7 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
             if (SceneSerializer::Load(world, assets, recoveryPath)) {
                 CheckSceneVersionWarning();
                 ClearSelection();
-                m_UndoStack.clear();
-                m_RedoStack.clear();
+                ClearUndoHistory();
                 m_Dirty = true; // recovered content isn't in the real scene file yet
                 m_SavedUndoDepth = -1;
                 Log::Info("Restored unsaved changes from the recovery snapshot.");
@@ -338,10 +368,10 @@ void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& 
 }
 
 void EditorLayer::PushUndo(const World& world, const std::string& label) {
+    const std::string sceneJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
+                                              : SceneSerializer::SaveToString(world);
     UndoEntry entry;
-    entry.SceneJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
-                                   : SceneSerializer::SaveToString(world);
-    entry.Hash = HashSceneJson(entry.SceneJson);
+    entry.Hash = HashSceneJson(sceneJson);
     // Plenty of call sites fire on "field focused" / "gizmo grabbed" before anything actually
     // changes — a double-click-to-type on a Transform field lands here twice with no edit
     // between. Don't stack a byte-identical snapshot on the last one: it produced phantom
@@ -349,7 +379,7 @@ void EditorLayer::PushUndo(const World& world, const std::string& label) {
     // Compared by hash rather than the full JSON string (#174 stage 1) - scenes can be
     // megabytes, and this compare runs on every single edit.
     if (!m_UndoStack.empty() && m_UndoStack.back().Hash == entry.Hash) {
-        m_RedoStack.clear(); // still a fresh edit intent — a stale redo branch shouldn't survive it
+        ClearRedoHistory(); // still a fresh edit intent — a stale redo branch shouldn't survive it
         RefreshDirtyFromHistory();
         return;
     }
@@ -358,12 +388,14 @@ void EditorLayer::PushUndo(const World& world, const std::string& label) {
     // Branching off a mid-history position discards the redo entries — the saved state may be
     // among them, in which case there's no longer a clean point to return to (#22 P22).
     if (m_SavedUndoDepth >= 0 && !m_RedoStack.empty()) m_SavedUndoDepth = -1;
-    m_UndoStack.push_back(std::move(entry));
+    PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(entry), sceneJson);
     if (m_UndoStack.size() > kMaxHistory) {
+        // Safe with the delta chain as-is: entry 0's patch only ever rebuilt entry 0 from
+        // entry 1, so dropping it leaves every remaining link intact (#174 stage 2).
         m_UndoStack.erase(m_UndoStack.begin());
         if (m_SavedUndoDepth > 0) m_SavedUndoDepth--; // the whole stack shifted down by one
     }
-    m_RedoStack.clear(); // a fresh edit invalidates whatever redo history existed
+    ClearRedoHistory(); // a fresh edit invalidates whatever redo history existed
     RefreshDirtyFromHistory();
 }
 
@@ -394,18 +426,20 @@ void EditorLayer::CommitStagedUndo(const World& world, const std::string& label)
         return;
     }
 
+    // The staged snapshot is the PRE-edit state, so that's the full state this entry stands for.
+    const std::string stagedJson = std::move(m_StagedUndoJson);
+    m_StagedUndoJson.clear();
     UndoEntry entry;
-    entry.SceneJson = std::move(m_StagedUndoJson);
     entry.Hash = m_StagedUndoHash;
     entry.SelectedOrders = std::move(m_StagedUndoSelectedOrders);
     entry.Label = label;
     if (m_SavedUndoDepth >= 0 && !m_RedoStack.empty()) m_SavedUndoDepth = -1;
-    m_UndoStack.push_back(std::move(entry));
+    PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(entry), stagedJson);
     if (m_UndoStack.size() > kMaxHistory) {
         m_UndoStack.erase(m_UndoStack.begin());
         if (m_SavedUndoDepth > 0) m_SavedUndoDepth--;
     }
-    m_RedoStack.clear();
+    ClearRedoHistory();
     RefreshDirtyFromHistory();
     m_HasStagedUndo = false;
 }
@@ -413,16 +447,17 @@ void EditorLayer::CommitStagedUndo(const World& world, const std::string& label)
 void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     if (m_UndoStack.empty()) return;
 
+    const std::string currentJson = SceneSerializer::SaveToString(world, assets);
     UndoEntry redoEntry;
-    redoEntry.SceneJson = SceneSerializer::SaveToString(world, assets);
-    redoEntry.Hash = HashSceneJson(redoEntry.SceneJson);
+    redoEntry.Hash = HashSceneJson(currentJson);
     redoEntry.SelectedOrders = CaptureSelectedOrders(world);
     redoEntry.Label = m_UndoStack.back().Label; // the action Redo would re-apply from here
-    m_RedoStack.push_back(std::move(redoEntry));
+    PushHistoryEntry(m_RedoStack, m_RedoBaseJson, std::move(redoEntry), currentJson);
 
-    UndoEntry entry = std::move(m_UndoStack.back());
-    m_UndoStack.pop_back();
-    SceneSerializer::LoadFromString(world, assets, entry.SceneJson);
+    UndoEntry entry;
+    std::string targetJson;
+    if (!PopHistoryEntry(m_UndoStack, m_UndoBaseJson, entry, targetJson)) return;
+    SceneSerializer::LoadFromString(world, assets, targetJson);
     RestoreSelectionByOrder(world, entry.SelectedOrders);
     InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
@@ -431,16 +466,17 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
 void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     if (m_RedoStack.empty()) return;
 
+    const std::string currentJson = SceneSerializer::SaveToString(world, assets);
     UndoEntry undoEntry;
-    undoEntry.SceneJson = SceneSerializer::SaveToString(world, assets);
-    undoEntry.Hash = HashSceneJson(undoEntry.SceneJson);
+    undoEntry.Hash = HashSceneJson(currentJson);
     undoEntry.SelectedOrders = CaptureSelectedOrders(world);
     undoEntry.Label = m_RedoStack.back().Label;
-    m_UndoStack.push_back(std::move(undoEntry));
+    PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(undoEntry), currentJson);
 
-    UndoEntry entry = std::move(m_RedoStack.back());
-    m_RedoStack.pop_back();
-    SceneSerializer::LoadFromString(world, assets, entry.SceneJson);
+    UndoEntry entry;
+    std::string targetJson;
+    if (!PopHistoryEntry(m_RedoStack, m_RedoBaseJson, entry, targetJson)) return;
+    SceneSerializer::LoadFromString(world, assets, targetJson);
     RestoreSelectionByOrder(world, entry.SelectedOrders);
     InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
@@ -535,8 +571,7 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
     m_LookThroughLight = entt::null;
     m_LookThroughMoved = false;
     m_PendingLookThrough = entt::null;
-    m_UndoStack.clear();
-    m_RedoStack.clear();
+    ClearUndoHistory();
     m_AutoSaveTimer = 0.0f;
 
     // Write the fresh scene to disk right away — the first free "Untitled N.json" under
@@ -587,8 +622,7 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     m_LookThroughLight = entt::null;
     m_LookThroughMoved = false;
     m_PendingLookThrough = entt::null;
-    m_UndoStack.clear();
-    m_RedoStack.clear();
+    ClearUndoHistory();
     m_Dirty = false;
     m_SavedUndoDepth = 0; // freshly loaded — empty history == on disk
     m_AutoSaveTimer = 0.0f;
