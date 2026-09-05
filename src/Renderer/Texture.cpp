@@ -5,14 +5,16 @@
 #include "TextureCache.h"
 #include "stb_image.h"
 #include <algorithm>
+#include <cstdint>
 #include <vector>
 
 namespace {
 
-// Nearest-neighbor downsample to fit within maxSize x maxSize, preserving aspect ratio. No new
-// dependency (a proper box/Lanczos filter would need stb_image_resize, not vendored here) —
-// good enough for "cap an oversized source texture", not a quality-critical resize path.
-std::vector<unsigned char> DownsampleNearest(const unsigned char* src, int srcW, int srcH, int channels,
+// Box-filter downsample to fit within maxSize x maxSize, preserving aspect ratio. No new
+// dependency (a Lanczos filter would need stb_image_resize, not vendored here) — averages every
+// source texel whose footprint falls under each destination texel, which is a large quality win
+// over a point sample for the common case of a 4K source getting capped to 2048 or lower (#207).
+std::vector<unsigned char> DownsampleBox(const unsigned char* src, int srcW, int srcH, int channels,
     int maxSize, int& outW, int& outH) {
     float scale = std::min((float)maxSize / srcW, (float)maxSize / srcH);
     outW = std::max(1, (int)(srcW * scale));
@@ -20,12 +22,28 @@ std::vector<unsigned char> DownsampleNearest(const unsigned char* src, int srcW,
 
     std::vector<unsigned char> dst((size_t)outW * outH * channels);
     for (int y = 0; y < outH; ++y) {
-        int sy = std::min(srcH - 1, (int)((y + 0.5f) * srcH / outH));
+        // Source row range covering this destination texel's footprint.
+        int sy0 = (int)((float)y * srcH / outH);
+        int sy1 = std::max(sy0 + 1, (int)((float)(y + 1) * srcH / outH));
+        sy1 = std::min(sy1, srcH);
         for (int x = 0; x < outW; ++x) {
-            int sx = std::min(srcW - 1, (int)((x + 0.5f) * srcW / outW));
-            const unsigned char* s = src + ((size_t)sy * srcW + sx) * channels;
+            int sx0 = (int)((float)x * srcW / outW);
+            int sx1 = std::max(sx0 + 1, (int)((float)(x + 1) * srcW / outW));
+            sx1 = std::min(sx1, srcW);
+
             unsigned char* d = dst.data() + ((size_t)y * outW + x) * channels;
-            for (int c = 0; c < channels; ++c) d[c] = s[c];
+            int sampleCount = (sy1 - sy0) * (sx1 - sx0);
+            for (int c = 0; c < channels; ++c) {
+                uint32_t sum = 0;
+                for (int sy = sy0; sy < sy1; ++sy) {
+                    const unsigned char* row = src + ((size_t)sy * srcW + sx0) * channels;
+                    for (int sx = sx0; sx < sx1; ++sx) {
+                        sum += row[c];
+                        row += channels;
+                    }
+                }
+                d[c] = (unsigned char)(sum / sampleCount);
+            }
         }
     }
     return dst;
@@ -91,7 +109,7 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
         uploadW = m_Width;
         uploadH = m_Height;
         if (settings.MaxTextureSize > 0 && (m_Width > settings.MaxTextureSize || m_Height > settings.MaxTextureSize)) {
-            resized = DownsampleNearest(data, m_Width, m_Height, m_Channels, settings.MaxTextureSize, uploadW, uploadH);
+            resized = DownsampleBox(data, m_Width, m_Height, m_Channels, settings.MaxTextureSize, uploadW, uploadH);
             uploadData = resized.data();
         }
 
