@@ -56,6 +56,12 @@ struct ColliderComponent {
 // Optional clip triggered from the editor Inspector; formerly PlacedModel-only, now any entity.
 struct AudioSourceComponent {
     std::string SoundPath;
+    float Volume = 1.0f;
+    bool Loop = false;
+    // Played automatically on Play-mode entry (see EditorLayer::OnEnterPlayMode) and stopped on
+    // exit; false by default so placing a source in a scene doesn't start blaring the moment you
+    // press Play unless you opt in.
+    bool PlayOnStart = false;
 };
 
 // Tag only: which Hierarchy section an entity lists under ("Level Geometry" vs "Models") and

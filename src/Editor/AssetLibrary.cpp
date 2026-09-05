@@ -21,7 +21,10 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
         std::string kind = rest.substr(0, rest.find('#'));
         model = Model::CreatePrimitive(kind, path);
     } else {
-        model = std::make_shared<Model>(path);
+        // Consult any settings saved for this path (e.g. from a scene's assetMeta, applied
+        // before this is called) so an asset with custom import settings is imported once,
+        // correctly, instead of once with defaults and once more via Reimport.
+        model = std::make_shared<Model>(path, GetModelSettings(path));
     }
 
     m_ModelCache[path] = model;
@@ -61,7 +64,10 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path) {
     auto it = m_TextureCache.find(path);
     if (it != m_TextureCache.end()) return it->second;
 
-    auto tex = std::make_shared<Texture>(path);
+    // Consult any settings saved for this path (e.g. from a scene's assetMeta, applied before
+    // this is called) so an asset with custom import settings is imported once, correctly,
+    // instead of once with defaults and once more via Reimport.
+    auto tex = std::make_shared<Texture>(path, GetTextureSettings(path));
     m_TextureCache[path] = tex;
     m_TextureList.push_back(tex);
     return tex;
@@ -81,6 +87,7 @@ void AssetLibrary::RemoveModel(const std::shared_ptr<Model>& model) {
     m_DisplayNames.erase(model->Path());
     m_ModelSettings.erase(model->Path());
     m_Labels.erase(model->Path());
+    m_AllLabelsDirty = true;
 }
 
 void AssetLibrary::RemoveTexture(const std::shared_ptr<Texture>& texture) {
@@ -91,6 +98,7 @@ void AssetLibrary::RemoveTexture(const std::shared_ptr<Texture>& texture) {
     m_DisplayNames.erase(texture->Path());
     m_TextureSettings.erase(texture->Path());
     m_Labels.erase(texture->Path());
+    m_AllLabelsDirty = true;
 }
 
 void AssetLibrary::RemoveSound(const std::string& path) {
@@ -98,6 +106,7 @@ void AssetLibrary::RemoveSound(const std::string& path) {
     m_AssetFolder.erase(path);
     m_DisplayNames.erase(path);
     m_Labels.erase(path);
+    m_AllLabelsDirty = true;
 }
 
 void AssetLibrary::RegisterPrefab(const std::string& path) {
@@ -111,6 +120,7 @@ void AssetLibrary::RemovePrefab(const std::string& path) {
     m_AssetFolder.erase(path);
     m_DisplayNames.erase(path);
     m_Labels.erase(path);
+    m_AllLabelsDirty = true;
 }
 
 void AssetLibrary::SetAssetFolder(const std::string& assetKey, const std::string& folder) {
@@ -138,6 +148,7 @@ std::string AssetLibrary::DisplayName(const std::string& assetKey) const {
 void AssetLibrary::SetLabels(const std::string& assetKey, const std::set<std::string>& labels) {
     if (labels.empty()) m_Labels.erase(assetKey);
     else m_Labels[assetKey] = labels;
+    m_AllLabelsDirty = true;
 }
 
 const std::set<std::string>& AssetLibrary::Labels(const std::string& assetKey) const {
@@ -146,10 +157,13 @@ const std::set<std::string>& AssetLibrary::Labels(const std::string& assetKey) c
     return it != m_Labels.end() ? it->second : kEmpty;
 }
 
-std::set<std::string> AssetLibrary::AllKnownLabels() const {
-    std::set<std::string> all;
-    for (const auto& [key, labels] : m_Labels) all.insert(labels.begin(), labels.end());
-    return all;
+const std::set<std::string>& AssetLibrary::AllKnownLabels() const {
+    if (m_AllLabelsDirty) {
+        m_AllLabelsCache.clear();
+        for (const auto& [key, labels] : m_Labels) m_AllLabelsCache.insert(labels.begin(), labels.end());
+        m_AllLabelsDirty = false;
+    }
+    return m_AllLabelsCache;
 }
 
 void AssetLibrary::PruneToKeepSet(const std::set<std::string>& modelPaths, const std::set<std::string>& texturePaths,
@@ -185,6 +199,7 @@ void AssetLibrary::ClearMetadataOnly() {
     m_TextureSettings.clear();
     m_ModelSettings.clear();
     m_Labels.clear();
+    m_AllLabelsDirty = true;
 }
 
 void AssetLibrary::CreateFolder(const std::string& folderPath) {

@@ -11,25 +11,13 @@ namespace {
 
 constexpr char kMagic[4] = {'T', 'T', 'E', 'X'};
 // Bump to invalidate every existing entry after a format or decode-behaviour change.
-constexpr uint32_t kVersion = 1;
+// v2 (#207): downsample switched from nearest-neighbor to a box filter, so cached pixels baked
+// with the old point-sample must be discarded and re-baked.
+constexpr uint32_t kVersion = 2;
 
 std::string CacheDir() {
     static const std::string dir = ProjectPaths::Resolve("Library/Textures");
     return dir;
-}
-
-// Import settings that change the stored PIXELS. Filtering and wrap mode are deliberately
-// excluded — they're sampler state applied at upload, so changing them must not throw away a
-// perfectly good decode.
-uint64_t SettingsHash(const TextureImportSettings& s) {
-    uint64_t h = 1469598103934665603ull; // FNV-1a offset basis
-    auto mix = [&h](uint64_t v) {
-        h ^= v;
-        h *= 1099511628211ull;
-    };
-    mix((uint64_t)s.MaxTextureSize);
-    mix(s.IsSRGB ? 1u : 0u); // affects the GL internal format chosen for these pixels
-    return h;
 }
 
 // Cache entries are keyed by the source's absolute path; the path is also written into the
@@ -71,6 +59,20 @@ bool Read(std::ifstream& f, T& v) {
 
 } // namespace
 
+// Import settings that change the stored PIXELS. Filtering and wrap mode are deliberately
+// excluded — they're sampler state applied at upload, so changing them must not throw away a
+// perfectly good decode.
+uint64_t HashSettings(const TextureImportSettings& s) {
+    uint64_t h = 1469598103934665603ull; // FNV-1a offset basis
+    auto mix = [&h](uint64_t v) {
+        h ^= v;
+        h *= 1099511628211ull;
+    };
+    mix((uint64_t)s.MaxTextureSize);
+    mix(s.IsSRGB ? 1u : 0u); // affects the GL internal format chosen for these pixels
+    return h;
+}
+
 bool Load(const std::string& sourcePath, const TextureImportSettings& settings, Image& out) {
     uint64_t srcSize = 0, srcMtime = 0;
     if (!SourceStamp(sourcePath, srcSize, srcMtime)) return false; // source gone: nothing to validate against
@@ -85,7 +87,7 @@ bool Load(const std::string& sourcePath, const TextureImportSettings& settings, 
 
     uint64_t size = 0, mtime = 0, hash = 0;
     if (!Read(f, size) || !Read(f, mtime) || !Read(f, hash)) return false;
-    if (size != srcSize || mtime != srcMtime || hash != SettingsHash(settings)) return false;
+    if (size != srcSize || mtime != srcMtime || hash != HashSettings(settings)) return false;
 
     // The source path is stored too, so a (vanishingly unlikely) filename-hash collision is
     // caught here and treated as a miss.
@@ -133,7 +135,7 @@ void Store(const std::string& sourcePath, const TextureImportSettings& settings,
         Write(f, kVersion);
         Write(f, srcSize);
         Write(f, srcMtime);
-        Write(f, SettingsHash(settings));
+        Write(f, HashSettings(settings));
 
         std::string abs = std::filesystem::absolute(sourcePath, ec).lexically_normal().string();
         if (ec) abs = sourcePath;
@@ -154,6 +156,62 @@ void Store(const std::string& sourcePath, const TextureImportSettings& settings,
     }
     std::filesystem::rename(tempPath, finalPath, ec);
     if (ec) std::filesystem::remove(tempPath, ec);
+}
+
+void Prune(const std::function<std::optional<uint64_t>(const std::string& sourcePath)>& currentSettingsHash) {
+    std::error_code ec;
+    std::filesystem::directory_iterator dir(CacheDir(), ec);
+    if (ec) return; // no cache directory yet (or can't be listed): nothing to prune
+
+    for (const auto& entry : std::filesystem::directory_iterator(CacheDir(), ec)) {
+        if (ec) break;
+        std::error_code fileEc;
+        if (!entry.is_regular_file(fileEc) || fileEc) continue;
+
+        const std::filesystem::path path = entry.path();
+        if (path.extension() != ".ttex") continue; // ignore ".tmp" in-flight writes and stray files
+
+        // Read the header ONLY — magic, version, source stamp, settings hash, source path — and
+        // stop before the pixel payload that follows. Never decodes or even reads the pixels.
+        std::ifstream f(path, std::ios::binary);
+        bool stale = !f; // unreadable file: already useless, safe to remove
+
+        std::string storedPath;
+        uint64_t storedHash = 0;
+        if (!stale) {
+            char magic[4];
+            uint32_t version = 0;
+            uint64_t size = 0, mtime = 0;
+            uint32_t pathLen = 0;
+            if (!f.read(magic, 4) || std::memcmp(magic, kMagic, 4) != 0) {
+                stale = true; // not one of our files (or corrupt): safe to remove
+            } else if (!Read(f, version) || version != kVersion) {
+                stale = true; // predates the current format; Load() would never accept it either
+            } else if (!Read(f, size) || !Read(f, mtime) || !Read(f, storedHash)) {
+                stale = true; // truncated header
+            } else if (!Read(f, pathLen) || pathLen > 4096) {
+                stale = true; // truncated/corrupt header
+            } else {
+                storedPath.resize(pathLen);
+                if (pathLen && !f.read(storedPath.data(), pathLen)) stale = true; // truncated header
+            }
+        }
+        f.close(); // done with the header either way; the pixel payload is never touched
+
+        if (!stale) {
+            std::error_code existsEc;
+            if (!std::filesystem::exists(storedPath, existsEc) || existsEc) {
+                stale = true; // source texture was deleted from the project
+            } else if (currentSettingsHash) {
+                std::optional<uint64_t> current = currentSettingsHash(storedPath);
+                if (current.has_value() && *current != storedHash) {
+                    stale = true; // settings changed since this entry was baked
+                }
+            }
+        }
+
+        if (stale) std::filesystem::remove(path, ec);
+    }
 }
 
 } // namespace TextureCache

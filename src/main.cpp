@@ -27,6 +27,7 @@
 #include "CascadedShadowMap.h"
 #include "SpotShadowMap.h"
 #include "PointShadowMap.h"
+#include "IblProbe.h"
 #include "GLStateCache.h"
 #include "Profiler.h"
 #include "Frustum.h"
@@ -35,6 +36,7 @@
 #include "SplashScreen.h"
 #include "GLDebug.h"
 #include "Log.h"
+#include "TextureCache.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -46,7 +48,6 @@
 #include <thread>
 #include <vector>
 #include <cstring>
-#include <unordered_set>
 #include <cstdlib>
 #include <intrin.h>   // __cpuid — CPU brand string for the boot log
 #ifndef NOMINMAX
@@ -336,7 +337,19 @@ static entt::entity FindActiveSceneCamera(const World& world) {
     return best;
 }
 
-int main() {
+int main(int argc, char** argv) {
+    // --smoke-test: headless-as-possible CI/manual smoke check (audit #187). Loads every scene
+    // under project/scenes/, renders a fixed number of frames of each through the exact same
+    // per-frame render path the interactive editor uses (see the `smokeTestMode` branches
+    // sprinkled through the main loop below), then checks for new GL debug-callback errors and
+    // a nonzero draw count before moving to the next scene. Exits 0 if every scene passed, or a
+    // nonzero code if any failed — parsed here, before anything else, so it can never be
+    // confused with a scene-path or other future argument.
+    bool smokeTestMode = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--smoke-test") smokeTestMode = true;
+    }
+
     try {
         // Up before anything else so it covers the whole startup, including the GL context
         // creation and shader compiles below. The main window stays hidden until its first
@@ -365,6 +378,7 @@ int main() {
         TintOverlayRenderer tintOverlay;
         Grid grid;
         Sky sky;
+        IblProbe iblProbe; // #196: sky-baked irradiance / prefiltered specular / BRDF LUT
 
         World world;
         Player player;
@@ -392,6 +406,21 @@ int main() {
         bool sceneLoaded = SceneSerializer::Load(world, assets, scenePath);
         if (sceneLoaded) {
             std::cout << "Loaded scene from " << scenePath << std::endl;
+        }
+
+        // #226: TextureCache never evicted anything on its own, so a texture deleted from the
+        // project (or reimported under different settings) left its old decoded-pixel entry on
+        // disk forever — 229MB across 26 entries observed on a real dev machine. Sweep now, after
+        // the scene above has loaded its textures and their customized import settings, so the
+        // sweep knows the *current* settings for anything actually customized. An entry for a
+        // texture this scene didn't touch is left alone rather than judged by stale information.
+        {
+            const auto& textureSettings = assets.TextureSettingsMap();
+            TextureCache::Prune([&textureSettings](const std::string& sourcePath) -> std::optional<uint64_t> {
+                auto it = textureSettings.find(sourcePath);
+                if (it == textureSettings.end()) return std::nullopt;
+                return TextureCache::HashSettings(it->second);
+            });
         }
 
         EditorLayer editor;
@@ -611,9 +640,6 @@ int main() {
 
         int appliedVSyncMode = -1; // != any real mode, so the first iteration applies the saved pref
         bool camDragActive = false; // OS cursor disabled for the duration of a look/pan/orbit drag
-        bool prevF1 = false;
-        bool prevF11 = false;
-        bool prevEscape = false;
 
         std::string lastScenePath;
         bool lastDirty = false;
@@ -672,7 +698,58 @@ int main() {
         bool exitApproved = false;
         bool exitSkipFinalSave = false;
 
+        // Monotonically increasing per-frame counter, used by Model::TickAnimationOnce() to
+        // dedupe animation updates for models shared by more than one entity (#106) without a
+        // per-frame heap allocation.
+        uint64_t frameIndex = 0;
+
+        // --smoke-test state (audit #187). Deliberately driven from inside the normal render
+        // loop below rather than a separate loop of its own, so it exercises the exact same
+        // per-frame path (light gather, shadow passes, drawScene, editor.Draw/EndFrame) as an
+        // interactive session — the whole point of the harness is catching a regression that
+        // path could introduce, not a hand-rolled approximation of it.
+        constexpr int kSmokeTestFrames = 100;
+        struct SmokeResult { std::string scenePath; int frames; int newGlErrors; int drawCalls; bool pass; };
+        std::vector<std::string> smokeScenePaths;
+        std::vector<SmokeResult> smokeResults;
+        size_t smokeSceneIndex = 0;
+        int smokeFramesRendered = 0;
+        int smokeBaselineGlErrors = 0;
+        bool smokeSceneActive = false;
+        if (smokeTestMode) {
+            std::string scenesDir = ProjectPaths::Resolve("scenes");
+            std::error_code dirEc;
+            for (auto& entry : std::filesystem::directory_iterator(scenesDir, dirEc)) {
+                if (dirEc) break;
+                if (entry.is_regular_file() && entry.path().extension() == ".json")
+                    smokeScenePaths.push_back(entry.path().string());
+            }
+            std::sort(smokeScenePaths.begin(), smokeScenePaths.end());
+            std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
+                      << scenesDir << std::endl;
+            if (!GLDebug::IsEnabled()) {
+                std::cout << "[SmokeTest] WARNING: GLDebug is not active in this build (needs a "
+                             "Debug build or TARTARUS_GL_DEBUG=1) - GL error counts will always "
+                             "read 0." << std::endl;
+            }
+        }
+
         while (true) {
+            ++frameIndex;
+            // Advance the smoke test: load the next scene (or, once every scene's frame quota is
+            // met, fall through and stop the whole loop below).
+            if (smokeTestMode) {
+                if (smokeSceneIndex >= smokeScenePaths.size()) break;
+                if (!smokeSceneActive) {
+                    const std::string& path = smokeScenePaths[smokeSceneIndex];
+                    bool loadOk = SceneSerializer::Load(world, assets, path);
+                    std::cout << "[SmokeTest] Loading " << path
+                              << (loadOk ? "" : "  (Load() reported failure)") << std::endl;
+                    smokeBaselineGlErrors = GLDebug::ErrorCount();
+                    smokeFramesRendered = 0;
+                    smokeSceneActive = true;
+                }
+            }
             Clock::Update();
             float dt = Clock::DeltaTime();
             Profiler::BeginFrame();
@@ -711,19 +788,14 @@ int main() {
                 titleInitialized = true;
             }
 
-            bool f1Now = Input::IsKeyDown(GLFW_KEY_F1);
-            if (f1Now && !prevF1) togglePlay();
-            prevF1 = f1Now;
+            if (Input::IsKeyPressed(GLFW_KEY_F1)) togglePlay();
 
-            bool f11Now = Input::IsKeyDown(GLFW_KEY_F11);
-            if (f11Now && !prevF11) {
+            if (Input::IsKeyPressed(GLFW_KEY_F11)) {
                 window.ToggleFullscreen();
             }
-            prevF11 = f11Now;
 
             if (playing) {
-                bool escNow = Input::IsKeyDown(GLFW_KEY_ESCAPE);
-                if (escNow && !prevEscape) {
+                if (Input::IsKeyPressed(GLFW_KEY_ESCAPE)) {
                     if (playMaximized) {
                         // Maximized play: Esc toggles the cursor, same as the old Play mode.
                         window.SetCursorLocked(!window.IsCursorLocked());
@@ -733,7 +805,6 @@ int main() {
                         window.SetCursorLocked(false);
                     }
                 }
-                prevEscape = escNow;
 
                 // Safety net: if the window loses focus while the game has grabbed the cursor
                 // (alt-tab, a notification steals focus), release it — otherwise you can come
@@ -812,8 +883,16 @@ int main() {
             // Simulate the player whenever playing. When the game doesn't have input (in-panel
             // play, not yet clicked in), the body still falls/rests — it just doesn't walk or
             // look (see Player::Update's readInput).
+            // Reap voices that have finished so repeated Play/Stop cycles don't accumulate
+            // ma_sound objects and open file handles (#200).
+            AudioEngine::Update();
+
             if (playing) {
                 player.Update(dt, world, window.Handle(), gameHasInput);
+                // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
+                // against wherever the player is looking from, updated after the move so the
+                // listener matches the frame that's about to be rendered.
+                AudioEngine::SetListener(player.Cam.Position, player.Cam.Front(), player.Cam.Up());
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
                 UpdateAnimators(world, dt);
@@ -826,10 +905,11 @@ int main() {
                 // Advance each distinct Model once. Scene entities get their own instance
                 // (AssetLibrary::InstantiateModel), so this is normally 1:1 — but dedupe
                 // defensively so a future shared-Model path can't tick one player N*dt (#106).
-                std::unordered_set<Model*> advanced;
+                // Model::TickAnimationOnce() compares against its own m_LastTickedFrame instead
+                // of this loop building a heap-allocated std::unordered_set<Model*> every frame.
                 for (auto entity : world.Registry.view<RenderableComponent>()) {
                     Model* m = world.Registry.get<RenderableComponent>(entity).ModelRef.get();
-                    if (m && advanced.insert(m).second) m->UpdateAnimation(dt);
+                    if (m) m->TickAnimationOnce(frameIndex, dt);
                 }
             }
 
@@ -840,6 +920,19 @@ int main() {
                 // KeepDockspaceAlive's own comment for the full story.
                 editor.KeepDockspaceAlive();
             }
+
+            // Every world matrix this frame's render passes need, computed once, top-down
+            // (#173). Placed here deliberately: player/animator/animation updates above have
+            // finished writing transforms, and the shadow + scene passes below (which each used
+            // to re-derive the same entity's parent chain per cascade, per spot, per cube face
+            // and per viewport) now just read it back. Editor edits — gizmo drags, Inspector
+            // fields — land in editor.Draw() further down and so take effect on the NEXT frame's
+            // rebuild. That is a small behavior change for the Game-view passes, which run after
+            // editor.Draw() and so used to see a mid-frame edit that the Scene pass above them
+            // did not: both views now agree on one snapshot instead of tearing between them.
+            // Entities SPAWNED after this point still resolve correctly — GetCachedWorldTransform
+            // falls back to composing on demand for anything the cache doesn't hold.
+            world.RebuildWorldTransformCache();
 
             glm::vec3 lightDir(-0.4f, -1.0f, -0.3f);
 
@@ -878,7 +971,7 @@ int main() {
             float pointShadowNear[PointShadowMap::kMaxPoints];
             float frameSunShadowBias = 1.0f, frameSunShadowNormalBias = 1.0f, frameSunShadowSoftness = 1.0f;
             for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
-                if (lightBuffer.Count() >= LightBuffer::kMaxLights) break;
+                if (lightBuffer.Count() >= LightBuffer::kMaxLights) { lightBuffer.MarkOverflowed(); break; }
                 if (world.Registry.all_of<InactiveTag>(e)) continue;
                 // Lights panel solo/mute is an editing aid only — Play renders every light (#140).
                 if (!playing && editor.IsLightSuppressed(e)) continue;
@@ -980,16 +1073,20 @@ int main() {
 
                 shadowShader.Bind();
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
+                // #194: resolve these two hot uniform locations once, outside the 6-face(ish)
+                // x N-caster loop below, instead of hashing "uLightViewProj"/"uModel" every call.
+                int shadowLightViewProjLoc = shadowShader.Loc("uLightViewProj");
+                int shadowModelLoc = shadowShader.Loc("uModel");
                 for (int c = 0; c < shadowMap.Count(); ++c) {
                     shadowMap.Begin(c);
-                    shadowShader.SetMat4("uLightViewProj", shadowMap.LightViewProj(c));
+                    shadowShader.SetMat4(shadowLightViewProjLoc, shadowMap.LightViewProj(c));
                     // Cull each cascade's caster list against that cascade's own ortho frustum —
                     // the near slice covers a few metres yet used to redraw the whole level x4.
                     Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
                     for (auto entity : casters) {
                         if (world.Registry.all_of<InactiveTag>(entity)) continue;
                         auto& renderable = world.Registry.get<RenderableComponent>(entity);
-                        glm::mat4 model = world.ComposeWorldTransform(entity);
+                        glm::mat4 model = world.GetCachedWorldTransform(entity);
                         glm::vec3 bmin = renderable.ModelRef->BoundsMin();
                         glm::vec3 bmax = renderable.ModelRef->BoundsMax();
                         bool validBounds = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
@@ -999,7 +1096,7 @@ int main() {
                         if (validBounds && !renderable.ModelRef->HasAnimations() &&
                             !cascadeFrustum.Intersects(AABB{bmin, bmax}.Transformed(model)))
                             continue;
-                        shadowShader.SetMat4("uModel", model);
+                        shadowShader.SetMat4(shadowModelLoc, model);
                         renderable.ModelRef->DrawDepthOnly(shadowShader);
                     }
                 }
@@ -1031,23 +1128,28 @@ int main() {
 
                 localShadowShader.Bind(); // linear distance-to-light depth
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
+                // #194: resolve once, outside the per-spot x per-caster loop.
+                int localLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
+                int localLightPosLoc = localShadowShader.Loc("uShadowLightPos");
+                int localFarLoc = localShadowShader.Loc("uShadowFar");
+                int localModelLoc = localShadowShader.Loc("uModel");
                 for (int s = 0; s < spotShadowCount; ++s) {
                     spotShadowMap.Begin(s);
-                    localShadowShader.SetMat4("uLightViewProj", spotShadowVP[s]);
-                    localShadowShader.SetVec3("uShadowLightPos", spotShadowPos[s]);
-                    localShadowShader.SetFloat("uShadowFar", spotShadowFar[s]);
+                    localShadowShader.SetMat4(localLightViewProjLoc, spotShadowVP[s]);
+                    localShadowShader.SetVec3(localLightPosLoc, spotShadowPos[s]);
+                    localShadowShader.SetFloat(localFarLoc, spotShadowFar[s]);
                     Frustum lf = Frustum::FromViewProj(spotShadowVP[s]);
                     for (auto entity : casters) {
                         if (world.Registry.all_of<InactiveTag>(entity)) continue;
                         auto& r = world.Registry.get<RenderableComponent>(entity);
-                        glm::mat4 model = world.ComposeWorldTransform(entity);
+                        glm::mat4 model = world.GetCachedWorldTransform(entity);
                         glm::vec3 bmin = r.ModelRef->BoundsMin();
                         glm::vec3 bmax = r.ModelRef->BoundsMax();
                         bool vb = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
                         if (vb && !r.ModelRef->HasAnimations() &&
                             !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
                             continue;
-                        localShadowShader.SetMat4("uModel", model);
+                        localShadowShader.SetMat4(localModelLoc, model);
                         r.ModelRef->DrawDepthOnly(localShadowShader);
                     }
                 }
@@ -1084,27 +1186,32 @@ int main() {
 
                 localShadowShader.Bind(); // linear distance-to-light depth
                 auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
+                // #194: resolve once, outside the per-point x 6-face x per-caster loop.
+                int cubeLightPosLoc = localShadowShader.Loc("uShadowLightPos");
+                int cubeFarLoc = localShadowShader.Loc("uShadowFar");
+                int cubeLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
+                int cubeModelLoc = localShadowShader.Loc("uModel");
                 for (int s = 0; s < pointShadowCount; ++s) {
                     glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, pointShadowNear[s], pointShadowFar[s]);
-                    localShadowShader.SetVec3("uShadowLightPos", pointShadowPos[s]);
-                    localShadowShader.SetFloat("uShadowFar", pointShadowFar[s]);
+                    localShadowShader.SetVec3(cubeLightPosLoc, pointShadowPos[s]);
+                    localShadowShader.SetFloat(cubeFarLoc, pointShadowFar[s]);
                     for (int f = 0; f < 6; ++f) {
                         pointShadowMap.BeginFace(s, f);
                         glm::mat4 vp = proj * glm::lookAt(pointShadowPos[s],
                                                          pointShadowPos[s] + kFaceDir[f], kFaceUp[f]);
-                        localShadowShader.SetMat4("uLightViewProj", vp);
+                        localShadowShader.SetMat4(cubeLightViewProjLoc, vp);
                         Frustum lf = Frustum::FromViewProj(vp);
                         for (auto entity : casters) {
                             if (world.Registry.all_of<InactiveTag>(entity)) continue;
                             auto& r = world.Registry.get<RenderableComponent>(entity);
-                            glm::mat4 model = world.ComposeWorldTransform(entity);
+                            glm::mat4 model = world.GetCachedWorldTransform(entity);
                             glm::vec3 bmin = r.ModelRef->BoundsMin();
                             glm::vec3 bmax = r.ModelRef->BoundsMax();
                             bool vb = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
                             if (vb && !r.ModelRef->HasAnimations() &&
                                 !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
                                 continue;
-                            localShadowShader.SetMat4("uModel", model);
+                            localShadowShader.SetMat4(cubeModelLoc, model);
                             r.ModelRef->DrawDepthOnly(localShadowShader);
                         }
                     }
@@ -1113,6 +1220,21 @@ int main() {
                 glDisable(GL_POLYGON_OFFSET_FILL);
                 glEnable(GL_CULL_FACE);
                 glCullFace(GL_BACK);
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, window.GetWidth(), window.GetHeight());
+                GLStateCache::Invalidate();
+            }
+
+            // --- IBL probes (#196) — baked from the sky, NOT per frame ------------------------
+            // NeedsBake() compares against the colours the probes were last baked with, so this
+            // is a couple of vec3 compares on the overwhelming majority of frames and a ~1 ms
+            // burst on the frame after someone drags the sky colour (or loads a scene, or
+            // undoes an edit — watching the state rather than any one writer means every path
+            // that can change the sky is covered without plumbing a dirty flag through the UI).
+            if (iblProbe.NeedsBake(world.SkyHorizonColor, world.SkyZenithColor)) {
+                PROFILE_SCOPE("IBL Bake");
+                PROFILE_GPU_SCOPE("IBL Bake");
+                iblProbe.Bake(world.SkyHorizonColor, world.SkyZenithColor);
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glViewport(0, 0, window.GetWidth(), window.GetHeight());
                 GLStateCache::Invalidate();
@@ -1198,6 +1320,22 @@ int main() {
                 glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, pointShadowMap.DepthCubeArray());
                 modelShader.SetInt("uPointShadowMap", 10);
                 modelShader.SetFloat("uPointShadowMapResolution", (float)pointShadowMap.Resolution()); // #190
+
+                // IBL probes on units 11/12/13 (#196). The shader declares those units with
+                // layout(binding=) qualifiers, so there's no SetInt here — just the bind. Unlit
+                // mode skips lighting entirely, so it doesn't need them either.
+                bool iblOn = iblProbe.IsValid() && !unlit;
+                if (iblOn) {
+                    glActiveTexture(GL_TEXTURE0 + 11);
+                    glBindTexture(GL_TEXTURE_CUBE_MAP, iblProbe.IrradianceMap());
+                    glActiveTexture(GL_TEXTURE0 + 12);
+                    glBindTexture(GL_TEXTURE_CUBE_MAP, iblProbe.SpecularMap());
+                    glActiveTexture(GL_TEXTURE0 + 13);
+                    glBindTexture(GL_TEXTURE_2D, iblProbe.BrdfLut());
+                    modelShader.SetFloat("uIBLIntensity", std::max(world.SkyAmbientIntensity, 0.0f));
+                    modelShader.SetFloat("uIBLSpecularMaxLod", (float)(IblProbe::kSpecularMips - 1));
+                }
+                modelShader.SetInt("uIBLEnabled", iblOn ? 1 : 0);
                 glActiveTexture(GL_TEXTURE0);
 
                 // The light SSBO (binding 0) is built once per frame above — just bind it.
@@ -1235,14 +1373,19 @@ int main() {
                 // since both are just entities with a Transform + Renderable.
                 EditorLayer::RenderStats localStats;
                 localStats.PointLights = std::max(0, frameLightCount - 1); // minus the directional sun
+                localStats.LightBufferOverflowed = lightBuffer.Overflowed(); // #204
+                localStats.ClusterSaturated = clusterOn && clusterGrid.Saturated(); // #204
                 Frustum camFrustum = Frustum::FromViewProj(sceneProj * sceneView);
                 { // scope limits PROFILE_SCOPE to just this loop, not the rest of the frame
                 PROFILE_SCOPE("Scene Draw");
                 PROFILE_GPU_SCOPE("Scene Draw"); // shared by both Scene-tab and Game-tab draws
+                // #194: resolve once, outside the per-entity loop below.
+                int modelModelLoc = modelShader.Loc("uModel");
+                int modelNormalMatrixLoc = modelShader.Loc("uNormalMatrix");
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.all_of<InactiveTag>(entity)) continue; // Hierarchy eye toggle / GameObject active
                     auto& renderable = world.Registry.get<RenderableComponent>(entity);
-                    glm::mat4 model = world.ComposeWorldTransform(entity);
+                    glm::mat4 model = world.GetCachedWorldTransform(entity);
 
                     // Frustum culling: skip the draw call entirely for anything outside the
                     // camera's view. Bounds come from the same Model::BoundsMin/Max already used
@@ -1269,9 +1412,9 @@ int main() {
                         }
                     }
 
-                    modelShader.SetMat4("uModel", model);
+                    modelShader.SetMat4(modelModelLoc, model);
                     // Normal matrix (inverse-transpose) computed here, not per-vertex (#104).
-                    modelShader.SetMat4("uNormalMatrix",
+                    modelShader.SetMat4(modelNormalMatrixLoc,
                         glm::mat4(glm::transpose(glm::inverse(glm::mat3(model)))));
                     renderable.ModelRef->Draw(modelShader);
 
@@ -1368,7 +1511,7 @@ int main() {
                         // selection ring from EditorLayer::DrawEntityIcons instead.
                         auto* renderablePtr = world.Registry.try_get<RenderableComponent>(entity);
                         if (!renderablePtr) continue;
-                        xforms.push_back(world.ComposeWorldTransform(entity));
+                        xforms.push_back(world.GetCachedWorldTransform(entity));
                         models.push_back(renderablePtr->ModelRef.get());
                     }
 
@@ -1674,13 +1817,21 @@ int main() {
             // Capture: PrintScreen, or a ".shot" sentinel file next to the exe (triggerable
             // without keyboard focus). Both just raise a request; it's serviced next.
             {
-                static bool prevPS = false;
-                bool ps = Input::IsKeyDown(GLFW_KEY_PRINT_SCREEN);
-                std::error_code shotEc;
-                bool sentinel = std::filesystem::exists(".shot", shotEc);
-                if ((ps && !prevPS) || sentinel) editor.RequestCapture();
-                if (sentinel) std::filesystem::remove(".shot", shotEc);
-                prevPS = ps;
+                bool ps = Input::IsKeyPressed(GLFW_KEY_PRINT_SCREEN);
+                // The sentinel only exists to let an external script trigger a capture, so a
+                // quarter-second of latency is irrelevant — stat'ing the filesystem every single
+                // frame (up to 240x/sec at the FPS cap) just to poll a rarely-present file isn't
+                // worth it. Throttle the check to ~4 Hz instead.
+                static float shotPollAccum = 0.0f;
+                shotPollAccum += dt;
+                bool sentinel = false;
+                if (shotPollAccum >= 0.25f) {
+                    shotPollAccum = 0.0f;
+                    std::error_code shotEc;
+                    sentinel = std::filesystem::exists(".shot", shotEc);
+                    if (sentinel) std::filesystem::remove(".shot", shotEc);
+                }
+                if (ps || sentinel) editor.RequestCapture();
             }
 
             // Service a pending capture now that the frame is fully composited on the back
@@ -1735,6 +1886,46 @@ int main() {
                 window.Show();
                 splash.Close(); // blocks out any remainder of the minimum display time
             }
+
+            // Count this frame toward the active scene's quota; once it's rendered enough,
+            // score it (new GL errors + draw count) and advance to the next scene.
+            if (smokeTestMode && smokeSceneActive) {
+                ++smokeFramesRendered;
+                if (smokeFramesRendered >= kSmokeTestFrames) {
+                    int newErrors = GLDebug::ErrorCount() - smokeBaselineGlErrors;
+                    int drawCalls = editor.GetRenderStats().DrawCalls;
+                    bool pass = newErrors == 0 && drawCalls > 0;
+                    const std::string& path = smokeScenePaths[smokeSceneIndex];
+                    smokeResults.push_back({path, smokeFramesRendered, newErrors, drawCalls, pass});
+                    std::cout << "[SmokeTest] " << (pass ? "PASS" : "FAIL") << "  "
+                              << std::filesystem::path(path).filename().string()
+                              << "  frames=" << smokeFramesRendered
+                              << " newGlErrors=" << newErrors
+                              << " drawCalls=" << drawCalls << std::endl;
+                    ++smokeSceneIndex;
+                    smokeSceneActive = false;
+                }
+            }
+        }
+
+        if (smokeTestMode) {
+            // Deliberately skip the normal exit path entirely (no play-mode revert, no
+            // save-on-exit) — smoke-tested scenes were never really "open" from the user's
+            // point of view and must not get written back to disk.
+            std::cout << "\n[SmokeTest] ==== Summary ====" << std::endl;
+            bool allPassed = !smokeResults.empty();
+            for (const auto& r : smokeResults) {
+                std::cout << "[SmokeTest] " << (r.pass ? "PASS" : "FAIL") << "  "
+                          << std::filesystem::path(r.scenePath).filename().string()
+                          << "  frames=" << r.frames << " newGlErrors=" << r.newGlErrors
+                          << " drawCalls=" << r.drawCalls << std::endl;
+                if (!r.pass) allPassed = false;
+            }
+            std::cout << "[SmokeTest] " << smokeResults.size() << " scene(s) - "
+                      << (allPassed ? "ALL PASSED" : "FAILURES DETECTED") << std::endl;
+            editor.Shutdown();
+            AudioEngine::Shutdown();
+            return allPassed ? 0 : 1;
         }
 
         // Closing mid-play would otherwise auto-save the transient play state — revert to the

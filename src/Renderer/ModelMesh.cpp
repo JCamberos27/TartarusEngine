@@ -1,5 +1,6 @@
 #include "ModelMesh.h"
 #include "gl.h"
+#include "GLStateCache.h"
 #include <cstddef>
 
 // Imported geometry is static, so the buffers use immutable storage (flags 0) and the VAO is
@@ -53,6 +54,6 @@ ModelMesh::~ModelMesh() {
 }
 
 void ModelMesh::Draw() const {
-    glBindVertexArray(m_VAO);
+    GLStateCache::BindVertexArray(m_VAO);
     glDrawElements(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr);
 }

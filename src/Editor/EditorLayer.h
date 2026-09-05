@@ -5,14 +5,18 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <cstdint>
 #include <unordered_set>
+#include <unordered_map>
 #include <map>
+#include <list>
 #include <memory>
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
 #include "Model.h"   // ModelImportSettings - same
 #include "ImportQueueManager.h"
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
+#include "AudioEngine.h" // AudioEngine::SoundHandle - m_PlayModeAudioHandles
 
 struct GLFWwindow;
 class World;
@@ -24,6 +28,19 @@ class Framebuffer;
 // Rect = Unity's "Rect Tool" adapted to 3D: translate handles plus bounding-box corner/edge
 // handles for non-uniform scaling, in one combined gizmo (ImGuizmo's TRANSLATE | BOUNDS).
 enum class GizmoOp { Translate, Rotate, Scale, Rect };
+
+// Async (PBO-backed) state for one adaptive-contrast sampling call site (#178). SampleTextureLuminance
+// ping-pongs two pixel-pack buffer objects: each call kicks off a non-blocking glReadPixels into
+// one PBO and, in the same call, maps+consumes whatever the OTHER PBO was loaded with by the
+// previous kickoff (one throttled ~100ms tick earlier) — so the GPU is never stalled waiting for
+// the readback. Each HUD element that samples independently (Stats HUD, History HUD, status bar,
+// nav-gizmo cluster, Play/Stop button) needs its own instance so their reads don't clobber one
+// another.
+struct AsyncLuminanceReadback {
+    unsigned int Pbo[2] = { 0, 0 }; // fixed-size (kMaxLumPatch^2 * 4 bytes) buffers, DSA-mapped
+    int Pending[2] = { 0, 0 };      // pixel count kicked into that slot and not yet consumed (0 = none)
+    int Next = 0;                  // slot to write into on the next call; the other slot is read
+};
 
 // In-game editor overlay (Dear ImGui + ImGuizmo): import assets, place/inspect
 // entities, manipulate them with viewport gizmos. Toggle with F1; gameplay pauses
@@ -77,12 +94,14 @@ public:
         m_GameViewTex = colorTex; m_GameViewTexW = texW; m_GameViewTexH = texH;
     }
     // Average luminance (0..1) of this frame's rendered Scene viewport inside a screen-space box
-    // of `boxPx` centered at `centerScreen`; -1 when it can't be sampled (no scene texture yet,
-    // box entirely outside the viewport). Throttle calls yourself — it does a GPU->CPU readback.
-    float SampleSceneLuminance(ImVec2 centerScreen, float boxPx);
+    // of `boxPx` centered at `centerScreen`; -1 when no result is available yet (no scene texture,
+    // box entirely outside the viewport, or the async readback hasn't landed yet — see
+    // AsyncLuminanceReadback below). Throttle calls yourself — it still does a GPU->CPU sync, just
+    // a frame or two later and without stalling the pipeline.
+    float SampleSceneLuminance(AsyncLuminanceReadback& rb, ImVec2 centerScreen, float boxPx);
     // General form: sample `colorTex` (texW x texH) as if it were displayed in screen rect
     // imgPos..imgPos+imgSize, in a screen-space box of `boxPx` at `centerScreen`. -1 if unusable.
-    float SampleTextureLuminance(unsigned int colorTex, int texW, int texH,
+    float SampleTextureLuminance(AsyncLuminanceReadback& rb, unsigned int colorTex, int texW, int texH,
                                  ImVec2 imgPos, ImVec2 imgSize, ImVec2 centerScreen, float boxPx);
     bool ConsumePlayStopRequest() {
         bool requested = m_PlayStopRequested;
@@ -303,8 +322,19 @@ public:
         int Vertices = 0;
         int PointLights = 0;
         int Culled = 0; // entities skipped by frustum culling this frame - not drawn at all
+        // #204: the scene has more active lights than the forward LightBuffer can hold
+        // (LightBuffer::kMaxLights) - the excess were silently dropped before this existed.
+        bool LightBufferOverflowed = false;
+        // #204: the global per-frame cluster light-index list (ClusterGrid::GLOBAL_INDEX_CAPACITY)
+        // ran out of room this frame, so at least one cluster's reserved block was truncated and
+        // may be missing lights that should be shading it (#208: adapted from a per-cluster cap
+        // to this shared-list capacity).
+        bool ClusterSaturated = false;
     };
     void SetRenderStats(const RenderStats& stats) { m_RenderStats = stats; }
+    // Last frame's stats, as set above — read by the --smoke-test harness (main.cpp) to check
+    // a loaded scene actually issued draw calls rather than rendering silently empty.
+    const RenderStats& GetRenderStats() const { return m_RenderStats; }
 
     // Files (or whole folders) dropped onto the window from the OS (e.g. dragged in from
     // Explorer) — routed by extension through the exact same AssetLibrary calls File > Import
@@ -424,6 +454,14 @@ private:
     void DeleteSelection(World& world);
     void DuplicateSelection(World& world, AssetLibrary& assets);
     void DrawGroupGizmo(World& world, Camera& editorCamera);
+    // Shared setup/teardown behind DrawGizmo() (single-object) and DrawGroupGizmo() (multi-select):
+    // opens the fullscreen transparent overlay window ImGuizmo's hit-testing needs and configures
+    // its per-frame global state (ortho, drawlist, rect, gizmo size). `overlayName` is the one
+    // difference between the two call sites (distinct ImGui window IDs). Returns false — with no
+    // overlay left open — if the current window size is degenerate and the caller should bail out;
+    // EndGizmoOverlay() must only be called after a true return.
+    bool BeginGizmoOverlay(Camera& editorCamera, const char* overlayName);
+    void EndGizmoOverlay();
     // Shared bounds computation behind FocusOnSelection() and GetSelectionCenter() — world-space
     // AABB of the current selection (single object or group). False if nothing is selected.
     bool ComputeSelectionBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) const;
@@ -474,6 +512,16 @@ private:
     void DrawExitPrompt();
     bool m_ExitPromptPending = false;
     ExitDecision m_ExitDecision = ExitDecision::None;
+
+    // #195: a scene file whose formatVersion is newer than this build understands still loads
+    // best-effort, but SceneSerializer::TakeLoadWarning() comes back non-empty in that case — the
+    // Console already got a Log::Error line from SceneSerializer itself, and this modal is the
+    // loud, hard-to-miss half of that warning. m_SceneVersionWarning non-empty is what drives the
+    // popup open; set it right after any Load() the user can see the result of (OpenScene, the
+    // recovery-restore path) via CheckSceneVersionWarning().
+    void CheckSceneVersionWarning();
+    void DrawSceneVersionWarningPopup();
+    std::string m_SceneVersionWarning;
 
     // Preferences window (Ctrl+,) — replaces the old giant Settings menu-bar dropdown (#53).
     void DrawPreferencesWindow(World& world);
@@ -539,17 +587,50 @@ private:
     // Undo/redo: whole-scene JSON snapshots (via SceneSerializer, entities AND AssetLibrary
     // state both), pushed at the start of a discrete edit (gizmo drag, field drag, import,
     // delete, rename, folder move...) rather than every frame. `Label` is what the History
-    // panel (DrawHistoryPanel) shows for that step, and `SelectedNames` is what was selected
-    // right before the edit — restored by name (not raw entt::entity, which a full scene reload
-    // invalidates) when undoing back to this point.
+    // panel (DrawHistoryPanel) shows for that step, and `SelectedOrders` is what was selected
+    // right before the edit — restored by stable OrderComponent value (not raw entt::entity,
+    // which a full scene reload invalidates, and not by name, which collides whenever two
+    // entities share a name - #217) when undoing back to this point.
+    //
+    // Storage (#174 stage 2): an entry no longer holds a full scene snapshot. 100 entries of a
+    // multi-MB scene meant hundreds of MB of retained JSON text. Instead each stack is a
+    // delta chain anchored at its TOP entry:
+    //   - the top entry's state is held in full, once, in m_UndoBaseJson / m_RedoBaseJson;
+    //   - every entry below the top stores `Delta`, an RFC 6902 JSON Patch
+    //     (nlohmann::json::diff, dumped to text) that turns the state of the entry ABOVE it
+    //     back into its own state.
+    // The top is the only end either stack is pushed to or popped from, so a push re-encodes
+    // exactly one entry and a pop applies exactly one patch - no replay, no keyframes. See
+    // PushHistoryEntry / PopHistoryEntry in EditorLayer_Scene.cpp for the whole mechanism.
     struct UndoEntry {
-        std::string SceneJson;
-        std::vector<std::string> SelectedNames;
+        // JSON Patch from the entry above this one to this one. Empty on the top entry (its
+        // full state is the base string) and, as a failure sentinel, on an entry whose patch
+        // could not be produced - see ApplyScenePatch.
+        std::string Delta;
+        std::vector<int> SelectedOrders;
         std::string Label;
+        // Cheap FNV-1a hash of this entry's full scene JSON (#174 stage 1), used instead of a
+        // full string compare to detect a no-op push. Only ever compared against another
+        // entry's hash, never used on its own - which is why it survives delta encoding.
+        uint64_t Hash = 0;
     };
     std::vector<UndoEntry> m_UndoStack;
     std::vector<UndoEntry> m_RedoStack;
+    // Full scene JSON of each stack's TOP entry; empty exactly when that stack is empty.
+    std::string m_UndoBaseJson;
+    std::string m_RedoBaseJson;
     static constexpr size_t kMaxHistory = 100;
+
+    // Delta-chain plumbing. `entry`'s own full state is `newFullJson`: it becomes the stack's
+    // new top (held in full in `baseJson`), and the outgoing top is re-encoded as a patch off it.
+    static void PushHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
+                                 UndoEntry&& entry, const std::string& newFullJson);
+    // Removes the top entry, handing back the entry itself and its full scene JSON, and
+    // re-anchors `baseJson` on the entry underneath. Returns false only if the stack was empty.
+    static bool PopHistoryEntry(std::vector<UndoEntry>& stack, std::string& baseJson,
+                                UndoEntry& outEntry, std::string& outFullJson);
+    void ClearRedoHistory();  // redo stack + its base, kept in lockstep
+    void ClearUndoHistory();  // both stacks and both bases - for New/Open/recovery-restore
 
     // Set at the top of every Draw() call - PushUndo needs AssetLibrary to snapshot its state
     // (folders, display names, import settings) alongside the entity graph, but threading an
@@ -573,17 +654,18 @@ private:
     // re-activation, and opening a picker without changing anything adds nothing (issue #11).
     bool m_HasStagedUndo = false;
     std::string m_StagedUndoJson;
-    std::vector<std::string> m_StagedUndoSelectedNames;
+    uint64_t m_StagedUndoHash = 0; // hash of m_StagedUndoJson, computed once alongside it (#174)
+    std::vector<int> m_StagedUndoSelectedOrders;
     void StageUndo(const World& world);
     void CommitStagedUndo(const World& world, const std::string& label);
     // Repeatedly calls Undo()/Redo() until the entry at this position in the visible history
-    // list (see DrawHistoryPanel) becomes current - each step is still a single full-snapshot
-    // load, not incremental replay, so this stays cheap even jumping many steps at once.
+    // list (see DrawHistoryPanel) becomes current - each step costs one patch application plus
+    // the scene load it was already doing, so this stays cheap even jumping many steps at once.
     void JumpToUndoEntry(World& world, AssetLibrary& assets, size_t undoStackIndex);
     void JumpToRedoEntry(World& world, AssetLibrary& assets, size_t redoStackIndex);
 
-    std::vector<std::string> CaptureSelectedNames(const World& world) const;
-    void RestoreSelectionByName(World& world, const std::vector<std::string>& names);
+    std::vector<int> CaptureSelectedOrders(const World& world) const;
+    void RestoreSelectionByOrder(World& world, const std::vector<int>& orders);
 
     bool m_ShowHistory = false;
     void DrawHistoryPanel(World& world, AssetLibrary& assets);
@@ -628,28 +710,33 @@ private:
     float m_PlayBtnContrastLum = 1.0f;
     float m_PlayBtnContrastTarget = 1.0f;
     float m_PlayBtnSampleAccum = 0.0f;
+    AsyncLuminanceReadback m_PlayBtnReadback; // ping-ponged PBOs backing the sample above (#178)
     // Same again for the top-right nav-gizmo cluster (dolly / pan tool buttons + the Persp/axis
     // label): its own sample because the corner it lives in can differ in brightness from the
     // top-center where the Play button sits.
     float m_NavGizmoContrastLum = 1.0f;
     float m_NavGizmoContrastTarget = 1.0f;
     float m_NavGizmoSampleAccum = 0.0f;
+    AsyncLuminanceReadback m_NavGizmoReadback;
     // ...and for the bottom-of-viewport status readout, now a bare adaptive-tinted line of text
     // with no strip behind it.
     float m_StatusBarContrastLum = 1.0f;
     float m_StatusBarContrastTarget = 1.0f;
     float m_StatusBarSampleAccum = 0.0f;
+    AsyncLuminanceReadback m_StatusBarReadback;
     // ...and for the two transparent viewport HUDs — Statistics (top-left) and History (bottom-
     // right). Each reads the patch of scene directly behind it, so they tint independently.
     float m_StatsHudContrastLum = 1.0f;
     float m_StatsHudContrastTarget = 1.0f;
     float m_StatsHudSampleAccum = 0.0f;
+    AsyncLuminanceReadback m_StatsHudReadback;
     // Set each frame by DrawStatsPanel: true when the (capped) Statistics HUD reaches far enough
     // down the left edge to collide with the corner monogram — the mark is skipped while so.
     bool m_HideEngineMarkForStats = false;
     float m_HistoryHudContrastLum = 1.0f;
     float m_HistoryHudContrastTarget = 1.0f;
     float m_HistoryHudSampleAccum = 0.0f;
+    AsyncLuminanceReadback m_HistoryHudReadback;
     // Live Game-view rect + texture, pushed in each frame by main.cpp (zero size = none). Used by
     // DrawPlayStopButton to place the Stop/Fullscreen control over the game viewport and tint it.
     ImVec2 m_GameViewImgPos{0.0f, 0.0f};
@@ -780,16 +867,48 @@ private:
     // texture and cached, so a folder of FBXs shows real previews instead of a generic cube
     // glyph. A per-frame budget keeps opening a big folder from stalling; the blit FBO copies
     // the shared preview render into the per-model texture (via glCopyTexSubImage2D).
+    //
+    // Keyed by asset path (#181) rather than the Model* — stable across a Model being destroyed
+    // and a new allocation reusing the same address, unlike the pointer. Bounded to
+    // kMaxModelThumbnails with simple LRU eviction (a doubly-linked list for recency order plus
+    // the map for O(1) lookup/touch) so browsing a large library over a session doesn't leak GL
+    // textures forever; each 128x128 RGBA8 thumbnail is 64KB, so the cap keeps this well under a
+    // megabyte of VRAM.
     ModelPreviewRenderer m_ThumbnailPreview;
-    std::map<const Model*, unsigned int> m_ModelThumbnails;
+    static constexpr size_t kMaxModelThumbnails = 128;
+    std::list<std::string> m_ThumbnailLRU; // front = most recently used
+    std::unordered_map<std::string, std::pair<unsigned int, std::list<std::string>::iterator>> m_ModelThumbnails;
     unsigned int m_ThumbnailBlitFbo = 0;
     int m_ThumbnailBudgetThisFrame = 0;
     unsigned int ModelThumbnail(Model& model); // cached GL texture, or 0 while over this frame's budget
-    void InvalidateModelThumbnail(const Model* model);
+    void InvalidateModelThumbnail(const std::string& path = ""); // empty = clear all (e.g. a freed Model could be reallocated at the same address)
 
     // Thumbnails for the Asset Browser's "Screenshots" folder — keyed by file path, kept in sync
-    // with what's on disk each frame (entries drop when their file is gone).
+    // with what's on disk each cache refresh (#175; entries drop when their file is gone).
+    // Loading is capped by its own per-frame budget (#176) so opening a folder of many captures
+    // decodes/uploads a few at a time instead of stalling on the frame the folder is opened;
+    // unloaded entries just aren't inserted into the map yet, so they're retried next frame.
     std::unordered_map<std::string, std::shared_ptr<Texture>> m_ShotThumbs;
+    int m_ScreenshotThumbBudgetThisFrame = 0;
+
+    // Cached directory listings backing the filesystem-based "Scenes" and "Screenshots" folders
+    // (#175) — std::filesystem::directory_iterator used to run every single frame while either
+    // folder was open or a search/filter was active. Now refreshed only on a short timer, when
+    // the Asset Browser regains focus, or right after an operation that actually creates/deletes/
+    // duplicates a file in one of those folders (a rename never touches these two folders on
+    // disk — see CommitRename — so it isn't a trigger).
+    struct AssetDirListingCache {
+        std::vector<std::string> paths; // generic_string() full paths of the matching files
+        bool valid = false;
+    };
+    AssetDirListingCache m_ScenesListingCache;
+    AssetDirListingCache m_ShotsListingCache;
+    float m_AssetListingRefreshTimer = 0.0f;   // ticks up in DrawAssetBrowser; see kAssetListingRefreshInterval
+    bool m_AssetBrowserFocusedLastFrame = false; // edge-detects m_AssetBrowserFocused for "just gained focus"
+    void RefreshScenesListingIfNeeded();
+    void RefreshShotsListingIfNeeded();
+    void InvalidateScenesListing() { m_ScenesListingCache.valid = false; }
+    void InvalidateShotsListing() { m_ShotsListingCache.valid = false; }
 
     // The screenshot lightbox (DrawScreenshotPreview). Its own full-res Texture, not a m_ShotThumbs
     // entry, so it survives that map being pruned and isn't size-capped to the thumbnail budget.
@@ -890,6 +1009,11 @@ private:
     // Selection captured by stable OrderComponent value on Play, re-resolved to fresh entity
     // ids on Stop — the registry is rebuilt in between and entt recycles ids (#110).
     std::vector<int> m_PlaySelectionOrders;
+    // #199: handles for every AudioSourceComponent with Play On Start, begun the instant Play
+    // mode is entered. Kept per-entity (rather than relying on AudioEngine::StopAll()) so exiting
+    // Play stops exactly these voices and leaves an unrelated editor preview sound (Inspector
+    // Preview button, Asset Browser) started mid-Play alone. Cleared on both enter and exit.
+    std::unordered_map<entt::entity, AudioEngine::SoundHandle> m_PlayModeAudioHandles;
 
     // --- Console ------------------------------------------------------------------------
     void DrawConsole();
@@ -902,6 +1026,17 @@ private:
     std::string m_ConsoleFilter;
     unsigned int m_ConsoleSeenRevision = 0; // only auto-scroll when Log actually gained an entry
 
+    // #219: indices into Log::Entries() that currently pass the level toggles + text filter,
+    // rebuilt only when one of those inputs (or the log itself, via Log::Revision()) changes —
+    // not every frame — so DrawConsole can drive ImGuiListClipper over a stable list instead of
+    // re-filtering and submitting all 1000 possible entries each frame.
+    std::vector<size_t> m_ConsoleFilteredIndices;
+    unsigned int m_ConsoleFilterCacheRevision = (unsigned int)-1; // forces a rebuild on first draw
+    std::string m_ConsoleFilterCacheFilter;
+    bool m_ConsoleFilterCacheShowInfo = true;
+    bool m_ConsoleFilterCacheShowWarning = true;
+    bool m_ConsoleFilterCacheShowError = true;
+
     // The spinning corner monogram is governed by EditorSettings (EngineMarkEnabled / SpinSpeed /
     // Rgb) so the choice persists and the Preferences + Window-menu controls share one source of
     // truth. (Was m_ShowEngineMark — a session-only bool — before the Preferences controls landed.)
@@ -911,7 +1046,7 @@ private:
     // push ImGuiCol_Text + ImGuiCol_TextDisabled so the readout rides white-on-dark / dark-on-
     // light like the corner mark. Always pushes exactly 2 style colours — caller pops them after
     // its content. Same maths as DrawEngineMark / DrawViewportStatusBar.
-    void PushAdaptiveHudText(ImVec2 centerScreen, float boxPx, float dt,
+    void PushAdaptiveHudText(AsyncLuminanceReadback& rb, ImVec2 centerScreen, float boxPx, float dt,
                              float& easedLum, float& targetLum, float& sampleAccum);
 
     // --- Statistics --------------------------------------------------------------------
@@ -961,6 +1096,10 @@ private:
     // optionally with a LightComponent already attached.
     entt::entity CreateEmptyAt(World& world, Camera* editorCamera, const char* name, bool asLight);
     void CreateEmptyParentForSelection(World& world); // Hierarchy right-click "Group into Empty Parent" (#71)
+    // Hierarchy right-click "Unparent" (#220) — moves the whole selection to the scene root, the
+    // same operation the drag-to-empty-space gesture performs, but always reachable even once the
+    // tree fills the panel and that drop zone collapses to nothing.
+    void UnparentSelection(World& world);
 
     // --- Inspector: Add / Remove Component -------------------------------------------------
     void DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity);
@@ -982,12 +1121,12 @@ private:
     // center of its bounding box (or of the whole group, for a multi-selection).
     bool m_GizmoPivotCenter = false;
 
-    void DrawMaterialEditor(World& world, AssetLibrary& assets);
-    // Multi-select variant: PBR + texture-map editing across every selected mesh at once, with
-    // a mixed-value dash for fields the selected materials disagree on. Only meaningful when
-    // every entity in `sel` has a mesh; the caller checks that.
-    void DrawMultiMaterialEditor(World& world, AssetLibrary& assets,
-                                 const std::vector<entt::entity>& sel);
+    // PBR + texture-map editing for one or more selected entities, with a mixed-value dash for
+    // fields the selected materials disagree on (single selection never shows one — `sel` of
+    // size 1 can't disagree with itself). Only meaningful when every entity in `sel` has a mesh;
+    // the caller checks that (single-select callers pass a one-element `sel`).
+    void DrawMaterialEditor(World& world, AssetLibrary& assets,
+                            const std::vector<entt::entity>& sel);
     void DrawGizmo(World& world, Camera& editorCamera);
     // Small screen-space markers for entities with no mesh (lights, empties) — without these
     // they'd be invisible and unclickable in the viewport, since there's nothing to rasterize.

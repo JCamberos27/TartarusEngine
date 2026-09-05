@@ -21,6 +21,7 @@ namespace GLStateCache {
 
     void UseProgram(unsigned int program);
     void BindTexture2D(unsigned int unit, unsigned int texture);
+    void BindVertexArray(unsigned int vao);
 
     // How many of the calls above this frame actually reached the driver vs. were skipped as
     // redundant - read by the Stats overlay, reset by ResetFrameStats() at the top of the frame.
@@ -29,6 +30,8 @@ namespace GLStateCache {
         int ProgramBindsSkipped = 0;
         int TextureBinds = 0;
         int TextureBindsSkipped = 0;
+        int VaoBinds = 0;
+        int VaoBindsSkipped = 0;
     };
     const FrameStats& GetFrameStats();
     void ResetFrameStats();
