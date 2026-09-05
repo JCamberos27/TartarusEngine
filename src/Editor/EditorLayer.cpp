@@ -1186,8 +1186,9 @@ void EditorLayer::Shutdown() {
 
     if (m_MarkSampleFbo) { glDeleteFramebuffers(1, &m_MarkSampleFbo); m_MarkSampleFbo = 0; }
 
-    for (auto& [model, tex] : m_ModelThumbnails) { (void)model; if (tex) glDeleteTextures(1, &tex); }
+    for (auto& [path, entry] : m_ModelThumbnails) { (void)path; if (entry.first) glDeleteTextures(1, &entry.first); }
     m_ModelThumbnails.clear();
+    m_ThumbnailLRU.clear();
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
 
     // Safety net: save preferences on clean shutdown, in case a future control forgets its own
@@ -1203,8 +1204,15 @@ void EditorLayer::Shutdown() {
 // Rendered once per Model into its own small texture, then cached. Returns 0 while this frame's
 // render budget is spent — the caller falls back to the type glyph and picks it up next frame.
 unsigned int EditorLayer::ModelThumbnail(Model& model) {
-    auto it = m_ModelThumbnails.find(&model);
-    if (it != m_ModelThumbnails.end()) return it->second;
+    const std::string& path = model.Path();
+    auto it = m_ModelThumbnails.find(path);
+    if (it != m_ModelThumbnails.end()) {
+        // Touch: move to the front (most-recently-used end) of the LRU list.
+        m_ThumbnailLRU.erase(it->second.second);
+        m_ThumbnailLRU.push_front(path);
+        it->second.second = m_ThumbnailLRU.begin();
+        return it->second.first;
+    }
     if (m_ThumbnailBudgetThisFrame <= 0) return 0;
     m_ThumbnailBudgetThisFrame--;
 
@@ -1236,19 +1244,35 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevRead);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (unsigned int)prevDraw);
 
-    m_ModelThumbnails[&model] = dst;
+    m_ThumbnailLRU.push_front(path);
+    m_ModelThumbnails[path] = { dst, m_ThumbnailLRU.begin() };
+
+    // LRU eviction: bounded above kMaxModelThumbnails so browsing a large asset library over a
+    // session doesn't accumulate GL textures forever. The least-recently-used entry is the back
+    // of the list.
+    if (m_ModelThumbnails.size() > kMaxModelThumbnails) {
+        const std::string evictPath = m_ThumbnailLRU.back();
+        m_ThumbnailLRU.pop_back();
+        auto evictIt = m_ModelThumbnails.find(evictPath);
+        if (evictIt != m_ModelThumbnails.end()) {
+            if (evictIt->second.first) glDeleteTextures(1, &evictIt->second.first);
+            m_ModelThumbnails.erase(evictIt);
+        }
+    }
     return dst;
 }
 
-void EditorLayer::InvalidateModelThumbnail(const Model* model) {
-    if (!model) { // clear all — a reimport can rebuild any model in place
-        for (auto& [m, tex] : m_ModelThumbnails) { (void)m; if (tex) glDeleteTextures(1, &tex); }
+void EditorLayer::InvalidateModelThumbnail(const std::string& path) {
+    if (path.empty()) { // clear all — a reimport can rebuild any model in place
+        for (auto& [p, entry] : m_ModelThumbnails) { (void)p; if (entry.first) glDeleteTextures(1, &entry.first); }
         m_ModelThumbnails.clear();
+        m_ThumbnailLRU.clear();
         return;
     }
-    auto it = m_ModelThumbnails.find(model);
+    auto it = m_ModelThumbnails.find(path);
     if (it == m_ModelThumbnails.end()) return;
-    if (it->second) glDeleteTextures(1, &it->second);
+    if (it->second.first) glDeleteTextures(1, &it->second.first);
+    m_ThumbnailLRU.erase(it->second.second);
     m_ModelThumbnails.erase(it);
 }
 
@@ -2039,7 +2063,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     m_UndoStack.pop_back();
     SceneSerializer::LoadFromString(world, assets, entry.SceneJson);
     RestoreSelectionByOrder(world, entry.SelectedOrders);
-    InvalidateModelThumbnail(nullptr); // LoadFromString may rebuild the asset library
+    InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
 }
 
@@ -2056,7 +2080,7 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     m_RedoStack.pop_back();
     SceneSerializer::LoadFromString(world, assets, entry.SceneJson);
     RestoreSelectionByOrder(world, entry.SelectedOrders);
-    InvalidateModelThumbnail(nullptr); // LoadFromString may rebuild the asset library
+    InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
 }
 
@@ -3861,7 +3885,7 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
 
 void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
     world = World();
-    InvalidateModelThumbnail(nullptr);
+    InvalidateModelThumbnail();
     ClearSelection();
     m_SoloLights.clear();
     m_MutedLights.clear();
@@ -3908,7 +3932,7 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
 
 void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::string& path) {
     if (path.empty() || !SceneSerializer::Load(world, assets, path)) return;
-    InvalidateModelThumbnail(nullptr);
+    InvalidateModelThumbnail();
     ClearRecoverySnapshot(); // drop the outgoing scene's snapshot before switching away from it
     m_CurrentScenePath = path;
     EditorSettings::Get().LastScenePath = path; // reopen this one next launch (#95)
@@ -5535,7 +5559,7 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
                 assets.SetModelSettings(key, m_PendingModelSettings);
                 if (assets.ReimportModel(key)) Log::Info("Reimported model '" + key + "'.");
                 else Log::Error("Reimport failed for '" + key + "' - see Console.");
-                InvalidateModelThumbnail(nullptr); // re-render the Asset Browser preview
+                InvalidateModelThumbnail(); // re-render the Asset Browser preview
                 m_ImportSettingsDirty = false;
             },
             [&]() {
@@ -8580,7 +8604,7 @@ void EditorLayer::RequestDeleteAssets(World& world, AssetLibrary& assets, const 
 
 bool EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const std::string& key, bool isFolder) {
     (void)world; // undo is now pushed once by the caller, covering the whole batch (#212)
-    InvalidateModelThumbnail(nullptr); // a freed Model could be reallocated at the same address
+    InvalidateModelThumbnail(); // a freed Model could be reallocated at the same address
     const std::string leaf = std::filesystem::path(key).filename().string();
     if (isFolder) {
         assets.DeleteFolderRecursive(key);
@@ -9693,7 +9717,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
                         PushUndo(world, "Reimport Model");
                         if (assets.ReimportModel(cell.key)) Log::Info("Reimported model '" + cell.key + "'.");
                         else Log::Error("Reimport failed for '" + cell.key + "' - see Console.");
-                        InvalidateModelThumbnail(nullptr);
+                        InvalidateModelThumbnail();
                     } else {
                         PushUndo(world, "Reimport Texture");
                         if (assets.ReimportTexture(cell.key)) Log::Info("Reimported texture '" + cell.key + "'.");

@@ -6,7 +6,9 @@
 #include <vector>
 #include <set>
 #include <unordered_set>
+#include <unordered_map>
 #include <map>
+#include <list>
 #include <memory>
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
 #include "Model.h"   // ModelImportSettings - same
@@ -797,12 +799,21 @@ private:
     // texture and cached, so a folder of FBXs shows real previews instead of a generic cube
     // glyph. A per-frame budget keeps opening a big folder from stalling; the blit FBO copies
     // the shared preview render into the per-model texture (via glCopyTexSubImage2D).
+    //
+    // Keyed by asset path (#181) rather than the Model* — stable across a Model being destroyed
+    // and a new allocation reusing the same address, unlike the pointer. Bounded to
+    // kMaxModelThumbnails with simple LRU eviction (a doubly-linked list for recency order plus
+    // the map for O(1) lookup/touch) so browsing a large library over a session doesn't leak GL
+    // textures forever; each 128x128 RGBA8 thumbnail is 64KB, so the cap keeps this well under a
+    // megabyte of VRAM.
     ModelPreviewRenderer m_ThumbnailPreview;
-    std::map<const Model*, unsigned int> m_ModelThumbnails;
+    static constexpr size_t kMaxModelThumbnails = 128;
+    std::list<std::string> m_ThumbnailLRU; // front = most recently used
+    std::unordered_map<std::string, std::pair<unsigned int, std::list<std::string>::iterator>> m_ModelThumbnails;
     unsigned int m_ThumbnailBlitFbo = 0;
     int m_ThumbnailBudgetThisFrame = 0;
     unsigned int ModelThumbnail(Model& model); // cached GL texture, or 0 while over this frame's budget
-    void InvalidateModelThumbnail(const Model* model);
+    void InvalidateModelThumbnail(const std::string& path = ""); // empty = clear all (e.g. a freed Model could be reallocated at the same address)
 
     // Thumbnails for the Asset Browser's "Screenshots" folder — keyed by file path, kept in sync
     // with what's on disk each frame (entries drop when their file is gone). Loading is capped
