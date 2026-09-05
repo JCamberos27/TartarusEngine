@@ -50,7 +50,14 @@ bool Enabled() {
 #ifndef NDEBUG
     return true; // Debug builds always get it
 #else
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4996) // getenv is fine for a one-shot read-only debug toggle check
+#endif
     const char* v = std::getenv("TARTARUS_GL_DEBUG");
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
     return v && v[0] == '1';
 #endif
 }

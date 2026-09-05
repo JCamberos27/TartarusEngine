@@ -136,7 +136,8 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
     // regardless of anything EditorLayer explicitly requests afterward. See EditorLayer's
     // matching flag on "Scene" for the full explanation (found in ImGui's own source, not
     // guessed) - both windows need it, since either one's auto-focus alone can win this fight.
-    if (!ImGui::Begin("Game", &m_WindowOpen, ImGuiWindowFlags_NoFocusOnAppearing)) {
+    m_Visible = ImGui::Begin("Game", &m_WindowOpen, ImGuiWindowFlags_NoFocusOnAppearing);
+    if (!m_Visible) {
         m_LastAvailableRegion = ImVec2(0.0f, 0.0f);
         m_ViewImageSize = ImVec2(0.0f, 0.0f);
         ImGui::End();

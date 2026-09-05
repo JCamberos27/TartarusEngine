@@ -93,6 +93,14 @@ PFNGLVERTEXARRAYELEMENTBUFFERPROC glVertexArrayElementBuffer = nullptr;
 PFNGLDISPATCHCOMPUTEPROC glDispatchCompute = nullptr;
 PFNGLMEMORYBARRIERPROC glMemoryBarrier = nullptr;
 
+// GPU timer queries — Profiler's GPU-side timing (#197).
+PFNGLGENQUERIESPROC glGenQueries = nullptr;
+PFNGLDELETEQUERIESPROC glDeleteQueries = nullptr;
+PFNGLBEGINQUERYPROC glBeginQuery = nullptr;
+PFNGLENDQUERYPROC glEndQuery = nullptr;
+PFNGLGETQUERYOBJECTIVPROC glGetQueryObjectiv = nullptr;
+PFNGLGETQUERYOBJECTUI64VPROC glGetQueryObjectui64v = nullptr;
+
 namespace {
 void* LoadGLFunc(const char* name) {
     void* p = (void*)wglGetProcAddress(name);
@@ -198,6 +206,14 @@ bool GLLoader_Init() {
     LOAD(PFNGLVERTEXARRAYELEMENTBUFFERPROC, glVertexArrayElementBuffer)
     LOAD(PFNGLDISPATCHCOMPUTEPROC, glDispatchCompute)
     LOAD(PFNGLMEMORYBARRIERPROC, glMemoryBarrier)
+
+    // GPU timer queries — Profiler's GPU-side timing (#197).
+    LOAD(PFNGLGENQUERIESPROC, glGenQueries)
+    LOAD(PFNGLDELETEQUERIESPROC, glDeleteQueries)
+    LOAD(PFNGLBEGINQUERYPROC, glBeginQuery)
+    LOAD(PFNGLENDQUERYPROC, glEndQuery)
+    LOAD(PFNGLGETQUERYOBJECTIVPROC, glGetQueryObjectiv)
+    LOAD(PFNGLGETQUERYOBJECTUI64VPROC, glGetQueryObjectui64v)
 #undef LOAD
     return ok;
 }

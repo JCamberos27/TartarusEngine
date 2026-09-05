@@ -705,6 +705,20 @@ private:
     void OpenScene(World& world, AssetLibrary& assets, const std::string& path);
     void NewScene(World& world, AssetLibrary& assets); // fresh scene, written to disk immediately; File > New Scene / Ctrl+N
 
+    // Guards New Scene / Open Scene against silently discarding unsaved work (#216). Every call
+    // site that wants to switch scenes — Ctrl+N/Ctrl+O, the File menu, a dropped .json, and both
+    // Asset Browser open paths — goes through these instead of calling NewScene/OpenScene
+    // directly. If the current scene is dirty, the switch is deferred behind DrawSceneSwitchPrompt
+    // (Save / Don't Save / Cancel, same as the on-exit prompt); Cancel aborts the switch entirely.
+    // If the scene isn't dirty, the switch happens immediately.
+    enum class PendingSceneSwitch { None, New, Open };
+    void RequestNewScene(World& world, AssetLibrary& assets);
+    void RequestOpenScene(World& world, AssetLibrary& assets, const std::string& path);
+    void DrawSceneSwitchPrompt(World& world, AssetLibrary& assets);
+    bool m_ScenePromptPending = false;
+    PendingSceneSwitch m_PendingSceneSwitch = PendingSceneSwitch::None;
+    std::string m_PendingScenePath;
+
     // Unity Project-window style browsing: the current virtual folder ("" = root), the
     // browser-local selection (separate from the scene selection — this is for F2/right-click
     // actions on library assets, not placed objects), and inline-rename state shared by both

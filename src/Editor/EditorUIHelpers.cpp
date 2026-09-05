@@ -134,6 +134,10 @@ bool SliderStyled(const char* label, ImGuiDataType dt, void* p_v,
             // skip to the first character that can start a number, then parse.
             const char* s = buf;
             while (*s && !(*s == '-' || *s == '+' || *s == '.' || (*s >= '0' && *s <= '9'))) ++s;
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4996) // sscanf into a single local scalar, not a buffer - no overrun risk
+#endif
             if (dt == ImGuiDataType_S32) {
                 int nv = *(const int*)p_v;
                 if (sscanf(s, "%d", &nv) == 1) {
@@ -147,6 +151,9 @@ bool SliderStyled(const char* label, ImGuiDataType dt, void* p_v,
                     if (nv != *(float*)p_v) { *(float*)p_v = nv; changed = true; ImGui::MarkItemEdited(id); }
                 }
             }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
         }
         ImGui::PopID();
     }

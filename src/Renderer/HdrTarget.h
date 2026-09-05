@@ -33,7 +33,13 @@ public:
     void ResolveTo() const;
 
     unsigned int ResolvedColorTexture() const { return m_ResolveColor; } // RGBA16F, linear-filtered, sampleable
-    unsigned int ResolvedDepthTexture() const { return m_ResolveDepth; } // single-sample DEPTH_COMPONENT32F (#121)
+
+    // Single-sample DEPTH_COMPONENT32F (#121) — lazily created on first call rather than at
+    // Resize()/Create() time (#206). Until something (a future SSAO / screen-space pass) actually
+    // calls this, the resolve target has no depth attachment and ResolveTo() blits colour only:
+    // no wasted VRAM (~33 MB at 4K) or bandwidth for a texture nothing reads. Once called, it
+    // stays provisioned (and re-provisioned across Resize()) for the life of this HdrTarget.
+    unsigned int ResolvedDepthTexture() const;
     unsigned int MultisampleFbo() const { return m_MsFbo; }
     unsigned int DepthTexture() const { return m_MsDepth; }              // GL_TEXTURE_2D_MULTISAMPLE, DEPTH_COMPONENT32F
 
@@ -44,9 +50,12 @@ public:
 
 private:
     unsigned int m_MsFbo = 0, m_MsColor = 0, m_MsDepth = 0;
-    unsigned int m_ResolveFbo = 0, m_ResolveColor = 0, m_ResolveDepth = 0;
+    unsigned int m_ResolveFbo = 0, m_ResolveColor = 0;
+    mutable unsigned int m_ResolveDepth = 0; // 0 until ResolvedDepthTexture() is first called
+    mutable bool m_DepthRequested = false;   // sticky, so a later Resize()/Create() still provisions it
     int m_Width = 0, m_Height = 0, m_Samples = 0;
 
     void Release();
     void Create(int width, int height, int samples);
+    void CreateResolveDepth() const; // allocates + parameterizes m_ResolveDepth (not attached)
 };

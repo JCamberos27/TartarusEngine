@@ -495,6 +495,8 @@ void BindMaterial(Shader& shader, const Material& mat) {
     shader.SetFloat("uMetallic", mat.Metallic);
     shader.SetFloat("uRoughness", mat.Roughness);
     shader.SetVec3("uEmissiveColor", mat.EmissiveColor * mat.EmissiveStrength);
+    shader.SetInt("uTriplanar", mat.Triplanar ? 1 : 0);
+    shader.SetFloat("uTriplanarScale", mat.TriplanarScale);
 
     int unit = 1; // unit 0 reserved by caller for nothing; start textures at 1..5
     auto bindOptional = [&](const std::shared_ptr<Texture>& tex, const char* hasUniform, const char* samplerUniform) {

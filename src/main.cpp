@@ -368,7 +368,13 @@ int main() {
 
         World world;
         Player player;
-        player.Cam.Position = glm::vec3(0, 2.0f, 0);
+        // Default spawn/editor-camera start: Room 2 (Lighting Test) of the Development scene,
+        // facing its cluster of orbiting, colour-cycling lights - the busiest, most immediately
+        // legible part of the scene rather than an arbitrary point that might sit outside any
+        // room on a future layout change.
+        player.Cam.Position = glm::vec3(18.0f, 2.0f, 6.0f);
+        player.Cam.Yaw = -90.0f;   // faces -Z, toward the room's centre
+        player.Cam.Pitch = 15.0f;  // tilted up toward the lights (they orbit up to y=7.5)
 
         // Resolved under the project folder (see ProjectPaths.h) rather than the working
         // directory, so the scene being edited lives alongside the source instead of inside
@@ -584,8 +590,13 @@ int main() {
         editorCamera.Position = player.Cam.Position;
         editorCamera.Yaw = player.Cam.Yaw;
         editorCamera.Pitch = player.Cam.Pitch;
-        // Open framed on the scene instead of staring at empty space beside it (audit #87).
-        editor.FrameSceneBounds(world, editorCamera);
+        // Deliberately NOT calling editor.FrameSceneBounds() here (audit #87's original fix for
+        // "staring at empty space") - for this scene it re-frames to an exterior overview of the
+        // whole building, outside every room's floor. Since Play copies its spawn straight from
+        // wherever editorCamera currently is, that overview became the Play spawn point too - and
+        // it's outside any walkable geometry, so the player free-fell forever. Starting inside
+        // Room 2 instead means both the Scene view and an immediate Play are already somewhere
+        // safe and populated.
         window.SetCursorLocked(false);
 
         // OS-level drag-and-drop (e.g. dragging a file in from Windows Explorer) — routes
@@ -687,15 +698,15 @@ int main() {
             // Rebuilding this (filesystem::path parse + string concat) is wasted work on the
             // ~99.9% of frames where neither input changed, so gate it on the inputs themselves
             // rather than on the composed string.
-            const std::string& scenePath = editor.CurrentScenePath();
+            const std::string& currentScenePath = editor.CurrentScenePath();
             bool dirty = editor.IsDirty();
-            if (!titleInitialized || scenePath != lastScenePath || dirty != lastDirty) {
-                std::string sceneName = std::filesystem::path(scenePath).filename().string();
+            if (!titleInitialized || currentScenePath != lastScenePath || dirty != lastDirty) {
+                std::string sceneName = std::filesystem::path(currentScenePath).filename().string();
                 if (sceneName.empty()) sceneName = "Untitled"; // File > New Scene: no path yet
                 std::string desiredTitle = "Tartarus Engine \xE2\x80\x94 " + sceneName +
                     (dirty ? "*" : "");
                 window.SetTitle(desiredTitle);
-                lastScenePath = scenePath;
+                lastScenePath = currentScenePath;
                 lastDirty = dirty;
                 titleInitialized = true;
             }
@@ -938,6 +949,7 @@ int main() {
             bool sunShadowsReady = false;
             if (frameSettings.ShadowsEnabled && frameHaveDirectional && frameSunCastShadows) {
                 PROFILE_SCOPE("Sun Shadow Pass");
+                PROFILE_GPU_SCOPE("Sun Shadow Pass");
 
                 // Fit the cascades to whichever camera drives this frame's main view: the game
                 // camera while playing, else the editor free-cam (the Scene tab is the working
@@ -1006,6 +1018,7 @@ int main() {
             }
             if (frameSettings.ShadowsEnabled && spotShadowCount > 0) {
                 PROFILE_SCOPE("Spot Shadow Pass");
+                PROFILE_GPU_SCOPE("Spot Shadow Pass");
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
                 // Store the LIGHT-FACING surface (back-face cull), NOT the far side. The sun CSM
@@ -1052,6 +1065,7 @@ int main() {
             }
             if (frameSettings.ShadowsEnabled && pointShadowCount > 0) {
                 PROFILE_SCOPE("Point Shadow Pass");
+                PROFILE_GPU_SCOPE("Point Shadow Pass");
                 // Standard GL cube-map face order: +X -X +Y -Y +Z -Z, with the conventional ups.
                 static const glm::vec3 kFaceDir[6] = {
                     { 1, 0, 0}, {-1, 0, 0}, {0,  1, 0}, {0, -1, 0}, {0, 0,  1}, {0, 0, -1} };
@@ -1151,6 +1165,7 @@ int main() {
                 glActiveTexture(GL_TEXTURE0 + 8);
                 glBindTexture(GL_TEXTURE_2D_ARRAY, shadowMap.DepthArray());
                 modelShader.SetInt("uShadowMap", 8);
+                modelShader.SetFloat("uShadowMapResolution", (float)shadowMap.Resolution()); // #190
 
                 // Spot-light shadow maps on unit 9 (#119). Count is zeroed when shadows are off
                 // or in Unlit so the shader's SpotShadow() early-outs.
@@ -1169,6 +1184,7 @@ int main() {
                 glActiveTexture(GL_TEXTURE0 + 9);
                 glBindTexture(GL_TEXTURE_2D_ARRAY, spotShadowMap.DepthArray());
                 modelShader.SetInt("uSpotShadowMap", 9);
+                modelShader.SetFloat("uSpotShadowMapResolution", (float)spotShadowMap.Resolution()); // #190
 
                 // Point-light cube shadow maps on unit 10 (#119).
                 int pointCountForView = shadowsOn ? pointShadowCount : 0;
@@ -1181,6 +1197,7 @@ int main() {
                 glActiveTexture(GL_TEXTURE0 + 10);
                 glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, pointShadowMap.DepthCubeArray());
                 modelShader.SetInt("uPointShadowMap", 10);
+                modelShader.SetFloat("uPointShadowMapResolution", (float)pointShadowMap.Resolution()); // #190
                 glActiveTexture(GL_TEXTURE0);
 
                 // The light SSBO (binding 0) is built once per frame above — just bind it.
@@ -1196,6 +1213,7 @@ int main() {
                 bool perspective = std::abs(sceneProj[3][3]) < 0.5f; // proj[3][3] == 1 for ortho
                 bool clusterOn = perspective && !unlit && vp[2] > 0 && vp[3] > 0;
                 if (clusterOn) {
+                    PROFILE_GPU_SCOPE("Cluster Cull");
                     float nearZ = std::abs(sceneProj[3][2] / (sceneProj[2][2] - 1.0f));
                     float farZ  = std::abs(sceneProj[3][2] / (sceneProj[2][2] + 1.0f));
                     clusterGrid.Cull(clusterBuildShader, clusterCullShader, sceneView, sceneProj,
@@ -1220,6 +1238,7 @@ int main() {
                 Frustum camFrustum = Frustum::FromViewProj(sceneProj * sceneView);
                 { // scope limits PROFILE_SCOPE to just this loop, not the rest of the frame
                 PROFILE_SCOPE("Scene Draw");
+                PROFILE_GPU_SCOPE("Scene Draw"); // shared by both Scene-tab and Game-tab draws
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.all_of<InactiveTag>(entity)) continue; // Hierarchy eye toggle / GameObject active
                     auto& renderable = world.Registry.get<RenderableComponent>(entity);
@@ -1284,7 +1303,10 @@ int main() {
                 editor.PrimeCaptureRequest();  // this frame's Scene render IS the one we grab
             }
 
-            if (editorUIVisible) {
+            // Scene and Game are tabs in the same dock node - at most one is visible at a time, so
+            // skip this render entirely when the Scene tab isn't the one showing (#172). Halves
+            // per-frame render cost in the common case (editing in one tab or the other).
+            if (editorUIVisible && editor.IsSceneViewportVisible()) {
                 PROFILE_SCOPE("Scene View Render");
                 glm::vec2 available = editor.GetLastSceneContentRegion();
                 if (available.x < 1.0f || available.y < 1.0f) {
@@ -1428,9 +1450,12 @@ int main() {
                 // Resolve MSAA + tonemap the linear-HDR scene into the LDR texture the Scene tab
                 // displays (exposure -> curve -> gamma, once, in Tonemapper).
                 sceneHdr.ResolveTo();
+                {
+                PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(sceneHdr.ResolvedColorTexture(), sceneFramebuffer.Handle(), scW, scH,
                                  EditorSettings::Get().ExposureEV,
                                  (Tonemapper::Operator)EditorSettings::Get().TonemapOperator);
+                }
 
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
                 editor.SetSceneTexture(sceneFramebuffer.ColorTexture());
@@ -1467,15 +1492,16 @@ int main() {
             }
 
             // --- Game View offscreen pass -----------------------------------------------------
-            // Rendered whenever the Game panel is on screen (editor UI visible, so its docked tab
-            // has something current to show) or maximized play has a locked, non-Free aspect/
-            // resolution selected (so the letterboxed blit further down has a source). Free-Aspect
-            // maximized play never needs this — the normal full-window pass below already IS a
-            // free-aspect render, so skip the extra work entirely.
+            // Rendered whenever the Game panel is actually the visible tab (Scene and Game share
+            // one dock node, so only one of them is ever showing - #172) or maximized play has a
+            // locked, non-Free aspect/resolution selected (so the letterboxed blit further down
+            // has a source). Free-Aspect maximized play never needs this — the normal full-window
+            // pass below already IS a free-aspect render, so skip the extra work entirely.
             bool playMaxLocked = playMaximized && gameView.GetCurrentPreset().Mode != AspectRatioMode::FreeAspect;
+            bool gameTabVisible = editorUIVisible && gameView.IsVisible();
             GameViewStats gameViewStats{};
-            if (editorUIVisible || playMaxLocked) {
-                ImVec2 available = editorUIVisible ? gameView.GetLastAvailableRegion() : ImVec2(0.0f, 0.0f);
+            if (gameTabVisible || playMaxLocked) {
+                ImVec2 available = gameTabVisible ? gameView.GetLastAvailableRegion() : ImVec2(0.0f, 0.0f);
                 if (available.x < 1.0f || available.y < 1.0f) {
                     available = ImVec2((float)window.GetWidth(), (float)window.GetHeight());
                 }
@@ -1510,9 +1536,12 @@ int main() {
                 drawScene(gvView, gvProj, gvEye, /*unlit=*/false, &gvRenderStats);
 
                 gameHdr.ResolveTo();
+                {
+                PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameView.GetFramebuffer().Handle(),
                                  gvWidth, gvHeight, EditorSettings::Get().ExposureEV,
                                  (Tonemapper::Operator)EditorSettings::Get().TonemapOperator);
+                }
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
 
                 gameViewStats.FPS = dt > 0.0f ? (int)(1.0f / dt) : 0;
@@ -1606,9 +1635,12 @@ int main() {
                 drawScene(view, proj, gameCam->Position, /*unlit=*/false, &stats);
                 editor.SetRenderStats(stats);
                 gameHdr.ResolveTo();
+                {
+                PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh,
                                  EditorSettings::Get().ExposureEV,
                                  (Tonemapper::Operator)EditorSettings::Get().TonemapOperator);
+                }
             }
 
             {

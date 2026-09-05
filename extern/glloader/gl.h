@@ -137,11 +137,17 @@
 #define GL_ALL_BARRIER_BITS 0xFFFFFFFF
 #define GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS 0x90EB
 
+// GPU timer queries — Profiler's GPU-side timing (#197).
+#define GL_TIME_ELAPSED 0x88BF
+#define GL_QUERY_RESULT 0x8866
+#define GL_QUERY_RESULT_AVAILABLE 0x8867
+
 typedef char GLchar;
 typedef ptrdiff_t GLsizeiptr;
 typedef ptrdiff_t GLintptr;
 typedef unsigned int GLenum;
 typedef unsigned int GLuint;
+typedef unsigned long long GLuint64;
 typedef int GLint;
 typedef int GLsizei;
 typedef unsigned char GLboolean;
@@ -370,6 +376,20 @@ extern PFNGLVERTEXARRAYVERTEXBUFFERPROC glVertexArrayVertexBuffer;
 extern PFNGLVERTEXARRAYELEMENTBUFFERPROC glVertexArrayElementBuffer;
 extern PFNGLDISPATCHCOMPUTEPROC glDispatchCompute;
 extern PFNGLMEMORYBARRIERPROC glMemoryBarrier;
+
+// GPU timer queries — Profiler's GPU-side timing (#197).
+typedef void (__stdcall* PFNGLGENQUERIESPROC)(GLsizei, GLuint*);
+typedef void (__stdcall* PFNGLDELETEQUERIESPROC)(GLsizei, const GLuint*);
+typedef void (__stdcall* PFNGLBEGINQUERYPROC)(GLenum, GLuint);
+typedef void (__stdcall* PFNGLENDQUERYPROC)(GLenum);
+typedef void (__stdcall* PFNGLGETQUERYOBJECTIVPROC)(GLuint, GLenum, GLint*);
+typedef void (__stdcall* PFNGLGETQUERYOBJECTUI64VPROC)(GLuint, GLenum, GLuint64*);
+extern PFNGLGENQUERIESPROC glGenQueries;
+extern PFNGLDELETEQUERIESPROC glDeleteQueries;
+extern PFNGLBEGINQUERYPROC glBeginQuery;
+extern PFNGLENDQUERYPROC glEndQuery;
+extern PFNGLGETQUERYOBJECTIVPROC glGetQueryObjectiv;
+extern PFNGLGETQUERYOBJECTUI64VPROC glGetQueryObjectui64v;
 
 // Call once after a GL context is current (e.g. right after glfwMakeContextCurrent).
 bool GLLoader_Init();

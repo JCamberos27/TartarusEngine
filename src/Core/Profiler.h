@@ -3,13 +3,12 @@
 #include <vector>
 #include <chrono>
 
-// Lightweight CPU frame profiler: named scoped timers collected once per frame, read by the
-// editor's Stats overlay (EditorLayer::DrawStatsOverlay). CPU-only, deliberately — a GPU timer
-// (glQueryCounter/GL_TIME_ELAPSED) reports results several frames late due to pipelining, which
-// is real extra complexity (a ring buffer of in-flight queries, not just a start/stop pair), and
-// nothing about this engine's current scene scale (see the architecture audit) points to the GPU
-// being the actual bottleneck yet — CPU timing answers "where does a frame's time actually go"
-// for the problems this codebase has today. Worth adding if/when that changes.
+// Frame profiler: named scoped timers collected once per frame, read by the editor's Stats
+// overlay (EditorLayer::DrawStatsPanel). CPU timing (ScopeTimer / PROFILE_SCOPE) answers "where
+// does a frame's CPU time go"; GPU timing (GpuScopeTimer / PROFILE_GPU_SCOPE, #197) answers the
+// same question for GPU time via GL_TIME_ELAPSED queries, which the CPU timers structurally
+// cannot see. GPU results land several frames late due to pipelining — each named scope keeps
+// its own small ring of query objects so reading them back never stalls waiting on the GPU.
 class Profiler {
 public:
     struct Entry {
@@ -42,6 +41,26 @@ public:
         std::string m_Name;
         std::chrono::steady_clock::time_point m_Start;
     };
+
+    // GPU timings, from whichever named ring's query most recently completed - the GPU
+    // equivalent of GetLastFrame(), just further behind by however many frames the driver's
+    // pipeline is deep (typically 1-3), not exactly one.
+    static const std::vector<Entry>& GetLastFrameGpu();
+
+    // Constructed at the top of a scope, issues a GL_TIME_ELAPSED query under `name` that ends
+    // when the scope exits. Use via PROFILE_GPU_SCOPE(name). Must be constructed on the GL
+    // thread with a current context, after GLLoader_Init() - same requirement as any other GL
+    // call in this codebase.
+    class GpuScopeTimer {
+    public:
+        explicit GpuScopeTimer(std::string name);
+        ~GpuScopeTimer();
+        GpuScopeTimer(const GpuScopeTimer&) = delete;
+        GpuScopeTimer& operator=(const GpuScopeTimer&) = delete;
+    private:
+        std::string m_Name;
+        int m_Slot = -1; // which ring slot this instance's query landed in; -1 = skipped (ring busy)
+    };
 };
 
 // __LINE__-based naming means at most one PROFILE_SCOPE per source line, which every real call
@@ -49,3 +68,4 @@ public:
 #define PROFILE_SCOPE_CONCAT_INNER(a, b) a##b
 #define PROFILE_SCOPE_CONCAT(a, b) PROFILE_SCOPE_CONCAT_INNER(a, b)
 #define PROFILE_SCOPE(name) Profiler::ScopeTimer PROFILE_SCOPE_CONCAT(profileScope_, __LINE__)(name)
+#define PROFILE_GPU_SCOPE(name) Profiler::GpuScopeTimer PROFILE_SCOPE_CONCAT(profileGpuScope_, __LINE__)(name)

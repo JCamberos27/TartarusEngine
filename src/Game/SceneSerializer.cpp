@@ -338,6 +338,8 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
                 {"roughness", mat->Roughness},
                 {"emissiveColor", Vec3ToJson(mat->EmissiveColor)},
                 {"emissiveStrength", mat->EmissiveStrength},
+                {"triplanar", mat->Triplanar},
+                {"triplanarScale", mat->TriplanarScale},
                 {"albedoMap", PathOrEmpty(mat->AlbedoMap)},
                 {"normalMap", PathOrEmpty(mat->NormalMap)},
                 {"metallicRoughnessMap", PathOrEmpty(mat->MetallicRoughnessMap)},
@@ -445,6 +447,8 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
                 mat->Roughness = mj.value("roughness", 0.5f);
                 mat->EmissiveColor = JsonToVec3(mj.value("emissiveColor", json::array({0, 0, 0})));
                 mat->EmissiveStrength = mj.value("emissiveStrength", 1.0f);
+                mat->Triplanar = mj.value("triplanar", false);
+                mat->TriplanarScale = mj.value("triplanarScale", 1.0f);
                 mat->AlbedoMap = LoadIfPresent(assets, mj, "albedoMap");
                 mat->NormalMap = LoadIfPresent(assets, mj, "normalMap");
                 mat->MetallicRoughnessMap = LoadIfPresent(assets, mj, "metallicRoughnessMap");

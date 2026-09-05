@@ -4,7 +4,14 @@
 #include "gl.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
+#endif
 #include <stb_image_write.h>
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 #include <filesystem>
 #include <ctime>
@@ -141,7 +148,14 @@ std::string ShutterClipPath() {
         (uint32_t)rate, (uint32_t)rate * 2, 2, 16, {'d','a','t','a'}, (uint32_t)(s.size() * 2) };
     h.sz = 36 + h.ds;
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4996) // fopen: path is already a validated project-relative path, not user input
+#endif
     FILE* fp = std::fopen(path.c_str(), "wb");
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
     if (!fp) return {};
     std::fwrite(&h, sizeof(h), 1, fp);
     std::fwrite(s.data(), 2, s.size(), fp);
