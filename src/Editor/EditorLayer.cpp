@@ -9143,7 +9143,7 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
         }
 
         ImGui::SeparatorText("Label");
-        std::set<std::string> allLabels = assets.AllKnownLabels();
+        const std::set<std::string>& allLabels = assets.AllKnownLabels();
         if (allLabels.empty()) {
             ImGui::TextDisabled("No labels yet - add one from an\nasset's right-click menu.");
         } else {
