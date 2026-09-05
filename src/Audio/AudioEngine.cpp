@@ -3,6 +3,7 @@
 #include "miniaudio.h"
 #include <fstream>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace {
@@ -13,13 +14,27 @@ bool s_Initialized = false;
 // handle's index stays meaningful; Generation is bumped on every reuse so handles into a
 // previous occupant of the slot no longer resolve.
 struct Voice {
-    std::unique_ptr<ma_sound> Sound;   // null when the slot is free
-    uint16_t Generation = 1;           // never 0, so a live handle is never InvalidHandle
+    std::unique_ptr<ma_sound> Sound;         // null when the slot is free
+    std::unique_ptr<ma_audio_buffer> Buffer; // non-null only for a voice playing preloaded data (#202)
+    uint16_t Generation = 1;                 // never 0, so a live handle is never InvalidHandle
     bool Looping = false;
 };
 
 std::vector<Voice> s_Voices;
 std::vector<uint32_t> s_FreeSlots;
+
+// Fully-decoded PCM data for a preloaded sound (#202), kept in the engine's own output format so
+// playing it needs no runtime resample/convert. Play() takes its own private copy of Data per
+// voice (ma_audio_buffer_init_copy) rather than sharing this storage directly, so Unload()ing a
+// path can never invalidate a voice already playing from it.
+struct PreloadedClip {
+    std::vector<uint8_t> Data;
+    ma_format Format = ma_format_unknown;
+    ma_uint32 Channels = 0;
+    ma_uint32 SampleRate = 0;
+    ma_uint64 FrameCount = 0;
+};
+std::unordered_map<std::string, PreloadedClip> s_Preloaded;
 
 std::unique_ptr<ma_sound> s_PreviewSound;
 std::string s_PreviewPath;
@@ -49,6 +64,10 @@ void FreeSlot(uint32_t index) {
     ma_sound_stop(voice.Sound.get());
     ma_sound_uninit(voice.Sound.get());
     voice.Sound.reset();
+    if (voice.Buffer) {
+        ma_audio_buffer_uninit(voice.Buffer.get());
+        voice.Buffer.reset();
+    }
     // Bumping here (rather than on allocation) invalidates every outstanding handle to this slot
     // the moment its sound goes away. Wrapping past 65535 back to 1 keeps the generation nonzero.
     voice.Generation = voice.Generation == 0xFFFF ? 1 : static_cast<uint16_t>(voice.Generation + 1);
@@ -71,6 +90,7 @@ void AudioEngine::Shutdown() {
     StopAll();
     s_Voices.clear();
     s_FreeSlots.clear();
+    UnloadAll();
     ma_engine_uninit(&s_Engine);
     s_Initialized = false;
 }
@@ -98,16 +118,72 @@ void AudioEngine::Update() {
 }
 
 bool AudioEngine::Load(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
-    return f.good();
+    if (s_Preloaded.find(path) != s_Preloaded.end()) return true; // already preloaded
+
+    // Force the decode to the engine's own output format/rate so playing a preloaded clip needs
+    // no per-instance resample - just a straight PCM copy into a fresh ma_audio_buffer.
+    ma_decoder_config config = ma_decoder_config_init(
+        ma_format_f32,
+        s_Initialized ? ma_engine_get_channels(&s_Engine) : 2,
+        s_Initialized ? ma_engine_get_sample_rate(&s_Engine) : 48000);
+
+    ma_uint64 frameCount = 0;
+    void* pFrames = nullptr;
+    if (ma_decode_file(path.c_str(), &config, &frameCount, &pFrames) != MA_SUCCESS) {
+        Log::Error("Audio: failed to preload '" + path + "'.");
+        return false;
+    }
+
+    PreloadedClip clip;
+    clip.Format = config.format;
+    clip.Channels = config.channels;
+    clip.SampleRate = config.sampleRate;
+    clip.FrameCount = frameCount;
+    const size_t bytes = (size_t)frameCount * config.channels * ma_get_bytes_per_sample(config.format);
+    const uint8_t* begin = static_cast<const uint8_t*>(pFrames);
+    clip.Data.assign(begin, begin + bytes);
+    ma_free(pFrames, nullptr);
+
+    s_Preloaded.emplace(path, std::move(clip));
+    return true;
+}
+
+bool AudioEngine::Unload(const std::string& path) {
+    return s_Preloaded.erase(path) > 0;
+}
+
+void AudioEngine::UnloadAll() {
+    s_Preloaded.clear();
 }
 
 AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume, bool loop) {
     if (!s_Initialized) return InvalidHandle;
 
     auto sound = std::make_unique<ma_sound>();
-    if (ma_sound_init_from_file(&s_Engine, path.c_str(), MA_SOUND_FLAG_STREAM, nullptr, nullptr,
-                                sound.get()) != MA_SUCCESS) {
+    std::unique_ptr<ma_audio_buffer> buffer;
+
+    auto cached = s_Preloaded.find(path);
+    if (cached != s_Preloaded.end()) {
+        // Preloaded (#202): play from a private copy of the already-decoded PCM instead of
+        // re-decoding from disk on every Play(). ma_audio_buffer_init_copy (not the non-owning
+        // ma_audio_buffer_init) so this voice's buffer is fully independent of s_Preloaded —
+        // Unload()ing the cache entry mid-playback can never affect it.
+        const PreloadedClip& clip = cached->second;
+        buffer = std::make_unique<ma_audio_buffer>();
+        ma_audio_buffer_config config = ma_audio_buffer_config_init(
+            clip.Format, clip.Channels, clip.FrameCount, clip.Data.data(), nullptr);
+        if (ma_audio_buffer_init_copy(&config, buffer.get()) != MA_SUCCESS) {
+            Log::Error("Audio: failed to instantiate preloaded '" + path + "'.");
+            return InvalidHandle;
+        }
+        if (ma_sound_init_from_data_source(&s_Engine, (ma_data_source*)buffer.get(), 0, nullptr,
+                                           sound.get()) != MA_SUCCESS) {
+            Log::Error("Audio: failed to play preloaded '" + path + "'.");
+            ma_audio_buffer_uninit(buffer.get());
+            return InvalidHandle;
+        }
+    } else if (ma_sound_init_from_file(&s_Engine, path.c_str(), MA_SOUND_FLAG_STREAM, nullptr, nullptr,
+                                       sound.get()) != MA_SUCCESS) {
         Log::Error("Audio: failed to load sound '" + path + "'.");
         return InvalidHandle;
     }
@@ -120,6 +196,7 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
     if (ma_sound_start(sound.get()) != MA_SUCCESS) {
         Log::Error("Audio: failed to start sound '" + path + "'.");
         ma_sound_uninit(sound.get());
+        if (buffer) ma_audio_buffer_uninit(buffer.get());
         return InvalidHandle;
     }
 
@@ -141,6 +218,7 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
 
     Voice& voice = s_Voices[index];
     voice.Sound = std::move(sound);
+    voice.Buffer = std::move(buffer);
     voice.Looping = loop;
     return MakeHandle(index, voice.Generation);
 }
