@@ -46,7 +46,6 @@
 #include <thread>
 #include <vector>
 #include <cstring>
-#include <unordered_set>
 #include <cstdlib>
 #include <intrin.h>   // __cpuid — CPU brand string for the boot log
 #ifndef NOMINMAX
@@ -611,9 +610,6 @@ int main() {
 
         int appliedVSyncMode = -1; // != any real mode, so the first iteration applies the saved pref
         bool camDragActive = false; // OS cursor disabled for the duration of a look/pan/orbit drag
-        bool prevF1 = false;
-        bool prevF11 = false;
-        bool prevEscape = false;
 
         std::string lastScenePath;
         bool lastDirty = false;
@@ -672,7 +668,13 @@ int main() {
         bool exitApproved = false;
         bool exitSkipFinalSave = false;
 
+        // Monotonically increasing per-frame counter, used by Model::TickAnimationOnce() to
+        // dedupe animation updates for models shared by more than one entity (#106) without a
+        // per-frame heap allocation.
+        uint64_t frameIndex = 0;
+
         while (true) {
+            ++frameIndex;
             Clock::Update();
             float dt = Clock::DeltaTime();
             Profiler::BeginFrame();
@@ -711,19 +713,14 @@ int main() {
                 titleInitialized = true;
             }
 
-            bool f1Now = Input::IsKeyDown(GLFW_KEY_F1);
-            if (f1Now && !prevF1) togglePlay();
-            prevF1 = f1Now;
+            if (Input::IsKeyPressed(GLFW_KEY_F1)) togglePlay();
 
-            bool f11Now = Input::IsKeyDown(GLFW_KEY_F11);
-            if (f11Now && !prevF11) {
+            if (Input::IsKeyPressed(GLFW_KEY_F11)) {
                 window.ToggleFullscreen();
             }
-            prevF11 = f11Now;
 
             if (playing) {
-                bool escNow = Input::IsKeyDown(GLFW_KEY_ESCAPE);
-                if (escNow && !prevEscape) {
+                if (Input::IsKeyPressed(GLFW_KEY_ESCAPE)) {
                     if (playMaximized) {
                         // Maximized play: Esc toggles the cursor, same as the old Play mode.
                         window.SetCursorLocked(!window.IsCursorLocked());
@@ -733,7 +730,6 @@ int main() {
                         window.SetCursorLocked(false);
                     }
                 }
-                prevEscape = escNow;
 
                 // Safety net: if the window loses focus while the game has grabbed the cursor
                 // (alt-tab, a notification steals focus), release it — otherwise you can come
@@ -834,10 +830,11 @@ int main() {
                 // Advance each distinct Model once. Scene entities get their own instance
                 // (AssetLibrary::InstantiateModel), so this is normally 1:1 — but dedupe
                 // defensively so a future shared-Model path can't tick one player N*dt (#106).
-                std::unordered_set<Model*> advanced;
+                // Model::TickAnimationOnce() compares against its own m_LastTickedFrame instead
+                // of this loop building a heap-allocated std::unordered_set<Model*> every frame.
                 for (auto entity : world.Registry.view<RenderableComponent>()) {
                     Model* m = world.Registry.get<RenderableComponent>(entity).ModelRef.get();
-                    if (m && advanced.insert(m).second) m->UpdateAnimation(dt);
+                    if (m) m->TickAnimationOnce(frameIndex, dt);
                 }
             }
 
@@ -1714,13 +1711,21 @@ int main() {
             // Capture: PrintScreen, or a ".shot" sentinel file next to the exe (triggerable
             // without keyboard focus). Both just raise a request; it's serviced next.
             {
-                static bool prevPS = false;
-                bool ps = Input::IsKeyDown(GLFW_KEY_PRINT_SCREEN);
-                std::error_code shotEc;
-                bool sentinel = std::filesystem::exists(".shot", shotEc);
-                if ((ps && !prevPS) || sentinel) editor.RequestCapture();
-                if (sentinel) std::filesystem::remove(".shot", shotEc);
-                prevPS = ps;
+                bool ps = Input::IsKeyPressed(GLFW_KEY_PRINT_SCREEN);
+                // The sentinel only exists to let an external script trigger a capture, so a
+                // quarter-second of latency is irrelevant — stat'ing the filesystem every single
+                // frame (up to 240x/sec at the FPS cap) just to poll a rarely-present file isn't
+                // worth it. Throttle the check to ~4 Hz instead.
+                static float shotPollAccum = 0.0f;
+                shotPollAccum += dt;
+                bool sentinel = false;
+                if (shotPollAccum >= 0.25f) {
+                    shotPollAccum = 0.0f;
+                    std::error_code shotEc;
+                    sentinel = std::filesystem::exists(".shot", shotEc);
+                    if (sentinel) std::filesystem::remove(".shot", shotEc);
+                }
+                if (ps || sentinel) editor.RequestCapture();
             }
 
             // Service a pending capture now that the frame is fully composited on the back
