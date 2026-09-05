@@ -9,7 +9,7 @@
 
 #include "AudioEngine.h"
 #include "AssetLibrary.h"
-#include "TransformControllerSystem.h"
+#include "HotReloadGameModule.h"
 #include "EditorLayer.h"
 #include "EditorSettings.h"
 #include "Model.h"
@@ -382,6 +382,13 @@ int main(int argc, char** argv) {
         IblProbe iblProbe; // #196: sky-baked irradiance / prefiltered specular / BRDF LUT
 
         World world;
+        HotReloadGameModule gameModule;
+        {
+            std::error_code ec;
+            std::filesystem::path executable = std::filesystem::absolute(argv[0], ec);
+            if (ec) executable = std::filesystem::current_path(ec) / "TartarusEngine.exe";
+            gameModule.Initialize(executable.parent_path() / "TartarusGame.dll");
+        }
         Player player;
         // Default spawn/editor-camera start: on the outdoor plaza, facing through the open
         // entrance toward the showroom's hero display and its walkable floor.
@@ -895,8 +902,12 @@ int main(int argc, char** argv) {
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
                 UpdateAnimators(world, dt);
-                UpdateTransformControllers(world, dt);
             }
+
+            // The gameplay DLL watches its freshly-built source copy even while editing, and
+            // only runs game systems during Play. Rebuilding TartarusGame swaps the module
+            // without closing the editor or discarding this World.
+            gameModule.Tick(world, dt, playing);
 
             // Animations advance whenever something is showing them: the editor viewport, or the
             // running game.

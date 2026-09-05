@@ -84,6 +84,13 @@ file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/extern/ImViewGuizmo_impl.cpp
 )
 
+# Gameplay code lives in a separately-built DLL so it can be rebuilt and reloaded while the
+# editor executable remains open. Keep module entry points and systems out of the host target.
+list(REMOVE_ITEM ENGINE_SOURCES
+  ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
+  ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
+)
+
 set(IMGUI_SOURCES
   ${imgui_SOURCE_DIR}/imgui.cpp
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -102,6 +109,27 @@ if(WIN32)
 endif()
 
 add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES})
+
+add_library(TartarusGame SHARED
+  ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
+  ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
+)
+
+target_include_directories(TartarusGame PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/src/Core
+  ${CMAKE_SOURCE_DIR}/src/Game
+  ${CMAKE_SOURCE_DIR}/src/Physics
+)
+target_link_libraries(TartarusGame PRIVATE glm::glm EnTT::EnTT)
+target_compile_definitions(TartarusGame PRIVATE GLM_ENABLE_EXPERIMENTAL)
+target_compile_options(TartarusGame PRIVATE
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /MP>
+  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+)
+
+# A normal TartarusEngine build also produces its current gameplay module next to the exe.
+add_dependencies(TartarusEngine TartarusGame)
 
 # A console-subsystem build makes Windows open a terminal window alongside the editor, which
 # looks like a launch error to anyone who didn't expect it. Release builds use the GUI
