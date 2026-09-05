@@ -5528,9 +5528,24 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
             if (res.committed) CommitStagedUndo(world, undoLabel);
         };
 
-        transformRow("Position", 0.05f, 0.0f, 0.0f,
-            [](TransformComponent& t) -> glm::vec3& { return t.Position; },
-            "Sets X / Y / Z on every selected object.", "Set Position");
+        // #218 — label the Position row "Local Position" only when every selected object is
+        // parented (each one's own TransformComponent.Position is then parent-relative); a
+        // mixed selection of parented/unparented objects falls back to the neutral "Position"
+        // since neither "World" nor "Local" would be true for the whole group.
+        {
+            bool allParented = true;
+            forEach([&](entt::entity e) {
+                const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+                allParented &= (h && h->Parent != entt::null);
+            });
+            const char* posLabel = allParented ? "Local Position" : "Position";
+            const char* posTip = allParented
+                ? "Sets X / Y / Z (relative to each object's parent) on every selected object."
+                : "Sets X / Y / Z on every selected object.";
+            transformRow(posLabel, 0.05f, 0.0f, 0.0f,
+                [](TransformComponent& t) -> glm::vec3& { return t.Position; },
+                posTip, "Set Position");
+        }
         transformRow("Rotation", 0.5f, 0.0f, 0.0f,
             [](TransformComponent& t) -> glm::vec3& { return t.RotationEuler; },
             "Sets Euler rotation (degrees) on every selected object.", "Set Rotation");
@@ -5976,8 +5991,15 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         // Stage on first touch, commit on release — one History entry per edit, and a
         // rejected (non-finite) or no-op edit records nothing (its snapshot dedupes away).
         bool rowActive = false, rowCommitted = false;
-        DrawVec3Row("Position", transform.Position, 0.1f, 0.0f, 0.0f, rowActive, rowCommitted,
-            "World-space position in units. Drag a number to change it, or\nclick a colored letter to zero that axis.");
+        // #218 — TransformComponent.Position is parent-relative once this entity has a parent
+        // (World::SetParent re-expresses it into the new parent's local space), so the row's
+        // label/tooltip need to say "Local" rather than claim world-space for those objects.
+        const auto* posHier = registry.try_get<HierarchyComponent>(entity);
+        bool hasParent = posHier && posHier->Parent != entt::null;
+        DrawVec3Row(hasParent ? "Local Position" : "Position", transform.Position, 0.1f, 0.0f, 0.0f, rowActive, rowCommitted,
+            hasParent
+                ? "Position in units, relative to this object's parent. Drag a number to\nchange it, or click a colored letter to zero that axis."
+                : "World-space position in units. Drag a number to change it, or\nclick a colored letter to zero that axis.");
         if (rowActive) StageUndo(world);
         if (rowCommitted) CommitStagedUndo(world, "Move");
         DrawVec3Row("Rotation", transform.RotationEuler, 1.0f, 0.0f, 0.0f, rowActive, rowCommitted,
