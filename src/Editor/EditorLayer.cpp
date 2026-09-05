@@ -8302,6 +8302,9 @@ void EditorLayer::RequestDeleteAssets(World& world, AssetLibrary& assets, const 
     if (items.empty()) return;
     if (skipDialog) {
         m_DeleteError.clear();
+        PushUndo(world, items.size() == 1
+            ? (items[0].IsFolder ? "Delete Folder" : "Delete Asset")
+            : "Delete Assets");
         for (const auto& item : items) PerformAssetDelete(world, assets, item.Key, item.IsFolder);
         ClearAssetSelection();
         if (!m_DeleteError.empty()) m_OpenDeleteErrorRequested = true;
@@ -8312,10 +8315,10 @@ void EditorLayer::RequestDeleteAssets(World& world, AssetLibrary& assets, const 
 }
 
 bool EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const std::string& key, bool isFolder) {
+    (void)world; // undo is now pushed once by the caller, covering the whole batch (#212)
     InvalidateModelThumbnail(nullptr); // a freed Model could be reallocated at the same address
     const std::string leaf = std::filesystem::path(key).filename().string();
     if (isFolder) {
-        PushUndo(world, "Delete Folder");
         assets.DeleteFolderRecursive(key);
         // Don't leave the browser pointed at a folder that no longer exists.
         if (m_CurrentAssetFolder == key || m_CurrentAssetFolder.rfind(key + "/", 0) == 0) {
@@ -8323,16 +8326,16 @@ bool EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const s
         }
     } else {
         for (const auto& model : assets.Models()) {
-            if (model->Path() == key) { PushUndo(world, "Delete Asset"); assets.RemoveModel(model); break; }
+            if (model->Path() == key) { assets.RemoveModel(model); break; }
         }
         for (const auto& tex : assets.Textures()) {
-            if (tex->Path() == key) { PushUndo(world, "Delete Asset"); assets.RemoveTexture(tex); break; }
+            if (tex->Path() == key) { assets.RemoveTexture(tex); break; }
         }
         for (const auto& sound : assets.Sounds()) {
-            if (sound == key) { PushUndo(world, "Delete Asset"); assets.RemoveSound(sound); break; }
+            if (sound == key) { assets.RemoveSound(sound); break; }
         }
         for (const auto& prefab : assets.Prefabs()) {
-            if (prefab == key) { PushUndo(world, "Delete Asset"); assets.RemovePrefab(prefab); break; }
+            if (prefab == key) { assets.RemovePrefab(prefab); break; }
         }
         // A Scene entry is a real .json file, not an AssetLibrary asset — remove it from disk
         // directly, and report why if that fails.
@@ -8445,6 +8448,9 @@ void EditorLayer::DrawDeleteConfirmPopup(World& world, AssetLibrary& assets) {
         ImGui::SameLine();
         if (PrimaryButton("Delete", ImVec2(buttonWidth, 0.0f)) || keyConfirm) {
             m_DeleteError.clear();
+            PushUndo(world, m_PendingDelete.size() == 1
+                ? (m_PendingDelete[0].IsFolder ? "Delete Folder" : "Delete Asset")
+                : "Delete Assets");
             for (const auto& item : m_PendingDelete) PerformAssetDelete(world, assets, item.Key, item.IsFolder);
             m_PendingDelete.clear();
             ClearAssetSelection();
