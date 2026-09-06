@@ -605,6 +605,37 @@ void EditorLayer::DrawCaptureOptionsPopupBody() {
     }
 }
 
+void EditorLayer::DrawGridSnapPopupBody() {
+    auto& gs = EditorSettings::Get();
+    ImGui::PushItemWidth(120.0f * m_UIScale);
+
+    ImGui::TextDisabled("GRID");
+    bool showGrid = m_ShowGrid;
+    if (ImGui::Checkbox("Visible", &showGrid)) m_ShowGrid = showGrid;
+    if (ImGui::DragFloat("Cell size", &gs.GridMinorSpacing, 0.05f, 0.05f, 50.0f, "%.2f m"))
+        EditorSettings::Save();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("World units between minor grid lines.\nAlso the step used when snapping a dropped object to the ground grid.");
+    if (ImGui::DragInt("Major every", &gs.GridMajorEvery, 0.2f, 2, 100, "%d cells"))
+        EditorSettings::Save();
+
+    ImGui::Separator();
+    ImGui::TextDisabled("SNAP  (hold Ctrl while dragging to invert)");
+    bool snap = m_GridSnapEnabled;
+    if (ImGui::Checkbox("Snap enabled", &snap)) m_GridSnapEnabled = snap;
+    ImGui::BeginDisabled(!m_GridSnapEnabled);
+    ImGui::DragFloat("Move",   &m_SnapTranslation, 0.05f, 0.001f, 100.0f, "%.3f m");
+    ImGui::DragFloat("Rotate", &m_SnapRotationDeg, 0.5f,  0.1f,   180.0f, "%.1f deg");
+    ImGui::DragFloat("Scale",  &m_SnapScale,       0.01f, 0.001f, 10.0f,  "%.3f");
+    ImGui::EndDisabled();
+
+    if (ImGui::SmallButton("Match Move snap to grid")) m_SnapTranslation = gs.GridMinorSpacing;
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Set the gizmo Move increment equal to the grid cell size.");
+
+    ImGui::PopItemWidth();
+}
+
 void EditorLayer::RequestCapture() {
     const auto& s = EditorSettings::Get();
     const int rp = std::clamp(s.CaptureResPreset, 0, (int)IM_ARRAYSIZE(kCaptureRes) - 1);
