@@ -926,11 +926,14 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             {"Duplicate", "Ctrl+D"},
             {"Copy / Cut / Paste", "Ctrl+C / Ctrl+X / Ctrl+V"},
             {"Delete selection", "Delete"},
-            {"Rename selection", "F2  (or double-click in Hierarchy)"},
+            {"Rename selection (edit mode)", "F2  (or double-click in Hierarchy)"},
             {"Open Preferences", "Ctrl+,"},
-            {"Toggle fullscreen", "F11"},
+            {"Toggle window fullscreen", "F11"},
             {"Screenshot (Capture tool)", "Print Screen"},
             {"Play / Stop", "F1"},
+            {"Pause / Resume  (Play mode)", "F2"},
+            {"Step one frame  (while paused)", "F3"},
+            {"Maximize / restore Game view  (Play mode)", "F4"},
             {"Release mouse & keyboard from the running game", "Esc"},
         };
         if (ImGui::BeginTable("##sctable", 2,
@@ -1820,8 +1823,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (pressedDigit(ImGuiKey_5, ImGuiKey_Keypad5)) ToggleOrthographic(world, editorCamera);
 
         // F2 renames whichever selection is "live": a scene object takes priority over an Asset
-        // Browser entry, matching which panel the user most likely just clicked in.
-        if (ImGui::IsKeyPressed(ImGuiKey_F2)) {
+        // Browser entry, matching which panel the user most likely just clicked in. In Play mode
+        // F2 is Pause instead (#236) — rename is still one double-click away in the Hierarchy.
+        if (!m_InPlayMode && ImGui::IsKeyPressed(ImGuiKey_F2)) {
             if (HasAnySelection()) {
                 BeginRenameEntity(m_Selected);
             } else if (!m_SelectedAssetKey.empty() && m_RenamingAssetKey.empty() && m_ExtraAssetSelection.empty()) {

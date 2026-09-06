@@ -627,6 +627,7 @@ int main(int argc, char** argv) {
         // editor still fully usable. The Fullscreen button next to Stop toggles `playMaximized`.
         bool editorUIVisible = true;
         bool playing = false;
+        bool paused = false;   // #236: simulation frozen, rendering continues; Step advances one frame
         bool playMaximized = false;
         // In-panel play is click-to-focus: the game only reads mouse/keyboard once the user has
         // clicked inside the Game view. Esc (or Stop) hands control back to the editor. Ignored
@@ -686,6 +687,7 @@ int main(int argc, char** argv) {
             if (!playing) return;
             editor.OnExitPlayMode(world, assets);
             playing = false;
+            paused = false;
             playMaximized = false;
             editorUIVisible = true;
             gameInputEngaged = false;
@@ -805,6 +807,16 @@ int main(int argc, char** argv) {
             }
 
             if (Input::IsKeyPressed(GLFW_KEY_F1)) togglePlay();
+            // Pause (F2 / toolbar) and single-frame Step (F3 / toolbar). The toolbar requests are
+            // raised during the previous frame's editor draw; consuming them here folds them into
+            // the same state the keys drive, one frame later.
+            if (playing && (Input::IsKeyPressed(GLFW_KEY_F2) || editor.ConsumePauseToggleRequest()))
+                paused = !paused;
+            bool stepThisFrame = playing && paused &&
+                (Input::IsKeyPressed(GLFW_KEY_F3) || editor.ConsumeStepRequest());
+            // F4 mirrors the toolbar's Fullscreen/Restore button — maximize the Game view over
+            // the editor panels (only meaningful while playing; setMaximized no-ops otherwise).
+            if (playing && Input::IsKeyPressed(GLFW_KEY_F4)) setMaximized(!playMaximized);
 
             if (Input::IsKeyPressed(GLFW_KEY_F11)) {
                 window.ToggleFullscreen();
@@ -903,7 +915,13 @@ int main(int argc, char** argv) {
             // ma_sound objects and open file handles (#200).
             AudioEngine::Update();
 
-            if (playing) {
+            // Whether gameplay actually advances this frame: playing and not paused, or a
+            // single-frame Step was requested while paused (#236). Everything else about play mode
+            // — the Game panel, the player camera, input routing — stays live while paused, so a
+            // frozen frame is still fully inspectable.
+            const bool simThisFrame = (playing && !paused) || stepThisFrame;
+
+            if (simThisFrame) {
                 player.Update(dt, world, window.Handle(), gameHasInput);
                 // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
                 // against wherever the player is looking from, updated after the move so the
@@ -917,7 +935,7 @@ int main(int argc, char** argv) {
             // The gameplay DLL watches its freshly-built source copy even while editing, and
             // only runs game systems during Play. Rebuilding TartarusGame swaps the module
             // without closing the editor or discarding this World.
-            gameModule.Tick(world, dt, playing);
+            gameModule.Tick(world, dt, simThisFrame);
 
             // Animations advance whenever something is showing them: the editor viewport, or the
             // running game.
@@ -1671,7 +1689,7 @@ int main(int argc, char** argv) {
             // Drawn every frame in every state (unlike editor.Draw(), which is editor-UI-only) so
             // there's always an on-screen Play/Stop, not just F1. Drawn AFTER editor.Draw() so it
             // layers on top of the toolbar strip instead of being painted over by it.
-            editor.DrawPlayStopButton(playing, playMaximized);
+            editor.DrawPlayStopButton(playing, playMaximized, paused);
             if (editor.ConsumePlayStopRequest()) togglePlay();
             if (editor.ConsumeMaximizeToggleRequest()) setMaximized(!playMaximized);
 
