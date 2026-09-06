@@ -74,6 +74,11 @@ public:
     // once from Init() and again (colours only — no size/font rebuild) whenever the theme combo
     // in Preferences changes. For the Prism theme it also seeds the animated colours below.
     void ApplyEditorTheme();
+    // Applies the current theme's *metrics* (rounding / padding / borders) as well as its colours,
+    // DPI-scaled once. Bento (0) and Prism (1) use the rounded-card metrics; Windows XP (2) keeps
+    // the compact baseline. Resets to the shared baseline first so a live theme switch never leaks
+    // or double-scales. Call this (not ApplyEditorTheme) on a theme change.
+    void ApplyThemeStyle();
 
     void BeginFrame();
     void Draw(World& world, AssetLibrary& assets, Camera& editorCamera, float dt);
