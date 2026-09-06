@@ -923,6 +923,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             {"Quick create (Create menu at cursor)", "Shift+A"},
             {"Create Empty Child (of the selection)", "Ctrl+Shift+N"},
             {"Toggle Active State (selection)", "Alt+Shift+A"},
+            {"Select All / Deselect / Invert", "Ctrl+A / Ctrl+Shift+A / Ctrl+I"},
             {"Align selected Camera to view", "Ctrl+Shift+F"},
             {"Gizmo: move / rotate / scale / rect", "W / E / R / T"},
             {"Vertex grab", "hold V"},
@@ -1769,6 +1770,15 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
         if (HasAnySelection() && !assetBrowserOwnsKeys && !hierarchyOwnsLetters && ImGui::IsKeyPressed(ImGuiKey_F)) FocusOnSelection(world, editorCamera);
         if (HasAnySelection() && !assetBrowserOwnsKeys && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) DuplicateSelection(world, assets);
+
+        // Edit-menu selection ops (#236). The Hierarchy owns Ctrl+A when it's focused (select all
+        // *visible* rows); elsewhere Ctrl+A selects every entity. Ctrl+Shift+A deselects, Ctrl+I
+        // inverts.
+        if (!assetBrowserOwnsKeys && !hierarchyOwnsLetters && io.KeyCtrl) {
+            if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_A))      ClearSelection();
+            else if (ImGui::IsKeyPressed(ImGuiKey_A))               SelectAllEntities(world);
+            else if (ImGui::IsKeyPressed(ImGuiKey_I))               InvertSelection(world);
+        }
 
         // Ctrl+Shift+F — snap the selected Camera entity to the editor viewport (Unity's Align
         // With View). Mirrors the Inspector's "Align to View" button.

@@ -587,6 +587,9 @@ private:
     entt::entity m_SelectionAnchor = entt::null;
     // Ctrl+A while the Hierarchy is focused: replace the selection with every visible row.
     void SelectAllVisibleInHierarchy();
+    // Edit-menu ops (#236): every entity in the scene / flip which entities are selected.
+    void SelectAllEntities(World& world);
+    void InvertSelection(World& world);
     // Arrow / Home / End / type-to-select keyboard navigation of the tree (#236), gated the same
     // way Ctrl+A is (panel focused, no text field capturing keys). Runs once per frame after the
     // rows are drawn, off the published m_HierarchyVisibleOrder.
