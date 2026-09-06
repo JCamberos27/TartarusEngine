@@ -184,9 +184,8 @@ inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
 // #152 — the one "is this object active" control, shared by the Hierarchy row and the Inspector
 // header so both panels speak the same language. Borderless (matches ActionButton). It always
 // occupies one frame-height slot so the layout never shifts:
-//   inactive          -> a dim EYE_SLASH, always visible (this is the state worth surfacing)
-//   active + hovered   -> a faint EYE the user can click to disable (row- or self-hover)
-//   active + at rest   -> just a 2px dot, so the slot stays discoverable without adding chrome
+//   inactive          -> a dim EYE_SLASH (the state worth surfacing)
+//   active            -> a faint EYE, always visible, brightening on row- or self-hover
 // `rowHovered` is the caller's hit-test of the whole row/header line (the glyph is drawn before
 // the rest of the row, so it can't rely on its own hover alone). Returns true on click.
 // `alignTop`: place the glyph with its line-box at the row top (matches the Hierarchy's kind
@@ -215,10 +214,9 @@ inline bool ActiveToggle(const char* id, bool active, bool rowHovered, const cha
     };
     if (!active) {
         glyph(ICON_FA_EYE_SLASH, ImGui::GetColorU32(ImGuiCol_TextDisabled, selfHover ? 1.0f : 0.90f));
-    } else if (rowHovered || selfHover) {
-        glyph(ICON_FA_EYE, ImGui::GetColorU32(ImGuiCol_Text, selfHover ? 0.85f : 0.45f));
     } else {
-        dl->AddCircleFilled(c, ImMax(1.5f, sz * 0.06f), ImGui::GetColorU32(ImGuiCol_TextDisabled, 0.50f));
+        // Always shown now (#236 feedback): a quiet eye at rest, brighter on hover.
+        glyph(ICON_FA_EYE, ImGui::GetColorU32(ImGuiCol_Text, selfHover ? 0.85f : (rowHovered ? 0.55f : 0.32f)));
     }
     return clicked;
 }
