@@ -11,6 +11,7 @@
 #include <map>
 #include <list>
 #include <memory>
+#include <functional>
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
 #include "Model.h"   // ModelImportSettings - same
 #include "ImportQueueManager.h"
@@ -1259,6 +1260,8 @@ private:
 
     // --- Inspector: Add / Remove Component -------------------------------------------------
     void DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity);
+    char m_AddComponentFilter[64] = {};      // type-to-filter text in the Add Component popup (#236)
+    bool m_AddComponentFilterFocus = false;  // grab the keyboard for it the frame the popup opens
     // Draws one removable component section with a header and a trailing "x" — returns true if
     // the body should be drawn (i.e. the header is expanded and the component wasn't removed),
     // in which case the caller MUST call EndComponentSection() after drawing the body (it
@@ -1269,8 +1272,27 @@ private:
     // Used by both the single-select and multi-select Inspector paths (#155) so they share one
     // heading language — hence no entity argument. Collapse state is keyed by `label`.
     bool BeginComponentSection(const char* icon, const char* label,
-        bool removable, bool& removedOut, bool defaultOpen = true, const char* tooltip = nullptr);
+        bool removable, bool& removedOut, bool defaultOpen = true, const char* tooltip = nullptr,
+        bool* resetOut = nullptr, bool* copyOut = nullptr, bool* pasteOut = nullptr);
     void EndComponentSection();
+
+    // Single-slot component clipboard (#236): "Copy Component" on a header header snapshots the
+    // component; "Paste Component Values" on a matching header (or the same kind on another
+    // object) writes it back via emplace_or_replace, so it also works when the target lacks it.
+    // Held as a closure over the copied value — no serialization, type-safe.
+    std::string m_ComponentClipKind;
+    std::function<void(EditorLayer&, World&, entt::entity)> m_ComponentClipApply;
+    template <class T>
+    void CopyComponentToClip(const char* kind, const T& value) {
+        m_ComponentClipKind = kind;
+        T snapshot = value;
+        std::string label = std::string("Paste ") + kind;
+        m_ComponentClipApply = [snapshot, label](EditorLayer& self, World& w, entt::entity e) {
+            self.PushUndo(w, label);
+            w.Registry.emplace_or_replace<T>(e, snapshot);
+        };
+    }
+    void PasteComponentFromClip(World& world, entt::entity entity); // EditorLayer_Inspector.cpp
     // True while BeginComponentSection opened a bordered card (Bento layout) rather than a plain
     // indent — so EndComponentSection closes the matching child/style stack.
     bool m_ComponentSectionIsCard = false;
