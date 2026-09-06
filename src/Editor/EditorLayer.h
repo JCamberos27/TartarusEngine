@@ -143,6 +143,7 @@ public:
     void DrawViewMenuBody(World& world, Camera& editorCamera);
     void DrawWindowMenuBody();
     void DrawCaptureOptionsPopupBody();
+    void DrawGridSnapPopupBody(); // #236 — grid spacing + per-op snap increments, opened from the toolbar magnet's caret
     // Also the module's Add menu (via the host glue); still used by Shift+A quick-add and the
     // Hierarchy context menu, which are host-side.
     void DrawAddEntityItems(World& world, AssetLibrary& assets, Camera& editorCamera);

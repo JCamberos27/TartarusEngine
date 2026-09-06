@@ -249,6 +249,20 @@ void Draw(const EditorModuleHostAPI& host) {
             && host.SetGridSnapEnabled) {
         host.SetGridSnapEnabled(!gridSnap);
     }
+    ImGui::SameLine(0.0f, 1.0f);
+    ImGui::PushID("##gridSnapOpts");
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+    if (ImGui::Button(ICON_FA_CARET_DOWN)) ImGui::OpenPopup("##GridSnapPopup");
+    ImGui::PopStyleColor(2);
+    if (ImGui::IsItemHovered()) Tooltip(host, "Grid & snap settings");
+    if (ImGui::BeginPopup("##GridSnapPopup")) {
+        xpMenuTextPush();
+        if (host.DrawGridSnapPopupBody) host.DrawGridSnapPopupBody();
+        xpMenuTextPop();
+        ImGui::EndPopup();
+    }
+    ImGui::PopID();
     ImGui::SameLine();
     {
         const bool canSnap = host.CanSnapSelectionToGround && host.CanSnapSelectionToGround();
