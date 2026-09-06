@@ -1655,9 +1655,10 @@ int main(int argc, char** argv) {
                 // stand down (a shoot-click or strafe key shouldn't also poke the editor).
                 editor.SetGameInputActive(gameHasInput);
                 if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
-                // The reloadable editor module's Stats HUD reads live editor + world state
-                // through EditorModuleHostAPI (API v3); hand it this frame's pointers first.
-                editorModule.SetFrameContext(&editor, &world);
+                // The reloadable editor module (Stats HUD, toolbar strip + menus) reads live
+                // editor / world / assets / camera state through EditorModuleHostAPI; hand it
+                // this frame's pointers first.
+                editorModule.SetFrameContext(&editor, &world, &assets, &editorCamera);
                 editorModule.Draw(editorUIVisible, dt);
             }
 

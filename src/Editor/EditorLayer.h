@@ -79,13 +79,54 @@ public:
     // state itself.
     void DrawPlayStopButton(bool playing, bool maximized);
 
-    // Minimize / maximize-restore / close buttons, right-aligned in the top toolbar — the OS
-    // title bar is removed (Win32 custom frame in Window.cpp). Called from DrawTopToolbar.
-    void DrawWindowControls();
     // True when the cursor is over the toolbar's empty (draggable) area this frame; main.cpp
     // forwards it to Window so its WM_NCHITTEST can treat that region as the window's caption.
+    // Written by the reloadable toolbar module through EditorModuleHostAPI::SetTitleBarDragHovered.
     bool WantsWindowDrag() const { return m_TitleBarDragHovered; }
     bool m_TitleBarDragHovered = false;
+
+    // --- Reloadable toolbar module bridge (issue #229) --------------------------------------
+    // The top toolbar strip + its dropdown menus + the window min/max/close controls live in
+    // TartarusEditor.dll now (EditorModuleToolbar.cpp). The module owns the pinned window, the
+    // XP chrome and the icon-row layout; it reaches everything below through EditorModuleHostAPI
+    // (bodies in HotReloadEditorModule.cpp). These are public purely for that host-side glue.
+    float ToolbarHeightPx() const; // kToolbarHeight * m_UIScale; defined in EditorLayer_Toolbar.cpp
+    void SetTitleBarDragHovered(bool hovered) { m_TitleBarDragHovered = hovered; }
+
+    int  GizmoOpIndex() const { return (int)m_GizmoOp; }
+    void SetGizmoOpIndex(int op) { m_GizmoOp = (GizmoOp)op; }
+    int  ShadingModeIndex() const { return (int)m_ShadingMode; }
+    void SetShadingModeIndex(int m) { m_ShadingMode = (ShadingMode)m; }
+    bool GizmoLocalSpace() const { return m_GizmoLocalSpace; }
+    void SetGizmoLocalSpace(bool on) { m_GizmoLocalSpace = on; }
+    bool GizmoPivotCenter() const { return m_GizmoPivotCenter; }
+    void SetGizmoPivotCenter(bool on) { m_GizmoPivotCenter = on; }
+    void SetShowGrid(bool on) { m_ShowGrid = on; }          // ShowGrid() getter already exists
+    bool GridSnapEnabled() const { return m_GridSnapEnabled; }
+    void SetGridSnapEnabled(bool on) { m_GridSnapEnabled = on; }
+    bool ShowHistory() const { return m_ShowHistory; }
+    void SetShowHistory(bool on) { m_ShowHistory = on; }
+    void RequestResetLayout() { m_ResetLayoutRequested = true; }
+    void OpenPreferences() { m_ShowPreferences = true; }
+
+    // Thin forwarders so the non-member host glue (HotReloadEditorModule.cpp) can invoke these;
+    // the real methods stay private with their existing call sites. World/Assets/Camera are the
+    // live per-frame pointers the glue holds from SetFrameContext.
+    void ToolbarUndo(World& w, AssetLibrary& a) { Undo(w, a); }
+    void ToolbarRedo(World& w, AssetLibrary& a) { Redo(w, a); }
+    void ToolbarToggleOrthographic(World& w, Camera& c) { ToggleOrthographic(w, c); }
+    bool ToolbarCanSnapToGround(World& w) { return CanSnapSelectionToGround(w); }
+    void ToolbarSnapToGround(World& w) { SnapSelectionToGround(w); }
+
+    // Menu / popup bodies for the module's dropdowns, rendered host-side into the module-begun
+    // menu/popup (shared ImGuiContext). Defined in EditorLayer_Toolbar.cpp.
+    void DrawFileMenuBody(World& world, AssetLibrary& assets);
+    void DrawViewMenuBody(World& world, Camera& editorCamera);
+    void DrawWindowMenuBody();
+    void DrawCaptureOptionsPopupBody();
+    // Also the module's Add menu (via the host glue); still used by Shift+A quick-add and the
+    // Hierarchy context menu, which are host-side.
+    void DrawAddEntityItems(World& world, AssetLibrary& assets, Camera& editorCamera);
     // Screen-space rect of the live Game view image + its framebuffer's colour texture/size, so
     // the Play-Mode Stop/Fullscreen overlay can anchor to the game viewport and adapt its tint
     // to what's rendered there. Pass a zero size to say "no game view this frame".
@@ -769,13 +810,11 @@ private:
     float m_ThemeHue = 0.0f;
     void ApplyPrismAnimation(float hue);
 
-    // Full-width strip above the viewport: everything lives here now — one-click toggles in
-    // the row below the menu bar, and File/Import/Add/Settings as dropdown menus (Settings
-    // holds what used to be a separate always-open side panel: environment, grid/snap tuning,
-    // vertex snap tuning, controls reference).
-    void DrawTopToolbar(World& world, AssetLibrary& assets, Camera& editorCamera);
-    // Add-menu contents, shared by the menu bar and the Shift+A quick-add popup.
-    void DrawAddEntityItems(World& world, AssetLibrary& assets, Camera& editorCamera);
+    // The full-width toolbar strip + its dropdown menus moved into TartarusEditor.dll
+    // (EditorModuleToolbar.cpp, issue #229). The host keeps the menu/popup *bodies* — declared
+    // in the public bridge block above (DrawFileMenuBody / DrawViewMenuBody / DrawWindowMenuBody
+    // / DrawCaptureOptionsPopupBody / DrawAddEntityItems, all declared in the public bridge block
+    // above).
     bool m_OpenQuickAdd = false; // set by the Shift+A shortcut, consumed next frame in Draw()
     std::string m_LastSelectedName; // last valid scene selection, shown in the Inspector empty state
 
