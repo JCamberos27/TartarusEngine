@@ -205,6 +205,25 @@ void EditorLayer::SelectAllVisibleInHierarchy() {
     // every time the user hits Ctrl+A would be more disruptive than helpful.
 }
 
+void EditorLayer::SelectAllEntities(World& world) {
+    m_Selected = entt::null;
+    m_ExtraSelection.clear();
+    m_RenamingEntity = entt::null;
+    for (entt::entity e : world.Registry.view<const NameComponent>()) AddToSelectionIfAbsent(e);
+    if (m_Selected != entt::null) m_SelectionAnchor = m_Selected;
+}
+
+void EditorLayer::InvertSelection(World& world) {
+    std::vector<entt::entity> nowSelected;
+    for (entt::entity e : world.Registry.view<const NameComponent>())
+        if (!IsSelected(e)) nowSelected.push_back(e);
+    m_Selected = entt::null;
+    m_ExtraSelection.clear();
+    m_RenamingEntity = entt::null;
+    for (entt::entity e : nowSelected) AddToSelectionIfAbsent(e);
+    if (m_Selected != entt::null) m_SelectionAnchor = m_Selected;
+}
+
 void EditorLayer::HandleHierarchyKeyboardNav(World& world) {
     if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) return;
     ImGuiIO& io = ImGui::GetIO();
@@ -930,6 +949,13 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Create Empty Child", "Ctrl+Shift+N", false, hasEntity)) {
         CreateEmptyChild(world, entity);
     }
+
+    ImGui::Separator();
+    const bool anyEntities = world.Registry.view<const NameComponent>().begin() != world.Registry.view<const NameComponent>().end();
+    if (ImGui::MenuItem(ICON_FA_OBJECT_UNGROUP "  Select All", "Ctrl+A", false, anyEntities)) SelectAllEntities(world);
+    if (ImGui::MenuItem(ICON_FA_BAN "  Deselect All", "Ctrl+Shift+A", false, HasAnySelection())) ClearSelection();
+    if (ImGui::MenuItem(ICON_FA_RIGHT_LEFT "  Invert Selection", "Ctrl+I", false, anyEntities)) InvertSelection(world);
+    ImGui::Separator();
     if (ImGui::MenuItem(ICON_FA_OBJECT_GROUP "  Group into Empty Parent", nullptr, false, HasAnySelection())) {
         CreateEmptyParentForSelection(world);
     }
