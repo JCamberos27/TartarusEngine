@@ -205,6 +205,99 @@ void EditorLayer::SelectAllVisibleInHierarchy() {
     // every time the user hits Ctrl+A would be more disruptive than helpful.
 }
 
+void EditorLayer::HandleHierarchyKeyboardNav(World& world) {
+    if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) return;
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.WantTextInput) return; // renaming, or the search box has the keyboard
+
+    const auto& vis = m_HierarchyVisibleOrder;
+    if (vis.empty()) return;
+
+    // A node's open/closed flag lives in this window's storage under the "##node" id computed
+    // inside DrawHierarchyNode's PushID stack — and rows nest, so that stack is PushID(root) …
+    // PushID(entity), one per ancestor. Rebuild the whole chain here or the id won't match for
+    // any row below the top level (which is why Left/Right did nothing on nested rows).
+    auto nodeId = [&](entt::entity e) {
+        std::vector<entt::entity> chain;
+        for (entt::entity w = e; w != entt::null; ) {
+            chain.push_back(w);
+            const auto* h = world.Registry.try_get<HierarchyComponent>(w);
+            w = h ? h->Parent : entt::null;
+        }
+        for (auto it = chain.rbegin(); it != chain.rend(); ++it)
+            ImGui::PushID((int)entt::to_integral(*it));
+        ImGuiID id = ImGui::GetID("##node");
+        for (size_t i = 0; i < chain.size(); ++i) ImGui::PopID();
+        return id;
+    };
+    auto nodeOpen    = [&](entt::entity e) { return ImGui::GetStateStorage()->GetInt(nodeId(e), 1) != 0; };
+    auto setNodeOpen = [&](entt::entity e, bool open) { ImGui::GetStateStorage()->SetInt(nodeId(e), open ? 1 : 0); };
+
+    int idx = -1;
+    for (int i = 0; i < (int)vis.size(); ++i) if (vis[i] == m_Selected) { idx = i; break; }
+
+    const bool shift = io.KeyShift;
+    auto pick = [&](int i) {
+        i = i < 0 ? 0 : i >= (int)vis.size() ? (int)vis.size() - 1 : i;
+        entt::entity e = vis[i];
+        if (shift && m_SelectionAnchor != entt::null) SelectHierarchyRange(world, e, io.KeyCtrl);
+        else SelectItem(e, false);
+        m_HierarchyScrollToEntity = e;
+    };
+
+    if (ImGui::IsKeyPressed(ImGuiKey_DownArrow, true)) {
+        pick(idx < 0 ? 0 : idx + 1);
+    } else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow, true)) {
+        pick(idx < 0 ? (int)vis.size() - 1 : idx - 1);
+    } else if (ImGui::IsKeyPressed(ImGuiKey_Home, true)) {
+        pick(0);
+    } else if (ImGui::IsKeyPressed(ImGuiKey_End, true)) {
+        pick((int)vis.size() - 1);
+    } else if (idx >= 0 && ImGui::IsKeyPressed(ImGuiKey_RightArrow, true)) {
+        const auto* h = world.Registry.try_get<HierarchyComponent>(vis[idx]);
+        const bool hasKids = h && !h->Children.empty();
+        if (hasKids && !nodeOpen(vis[idx])) setNodeOpen(vis[idx], true);
+        else if (hasKids) pick(idx + 1); // already open: step into the first child
+    } else if (idx >= 0 && ImGui::IsKeyPressed(ImGuiKey_LeftArrow, true)) {
+        const auto* h = world.Registry.try_get<HierarchyComponent>(vis[idx]);
+        const bool hasKids = h && !h->Children.empty();
+        if (hasKids && nodeOpen(vis[idx])) {
+            setNodeOpen(vis[idx], false);
+        } else if (h && h->Parent != entt::null) {
+            SelectItem(h->Parent, false);
+            m_HierarchyScrollToEntity = h->Parent;
+        }
+    }
+
+    // Type-to-select: printable keystrokes (no Ctrl/Alt) build a prefix that resets after a short
+    // idle, then jump to the next visible row whose name starts with it, wrapping past the end.
+    if (!io.KeyCtrl && !io.KeyAlt && io.InputQueueCharacters.Size > 0) {
+        const double now = ImGui::GetTime();
+        const size_t before = m_HierarchyTypeAhead.size();
+        for (ImWchar c : io.InputQueueCharacters) {
+            if (c < 32 || c > 126) continue;
+            if (now - m_HierarchyTypeAheadAt > 0.9) m_HierarchyTypeAhead.clear();
+            m_HierarchyTypeAheadAt = now;
+            m_HierarchyTypeAhead += (char)std::tolower((unsigned char)c);
+        }
+        if (m_HierarchyTypeAhead.size() != before && !m_HierarchyTypeAhead.empty()) {
+            const int n = (int)vis.size();
+            for (int step = 1; step <= n; ++step) {
+                entt::entity e = vis[(std::max(idx, 0) + step) % n];
+                const auto* nm = world.Registry.try_get<NameComponent>(e);
+                std::string lower = nm ? nm->Name : std::string();
+                std::transform(lower.begin(), lower.end(), lower.begin(),
+                               [](unsigned char ch) { return (char)std::tolower(ch); });
+                if (lower.rfind(m_HierarchyTypeAhead, 0) == 0) {
+                    SelectItem(e, false);
+                    m_HierarchyScrollToEntity = e;
+                    break;
+                }
+            }
+        }
+    }
+}
+
 void EditorLayer::SelectHierarchyRange(World& world, entt::entity target, bool additive) {
     // No usable anchor (first click was Shift, or the anchor row was deleted / scrolled out of
     // the visible set): fall back to a plain pick so Shift+Click is never a dead input.
@@ -408,6 +501,24 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     if (bentoRows) ImGui::PopStyleVar();
     ImGui::PopStyleVar(); // IndentSpacing
 
+    // Auto-scroll while a row is being dragged near the panel's top/bottom edge — otherwise you
+    // can only drop among the rows that happen to be on screen when the drag starts.
+    if (const ImGuiPayload* drag = ImGui::GetDragDropPayload();
+        drag && drag->IsDataType("HIERARCHY_ENTITY") && ImGui::GetScrollMaxY() > 0.0f) {
+        const float my     = ImGui::GetIO().MousePos.y;
+        const float top    = ImGui::GetWindowPos().y;
+        const float bottom = top + ImGui::GetWindowSize().y;
+        const float margin = 26.0f * m_UIScale;
+        float over = 0.0f;
+        if (my < top + margin)         over = my - (top + margin);      // negative -> scroll up
+        else if (my > bottom - margin) over = my - (bottom - margin);   // positive -> scroll down
+        if (over != 0.0f) {
+            const float speed = 14.0f * m_UIScale; // px per frame at the edge, ramps with overshoot
+            ImGui::SetScrollY(ImGui::GetScrollY() + (over > 0.0f ? 1.0f : -1.0f) *
+                              std::min(std::abs(over) / margin, 2.0f) * speed);
+        }
+    }
+
     // Dropping onto empty space below the tree un-parents (Unity's "drag to the root") — and
     // right-clicking there opens the create/paste menu.
     // Dummy needs a real size (negative width isn't valid here), so this claims whatever space
@@ -429,6 +540,14 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
                 CommitStagedUndo(world, "Reparent");
             }
         }
+        // Model / prefab from the Asset Browser dropped below the tree -> instantiate at the root.
+        const ImGuiPayload* mdl = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH");
+        const ImGuiPayload* pfb = mdl ? nullptr : ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH");
+        if (mdl || pfb) {
+            InstantiateAssetDropInHierarchy(world, assets,
+                mdl ? (const char*)mdl->Data : nullptr,
+                pfb ? (const char*)pfb->Data : nullptr, entt::null);
+        }
         ImGui::EndDragDropTarget();
     }
     if (ImGui::BeginPopupContextItem("##HierarchyEmptyContext")) {
@@ -448,6 +567,8 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
         ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_A)) {
         SelectAllVisibleInHierarchy();
     }
+    // Arrow / Home / End / type-to-select nav over the same visible-row list.
+    HandleHierarchyKeyboardNav(world);
     // ImGui::End() for the "Scene Hierarchy" window is the module's — it owns Begin() now.
 }
 
@@ -527,14 +648,25 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     const bool hasMesh   = world.Registry.all_of<RenderableComponent>(entity);
     const bool hasLight  = world.Registry.all_of<LightComponent>(entity);
     const bool hasCamera = world.Registry.all_of<CameraComponent>(entity);
+    // Solid, literal glyphs beat the old abstract ones: a filled cube for a mesh (not a wireframe
+    // polygon), a stacked layer-group for an empty that parents other rows (it's acting as a
+    // folder), a plain bounding-box locator for a childless empty (not the org-chart node).
     const char* primaryGlyph =
-        hasMesh   ? ICON_FA_DRAW_POLYGON  :
-        hasLight  ? ICON_FA_LIGHTBULB     :
-        hasCamera ? ICON_FA_VIDEO         : ICON_FA_DIAGRAM_PROJECT;
+        hasMesh     ? ICON_FA_CUBE          :
+        hasLight    ? ICON_FA_LIGHTBULB     :
+        hasCamera   ? ICON_FA_VIDEO         :
+        hasChildren ? ICON_FA_LAYER_GROUP   : ICON_FA_VECTOR_SQUARE;
     const char* secondaryGlyph =
         (hasMesh && hasLight)   ? ICON_FA_LIGHTBULB :
         (hasMesh && hasCamera)  ? ICON_FA_VIDEO     :
         (hasLight && hasCamera) ? ICON_FA_VIDEO     : nullptr;
+    // Muted per-kind tint so kinds separate at a glance without the panel turning to confetti —
+    // amber light, blue camera (the #234 accent roles); mesh/empty stay near the text colour
+    // since they're the bulk of every scene. Overridden to the disabled grey on inactive rows.
+    const ImU32 kindCol =
+        hasLight  ? IM_COL32(232, 196, 104, 255) :
+        hasCamera ? IM_COL32( 91, 157, 249, 255) :
+        hasMesh   ? IM_COL32(214, 214, 218, 255) : IM_COL32(148, 148, 156, 255);
 
     // Never-named entities get a positional fallback instead of a wall of identical
     // "(unnamed)" rows (#21 P10).
@@ -560,6 +692,13 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     // below; the chevron + glyph slot + name are painted afterward at a constant X.
     ImGui::TreeNodeEx("##node", nodeFlags, "%s", "");
     const ImVec2 rowMin = ImGui::GetItemRectMin();
+    const ImVec2 rowMax = ImGui::GetItemRectMax();
+
+    // Keyboard nav asked to reveal this row last frame — bring it into view, once.
+    if (entity == m_HierarchyScrollToEntity) {
+        ImGui::SetScrollHereY(0.5f);
+        m_HierarchyScrollToEntity = entt::null;
+    }
 
     // The chevron's hit box: the leading ~1.1em of the row. A click there toggles this row's
     // subtree (Alt = cascade to every descendant); a click anywhere else selects.
@@ -587,7 +726,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         BeginRenameEntity(entity);
     }
     if (!m_HierarchyRowHintDone && ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-        EditorUI::SetTooltip("Click to select (Ctrl+Click to add/remove, Shift+Click for a range, Ctrl+A for all).\nDouble-click or F2 to rename. Drag onto another row to parent it.\nRight-click for more options.");
+        EditorUI::SetTooltip("Click to select (Ctrl+Click to add/remove, Shift+Click for a range, Ctrl+A for all).\nDouble-click or F2 to rename. Drag onto a row to parent it, or between rows to reorder.\nRight-click for more options.");
     }
 
     if (ImGui::BeginPopupContextItem("##RowContext")) {
@@ -606,28 +745,77 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         else ImGui::Text("%s", label.c_str());
         ImGui::EndDragDropSource();
     }
-    if (ImGui::BeginDragDropTarget()) {
-        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
-            entt::entity dragged = *(const entt::entity*)payload->Data;
-            if (world.Registry.valid(dragged) && dragged != entity) {
-                // Same rule as the un-parent drop below: a multi-selected dragged row re-parents
-                // the whole selection (#220), otherwise just the row itself.
-                std::vector<entt::entity> toReparent = IsSelected(dragged) ? GetSelectedItems()
-                                                                            : std::vector<entt::entity>{dragged};
-                StageUndo(world);
-                // SetParent refuses cycles and Collider-bearing children on its own; report the
-                // refusal rather than silently doing nothing, so the gesture never looks broken.
-                bool anyFailed = false;
-                for (entt::entity e : toReparent) {
-                    if (!world.Registry.valid(e) || e == entity) continue;
-                    if (!world.SetParent(e, entity)) anyFailed = true;
-                }
-                CommitStagedUndo(world, "Reparent");
-                if (anyFailed) {
-                    Log::Warn("Can't parent that: level geometry has a collider that needs world-space "
-                              "coordinates, or the target is already a child of the dragged object.");
+    // Row drop zone for reordering / reparenting. Deliberately NOT ImGui's BeginDragDropTarget
+    // (that only reacts over the text line, leaving the padding around each name dead). One
+    // row-pitch tall, centred on the name, so zones tile with no gaps or overlap:
+    //   - middle 60% of the pitch = parent onto this row;
+    //   - the 40% below it = a single "insert between this row and the next" strip, owned only
+    //     by the upper row (so a boundary has ONE reactive spot, not the old two abutting ones);
+    //   - the first visible row additionally gets an "insert above" strip so the very top is
+    //     reachable.
+    // The hovered strip fills with a solid block so the whole reactive area is visible.
+    if (const ImGuiPayload* drag = ImGui::GetDragDropPayload();
+        drag && drag->IsDataType("HIERARCHY_ENTITY")) {
+        const float midY  = (rowMin.y + rowMax.y) * 0.5f;
+        const float pitch = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y;
+        const float half  = pitch * 0.5f;
+        const float pInset = pitch * 0.30f;          // parent zone = +/- this around the name
+        const bool  isFirstRow = m_HierarchyVisibleBuild.size() == 1;
+        const float zoneTop = isFirstRow ? midY - half : midY - pInset;
+        if (ImGui::IsMouseHoveringRect(ImVec2(rowMin.x, zoneTop), ImVec2(rowMax.x, midY + half), /*clip=*/false)) {
+            const float my = ImGui::GetIO().MousePos.y;
+            const int zone = my > midY + pInset ? 1                    // below the name -> insert after
+                           : (isFirstRow && my < midY - pInset) ? -1  // above the first name -> insert before
+                           : 0;                                        // on the name -> parent onto
+
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const ImU32 accent = ImGui::GetColorU32(ImGuiCol_DragDropTarget);
+            const ImU32 fill   = (accent & 0x00FFFFFFu) | 0x44000000u; // same hue, ~27% alpha block
+            float y0, y1, edge;
+            if (zone == 0)      { y0 = midY - pInset; y1 = midY + pInset; edge = -1.0f; }
+            else if (zone > 0)  { y0 = midY + pInset; y1 = midY + half;   edge = y0 + 1.0f; }
+            else                { y0 = midY - half;   y1 = midY - pInset; edge = y1 - 1.0f; }
+            dl->AddRectFilled(ImVec2(rowMin.x, y0), ImVec2(rowMax.x, y1), fill);
+            if (edge < 0.0f) dl->AddRect(ImVec2(rowMin.x, y0), ImVec2(rowMax.x, y1), accent, 3.0f, 0, 2.0f);
+            else             dl->AddLine(ImVec2(rowMin.x, edge), ImVec2(rowMax.x, edge), accent, 2.0f);
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                entt::entity dragged = *(const entt::entity*)drag->Data;
+                if (world.Registry.valid(dragged) && dragged != entity) {
+                    // A multi-selected dragged row carries the whole selection (#220).
+                    std::vector<entt::entity> moving = IsSelected(dragged) ? GetSelectedItems()
+                                                                           : std::vector<entt::entity>{dragged};
+                    if (zone == 0) {
+                        StageUndo(world);
+                        // SetParent refuses cycles and Collider-bearing children on its own; report the
+                        // refusal rather than silently doing nothing, so the gesture never looks broken.
+                        bool anyFailed = false;
+                        for (entt::entity e : moving) {
+                            if (!world.Registry.valid(e) || e == entity) continue;
+                            if (!world.SetParent(e, entity)) anyFailed = true;
+                        }
+                        CommitStagedUndo(world, "Reparent");
+                        if (anyFailed) {
+                            Log::Warn("Can't parent that: level geometry has a collider that needs world-space "
+                                      "coordinates, or the target is already a child of the dragged object.");
+                        }
+                    } else {
+                        ReorderHierarchySiblings(world, moving, entity, zone > 0);
+                    }
                 }
             }
+        }
+    }
+    if (ImGui::BeginDragDropTarget()) {
+        // Drop a model / prefab from the Asset Browser onto a row to instantiate it as a child
+        // of that row (#236) — the Hierarchy counterpart of dragging into the viewport.
+        const ImGuiPayload* mdl = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH");
+        const ImGuiPayload* pfb = mdl ? nullptr : ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH");
+        if (mdl || pfb) {
+            InstantiateAssetDropInHierarchy(world, assets,
+                mdl ? (const char*)mdl->Data : nullptr,
+                pfb ? (const char*)pfb->Data : nullptr, entity);
         }
         // Existing behavior: dropping a texture from the Asset Browser assigns it as Albedo.
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
@@ -679,12 +867,15 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
                                rowMin.y + (ImGui::GetFrameHeight() - cm.y) * 0.5f),
                         chCol, chev);
         }
-        dl->AddText(ImVec2(labelX, rowMin.y), col, primaryGlyph);
+        dl->AddText(ImVec2(labelX, rowMin.y), inactive ? col : kindCol, primaryGlyph);
         if (secondaryGlyph) {
             const float sub = fontSize * 0.68f;
+            const ImU32 secBase = inactive ? col
+                                : (hasMesh && hasLight) ? IM_COL32(232, 196, 104, 255)
+                                                        : IM_COL32(91, 157, 249, 255);
             dl->AddText(ImGui::GetFont(), sub,
                         ImVec2(labelX + slotW - sub, rowMin.y + fontSize - sub),
-                        (col & 0x00FFFFFFu) | 0x9E000000u, secondaryGlyph);
+                        (secBase & 0x00FFFFFFu) | 0xB4000000u, secondaryGlyph);
         }
         dl->AddText(ImVec2(labelX + slotW, rowMin.y), col, shownName.c_str());
     }
@@ -693,9 +884,10 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         // Every row is NoTreePushOnOpen now, so ImGui no longer auto-indents children — do it
         // here (IndentSpacing is the tightened 13*uiScale pushed by DrawHierarchyTreeBody).
         ImGui::Indent(ImGui::GetStyle().IndentSpacing);
-        // Copied because a re-parent or delete triggered from a child's own context menu would
-        // otherwise mutate this vector mid-iteration.
-        std::vector<entt::entity> children = hier->Children;
+        // Sorted by OrderComponent (not raw HierarchyComponent::Children insertion order) so
+        // sibling reordering shows, and it's a fresh copy anyway — a re-parent or delete from a
+        // child's own context menu would otherwise mutate Children mid-iteration.
+        std::vector<entt::entity> children = HierarchySiblingsInOrder(world, entity);
         for (entt::entity child : children) {
             if (world.Registry.valid(child)) DrawHierarchyNode(world, assets, child, isLevelGeometry);
         }
@@ -846,6 +1038,102 @@ void EditorLayer::UnparentSelection(World& world) {
         if (world.Registry.valid(e)) world.SetParent(e, entt::null);
     }
     CommitStagedUndo(world, "Reparent");
+}
+
+std::vector<entt::entity> EditorLayer::HierarchySiblingsInOrder(const World& world, entt::entity parent) const {
+    std::vector<entt::entity> out;
+    if (parent == entt::null) {
+        for (entt::entity e : world.Registry.view<const NameComponent>()) {
+            const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+            if (!h || h->Parent == entt::null) out.push_back(e);
+        }
+    } else if (const auto* h = world.Registry.try_get<HierarchyComponent>(parent)) {
+        out = h->Children;
+    }
+    std::sort(out.begin(), out.end(), [&](entt::entity a, entt::entity b) {
+        const auto* oa = world.Registry.try_get<OrderComponent>(a);
+        const auto* ob = world.Registry.try_get<OrderComponent>(b);
+        int va = oa ? oa->Value : 0, vb = ob ? ob->Value : 0;
+        return va != vb ? va < vb : a < b;
+    });
+    return out;
+}
+
+void EditorLayer::ReorderHierarchySiblings(World& world, const std::vector<entt::entity>& movingIn,
+                                           entt::entity anchor, bool after) {
+    if (!world.Registry.valid(anchor)) return;
+    const auto* anchorHier = world.Registry.try_get<HierarchyComponent>(anchor);
+    const entt::entity newParent = anchorHier ? anchorHier->Parent : entt::null;
+
+    // Keep the dragged rows in their current visual order; drop the anchor itself and anything
+    // that is an ancestor of the anchor (SetParent would reject the resulting cycle anyway).
+    std::vector<entt::entity> moving;
+    for (entt::entity e : movingIn) {
+        if (!world.Registry.valid(e) || e == anchor) continue;
+        bool ancestorOfAnchor = false;
+        for (entt::entity w = newParent; w != entt::null; ) {
+            if (w == e) { ancestorOfAnchor = true; break; }
+            const auto* h = world.Registry.try_get<HierarchyComponent>(w);
+            w = h ? h->Parent : entt::null;
+        }
+        if (!ancestorOfAnchor) moving.push_back(e);
+    }
+    if (moving.empty()) return;
+
+    StageUndo(world);
+
+    // Reparent any row not already under newParent (SetParent preserves world pose and keeps the
+    // Children vectors consistent; a same-parent call is a no-op we skip explicitly).
+    bool anyFailed = false;
+    for (entt::entity e : moving) {
+        const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+        const entt::entity cur = h ? h->Parent : entt::null;
+        if (cur != newParent && !world.SetParent(e, newParent)) anyFailed = true;
+    }
+
+    // Splice the moving rows back around the anchor, then renumber the whole group 0..N-1.
+    std::vector<entt::entity> group = HierarchySiblingsInOrder(world, newParent);
+    group.erase(std::remove_if(group.begin(), group.end(), [&](entt::entity e) {
+        return std::find(moving.begin(), moving.end(), e) != moving.end();
+    }), group.end());
+
+    std::vector<entt::entity> rebuilt;
+    rebuilt.reserve(group.size() + moving.size());
+    for (entt::entity e : group) {
+        if (e == anchor && !after) for (entt::entity m : moving) rebuilt.push_back(m);
+        rebuilt.push_back(e);
+        if (e == anchor && after) for (entt::entity m : moving) rebuilt.push_back(m);
+    }
+    for (int i = 0; i < (int)rebuilt.size(); ++i)
+        world.Registry.emplace_or_replace<OrderComponent>(rebuilt[i], i);
+
+    CommitStagedUndo(world, "Reorder");
+    if (anyFailed)
+        Log::Warn("Some rows couldn't be moved there — level geometry with a collider can't be parented.");
+}
+
+entt::entity EditorLayer::InstantiateAssetDropInHierarchy(World& world, AssetLibrary& assets,
+                                                          const char* modelPath, const char* prefabPath,
+                                                          entt::entity parent) {
+    entt::entity e = entt::null;
+    if (modelPath && *modelPath) {
+        PushUndo(world, "Place Model");
+        auto model = assets.InstantiateModel(modelPath);
+        std::string name = std::filesystem::path(modelPath).stem().string();
+        e = world.CreateModelEntity(model, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f),
+                                    UniqueNameFor(world, name));
+    } else if (prefabPath && *prefabPath) {
+        PushUndo(world, "Place Prefab Instance");
+        e = SceneSerializer::InstantiatePrefab(world, assets, prefabPath);
+        if (e != entt::null) UniquifyName(world, e);
+    }
+    if (e != entt::null) {
+        // SetParent re-expresses the transform into the parent's frame; a model was created at
+        // the origin so it lands at the parent's origin, a prefab keeps its authored offset.
+        if (parent != entt::null && world.Registry.valid(parent)) world.SetParent(e, parent);
+        SelectItem(e, false);
+    }
+    return e;
 }
 
 entt::entity EditorLayer::CreateEmptyAt(World& world, Camera* editorCamera, const char* name, bool asLight) {

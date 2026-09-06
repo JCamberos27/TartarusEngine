@@ -568,6 +568,17 @@ private:
     entt::entity m_SelectionAnchor = entt::null;
     // Ctrl+A while the Hierarchy is focused: replace the selection with every visible row.
     void SelectAllVisibleInHierarchy();
+    // Arrow / Home / End / type-to-select keyboard navigation of the tree (#236), gated the same
+    // way Ctrl+A is (panel focused, no text field capturing keys). Runs once per frame after the
+    // rows are drawn, off the published m_HierarchyVisibleOrder.
+    void HandleHierarchyKeyboardNav(World& world);
+    // Set by the keyboard nav when it moves the selection: the next frame's row draw scrolls this
+    // entity into view, then clears it.
+    entt::entity m_HierarchyScrollToEntity = entt::null;
+    // Type-to-select: accumulated prefix and the time of the last keystroke (buffer resets after
+    // a short idle gap, matching every OS file list).
+    std::string m_HierarchyTypeAhead;
+    double m_HierarchyTypeAheadAt = 0.0;
     // Shift+Click on `target`: select every row between m_SelectionAnchor and `target`
     // inclusive along m_HierarchyVisibleOrder. `additive` (Ctrl+Shift) keeps the existing
     // selection and adds the range; otherwise the range replaces it. `target` becomes primary.
@@ -1229,6 +1240,22 @@ private:
     // same operation the drag-to-empty-space gesture performs, but always reachable even once the
     // tree fills the panel and that drop zone collapses to nothing.
     void UnparentSelection(World& world);
+    // Sibling reordering (#236) — moves `moving` to sit immediately before/after `anchor` within
+    // `anchor`'s parent (the scene-root list when `anchor` has no parent), reparenting first if
+    // they weren't already siblings. Rewrites the affected group's OrderComponent values to a
+    // clean 0..N-1 run — the number the Hierarchy sorts siblings by. One undo entry.
+    void ReorderHierarchySiblings(World& world, const std::vector<entt::entity>& moving,
+                                  entt::entity anchor, bool after);
+    // Children of `parent` (or the scene roots when `parent == entt::null`) in Hierarchy display
+    // order: OrderComponent ascending, entity handle as the stable tiebreak.
+    std::vector<entt::entity> HierarchySiblingsInOrder(const World& world, entt::entity parent) const;
+    // Instantiate a model/prefab dragged from the Asset Browser onto the Hierarchy (#236). Pass
+    // exactly one of the two payload strings; `parent` nests it under a row, or entt::null drops
+    // it at the scene root. Models land at the origin, prefabs keep their authored transform.
+    // Returns the new, already-selected entity (entt::null on failure).
+    entt::entity InstantiateAssetDropInHierarchy(World& world, AssetLibrary& assets,
+                                                 const char* modelPath, const char* prefabPath,
+                                                 entt::entity parent);
 
     // --- Inspector: Add / Remove Component -------------------------------------------------
     void DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity);

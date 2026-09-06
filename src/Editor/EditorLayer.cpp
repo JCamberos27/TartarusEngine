@@ -1697,10 +1697,16 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if (!ImGui::GetIO().WantTextInput && !m_GameInputActive && !OtherWindowOwnsKeyboard()) {
         ImGuiIO& io = ImGui::GetIO();
 
+        // The Scene Hierarchy takes plain letters for type-to-select and the arrows for tree
+        // nav (#236); while it holds focus, a bare W/E/R/T/A/F must not also reach the viewport
+        // as a tool switch or frame. Ctrl-combos (save, undo, duplicate) are unaffected.
+        ImGuiWindow* navRoot = GImGui->NavWindow ? GImGui->NavWindow->RootWindow : nullptr;
+        const bool hierarchyOwnsLetters = navRoot && navRoot == ImGui::FindWindowByName("Scene Hierarchy");
+
         // W/E/R/T gizmo-tool shortcuts (Unity's own scheme) only when Right-drag isn't held —
         // WASDQE fly the camera during Right-drag instead (see main.cpp's UpdateEditorCamera),
         // so without this guard just walking forward with W would also switch tools every time.
-        if (!ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Right) && !hierarchyOwnsLetters) {
             if (ImGui::IsKeyPressed(ImGuiKey_W)) m_GizmoOp = GizmoOp::Translate;
             if (ImGui::IsKeyPressed(ImGuiKey_E)) m_GizmoOp = GizmoOp::Rotate;
             if (ImGui::IsKeyPressed(ImGuiKey_R)) m_GizmoOp = GizmoOp::Scale;
@@ -1742,7 +1748,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         bool assetBrowserOwnsKeys = m_AssetBrowserFocused &&
             (!m_SelectedAssetKey.empty() || !m_ExtraAssetSelection.empty());
 
-        if (HasAnySelection() && !assetBrowserOwnsKeys && ImGui::IsKeyPressed(ImGuiKey_F)) FocusOnSelection(world, editorCamera);
+        if (HasAnySelection() && !assetBrowserOwnsKeys && !hierarchyOwnsLetters && ImGui::IsKeyPressed(ImGuiKey_F)) FocusOnSelection(world, editorCamera);
         if (HasAnySelection() && !assetBrowserOwnsKeys && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) DuplicateSelection(world, assets);
 
         // Ctrl+Shift+F — snap the selected Camera entity to the editor viewport (Unity's Align
