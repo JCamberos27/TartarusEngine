@@ -96,7 +96,7 @@ public:
     // panels, or drop back). `maximized` floats it near the top of the window since the toolbar
     // is hidden then. Clicks only raise request flags — main.cpp owns the play/maximize/cursor
     // state itself.
-    void DrawPlayStopButton(bool playing, bool maximized);
+    void DrawPlayStopButton(bool playing, bool maximized, bool paused);
 
     // True when the cursor is over the toolbar's empty (draggable) area this frame; main.cpp
     // forwards it to Window so its WM_NCHITTEST can treat that region as the window's caption.
@@ -241,6 +241,18 @@ public:
     bool ConsumeMaximizeToggleRequest() {
         bool requested = m_MaximizeToggleRequested;
         m_MaximizeToggleRequested = false;
+        return requested;
+    }
+    // Pause & Step (#236): the Pause button toggles a paused flag main.cpp holds; Step asks for
+    // exactly one simulated frame while paused. Both consumed once per press.
+    bool ConsumePauseToggleRequest() {
+        bool requested = m_PauseToggleRequested;
+        m_PauseToggleRequested = false;
+        return requested;
+    }
+    bool ConsumeStepRequest() {
+        bool requested = m_StepRequested;
+        m_StepRequested = false;
         return requested;
     }
 
@@ -516,6 +528,8 @@ private:
     float m_UIScale = 1.0f;
     bool m_PlayStopRequested = false;
     bool m_MaximizeToggleRequested = false;
+    bool m_PauseToggleRequested = false;
+    bool m_StepRequested = false;
     bool m_GameInputActive = false; // see SetGameInputActive
     // Set by Settings > Reset Layout; consumed at the top of Draw()'s dockspace setup to
     // rebuild the default panel arrangement from scratch.
@@ -1164,6 +1178,7 @@ private:
     // --- Play mode (see OnEnterPlayMode/OnExitPlayMode) -------------------------------------
     // The scene as it was the instant Play was pressed, as a SceneSerializer JSON string — the
     // same snapshot format undo/redo already uses. Empty when not in (or never entered) play.
+    bool m_InPlayMode = false; // set by OnEnter/OnExitPlayMode — lets edit-mode-only shortcuts (F2 rename) yield to Play-mode ones
     std::string m_PlayModeSnapshot;
     // Selection captured by stable OrderComponent value on Play, re-resolved to fresh entity
     // ids on Stop — the registry is rebuilt in between and entt recycles ids (#110).

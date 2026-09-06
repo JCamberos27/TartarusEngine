@@ -134,7 +134,7 @@ float EditorLayer::SampleSceneLuminance(AsyncLuminanceReadback& rb, ImVec2 cente
                                   ImVec2(m_ViewportPos.x, m_ViewportPos.y),
                                   ImVec2(m_ViewportSize.x, m_ViewportSize.y), centerScreen, boxPx);
 }
-void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
+void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) {
     int ww, wh;
     glfwGetWindowSize(m_Window, &ww, &wh);
     float w = (float)ww;
@@ -214,13 +214,27 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized) {
         if (ImGui::Button(ICON_FA_STOP "  Stop")) m_PlayStopRequested = true;
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Stop and revert the scene (F1)");
 
+        // Pause toggle + single-frame Step (#236). Pause reads as pressed-in while active; Step
+        // is only meaningful (and only enabled) once paused.
+        ImGui::SameLine();
+        if (paused) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(iv, iv, iv, 0.28f));
+        if (ImGui::Button(paused ? ICON_FA_PLAY "  Resume" : ICON_FA_PAUSE "  Pause")) m_PauseToggleRequested = true;
+        if (paused) ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip(paused ? "Resume simulation (F2)" : "Freeze simulation, keep rendering (F2)");
+
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!paused);
+        if (ImGui::Button(ICON_FA_FORWARD_STEP "  Step")) m_StepRequested = true;
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Advance exactly one frame (F3)");
+
         ImGui::SameLine();
         const char* fsLabel = maximized ? ICON_FA_COMPRESS "  Restore" : ICON_FA_EXPAND "  Fullscreen";
         if (ImGui::Button(fsLabel)) m_MaximizeToggleRequested = true;
         if (ImGui::IsItemHovered()) {
             EditorUI::SetTooltip(maximized
-                ? "Back to windowed play (editor panels return)"
-                : "Maximize the Game view over the editor panels");
+                ? "Back to windowed play (editor panels return) (F4)"
+                : "Maximize the Game view over the editor panels (F4)");
         }
     }
 

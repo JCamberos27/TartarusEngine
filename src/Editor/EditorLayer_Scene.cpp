@@ -496,6 +496,7 @@ void EditorLayer::JumpToRedoEntry(World& world, AssetLibrary& assets, size_t red
 }
 
 void EditorLayer::OnEnterPlayMode(const World& world) {
+    m_InPlayMode = true;
     m_PlayModeSnapshot = SceneSerializer::SaveToString(world);
     // Remember what's selected by OrderComponent value, not entt id: Stop rebuilds the whole
     // registry and entt recycles ids, so a retained handle can pass valid() yet denote a
@@ -528,6 +529,7 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
 }
 
 void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
+    m_InPlayMode = false;
     if (m_PlayModeSnapshot.empty()) return;
 
     // Stop exactly the voices Play On Start began (not AudioEngine::StopAll(), which would also
