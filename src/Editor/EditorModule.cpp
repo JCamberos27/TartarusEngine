@@ -8,6 +8,9 @@ namespace EditorModuleToolbar {
 namespace EditorModuleAssetBrowser {
     void Draw(const EditorModuleHostAPI& host);
 }
+namespace EditorModuleHierarchy {
+    void Draw(const EditorModuleHostAPI& host);
+}
 namespace EditorModuleConsole {
     void Draw(const EditorModuleHostAPI& host);
 }
@@ -44,6 +47,7 @@ bool BindImGuiToHost(const EditorModuleHostAPI& host) {
 void Draw(const EditorModuleHostAPI& host) {
     if (!BindImGuiToHost(host)) return;
     EditorModuleToolbar::Draw(host); // top chrome first
+    EditorModuleHierarchy::Draw(host);
     EditorModuleAssetBrowser::Draw(host);
     EditorModuleConsole::Draw(host);
     EditorModuleStats::Draw(host);

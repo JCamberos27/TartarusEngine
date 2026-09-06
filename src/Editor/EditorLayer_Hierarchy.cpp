@@ -361,59 +361,24 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
         }
     }
 }
-void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
-    // Locked only blocks dragging the tab to move/undock/rearrange the panel — resizing its
-    // dock node (and the neighbors that share that border) always works, locked or not.
-    ImGuiWindowFlags flags = ImGuiWindowFlags_None;
-    PushTabChromeText(); // the dock tab bar renders inside Begin(); keep its text white on XP
-    const bool hierarchyOpen = ImGui::Begin("Scene Hierarchy", &m_ShowHierarchy, flags);
-    PopTabChromeText();
-    if (!hierarchyOpen) { ImGui::End(); return; }
+// Expand / collapse every root's whole subtree at once (audit #71) — the host half of the
+// module's Expand-all / Collapse-all buttons.
+void EditorLayer::HierarchyExpandAll(World& world, bool open) {
+    for (auto e : world.Registry.view<const NameComponent>()) {
+        const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+        if (!h || h->Parent == entt::null) SetHierarchyExpandedRecursive(world, e, open);
+    }
+}
 
+// The Scene Hierarchy's entity tree — everything below the search row. The module
+// (EditorModuleHierarchy.cpp, #229) owns Begin("Scene Hierarchy") + the search box + the two
+// Expand/Collapse-all buttons and calls this inside that window scope; the tree, drag-reparent,
+// context menus, selection, undo and Ctrl+A stay here (EnTT + Components.h never cross the DLL
+// boundary).
+void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     // Accumulates as each row is drawn (DrawHierarchyNode); published to m_HierarchyVisibleOrder
     // just before this function returns. See the header for why the two buffers are separate.
     m_HierarchyVisibleBuild.clear();
-
-    // Expand / collapse every root's whole subtree at once (audit #71). Two flat glyph buttons
-    // pinned to the right of the search row (#151) instead of a whole dedicated button row.
-    auto setAllExpanded = [&](bool open) {
-        for (auto e : world.Registry.view<const NameComponent>()) {
-            const auto* h = world.Registry.try_get<HierarchyComponent>(e);
-            if (!h || h->Parent == entt::null) SetHierarchyExpandedRecursive(world, e, open);
-        }
-    };
-    auto flatGlyphButton = [](const char* icon, const char* tip) {
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f)); // flat at rest
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.245f, 0.250f, 0.275f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.300f, 0.310f, 0.345f, 1.0f));
-        ImGui::PushID(tip);
-        bool clicked = ImGui::Button(icon);
-        ImGui::PopID();
-        ImGui::PopStyleColor(3);
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
-        return clicked;
-    };
-
-    // Search box. A bare string matches names; the "t:" prefix matches TagComponent instead,
-    // the same shorthand Unity's Hierarchy search uses. Width leaves room for the two glyph
-    // buttons + the spacing on either side of them.
-    const ImGuiStyle& hstyle = ImGui::GetStyle();
-    const float glyphBtnW = ImGui::CalcTextSize(ICON_FA_ANGLES_UP).x + hstyle.FramePadding.x * 2.0f;
-    ImGui::SetNextItemWidth(-(glyphBtnW * 2.0f + hstyle.ItemSpacing.x * 2.0f));
-    char filterBuf[128];
-    snprintf(filterBuf, sizeof(filterBuf), "%s", m_HierarchyFilter.c_str());
-    if (ImGui::InputTextWithHint("##HierarchyFilter", ICON_FA_MAGNIFYING_GLASS "  Search (t:Tag to filter by tag)",
-            filterBuf, sizeof(filterBuf))) {
-        m_HierarchyFilter = filterBuf;
-    }
-    if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) {
-        EditorUI::SetTooltip("Type a name to filter the list below.\nType \"t:\" followed by a tag (e.g. t:Enemy) to filter by Tag instead.");
-    }
-
-    ImGui::SameLine();
-    if (flatGlyphButton(ICON_FA_ANGLES_DOWN, "Expand all")) setAllExpanded(true);
-    ImGui::SameLine();
-    if (flatGlyphButton(ICON_FA_ANGLES_UP, "Collapse all")) setAllExpanded(false);
 
     const bool filtering = !m_HierarchyFilter.empty();
 
@@ -477,8 +442,7 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
         ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_A)) {
         SelectAllVisibleInHierarchy();
     }
-
-    ImGui::End();
+    // ImGui::End() for the "Scene Hierarchy" window is the module's — it owns Begin() now.
 }
 
 bool EditorLayer::MatchesHierarchyFilter(const World& world, entt::entity entity) const {
@@ -575,16 +539,35 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     // Only feeds the drag preview below — the row paints its own glyph + name after the node.
     std::string label = std::string(primaryGlyph) + "  " + shownName;
 
-    ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth |
-        (selected ? ImGuiTreeNodeFlags_Selected : 0) |
-        (hasChildren ? ImGuiTreeNodeFlags_DefaultOpen : (ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen));
+    // Every row is a Leaf (NoTreePushOnOpen) so ImGui never draws its chunky filled-triangle
+    // arrow or auto-toggles — the disclosure control is a hand-drawn Font Awesome chevron below,
+    // and open/closed state is our own int in the window's state storage (the same slot
+    // SetHierarchyExpandedRecursive writes, so Expand/Collapse-all and the Alt cascade still work).
+    ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_SpanAvailWidth |
+        ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen |
+        (selected ? ImGuiTreeNodeFlags_Selected : 0);
 
-    // Empty label: the tree node owns the arrow / indent / full-row hitbox / open-close and every
-    // interaction handler below; the glyph slot + name are painted afterward at a constant X.
-    bool open = ImGui::TreeNodeEx("##node", nodeFlags, "%s", "");
+    const ImGuiID nodeStateId = ImGui::GetID("##node");
+    bool open = hasChildren && ImGui::GetStateStorage()->GetInt(nodeStateId, 1) != 0;
+
+    // Empty label: the tree node owns the indent / full-row hitbox and every interaction handler
+    // below; the chevron + glyph slot + name are painted afterward at a constant X.
+    ImGui::TreeNodeEx("##node", nodeFlags, "%s", "");
     const ImVec2 rowMin = ImGui::GetItemRectMin();
 
-    if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+    // The chevron's hit box: the leading ~1.1em of the row. A click there toggles this row's
+    // subtree (Alt = cascade to every descendant); a click anywhere else selects.
+    const float arrowSlotW = ImGui::GetFontSize() * 1.1f;
+    const bool clickOnArrow = hasChildren && ImGui::IsItemHovered() &&
+        ImGui::GetIO().MousePos.x < rowMin.x + arrowSlotW;
+
+    if (ImGui::IsItemClicked() && clickOnArrow) {
+        open = !open;
+        ImGui::GetStateStorage()->SetInt(nodeStateId, open ? 1 : 0);
+        if (ImGui::GetIO().KeyAlt) {
+            for (entt::entity child : hier->Children) SetHierarchyExpandedRecursive(world, child, open);
+        }
+    } else if (ImGui::IsItemClicked()) {
         const ImGuiIO& io = ImGui::GetIO();
         if (io.KeyShift) {
             // Shift (or Ctrl+Shift) — contiguous range from the anchor to this row.
@@ -594,14 +577,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         }
         m_HierarchyRowHintDone = true; // learned the row interaction — stop showing the hint
     }
-    if (ImGui::IsItemToggledOpen() && ImGui::GetIO().KeyAlt && hasChildren) {
-        // `open` already reflects the state ImGui just toggled this entity's own row to —
-        // cascade that same state to every descendant.
-        for (entt::entity child : hier->Children) {
-            SetHierarchyExpandedRecursive(world, child, open);
-        }
-    }
-    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    if (ImGui::IsItemHovered() && !clickOnArrow && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
         BeginRenameEntity(entity);
     }
     if (!m_HierarchyRowHintDone && ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
@@ -680,9 +656,23 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         const float fontSize = ImGui::GetFontSize();
         const float slotW    = fontSize * 1.45f;
         // Pull the kind glyph + name in toward the eye (#152 follow-up). Parent rows keep enough
-        // lead for the disclosure arrow; leaf rows (no arrow) only need a hair of separation.
+        // lead for the disclosure chevron; leaf rows (no chevron) only need a hair of separation.
         const float labelX   = rowMin.x + (hasChildren ? fontSize * 1.15f : fontSize * 0.35f);
         const ImU32 col = ImGui::GetColorU32(inactive ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+
+        // Disclosure chevron — a light Font Awesome ">" / "v" (0.66em) centred in the leading
+        // slot, in the dim text colour, brightening on arrow-hover. Replaces ImGui's chunky
+        // filled triangle.
+        if (hasChildren) {
+            const float chSize = fontSize * 0.66f;
+            const char* chev = open ? ICON_FA_CHEVRON_DOWN : ICON_FA_CHEVRON_RIGHT;
+            const ImVec2 cm = ImGui::GetFont()->CalcTextSizeA(chSize, FLT_MAX, 0.0f, chev);
+            const ImU32 chCol = ImGui::GetColorU32(clickOnArrow ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+            dl->AddText(ImGui::GetFont(), chSize,
+                        ImVec2(rowMin.x + (fontSize * 1.1f - cm.x) * 0.5f,
+                               rowMin.y + (ImGui::GetFrameHeight() - cm.y) * 0.5f),
+                        chCol, chev);
+        }
         dl->AddText(ImVec2(labelX, rowMin.y), col, primaryGlyph);
         if (secondaryGlyph) {
             const float sub = fontSize * 0.68f;
@@ -694,13 +684,16 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     }
 
     if (hasChildren && open) {
+        // Every row is NoTreePushOnOpen now, so ImGui no longer auto-indents children — do it
+        // here (IndentSpacing is the tightened 13*uiScale pushed by DrawHierarchyTreeBody).
+        ImGui::Indent(ImGui::GetStyle().IndentSpacing);
         // Copied because a re-parent or delete triggered from a child's own context menu would
         // otherwise mutate this vector mid-iteration.
         std::vector<entt::entity> children = hier->Children;
         for (entt::entity child : children) {
             if (world.Registry.valid(child)) DrawHierarchyNode(world, assets, child, isLevelGeometry);
         }
-        ImGui::TreePop();
+        ImGui::Unindent(ImGui::GetStyle().IndentSpacing);
     }
 
     ImGui::PopID();
