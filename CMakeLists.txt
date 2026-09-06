@@ -89,6 +89,7 @@ file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
 list(REMOVE_ITEM ENGINE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
+  ${CMAKE_SOURCE_DIR}/src/Game/SpinSystem.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleConsole.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleStats.cpp
@@ -116,6 +117,7 @@ add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES})
 add_library(TartarusGame SHARED
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
+  ${CMAKE_SOURCE_DIR}/src/Game/SpinSystem.cpp
 )
 
 # Reloadable editor tools intentionally use a narrow host callback table rather than sharing
