@@ -1509,7 +1509,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         m_SceneGameDockNodeId = center;
         m_SelectAssetBrowserTabFrames = 90;  // land on Asset Browser, not Console
     }
-    ImGui::DockSpace(dockspaceId, ImVec2(0, 0), ImGuiDockNodeFlags_None);
+    // NoWindowMenuButton drops the little "▼" tab-list button from every dock node's tab bar —
+    // it only listed the tabs already visible right next to it, so it was pure clutter.
+    ImGui::DockSpace(dockspaceId, ImVec2(0, 0), ImGuiDockNodeFlags_NoWindowMenuButton);
     ImGui::End();
 
     // Neither Scene nor Game is submitted while play is maximized (both gated on editorUIVisible) —
