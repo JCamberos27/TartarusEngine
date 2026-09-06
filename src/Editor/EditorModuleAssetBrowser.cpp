@@ -4,14 +4,15 @@
 // open. Ported in behaviour from EditorLayer::DrawAssetBrowser / DrawFolderTreeNode
 // (EditorLayer_AssetBrowser.cpp).
 //
-// Thin slice (issue #229): the asset GRID itself — tiles, GL thumbnails, context menus,
-// rename-in-place, drag sources, delete/duplicate, the scenes/screenshots virtual folders — is
-// still host code, drawn into this window through host.DrawAssetGridBody(). AssetLibrary never
-// crosses the DLL boundary: the folder list arrives as a per-frame string snapshot
-// (GetFolderCount/GetFolder), every mutation is an undoable command callback, and folder-tree
-// expansion state stays host-side (so the Left/Right-arrow shortcuts keep working and it survives
-// a reload) — reached here through Is/SetAssetFolderExpanded. Drag payloads are bare path strings,
-// which are already boundary-safe.
+// Issue #229: this DLL owns the panel's chrome AND (as of API v6) the asset grid's scaffold — the
+// ##AssetList child, the ImGuiListClipper row loop with per-row SameLine wrapping, and the footer.
+// Per-cell drawing (GL thumbnails, the five context menus, rename-in-place, drag sources,
+// multi-select, delete/duplicate) and the background stay host code, reached through
+// DrawAssetCell / HandleAssetGridBackground / AssetGridFrameEnd. AssetLibrary never crosses the
+// boundary: the folder list is a per-frame string snapshot (GetFolderCount/GetFolder), the grid a
+// per-frame cell count + DrawAssetCell(index) callback, every mutation an undoable command
+// callback, and folder-tree expansion stays host-side (Left/Right-arrow shortcuts keep working,
+// survives a reload) via Is/SetAssetFolderExpanded. Drag payloads are bare path strings.
 
 #include "EditorModuleAPI.h"
 
@@ -233,6 +234,83 @@ void DrawFolderNode(const EditorModuleHostAPI& host, const std::vector<std::stri
     }
 }
 
+// The asset grid (API v6): the module owns the ##AssetList child, the ImGuiListClipper row loop
+// with per-row SameLine wrapping, and the footer; every cell + the background + the delete-confirm
+// popup are host code (DrawAssetCell / HandleAssetGridBackground / AssetGridFrameEnd). Cell size
+// and cellsPerRow are pure math from GetAssetGridMetrics — ported from the host's old
+// DrawAssetGridBody.
+void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
+    ImGui::BeginChild("##AssetList", ImVec2(0, contentHeight), ImGuiChildFlags_None);
+
+    if (host.AssetGridFrameBegin) host.AssetGridFrameBegin();
+
+    float iconSize = 64.0f, uiScale = 1.0f, listMinIcon = 24.0f;
+    if (host.GetAssetGridMetrics) host.GetAssetGridMetrics(&iconSize, &uiScale, &listMinIcon);
+
+    const bool gridMode = iconSize > listMinIcon * uiScale;
+    const float cellPadding = 8.0f;
+    const float cellWidth = iconSize + cellPadding * 2.0f;
+    const float cellHeight = iconSize + cellPadding + ImGui::GetTextLineHeightWithSpacing();
+
+    const int cellCount = host.AssetGridCellCount ? host.AssetGridCellCount() : 0;
+
+    int cellsPerRow = 1;
+    if (gridMode) {
+        const float availW = ImGui::GetContentRegionAvail().x;
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        cellsPerRow = (int)((availW + spacing) / (cellWidth + spacing));
+        if (cellsPerRow < 1) cellsPerRow = 1;
+    }
+    const int totalRows = cellCount == 0 ? 0 : (cellCount + cellsPerRow - 1) / cellsPerRow;
+    const float clipRowHeight = gridMode ? cellHeight : ImGui::GetFrameHeightWithSpacing();
+
+    ImGuiListClipper clipper;
+    clipper.Begin(totalRows, clipRowHeight);
+    while (clipper.Step()) {
+        for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+            for (int col = 0; col < cellsPerRow; ++col) {
+                const int idx = row * cellsPerRow + col;
+                if (idx >= cellCount) break;
+                if (host.DrawAssetCell) host.DrawAssetCell(idx, cellWidth, cellHeight, gridMode);
+                // Wrap within the row: SameLine for every column but the last, and only when
+                // there's another cell to draw (the final row may be partial).
+                if (gridMode && col + 1 < cellsPerRow && idx + 1 < cellCount) ImGui::SameLine();
+            }
+        }
+    }
+    clipper.End();
+
+    if (host.HandleAssetGridBackground) host.HandleAssetGridBackground();
+
+    ImGui::EndChild(); // ##AssetList
+
+    // Footer: selection summary on the left, the icon-size slider on the right (drag to the
+    // minimum for the compact list view).
+    ImGui::BeginChild("##AssetGridFooter", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+    char summary[256] = {};
+    if (host.GetAssetSelectionSummary) host.GetAssetSelectionSummary(summary, (int)sizeof(summary));
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextDisabled("%s", summary);
+
+    const float sliderWidth = 100.0f;
+    const float sliderX = ImGui::GetWindowContentRegionMax().x - sliderWidth;
+    if (sliderX > ImGui::GetCursorPosX()) ImGui::SameLine(sliderX);
+    else ImGui::NewLine();
+    ImGui::SetNextItemWidth(sliderWidth);
+    float sliderVal = iconSize;
+    if (ImGui::SliderFloat("##IconSize", &sliderVal, listMinIcon * uiScale, 128.0f * uiScale, "") &&
+        host.SetAssetIconSize) {
+        host.SetAssetIconSize(sliderVal, /*commit=*/false);
+    }
+    if (ImGui::IsItemHovered() && host.SetTooltip)
+        host.SetTooltip("Icon size - drag all the way to the left for a compact list view.");
+    if (ImGui::IsItemDeactivatedAfterEdit() && host.SetAssetIconSize)
+        host.SetAssetIconSize(sliderVal, /*commit=*/true);
+    ImGui::EndChild();
+
+    if (host.AssetGridFrameEnd) host.AssetGridFrameEnd();
+}
+
 } // namespace
 
 void Draw(const EditorModuleHostAPI& host) {
@@ -428,7 +506,7 @@ void Draw(const EditorModuleHostAPI& host) {
         host.SetAssetTreeWidth(host.GetAssetTreeWidth ? host.GetAssetTreeWidth() : treeWidth, /*commit=*/true);
     ImGui::SameLine();
 
-    if (host.DrawAssetGridBody) host.DrawAssetGridBody(contentHeight);
+    DrawAssetGrid(host, contentHeight);
 
     ImGui::End();
 }
