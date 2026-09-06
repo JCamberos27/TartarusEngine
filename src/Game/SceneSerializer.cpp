@@ -121,43 +121,29 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
             {"far", cam->FarPlane},
         };
     }
-    if (const auto* anim = world.Registry.try_get<AnimatorComponent>(entity)) {
-        // Authored parameters only — the Base*/Initialized runtime scratch is deliberately not
-        // written, so a scene saved mid-play still reloads to the authored pose.
-        j["animator"] = {
-            {"spin", Vec3ToJson(anim->SpinDegPerSec)},
-            {"orbitAxis", Vec3ToJson(anim->OrbitAxis)},
-            {"orbitDegPerSec", anim->OrbitDegPerSec},
-            {"orbitRadius", anim->OrbitRadius},
-            {"bobAmplitude", anim->BobAmplitude},
-            {"bobFreqHz", anim->BobFreqHz},
-            {"colorCycleHzPerSec", anim->ColorCycleHzPerSec},
-        };
-    }
-    if (const auto* controller = world.Registry.try_get<TransformControllerComponent>(entity)) {
-        j["transformController"] = {
-            {"script", controller->ScriptPath},
-            {"enabled", controller->Enabled},
-            {"rotationSpeed", Vec3ToJson(controller->RotationDegPerSec)},
-            {"translationSpeed", Vec3ToJson(controller->TranslationUnitsPerSec)},
-            {"scalePulseAmplitude", controller->ScalePulseAmplitude},
-            {"scalePulseFrequencyHz", controller->ScalePulseFrequencyHz},
-        };
-    }
 
     // #184: components registered through the reflection system serialize generically — one JSON
     // object per component keyed by its Meta.Name, one entry per reflected field. No per-component
-    // code here; adding a reflected component adds nothing to this file.
+    // code here; adding a reflected component adds nothing to this file. TransformController was
+    // the first migration off hand-written code onto this path (was a "transformController" object
+    // with its own key names; no shipped scene ever set it, since it had no Inspector section).
+    // Animator is the second — unlike TransformController, real scenes DO carry authored
+    // "animator" blocks (it's ship-visible: moving colour-cycling lights), so ReadCommonComponents
+    // below keeps a permanent legacy-format read fallback even though this write path only ever
+    // emits the new "Animator" key from here on.
     for (const auto& rc : ComponentRegistry::All()) {
         if (!rc.Has(world.Registry, entity)) continue;
-        const char* base = static_cast<const char*>(rc.GetConst(world.Registry, entity));
+        // const_cast is safe: the component is a live mutable object; this path only reads it.
+        void* comp = const_cast<void*>(rc.GetConst(world.Registry, entity));
         json cj;
         for (const auto& f : rc.Meta.Fields) {
+            const void* fp = f.Address(comp);
             switch (f.Type) {
-                case ReflectFieldType::Bool:  cj[f.Name] = *reinterpret_cast<const bool*>(base + f.Offset); break;
-                case ReflectFieldType::Int:   cj[f.Name] = *reinterpret_cast<const int*>(base + f.Offset); break;
-                case ReflectFieldType::Float: cj[f.Name] = *reinterpret_cast<const float*>(base + f.Offset); break;
-                case ReflectFieldType::Vec3:  cj[f.Name] = Vec3ToJson(*reinterpret_cast<const glm::vec3*>(base + f.Offset)); break;
+                case ReflectFieldType::Bool:   cj[f.Name] = *static_cast<const bool*>(fp); break;
+                case ReflectFieldType::Int:    cj[f.Name] = *static_cast<const int*>(fp); break;
+                case ReflectFieldType::Float:  cj[f.Name] = *static_cast<const float*>(fp); break;
+                case ReflectFieldType::Vec3:   cj[f.Name] = Vec3ToJson(*static_cast<const glm::vec3*>(fp)); break;
+                case ReflectFieldType::String: cj[f.Name] = *static_cast<const std::string*>(fp); break;
             }
         }
         j[rc.Meta.Name] = cj;
@@ -215,7 +201,10 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
         cam.FarPlane = c.value("far", 1000.0f);
         world.Registry.emplace_or_replace<CameraComponent>(entity, cam);
     }
-    if (j.contains("animator")) {
+    // Legacy pre-#184 format: AnimatorComponent moved onto reflection (keyed "Animator" below),
+    // but real authored scenes carry the old flat "animator" object, so it's still read here —
+    // only when the new key is absent, so a re-saved file goes through the generic path instead.
+    if (!j.contains("Animator") && j.contains("animator")) {
         const json& a = j["animator"];
         AnimatorComponent anim;
         anim.SpinDegPerSec = JsonToVec3(a.value("spin", json::array({0, 0, 0})));
@@ -227,32 +216,23 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
         anim.ColorCycleHzPerSec = a.value("colorCycleHzPerSec", 0.0f);
         world.Registry.emplace_or_replace<AnimatorComponent>(entity, anim);
     }
-    if (j.contains("transformController")) {
-        const json& c = j["transformController"];
-        TransformControllerComponent controller;
-        controller.ScriptPath = c.value("script", controller.ScriptPath);
-        controller.Enabled = c.value("enabled", true);
-        controller.RotationDegPerSec = JsonToVec3(c.value("rotationSpeed", json::array({0, 0, 0})));
-        controller.TranslationUnitsPerSec = JsonToVec3(c.value("translationSpeed", json::array({0, 0, 0})));
-        controller.ScalePulseAmplitude = c.value("scalePulseAmplitude", 0.0f);
-        controller.ScalePulseFrequencyHz = c.value("scalePulseFrequencyHz", 0.5f);
-        world.Registry.emplace_or_replace<TransformControllerComponent>(entity, controller);
-    }
 
     // #184: mirror of the generic write — restore each registered component present in `j`.
     // Missing fields keep the component's own default (the component was just default-added).
     for (const auto& rc : ComponentRegistry::All()) {
         if (!j.contains(rc.Meta.Name)) continue;
         rc.Add(world.Registry, entity);
-        char* base = static_cast<char*>(rc.Get(world.Registry, entity));
+        void* comp = rc.Get(world.Registry, entity);
         const json& cj = j.at(rc.Meta.Name);
         for (const auto& f : rc.Meta.Fields) {
             if (!cj.contains(f.Name)) continue;
+            void* fp = f.Address(comp);
             switch (f.Type) {
-                case ReflectFieldType::Bool:  *reinterpret_cast<bool*>(base + f.Offset)  = cj.at(f.Name).get<bool>(); break;
-                case ReflectFieldType::Int:   *reinterpret_cast<int*>(base + f.Offset)   = cj.at(f.Name).get<int>(); break;
-                case ReflectFieldType::Float: *reinterpret_cast<float*>(base + f.Offset) = cj.at(f.Name).get<float>(); break;
-                case ReflectFieldType::Vec3:  *reinterpret_cast<glm::vec3*>(base + f.Offset) = JsonToVec3(cj.at(f.Name)); break;
+                case ReflectFieldType::Bool:   *static_cast<bool*>(fp)  = cj.at(f.Name).get<bool>(); break;
+                case ReflectFieldType::Int:    *static_cast<int*>(fp)   = cj.at(f.Name).get<int>(); break;
+                case ReflectFieldType::Float:  *static_cast<float*>(fp) = cj.at(f.Name).get<float>(); break;
+                case ReflectFieldType::Vec3:   *static_cast<glm::vec3*>(fp) = JsonToVec3(cj.at(f.Name)); break;
+                case ReflectFieldType::String: *static_cast<std::string*>(fp) = cj.at(f.Name).get<std::string>(); break;
             }
         }
     }
