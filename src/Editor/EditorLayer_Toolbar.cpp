@@ -255,112 +255,13 @@ void EditorLayer::PushAdaptiveHudText(AsyncLuminanceReadback& rb, ImVec2 centerS
     ImGui::PushStyleColor(ImGuiCol_TextDisabled, IM_COL32(v, v, v, 150));
 }
 
-void EditorLayer::DrawStatsPanel(World& world, float dt) {
-    // Exponential smoothing: a raw per-frame ms figure flickers too fast to read. Kept running
-    // every frame (even while the panel is hidden) so the status-bar FPS/ms stays smooth too.
-    float frameMs = dt * 1000.0f;
-    m_SmoothedFrameMs = m_SmoothedFrameMs * 0.92f + frameMs * 0.08f;
-
-    m_HideEngineMarkForStats = false;
-
-    if (!EditorSettings::Get().SceneShowStats) return;
-    // Tied to the Scene view — the numbers describe that render, and the pin needs a live
-    // viewport rect to anchor to.
-    if (!m_SceneViewportVisible || m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
-
-    int entityCount = 0, renderableCount = 0, lightCount = 0, colliderCount = 0, inactiveCount = 0;
-    for (auto entity : world.Registry.view<TransformComponent>()) {
-        entityCount++;
-        if (world.Registry.all_of<RenderableComponent>(entity)) renderableCount++;
-        if (world.Registry.all_of<LightComponent>(entity)) lightCount++;
-        if (world.Registry.all_of<ColliderComponent>(entity)) colliderCount++;
-        if (world.Registry.all_of<InactiveTag>(entity)) inactiveCount++;
-    }
-
-    // A compact HUD pinned to the viewport's top-left corner (#149): fully transparent so it
-    // doesn't box off the scene, click-through (NoInputs) so it never eats camera-look. Height
-    // is measured from its content and capped so it never spills past the status bar into the
-    // panels below (same treatment as the History HUD); the profiler tail clips rather than
-    // overflowing. Toggled via SceneShowStats; not dockable, not persisted — the pin wins.
-    const float pad = 12.0f * m_UIScale;
-    const float statusBarH = ImGui::GetTextLineHeight() + 8.0f * m_UIScale;
-    const ImGuiStyle& stStats = ImGui::GetStyle();
-    const float lineH = ImGui::GetTextLineHeightWithSpacing();
-    const int profN = (int)Profiler::GetLastFrame().size();
-    const int profGpuN = (int)Profiler::GetLastFrameGpu().size();
-    const bool hasGpuSection = profGpuN > 0;
-    const int rows = 1 /*fps*/ + 3 /*draw/tri/vert*/ + (m_RenderStats.Culled > 0 ? 1 : 0)
-                   + 4 /*ent/rend/coll/light*/ + (inactiveCount > 0 ? 1 : 0)
-                   + (m_RenderStats.LightBufferOverflowed ? 1 : 0) // #204
-                   + (m_RenderStats.ClusterSaturated ? 1 : 0)      // #204
-                   + profN + (hasGpuSection ? profGpuN : 0) + 2 /*shader/texture binds*/;
-    const float chromeH = lineH * (2.0f + (hasGpuSection ? 1.0f : 0.0f))  // "Statistics" + "Profiler (CPU)" [+ "Profiler (GPU)"]
-                        + (4.0f + (hasGpuSection ? 1.0f : 0.0f)) * (stStats.ItemSpacing.y + 2.0f) // Separator() rules
-                        + stStats.WindowPadding.y * 2.0f + 4.0f;
-    const float desiredH = chromeH + rows * lineH;
-    const float maxH = std::max(120.0f * m_UIScale,
-                                m_ViewportSize.y - statusBarH - 2.0f * pad);
-    const float winH = std::min(desiredH, maxH);
-
-    // If the box would reach down into the corner monogram, hide the monogram until it doesn't
-    // (checked in Draw() at the DrawEngineMark call site).
-    const float markTop = m_ViewportSize.y - statusBarH - 14.0f * m_UIScale - 54.0f * m_UIScale;
-    m_HideEngineMarkForStats = (pad + winH + 8.0f * m_UIScale) > markTop;
-
-    ImGui::SetNextWindowPos(
-        ImVec2(m_ViewportPos.x + pad, m_ViewportPos.y + pad),
-        ImGuiCond_Always, ImVec2(0.0f, 0.0f));
-    ImGui::SetNextWindowSize(ImVec2(0.0f, winH)); // x=0 → auto-fit width; height clamped
-    ImGui::SetNextWindowBgAlpha(0.0f);
-    if (ImGui::Begin("##Stats", nullptr,
-            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
-            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground)) {
-        // Contrast-adaptive tint (like the corner mark): sample the scene behind the HUD so the
-        // text stays legible white-on-dark / dark-on-light with no plate behind it.
-        const ImVec2 wpos = ImGui::GetWindowPos(), wsz = ImGui::GetWindowSize();
-        PushAdaptiveHudText(m_StatsHudReadback, ImVec2(wpos.x + wsz.x * 0.5f, wpos.y + wsz.y * 0.5f), 48.0f * m_UIScale,
-                            dt, m_StatsHudContrastLum, m_StatsHudContrastTarget, m_StatsHudSampleAccum);
-        ImGui::TextUnformatted(ICON_FA_CHART_SIMPLE "  Statistics");
-        ImGui::Separator();
-        ImGui::Text("%.1f FPS  (%.2f ms)", m_SmoothedFrameMs > 0.0001f ? 1000.0f / m_SmoothedFrameMs : 0.0f, m_SmoothedFrameMs);
-        ImGui::Separator();
-        ImGui::Text("Draw calls   %d", m_RenderStats.DrawCalls);
-        ImGui::Text("Triangles    %d", m_RenderStats.Triangles);
-        ImGui::Text("Vertices     %d", m_RenderStats.Vertices);
-        if (m_RenderStats.Culled > 0) ImGui::TextDisabled("Culled       %d (outside view)", m_RenderStats.Culled);
-        ImGui::Separator();
-        ImGui::Text("Entities     %d", entityCount);
-        ImGui::Text("Renderers    %d", renderableCount);
-        ImGui::Text("Colliders    %d", colliderCount);
-        ImGui::Text("Lights       %d", lightCount);
-        if (inactiveCount > 0) ImGui::TextDisabled("Inactive     %d", inactiveCount);
-
-        // Numbers from the frame that just finished (this frame's own "Scene Draw"/"ImGui
-        // Render" scopes haven't run yet at this point) - same one-frame-behind convention the
-        // smoothed FPS figure above already uses, so it's not called out as its own oddity.
-        ImGui::SeparatorText("Profiler (CPU)");
-        for (const auto& sample : Profiler::GetLastFrame()) {
-            ImGui::Text("%-16s %.3f ms", sample.Name.c_str(), sample.Milliseconds);
-        }
-        // GPU timings land several frames later than their CPU counterparts (pipelining), so
-        // these are "most recently completed", not "this frame" - the CPU section above already
-        // reads one frame behind; this one just trails a little further (#197).
-        const auto& gpuSamples = Profiler::GetLastFrameGpu();
-        if (!gpuSamples.empty()) {
-            ImGui::SeparatorText("Profiler (GPU)");
-            for (const auto& sample : gpuSamples) {
-                ImGui::Text("%-16s %.3f ms", sample.Name.c_str(), sample.Milliseconds);
-            }
-        }
-        ImGui::Separator();
-        const auto& gl = GLStateCache::GetFrameStats();
-        ImGui::Text("Shader binds   %d (%d skipped)", gl.ProgramBinds, gl.ProgramBindsSkipped);
-        ImGui::Text("Texture binds  %d (%d skipped)", gl.TextureBinds, gl.TextureBindsSkipped);
-        ImGui::Text("VAO binds      %d (%d skipped)", gl.VaoBinds, gl.VaoBindsSkipped);
-        ImGui::PopStyleColor(2); // adaptive Text + TextDisabled
-    }
-    ImGui::End();
+// The Statistics HUD itself moved into the reloadable editor module
+// (src/Editor/EditorModuleStats.cpp). This is the host half of its one GL dependency: the
+// module asks for a luminance sample under a screen box through EditorModuleHostAPI, and the
+// host drives the async PBO readback (it owns the Scene framebuffer and the GL context) against
+// the same ping-ponged pair the panel always used.
+float EditorLayer::SampleStatsHudLuminance(float screenCenterX, float screenCenterY, float boxPx) {
+    return SampleSceneLuminance(m_StatsHudReadback, ImVec2(screenCenterX, screenCenterY), boxPx);
 }
 
 void EditorLayer::DrawViewportStatusBar() {
@@ -419,6 +320,19 @@ void EditorLayer::DrawViewportStatusBar() {
         auto sep = [&]() { ImGui::SameLine(0, 6); ImGui::TextDisabled("\xc2\xb7"); ImGui::SameLine(0, 6); };
 
         ImGui::AlignTextToFramePadding();
+        // Build config, so it's obvious at a glance whether this is the slow (Debug) binary or an
+        // optimized one. TARTARUS_BUILD_CONFIG is "$<CONFIG>" from CMake; NDEBUG is the canonical
+        // "optimized" signal (Release / RelWithDebInfo define it), so only a true Debug build gets
+        // the amber warning colour — the rest render quiet.
+#ifndef TARTARUS_BUILD_CONFIG
+#define TARTARUS_BUILD_CONFIG "Build?"
+#endif
+#if defined(NDEBUG)
+        ImGui::TextDisabled("%s", TARTARUS_BUILD_CONFIG);
+#else
+        ImGui::TextColored(ImVec4(1.00f, 0.62f, 0.20f, 1.00f), "%s", TARTARUS_BUILD_CONFIG);
+#endif
+        sep();
         ImGui::Text("%.0f FPS", fps);
         sep(); ImGui::TextDisabled("%.1f ms", m_SmoothedFrameMs);
         sep(); ImGui::Text("%s draws", compact(m_RenderStats.DrawCalls).c_str());
@@ -548,12 +462,40 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
     // Tight vertical window padding so the icon row hugs the menu bar and the bottom edge — the
     // strip is only as tall as its two rows now (kToolbarHeight).
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9.0f, 3.0f));
-    if (!ImGui::Begin("##Toolbar", nullptr, flags)) { ImGui::End(); ImGui::PopStyleVar(); return; }
+
+    // Windows XP theme (2): the toolbar strip is the Luna taskbar blue with white menu/icon text
+    // — the one spot the theme shows blue chrome (panels stay beige). ImGui paints one global
+    // text colour, so the white is pushed for the whole strip and then locally reverted to the
+    // body near-black inside each menu-dropdown / options popup (those render on the beige
+    // PopupBg). See xpMenuTextPush/Pop below.
+    const bool xpBar = (EditorSettings::Get().EditorTheme == 2);
+    const ImVec4 xpBodyText(0.09f, 0.09f, 0.09f, 1.0f);
+    const ImVec4 xpBodyTextDim(0.50f, 0.50f, 0.50f, 1.0f);
+    auto xpMenuTextPush = [&]() {
+        if (xpBar) { ImGui::PushStyleColor(ImGuiCol_Text, xpBodyText);
+                     ImGui::PushStyleColor(ImGuiCol_TextDisabled, xpBodyTextDim); }
+    };
+    auto xpMenuTextPop = [&]() { if (xpBar) ImGui::PopStyleColor(2); };
+    const int xpBarCols = xpBar ? 4 : 0;
+    if (xpBar) {
+        ImGui::PushStyleColor(ImGuiCol_WindowBg,     ImVec4(0.161f, 0.396f, 0.878f, 1.0f)); // #295EE0 Luna blue
+        ImGui::PushStyleColor(ImGuiCol_MenuBarBg,    ImVec4(0.133f, 0.337f, 0.804f, 1.0f)); // #2256CD
+        ImGui::PushStyleColor(ImGuiCol_Text,         ImVec4(0.97f, 0.98f, 1.0f, 1.0f));     // white chrome text
+        ImGui::PushStyleColor(ImGuiCol_TextDisabled, ImVec4(0.74f, 0.81f, 0.95f, 1.0f));
+    }
+
+    if (!ImGui::Begin("##Toolbar", nullptr, flags)) {
+        ImGui::End();
+        if (xpBarCols) ImGui::PopStyleColor(xpBarCols);
+        ImGui::PopStyleVar();
+        return;
+    }
 
     // Real dropdown menus for the stuff you reach for occasionally (import, add primitive,
     // scene save/load) — keeps the always-visible row below reserved for one-click toggles.
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu(ICON_FA_FOLDER_OPEN " File")) {
+            xpMenuTextPush(); // beige dropdown -> revert the strip's white text to body near-black
             if (ImGui::MenuItem(ICON_FA_FILE "  New Scene", "Ctrl+N")) {
                 RequestNewScene(world, assets);
             }
@@ -603,15 +545,19 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("WAV / MP3 / OGG / FLAC");
                 ImGui::EndMenu();
             }
+            xpMenuTextPop();
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu(ICON_FA_CUBES " Add")) {
+            xpMenuTextPush();
             DrawAddEntityItems(world, assets, editorCamera);
+            xpMenuTextPop();
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu(ICON_FA_CAMERA " View")) {
+            xpMenuTextPush();
             if (ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS_PLUS "  Frame Selected", "F", false, HasAnySelection())) {
                 FocusOnSelection(world, editorCamera);
             }
@@ -647,10 +593,12 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem("  Left", "Ctrl+3")) SnapToView(world, editorCamera, 0.0f, 0.0f, true);
             if (ImGui::MenuItem("  Top", "7")) SnapToView(world, editorCamera, -90.0f, -89.9f, true);
             if (ImGui::MenuItem("  Bottom", "Ctrl+7")) SnapToView(world, editorCamera, -90.0f, 89.9f, true);
+            xpMenuTextPop();
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu(ICON_FA_TABLE_COLUMNS " Window")) {
+            xpMenuTextPush();
             ImGui::MenuItem(ICON_FA_SITEMAP "  Scene Hierarchy", nullptr, &m_ShowHierarchy);
             ImGui::MenuItem(ICON_FA_SLIDERS "  Inspector", nullptr, &m_ShowInspector);
             ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Asset Browser", nullptr, &m_ShowAssetBrowser);
@@ -660,6 +608,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
                 m_ResetLayoutRequested = true;
             }
+            xpMenuTextPop();
             ImGui::EndMenu();
         }
 
@@ -795,6 +744,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         ImGui::PopStyleColor(2);
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Capture options");
         if (ImGui::BeginPopup("##CapturePopup")) {
+            xpMenuTextPush();
             ImGui::PushItemWidth(150.0f * m_UIScale);
             ImGui::TextDisabled("Capture");
             if (ImGui::Combo("Mode", &cs.CaptureMode, kModes, IM_ARRAYSIZE(kModes))) EditorSettings::Save();
@@ -822,6 +772,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open screenshots folder"))
                 Screenshot::ShowInFolder(m_LastCapturePath.empty() ? Screenshot::Dir() : m_LastCapturePath);
             ImGui::PopItemWidth();
+            xpMenuTextPop();
             ImGui::EndPopup();
         }
         ImGui::PopID();
@@ -838,6 +789,7 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
         !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
 
     ImGui::End();
+    if (xpBarCols) ImGui::PopStyleColor(xpBarCols); // XP toolbar blue + white chrome text
     ImGui::PopStyleVar(); // WindowPadding
 }
 

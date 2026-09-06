@@ -136,7 +136,15 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
     // regardless of anything EditorLayer explicitly requests afterward. See EditorLayer's
     // matching flag on "Scene" for the full explanation (found in ImGui's own source, not
     // guessed) - both windows need it, since either one's auto-focus alone can win this fight.
+    // The dock tab bar renders synchronously inside Begin(); on a light-chrome theme (Windows XP)
+    // its text — tab labels, per-tab ×, the ▼ list button, node × — wants to stay white against
+    // the coloured tabs. Detected from WindowBg luminance so the dark themes are a no-op. The
+    // body below draws in the theme's normal text colour, no wrapping needed.
+    const ImVec4 gvBg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+    const bool gvLightChrome = (0.299f * gvBg.x + 0.587f * gvBg.y + 0.114f * gvBg.z) > 0.5f;
+    if (gvLightChrome) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));
     m_Visible = ImGui::Begin("Game", &m_WindowOpen, ImGuiWindowFlags_NoFocusOnAppearing);
+    if (gvLightChrome) ImGui::PopStyleColor();
     if (!m_Visible) {
         m_LastAvailableRegion = ImVec2(0.0f, 0.0f);
         m_ViewImageSize = ImVec2(0.0f, 0.0f);

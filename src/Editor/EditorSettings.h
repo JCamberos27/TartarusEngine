@@ -12,7 +12,9 @@ struct EditorSettings {
     // Editor colour theme, applied by EditorLayer::ApplyEditorTheme() at launch and live when
     // changed in Preferences > General. 0 = Dark Slate (monochrome + one cool accent),
     // 1 = Prism (near-black chrome; accent/buttons/text hue drift through the spectrum each
-    // frame, spread across ~half the wheel so several spectrum colours show at once).
+    // frame, spread across ~half the wheel so several spectrum colours show at once),
+    // 2 = Windows XP (the Luna "Blue" scheme: beige chrome, black text, white fields, Luna-blue
+    // selection; static like Dark Slate).
     int EditorTheme = 0;
 
     // Master switch for every contextual tooltip/help-marker in the editor (Inspector fields,

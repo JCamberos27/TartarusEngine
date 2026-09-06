@@ -215,6 +215,16 @@ public:
     // into a region the Scene view isn't actually occupying on screen this frame.
     bool IsSceneViewportVisible() const { return m_SceneViewportVisible; }
 
+    // Read by the reloadable Stats module (EditorModuleStats.cpp) through EditorModuleHostAPI —
+    // the HUD lays itself out against these, shows the smoothed frame time, and pushes back the
+    // engine-mark hide flag when its capped height would overlap the corner monogram.
+    float UIScale() const { return m_UIScale; }
+    float SmoothedFrameMs() const { return m_SmoothedFrameMs; }
+    void SetHideEngineMarkForStats(bool v) { m_HideEngineMarkForStats = v; }
+    // Drives the Stats HUD's own async luminance readback (host owns the Scene framebuffer + the
+    // ping-ponged PBOs). Returns the last completed average luminance under the screen box, or -1.
+    float SampleStatsHudLuminance(float screenCenterX, float screenCenterY, float boxPx);
+
     // The GL color texture main.cpp should hand over each frame (its editor-camera render,
     // already containing the grid/outline/drag-preview overlays) — Draw() displays it inside
     // the "Scene" window via ImGui::Image instead of relying on raw GL drawn straight into the
@@ -725,12 +735,12 @@ private:
     AsyncLuminanceReadback m_StatusBarReadback;
     // ...and for the two transparent viewport HUDs — Statistics (top-left) and History (bottom-
     // right). Each reads the patch of scene directly behind it, so they tint independently.
-    float m_StatsHudContrastLum = 1.0f;
-    float m_StatsHudContrastTarget = 1.0f;
-    float m_StatsHudSampleAccum = 0.0f;
+    // The Stats HUD's easing pair lives module-side now (EditorModuleStats.cpp); the host keeps
+    // only the readback object, driven from SampleStatsHudLuminance() via EditorModuleHostAPI.
     AsyncLuminanceReadback m_StatsHudReadback;
-    // Set each frame by DrawStatsPanel: true when the (capped) Statistics HUD reaches far enough
-    // down the left edge to collide with the corner monogram — the mark is skipped while so.
+    // Set each frame by the reloadable Stats module (via SetHideEngineMarkForStats): true when
+    // the (capped) Statistics HUD reaches far enough down the left edge to collide with the
+    // corner monogram — the mark is skipped while so.
     bool m_HideEngineMarkForStats = false;
     float m_HistoryHudContrastLum = 1.0f;
     float m_HistoryHudContrastTarget = 1.0f;
@@ -1035,11 +1045,11 @@ private:
                              float& easedLum, float& targetLum, float& sampleAccum);
 
     // --- Statistics --------------------------------------------------------------------
-    // Compact transparent HUD pinned to the Scene viewport's top-left corner (#149): FPS/ms,
-    // draw/tri/vert counts, per-category entity counts, the Profiler sample list, and the
-    // GL-state-cache bind table. Auto-sized to its text, click-through, toggled via
-    // EditorSettings::SceneShowStats.
-    void DrawStatsPanel(World& world, float dt);
+    // The compact transparent HUD pinned to the Scene viewport's top-left corner (#149) moved
+    // into the reloadable editor module (src/Editor/EditorModuleStats.cpp) so its code
+    // hot-reloads while the editor stays open; the host still owns every number it shows and
+    // exposes them through EditorModuleHostAPI (see UIScale()/SmoothedFrameMs()/GetRenderStats
+    // etc.). main.cpp draws it via editorModule.Draw(), right after this class's Draw().
     // Thin always-on strip along the bottom of the Scene viewport: FPS / ms / draws / tris /
     // selection count / active tool — the at-a-glance surface (#92). The Statistics panel above
     // is the deeper readout.
