@@ -134,6 +134,7 @@ add_library(TartarusEditor SHARED
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleToolbar.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleAssetBrowser.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleHierarchy.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleConsole.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleStats.cpp
   ${imgui_SOURCE_DIR}/imgui.cpp
