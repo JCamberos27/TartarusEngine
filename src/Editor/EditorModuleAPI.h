@@ -20,7 +20,14 @@
 //       history, stats, light gizmos, ortho), undo/redo + snap-to-ground commands, and five
 //       Draw*Body callbacks that render the host-owned menu/popup contents into the module's
 //       menus (scene load/save, entity creation, camera framing — all still host-side).
-constexpr std::uint32_t kEditorModuleAPIVersion = 4;
+//   5 - Asset Browser (thin slice): the dock window, the +Create/Import toolbar row, breadcrumb,
+//       search + Filters popup, the left folder-tree pane and the tree/grid splitter move into
+//       the module. Panel-state getters/setters (visibility, search text, label-menu filter,
+//       current folder, tree width), a frame snapshot of the folder list + known labels,
+//       undoable folder commands (create / rename / move-asset-into), import-via-dialog, and one
+//       DrawAssetGridBody callback that keeps the asset grid + thumbnails + context menus +
+//       delete/duplicate host-side.
+constexpr std::uint32_t kEditorModuleAPIVersion = 5;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -219,6 +226,63 @@ struct EditorModuleHostAPI {
     // Fills `out` with the capture button's tooltip ("Capture screenshot — <mode><x2+?> (Print
     // Screen)"), built host-side from EditorSettings so the module needn't read those fields.
     void (*GetCaptureButtonTooltip)(char* out, int outSize) = nullptr;
+
+    // --- Asset Browser, thin slice (API v5) -------------------------------------------------
+    // The dock window, the +Create/Import toolbar row, the breadcrumb, the search box + Filters
+    // popup, the left folder-tree pane and the tree/grid splitter live in the module now
+    // (EditorModuleAssetBrowser.cpp). The asset grid itself — tiles, thumbnails (GL), context
+    // menus, rename-in-place, drag sources, delete/duplicate, the scenes/screenshots virtual
+    // folders — stays host-side and is rendered into the module's window through
+    // DrawAssetGridBody. AssetLibrary (STL-heavy, traffics shared_ptr<Model>) never crosses the
+    // boundary: folders come back as a per-frame string snapshot, and every mutation is an
+    // undoable command callback.
+
+    // Panel state (host-owned so it survives a reload; the module's tree-expansion set does not).
+    bool (*GetShowAssetBrowser)() = nullptr;   void (*SetShowAssetBrowser)(bool on) = nullptr;
+    void (*GetAssetSearch)(char* out, int n) = nullptr;         void (*SetAssetSearch)(const char* s) = nullptr;
+    void (*GetAssetLabelMenuFilter)(char* out, int n) = nullptr; void (*SetAssetLabelMenuFilter)(const char* s) = nullptr;
+    void (*GetCurrentAssetFolder)(char* out, int n) = nullptr;
+    // Also clears the asset selection and points it at the folder, matching the old tree-click.
+    void (*SetCurrentAssetFolder)(const char* folder) = nullptr;
+    float (*GetAssetTreeWidth)() = nullptr;
+    // `commit` true on drag-end: persist to EditorSettings + Save(); false while dragging.
+    void (*SetAssetTreeWidth)(float px, bool commit) = nullptr;
+    // One-shot: true (once) after the host's Ctrl+F shortcut asked to focus the search box.
+    bool (*ConsumeAssetSearchFocus)() = nullptr;
+    // The module reports its window focus each frame; the host uses it for the scenes/screenshots
+    // listing refresh and Ctrl+A-select-all.
+    void (*SetAssetBrowserFocused)(bool focused) = nullptr;
+
+    // Folder-tree expansion — kept host-side so the Left/Right-arrow tree shortcuts keep working
+    // and so it survives a reload. `recursive` matches the Alt+click "and everything under it".
+    bool (*IsAssetFolderExpanded)(const char* path) = nullptr;
+    void (*SetAssetFolderExpanded)(const char* path, bool expand, bool recursive) = nullptr;
+    // Per-frame setup the host does before the module draws the tree: ensure the "Scenes"/
+    // "Screenshots" virtual folders exist, refresh the on-disk listing caches, and expand the
+    // ancestors of the current folder when it changed from elsewhere. Fills `outReveal` with the
+    // folder that should scroll itself into view this frame (empty = none) — the old
+    // m_RevealAssetFolderInTree one-shot.
+    void (*AssetTreeFrameSetup)(char* outReveal, int n) = nullptr;
+
+    // Folder list + labels — a snapshot valid for the current frame.
+    int  (*GetFolderCount)() = nullptr;
+    bool (*GetFolder)(int index, char* out, int n) = nullptr;
+    int  (*GetKnownLabelCount)() = nullptr;
+    bool (*GetKnownLabel)(int index, char* out, int n) = nullptr;
+
+    // Undoable AssetLibrary commands (host does PushUndo + the mutation).
+    void (*CreateFolderUndoable)(const char* path) = nullptr;
+    void (*RenameFolderUndoable)(const char* oldPath, const char* newPath) = nullptr;
+    void (*MoveAssetToFolderUndoable)(const char* assetKey, const char* folder) = nullptr;
+    // Start the in-place rename editor on a folder (host BeginRenameAsset(path, isFolder=true)).
+    void (*BeginRenameFolder)(const char* path) = nullptr;
+    // kind 0/1/2 = model / texture / sound; host opens FileDialog then ImportDroppedFile into
+    // `intoFolder` (the current folder).
+    void (*ImportAssetViaDialog)(int kind, const char* intoFolder) = nullptr;
+
+    // The asset grid + footer + delete-confirm popup, host-side, drawn into the module's window
+    // between the tree/splitter and the module's End(). `contentHeight` is the tree pane height.
+    void (*DrawAssetGridBody)(float contentHeight) = nullptr;
 };
 
 struct EditorModuleAPI {

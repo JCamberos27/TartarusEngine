@@ -695,104 +695,11 @@ bool DrawClampedGridLabel(ImDrawList* dl, ImVec2 pos, float wrapWidth, float lin
 }
 } // namespace
 
-// Unity Project window's left pane: a real folder hierarchy (not just the breadcrumb above the
-// grid) with expand/collapse arrows. Alt+click recursively expands/collapses every descendant in
-// one step - the same gesture Unity uses - which is why open/closed state is tracked in
-// m_ExpandedAssetFolders rather than left to ImGui's own per-ID tree memory (that has no hook
-// for "and everything under it too").
-void EditorLayer::DrawFolderTreeNode(World& world, AssetLibrary& assets, const std::string& folderPath, bool isRoot) {
-    std::vector<std::string> children;
-    for (const auto& f : assets.Folders()) {
-        if (ParentFolderOf(f) == folderPath) children.push_back(f);
-    }
-    std::sort(children.begin(), children.end(), [](const std::string& a, const std::string& b) {
-        return LeafNameOf(a) < LeafNameOf(b);
-    });
-
-    bool hasChildren = !children.empty();
-    bool wasExpanded = isRoot || m_ExpandedAssetFolders.count(folderPath) > 0;
-    if (!isRoot) ImGui::SetNextItemOpen(wasExpanded);
-
-    ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
-    if (m_CurrentAssetFolder == folderPath) nodeFlags |= ImGuiTreeNodeFlags_Selected;
-    if (!hasChildren) nodeFlags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-    if (isRoot) nodeFlags |= ImGuiTreeNodeFlags_DefaultOpen;
-
-    std::string label = std::string(isRoot ? ICON_FA_FOLDER_TREE : ICON_FA_FOLDER) + "  " + (isRoot ? "Assets" : LeafNameOf(folderPath));
-
-    ImGui::PushID(folderPath.c_str());
-    bool open = ImGui::TreeNodeEx("##node", nodeFlags, "%s", label.c_str());
-
-    // (#157) One-shot scroll so a folder selected from elsewhere lands in view.
-    if (!isRoot && m_RevealAssetFolderInTree && folderPath == m_CurrentAssetFolder) {
-        ImGui::SetScrollHereY(0.5f);
-        m_RevealAssetFolderInTree = false;
-    }
-
-    if (!isRoot && open != wasExpanded) {
-        // The user just clicked THIS node's arrow this frame (ImGui's own toggle already ran,
-        // which is why `open` differs from what we told it to be) - Alt turns it into "and
-        // every descendant folder too."
-        SetFolderExpandedRecursive(assets, folderPath, open, ImGui::GetIO().KeyAlt);
-    }
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen()) {
-        m_CurrentAssetFolder = folderPath;
-        ClearAssetSelection();
-        m_SelectedAssetKey = folderPath;
-        m_SelectedAssetIsFolder = true;
-    }
-
-    if (!isRoot) {
-        if (ImGui::BeginDragDropSource()) {
-            ImGui::SetDragDropPayload("ASSET_FOLDER_PATH", folderPath.c_str(), folderPath.size() + 1);
-            ImGui::TextUnformatted(LeafNameOf(folderPath).c_str());
-            ImGui::EndDragDropSource();
-        }
-    }
-    if (ImGui::BeginDragDropTarget()) {
-        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
-            PushUndo(world, "Move Asset to Folder");
-            assets.SetAssetFolder((const char*)p->Data, folderPath);
-        }
-        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
-            PushUndo(world, "Move Asset to Folder");
-            assets.SetAssetFolder((const char*)p->Data, folderPath);
-        }
-        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_SOUND_PATH")) {
-            PushUndo(world, "Move Asset to Folder");
-            assets.SetAssetFolder((const char*)p->Data, folderPath);
-        }
-        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH")) {
-            PushUndo(world, "Move Asset to Folder");
-            assets.SetAssetFolder((const char*)p->Data, folderPath);
-        }
-        if (!isRoot) {
-            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FOLDER_PATH")) {
-                std::string src((const char*)p->Data);
-                if (src != folderPath && folderPath.rfind(src + "/", 0) != 0) {
-                    PushUndo(world, "Move Folder");
-                    assets.RenameFolder(src, folderPath + "/" + LeafNameOf(src));
-                }
-            }
-        }
-        ImGui::EndDragDropTarget();
-    }
-    if (ImGui::IsItemHovered() && !ImGui::IsItemToggledOpen()) {
-        EditorUI::SetTooltip(isRoot
-            ? "The root of every asset the editor knows about.\nAlt+click a folder's arrow to expand/collapse it and everything under it."
-            : "Click to browse. Drag assets or other folders onto it to file them here.");
-    }
-    ImGui::PopID();
-
-    if (open) {
-        for (const auto& child : children) DrawFolderTreeNode(world, assets, child, false);
-        // TreeNodeEx sets NoTreePushOnOpen (so no ID-stack push happens) whenever !hasChildren,
-        // root or not - so TreePop() must be gated on hasChildren alone. The old `|| isRoot` here
-        // called TreePop() for a root with zero folders even though nothing was pushed, a
-        // mismatch that spammed "PopID() too many times" / "Missing TreePop()" every frame.
-        if (hasChildren) ImGui::TreePop();
-    }
-}
+// Unity Project window's left pane (a real folder hierarchy with expand/collapse arrows, Alt+click
+// for recursive) moved into EditorModuleAssetBrowser.cpp (#229). Expansion state stays here in
+// m_ExpandedAssetFolders (host-side) so the tree's Left/Right-arrow shortcuts keep working and it
+// survives a reload; SetFolderExpandedRecursive below is still its writer, and the module reaches
+// it (and the drop-onto-folder / rename-folder AssetLibrary ops) through EditorModuleHostAPI.
 
 // Rescans scenes/ on disk into m_ScenesListingCache — only when the cache has been invalidated
 // (timer, Asset Browser focus regained, or an explicit create/delete/duplicate elsewhere in this
@@ -829,36 +736,76 @@ void EditorLayer::RefreshShotsListingIfNeeded() {
     m_ShotsListingCache.valid = true;
 }
 
-void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
-    // Locked only blocks dragging the tab to move/undock/rearrange the panel — resizing its
-    // dock node (and the neighbors that share that border) always works, locked or not.
-    ImGuiWindowFlags flags = ImGuiWindowFlags_None;
-    // Tighter vertical padding than the default so the toolbar hugs the tab bar instead of
-    // floating below a large gap.
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
-    PushTabChromeText(); // the dock tab bar renders inside Begin(); keep its text white on XP
-    bool open = ImGui::Begin("Asset Browser", &m_ShowAssetBrowser, flags);
-    PopTabChromeText();
-    ImGui::PopStyleVar();
-    if (!open) { ImGui::End(); return; }
-    m_AssetBrowserFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
+// kind 0/1/2 = model / texture / sound. Opens the OS file dialog, then imports into the current
+// folder — the host half of the module's +Create/Import menu.
+void EditorLayer::AssetBrowserImportViaDialog(World& world, AssetLibrary& assets, int kind, const std::string& intoFolder) {
+    const char* filter =
+        kind == 0 ? "3D Models\0*.fbx;*.obj;*.gltf;*.glb\0All Files\0*.*\0" :
+        kind == 1 ? "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0" :
+                    "Audio\0*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0";
+    std::string p = FileDialog::OpenFile(filter, m_Window);
+    if (!p.empty() && m_EditorCameraPtr)
+        ImportDroppedFile(world, assets, *m_EditorCameraPtr, p, intoFolder);
+}
 
-    // Refresh triggers for the Scenes/Screenshots directory-listing caches (#175): a short
-    // timer, and the Asset Browser regaining focus (edge-detected off m_AssetBrowserFocused,
-    // which the line above already keeps current every frame — this just remembers last
-    // frame's value to catch the false->true transition). Explicit invalidation after any
-    // create/delete/duplicate touching those folders happens at the call sites themselves
-    // (NewScene, DoSaveAs, PerformAssetDelete, DuplicateSelectedAsset, OnCaptureDone).
+void EditorLayer::SetAssetTreeWidthPx(float px, bool commit) {
+    m_AssetTreeWidth = std::clamp(px, 140.0f * m_UIScale, 460.0f * m_UIScale);
+    if (commit) { EditorSettings::Get().AssetBrowserTreeWidth = m_AssetTreeWidth; EditorSettings::Save(); }
+}
+
+void EditorLayer::AssetBrowserCreateFolder(World& world, AssetLibrary& assets, const std::string& path) {
+    PushUndo(world, "Create Folder");
+    assets.CreateFolder(path);
+}
+void EditorLayer::AssetBrowserRenameFolder(World& world, AssetLibrary& assets,
+                                           const std::string& oldPath, const std::string& newPath) {
+    PushUndo(world, "Move Folder");
+    assets.RenameFolder(oldPath, newPath);
+}
+void EditorLayer::AssetBrowserMoveAssetToFolder(World& world, AssetLibrary& assets,
+                                                const std::string& assetKey, const std::string& folder) {
+    PushUndo(world, "Move Asset to Folder");
+    assets.SetAssetFolder(assetKey, folder);
+}
+
+// Per-frame prep the module calls before drawing the folder tree: keep the scenes/screenshots
+// directory-listing caches fresh (short timer + focus-gained edge), make sure the two
+// filesystem-backed virtual folders exist, and — whenever the current folder changed from
+// elsewhere (a folder tile, a search hit, Backspace) — force its ancestors open and hand back the
+// folder that should scroll itself into view this frame ("" = none). m_AssetBrowserFocused is set
+// by the module through SetAssetBrowserFocused().
+std::string EditorLayer::AssetBrowserTreeFrameSetup(AssetLibrary& assets) {
     constexpr float kAssetListingRefreshInterval = 1.5f; // seconds
-    const bool assetBrowserFocusGained = m_AssetBrowserFocused && !m_AssetBrowserFocusedLastFrame;
+    const bool focusGained = m_AssetBrowserFocused && !m_AssetBrowserFocusedLastFrame;
     m_AssetBrowserFocusedLastFrame = m_AssetBrowserFocused;
     m_AssetListingRefreshTimer += ImGui::GetIO().DeltaTime;
-    if (assetBrowserFocusGained || m_AssetListingRefreshTimer >= kAssetListingRefreshInterval) {
+    if (focusGained || m_AssetListingRefreshTimer >= kAssetListingRefreshInterval) {
         m_AssetListingRefreshTimer = 0.0f;
         InvalidateScenesListing();
         InvalidateShotsListing();
     }
+    assets.CreateFolder("Scenes");
+    assets.CreateFolder("Screenshots");
 
+    std::string reveal;
+    if (m_CurrentAssetFolder != m_AssetFolderTreeRevealed) {
+        m_AssetFolderTreeRevealed = m_CurrentAssetFolder;
+        if (!m_CurrentAssetFolder.empty()) reveal = m_CurrentAssetFolder;
+        for (size_t s = 0; s < m_CurrentAssetFolder.size();) {
+            size_t slash = m_CurrentAssetFolder.find('/', s);
+            m_ExpandedAssetFolders.insert(m_CurrentAssetFolder.substr(
+                0, slash == std::string::npos ? m_CurrentAssetFolder.size() : slash));
+            if (slash == std::string::npos) break;
+            s = slash + 1;
+        }
+    }
+    return reveal;
+}
+
+// The asset grid (right pane) + the footer + the delete-confirm popup — everything the thin-slice
+// #229 migration left host-side. Drawn into the module's "Asset Browser" window, between its
+// tree/splitter and its End(); `contentHeight` is the tree pane's height, computed module-side.
+void EditorLayer::DrawAssetGridBody(World& world, AssetLibrary& assets, float contentHeight) {
     auto makeNewFolder = [&]() {
         std::string base = m_CurrentAssetFolder.empty() ? "New Folder" : (m_CurrentAssetFolder + "/New Folder");
         std::string candidate = base;
@@ -872,202 +819,6 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
         assets.CreateFolder(candidate);
         BeginRenameAsset(candidate, true, LeafNameOf(candidate));
     };
-
-    // Single toolbar row: New Folder, a breadcrumb, and a search box pinned to the right
-    // edge — instead of the button and search box stacking on separate cramped lines. Zero
-    // padding so the row hugs the tab bar directly above it instead of floating with a gap.
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::BeginChild("##AssetToolbar", ImVec2(0, ImGui::GetFrameHeight()), ImGuiChildFlags_None,
-        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    ImGui::PopStyleVar();
-
-    const float searchWidth = 200.0f;
-
-    // One "+ Create / Import" entry point instead of New-Folder-only up front and Import buried
-    // in the menu bar (audit #79).
-    if (ActionButton(ICON_FA_PLUS, "Create / Import")) ImGui::OpenPopup("##AssetCreateMenu");
-    if (ImGui::BeginPopup("##AssetCreateMenu")) {
-        if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS "  New Folder")) makeNewFolder();
-        ImGui::Separator();
-        auto importInto = [&](const char* filter) {
-            std::string p = FileDialog::OpenFile(filter, m_Window);
-            if (!p.empty() && m_EditorCameraPtr)
-                ImportDroppedFile(world, assets, *m_EditorCameraPtr, p, m_CurrentAssetFolder);
-        };
-        if (ImGui::MenuItem(ICON_FA_CUBE "  Import Model..."))
-            importInto("3D Models\0*.fbx;*.obj;*.gltf;*.glb\0All Files\0*.*\0");
-        if (ImGui::MenuItem(ICON_FA_IMAGE "  Import Texture..."))
-            importInto("Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0");
-        if (ImGui::MenuItem(ICON_FA_MUSIC "  Import Sound..."))
-            importInto("Audio\0*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0");
-        ImGui::EndPopup();
-    }
-
-    EditorUI::VSeparator();
-
-    // Breadcrumb (#157): non-interactive path text for context only — "Assets / Sub / Folder".
-    // The folder tree on the left is how you actually move; this just says where you are, so
-    // it's a single dim string with no framed per-segment buttons or "/" glyphs.
-    {
-        std::string crumb = "Assets";
-        for (char c : m_CurrentAssetFolder) {
-            if (c == '/') crumb += " / ";
-            else          crumb += c;
-        }
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextDisabled("%s", crumb.c_str());
-    }
-
-    // Search box + its two filter buttons (Type, Label), pinned as one group to the toolbar's
-    // right edge - falling back to a new line only if the breadcrumb has grown too long to
-    // leave room for it.
-    float filterButtonsWidth = (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) * 1.0f; // one "Filters" button now
-    float groupWidth = searchWidth + filterButtonsWidth;
-    float targetX = ImGui::GetWindowContentRegionMax().x - groupWidth;
-    if (targetX > ImGui::GetCursorPosX()) ImGui::SameLine(targetX);
-    else ImGui::NewLine();
-
-    char filterBuf[64];
-    snprintf(filterBuf, sizeof(filterBuf), "%s", m_AssetSearchFilter.c_str());
-    ImGui::SetNextItemWidth(searchWidth);
-    if (m_AssetSearchFocusRequested) {
-        ImGui::SetKeyboardFocusHere();
-        m_AssetSearchFocusRequested = false;
-    }
-    if (ImGui::InputTextWithHint("##AssetFilter", ICON_FA_MAGNIFYING_GLASS "  Search...", filterBuf, sizeof(filterBuf))) {
-        m_AssetSearchFilter = filterBuf;
-    }
-    if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) {
-        EditorUI::SetTooltip(
-            "Search every asset by name, across all folders.\n"
-            "Type multiple words to match all of them (AND).\n"
-            "t:Model / t:Texture / t:Sound / t:Scene / t:Prefab / t:Folder\n"
-            "  restricts by type - listing several ORs them together.\n"
-            "l:label restricts by label (set in an asset's right-click\n"
-            "  menu) - listing several ANDs them, requiring every one.");
-    }
-
-    // One "Filters" menu instead of a separate type-filter and label-filter button next to the
-    // search box (audit #80). Both just toggle t:/l: tokens in the one search string, so folding
-    // them together removes two near-identical affordances without losing anything. The lit dot
-    // shows when any type/label token is active.
-    bool anyFilterActive = false;
-    for (const char* t : {"t:model", "t:texture", "t:sound", "t:scene", "t:prefab", "t:folder"})
-        anyFilterActive |= SearchHasToken(m_AssetSearchFilter, t);
-    for (const auto& lbl : assets.AllKnownLabels())
-        anyFilterActive |= SearchHasToken(m_AssetSearchFilter, "l:" + lbl);
-
-    ImGui::SameLine();
-    if (anyFilterActive) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_CheckMark));
-    bool openFilters = ImGui::Button(ICON_FA_FILTER);
-    if (anyFilterActive) ImGui::PopStyleColor();
-    if (openFilters) ImGui::OpenPopup("##AssetFilters");
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Filter by asset type or label");
-    if (ImGui::BeginPopup("##AssetFilters")) {
-        ImGui::SeparatorText("Type");
-        static const std::pair<const char*, const char*> kTypes[] = {
-            {"Model", "model"}, {"Texture", "texture"}, {"Sound", "sound"},
-            {"Scene", "scene"}, {"Prefab", "prefab"}, {"Folder", "folder"},
-        };
-        for (const auto& [label, token] : kTypes) {
-            std::string full = std::string("t:") + token;
-            bool active = SearchHasToken(m_AssetSearchFilter, full);
-            if (ImGui::MenuItem(label, nullptr, active)) ToggleSearchToken(m_AssetSearchFilter, full);
-        }
-
-        ImGui::SeparatorText("Label");
-        const std::set<std::string>& allLabels = assets.AllKnownLabels();
-        if (allLabels.empty()) {
-            ImGui::TextDisabled("No labels yet - add one from an\nasset's right-click menu.");
-        } else {
-            ImGui::SetNextItemWidth(180.0f);
-            char labelSearchBuf[64];
-            snprintf(labelSearchBuf, sizeof(labelSearchBuf), "%s", m_AssetLabelMenuFilter.c_str());
-            if (ImGui::InputTextWithHint("##LabelMenuFilter", ICON_FA_MAGNIFYING_GLASS "  Search labels...",
-                    labelSearchBuf, sizeof(labelSearchBuf))) {
-                m_AssetLabelMenuFilter = labelSearchBuf;
-            }
-            for (const auto& lbl : allLabels) {
-                if (!MatchesFilter(m_AssetLabelMenuFilter, lbl)) continue;
-                std::string full = "l:" + lbl;
-                bool active = SearchHasToken(m_AssetSearchFilter, full);
-                if (ImGui::MenuItem(lbl.c_str(), nullptr, active)) ToggleSearchToken(m_AssetSearchFilter, full);
-            }
-        }
-
-        if (anyFilterActive) {
-            ImGui::Separator();
-            if (ImGui::MenuItem(ICON_FA_XMARK "  Clear all filters")) {
-                // Strip every t:/l: token, leave any free-text search words.
-                std::string kept;
-                std::stringstream ss(m_AssetSearchFilter);
-                std::string w;
-                while (ss >> w) {
-                    if (w.rfind("t:", 0) == 0 || w.rfind("l:", 0) == 0) continue;
-                    kept += (kept.empty() ? "" : " ") + w;
-                }
-                m_AssetSearchFilter = kept;
-            }
-        }
-        ImGui::EndPopup();
-    }
-
-    ImGui::EndChild(); // ##AssetToolbar
-
-    ImGui::Separator();
-
-    // Unity Project-window layout: a folder tree on the left (real hierarchy navigation, not
-    // just the breadcrumb above) and the current folder's contents as icons on the right,
-    // split by a drag-resizable divider.
-    float footerHeight = ImGui::GetFrameHeightWithSpacing() + 4.0f;
-    float contentHeight = ImGui::GetContentRegionAvail().y - footerHeight;
-
-    // No child borders on either pane (#158) — the splitter alone is the divider: a hairline in
-    // ImGuiCol_Border at rest, brightening + thickening on hover/drag, inside a 6px hit target.
-    // (#157) The tree is the only folder navigator now, so whenever the current folder changes
-    // from anywhere else (a folder tile, a search-result click, Backspace), force its ancestors
-    // open in the tree and ask the matching node to scroll itself into view. Only fires on an
-    // actual change, so the user can still collapse things afterward.
-    if (m_CurrentAssetFolder != m_AssetFolderTreeRevealed) {
-        m_AssetFolderTreeRevealed = m_CurrentAssetFolder;
-        m_RevealAssetFolderInTree = !m_CurrentAssetFolder.empty();
-        for (size_t s = 0; s < m_CurrentAssetFolder.size();) {
-            size_t slash = m_CurrentAssetFolder.find('/', s);
-            m_ExpandedAssetFolders.insert(m_CurrentAssetFolder.substr(
-                0, slash == std::string::npos ? m_CurrentAssetFolder.size() : slash));
-            if (slash == std::string::npos) break;
-            s = slash + 1;
-        }
-    }
-
-    ImGui::BeginChild("##AssetTree", ImVec2(m_AssetTreeWidth, contentHeight), ImGuiChildFlags_None);
-    DrawFolderTreeNode(world, assets, "", true);
-    ImGui::EndChild();
-
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-    ImGui::Button("##AssetTreeSplitter", ImVec2(6.0f, contentHeight));
-    ImGui::PopStyleColor(3);
-    {
-        const bool active = ImGui::IsItemActive();
-        const bool hot = active || ImGui::IsItemHovered();
-        const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
-        const float cx = ImFloor((mn.x + mx.x) * 0.5f) + 0.5f;
-        const ImU32 col = ImGui::GetColorU32(active ? ImGuiCol_SeparatorActive
-                                           : hot ? ImGuiCol_SeparatorHovered : ImGuiCol_Border);
-        ImGui::GetWindowDrawList()->AddLine(ImVec2(cx, mn.y + 2.0f), ImVec2(cx, mx.y - 2.0f),
-                                            col, hot ? 2.0f : 1.0f);
-    }
-    if (ImGui::IsItemHovered() || ImGui::IsItemActive()) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-    if (ImGui::IsItemActive()) m_AssetTreeWidth += ImGui::GetIO().MouseDelta.x;
-    m_AssetTreeWidth = std::clamp(m_AssetTreeWidth, 140.0f * m_UIScale, 460.0f * m_UIScale);
-    if (ImGui::IsItemDeactivated()) { // drag finished — remember it
-        EditorSettings::Get().AssetBrowserTreeWidth = m_AssetTreeWidth;
-        EditorSettings::Save();
-    }
-    ImGui::SameLine();
 
     ImGui::BeginChild("##AssetList", ImVec2(0, contentHeight), ImGuiChildFlags_None);
 
@@ -1626,6 +1377,5 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     ImGui::EndChild();
 
     DrawDeleteConfirmPopup(world, assets);
-
-    ImGui::End();
+    // ImGui::End() for the "Asset Browser" window is the module's — it owns Begin() now.
 }
