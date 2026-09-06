@@ -9,12 +9,15 @@
 // a heap-allocated singleton: single-threaded UI code, no dynamic-initialization-order concerns,
 // and every call site just writes EditorSettings::Get().Field like a normal member access.
 struct EditorSettings {
-    // Editor colour theme, applied by EditorLayer::ApplyEditorTheme() at launch and live when
-    // changed in Preferences > General. 0 = Dark Slate (monochrome + one cool accent),
-    // 1 = Prism (near-black chrome; accent/buttons/text hue drift through the spectrum each
-    // frame, spread across ~half the wheel so several spectrum colours show at once),
-    // 2 = Windows XP (the Luna "Blue" scheme: beige chrome, black text, white fields, Luna-blue
-    // selection; static like Dark Slate).
+    // Editor theme, applied by EditorLayer::ApplyThemeStyle() (colours + metrics) at launch and
+    // live when changed in Preferences > General. (#234 renumbered these when Dark Slate was
+    // dropped; EditorSettings::Load remaps any out-of-range value to 0.)
+    // 0 = Bento — the default (dark SaaS-dashboard: layered charcoal surfaces, hairline borders,
+    //     rounded-card geometry, cyan selection / blue active accents),
+    // 1 = Prism — the Bento layout, but the accent / buttons / text tint drift through the
+    //     spectrum together each frame (spread across ~half the wheel so several hues show),
+    // 2 = Windows XP — the Luna "Blue" scheme: beige chrome, black text, white fields, Luna-blue
+    //     selection; compact geometry (the shared metric baseline, not Bento's).
     int EditorTheme = 0;
 
     // Master switch for every contextual tooltip/help-marker in the editor (Inspector fields,
