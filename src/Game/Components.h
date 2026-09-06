@@ -140,6 +140,13 @@ struct CameraComponent {
 // pose. All parameters are authored/serialized; the Base* fields and Initialized are runtime
 // scratch, captured from the entity's authored transform the first frame play runs and never
 // written to the scene file, so Play -> Stop restores everything cleanly.
+// Registered via ComponentRegistry (#184) rather than hand-coded serializer/Inspector code — the
+// third such migration. Reflected fields are addressed by pointer-to-member
+// (ComponentReflection.h); the runtime-scratch tail (Initialized, Base*, Elapsed) is left out of
+// the reflected field list, same as it was left out of the old hand-written serializer. The flat
+// reflected Inspector list loses the old section's "Spin"/"Orbit"/"Bob"/"Light Color Cycle"
+// sub-headers, so field names below are qualified (e.g. "Orbit Speed", not "Speed") to stay
+// unambiguous without them.
 struct AnimatorComponent {
     glm::vec3 SpinDegPerSec{0.0f};   // continuous local rotation, degrees/second per axis
 
@@ -164,6 +171,11 @@ struct AnimatorComponent {
 // a Script asset attaches this component, and this runtime system applies its motion only while
 // playing. That gives the Inspector a familiar script workflow without requiring a compiler or
 // exposing native engine code to scene authors.
+// Registered via ComponentRegistry (#184) rather than hand-coded serializer/Inspector code — the
+// second such migration, after SpinComponent below. Reflected fields are addressed by
+// pointer-to-member (ComponentReflection.h), so the std::string member is no problem. The
+// runtime-scratch tail is deliberately excluded from the reflected field list, same as it was
+// excluded from the old hand-written serializer.
 struct TransformControllerComponent {
     std::string ScriptPath = "scripts/TransformController.tescript";
     bool Enabled = true;
@@ -183,8 +195,8 @@ struct TransformControllerComponent {
 // First component wired up purely through the native reflection system (#184): it is declared
 // here, listed once in ComponentRegistry::RegisterEngineComponents(), and from that its JSON
 // serialization, Inspector section and Add Component entry are all generated. The per-frame
-// behaviour is SpinSystem in TartarusGame.dll. Standard-layout (plain members, no ctors beyond
-// defaults) so offsetof in the reflection metadata is well-defined.
+// behaviour is SpinSystem in TartarusGame.dll. Reflected fields are addressed by pointer-to-
+// member (ComponentReflection.h), so there's no standard-layout requirement on the component.
 struct SpinComponent {
     glm::vec3 Axis{0.0f, 1.0f, 0.0f}; // local axis to spin around (normalised at use)
     float Speed = 90.0f;             // degrees per second, applied only while playing

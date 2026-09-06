@@ -1,0 +1,67 @@
+name: Build
+
+# Compiles TartarusEngine on Windows (the only platform it targets — MSVC via the
+# Visual Studio generator, same as the README's local build instructions) on every push and
+# pull request, for both Debug and Release. This is intentionally a COMPILE gate first and
+# foremost: it exists to catch the class of bug a human never gets to see locally until they
+# pull a branch and build it themselves.
+#
+# The --smoke-test step (loads every scene, renders a fixed number of frames, checks for GL
+# errors) is run best-effort with continue-on-error: hosted GitHub Windows runners have no GPU,
+# and this engine requires a real OpenGL 4.6 core context with compute shader support, which a
+# software/basic-display-adapter fallback very likely can't provide. So a smoke-test failure
+# here is NOT proof of a real bug — only a compile failure or a smoke-test PASS are conclusive;
+# a smoke-test FAIL/crash on this runner needs a human (or a GPU-equipped runner) to confirm.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    # Backstop: a hung build or smoke test must not sit on a runner until GitHub's 6-hour
+    # job ceiling. The compile + cached deps finish well inside this; anything approaching it
+    # is a hang worth failing fast on.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+
+      # CMake's FetchContent re-clones + rebuilds glfw/glm/assimp/entt/imgui/imguizmo from
+      # source every configure otherwise (assimp alone is the bulk of the build time). Keyed on
+      # CMakeLists.txt so a dependency version bump invalidates the cache automatically.
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: fetchcontent-${{ matrix.config }}-${{ hashFiles('CMakeLists.txt') }}
+
+      # No -G here on purpose: hardcoding "Visual Studio 17 2022" broke the first run of this
+      # workflow the moment the hosted windows-latest image moved to VS2026 (the generator name
+      # is tied to a specific VS version and doesn't auto-upgrade). Omitting -G lets CMake pick
+      # whatever Visual Studio is actually installed on the runner; -A x64 still pins the
+      # architecture regardless of which VS version that resolves to.
+      - name: Configure
+        run: cmake -S . -B build -A x64
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.config }} --parallel
+
+      # Best-effort only — see the note at the top of this file. continue-on-error means this
+      # step's outcome never fails the job; check its own log to see whether it actually ran.
+      #
+      # timeout-minutes is load-bearing, not just tidiness: with no GL driver on the runner the
+      # Debug build fails to create its window and then STALLS (the debug CRT's abort path waits
+      # on a message box that a non-interactive desktop never dismisses) instead of exiting.
+      # continue-on-error can't salvage a step that never returns — the job would ride GitHub's
+      # 6-hour ceiling and land red. A short cap turns that hang into a fast, swallowed timeout.
+      - name: Smoke test (best effort - no GPU on this runner)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: build/${{ matrix.config }}/TartarusEngine.exe --smoke-test

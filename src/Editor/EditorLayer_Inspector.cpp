@@ -635,14 +635,19 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
 
         // ---- Common components: those present on the WHOLE selection ----
         bool allMesh = true, allLight = true, allCamera = true, allCollider = true,
-             allAudio = true, allAnimator = true;
+             allAudio = true;
+        // #184: same "present on every selected object" test, generalized over every
+        // reflection-registered component instead of one bool per hand-coded component.
+        const auto& registeredComponents = ComponentRegistry::All();
+        std::vector<bool> allReflected(registeredComponents.size(), true);
         forEach([&](entt::entity e) {
             allMesh     &= world.Registry.all_of<RenderableComponent>(e);
             allLight    &= world.Registry.all_of<LightComponent>(e);
             allCamera   &= world.Registry.all_of<CameraComponent>(e);
             allCollider &= world.Registry.all_of<ColliderComponent>(e);
             allAudio    &= world.Registry.all_of<AudioSourceComponent>(e);
-            allAnimator &= world.Registry.all_of<AnimatorComponent>(e);
+            for (std::size_t i = 0; i < registeredComponents.size(); ++i)
+                if (!registeredComponents[i].Has(world.Registry, e)) allReflected[i] = false;
         });
         {
             std::string common = "Transform";
@@ -651,7 +656,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             if (allCamera)   common += ", Camera";
             if (allCollider) common += ", Box Collider";
             if (allAudio)    common += ", Audio Source";
-            if (allAnimator) common += ", Animator";
+            for (std::size_t i = 0; i < registeredComponents.size(); ++i)
+                if (allReflected[i]) common += std::string(", ") + registeredComponents[i].Meta.Name;
             ImGui::TextDisabled("Common: %s", common.c_str());
         }
 
@@ -946,6 +952,104 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 "Far clip plane for every selected camera.", "Set Camera Far");
 
             EndComponentSection(); // Camera
+            }
+        }
+
+        // ===== Reflection-registered components (#184) — the multi-select counterpart of the
+        // single-select generic loop: one section per component present on the WHOLE selection,
+        // one row per reflected field, using the same MultiEdit* mixed-value widgets as every
+        // hand-coded section above. No per-component code here, same as the single-select pass.
+        for (std::size_t ci = 0; ci < registeredComponents.size(); ++ci) {
+            if (!allReflected[ci]) continue;
+            const RegisteredComponent& rc = registeredComponents[ci];
+            ImGui::Spacing();
+            if (BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, false, mrm, /*defaultOpen=*/true, rc.Meta.Tooltip)) {
+                auto fieldPtr = [&](entt::entity e, const ReflectField& f) -> void* {
+                    return f.Address(rc.Get(world.Registry, e));
+                };
+                for (const ReflectField& f : rc.Meta.Fields) {
+                    ImGui::PushID(f.Name);
+                    switch (f.Type) {
+                        case ReflectFieldType::Bool: {
+                            bool anyOn = false, mixed = false, first = true, firstVal = false;
+                            forEach([&](entt::entity e) {
+                                bool v = *reinterpret_cast<bool*>(fieldPtr(e, f));
+                                if (first) { firstVal = v; first = false; } else if (v != firstVal) mixed = true;
+                                anyOn |= v;
+                            });
+                            bool out = firstVal;
+                            if (MultiEditCheckbox(f.Name, anyOn, mixed, out)) {
+                                StageUndo(world);
+                                forEach([&](entt::entity e) { *reinterpret_cast<bool*>(fieldPtr(e, f)) = out; });
+                                CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                            }
+                            break;
+                        }
+                        case ReflectFieldType::Int: {
+                            int shared = 0; bool mixed = false, first = true;
+                            forEach([&](entt::entity e) {
+                                int v = *reinterpret_cast<int*>(fieldPtr(e, f));
+                                if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
+                            });
+                            float edit = (float)shared;
+                            MultiEditResult r = MultiEditFloatRow(f.Name, edit, mixed, f.DragSpeed, f.Min, f.Max, f.Tooltip);
+                            if (r.activated) StageUndo(world);
+                            if (r.changed) { int v = (int)edit; forEach([&](entt::entity e) { *reinterpret_cast<int*>(fieldPtr(e, f)) = v; }); }
+                            if (r.committed) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                            break;
+                        }
+                        case ReflectFieldType::Float: {
+                            float shared = 0.0f; bool mixed = false, first = true;
+                            forEach([&](entt::entity e) {
+                                float v = *reinterpret_cast<float*>(fieldPtr(e, f));
+                                if (first) { shared = v; first = false; } else if (std::fabs(v - shared) > 1.0e-4f) mixed = true;
+                            });
+                            float edit = shared;
+                            MultiEditResult r = MultiEditFloatRow(f.Name, edit, mixed, f.DragSpeed, f.Min, f.Max, f.Tooltip);
+                            if (r.activated) StageUndo(world);
+                            if (r.changed) forEach([&](entt::entity e) { *reinterpret_cast<float*>(fieldPtr(e, f)) = edit; });
+                            if (r.committed) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                            break;
+                        }
+                        case ReflectFieldType::Vec3: {
+                            glm::vec3 shared(0.0f); bool mixedAxis[3] = {false, false, false}; bool first = true;
+                            forEach([&](entt::entity e) {
+                                glm::vec3 v = *reinterpret_cast<glm::vec3*>(fieldPtr(e, f));
+                                if (first) { shared = v; first = false; }
+                                else for (int a = 0; a < 3; ++a) if (std::fabs(v[a] - shared[a]) > 1.0e-4f) mixedAxis[a] = true;
+                            });
+                            glm::vec3 edit = shared;
+                            bool touched[3];
+                            MultiEditResult r = MultiEditVec3Row(f.Name, edit, mixedAxis, touched, f.DragSpeed, f.Min, f.Max, f.Tooltip);
+                            if (r.activated) StageUndo(world);
+                            if (r.changed) forEach([&](entt::entity e) {
+                                glm::vec3& v = *reinterpret_cast<glm::vec3*>(fieldPtr(e, f));
+                                for (int a = 0; a < 3; ++a) if (touched[a]) v[a] = edit[a];
+                            });
+                            if (r.committed) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                            break;
+                        }
+                        case ReflectFieldType::String: {
+                            std::string shared; bool mixed = false, first = true;
+                            forEach([&](entt::entity e) {
+                                const std::string& v = *reinterpret_cast<std::string*>(fieldPtr(e, f));
+                                if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
+                            });
+                            PropertyLabel(f.Name, f.Tooltip);
+                            char buf[256];
+                            snprintf(buf, sizeof(buf), "%s", mixed ? "" : shared.c_str());
+                            bool changed = mixed
+                                ? ImGui::InputTextWithHint("##v", "(multiple values)", buf, sizeof(buf))
+                                : ImGui::InputText("##v", buf, sizeof(buf));
+                            if (ImGui::IsItemActivated()) StageUndo(world);
+                            if (changed) forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e, f)) = buf; });
+                            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                            break;
+                        }
+                    }
+                    ImGui::PopID();
+                }
+                EndComponentSection();
             }
         }
 
@@ -1550,54 +1654,6 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
     }
 
-    // --- Animator (procedural motion: spin/orbit/bob/color-cycle, see #214) ----------------
-    if (auto* anim = registry.try_get<AnimatorComponent>(entity)) {
-        if (BeginComponentSection(ICON_FA_PERSON_RUNNING, "Animator", true, removed, /*defaultOpen=*/true,
-                "Procedural motion driven every frame in Play mode - continuous spin, orbit\naround an axis, vertical bob, and light hue-cycling. All fields are additive\nand reversible (turning a rate back to 0 undoes its contribution).")) {
-            bool rowActive, rowCommitted;
-
-            ImGui::TextDisabled("Spin");
-            DrawVec3Row("Spin", anim->SpinDegPerSec, 1.0f, 0.0f, 0.0f, rowActive, rowCommitted,
-                "Continuous local rotation, in degrees/second per axis.");
-            if (rowActive) StageUndo(world);
-            if (rowCommitted) CommitStagedUndo(world, "Edit Animator Spin");
-
-            ImGui::Spacing();
-            ImGui::TextDisabled("Orbit");
-            DrawVec3Row("Axis", anim->OrbitAxis, 0.01f, 0.0f, 0.0f, rowActive, rowCommitted,
-                "Axis this object revolves around, relative to its base position.");
-            if (rowActive) StageUndo(world);
-            if (rowCommitted) CommitStagedUndo(world, "Edit Animator Orbit Axis");
-            PropertyLabel("Speed", "Revolution rate around the orbit axis, in degrees/second.");
-            ImGui::DragFloat("##OrbitDegPerSec", &anim->OrbitDegPerSec, 0.5f, 0.0f, 0.0f, "%.1f deg/s");
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Animator Orbit Speed");
-            PropertyLabel("Radius", "Distance from the base position while orbiting, in world units.");
-            ImGui::DragFloat("##OrbitRadius", &anim->OrbitRadius, 0.05f, 0.0f, 0.0f, "%.2f");
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Animator Orbit Radius");
-
-            ImGui::Spacing();
-            ImGui::TextDisabled("Bob");
-            PropertyLabel("Amplitude", "Vertical sine offset from the base position, in world units.");
-            ImGui::DragFloat("##BobAmplitude", &anim->BobAmplitude, 0.01f, 0.0f, 0.0f, "%.3f");
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Animator Bob Amplitude");
-            PropertyLabel("Frequency", "Bob rate in Hz (cycles/second).");
-            ImGui::DragFloat("##BobFreqHz", &anim->BobFreqHz, 0.02f, 0.0f, 0.0f, "%.2f Hz");
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Animator Bob Frequency");
-
-            ImGui::Spacing();
-            ImGui::TextDisabled("Light Color Cycle");
-            PropertyLabel("Cycle Rate", "Hue revolutions/second for this object's Light color.\n0 leaves the color alone. Has no effect without a Light component.");
-            ImGui::DragFloat("##ColorCycleHzPerSec", &anim->ColorCycleHzPerSec, 0.01f, 0.0f, 0.0f, "%.2f Hz");
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Animator Color Cycle");
-
-            EndComponentSection();
-        }
-        if (removed) {
-            PushUndo(world, "Remove Animator");
-            registry.remove<AnimatorComponent>(entity);
-        }
-    }
-
     // #184: sections for reflection-registered components (ComponentRegistry). One widget per
     // field, chosen by ReflectFieldType — no per-component code here; registering a component
     // gives it a section for free. Undo follows the same lightweight pattern the hand-coded
@@ -1606,28 +1662,39 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         if (!rc.Has(registry, entity)) continue;
         bool reflRemoved = false;
         if (BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, true, reflRemoved, /*defaultOpen=*/true, rc.Meta.Tooltip)) {
-            char* fbase = static_cast<char*>(rc.Get(registry, entity));
+            void* fbase = rc.Get(registry, entity);
             for (const ReflectField& f : rc.Meta.Fields) {
                 PropertyLabel(f.Name, f.Tooltip);
                 ImGui::PushID(f.Name);
                 bool started = false;
                 switch (f.Type) {
                     case ReflectFieldType::Bool:
-                        if (ImGui::Checkbox("##v", reinterpret_cast<bool*>(fbase + f.Offset)))
+                        if (ImGui::Checkbox("##v", reinterpret_cast<bool*>(f.Address(fbase))))
                             PushUndo(world, std::string("Edit ") + rc.Meta.Name);
                         break;
                     case ReflectFieldType::Int:
-                        ImGui::DragInt("##v", reinterpret_cast<int*>(fbase + f.Offset), f.DragSpeed);
+                        ImGui::DragInt("##v", reinterpret_cast<int*>(f.Address(fbase)), f.DragSpeed,
+                            (int)f.Min, (int)f.Max);
                         started = ImGui::IsItemActivated();
                         break;
                     case ReflectFieldType::Float:
-                        ImGui::DragFloat("##v", reinterpret_cast<float*>(fbase + f.Offset), f.DragSpeed, 0.0f, 0.0f, "%.3f");
+                        ImGui::DragFloat("##v", reinterpret_cast<float*>(f.Address(fbase)), f.DragSpeed,
+                            f.Min, f.Max, "%.3f");
                         started = ImGui::IsItemActivated();
                         break;
                     case ReflectFieldType::Vec3:
-                        ImGui::DragFloat3("##v", reinterpret_cast<float*>(fbase + f.Offset), f.DragSpeed);
+                        ImGui::DragFloat3("##v", reinterpret_cast<float*>(f.Address(fbase)), f.DragSpeed,
+                            f.Min, f.Max);
                         started = ImGui::IsItemActivated();
                         break;
+                    case ReflectFieldType::String: {
+                        auto* s = reinterpret_cast<std::string*>(f.Address(fbase));
+                        char buf[256];
+                        snprintf(buf, sizeof(buf), "%s", s->c_str());
+                        if (ImGui::InputText("##v", buf, sizeof(buf))) *s = buf;
+                        started = ImGui::IsItemActivated();
+                        break;
+                    }
                 }
                 if (started) PushUndo(world, std::string("Edit ") + rc.Meta.Name);
                 ImGui::PopID();
@@ -1782,12 +1849,9 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     entry(ICON_FA_VOLUME_HIGH, "Audio Source", registry.all_of<AudioSourceComponent>(entity),
         [&] { registry.emplace<AudioSourceComponent>(entity); });
 
-    ImGui::SeparatorText("Motion");
-    entry(ICON_FA_PERSON_RUNNING, "Animator", registry.all_of<AnimatorComponent>(entity),
-        [&] { registry.emplace<AnimatorComponent>(entity); });
-
     // #184: reflection-registered components. Adding one to ComponentRegistry puts it here with
-    // no edit to this menu.
+    // no edit to this menu. Animator used to be its own hand-coded "Motion" entry here; now it's
+    // just another entry in this list, same as Transform Controller and Spin.
     if (!ComponentRegistry::All().empty()) {
         ImGui::SeparatorText("Scripts");
         for (const auto& rc : ComponentRegistry::All()) {

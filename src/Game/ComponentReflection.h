@@ -13,24 +13,41 @@
 // The per-frame behaviour still lives in a system (in TartarusGame.dll) — reflection describes
 // the DATA, not the logic.
 //
-// v1 field types are deliberately just the four the first real component needs. Add more
-// (String, Int-as-enum, asset refs, entity refs) when a component actually wants them; the
-// generic serializer + Inspector switch on this enum in one place each.
+// v1 field types were deliberately just the four the first real component needed; String is the
+// second addition (TransformControllerComponent's ScriptPath). Add more (Int-as-enum, asset
+// refs, entity refs) when a component actually wants them; the generic serializer + Inspector
+// switch on this enum in one place each.
 
 enum class ReflectFieldType {
     Bool,
     Int,
     Float,
     Vec3,
+    String,
 };
 
 struct ReflectField {
     const char* Name = "";          // Inspector label + JSON key
     ReflectFieldType Type = ReflectFieldType::Float;
-    std::size_t Offset = 0;         // offsetof(Component, member) — components are standard-layout
-    float DragSpeed = 0.1f;         // per-pixel step for the Inspector's Drag* widget
-    const char* Tooltip = nullptr;  // optional
+    // Returns the address of this field within a component instance. Built from a pointer-to-
+    // member at the registration site (TARTARUS_REFLECT_FIELD below) rather than an offsetof, so
+    // the component need NOT be standard-layout — a std::string or a non-standard-layout
+    // glm::vec3 member is fine. `component` is the void* from RegisteredComponent::Get/GetConst.
+    void* (*Address)(void* component) = nullptr;
+    float DragSpeed = 0.1f;          // per-pixel step for the Inspector's Drag* widget
+    const char* Tooltip = nullptr;   // optional
+    // Optional Int/Float/Vec3 clamp, forwarded straight to the Inspector's Drag* widgets. Leave
+    // both at 0 (the default) for "unclamped" — ImGui's own convention for DragFloat/DragInt/
+    // DragFloat3 (v_min == v_max == 0 disables clamping), so a field that doesn't set these
+    // behaves exactly as it did before Min/Max existed. Ignored by Bool/String.
+    float Min = 0.0f;
+    float Max = 0.0f;
 };
+
+// Builds a ReflectField::Address accessor from a pointer-to-member. The unary + forces the
+// captureless lambda to decay to a plain function pointer.
+#define TARTARUS_REFLECT_FIELD(ComponentType, member) \
+    (+[](void* c) -> void* { return &static_cast<ComponentType*>(c)->member; })
 
 struct ReflectComponent {
     const char* Name = "";          // stable key: JSON object key, section title, menu label
