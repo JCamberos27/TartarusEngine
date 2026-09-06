@@ -15,6 +15,10 @@
 
 #include <cstdio>
 #include <cstring>
+#include <iterator>
+#include <set>
+#include <string>
+#include <vector>
 #include <imgui.h>
 #include <GLFW/glfw3.h>
 #include <windows.h>
@@ -275,6 +279,76 @@ void TbGetCaptureButtonTooltip(char* out, int outSize) {
                   kModes[cm], (cm == 1 || cm == 2) && s.CaptureScale > 1 ? " x2+" : "");
 }
 
+// --- Asset Browser, thin slice (API v5) --------------------------------------------------
+// The Asset Browser's chrome lives in EditorModuleAssetBrowser.cpp; the grid stays host-side.
+// AssetLibrary never crosses the boundary — folders come back as a per-frame string snapshot
+// and every mutation is an undoable command routed through EditorLayer's public bridge methods.
+// g_Assets / g_World / g_Editor are refreshed each frame by SetFrameContext().
+
+void AbPutStr(char* out, int n, const std::string& s) {
+    if (!out || n <= 0) return;
+    const int m = (int)s.size() < n - 1 ? (int)s.size() : n - 1;
+    std::memcpy(out, s.data(), (size_t)m);
+    out[m] = '\0';
+}
+
+bool  AbGetShow() { return g_Editor && g_Editor->GetShowAssetBrowser(); }
+void  AbSetShow(bool on) { if (g_Editor) g_Editor->SetShowAssetBrowser(on); }
+void  AbGetSearch(char* o, int n) { AbPutStr(o, n, g_Editor ? g_Editor->AssetSearchFilter() : std::string()); }
+void  AbSetSearch(const char* s) { if (g_Editor) g_Editor->SetAssetSearchFilter(s ? s : ""); }
+void  AbGetLabelMenuFilter(char* o, int n) { AbPutStr(o, n, g_Editor ? g_Editor->AssetLabelMenuFilter() : std::string()); }
+void  AbSetLabelMenuFilter(const char* s) { if (g_Editor) g_Editor->SetAssetLabelMenuFilter(s ? s : ""); }
+void  AbGetCurrentFolder(char* o, int n) { AbPutStr(o, n, g_Editor ? g_Editor->CurrentAssetFolder() : std::string()); }
+void  AbSetCurrentFolder(const char* f) { if (g_Editor) g_Editor->SetCurrentAssetFolderFromTree(f ? f : ""); }
+float AbGetTreeWidth() { return g_Editor ? g_Editor->AssetTreeWidthPx() : 180.0f; }
+void  AbSetTreeWidth(float px, bool commit) { if (g_Editor) g_Editor->SetAssetTreeWidthPx(px, commit); }
+bool  AbConsumeSearchFocus() { return g_Editor && g_Editor->ConsumeAssetSearchFocusRequest(); }
+void  AbSetFocused(bool f) { if (g_Editor) g_Editor->SetAssetBrowserFocused(f); }
+bool  AbIsFolderExpanded(const char* p) { return g_Editor && p && g_Editor->IsAssetFolderExpanded(p); }
+void  AbSetFolderExpanded(const char* p, bool e, bool r) {
+    if (g_Editor && g_Assets && p) g_Editor->AssetBrowserSetFolderExpanded(*g_Assets, p, e, r);
+}
+void  AbTreeFrameSetup(char* o, int n) {
+    AbPutStr(o, n, (g_Editor && g_Assets) ? g_Editor->AssetBrowserTreeFrameSetup(*g_Assets) : std::string());
+}
+int   AbGetFolderCount() { return g_Assets ? (int)g_Assets->Folders().size() : 0; }
+bool  AbGetFolder(int i, char* o, int n) {
+    if (!g_Assets) return false;
+    const std::vector<std::string>& f = g_Assets->Folders();
+    if (i < 0 || (size_t)i >= f.size()) return false;
+    AbPutStr(o, n, f[(size_t)i]);
+    return true;
+}
+int   AbGetKnownLabelCount() { return g_Assets ? (int)g_Assets->AllKnownLabels().size() : 0; }
+bool  AbGetKnownLabel(int i, char* o, int n) {
+    if (!g_Assets) return false;
+    const std::set<std::string>& s = g_Assets->AllKnownLabels();
+    if (i < 0 || (size_t)i >= s.size()) return false;
+    auto it = s.begin();
+    std::advance(it, i);
+    AbPutStr(o, n, *it);
+    return true;
+}
+void  AbCreateFolder(const char* p) {
+    if (g_Editor && g_World && g_Assets && p) g_Editor->AssetBrowserCreateFolder(*g_World, *g_Assets, p);
+}
+void  AbRenameFolder(const char* oldP, const char* newP) {
+    if (g_Editor && g_World && g_Assets && oldP && newP)
+        g_Editor->AssetBrowserRenameFolder(*g_World, *g_Assets, oldP, newP);
+}
+void  AbMoveAsset(const char* key, const char* folder) {
+    if (g_Editor && g_World && g_Assets && key && folder)
+        g_Editor->AssetBrowserMoveAssetToFolder(*g_World, *g_Assets, key, folder);
+}
+void  AbBeginRenameFolder(const char* p) { if (g_Editor && p) g_Editor->AssetBrowserBeginRenameFolder(p); }
+void  AbImportViaDialog(int kind, const char* into) {
+    if (g_Editor && g_World && g_Assets)
+        g_Editor->AssetBrowserImportViaDialog(*g_World, *g_Assets, kind, into ? into : "");
+}
+void  AbDrawGridBody(float h) {
+    if (g_Editor && g_World && g_Assets) g_Editor->DrawAssetGridBody(*g_World, *g_Assets, h);
+}
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
@@ -329,6 +403,29 @@ const EditorModuleHostAPI kHostAPI{
     &TbDrawCaptureOptionsPopupBody,
     &TbRequestCapture,
     &TbGetCaptureButtonTooltip,
+    // --- Asset Browser, thin slice (API v5) — order must match EditorModuleHostAPI exactly ---
+    &AbGetShow,                 &AbSetShow,
+    &AbGetSearch,               &AbSetSearch,
+    &AbGetLabelMenuFilter,      &AbSetLabelMenuFilter,
+    &AbGetCurrentFolder,
+    &AbSetCurrentFolder,
+    &AbGetTreeWidth,
+    &AbSetTreeWidth,
+    &AbConsumeSearchFocus,
+    &AbSetFocused,
+    &AbIsFolderExpanded,
+    &AbSetFolderExpanded,
+    &AbTreeFrameSetup,
+    &AbGetFolderCount,
+    &AbGetFolder,
+    &AbGetKnownLabelCount,
+    &AbGetKnownLabel,
+    &AbCreateFolder,
+    &AbRenameFolder,
+    &AbMoveAsset,
+    &AbBeginRenameFolder,
+    &AbImportViaDialog,
+    &AbDrawGridBody,
 };
 
 } // namespace

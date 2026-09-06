@@ -1529,10 +1529,10 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
     if (m_ShowHierarchy) DrawHierarchy(world, assets);
     if (m_ShowInspector) DrawInspector(world, assets, dt);
-    if (m_ShowAssetBrowser) DrawAssetBrowser(world, assets);
-    // (Console and the Statistics HUD are drawn by the reloadable editor module — see main.cpp's
-    // editorModule.Draw(), which runs immediately after this call, still inside the same ImGui
-    // frame and dockspace.)
+    // (Console, the Statistics HUD, the top toolbar and the Asset Browser are drawn by the
+    // reloadable editor module — see main.cpp's editorModule.Draw(), which runs immediately after
+    // this call, still inside the same ImGui frame and dockspace. The Asset Browser's grid is
+    // still host code: the module calls it back via EditorModuleHostAPI::DrawAssetGridBody.)
     if (!m_HideOverlaysThisFrame) {
         // Exponential smoothing of the frame time: a raw per-frame ms figure flickers too fast
         // to read. Used by the viewport status bar just below and by the reloadable Stats HUD

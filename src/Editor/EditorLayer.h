@@ -127,6 +127,41 @@ public:
     // Also the module's Add menu (via the host glue); still used by Shift+A quick-add and the
     // Hierarchy context menu, which are host-side.
     void DrawAddEntityItems(World& world, AssetLibrary& assets, Camera& editorCamera);
+
+    // --- Reloadable Asset Browser module bridge (issue #229, thin slice) -------------------
+    // The Asset Browser's chrome (dock window, +Create/Import row, breadcrumb, search + Filters,
+    // folder tree, splitter) lives in EditorModuleAssetBrowser.cpp. The grid stays host-side and
+    // is drawn through DrawAssetGridBody. These are public for the non-member host glue.
+    bool  GetShowAssetBrowser() const { return m_ShowAssetBrowser; }
+    void  SetShowAssetBrowser(bool on) { m_ShowAssetBrowser = on; }
+    const std::string& CurrentAssetFolder() const { return m_CurrentAssetFolder; }
+    void  SetCurrentAssetFolderFromTree(const std::string& folder) {
+        m_CurrentAssetFolder = folder;
+        ClearAssetSelection();
+        m_SelectedAssetKey = folder;
+        m_SelectedAssetIsFolder = true;
+    }
+    const std::string& AssetSearchFilter() const { return m_AssetSearchFilter; }
+    void  SetAssetSearchFilter(const std::string& s) { m_AssetSearchFilter = s; }
+    const std::string& AssetLabelMenuFilter() const { return m_AssetLabelMenuFilter; }
+    void  SetAssetLabelMenuFilter(const std::string& s) { m_AssetLabelMenuFilter = s; }
+    float AssetTreeWidthPx() const { return m_AssetTreeWidth; }
+    void  SetAssetTreeWidthPx(float px, bool commit);   // clamps; persists on commit — EditorLayer_AssetBrowser.cpp
+    bool  ConsumeAssetSearchFocusRequest() { bool r = m_AssetSearchFocusRequested; m_AssetSearchFocusRequested = false; return r; }
+    void  SetAssetBrowserFocused(bool f) { m_AssetBrowserFocused = f; }
+    bool  IsAssetFolderExpanded(const std::string& p) const { return m_ExpandedAssetFolders.count(p) > 0; }
+    // Thin forwarders for the non-member glue (real methods stay private).
+    void  AssetBrowserBeginRenameFolder(const std::string& path) { BeginRenameAsset(path, true, path.substr(path.find_last_of('/') + 1)); }
+    void  AssetBrowserSetFolderExpanded(AssetLibrary& a, const std::string& p, bool e, bool r) { SetFolderExpandedRecursive(a, p, e, r); }
+    // Undoable AssetLibrary folder commands (PushUndo + the mutation) — EditorLayer_AssetBrowser.cpp.
+    void  AssetBrowserCreateFolder(World& world, AssetLibrary& assets, const std::string& path);
+    void  AssetBrowserRenameFolder(World& world, AssetLibrary& assets, const std::string& oldPath, const std::string& newPath);
+    void  AssetBrowserMoveAssetToFolder(World& world, AssetLibrary& assets, const std::string& assetKey, const std::string& folder);
+    void  AssetBrowserImportViaDialog(World& world, AssetLibrary& assets, int kind, const std::string& intoFolder); // EditorLayer_AssetBrowser.cpp
+    // Per-frame tree prep: virtual folders, listing-cache refresh, ancestor-expand on folder
+    // change; returns the folder to scroll into view this frame ("" = none).
+    std::string AssetBrowserTreeFrameSetup(AssetLibrary& assets);                // EditorLayer_AssetBrowser.cpp
+    void  DrawAssetGridBody(World& world, AssetLibrary& assets, float contentHeight); // EditorLayer_AssetBrowser.cpp
     // Screen-space rect of the live Game view image + its framebuffer's colour texture/size, so
     // the Play-Mode Stop/Fullscreen overlay can anchor to the game viewport and adapt its tint
     // to what's rendered there. Pass a zero size to say "no game view this frame".
@@ -829,7 +864,8 @@ private:
     char m_TagAddBuf[64] = "";
     void DrawHierarchy(World& world, AssetLibrary& assets);
     void DrawInspector(World& world, AssetLibrary& assets, float dt);
-    void DrawAssetBrowser(World& world, AssetLibrary& assets);
+    // DrawAssetBrowser's chrome moved into EditorModuleAssetBrowser.cpp (#229); the grid stays
+    // host-side as DrawAssetGridBody (declared in the public bridge block above).
     std::string m_AssetSearchFilter;
     std::string m_AssetLabelMenuFilter; // the Label filter popup's own mini search box
     char m_LabelsEditBuffer[256] = {};  // the per-asset "Edit Labels..." popup's comma-separated text
@@ -874,7 +910,9 @@ private:
     std::string m_AssetFolderTreeRevealed;
     bool m_RevealAssetFolderInTree = false;
     float m_AssetTreeWidth = 180.0f; // drag-resizable via the splitter between tree and grid
-    void DrawFolderTreeNode(World& world, AssetLibrary& assets, const std::string& folderPath, bool isRoot);
+    // The folder tree moved into EditorModuleAssetBrowser.cpp (#229). Expansion state stays here
+    // (host-side) so the Left/Right-arrow tree shortcuts keep working and it survives a reload;
+    // the module reaches it through EditorModuleHostAPI::{Is,Set}AssetFolderExpanded.
     void SetFolderExpandedRecursive(AssetLibrary& assets, const std::string& folderPath, bool expand, bool recursive);
 
     // Icon size for the grid on the right - dragging the slider at its bottom below
