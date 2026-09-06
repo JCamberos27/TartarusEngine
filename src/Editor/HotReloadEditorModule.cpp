@@ -385,6 +385,7 @@ void  InspDrawBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawInspectorBody(*g_World, *g_Assets);
 }
 void  TbDrawGridSnapPopupBody() { if (g_Editor) g_Editor->DrawGridSnapPopupBody(); }
+void  TbDrawGizmosPopupBody()   { if (g_Editor) g_Editor->DrawGizmosPopupBody(); }
 
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
@@ -483,6 +484,8 @@ const EditorModuleHostAPI kHostAPI{
     &InspDrawBody,
     // --- Grid & Snap popover (API v9) — order must match EditorModuleHostAPI exactly ---
     &TbDrawGridSnapPopupBody,
+    // --- Gizmos dropdown (API v10) — order must match EditorModuleHostAPI exactly ---
+    &TbDrawGizmosPopupBody,
 };
 
 } // namespace
