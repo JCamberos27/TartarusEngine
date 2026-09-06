@@ -43,18 +43,9 @@ struct AssetGridCell {
     std::shared_ptr<Texture> texture;
 };
 
-// Async (PBO-backed) state for one adaptive-contrast sampling call site (#178). SampleTextureLuminance
-// ping-pongs two pixel-pack buffer objects: each call kicks off a non-blocking glReadPixels into
-// one PBO and, in the same call, maps+consumes whatever the OTHER PBO was loaded with by the
-// previous kickoff (one throttled ~100ms tick earlier) — so the GPU is never stalled waiting for
-// the readback. Each HUD element that samples independently (Stats HUD, History HUD, status bar,
-// nav-gizmo cluster, Play/Stop button) needs its own instance so their reads don't clobber one
-// another.
-struct AsyncLuminanceReadback {
-    unsigned int Pbo[2] = { 0, 0 }; // fixed-size (kMaxLumPatch^2 * 4 bytes) buffers, DSA-mapped
-    int Pending[2] = { 0, 0 };      // pixel count kicked into that slot and not yet consumed (0 = none)
-    int Next = 0;                  // slot to write into on the next call; the other slot is read
-};
+#include "AdaptiveContrast.h" // AsyncLuminanceReadback + SampleTextureLuminance (shared with GameViewPanel)
+// NB: EditorLayer also keeps its own m_MarkSampleFbo (below) — a scratch read-FBO for a separate
+// synchronous corner-monogram luminance sample, unrelated to the async readbacks above.
 
 // In-game editor overlay (Dear ImGui + ImGuizmo): import assets, place/inspect
 // entities, manipulate them with viewport gizmos. Toggle with F1; gameplay pauses
@@ -230,10 +221,6 @@ public:
     // AsyncLuminanceReadback below). Throttle calls yourself — it still does a GPU->CPU sync, just
     // a frame or two later and without stalling the pipeline.
     float SampleSceneLuminance(AsyncLuminanceReadback& rb, ImVec2 centerScreen, float boxPx);
-    // General form: sample `colorTex` (texW x texH) as if it were displayed in screen rect
-    // imgPos..imgPos+imgSize, in a screen-space box of `boxPx` at `centerScreen`. -1 if unusable.
-    float SampleTextureLuminance(AsyncLuminanceReadback& rb, unsigned int colorTex, int texW, int texH,
-                                 ImVec2 imgPos, ImVec2 imgSize, ImVec2 centerScreen, float boxPx);
     bool ConsumePlayStopRequest() {
         bool requested = m_PlayStopRequested;
         m_PlayStopRequested = false;
@@ -869,7 +856,6 @@ private:
     // of the scene texture directly behind the mark, and eases this toward white over dark
     // content / black over light content. 1 = white, 0 = black; starts white (matches the old
     // fixed colour) so the first frame before any readback looks unchanged.
-    unsigned int m_MarkSampleFbo = 0; // scratch read-FBO wrapping m_SceneColorTexture for the readback
     float m_MarkContrastLum = 1.0f;    // eased, per-frame
     float m_MarkContrastTarget = 1.0f; // refreshed by the throttled readback
     float m_MarkSampleAccum = 0.0f;    // seconds since last readback (sampled ~10 Hz, not per-frame,
@@ -881,6 +867,7 @@ private:
     float m_PlayBtnContrastTarget = 1.0f;
     float m_PlayBtnSampleAccum = 0.0f;
     AsyncLuminanceReadback m_PlayBtnReadback; // ping-ponged PBOs backing the sample above (#178)
+    unsigned int m_MarkSampleFbo = 0; // scratch read-FBO for the corner-monogram's own synchronous sample
     // Same again for the top-right nav-gizmo cluster (dolly / pan tool buttons + the Persp/axis
     // label): its own sample because the corner it lives in can differ in brightness from the
     // top-center where the Play button sits.

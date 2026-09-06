@@ -1,6 +1,7 @@
 #pragma once
 #include "ResolutionManager.h"
 #include "../Renderer/Framebuffer.h"
+#include "AdaptiveContrast.h"
 #include <imgui.h>
 #include <vector>
 
@@ -130,6 +131,13 @@ private:
     int m_CustomWidth = 1920;
     int m_CustomHeight = 1080;
 
-    void DrawAspectControl();
+    // Adaptive-contrast state for the overlays that sit on the rendered game image, so their
+    // text/plates track what's behind them (the corner-monogram trick). Two sample regions: the
+    // top-left (stats) and the bottom (the "click to control" hint + the aspect control).
+    AsyncLuminanceReadback m_TopLumRb, m_BottomLumRb;
+    float m_TopLum = 1.0f, m_TopLumTarget = 1.0f, m_TopLumAccum = 0.0f;
+    float m_BottomLum = 1.0f, m_BottomLumTarget = 1.0f, m_BottomLumAccum = 0.0f;
+
+    void DrawAspectControl(float contrast);
     void DrawCustomResolutionModal();
 };
