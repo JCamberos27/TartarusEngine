@@ -43,6 +43,13 @@ Current lineup (#234): **0 = Bento** (default; `ApplyBentoPalette()` — the fal
 the accent family every frame), **2 = Windows XP**. `EditorSettings::Load` clamps an out-of-range
 value to 0.
 
+**Layer-3 layout treatment is theme-gated.** The Bento hairline-card / tight-row look (#234
+layer 3) only applies to the SaaS-dashboard themes. Gate host-side branches on
+`EditorLayer::UseBentoLayout()` (`EditorTheme <= 1` — Bento or Prism); in a reloadable module,
+`host.GetEditorTheme() <= 1`. Windows XP keeps the flat panels. The viewport HUDs (Stats,
+History, status bar) stay bare contrast-adaptive text over the scene in every theme — a card
+frame there occludes the view and defeats the adaptive tint.
+
 **Adding a theme:**
 
 1. New `int` value. Add a branch `if (EditorTheme == N) { … return; }` in `ApplyEditorTheme()`

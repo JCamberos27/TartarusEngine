@@ -380,6 +380,8 @@ static void ApplyBentoPalette(ImGuiStyle& style) {
     style.Colors[ImGuiCol_ModalWindowDimBg] = rgb(0, 0, 0, 0.45f);
 }
 
+bool EditorLayer::UseBentoLayout() const { return EditorSettings::Get().EditorTheme <= 1; }
+
 void EditorLayer::ApplyEditorTheme() {
     ImGuiStyle& style = ImGui::GetStyle();
 
