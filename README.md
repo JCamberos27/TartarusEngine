@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/logo.png" alt="Tartarus Engine" width="640">
+<img src="docs/images/logo.png" alt="Tartarus Engine" width="520">
 
 **A C++17 / OpenGL game engine and scene editor for first-person games.**
 
@@ -269,8 +269,3 @@ Bundled and fetched third-party components (miniaudio, stb, nlohmann/json, Font 
 GLM, Assimp, EnTT, Dear ImGui, ImGuizmo, libtiff) remain under their own licenses — see
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Branding assets under `extern/branding/` are
 not covered by the MIT license.
-
-<div align="center">
-<br>
-<img src="docs/images/mark.png" alt="" width="64">
-</div>
