@@ -27,6 +27,10 @@ void Add(RegisteredComponent entry);
 
 template <class T>
 void Register(ReflectComponent meta) {
+    // Reflected fields are addressed through a pointer-to-member accessor (TARTARUS_REFLECT_FIELD
+    // in ComponentReflection.h), not offsetof, so there is no standard-layout requirement on T —
+    // components with std::string members (Transform Controller's ScriptPath) or non-standard-
+    // layout glm::vec3 members register fine.
     Add(RegisteredComponent{
         std::move(meta),
         [](const entt::registry& r, entt::entity e) { return r.all_of<T>(e); },
