@@ -665,6 +665,11 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ImGui::Checkbox("Show transform gizmo", &m_ShowGizmos);
         ImGui::Checkbox("Frame camera on select", &m_FrameOnSelect);
 
+        ImGui::SeparatorText("Game view");
+        if (ImGui::Checkbox("Maximize on Play", &prefs.GameViewMaximizeOnPlay)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Entering Play Mode expands the Game view to borderless fullscreen\ninstead of staying windowed.");
+
         ImGui::SeparatorText("Light gizmos");
         if (ImGui::Checkbox("Show light gizmos", &prefs.ShowLightGizmos)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
@@ -915,7 +920,9 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             {"View presets", "1 / 3 / 7 / 0  (or numpad; Ctrl = opposite side)"},
             {"Toggle orthographic", "5  (or numpad 5)"},
             {"Frame selection", "F"},
-            {"Quick add (Add menu at cursor)", "Shift+A"},
+            {"Quick create (Create menu at cursor)", "Shift+A"},
+            {"Create Empty Child (of the selection)", "Ctrl+Shift+N"},
+            {"Toggle Active State (selection)", "Alt+Shift+A"},
             {"Align selected Camera to view", "Ctrl+Shift+F"},
             {"Gizmo: move / rotate / scale / rect", "W / E / R / T"},
             {"Vertex grab", "hold V"},
@@ -1731,6 +1738,15 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N)) {
             RequestNewScene(world, assets);
         }
+        // GameObject-menu parity (#236): Ctrl+Shift+N = Create Empty Child (of the active
+        // selection, or a root Empty if nothing's selected); Alt+Shift+A = Toggle Active State.
+        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N)) {
+            CreateEmptyChild(world,
+                (m_Selected != entt::null && world.Registry.valid(m_Selected)) ? m_Selected : entt::null);
+        }
+        if (io.KeyAlt && io.KeyShift && !io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A)) {
+            ToggleSelectionActive(world);
+        }
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Comma)) m_ShowPreferences = true;
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O)) {
             RequestOpenScene(world, assets, FileDialog::OpenFile("Scene Files\0*.json\0All Files\0*.*\0", m_Window));
@@ -1923,7 +1939,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         m_OpenQuickAdd = false;
     }
     if (ImGui::BeginPopup("##QuickAdd")) {
-        ImGui::SeparatorText(ICON_FA_CUBES "  Add");
+        ImGui::SeparatorText(ICON_FA_CUBES "  Create");
         DrawAddEntityItems(world, assets, editorCamera);
         ImGui::EndPopup();
     }
