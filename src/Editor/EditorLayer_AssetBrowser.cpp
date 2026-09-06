@@ -52,6 +52,10 @@
 
 using namespace EditorInternal;
 
+// The grid's per-frame tile list (EditorLayer::m_AssetGridCells). `Cell` kept as a short local
+// alias so the ported per-cell code below reads unchanged.
+using Cell = AssetGridCell;
+
 
 namespace {
 
@@ -805,22 +809,12 @@ std::string EditorLayer::AssetBrowserTreeFrameSetup(AssetLibrary& assets) {
 // The asset grid (right pane) + the footer + the delete-confirm popup — everything the thin-slice
 // #229 migration left host-side. Drawn into the module's "Asset Browser" window, between its
 // tree/splitter and its End(); `contentHeight` is the tree pane's height, computed module-side.
-void EditorLayer::DrawAssetGridBody(World& world, AssetLibrary& assets, float contentHeight) {
-    auto makeNewFolder = [&]() {
-        std::string base = m_CurrentAssetFolder.empty() ? "New Folder" : (m_CurrentAssetFolder + "/New Folder");
-        std::string candidate = base;
-        int n = 1;
-        auto exists = [&](const std::string& p) {
-            for (const auto& f : assets.Folders()) if (f == p) return true;
-            return false;
-        };
-        while (exists(candidate)) candidate = base + " (" + std::to_string(n++) + ")";
-        PushUndo(world, "Create Folder");
-        assets.CreateFolder(candidate);
-        BeginRenameAsset(candidate, true, LeafNameOf(candidate));
-    };
-
-    ImGui::BeginChild("##AssetList", ImVec2(0, contentHeight), ImGuiChildFlags_None);
+// Rebuild the per-frame tile list and run the Ctrl+A "select every visible item" shortcut. The
+// module calls this right after ImGui::BeginChild("##AssetList") so IsWindowFocused is meaningful.
+void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
+    (void)world;
+    auto& cells = m_AssetGridCells;
+    cells.clear();
 
     bool searching = !m_AssetSearchFilter.empty();
     ParsedAssetSearch parsedSearch = ParseAssetSearch(m_AssetSearchFilter);
@@ -828,15 +822,6 @@ void EditorLayer::DrawAssetGridBody(World& world, AssetLibrary& assets, float co
     // searching by name) - e.g. "t:Texture" alone, browsing normally, should hide non-textures
     // right where they are rather than forcing a switch to whole-library search first.
     bool filtering = searching || !parsedSearch.typeTerms.empty() || !parsedSearch.labelTerms.empty();
-
-    struct Cell {
-        enum class Kind { Folder, Model, Texture, Sound, Scene, Prefab, Screenshot } kind;
-        std::string key;
-        std::string display;
-        std::shared_ptr<Model> model;
-        std::shared_ptr<Texture> texture;
-    };
-    std::vector<Cell> cells;
 
     // A special, filesystem-backed folder (not one of AssetLibrary's virtual reference
     // folders) listing every *.json under scenes/ on disk, so scenes can be browsed and
@@ -934,41 +919,21 @@ void EditorLayer::DrawAssetGridBody(World& world, AssetLibrary& assets, float co
         }
     }
 
-    // Below kListViewIconSize (DPI-scaled, matching the footer slider's minimum), the slider
-    // switches to a compact list - Unity's "slide the icon size to the extreme left for list
-    // view" behavior.
-    bool gridMode = m_AssetIconSize > kListViewIconSize * m_UIScale;
+    // #219: the wrapping grid clips by ROW (see the module's clipper loop). The cell-size math and
+    // cellsPerRow live module-side now, derived from GetAssetGridMetrics(); DrawAssetCell just
+    // takes the rect it was told to fill. List mode is a grid with one cell per row.
+}
+
+// One tile at the module's current cursor. `gridMode` false = the compact icon+name list row.
+// The module owns the per-row SameLine wrapping, so this never advances past its own cell.
+void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, float cellW, float cellH, bool gridMode) {
+    auto& cells = m_AssetGridCells;
+    if (index < 0 || (size_t)index >= cells.size()) return;
+    const size_t cellIndex = (size_t)index;
+    const float cellWidth = cellW;
+    const float cellHeight = cellH;
     const float cellPadding = 8.0f;
-    const float cellWidth = m_AssetIconSize + cellPadding * 2.0f;
-    // One text line reserved under the thumbnail (#158) — long names truncate with "…" and show
-    // the full string on hover; every grid row is a line shorter than the old two-line reserve.
-    const float cellHeight = m_AssetIconSize + cellPadding + ImGui::GetTextLineHeightWithSpacing();
-
-    // (#157) The ".." go-up row is gone — the folder tree and the Backspace shortcut cover
-    // "go to parent"; it no longer costs a row at the top of every non-root folder.
-
-    // #219: submitting a Selectable+thumbnail+context-menu for every cell in the folder (rather
-    // than only the visible ones) got expensive with large libraries. This is a wrapping grid,
-    // not a simple list, so clipping happens by ROW: figure out how many cells fit per row (the
-    // same fixed-width math the old per-cell wrap check below did, just computed once up front),
-    // then let ImGuiListClipper skip whole off-screen rows while each visible row still iterates
-    // its cells normally. List mode is just a grid with one cell per row.
-    int cellsPerRow = 1;
-    if (gridMode) {
-        float availW = ImGui::GetContentRegionAvail().x;
-        float spacing = ImGui::GetStyle().ItemSpacing.x;
-        cellsPerRow = std::max(1, (int)std::floor((availW + spacing) / (cellWidth + spacing)));
-    }
-    int totalRows = cells.empty() ? 0 : (int)((cells.size() + (size_t)cellsPerRow - 1) / (size_t)cellsPerRow);
-    float clipRowHeight = gridMode ? cellHeight : ImGui::GetFrameHeightWithSpacing();
-
-    ImGuiListClipper clipper;
-    clipper.Begin(totalRows, clipRowHeight);
-    while (clipper.Step()) {
-    for (int clipRow = clipper.DisplayStart; clipRow < clipper.DisplayEnd; ++clipRow) {
-    for (int clipCol = 0; clipCol < cellsPerRow; ++clipCol) {
-        size_t cellIndex = (size_t)clipRow * (size_t)cellsPerRow + (size_t)clipCol;
-        if (cellIndex >= cells.size()) break;
+    {
         const auto& cell = cells[cellIndex];
         ImGui::PushID(cell.key.c_str());
 
@@ -1326,14 +1291,25 @@ void EditorLayer::DrawAssetGridBody(World& world, AssetLibrary& assets, float co
         }
 
         ImGui::PopID();
+    }
+}
 
-        // Wrap within the row: SameLine for every column but the last, provided there's
-        // actually another cell to draw (the final row of the grid may be a partial one).
-        if (gridMode && clipCol + 1 < cellsPerRow && cellIndex + 1 < cells.size()) ImGui::SameLine();
-    }
-    }
-    }
-    clipper.End();
+// The empty-space click-to-clear + right-click "New Folder" popup, drawn by the module right
+// after the last DrawAssetCell (still inside its ##AssetList child).
+void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) {
+    auto makeNewFolder = [&]() {
+        std::string base = m_CurrentAssetFolder.empty() ? "New Folder" : (m_CurrentAssetFolder + "/New Folder");
+        std::string candidate = base;
+        int n = 1;
+        auto exists = [&](const std::string& p) {
+            for (const auto& f : assets.Folders()) if (f == p) return true;
+            return false;
+        };
+        while (exists(candidate)) candidate = base + " (" + std::to_string(n++) + ")";
+        PushUndo(world, "Create Folder");
+        assets.CreateFolder(candidate);
+        BeginRenameAsset(candidate, true, LeafNameOf(candidate));
+    };
 
     if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered()) {
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ClearAssetSelection();
@@ -1343,39 +1319,22 @@ void EditorLayer::DrawAssetGridBody(World& world, AssetLibrary& assets, float co
         if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS "  New Folder")) makeNewFolder();
         ImGui::EndPopup();
     }
+}
 
-    ImGui::EndChild(); // ##AssetList
+// Footer text: "N items selected" / the selected item's display name / "".
+void EditorLayer::GetAssetSelectionSummary(AssetLibrary& assets, char* out, int n) const {
+    if (!out || n <= 0) return;
+    std::string s;
+    if (!m_ExtraAssetSelection.empty())
+        s = std::to_string(m_ExtraAssetSelection.size() + 1) + " items selected";
+    else if (!m_SelectedAssetKey.empty())
+        s = m_SelectedAssetIsFolder ? m_SelectedAssetKey : assets.DisplayName(m_SelectedAssetKey);
+    const int m = (int)s.size() < n - 1 ? (int)s.size() : n - 1;
+    std::memcpy(out, s.data(), (size_t)m);
+    out[m] = '\0';
+}
 
-    // Footer: the selected item's name/path on the left (Unity shows the full path here only
-    // while searching; a plain display name the rest of the time is enough for this browser's
-    // scale), and the icon-size slider on the right - dragging it to the minimum switches the
-    // grid above to the compact list view instead of tiles.
-    ImGui::BeginChild("##AssetGridFooter", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
-    std::string footerLabel;
-    if (!m_ExtraAssetSelection.empty()) {
-        footerLabel = std::to_string(m_ExtraAssetSelection.size() + 1) + " items selected";
-    } else if (!m_SelectedAssetKey.empty()) {
-        footerLabel = m_SelectedAssetIsFolder ? m_SelectedAssetKey : assets.DisplayName(m_SelectedAssetKey);
-    }
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextDisabled("%s", footerLabel.c_str());
-
-    const float sliderWidth = 100.0f;
-    float sliderX = ImGui::GetWindowContentRegionMax().x - sliderWidth;
-    if (sliderX > ImGui::GetCursorPosX()) ImGui::SameLine(sliderX);
-    else ImGui::NewLine();
-    ImGui::SetNextItemWidth(sliderWidth);
-    EditorUI::SliderFloat("##IconSize", &m_AssetIconSize,
-        kListViewIconSize * m_UIScale, 128.0f * m_UIScale, "");
-    if (ImGui::IsItemHovered()) {
-        EditorUI::SetTooltip("Icon size - drag all the way to the left for a compact list view.");
-    }
-    if (ImGui::IsItemDeactivatedAfterEdit()) { // slider released — remember it
-        EditorSettings::Get().AssetBrowserIconSize = m_AssetIconSize;
-        EditorSettings::Save();
-    }
-    ImGui::EndChild();
-
-    DrawDeleteConfirmPopup(world, assets);
-    // ImGui::End() for the "Asset Browser" window is the module's — it owns Begin() now.
+void EditorLayer::SetAssetIconSize(float px, bool commit) {
+    m_AssetIconSize = std::clamp(px, kListViewIconSize * m_UIScale, 128.0f * m_UIScale);
+    if (commit) { EditorSettings::Get().AssetBrowserIconSize = m_AssetIconSize; EditorSettings::Save(); }
 }

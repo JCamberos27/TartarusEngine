@@ -345,9 +345,20 @@ void  AbImportViaDialog(int kind, const char* into) {
     if (g_Editor && g_World && g_Assets)
         g_Editor->AssetBrowserImportViaDialog(*g_World, *g_Assets, kind, into ? into : "");
 }
-void  AbDrawGridBody(float h) {
-    if (g_Editor && g_World && g_Assets) g_Editor->DrawAssetGridBody(*g_World, *g_Assets, h);
+void  AbGridFrameBegin() { if (g_Editor && g_World && g_Assets) g_Editor->AssetGridFrameBegin(*g_World, *g_Assets); }
+int   AbGridCellCount() { return g_Editor ? g_Editor->AssetGridCellCount() : 0; }
+void  AbGetGridMetrics(float* i, float* u, float* l) { if (g_Editor) g_Editor->GetAssetGridMetrics(i, u, l); }
+void  AbDrawCell(int idx, float w, float h, bool grid) {
+    if (g_Editor && g_World && g_Assets) g_Editor->DrawAssetCell(*g_World, *g_Assets, idx, w, h, grid);
 }
+void  AbHandleGridBackground() { if (g_Editor && g_World && g_Assets) g_Editor->HandleAssetGridBackground(*g_World, *g_Assets); }
+void  AbGetSelectionSummary(char* o, int n) {
+    if (g_Editor && g_Assets) g_Editor->GetAssetSelectionSummary(*g_Assets, o, n);
+    else if (o && n > 0) o[0] = '\0';
+}
+float AbGetIconSize() { return g_Editor ? g_Editor->GetAssetIconSize() : 64.0f; }
+void  AbSetIconSize(float px, bool commit) { if (g_Editor) g_Editor->SetAssetIconSize(px, commit); }
+void  AbGridFrameEnd() { if (g_Editor && g_World && g_Assets) g_Editor->AssetGridFrameEnd(*g_World, *g_Assets); }
 
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
@@ -425,7 +436,16 @@ const EditorModuleHostAPI kHostAPI{
     &AbMoveAsset,
     &AbBeginRenameFolder,
     &AbImportViaDialog,
-    &AbDrawGridBody,
+    // --- Asset grid layout slice (API v6) — order must match EditorModuleHostAPI exactly ---
+    &AbGridFrameBegin,
+    &AbGridCellCount,
+    &AbGetGridMetrics,
+    &AbDrawCell,
+    &AbHandleGridBackground,
+    &AbGetSelectionSummary,
+    &AbGetIconSize,
+    &AbSetIconSize,
+    &AbGridFrameEnd,
 };
 
 } // namespace

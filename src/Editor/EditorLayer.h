@@ -29,6 +29,19 @@ class Framebuffer;
 // handles for non-uniform scaling, in one combined gizmo (ImGuizmo's TRANSLATE | BOUNDS).
 enum class GizmoOp { Translate, Rotate, Scale, Rect };
 
+// One tile in the Asset Browser grid. Built once per frame by EditorLayer::AssetGridFrameBegin
+// into m_AssetGridCells and read by DrawAssetCell (#229: the grid's clipper/row-wrap scaffold
+// lives in TartarusEditor.dll, the per-cell draw stays host-side). Holds shared_ptr<Model/Texture>
+// so it never crosses the DLL boundary — the module only ever asks for a cell count + a
+// DrawAssetCell(index) callback.
+struct AssetGridCell {
+    enum class Kind { Folder, Model, Texture, Sound, Scene, Prefab, Screenshot } kind;
+    std::string key;
+    std::string display;
+    std::shared_ptr<Model> model;
+    std::shared_ptr<Texture> texture;
+};
+
 // Async (PBO-backed) state for one adaptive-contrast sampling call site (#178). SampleTextureLuminance
 // ping-pongs two pixel-pack buffer objects: each call kicks off a non-blocking glReadPixels into
 // one PBO and, in the same call, maps+consumes whatever the OTHER PBO was loaded with by the
@@ -161,7 +174,23 @@ public:
     // Per-frame tree prep: virtual folders, listing-cache refresh, ancestor-expand on folder
     // change; returns the folder to scroll into view this frame ("" = none).
     std::string AssetBrowserTreeFrameSetup(AssetLibrary& assets);                // EditorLayer_AssetBrowser.cpp
-    void  DrawAssetGridBody(World& world, AssetLibrary& assets, float contentHeight); // EditorLayer_AssetBrowser.cpp
+
+    // Asset grid (#229 minimal slice): the module owns the ##AssetList child, the ImGuiListClipper
+    // row loop + per-row SameLine wrapping, and the footer child; the host fills each cell and the
+    // background through these. All in EditorLayer_AssetBrowser.cpp unless inline.
+    void  AssetGridFrameBegin(World& world, AssetLibrary& assets); // rebuilds m_AssetGridCells + Ctrl+A select-all
+    int   AssetGridCellCount() const { return (int)m_AssetGridCells.size(); }
+    void  GetAssetGridMetrics(float* outIconSize, float* outUIScale, float* outListMinIcon) const {
+        if (outIconSize)    *outIconSize = m_AssetIconSize;
+        if (outUIScale)     *outUIScale = m_UIScale;
+        if (outListMinIcon) *outListMinIcon = kListViewIconSize;
+    }
+    void  DrawAssetCell(World& world, AssetLibrary& assets, int index, float cellW, float cellH, bool gridMode);
+    void  HandleAssetGridBackground(World& world, AssetLibrary& assets);
+    void  GetAssetSelectionSummary(AssetLibrary& assets, char* out, int n) const;
+    float GetAssetIconSize() const { return m_AssetIconSize; }
+    void  SetAssetIconSize(float px, bool commit);                              // clamps; persists on commit
+    void  AssetGridFrameEnd(World& world, AssetLibrary& assets) { DrawDeleteConfirmPopup(world, assets); }
     // Screen-space rect of the live Game view image + its framebuffer's colour texture/size, so
     // the Play-Mode Stop/Fullscreen overlay can anchor to the game viewport and adapt its tint
     // to what's rendered there. Pass a zero size to say "no game view this frame".
@@ -897,6 +926,11 @@ private:
     std::string m_CurrentAssetFolder;
     std::string m_SelectedAssetKey;
     bool m_SelectedAssetIsFolder = false;
+
+    // Rebuilt once per frame by AssetGridFrameBegin; read by DrawAssetCell and the shift/ctrl
+    // multi-select (m_AssetSelectionAnchorIndex indexes into this). Never mutated between
+    // FrameBegin and the last DrawAssetCell of a frame.
+    std::vector<AssetGridCell> m_AssetGridCells;
 
     // Unity Project-window-style left folder tree, shown alongside the icon grid rather than
     // breadcrumb-only navigation. Which folders are expanded is tracked here (not left to

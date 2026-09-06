@@ -27,7 +27,13 @@
 //       undoable folder commands (create / rename / move-asset-into), import-via-dialog, and one
 //       DrawAssetGridBody callback that keeps the asset grid + thumbnails + context menus +
 //       delete/duplicate host-side.
-constexpr std::uint32_t kEditorModuleAPIVersion = 5;
+//   6 - Asset grid layout slice: the module now owns the ##AssetList child, the ImGuiListClipper
+//       row loop + per-row SameLine wrapping, and the footer child. DrawAssetGridBody is replaced
+//       by AssetGridFrameBegin / AssetGridCellCount / GetAssetGridMetrics / DrawAssetCell /
+//       HandleAssetGridBackground / GetAssetSelectionSummary / Get+SetAssetIconSize /
+//       AssetGridFrameEnd. Per-cell draw (thumbnails, the five context menus, rename, drag,
+//       multi-select) stays host-side inside DrawAssetCell.
+constexpr std::uint32_t kEditorModuleAPIVersion = 6;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -280,9 +286,22 @@ struct EditorModuleHostAPI {
     // `intoFolder` (the current folder).
     void (*ImportAssetViaDialog)(int kind, const char* intoFolder) = nullptr;
 
-    // The asset grid + footer + delete-confirm popup, host-side, drawn into the module's window
-    // between the tree/splitter and the module's End(). `contentHeight` is the tree pane height.
-    void (*DrawAssetGridBody)(float contentHeight) = nullptr;
+    // --- Asset grid layout slice (API v6) -------------------------------------------------
+    // The module owns the ##AssetList child, the clipper row loop + per-row SameLine wrapping,
+    // and the footer child. Per-frame order: BeginChild -> AssetGridFrameBegin -> for each
+    // visible cell DrawAssetCell(i, w, h, gridMode) -> HandleAssetGridBackground -> EndChild ->
+    // footer (GetAssetSelectionSummary + the icon-size slider via Get/SetAssetIconSize) ->
+    // AssetGridFrameEnd. Cell width/height and cellsPerRow are pure math the module does from
+    // GetAssetGridMetrics; DrawAssetCell just fills the rect it is handed.
+    void  (*AssetGridFrameBegin)() = nullptr;
+    int   (*AssetGridCellCount)() = nullptr;
+    void  (*GetAssetGridMetrics)(float* outIconSize, float* outUIScale, float* outListMinIcon) = nullptr;
+    void  (*DrawAssetCell)(int index, float cellW, float cellH, bool gridMode) = nullptr;
+    void  (*HandleAssetGridBackground)() = nullptr;
+    void  (*GetAssetSelectionSummary)(char* out, int n) = nullptr;
+    float (*GetAssetIconSize)() = nullptr;
+    void  (*SetAssetIconSize)(float px, bool commit) = nullptr;
+    void  (*AssetGridFrameEnd)() = nullptr;
 };
 
 struct EditorModuleAPI {
