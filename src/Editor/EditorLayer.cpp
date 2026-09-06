@@ -1651,8 +1651,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         UpdateVertexDrag(world, editorCamera);
     }
 
-    if (!m_HideOverlaysThisFrame) {
-        DrawEntityIcons(world, editorCamera);
+    if (!m_HideOverlaysThisFrame && m_GizmosMasterVisible) {
+        if (m_ShowEntityIcons) DrawEntityIcons(world, editorCamera); // DrawLightGizmos self-gates on EditorSettings::ShowLightGizmos
         DrawLightGizmos(world, editorCamera);
     }
 
@@ -1664,7 +1664,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if (!vHeld) {
         UpdateLightHandles(world, editorCamera);
         HandleViewportPicking(world, editorCamera);
-        if (m_ShowGizmos && !m_HideOverlaysThisFrame) DrawGizmo(world, editorCamera);
+        if (m_ShowGizmos && m_GizmosMasterVisible && !m_HideOverlaysThisFrame) DrawGizmo(world, editorCamera);
     }
 
     // Anchored to the actual viewport's top-center (a pivot, not a fixed-width guess) so it

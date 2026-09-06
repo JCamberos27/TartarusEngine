@@ -278,6 +278,20 @@ void Draw(const EditorModuleHostAPI& host) {
                 lightGizmos) && host.SetShowLightGizmos) {
             host.SetShowLightGizmos(!lightGizmos);
         }
+        ImGui::SameLine(0.0f, 1.0f);
+        ImGui::PushID("##gizmosOpts");
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+        if (ImGui::Button(ICON_FA_CARET_DOWN)) ImGui::OpenPopup("##GizmosPopup");
+        ImGui::PopStyleColor(2);
+        if (ImGui::IsItemHovered()) Tooltip(host, "Gizmo visibility");
+        if (ImGui::BeginPopup("##GizmosPopup")) {
+            xpMenuTextPush();
+            if (host.DrawGizmosPopupBody) host.DrawGizmosPopupBody();
+            xpMenuTextPop();
+            ImGui::EndPopup();
+        }
+        ImGui::PopID();
     }
 
     ImGui::SameLine();
