@@ -378,6 +378,13 @@ void  HierDrawTreeBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawHierarchyTreeBody(*g_World, *g_Assets);
 }
 
+// --- Inspector, frame only (API v8) --------------------------------------------------------
+bool  InspGetShow() { return g_Editor && g_Editor->GetShowInspector(); }
+void  InspSetShow(bool on) { if (g_Editor) g_Editor->SetShowInspector(on); }
+void  InspDrawBody() {
+    if (g_Editor && g_World && g_Assets) g_Editor->DrawInspectorBody(*g_World, *g_Assets);
+}
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
@@ -470,6 +477,9 @@ const EditorModuleHostAPI kHostAPI{
     &HierSetFilter,
     &HierExpandAll,
     &HierDrawTreeBody,
+    // --- Inspector, frame only (API v8) — order must match EditorModuleHostAPI exactly ---
+    &InspGetShow,  &InspSetShow,
+    &InspDrawBody,
 };
 
 } // namespace

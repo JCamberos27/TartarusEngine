@@ -11,6 +11,9 @@ namespace EditorModuleAssetBrowser {
 namespace EditorModuleHierarchy {
     void Draw(const EditorModuleHostAPI& host);
 }
+namespace EditorModuleInspector {
+    void Draw(const EditorModuleHostAPI& host);
+}
 namespace EditorModuleConsole {
     void Draw(const EditorModuleHostAPI& host);
 }
@@ -48,6 +51,7 @@ void Draw(const EditorModuleHostAPI& host) {
     if (!BindImGuiToHost(host)) return;
     EditorModuleToolbar::Draw(host); // top chrome first
     EditorModuleHierarchy::Draw(host);
+    EditorModuleInspector::Draw(host);
     EditorModuleAssetBrowser::Draw(host);
     EditorModuleConsole::Draw(host);
     EditorModuleStats::Draw(host);

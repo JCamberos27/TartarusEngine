@@ -584,23 +584,20 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
     }
 }
 
-void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
-    (void)dt; // not needed today; kept for parity with the other Draw* panel signatures
-    // Locked only blocks dragging the tab to move/undock/rearrange the panel — resizing its
-    // dock node (and the neighbors that share that border) always works, locked or not.
-    ImGuiWindowFlags flags = ImGuiWindowFlags_None;
-    PushTabChromeText(); // the dock tab bar renders inside Begin(); keep its text white on XP
-    const bool inspectorOpen = ImGui::Begin("Inspector", &m_ShowInspector, flags);
-    PopTabChromeText();
-    if (!inspectorOpen) { ImGui::End(); return; }
-
+// The Inspector's body — everything inside the panel window. The module
+// (EditorModuleInspector.cpp, #229) owns Begin("Inspector") + End + visibility and calls this
+// inside that window scope. The whole body — every component editor, the PBR material editor,
+// add-component, per-field undo — stays here (EnTT + Components.h + material shared_ptr never
+// cross the DLL boundary).
+void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // Flat button language for the whole panel (#155/#156): no raised body at rest, a faint wash
     // on hover. Every ImGui::Button below inherits it; ActionButton / DangerIconButton push their
-    // own on top. Popped before each ImGui::End() via InspectorEnd().
+    // own on top. Popped before each early return (and the natural end) via InspectorEnd() — the
+    // module owns ImGui::End() now, so this no longer closes the window.
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.14f));
-    auto InspectorEnd = []() { ImGui::PopStyleColor(3); ImGui::End(); };
+    auto InspectorEnd = []() { ImGui::PopStyleColor(3); };
 
     // Prune handles for objects deleted since the selection was made, so the multi/single
     // Inspector split below (and everything downstream) sees an accurate count.
