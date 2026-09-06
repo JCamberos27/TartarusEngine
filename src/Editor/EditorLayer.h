@@ -121,6 +121,8 @@ public:
     bool GizmoPivotCenter() const { return m_GizmoPivotCenter; }
     void SetGizmoPivotCenter(bool on) { m_GizmoPivotCenter = on; }
     void SetShowGrid(bool on) { m_ShowGrid = on; }          // ShowGrid() getter already exists
+    bool GizmosMasterVisible() const { return m_GizmosMasterVisible; }
+    void SetGizmosMasterVisible(bool on) { m_GizmosMasterVisible = on; }
     bool GridSnapEnabled() const { return m_GridSnapEnabled; }
     void SetGridSnapEnabled(bool on) { m_GridSnapEnabled = on; }
     bool ShowHistory() const { return m_ShowHistory; }

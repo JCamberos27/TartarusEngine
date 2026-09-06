@@ -386,6 +386,8 @@ void  InspDrawBody() {
 }
 void  TbDrawGridSnapPopupBody() { if (g_Editor) g_Editor->DrawGridSnapPopupBody(); }
 void  TbDrawGizmosPopupBody()   { if (g_Editor) g_Editor->DrawGizmosPopupBody(); }
+bool  TbGetGizmosMasterVisible() { return g_Editor && g_Editor->GizmosMasterVisible(); }
+void  TbSetGizmosMasterVisible(bool on) { if (g_Editor) g_Editor->SetGizmosMasterVisible(on); }
 
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
@@ -486,6 +488,8 @@ const EditorModuleHostAPI kHostAPI{
     &TbDrawGridSnapPopupBody,
     // --- Gizmos dropdown (API v10) — order must match EditorModuleHostAPI exactly ---
     &TbDrawGizmosPopupBody,
+    // --- Gizmos master toggle button (API v11) — order must match EditorModuleHostAPI exactly ---
+    &TbGetGizmosMasterVisible,  &TbSetGizmosMasterVisible,
 };
 
 } // namespace

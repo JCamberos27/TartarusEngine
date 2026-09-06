@@ -602,24 +602,9 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
 
     ImGui::PushID((int)entt::to_integral(entity));
 
-    // Leading eye toggle = Unity's active checkbox (#152: shared ActiveToggle). Drawn before the
-    // row so clicking it never also changes the selection; hover-reveals on the whole row so an
-    // active object carries no per-row chrome at rest.
-    {
-        const ImVec2 rowMin = ImGui::GetCursorScreenPos();
-        const ImVec2 rowMax(rowMin.x + ImGui::GetContentRegionAvail().x, rowMin.y + ImGui::GetFrameHeight());
-        const bool rowHovered = ImGui::IsMouseHoveringRect(rowMin, rowMax);
-        if (ActiveToggle("##rowactive", !inactive, rowHovered,
-                         inactive ? "Inactive - click to enable" : "Active - click to disable",
-                         /*alignTop=*/true)) {
-            PushUndo(world, "Toggle Active");
-            if (inactive) world.Registry.remove<InactiveTag>(entity);
-            else world.Registry.emplace<InactiveTag>(entity);
-        }
-    }
-    // Tight against the tree node — the node's own arrow gap already separates the eye from the
-    // kind glyph, so the default ItemSpacing here just reads as a hole (#152 follow-up).
-    ImGui::SameLine(0.0f, 2.0f);
+    // The active-state eye toggle used to lead every row, so it indented with tree depth. It now
+    // sits in a fixed right-hand column (drawn after the row below), Unity-style — one straight
+    // file of eyes regardless of nesting.
 
     // Inline rename (F2 / context menu) replaces the row with an edit field in place.
     if (m_RenamingEntity == entity) {
@@ -683,6 +668,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     // SetHierarchyExpandedRecursive writes, so Expand/Collapse-all and the Alt cascade still work).
     ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_SpanAvailWidth |
         ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen |
+        ImGuiTreeNodeFlags_AllowOverlap | // so the right-column eye below can take its own clicks
         (selected ? ImGuiTreeNodeFlags_Selected : 0);
 
     const ImGuiID nodeStateId = ImGui::GetID("##node");
@@ -703,7 +689,8 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     // The chevron's hit box: the leading ~1.1em of the row. A click there toggles this row's
     // subtree (Alt = cascade to every descendant); a click anywhere else selects.
     const float arrowSlotW = ImGui::GetFontSize() * 1.1f;
-    const bool clickOnArrow = hasChildren && ImGui::IsItemHovered() &&
+    const bool rowHovered = ImGui::IsItemHovered();
+    const bool clickOnArrow = hasChildren && rowHovered &&
         ImGui::GetIO().MousePos.x < rowMin.x + arrowSlotW;
 
     if (ImGui::IsItemClicked() && clickOnArrow) {
@@ -878,6 +865,21 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
                         (secBase & 0x00FFFFFFu) | 0xB4000000u, secondaryGlyph);
         }
         dl->AddText(ImVec2(labelX + slotW, rowMin.y), col, shownName.c_str());
+    }
+
+    // Active-state eye, pinned to a fixed right-hand column so every row's eye lines up no matter
+    // how deep it sits. Drawn after the row so a click on it never also selects the row.
+    {
+        const float eyeW = ImMax(ImGui::CalcTextSize(ICON_FA_EYE).x, ImGui::CalcTextSize(ICON_FA_EYE_SLASH).x) + 2.0f;
+        ImGui::SameLine();
+        ImGui::SetCursorScreenPos(ImVec2(rowMax.x - eyeW - 4.0f * m_UIScale, rowMin.y));
+        if (ActiveToggle("##rowactive", !inactive, rowHovered,
+                         inactive ? "Inactive - click to enable" : "Active - click to disable",
+                         /*alignTop=*/true)) {
+            PushUndo(world, "Toggle Active");
+            if (inactive) world.Registry.remove<InactiveTag>(entity);
+            else world.Registry.emplace<InactiveTag>(entity);
+        }
     }
 
     if (hasChildren && open) {

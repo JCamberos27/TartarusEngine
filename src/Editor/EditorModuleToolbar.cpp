@@ -273,10 +273,11 @@ void Draw(const EditorModuleHostAPI& host) {
     }
     ImGui::SameLine();
     {
-        const bool lightGizmos = host.GetShowLightGizmos && host.GetShowLightGizmos();
-        if (ActionButton(host, ICON_FA_CIRCLE_NODES, "Toggle Light Gizmos (range/cone/aim in the viewport)",
-                lightGizmos) && host.SetShowLightGizmos) {
-            host.SetShowLightGizmos(!lightGizmos);
+        const bool gizmosOn = host.GetGizmosMasterVisible && host.GetGizmosMasterVisible();
+        if (ActionButton(host, ICON_FA_UP_DOWN_LEFT_RIGHT,
+                "Toggle Gizmos (transform gizmo, entity icons, light gizmos)\nCaret: per-type visibility",
+                gizmosOn) && host.SetGizmosMasterVisible) {
+            host.SetGizmosMasterVisible(!gizmosOn);
         }
         ImGui::SameLine(0.0f, 1.0f);
         ImGui::PushID("##gizmosOpts");
@@ -318,7 +319,7 @@ void Draw(const EditorModuleHostAPI& host) {
     // belongs on the strip beside the shading mode (#148).
     {
         const bool ortho = host.IsOrthographic && host.IsOrthographic();
-        if (ActionButton(host, ICON_FA_BORDER_ALL,
+        if (ActionButton(host, ortho ? ICON_FA_SQUARE : ICON_FA_CUBE,
                 ortho ? "Orthographic (click for Perspective) — 5"
                       : "Perspective (click for Orthographic) — 5",
                 ortho) && host.ToggleOrthographic) {
