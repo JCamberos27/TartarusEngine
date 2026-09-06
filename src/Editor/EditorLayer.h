@@ -1244,6 +1244,14 @@ private:
     bool BeginComponentSection(const char* icon, const char* label,
         bool removable, bool& removedOut, bool defaultOpen = true, const char* tooltip = nullptr);
     void EndComponentSection();
+    // True while BeginComponentSection opened a bordered card (Bento layout) rather than a plain
+    // indent — so EndComponentSection closes the matching child/style stack.
+    bool m_ComponentSectionIsCard = false;
+
+    // #234 layer 3: the card / translucent-overlay / hairline treatment is gated to the
+    // SaaS-dashboard themes — Bento (0) and Prism (1). Windows XP (2) keeps the flat look.
+    // (Defined in EditorLayer.cpp — the header doesn't pull in EditorSettings.)
+    bool UseBentoLayout() const;
 
     ShadingMode m_ShadingMode = ShadingMode::Shaded;
     // Unity's Pivot/Center toggle: false = gizmo sits on the object's own origin, true = on the

@@ -1689,7 +1689,9 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     ImGui::PopStyleColor(3);
     const bool headerHovered = ImGui::IsItemHovered();
     if (tooltip && headerHovered) EditorUI::SetTooltip("%s", tooltip);
-    {
+    // Flat themes get a hairline under the header for separation; the Bento card's own border
+    // replaces it (#234 layer 3).
+    if (!UseBentoLayout()) {
         const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
         ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, mx.y - 0.5f), ImVec2(mx.x, mx.y - 0.5f),
                                             ImGui::GetColorU32(ImGuiCol_Separator));
@@ -1707,15 +1709,32 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     }
 
     bool showBody = open && !removedOut;
-    // Indenting the body is what visually reads as "these fields belong to that header" instead
-    // of every section's fields sitting flush with the header bars themselves — paired with
-    // EndComponentSection(), which callers must call whenever this returns true.
-    if (showBody) ImGui::Indent();
-    return showBody;
+    m_ComponentSectionIsCard = false;
+    if (showBody && UseBentoLayout()) {
+        // Bento: the section body sits in a rounded hairline-bordered card — delineation only, no
+        // fill, so the whole Inspector stays one tone (the header stays outside the card).
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f)); // no fill
+        ImGui::PushStyleColor(ImGuiCol_Border,  ImVec4(1.0f, 1.0f, 1.0f, 0.12f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f * m_UIScale, 10.0f * m_UIScale));
+        ImGui::BeginChild(label, ImVec2(0.0f, 0.0f),
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+        m_ComponentSectionIsCard = true;
+    } else if (showBody) {
+        // Flat themes: indenting the body reads as "these fields belong to that header".
+        ImGui::Indent();
+    }
+    return showBody; // callers must call EndComponentSection() whenever this returns true
 }
 
 void EditorLayer::EndComponentSection() {
-    ImGui::Unindent();
+    if (m_ComponentSectionIsCard) {
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(2);
+        m_ComponentSectionIsCard = false;
+    } else {
+        ImGui::Unindent();
+    }
     ImGui::Spacing();
 }
 void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity) {
