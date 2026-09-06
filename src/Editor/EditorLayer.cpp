@@ -1364,16 +1364,11 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // the very first time there's no saved layout yet.
     const float toolbarH = kToolbarHeight * m_UIScale;
 
-    // The toolbar is chrome, not a panel: hard-pinned to the top, full width, exact height, every
-    // frame — independent of the Lock Layout toggle (which only governs the dock panels). Fixed
-    // size + NoResize + size constraints keep it from ever being stretched down over the dock
-    // panels' tab bars; NoMove/NoDocking keep it from being dragged off or docked; NoSavedSettings
-    // stops a stale imgui.ini from repositioning it.
-    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(w, toolbarH), ImGuiCond_Always);
-    ImGui::SetNextWindowSizeConstraints(ImVec2(w, toolbarH), ImVec2(w, toolbarH));
-    ImGui::SetNextWindowViewport(ImGui::GetMainViewport()->ID);
-    DrawTopToolbar(world, assets, editorCamera);
+    // The full-width toolbar strip is drawn by the reloadable editor module now (issue #229):
+    // EditorModuleToolbar::Draw(), invoked from main.cpp's editorModule.Draw() immediately after
+    // this method returns, still inside the same ImGui frame. It pins its own "##Toolbar" window
+    // (same pos/size/constraints this used to set) and reaches host state through
+    // EditorModuleHostAPI. The dock host below still starts at y = toolbarH.
 
     // (The top-right wordmark overlay was removed in the #92 UI pass — the corner monogram
     // (DrawEngineMark) is the only branding mark now.)

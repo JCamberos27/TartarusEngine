@@ -132,6 +132,7 @@ add_library(TartarusGame SHARED
 # DLL its own private, permanently-empty log; it reads the host's through the callback table.
 add_library(TartarusEditor SHARED
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleToolbar.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleConsole.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleStats.cpp
   ${imgui_SOURCE_DIR}/imgui.cpp

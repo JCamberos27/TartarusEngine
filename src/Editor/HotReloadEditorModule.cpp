@@ -10,10 +10,13 @@
 #include "Components.h"
 #include "Profiler.h"
 #include "GLStateCache.h"
+#include "AssetLibrary.h"
+#include "Camera.h"
 
 #include <cstdio>
 #include <cstring>
 #include <imgui.h>
+#include <GLFW/glfw3.h>
 #include <windows.h>
 
 namespace fs = std::filesystem;
@@ -24,11 +27,14 @@ namespace {
 // host API is a table of plain function pointers with no user-data slot.
 GLFWwindow* g_ParentWindow = nullptr;
 
-// The live editor + world the Stats-panel callbacks (API v3) read from, refreshed every frame by
+// The live editor + world + assets + editor camera the Stats-panel callbacks (API v3) and the
+// toolbar's menu bodies / commands (API v4) read from, refreshed every frame by
 // HotReloadEditorModule::SetFrameContext(). Same file-scope rationale as g_ParentWindow: the host
 // API is a flat function-pointer table with nowhere to hang a context pointer.
 EditorLayer* g_Editor = nullptr;
 World* g_World = nullptr;
+AssetLibrary* g_Assets = nullptr;
+Camera* g_Camera = nullptr;
 
 void DrawStatusPanel(const char* title, const char* message, const char* accent) {
     bool open = true;
@@ -187,6 +193,88 @@ float StatsSampleViewportLuminanceFn(float screenCenterX, float screenCenterY, f
     return g_Editor ? g_Editor->SampleStatsHudLuminance(screenCenterX, screenCenterY, boxPx) : -1.0f;
 }
 
+// --- Toolbar / menus (API v4) --------------------------------------------------------------
+// Bodies for the reloadable toolbar strip (EditorModuleToolbar.cpp). The strip's window,
+// XP chrome and icon-row layout are module-side; every toggle it shows and every menu it opens
+// is host state / host code reached through these, exactly like the Stats bridge above. The
+// g_* pointers are refreshed each frame by SetFrameContext().
+
+void TbGetToolbarMetrics(float* outWinW, float* outToolbarH, float* outUIScale) {
+    // Main-window client width == the main ImGui viewport size (the editor runs a single
+    // viewport) — what the old caller read via glfwGetWindowSize.
+    float w = 0.0f;
+    if (const ImGuiViewport* vp = ImGui::GetMainViewport()) w = vp->Size.x;
+    if (outWinW)     *outWinW = w;
+    if (outToolbarH) *outToolbarH = g_Editor ? g_Editor->ToolbarHeightPx() : 0.0f;
+    if (outUIScale)  *outUIScale = g_Editor ? g_Editor->UIScale() : 1.0f;
+}
+
+int  TbGetEditorTheme() { return EditorSettings::Get().EditorTheme; }
+void TbSetTitleBarDragHovered(bool hovered) { if (g_Editor) g_Editor->SetTitleBarDragHovered(hovered); }
+
+void TbWindowMinimize() { if (g_ParentWindow) glfwIconifyWindow(g_ParentWindow); }
+void TbWindowToggleMaximize() {
+    if (!g_ParentWindow) return;
+    if (glfwGetWindowAttrib(g_ParentWindow, GLFW_MAXIMIZED)) glfwRestoreWindow(g_ParentWindow);
+    else                                                     glfwMaximizeWindow(g_ParentWindow);
+}
+void TbWindowClose() { if (g_ParentWindow) glfwSetWindowShouldClose(g_ParentWindow, GLFW_TRUE); }
+bool TbWindowIsMaximized() { return g_ParentWindow && glfwGetWindowAttrib(g_ParentWindow, GLFW_MAXIMIZED) != 0; }
+
+int  TbGetGizmoOp() { return g_Editor ? g_Editor->GizmoOpIndex() : 0; }
+void TbSetGizmoOp(int op) { if (g_Editor) g_Editor->SetGizmoOpIndex(op); }
+int  TbGetShadingMode() { return g_Editor ? g_Editor->ShadingModeIndex() : 0; }
+void TbSetShadingMode(int mode) { if (g_Editor) g_Editor->SetShadingModeIndex(mode); }
+bool TbGetGizmoLocalSpace() { return g_Editor && g_Editor->GizmoLocalSpace(); }
+void TbSetGizmoLocalSpace(bool on) { if (g_Editor) g_Editor->SetGizmoLocalSpace(on); }
+bool TbGetGizmoPivotCenter() { return g_Editor && g_Editor->GizmoPivotCenter(); }
+void TbSetGizmoPivotCenter(bool on) { if (g_Editor) g_Editor->SetGizmoPivotCenter(on); }
+bool TbGetShowGrid() { return g_Editor && g_Editor->ShowGrid(); }
+void TbSetShowGrid(bool on) { if (g_Editor) g_Editor->SetShowGrid(on); }
+bool TbGetGridSnapEnabled() { return g_Editor && g_Editor->GridSnapEnabled(); }
+void TbSetGridSnapEnabled(bool on) { if (g_Editor) g_Editor->SetGridSnapEnabled(on); }
+bool TbGetShowHistory() { return g_Editor && g_Editor->ShowHistory(); }
+void TbSetShowHistory(bool on) { if (g_Editor) g_Editor->SetShowHistory(on); }
+bool TbGetShowStats() { return EditorSettings::Get().SceneShowStats; }
+void TbSetShowStats(bool on) { EditorSettings::Get().SceneShowStats = on; EditorSettings::Save(); }
+bool TbGetShowLightGizmos() { return EditorSettings::Get().ShowLightGizmos; }
+void TbSetShowLightGizmos(bool on) { EditorSettings::Get().ShowLightGizmos = on; EditorSettings::Save(); }
+bool TbIsOrthographic() { return g_Camera && g_Camera->Orthographic; }
+void TbToggleOrthographic() {
+    if (g_Editor && g_World && g_Camera) g_Editor->ToolbarToggleOrthographic(*g_World, *g_Camera);
+}
+void TbUndo() { if (g_Editor && g_World && g_Assets) g_Editor->ToolbarUndo(*g_World, *g_Assets); }
+void TbRedo() { if (g_Editor && g_World && g_Assets) g_Editor->ToolbarRedo(*g_World, *g_Assets); }
+bool TbCanSnapSelectionToGround() {
+    return g_Editor && g_World && g_Editor->ToolbarCanSnapToGround(*g_World);
+}
+void TbSnapSelectionToGround() { if (g_Editor && g_World) g_Editor->ToolbarSnapToGround(*g_World); }
+void TbRequestResetLayout() { if (g_Editor) g_Editor->RequestResetLayout(); }
+void TbOpenPreferences() { if (g_Editor) g_Editor->OpenPreferences(); }
+
+void TbDrawFileMenuBody() {
+    if (g_Editor && g_World && g_Assets) g_Editor->DrawFileMenuBody(*g_World, *g_Assets);
+}
+void TbDrawAddEntityMenuItems() {
+    if (g_Editor && g_World && g_Assets && g_Camera)
+        g_Editor->DrawAddEntityItems(*g_World, *g_Assets, *g_Camera);
+}
+void TbDrawViewMenuBody() {
+    if (g_Editor && g_World && g_Camera) g_Editor->DrawViewMenuBody(*g_World, *g_Camera);
+}
+void TbDrawWindowMenuBody() { if (g_Editor) g_Editor->DrawWindowMenuBody(); }
+void TbDrawCaptureOptionsPopupBody() { if (g_Editor) g_Editor->DrawCaptureOptionsPopupBody(); }
+void TbRequestCapture() { if (g_Editor) g_Editor->RequestCapture(); }
+void TbGetCaptureButtonTooltip(char* out, int outSize) {
+    if (!out || outSize <= 0) return;
+    const EditorSettings& s = EditorSettings::Get();
+    static const char* kModes[] = { "Full editor window", "Scene viewport",
+                                    "Scene viewport (clean)", "Game view" };
+    int cm = s.CaptureMode; cm = cm < 0 ? 0 : (cm > 3 ? 3 : cm);
+    std::snprintf(out, (size_t)outSize, "Capture screenshot \xe2\x80\x94 %s%s (Print Screen)",
+                  kModes[cm], (cm == 1 || cm == 2) && s.CaptureScale > 1 ? " x2+" : "");
+}
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
@@ -210,6 +298,37 @@ const EditorModuleHostAPI kHostAPI{
     &StatsGetSmoothedFrameMsFn,
     &StatsSetHideEngineMarkFn,
     &StatsSampleViewportLuminanceFn,
+    // --- Toolbar / menus (API v4) — order must match EditorModuleHostAPI exactly ---
+    &TbGetToolbarMetrics,
+    &TbGetEditorTheme,
+    &TbSetTitleBarDragHovered,
+    &TbWindowMinimize,
+    &TbWindowToggleMaximize,
+    &TbWindowClose,
+    &TbWindowIsMaximized,
+    &TbGetGizmoOp,            &TbSetGizmoOp,
+    &TbGetShadingMode,        &TbSetShadingMode,
+    &TbGetGizmoLocalSpace,    &TbSetGizmoLocalSpace,
+    &TbGetGizmoPivotCenter,   &TbSetGizmoPivotCenter,
+    &TbGetShowGrid,           &TbSetShowGrid,
+    &TbGetGridSnapEnabled,    &TbSetGridSnapEnabled,
+    &TbGetShowHistory,        &TbSetShowHistory,
+    &TbGetShowStats,          &TbSetShowStats,
+    &TbGetShowLightGizmos,    &TbSetShowLightGizmos,
+    &TbIsOrthographic,        &TbToggleOrthographic,
+    &TbUndo,
+    &TbRedo,
+    &TbCanSnapSelectionToGround,
+    &TbSnapSelectionToGround,
+    &TbRequestResetLayout,
+    &TbOpenPreferences,
+    &TbDrawFileMenuBody,
+    &TbDrawAddEntityMenuItems,
+    &TbDrawViewMenuBody,
+    &TbDrawWindowMenuBody,
+    &TbDrawCaptureOptionsPopupBody,
+    &TbRequestCapture,
+    &TbGetCaptureButtonTooltip,
 };
 
 } // namespace
@@ -231,9 +350,12 @@ void HotReloadEditorModule::Initialize(const fs::path& sourceModule, void* paren
     Reload(true);
 }
 
-void HotReloadEditorModule::SetFrameContext(EditorLayer* editor, World* world) {
+void HotReloadEditorModule::SetFrameContext(EditorLayer* editor, World* world,
+                                           AssetLibrary* assets, Camera* editorCamera) {
     g_Editor = editor;
     g_World = world;
+    g_Assets = assets;
+    g_Camera = editorCamera;
 }
 
 void HotReloadEditorModule::Draw(bool editorUIVisible, float deltaTime) {
