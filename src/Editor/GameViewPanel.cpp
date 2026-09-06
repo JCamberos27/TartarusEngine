@@ -12,7 +12,8 @@ void GameViewPanel::SetPreset(const ResolutionPreset& preset) {
 }
 
 void GameViewPanel::OnPlayStateChanged(bool isPlaying) {
-    if (isPlaying && m_MaximizeOnPlay) {
+    // Read the setting live (it's edited in Preferences > Viewport now, not a panel checkbox).
+    if (isPlaying && EditorSettings::Get().GameViewMaximizeOnPlay) {
         m_FullscreenRequestPending = true;
         m_FullscreenRequestValue = true;
         m_FullscreenFromMaximizeOnPlay = true;
@@ -52,47 +53,58 @@ void GameViewPanel::ComputeTargetSize(ImVec2 available, int& outWidth, int& outH
     outHeight = std::max(outHeight, 1);
 }
 
-void GameViewPanel::DrawToolbar() {
-    ImGui::SetNextItemWidth(220.0f);
-    if (ImGui::BeginCombo("##GameViewPreset", m_CurrentPreset.Label.c_str())) {
-        for (const auto& preset : ResolutionManager::BuiltInPresets()) {
-            if (ImGui::Selectable(preset.Label.c_str(), preset.Label == m_CurrentPreset.Label)) {
-                SetPreset(preset);
-            }
-        }
-        for (const auto& preset : m_CustomPresets) {
-            if (ImGui::Selectable(preset.Label.c_str(), preset.Label == m_CurrentPreset.Label)) {
-                SetPreset(preset);
-            }
-        }
-        ImGui::Separator();
-        if (ImGui::Selectable(ICON_FA_PLUS "  Add Custom Aspect/Resolution...")) {
-            m_ShowCustomModal = true;
-        }
-        ImGui::EndCombo();
+void GameViewPanel::DrawAspectControl() {
+    const float itemW = 200.0f;
+    const float h = ImGui::GetFrameHeight();
+    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+
+    // Custom button + manual popup rather than BeginCombo: ImGui's combo always re-runs its own
+    // auto-placement (prefers Down), so a real "open upward" isn't reachable through it. Here we
+    // own the popup, so SetNextWindowPos with a bottom-left pivot makes it grow up from the top
+    // edge of the button.
+    ImGui::PushStyleColor(ImGuiCol_Button,        IM_COL32(0, 0, 0, 150));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(0, 0, 0, 190));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(0, 0, 0, 210));
+    ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f)); // left-align like a combo
+    if (ImGui::Button((m_CurrentPreset.Label + "###aspectbtn").c_str(), ImVec2(itemW, h)))
+        ImGui::OpenPopup("##AspectPopup");
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(3);
+    const bool btnHovered = ImGui::IsItemHovered();
+    m_AspectComboOpen = ImGui::IsPopupOpen("##AspectPopup");
+
+    // Caret at the button's right edge — up while the list is open, down otherwise.
+    {
+        const float cx = p0.x + itemW - h * 0.5f;
+        const float cy = p0.y + h * 0.5f;
+        const float r = ImGui::GetFontSize() * 0.20f;
+        const ImU32 col = ImGui::GetColorU32(ImGuiCol_Text);
+        ImDrawList* d = ImGui::GetWindowDrawList();
+        if (m_AspectComboOpen)
+            d->AddTriangleFilled(ImVec2(cx - r, cy + r * 0.7f), ImVec2(cx + r, cy + r * 0.7f), ImVec2(cx, cy - r * 0.9f), col);
+        else
+            d->AddTriangleFilled(ImVec2(cx - r, cy - r * 0.7f), ImVec2(cx + r, cy - r * 0.7f), ImVec2(cx, cy + r * 0.9f), col);
     }
-    if (ImGui::IsItemHovered()) {
+    if (btnHovered) {
         EditorUI::SetTooltip("Locks the Game View (and Play Mode) to this aspect ratio or exact\nresolution, letterboxing the rest. Free Aspect fills whatever space is available.");
     }
 
-    ImGui::SameLine();
-    if (ImGui::Checkbox("Maximize on Play", &m_MaximizeOnPlay)) SaveSettings();
-    if (ImGui::IsItemHovered()) {
-        EditorUI::SetTooltip("When enabled, entering Play Mode automatically expands the game\nto fullscreen instead of staying windowed.");
+    ImGui::SetNextWindowPos(ImVec2(p0.x, p0.y - 2.0f), ImGuiCond_Always, ImVec2(0.0f, 1.0f)); // grow upward
+    ImGui::SetNextWindowSizeConstraints(ImVec2(itemW, 0.0f), ImVec2(itemW, 600.0f));
+    if (ImGui::BeginPopup("##AspectPopup")) {
+        auto row = [&](const ResolutionPreset& preset) {
+            if (ImGui::Selectable(preset.Label.c_str(), preset.Label == m_CurrentPreset.Label))
+                SetPreset(preset);
+        };
+        for (const auto& preset : ResolutionManager::BuiltInPresets()) row(preset);
+        for (const auto& preset : m_CustomPresets) row(preset);
+        ImGui::Separator();
+        if (ImGui::Selectable(ICON_FA_PLUS "  Add Custom Aspect/Resolution..."))
+            m_ShowCustomModal = true;
+        ImGui::EndPopup();
     }
-
-    ImGui::SameLine();
-    if (ImGui::Button(m_LastKnownOsFullscreen ? ICON_FA_COMPRESS "  Windowed" : ICON_FA_EXPAND "  Fullscreen")) {
-        m_FullscreenRequestPending = true;
-        m_FullscreenRequestValue = !m_LastKnownOsFullscreen;
-    }
-    if (ImGui::IsItemHovered()) {
-        EditorUI::SetTooltip("Expand the game to a true borderless fullscreen window (F11).");
-    }
-
-    ImGui::SameLine();
-    if (ImGui::Checkbox(ICON_FA_GAUGE_HIGH "  Stats", &m_ShowStatsOverlay)) SaveSettings();
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show FPS, frame time, draw calls, and vert/tri counts over the view.");
+    // Fullscreen dropped from here — it's in the viewport transport overlay and on F11.
+    // "Maximize on Play" -> Preferences > Viewport; Stats overlay -> the main toolbar Stats button.
 }
 
 void GameViewPanel::DrawCustomResolutionModal() {
@@ -152,9 +164,6 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         return;
     }
 
-    DrawToolbar();
-    ImGui::Separator();
-
     ImVec2 avail = ImGui::GetContentRegionAvail();
     m_LastAvailableRegion = avail;
     m_ViewImageSize = ImVec2(0.0f, 0.0f);
@@ -175,13 +184,26 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         ImGui::SetCursorScreenPos(imagePos);
         // uv0=(0,1)/uv1=(1,0): OpenGL textures are bottom-left origin, ImGui::Image expects
         // top-left, so this flips the framebuffer's color attachment right-side up.
+        // AllowOverlap so the aspect-ratio control drawn on top of it (below) can take its own clicks.
+        ImGui::SetNextItemAllowOverlap();
         ImGui::Image((ImTextureID)(intptr_t)m_Framebuffer.ColorTexture(), rect.Size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
         m_ViewHovered = ImGui::IsItemHovered();
+
+        // Aspect / resolution control — bottom-left overlay (was a top strip). Drawn before the
+        // click-to-engage check so a click here never falls through to the game view.
+        bool overAspectCtl;
+        {
+            const float ctlH = ImGui::GetFrameHeight();
+            ImGui::SetCursorScreenPos(ImVec2(imagePos.x + 8.0f, imagePos.y + rect.Size.y - ctlH - 8.0f));
+            DrawAspectControl();
+            overAspectCtl = ImGui::IsItemHovered() || ImGui::IsItemActive() || m_AspectComboOpen;
+        }
+        if (overAspectCtl) m_ViewHovered = false; // the control ate this hover, not the view
 
         // In-panel play: first click inside the running view captures mouse/keyboard for the
         // game; until then, a hint sits over the image. (Esc releases — handled in main.cpp.)
         if (playing && !inputEngaged) {
-            if (m_ViewHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            if (m_ViewHovered && !overAspectCtl && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                 m_EngageClickPending = true;
             }
             const char* hint = "Click to control  \xE2\x80\xA2  Esc to release";
@@ -193,7 +215,7 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
                               IM_COL32(0, 0, 0, 150), 4.0f);
             dl->AddText(anchor, IM_COL32(255, 255, 255, 230), hint);
         } else if (!playing && noSceneCamera) {
-            const char* hint = "No Camera in scene  \xE2\x80\xA2  previewing the editor view.  Add \xE2\x96\xB8 Camera to place one.";
+            const char* hint = "No Camera in scene - previewing the editor view. Create " ICON_FA_ANGLE_RIGHT " Camera to place one.";
             ImVec2 ts = ImGui::CalcTextSize(hint);
             ImVec2 anchor(imagePos.x + (rect.Size.x - ts.x) * 0.5f,
                           imagePos.y + rect.Size.y - ts.y - 14.0f);

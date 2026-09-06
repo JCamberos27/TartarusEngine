@@ -176,7 +176,7 @@ void Draw(const EditorModuleHostAPI& host) {
             xpMenuTextPop();
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu(ICON_FA_CUBES " Add")) {
+        if (ImGui::BeginMenu(ICON_FA_CUBES " Create")) {
             xpMenuTextPush();
             if (host.DrawAddEntityMenuItems) host.DrawAddEntityMenuItems();
             xpMenuTextPop();
@@ -319,7 +319,7 @@ void Draw(const EditorModuleHostAPI& host) {
     // belongs on the strip beside the shading mode (#148).
     {
         const bool ortho = host.IsOrthographic && host.IsOrthographic();
-        if (ActionButton(host, ortho ? ICON_FA_SQUARE : ICON_FA_CUBE,
+        if (ActionButton(host, ortho ? ICON_FA_VECTOR_SQUARE : ICON_FA_EYE,
                 ortho ? "Orthographic (click for Perspective) — 5"
                       : "Perspective (click for Orthographic) — 5",
                 ortho) && host.ToggleOrthographic) {

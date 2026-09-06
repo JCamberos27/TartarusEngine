@@ -146,12 +146,13 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) 
         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
         ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize;
 
-    // Where the control lives: over the Scene viewport while editing, over the Game viewport while
-    // playing. Both are the same flat "vector + label" treatment with the engine-mark contrast
-    // readback (throttled ~10 Hz, eased per frame) so the glyph rides white-on-dark / dark-on-
-    // light against whatever's rendered behind it.
-    const bool overScene = !playing && m_ViewportSize.x > 1.0f && m_ViewportSize.y > 1.0f;
-    const bool overGame  =  playing && m_GameViewImgSize.x > 1.0f && m_GameViewImgSize.y > 1.0f;
+    // The transport (Play, or Stop/Pause/Step/Fullscreen) rides over whichever of the two shared-
+    // dock-node viewports is actually on screen: the Game view when its tab is up, otherwise the
+    // Scene view — so it never floats in a plate over the middle of the window, and it's on the
+    // Scene view too when you tab there mid-play. Same flat "vector + label" treatment with the
+    // engine-mark contrast readback (throttled ~10 Hz, eased) so the glyph stays legible.
+    const bool overGame  = m_GameViewImgSize.x > 1.0f && m_GameViewImgSize.y > 1.0f;
+    const bool overScene = !overGame && m_ViewportSize.x > 1.0f && m_ViewportSize.y > 1.0f;
 
     int fgV = 235; // near-white until the first sample lands
 

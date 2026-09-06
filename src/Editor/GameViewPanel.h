@@ -126,9 +126,10 @@ private:
     bool m_FullscreenFromMaximizeOnPlay = false; // so leaving Play only auto-un-fullscreens if THIS feature caused it
 
     bool m_ShowCustomModal = false;
+    bool m_AspectComboOpen = false; // aspect-ratio combo popup state — drives the hand-drawn caret + click routing
     int m_CustomWidth = 1920;
     int m_CustomHeight = 1080;
 
-    void DrawToolbar();
+    void DrawAspectControl();
     void DrawCustomResolutionModal();
 };
