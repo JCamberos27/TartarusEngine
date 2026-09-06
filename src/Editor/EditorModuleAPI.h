@@ -14,7 +14,13 @@
 //   3 - Stats-panel accessors: viewport rect + UI scale, RenderStats / Profiler / GL-frame-stats
 //       / entity-count readouts, the smoothed frame time, the engine-mark hide write-back, and a
 //       viewport-luminance sample so the module can own the HUD's contrast-adaptive text tint.
-constexpr std::uint32_t kEditorModuleAPIVersion = 3;
+//   4 - Toolbar / menus: the top strip + its dropdown menus + the window min/max/close controls.
+//       Window metrics + theme + drag-region write-back, GLFW window-control callbacks, typed
+//       getters/setters for the icon-row toggles (gizmo op/space/pivot, grid, snap, shading,
+//       history, stats, light gizmos, ortho), undo/redo + snap-to-ground commands, and five
+//       Draw*Body callbacks that render the host-owned menu/popup contents into the module's
+//       menus (scene load/save, entity creation, camera framing — all still host-side).
+constexpr std::uint32_t kEditorModuleAPIVersion = 4;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -155,6 +161,64 @@ struct EditorModuleHostAPI {
     // luminance there, 0..1, or -1 if no sample has landed yet. The module throttles calls to
     // ~10 Hz and does its own easing + text tint.
     float (*SampleViewportLuminance)(float screenCenterX, float screenCenterY, float boxPx) = nullptr;
+
+    // --- Toolbar / menus (API v4) ------------------------------------------------------------
+    // The top toolbar strip, its dropdown menus and the window min/max/close controls live in
+    // the module now (EditorModuleToolbar.cpp). The module owns the pinned "##Toolbar" window,
+    // the Windows-XP chrome, the icon-button row layout and the menu/popup scaffolding; the deep
+    // host logic behind the menus (scene load/save, entity creation, camera framing, undo) stays
+    // host-side and is rendered into the module's menus through the Draw*Body callbacks below.
+
+    // Window metrics the strip pins itself against, forced every frame: main-window pixel width,
+    // toolbar height (host-owned kToolbarHeight * UI scale) and the editor UI scale.
+    void (*GetToolbarMetrics)(float* outWinW, float* outToolbarH, float* outUIScale) = nullptr;
+    // EditorSettings::EditorTheme — 2 is Windows XP, where the strip paints the blue Luna chrome.
+    int (*GetEditorTheme)() = nullptr;
+    // The toolbar's empty area is the window drag handle (the OS caption is gone). Reported back
+    // every frame; the host forwards it to Window's WM_NCHITTEST.
+    void (*SetTitleBarDragHovered)(bool hovered) = nullptr;
+    // Custom window controls operate on the host's GLFW window (the module never sees the handle).
+    void (*WindowMinimize)() = nullptr;
+    void (*WindowToggleMaximize)() = nullptr;
+    void (*WindowClose)() = nullptr;
+    bool (*WindowIsMaximized)() = nullptr;
+
+    // Icon-row state. Enums cross as int — GizmoOp: 0..3 Translate/Rotate/Scale/Rect;
+    // ShadingMode: 0..2 Shaded/Wireframe/Unlit.
+    int  (*GetGizmoOp)() = nullptr;          void (*SetGizmoOp)(int op) = nullptr;
+    int  (*GetShadingMode)() = nullptr;      void (*SetShadingMode)(int mode) = nullptr;
+    bool (*GetGizmoLocalSpace)() = nullptr;  void (*SetGizmoLocalSpace)(bool on) = nullptr;
+    bool (*GetGizmoPivotCenter)() = nullptr; void (*SetGizmoPivotCenter)(bool on) = nullptr;
+    bool (*GetShowGrid)() = nullptr;         void (*SetShowGrid)(bool on) = nullptr;
+    bool (*GetGridSnapEnabled)() = nullptr;  void (*SetGridSnapEnabled)(bool on) = nullptr;
+    bool (*GetShowHistory)() = nullptr;      void (*SetShowHistory)(bool on) = nullptr;
+    // These two persist into EditorSettings; the setter calls EditorSettings::Save() host-side.
+    bool (*GetShowStats)() = nullptr;        void (*SetShowStats)(bool on) = nullptr;
+    bool (*GetShowLightGizmos)() = nullptr;  void (*SetShowLightGizmos)(bool on) = nullptr;
+    bool (*IsOrthographic)() = nullptr;      void (*ToggleOrthographic)() = nullptr;
+    void (*ToolbarUndo)() = nullptr;
+    void (*ToolbarRedo)() = nullptr;
+    bool (*CanSnapSelectionToGround)() = nullptr;
+    void (*SnapSelectionToGround)() = nullptr;
+    void (*RequestResetLayout)() = nullptr;
+    void (*OpenPreferences)() = nullptr;
+
+    // Menu / popup bodies rendered host-side into the module-begun menu or popup — the module
+    // calls these between its own BeginMenu/EndMenu (or BeginPopup/EndPopup). The single shared
+    // ImGuiContext means host-side ImGui calls in here land in the module's menu exactly as if
+    // the module had made them. DrawAddEntityMenuItems wraps EditorLayer::DrawAddEntityItems,
+    // which the not-yet-migrated Hierarchy panel also calls — one implementation, host-side.
+    void (*DrawFileMenuBody)() = nullptr;
+    void (*DrawAddEntityMenuItems)() = nullptr;
+    void (*DrawViewMenuBody)() = nullptr;
+    void (*DrawWindowMenuBody)() = nullptr;
+    void (*DrawCaptureOptionsPopupBody)() = nullptr;
+    // Fire a screenshot with the current EditorSettings capture options (the Print Screen path
+    // shares this); kCaptureRes and EditorLayer::RequestCapture stay host-side.
+    void (*RequestCapture)() = nullptr;
+    // Fills `out` with the capture button's tooltip ("Capture screenshot — <mode><x2+?> (Print
+    // Screen)"), built host-side from EditorSettings so the module needn't read those fields.
+    void (*GetCaptureButtonTooltip)(char* out, int outSize) = nullptr;
 };
 
 struct EditorModuleAPI {

@@ -5,6 +5,8 @@
 struct EditorConsoleState;
 class EditorLayer;
 class World;
+class AssetLibrary;
+class Camera;
 
 // Host-side state the reloadable editor module reads through EditorModuleHostAPI. It lives in the
 // executable (not the DLL) so it survives a module reload untouched, and so host code — the
@@ -26,10 +28,12 @@ public:
     // `parentWindow` is the GLFWwindow* native file dialogs opened by the module are parented to
     // (passed as void* so this header stays GLFW-free); may be null.
     void Initialize(const std::filesystem::path& sourceModule, void* parentWindow = nullptr);
-    // The live editor + world the module's host callbacks (Stats panel data, API v3) read from.
-    // Call once per frame before Draw(); both are host-owned and outlive the module. Passing
-    // nullptr is safe — the affected callbacks then report empty/zero.
-    void SetFrameContext(EditorLayer* editor, World* world);
+    // The live editor + world + assets + editor camera the module's host callbacks read from
+    // (Stats panel data since API v3; the toolbar's menu bodies / commands since API v4). Call
+    // once per frame before Draw(); all are host-owned and outlive the module. Passing nullptr is
+    // safe — the affected callbacks then report empty/zero or no-op.
+    void SetFrameContext(EditorLayer* editor, World* world,
+                         AssetLibrary* assets = nullptr, Camera* editorCamera = nullptr);
     void Draw(bool editorUIVisible, float deltaTime);
     void Shutdown();
 

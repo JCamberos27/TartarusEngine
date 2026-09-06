@@ -453,49 +453,17 @@ static const struct { const char* label; int w, h; } kCaptureRes[] = {
     { "3840 x 2160",    3840, 2160 },
 };
 
-void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& editorCamera) {
-    // Always pinned regardless of Lock Layout — pos/size are forced every frame by the caller.
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar |
-        ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoNavFocus |
-        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings;
-    // Tight vertical window padding so the icon row hugs the menu bar and the bottom edge — the
-    // strip is only as tall as its two rows now (kToolbarHeight).
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9.0f, 3.0f));
+float EditorLayer::ToolbarHeightPx() const { return kToolbarHeight * m_UIScale; }
 
-    // Windows XP theme (2): the toolbar strip is the Luna taskbar blue with white menu/icon text
-    // — the one spot the theme shows blue chrome (panels stay beige). ImGui paints one global
-    // text colour, so the white is pushed for the whole strip and then locally reverted to the
-    // body near-black inside each menu-dropdown / options popup (those render on the beige
-    // PopupBg). See xpMenuTextPush/Pop below.
-    const bool xpBar = (EditorSettings::Get().EditorTheme == 2);
-    const ImVec4 xpBodyText(0.09f, 0.09f, 0.09f, 1.0f);
-    const ImVec4 xpBodyTextDim(0.50f, 0.50f, 0.50f, 1.0f);
-    auto xpMenuTextPush = [&]() {
-        if (xpBar) { ImGui::PushStyleColor(ImGuiCol_Text, xpBodyText);
-                     ImGui::PushStyleColor(ImGuiCol_TextDisabled, xpBodyTextDim); }
-    };
-    auto xpMenuTextPop = [&]() { if (xpBar) ImGui::PopStyleColor(2); };
-    const int xpBarCols = xpBar ? 4 : 0;
-    if (xpBar) {
-        ImGui::PushStyleColor(ImGuiCol_WindowBg,     ImVec4(0.161f, 0.396f, 0.878f, 1.0f)); // #295EE0 Luna blue
-        ImGui::PushStyleColor(ImGuiCol_MenuBarBg,    ImVec4(0.133f, 0.337f, 0.804f, 1.0f)); // #2256CD
-        ImGui::PushStyleColor(ImGuiCol_Text,         ImVec4(0.97f, 0.98f, 1.0f, 1.0f));     // white chrome text
-        ImGui::PushStyleColor(ImGuiCol_TextDisabled, ImVec4(0.74f, 0.81f, 0.95f, 1.0f));
-    }
+// The toolbar strip + its menu bar + the window min/max/close controls moved into
+// TartarusEditor.dll (EditorModuleToolbar.cpp, issue #229). What stays here is the deep host
+// logic behind the menus — scene load/save, camera framing, the capture options popup — exposed
+// to the module through EditorModuleHostAPI (API v4) as the four Draw*Body methods below.
+// DrawAddEntityItems (EditorLayer_Hierarchy.cpp) is the fifth; the Shift+A quick-add popup and
+// the Hierarchy's context menu call it too. The play/stop button, viewport status bar and
+// History HUD further down this file are still host-drawn (a later #229 pass).
 
-    if (!ImGui::Begin("##Toolbar", nullptr, flags)) {
-        ImGui::End();
-        if (xpBarCols) ImGui::PopStyleColor(xpBarCols);
-        ImGui::PopStyleVar();
-        return;
-    }
-
-    // Real dropdown menus for the stuff you reach for occasionally (import, add primitive,
-    // scene save/load) — keeps the always-visible row below reserved for one-click toggles.
-    if (ImGui::BeginMenuBar()) {
-        if (ImGui::BeginMenu(ICON_FA_FOLDER_OPEN " File")) {
-            xpMenuTextPush(); // beige dropdown -> revert the strip's white text to body near-black
+void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
             if (ImGui::MenuItem(ICON_FA_FILE "  New Scene", "Ctrl+N")) {
                 RequestNewScene(world, assets);
             }
@@ -545,19 +513,9 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("WAV / MP3 / OGG / FLAC");
                 ImGui::EndMenu();
             }
-            xpMenuTextPop();
-            ImGui::EndMenu();
-        }
+}
 
-        if (ImGui::BeginMenu(ICON_FA_CUBES " Add")) {
-            xpMenuTextPush();
-            DrawAddEntityItems(world, assets, editorCamera);
-            xpMenuTextPop();
-            ImGui::EndMenu();
-        }
-
-        if (ImGui::BeginMenu(ICON_FA_CAMERA " View")) {
-            xpMenuTextPush();
+void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             if (ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS_PLUS "  Frame Selected", "F", false, HasAnySelection())) {
                 FocusOnSelection(world, editorCamera);
             }
@@ -593,12 +551,9 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem("  Left", "Ctrl+3")) SnapToView(world, editorCamera, 0.0f, 0.0f, true);
             if (ImGui::MenuItem("  Top", "7")) SnapToView(world, editorCamera, -90.0f, -89.9f, true);
             if (ImGui::MenuItem("  Bottom", "Ctrl+7")) SnapToView(world, editorCamera, -90.0f, 89.9f, true);
-            xpMenuTextPop();
-            ImGui::EndMenu();
-        }
+}
 
-        if (ImGui::BeginMenu(ICON_FA_TABLE_COLUMNS " Window")) {
-            xpMenuTextPush();
+void EditorLayer::DrawWindowMenuBody() {
             ImGui::MenuItem(ICON_FA_SITEMAP "  Scene Hierarchy", nullptr, &m_ShowHierarchy);
             ImGui::MenuItem(ICON_FA_SLIDERS "  Inspector", nullptr, &m_ShowInspector);
             ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Asset Browser", nullptr, &m_ShowAssetBrowser);
@@ -608,143 +563,17 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
                 m_ResetLayoutRequested = true;
             }
-            xpMenuTextPop();
-            ImGui::EndMenu();
-        }
+}
 
-        if (ImGui::MenuItem(ICON_FA_GEAR " Preferences")) m_ShowPreferences = true;
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Editor settings, environment, shortcuts (Ctrl+,)");
-
-        // Custom window controls, right-aligned — the OS title bar is gone (Win32 custom frame,
-        // Window.cpp), so minimize / maximize-restore / close live here instead.
-        DrawWindowControls();
-
-        ImGui::EndMenuBar();
-    }
-
-    // A spaced group separator — a real 1px rule with breathing room on both sides so the toolbar
-    // reads as distinct clusters (history · tools · grid/snap · view · panels · lock) instead of
-    // one dense left-jammed run of identical squares (audit #66 / #147).
-    auto divider = []() { EditorUI::VSeparator(1.5f); };
-
-    // Toolbar tools/toggles use the shared flat treatment (#160): ActionButton(icon, tip, active).
-    auto iconButton = [](const char* icon, const char* tooltip, bool active = false) {
-        return ActionButton(icon, tooltip, active);
-    };
-
-    if (iconButton(ICON_FA_ROTATE_LEFT, "Undo (Ctrl+Z)")) Undo(world, assets);
-    ImGui::SameLine();
-    if (iconButton(ICON_FA_ROTATE_RIGHT, "Redo (Ctrl+Y)")) Redo(world, assets);
-
-    divider();
-    if (iconButton(ICON_FA_UP_DOWN_LEFT_RIGHT, "Translate (W)", m_GizmoOp == GizmoOp::Translate)) m_GizmoOp = GizmoOp::Translate;
-    ImGui::SameLine();
-    if (iconButton(ICON_FA_ARROWS_SPIN, "Rotate (E)", m_GizmoOp == GizmoOp::Rotate)) m_GizmoOp = GizmoOp::Rotate;
-    ImGui::SameLine();
-    if (iconButton(ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER, "Scale (R)", m_GizmoOp == GizmoOp::Scale)) m_GizmoOp = GizmoOp::Scale;
-    ImGui::SameLine();
-    if (iconButton(ICON_FA_VECTOR_SQUARE, "Rect — move + non-uniform scale via corner/edge handles (T)",
-            m_GizmoOp == GizmoOp::Rect)) m_GizmoOp = GizmoOp::Rect;
-
-    divider(); // transform tools | gizmo-space modifiers
-    if (iconButton(m_GizmoLocalSpace ? ICON_FA_ARROWS_TO_DOT : ICON_FA_GLOBE,
-            m_GizmoLocalSpace ? "Local space (click for World)" : "World space (click for Local)")) {
-        m_GizmoLocalSpace = !m_GizmoLocalSpace;
-    }
-    ImGui::SameLine();
-    if (iconButton(m_GizmoPivotCenter ? ICON_FA_CIRCLE_DOT : ICON_FA_CROSSHAIRS,
-            m_GizmoPivotCenter
-                ? "Center - gizmo sits on the bounding-box center (click for Pivot)"
-                : "Pivot - gizmo sits on the object's own origin (click for Center)")) {
-        m_GizmoPivotCenter = !m_GizmoPivotCenter;
-    }
-
-    divider();
-    if (iconButton(ICON_FA_TABLE_CELLS, "Toggle Grid", m_ShowGrid)) m_ShowGrid = !m_ShowGrid;
-    ImGui::SameLine();
-    if (iconButton(ICON_FA_MAGNET, "Toggle Snap to Grid (hold Ctrl to invert while dragging)", m_GridSnapEnabled)) {
-        m_GridSnapEnabled = !m_GridSnapEnabled;
-    }
-    ImGui::SameLine();
+// The capture options popup body (Mode / Resolution / Supersample / Format / Flash / Sound +
+// "Capture now" + "Open screenshots folder"). The module owns the toolbar camera button and the
+// caret that opens this; the module wraps the call in its own BeginPopup("##CapturePopup") and
+// xpMenuTextPush/Pop.
+void EditorLayer::DrawCaptureOptionsPopupBody() {
+    auto& cs = EditorSettings::Get();
+    static const char* kModes[] = { "Full editor window", "Scene viewport", "Scene viewport (clean)", "Game view" };
     {
-        bool canSnap = CanSnapSelectionToGround(world);
-        ImGui::BeginDisabled(!canSnap);
-        if (iconButton(ICON_FA_DOWN_LONG, "Snap selection to ground")) SnapSelectionToGround(world);
-        ImGui::EndDisabled();
-    }
-    ImGui::SameLine();
-    {
-        auto& prefs = EditorSettings::Get();
-        if (iconButton(ICON_FA_CIRCLE_NODES, "Toggle Light Gizmos (range/cone/aim in the viewport)",
-                prefs.ShowLightGizmos)) {
-            prefs.ShowLightGizmos = !prefs.ShowLightGizmos;
-            EditorSettings::Save();
-        }
-    }
-
-    ImGui::SameLine();
-    // Scene-view shading, cycling Shaded -> Wireframe -> Unlit like a draw-mode dropdown — part of
-    // the same "what the viewport shows" cluster as grid / snap / light gizmos.
-    {
-        const char* shadingIcon = ICON_FA_CIRCLE_HALF_STROKE;
-        const char* shadingTip = "Shaded (click for Wireframe)";
-        if (m_ShadingMode == ShadingMode::Wireframe) {
-            shadingIcon = ICON_FA_BORDER_NONE;
-            shadingTip = "Wireframe (click for Unlit)";
-        } else if (m_ShadingMode == ShadingMode::Unlit) {
-            shadingIcon = ICON_FA_SUN;
-            shadingTip = "Unlit (click for Shaded)";
-        }
-        if (iconButton(shadingIcon, shadingTip, m_ShadingMode != ShadingMode::Shaded)) {
-            m_ShadingMode = m_ShadingMode == ShadingMode::Shaded ? ShadingMode::Wireframe
-                : (m_ShadingMode == ShadingMode::Wireframe ? ShadingMode::Unlit : ShadingMode::Shaded);
-        }
-    }
-
-    ImGui::SameLine();
-    // Orthographic / perspective toggle (shortcut 5) — was menu-only; it has a distinct on/off
-    // state so it belongs on the strip beside the shading mode (#148).
-    if (iconButton(ICON_FA_BORDER_ALL,
-            editorCamera.Orthographic ? "Orthographic (click for Perspective) — 5"
-                                      : "Perspective (click for Orthographic) — 5",
-            editorCamera.Orthographic)) {
-        ToggleOrthographic(world, editorCamera);
-    }
-
-    divider();
-    if (iconButton(ICON_FA_CHART_SIMPLE, "Toggle Statistics", EditorSettings::Get().SceneShowStats)) {
-        EditorSettings::Get().SceneShowStats = !EditorSettings::Get().SceneShowStats;
-        EditorSettings::Save();
-    }
-    ImGui::SameLine();
-    {
-        // Console visibility lives host-side (not in the module) so this toggle keeps working
-        // across a TartarusEditor.dll reload, and so a hidden Console stays hidden through one.
-        bool& consoleVisible = EditorModuleHost::ConsoleState().Visible;
-        if (iconButton(ICON_FA_TERMINAL, "Toggle Console", consoleVisible)) consoleVisible = !consoleVisible;
-    }
-    ImGui::SameLine();
-    if (iconButton(ICON_FA_CLOCK_ROTATE_LEFT, "Toggle History", m_ShowHistory)) m_ShowHistory = !m_ShowHistory;
-
-    divider();
-    // Capture: click = shoot with the current settings; the caret opens the options popup.
-    {
-        auto& cs = EditorSettings::Get();
-        static const char* kModes[] = { "Full editor window", "Scene viewport", "Scene viewport (clean)", "Game view" };
-        const int cm = std::clamp(cs.CaptureMode, 0, 3);
-        char tip[128];
-        snprintf(tip, sizeof(tip), "Capture screenshot — %s%s (Print Screen)",
-                 kModes[cm], (cm == 1 || cm == 2) && cs.CaptureScale > 1 ? " x2+" : "");
-        if (iconButton(ICON_FA_CAMERA_RETRO, tip)) RequestCapture();
-        ImGui::SameLine(0.0f, 1.0f);
-        ImGui::PushID("##capOpts");
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
-        if (ImGui::Button(ICON_FA_CARET_DOWN)) ImGui::OpenPopup("##CapturePopup");
-        ImGui::PopStyleColor(2);
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Capture options");
-        if (ImGui::BeginPopup("##CapturePopup")) {
-            xpMenuTextPush();
+        {
             ImGui::PushItemWidth(150.0f * m_UIScale);
             ImGui::TextDisabled("Capture");
             if (ImGui::Combo("Mode", &cs.CaptureMode, kModes, IM_ARRAYSIZE(kModes))) EditorSettings::Save();
@@ -772,68 +601,10 @@ void EditorLayer::DrawTopToolbar(World& world, AssetLibrary& assets, Camera& edi
             if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open screenshots folder"))
                 Screenshot::ShowInFolder(m_LastCapturePath.empty() ? Screenshot::Dir() : m_LastCapturePath);
             ImGui::PopItemWidth();
-            xpMenuTextPop();
-            ImGui::EndPopup();
         }
-        ImGui::PopID();
     }
-
-
-    // The toolbar's empty space is the window drag handle (the OS caption is gone). True only
-    // when the cursor is over this strip and not over any widget / open menu / active drag —
-    // Window.cpp's WM_NCHITTEST reads this to return HTCAPTION.
-    m_TitleBarDragHovered =
-        ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
-        !ImGui::IsAnyItemHovered() &&
-        !ImGui::IsAnyItemActive() &&
-        !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
-
-    ImGui::End();
-    if (xpBarCols) ImGui::PopStyleColor(xpBarCols); // XP toolbar blue + white chrome text
-    ImGui::PopStyleVar(); // WindowPadding
 }
 
-// Minimize / maximize-restore / close, right-aligned in the toolbar's menu-bar row. Operates
-// directly on the GLFW window; the visual frame removal happens in Window.cpp.
-void EditorLayer::DrawWindowControls() {
-    const float h = ImGui::GetFrameHeight();
-    const float bw = std::floor(h * 1.6f);
-    const ImGuiStyle& st = ImGui::GetStyle();
-    const float startX = ImGui::GetWindowWidth() - bw * 3.0f - st.WindowPadding.x;
-    ImGui::SameLine(startX > 0.0f ? startX : 0.0f);
-
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, st.ItemSpacing.y));
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.09f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 1.0f, 1.0f, 0.16f));
-
-    ImGui::PushID("win_min");
-    if (ImGui::Button(ICON_FA_MINUS, ImVec2(bw, 0.0f))) glfwIconifyWindow(m_Window);
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Minimize");
-    ImGui::PopID();
-    ImGui::SameLine();
-
-    const bool maxed = glfwGetWindowAttrib(m_Window, GLFW_MAXIMIZED) != 0;
-    ImGui::PushID("win_max");
-    if (ImGui::Button(maxed ? ICON_FA_COMPRESS : ICON_FA_EXPAND, ImVec2(bw, 0.0f))) {
-        if (maxed) glfwRestoreWindow(m_Window); else glfwMaximizeWindow(m_Window);
-    }
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip(maxed ? "Restore" : "Maximize");
-    ImGui::PopID();
-    ImGui::SameLine();
-
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.86f, 0.15f, 0.18f, 0.92f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.78f, 0.12f, 0.15f, 1.0f));
-    ImGui::PushID("win_close");
-    if (ImGui::Button(ICON_FA_XMARK, ImVec2(bw, 0.0f))) glfwSetWindowShouldClose(m_Window, GLFW_TRUE);
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Close");
-    ImGui::PopID();
-    ImGui::PopStyleColor(2);
-
-    ImGui::PopStyleColor(3);
-    ImGui::PopStyleVar(2);
-}
 void EditorLayer::RequestCapture() {
     const auto& s = EditorSettings::Get();
     const int rp = std::clamp(s.CaptureResPreset, 0, (int)IM_ARRAYSIZE(kCaptureRes) - 1);

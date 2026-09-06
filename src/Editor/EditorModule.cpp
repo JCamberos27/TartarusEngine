@@ -2,6 +2,9 @@
 
 #include <imgui.h>
 
+namespace EditorModuleToolbar {
+    void Draw(const EditorModuleHostAPI& host);
+}
 namespace EditorModuleConsole {
     void Draw(const EditorModuleHostAPI& host);
 }
@@ -37,6 +40,7 @@ bool BindImGuiToHost(const EditorModuleHostAPI& host) {
 // and the host will swap this DLL without closing the scene.
 void Draw(const EditorModuleHostAPI& host) {
     if (!BindImGuiToHost(host)) return;
+    EditorModuleToolbar::Draw(host); // top chrome first
     EditorModuleConsole::Draw(host);
     EditorModuleStats::Draw(host);
 }
