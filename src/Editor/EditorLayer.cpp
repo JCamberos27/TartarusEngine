@@ -261,14 +261,91 @@ void EditorLayer::Init(GLFWwindow* window) {
     if (!m_MarkTexture->IsValid()) m_MarkTexture.reset();
 }
 
-// The editor's colour palette. Both themes share the sizes/rounding set in Init(); this only
+// The editor's colour palette. All themes share the sizes/rounding set in Init(); this only
 // writes style.Colors[], so Preferences can swap it live with no font/size rebuild.
 //   0 Dark Slate — monochrome greys + one desaturated cool-slate accent (the #92 default).
 //   1 Prism      — near-black backgrounds; the accent, buttons, text tint and tab keyline are
 //                  all hue-driven, spread across ~half the wheel and drifting through the
 //                  spectrum together every frame (ApplyPrismAnimation, phase advanced in Draw()).
+//   2 Windows XP — the Luna "Blue" scheme: #ECE9D8 beige-grey chrome, black text, white input
+//                  fields, and a Luna-blue selection/accent. Static, like Dark Slate.
 void EditorLayer::ApplyEditorTheme() {
     ImGuiStyle& style = ImGui::GetStyle();
+
+    if (EditorSettings::Get().EditorTheme == 2) {
+        // --- Windows XP (Luna) ---------------------------------------------------------------
+        // Approximates the XP desktop theme: #ECE9D8 beige chrome, black text, white input
+        // fields. The Luna-blue caption bars and the toolbar's own #245EDC taskbar blue (pushed
+        // locally in DrawTopToolbar) are the "blue"; the accent/selection roles are the XP
+        // Start-button green, per request. ImGui paints one global text colour, so the caption
+        // bars use a *lighter* Luna blue than the real #0A64D2 to stay legible under black text.
+        // Geometry (rounding/padding) is shared across all themes — this stays ImGui's rounded
+        // shape, not XP's near-square one.
+        auto rgb = [](int r, int g, int b, float a = 1.0f) {
+            return ImVec4(r / 255.0f, g / 255.0f, b / 255.0f, a);
+        };
+
+        const ImVec4 face       = rgb(236, 233, 216); // #ECE9D8 ButtonFace / window chrome
+        const ImVec4 faceLight  = rgb(244, 242, 232);
+        const ImVec4 faceDark   = rgb(206, 202, 183);
+        const ImVec4 edge       = rgb(172, 168, 153); // #ACA899 3D edge
+        const ImVec4 lunaTitle  = rgb(110, 158, 222); // Luna blue caption / docked-tab-bar strip
+        const ImVec4 lunaSoft   = rgb(153, 174, 199); // greyed Luna for the unfocused caption bar
+        // XP Start-button green — the accent, per request.
+        const ImVec4 green      = rgb( 78, 154,  46); // #4E9A2E face
+        const ImVec4 greenHi    = rgb( 99, 179,  60); // #63B33C hovered
+        const ImVec4 greenLo    = rgb( 58, 122,  34); // #3A7A22 pressed / checkmark
+
+        style.Colors[ImGuiCol_WindowBg]         = face;
+        style.Colors[ImGuiCol_ChildBg]          = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+        style.Colors[ImGuiCol_PopupBg]          = rgb(252, 251, 245, 0.98f);
+        style.Colors[ImGuiCol_MenuBarBg]        = face;
+        style.Colors[ImGuiCol_TitleBg]          = lunaSoft;
+        style.Colors[ImGuiCol_TitleBgActive]    = lunaTitle;
+        style.Colors[ImGuiCol_TitleBgCollapsed] = lunaSoft;
+        style.Colors[ImGuiCol_Border]           = edge;
+        style.Colors[ImGuiCol_BorderShadow]     = ImVec4(1.0f, 1.0f, 1.0f, 0.35f); // fakes the raised bevel
+        style.Colors[ImGuiCol_Separator]        = rgb(172, 168, 153, 0.65f);
+        style.Colors[ImGuiCol_SeparatorHovered] = greenHi;
+        style.Colors[ImGuiCol_SeparatorActive]  = green;
+        style.Colors[ImGuiCol_FrameBg]          = rgb(255, 255, 255);
+        style.Colors[ImGuiCol_FrameBgHovered]   = rgb(238, 246, 235);
+        style.Colors[ImGuiCol_FrameBgActive]    = rgb(224, 240, 219);
+        style.Colors[ImGuiCol_ScrollbarBg]      = rgb(241, 239, 226);
+        style.Colors[ImGuiCol_ScrollbarGrab]        = rgb(212, 208, 200); // #D4D0C8
+        style.Colors[ImGuiCol_ScrollbarGrabHovered] = rgb(180, 214, 165);
+        style.Colors[ImGuiCol_ScrollbarGrabActive]  = rgb(140, 190, 118);
+        style.Colors[ImGuiCol_Text]            = rgb(23, 23, 23);
+        style.Colors[ImGuiCol_TextDisabled]    = rgb(128, 128, 128); // #808080
+        style.Colors[ImGuiCol_TextSelectedBg]  = ImVec4(green.x, green.y, green.z, 0.55f);
+        style.Colors[ImGuiCol_CheckMark]       = greenLo;
+        style.Colors[ImGuiCol_SliderGrab]       = greenHi;
+        style.Colors[ImGuiCol_SliderGrabActive] = green;
+        style.Colors[ImGuiCol_Button]           = faceLight;
+        style.Colors[ImGuiCol_ButtonHovered]    = rgb(223, 240, 214); // XP "hot" — a green wash
+        style.Colors[ImGuiCol_ButtonActive]     = rgb(204, 212, 189); // pressed / sunk
+        style.Colors[ImGuiCol_Header]           = ImVec4(green.x, green.y, green.z, 0.85f);
+        style.Colors[ImGuiCol_HeaderHovered]    = greenHi;
+        style.Colors[ImGuiCol_HeaderActive]     = green;
+        style.Colors[ImGuiCol_ResizeGrip]        = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+        style.Colors[ImGuiCol_ResizeGripHovered] = greenHi;
+        style.Colors[ImGuiCol_ResizeGripActive]  = green;
+        // Panel tabs in the Start-button green, per request: unselected a lighter green (black
+        // tab text still clears AA on it), the selected/front tab the deeper #4E9A2E so it reads
+        // as the active one.
+        style.Colors[ImGuiCol_Tab]                       = rgb(119, 176,  72); // #77B048
+        style.Colors[ImGuiCol_TabHovered]                = rgb(136, 194,  88);
+        style.Colors[ImGuiCol_TabSelected]               = green;              // #4E9A2E front tab
+        style.Colors[ImGuiCol_TabDimmed]                 = rgb( 96, 138,  62);
+        style.Colors[ImGuiCol_TabDimmedSelected]         = rgb( 74, 132,  44);
+        style.Colors[ImGuiCol_TabSelectedOverline]       = rgb(158, 220, 118, 0.95f);
+        style.Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+        style.Colors[ImGuiCol_NavCursor]        = green;
+        style.Colors[ImGuiCol_DockingPreview]  = ImVec4(green.x, green.y, green.z, 0.45f);
+        style.Colors[ImGuiCol_DockingEmptyBg]  = rgb(158, 154, 138);
+        style.Colors[ImGuiCol_ModalWindowDimBg] = rgb(26, 31, 41, 0.28f);
+        return;
+    }
 
     if (EditorSettings::Get().EditorTheme == 1) {
         // Prism: static near-black chrome. Everything with colour is set by ApplyPrismAnimation,
@@ -451,7 +528,10 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
     if (!m_ShowPreferences) return;
 
     ImGui::SetNextWindowSize(ImVec2(660.0f * m_UIScale, 440.0f * m_UIScale), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin(ICON_FA_GEAR "  Preferences", &m_ShowPreferences)) { ImGui::End(); return; }
+    PushTabChromeText(); // keep the (blue) title bar text white on XP; body text is unaffected
+    const bool prefsOpen = ImGui::Begin(ICON_FA_GEAR "  Preferences", &m_ShowPreferences);
+    PopTabChromeText();
+    if (!prefsOpen) { ImGui::End(); return; }
 
     static const char* kCats[] = {
         ICON_FA_UNIVERSAL_ACCESS "  General",
@@ -485,7 +565,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             ImGui::SetTooltip("Hover hints on Inspector fields, Hierarchy rows and toolbar buttons.");
 
         {
-            static const char* kThemeLabels[] = { "Dark Slate", "Prism" };
+            static const char* kThemeLabels[] = { "Dark Slate", "Prism", "Windows XP" };
             int theme = std::clamp(prefs.EditorTheme, 0, (int)IM_ARRAYSIZE(kThemeLabels) - 1);
             ImGui::SetNextItemWidth(kw);
             if (ImGui::Combo("Theme", &theme, kThemeLabels, IM_ARRAYSIZE(kThemeLabels))) {
@@ -496,7 +576,9 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Dark Slate: monochrome greys + one cool accent.\n"
                                      "Prism: near-black chrome; the accent, buttons and text\n"
-                                     "tint drift through the spectrum together.");
+                                     "tint drift through the spectrum together.\n"
+                                     "Windows XP: the Luna \"Blue\" scheme - beige chrome,\n"
+                                     "black text, white fields, Luna-blue selection.");
         }
 
         ImGui::SeparatorText("Display");
@@ -1413,7 +1495,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     ImGuiWindowFlags sceneFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
         ImGuiWindowFlags_NoFocusOnAppearing;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    PushTabChromeText(); // Scene/Game share a tab bar; keep its text white on XP (drawn in Begin())
     m_SceneViewportVisible = ImGui::Begin("Scene", nullptr, sceneFlags);
+    PopTabChromeText();
     ImGui::PopStyleVar();
     // Track Scene's live dock node every frame (not just once) so the Play/Stop re-docking
     // safety net always targets the pair's CURRENT home — wherever the user last dragged the
@@ -1451,10 +1535,18 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if (m_ShowHierarchy) DrawHierarchy(world, assets);
     if (m_ShowInspector) DrawInspector(world, assets, dt);
     if (m_ShowAssetBrowser) DrawAssetBrowser(world, assets);
-    // (Console is drawn by the reloadable editor module — see main.cpp's editorModule.Draw(),
-    // which runs immediately after this call, still inside the same ImGui frame and dockspace.)
+    // (Console and the Statistics HUD are drawn by the reloadable editor module — see main.cpp's
+    // editorModule.Draw(), which runs immediately after this call, still inside the same ImGui
+    // frame and dockspace.)
     if (!m_HideOverlaysThisFrame) {
-        DrawStatsPanel(world, dt);
+        // Exponential smoothing of the frame time: a raw per-frame ms figure flickers too fast
+        // to read. Used by the viewport status bar just below and by the reloadable Stats HUD
+        // (exposed through EditorModuleHostAPI::GetSmoothedFrameMs). Lived inside DrawStatsPanel
+        // before that panel moved out; kept on the same !m_HideOverlaysThisFrame path so its
+        // cadence is unchanged.
+        const float frameMs = dt * 1000.0f;
+        m_SmoothedFrameMs = m_SmoothedFrameMs * 0.92f + frameMs * 0.08f;
+
         DrawViewportStatusBar();
         DrawHistoryPanel(world, assets);
     }

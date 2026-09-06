@@ -5,6 +5,9 @@
 namespace EditorModuleConsole {
     void Draw(const EditorModuleHostAPI& host);
 }
+namespace EditorModuleStats {
+    void Draw(const EditorModuleHostAPI& host);
+}
 
 namespace {
 
@@ -35,6 +38,7 @@ bool BindImGuiToHost(const EditorModuleHostAPI& host) {
 void Draw(const EditorModuleHostAPI& host) {
     if (!BindImGuiToHost(host)) return;
     EditorModuleConsole::Draw(host);
+    EditorModuleStats::Draw(host);
 }
 
 const EditorModuleAPI kAPI{

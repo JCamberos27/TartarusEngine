@@ -4,7 +4,14 @@
 #include "EditorUIHelpers.h"
 #include "FileDialog.h"
 #include "Log.h"
+#include "EditorLayer.h"
+#include "EditorSettings.h"
+#include "World.h"
+#include "Components.h"
+#include "Profiler.h"
+#include "GLStateCache.h"
 
+#include <cstdio>
 #include <cstring>
 #include <imgui.h>
 #include <windows.h>
@@ -16,6 +23,12 @@ namespace {
 // The window native dialogs opened on the module's behalf are parented to. File-scope because the
 // host API is a table of plain function pointers with no user-data slot.
 GLFWwindow* g_ParentWindow = nullptr;
+
+// The live editor + world the Stats-panel callbacks (API v3) read from, refreshed every frame by
+// HotReloadEditorModule::SetFrameContext(). Same file-scope rationale as g_ParentWindow: the host
+// API is a flat function-pointer table with nowhere to hang a context pointer.
+EditorLayer* g_Editor = nullptr;
+World* g_World = nullptr;
 
 void DrawStatusPanel(const char* title, const char* message, const char* accent) {
     bool open = true;
@@ -83,6 +96,97 @@ bool SaveFileDialogFn(const char* filter, const char* defaultExt, char* outPath,
 
 EditorConsoleState* ConsoleStateFn() { return &EditorModuleHost::ConsoleState(); }
 
+// --- Stats panel (API v3) ------------------------------------------------------------------
+// Bodies for the reloadable Statistics HUD's read-only view of host state. Everything the panel
+// shows is owned by EditorLayer / the renderer / the Profiler singletons, which are linked into
+// the executable only — the module reads them exclusively through these, exactly like the Log
+// bridge above. g_Editor / g_World are refreshed each frame by SetFrameContext().
+
+void StatsGetViewportRectFn(float* outX, float* outY, float* outW, float* outH,
+                            float* outUIScale, bool* outEnabled) {
+    const bool haveEditor = g_Editor != nullptr;
+    const glm::vec2 pos  = haveEditor ? g_Editor->ViewportPos()  : glm::vec2(0.0f);
+    const glm::vec2 size = haveEditor ? g_Editor->ViewportSize() : glm::vec2(0.0f);
+    if (outX) *outX = pos.x;
+    if (outY) *outY = pos.y;
+    if (outW) *outW = size.x;
+    if (outH) *outH = size.y;
+    if (outUIScale) *outUIScale = haveEditor ? g_Editor->UIScale() : 1.0f;
+    // Mirrors the old DrawStatsPanel guards: the toolbar/menu toggle, plus a live non-degenerate
+    // Scene viewport to pin to.
+    if (outEnabled) {
+        *outEnabled = haveEditor && EditorSettings::Get().SceneShowStats &&
+                      g_Editor->IsSceneViewportVisible() && size.x >= 1.0f && size.y >= 1.0f;
+    }
+}
+
+void StatsGetRenderStatsFn(EditorModuleRenderStats* out) {
+    if (!out) return;
+    *out = EditorModuleRenderStats{};
+    if (!g_Editor) return;
+    const EditorLayer::RenderStats& rs = g_Editor->GetRenderStats();
+    out->DrawCalls = rs.DrawCalls;
+    out->Triangles = rs.Triangles;
+    out->Vertices = rs.Vertices;
+    out->Culled = rs.Culled;
+    out->LightBufferOverflowed = rs.LightBufferOverflowed;
+    out->ClusterSaturated = rs.ClusterSaturated;
+}
+
+int StatsGetProfilerSamplesFn(EditorModuleProfilerSample* outArr, int maxCount, bool gpu) {
+    if (!outArr || maxCount <= 0) return 0;
+    const std::vector<Profiler::Entry>& src = gpu ? Profiler::GetLastFrameGpu() : Profiler::GetLastFrame();
+    // Not std::min: <windows.h> (included below for LoadLibrary etc.) defines a min() macro.
+    const int srcCount = (int)src.size();
+    const int n = maxCount < srcCount ? maxCount : srcCount;
+    for (int i = 0; i < n; ++i) {
+        std::snprintf(outArr[i].Name, sizeof(outArr[i].Name), "%s", src[(size_t)i].Name.c_str());
+        outArr[i].Milliseconds = src[(size_t)i].Milliseconds;
+    }
+    return n;
+}
+
+void StatsGetGLFrameStatsFn(EditorModuleGLFrameStats* out) {
+    if (!out) return;
+    const GLStateCache::FrameStats& gl = GLStateCache::GetFrameStats();
+    out->ProgramBinds = gl.ProgramBinds;
+    out->ProgramBindsSkipped = gl.ProgramBindsSkipped;
+    out->TextureBinds = gl.TextureBinds;
+    out->TextureBindsSkipped = gl.TextureBindsSkipped;
+    out->VaoBinds = gl.VaoBinds;
+    out->VaoBindsSkipped = gl.VaoBindsSkipped;
+}
+
+void StatsGetSceneEntityCountsFn(int* outEntities, int* outRenderers, int* outColliders,
+                                 int* outLights, int* outInactive) {
+    int entities = 0, renderers = 0, colliders = 0, lights = 0, inactive = 0;
+    if (g_World) {
+        // Same tally as the old EditorLayer::DrawStatsPanel loop.
+        for (auto entity : g_World->Registry.view<TransformComponent>()) {
+            ++entities;
+            if (g_World->Registry.all_of<RenderableComponent>(entity)) ++renderers;
+            if (g_World->Registry.all_of<LightComponent>(entity)) ++lights;
+            if (g_World->Registry.all_of<ColliderComponent>(entity)) ++colliders;
+            if (g_World->Registry.all_of<InactiveTag>(entity)) ++inactive;
+        }
+    }
+    if (outEntities) *outEntities = entities;
+    if (outRenderers) *outRenderers = renderers;
+    if (outColliders) *outColliders = colliders;
+    if (outLights) *outLights = lights;
+    if (outInactive) *outInactive = inactive;
+}
+
+float StatsGetSmoothedFrameMsFn() { return g_Editor ? g_Editor->SmoothedFrameMs() : 0.0f; }
+
+void StatsSetHideEngineMarkFn(bool hide) {
+    if (g_Editor) g_Editor->SetHideEngineMarkForStats(hide);
+}
+
+float StatsSampleViewportLuminanceFn(float screenCenterX, float screenCenterY, float boxPx) {
+    return g_Editor ? g_Editor->SampleStatsHudLuminance(screenCenterX, screenCenterY, boxPx) : -1.0f;
+}
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
@@ -98,6 +202,14 @@ const EditorModuleHostAPI kHostAPI{
     &SetTooltipFn,
     &SaveFileDialogFn,
     &ConsoleStateFn,
+    &StatsGetViewportRectFn,
+    &StatsGetRenderStatsFn,
+    &StatsGetProfilerSamplesFn,
+    &StatsGetGLFrameStatsFn,
+    &StatsGetSceneEntityCountsFn,
+    &StatsGetSmoothedFrameMsFn,
+    &StatsSetHideEngineMarkFn,
+    &StatsSampleViewportLuminanceFn,
 };
 
 } // namespace
@@ -119,16 +231,29 @@ void HotReloadEditorModule::Initialize(const fs::path& sourceModule, void* paren
     Reload(true);
 }
 
+void HotReloadEditorModule::SetFrameContext(EditorLayer* editor, World* world) {
+    g_Editor = editor;
+    g_World = world;
+}
+
 void HotReloadEditorModule::Draw(bool editorUIVisible, float deltaTime) {
     m_PollElapsed += deltaTime;
     if (m_PollElapsed >= 0.35f) {
         m_PollElapsed = 0.0f;
         std::error_code ec;
         const fs::file_time_type sourceWrite = fs::last_write_time(m_SourceModule, ec);
-        if (!ec && sourceWrite != m_LastSourceWrite) Reload(false);
+        if (!ec && sourceWrite != m_LastSourceWrite && sourceWrite != m_LastFailedSourceWrite)
+            Reload(false);
     }
 
-    if (editorUIVisible && m_API && m_API->Draw) m_API->Draw(kHostAPI);
+    if (editorUIVisible && m_API && m_API->Draw) {
+        m_API->Draw(kHostAPI);
+    } else if (!editorUIVisible && g_Editor) {
+        // The module's Stats panel is what clears this each frame; with the module not drawing
+        // (editor UI hidden), clear it here so the corner engine-mark isn't left suppressed by a
+        // stale overflow decision when the panels come back.
+        g_Editor->SetHideEngineMarkForStats(false);
+    }
 }
 
 bool HotReloadEditorModule::Reload(bool initialLoad) {
@@ -145,6 +270,20 @@ bool HotReloadEditorModule::Reload(bool initialLoad) {
         return false;
     }
 
+    // On startup, clear numbered copies left behind by an earlier crash or force-kill (a clean
+    // Shutdown deletes its own). Anything still locked by another running instance just fails the
+    // remove and is left alone.
+    if (initialLoad) {
+        std::error_code sweepEc;
+        for (const auto& entry : fs::directory_iterator(cacheDir, sweepEc)) {
+            const std::wstring name = entry.path().filename().wstring();
+            if (name.rfind(L"TartarusEditor_", 0) == 0 && entry.path().extension() == L".dll") {
+                std::error_code rmEc;
+                fs::remove(entry.path(), rmEc);
+            }
+        }
+    }
+
     const fs::path copyPath = cacheDir / ("TartarusEditor_" + std::to_string(++m_Generation) + ".dll");
     fs::copy_file(m_SourceModule, copyPath, fs::copy_options::overwrite_existing, ec);
     if (ec) {
@@ -156,6 +295,7 @@ bool HotReloadEditorModule::Reload(bool initialLoad) {
     if (!candidate) {
         Log::Error("Editor hot reload: couldn't load the rebuilt TartarusEditor.dll.");
         fs::remove(copyPath, ec);
+        m_LastFailedSourceWrite = sourceWrite; // don't re-attempt this exact build every poll
         return false;
     }
 
@@ -165,6 +305,7 @@ bool HotReloadEditorModule::Reload(bool initialLoad) {
         Log::Error("Editor hot reload: TartarusEditor.dll has an incompatible module API.");
         ::FreeLibrary(candidate);
         fs::remove(copyPath, ec);
+        m_LastFailedSourceWrite = sourceWrite; // don't re-attempt this exact build every poll
         return false;
     }
 
@@ -179,6 +320,7 @@ bool HotReloadEditorModule::Reload(bool initialLoad) {
     m_API = candidateAPI;
     m_LoadedCopy = copyPath;
     m_LastSourceWrite = sourceWrite;
+    m_LastFailedSourceWrite = {};
     Log::Info(initialLoad ? "Editor hot reload: TartarusEditor module loaded."
                           : "Editor hot reload: TartarusEditor module reloaded.");
     return true;

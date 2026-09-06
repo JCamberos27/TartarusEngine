@@ -24,6 +24,10 @@ private:
     std::filesystem::path m_SourceModule;
     std::filesystem::path m_LoadedCopy;
     std::filesystem::file_time_type m_LastSourceWrite{};
+    // Write-time of a build that loaded but failed validation (bad export / mismatched API
+    // version). The poll skips re-attempting that exact timestamp so a broken DLL isn't retried
+    // and re-logged every 0.35 s; a fresh build (new mtime) still is.
+    std::filesystem::file_time_type m_LastFailedSourceWrite{};
     void* m_Handle = nullptr;
     const struct GameModuleAPI* m_API = nullptr;
     float m_PollElapsed = 0.0f;

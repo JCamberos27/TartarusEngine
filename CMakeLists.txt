@@ -91,6 +91,7 @@ list(REMOVE_ITEM ENGINE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleConsole.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleStats.cpp
 )
 
 set(IMGUI_SOURCES
@@ -130,6 +131,7 @@ add_library(TartarusGame SHARED
 add_library(TartarusEditor SHARED
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleConsole.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleStats.cpp
   ${imgui_SOURCE_DIR}/imgui.cpp
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp
@@ -173,6 +175,9 @@ add_dependencies(TartarusEngine TartarusGame TartarusEditor)
 target_compile_definitions(TartarusEngine PRIVATE
   TARTARUS_GAME_MODULE_FILENAME="$<TARGET_FILE_NAME:TartarusGame>"
   TARTARUS_EDITOR_MODULE_FILENAME="$<TARGET_FILE_NAME:TartarusEditor>"
+  # Shown in the viewport status bar so the running build (Debug vs an optimized config) is
+  # obvious at a glance — Debug is ~2x the frame time.
+  TARTARUS_BUILD_CONFIG="$<CONFIG>"
 )
 
 # A console-subsystem build makes Windows open a terminal window alongside the editor, which
