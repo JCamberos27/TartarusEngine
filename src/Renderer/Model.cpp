@@ -2,6 +2,7 @@
 #include "Log.h"
 #include "Texture.h"
 #include "Shader.h"
+#include "GLStateCache.h"
 #include "PrimitiveMeshes.h"
 #include "gl.h"
 
@@ -528,6 +529,12 @@ MaterialLocs ResolveMaterialLocs(Shader& shader) {
 }
 
 void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs) {
+    // #192: ~12 uniform uploads + up to 7 texture binds below, almost all redundant when the
+    // previous mesh drew with this same material under this same program. The draw loop sorts
+    // by material so consecutive meshes usually match; GLStateCache clears this on Invalidate()
+    // (end of frame + after every raw-GL pass), so an edited material can't be wrongly skipped.
+    if (GLStateCache::MaterialAlreadyBound(mat.Hash(), shader.Program())) return;
+
     shader.SetVec3(locs.baseColor, mat.BaseColor);
     shader.SetFloat(locs.metallic, mat.Metallic);
     shader.SetFloat(locs.roughness, mat.Roughness);
@@ -575,13 +582,16 @@ void Model::DrawDepthOnly(Shader& shader) {
         const Material& mat = m_MaterialOverride ? *m_MaterialOverride : mesh->Mat;
         // Only cost paid over a pure depth draw: one texture bind + two uniforms, and only for
         // meshes that actually have an albedo map (cutout foliage/fences) — the shadow then
-        // follows the cutout instead of a solid silhouette (#116).
-        if (mat.AlbedoMap) {
-            mat.AlbedoMap->Bind(0);
-            shader.SetInt(albedoLoc, 0);
-            shader.SetInt(alphaTestLoc, 1);
-        } else {
-            shader.SetInt(alphaTestLoc, 0);
+        // follows the cutout instead of a solid silhouette (#116). #192: skip even that when the
+        // previous mesh in this pass drew with the same material.
+        if (!GLStateCache::MaterialAlreadyBound(mat.Hash(), shader.Program())) {
+            if (mat.AlbedoMap) {
+                mat.AlbedoMap->Bind(0);
+                shader.SetInt(albedoLoc, 0);
+                shader.SetInt(alphaTestLoc, 1);
+            } else {
+                shader.SetInt(alphaTestLoc, 0);
+            }
         }
         mesh->Draw();
     }
