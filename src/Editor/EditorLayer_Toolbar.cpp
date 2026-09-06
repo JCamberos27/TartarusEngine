@@ -636,6 +636,28 @@ void EditorLayer::DrawGridSnapPopupBody() {
     ImGui::PopItemWidth();
 }
 
+void EditorLayer::DrawGizmosPopupBody() {
+    ImGui::Checkbox("Gizmos", &m_GizmosMasterVisible);
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Master switch for every viewport gizmo and icon below.\nThe nav cube and selection outline are unaffected.");
+    ImGui::Separator();
+
+    ImGui::BeginDisabled(!m_GizmosMasterVisible);
+    ImGui::Checkbox("Transform gizmo", &m_ShowGizmos);
+    ImGui::Checkbox("Entity icons", &m_ShowEntityIcons);
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("The billboard light / camera / empty markers.");
+    bool lightGiz = EditorSettings::Get().ShowLightGizmos;
+    if (ImGui::Checkbox("Light gizmos", &lightGiz)) {
+        EditorSettings::Get().ShowLightGizmos = lightGiz;
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Range spheres and spot cones drawn from each light.");
+    ImGui::EndDisabled();
+
+    ImGui::Separator();
+    ImGui::Checkbox("Grid", &m_ShowGrid); // independent of the master switch, like Unity's grid
+}
+
 void EditorLayer::RequestCapture() {
     const auto& s = EditorSettings::Get();
     const int rp = std::clamp(s.CaptureResPreset, 0, (int)IM_ARRAYSIZE(kCaptureRes) - 1);

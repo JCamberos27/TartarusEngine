@@ -41,7 +41,7 @@
 //   8 - Inspector (frame only): the module owns Begin("Inspector") + End + visibility.
 //       Get/SetShowInspector and one DrawInspectorBody callback — the ~1090-line body (every
 //       component editor, PBR material, add-component, per-field undo) stays host-side.
-constexpr std::uint32_t kEditorModuleAPIVersion = 9;
+constexpr std::uint32_t kEditorModuleAPIVersion = 10;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -333,6 +333,11 @@ struct EditorModuleHostAPI {
     // The toolbar's magnet button gets a caret that opens this popup; the body (grid spacing,
     // per-op snap increments — plain floats/ints in EditorSettings + EditorLayer) is host-side.
     void (*DrawGridSnapPopupBody)() = nullptr;
+
+    // --- Gizmos dropdown (API v10) ----------------------------------------------------
+    // Master viewport-gizmo switch + per-type visibility; body is host-side (EditorLayer flags
+    // + EditorSettings::ShowLightGizmos).
+    void (*DrawGizmosPopupBody)() = nullptr;
 };
 
 struct EditorModuleAPI {

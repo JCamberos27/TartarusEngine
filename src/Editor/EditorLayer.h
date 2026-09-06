@@ -144,6 +144,7 @@ public:
     void DrawWindowMenuBody();
     void DrawCaptureOptionsPopupBody();
     void DrawGridSnapPopupBody(); // #236 — grid spacing + per-op snap increments, opened from the toolbar magnet's caret
+    void DrawGizmosPopupBody();   // #236 — master gizmo switch + per-type visibility, opened from the toolbar Gizmos caret
     // Also the module's Add menu (via the host glue); still used by Shift+A quick-add and the
     // Hierarchy context menu, which are host-side.
     void DrawAddEntityItems(World& world, AssetLibrary& assets, Camera& editorCamera);
@@ -707,6 +708,8 @@ private:
 
     bool m_ShowGrid = true;
     bool m_ShowGizmos = true; // View menu toggle for the viewport transform gizmo (audit #60)
+    bool m_GizmosMasterVisible = true; // #236 "Gizmos" dropdown master switch — hides every viewport gizmo/icon at once
+    bool m_ShowEntityIcons = true;     // #236 — the billboard light/camera/empty icons in the viewport
     bool m_FrameOnSelect = false;   // auto-frame the editor camera when the selection changes (#69)
     bool m_PendingFrameSelect = false; // set by SelectItem, consumed in Draw() where the camera is in scope
     bool m_GridSnapEnabled = true;    // hold Ctrl to invert momentarily, Blender-style
