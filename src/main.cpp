@@ -47,6 +47,7 @@
 #include <string>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <thread>
 #include <vector>
 #include <cstring>
@@ -1399,6 +1400,22 @@ int main(int argc, char** argv) {
                 // #194: resolve once, outside the per-entity loop below.
                 int modelModelLoc = modelShader.Loc("uModel");
                 int modelNormalMatrixLoc = modelShader.Loc("uNormalMatrix");
+
+                // #192: gather the frustum-culled visible set, then sort it by material before
+                // drawing, so entities sharing a material land adjacent — which is what makes
+                // the BindMaterial dedup (GLStateCache::MaterialAlreadyBound) actually hit. All
+                // scene geometry is opaque and depth-tested, so reordering is invisible. The
+                // buffer is static so it is reused across the Scene- and Game-tab passes and
+                // across frames rather than reallocated each call.
+                struct DrawItem {
+                    glm::mat4 Xform;
+                    Model* Ref;
+                    std::uint64_t MatKey;
+                    int Meshes, Tris, Verts;
+                };
+                static std::vector<DrawItem> drawList;
+                drawList.clear();
+
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.all_of<InactiveTag>(entity)) continue; // Hierarchy eye toggle / GameObject active
                     auto& renderable = world.Registry.get<RenderableComponent>(entity);
@@ -1429,15 +1446,26 @@ int main(int argc, char** argv) {
                         }
                     }
 
-                    modelShader.SetMat4(modelModelLoc, model);
+                    Model* m = renderable.ModelRef.get();
+                    drawList.push_back({ model, m, m->MaterialSortKey(),
+                                        m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount() });
+                }
+
+                std::sort(drawList.begin(), drawList.end(), [](const DrawItem& a, const DrawItem& b) {
+                    if (a.MatKey != b.MatKey) return a.MatKey < b.MatKey;
+                    return reinterpret_cast<std::uintptr_t>(a.Ref) < reinterpret_cast<std::uintptr_t>(b.Ref);
+                });
+
+                for (const DrawItem& it : drawList) {
+                    modelShader.SetMat4(modelModelLoc, it.Xform);
                     // Normal matrix (inverse-transpose) computed here, not per-vertex (#104).
                     modelShader.SetMat4(modelNormalMatrixLoc,
-                        glm::mat4(glm::transpose(glm::inverse(glm::mat3(model)))));
-                    renderable.ModelRef->Draw(modelShader);
+                        glm::mat4(glm::transpose(glm::inverse(glm::mat3(it.Xform)))));
+                    it.Ref->Draw(modelShader);
 
-                    localStats.DrawCalls += renderable.ModelRef->MeshCount();
-                    localStats.Triangles += (int)renderable.ModelRef->TriangleCount();
-                    localStats.Vertices += (int)renderable.ModelRef->VertexCount();
+                    localStats.DrawCalls += it.Meshes;
+                    localStats.Triangles += it.Tris;
+                    localStats.Vertices += it.Verts;
                 }
                 } // end "Scene Draw" profile scope
                 if (outStats) *outStats = localStats;

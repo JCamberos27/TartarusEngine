@@ -108,6 +108,16 @@ public:
     int MeshCount() const { return (int)m_Meshes.size(); }
     Material& MeshMaterial(int index) { return m_Meshes[index]->Mat; }
 
+    // #192: the material value-hash this model draws with, so the scene draw loop can sort
+    // entities to put value-identical materials adjacent (which is what makes the BindMaterial
+    // dedup in GLStateCache actually hit). The override, or the first sub-mesh's material —
+    // enough to cluster the primitives that share a handful of material values; multi-mesh
+    // imports still group by this plus the model pointer.
+    std::uint64_t MaterialSortKey() const {
+        if (m_MaterialOverride) return m_MaterialOverride->Hash();
+        return m_Meshes.empty() ? 0 : m_Meshes[0]->Mat.Hash();
+    }
+
     // Summed across every sub-mesh, for the editor's statistics overlay.
     unsigned int TriangleCount() const;
     unsigned int VertexCount() const;
