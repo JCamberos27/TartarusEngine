@@ -1310,8 +1310,19 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     if (auto* collider = registry.try_get<ColliderComponent>(entity)) {
         if (BeginComponentSection(ICON_FA_CUBE, "Box Collider", true, removed, /*defaultOpen=*/false,
                 "Lets this object block movement and be hit by raycasts.\nBounds follow its Transform/mesh automatically.")) {
-            PropertyLabel("Is Trigger", "If checked, this object doesn't block movement -\nit's solid (blocking) by default.");
-            if (ImGui::Checkbox("##IsTrigger", &collider->IsTrigger)) PushUndo(world, "Edit Collider");
+            // Trigger volumes (non-blocking, enter/stay/exit events) aren't implemented — nothing
+            // reads IsTrigger yet (#185). Per docs/CONVENTIONS.md rule 3 the toggle still shows
+            // (a collider is where you'd look for it) but disabled, so it can't be set on an
+            // assumption that isn't true. The field stays in the component + serializer for
+            // forward-compat, and this re-wires to a live checkbox when #185 lands.
+            PropertyLabel("Is Trigger", "Not implemented yet (#185): every collider blocks movement.\n"
+                                        "Trigger volumes with enter/stay/exit events come with the\n"
+                                        "collision-system work.");
+            ImGui::BeginDisabled();
+            ImGui::Checkbox("##IsTrigger", &collider->IsTrigger);
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::TextDisabled("(not implemented)");
             EndComponentSection();
         }
         if (removed) {
