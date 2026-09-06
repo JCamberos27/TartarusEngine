@@ -19,6 +19,7 @@
 #include "EditorSettings.h"
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
+#include "ComponentRegistry.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
 #include "GLStateCache.h"
@@ -1600,6 +1601,48 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
         }
     }
 
+    // #184: sections for reflection-registered components (ComponentRegistry). One widget per
+    // field, chosen by ReflectFieldType — no per-component code here; registering a component
+    // gives it a section for free. Undo follows the same lightweight pattern the hand-coded
+    // sections above use (push on the frame an edit starts).
+    for (const auto& rc : ComponentRegistry::All()) {
+        if (!rc.Has(registry, entity)) continue;
+        bool reflRemoved = false;
+        if (BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, true, reflRemoved, /*defaultOpen=*/true, rc.Meta.Tooltip)) {
+            char* fbase = static_cast<char*>(rc.Get(registry, entity));
+            for (const ReflectField& f : rc.Meta.Fields) {
+                PropertyLabel(f.Name, f.Tooltip);
+                ImGui::PushID(f.Name);
+                bool started = false;
+                switch (f.Type) {
+                    case ReflectFieldType::Bool:
+                        if (ImGui::Checkbox("##v", reinterpret_cast<bool*>(fbase + f.Offset)))
+                            PushUndo(world, std::string("Edit ") + rc.Meta.Name);
+                        break;
+                    case ReflectFieldType::Int:
+                        ImGui::DragInt("##v", reinterpret_cast<int*>(fbase + f.Offset), f.DragSpeed);
+                        started = ImGui::IsItemActivated();
+                        break;
+                    case ReflectFieldType::Float:
+                        ImGui::DragFloat("##v", reinterpret_cast<float*>(fbase + f.Offset), f.DragSpeed, 0.0f, 0.0f, "%.3f");
+                        started = ImGui::IsItemActivated();
+                        break;
+                    case ReflectFieldType::Vec3:
+                        ImGui::DragFloat3("##v", reinterpret_cast<float*>(fbase + f.Offset), f.DragSpeed);
+                        started = ImGui::IsItemActivated();
+                        break;
+                }
+                if (started) PushUndo(world, std::string("Edit ") + rc.Meta.Name);
+                ImGui::PopID();
+            }
+            EndComponentSection();
+        }
+        if (reflRemoved) {
+            PushUndo(world, std::string("Remove ") + rc.Meta.Name);
+            rc.Remove(registry, entity);
+        }
+    }
+
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
@@ -1726,6 +1769,16 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     ImGui::SeparatorText("Motion");
     entry(ICON_FA_PERSON_RUNNING, "Animator", registry.all_of<AnimatorComponent>(entity),
         [&] { registry.emplace<AnimatorComponent>(entity); });
+
+    // #184: reflection-registered components. Adding one to ComponentRegistry puts it here with
+    // no edit to this menu.
+    if (!ComponentRegistry::All().empty()) {
+        ImGui::SeparatorText("Scripts");
+        for (const auto& rc : ComponentRegistry::All()) {
+            entry(rc.Meta.Icon, rc.Meta.Name, rc.Has(registry, entity),
+                  [&] { rc.Add(registry, entity); });
+        }
+    }
 
     ImGui::EndPopup();
 }

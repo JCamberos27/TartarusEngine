@@ -1,6 +1,7 @@
 #include "SceneSerializer.h"
 #include "World.h"
 #include "AssetLibrary.h"
+#include "ComponentRegistry.h"
 #include "Model.h"
 #include "Texture.h"
 #include "Material.h"
@@ -143,6 +144,24 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
             {"scalePulseFrequencyHz", controller->ScalePulseFrequencyHz},
         };
     }
+
+    // #184: components registered through the reflection system serialize generically — one JSON
+    // object per component keyed by its Meta.Name, one entry per reflected field. No per-component
+    // code here; adding a reflected component adds nothing to this file.
+    for (const auto& rc : ComponentRegistry::All()) {
+        if (!rc.Has(world.Registry, entity)) continue;
+        const char* base = static_cast<const char*>(rc.GetConst(world.Registry, entity));
+        json cj;
+        for (const auto& f : rc.Meta.Fields) {
+            switch (f.Type) {
+                case ReflectFieldType::Bool:  cj[f.Name] = *reinterpret_cast<const bool*>(base + f.Offset); break;
+                case ReflectFieldType::Int:   cj[f.Name] = *reinterpret_cast<const int*>(base + f.Offset); break;
+                case ReflectFieldType::Float: cj[f.Name] = *reinterpret_cast<const float*>(base + f.Offset); break;
+                case ReflectFieldType::Vec3:  cj[f.Name] = Vec3ToJson(*reinterpret_cast<const glm::vec3*>(base + f.Offset)); break;
+            }
+        }
+        j[rc.Meta.Name] = cj;
+    }
 }
 
 void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
@@ -218,6 +237,24 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
         controller.ScalePulseAmplitude = c.value("scalePulseAmplitude", 0.0f);
         controller.ScalePulseFrequencyHz = c.value("scalePulseFrequencyHz", 0.5f);
         world.Registry.emplace_or_replace<TransformControllerComponent>(entity, controller);
+    }
+
+    // #184: mirror of the generic write — restore each registered component present in `j`.
+    // Missing fields keep the component's own default (the component was just default-added).
+    for (const auto& rc : ComponentRegistry::All()) {
+        if (!j.contains(rc.Meta.Name)) continue;
+        rc.Add(world.Registry, entity);
+        char* base = static_cast<char*>(rc.Get(world.Registry, entity));
+        const json& cj = j.at(rc.Meta.Name);
+        for (const auto& f : rc.Meta.Fields) {
+            if (!cj.contains(f.Name)) continue;
+            switch (f.Type) {
+                case ReflectFieldType::Bool:  *reinterpret_cast<bool*>(base + f.Offset)  = cj.at(f.Name).get<bool>(); break;
+                case ReflectFieldType::Int:   *reinterpret_cast<int*>(base + f.Offset)   = cj.at(f.Name).get<int>(); break;
+                case ReflectFieldType::Float: *reinterpret_cast<float*>(base + f.Offset) = cj.at(f.Name).get<float>(); break;
+                case ReflectFieldType::Vec3:  *reinterpret_cast<glm::vec3*>(base + f.Offset) = JsonToVec3(cj.at(f.Name)); break;
+            }
+        }
     }
 }
 

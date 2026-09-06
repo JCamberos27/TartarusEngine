@@ -180,6 +180,16 @@ struct TransformControllerComponent {
     float Elapsed = 0.0f;
 };
 
+// First component wired up purely through the native reflection system (#184): it is declared
+// here, listed once in ComponentRegistry::RegisterEngineComponents(), and from that its JSON
+// serialization, Inspector section and Add Component entry are all generated. The per-frame
+// behaviour is SpinSystem in TartarusGame.dll. Standard-layout (plain members, no ctors beyond
+// defaults) so offsetof in the reflection metadata is well-defined.
+struct SpinComponent {
+    glm::vec3 Axis{0.0f, 1.0f, 0.0f}; // local axis to spin around (normalised at use)
+    float Speed = 90.0f;             // degrees per second, applied only while playing
+};
+
 // Present only on entities that are parented, or that have at least one child — an entity with
 // no relationships at all simply lacks this component, so the common (flat) case pays no cost.
 // When Parent is not entt::null, this entity's TransformComponent is interpreted as LOCAL space
