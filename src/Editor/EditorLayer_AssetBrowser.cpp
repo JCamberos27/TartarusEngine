@@ -836,7 +836,9 @@ void EditorLayer::DrawAssetBrowser(World& world, AssetLibrary& assets) {
     // Tighter vertical padding than the default so the toolbar hugs the tab bar instead of
     // floating below a large gap.
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
+    PushTabChromeText(); // the dock tab bar renders inside Begin(); keep its text white on XP
     bool open = ImGui::Begin("Asset Browser", &m_ShowAssetBrowser, flags);
+    PopTabChromeText();
     ImGui::PopStyleVar();
     if (!open) { ImGui::End(); return; }
     m_AssetBrowserFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);

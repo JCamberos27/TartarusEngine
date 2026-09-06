@@ -29,6 +29,33 @@ namespace EditorInternal {
 inline constexpr float kToolbarHeight = 52.0f;
 
 
+// --- Docked-panel tab-bar chrome text -------------------------------------------------------
+// A dock node's tab bar — the tab labels, each tab's close ×, the ▼ window-list button, the
+// node close × — is all drawn in ImGuiCol_Text, with no separate style colour (ImGui's own
+// source says as much). On a light-chrome theme (Windows XP) that chrome wants to stay white
+// against the coloured tabs / caption strip. The whole tab bar renders synchronously inside a
+// docked window's ImGui::Begin(), so each panel wraps *just its Begin() call* in these:
+//
+//     PushTabChromeText();
+//     bool open = ImGui::Begin("Panel", ...);
+//     PopTabChromeText();
+//     if (!open) { ImGui::End(); return; }
+//     ... body draws in the theme's normal text colour, no wrapping needed ...
+//
+// "Light chrome" is detected from ImGuiCol_WindowBg luminance, so any future light theme works
+// and the dark themes are untouched (no-op).
+inline bool PanelChromeIsLight() {
+    const ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+    return (0.299f * bg.x + 0.587f * bg.y + 0.114f * bg.z) > 0.5f;
+}
+inline void PushTabChromeText() {
+    if (PanelChromeIsLight()) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));
+}
+inline void PopTabChromeText() {
+    if (PanelChromeIsLight()) ImGui::PopStyleColor();
+}
+
+
 // True only for entities the vertex-grab workflow applies to. Level-geometry boxes qualify now
 // too — their cube primitive has real vertices to grab, same as any placed cube.
 inline bool IsVertexDraggable(World& world, entt::entity entity) {

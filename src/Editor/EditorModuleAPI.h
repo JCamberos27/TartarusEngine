@@ -11,7 +11,10 @@
 //   1 - status-panel placeholder only.
 //   2 - ImGui context/allocator sharing, Log accessors, tooltip + save-dialog callbacks and the
 //       host-owned Console panel state, so the Console panel itself can live in the module.
-constexpr std::uint32_t kEditorModuleAPIVersion = 2;
+//   3 - Stats-panel accessors: viewport rect + UI scale, RenderStats / Profiler / GL-frame-stats
+//       / entity-count readouts, the smoothed frame time, the engine-mark hide write-back, and a
+//       viewport-luminance sample so the module can own the HUD's contrast-adaptive text tint.
+constexpr std::uint32_t kEditorModuleAPIVersion = 3;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -44,6 +47,29 @@ struct EditorConsoleState {
     // Only auto-scroll when Log actually gained an entry, rather than fighting the user's
     // scrollback every frame.
     unsigned int SeenRevision = 0;
+};
+
+// --- Stats panel data (API v3) ---------------------------------------------------------------
+// Plain PODs mirroring the host-side structs the Stats HUD reads (EditorLayer::RenderStats,
+// Profiler::Entry, GLStateCache::FrameStats) so none of those host headers cross the boundary.
+struct EditorModuleRenderStats {
+    int DrawCalls = 0;
+    int Triangles = 0;
+    int Vertices = 0;
+    int Culled = 0;
+    bool LightBufferOverflowed = false;
+    bool ClusterSaturated = false;
+};
+
+struct EditorModuleProfilerSample {
+    char Name[32] = {};
+    float Milliseconds = 0.0f;
+};
+
+struct EditorModuleGLFrameStats {
+    int ProgramBinds = 0, ProgramBindsSkipped = 0;
+    int TextureBinds = 0, TextureBindsSkipped = 0;
+    int VaoBinds = 0, VaoBindsSkipped = 0;
 };
 
 struct EditorModuleHostAPI {
@@ -86,6 +112,49 @@ struct EditorModuleHostAPI {
 
     // Host-owned, reload-surviving Console panel state. Never null when Version matches.
     EditorConsoleState* (*ConsoleState)() = nullptr;
+
+    // --- Stats panel (API v3) ------------------------------------------------------------------
+    // The Stats HUD is a transparent, click-through overlay the module owns (its own ImGui::Begin
+    // with NoInputs/NoBackground), pinned to the Scene viewport. Everything it displays is
+    // host-owned state read through the callbacks below; the module keeps only derived data and
+    // the eased contrast tint, both of which simply rebuild after a reload.
+
+    // Scene-viewport rect (screen space) and the editor UI scale the HUD lays itself out against.
+    // *outEnabled is false when the Stats overlay is toggled off (View > Statistics) or the Scene
+    // viewport isn't showing / is degenerate — the module then draws nothing and clears the
+    // engine-mark hide flag.
+    void (*GetViewportRect)(float* outX, float* outY, float* outW, float* outH,
+                            float* outUIScale, bool* outEnabled) = nullptr;
+
+    // One-frame-behind render stats for the frame that just finished.
+    void (*GetRenderStats)(EditorModuleRenderStats* out) = nullptr;
+
+    // Fills outArr with up to maxCount profiler samples from the most recently completed frame
+    // (gpu=false: CPU scopes; gpu=true: GPU timer queries, which trail a few frames further).
+    // Returns the number of samples written.
+    int (*GetProfilerSamples)(EditorModuleProfilerSample* outArr, int maxCount, bool gpu) = nullptr;
+
+    // GLStateCache bind counters for the frame that just finished.
+    void (*GetGLFrameStats)(EditorModuleGLFrameStats* out) = nullptr;
+
+    // Live tallies over the host's World (computed host-side; the module never sees EnTT).
+    void (*GetSceneEntityCounts)(int* outEntities, int* outRenderers, int* outColliders,
+                                 int* outLights, int* outInactive) = nullptr;
+
+    // Exponentially-smoothed frame time (ms). The host keeps updating this every frame even while
+    // the panel is hidden — the viewport status bar reads it too — so the module only reads.
+    float (*GetSmoothedFrameMs)() = nullptr;
+
+    // The module's one write-back: true while the (height-capped) Stats HUD reaches far enough
+    // down the viewport to collide with the corner engine-mark monogram, so the host hides it.
+    // Called once per module Draw (false on the early-out paths).
+    void (*SetHideEngineMark)(bool hide) = nullptr;
+
+    // Kicks the host's async PBO luminance readback under the given screen-space box (the host
+    // owns the Scene framebuffer + GL context) and returns the most-recently-completed average
+    // luminance there, 0..1, or -1 if no sample has landed yet. The module throttles calls to
+    // ~10 Hz and does its own easing + text tint.
+    float (*SampleViewportLuminance)(float screenCenterX, float screenCenterY, float boxPx) = nullptr;
 };
 
 struct EditorModuleAPI {

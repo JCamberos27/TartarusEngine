@@ -130,8 +130,18 @@ void Draw(const EditorModuleHostAPI& host) {
     EditorConsoleState& state = *host.ConsoleState();
     if (!state.Visible) return;
 
+    // The dock tab bar renders synchronously inside Begin(); on a light-chrome theme (Windows XP)
+    // its text — tab labels, per-tab ×, the ▼ list button, node × — wants to stay white against
+    // the coloured tabs. Detected from WindowBg luminance so it needs no theme knowledge across
+    // the module boundary and is a no-op on the dark themes; the body below is unaffected.
+    const ImVec4 consoleBg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+    const bool consoleLightChrome =
+        (0.299f * consoleBg.x + 0.587f * consoleBg.y + 0.114f * consoleBg.z) > 0.5f;
+    if (consoleLightChrome) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));
     ImGuiWindowFlags flags = ImGuiWindowFlags_None;
-    if (!ImGui::Begin(ICON_FA_TERMINAL "  Console", &state.Visible, flags)) { ImGui::End(); return; }
+    const bool consoleOpen = ImGui::Begin(ICON_FA_TERMINAL "  Console", &state.Visible, flags);
+    if (consoleLightChrome) ImGui::PopStyleColor();
+    if (!consoleOpen) { ImGui::End(); return; }
 
     if (ActionButton(host, ICON_FA_TRASH "  Clear", "Remove every message from the console")) {
         if (host.LogClear) host.LogClear();

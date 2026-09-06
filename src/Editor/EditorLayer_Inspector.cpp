@@ -588,7 +588,10 @@ void EditorLayer::DrawInspector(World& world, AssetLibrary& assets, float dt) {
     // Locked only blocks dragging the tab to move/undock/rearrange the panel — resizing its
     // dock node (and the neighbors that share that border) always works, locked or not.
     ImGuiWindowFlags flags = ImGuiWindowFlags_None;
-    if (!ImGui::Begin("Inspector", &m_ShowInspector, flags)) { ImGui::End(); return; }
+    PushTabChromeText(); // the dock tab bar renders inside Begin(); keep its text white on XP
+    const bool inspectorOpen = ImGui::Begin("Inspector", &m_ShowInspector, flags);
+    PopTabChromeText();
+    if (!inspectorOpen) { ImGui::End(); return; }
 
     // Flat button language for the whole panel (#155/#156): no raised body at rest, a faint wash
     // on hover. Every ImGui::Button below inherits it; ActionButton / DangerIconButton push their

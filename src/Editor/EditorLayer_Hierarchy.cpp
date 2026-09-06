@@ -365,7 +365,10 @@ void EditorLayer::DrawHierarchy(World& world, AssetLibrary& assets) {
     // Locked only blocks dragging the tab to move/undock/rearrange the panel — resizing its
     // dock node (and the neighbors that share that border) always works, locked or not.
     ImGuiWindowFlags flags = ImGuiWindowFlags_None;
-    if (!ImGui::Begin("Scene Hierarchy", &m_ShowHierarchy, flags)) { ImGui::End(); return; }
+    PushTabChromeText(); // the dock tab bar renders inside Begin(); keep its text white on XP
+    const bool hierarchyOpen = ImGui::Begin("Scene Hierarchy", &m_ShowHierarchy, flags);
+    PopTabChromeText();
+    if (!hierarchyOpen) { ImGui::End(); return; }
 
     // Accumulates as each row is drawn (DrawHierarchyNode); published to m_HierarchyVisibleOrder
     // just before this function returns. See the header for why the two buffers are separate.
