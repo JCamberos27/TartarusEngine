@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 // Wraps the highest-traffic OpenGL state-setting calls (shader bind, per-unit texture bind) with
 // a same-thread cache, so calling Shader::Bind()/Texture::Bind() with whatever's ALREADY bound —
 // which happens constantly when many meshes in a row share a material — is a no-op instead of a
@@ -35,4 +37,14 @@ namespace GLStateCache {
     };
     const FrameStats& GetFrameStats();
     void ResetFrameStats();
+
+    // Material uniform-upload dedup (#192). Model.cpp's BindMaterial uploads ~12 scalar/vector
+    // uniforms and up to 7 texture binds per mesh, per entity, per pass — almost all redundant
+    // when consecutive draws share a material (the draw loop now sorts by material so they do).
+    // `materialHash` is Material::Hash() — a value hash, so two objects with identical material
+    // values dedupe. Returns true when that hash is already bound under `program` (skip
+    // BindMaterial); otherwise records (hash, program) and returns false. Invalidate() clears it
+    // (raw GL binds elsewhere in the frame disturb the same assumption), and a program mismatch
+    // naturally misses so a new pass rebinds.
+    bool MaterialAlreadyBound(std::uint64_t materialHash, unsigned int program);
 }

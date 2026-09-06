@@ -12,6 +12,10 @@ public:
 
     void Bind() const;
 
+    // The raw GL program name. Used as half the key for the material-bind dedup (#192) — a
+    // cached "this material is already bound" is only valid while the same program is current.
+    unsigned int Program() const { return m_Program; }
+
     // Dispatches this (compute) program over an x*y*z grid of work groups.
     void DispatchCompute(unsigned int groupsX, unsigned int groupsY, unsigned int groupsZ) const;
 

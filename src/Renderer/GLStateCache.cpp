@@ -18,6 +18,12 @@ std::array<bool, kMaxCachedTextureUnits> g_TextureValid{};
 
 GLStateCache::FrameStats g_Stats;
 
+// #192: the material value-hash currently bound and the program it was bound under. Program is
+// part of the key (a new pass rebinds) and Invalidate() clears it — which already runs at end
+// of frame and after every raw-GL pass, so an edited material can't be wrongly skipped.
+std::uint64_t g_BoundMaterialHash = 0;
+unsigned int g_BoundMaterialProgram = 0;
+
 } // namespace
 
 namespace GLStateCache {
@@ -26,6 +32,8 @@ void Invalidate() {
     g_ProgramValid = false;
     g_TextureValid.fill(false);
     g_VAOValid = false;
+    g_BoundMaterialHash = 0;
+    g_BoundMaterialProgram = 0;
 }
 
 void UseProgram(unsigned int program) {
@@ -73,5 +81,13 @@ void BindVertexArray(unsigned int vao) {
 
 const FrameStats& GetFrameStats() { return g_Stats; }
 void ResetFrameStats() { g_Stats = FrameStats{}; }
+
+bool MaterialAlreadyBound(std::uint64_t materialHash, unsigned int program) {
+    if (program != 0 && program == g_BoundMaterialProgram && materialHash == g_BoundMaterialHash)
+        return true;
+    g_BoundMaterialHash = materialHash;
+    g_BoundMaterialProgram = program;
+    return false;
+}
 
 } // namespace GLStateCache
