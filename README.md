@@ -59,6 +59,7 @@ for free.
 ### Renderer
 
 - Forward PBR-style shading — albedo, normal, metallic, roughness, ambient occlusion, and emissive maps
+- **Image-based lighting** from the procedural sky — split-sum irradiance + prefiltered-specular cubes and a BRDF LUT, auto-rebaked when the sky colours change; the scene's Ambient control scales it
 - **Linear HDR pipeline** — the scene renders into a multisampled `RGBA16F` target and a single fullscreen pass applies exposure, a tone-mapping curve (**Reinhard / ACES / AgX**), and gamma
 - **Directional, point, and spot lights** in one GPU light buffer (`std430` SSBO) — the sun is a placeable entity you aim with its rotation; point / spot have range and cone falloff. Each light's colour is set directly or from a **colour temperature** (Kelvin), and each carries its own shadow settings — cast on / off plus bias / normal-bias / softness / near-plane — layered on the global cascade config
 - **Clustered-forward light culling** — a per-view compute pass bins point / spot lights into a 16 × 9 × 24 froxel grid, so a fragment loops only the lights that actually reach its cluster instead of every light in the scene
@@ -238,6 +239,8 @@ project/      The scene and editor preferences being authored
 - Linear HDR pipeline with tone mapping (Reinhard / ACES / AgX)
 - Cascaded shadow maps for the sun; point- and spot-light shadows
 - GPU (SSBO) light buffer · clustered-forward light culling (16 × 9 × 24 froxel grid, compute-driven)
+- **Image-based lighting** — irradiance + prefiltered-specular cubes and a BRDF LUT, baked from the
+  procedural sky and auto-rebaked when it changes ([#196](https://github.com/JCamberos27/TartarusEngine/issues/196))
 - Decoded-texture disk cache with source and settings invalidation
 - **Hot-reloadable editor panels** — the toolbar and every dock panel swap without restarting
 - **Reflection-registered components** — one declaration generates serialization + Inspector + Add-Component entry
@@ -253,9 +256,7 @@ project/      The scene and editor preferences being authored
   ([#185](https://github.com/JCamberos27/TartarusEngine/issues/185))
 - **GPU timer queries** — the CPU profiler accounts for only ~2 ms of a 7 ms frame; the rest is
   unmeasured ([#197](https://github.com/JCamberos27/TartarusEngine/issues/197))
-- **Image-based lighting** — irradiance + prefiltered specular probes and a BRDF LUT, so
-  surfaces out of direct light stop reading flat
-  ([#196](https://github.com/JCamberos27/TartarusEngine/issues/196))
+- **Placed reflection probes** — local cubemaps and HDRI input, beyond today's single global sky probe
 - **Screen-space effects** on the HDR buffer — SSAO, bloom
 - **Standalone build export** — ship a scene as a runnable game without the editor
 - Finish the remaining [#236](https://github.com/JCamberos27/TartarusEngine/issues/236) backlog —
