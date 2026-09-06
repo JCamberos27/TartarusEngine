@@ -1527,12 +1527,12 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if (EditorSettings::Get().EngineMarkEnabled && !m_HideEngineMarkForStats && !m_HideOverlaysThisFrame)
         DrawEngineMark(dt);
 
-    if (m_ShowInspector) DrawInspector(world, assets, dt);
-    // (Console, the Statistics HUD, the top toolbar, the Asset Browser and the Scene Hierarchy are
-    // drawn by the reloadable editor module — see main.cpp's editorModule.Draw(), which runs
-    // immediately after this call, still inside the same ImGui frame and dockspace. The Asset
-    // Browser's grid and the Hierarchy's entity tree are still host code, reached back via
-    // EditorModuleHostAPI::DrawAssetGridBody / DrawHierarchyTreeBody.)
+    // (Every editor panel's window is drawn by the reloadable editor module now — Console, the
+    // Statistics HUD, the top toolbar, the Asset Browser, the Scene Hierarchy and the Inspector.
+    // See main.cpp's editorModule.Draw(), which runs immediately after this call, still inside the
+    // same ImGui frame and dockspace. The Asset Browser's grid, the Hierarchy's entity tree and
+    // the Inspector's body are still host code, reached back via
+    // EditorModuleHostAPI::DrawAssetGridBody / DrawHierarchyTreeBody / DrawInspectorBody.)
     if (!m_HideOverlaysThisFrame) {
         // Exponential smoothing of the frame time: a raw per-frame ms figure flickers too fast
         // to read. Used by the viewport status bar just below and by the reloadable Stats HUD

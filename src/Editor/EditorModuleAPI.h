@@ -38,7 +38,10 @@
 //       Get/SetHierarchyFilter, HierarchyExpandAll, and one DrawHierarchyTreeBody callback that
 //       keeps the whole EnTT entity tree (rows, drag-reparent, context menus, selection, undo,
 //       Ctrl+A) host-side.
-constexpr std::uint32_t kEditorModuleAPIVersion = 7;
+//   8 - Inspector (frame only): the module owns Begin("Inspector") + End + visibility.
+//       Get/SetShowInspector and one DrawInspectorBody callback — the ~1090-line body (every
+//       component editor, PBR material, add-component, per-field undo) stays host-side.
+constexpr std::uint32_t kEditorModuleAPIVersion = 8;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -318,6 +321,13 @@ struct EditorModuleHostAPI {
     void (*SetHierarchyFilter)(const char* s) = nullptr;
     void (*HierarchyExpandAll)(bool open) = nullptr;
     void (*DrawHierarchyTreeBody)() = nullptr;
+
+    // --- Inspector, frame only (API v8) -------------------------------------------------
+    // The module owns Begin("Inspector") + End + visibility; the ~1090-line body (every
+    // component editor, PBR material, add-component, per-field undo — EnTT + material shared_ptr
+    // throughout) stays host-side inside DrawInspectorBody.
+    bool (*GetShowInspector)() = nullptr;      void (*SetShowInspector)(bool on) = nullptr;
+    void (*DrawInspectorBody)() = nullptr;
 };
 
 struct EditorModuleAPI {
