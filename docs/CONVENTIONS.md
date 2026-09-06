@@ -30,3 +30,37 @@ possible by construction. This convention is what to follow until that lands.
 | Control | Treatment | Unblocks when |
 |---|---|---|
 | `ColliderComponent::IsTrigger` | shown disabled, `(not implemented)` — a collider is a place a user looks for a trigger toggle (rule 3) | #185 (collision system) |
+
+## Editor themes (#92, #234)
+
+`EditorSettings::EditorTheme` is an int; `EditorLayer::ApplyThemeStyle()` is the single entry
+point that applies the active theme — **both** its `style.Colors[]` (via `ApplyEditorTheme()`) and
+its style *metrics* (rounding / padding / borders) — then DPI-scales once. Call `ApplyThemeStyle()`,
+not `ApplyEditorTheme()`, on any theme change so metrics switch too.
+
+Current lineup (#234): **0 = Bento** (default; `ApplyBentoPalette()` — the fall-through case in
+`ApplyEditorTheme()`), **1 = Prism** (`ApplyBentoPalette()` then `ApplyPrismAnimation()` re-tints
+the accent family every frame), **2 = Windows XP**. `EditorSettings::Load` clamps an out-of-range
+value to 0.
+
+**Adding a theme:**
+
+1. New `int` value. Add a branch `if (EditorTheme == N) { … return; }` in `ApplyEditorTheme()`
+   (`EditorLayer.cpp`) that sets `style.Colors[]` only. (Bento is the fall-through, so it needs no
+   branch; a new theme does.)
+2. If it needs non-default geometry, add `EditorTheme == N` to the metric block in
+   `ApplyThemeStyle()` (Bento + Prism take it today). `ApplyThemeStyle()` resets to the shared
+   baseline (`SetSharedMetrics`) first, so you only set what differs, and `ScaleAllSizes` runs
+   after — use raw 96-DPI values.
+3. Add the label to `kThemeLabels[]` and a line to the theme combo's tooltip (both in
+   `EditorLayer.cpp`, Preferences ▸ General).
+4. Extend the `EditorTheme` comment in `EditorSettings.h`; bump the `Load` clamp if you add a slot.
+
+**Accent discipline (Bento, and any future multi-accent theme):** the cyan / blue / yellow triad
+has a fixed semantic split — do not mix roles:
+
+| Colour | Role | Where |
+|---|---|---|
+| **cyan** `#3DD6D0` | selection / "you are here" | `Header`, `CheckMark`, `SliderGrab`, `Separator{Hovered,Active}`, `TabSelectedOverline`, `NavCursor`, `DockingPreview`, `TextSelectedBg`, `ResizeGripHovered` |
+| **blue** `#5B9DF9` | active / pressed / in-progress | `HeaderActive`, `SliderGrabActive`, `ResizeGripActive` |
+| **yellow** `#E8C468` | warning / one data highlight | reserved for host-drawn warning text (the amber build-config label, `#204` overflow rows, "unsaved") — almost none of it is a `style.Colors[]` role, so it lives in hand-coded `ImVec4`s, not the palette |
