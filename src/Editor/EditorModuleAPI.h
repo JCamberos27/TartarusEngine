@@ -33,7 +33,12 @@
 //       HandleAssetGridBackground / GetAssetSelectionSummary / Get+SetAssetIconSize /
 //       AssetGridFrameEnd. Per-cell draw (thumbnails, the five context menus, rename, drag,
 //       multi-select) stays host-side inside DrawAssetCell.
-constexpr std::uint32_t kEditorModuleAPIVersion = 6;
+//   7 - Scene Hierarchy (thin slice): the module owns the panel frame — Begin("Scene Hierarchy"),
+//       the search box, the Expand-all / Collapse-all buttons. Get/SetShowHierarchy,
+//       Get/SetHierarchyFilter, HierarchyExpandAll, and one DrawHierarchyTreeBody callback that
+//       keeps the whole EnTT entity tree (rows, drag-reparent, context menus, selection, undo,
+//       Ctrl+A) host-side.
+constexpr std::uint32_t kEditorModuleAPIVersion = 7;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -302,6 +307,17 @@ struct EditorModuleHostAPI {
     float (*GetAssetIconSize)() = nullptr;
     void  (*SetAssetIconSize)(float px, bool commit) = nullptr;
     void  (*AssetGridFrameEnd)() = nullptr;
+
+    // --- Scene Hierarchy, thin slice (API v7) ---------------------------------------------
+    // The module owns Begin("Scene Hierarchy"), the search box and the Expand/Collapse-all
+    // buttons. The whole entity tree — rows, drag-reparent, the row + empty-space context menus,
+    // click/shift/ctrl selection, delta undo, Ctrl+A — stays host-side inside DrawHierarchyTreeBody
+    // (EnTT + Components.h never cross the boundary).
+    bool (*GetShowHierarchy)() = nullptr;      void (*SetShowHierarchy)(bool on) = nullptr;
+    void (*GetHierarchyFilter)(char* out, int n) = nullptr;
+    void (*SetHierarchyFilter)(const char* s) = nullptr;
+    void (*HierarchyExpandAll)(bool open) = nullptr;
+    void (*DrawHierarchyTreeBody)() = nullptr;
 };
 
 struct EditorModuleAPI {

@@ -360,6 +360,24 @@ float AbGetIconSize() { return g_Editor ? g_Editor->GetAssetIconSize() : 64.0f; 
 void  AbSetIconSize(float px, bool commit) { if (g_Editor) g_Editor->SetAssetIconSize(px, commit); }
 void  AbGridFrameEnd() { if (g_Editor && g_World && g_Assets) g_Editor->AssetGridFrameEnd(*g_World, *g_Assets); }
 
+// --- Scene Hierarchy, thin slice (API v6) ----------------------------------------------------
+// The module owns Begin("Scene Hierarchy") + the search box + the Expand/Collapse-all buttons;
+// the entity tree stays host-side in DrawHierarchyTreeBody.
+bool  HierGetShow() { return g_Editor && g_Editor->GetShowHierarchy(); }
+void  HierSetShow(bool on) { if (g_Editor) g_Editor->SetShowHierarchy(on); }
+void  HierGetFilter(char* o, int n) {
+    if (!o || n <= 0) return;
+    const std::string& s = g_Editor ? g_Editor->HierarchyFilterText() : std::string();
+    const int m = (int)s.size() < n - 1 ? (int)s.size() : n - 1;
+    std::memcpy(o, s.data(), (size_t)m);
+    o[m] = '\0';
+}
+void  HierSetFilter(const char* s) { if (g_Editor) g_Editor->SetHierarchyFilterText(s ? s : ""); }
+void  HierExpandAll(bool open) { if (g_Editor && g_World) g_Editor->HierarchyExpandAll(*g_World, open); }
+void  HierDrawTreeBody() {
+    if (g_Editor && g_World && g_Assets) g_Editor->DrawHierarchyTreeBody(*g_World, *g_Assets);
+}
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
@@ -446,6 +464,12 @@ const EditorModuleHostAPI kHostAPI{
     &AbGetIconSize,
     &AbSetIconSize,
     &AbGridFrameEnd,
+    // --- Scene Hierarchy, thin slice (API v7) — order must match EditorModuleHostAPI exactly ---
+    &HierGetShow,  &HierSetShow,
+    &HierGetFilter,
+    &HierSetFilter,
+    &HierExpandAll,
+    &HierDrawTreeBody,
 };
 
 } // namespace

@@ -191,6 +191,16 @@ public:
     float GetAssetIconSize() const { return m_AssetIconSize; }
     void  SetAssetIconSize(float px, bool commit);                              // clamps; persists on commit
     void  AssetGridFrameEnd(World& world, AssetLibrary& assets) { DrawDeleteConfirmPopup(world, assets); }
+
+    // --- Reloadable Scene Hierarchy module bridge (issue #229, thin slice) ------------------
+    // The module owns the panel frame (Begin, search box, Expand/Collapse-all). The entity tree
+    // stays host-side in DrawHierarchyTreeBody. Public for the non-member host glue.
+    bool GetShowHierarchy() const { return m_ShowHierarchy; }
+    void SetShowHierarchy(bool on) { m_ShowHierarchy = on; }
+    const std::string& HierarchyFilterText() const { return m_HierarchyFilter; }
+    void SetHierarchyFilterText(const std::string& s) { m_HierarchyFilter = s; }
+    void HierarchyExpandAll(World& world, bool open);                            // EditorLayer_Hierarchy.cpp
+    void DrawHierarchyTreeBody(World& world, AssetLibrary& assets);              // EditorLayer_Hierarchy.cpp
     // Screen-space rect of the live Game view image + its framebuffer's colour texture/size, so
     // the Play-Mode Stop/Fullscreen overlay can anchor to the game viewport and adapt its tint
     // to what's rendered there. Pass a zero size to say "no game view this frame".
@@ -891,7 +901,8 @@ private:
     bool m_TagAdding = false;
     bool m_TagAddingJustOpened = false;
     char m_TagAddBuf[64] = "";
-    void DrawHierarchy(World& world, AssetLibrary& assets);
+    // DrawHierarchy's panel frame moved into EditorModuleHierarchy.cpp (#229); the entity tree is
+    // DrawHierarchyTreeBody (declared in the public bridge block above).
     void DrawInspector(World& world, AssetLibrary& assets, float dt);
     // DrawAssetBrowser's chrome moved into EditorModuleAssetBrowser.cpp (#229); the grid stays
     // host-side as DrawAssetGridBody (declared in the public bridge block above).
