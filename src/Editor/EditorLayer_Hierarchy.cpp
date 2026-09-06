@@ -921,15 +921,14 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     bool hasEntity = entity != entt::null && world.Registry.valid(entity);
 
     if (ImGui::BeginMenu(ICON_FA_PLUS "  Create")) {
-        if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Empty")) CreateEmptyAt(world, nullptr, "Empty", false);
-        if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) CreateEmptyAt(world, nullptr, "Point Light", true);
-        if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light")) {
-            world.Registry.get<LightComponent>(CreateEmptyAt(world, nullptr, "Spot Light", true)).Kind = LightComponent::Type::Spot;
-        }
-        if (ImGui::MenuItem(ICON_FA_SUN "  Directional Light")) {
-            MakeDirectionalLight(world, CreateEmptyAt(world, nullptr, "Directional Light", true));
-        }
+        // Same body as the toolbar Create menu and the Shift+A quick-add, so every "add an
+        // object" entry point offers the same list. New objects spawn in front of the editor
+        // camera (not as a child of the right-clicked row).
+        if (m_EditorCameraPtr) DrawAddEntityItems(world, assets, *m_EditorCameraPtr);
         ImGui::EndMenu();
+    }
+    if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Create Empty Child", "Ctrl+Shift+N", false, hasEntity)) {
+        CreateEmptyChild(world, entity);
     }
     if (ImGui::MenuItem(ICON_FA_OBJECT_GROUP "  Group into Empty Parent", nullptr, false, HasAnySelection())) {
         CreateEmptyParentForSelection(world);
@@ -951,6 +950,30 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     }
     if (ImGui::IsItemHovered() && selectionHasParent) {
         EditorUI::SetTooltip("Move the selection to the scene root.");
+    }
+
+    if (ImGui::MenuItem(ICON_FA_ANGLES_UP "  Set as First Sibling", nullptr, false, hasEntity))
+        SetHierarchySiblingExtreme(world, entity, /*first=*/true);
+    if (ImGui::MenuItem(ICON_FA_ANGLES_DOWN "  Set as Last Sibling", nullptr, false, hasEntity))
+        SetHierarchySiblingExtreme(world, entity, /*first=*/false);
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_FA_EYE "  Toggle Active State", "Alt+Shift+A", false, HasAnySelection()))
+        ToggleSelectionActive(world);
+    if (ImGui::MenuItem(ICON_FA_LOCATION_CROSSHAIRS "  Move To View", nullptr, false, HasAnySelection()))
+        MoveSelectionToView(world);
+    if (ImGui::IsItemHovered() && HasAnySelection())
+        EditorUI::SetTooltip("Move the selection to just in front of the editor camera.");
+    if (hasEntity && world.Registry.all_of<CameraComponent>(entity)) {
+        if (ImGui::MenuItem(ICON_FA_VIDEO "  Align With View") && m_EditorCameraPtr) {
+            PushUndo(world, "Align Camera to View");
+            auto& t = world.Registry.get<TransformComponent>(entity);
+            t.Position = m_EditorCameraPtr->Position;
+            glm::vec3 d = glm::normalize(m_EditorCameraPtr->Front());
+            t.RotationEuler = glm::vec3(glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
+                                        glm::degrees(std::atan2(-d.x, -d.z)), 0.0f);
+            world.Registry.get<CameraComponent>(entity).FovDegrees = m_EditorCameraPtr->Fov;
+        }
     }
     ImGui::Separator();
 
@@ -1141,6 +1164,61 @@ entt::entity EditorLayer::InstantiateAssetDropInHierarchy(World& world, AssetLib
         SelectItem(e, false);
     }
     return e;
+}
+
+entt::entity EditorLayer::CreateEmptyChild(World& world, entt::entity parent) {
+    PushUndo(world, "Create Empty Child");
+    entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f),
+                                             UniqueNameFor(world, "Empty"));
+    if (parent != entt::null && world.Registry.valid(parent)) world.SetParent(e, parent);
+    SelectItem(e, false);
+    return e;
+}
+
+void EditorLayer::SetHierarchySiblingExtreme(World& world, entt::entity entity, bool first) {
+    if (!world.Registry.valid(entity)) return;
+    const auto* h = world.Registry.try_get<HierarchyComponent>(entity);
+    const entt::entity parent = h ? h->Parent : entt::null;
+    std::vector<entt::entity> sibs = HierarchySiblingsInOrder(world, parent);
+    if (sibs.size() < 2) return;
+    const entt::entity anchor = first ? sibs.front() : sibs.back();
+    if (anchor == entity) return; // already there
+    ReorderHierarchySiblings(world, {entity}, anchor, /*after=*/!first);
+}
+
+void EditorLayer::MoveSelectionToView(World& world) {
+    std::vector<entt::entity> sel = GetSelectedItems();
+    if (sel.empty() || !m_EditorCameraPtr) return;
+    const glm::vec3 target = SafeSpawnInFrontOf(*m_EditorCameraPtr);
+    StageUndo(world);
+    for (entt::entity e : sel) {
+        if (!world.Registry.valid(e)) continue;
+        auto* t = world.Registry.try_get<TransformComponent>(e);
+        if (!t) continue;
+        const auto* hier = world.Registry.try_get<HierarchyComponent>(e);
+        if (hier && hier->Parent != entt::null && world.Registry.valid(hier->Parent)) {
+            const glm::mat4 inv = glm::inverse(world.ComposeWorldTransform(hier->Parent));
+            t->Position = glm::vec3(inv * glm::vec4(target, 1.0f));
+        } else {
+            t->Position = target;
+        }
+    }
+    CommitStagedUndo(world, "Move To View");
+}
+
+void EditorLayer::ToggleSelectionActive(World& world) {
+    std::vector<entt::entity> sel = GetSelectedItems();
+    if (sel.empty()) return;
+    bool anyActive = false;
+    for (entt::entity e : sel)
+        if (world.Registry.valid(e) && !world.Registry.all_of<InactiveTag>(e)) { anyActive = true; break; }
+    StageUndo(world);
+    for (entt::entity e : sel) {
+        if (!world.Registry.valid(e)) continue;
+        if (anyActive) world.Registry.emplace_or_replace<InactiveTag>(e); // mixed/all-active -> disable all
+        else world.Registry.remove<InactiveTag>(e);
+    }
+    CommitStagedUndo(world, "Toggle Active");
 }
 
 entt::entity EditorLayer::CreateEmptyAt(World& world, Camera* editorCamera, const char* name, bool asLight) {

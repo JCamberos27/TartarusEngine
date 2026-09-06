@@ -1279,6 +1279,18 @@ private:
                                                  const char* modelPath, const char* prefabPath,
                                                  entt::entity parent);
 
+    // --- GameObject-menu parity (#236) ---------------------------------------------------
+    // A fresh Empty parented under `parent`, placed at the parent's origin and selected.
+    entt::entity CreateEmptyChild(World& world, entt::entity parent);
+    // Move `entity` to the front or back of its sibling list (Unity's Set as First/Last Sibling).
+    void SetHierarchySiblingExtreme(World& world, entt::entity entity, bool first);
+    // Move the selection ~5 units in front of the editor camera (Unity's Move To View). Keeps
+    // each object's rotation; re-expresses into parent space so parented objects land right.
+    void MoveSelectionToView(World& world);
+    // Toggle InactiveTag across the whole selection (Unity's Alt+Shift+A). If the selection is
+    // mixed, everything goes active.
+    void ToggleSelectionActive(World& world);
+
     // --- Inspector: Add / Remove Component -------------------------------------------------
     void DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity);
     char m_AddComponentFilter[64] = {};      // type-to-filter text in the Add Component popup (#236)

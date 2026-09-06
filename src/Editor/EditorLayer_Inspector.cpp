@@ -1270,7 +1270,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // label/tooltip need to say "Local" rather than claim world-space for those objects.
         const auto* posHier = registry.try_get<HierarchyComponent>(entity);
         bool hasParent = posHier && posHier->Parent != entt::null;
-        DrawVec3Row(hasParent ? "Local Position" : "Position", transform.Position, 0.1f, 0.0f, 0.0f, rowActive, rowCommitted,
+        DrawVec3Row("Location", transform.Position, 0.1f, 0.0f, 0.0f, rowActive, rowCommitted,
             hasParent
                 ? "Position in units, relative to this object's parent. Drag a number to\nchange it, or click a colored letter to zero that axis."
                 : "World-space position in units. Drag a number to change it, or\nclick a colored letter to zero that axis.");
