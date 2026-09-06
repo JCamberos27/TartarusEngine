@@ -3,6 +3,7 @@
 #include "EditorSettings.h"
 #include <IconsFontAwesome6.h>
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdint>
 
@@ -53,23 +54,27 @@ void GameViewPanel::ComputeTargetSize(ImVec2 available, int& outWidth, int& outH
     outHeight = std::max(outHeight, 1);
 }
 
-void GameViewPanel::DrawAspectControl() {
+void GameViewPanel::DrawAspectControl(float contrast) {
     const float itemW = 200.0f;
     const float h = ImGui::GetFrameHeight();
     const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    const int tv = (int)(contrast * 255.0f + 0.5f);        // text: light on dark, dark on light
+    const int pv = 255 - tv;                                // plate: the opposite
+    const ImU32 textCol = IM_COL32(tv, tv, tv, 255);
 
     // Custom button + manual popup rather than BeginCombo: ImGui's combo always re-runs its own
     // auto-placement (prefers Down), so a real "open upward" isn't reachable through it. Here we
     // own the popup, so SetNextWindowPos with a bottom-left pivot makes it grow up from the top
     // edge of the button.
-    ImGui::PushStyleColor(ImGuiCol_Button,        IM_COL32(0, 0, 0, 150));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(0, 0, 0, 190));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(0, 0, 0, 210));
+    ImGui::PushStyleColor(ImGuiCol_Button,        IM_COL32(pv, pv, pv, 150));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(pv, pv, pv, 190));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(pv, pv, pv, 210));
+    ImGui::PushStyleColor(ImGuiCol_Text,          textCol);
     ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f)); // left-align like a combo
     if (ImGui::Button((m_CurrentPreset.Label + "###aspectbtn").c_str(), ImVec2(itemW, h)))
         ImGui::OpenPopup("##AspectPopup");
     ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4);
     const bool btnHovered = ImGui::IsItemHovered();
     m_AspectComboOpen = ImGui::IsPopupOpen("##AspectPopup");
 
@@ -78,7 +83,7 @@ void GameViewPanel::DrawAspectControl() {
         const float cx = p0.x + itemW - h * 0.5f;
         const float cy = p0.y + h * 0.5f;
         const float r = ImGui::GetFontSize() * 0.20f;
-        const ImU32 col = ImGui::GetColorU32(ImGuiCol_Text);
+        const ImU32 col = textCol;
         ImDrawList* d = ImGui::GetWindowDrawList();
         if (m_AspectComboOpen)
             d->AddTriangleFilled(ImVec2(cx - r, cy + r * 0.7f), ImVec2(cx + r, cy + r * 0.7f), ImVec2(cx, cy - r * 0.9f), col);
@@ -189,13 +194,34 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         ImGui::Image((ImTextureID)(intptr_t)m_Framebuffer.ColorTexture(), rect.Size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
         m_ViewHovered = ImGui::IsItemHovered();
 
+        // Adaptive contrast for the overlays: sample the rendered image behind the top-left and
+        // the bottom, throttled ~10 Hz, ease it. c = 1 -> light text on a dark plate, c = 0 -> dark.
+        const float dt = ImGui::GetIO().DeltaTime;
+        auto adapt = [&](AsyncLuminanceReadback& rb, float& eased, float& target, float& accum, ImVec2 probe) {
+            accum += dt;
+            if (accum >= 0.1f) {
+                accum = 0.0f;
+                const float lum = SampleTextureLuminance(rb, m_Framebuffer.ColorTexture(),
+                    m_Framebuffer.Width(), m_Framebuffer.Height(), imagePos, rect.Size, probe, 48.0f);
+                if (lum >= 0.0f) target = ContrastForLuminance(lum);
+            }
+            eased += (target - eased) * (1.0f - std::exp(-dt / 0.15f));
+            return eased;
+        };
+        const float topC    = adapt(m_TopLumRb, m_TopLum, m_TopLumTarget, m_TopLumAccum,
+                                    ImVec2(imagePos.x + 60.0f, imagePos.y + 34.0f));
+        const float bottomC = adapt(m_BottomLumRb, m_BottomLum, m_BottomLumTarget, m_BottomLumAccum,
+                                    ImVec2(imagePos.x + rect.Size.x * 0.5f, imagePos.y + rect.Size.y - 26.0f));
+        auto tcol = [](float c, int a) { int v = (int)(c * 255.0f + 0.5f); return IM_COL32(v, v, v, a); };
+        auto pcol = [](float c, int a) { int v = 255 - (int)(c * 255.0f + 0.5f); return IM_COL32(v, v, v, a); };
+
         // Aspect / resolution control — bottom-left overlay (was a top strip). Drawn before the
         // click-to-engage check so a click here never falls through to the game view.
         bool overAspectCtl;
         {
             const float ctlH = ImGui::GetFrameHeight();
             ImGui::SetCursorScreenPos(ImVec2(imagePos.x + 8.0f, imagePos.y + rect.Size.y - ctlH - 8.0f));
-            DrawAspectControl();
+            DrawAspectControl(bottomC);
             overAspectCtl = ImGui::IsItemHovered() || ImGui::IsItemActive() || m_AspectComboOpen;
         }
         if (overAspectCtl) m_ViewHovered = false; // the control ate this hover, not the view
@@ -212,8 +238,8 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
                           imagePos.y + rect.Size.y - ts.y - 16.0f);
             dl->AddRectFilled(ImVec2(anchor.x - 10.0f, anchor.y - 6.0f),
                               ImVec2(anchor.x + ts.x + 10.0f, anchor.y + ts.y + 6.0f),
-                              IM_COL32(0, 0, 0, 150), 4.0f);
-            dl->AddText(anchor, IM_COL32(255, 255, 255, 230), hint);
+                              pcol(bottomC, 150), 4.0f);
+            dl->AddText(anchor, tcol(bottomC, 235), hint);
         } else if (!playing && noSceneCamera) {
             const char* hint = "No Camera in scene - previewing the editor view. Create " ICON_FA_ANGLE_RIGHT " Camera to place one.";
             ImVec2 ts = ImGui::CalcTextSize(hint);
@@ -221,8 +247,8 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
                           imagePos.y + rect.Size.y - ts.y - 14.0f);
             dl->AddRectFilled(ImVec2(anchor.x - 10.0f, anchor.y - 6.0f),
                               ImVec2(anchor.x + ts.x + 10.0f, anchor.y + ts.y + 6.0f),
-                              IM_COL32(0, 0, 0, 140), 4.0f);
-            dl->AddText(anchor, IM_COL32(230, 230, 230, 210), hint);
+                              pcol(bottomC, 140), 4.0f);
+            dl->AddText(anchor, tcol(bottomC, 220), hint);
         }
         // (The persistent "Esc to release the cursor" banner was removed — that binding now
         // lives in Preferences ▸ Shortcuts like every other key.)
@@ -233,8 +259,8 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
             snprintf(buf, sizeof(buf), "%d FPS (%.2f ms)\n%d draw calls\n%d tris / %d verts",
                 stats->FPS, stats->FrameMs, stats->DrawCalls, stats->Triangles, stats->Vertices);
             ImVec2 textSize = ImGui::CalcTextSize(buf);
-            dl->AddRectFilled(statsPos, ImVec2(statsPos.x + textSize.x + 12.0f, statsPos.y + textSize.y + 8.0f), IM_COL32(0, 0, 0, 140), 3.0f);
-            dl->AddText(ImVec2(statsPos.x + 6.0f, statsPos.y + 4.0f), IM_COL32(255, 255, 255, 255), buf);
+            dl->AddRectFilled(statsPos, ImVec2(statsPos.x + textSize.x + 12.0f, statsPos.y + textSize.y + 8.0f), pcol(topC, 140), 3.0f);
+            dl->AddText(ImVec2(statsPos.x + 6.0f, statsPos.y + 4.0f), tcol(topC, 255), buf);
         }
 
         ImGui::SetCursorScreenPos(ImVec2(containerStart.x, containerStart.y + avail.y));

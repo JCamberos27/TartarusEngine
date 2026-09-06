@@ -97,7 +97,7 @@ void Draw(const EditorModuleHostAPI& host) {
                    + 4 /*ent/rend/coll/light*/ + (inactiveCount > 0 ? 1 : 0)
                    + (rs.LightBufferOverflowed ? 1 : 0) // #204
                    + (rs.ClusterSaturated ? 1 : 0)      // #204
-                   + profN + (hasGpuSection ? profGpuN : 0) + 2 /*shader/texture binds*/;
+                   + profN + (hasGpuSection ? profGpuN : 0) + 3 /*shader/texture/VAO binds*/;
     const float chromeH = lineH * (2.0f + (hasGpuSection ? 1.0f : 0.0f))  // "Statistics" + "Profiler (CPU)" [+ "Profiler (GPU)"]
                         + (4.0f + (hasGpuSection ? 1.0f : 0.0f)) * (stStats.ItemSpacing.y + 2.0f) // Separator() rules
                         + stStats.WindowPadding.y * 2.0f + 4.0f;
