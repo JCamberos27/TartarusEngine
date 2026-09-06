@@ -1,5 +1,6 @@
 #include "GameModuleAPI.h"
 #include "TransformControllerSystem.h"
+#include "SpinSystem.h"
 
 namespace {
 
@@ -15,6 +16,8 @@ void Update(const GameModuleHostAPI& host, World& world, float deltaTime) {
     // reloads never duplicate the four donuts.
     if (host.EnsureRoomDonutTestSet) host.EnsureRoomDonutTestSet(world);
     UpdateTransformControllers(world, deltaTime);
+    UpdateSpinners(world, deltaTime); // #184: first reflection-registered component's system
+
 }
 
 const GameModuleAPI kAPI{
