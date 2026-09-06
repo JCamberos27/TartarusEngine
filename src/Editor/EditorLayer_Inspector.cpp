@@ -50,6 +50,7 @@
 #include <cctype>
 #include <cstring>
 #include <functional>
+#include <variant>
 #include <cfloat>
 
 using namespace EditorInternal;
@@ -1256,9 +1257,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     ImGui::Spacing();
 
     // --- Transform (every entity has one; not removable, same as Unity) --------------------
-    bool removed = false;
+    bool removed = false, tfReset = false, tfCopy = false, tfPaste = false;
     if (BeginComponentSection(ICON_FA_UP_DOWN_LEFT_RIGHT, "Transform", false, removed,
-            /*defaultOpen=*/true, "Position, rotation, and scale in the world. Every object has one.")) {
+            /*defaultOpen=*/true, "Position, rotation, and scale in the world. Every object has one.",
+            &tfReset, &tfCopy, &tfPaste)) {
 
         // Stage on first touch, commit on release — one History entry per edit, and a
         // rejected (non-finite) or no-op edit records nothing (its snapshot dedupes away).
@@ -1319,6 +1321,14 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // Ground lives in the toolbar now — neither duplicated here.
         EndComponentSection();
     }
+    if (tfReset) {
+        PushUndo(world, "Reset Transform");
+        transform.Position = glm::vec3(0.0f);
+        transform.RotationEuler = glm::vec3(0.0f);
+        transform.Scale = glm::vec3(1.0f);
+    }
+    if (tfCopy)  CopyComponentToClip("Transform", transform);
+    if (tfPaste) PasteComponentFromClip(world, entity);
 
     // --- Mesh Renderer ---------------------------------------------------------------------
     if (auto* renderable = registry.try_get<RenderableComponent>(entity)) {
@@ -1435,8 +1445,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
 
     // --- Light (open by default — usually the main thing being tuned on a light entity) ----
     if (auto* light = registry.try_get<LightComponent>(entity)) {
+        bool lightReset = false, lightCopy = false, lightPaste = false;
         if (BeginComponentSection(ICON_FA_LIGHTBULB, "Light", true, removed,
-            /*defaultOpen=*/true, "Casts light into the scene from this object's position.")) {
+            /*defaultOpen=*/true, "Casts light into the scene from this object's position.",
+            &lightReset, &lightCopy, &lightPaste)) {
             // Slightly slimmer rows for this block — the light sliders read better less chunky.
             const ImVec2 lightFramePad(ImGui::GetStyle().FramePadding.x,
                                        std::max(1.0f, ImGui::GetStyle().FramePadding.y - 2.0f));
@@ -1557,12 +1569,17 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             PushUndo(world, "Remove Light");
             registry.remove<LightComponent>(entity);
         }
+        if (lightReset) { PushUndo(world, "Reset Light"); *light = LightComponent{}; }
+        if (lightCopy)  CopyComponentToClip("Light", *light);
+        if (lightPaste) PasteComponentFromClip(world, entity);
     }
 
     // --- Camera (the Game view previews through this while editing) ------------------------
     if (auto* cam = registry.try_get<CameraComponent>(entity)) {
+        bool camReset = false, camCopy = false, camPaste = false;
         if (BeginComponentSection(ICON_FA_VIDEO, "Camera", true, removed, /*defaultOpen=*/true,
-                "The Game view renders through this camera while editing, so you can frame a\nshot without walking there. Play mode still uses the first-person controller.")) {
+                "The Game view renders through this camera while editing, so you can frame a\nshot without walking there. Play mode still uses the first-person controller.",
+                &camReset, &camCopy, &camPaste)) {
             PropertyLabel("Field of View", "Vertical FOV in degrees.");
             ImGui::SetNextItemWidth(-FLT_MIN);
             EditorUI::SliderFloat("##Fov", &cam->FovDegrees, 20.0f, 120.0f, "%.0f deg");
@@ -1602,12 +1619,16 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             PushUndo(world, "Remove Camera");
             registry.remove<CameraComponent>(entity);
         }
+        if (camReset) { PushUndo(world, "Reset Camera"); *cam = CameraComponent{}; }
+        if (camCopy)  CopyComponentToClip("Camera", *cam);
+        if (camPaste) PasteComponentFromClip(world, entity);
     }
 
     // --- Audio Source (collapsed by default: set-and-forget once a clip is chosen) ---------
     if (auto* audio = registry.try_get<AudioSourceComponent>(entity)) {
+        bool audioReset = false, audioCopy = false, audioPaste = false;
         if (BeginComponentSection(ICON_FA_VOLUME_HIGH, "Audio Source", true, removed, /*defaultOpen=*/false,
-                "A sound clip that can be played from this object.")) {
+                "A sound clip that can be played from this object.", &audioReset, &audioCopy, &audioPaste)) {
             const std::string preview = audio->SoundPath.empty()
                 ? "(none)" : std::filesystem::path(audio->SoundPath).filename().string();
             PropertyLabel("Clip", "Which imported sound this object plays.\nImport sounds via File > Import, or the Asset Browser.");
@@ -1652,6 +1673,9 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             PushUndo(world, "Remove Audio Source");
             registry.remove<AudioSourceComponent>(entity);
         }
+        if (audioReset) { PushUndo(world, "Reset Audio Source"); *audio = AudioSourceComponent{}; }
+        if (audioCopy)  CopyComponentToClip("Audio Source", *audio);
+        if (audioPaste) PasteComponentFromClip(world, entity);
     }
 
     // #184: sections for reflection-registered components (ComponentRegistry). One widget per
@@ -1660,8 +1684,51 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // sections above use (push on the frame an edit starts).
     for (const auto& rc : ComponentRegistry::All()) {
         if (!rc.Has(registry, entity)) continue;
-        bool reflRemoved = false;
-        if (BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, true, reflRemoved, /*defaultOpen=*/true, rc.Meta.Tooltip)) {
+        bool reflRemoved = false, reflReset = false, reflCopy = false, reflPaste = false;
+        const bool reflOpen = BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, true, reflRemoved,
+            /*defaultOpen=*/true, rc.Meta.Tooltip, &reflReset, &reflCopy, &reflPaste);
+        if (reflReset) {
+            PushUndo(world, std::string("Reset ") + rc.Meta.Name);
+            rc.Add(registry, entity); // emplace_or_replace -> back to default-constructed
+        }
+        if (reflCopy) {
+            // Type-erased snapshot: read each reflected field into a variant, then a closure
+            // writes them back (creating the component first if the paste target lacks it).
+            void* src = rc.Get(registry, entity);
+            std::vector<std::variant<bool, int, float, glm::vec3, std::string>> vals;
+            for (const ReflectField& f : rc.Meta.Fields) {
+                void* p = f.Address(src);
+                switch (f.Type) {
+                    case ReflectFieldType::Bool:   vals.emplace_back(*reinterpret_cast<bool*>(p)); break;
+                    case ReflectFieldType::Int:    vals.emplace_back(*reinterpret_cast<int*>(p)); break;
+                    case ReflectFieldType::Float:  vals.emplace_back(*reinterpret_cast<float*>(p)); break;
+                    case ReflectFieldType::Vec3:   vals.emplace_back(*reinterpret_cast<glm::vec3*>(p)); break;
+                    case ReflectFieldType::String: vals.emplace_back(*reinterpret_cast<std::string*>(p)); break;
+                }
+            }
+            m_ComponentClipKind = rc.Meta.Name;
+            const RegisteredComponent* rcp = &rc; // ComponentRegistry::All() entries are stable for the run
+            std::string name = rc.Meta.Name;
+            m_ComponentClipApply = [rcp, vals, name](EditorLayer& self, World& w, entt::entity e) {
+                self.PushUndo(w, "Paste " + name);
+                if (!rcp->Has(w.Registry, e)) rcp->Add(w.Registry, e);
+                void* dst = rcp->Get(w.Registry, e);
+                size_t i = 0;
+                for (const ReflectField& f : rcp->Meta.Fields) {
+                    void* p = f.Address(dst);
+                    const auto& v = vals[i++];
+                    switch (f.Type) {
+                        case ReflectFieldType::Bool:   *reinterpret_cast<bool*>(p) = std::get<bool>(v); break;
+                        case ReflectFieldType::Int:    *reinterpret_cast<int*>(p) = std::get<int>(v); break;
+                        case ReflectFieldType::Float:  *reinterpret_cast<float*>(p) = std::get<float>(v); break;
+                        case ReflectFieldType::Vec3:   *reinterpret_cast<glm::vec3*>(p) = std::get<glm::vec3>(v); break;
+                        case ReflectFieldType::String: *reinterpret_cast<std::string*>(p) = std::get<std::string>(v); break;
+                    }
+                }
+            };
+        }
+        if (reflPaste) PasteComponentFromClip(world, entity);
+        if (reflOpen) {
             void* fbase = rc.Get(registry, entity);
             for (const ReflectField& f : rc.Meta.Fields) {
                 PropertyLabel(f.Name, f.Tooltip);
@@ -1737,9 +1804,17 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     InspectorEnd();
 }
 
+void EditorLayer::PasteComponentFromClip(World& world, entt::entity entity) {
+    if (m_ComponentClipApply && world.Registry.valid(entity)) m_ComponentClipApply(*this, world, entity);
+}
+
 bool EditorLayer::BeginComponentSection(const char* icon,
-    const char* label, bool removable, bool& removedOut, bool defaultOpen, const char* tooltip) {
+    const char* label, bool removable, bool& removedOut, bool defaultOpen, const char* tooltip,
+    bool* resetOut, bool* copyOut, bool* pasteOut) {
     removedOut = false;
+    if (resetOut) *resetOut = false;
+    if (copyOut)  *copyOut = false;
+    if (pasteOut) *pasteOut = false;
 
     std::string header = std::string(icon) + "  " + label;
     // CollapsingHeader claims its ENTIRE row as one hit-test region by default, so without
@@ -1753,6 +1828,9 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.05f));
     ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
     bool open = ImGui::CollapsingHeader(header.c_str(), flags);
+    // Right-click anywhere on the header row -> the actions menu (#236). Registered here while
+    // the header is the last item; the popup body is drawn a few lines down.
+    ImGui::OpenPopupOnItemClick(header.c_str(), ImGuiPopupFlags_MouseButtonRight);
     ImGui::PopStyleColor(3);
     const bool headerHovered = ImGui::IsItemHovered();
     if (tooltip && headerHovered) EditorUI::SetTooltip("%s", tooltip);
@@ -1773,6 +1851,23 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         if (DangerIconButton(ICON_FA_XMARK, "Remove this component", ImVec2(bw, 0.0f)))
             removedOut = true;
         ImGui::PopID();
+    }
+
+    // Actions menu opened by the right-click registered just after the header above (#236).
+    // Reset only appears when the caller opted in with resetOut (it owns what "default" means
+    // for its type).
+    if (ImGui::BeginPopup(header.c_str())) {
+        if (resetOut && ImGui::MenuItem(ICON_FA_ROTATE_LEFT "  Reset")) *resetOut = true;
+        if (copyOut && ImGui::MenuItem(ICON_FA_COPY "  Copy Component")) *copyOut = true;
+        if (pasteOut) {
+            const bool canPaste = m_ComponentClipKind == label;
+            if (ImGui::MenuItem(ICON_FA_PASTE "  Paste Component Values", nullptr, false, canPaste))
+                *pasteOut = true;
+        }
+        if ((resetOut || copyOut || pasteOut) && removable) ImGui::Separator();
+        if (removable && ImGui::MenuItem(ICON_FA_XMARK "  Remove Component")) removedOut = true;
+        if (!resetOut && !copyOut && !pasteOut && !removable) ImGui::TextDisabled("No actions");
+        ImGui::EndPopup();
     }
 
     bool showBody = open && !removedOut;
@@ -1807,22 +1902,36 @@ void EditorLayer::EndComponentSection() {
 void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity) {
     if (ActionButton(ICON_FA_PLUS "  Add Component", "Attach a new capability to this object",
                      false, ImVec2(-1.0f, 0.0f))) {
+        m_AddComponentFilter[0] = '\0';
+        m_AddComponentFilterFocus = true;
         ImGui::OpenPopup("##AddComponentPopup");
     }
     if (!ImGui::BeginPopup("##AddComponentPopup")) return;
+
+    // Type-to-filter (#236). Focused on open; Esc clears it before it closes the popup.
+    ImGui::SetNextItemWidth(240.0f * m_UIScale);
+    if (m_AddComponentFilterFocus) { ImGui::SetKeyboardFocusHere(); m_AddComponentFilterFocus = false; }
+    ImGui::InputTextWithHint("##AddComponentFilter", ICON_FA_MAGNIFYING_GLASS "  Search",
+                             m_AddComponentFilter, sizeof(m_AddComponentFilter));
+    if (ImGui::IsItemDeactivated() && ImGui::IsKeyPressed(ImGuiKey_Escape)) m_AddComponentFilter[0] = '\0';
+    ImGui::Separator();
+    const std::string filter = m_AddComponentFilter;
 
     auto& registry = world.Registry;
     // Greyed out rather than hidden when already present, so the menu's contents (i.e. what the
     // engine actually supports) stay the same every time it's opened.
     auto entry = [&](const char* icon, const char* label, bool alreadyHas, const std::function<void()>& add) {
+        if (!filter.empty() && !MatchesFilter(filter, label)) return;
         std::string text = std::string(icon) + "  " + label;
         if (ImGui::MenuItem(text.c_str(), nullptr, false, !alreadyHas)) {
             PushUndo(world, std::string("Add ") + label);
             add();
         }
     };
+    // Category headings are noise once a filter narrows the list to a handful of rows.
+    auto section = [&](const char* title) { if (filter.empty()) ImGui::SeparatorText(title); };
 
-    ImGui::SeparatorText("Rendering");
+    section("Rendering");
     // Restores the mesh the entity had before "Mesh Renderer" was removed (DetachedMeshComponent),
     // or a fresh cube if there's nothing to restore — the section's own drop target (drag a Model
     // from the Asset Browser onto it) then repoints it.
@@ -1841,11 +1950,11 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     entry(ICON_FA_VIDEO, "Camera", registry.all_of<CameraComponent>(entity),
         [&] { registry.emplace<CameraComponent>(entity); });
 
-    ImGui::SeparatorText("Physics");
+    section("Physics");
     entry(ICON_FA_CUBE, "Box Collider", registry.all_of<ColliderComponent>(entity),
         [&] { registry.emplace<ColliderComponent>(entity); });
 
-    ImGui::SeparatorText("Audio");
+    section("Audio");
     entry(ICON_FA_VOLUME_HIGH, "Audio Source", registry.all_of<AudioSourceComponent>(entity),
         [&] { registry.emplace<AudioSourceComponent>(entity); });
 
@@ -1853,7 +1962,7 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     // no edit to this menu. Animator used to be its own hand-coded "Motion" entry here; now it's
     // just another entry in this list, same as Transform Controller and Spin.
     if (!ComponentRegistry::All().empty()) {
-        ImGui::SeparatorText("Scripts");
+        section("Scripts");
         for (const auto& rc : ComponentRegistry::All()) {
             entry(rc.Meta.Icon, rc.Meta.Name, rc.Has(registry, entity),
                   [&] { rc.Add(registry, entity); });
