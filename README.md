@@ -2,7 +2,7 @@
 
 <img src="docs/images/logo.png" alt="Tartarus Engine" width="520">
 
-**A C++17 / OpenGL game engine and scene editor for first-person games.**
+**A C++17 / OpenGL 4.6 game engine and scene editor for first-person games.**
 
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square&logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/17)
 [![OpenGL 4.6](https://img.shields.io/badge/OpenGL-4.6%20core-5586A4?style=flat-square&logo=opengl&logoColor=white)](https://www.khronos.org/opengl/)
@@ -15,73 +15,73 @@
 
 ---
 
-Tartarus is a from-scratch game engine with a full editor front-end — dockable panels,
-transform gizmos, an asset browser, prefabs, undo/redo, and an in-editor play mode. It renders
-imported FBX / glTF / OBJ models with PBR-style materials and skeletal animation through a
-hand-rolled OpenGL 4.6 core loader — no glad / Python codegen step in the build.
+Tartarus is a from-scratch game engine with a full editor front-end — dockable panels, transform
+gizmos, an asset browser, prefabs, undo/redo, and an in-editor play mode. It renders imported
+FBX / glTF / OBJ models with PBR materials and skeletal animation through a
+[hand-rolled OpenGL 4.6 core loader](https://github.com/JCamberos27/TartarusEngine/discussions/282)
+— no glad / codegen step in the build.
 
-Both the **gameplay module** and the **editor's panels** are compiled into hot-reloadable DLLs,
+Two design choices shape the codebase. The **gameplay module** and the **editor's panels** are
+each compiled into [hot-reloadable DLLs](https://github.com/JCamberos27/TartarusEngine/discussions/257),
 so game systems *and* editor UI can be rebuilt and swapped in without closing the editor or
-losing the open scene. Engine-side components are **reflection-registered**: declaring one in a
-single place gives it JSON serialization, an Inspector section, and an Add-Component menu entry
-for free.
+losing the open scene. And engine components are
+[reflection-registered](https://github.com/JCamberos27/TartarusEngine/discussions/261) —
+declaring one in a single place gives it JSON serialization, an Inspector section, and an
+Add-Component menu entry, with no per-component editor code.
+
+Every feature below links to a live discussion thread that tracks, in detail, exactly what that
+feature can do today and what's still planned.
 
 ## Features
 
 ### Editor
 
-| | |
+| Feature | Summary |
 |---|---|
-| **Dockable layout** | Scene, Game, Hierarchy, Inspector, Asset Browser, and Console panels in a real ImGui dock tree — drag any border to resize neighbours, panels scale proportionally with the window, and the arrangement persists between sessions. Statistics and History sit as transparent, contrast-adaptive viewport overlays pinned to the corners |
-| **Hot-reloadable UI** | The toolbar, Hierarchy, Inspector, Asset Browser, Console, and Stats panels live in `TartarusEditor.dll` — rebuild that target and the editor swaps the new panel code at the next safe frame with the scene still loaded. The gameplay module (`TartarusGame.dll`) hot-reloads the same way |
-| **Themes** | **Bento** (dark-mode SaaS / bento-grid, the default), **Prism**, and a **Windows XP Luna** skin — swapped live from Preferences, colours *and* layout metrics |
-| **Transform gizmos** | Translate / rotate / scale / rect tools with local vs. world space, pivot vs. bounds-center, a combined gizmo for multi-object selections, and a relative Batch Transform panel for nudging a whole selection at once. A **Gizmos** dropdown master-toggles every viewport gizmo and icon, or hides them per type |
-| **Hierarchy** | Tree view with **drag-to-reparent** and **drag-between-rows to reorder siblings** (a full-row drop band, not a hairline), full **keyboard navigation** (arrows, `Home`/`End`, `←`/`→` to collapse-expand or step into children, type-to-select), per-kind icons (mesh / light / camera / folder) with a right-hand active-state eye column, and a right-click menu with Unity-style **GameObject** ops — Create ▸ (the full Create menu), Create Empty Child, Set as First / Last Sibling, Group / Unparent, Move To View, Align With View, Toggle Active State. Drop a model or prefab from the Asset Browser onto a row to instantiate it as a child |
-| **Inspector** | Every component section has a right-click menu — **Reset**, **Copy Component**, **Paste Component Values** (across objects, creates it if missing), **Remove**. **Add Component** has a type-to-filter search. Reflection-registered components render their own sections with per-field drag speeds, clamps, and tooltips — no per-component editor code. Full multi-select editing with mixed-value dashes and tri-state checkboxes |
-| **Lights** | Select a light and its shape draws in the viewport — a range sphere for point lights, an angle-and-range cone for spots, aim arrows for the sun, tinted by the light's colour — with drag handles to scale range, open or close the cone, or re-aim without leaving the viewport. A dockable **Lights panel** lists every light with solo / mute / frame; any light can be flown through (**look through light**) or **dropped onto the surface** below it. The Inspector picks colour directly or from a **colour temperature** (Kelvin) and exposes per-light shadow tuning; a whole multi-selection edits together |
-| **Selection** | Click-to-pick, box / marquee select, `Ctrl`-click multi-select, `Shift`-click ranges, **Select All / Deselect / Invert**, hierarchy parenting for mesh-less and imported objects, per-entity active toggle |
-| **Snapping** | **Grid & Snap popover** on the toolbar — grid cell size, major-line spacing, and independent Move / Rotate° / Scale increments for the gizmo. Hold `Ctrl` to invert snap for one drag; hold `V` for vertex snapping between unparented meshes; snap-to-ground |
-| **Navigation** | Fly camera, Alt-orbit, pan, dolly, frame-selection, orthographic / perspective toggle, axis view presets with animated transitions, plus an on-screen orientation gizmo |
-| **Undo / redo** | Whole-scene snapshots with a History panel you can jump around in; delta-compressed so history is cheap to keep |
-| **Play mode** | Runs inside the docked Game panel with the editor still live; scene state is snapshotted on entry and restored on exit, so play never becomes an edit. **Play / Pause / single-frame Step** (`F1` / `F2` / `F3`), maximize the Game view (`F4`), click to capture input, `Esc` to release |
-| **Game View** | Resolution and aspect-ratio presets with letterboxing, custom resolutions, maximize-on-play (Preferences), and an FPS / draw-call / triangle overlay. The aspect control and every overlay is **contrast-adaptive** — text and plates lighten or darken to stay legible over whatever's rendered. Add a **Camera** entity to frame a shot; the Game view previews through it while editing |
-| **Quality of life** | Auto-save with crash recovery, copy / paste / duplicate, filtered console, statistics overlay, DPI-aware scaling, a searchable shortcut list in Preferences, persisted preferences |
+| **[Dockable layout & panels](https://github.com/JCamberos27/TartarusEngine/discussions/256)** | Scene, Game, Hierarchy, Inspector, Asset Browser, Console in a real ImGui dock tree; the arrangement persists, and Statistics / History sit as transparent corner overlays |
+| **[Hot-reloadable modules](https://github.com/JCamberos27/TartarusEngine/discussions/257)** | The toolbar and every dock panel live in `TartarusEditor.dll`; gameplay lives in `TartarusGame.dll`. Rebuild either and it swaps at the next safe frame, scene intact |
+| **[Themes](https://github.com/JCamberos27/TartarusEngine/discussions/258)** | Bento (dark-mode SaaS, default), Prism, and a Windows XP Luna skin — colours and layout metrics, swapped live |
+| **[Transform gizmos & Batch Transform](https://github.com/JCamberos27/TartarusEngine/discussions/259)** | Translate / rotate / scale / rect, local vs. world, pivot vs. bounds-center, a combined multi-select gizmo, and a relative Batch Transform panel |
+| **[Scene Hierarchy](https://github.com/JCamberos27/TartarusEngine/discussions/260)** | Drag-to-reparent and drag-between-rows to reorder siblings, full keyboard navigation + type-to-select, per-kind icons with a right-hand active-eye column, and a Unity-style GameObject right-click menu |
+| **[Inspector & component system](https://github.com/JCamberos27/TartarusEngine/discussions/261)** | Per-header Reset / Copy / Paste-Values / Remove menu, an Add-Component search box, full multi-select editing, and reflection-driven sections for registered components |
+| **[Lights](https://github.com/JCamberos27/TartarusEngine/discussions/262)** | Editable viewport gizmos (range sphere / spot cone / aim arrows), a Lights panel with solo-mute-frame, look-through-light, drop-to-surface, Kelvin colour, and per-light shadow tuning |
+| **[Selection, snapping & navigation](https://github.com/JCamberos27/TartarusEngine/discussions/263)** | Fly / orbit / pan / dolly, axis presets, box-select, Select All / Deselect / Invert, a Grid & Snap popover with per-operation increments, and hold-`V` vertex snapping |
+| **[Play mode & Game view](https://github.com/JCamberos27/TartarusEngine/discussions/264)** | Play / Pause / single-frame Step inside the docked Game panel with the editor still live; scene state snapshotted on entry; resolution presets and a contrast-adaptive stats overlay |
+| **[Undo / redo & History](https://github.com/JCamberos27/TartarusEngine/discussions/270)** | Delta-compressed whole-scene history with a jump-to-any-step History panel; covers asset-library operations too |
+| **[Console & logging](https://github.com/JCamberos27/TartarusEngine/discussions/271)** | Streamed engine log with level filter, search, and collapsed repeats |
+| **[Statistics & Profiler HUD](https://github.com/JCamberos27/TartarusEngine/discussions/272)** | FPS, draw calls, triangle / entity counts, GL bind counters, and per-pass CPU timings as a transparent overlay |
+| **[Screenshot / Capture tool](https://github.com/JCamberos27/TartarusEngine/discussions/273)** | Editor / Scene / clean-Scene / Game modes, fixed-resolution and supersample options, PNG or JPG, `Print Screen` or a sentinel-file trigger |
+| **[Preferences & settings](https://github.com/JCamberos27/TartarusEngine/discussions/274)** | Tabbed settings — theme, UI scale, viewport, light gizmos, grid & snap, capture, a searchable shortcut table — all persisted |
+| **[Adaptive-contrast HUD system](https://github.com/JCamberos27/TartarusEngine/discussions/275)** | A shared async luminance sampler keeps every viewport overlay and the corner monogram legible over any render |
+| **[Startup splash & frosted UI](https://github.com/JCamberos27/TartarusEngine/discussions/284)** | A Win32 layered-window splash that doesn't block a synchronous load, and a half-res Gaussian backdrop behind modal dialogs |
 
-### Assets
+### Rendering
 
-- **Import** FBX, OBJ, glTF / GLB models · PNG / JPG / TGA / BMP textures · WAV / MP3 / OGG / FLAC audio
-- **Browse** with a folder tree, resizable icon grid or compact list, search, and labels
-- **Drag and drop** — from the OS into the editor, from the browser into the viewport with a live translucent placement preview that grid-snaps and rests on the surface below, or from the browser onto a Hierarchy row to parent the new instance
-- **Import settings** per asset (Unity-style): texture filtering, wrap, sRGB, mipmaps, max size; model scale, normals, tangents, skeleton, animation, and material handling — all re-importable in place
-- **Previews** including live texture thumbnails, an orbitable 3D model preview, and R / G / B / A channel isolation for textures
-- **Prefabs** — save an entity as a reusable asset and instantiate it by drag or double-click
+| Feature | Summary |
+|---|---|
+| **[PBR & HDR pipeline](https://github.com/JCamberos27/TartarusEngine/discussions/266)** | Forward PBR (albedo / normal / metallic / roughness / AO / emissive) into a multisampled `RGBA16F` target; exposure + Reinhard / ACES / AgX tone-mapping; per-viewport HDR targets |
+| **[Lighting & shadows](https://github.com/JCamberos27/TartarusEngine/discussions/267)** | One `std430` GPU light buffer; clustered-forward culling on a 16 × 9 × 24 froxel grid; cascaded sun shadows, plus cube-map point and perspective spot shadows |
+| **[Image-based lighting](https://github.com/JCamberos27/TartarusEngine/discussions/281)** | Split-sum IBL — irradiance + prefiltered-specular cubes and a BRDF LUT baked from the procedural sky, auto-rebaked when it changes |
+| **[Sky & environment](https://github.com/JCamberos27/TartarusEngine/discussions/277)** | Per-scene procedural gradient sky feeding the IBL probes, a scene Ambient control, and a distance-faded infinite grid |
+| **[Skeletal animation & the Animator](https://github.com/JCamberos27/TartarusEngine/discussions/276)** | Up to 100 bones per model from glTF / FBX rigs, ticked in the editor or the running game; an Animator component for procedural spin / orbit / bob / hue-cycle |
+| **[OpenGL 4.6 layer](https://github.com/JCamberos27/TartarusEngine/discussions/282)** | Hand-rolled loader, direct-state-access mesh path, a redundant-bind cache with counters, and `KHR_debug` output routed to the Console |
+| **[Primitive meshes & preview renderers](https://github.com/JCamberos27/TartarusEngine/discussions/283)** | Procedural cube / sphere / cylinder / capsule / cone / pyramid / torus / plane, an orbitable model preview, texture channel isolation, and the translucent drag-ghost + selection wash |
 
-### Renderer
+### Assets, core & gameplay
 
-- Forward PBR-style shading — albedo, normal, metallic, roughness, ambient occlusion, and emissive maps
-- **Image-based lighting** from the procedural sky — split-sum irradiance + prefiltered-specular cubes and a BRDF LUT, auto-rebaked when the sky colours change; the scene's Ambient control scales it
-- **Linear HDR pipeline** — the scene renders into a multisampled `RGBA16F` target and a single fullscreen pass applies exposure, a tone-mapping curve (**Reinhard / ACES / AgX**), and gamma
-- **Directional, point, and spot lights** in one GPU light buffer (`std430` SSBO) — the sun is a placeable entity you aim with its rotation; point / spot have range and cone falloff. Each light's colour is set directly or from a **colour temperature** (Kelvin), and each carries its own shadow settings — cast on / off plus bias / normal-bias / softness / near-plane — layered on the global cascade config
-- **Clustered-forward light culling** — a per-view compute pass bins point / spot lights into a 16 × 9 × 24 froxel grid, so a fragment loops only the lights that actually reach its cluster instead of every light in the scene
-- **Cascaded shadow maps** for the directional sun — 2–4 texel-snapped cascades, soft rotated-Poisson PCF whose penumbra follows the sun's angular size, seam-blended between cascades, with per-cascade frustum culling
-- **Point-light shadows** via a depth cube-map array, and **spot-light shadows** via a perspective depth array — both store linear distance-to-light so a shadow reaches the light's full range, and share the light SSBO's per-light shadow slot
-- Skeletal animation with up to 100 bones per model
-- Frustum culling, a redundant-state-change cache, and per-frame draw statistics
-- Offscreen HDR targets per viewport, so Scene and Game render independently at their own resolutions and MSAA levels
-- Procedural sky, distance-faded infinite grid, inverted-hull selection outlines, translucent drag previews
-- Shaded / wireframe / unlit view modes
-- Targets OpenGL 4.6 core through the hand-rolled loader — immutable texture and buffer storage, `std430` shader storage buffers, and direct state access throughout the mesh path (`glCreateBuffers` / `glNamedBufferStorage` / `glVertexArray*`), so building a mesh mid-frame never disturbs the bound render state
+| Feature | Summary |
+|---|---|
+| **[Import, browser & prefabs](https://github.com/JCamberos27/TartarusEngine/discussions/265)** | FBX / OBJ / glTF models, common image and audio formats; a folder tree with search and labels; per-asset import settings; drag-in placement with a live preview; save-as-prefab |
+| **[ECS, serialization, physics, audio & caching](https://github.com/JCamberos27/TartarusEngine/discussions/268)** | EnTT with a transform hierarchy; JSON scene format; a first-person controller with sub-stepped AABB collision; miniaudio; a decoded-texture disk cache; a frame profiler |
+| **[Scene & project management](https://github.com/JCamberos27/TartarusEngine/discussions/279)** | New / Open / Save / Save As, a format-version guard, auto-save with a crash-recovery prompt, and last-scene-reopened-on-launch |
+| **[Game module & built-in systems](https://github.com/JCamberos27/TartarusEngine/discussions/278)** | The hot-reloadable gameplay layer — Spin, Transform Controller, and Animator systems, all driven by reflection-registered components |
 
-### Core
+### Tools & build
 
-- **EnTT** entity-component system with a full transform hierarchy
-- **Reflection-registered components** — a component listed once in `ComponentRegistry` gets its JSON serialization, its Inspector section (fields typed as bool / int / float / vec3 / string with per-field drag speed, min/max, tooltip), and its Add-Component entry generated from that one declaration. Per-frame behaviour lives in the hot-reloadable game module
-- JSON scene serialization, including the asset library and per-asset import settings, with a format-version check
-- First-person controller — WASD, sprint, jump, gravity, and sub-stepped AABB collision that won't tunnel through thin geometry
-- AABB physics primitives with ray / box intersection, driving editor picking and the player's collision resolution
-- Audio via miniaudio — in-editor preview, and Play-mode `AudioSourceComponent` playback (play-on-start, volume, loop) positioned from the cached world transform
-- Decoded-texture disk cache (`Library/Textures`) keyed on source size, mtime and import settings — a warm scene load skips PNG decoding entirely, written atomically so a crash can't leave a corrupt entry
-- Frame profiler with per-pass CPU timings, and a log that streams into the editor Console
+| Feature | Summary |
+|---|---|
+| **[TifSplitter](https://github.com/JCamberos27/TartarusEngine/discussions/269)** | A standalone CLI that turns high-bit-depth / multi-channel TIFFs into engine-ready PNGs — channel splitting, normal-map green-flip, heightmap normalization, tiling, batch mode |
+| **[CMake, dependencies & CI](https://github.com/JCamberos27/TartarusEngine/discussions/280)** | `-A x64` with no hardcoded generator; FetchContent for GLFW / GLM / Assimp / EnTT / ImGui / ImGuizmo; a headless `--smoke-test`; GitHub Actions builds every push in Debug and Release |
 
 ## Performance
 
@@ -107,124 +107,60 @@ instrumented.*
 
 **Actively developed.** The engine has been through a full seven-round source audit — every file
 in `src/` was read — tracked in
-**[issue #187](https://github.com/JCamberos27/TartarusEngine/issues/187)** (now closed: all 54
-findings resolved).
-
-Current focus is **[issue #236](https://github.com/JCamberos27/TartarusEngine/issues/236)**, a
-feature-gap audit of the editor against Unity — Hierarchy, Inspector, toolbars, gizmos,
-shortcuts, and the Asset Browser. Much of it has shipped (sibling reordering, keyboard tree
-navigation, drag-from-browser, the component context menu with copy/paste, the Add-Component
-search, Pause & Step, the Grid & Snap and Gizmos popovers, GameObject-menu parity); the rest is
-the open backlog on that issue.
-
-Windows-only CI builds every push in **Debug and Release**.
-
-## Tools
-
-### TifSplitter
-
-A standalone command-line utility (built alongside the engine as its own executable) that turns
-high-bit-depth or multi-channel TIFFs into the 8-bit PNGs the engine's texture loader reads.
-Decoding goes through libtiff, so any source layout it supports works — 8 / 16 / 32-bit integer
-or float samples, tiled or stripped, palette, YCbCr, CMYK.
-
-| | |
-|---|---|
-| **Channel splitting** | Unpack a combined sheet into `_R` / `_G` / `_B` / `_A` PNGs — e.g. a Metallic / Roughness / AO / Smoothness texture authored as one RGBA image |
-| **Normal map conversion** | Flip green to convert a DirectX (+Y up) normal map to OpenGL (+Y down), which is what the engine's shaders expect |
-| **Heightmap normalization** | Stretch a 16-bit heightmap's actual value range to fill 0–255, so terrain data that only occupied a narrow slice of its range doesn't decode to flat gray |
-| **Tiling** | Split an oversized source into a grid of square PNGs, for terrain too large to load as a single texture |
-| **Batch mode** | Convert a whole folder (optionally recursive, mirroring its structure) or an explicit file list, across multiple threads |
-
-```bash
-# One file, splitting a packed PBR sheet into its channels
-TifSplitter -i packed_mrao.tif -o ./Output --split-channels
-
-# A whole tree, converting DirectX normal maps as it goes
-TifSplitter -d ./SourceTextures --recursive -o ./Output --flip-y
-
-# A heightmap too big for one texture, cut into 1024px tiles
-TifSplitter -i Terrain_Height.tif -o ./Output --tile-size 1024
-```
-
-Run it with no arguments for the full option list, or drag a `.tif` onto the executable to
-convert it in place.
+[issue #187](https://github.com/JCamberos27/TartarusEngine/issues/187) (closed: all 54 findings
+resolved). Current focus is
+[issue #236](https://github.com/JCamberos27/TartarusEngine/issues/236), a feature-gap audit of
+the editor against Unity; much of it has shipped and the rest is that issue's open backlog.
+Windows-only CI builds every push in Debug and Release.
 
 ## Building
 
 Requires **CMake 3.16+**, an **MSVC** toolset (Visual Studio 2022 or newer), and a GPU / driver
-that can create an **OpenGL 4.6 core** context (any NVIDIA / AMD / Intel driver from the last
-several years). GLFW, GLM, Assimp, EnTT, Dear ImGui, and ImGuizmo are fetched automatically by
-CMake on first configure — that step needs an internet connection; later builds are offline.
+that can create an **OpenGL 4.6 core** context. GLFW, GLM, Assimp, EnTT, Dear ImGui, and
+ImGuizmo are fetched by CMake on first configure — that step needs an internet connection; later
+builds are offline.
 
 ```bash
 cmake -S . -B build -A x64
 cmake --build build --config Release
 ```
 
-No `-G` on purpose — CMake picks whichever Visual Studio is installed (the CI does the same, so
-a toolset bump doesn't break the build). Pass `-G "Visual Studio 17 2022"` etc. if you need a
-specific one.
+No `-G` on purpose — CMake picks whichever Visual Studio is installed, so a toolset bump doesn't
+break the build. The executable lands at `build/Release/TartarusEngine.exe`, with the reloadable
+`TartarusGame.dll` and `TartarusEditor.dll` beside it. First launch opens
+`project/scenes/Showcase.json`, then reopens whatever scene you last had open.
 
-The executable lands at `build/Release/TartarusEngine.exe`; its reloadable modules,
-`TartarusGame.dll` (gameplay) and `TartarusEditor.dll` (editor panels), are built beside it.
-Icon fonts and branding are copied next to them automatically. On first launch it opens
-`project/scenes/Showcase.json` — a first-person hall lit entirely by moving, colour-cycling
-point and spot lights — and thereafter reopens whatever scene you last had open.
-
-> **Note:** the engine must be closed before rebuilding `TartarusEngine.exe`, or the linker
-> can't overwrite it. The two DLLs can be rebuilt while it runs.
-
-### Hot reload
-
-After launching a build that includes the hot-reload hosts, gameplay code and editor-panel code
-can each be rebuilt without closing the editor:
-
-```bash
-cmake --build build --config Release --target TartarusGame     # gameplay systems
-cmake --build build --config Release --target TartarusEditor    # toolbar / panels
-```
-
-The editor polls for a rebuilt DLL a few times a second, loads a private copy, and swaps it at
-the next safe frame. The editor, renderer, scene, and OpenGL context stay in the host, so the
-open scene is preserved. Rebuilding `TartarusEngine.exe` itself still requires closing it.
+> The engine must be closed before rebuilding `TartarusEngine.exe`; the two DLLs can be rebuilt
+> while it runs — see [Hot-reloadable modules](https://github.com/JCamberos27/TartarusEngine/discussions/257).
 
 ## Controls
 
 | Input | Action |
 |---|---|
-| `Right-drag` | Look around · `WASD` `Q` `E` to fly while held · `Shift` to sprint |
-| `Alt` + `Left-drag` | Orbit the selection |
-| `Alt` + `Right-drag` / `Scroll` | Dolly / zoom |
-| `Middle-drag` | Pan |
+| `Right-drag` | Look · `WASD` `Q` `E` to fly while held · `Shift` to sprint |
+| `Alt` + `Left-drag` / `Right-drag` / `Middle-drag` | Orbit selection · dolly · pan |
 | `W` `E` `R` `T` | Translate / Rotate / Scale / Rect tool |
-| `F` | Frame the current selection |
-| `V` (hold) | Vertex snap — grab a vertex and snap it onto another mesh |
-| `Ctrl` (hold) | Invert grid snapping for the duration of a drag |
-| `Numpad 1` `3` `7` `0` | Front / Right / Top / Isometric views · `5` toggles orthographic |
-| `Ctrl` + `Z` / `Y` | Undo / Redo |
-| `Ctrl` + `C` / `X` / `V` / `D` | Copy / Cut / Paste / Duplicate |
-| `Ctrl` + `A` / `Ctrl` + `Shift` + `A` / `Ctrl` + `I` | Select All / Deselect All / Invert Selection |
-| `Ctrl` + `Shift` + `N` | Create Empty Child of the selection |
-| `Alt` + `Shift` + `A` | Toggle active state of the selection |
-| `Shift` + `A` | Quick Create menu at the cursor |
+| `F` · `V` (hold) · `Ctrl` (hold) | Frame selection · vertex snap · invert grid snap for the drag |
+| `Numpad 1` `3` `7` `0` · `5` | Front / Right / Top / Isometric · toggle orthographic |
+| `Ctrl` + `Z` / `Y` · `Ctrl` + `C` / `X` / `V` / `D` | Undo / Redo · Copy / Cut / Paste / Duplicate |
+| `Ctrl` + `A` / `Ctrl` + `Shift` + `A` / `Ctrl` + `I` | Select All / Deselect All / Invert |
+| `Ctrl` + `Shift` + `N` · `Alt` + `Shift` + `A` · `Shift` + `A` | Create Empty Child · Toggle Active · Quick Create at cursor |
 | `Ctrl` + `S` / `Ctrl` + `Shift` + `S` | Save · Save As |
-| `F1` / `F2` / `F3` | Play–Stop · Pause–Resume · single-frame Step |
-| `F4` / `F11` | Maximize the Game view · window fullscreen |
-| `Esc` | Release the cursor from the running game |
+| `F1` / `F2` / `F3` · `F4` / `F11` · `Esc` | Play–Stop · Pause · Step · maximize Game view · window fullscreen · release cursor |
 
-The full list, searchable, is in **Preferences ▸ Shortcuts**.
+The full, searchable list is in **Preferences ▸ Shortcuts**.
 
 ## Project layout
 
 ```
 src/
-  Core/       Window, input, clock, logging, profiler, project paths
-  Renderer/   GL loader, shaders, models, meshes, textures, camera, framebuffers
+  Core/       Window, input, clock, logging, profiler, splash, screenshot, project paths
+  Renderer/   GL loader + state cache, shaders, models, meshes, textures, camera,
+              framebuffers, shadows, clustered light grid, IBL probes, sky, tonemapper
   Game/       World (EnTT), player controller, scene serialization, components,
-              ComponentRegistry (reflection), the hot-reloadable game module
-  Editor/     Editor layer, asset library, import pipeline, and the panel modules
-              compiled into TartarusEditor.dll
+              ComponentRegistry (reflection), the hot-reloadable game module + systems
+  Editor/     Editor layer, asset library, import pipeline, adaptive-contrast sampler,
+              and the panel modules compiled into TartarusEditor.dll
   Physics/    AABB, frustum
   Audio/      miniaudio wrapper
 extern/       Vendored single-header libraries, icon font, branding
@@ -237,36 +173,24 @@ project/      The scene and editor preferences being authored
 ### Shipped
 
 - Linear HDR pipeline with tone mapping (Reinhard / ACES / AgX)
-- Cascaded shadow maps for the sun; point- and spot-light shadows
-- GPU (SSBO) light buffer · clustered-forward light culling (16 × 9 × 24 froxel grid, compute-driven)
-- **Image-based lighting** — irradiance + prefiltered-specular cubes and a BRDF LUT, baked from the
-  procedural sky and auto-rebaked when it changes ([#196](https://github.com/JCamberos27/TartarusEngine/issues/196))
-- Decoded-texture disk cache with source and settings invalidation
-- **Hot-reloadable editor panels** — the toolbar and every dock panel swap without restarting
-- **Reflection-registered components** — one declaration generates serialization + Inspector + Add-Component entry
-- **Runtime audio** — `AudioSourceComponent` play-on-start with world-positioned sources
-  ([#201](https://github.com/JCamberos27/TartarusEngine/issues/201))
-- **Editor / Unity parity pass** — Hierarchy reordering & keyboard nav, Inspector component
-  menu + copy/paste, Grid & Snap and Gizmos popovers, Pause & Step, GameObject-menu ops
-  ([#236](https://github.com/JCamberos27/TartarusEngine/issues/236), ongoing)
+- Cascaded sun shadows; cube-map point and perspective spot shadows
+- GPU (`std430` SSBO) light buffer · clustered-forward light culling (16 × 9 × 24 froxel grid)
+- Image-based lighting baked from the procedural sky ([#196](https://github.com/JCamberos27/TartarusEngine/issues/196))
+- Hot-reloadable editor panels · reflection-registered components · runtime `AudioSourceComponent` playback
+- Editor / Unity parity pass — Hierarchy reordering & keyboard nav, Inspector component menu + copy/paste, Grid & Snap and Gizmos popovers, Pause & Step, GameObject-menu ops ([#236](https://github.com/JCamberos27/TartarusEngine/issues/236))
 
 ### Next
 
-- **Collision beyond AABB** — triggers, gameplay raycasts, capsule and mesh colliders
-  ([#185](https://github.com/JCamberos27/TartarusEngine/issues/185))
-- **GPU timer queries** — the CPU profiler accounts for only ~2 ms of a 7 ms frame; the rest is
-  unmeasured ([#197](https://github.com/JCamberos27/TartarusEngine/issues/197))
+- **Collision beyond AABB** — triggers, gameplay raycasts, capsule and mesh colliders ([#185](https://github.com/JCamberos27/TartarusEngine/issues/185))
+- **GPU timer queries** — GPU-side pass timing is not yet instrumented ([#197](https://github.com/JCamberos27/TartarusEngine/issues/197))
 - **Placed reflection probes** — local cubemaps and HDRI input, beyond today's single global sky probe
 - **Screen-space effects** on the HDR buffer — SSAO, bloom
 - **Standalone build export** — ship a scene as a runnable game without the editor
-- Finish the remaining [#236](https://github.com/JCamberos27/TartarusEngine/issues/236) backlog —
-  Asset Browser gaps, Inspector list/array fields, custom Hierarchy folders, tag / layer indicators
+- Finish the [#236](https://github.com/JCamberos27/TartarusEngine/issues/236) backlog — Asset Browser gaps, Inspector list/array fields, custom Hierarchy folders, tag / layer indicators
 
 ## License
 
-Released under the [MIT License](LICENSE).
-
-Bundled and fetched third-party components (miniaudio, stb, nlohmann/json, Font Awesome, GLFW,
-GLM, Assimp, EnTT, Dear ImGui, ImGuizmo, libtiff) remain under their own licenses — see
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Branding assets under `extern/branding/` are
-not covered by the MIT license.
+Released under the [MIT License](LICENSE). Bundled and fetched third-party components (miniaudio,
+stb, nlohmann/json, Font Awesome, GLFW, GLM, Assimp, EnTT, Dear ImGui, ImGuizmo, libtiff) remain
+under their own licenses — see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Branding assets
+under `extern/branding/` are not covered by the MIT license.
