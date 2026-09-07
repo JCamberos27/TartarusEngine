@@ -364,18 +364,30 @@ void Draw(const EditorModuleHostAPI& host) {
 
     VSeparator();
 
-    // Breadcrumb — context only, non-interactive.
+    const float refreshFlash = host.GetAssetRefreshFlash ? host.GetAssetRefreshFlash() : 0.0f;
+
+    // Breadcrumb — context only, non-interactive. The post-refresh confirmation (#236 G) rides
+    // here on the toolbar itself rather than adding a row below it; it fades over its last second.
     {
         std::string crumb = "Assets";
         for (char c : curFolder) crumb += (c == '/') ? " / " : std::string(1, c);
         ImGui::AlignTextToFramePadding();
         ImGui::TextDisabled("%s", crumb.c_str());
+        if (refreshFlash > 0.0f) {
+            const float a = refreshFlash > 1.0f ? 1.0f : refreshFlash;
+            ImGui::SameLine(0.0f, 12.0f);
+            ImGui::AlignTextToFramePadding();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.85f, 0.52f, a));
+            ImGui::TextUnformatted(ICON_FA_CIRCLE_CHECK "  Assets refreshed");
+            ImGui::PopStyleColor();
+        }
     }
 
-    // Search box + the Filters button, pinned to the right edge (or a new line if the breadcrumb
-    // has crowded it out).
-    const float filterButtonsWidth = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x;
-    const float targetX = ImGui::GetWindowContentRegionMax().x - (searchWidth + filterButtonsWidth);
+    // Search box + the trailing icon buttons (Filters, Sort, Refresh — #236 G), pinned to the
+    // right edge (or a new line if the breadcrumb has crowded them out).
+    const float iconBtnW = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x;
+    const float trailingButtonsWidth = iconBtnW * 3.0f;
+    const float targetX = ImGui::GetWindowContentRegionMax().x - (searchWidth + trailingButtonsWidth);
     if (targetX > ImGui::GetCursorPosX()) ImGui::SameLine(targetX);
     else ImGui::NewLine();
 
@@ -467,6 +479,32 @@ void Draw(const EditorModuleHostAPI& host) {
         }
         ImGui::EndPopup();
     }
+
+    // Sort control + Refresh (#236 G).
+    ImGui::SameLine();
+    const int sortPacked = host.GetAssetSort ? host.GetAssetSort() : 0;
+    int sortMode = (sortPacked >> 1) & 3;
+    bool sortDesc = (sortPacked & 1) != 0;
+    if (ImGui::Button(ICON_FA_ARROW_DOWN_SHORT_WIDE)) ImGui::OpenPopup("##AssetSort");
+    if (ImGui::IsItemHovered()) Tooltip(host, "Sort the grid");
+    if (ImGui::BeginPopup("##AssetSort")) {
+        static const char* kModes[] = { "Name", "Type", "Date modified", "Size" };
+        for (int i = 0; i < 4; ++i)
+            if (ImGui::MenuItem(kModes[i], nullptr, sortMode == i)) sortMode = i;
+        ImGui::Separator();
+        if (ImGui::MenuItem("Ascending", nullptr, !sortDesc)) sortDesc = false;
+        if (ImGui::MenuItem("Descending", nullptr, sortDesc)) sortDesc = true;
+        ImGui::EndPopup();
+    }
+    const int newPacked = sortMode * 2 + (sortDesc ? 1 : 0);
+    if (newPacked != sortPacked && host.SetAssetSort) host.SetAssetSort(newPacked);
+
+    ImGui::SameLine();
+    if (refreshFlash > 0.0f)
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.85f, 0.52f, 1.0f)); // green while confirming
+    if (ImGui::Button(ICON_FA_ROTATE) && host.RefreshAssetBrowser) host.RefreshAssetBrowser();
+    if (refreshFlash > 0.0f) ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) Tooltip(host, "Refresh - re-scan folders and thumbnails (Ctrl+R)");
 
     ImGui::EndChild(); // ##AssetToolbar
 
