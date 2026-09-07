@@ -653,6 +653,15 @@ private:
                                  int cx, int cy, int cz, const glm::vec3& step);
     void DrawArrayDuplicateModal(World& world, AssetLibrary& assets);
     bool  m_ShowArrayDuplicate = false;
+
+    // Measure / ruler tool (#236 R2). While active, viewport clicks drop the two endpoints
+    // (raycast onto scene geometry, else a point on the far arc); right-click clears. The
+    // readout shows straight-line distance + per-axis deltas.
+    bool  m_MeasureTool = false;
+    int   m_MeasureCount = 0;            // 0 = none, 1 = first point set, 2 = both
+    glm::vec3 m_MeasureP0{0.0f}, m_MeasureP1{0.0f};
+    bool RaycastViewportSurface(World& world, Camera& cam, const glm::vec2& screenPx, glm::vec3& outHit) const;
+    void DrawMeasurement(Camera& cam);
     int   m_ArrayDupCount[3] = { 3, 1, 1 };
     float m_ArrayDupStep[3]  = { 2.0f, 0.0f, 0.0f };
     void DrawGroupGizmo(World& world, Camera& editorCamera);
