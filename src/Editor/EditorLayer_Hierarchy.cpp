@@ -721,11 +721,12 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     const bool rowHovered = ImGui::IsItemHovered();
     const bool clickOnArrow = hasChildren && rowHovered &&
         ImGui::GetIO().MousePos.x < rowMin.x + arrowSlotW;
-    // The active-state eye lives in a fixed right column (drawn below) that the full-width node
-    // overlaps. Carve its X band out of the row's own click/select/rename handling so a click —
-    // or double-click — on the eye is the eye's alone.
-    const float eyeBandW = ImGui::GetFontSize() * 1.6f + 8.0f * m_UIScale;
-    const bool overEye = rowHovered && ImGui::GetIO().MousePos.x > rowMax.x - eyeBandW;
+    // The row's right cluster — SceneVis eye + lock + the Active checkbox — is drawn below via
+    // SetCursorScreenPos over the full-width node, so its InvisibleButtons and the node both see
+    // the same click. Carve the cluster's whole X span out of the row's click / double-click
+    // handling so a click anywhere on an icon is that icon's alone and never also selects (#236 B).
+    const float rowIconsBandW = ImGui::GetFontSize() * 3.4f + 20.0f * m_UIScale;
+    const bool overRowIcons = rowHovered && ImGui::GetIO().MousePos.x > rowMax.x - rowIconsBandW;
 
     if (ImGui::IsItemClicked() && clickOnArrow) {
         open = !open;
@@ -733,7 +734,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         if (ImGui::GetIO().KeyAlt) {
             for (entt::entity child : hier->Children) SetHierarchyExpandedRecursive(world, child, open);
         }
-    } else if (ImGui::IsItemClicked() && !overEye) {
+    } else if (ImGui::IsItemClicked() && !overRowIcons) {
         const ImGuiIO& io = ImGui::GetIO();
         if (io.KeyShift) {
             // Shift (or Ctrl+Shift) — contiguous range from the anchor to this row.
@@ -743,7 +744,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         }
         m_HierarchyRowHintDone = true; // learned the row interaction — stop showing the hint
     }
-    if (ImGui::IsItemHovered() && !clickOnArrow && !overEye && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    if (ImGui::IsItemHovered() && !clickOnArrow && !overRowIcons && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
         BeginRenameEntity(entity);
     }
     if (!m_HierarchyRowHintDone && ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
