@@ -1211,6 +1211,34 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) EditorUI::SetTooltip("Display name shown in the Hierarchy and here");
     if (activated) PushUndo(world, "Rename");
 
+    // #236 A2 — prefab-instance banner. Walk up to the instance root (if any) and say what's
+    // authoritative: the root keeps its own transform/name/tag, everything else tracks the .prefab.
+    {
+        entt::entity prefabRoot = entt::null;
+        for (entt::entity cur = entity; cur != entt::null; ) {
+            if (registry.all_of<PrefabInstanceComponent>(cur)) { prefabRoot = cur; break; }
+            const auto* h = registry.try_get<HierarchyComponent>(cur);
+            cur = h ? h->Parent : entt::null;
+        }
+        if (prefabRoot != entt::null) {
+            const auto& pi = registry.get<PrefabInstanceComponent>(prefabRoot);
+            const bool isRoot = (prefabRoot == entity);
+            ImGui::Spacing();
+            ImGui::PushStyleColor(ImGuiCol_Text, pi.Missing ? IM_COL32(240, 130, 120, 255)
+                                                            : IM_COL32(120, 170, 255, 255));
+            ImGui::TextWrapped("%s  %s", ICON_FA_BOX_ARCHIVE,
+                pi.Missing ? "Prefab source missing"
+                           : (isRoot ? "Prefab instance" : "Part of a prefab instance"));
+            ImGui::PopStyleColor();
+            ImGui::TextDisabled("%s", pi.SourcePath.c_str());
+            ImGui::TextDisabled(isRoot
+                ? "Transform / name / tag are kept per-instance; everything else tracks the prefab."
+                : "Edits here are overwritten when the prefab reloads \xE2\x80\x94 unpack the root to edit.");
+            ImGui::Spacing();
+            ImGui::Separator();
+        }
+    }
+
     {
         auto* tag = registry.try_get<TagComponent>(entity);
         std::string tagText = tag ? tag->Tag : std::string("Untagged");
