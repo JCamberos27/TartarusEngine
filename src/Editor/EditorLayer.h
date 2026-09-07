@@ -1074,6 +1074,11 @@ private:
     void RefreshShotsListingIfNeeded();
     void InvalidateScenesListing() { m_ScenesListingCache.valid = false; }
     void InvalidateShotsListing() { m_ShotsListingCache.valid = false; }
+public:
+    // #236 G — Refresh / Reimport All (Ctrl+R): bust every Asset Browser cache so the next frame
+    // re-scans the scenes/ and screenshots/ folders and re-renders thumbnails from disk.
+    void RefreshAssetBrowser();
+private:
 
     // The screenshot lightbox (DrawScreenshotPreview). Its own full-res Texture, not a m_ShotThumbs
     // entry, so it survives that map being pruned and isn't size-capped to the thumbnail budget.
