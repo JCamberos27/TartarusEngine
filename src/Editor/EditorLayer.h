@@ -531,6 +531,17 @@ private:
     // rebuild the default panel arrangement from scratch.
     bool m_ResetLayoutRequested = false;
 
+    // Layout presets (#236 R2 toolbar tail) — named ImGui-ini snapshots in project/layouts/.
+    // A load stages the ini text here; Draw() applies it via LoadIniSettingsFromMemory before
+    // the dockspace code runs, so the docked windows land where the preset put them.
+    void SaveLayoutPreset(const std::string& name);
+    void RequestLoadLayoutPreset(const std::string& name);
+    void DeleteLayoutPreset(const std::string& name);
+    std::vector<std::string> LayoutPresetNames() const;
+    std::string m_PendingLayoutIni;
+    bool m_ShowSaveLayout = false;
+    char m_SaveLayoutName[64] = "";
+
     // Defaults to a plausible full-window size so nothing divides by zero if anything reads
     // these before the first Draw() has run; overwritten every editor-mode frame after that.
     bool m_FocusSceneTabRequested = true;
