@@ -256,10 +256,12 @@ void EditorLayer::HandleHandToolPan(Camera& editorCamera) {
     if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) { m_HandPanActive = false; return; }
     if (!m_HandPanActive) return;
 
-    // Same fixed rate as the middle-mouse pan in UpdateEditorCamera.
+    // Same fixed rate as the middle-mouse pan in UpdateEditorCamera. Horizontal grabs the scene
+    // (drag right -> view moves left); vertical is inverted from that on purpose (drag down ->
+    // camera moves up), matching how the user expects the Hand tool to feel here.
     const float kPanSpeed = 0.01f;
-    editorCamera.Position -=
-        (editorCamera.Right() * io.MouseDelta.x + editorCamera.Up() * io.MouseDelta.y) * kPanSpeed;
+    editorCamera.Position +=
+        (editorCamera.Up() * io.MouseDelta.y - editorCamera.Right() * io.MouseDelta.x) * kPanSpeed;
 }
 
 // #236 E — Lock View to Selected (Shift+F): each frame, shift the camera position by however
