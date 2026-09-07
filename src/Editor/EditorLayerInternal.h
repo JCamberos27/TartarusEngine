@@ -221,6 +221,32 @@ inline bool ActiveToggle(const char* id, bool active, bool rowHovered, const cha
     return clicked;
 }
 
+// #236 B — a hover-reveal glyph toggle for the Hierarchy's SceneVis columns (hide / lock).
+// Nothing is drawn at rest unless `on`; hovering the row fades the glyph in so the column
+// doesn't clutter every row. Returns true on click. Same top-aligned glyph metrics as
+// ActiveToggle so the little cluster lines up with the eye.
+inline bool SceneVisToggle(const char* id, const char* glyphOn, const char* glyphOff,
+                           bool on, bool rowHovered, const char* tip) {
+    const float sz = ImGui::GetFrameHeight();
+    const float w  = ImMax(ImGui::CalcTextSize(glyphOn).x, ImGui::CalcTextSize(glyphOff).x) + 2.0f;
+    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    ImGui::PushID(id);
+    const bool clicked = ImGui::InvisibleButton("##svis", ImVec2(w, sz));
+    const bool selfHover = ImGui::IsItemHovered();
+    ImGui::PopID();
+    if (selfHover) EditorUI::SetTooltip("%s", tip);
+
+    if (on || rowHovered || selfHover) {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const char* g = on ? glyphOn : glyphOff;
+        const ImVec2 ts = ImGui::CalcTextSize(g);
+        const float a = on ? (selfHover ? 1.0f : 0.85f) : (selfHover ? 0.75f : 0.30f);
+        dl->AddText(ImVec2(p0.x + (w - ts.x) * 0.5f, p0.y),
+                    ImGui::GetColorU32(on ? ImGuiCol_Text : ImGuiCol_TextDisabled, a), g);
+    }
+    return clicked;
+}
+
 
 // Unity-style duplicate naming: "Cube" -> "Cube (1)" -> "Cube (2)". Re-derives the base name
 // from an already-numbered source first, so duplicating a duplicate produces "Cube (2)" instead
