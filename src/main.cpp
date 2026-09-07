@@ -1287,9 +1287,9 @@ int main(int argc, char** argv) {
             // diverge. Editor-only visualization (selection outline/highlight, drag-preview
             // ghost, grid, wireframe) is deliberately NOT part of this — the Game View should
             // show exactly what Play Mode does, never editor debug shading.
-            // editorView: the editor Scene viewport (not the Game view). Only that pass honours
-            // the per-layer visibility mask (#236 A1) — hiding a layer is an authoring aid, the
-            // running game and its Game-view still draw every layer.
+            // editorView: the editor Scene viewport (not the Game view). Only that pass applies
+            // editor-only visibility filters — the per-layer visibility mask (#236 A1) and the
+            // per-entity HiddenInSceneTag (#236 B). The running game and its Game view draw everything.
             auto drawScene = [&](const glm::mat4& sceneView, const glm::mat4& sceneProj,
                                   const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats,
                                   bool editorView = false) {
@@ -1446,9 +1446,10 @@ int main(int argc, char** argv) {
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.all_of<InactiveTag>(entity)) continue; // Hierarchy eye toggle / GameObject active
 
-                    // Per-layer viewport visibility (#236 A1) — Scene view only; a clear bit
-                    // hides that layer here while leaving it in the scene, saves and Game view.
+                    // Editor Scene viewport only: per-entity SceneVis hide (#236 B) + per-layer
+                    // visibility mask (#236 A1). The scene, saves and Game view are unaffected.
                     if (editorView) {
+                        if (world.Registry.all_of<HiddenInSceneTag>(entity)) continue;
                         const auto* lc = world.Registry.try_get<LayerComponent>(entity);
                         const int layer = lc ? lc->Layer : 0;
                         if (layer >= 0 && layer < 32 && !((gs.LayerVisibleMask >> layer) & 1u)) continue;

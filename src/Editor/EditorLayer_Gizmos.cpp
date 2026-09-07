@@ -73,6 +73,11 @@ bool ViewportPickLocked(const World& world, entt::entity e) {
     const int layer = lc ? lc->Layer : 0;
     if (layer < 0 || layer >= 32) return false;
     return (EditorSettings::Get().LayerPickLockMask >> layer) & 1u;
+// #236 B — SceneVis-lite: an entity that is hidden or locked in the Scene view is not
+// selectable there by click or marquee. Hierarchy selection and, once selected, the gizmo still
+// work — matching Unity's SceneVis lock.
+inline bool NotSceneSelectable(const World& world, entt::entity e) {
+    return world.Registry.all_of<HiddenInSceneTag>(e) || world.Registry.all_of<SceneLockedTag>(e);
 }
 
 // TransformComponent is LOCAL space once an entity has a parent, so anything that manipulates an
@@ -801,6 +806,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         auto pickView = world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>);
         for (auto entity : pickView) {
             if (ViewportPickLocked(world, entity)) continue;
+            if (NotSceneSelectable(world, entity)) continue; // #236 B
             const auto& renderable = pickView.get<const RenderableComponent>(entity);
             glm::mat4 model = world.ComposeWorldTransform(entity);
             AABB worldBounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(model);
@@ -824,6 +830,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
             float iconDepth = 1e30f;
             for (auto entity : world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent, InactiveTag>)) {
                 if (ViewportPickLocked(world, entity)) continue;
+                if (NotSceneSelectable(world, entity)) continue; // #236 B
                 glm::mat4 model = world.ComposeWorldTransform(entity);
                 glm::vec3 worldPos = glm::vec3(model[3]);
                 glm::vec4 clip = viewProj * glm::vec4(worldPos, 1.0f);
@@ -888,6 +895,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
     auto entityView = world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>);
     for (auto entity : entityView) {
         if (ViewportPickLocked(world, entity)) continue;
+        if (NotSceneSelectable(world, entity)) continue; // #236 B
         const auto& renderable = entityView.get<const RenderableComponent>(entity);
         glm::mat4 model = world.ComposeWorldTransform(entity);
         AABB bounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(model);
@@ -902,6 +910,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
     // the icon-proximity pick above) against the drag rectangle.
     for (auto entity : world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent, InactiveTag>)) {
         if (ViewportPickLocked(world, entity)) continue;
+        if (NotSceneSelectable(world, entity)) continue; // #236 B
         glm::mat4 model = world.ComposeWorldTransform(entity);
         glm::vec3 worldPos = glm::vec3(model[3]);
         glm::vec4 clip = viewProj * glm::vec4(worldPos, 1.0f);
