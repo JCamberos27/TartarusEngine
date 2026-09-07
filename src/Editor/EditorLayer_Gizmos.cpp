@@ -1578,9 +1578,99 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
                 transform.Scale = newScale;
                 break;
         }
+
+        // #236 E — surface drag-snapping. While translating with the toggle on (hold Shift to
+        // invert), override the axis-handle result: drop the object where the cursor ray hits
+        // another surface, optionally aligning it to that face's normal.
+        if (m_GizmoOp == GizmoOp::Translate && (m_SurfaceSnap != ImGui::GetIO().KeyShift)) {
+            ApplySurfaceSnap(world, editorCamera, m_Selected, parentWorld);
+            const ImVec2 mp = ImGui::GetIO().MousePos;
+            ImGui::GetForegroundDrawList()->AddText(ImVec2(mp.x + 18.0f, mp.y - 20.0f),
+                IM_COL32(120, 220, 160, 255),
+                m_SurfaceSnapAlign ? "surface + align" : "surface");
+        }
     }
 
     EndGizmoOverlay();
+}
+
+void EditorLayer::ApplySurfaceSnap(World& world, Camera& editorCamera, entt::entity sel,
+                                   const glm::mat4& parentWorld) {
+    const float w = m_ViewportSize.x, h = m_ViewportSize.y;
+    if (w <= 1.0f || h <= 1.0f || !world.Registry.valid(sel)) return;
+
+    const glm::mat4 view = editorCamera.ViewMatrix();
+    const glm::mat4 proj = editorCamera.ProjectionMatrix(w / h);
+    const glm::mat4 invVP = glm::inverse(proj * view);
+    const ImVec2 m = ImGui::GetIO().MousePos;
+    const float ndcX = (2.0f * (m.x - m_ViewportPos.x)) / w - 1.0f;
+    const float ndcY = 1.0f - (2.0f * (m.y - m_ViewportPos.y)) / h;
+    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
+    glm::vec4 farP  = invVP * glm::vec4(ndcX, ndcY,  1.0f, 1.0f);
+    nearP /= nearP.w; farP /= farP.w;
+    const glm::vec3 origin = glm::vec3(nearP);
+    const glm::vec3 dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
+
+    // Never snap to the moving object itself or anything parented under it.
+    auto isSelfOrChild = [&](entt::entity e) {
+        for (entt::entity c = e; c != entt::null; ) {
+            if (c == sel) return true;
+            const auto* hp = world.Registry.try_get<HierarchyComponent>(c);
+            c = hp ? hp->Parent : entt::null;
+        }
+        return false;
+    };
+
+    float bestT = 1e30f;
+    AABB bestBounds{};
+    bool hit = false;
+    for (auto e : world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>)) {
+        if (isSelfOrChild(e)) continue;
+        const auto& r = world.Registry.get<const RenderableComponent>(e);
+        AABB wb = AABB{r.ModelRef->BoundsMin(), r.ModelRef->BoundsMax()}
+                     .Transformed(world.ComposeWorldTransform(e));
+        float t;
+        if (wb.RayIntersect(origin, dir, t) && t > 1e-3f && t < bestT) { bestT = t; bestBounds = wb; hit = true; }
+    }
+    if (!hit) return;
+
+    const glm::vec3 p = origin + dir * bestT;
+
+    // Axis-aligned face normal: the axis on which the hit point sits at the box boundary.
+    const glm::vec3 c = (bestBounds.Min + bestBounds.Max) * 0.5f;
+    const glm::vec3 ext = glm::max((bestBounds.Max - bestBounds.Min) * 0.5f, glm::vec3(1e-5f));
+    const glm::vec3 a = glm::abs((p - c) / ext);
+    glm::vec3 n(0.0f);
+    if (a.x >= a.y && a.x >= a.z)      n.x = (p.x >= c.x) ? 1.0f : -1.0f;
+    else if (a.y >= a.z)              n.y = (p.y >= c.y) ? 1.0f : -1.0f;
+    else                             n.z = (p.z >= c.z) ? 1.0f : -1.0f;
+
+    // Lift the object so its footprint rests on the surface rather than its origin sinking to it.
+    glm::vec3 dropWorld = p;
+    const glm::mat4 selWorld = world.ComposeWorldTransform(sel);
+    if (const auto* selR = world.Registry.try_get<RenderableComponent>(sel)) {
+        const AABB sw = AABB{selR->ModelRef->BoundsMin(), selR->ModelRef->BoundsMax()}.Transformed(selWorld);
+        const glm::vec3 selCtr = (sw.Min + sw.Max) * 0.5f;
+        const glm::vec3 selOrigin = glm::vec3(selWorld[3]);
+        const float halfAlong = 0.5f * std::abs(glm::dot(sw.Max - sw.Min, glm::abs(n)));
+        const float originToCtr = glm::dot(selCtr - selOrigin, n);
+        dropWorld = p + n * (halfAlong - originToCtr);
+    }
+
+    auto& transform = world.Registry.get<TransformComponent>(sel);
+    transform.Position = glm::vec3(glm::inverse(parentWorld) * glm::vec4(dropWorld, 1.0f));
+
+    if (m_SurfaceSnapAlign) {
+        const glm::vec3 up = n;
+        const glm::vec3 ref = (std::abs(up.y) > 0.99f) ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
+        const glm::vec3 fwd = glm::normalize(glm::cross(ref, up));
+        const glm::vec3 right = glm::cross(up, fwd);
+        glm::mat4 rot(1.0f);
+        rot[0] = glm::vec4(right, 0.0f);
+        rot[1] = glm::vec4(up, 0.0f);
+        rot[2] = glm::vec4(fwd, 0.0f);
+        transform.RotationEuler = EulerYXZFromMatrix(glm::inverse(parentWorld) * rot);
+    }
 }
 
 void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
