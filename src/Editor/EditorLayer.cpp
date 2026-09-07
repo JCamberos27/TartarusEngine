@@ -918,6 +918,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
                 case Shortcuts::Ctx_Hierarchy: return "Hierarchy";
                 case Shortcuts::Ctx_Project:   return "Project";
                 case Shortcuts::Ctx_Inspector: return "Inspector";
+                case Shortcuts::Ctx_App:       return "App";
                 default:                       return "Global";
             }
         };
@@ -990,8 +991,9 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             ImGui::TableSetupColumn("##bind", ImGuiTableColumnFlags_WidthFixed, 132.0f * m_UIScale);
             ImGui::TableSetupColumn("##rst",  ImGuiTableColumnFlags_WidthFixed, 20.0f * m_UIScale);
 
-            const std::uint32_t order[] = { Shortcuts::Ctx_Global, Shortcuts::Ctx_Viewport,
-                Shortcuts::Ctx_Hierarchy, Shortcuts::Ctx_Project, Shortcuts::Ctx_Inspector };
+            const std::uint32_t order[] = { Shortcuts::Ctx_Global, Shortcuts::Ctx_App,
+                Shortcuts::Ctx_Viewport, Shortcuts::Ctx_Hierarchy, Shortcuts::Ctx_Project,
+                Shortcuts::Ctx_Inspector };
 
             for (std::uint32_t gctx : order) {
                 bool wroteHeader = false;
