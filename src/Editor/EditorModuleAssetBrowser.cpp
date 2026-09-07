@@ -372,10 +372,11 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGui::TextDisabled("%s", crumb.c_str());
     }
 
-    // Search box + the Filters button, pinned to the right edge (or a new line if the breadcrumb
-    // has crowded it out).
-    const float filterButtonsWidth = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x;
-    const float targetX = ImGui::GetWindowContentRegionMax().x - (searchWidth + filterButtonsWidth);
+    // Search box + the trailing icon buttons (Filters, Sort, Refresh — #236 G), pinned to the
+    // right edge (or a new line if the breadcrumb has crowded them out).
+    const float iconBtnW = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x;
+    const float trailingButtonsWidth = iconBtnW * 3.0f;
+    const float targetX = ImGui::GetWindowContentRegionMax().x - (searchWidth + trailingButtonsWidth);
     if (targetX > ImGui::GetCursorPosX()) ImGui::SameLine(targetX);
     else ImGui::NewLine();
 
@@ -488,7 +489,11 @@ void Draw(const EditorModuleHostAPI& host) {
     if (newPacked != sortPacked && host.SetAssetSort) host.SetAssetSort(newPacked);
 
     ImGui::SameLine();
+    const float refreshFlash = host.GetAssetRefreshFlash ? host.GetAssetRefreshFlash() : 0.0f;
+    if (refreshFlash > 0.0f)
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.85f, 0.52f, 1.0f)); // green while confirming
     if (ImGui::Button(ICON_FA_ROTATE) && host.RefreshAssetBrowser) host.RefreshAssetBrowser();
+    if (refreshFlash > 0.0f) ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) Tooltip(host, "Refresh - re-scan folders and thumbnails (Ctrl+R)");
 
     ImGui::EndChild(); // ##AssetToolbar
@@ -496,6 +501,16 @@ void Draw(const EditorModuleHostAPI& host) {
     if (search != searchBefore && host.SetAssetSearch) host.SetAssetSearch(search.c_str());
 
     ImGui::Separator();
+
+    // Brief post-refresh confirmation (#236 G) — Ctrl+R is otherwise silent. Fades over its
+    // last second.
+    if (refreshFlash > 0.0f) {
+        const float a = refreshFlash > 1.0f ? 1.0f : refreshFlash;
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.85f, 0.52f, a));
+        ImGui::TextUnformatted(ICON_FA_CIRCLE_CHECK "  Assets refreshed");
+        ImGui::PopStyleColor();
+        ImGui::Separator();
+    }
 
     // --- tree | splitter | grid --------------------------------------------------------
     const float footerHeight = ImGui::GetFrameHeightWithSpacing() + 4.0f;
