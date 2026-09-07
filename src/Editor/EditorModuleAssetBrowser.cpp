@@ -364,12 +364,23 @@ void Draw(const EditorModuleHostAPI& host) {
 
     VSeparator();
 
-    // Breadcrumb — context only, non-interactive.
+    const float refreshFlash = host.GetAssetRefreshFlash ? host.GetAssetRefreshFlash() : 0.0f;
+
+    // Breadcrumb — context only, non-interactive. The post-refresh confirmation (#236 G) rides
+    // here on the toolbar itself rather than adding a row below it; it fades over its last second.
     {
         std::string crumb = "Assets";
         for (char c : curFolder) crumb += (c == '/') ? " / " : std::string(1, c);
         ImGui::AlignTextToFramePadding();
         ImGui::TextDisabled("%s", crumb.c_str());
+        if (refreshFlash > 0.0f) {
+            const float a = refreshFlash > 1.0f ? 1.0f : refreshFlash;
+            ImGui::SameLine(0.0f, 12.0f);
+            ImGui::AlignTextToFramePadding();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.85f, 0.52f, a));
+            ImGui::TextUnformatted(ICON_FA_CIRCLE_CHECK "  Assets refreshed");
+            ImGui::PopStyleColor();
+        }
     }
 
     // Search box + the trailing icon buttons (Filters, Sort, Refresh — #236 G), pinned to the
@@ -489,7 +500,6 @@ void Draw(const EditorModuleHostAPI& host) {
     if (newPacked != sortPacked && host.SetAssetSort) host.SetAssetSort(newPacked);
 
     ImGui::SameLine();
-    const float refreshFlash = host.GetAssetRefreshFlash ? host.GetAssetRefreshFlash() : 0.0f;
     if (refreshFlash > 0.0f)
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.85f, 0.52f, 1.0f)); // green while confirming
     if (ImGui::Button(ICON_FA_ROTATE) && host.RefreshAssetBrowser) host.RefreshAssetBrowser();
@@ -501,16 +511,6 @@ void Draw(const EditorModuleHostAPI& host) {
     if (search != searchBefore && host.SetAssetSearch) host.SetAssetSearch(search.c_str());
 
     ImGui::Separator();
-
-    // Brief post-refresh confirmation (#236 G) — Ctrl+R is otherwise silent. Fades over its
-    // last second.
-    if (refreshFlash > 0.0f) {
-        const float a = refreshFlash > 1.0f ? 1.0f : refreshFlash;
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.85f, 0.52f, a));
-        ImGui::TextUnformatted(ICON_FA_CIRCLE_CHECK "  Assets refreshed");
-        ImGui::PopStyleColor();
-        ImGui::Separator();
-    }
 
     // --- tree | splitter | grid --------------------------------------------------------
     const float footerHeight = ImGui::GetFrameHeightWithSpacing() + 4.0f;
