@@ -20,6 +20,7 @@
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
 #include "ComponentRegistry.h"
+#include "ProjectSettings.h" // project-defined tag vocabulary for the Tag dropdown (#236 A4)
 #include "LayerRegistry.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
@@ -762,6 +763,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             std::set<std::string> tagChoices{"Untagged"};
             for (auto e : world.Registry.view<const TagComponent>())
                 tagChoices.insert(world.Registry.get<TagComponent>(e).Tag);
+            for (const std::string& t : ProjectSettings::Tags()) tagChoices.insert(t); // #236 A4
             std::string sharedTag; bool tagMixed = false, first = true;
             forEach([&](entt::entity e) {
                 const auto* tc = world.Registry.try_get<TagComponent>(e);
@@ -1252,6 +1254,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 const auto& tc = registry.get<TagComponent>(e);
                 if (!tc.Tag.empty()) known.insert(tc.Tag);
             }
+            for (const std::string& t : ProjectSettings::Tags()) known.insert(t); // #236 A4
             if (ImGui::BeginCombo("##Tag", tagText.c_str())) {
                 if (ImGui::Selectable("Untagged", !tag)) setTag("");
                 if (!known.empty()) ImGui::Separator();

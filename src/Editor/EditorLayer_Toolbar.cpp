@@ -504,6 +504,10 @@ void EditorLayer::DrawWindowMenuBody() {
             ImGui::MenuItem(ICON_FA_SLIDERS "  Inspector", nullptr, &m_ShowInspector);
             ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Asset Browser", nullptr, &m_ShowAssetBrowser);
             ImGui::Separator();
+            ImGui::MenuItem(ICON_FA_GEARS "  Project Settings", nullptr, &m_ShowProjectSettings);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Project-scoped settings (physics, tags, layer names) - saved with the project, not your editor prefs.");
+            ImGui::Separator();
             // Console / Statistics / History / Light Gizmos have dedicated toolbar toggles (#148);
             // the engine mark lives in Preferences ▸ Viewport.
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
@@ -630,20 +634,12 @@ void EditorLayer::DrawGizmosPopupBody() {
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Lock: objects on this layer can't be clicked in the viewport.\nHierarchy selection still works.");
 
             ImGui::SameLine();
-            if (i == 0) {
-                ImGui::TextUnformatted("Default");
-            } else {
-                char buf[32];
-                std::snprintf(buf, sizeof(buf), "%s", LayerRegistry::Name(i).c_str());
-                char hint[16];
-                std::snprintf(hint, sizeof(hint), "Layer %d", i);
-                ImGui::SetNextItemWidth(150.0f);
-                if (ImGui::InputTextWithHint("##name", hint, buf, sizeof(buf)))
-                    LayerRegistry::SetName(i, buf);
-                if (ImGui::IsItemDeactivatedAfterEdit()) LayerRegistry::Save();
-            }
+            // Read-only label here — renaming lives in Project Settings ▸ Tags & Layers (#236 A4),
+            // since the slot names are project content, not per-user viewport state.
+            ImGui::TextUnformatted(LayerRegistry::DisplayName(i).c_str());
             ImGui::PopID();
         }
+        ImGui::TextDisabled("Rename in Project Settings \xE2\x96\xB8 Tags & Layers");
     }
 }
 

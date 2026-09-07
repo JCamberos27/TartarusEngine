@@ -120,6 +120,7 @@ public:
     void SetShowHistory(bool on) { m_ShowHistory = on; }
     void RequestResetLayout() { m_ResetLayoutRequested = true; }
     void OpenPreferences() { m_ShowPreferences = true; }
+    void OpenProjectSettings() { m_ShowProjectSettings = true; }
 
     // Thin forwarders so the non-member host glue (HotReloadEditorModule.cpp) can invoke these;
     // the real methods stay private with their existing call sites. World/Assets/Camera are the
@@ -684,6 +685,13 @@ private:
     bool m_ShowPreferences = false;
     int m_PrefsCategory = 0;
     std::string m_PrefsShortcutFilter;
+
+    // Project Settings window (#236 A4) — project-scoped (project/settings.json + layers.json),
+    // kept separate from the per-user Preferences window above.
+    void DrawProjectSettingsWindow(World& world);
+    bool m_ShowProjectSettings = false;
+    int m_ProjSettingsCategory = 0;
+    char m_NewTagBuf[48] = {};
 public:
     // The launch-time system report (OS/CPU/RAM/GPU/GL/display/build), built by main.cpp.
     // Shown in Preferences > About.
