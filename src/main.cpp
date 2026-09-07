@@ -1282,8 +1282,11 @@ int main(int argc, char** argv) {
             // diverge. Editor-only visualization (selection outline/highlight, drag-preview
             // ghost, grid, wireframe) is deliberately NOT part of this — the Game View should
             // show exactly what Play Mode does, never editor debug shading.
+            // editorView: the editor Scene viewport (not the Game view). Only that pass hides
+            // HiddenInSceneTag entities (#236 B — SceneVis-lite) — the running game still draws them.
             auto drawScene = [&](const glm::mat4& sceneView, const glm::mat4& sceneProj,
-                                  const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats) {
+                                  const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats,
+                                  bool editorView = false) {
                 const EditorSettings& gs = EditorSettings::Get();
 
                 // Shadows for this view. Spot and point shadows only need shadows-enabled +
@@ -1436,6 +1439,7 @@ int main(int argc, char** argv) {
 
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.all_of<InactiveTag>(entity)) continue; // Hierarchy eye toggle / GameObject active
+                    if (editorView && world.Registry.all_of<HiddenInSceneTag>(entity)) continue; // #236 B — SceneVis hide
                     auto& renderable = world.Registry.get<RenderableComponent>(entity);
                     glm::mat4 model = world.GetCachedWorldTransform(entity);
 
@@ -1548,7 +1552,7 @@ int main(int argc, char** argv) {
                 if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
                 EditorLayer::RenderStats sceneStats;
-                drawScene(sceneViewMat, sceneProjMat, editorCamera.Position, sceneUnlit, &sceneStats);
+                drawScene(sceneViewMat, sceneProjMat, editorCamera.Position, sceneUnlit, &sceneStats, /*editorView=*/true);
 
                 editor.SetRenderStats(sceneStats);
                 // NB: in Wireframe mode the polygon mode stays GL_LINE through the selection

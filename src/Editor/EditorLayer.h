@@ -588,6 +588,10 @@ private:
     // a short idle gap, matching every OS file list).
     std::string m_HierarchyTypeAhead;
     double m_HierarchyTypeAheadAt = 0.0;
+    // #236 B — spring-loaded folders: the collapsed row the drag cursor is dwelling on, and when
+    // that dwell began. Reset when the cursor leaves it or a drag ends.
+    entt::entity m_HierarchySpringRow = entt::null;
+    double m_HierarchySpringSince = 0.0;
     // Shift+Click on `target`: select every row between m_SelectionAnchor and `target`
     // inclusive along m_HierarchyVisibleOrder. `additive` (Ctrl+Shift) keeps the existing
     // selection and adds the range; otherwise the range replaces it. `target` becomes primary.
