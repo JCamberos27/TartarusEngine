@@ -68,16 +68,24 @@ namespace {
 
 // #236 A1 — an entity is unclickable in the viewport when its layer's bit is set in the
 // editor's pick-lock mask. Hierarchy selection is unaffected. Absent LayerComponent == layer 0.
-bool ViewportPickLocked(const World& world, entt::entity e) {
+inline bool ViewportPickLocked(const World& world, entt::entity e) {
     const auto* lc = world.Registry.try_get<LayerComponent>(e);
     const int layer = lc ? lc->Layer : 0;
     if (layer < 0 || layer >= 32) return false;
     return (EditorSettings::Get().LayerPickLockMask >> layer) & 1u;
+}
+
 // #236 B — SceneVis-lite: an entity that is hidden or locked in the Scene view is not
 // selectable there by click or marquee. Hierarchy selection and, once selected, the gizmo still
 // work — matching Unity's SceneVis lock.
 inline bool NotSceneSelectable(const World& world, entt::entity e) {
     return world.Registry.all_of<HiddenInSceneTag>(e) || world.Registry.all_of<SceneLockedTag>(e);
+}
+
+// #236 A1 + B combined — skip an entity in any viewport pick loop when it's pick-locked by
+// layer or hidden/locked by SceneVis.
+inline bool ViewportUnpickable(const World& world, entt::entity e) {
+    return ViewportPickLocked(world, e) || NotSceneSelectable(world, e);
 }
 
 // TransformComponent is LOCAL space once an entity has a parent, so anything that manipulates an
