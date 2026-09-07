@@ -388,6 +388,10 @@ void  TbDrawGridSnapPopupBody() { if (g_Editor) g_Editor->DrawGridSnapPopupBody(
 void  TbDrawGizmosPopupBody()   { if (g_Editor) g_Editor->DrawGizmosPopupBody(); }
 bool  TbGetGizmosMasterVisible() { return g_Editor && g_Editor->GizmosMasterVisible(); }
 void  TbSetGizmosMasterVisible(bool on) { if (g_Editor) g_Editor->SetGizmosMasterVisible(on); }
+bool  TbGetHandTool() { return g_Editor && g_Editor->HandToolActive(); }
+void  TbSetHandTool(bool on) { if (g_Editor) g_Editor->SetHandToolActive(on); }
+bool  TbGetLockViewToSelection() { return g_Editor && g_Editor->LockViewToSelection(); }
+void  TbSetLockViewToSelection(bool on) { if (g_Editor) g_Editor->SetLockViewToSelection(on); }
 
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
@@ -490,6 +494,8 @@ const EditorModuleHostAPI kHostAPI{
     &TbDrawGizmosPopupBody,
     // --- Gizmos master toggle button (API v11) — order must match EditorModuleHostAPI exactly ---
     &TbGetGizmosMasterVisible,  &TbSetGizmosMasterVisible,
+    &TbGetHandTool,             &TbSetHandTool,
+    &TbGetLockViewToSelection,  &TbSetLockViewToSelection,
 };
 
 } // namespace
