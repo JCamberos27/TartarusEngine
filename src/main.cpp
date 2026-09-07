@@ -11,6 +11,7 @@
 #include "AssetLibrary.h"
 #include "HotReloadGameModule.h"
 #include "HotReloadEditorModule.h"
+#include "EditorModuleAPI.h" // EditorConsoleState (Clear on Play / Error Pause — #236 A5)
 #include "EditorLayer.h"
 #include "EditorSettings.h"
 #include "Model.h"
@@ -35,6 +36,8 @@
 #include "Frustum.h"
 #include "GameViewPanel.h"
 #include "ProjectPaths.h"
+#include "LayerRegistry.h"
+#include "ProjectSettings.h"
 #include "SplashScreen.h"
 #include "GLDebug.h"
 #include "Log.h"
@@ -411,6 +414,8 @@ int main(int argc, char** argv) {
         // build/, where it was gitignored and a clean rebuild would delete it. Prefer the scene
         // that was open when the editor last closed, if it still exists (#95).
         EditorSettings::Load();
+        LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
+        ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
         std::string scenePath = ProjectPaths::Resolve("scenes/Showcase.json");
         {
             const std::string& last = EditorSettings::Get().LastScenePath;
@@ -665,9 +670,12 @@ int main(int argc, char** argv) {
         // Unity's play-mode contract: entering Play snapshots the scene and leaving it restores
         // that snapshot, so gameplay (shot crates, moved objects) never silently becomes an
         // edit. EditorLayer owns the snapshot; main.cpp owns the state bits.
+        int errPauseSeen = 0; // #236 A5 — error count baseline for "Error Pause", re-armed each Play
         auto startPlay = [&]() {
             if (playing) return;
+            if (EditorModuleHost::ConsoleState().ClearOnPlay) Log::Clear(); // #236 A5
             editor.OnEnterPlayMode(world);
+            errPauseSeen = Log::CountOf(LogLevel::Error); // ignore errors that predate this run
             playing = true;
             playMaximized = false;
             editorUIVisible = true;
@@ -681,6 +689,7 @@ int main(int argc, char** argv) {
             player.Cam.Yaw = editorCamera.Yaw;
             player.Cam.Pitch = editorCamera.Pitch;
             player.Velocity = glm::vec3(0.0f);
+            player.Gravity = ProjectSettings::Physics().Gravity.y; // #236 A4 — project-scoped
             window.SetCursorLocked(false); // click the Game view to take control
         };
         auto stopPlay = [&]() {
@@ -812,6 +821,15 @@ int main(int argc, char** argv) {
             // the same state the keys drive, one frame later.
             if (playing && (Input::IsKeyPressed(GLFW_KEY_F2) || editor.ConsumePauseToggleRequest()))
                 paused = !paused;
+            // #236 A5 — Error Pause: freeze the sim the frame a fresh error lands.
+            if (playing && !paused && EditorModuleHost::ConsoleState().ErrorPause) {
+                const int errNow = Log::CountOf(LogLevel::Error);
+                if (errNow > errPauseSeen) {
+                    paused = true;
+                    Log::Info("Error Pause: simulation paused on a new error (Console \xE2\x96\xB8 Error Pause).");
+                }
+            }
+            errPauseSeen = Log::CountOf(LogLevel::Error);
             bool stepThisFrame = playing && paused &&
                 (Input::IsKeyPressed(GLFW_KEY_F3) || editor.ConsumeStepRequest());
             // F4 mirrors the toolbar's Fullscreen/Restore button — maximize the Game view over
@@ -1282,8 +1300,12 @@ int main(int argc, char** argv) {
             // diverge. Editor-only visualization (selection outline/highlight, drag-preview
             // ghost, grid, wireframe) is deliberately NOT part of this — the Game View should
             // show exactly what Play Mode does, never editor debug shading.
+            // editorView: the editor Scene viewport (not the Game view). Only that pass applies
+            // editor-only visibility filters — the per-layer visibility mask (#236 A1) and the
+            // per-entity HiddenInSceneTag (#236 B). The running game and its Game view draw everything.
             auto drawScene = [&](const glm::mat4& sceneView, const glm::mat4& sceneProj,
-                                  const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats) {
+                                  const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats,
+                                  bool editorView = false) {
                 const EditorSettings& gs = EditorSettings::Get();
 
                 // Shadows for this view. Spot and point shadows only need shadows-enabled +
@@ -1436,6 +1458,15 @@ int main(int argc, char** argv) {
 
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.all_of<InactiveTag>(entity)) continue; // Hierarchy eye toggle / GameObject active
+
+                    // Editor Scene viewport only: per-entity SceneVis hide (#236 B) + per-layer
+                    // visibility mask (#236 A1). The scene, saves and Game view are unaffected.
+                    if (editorView) {
+                        if (world.Registry.all_of<HiddenInSceneTag>(entity)) continue;
+                        const auto* lc = world.Registry.try_get<LayerComponent>(entity);
+                        const int layer = lc ? lc->Layer : 0;
+                        if (layer >= 0 && layer < 32 && !((gs.LayerVisibleMask >> layer) & 1u)) continue;
+                    }
                     auto& renderable = world.Registry.get<RenderableComponent>(entity);
                     glm::mat4 model = world.GetCachedWorldTransform(entity);
 
@@ -1548,7 +1579,7 @@ int main(int argc, char** argv) {
                 if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
                 EditorLayer::RenderStats sceneStats;
-                drawScene(sceneViewMat, sceneProjMat, editorCamera.Position, sceneUnlit, &sceneStats);
+                drawScene(sceneViewMat, sceneProjMat, editorCamera.Position, sceneUnlit, &sceneStats, /*editorView=*/true);
 
                 editor.SetRenderStats(sceneStats);
                 // NB: in Wireframe mode the polygon mode stays GL_LINE through the selection

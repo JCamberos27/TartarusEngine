@@ -2,11 +2,8 @@
 
 #include "GameModuleAPI.h"
 #include "Log.h"
-#include "Model.h"
 #include "World.h"
-#include "Components.h"
 
-#include <iterator>
 #include <string>
 #include <windows.h>
 
@@ -14,42 +11,12 @@ namespace fs = std::filesystem;
 
 namespace {
 
-bool HasNamedEntity(const World& world, const char* name) {
-    for (auto entity : world.Registry.view<const NameComponent>()) {
-        if (world.Registry.get<const NameComponent>(entity).Name == name) return true;
-    }
-    return false;
-}
-
-void EnsureRoomDonutTestSet(World& world) {
-    struct DonutSpec {
-        const char* Name;
-        glm::vec3 Position;
-        glm::vec3 Color;
-    };
-    static const DonutSpec kDonuts[] = {
-        {"Hot Reload Donut - Kitchen",     {-3.0f, 0.75f, -3.0f}, {0.95f, 0.45f, 0.22f}},
-        {"Hot Reload Donut - Living Room", { 3.0f, 0.75f, -3.0f}, {0.25f, 0.65f, 0.95f}},
-        {"Hot Reload Donut - Bathroom",    {-3.0f, 0.75f,  3.0f}, {0.25f, 0.85f, 0.70f}},
-        {"Hot Reload Donut - Bedroom",     { 3.0f, 0.75f,  3.0f}, {0.82f, 0.35f, 0.85f}},
-    };
-
-    int created = 0;
-    for (int i = 0; i < (int)std::size(kDonuts); ++i) {
-        const DonutSpec& spec = kDonuts[i];
-        if (HasNamedEntity(world, spec.Name)) continue;
-
-        auto model = Model::CreatePrimitive("donut", "primitive://donut#hotreload" + std::to_string(i));
-        model->MeshMaterial(0).BaseColor = spec.Color;
-        world.CreateModelEntity(model, spec.Position, glm::vec3(0.0f), glm::vec3(1.25f), spec.Name);
-        ++created;
-    }
-    if (created > 0) Log::Info("Hot reload: spawned " + std::to_string(created) + " room donut test object(s).");
-}
-
+// The host callback table handed to the game module every Update. Empty for now — the reload
+// itself logs ("TartarusGame module loaded / reloaded") and the module's systems (SpinSystem,
+// TransformControllerSystem) already prove the module→World path works, so the old
+// donut-spawning cross-DLL smoke test was redundant and has been removed.
 const GameModuleHostAPI kHostAPI{
     kGameModuleAPIVersion,
-    &EnsureRoomDonutTestSet,
 };
 
 } // namespace
