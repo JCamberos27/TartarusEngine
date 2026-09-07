@@ -498,6 +498,12 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             // have no toolbar home.
             ImGui::SeparatorText("Options");
             ImGui::MenuItem(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform Gizmo", nullptr, &m_ShowGizmos);
+            if (ImGui::MenuItem(ICON_FA_RULER "  Measure Tool", nullptr, m_MeasureTool)) {
+                m_MeasureTool = !m_MeasureTool;
+                m_MeasureCount = 0;
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Click two points in the viewport to measure the distance. Right-click clears.");
             ImGui::MenuItem(ICON_FA_CROSSHAIRS "  Frame on Select", nullptr, &m_FrameOnSelect);
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Move the camera to frame each object as you select it.");
             if (ImGui::MenuItem(ICON_FA_BORDER_ALL "  Orthographic", "5", editorCamera.Orthographic)) {
@@ -516,6 +522,17 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
                 if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
                 if (ImGui::IsItemHovered())
                     EditorUI::SetTooltip("Editor fly-camera speed (Shift = ×3). Also: scroll while holding right-drag.");
+
+                if (ImGui::DragFloat("Near", &cs.SceneCameraNear, 0.01f, 0.001f, 10.0f, "%.3f")) {
+                    cs.SceneCameraNear = std::min(cs.SceneCameraNear, cs.SceneCameraFar - 0.01f);
+                    editorCamera.NearPlane = cs.SceneCameraNear;
+                }
+                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+                if (ImGui::DragFloat("Far", &cs.SceneCameraFar, 1.0f, 1.0f, 10000.0f, "%.0f")) {
+                    cs.SceneCameraFar = std::max(cs.SceneCameraFar, cs.SceneCameraNear + 0.01f);
+                    editorCamera.FarPlane = cs.SceneCameraFar;
+                }
+                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
                 ImGui::PopItemWidth();
             }
 
