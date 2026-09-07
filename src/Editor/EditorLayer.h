@@ -1106,6 +1106,15 @@ private:
     void RefreshShotsListingIfNeeded();
     void InvalidateScenesListing() { m_ScenesListingCache.valid = false; }
     void InvalidateShotsListing() { m_ShotsListingCache.valid = false; }
+public:
+    // #236 G — Refresh / Reimport All (Ctrl+R): bust every Asset Browser cache so the next frame
+    // re-scans the scenes/ and screenshots/ folders and re-renders thumbnails from disk.
+    void RefreshAssetBrowser();
+    // Seconds left on the post-refresh confirmation flash (0 = none). The module reads this to
+    // show a brief "Assets refreshed" indicator, since Ctrl+R gives no other visible feedback.
+    float AssetRefreshFlash() const { return m_AssetRefreshFlash; }
+private:
+    float m_AssetRefreshFlash = 0.0f;
 
     // The screenshot lightbox (DrawScreenshotPreview). Its own full-res Texture, not a m_ShotThumbs
     // entry, so it survives that map being pruned and isn't size-capped to the thumbnail budget.

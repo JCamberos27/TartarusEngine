@@ -392,6 +392,17 @@ bool  TbGetHandTool() { return g_Editor && g_Editor->HandToolActive(); }
 void  TbSetHandTool(bool on) { if (g_Editor) g_Editor->SetHandToolActive(on); }
 bool  TbGetLockViewToSelection() { return g_Editor && g_Editor->LockViewToSelection(); }
 void  TbSetLockViewToSelection(bool on) { if (g_Editor) g_Editor->SetLockViewToSelection(on); }
+int   TbGetAssetSort() {
+    return EditorSettings::Get().AssetSortMode * 2 + (EditorSettings::Get().AssetSortDesc ? 1 : 0);
+}
+void  TbSetAssetSort(int packed) {
+    auto& s = EditorSettings::Get();
+    s.AssetSortMode = (packed >> 1) & 3;
+    s.AssetSortDesc = (packed & 1) != 0;
+    EditorSettings::Save();
+}
+void  TbRefreshAssetBrowser() { if (g_Editor) g_Editor->RefreshAssetBrowser(); }
+float TbGetAssetRefreshFlash() { return g_Editor ? g_Editor->AssetRefreshFlash() : 0.0f; }
 
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
@@ -496,6 +507,9 @@ const EditorModuleHostAPI kHostAPI{
     &TbGetGizmosMasterVisible,  &TbSetGizmosMasterVisible,
     &TbGetHandTool,             &TbSetHandTool,
     &TbGetLockViewToSelection,  &TbSetLockViewToSelection,
+    &TbGetAssetSort,            &TbSetAssetSort,
+    &TbRefreshAssetBrowser,
+    &TbGetAssetRefreshFlash,
 };
 
 } // namespace
