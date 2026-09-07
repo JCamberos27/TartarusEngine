@@ -1789,7 +1789,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             }
 
             PropertyLabel("Volume", "Playback volume - 1 is unattenuated.");
-            if (ImGui::DragFloat("##AudioVolume", &audio->Volume, 0.01f, 0.0f, 1.0f, "%.2f")) {
+            if (EditorUI::SliderFloat("##AudioVolume", &audio->Volume, 0.0f, 1.0f, "%.2f")) {
                 audio->Volume = glm::clamp(audio->Volume, 0.0f, 1.0f);
             }
             if (ImGui::IsItemActivated()) PushUndo(world, "Edit Audio Volume");
