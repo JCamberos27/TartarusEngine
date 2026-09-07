@@ -121,6 +121,15 @@ struct EditorSettings {
     float LightGizmoOpacity      = 0.5f;
     float LightGizmoScale        = 1.0f;
 
+    // --- Per-layer viewport mask (#236 A1). One bit per LayerRegistry slot (bit N = layer N).
+    // LayerVisibleMask: a clear bit hides that layer's entities in the Scene viewport draw (they
+    // stay in the scene, the Hierarchy, and every save). LayerPickLockMask: a set bit makes that
+    // layer's entities unclickable in the viewport (Hierarchy selection still works). Per-user,
+    // not content — the slot *names* are project-scoped (LayerRegistry / project/layers.json).
+    // Edited from the toolbar's Gizmos/visibility popup.
+    unsigned LayerVisibleMask  = 0xFFFFFFFFu;
+    unsigned LayerPickLockMask = 0u;
+
     // --- Capture (screenshot) tool. Images always write to project/screenshots/ (so the Asset
     // Browser's "Screenshots" folder finds them). Controls live in Preferences > Capture and the
     // toolbar's camera button. CaptureMode: 0 full editor window, 1 Scene viewport only,
