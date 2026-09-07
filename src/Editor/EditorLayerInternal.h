@@ -236,14 +236,15 @@ inline bool SceneVisToggle(const char* id, const char* glyphOn, const char* glyp
     ImGui::PopID();
     if (selfHover) EditorUI::SetTooltip("%s", tip);
 
-    if (on || rowHovered || selfHover) {
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-        const char* g = on ? glyphOn : glyphOff;
-        const ImVec2 ts = ImGui::CalcTextSize(g);
-        const float a = on ? (selfHover ? 1.0f : 0.85f) : (selfHover ? 0.75f : 0.30f);
-        dl->AddText(ImVec2(p0.x + (w - ts.x) * 0.5f, p0.y),
-                    ImGui::GetColorU32(on ? ImGuiCol_Text : ImGuiCol_TextDisabled, a), g);
-    }
+    // Always drawn (like the Active eye): a barely-there glyph at rest so the column is
+    // discoverable, brighter on row-hover, brightest when set or directly hovered.
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const char* g = on ? glyphOn : glyphOff;
+    const ImVec2 ts = ImGui::CalcTextSize(g);
+    const float a = on ? (selfHover ? 1.0f : 0.90f)
+                       : (selfHover ? 0.80f : (rowHovered ? 0.42f : 0.16f));
+    dl->AddText(ImVec2(p0.x + (w - ts.x) * 0.5f, p0.y),
+                ImGui::GetColorU32(on ? ImGuiCol_Text : ImGuiCol_TextDisabled, a), g);
     return clicked;
 }
 
