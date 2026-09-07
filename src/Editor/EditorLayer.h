@@ -593,6 +593,21 @@ private:
     // Edit-menu ops (#236): every entity in the scene / flip which entities are selected.
     void SelectAllEntities(World& world);
     void InvertSelection(World& world);
+
+    // Selection history (#236 R2) — back/forward through past selections. RecordSelectionHistory()
+    // polls the live selection once per frame from Draw(), so every selection path feeds the
+    // ring without per-call-site hooks; the nav functions set m_SelHistoryNavigating so the poll
+    // doesn't re-record its own change.
+    void RecordSelectionHistory();
+    void SelectionHistoryBack(World& world);
+    void SelectionHistoryForward(World& world);
+    bool CanSelectionHistoryBack() const    { return m_SelHistoryPos > 0; }
+    bool CanSelectionHistoryForward() const  { return m_SelHistoryPos + 1 < m_SelHistory.size(); }
+    void ApplySelectionSnapshot(World& world, const std::vector<entt::entity>& snap);
+    std::vector<std::vector<entt::entity>> m_SelHistory;
+    size_t m_SelHistoryPos = 0;
+    std::vector<entt::entity> m_SelSnapshotLast;
+    bool m_SelHistoryNavigating = false;
     // Arrow / Home / End / type-to-select keyboard navigation of the tree (#236), gated the same
     // way Ctrl+A is (panel focused, no text field capturing keys). Runs once per frame after the
     // rows are drawn, off the published m_HierarchyVisibleOrder.
@@ -631,6 +646,15 @@ private:
     // inPlace = true (the Ctrl+D shortcut, #236 F) skips the (1,0,1) nudge given to duplicated
     // roots, so the copy lands exactly on the original; the menu items keep the nudge.
     void DuplicateSelection(World& world, AssetLibrary& assets, bool inPlace = false);
+
+    // Array / grid duplicate (#236 R2): counts per axis, step in world units per axis. The
+    // (0,0,0) cell is the existing selection, so counts {3,1,1} makes 2 new copies.
+    void DuplicateSelectionArray(World& world, AssetLibrary& assets,
+                                 int cx, int cy, int cz, const glm::vec3& step);
+    void DrawArrayDuplicateModal(World& world, AssetLibrary& assets);
+    bool  m_ShowArrayDuplicate = false;
+    int   m_ArrayDupCount[3] = { 3, 1, 1 };
+    float m_ArrayDupStep[3]  = { 2.0f, 0.0f, 0.0f };
     void DrawGroupGizmo(World& world, Camera& editorCamera);
     // Shared setup/teardown behind DrawGizmo() (single-object) and DrawGroupGizmo() (multi-select):
     // opens the fullscreen transparent overlay window ImGuizmo's hit-testing needs and configures
@@ -1010,6 +1034,11 @@ private:
     void RequestNewScene(World& world, AssetLibrary& assets);
     void RequestOpenScene(World& world, AssetLibrary& assets, const std::string& path);
     void DrawSceneSwitchPrompt(World& world, AssetLibrary& assets);
+    // Revert Scene (#236 R2) — reload m_CurrentScenePath from disk, discarding edits (and any
+    // in-play changes). Confirms first when the scene is dirty.
+    void RequestRevertScene(World& world, AssetLibrary& assets);
+    void DrawRevertScenePrompt(World& world, AssetLibrary& assets);
+    bool m_RevertPromptPending = false;
     bool m_ScenePromptPending = false;
     PendingSceneSwitch m_PendingSceneSwitch = PendingSceneSwitch::None;
     std::string m_PendingScenePath;

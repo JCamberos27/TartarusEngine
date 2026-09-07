@@ -214,6 +214,63 @@ void EditorLayer::SelectAllEntities(World& world) {
     if (m_Selected != entt::null) m_SelectionAnchor = m_Selected;
 }
 
+// --- Selection history (#236 R2) -----------------------------------------------------------
+namespace {
+std::vector<entt::entity> SnapshotSelection(entt::entity primary, const std::vector<entt::entity>& extra) {
+    std::vector<entt::entity> s;
+    if (primary != entt::null) s.push_back(primary);
+    s.insert(s.end(), extra.begin(), extra.end());
+    return s;
+}
+} // namespace
+
+void EditorLayer::RecordSelectionHistory() {
+    auto cur = SnapshotSelection(m_Selected, m_ExtraSelection);
+    if (cur == m_SelSnapshotLast) return;
+    auto prev = std::move(m_SelSnapshotLast);
+    m_SelSnapshotLast = cur;
+
+    // Our own back/forward change — advance the "last seen" marker, don't append.
+    if (m_SelHistoryNavigating) { m_SelHistoryNavigating = false; return; }
+
+    if (m_SelHistory.empty()) {           // seed with the pre-change state so Back can reach it
+        m_SelHistory.push_back(std::move(prev));
+        m_SelHistoryPos = 0;
+    } else if (m_SelHistoryPos + 1 < m_SelHistory.size()) {
+        m_SelHistory.resize(m_SelHistoryPos + 1); // drop the forward branch
+    }
+    m_SelHistory.push_back(std::move(cur));
+
+    constexpr size_t kCap = 64;
+    if (m_SelHistory.size() > kCap)
+        m_SelHistory.erase(m_SelHistory.begin(), m_SelHistory.begin() + (m_SelHistory.size() - kCap));
+    m_SelHistoryPos = m_SelHistory.size() - 1;
+}
+
+void EditorLayer::ApplySelectionSnapshot(World& world, const std::vector<entt::entity>& snap) {
+    m_Selected = entt::null;
+    m_ExtraSelection.clear();
+    m_RenamingEntity = entt::null;
+    for (entt::entity e : snap) {
+        if (!world.Registry.valid(e)) continue; // entity deleted since it was recorded
+        if (m_Selected == entt::null) m_Selected = e;
+        else if (std::find(m_ExtraSelection.begin(), m_ExtraSelection.end(), e) == m_ExtraSelection.end())
+            m_ExtraSelection.push_back(e);
+    }
+    if (m_Selected != entt::null) m_SelectionAnchor = m_Selected;
+    m_SelHistoryNavigating = true; // next RecordSelectionHistory() poll swallows this change
+}
+
+void EditorLayer::SelectionHistoryBack(World& world) {
+    if (m_SelHistoryPos == 0 || m_SelHistory.empty()) return;
+    ApplySelectionSnapshot(world, m_SelHistory[--m_SelHistoryPos]);
+}
+
+void EditorLayer::SelectionHistoryForward(World& world) {
+    if (m_SelHistoryPos + 1 >= m_SelHistory.size()) return;
+    ApplySelectionSnapshot(world, m_SelHistory[++m_SelHistoryPos]);
+}
+
 void EditorLayer::InvertSelection(World& world) {
     std::vector<entt::entity> nowSelected;
     for (entt::entity e : world.Registry.view<const NameComponent>())
@@ -424,6 +481,96 @@ void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets, bool in
     }
     Log::Info("Duplicated " + std::to_string(created.size()) + (created.size() == 1 ? " object." : " objects."));
 }
+
+void EditorLayer::DuplicateSelectionArray(World& world, AssetLibrary& assets,
+                                          int cx, int cy, int cz, const glm::vec3& step) {
+    if (!HasAnySelection()) return;
+    cx = std::clamp(cx, 1, 32); cy = std::clamp(cy, 1, 32); cz = std::clamp(cz, 1, 32);
+    const int cells = cx * cy * cz;
+    if (cells <= 1 || cells > 512) return; // nothing to do, or absurd — bail without an undo entry
+
+    std::vector<entt::entity> source;
+    if (m_Selected != entt::null) source.push_back(m_Selected);
+    for (entt::entity e : m_ExtraSelection) source.push_back(e);
+
+    const std::string fragment = SceneSerializer::SaveEntitiesToString(world, source);
+    if (fragment.empty()) { Log::Warn("Duplicate Array failed: selection could not be copied."); return; }
+
+    PushUndo(world, "Duplicate Array");
+
+    std::set<std::string> existingNames;
+    for (auto e : world.Registry.view<NameComponent>()) existingNames.insert(world.Registry.get<NameComponent>(e).Name);
+
+    std::vector<entt::entity> allCreated;
+    for (int n = 1; n < cells; ++n) {                 // cell 0 is the original selection
+        const int i = n % cx, j = (n / cx) % cy, k = n / (cx * cy);
+        const glm::vec3 offset = step * glm::vec3((float)i, (float)j, (float)k);
+
+        std::vector<entt::entity> created;
+        if (!SceneSerializer::AppendEntitiesFromString(world, assets, fragment, created) || created.empty())
+            continue;
+        for (entt::entity e : created) {
+            const auto* hier = world.Registry.try_get<HierarchyComponent>(e);
+            if (hier && hier->Parent != entt::null) continue; // offset / rename roots only
+            if (auto* t = world.Registry.try_get<TransformComponent>(e)) t->Position += offset;
+            if (auto* name = world.Registry.try_get<NameComponent>(e)) {
+                existingNames.erase(name->Name);
+                name->Name = NextDuplicateName(existingNames, name->Name.empty() ? "Object" : name->Name);
+                existingNames.insert(name->Name);
+            }
+        }
+        allCreated.insert(allCreated.end(), created.begin(), created.end());
+    }
+
+    ClearSelection();
+    for (size_t i = 0; i < allCreated.size(); ++i) {
+        if (i == 0) m_Selected = allCreated[i];
+        else m_ExtraSelection.push_back(allCreated[i]);
+    }
+    Log::Info("Duplicate Array: created " + std::to_string(allCreated.size()) + " object(s).");
+}
+
+void EditorLayer::DrawArrayDuplicateModal(World& world, AssetLibrary& assets) {
+    if (!m_ShowArrayDuplicate) return;
+    if (!HasAnySelection()) { m_ShowArrayDuplicate = false; return; }
+
+    if (!ImGui::IsPopupOpen("Duplicate Array##ArrayDup")) ImGui::OpenPopup("Duplicate Array##ArrayDup");
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (ImGui::BeginPopupModal("Duplicate Array##ArrayDup", &m_ShowArrayDuplicate,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextDisabled("Count per axis (the selection is cell 0,0,0)");
+        ImGui::PushItemWidth(200.0f * m_UIScale);
+        ImGui::InputInt3("Count", m_ArrayDupCount);
+        ImGui::InputFloat3("Step (world units)", m_ArrayDupStep, "%.2f");
+        ImGui::PopItemWidth();
+        for (int& c : m_ArrayDupCount) c = std::clamp(c, 1, 32);
+
+        const long long total = (long long)m_ArrayDupCount[0] * m_ArrayDupCount[1] * m_ArrayDupCount[2];
+        ImGui::TextDisabled("%lld new copies", std::max(0LL, total - 1));
+        const bool ok = total > 1 && total <= 512;
+        if (!ok) ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f),
+                                    total <= 1 ? "Increase a count above 1." : "Too many (max 512).");
+        ImGui::Separator();
+
+        ImGui::BeginDisabled(!ok);
+        if (PrimaryButton("Create", ImVec2(110.0f, 0.0f))) {
+            DuplicateSelectionArray(world, assets, m_ArrayDupCount[0], m_ArrayDupCount[1], m_ArrayDupCount[2],
+                                    glm::vec3(m_ArrayDupStep[0], m_ArrayDupStep[1], m_ArrayDupStep[2]));
+            m_ShowArrayDuplicate = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (PrimaryButton("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            m_ShowArrayDuplicate = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
 // The Add-menu body, shared verbatim by the File-menu-bar "Add" menu and the Shift+A quick-add
 // popup (ImGui::MenuItem works inside BeginMenu and BeginPopup alike).
 void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera& editorCamera) {
@@ -1069,6 +1216,9 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     }
     if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", "Ctrl+D", false, hasEntity)) {
         DuplicateSelection(world, assets);
+    }
+    if (ImGui::MenuItem(ICON_FA_TABLE_CELLS "  Duplicate Array\xE2\x80\xA6", nullptr, false, hasEntity)) {
+        m_ShowArrayDuplicate = true;
     }
 
     const bool isLight = hasEntity && world.Registry.all_of<LightComponent>(entity);

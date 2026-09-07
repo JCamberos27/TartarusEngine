@@ -127,6 +127,7 @@ void BuildDefaultTable() {
 
     // --- Edit (Global) ---
     Register("edit.duplicate",       "Duplicate (in place)",  Ctx_Global, Ck(ImGuiKey_D));
+    Register("edit.duplicateArray",  "Duplicate Array\xE2\x80\xA6", Ctx_Global, Chord{}); // unbound by default
     Register("edit.selectAll",       "Select All",            Ctx_Global, Ck(ImGuiKey_A));
     Register("edit.deselectAll",     "Deselect All",          Ctx_Global, CSk(ImGuiKey_A));
     Register("edit.invertSelection", "Invert Selection",      Ctx_Global, Ck(ImGuiKey_I));
@@ -135,6 +136,8 @@ void BuildDefaultTable() {
     Register("edit.paste",           "Paste",                 Ctx_Global, Ck(ImGuiKey_V));
     Register("edit.delete",          "Delete Selection",      Ctx_Global, K(ImGuiKey_Delete));
     Register("edit.rename",          "Rename Selection",      Ctx_Global, K(ImGuiKey_F2));
+    Register("select.historyBack",    "Selection: Back",      Ctx_Global, Ck(ImGuiKey_LeftBracket));
+    Register("select.historyForward", "Selection: Forward",   Ctx_Global, Ck(ImGuiKey_RightBracket));
 
     // --- GameObject (Global) ---
     Register("gameobject.createEmptyChild", "Create Empty Child",   Ctx_Global, CSk(ImGuiKey_N));
