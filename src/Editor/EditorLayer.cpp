@@ -1623,6 +1623,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawRecoveryPrompt(world, assets);
     DrawExitPrompt();
     DrawSceneSwitchPrompt(world, assets);
+    DrawRevertScenePrompt(world, assets);
     DrawPreferencesWindow(world);
     DrawProjectSettingsWindow(world);
     DrawScreenshotPreview();
@@ -2055,6 +2056,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             FocusOnSelection(world, editorCamera);
         if (HasAnySelection() && !assetBrowserOwnsKeys && Shortcuts::Triggered("edit.duplicate"))
             DuplicateSelection(world, assets, /*inPlace=*/true); // Ctrl+D duplicates without the (1,0,1) nudge (#236 F)
+        if (HasAnySelection() && !assetBrowserOwnsKeys && Shortcuts::Triggered("edit.duplicateArray"))
+            m_ShowArrayDuplicate = true;
 
         // Edit-menu selection ops (#236). The Hierarchy owns Ctrl+A when it's focused (select all
         // *visible* rows); elsewhere Ctrl+A selects every entity. Ctrl+Shift+A deselects, Ctrl+I
@@ -2064,6 +2067,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             else if (Shortcuts::Triggered("edit.selectAll"))      SelectAllEntities(world);
             else if (Shortcuts::Triggered("edit.invertSelection")) InvertSelection(world);
         }
+
+        if (Shortcuts::Triggered("select.historyBack"))    SelectionHistoryBack(world);
+        if (Shortcuts::Triggered("select.historyForward")) SelectionHistoryForward(world);
 
         // Ctrl+Shift+F — snap the selected Camera entity to the editor viewport (Unity's Align
         // With View). Mirrors the Inspector's "Align to View" button.
@@ -2230,6 +2236,28 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         DrawAddEntityItems(world, assets, editorCamera);
         ImGui::EndPopup();
     }
+
+    // Play-mode tint (#236 R2): a warm border + tag on the Scene viewport so it's obvious that
+    // edits made now are reverted on Stop.
+    if (m_InPlayMode && m_ViewportSize.x > 2.0f && m_ViewportSize.y > 2.0f) {
+        ImDrawList* dl = ImGui::GetForegroundDrawList();
+        const ImU32 col = IM_COL32(255, 140, 40, 210);
+        ImVec2 a(m_ViewportPos.x + 1.5f, m_ViewportPos.y + 1.5f);
+        ImVec2 b(m_ViewportPos.x + m_ViewportSize.x - 1.5f, m_ViewportPos.y + m_ViewportSize.y - 1.5f);
+        dl->AddRect(a, b, col, 0.0f, 0, 3.0f);
+        const char* tag = "PLAY MODE \xE2\x80\x94 changes revert on Stop";
+        ImVec2 ts = ImGui::CalcTextSize(tag);
+        ImVec2 tp(m_ViewportPos.x + m_ViewportSize.x * 0.5f - ts.x * 0.5f, m_ViewportPos.y + 6.0f);
+        dl->AddRectFilled(ImVec2(tp.x - 6.0f, tp.y - 2.0f), ImVec2(tp.x + ts.x + 6.0f, tp.y + ts.y + 2.0f),
+                          IM_COL32(20, 20, 24, 200), 3.0f);
+        dl->AddText(tp, col, tag);
+    }
+
+    DrawArrayDuplicateModal(world, assets); // #236 R2
+
+    // Fold this frame's selection into the back/forward history (#236 R2). Last thing in Draw,
+    // so it sees the net result of every panel and shortcut that ran this frame.
+    RecordSelectionHistory();
 }
 bool EditorLayer::AnyModalOpen() const {
     return ImGui::GetTopMostPopupModal() != nullptr;

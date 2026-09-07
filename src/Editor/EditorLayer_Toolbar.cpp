@@ -429,6 +429,12 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
             if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As...", "Ctrl+Shift+S")) {
                 DoSaveAs(world, assets);
             }
+            if (ImGui::MenuItem(ICON_FA_ROTATE_LEFT "  Revert Scene", nullptr, false,
+                                !m_CurrentScenePath.empty())) {
+                RequestRevertScene(world, assets); // #236 R2 — reload from disk, discard edits
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Reload the scene file from disk, discarding unsaved (and in-play) changes.");
             ImGui::Separator();
             {
                 std::string cur = std::filesystem::path(m_CurrentScenePath).filename().string();
@@ -474,6 +480,12 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
                 FrameSceneBounds(world, editorCamera);
             }
 
+            ImGui::SeparatorText("Selection");
+            if (ImGui::MenuItem(ICON_FA_ARROW_LEFT "  Selection Back", "Ctrl+[", false, CanSelectionHistoryBack()))
+                SelectionHistoryBack(world);
+            if (ImGui::MenuItem(ICON_FA_ARROW_RIGHT "  Selection Forward", "Ctrl+]", false, CanSelectionHistoryForward()))
+                SelectionHistoryForward(world);
+
             ImGui::SeparatorText("Shading");
             if (ImGui::MenuItem("  Shaded", nullptr, m_ShadingMode == ShadingMode::Shaded))
                 m_ShadingMode = ShadingMode::Shaded;
@@ -490,6 +502,21 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Move the camera to frame each object as you select it.");
             if (ImGui::MenuItem(ICON_FA_BORDER_ALL "  Orthographic", "5", editorCamera.Orthographic)) {
                 ToggleOrthographic(world, editorCamera);
+            }
+
+            ImGui::SeparatorText("Camera");
+            {
+                auto& cs = EditorSettings::Get();
+                ImGui::PushItemWidth(140.0f * m_UIScale);
+                if (ImGui::SliderFloat("FOV", &cs.SceneCameraFov, 30.0f, 110.0f, "%.0f\xC2\xB0")) {
+                    editorCamera.Fov = cs.SceneCameraFov;
+                }
+                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+                if (ImGui::SliderFloat("Fly speed", &cs.SceneCameraFlySpeed, 0.5f, 60.0f, "%.1f")) {}
+                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+                if (ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("Editor fly-camera speed (Shift = ×3). Also: scroll while holding right-drag.");
+                ImGui::PopItemWidth();
             }
 
             ImGui::SeparatorText("Snap to view");
