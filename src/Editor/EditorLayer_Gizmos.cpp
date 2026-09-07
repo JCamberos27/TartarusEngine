@@ -21,6 +21,7 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "LayerRegistry.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"
 #include "gl.h"
@@ -55,6 +56,7 @@
 #include <sstream>
 #include <fstream>
 #include <cmath>
+#include <cstdio>
 #include <cctype>
 #include <cstring>
 #include <functional>
@@ -64,6 +66,28 @@ using namespace EditorInternal;
 
 
 namespace {
+
+// #236 A1 — an entity is unclickable in the viewport when its layer's bit is set in the
+// editor's pick-lock mask. Hierarchy selection is unaffected. Absent LayerComponent == layer 0.
+inline bool ViewportPickLocked(const World& world, entt::entity e) {
+    const auto* lc = world.Registry.try_get<LayerComponent>(e);
+    const int layer = lc ? lc->Layer : 0;
+    if (layer < 0 || layer >= 32) return false;
+    return (EditorSettings::Get().LayerPickLockMask >> layer) & 1u;
+}
+
+// #236 B — SceneVis-lite: an entity that is hidden or locked in the Scene view is not
+// selectable there by click or marquee. Hierarchy selection and, once selected, the gizmo still
+// work — matching Unity's SceneVis lock.
+inline bool NotSceneSelectable(const World& world, entt::entity e) {
+    return world.Registry.all_of<HiddenInSceneTag>(e) || world.Registry.all_of<SceneLockedTag>(e);
+}
+
+// #236 A1 + B combined — skip an entity in any viewport pick loop when it's pick-locked by
+// layer or hidden/locked by SceneVis.
+inline bool ViewportUnpickable(const World& world, entt::entity e) {
+    return ViewportPickLocked(world, e) || NotSceneSelectable(world, e);
+}
 
 // TransformComponent is LOCAL space once an entity has a parent, so anything that manipulates an
 // entity in world space has to bracket the work with these two: read the world matrix, do the
@@ -126,11 +150,12 @@ inline glm::vec3 EulerYXZFromMatrix(const glm::mat4& m) {
 // "Transform" from the gizmo path only (#19 P8).
 const char* GizmoOpUndoLabel(GizmoOp op) {
     switch (op) {
-        case GizmoOp::Rotate: return "Rotate";
-        case GizmoOp::Scale:  return "Scale";
-        case GizmoOp::Rect:   return "Edit Bounds";
+        case GizmoOp::Rotate:    return "Rotate";
+        case GizmoOp::Scale:     return "Scale";
+        case GizmoOp::Rect:      return "Edit Bounds";
+        case GizmoOp::Universal: return "Transform";
         case GizmoOp::Translate:
-        default:              return "Move";
+        default:                 return "Move";
     }
 }
 
@@ -235,6 +260,51 @@ void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
     m_ViewTransition.ToPitch = editorCamera.Pitch;
     m_ViewTransition.ToOrthoHalfHeight = editorCamera.Orthographic
         ? (distance * std::tan(halfFov)) : editorCamera.OrthoHalfHeight;
+}
+
+// #236 E — Hand tool (Q): a left-drag that starts inside the Scene viewport pans the editor
+// camera parallel to the view plane, the same motion as a middle-mouse drag, with no picking or
+// gizmo interaction while the tool is active.
+void EditorLayer::HandleHandToolPan(Camera& editorCamera) {
+    ImGuiIO& io = ImGui::GetIO();
+    const bool overViewport =
+        m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f &&
+        io.MousePos.x >= m_ViewportPos.x && io.MousePos.x <= m_ViewportPos.x + m_ViewportSize.x &&
+        io.MousePos.y >= m_ViewportPos.y && io.MousePos.y <= m_ViewportPos.y + m_ViewportSize.y;
+
+    if (overViewport && !WantsCaptureMouse()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        m_HandPanActive = overViewport && !WantsCaptureMouse() && !m_ViewGizmoBlocking;
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) { m_HandPanActive = false; return; }
+    if (!m_HandPanActive) return;
+
+    // Same fixed rate as the middle-mouse pan in UpdateEditorCamera. Horizontal grabs the scene
+    // (drag right -> view moves left); vertical is inverted from that on purpose (drag down ->
+    // camera moves up), matching how the user expects the Hand tool to feel here.
+    const float kPanSpeed = 0.01f;
+    editorCamera.Position +=
+        (editorCamera.Up() * io.MouseDelta.y - editorCamera.Right() * io.MouseDelta.x) * kPanSpeed;
+}
+
+// #236 E — Lock View to Selected (Shift+F): each frame, shift the camera position by however
+// much the selection's centroid moved since last frame, so the camera rides along with a moving
+// selection without changing its orientation or zoom. Any manual reframe (F) or an empty
+// selection re-arms the tracking so re-acquiring a target never snaps the view.
+void EditorLayer::UpdateLockViewToSelection(World& world, Camera& editorCamera) {
+    if (!m_LockViewToSelection || m_ViewTransition.Active) { m_LockViewHasCentroid = false; return; }
+
+    glm::vec3 bmin, bmax;
+    if (!ComputeSelectionBounds(world, bmin, bmax)) { m_LockViewHasCentroid = false; return; }
+    const glm::vec3 centroid = (bmin + bmax) * 0.5f;
+
+    if (m_LockViewHasCentroid) {
+        const glm::vec3 delta = centroid - m_LockViewCentroid;
+        if (std::isfinite(delta.x) && std::isfinite(delta.y) && std::isfinite(delta.z))
+            editorCamera.Position += delta;
+    }
+    m_LockViewCentroid = centroid;
+    m_LockViewHasCentroid = true;
 }
 
 bool EditorLayer::CanSnapSelectionToGround(World& world) const {
@@ -790,6 +860,8 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         entt::entity best = entt::null;
         auto pickView = world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>);
         for (auto entity : pickView) {
+            if (ViewportPickLocked(world, entity)) continue;
+            if (NotSceneSelectable(world, entity)) continue; // #236 B
             const auto& renderable = pickView.get<const RenderableComponent>(entity);
             glm::mat4 model = world.ComposeWorldTransform(entity);
             AABB worldBounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(model);
@@ -812,6 +884,8 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
             entt::entity iconHit = entt::null;
             float iconDepth = 1e30f;
             for (auto entity : world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent, InactiveTag>)) {
+                if (ViewportPickLocked(world, entity)) continue;
+                if (NotSceneSelectable(world, entity)) continue; // #236 B
                 glm::mat4 model = world.ComposeWorldTransform(entity);
                 glm::vec3 worldPos = glm::vec3(model[3]);
                 glm::vec4 clip = viewProj * glm::vec4(worldPos, 1.0f);
@@ -875,6 +949,8 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
 
     auto entityView = world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>);
     for (auto entity : entityView) {
+        if (ViewportPickLocked(world, entity)) continue;
+        if (NotSceneSelectable(world, entity)) continue; // #236 B
         const auto& renderable = entityView.get<const RenderableComponent>(entity);
         glm::mat4 model = world.ComposeWorldTransform(entity);
         AABB bounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(model);
@@ -888,6 +964,8 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
     // them the same way a plain click does: test their on-screen icon position (same math as
     // the icon-proximity pick above) against the drag rectangle.
     for (auto entity : world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent, InactiveTag>)) {
+        if (ViewportPickLocked(world, entity)) continue;
+        if (NotSceneSelectable(world, entity)) continue; // #236 B
         glm::mat4 model = world.ComposeWorldTransform(entity);
         glm::vec3 worldPos = glm::vec3(model[3]);
         glm::vec4 clip = viewProj * glm::vec4(worldPos, 1.0f);
@@ -1511,6 +1589,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     if (m_GizmoOp == GizmoOp::Rotate) op = ImGuizmo::ROTATE;
     else if (m_GizmoOp == GizmoOp::Scale) op = ImGuizmo::SCALE;
     else if (m_GizmoOp == GizmoOp::Rect) op = ImGuizmo::OPERATION(ImGuizmo::TRANSLATE | ImGuizmo::BOUNDS);
+    else if (m_GizmoOp == GizmoOp::Universal) op = ImGuizmo::UNIVERSAL; // #236 E — one gizmo, all three
 
     glm::mat4 matrix = parentWorld * ComposeTransform(transform);
 
@@ -1544,8 +1623,12 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     bool isUsingNow = ImGuizmo::IsUsing();
     if (isUsingNow && !m_GizmoWasUsing) {
         // Drag just started this frame: snapshot the still-unmodified transform (pos/rot/scale
-        // below haven't been written yet) so undo restores to exactly where the drag began.
+        // below haven't been written yet) so undo restores to exactly where the drag began, and
+        // so the live readout below can show a delta from here (#236 E).
         PushUndo(world, GizmoOpUndoLabel(m_GizmoOp));
+        m_GizmoDragStartPos = transform.Position;
+        m_GizmoDragStartRot = transform.RotationEuler;
+        m_GizmoDragStartScale = transform.Scale;
     }
     m_GizmoWasUsing = isUsingNow;
 
@@ -1572,15 +1655,137 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
             case GizmoOp::Translate: transform.Position = newPos;      break;
             case GizmoOp::Rotate:    transform.RotationEuler = newRot;  break;
             case GizmoOp::Scale:     transform.Scale = newScale;        break;
-            default: // Rect / bounds edit resizes from a handle — position and scale both move
+            default: // Rect / Universal / bounds edit — position and scale both move
                 transform.Position = newPos;
                 transform.RotationEuler = newRot;
                 transform.Scale = newScale;
                 break;
         }
+
+        // #236 E — surface drag-snapping: while translating with the toggle on (hold Shift to
+        // invert), override the axis-handle result: drop the object where the cursor ray hits
+        // another surface, optionally aligning to that face's normal.
+        if (m_GizmoOp == GizmoOp::Translate && (m_SurfaceSnap != ImGui::GetIO().KeyShift)) {
+            ApplySurfaceSnap(world, editorCamera, m_Selected, parentWorld);
+            const ImVec2 mp = ImGui::GetIO().MousePos;
+            ImGui::GetForegroundDrawList()->AddText(ImVec2(mp.x + 18.0f, mp.y - 20.0f),
+                IM_COL32(120, 220, 160, 255),
+                m_SurfaceSnapAlign ? "surface + align" : "surface");
+        }
+        DrawGizmoDragReadout(transform.Position, transform.RotationEuler, transform.Scale);
     }
 
     EndGizmoOverlay();
+}
+
+// #236 E — a small readout near the cursor while a gizmo is dragging: the delta from where the
+// drag started, in the units that match the active tool.
+void EditorLayer::DrawGizmoDragReadout(const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scale) {
+    char buf[96];
+    switch (m_GizmoOp) {
+        case GizmoOp::Rotate: {
+            glm::vec3 d = rot - m_GizmoDragStartRot;
+            std::snprintf(buf, sizeof(buf), "R  %+.1f  %+.1f  %+.1f deg", d.x, d.y, d.z);
+            break;
+        }
+        case GizmoOp::Scale: {
+            std::snprintf(buf, sizeof(buf), "S  %.3f  %.3f  %.3f", scale.x, scale.y, scale.z);
+            break;
+        }
+        default: { // Translate / Rect / Universal
+            glm::vec3 d = pos - m_GizmoDragStartPos;
+            std::snprintf(buf, sizeof(buf), "T  %+.2f  %+.2f  %+.2f  (|%.2f|)",
+                          d.x, d.y, d.z, glm::length(d));
+            break;
+        }
+    }
+    const ImVec2 mp = ImGui::GetIO().MousePos;
+    const ImVec2 at(mp.x + 18.0f, mp.y + 18.0f);
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    const ImVec2 ts = ImGui::CalcTextSize(buf);
+    dl->AddRectFilled(ImVec2(at.x - 5.0f, at.y - 3.0f),
+                      ImVec2(at.x + ts.x + 5.0f, at.y + ts.y + 3.0f),
+                      IM_COL32(20, 20, 24, 220), 3.0f);
+    dl->AddText(at, IM_COL32(255, 255, 255, 255), buf);
+}
+
+void EditorLayer::ApplySurfaceSnap(World& world, Camera& editorCamera, entt::entity sel,
+                                   const glm::mat4& parentWorld) {
+    const float w = m_ViewportSize.x, h = m_ViewportSize.y;
+    if (w <= 1.0f || h <= 1.0f || !world.Registry.valid(sel)) return;
+
+    const glm::mat4 view = editorCamera.ViewMatrix();
+    const glm::mat4 proj = editorCamera.ProjectionMatrix(w / h);
+    const glm::mat4 invVP = glm::inverse(proj * view);
+    const ImVec2 m = ImGui::GetIO().MousePos;
+    const float ndcX = (2.0f * (m.x - m_ViewportPos.x)) / w - 1.0f;
+    const float ndcY = 1.0f - (2.0f * (m.y - m_ViewportPos.y)) / h;
+    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
+    glm::vec4 farP  = invVP * glm::vec4(ndcX, ndcY,  1.0f, 1.0f);
+    nearP /= nearP.w; farP /= farP.w;
+    const glm::vec3 origin = glm::vec3(nearP);
+    const glm::vec3 dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
+
+    // Never snap to the moving object itself or anything parented under it.
+    auto isSelfOrChild = [&](entt::entity e) {
+        for (entt::entity c = e; c != entt::null; ) {
+            if (c == sel) return true;
+            const auto* hp = world.Registry.try_get<HierarchyComponent>(c);
+            c = hp ? hp->Parent : entt::null;
+        }
+        return false;
+    };
+
+    float bestT = 1e30f;
+    AABB bestBounds{};
+    bool hit = false;
+    for (auto e : world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>)) {
+        if (isSelfOrChild(e)) continue;
+        const auto& r = world.Registry.get<const RenderableComponent>(e);
+        AABB wb = AABB{r.ModelRef->BoundsMin(), r.ModelRef->BoundsMax()}
+                     .Transformed(world.ComposeWorldTransform(e));
+        float t;
+        if (wb.RayIntersect(origin, dir, t) && t > 1e-3f && t < bestT) { bestT = t; bestBounds = wb; hit = true; }
+    }
+    if (!hit) return;
+
+    const glm::vec3 p = origin + dir * bestT;
+
+    // Axis-aligned face normal: the axis on which the hit point sits at the box boundary.
+    const glm::vec3 c = (bestBounds.Min + bestBounds.Max) * 0.5f;
+    const glm::vec3 ext = glm::max((bestBounds.Max - bestBounds.Min) * 0.5f, glm::vec3(1e-5f));
+    const glm::vec3 a = glm::abs((p - c) / ext);
+    glm::vec3 n(0.0f);
+    if (a.x >= a.y && a.x >= a.z)      n.x = (p.x >= c.x) ? 1.0f : -1.0f;
+    else if (a.y >= a.z)              n.y = (p.y >= c.y) ? 1.0f : -1.0f;
+    else                             n.z = (p.z >= c.z) ? 1.0f : -1.0f;
+
+    // Lift the object so its footprint rests on the surface rather than its origin sinking to it.
+    glm::vec3 dropWorld = p;
+    const glm::mat4 selWorld = world.ComposeWorldTransform(sel);
+    if (const auto* selR = world.Registry.try_get<RenderableComponent>(sel)) {
+        const AABB sw = AABB{selR->ModelRef->BoundsMin(), selR->ModelRef->BoundsMax()}.Transformed(selWorld);
+        const glm::vec3 selCtr = (sw.Min + sw.Max) * 0.5f;
+        const glm::vec3 selOrigin = glm::vec3(selWorld[3]);
+        const float halfAlong = 0.5f * std::abs(glm::dot(sw.Max - sw.Min, glm::abs(n)));
+        const float originToCtr = glm::dot(selCtr - selOrigin, n);
+        dropWorld = p + n * (halfAlong - originToCtr);
+    }
+
+    auto& transform = world.Registry.get<TransformComponent>(sel);
+    transform.Position = glm::vec3(glm::inverse(parentWorld) * glm::vec4(dropWorld, 1.0f));
+
+    if (m_SurfaceSnapAlign) {
+        const glm::vec3 up = n;
+        const glm::vec3 ref = (std::abs(up.y) > 0.99f) ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
+        const glm::vec3 fwd = glm::normalize(glm::cross(ref, up));
+        const glm::vec3 right = glm::cross(up, fwd);
+        glm::mat4 rot(1.0f);
+        rot[0] = glm::vec4(right, 0.0f);
+        rot[1] = glm::vec4(up, 0.0f);
+        rot[2] = glm::vec4(fwd, 0.0f);
+        transform.RotationEuler = EulerYXZFromMatrix(glm::inverse(parentWorld) * rot);
+    }
 }
 
 void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
@@ -1790,6 +1995,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     ImGuizmo::OPERATION op = ImGuizmo::TRANSLATE;
     if (m_GizmoOp == GizmoOp::Rotate) op = ImGuizmo::ROTATE;
     else if (m_GizmoOp == GizmoOp::Scale) op = ImGuizmo::SCALE;
+    else if (m_GizmoOp == GizmoOp::Universal) op = ImGuizmo::UNIVERSAL; // #236 E
 
     // Only re-center the pivot on the group's current average position when a drag ISN'T in
     // progress — while one is, m_GroupGizmoMatrix is the evolving frame of reference and

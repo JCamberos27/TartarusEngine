@@ -28,7 +28,7 @@ class Framebuffer;
 
 // Rect = Unity's "Rect Tool" adapted to 3D: translate handles plus bounding-box corner/edge
 // handles for non-uniform scaling, in one combined gizmo (ImGuizmo's TRANSLATE | BOUNDS).
-enum class GizmoOp { Translate, Rotate, Scale, Rect };
+enum class GizmoOp { Translate, Rotate, Scale, Rect, Universal }; // Universal (Y) = move+rotate+scale in one (#236 E)
 
 // One tile in the Asset Browser grid. Built once per frame by EditorLayer::AssetGridFrameBegin
 // into m_AssetGridCells and read by DrawAssetCell (#229: the grid's clipper/row-wrap scaffold
@@ -104,7 +104,12 @@ public:
     void SetTitleBarDragHovered(bool hovered) { m_TitleBarDragHovered = hovered; }
 
     int  GizmoOpIndex() const { return (int)m_GizmoOp; }
-    void SetGizmoOpIndex(int op) { m_GizmoOp = (GizmoOp)op; }
+    void SetGizmoOpIndex(int op) { m_GizmoOp = (GizmoOp)op; m_HandTool = false; } // picking a gizmo tool exits the Hand tool
+    // Viewport tools (#236 E) — Hand tool (Q) and Lock View to Selected (Shift+F).
+    bool HandToolActive() const { return m_HandTool; }
+    void SetHandToolActive(bool on) { m_HandTool = on; }
+    bool LockViewToSelection() const { return m_LockViewToSelection; }
+    void SetLockViewToSelection(bool on) { m_LockViewToSelection = on; m_LockViewHasCentroid = false; }
     int  ShadingModeIndex() const { return (int)m_ShadingMode; }
     void SetShadingModeIndex(int m) { m_ShadingMode = (ShadingMode)m; }
     bool GizmoLocalSpace() const { return m_GizmoLocalSpace; }
@@ -120,6 +125,7 @@ public:
     void SetShowHistory(bool on) { m_ShowHistory = on; }
     void RequestResetLayout() { m_ResetLayoutRequested = true; }
     void OpenPreferences() { m_ShowPreferences = true; }
+    void OpenProjectSettings() { m_ShowProjectSettings = true; }
 
     // Thin forwarders so the non-member host glue (HotReloadEditorModule.cpp) can invoke these;
     // the real methods stay private with their existing call sites. World/Assets/Camera are the
@@ -556,6 +562,15 @@ private:
     // material and its texture maps), Unity-style, with a mixed-value dash for properties that
     // differ across the selection.
     std::vector<entt::entity> m_ExtraSelection;
+
+    // #236 C — Inspector lock (padlock). While locked, the Inspector body renders these instead
+    // of the live selection, so you can keep an object's fields on screen while clicking /
+    // moving other objects in the viewport. Snapshotted from the live selection when the lock is
+    // engaged; auto-cleared once every locked entity is gone.
+    bool m_InspectorLocked = false;
+    entt::entity m_InspLockSelected = entt::null;
+    std::vector<entt::entity> m_InspLockExtra;
+
     glm::mat4 m_GroupGizmoMatrix{1.0f}; // pivot frame for the multi-select gizmo, updated across a drag
 
     // The Hierarchy's flattened top-to-bottom order of currently-visible rows (respects group
@@ -588,6 +603,10 @@ private:
     // a short idle gap, matching every OS file list).
     std::string m_HierarchyTypeAhead;
     double m_HierarchyTypeAheadAt = 0.0;
+    // #236 B — spring-loaded folders: the collapsed row the drag cursor is dwelling on, and when
+    // that dwell began. Reset when the cursor leaves it or a drag ends.
+    entt::entity m_HierarchySpringRow = entt::null;
+    double m_HierarchySpringSince = 0.0;
     // Shift+Click on `target`: select every row between m_SelectionAnchor and `target`
     // inclusive along m_HierarchyVisibleOrder. `additive` (Ctrl+Shift) keeps the existing
     // selection and adds the range; otherwise the range replaces it. `target` becomes primary.
@@ -684,6 +703,13 @@ private:
     bool m_ShowPreferences = false;
     int m_PrefsCategory = 0;
     std::string m_PrefsShortcutFilter;
+
+    // Project Settings window (#236 A4) — project-scoped (project/settings.json + layers.json),
+    // kept separate from the per-user Preferences window above.
+    void DrawProjectSettingsWindow(World& world);
+    bool m_ShowProjectSettings = false;
+    int m_ProjSettingsCategory = 0;
+    char m_NewTagBuf[48] = {};
 public:
     // The launch-time system report (OS/CPU/RAM/GPU/GL/display/build), built by main.cpp.
     // Shown in Preferences > About.
@@ -703,6 +729,17 @@ private:
     float m_GizmoSize = 0.09f;      // Compact reach keeps the axes close to the selected object.
     bool m_GizmoEngaged = false;
     bool m_GizmoWasUsing = false;
+
+    // Viewport tools (#236 E). Transient session state — not persisted.
+    bool m_HandTool = false;               // Q: LMB-drag pans the editor camera; no picking / gizmo.
+    bool m_LockViewToSelection = false;    // Shift+F: camera position tracks the selection centroid (no reframing).
+    glm::vec3 m_LockViewCentroid{0.0f};
+    bool m_LockViewHasCentroid = false;
+    bool m_HandPanActive = false;         // a Hand-tool left-drag is in progress (started over the viewport)
+    // Live gizmo drag readout: the transform at the instant a drag began, for the delta text.
+    glm::vec3 m_GizmoDragStartPos{0.0f};
+    glm::vec3 m_GizmoDragStartRot{0.0f};
+    glm::vec3 m_GizmoDragStartScale{1.0f};
     bool m_PrevLeftMouseDown = false;
 
     // Box/marquee select: press-drag-release in empty viewport space. Whether it turns out to
@@ -722,6 +759,10 @@ private:
     float m_SnapTranslation = 1.0f;
     float m_SnapRotationDeg = 15.0f;
     float m_SnapScale = 0.1f;
+    // #236 E — surface drag-snapping: while a translate drag is active, drop the object where
+    // the cursor ray hits another surface. Hold Shift to invert the toggle momentarily.
+    bool m_SurfaceSnap = false;
+    bool m_SurfaceSnapAlign = false;  // also orient local +Y to the hit surface normal
     // How close (screen pixels) the cursor must be to a vertex to grab/preview/snap onto it —
     // one setting governs the hover circle, the initial grab, AND the drag-time snap search,
     // so "the circle is showing" and "this will snap" always mean the same thing.
@@ -1074,6 +1115,15 @@ private:
     void RefreshShotsListingIfNeeded();
     void InvalidateScenesListing() { m_ScenesListingCache.valid = false; }
     void InvalidateShotsListing() { m_ShotsListingCache.valid = false; }
+public:
+    // #236 G — Refresh / Reimport All (Ctrl+R): bust every Asset Browser cache so the next frame
+    // re-scans the scenes/ and screenshots/ folders and re-renders thumbnails from disk.
+    void RefreshAssetBrowser();
+    // Seconds left on the post-refresh confirmation flash (0 = none). The module reads this to
+    // show a brief "Assets refreshed" indicator, since Ctrl+R gives no other visible feedback.
+    float AssetRefreshFlash() const { return m_AssetRefreshFlash; }
+private:
+    float m_AssetRefreshFlash = 0.0f;
 
     // The screenshot lightbox (DrawScreenshotPreview). Its own full-res Texture, not a m_ShotThumbs
     // entry, so it survives that map being pruned and isn't size-capped to the thumbnail budget.
@@ -1362,6 +1412,12 @@ private:
     glm::vec3 m_LightHandleGrabAxis{0.0f}; // world direction the grabbed dot slides along
     float m_LightHandleGrabParam = 0.0f;  // aim-handle distance captured at grab time
     void HandleViewportPicking(World& world, Camera& editorCamera);
+    void HandleHandToolPan(Camera& editorCamera);              // #236 E — Hand tool (Q)
+    void UpdateLockViewToSelection(World& world, Camera& editorCamera); // #236 E — Lock View (Shift+F)
+    void DrawGizmoDragReadout(const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scale); // #236 E
+    // #236 E — during a translate drag with surface-snap on: move `sel` to where the cursor ray
+    // hits another entity's surface (optionally aligning its local +Y to that normal).
+    void ApplySurfaceSnap(World& world, Camera& editorCamera, entt::entity sel, const glm::mat4& parentWorld);
     // Blender/Godot-style navigation gizmo (ImViewGuizmo) pinned to the viewport's top-right
     // corner: a rotate ring plus small dolly/pan buttons underneath. Camera is yaw/pitch, not
     // quaternion, so this converts to/from a quaternion around the call into the library.

@@ -87,6 +87,25 @@ struct InactiveTag {};
 // the distinction already recorded, rather than needing a re-pass once that optimization lands.
 struct StaticTag {};
 
+// Unity's layer field, "-lite" (#236 A1): a small integer slot (0..LayerRegistry::kCount-1)
+// grouping entities for editor visibility / pick-locking, camera culling, and (later) PhysX
+// collision filtering. Slot 0 is "Default"; the component is omitted entirely for it, so an
+// entity on the default layer costs nothing — same zero-default pattern as the tags above.
+// Human-readable slot names live in project/layers.json (LayerRegistry), not on the component.
+struct LayerComponent {
+    int Layer = 0;
+};
+// SceneVis-lite (#236 B), the editor-only counterparts of Unity's Scene-view hand/lock columns.
+// Unlike InactiveTag these change nothing about the object itself — it still renders in the
+// Game view, still collides, still ticks, still saves:
+//   HiddenInSceneTag — not drawn in the editor Scene viewport, and not click-/marquee-pickable
+//                      there (a decluttering aid; the object is still "there").
+//   SceneLockedTag   — still drawn in the Scene viewport, but not click-/marquee-pickable, so a
+//                      finished piece of set dressing can't be grabbed by accident. Hierarchy
+//                      selection and the gizmo still work once selected.
+struct HiddenInSceneTag {};
+struct SceneLockedTag {};
+
 // A dynamic light. Point/Spot use the entity's world position; Directional (the sun) ignores
 // position and takes its travel direction from the entity's -Z axis (rotate the entity to aim
 // it), matching the spot-cone convention. Every kind goes through the same LightBuffer SSBO and
@@ -211,4 +230,18 @@ struct SpinComponent {
 struct HierarchyComponent {
     entt::entity Parent = entt::null;
     std::vector<entt::entity> Children;
+};
+
+// Marks the ROOT of a live prefab instance (#236 A2, stage 1-2). The scene file stores only a
+// stub for this entity — the source path plus the root's own transform / name / active / layer
+// (the "transform-only overrides") — and NOT its descendants; on load the subtree is rebuilt
+// from SourcePath and those overrides re-applied on top. So edits to the prefab asset propagate
+// to every instance on the next load, while each instance keeps its own placement.
+// Descendants carry no marker: the serializer recomputes the owned set from this root each save.
+// "Unpack Prefab" removes this component, turning the subtree into plain scene entities.
+struct PrefabInstanceComponent {
+    std::string SourcePath;
+    // Runtime-only: set when SourcePath couldn't be opened on load, so the instance is shown as
+    // a broken placeholder rather than silently vanishing. Never serialised.
+    bool Missing = false;
 };
