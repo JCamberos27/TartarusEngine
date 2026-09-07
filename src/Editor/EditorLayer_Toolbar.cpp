@@ -513,22 +513,24 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             ImGui::SeparatorText("Camera");
             {
                 auto& cs = EditorSettings::Get();
-                ImGui::PushItemWidth(140.0f * m_UIScale);
-                if (ImGui::SliderFloat("FOV", &cs.SceneCameraFov, 30.0f, 110.0f, "%.0f\xC2\xB0")) {
+                ImGui::PushItemWidth(190.0f * m_UIScale);
+                if (EditorUI::SliderFloat("FOV", &cs.SceneCameraFov, 30.0f, 110.0f, "%.0f\xC2\xB0")) {
                     editorCamera.Fov = cs.SceneCameraFov;
                 }
                 if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
-                if (ImGui::SliderFloat("Fly speed", &cs.SceneCameraFlySpeed, 0.5f, 60.0f, "%.1f")) {}
+                if (EditorUI::SliderFloat("Fly speed", &cs.SceneCameraFlySpeed, 0.5f, 60.0f, "%.1f")) {}
                 if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
                 if (ImGui::IsItemHovered())
                     EditorUI::SetTooltip("Editor fly-camera speed (Shift = ×3). Also: scroll while holding right-drag.");
 
-                if (ImGui::DragFloat("Near", &cs.SceneCameraNear, 0.01f, 0.001f, 10.0f, "%.3f")) {
+                if (EditorUI::SliderFloat("Near", &cs.SceneCameraNear, 0.001f, 10.0f, "%.3f",
+                                          ImGuiSliderFlags_Logarithmic)) {
                     cs.SceneCameraNear = std::min(cs.SceneCameraNear, cs.SceneCameraFar - 0.01f);
                     editorCamera.NearPlane = cs.SceneCameraNear;
                 }
                 if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
-                if (ImGui::DragFloat("Far", &cs.SceneCameraFar, 1.0f, 1.0f, 10000.0f, "%.0f")) {
+                if (EditorUI::SliderFloat("Far", &cs.SceneCameraFar, 1.0f, 10000.0f, "%.0f",
+                                          ImGuiSliderFlags_Logarithmic)) {
                     cs.SceneCameraFar = std::max(cs.SceneCameraFar, cs.SceneCameraNear + 0.01f);
                     editorCamera.FarPlane = cs.SceneCameraFar;
                 }
