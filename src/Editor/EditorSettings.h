@@ -100,6 +100,10 @@ struct EditorSettings {
     float SceneCameraNear = 0.05f;
     float SceneCameraFar = 500.0f;
 
+    // View ▸ Mute Audio (#236 R2) — master-mutes the audio engine. Persisted so a muted
+    // session stays muted after a restart.
+    bool AudioMuted = false;
+
     std::string GameViewPresetLabel = "Free Aspect";
     int GameViewPresetWidth = 0;
     int GameViewPresetHeight = 0;

@@ -574,6 +574,56 @@ void EditorLayer::Shutdown() {
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 }
+// --- Layout presets (#236 R2 toolbar tail) — named ImGui-ini snapshots in project/layouts/ ---
+namespace {
+std::string LayoutsDir() { return ProjectPaths::Resolve("layouts"); }
+std::string SanitizeLayoutName(const std::string& in) {
+    std::string s;
+    for (char c : in) if (std::isalnum((unsigned char)c) || c == ' ' || c == '-' || c == '_') s += c;
+    while (!s.empty() && s.front() == ' ') s.erase(s.begin());
+    while (!s.empty() && s.back() == ' ') s.pop_back();
+    if (s.size() > 48) s.resize(48);
+    return s;
+}
+}
+
+std::vector<std::string> EditorLayer::LayoutPresetNames() const {
+    std::vector<std::string> names;
+    std::error_code ec;
+    for (const auto& e : std::filesystem::directory_iterator(LayoutsDir(), ec)) {
+        if (ec) break;
+        if (e.is_regular_file() && e.path().extension() == ".ini")
+            names.push_back(e.path().stem().string());
+    }
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+void EditorLayer::SaveLayoutPreset(const std::string& rawName) {
+    const std::string name = SanitizeLayoutName(rawName);
+    if (name.empty()) { Log::Warn("Layout preset: name is empty after sanitising."); return; }
+    std::error_code ec;
+    std::filesystem::create_directories(LayoutsDir(), ec);
+    const std::string path = LayoutsDir() + "/" + name + ".ini";
+    std::ofstream out(path, std::ios::binary);
+    if (!out) { Log::Error("Layout preset: couldn't write '" + path + "'."); return; }
+    out << ImGui::SaveIniSettingsToMemory(nullptr);
+    Log::Info("Saved layout preset: " + name);
+}
+
+void EditorLayer::RequestLoadLayoutPreset(const std::string& name) {
+    const std::string path = LayoutsDir() + "/" + SanitizeLayoutName(name) + ".ini";
+    std::ifstream in(path, std::ios::binary);
+    if (!in) { Log::Error("Layout preset: '" + name + "' not found."); return; }
+    std::stringstream ss; ss << in.rdbuf();
+    m_PendingLayoutIni = ss.str(); // Draw() applies it before the dockspace is built
+}
+
+void EditorLayer::DeleteLayoutPreset(const std::string& name) {
+    std::error_code ec;
+    std::filesystem::remove(LayoutsDir() + "/" + SanitizeLayoutName(name) + ".ini", ec);
+}
+
 // --- Lighting panel + shared section helpers (#236 R2) -----------------------------------
 void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
     ImGui::ColorEdit3("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
@@ -1736,6 +1786,14 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // Stash it while "##DockHost" is the current window — KeepDockspaceAlive() runs later with
     // no window pushed and can't re-derive the same id itself (see its comment).
     m_EditorDockspaceId = dockspaceId;
+    // Layout preset requested (#236 R2): apply the saved ImGui-ini snapshot before the
+    // dockspace is built this frame, so every docked window lands where the preset put it.
+    if (!m_PendingLayoutIni.empty()) {
+        ImGui::LoadIniSettingsFromMemory(m_PendingLayoutIni.c_str(), m_PendingLayoutIni.size());
+        m_PendingLayoutIni.clear();
+        m_ShowHierarchy = m_ShowInspector = m_ShowAssetBrowser = true; // never leave a core panel hidden
+    }
+
     bool rebuildLayout = m_ResetLayoutRequested;
     m_ResetLayoutRequested = false;
     // Reset Layout also un-hides any panel the user closed — otherwise "restore the default
@@ -2296,6 +2354,32 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
 
     DrawArrayDuplicateModal(world, assets); // #236 R2
+
+    // Save-layout-preset name prompt (#236 R2).
+    if (m_ShowSaveLayout) {
+        if (!ImGui::IsPopupOpen("Save Layout##SaveLayout")) ImGui::OpenPopup("Save Layout##SaveLayout");
+        ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        if (ImGui::BeginPopupModal("Save Layout##SaveLayout", &m_ShowSaveLayout, ImGuiWindowFlags_AlwaysAutoResize)) {
+            if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+            const bool enter = ImGui::InputTextWithHint("##layoutname", "Preset name", m_SaveLayoutName,
+                sizeof(m_SaveLayoutName), ImGuiInputTextFlags_EnterReturnsTrue);
+            ImGui::Separator();
+            const bool named = m_SaveLayoutName[0] != '\0';
+            ImGui::BeginDisabled(!named);
+            if (PrimaryButton("Save", ImVec2(110.0f, 0.0f)) || (enter && named)) {
+                SaveLayoutPreset(m_SaveLayoutName);
+                m_ShowSaveLayout = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            if (PrimaryButton("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                m_ShowSaveLayout = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+    }
 
     // Fold this frame's selection into the back/forward history (#236 R2). Last thing in Draw,
     // so it sees the net result of every panel and shortcut that ran this frame.

@@ -270,6 +270,13 @@ void AudioEngine::StopAll() {
     for (uint32_t i = 0; i < s_Voices.size(); ++i) FreeSlot(i);
 }
 
+static bool s_Muted = false;
+void AudioEngine::SetMuted(bool muted) {
+    s_Muted = muted;
+    if (s_Initialized) ma_engine_set_volume(&s_Engine, muted ? 0.0f : 1.0f);
+}
+bool AudioEngine::IsMuted() { return s_Muted; }
+
 void AudioEngine::PlayPreview(const std::string& path) {
     StopPreview();
     if (!s_Initialized) return;

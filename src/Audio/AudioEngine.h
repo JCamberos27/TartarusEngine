@@ -62,6 +62,12 @@ public:
 
     static void StopAll();
 
+    // Master mute — silences the whole engine output without stopping any voice (they keep
+    // their playback position, so unmuting resumes mid-clip). Used by the editor's
+    // View ▸ Mute Audio toggle (#236 R2 toolbar tail).
+    static void SetMuted(bool muted);
+    static bool IsMuted();
+
     // Asset Browser preview playback: at most one preview plays at a time — starting a new
     // one (even for a different file) stops whatever was previewing before it, so a Play/Stop
     // toggle per row always reflects reality.
