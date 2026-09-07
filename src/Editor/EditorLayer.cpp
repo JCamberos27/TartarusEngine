@@ -919,8 +919,9 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         static const std::pair<const char*, const char*> kShortcuts[] = {
             {"Fly camera", "hold RMB + WASDQE"},
             {"Zoom / dolly", "scroll wheel  ·  Alt+RMB drag"},
-            {"Pan view", "middle-drag"},
+            {"Pan view", "middle-drag  ·  Hand tool (Q) + left-drag"},
             {"Orbit selection", "Alt + left-drag"},
+            {"Lock view to selection (camera follows)", "Shift+F"},
             {"View presets", "1 / 3 / 7 / 0  (or numpad; Ctrl = opposite side)"},
             {"Toggle orthographic", "5  (or numpad 5)"},
             {"Frame selection", "F"},
@@ -929,7 +930,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             {"Toggle Active State (selection)", "Alt+Shift+A"},
             {"Select All / Deselect / Invert", "Ctrl+A / Ctrl+Shift+A / Ctrl+I"},
             {"Align selected Camera to view", "Ctrl+Shift+F"},
-            {"Gizmo: move / rotate / scale / rect", "W / E / R / T"},
+            {"Tools: hand / move / rotate / scale / rect / transform", "Q / W / E / R / T / Y"},
             {"Vertex grab", "hold V"},
             {"Multi-select", "Ctrl+Click  ·  drag a box"},
             {"Undo / Redo", "Ctrl+Z / Ctrl+Y"},
@@ -1788,10 +1789,15 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if (!m_HideOverlaysThisFrame) DrawViewGizmo(world, editorCamera);
 
     if (!vHeld) {
-        UpdateLightHandles(world, editorCamera);
-        HandleViewportPicking(world, editorCamera);
-        if (m_ShowGizmos && m_GizmosMasterVisible && !m_HideOverlaysThisFrame) DrawGizmo(world, editorCamera);
+        if (m_HandTool) {
+            HandleHandToolPan(editorCamera); // Q — LMB-drag pans; no picking or gizmo (#236 E)
+        } else {
+            UpdateLightHandles(world, editorCamera);
+            HandleViewportPicking(world, editorCamera);
+            if (m_ShowGizmos && m_GizmosMasterVisible && !m_HideOverlaysThisFrame) DrawGizmo(world, editorCamera);
+        }
     }
+    UpdateLockViewToSelection(world, editorCamera); // Shift+F — camera follows the selection centroid (#236 E)
 
     // Anchored to the actual viewport's top-center (a pivot, not a fixed-width guess) so it
     // stays centered over the 3D view itself as the Hierarchy/Inspector/Asset Browser panels
@@ -1833,10 +1839,14 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // WASDQE fly the camera during Right-drag instead (see main.cpp's UpdateEditorCamera),
         // so without this guard just walking forward with W would also switch tools every time.
         if (!ImGui::IsMouseDown(ImGuiMouseButton_Right) && !hierarchyOwnsLetters) {
-            if (ImGui::IsKeyPressed(ImGuiKey_W)) m_GizmoOp = GizmoOp::Translate;
-            if (ImGui::IsKeyPressed(ImGuiKey_E)) m_GizmoOp = GizmoOp::Rotate;
-            if (ImGui::IsKeyPressed(ImGuiKey_R)) m_GizmoOp = GizmoOp::Scale;
-            if (ImGui::IsKeyPressed(ImGuiKey_T)) m_GizmoOp = GizmoOp::Rect;
+            // Q/W/E/R/T/Y viewport tools (Unity's scheme, + Y for the combined gizmo, #236 E).
+            // Selecting any transform tool exits the Hand tool.
+            if (ImGui::IsKeyPressed(ImGuiKey_Q)) m_HandTool = true;
+            if (ImGui::IsKeyPressed(ImGuiKey_W)) { m_GizmoOp = GizmoOp::Translate; m_HandTool = false; }
+            if (ImGui::IsKeyPressed(ImGuiKey_E)) { m_GizmoOp = GizmoOp::Rotate;    m_HandTool = false; }
+            if (ImGui::IsKeyPressed(ImGuiKey_R)) { m_GizmoOp = GizmoOp::Scale;     m_HandTool = false; }
+            if (ImGui::IsKeyPressed(ImGuiKey_T)) { m_GizmoOp = GizmoOp::Rect;      m_HandTool = false; }
+            if (ImGui::IsKeyPressed(ImGuiKey_Y)) { m_GizmoOp = GizmoOp::Universal; m_HandTool = false; }
             // Shift+A quick-add (Blender's binding) — opens the Add menu as a popup at the
             // cursor. Guarded with the others so fly-mode's A (strafe left) doesn't trigger it.
             if (io.KeyShift && !io.KeyCtrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_A)) {
@@ -1883,7 +1893,10 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         bool assetBrowserOwnsKeys = m_AssetBrowserFocused &&
             (!m_SelectedAssetKey.empty() || !m_ExtraAssetSelection.empty());
 
-        if (HasAnySelection() && !assetBrowserOwnsKeys && !hierarchyOwnsLetters && ImGui::IsKeyPressed(ImGuiKey_F)) FocusOnSelection(world, editorCamera);
+        if (HasAnySelection() && !assetBrowserOwnsKeys && !hierarchyOwnsLetters && ImGui::IsKeyPressed(ImGuiKey_F)) {
+            if (io.KeyShift) SetLockViewToSelection(!m_LockViewToSelection); // Shift+F — toggle camera-follow (#236 E)
+            else             FocusOnSelection(world, editorCamera);
+        }
         if (HasAnySelection() && !assetBrowserOwnsKeys && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) DuplicateSelection(world, assets);
 
         // Edit-menu selection ops (#236). The Hierarchy owns Ctrl+A when it's focused (select all

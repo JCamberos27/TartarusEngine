@@ -214,9 +214,11 @@ void EditorLayer::DrawViewportStatusBar() {
     if (!m_SceneViewportVisible || m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
 
     const char* toolName =
-        m_GizmoOp == GizmoOp::Translate ? "Translate" :
-        m_GizmoOp == GizmoOp::Rotate    ? "Rotate"    :
-        m_GizmoOp == GizmoOp::Scale     ? "Scale"     : "Rect";
+        m_HandTool                       ? "Hand"      :
+        m_GizmoOp == GizmoOp::Translate  ? "Translate" :
+        m_GizmoOp == GizmoOp::Rotate     ? "Rotate"    :
+        m_GizmoOp == GizmoOp::Scale      ? "Scale"     :
+        m_GizmoOp == GizmoOp::Universal  ? "Transform" : "Rect";
 
     int selCount = (int)GetSelectedItems().size();
     float fps = m_SmoothedFrameMs > 0.0001f ? 1000.0f / m_SmoothedFrameMs : 0.0f;
@@ -287,8 +289,11 @@ void EditorLayer::DrawViewportStatusBar() {
         if (selCount == 0) ImGui::TextDisabled("no selection");
         else               ImGui::Text("%d selected", selCount);
 
+        if (m_LockViewToSelection) { sep(); ImGui::Text("%s follow", ICON_FA_LOCK); } // Shift+F (#236 E)
+
         // Active tool pinned to the right.
-        char toolBuf[32]; snprintf(toolBuf, sizeof(toolBuf), "%s  %s", ICON_FA_UP_DOWN_LEFT_RIGHT, toolName);
+        char toolBuf[32]; snprintf(toolBuf, sizeof(toolBuf), "%s  %s",
+            m_HandTool ? ICON_FA_HAND : ICON_FA_UP_DOWN_LEFT_RIGHT, toolName);
         float tw = ImGui::CalcTextSize(toolBuf).x;
         ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - tw);
         ImGui::TextUnformatted(toolBuf);
