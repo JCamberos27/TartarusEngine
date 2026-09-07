@@ -750,6 +750,10 @@ private:
     float m_SnapTranslation = 1.0f;
     float m_SnapRotationDeg = 15.0f;
     float m_SnapScale = 0.1f;
+    // #236 E — surface drag-snapping: while a translate drag is active, drop the object where
+    // the cursor ray hits another surface. Hold Shift to invert the toggle momentarily.
+    bool m_SurfaceSnap = false;
+    bool m_SurfaceSnapAlign = false;  // also orient local +Y to the hit surface normal
     // How close (screen pixels) the cursor must be to a vertex to grab/preview/snap onto it —
     // one setting governs the hover circle, the initial grab, AND the drag-time snap search,
     // so "the circle is showing" and "this will snap" always mean the same thing.
@@ -1393,6 +1397,9 @@ private:
     void HandleHandToolPan(Camera& editorCamera);              // #236 E — Hand tool (Q)
     void UpdateLockViewToSelection(World& world, Camera& editorCamera); // #236 E — Lock View (Shift+F)
     void DrawGizmoDragReadout(const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scale); // #236 E
+    // #236 E — during a translate drag with surface-snap on: move `sel` to where the cursor ray
+    // hits another entity's surface (optionally aligning its local +Y to that normal).
+    void ApplySurfaceSnap(World& world, Camera& editorCamera, entt::entity sel, const glm::mat4& parentWorld);
     // Blender/Godot-style navigation gizmo (ImViewGuizmo) pinned to the viewport's top-right
     // corner: a rotate ring plus small dolly/pan buttons underneath. Camera is yaw/pitch, not
     // quaternion, so this converts to/from a quaternion around the call into the library.

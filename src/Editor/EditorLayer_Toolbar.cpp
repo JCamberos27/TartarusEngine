@@ -588,6 +588,17 @@ void EditorLayer::DrawGridSnapPopupBody() {
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Set the gizmo Move increment equal to the grid cell size.");
 
+    ImGui::Separator();
+    ImGui::TextDisabled("SURFACE  (hold Shift while dragging to invert)");
+    ImGui::Checkbox("Snap to surface under cursor", &m_SurfaceSnap);
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("While dragging the Move gizmo, drop the object where the cursor\nray meets another object's surface instead of following the axis.");
+    ImGui::BeginDisabled(!m_SurfaceSnap);
+    ImGui::Checkbox("Align to surface normal", &m_SurfaceSnapAlign);
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Also orient the object's up axis to the face it lands on.");
+    ImGui::EndDisabled();
+
     ImGui::PopItemWidth();
 }
 
