@@ -20,6 +20,8 @@
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
 #include "ComponentRegistry.h"
+#include "ProjectSettings.h" // project-defined tag vocabulary for the Tag dropdown (#236 A4)
+#include "LayerRegistry.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
 #include "GLStateCache.h"
@@ -761,6 +763,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             std::set<std::string> tagChoices{"Untagged"};
             for (auto e : world.Registry.view<const TagComponent>())
                 tagChoices.insert(world.Registry.get<TagComponent>(e).Tag);
+            for (const std::string& t : ProjectSettings::Tags()) tagChoices.insert(t); // #236 A4
             std::string sharedTag; bool tagMixed = false, first = true;
             forEach([&](entt::entity e) {
                 const auto* tc = world.Registry.try_get<TagComponent>(e);
@@ -779,6 +782,31 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                                 TagComponent tc; tc.Tag = t;
                                 world.Registry.emplace_or_replace<TagComponent>(e, tc);
                             }
+                        });
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        }
+
+        // Layer (#236 A1) — shared slot across the selection, em-dash when mixed.
+        {
+            int sharedLayer = -1; bool layerMixed = false, firstL = true;
+            forEach([&](entt::entity e) {
+                const auto* lc = world.Registry.try_get<LayerComponent>(e);
+                int l = lc ? lc->Layer : 0;
+                if (firstL) { sharedLayer = l; firstL = false; }
+                else if (l != sharedLayer) layerMixed = true;
+            });
+            PropertyLabel("Layer", "Sets the Layer on every selected object.");
+            const std::string preview = layerMixed ? std::string("\xE2\x80\x94") : LayerRegistry::DisplayName(sharedLayer);
+            if (ImGui::BeginCombo("##mlayer", preview.c_str())) {
+                for (int i = 0; i < LayerRegistry::kCount; ++i) {
+                    if (ImGui::Selectable(LayerRegistry::DisplayName(i).c_str(), !layerMixed && i == sharedLayer)) {
+                        PushUndo(world, "Set Layer");
+                        forEach([&](entt::entity e) {
+                            if (i == 0) world.Registry.remove<LayerComponent>(e);
+                            else world.Registry.emplace_or_replace<LayerComponent>(e, LayerComponent{i});
                         });
                     }
                 }
@@ -1183,6 +1211,34 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) EditorUI::SetTooltip("Display name shown in the Hierarchy and here");
     if (activated) PushUndo(world, "Rename");
 
+    // #236 A2 — prefab-instance banner. Walk up to the instance root (if any) and say what's
+    // authoritative: the root keeps its own transform/name/tag, everything else tracks the .prefab.
+    {
+        entt::entity prefabRoot = entt::null;
+        for (entt::entity cur = entity; cur != entt::null; ) {
+            if (registry.all_of<PrefabInstanceComponent>(cur)) { prefabRoot = cur; break; }
+            const auto* h = registry.try_get<HierarchyComponent>(cur);
+            cur = h ? h->Parent : entt::null;
+        }
+        if (prefabRoot != entt::null) {
+            const auto& pi = registry.get<PrefabInstanceComponent>(prefabRoot);
+            const bool isRoot = (prefabRoot == entity);
+            ImGui::Spacing();
+            ImGui::PushStyleColor(ImGuiCol_Text, pi.Missing ? IM_COL32(240, 130, 120, 255)
+                                                            : IM_COL32(120, 170, 255, 255));
+            ImGui::TextWrapped("%s  %s", ICON_FA_BOX_ARCHIVE,
+                pi.Missing ? "Prefab source missing"
+                           : (isRoot ? "Prefab instance" : "Part of a prefab instance"));
+            ImGui::PopStyleColor();
+            ImGui::TextDisabled("%s", pi.SourcePath.c_str());
+            ImGui::TextDisabled(isRoot
+                ? "Transform / name / tag are kept per-instance; everything else tracks the prefab."
+                : "Edits here are overwritten when the prefab reloads \xE2\x80\x94 unpack the root to edit.");
+            ImGui::Spacing();
+            ImGui::Separator();
+        }
+    }
+
     {
         auto* tag = registry.try_get<TagComponent>(entity);
         std::string tagText = tag ? tag->Tag : std::string("Untagged");
@@ -1226,6 +1282,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 const auto& tc = registry.get<TagComponent>(e);
                 if (!tc.Tag.empty()) known.insert(tc.Tag);
             }
+            for (const std::string& t : ProjectSettings::Tags()) known.insert(t); // #236 A4
             if (ImGui::BeginCombo("##Tag", tagText.c_str())) {
                 if (ImGui::Selectable("Untagged", !tag)) setTag("");
                 if (!known.empty()) ImGui::Separator();
@@ -1252,6 +1309,29 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             EditorUI::SetTooltip("Marks this object as never moving at runtime.\nDoesn't change behavior yet - just records the intent for later optimizations.");
         }
     }
+
+    // --- Layer (#236 A1) — a small named slot; slot 0 ("Default") stores no component.
+    // Drives editor viewport visibility / pick-lock now (Gizmos dropdown ▸ Layers); camera
+    // culling and physics filtering ride on the same slot later.
+    {
+        const auto* lc = registry.try_get<LayerComponent>(entity);
+        const int cur = lc ? lc->Layer : 0;
+        PropertyLabel("Layer", "Groups objects for editor visibility, pick-locking and (later)\ncamera culling. Rename slots in the Gizmos dropdown \xE2\x96\xB8 Layers.");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo("##Layer", LayerRegistry::DisplayName(cur).c_str())) {
+            for (int i = 0; i < LayerRegistry::kCount; ++i) {
+                if (ImGui::Selectable(LayerRegistry::DisplayName(i).c_str(), i == cur)) {
+                    if (i != cur) {
+                        PushUndo(world, "Set Layer");
+                        if (i == 0) registry.remove<LayerComponent>(entity);
+                        else registry.emplace_or_replace<LayerComponent>(entity, LayerComponent{i});
+                    }
+                }
+            }
+            ImGui::EndCombo();
+        }
+    }
+
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();

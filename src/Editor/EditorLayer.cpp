@@ -17,6 +17,8 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "LayerRegistry.h"
+#include "ProjectSettings.h"
 #include "GLStateCache.h"
 #include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
 #include "ScreenBlur.h"
@@ -85,6 +87,8 @@ void EditorLayer::Init(GLFWwindow* window) {
     // Editor preferences (currently just the tooltip toggle) are independent of any scene, so
     // they're loaded once here rather than as part of scene load/save.
     EditorSettings::Load();
+    LayerRegistry::Load(); // slot names for LayerComponent (#236 A1); project/layers.json
+    ProjectSettings::Load(); // physics + tag vocabulary (#236 A4); project/settings.json
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see ProjectPaths.h. Must match main.cpp's initial load: prefer the last-open scene if
@@ -988,6 +992,114 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
     ImGui::EndChild();
     ImGui::End();
 }
+
+// #236 A4 — Project Settings: project-scoped, saved to project/settings.json (Physics, Tags)
+// and project/layers.json (layer names). Sibling of the per-user Preferences window above;
+// same two-pane category layout.
+void EditorLayer::DrawProjectSettingsWindow(World& /*world*/) {
+    if (!m_ShowProjectSettings) return;
+
+    ImGui::SetNextWindowSize(ImVec2(620.0f * m_UIScale, 420.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    PushTabChromeText();
+    const bool open = ImGui::Begin(ICON_FA_GEARS "  Project Settings", &m_ShowProjectSettings);
+    PopTabChromeText();
+    if (!open) { ImGui::End(); return; }
+
+    static const char* kCats[] = {
+        ICON_FA_PERSON_FALLING_BURST "  Physics",
+        ICON_FA_TAGS "  Tags & Layers",
+    };
+    const int kCatCount = (int)(sizeof(kCats) / sizeof(kCats[0]));
+    m_ProjSettingsCategory = std::clamp(m_ProjSettingsCategory, 0, kCatCount - 1);
+
+    ImGui::BeginChild("##ProjCats", ImVec2(160.0f * m_UIScale, 0), ImGuiChildFlags_Borders);
+    for (int i = 0; i < kCatCount; ++i)
+        if (ImGui::Selectable(kCats[i], m_ProjSettingsCategory == i)) m_ProjSettingsCategory = i;
+    ImGui::EndChild();
+    ImGui::SameLine();
+    ImGui::BeginChild("##ProjBody", ImVec2(0, 0), ImGuiChildFlags_Borders);
+
+    const float kw = 200.0f * m_UIScale;
+
+    if (m_ProjSettingsCategory == 0) { // Physics
+        ProjectSettings::PhysicsSettings& p = ProjectSettings::MutablePhysics();
+
+        ImGui::SeparatorText("Gravity");
+        ImGui::SetNextItemWidth(kw);
+        ImGui::DragFloat3("m/s\xC2\xB2##grav", &p.Gravity.x, 0.1f, -200.0f, 200.0f, "%.2f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("World gravity. Only the Y component is applied today — it drives the\n"
+                                 "Play-mode walk collider. X/Z are stored for rigid bodies (#185).");
+
+        ImGui::SeparatorText("Simulation (reserved for #185)");
+        ImGui::BeginDisabled(true);
+        ImGui::SetNextItemWidth(kw);
+        ImGui::DragFloat("Fixed timestep", &p.FixedTimestep, 0.0001f, 0.001f, 0.1f, "%.4f s");
+        ImGui::SetNextItemWidth(kw);
+        ImGui::DragInt("Solver iterations", &p.SolverIterations, 0.1f, 1, 64);
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Stored in project/settings.json now; consumed once the rigid-body\n"
+                                 "step lands (#185). The Play-mode walker uses its own safety substep.");
+    } else { // Tags & Layers
+        ImGui::SeparatorText("Tags");
+        ImGui::TextDisabled("Named tags offered in the Inspector's Tag dropdown, on top of tags already in use.");
+        ImGui::Spacing();
+
+        const auto& tags = ProjectSettings::Tags();
+        std::string removeTag;
+        for (const std::string& t : tags) {
+            ImGui::PushID(t.c_str());
+            if (ActionButton(ICON_FA_XMARK "##deltag", "Remove this tag", false,
+                             ImVec2(ImGui::GetFrameHeight(), 0.0f)))
+                removeTag = t;
+            ImGui::SameLine();
+            ImGui::TextUnformatted(t.c_str());
+            ImGui::PopID();
+        }
+        if (!removeTag.empty()) { ProjectSettings::RemoveTag(removeTag); ProjectSettings::Save(); }
+
+        ImGui::Spacing();
+        ImGui::SetNextItemWidth(kw);
+        const bool entered = ImGui::InputTextWithHint("##newtag", "New tag name", m_NewTagBuf,
+            sizeof(m_NewTagBuf), ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::SameLine();
+        if ((ActionButton("Add##tag", "Add this tag to the project") || entered) && m_NewTagBuf[0]) {
+            ProjectSettings::AddTag(m_NewTagBuf);
+            ProjectSettings::Save();
+            m_NewTagBuf[0] = '\0';
+        }
+
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+        ImGui::SeparatorText("Layers");
+        ImGui::TextDisabled("Slot 0 is always \"Default\". Names save to project/layers.json.");
+        ImGui::Spacing();
+        for (int i = 0; i < LayerRegistry::kCount; ++i) {
+            ImGui::PushID(i);
+            ImGui::Text("%2d", i);
+            ImGui::SameLine(0.0f, 12.0f);
+            if (i == 0) {
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextDisabled("Default");
+            } else {
+                char buf[32];
+                std::snprintf(buf, sizeof(buf), "%s", LayerRegistry::Name(i).c_str());
+                char hint[16];
+                std::snprintf(hint, sizeof(hint), "Layer %d", i);
+                ImGui::SetNextItemWidth(kw);
+                if (ImGui::InputTextWithHint("##lname", hint, buf, sizeof(buf)))
+                    LayerRegistry::SetName(i, buf);
+                if (ImGui::IsItemDeactivatedAfterEdit()) LayerRegistry::Save();
+            }
+            ImGui::PopID();
+        }
+    }
+
+    ImGui::EndChild();
+    ImGui::End();
+}
+
 void EditorLayer::BeginFrame() {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -1373,6 +1485,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawExitPrompt();
     DrawSceneSwitchPrompt(world, assets);
     DrawPreferencesWindow(world);
+    DrawProjectSettingsWindow(world);
     DrawScreenshotPreview();
 
     // Auto-save: only ticks here (Draw() is editor-mode-only, per main.cpp) so it never fires

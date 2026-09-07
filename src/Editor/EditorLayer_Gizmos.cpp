@@ -21,6 +21,7 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "LayerRegistry.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"
 #include "gl.h"
@@ -64,6 +65,15 @@ using namespace EditorInternal;
 
 
 namespace {
+
+// #236 A1 — an entity is unclickable in the viewport when its layer's bit is set in the
+// editor's pick-lock mask. Hierarchy selection is unaffected. Absent LayerComponent == layer 0.
+bool ViewportPickLocked(const World& world, entt::entity e) {
+    const auto* lc = world.Registry.try_get<LayerComponent>(e);
+    const int layer = lc ? lc->Layer : 0;
+    if (layer < 0 || layer >= 32) return false;
+    return (EditorSettings::Get().LayerPickLockMask >> layer) & 1u;
+}
 
 // TransformComponent is LOCAL space once an entity has a parent, so anything that manipulates an
 // entity in world space has to bracket the work with these two: read the world matrix, do the
@@ -790,6 +800,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         entt::entity best = entt::null;
         auto pickView = world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>);
         for (auto entity : pickView) {
+            if (ViewportPickLocked(world, entity)) continue;
             const auto& renderable = pickView.get<const RenderableComponent>(entity);
             glm::mat4 model = world.ComposeWorldTransform(entity);
             AABB worldBounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(model);
@@ -812,6 +823,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
             entt::entity iconHit = entt::null;
             float iconDepth = 1e30f;
             for (auto entity : world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent, InactiveTag>)) {
+                if (ViewportPickLocked(world, entity)) continue;
                 glm::mat4 model = world.ComposeWorldTransform(entity);
                 glm::vec3 worldPos = glm::vec3(model[3]);
                 glm::vec4 clip = viewProj * glm::vec4(worldPos, 1.0f);
@@ -875,6 +887,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
 
     auto entityView = world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>);
     for (auto entity : entityView) {
+        if (ViewportPickLocked(world, entity)) continue;
         const auto& renderable = entityView.get<const RenderableComponent>(entity);
         glm::mat4 model = world.ComposeWorldTransform(entity);
         AABB bounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(model);
@@ -888,6 +901,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
     // them the same way a plain click does: test their on-screen icon position (same math as
     // the icon-proximity pick above) against the drag rectangle.
     for (auto entity : world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent, InactiveTag>)) {
+        if (ViewportPickLocked(world, entity)) continue;
         glm::mat4 model = world.ComposeWorldTransform(entity);
         glm::vec3 worldPos = glm::vec3(model[3]);
         glm::vec4 clip = viewProj * glm::vec4(worldPos, 1.0f);

@@ -617,6 +617,9 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     auto& name = world.Registry.get<NameComponent>(entity);
     bool selected = IsSelected(entity);
     bool inactive = world.Registry.all_of<InactiveTag>(entity);
+    // #236 A2 — a prefab-instance root paints its name in prefab blue (amber-red when the
+    // source is missing), Unity-style.
+    const auto* prefabInst = world.Registry.try_get<PrefabInstanceComponent>(entity);
     const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
     bool hasChildren = hier && !hier->Children.empty() && m_HierarchyFilter.empty();
 
@@ -864,7 +867,10 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         // Pull the kind glyph + name in toward the eye (#152 follow-up). Parent rows keep enough
         // lead for the disclosure chevron; leaf rows (no chevron) only need a hair of separation.
         const float labelX   = rowMin.x + (hasChildren ? fontSize * 1.15f : fontSize * 0.35f);
-        const ImU32 col = ImGui::GetColorU32(inactive ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+        ImU32 col = ImGui::GetColorU32(inactive ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+        if (prefabInst && !inactive)
+            col = prefabInst->Missing ? IM_COL32(240, 130, 120, 255)   // broken link
+                                      : IM_COL32(120, 170, 255, 255);  // prefab blue
 
         // Disclosure chevron — a light Font Awesome ">" / "v" (0.66em) centred in the leading
         // slot, in the dim text colour, brightening on arrow-hover. Replaces ImGui's chunky
@@ -1032,6 +1038,18 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
         if (!path.empty() && SceneSerializer::SavePrefab(world, entity, path)) {
             assets.RegisterPrefab(path);
         }
+    }
+
+    // #236 A2 — prefab-instance actions, only on an instance root.
+    if (hasEntity && world.Registry.all_of<PrefabInstanceComponent>(entity)) {
+        const auto& pi = world.Registry.get<PrefabInstanceComponent>(entity);
+        if (ImGui::MenuItem(ICON_FA_LINK_SLASH "  Unpack Prefab Instance")) {
+            PushUndo(world, "Unpack Prefab");
+            world.Registry.remove<PrefabInstanceComponent>(entity);
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Break the link to %s.\nThe objects stay; they just stop tracking the prefab.",
+                                 pi.SourcePath.c_str());
     }
     ImGui::Separator();
 
