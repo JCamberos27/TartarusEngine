@@ -650,7 +650,9 @@ int main(int argc, char** argv) {
         editorCamera.Position = player.Cam.Position;
         editorCamera.Yaw = player.Cam.Yaw;
         editorCamera.Pitch = player.Cam.Pitch;
-        editorCamera.Fov = EditorSettings::Get().SceneCameraFov; // #236 R2 — persisted editor FOV
+        editorCamera.Fov = EditorSettings::Get().SceneCameraFov; // #236 R2 — persisted editor camera
+        editorCamera.NearPlane = EditorSettings::Get().SceneCameraNear;
+        editorCamera.FarPlane = EditorSettings::Get().SceneCameraFar;
         // Deliberately NOT calling editor.FrameSceneBounds() here (audit #87's original fix for
         // "staring at empty space") - for this scene it re-frames to an exterior overview of the
         // whole building, outside every room's floor. Since Play copies its spawn straight from

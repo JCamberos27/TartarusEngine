@@ -97,6 +97,8 @@ struct EditorSettings {
     // still ×3). Adjustable in View ▸ Camera and, for fly speed, by scrolling while holding RMB.
     float SceneCameraFov = 75.0f;
     float SceneCameraFlySpeed = 8.0f;
+    float SceneCameraNear = 0.05f;
+    float SceneCameraFar = 500.0f;
 
     std::string GameViewPresetLabel = "Free Aspect";
     int GameViewPresetWidth = 0;
