@@ -41,7 +41,8 @@
 //   8 - Inspector (frame only): the module owns Begin("Inspector") + End + visibility.
 //       Get/SetShowInspector and one DrawInspectorBody callback — the ~1090-line body (every
 //       component editor, PBR material, add-component, per-field undo) stays host-side.
-constexpr std::uint32_t kEditorModuleAPIVersion = 11;
+//   12 - Console (#236 A5): EditorConsoleState gains Collapse / ClearOnPlay / ErrorPause.
+constexpr std::uint32_t kEditorModuleAPIVersion = 12;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -69,6 +70,12 @@ struct EditorConsoleState {
     bool ShowError = true;
     bool AutoScroll = true;
     bool ShowTimestamps = true;
+    // #236 A5. Collapse: every identical message shows once with a summed (xN), Unity-style,
+    // not just consecutive duplicates. ClearOnPlay: the host wipes the log on entering Play.
+    // ErrorPause: the host freezes the running sim the frame a new error is logged.
+    bool Collapse = false;
+    bool ClearOnPlay = false;
+    bool ErrorPause = false;
     // Matches the 128-byte buffer the panel's InputTextWithHint has always used.
     char Filter[128] = {};
     // Only auto-scroll when Log actually gained an entry, rather than fighting the user's
