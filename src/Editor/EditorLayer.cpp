@@ -1805,6 +1805,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (m_AssetBrowserFocused && m_RenamingAssetKey.empty()) {
             if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F)) {
                 m_AssetSearchFocusRequested = true;
+            } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_R)) {
+                RefreshAssetBrowser(); // #236 G
             } else if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F) && !m_SelectedAssetKey.empty()) {
                 // "Frame selected" — Unity shows the asset in its containing folder; here that
                 // just means navigating the browser to it, since it's already always visible
