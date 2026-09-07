@@ -23,6 +23,7 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "LayerRegistry.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"
 #include "gl.h"
@@ -50,6 +51,7 @@
 #include <cmath>
 #include <cctype>
 #include <cstring>
+#include <cstdio>
 #include <functional>
 #include <cfloat>
 
@@ -212,9 +214,11 @@ void EditorLayer::DrawViewportStatusBar() {
     if (!m_SceneViewportVisible || m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
 
     const char* toolName =
-        m_GizmoOp == GizmoOp::Translate ? "Translate" :
-        m_GizmoOp == GizmoOp::Rotate    ? "Rotate"    :
-        m_GizmoOp == GizmoOp::Scale     ? "Scale"     : "Rect";
+        m_HandTool                       ? "Hand"      :
+        m_GizmoOp == GizmoOp::Translate  ? "Translate" :
+        m_GizmoOp == GizmoOp::Rotate     ? "Rotate"    :
+        m_GizmoOp == GizmoOp::Scale      ? "Scale"     :
+        m_GizmoOp == GizmoOp::Universal  ? "Transform" : "Rect";
 
     int selCount = (int)GetSelectedItems().size();
     float fps = m_SmoothedFrameMs > 0.0001f ? 1000.0f / m_SmoothedFrameMs : 0.0f;
@@ -285,8 +289,11 @@ void EditorLayer::DrawViewportStatusBar() {
         if (selCount == 0) ImGui::TextDisabled("no selection");
         else               ImGui::Text("%d selected", selCount);
 
+        if (m_LockViewToSelection) { sep(); ImGui::Text("%s follow", ICON_FA_LOCK); } // Shift+F (#236 E)
+
         // Active tool pinned to the right.
-        char toolBuf[32]; snprintf(toolBuf, sizeof(toolBuf), "%s  %s", ICON_FA_UP_DOWN_LEFT_RIGHT, toolName);
+        char toolBuf[32]; snprintf(toolBuf, sizeof(toolBuf), "%s  %s",
+            m_HandTool ? ICON_FA_HAND : ICON_FA_UP_DOWN_LEFT_RIGHT, toolName);
         float tw = ImGui::CalcTextSize(toolBuf).x;
         ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - tw);
         ImGui::TextUnformatted(toolBuf);
@@ -502,6 +509,10 @@ void EditorLayer::DrawWindowMenuBody() {
             ImGui::MenuItem(ICON_FA_SLIDERS "  Inspector", nullptr, &m_ShowInspector);
             ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Asset Browser", nullptr, &m_ShowAssetBrowser);
             ImGui::Separator();
+            ImGui::MenuItem(ICON_FA_GEARS "  Project Settings", nullptr, &m_ShowProjectSettings);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Project-scoped settings (physics, tags, layer names) - saved with the project, not your editor prefs.");
+            ImGui::Separator();
             // Console / Statistics / History / Light Gizmos have dedicated toolbar toggles (#148);
             // the engine mark lives in Preferences ▸ Viewport.
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
@@ -577,6 +588,17 @@ void EditorLayer::DrawGridSnapPopupBody() {
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Set the gizmo Move increment equal to the grid cell size.");
 
+    ImGui::Separator();
+    ImGui::TextDisabled("SURFACE  (hold Shift while dragging to invert)");
+    ImGui::Checkbox("Snap to surface under cursor", &m_SurfaceSnap);
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("While dragging the Move gizmo, drop the object where the cursor\nray meets another object's surface instead of following the axis.");
+    ImGui::BeginDisabled(!m_SurfaceSnap);
+    ImGui::Checkbox("Align to surface normal", &m_SurfaceSnapAlign);
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Also orient the object's up axis to the face it lands on.");
+    ImGui::EndDisabled();
+
     ImGui::PopItemWidth();
 }
 
@@ -600,6 +622,41 @@ void EditorLayer::DrawGizmosPopupBody() {
 
     ImGui::Separator();
     ImGui::Checkbox("Grid", &m_ShowGrid); // independent of the master switch, like Unity's grid
+
+    // --- Layers (#236 A1) -------------------------------------------------------------
+    // Per-layer Scene-viewport visibility (eye) + pick-lock (padlock), plus rename for the
+    // seven authorable slots. Visibility/lock masks are per-user (EditorSettings); the slot
+    // names are project content (LayerRegistry / project/layers.json).
+    ImGui::Separator();
+    if (ImGui::CollapsingHeader("Layers")) {
+        EditorSettings& s = EditorSettings::Get();
+        for (int i = 0; i < LayerRegistry::kCount; ++i) {
+            ImGui::PushID(i);
+            const unsigned bit = 1u << i;
+
+            bool vis = (s.LayerVisibleMask & bit) != 0;
+            if (ImGui::Checkbox("##vis", &vis)) {
+                if (vis) s.LayerVisibleMask |= bit; else s.LayerVisibleMask &= ~bit;
+                EditorSettings::Save();
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show this layer in the Scene viewport.\nHidden layers stay in the scene, the Hierarchy and every save.");
+
+            ImGui::SameLine();
+            bool locked = (s.LayerPickLockMask & bit) != 0;
+            if (ImGui::Checkbox("##lock", &locked)) {
+                if (locked) s.LayerPickLockMask |= bit; else s.LayerPickLockMask &= ~bit;
+                EditorSettings::Save();
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Lock: objects on this layer can't be clicked in the viewport.\nHierarchy selection still works.");
+
+            ImGui::SameLine();
+            // Read-only label here — renaming lives in Project Settings ▸ Tags & Layers (#236 A4),
+            // since the slot names are project content, not per-user viewport state.
+            ImGui::TextUnformatted(LayerRegistry::DisplayName(i).c_str());
+            ImGui::PopID();
+        }
+        ImGui::TextDisabled("Rename in Project Settings \xE2\x96\xB8 Tags & Layers");
+    }
 }
 
 void EditorLayer::RequestCapture() {

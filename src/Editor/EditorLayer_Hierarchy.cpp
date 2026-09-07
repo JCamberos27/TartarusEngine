@@ -73,7 +73,8 @@ inline void MakeDirectionalLight(World& world, entt::entity e) {
     lc.Kind = LightComponent::Type::Directional;
     lc.Intensity = 6.0f;
     lc.AngularSizeDegrees = 2.0f;
-    lc.Shadow.Enabled = true; // a freshly added sun casts shadows by default
+    lc.Shadow.Enabled = true;      // a freshly added sun casts shadows by default
+    lc.Shadow.Softness = 0.25f;    // crisper penumbra out of the box (~0.25 on the Softness slider)
     world.Registry.get<TransformComponent>(e).RotationEuler = glm::vec3(-36.25f, 53.13f, 0.0f);
 }
 
@@ -492,6 +493,11 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     // just before this function returns. See the header for why the two buffers are separate.
     m_HierarchyVisibleBuild.clear();
 
+    // #236 B — clear the spring-load dwell target whenever there's no row drag in flight, so a
+    // stale entity can't auto-expand a folder on the next unrelated drag.
+    if (const ImGuiPayload* d = ImGui::GetDragDropPayload(); !d || !d->IsDataType("HIERARCHY_ENTITY"))
+        m_HierarchySpringRow = entt::null;
+
     const bool filtering = !m_HierarchyFilter.empty();
 
     // One flat list — every entity in creation order, no "Level Geometry" / "Objects" split.
@@ -616,6 +622,10 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     auto& name = world.Registry.get<NameComponent>(entity);
     bool selected = IsSelected(entity);
     bool inactive = world.Registry.all_of<InactiveTag>(entity);
+    // #236 A2 — a prefab-instance root paints its name in prefab blue (amber-red when missing).
+    const auto* prefabInst = world.Registry.try_get<PrefabInstanceComponent>(entity);
+    // #236 B — SceneVis-lite: a row hidden in the Scene view reads like an inactive one (dimmed).
+    bool sceneHiddenRow = world.Registry.all_of<HiddenInSceneTag>(entity);
     const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
     bool hasChildren = hier && !hier->Children.empty() && m_HierarchyFilter.empty();
 
@@ -711,11 +721,12 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     const bool rowHovered = ImGui::IsItemHovered();
     const bool clickOnArrow = hasChildren && rowHovered &&
         ImGui::GetIO().MousePos.x < rowMin.x + arrowSlotW;
-    // The active-state eye lives in a fixed right column (drawn below) that the full-width node
-    // overlaps. Carve its X band out of the row's own click/select/rename handling so a click —
-    // or double-click — on the eye is the eye's alone.
-    const float eyeBandW = ImGui::GetFontSize() * 1.6f + 8.0f * m_UIScale;
-    const bool overEye = rowHovered && ImGui::GetIO().MousePos.x > rowMax.x - eyeBandW;
+    // The row's right cluster — SceneVis eye + lock + the Active checkbox — is drawn below via
+    // SetCursorScreenPos over the full-width node, so its InvisibleButtons and the node both see
+    // the same click. Carve the cluster's whole X span out of the row's click / double-click
+    // handling so a click anywhere on an icon is that icon's alone and never also selects (#236 B).
+    const float rowIconsBandW = ImGui::GetFontSize() * 3.4f + 20.0f * m_UIScale;
+    const bool overRowIcons = rowHovered && ImGui::GetIO().MousePos.x > rowMax.x - rowIconsBandW;
 
     if (ImGui::IsItemClicked() && clickOnArrow) {
         open = !open;
@@ -723,7 +734,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         if (ImGui::GetIO().KeyAlt) {
             for (entt::entity child : hier->Children) SetHierarchyExpandedRecursive(world, child, open);
         }
-    } else if (ImGui::IsItemClicked() && !overEye) {
+    } else if (ImGui::IsItemClicked() && !overRowIcons) {
         const ImGuiIO& io = ImGui::GetIO();
         if (io.KeyShift) {
             // Shift (or Ctrl+Shift) — contiguous range from the anchor to this row.
@@ -733,7 +744,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         }
         m_HierarchyRowHintDone = true; // learned the row interaction — stop showing the hint
     }
-    if (ImGui::IsItemHovered() && !clickOnArrow && !overEye && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    if (ImGui::IsItemHovered() && !clickOnArrow && !overRowIcons && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
         BeginRenameEntity(entity);
     }
     if (!m_HierarchyRowHintDone && ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
@@ -778,6 +789,21 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
             const int zone = my > midY + pInset ? 1                    // below the name -> insert after
                            : (isFirstRow && my < midY - pInset) ? -1  // above the first name -> insert before
                            : 0;                                        // on the name -> parent onto
+
+            // #236 B — spring-loaded folders: hover the parent zone of a collapsed row with
+            // children for ~0.5s while dragging and it opens itself, so you can drop deep in a
+            // tree without a separate expand click.
+            if (zone == 0 && hasChildren && !open) {
+                const double now = ImGui::GetTime();
+                if (m_HierarchySpringRow != entity) { m_HierarchySpringRow = entity; m_HierarchySpringSince = now; }
+                else if (now - m_HierarchySpringSince > 0.5) {
+                    ImGui::GetStateStorage()->SetInt(nodeStateId, 1);
+                    open = true;
+                    m_HierarchySpringRow = entt::null;
+                }
+            } else if (m_HierarchySpringRow == entity) {
+                m_HierarchySpringRow = entt::null;
+            }
 
             ImDrawList* dl = ImGui::GetWindowDrawList();
             const ImU32 accent = ImGui::GetColorU32(ImGuiCol_DragDropTarget);
@@ -863,7 +889,10 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         // Pull the kind glyph + name in toward the eye (#152 follow-up). Parent rows keep enough
         // lead for the disclosure chevron; leaf rows (no chevron) only need a hair of separation.
         const float labelX   = rowMin.x + (hasChildren ? fontSize * 1.15f : fontSize * 0.35f);
-        const ImU32 col = ImGui::GetColorU32(inactive ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+        ImU32 col = ImGui::GetColorU32((inactive || sceneHiddenRow) ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+        if (prefabInst && !inactive && !sceneHiddenRow)
+            col = prefabInst->Missing ? IM_COL32(240, 130, 120, 255)   // broken link
+                                      : IM_COL32(120, 170, 255, 255);  // prefab blue
 
         // Disclosure chevron — a light Font Awesome ">" / "v" (0.66em) centred in the leading
         // slot, in the dim text colour, brightening on arrow-hover. Replaces ImGui's chunky
@@ -895,7 +924,34 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     // how deep it sits. Drawn after the row so a click on it never also selects the row.
     {
         const float eyeW = ImMax(ImGui::CalcTextSize(ICON_FA_EYE).x, ImGui::CalcTextSize(ICON_FA_EYE_SLASH).x) + 2.0f;
+        const float gap  = 4.0f * m_UIScale;
+        const float lockW = ImMax(ImGui::CalcTextSize(ICON_FA_LOCK).x, ImGui::CalcTextSize(ICON_FA_LOCK_OPEN).x) + 2.0f;
+        const float hideW = ImMax(ImGui::CalcTextSize(ICON_FA_EYE).x, ImGui::CalcTextSize(ICON_FA_EYE_SLASH).x) + 2.0f;
+
+        // #236 B — SceneVis-lite: an eye (viewport visibility) + a padlock (viewport pickability),
+        // always drawn just left of the Active checkbox. These never touch the object itself —
+        // Game view, physics and saves are unaffected.
+        const bool sceneHidden = world.Registry.all_of<HiddenInSceneTag>(entity);
+        const bool sceneLocked = world.Registry.all_of<SceneLockedTag>(entity);
+
         ImGui::SameLine();
+        ImGui::SetCursorScreenPos(ImVec2(rowMax.x - eyeW - gap - lockW - hideW - 2.0f * gap, rowMin.y));
+        if (SceneVisToggle("##svhide", ICON_FA_EYE_SLASH, ICON_FA_EYE, sceneHidden, rowHovered,
+                           sceneHidden ? "Hidden in the Scene view - click to show"
+                                       : "Hide in the Scene view (still in the game, still collides, still saved)")) {
+            PushUndo(world, "Toggle Scene Visibility");
+            if (sceneHidden) world.Registry.remove<HiddenInSceneTag>(entity);
+            else             world.Registry.emplace<HiddenInSceneTag>(entity);
+        }
+        ImGui::SameLine(0.0f, gap);
+        if (SceneVisToggle("##svlock", ICON_FA_LOCK, ICON_FA_LOCK_OPEN, sceneLocked, rowHovered,
+                           sceneLocked ? "Locked out of Scene-view clicks - click to unlock"
+                                       : "Lock: can't be clicked in the Scene view (Hierarchy select still works)")) {
+            PushUndo(world, "Toggle Scene Lock");
+            if (sceneLocked) world.Registry.remove<SceneLockedTag>(entity);
+            else             world.Registry.emplace<SceneLockedTag>(entity);
+        }
+
         ImGui::SetCursorScreenPos(ImVec2(rowMax.x - eyeW - 4.0f * m_UIScale, rowMin.y));
         if (ActiveToggle("##rowactive", !inactive, rowHovered,
                          inactive ? "Inactive - click to enable" : "Active - click to disable",
@@ -1031,6 +1087,18 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
         if (!path.empty() && SceneSerializer::SavePrefab(world, entity, path)) {
             assets.RegisterPrefab(path);
         }
+    }
+
+    // #236 A2 — prefab-instance actions, only on an instance root.
+    if (hasEntity && world.Registry.all_of<PrefabInstanceComponent>(entity)) {
+        const auto& pi = world.Registry.get<PrefabInstanceComponent>(entity);
+        if (ImGui::MenuItem(ICON_FA_LINK_SLASH "  Unpack Prefab Instance")) {
+            PushUndo(world, "Unpack Prefab");
+            world.Registry.remove<PrefabInstanceComponent>(entity);
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Break the link to %s.\nThe objects stay; they just stop tracking the prefab.",
+                                 pi.SourcePath.c_str());
     }
     ImGui::Separator();
 

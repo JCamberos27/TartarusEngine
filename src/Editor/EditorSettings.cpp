@@ -62,6 +62,8 @@ void EditorSettings::Load() {
     s.GameViewPresetHeight = root.value("gameViewPresetHeight", s.GameViewPresetHeight);
     s.AssetBrowserTreeWidth = root.value("assetBrowserTreeWidth", s.AssetBrowserTreeWidth);
     s.AssetBrowserIconSize = root.value("assetBrowserIconSize", s.AssetBrowserIconSize);
+    s.AssetSortMode = root.value("assetSortMode", s.AssetSortMode);
+    s.AssetSortDesc = root.value("assetSortDesc", s.AssetSortDesc);
     s.EngineMarkEnabled = root.value("engineMarkEnabled", s.EngineMarkEnabled);
     s.EngineMarkSpinSpeed = root.value("engineMarkSpinSpeed", s.EngineMarkSpinSpeed);
     s.EngineMarkPrism = root.value("engineMarkPrism", s.EngineMarkPrism);
@@ -69,6 +71,8 @@ void EditorSettings::Load() {
     s.LightGizmoSelectedOnly = root.value("lightGizmoSelectedOnly", s.LightGizmoSelectedOnly);
     s.LightGizmoOpacity = root.value("lightGizmoOpacity", s.LightGizmoOpacity);
     s.LightGizmoScale = root.value("lightGizmoScale", s.LightGizmoScale);
+    s.LayerVisibleMask = root.value("layerVisibleMask", s.LayerVisibleMask);
+    s.LayerPickLockMask = root.value("layerPickLockMask", s.LayerPickLockMask);
     s.CaptureMode = root.value("captureMode", s.CaptureMode);
     s.CaptureScale = root.value("captureScale", s.CaptureScale);
     s.CaptureResPreset = root.value("captureResPreset", s.CaptureResPreset);
@@ -114,6 +118,8 @@ void EditorSettings::Save() {
     root["gameViewPresetHeight"] = Get().GameViewPresetHeight;
     root["assetBrowserTreeWidth"] = Get().AssetBrowserTreeWidth;
     root["assetBrowserIconSize"] = Get().AssetBrowserIconSize;
+    root["assetSortMode"] = Get().AssetSortMode;
+    root["assetSortDesc"] = Get().AssetSortDesc;
     root["engineMarkEnabled"] = Get().EngineMarkEnabled;
     root["engineMarkSpinSpeed"] = Get().EngineMarkSpinSpeed;
     root["engineMarkPrism"] = Get().EngineMarkPrism;
@@ -121,6 +127,8 @@ void EditorSettings::Save() {
     root["lightGizmoSelectedOnly"] = Get().LightGizmoSelectedOnly;
     root["lightGizmoOpacity"] = Get().LightGizmoOpacity;
     root["lightGizmoScale"] = Get().LightGizmoScale;
+    root["layerVisibleMask"] = Get().LayerVisibleMask;
+    root["layerPickLockMask"] = Get().LayerPickLockMask;
     root["captureMode"] = Get().CaptureMode;
     root["captureScale"] = Get().CaptureScale;
     root["captureResPreset"] = Get().CaptureResPreset;

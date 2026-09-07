@@ -1,0 +1,4384 @@
+{
+  "assetFolders": [
+    "Scenes",
+    "Screenshots"
+  ],
+  "assetMeta": [
+    {
+      "displayName": "Default Scene",
+      "path": "C:/Users/jacob/OneDrive/Desktop/TartarusEngine/project/scenes/Untitled 2.json"
+    },
+    {
+      "displayName": "Red Blocks",
+      "path": "C:/Users/jacob/OneDrive/Desktop/TartarusEngine/project/scenes/Untitled.json"
+    }
+  ],
+  "boxes": [
+    {
+      "center": [
+        0.0,
+        -0.25,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.05999999865889549,
+        0.05999999865889549,
+        0.07999999821186066
+      ],
+      "id": 0,
+      "name": "Floor",
+      "order": 0,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        16.0,
+        0.5,
+        64.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        9.25,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.03999999910593033,
+        0.03999999910593033,
+        0.05000000074505806
+      ],
+      "id": 1,
+      "name": "Ceiling",
+      "order": 1,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        16.0,
+        0.5,
+        64.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -8.0,
+        4.5,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.07999999821186066,
+        0.07999999821186066,
+        0.10000000149011612
+      ],
+      "id": 2,
+      "name": "Wall_W",
+      "order": 2,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.5,
+        9.0,
+        64.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        8.0,
+        4.5,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.07999999821186066,
+        0.07999999821186066,
+        0.10000000149011612
+      ],
+      "id": 3,
+      "name": "Wall_E",
+      "order": 3,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.5,
+        9.0,
+        64.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        4.5,
+        -32.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.07999999821186066,
+        0.07999999821186066,
+        0.10000000149011612
+      ],
+      "id": 4,
+      "name": "Wall_N",
+      "order": 4,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        16.0,
+        9.0,
+        0.5
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        4.5,
+        32.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.07999999821186066,
+        0.07999999821186066,
+        0.10000000149011612
+      ],
+      "id": 5,
+      "name": "Wall_S",
+      "order": 5,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        16.0,
+        9.0,
+        0.5
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -3.0,
+        3.0,
+        -16.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.10000000149011612,
+        0.10000000149011612,
+        0.11999999731779099
+      ],
+      "id": 6,
+      "name": "Divider_1",
+      "order": 6,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        10.0,
+        6.0,
+        0.6000000238418579
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        3.0,
+        3.0,
+        0.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.10000000149011612,
+        0.10000000149011612,
+        0.11999999731779099
+      ],
+      "id": 7,
+      "name": "Divider_2",
+      "order": 7,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        10.0,
+        6.0,
+        0.6000000238418579
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -3.0,
+        3.0,
+        16.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.10000000149011612,
+        0.10000000149011612,
+        0.11999999731779099
+      ],
+      "id": 8,
+      "name": "Divider_3",
+      "order": 8,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        10.0,
+        6.0,
+        0.6000000238418579
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -1.5,
+        3.0,
+        -24.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.30000001192092896,
+        0.30000001192092896,
+        0.3400000035762787
+      ],
+      "id": 9,
+      "name": "PillarA_1",
+      "order": 9,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        1.0,
+        6.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        1.7999999523162842,
+        2.5,
+        -26.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.30000001192092896,
+        0.30000001192092896,
+        0.3400000035762787
+      ],
+      "id": 10,
+      "name": "PillarA_2",
+      "order": 10,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        1.0,
+        5.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.5,
+        3.5,
+        -21.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.30000001192092896,
+        0.30000001192092896,
+        0.3400000035762787
+      ],
+      "id": 11,
+      "name": "PillarA_3",
+      "order": 11,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.800000011920929,
+        7.0,
+        0.800000011920929
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -5.0,
+        1.0,
+        -28.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.23999999463558197,
+        0.23999999463558197,
+        0.2800000011920929
+      ],
+      "id": 12,
+      "name": "LedgeA",
+      "order": 12,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        3.0,
+        2.0,
+        3.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        0.5,
+        -8.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.2199999988079071,
+        0.2199999988079071,
+        0.25999999046325684
+      ],
+      "id": 13,
+      "name": "PlinthB",
+      "order": 13,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        3.0,
+        1.0,
+        3.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -4.0,
+        1.5,
+        -6.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.25999999046325684,
+        0.25999999046325684,
+        0.30000001192092896
+      ],
+      "id": 14,
+      "name": "BlockB_1",
+      "order": 14,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        1.5,
+        3.0,
+        1.5
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        4.0,
+        1.0,
+        -10.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.25999999046325684,
+        0.25999999046325684,
+        0.30000001192092896
+      ],
+      "id": 15,
+      "name": "BlockB_2",
+      "order": 15,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -4.0,
+        0.5,
+        -11.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.23999999463558197,
+        0.23999999463558197,
+        0.2800000011920929
+      ],
+      "id": 16,
+      "name": "StepB_1",
+      "order": 16,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        1.0,
+        2.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -4.0,
+        1.5,
+        -11.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.23999999463558197,
+        0.23999999463558197,
+        0.2800000011920929
+      ],
+      "id": 17,
+      "name": "StepB_2",
+      "order": 17,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        1.399999976158142,
+        1.0,
+        1.399999976158142
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        0.4000000059604645,
+        8.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.18000000715255737,
+        0.18000000715255737,
+        0.2199999988079071
+      ],
+      "id": 18,
+      "name": "StageC",
+      "order": 18,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        8.0,
+        0.800000011920929,
+        8.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        1.399999976158142,
+        8.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.2199999988079071,
+        0.2199999988079071,
+        0.25999999046325684
+      ],
+      "id": 19,
+      "name": "PlinthC",
+      "order": 19,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        2.0,
+        1.2000000476837158,
+        2.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -3.0,
+        2.5,
+        6.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.2800000011920929,
+        0.2800000011920929,
+        0.3199999928474426
+      ],
+      "id": 20,
+      "name": "SlabC_1",
+      "order": 20,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        15.0
+      ],
+      "size": [
+        0.4000000059604645,
+        5.0,
+        3.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        3.5,
+        2.5,
+        10.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.2800000011920929,
+        0.2800000011920929,
+        0.3199999928474426
+      ],
+      "id": 21,
+      "name": "SlabC_2",
+      "order": 21,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        -15.0
+      ],
+      "size": [
+        0.4000000059604645,
+        5.0,
+        3.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -3.0,
+        1.0,
+        11.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.25999999046325684,
+        0.25999999046325684,
+        0.30000001192092896
+      ],
+      "id": 22,
+      "name": "StackC_1",
+      "order": 22,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        1.399999976158142,
+        2.0,
+        1.399999976158142
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -3.0,
+        2.4000000953674316,
+        11.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.25999999046325684,
+        0.25999999046325684,
+        0.30000001192092896
+      ],
+      "id": 23,
+      "name": "StackC_2",
+      "order": 23,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        -2.0,
+        3.0,
+        24.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.30000001192092896,
+        0.30000001192092896,
+        0.3400000035762787
+      ],
+      "id": 24,
+      "name": "PillarD_1",
+      "order": 24,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.800000011920929,
+        6.0,
+        0.800000011920929
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        2.5,
+        3.0,
+        26.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.30000001192092896,
+        0.30000001192092896,
+        0.3400000035762787
+      ],
+      "id": 25,
+      "name": "PillarD_2",
+      "order": 25,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.800000011920929,
+        6.0,
+        0.800000011920929
+      ],
+      "static": true
+    },
+    {
+      "center": [
+        0.0,
+        3.0,
+        20.0
+      ],
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        0.30000001192092896,
+        0.30000001192092896,
+        0.3400000035762787
+      ],
+      "id": 26,
+      "name": "PillarD_3",
+      "order": 26,
+      "parentId": -1,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size": [
+        0.800000011920929,
+        6.0,
+        0.800000011920929
+      ],
+      "static": true
+    }
+  ],
+  "empties": [
+    {
+      "Animator": {
+        "Bob Amplitude": 0.6000000238418579,
+        "Bob Frequency Hz": 0.15000000596046448,
+        "Color Cycle Hz": 0.05000000074505806,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 4.5,
+        "Orbit Speed": 24.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 65,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": true,
+        "color": [
+          1.0,
+          0.44999998807907104,
+          0.25
+        ],
+        "colorTempK": 0.0,
+        "intensity": 180.0,
+        "kind": "point",
+        "range": 26.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "PL_RoamA",
+      "order": 27,
+      "parentId": -1,
+      "position": [
+        0.0,
+        4.0,
+        -24.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.800000011920929,
+        "Bob Frequency Hz": 0.20000000298023224,
+        "Color Cycle Hz": 0.07000000029802322,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 3.5,
+        "Orbit Speed": -18.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 66,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": true,
+        "color": [
+          0.4000000059604645,
+          0.699999988079071,
+          1.0
+        ],
+        "colorTempK": 0.0,
+        "intensity": 160.0,
+        "kind": "point",
+        "range": 24.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "PL_RoamC",
+      "order": 28,
+      "parentId": -1,
+      "position": [
+        0.0,
+        5.0,
+        8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.03999999910593033,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 1.5,
+        "Orbit Speed": 15.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 67,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": true,
+        "color": [
+          1.0,
+          0.30000001192092896,
+          0.5
+        ],
+        "colorTempK": 0.0,
+        "intensity": 700.0,
+        "kind": "spot",
+        "range": 30.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 30.0
+      },
+      "name": "SP_TheatreL",
+      "order": 29,
+      "parentId": -1,
+      "position": [
+        -6.0,
+        7.5,
+        4.0
+      ],
+      "rotation": [
+        -45.0,
+        -35.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.05000000074505806,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 1.5,
+        "Orbit Speed": -15.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 68,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": true,
+        "color": [
+          0.30000001192092896,
+          0.6000000238418579,
+          1.0
+        ],
+        "colorTempK": 0.0,
+        "intensity": 700.0,
+        "kind": "spot",
+        "range": 30.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 30.0
+      },
+      "name": "SP_TheatreR",
+      "order": 30,
+      "parentId": -1,
+      "position": [
+        6.0,
+        7.5,
+        12.0
+      ],
+      "rotation": [
+        -45.0,
+        35.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "Orbit Radius": 2.0,
+        "Orbit Speed": 10.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 69,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": true,
+        "color": [
+          1.0,
+          0.800000011920929,
+          0.4000000059604645
+        ],
+        "colorTempK": 0.0,
+        "intensity": 500.0,
+        "kind": "spot",
+        "range": 28.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 34.0
+      },
+      "name": "SP_ChamberA",
+      "order": 31,
+      "parentId": -1,
+      "position": [
+        -6.0,
+        7.0,
+        -20.0
+      ],
+      "rotation": [
+        -50.0,
+        -20.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 2.5,
+        "Orbit Speed": 40.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 70,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": true,
+        "color": [
+          0.6000000238418579,
+          1.0,
+          0.699999988079071
+        ],
+        "colorTempK": 0.0,
+        "intensity": 550.0,
+        "kind": "spot",
+        "range": 30.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": true,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 40.0
+      },
+      "name": "SP_ChamberD",
+      "order": 32,
+      "parentId": -1,
+      "position": [
+        0.0,
+        8.0,
+        24.0
+      ],
+      "rotation": [
+        -70.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 71,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          0.20000000298023224,
+          0.10000000149011612,
+          0.6000000238418579
+        ],
+        "colorTempK": 0.0,
+        "intensity": 40.0,
+        "kind": "point",
+        "range": 12.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "FP_A1",
+      "order": 33,
+      "parentId": -1,
+      "position": [
+        -6.0,
+        2.0,
+        -28.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 72,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          0.6000000238418579,
+          0.10000000149011612,
+          0.20000000298023224
+        ],
+        "colorTempK": 0.0,
+        "intensity": 40.0,
+        "kind": "point",
+        "range": 12.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "FP_A2",
+      "order": 34,
+      "parentId": -1,
+      "position": [
+        6.0,
+        2.0,
+        -20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 73,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          0.10000000149011612,
+          0.5,
+          0.5
+        ],
+        "colorTempK": 0.0,
+        "intensity": 45.0,
+        "kind": "point",
+        "range": 12.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "FP_B1",
+      "order": 35,
+      "parentId": -1,
+      "position": [
+        -6.0,
+        2.0,
+        -4.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 74,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          0.5,
+          0.30000001192092896,
+          0.10000000149011612
+        ],
+        "colorTempK": 0.0,
+        "intensity": 45.0,
+        "kind": "point",
+        "range": 13.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "FP_B2",
+      "order": 36,
+      "parentId": -1,
+      "position": [
+        6.0,
+        3.0,
+        -12.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 75,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          0.5,
+          0.10000000149011612,
+          0.5
+        ],
+        "colorTempK": 0.0,
+        "intensity": 35.0,
+        "kind": "point",
+        "range": 10.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "FP_C1",
+      "order": 37,
+      "parentId": -1,
+      "position": [
+        -7.0,
+        1.5,
+        14.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 76,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          0.15000000596046448,
+          0.15000000596046448,
+          0.6000000238418579
+        ],
+        "colorTempK": 0.0,
+        "intensity": 35.0,
+        "kind": "point",
+        "range": 10.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "FP_C2",
+      "order": 38,
+      "parentId": -1,
+      "position": [
+        7.0,
+        1.5,
+        2.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 77,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          0.10000000149011612,
+          0.6000000238418579,
+          0.30000001192092896
+        ],
+        "colorTempK": 0.0,
+        "intensity": 45.0,
+        "kind": "point",
+        "range": 13.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "FP_D1",
+      "order": 39,
+      "parentId": -1,
+      "position": [
+        -6.0,
+        2.0,
+        28.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 78,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          0.6000000238418579,
+          0.20000000298023224,
+          0.5
+        ],
+        "colorTempK": 0.0,
+        "intensity": 45.0,
+        "kind": "point",
+        "range": 13.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "FP_D2",
+      "order": 40,
+      "parentId": -1,
+      "position": [
+        6.0,
+        2.0,
+        20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.4000000059604645,
+        "Bob Frequency Hz": 0.30000001192092896,
+        "Color Cycle Hz": 0.10000000149011612,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 5.0,
+        "Orbit Speed": 50.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 79,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          1.0,
+          0.6000000238418579,
+          0.20000000298023224
+        ],
+        "colorTempK": 0.0,
+        "intensity": 55.0,
+        "kind": "point",
+        "range": 14.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "FP_Roam_B",
+      "order": 41,
+      "parentId": -1,
+      "position": [
+        0.0,
+        1.2000000476837158,
+        -8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.5,
+        "Bob Frequency Hz": 0.5,
+        "Color Cycle Hz": 0.11999999731779099,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 6.0,
+        "Orbit Speed": -60.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 80,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          0.30000001192092896,
+          0.800000011920929,
+          1.0
+        ],
+        "colorTempK": 0.0,
+        "intensity": 55.0,
+        "kind": "point",
+        "range": 14.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "FP_Roam_D",
+      "order": 42,
+      "parentId": -1,
+      "position": [
+        0.0,
+        1.5,
+        24.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.09000000357627869,
+        "Orbit Axis": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "Orbit Radius": 3.0,
+        "Orbit Speed": 70.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 81,
+      "light": {
+        "angularSize": 0.5299999713897705,
+        "castShadows": false,
+        "color": [
+          0.800000011920929,
+          0.30000001192092896,
+          1.0
+        ],
+        "colorTempK": 0.0,
+        "intensity": 45.0,
+        "kind": "point",
+        "range": 12.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "FP_Roam_A",
+      "order": 43,
+      "parentId": -1,
+      "position": [
+        0.0,
+        2.5,
+        -24.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 82,
+      "light": {
+        "angularSize": 2.0,
+        "castShadows": false,
+        "color": [
+          1.0,
+          0.9300000071525574,
+          0.8399999737739563
+        ],
+        "colorTempK": 0.0,
+        "intensity": 0.0,
+        "kind": "directional",
+        "range": 12.0,
+        "shadow": {
+          "bias": 1.0,
+          "enabled": false,
+          "nearPlane": 0.05000000074505806,
+          "normalBias": 1.0,
+          "resolution": 0,
+          "softness": 1.0,
+          "updateMode": 0
+        },
+        "spotAngle": 35.0
+      },
+      "name": "Sun (disabled)",
+      "order": 82,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        -50.0,
+        30.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 1,
+  "libraryModels": [
+    "C:/Users/jacob/OneDrive/Desktop/TartarusEngine/project/models/cube.obj"
+  ],
+  "libraryPrefabs": [
+    "C:/Users/jacob/OneDrive/Desktop/TartarusEngine/checkout/project/prefabs/Turret.prefab"
+  ],
+  "librarySounds": [],
+  "libraryTextures": [
+    "C:/Users/jacob/OneDrive/Desktop/TartarusEngine/checkout/project/screenshots/FPS_Template_20260907_110411.png"
+  ],
+  "models": [
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          60.0,
+          0.0
+        ]
+      },
+      "id": 27,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8500000238418579,
+          0.5,
+          0.20000000298023224
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.30000001192092896,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.4000000059604645,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "SpinCubeA_1",
+      "order": 44,
+      "parentId": -1,
+      "path": "primitive://cube#38",
+      "position": [
+        -1.5,
+        1.0,
+        -22.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.30000001192092896,
+        "Bob Frequency Hz": 0.25,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          -45.0,
+          0.0
+        ]
+      },
+      "id": 28,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.30000001192092896,
+          0.6000000238418579,
+          0.8999999761581421
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.6000000238418579,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.25,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "SpinCubeA_2",
+      "order": 45,
+      "parentId": -1,
+      "path": "primitive://cube#39",
+      "position": [
+        1.7999999523162842,
+        1.2000000476837158,
+        -27.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          40.0,
+          40.0,
+          0.0
+        ]
+      },
+      "id": 29,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8999999761581421,
+          0.30000001192092896,
+          0.4000000059604645
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.10000000149011612,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.5,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "SpinCubeA_3",
+      "order": 46,
+      "parentId": -1,
+      "path": "primitive://cube#40",
+      "position": [
+        -3.0,
+        1.0,
+        -25.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          140.0
+        ]
+      },
+      "id": 30,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.20000000298023224,
+          0.800000011920929,
+          0.699999988079071
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.20000000298023224,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.30000001192092896,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "RollCylinderA",
+      "order": 47,
+      "parentId": -1,
+      "path": "primitive://cylinder#41",
+      "position": [
+        3.0,
+        1.0,
+        -22.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        90.0
+      ],
+      "scale": [
+        1.0,
+        2.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.4000000059604645,
+        "Bob Frequency Hz": 0.30000001192092896,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          50.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 31,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          0.6000000238418579,
+          0.15000000596046448
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.550000011920929,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "TumbleConeA",
+      "order": 48,
+      "parentId": -1,
+      "path": "primitive://cone#42",
+      "position": [
+        0.5,
+        1.5,
+        -19.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.2000000476837158,
+        2.200000047683716,
+        1.2000000476837158
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.5,
+        "Bob Frequency Hz": 0.4000000059604645,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 5.0,
+        "Orbit Speed": 45.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 32,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.05000000074505806,
+          0.05000000074505806,
+          0.05000000074505806
+        ],
+        "emissiveColor": [
+          1.0,
+          0.4000000059604645,
+          0.10000000149011612
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 5.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.5,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "GlowOrbA",
+      "order": 49,
+      "parentId": -1,
+      "path": "primitive://sphere#43",
+      "position": [
+        0.0,
+        3.0,
+        -24.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.6000000238418579,
+        0.6000000238418579,
+        0.6000000238418579
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 33,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8500000238418579,
+          0.8500000238418579,
+          0.8799999952316284
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.8500000238418579,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "MatSphere_00",
+      "order": 50,
+      "parentId": -1,
+      "path": "primitive://sphere#44",
+      "position": [
+        -1.600000023841858,
+        1.600000023841858,
+        -8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 34,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8500000238418579,
+          0.8500000238418579,
+          0.8799999952316284
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.5,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.8500000238418579,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "MatSphere_10",
+      "order": 51,
+      "parentId": -1,
+      "path": "primitive://sphere#45",
+      "position": [
+        0.0,
+        1.600000023841858,
+        -8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 35,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8500000238418579,
+          0.8500000238418579,
+          0.8799999952316284
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 1.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.8500000238418579,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "MatSphere_20",
+      "order": 52,
+      "parentId": -1,
+      "path": "primitive://sphere#46",
+      "position": [
+        1.600000023841858,
+        1.600000023841858,
+        -8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 36,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8500000238418579,
+          0.8500000238418579,
+          0.8799999952316284
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.4000000059604645,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "MatSphere_01",
+      "order": 53,
+      "parentId": -1,
+      "path": "primitive://sphere#47",
+      "position": [
+        -1.600000023841858,
+        3.0,
+        -8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 37,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8500000238418579,
+          0.8500000238418579,
+          0.8799999952316284
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.5,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.4000000059604645,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "MatSphere_11",
+      "order": 54,
+      "parentId": -1,
+      "path": "primitive://sphere#48",
+      "position": [
+        0.0,
+        3.0,
+        -8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 38,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8500000238418579,
+          0.8500000238418579,
+          0.8799999952316284
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 1.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.4000000059604645,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "MatSphere_21",
+      "order": 55,
+      "parentId": -1,
+      "path": "primitive://sphere#49",
+      "position": [
+        1.600000023841858,
+        3.0,
+        -8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 39,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8500000238418579,
+          0.8500000238418579,
+          0.8799999952316284
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.05000000074505806,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "MatSphere_02",
+      "order": 56,
+      "parentId": -1,
+      "path": "primitive://sphere#50",
+      "position": [
+        -1.600000023841858,
+        4.400000095367432,
+        -8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 40,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8500000238418579,
+          0.8500000238418579,
+          0.8799999952316284
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.5,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.05000000074505806,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "MatSphere_12",
+      "order": 57,
+      "parentId": -1,
+      "path": "primitive://sphere#51",
+      "position": [
+        0.0,
+        4.400000095367432,
+        -8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 41,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8500000238418579,
+          0.8500000238418579,
+          0.8799999952316284
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 1.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.05000000074505806,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "MatSphere_22",
+      "order": 58,
+      "parentId": -1,
+      "path": "primitive://sphere#52",
+      "position": [
+        1.600000023841858,
+        4.400000095367432,
+        -8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.699999988079071,
+        "Bob Frequency Hz": 0.30000001192092896,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          50.0,
+          0.0
+        ]
+      },
+      "id": 42,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8999999761581421,
+          0.699999988079071,
+          0.20000000298023224
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.4000000059604645,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.30000001192092896,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "BobCubeB_1",
+      "order": 59,
+      "parentId": -1,
+      "path": "primitive://cube#53",
+      "position": [
+        -4.0,
+        3.0,
+        -6.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.6000000238418579,
+        "Bob Frequency Hz": 0.25,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          30.0,
+          40.0,
+          20.0
+        ]
+      },
+      "id": 43,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.5,
+          0.30000001192092896,
+          0.8999999761581421
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.10000000149011612,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.4000000059604645,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "BobCubeB_2",
+      "order": 60,
+      "parentId": -1,
+      "path": "primitive://cube#54",
+      "position": [
+        4.0,
+        3.0,
+        -10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.100000023841858,
+        1.100000023841858,
+        1.100000023841858
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 2.5,
+        "Orbit Speed": 60.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 44,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.019999999552965164,
+          0.019999999552965164,
+          0.019999999552965164
+        ],
+        "emissiveColor": [
+          0.20000000298023224,
+          1.0,
+          0.800000011920929
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 4.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.5,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "GlowOrbB_1",
+      "order": 61,
+      "parentId": -1,
+      "path": "primitive://sphere#55",
+      "position": [
+        -4.0,
+        2.0,
+        -6.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.4000000059604645,
+        "Bob Frequency Hz": 0.5,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.20000000298023224,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 3.0,
+        "Orbit Speed": -50.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 45,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.019999999552965164,
+          0.019999999552965164,
+          0.019999999552965164
+        ],
+        "emissiveColor": [
+          1.0,
+          0.20000000298023224,
+          0.6000000238418579
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 4.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.5,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "GlowOrbB_2",
+      "order": 62,
+      "parentId": -1,
+      "path": "primitive://sphere#56",
+      "position": [
+        4.0,
+        2.0,
+        -10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 46,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8999999761581421,
+          0.8500000238418579,
+          0.6000000238418579
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.949999988079071,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.11999999731779099,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "HeroSphereC",
+      "order": 63,
+      "parentId": -1,
+      "path": "primitive://sphere#57",
+      "position": [
+        0.0,
+        3.200000047683716,
+        8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.600000023841858,
+        1.600000023841858,
+        1.600000023841858
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 3.5,
+        "Orbit Speed": 55.0,
+        "Spin Deg/Sec": [
+          0.0,
+          80.0,
+          0.0
+        ]
+      },
+      "id": 47,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          0.4000000059604645,
+          0.30000001192092896
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.5,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.30000001192092896,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "OrbitCubeC_1",
+      "order": 64,
+      "parentId": -1,
+      "path": "primitive://cube#58",
+      "position": [
+        0.0,
+        3.200000047683716,
+        8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.699999988079071,
+        0.699999988079071,
+        0.699999988079071
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.6000000238418579,
+        "Bob Frequency Hz": 0.30000001192092896,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 4.5,
+        "Orbit Speed": -40.0,
+        "Spin Deg/Sec": [
+          0.0,
+          80.0,
+          0.0
+        ]
+      },
+      "id": 48,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.30000001192092896,
+          0.5,
+          1.0
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.5,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.30000001192092896,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "OrbitCubeC_2",
+      "order": 65,
+      "parentId": -1,
+      "path": "primitive://cube#59",
+      "position": [
+        0.0,
+        3.200000047683716,
+        8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.699999988079071,
+        0.699999988079071,
+        0.699999988079071
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.10000000149011612,
+          1.0,
+          0.10000000149011612
+        ],
+        "Orbit Radius": 2.799999952316284,
+        "Orbit Speed": 70.0,
+        "Spin Deg/Sec": [
+          60.0,
+          0.0,
+          60.0
+        ]
+      },
+      "id": 49,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.4000000059604645,
+          1.0,
+          0.5
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.5,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.30000001192092896,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "OrbitCubeC_3",
+      "order": 66,
+      "parentId": -1,
+      "path": "primitive://cube#60",
+      "position": [
+        0.0,
+        3.200000047683716,
+        8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.6000000238418579,
+        0.6000000238418579,
+        0.6000000238418579
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.30000001192092896,
+        "Bob Frequency Hz": 0.3499999940395355,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          55.0
+        ]
+      },
+      "id": 50,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8999999761581421,
+          0.8999999761581421,
+          0.949999988079071
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.699999988079071,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.20000000298023224,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "TumbleConeC",
+      "order": 67,
+      "parentId": -1,
+      "path": "primitive://cone#61",
+      "position": [
+        -3.0,
+        1.399999976158142,
+        11.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        2.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          120.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 51,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.800000011920929,
+          0.20000000298023224,
+          0.30000001192092896
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.10000000149011612,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.3499999940395355,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "RollCylinderC",
+      "order": 68,
+      "parentId": -1,
+      "path": "primitive://cylinder#62",
+      "position": [
+        3.5,
+        1.0,
+        6.0
+      ],
+      "rotation": [
+        90.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.8999999761581421,
+        1.7999999523162842,
+        0.8999999761581421
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 52,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.019999999552965164,
+          0.019999999552965164,
+          0.019999999552965164
+        ],
+        "emissiveColor": [
+          1.0,
+          0.11999999731779099,
+          0.11999999731779099
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.5,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.6000000238418579,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "EmissiveBar_1",
+      "order": 69,
+      "parentId": -1,
+      "path": "primitive://cube#63",
+      "position": [
+        -4.0,
+        1.5,
+        30.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.5,
+        3.0,
+        0.5
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 53,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.019999999552965164,
+          0.019999999552965164,
+          0.019999999552965164
+        ],
+        "emissiveColor": [
+          1.0,
+          0.6000000238418579,
+          0.11999999731779099
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 3.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.6000000238418579,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "EmissiveBar_2",
+      "order": 70,
+      "parentId": -1,
+      "path": "primitive://cube#64",
+      "position": [
+        -2.0,
+        1.5,
+        30.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.5,
+        3.0,
+        0.5
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 54,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.019999999552965164,
+          0.019999999552965164,
+          0.019999999552965164
+        ],
+        "emissiveColor": [
+          0.30000001192092896,
+          1.0,
+          0.20000000298023224
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 4.5,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.6000000238418579,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "EmissiveBar_3",
+      "order": 71,
+      "parentId": -1,
+      "path": "primitive://cube#65",
+      "position": [
+        0.0,
+        1.5,
+        30.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.5,
+        3.0,
+        0.5
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 55,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.019999999552965164,
+          0.019999999552965164,
+          0.019999999552965164
+        ],
+        "emissiveColor": [
+          0.20000000298023224,
+          0.550000011920929,
+          1.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 6.5,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.6000000238418579,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "EmissiveBar_4",
+      "order": 72,
+      "parentId": -1,
+      "path": "primitive://cube#66",
+      "position": [
+        2.0,
+        1.5,
+        30.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.5,
+        3.0,
+        0.5
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 56,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.019999999552965164,
+          0.019999999552965164,
+          0.019999999552965164
+        ],
+        "emissiveColor": [
+          0.75,
+          0.20000000298023224,
+          1.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 9.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.6000000238418579,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "EmissiveBar_5",
+      "order": 73,
+      "parentId": -1,
+      "path": "primitive://cube#67",
+      "position": [
+        4.0,
+        1.5,
+        30.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.5,
+        3.0,
+        0.5
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.6000000238418579,
+        "Bob Frequency Hz": 0.30000001192092896,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 6.0,
+        "Orbit Speed": 60.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 57,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.019999999552965164,
+          0.019999999552965164,
+          0.019999999552965164
+        ],
+        "emissiveColor": [
+          1.0,
+          0.5,
+          0.10000000149011612
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 5.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.5,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "OrbiterD_1",
+      "order": 74,
+      "parentId": -1,
+      "path": "primitive://sphere#68",
+      "position": [
+        0.0,
+        3.0,
+        24.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.800000011920929,
+        "Bob Frequency Hz": 0.5,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 4.0,
+        "Orbit Speed": -85.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 58,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.019999999552965164,
+          0.019999999552965164,
+          0.019999999552965164
+        ],
+        "emissiveColor": [
+          0.10000000149011612,
+          0.6000000238418579,
+          1.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 5.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.5,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "OrbiterD_2",
+      "order": 75,
+      "parentId": -1,
+      "path": "primitive://sphere#69",
+      "position": [
+        0.0,
+        4.0,
+        24.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.44999998807907104,
+        0.44999998807907104,
+        0.44999998807907104
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          1.0,
+          0.20000000298023224,
+          0.0
+        ],
+        "Orbit Radius": 3.0,
+        "Orbit Speed": 100.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 59,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.019999999552965164,
+          0.019999999552965164,
+          0.019999999552965164
+        ],
+        "emissiveColor": [
+          0.800000011920929,
+          0.10000000149011612,
+          0.8999999761581421
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 5.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.5,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "OrbiterD_3",
+      "order": 76,
+      "parentId": -1,
+      "path": "primitive://sphere#70",
+      "position": [
+        0.0,
+        2.5,
+        24.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.4000000059604645,
+        0.4000000059604645,
+        0.4000000059604645
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.5,
+        "Bob Frequency Hz": 0.30000001192092896,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          50.0,
+          50.0,
+          0.0
+        ]
+      },
+      "id": 60,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.8999999761581421,
+          0.5,
+          0.20000000298023224
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.4000000059604645,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.3499999940395355,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "SpinCubeD_1",
+      "order": 77,
+      "parentId": -1,
+      "path": "primitive://cube#71",
+      "position": [
+        -2.0,
+        1.0,
+        22.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          70.0,
+          0.0
+        ]
+      },
+      "id": 61,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.20000000298023224,
+          0.699999988079071,
+          0.8999999761581421
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.6000000238418579,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.25,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "SpinCubeD_2",
+      "order": 78,
+      "parentId": -1,
+      "path": "primitive://cube#72",
+      "position": [
+        2.5,
+        1.2000000476837158,
+        26.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.100000023841858,
+        1.100000023841858,
+        1.100000023841858
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.4000000059604645,
+        "Bob Frequency Hz": 0.4000000059604645,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          35.0,
+          0.0,
+          35.0
+        ]
+      },
+      "id": 62,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.699999988079071,
+          0.30000001192092896,
+          0.8999999761581421
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.10000000149011612,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.5,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "SpinCubeD_3",
+      "order": 79,
+      "parentId": -1,
+      "path": "primitive://cube#73",
+      "position": [
+        0.0,
+        1.0,
+        20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.8999999761581421,
+        0.8999999761581421,
+        0.8999999761581421
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.0,
+        "Bob Frequency Hz": 0.0,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          0.0,
+          0.0,
+          130.0
+        ]
+      },
+      "id": 63,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          0.30000001192092896,
+          0.8999999761581421,
+          0.5
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.20000000298023224,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.30000001192092896,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "RollCylinderD",
+      "order": 80,
+      "parentId": -1,
+      "path": "primitive://cylinder#74",
+      "position": [
+        -4.0,
+        1.0,
+        28.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        90.0
+      ],
+      "scale": [
+        1.0,
+        2.0,
+        1.0
+      ],
+      "soundPath": ""
+    },
+    {
+      "Animator": {
+        "Bob Amplitude": 0.5,
+        "Bob Frequency Hz": 0.3499999940395355,
+        "Color Cycle Hz": 0.0,
+        "Orbit Axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "Orbit Radius": 0.0,
+        "Orbit Speed": 0.0,
+        "Spin Deg/Sec": [
+          60.0,
+          0.0,
+          0.0
+        ]
+      },
+      "id": 64,
+      "material": {
+        "albedoMap": "",
+        "aoMap": "",
+        "baseColor": [
+          1.0,
+          0.699999988079071,
+          0.20000000298023224
+        ],
+        "emissiveColor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emissiveMap": "",
+        "emissiveStrength": 1.0,
+        "metallic": 0.0,
+        "metallicMap": "",
+        "metallicRoughnessMap": "",
+        "normalMap": "",
+        "roughness": 0.5,
+        "roughnessMap": "",
+        "triplanar": false,
+        "triplanarScale": 1.0
+      },
+      "name": "TumbleConeD",
+      "order": 81,
+      "parentId": -1,
+      "path": "primitive://cone#75",
+      "position": [
+        4.0,
+        1.5,
+        20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.100000023841858,
+        2.0,
+        1.100000023841858
+      ],
+      "soundPath": ""
+    }
+  ],
+  "skyAmbientIntensity": 1.0,
+  "skyHorizonColor": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "skyZenithColor": [
+    0.0,
+    0.0,
+    0.0
+  ]
+}

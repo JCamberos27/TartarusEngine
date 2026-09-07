@@ -41,7 +41,13 @@
 //   8 - Inspector (frame only): the module owns Begin("Inspector") + End + visibility.
 //       Get/SetShowInspector and one DrawInspectorBody callback — the ~1090-line body (every
 //       component editor, PBR material, add-component, per-field undo) stays host-side.
-constexpr std::uint32_t kEditorModuleAPIVersion = 11;
+//   9-11 - Grid & Snap popover, Gizmos dropdown, Gizmos master toggle (see the tagged sections).
+//   12 - Viewport tools (#236 E): Hand tool (Q) + Lock View to Selected (Shift+F) getters/setters,
+//        and GizmoOp gains a 5th value (4 = Universal / combined transform, via Get/SetGizmoOp).
+//   13 - Asset Browser sort + refresh (#236 G): Get/SetAssetSort (packed mode*2+desc),
+//        RefreshAssetBrowser, GetAssetRefreshFlash. Also Console (#236 A5): EditorConsoleState
+//        gains Collapse / ClearOnPlay / ErrorPause.
+constexpr std::uint32_t kEditorModuleAPIVersion = 13;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -69,6 +75,12 @@ struct EditorConsoleState {
     bool ShowError = true;
     bool AutoScroll = true;
     bool ShowTimestamps = true;
+    // #236 A5. Collapse: every identical message shows once with a summed (xN), Unity-style,
+    // not just consecutive duplicates. ClearOnPlay: the host wipes the log on entering Play.
+    // ErrorPause: the host freezes the running sim the frame a new error is logged.
+    bool Collapse = false;
+    bool ClearOnPlay = false;
+    bool ErrorPause = false;
     // Matches the 128-byte buffer the panel's InputTextWithHint has always used.
     char Filter[128] = {};
     // Only auto-scroll when Log actually gained an entry, rather than fighting the user's
@@ -341,6 +353,15 @@ struct EditorModuleHostAPI {
 
     // --- Gizmos master toggle button (API v11) --------------------------------------
     bool (*GetGizmosMasterVisible)() = nullptr;  void (*SetGizmosMasterVisible)(bool on) = nullptr;
+
+    // --- Viewport tools (API v12) --------------------------------------------------
+    bool (*GetHandTool)() = nullptr;             void (*SetHandTool)(bool on) = nullptr;
+    bool (*GetLockViewToSelection)() = nullptr;  void (*SetLockViewToSelection)(bool on) = nullptr;
+
+    // --- Asset Browser sort + refresh (API v13) ---------------------------------
+    int  (*GetAssetSort)() = nullptr;   void (*SetAssetSort)(int packed) = nullptr;
+    void (*RefreshAssetBrowser)() = nullptr;
+    float (*GetAssetRefreshFlash)() = nullptr;
 };
 
 struct EditorModuleAPI {

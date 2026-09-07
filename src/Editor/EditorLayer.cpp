@@ -17,6 +17,8 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "LayerRegistry.h"
+#include "ProjectSettings.h"
 #include "GLStateCache.h"
 #include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
 #include "ScreenBlur.h"
@@ -85,6 +87,8 @@ void EditorLayer::Init(GLFWwindow* window) {
     // Editor preferences (currently just the tooltip toggle) are independent of any scene, so
     // they're loaded once here rather than as part of scene load/save.
     EditorSettings::Load();
+    LayerRegistry::Load(); // slot names for LayerComponent (#236 A1); project/layers.json
+    ProjectSettings::Load(); // physics + tag vocabulary (#236 A4); project/settings.json
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see ProjectPaths.h. Must match main.cpp's initial load: prefer the last-open scene if
@@ -915,8 +919,9 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         static const std::pair<const char*, const char*> kShortcuts[] = {
             {"Fly camera", "hold RMB + WASDQE"},
             {"Zoom / dolly", "scroll wheel  ·  Alt+RMB drag"},
-            {"Pan view", "middle-drag"},
+            {"Pan view", "middle-drag  ·  Hand tool (Q) + left-drag"},
             {"Orbit selection", "Alt + left-drag"},
+            {"Lock view to selection (camera follows)", "Shift+F"},
             {"View presets", "1 / 3 / 7 / 0  (or numpad; Ctrl = opposite side)"},
             {"Toggle orthographic", "5  (or numpad 5)"},
             {"Frame selection", "F"},
@@ -925,8 +930,9 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             {"Toggle Active State (selection)", "Alt+Shift+A"},
             {"Select All / Deselect / Invert", "Ctrl+A / Ctrl+Shift+A / Ctrl+I"},
             {"Align selected Camera to view", "Ctrl+Shift+F"},
-            {"Gizmo: move / rotate / scale / rect", "W / E / R / T"},
+            {"Tools: hand / move / rotate / scale / rect / transform", "Q / W / E / R / T / Y"},
             {"Vertex grab", "hold V"},
+            {"Surface snap while moving (invert the toggle)", "hold Shift"},
             {"Multi-select", "Ctrl+Click  ·  drag a box"},
             {"Undo / Redo", "Ctrl+Z / Ctrl+Y"},
             {"Save / Save As", "Ctrl+S / Ctrl+Shift+S"},
@@ -988,6 +994,114 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
     ImGui::EndChild();
     ImGui::End();
 }
+
+// #236 A4 — Project Settings: project-scoped, saved to project/settings.json (Physics, Tags)
+// and project/layers.json (layer names). Sibling of the per-user Preferences window above;
+// same two-pane category layout.
+void EditorLayer::DrawProjectSettingsWindow(World& /*world*/) {
+    if (!m_ShowProjectSettings) return;
+
+    ImGui::SetNextWindowSize(ImVec2(620.0f * m_UIScale, 420.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    PushTabChromeText();
+    const bool open = ImGui::Begin(ICON_FA_GEARS "  Project Settings", &m_ShowProjectSettings);
+    PopTabChromeText();
+    if (!open) { ImGui::End(); return; }
+
+    static const char* kCats[] = {
+        ICON_FA_PERSON_FALLING_BURST "  Physics",
+        ICON_FA_TAGS "  Tags & Layers",
+    };
+    const int kCatCount = (int)(sizeof(kCats) / sizeof(kCats[0]));
+    m_ProjSettingsCategory = std::clamp(m_ProjSettingsCategory, 0, kCatCount - 1);
+
+    ImGui::BeginChild("##ProjCats", ImVec2(160.0f * m_UIScale, 0), ImGuiChildFlags_Borders);
+    for (int i = 0; i < kCatCount; ++i)
+        if (ImGui::Selectable(kCats[i], m_ProjSettingsCategory == i)) m_ProjSettingsCategory = i;
+    ImGui::EndChild();
+    ImGui::SameLine();
+    ImGui::BeginChild("##ProjBody", ImVec2(0, 0), ImGuiChildFlags_Borders);
+
+    const float kw = 200.0f * m_UIScale;
+
+    if (m_ProjSettingsCategory == 0) { // Physics
+        ProjectSettings::PhysicsSettings& p = ProjectSettings::MutablePhysics();
+
+        ImGui::SeparatorText("Gravity");
+        ImGui::SetNextItemWidth(kw);
+        ImGui::DragFloat3("m/s\xC2\xB2##grav", &p.Gravity.x, 0.1f, -200.0f, 200.0f, "%.2f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("World gravity. Only the Y component is applied today — it drives the\n"
+                                 "Play-mode walk collider. X/Z are stored for rigid bodies (#185).");
+
+        ImGui::SeparatorText("Simulation (reserved for #185)");
+        ImGui::BeginDisabled(true);
+        ImGui::SetNextItemWidth(kw);
+        ImGui::DragFloat("Fixed timestep", &p.FixedTimestep, 0.0001f, 0.001f, 0.1f, "%.4f s");
+        ImGui::SetNextItemWidth(kw);
+        ImGui::DragInt("Solver iterations", &p.SolverIterations, 0.1f, 1, 64);
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Stored in project/settings.json now; consumed once the rigid-body\n"
+                                 "step lands (#185). The Play-mode walker uses its own safety substep.");
+    } else { // Tags & Layers
+        ImGui::SeparatorText("Tags");
+        ImGui::TextDisabled("Named tags offered in the Inspector's Tag dropdown, on top of tags already in use.");
+        ImGui::Spacing();
+
+        const auto& tags = ProjectSettings::Tags();
+        std::string removeTag;
+        for (const std::string& t : tags) {
+            ImGui::PushID(t.c_str());
+            if (ActionButton(ICON_FA_XMARK "##deltag", "Remove this tag", false,
+                             ImVec2(ImGui::GetFrameHeight(), 0.0f)))
+                removeTag = t;
+            ImGui::SameLine();
+            ImGui::TextUnformatted(t.c_str());
+            ImGui::PopID();
+        }
+        if (!removeTag.empty()) { ProjectSettings::RemoveTag(removeTag); ProjectSettings::Save(); }
+
+        ImGui::Spacing();
+        ImGui::SetNextItemWidth(kw);
+        const bool entered = ImGui::InputTextWithHint("##newtag", "New tag name", m_NewTagBuf,
+            sizeof(m_NewTagBuf), ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::SameLine();
+        if ((ActionButton("Add##tag", "Add this tag to the project") || entered) && m_NewTagBuf[0]) {
+            ProjectSettings::AddTag(m_NewTagBuf);
+            ProjectSettings::Save();
+            m_NewTagBuf[0] = '\0';
+        }
+
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+        ImGui::SeparatorText("Layers");
+        ImGui::TextDisabled("Slot 0 is always \"Default\". Names save to project/layers.json.");
+        ImGui::Spacing();
+        for (int i = 0; i < LayerRegistry::kCount; ++i) {
+            ImGui::PushID(i);
+            ImGui::Text("%2d", i);
+            ImGui::SameLine(0.0f, 12.0f);
+            if (i == 0) {
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextDisabled("Default");
+            } else {
+                char buf[32];
+                std::snprintf(buf, sizeof(buf), "%s", LayerRegistry::Name(i).c_str());
+                char hint[16];
+                std::snprintf(hint, sizeof(hint), "Layer %d", i);
+                ImGui::SetNextItemWidth(kw);
+                if (ImGui::InputTextWithHint("##lname", hint, buf, sizeof(buf)))
+                    LayerRegistry::SetName(i, buf);
+                if (ImGui::IsItemDeactivatedAfterEdit()) LayerRegistry::Save();
+            }
+            ImGui::PopID();
+        }
+    }
+
+    ImGui::EndChild();
+    ImGui::End();
+}
+
 void EditorLayer::BeginFrame() {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -1357,6 +1471,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
     m_ScreenshotThumbBudgetThisFrame = 8; // at most this many new Asset Browser screenshot thumbnails per frame (#176)
 
+    if (m_AssetRefreshFlash > 0.0f) m_AssetRefreshFlash = std::max(0.0f, m_AssetRefreshFlash - dt); // #236 G
+
     // Prism theme: drift the palette's spectral phase and repaint the hue-driven style colours
     // before any window is submitted this frame. Slow — the band should look like it's tilting,
     // not spinning. Dark Slate: nothing to do.
@@ -1373,6 +1489,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawExitPrompt();
     DrawSceneSwitchPrompt(world, assets);
     DrawPreferencesWindow(world);
+    DrawProjectSettingsWindow(world);
     DrawScreenshotPreview();
 
     // Auto-save: only ticks here (Draw() is editor-mode-only, per main.cpp) so it never fires
@@ -1675,10 +1792,15 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if (!m_HideOverlaysThisFrame) DrawViewGizmo(world, editorCamera);
 
     if (!vHeld) {
-        UpdateLightHandles(world, editorCamera);
-        HandleViewportPicking(world, editorCamera);
-        if (m_ShowGizmos && m_GizmosMasterVisible && !m_HideOverlaysThisFrame) DrawGizmo(world, editorCamera);
+        if (m_HandTool) {
+            HandleHandToolPan(editorCamera); // Q — LMB-drag pans; no picking or gizmo (#236 E)
+        } else {
+            UpdateLightHandles(world, editorCamera);
+            HandleViewportPicking(world, editorCamera);
+            if (m_ShowGizmos && m_GizmosMasterVisible && !m_HideOverlaysThisFrame) DrawGizmo(world, editorCamera);
+        }
     }
+    UpdateLockViewToSelection(world, editorCamera); // Shift+F — camera follows the selection centroid (#236 E)
 
     // Anchored to the actual viewport's top-center (a pivot, not a fixed-width guess) so it
     // stays centered over the 3D view itself as the Hierarchy/Inspector/Asset Browser panels
@@ -1720,10 +1842,14 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // WASDQE fly the camera during Right-drag instead (see main.cpp's UpdateEditorCamera),
         // so without this guard just walking forward with W would also switch tools every time.
         if (!ImGui::IsMouseDown(ImGuiMouseButton_Right) && !hierarchyOwnsLetters) {
-            if (ImGui::IsKeyPressed(ImGuiKey_W)) m_GizmoOp = GizmoOp::Translate;
-            if (ImGui::IsKeyPressed(ImGuiKey_E)) m_GizmoOp = GizmoOp::Rotate;
-            if (ImGui::IsKeyPressed(ImGuiKey_R)) m_GizmoOp = GizmoOp::Scale;
-            if (ImGui::IsKeyPressed(ImGuiKey_T)) m_GizmoOp = GizmoOp::Rect;
+            // Q/W/E/R/T/Y viewport tools (Unity's scheme, + Y for the combined gizmo, #236 E).
+            // Selecting any transform tool exits the Hand tool.
+            if (ImGui::IsKeyPressed(ImGuiKey_Q)) m_HandTool = true;
+            if (ImGui::IsKeyPressed(ImGuiKey_W)) { m_GizmoOp = GizmoOp::Translate; m_HandTool = false; }
+            if (ImGui::IsKeyPressed(ImGuiKey_E)) { m_GizmoOp = GizmoOp::Rotate;    m_HandTool = false; }
+            if (ImGui::IsKeyPressed(ImGuiKey_R)) { m_GizmoOp = GizmoOp::Scale;     m_HandTool = false; }
+            if (ImGui::IsKeyPressed(ImGuiKey_T)) { m_GizmoOp = GizmoOp::Rect;      m_HandTool = false; }
+            if (ImGui::IsKeyPressed(ImGuiKey_Y)) { m_GizmoOp = GizmoOp::Universal; m_HandTool = false; }
             // Shift+A quick-add (Blender's binding) — opens the Add menu as a popup at the
             // cursor. Guarded with the others so fly-mode's A (strafe left) doesn't trigger it.
             if (io.KeyShift && !io.KeyCtrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_A)) {
@@ -1770,7 +1896,10 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         bool assetBrowserOwnsKeys = m_AssetBrowserFocused &&
             (!m_SelectedAssetKey.empty() || !m_ExtraAssetSelection.empty());
 
-        if (HasAnySelection() && !assetBrowserOwnsKeys && !hierarchyOwnsLetters && ImGui::IsKeyPressed(ImGuiKey_F)) FocusOnSelection(world, editorCamera);
+        if (HasAnySelection() && !assetBrowserOwnsKeys && !hierarchyOwnsLetters && ImGui::IsKeyPressed(ImGuiKey_F)) {
+            if (io.KeyShift) SetLockViewToSelection(!m_LockViewToSelection); // Shift+F — toggle camera-follow (#236 E)
+            else             FocusOnSelection(world, editorCamera);
+        }
         if (HasAnySelection() && !assetBrowserOwnsKeys && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) DuplicateSelection(world, assets);
 
         // Edit-menu selection ops (#236). The Hierarchy owns Ctrl+A when it's focused (select all
@@ -1805,6 +1934,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (m_AssetBrowserFocused && m_RenamingAssetKey.empty()) {
             if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F)) {
                 m_AssetSearchFocusRequested = true;
+            } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_R)) {
+                RefreshAssetBrowser(); // #236 G
             } else if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F) && !m_SelectedAssetKey.empty()) {
                 // "Frame selected" — Unity shows the asset in its containing folder; here that
                 // just means navigating the browser to it, since it's already always visible
