@@ -44,7 +44,11 @@ namespace SceneSerializer {
     // The same JSON schema as a full scene, restricted to `entities` (plus, implicitly, all of
     // their descendants — copying a parent always brings its children). Sky settings and the
     // asset library are omitted, since a fragment shouldn't overwrite either on paste.
-    std::string SaveEntitiesToString(const World& world, const std::vector<entt::entity>& entities);
+    // flattenPrefabInstances: bake any prefab-instance subtree in the selection in full instead
+    // of writing it as a link stub (#236 A2). True when producing a self-contained .prefab file;
+    // false (the default) for the clipboard, so a copied instance stays linked to its source.
+    std::string SaveEntitiesToString(const World& world, const std::vector<entt::entity>& entities,
+        bool flattenPrefabInstances = false);
 
     // ADDS the fragment's entities to `world` without clearing it (unlike LoadFromString, which
     // replaces the whole scene), appending every newly created entity to outCreated. Used for
@@ -52,9 +56,11 @@ namespace SceneSerializer {
     bool AppendEntitiesFromString(World& world, AssetLibrary& assets, const std::string& data,
         std::vector<entt::entity>& outCreated);
 
-    // Prefabs: one entity (and its descendants) saved to / instantiated from a .prefab file —
-    // just an entity-subset fragment with a dedicated extension so the Asset Browser can list
-    // and drag them.
+    // Prefabs: one entity (and its descendants) saved to / instantiated from a .prefab file.
+    // SavePrefab writes a self-contained fragment (no nested links). InstantiatePrefab stamps a
+    // PrefabInstanceComponent on the returned root (#236 A2) so the placement is a live instance
+    // linked to `path`, not a detached copy; `outAll`, if given, receives every entity created.
     bool SavePrefab(const World& world, entt::entity root, const std::string& path);
-    entt::entity InstantiatePrefab(World& world, AssetLibrary& assets, const std::string& path);
+    entt::entity InstantiatePrefab(World& world, AssetLibrary& assets, const std::string& path,
+        std::vector<entt::entity>* outAll = nullptr);
 }
