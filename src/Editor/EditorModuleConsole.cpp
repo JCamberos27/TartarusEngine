@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace EditorModuleConsole {
@@ -97,27 +98,63 @@ bool LevelVisible(const EditorConsoleState& state, int level) {
 
 // #219's cached filtered index list. Module-side because it's pure derived data: after a reload
 // the sentinel revision below forces one rebuild and the panel is back where it was.
+// g_RowCounts is parallel: the (xN) shown per row — entry.Count normally, or the summed count
+// of every identical message when Collapse is on (#236 A5).
 std::vector<int> g_FilteredIndices;
+std::vector<int> g_RowCounts;
 unsigned int g_FilterCacheRevision = (unsigned int)-1; // forces a rebuild on first draw
 std::string g_FilterCacheFilter;
 bool g_FilterCacheShowInfo = true;
 bool g_FilterCacheShowWarning = true;
 bool g_FilterCacheShowError = true;
+bool g_FilterCacheCollapse = false;
+
+// Build the visible-row list (respecting level + text filter, and Collapse). Shared by the
+// panel's clipper loop and BuildShownText so "Save..." / "Copy all shown" match what's on screen.
+void BuildFilteredRows(const EditorModuleHostAPI& host, const EditorConsoleState& state,
+                       std::vector<int>& outIndices, std::vector<int>& outCounts) {
+    outIndices.clear();
+    outCounts.clear();
+    const int entryCount = host.LogEntryCount ? host.LogEntryCount() : 0;
+    const std::string filter = state.Filter;
+    outIndices.reserve((size_t)entryCount);
+    outCounts.reserve((size_t)entryCount);
+    std::unordered_map<std::string, size_t> collapsedRow; // key -> position in outIndices
+    for (int i = 0; i < entryCount; ++i) {
+        Entry e;
+        if (!FetchEntry(host, i, e)) continue;
+        if (!LevelVisible(state, e.Level) || !MatchesFilter(filter, e.Message)) continue;
+        if (state.Collapse) {
+            std::string key; key.reserve(e.Message.size() + 2);
+            key += (char)('0' + e.Level); key += '\x01'; key += e.Message;
+            auto it = collapsedRow.find(key);
+            if (it == collapsedRow.end()) {
+                collapsedRow.emplace(std::move(key), outIndices.size());
+                outIndices.push_back(i);
+                outCounts.push_back(e.Count);
+            } else {
+                outCounts[it->second] += e.Count;
+            }
+        } else {
+            outIndices.push_back(i);
+            outCounts.push_back(e.Count);
+        }
+    }
+}
 
 // The plain-text dump of everything currently shown (respects the level + text filters), used by
 // "Save..." and the right-click "Copy all shown".
 std::string BuildShownText(const EditorModuleHostAPI& host, const EditorConsoleState& state) {
+    std::vector<int> idx, cnt;
+    BuildFilteredRows(host, state, idx, cnt);
     std::string out;
-    const int count = host.LogEntryCount ? host.LogEntryCount() : 0;
-    const std::string filter = state.Filter;
-    for (int i = 0; i < count; ++i) {
+    for (size_t r = 0; r < idx.size(); ++r) {
         Entry e;
-        if (!FetchEntry(host, i, e)) continue;
-        if (!LevelVisible(state, e.Level) || !MatchesFilter(filter, e.Message)) continue;
+        if (!FetchEntry(host, idx[r], e)) continue;
         const char* tag = e.Level == EditorModuleLogLevel_Error ? "ERROR"
                         : (e.Level == EditorModuleLogLevel_Warning ? "WARN " : "INFO ");
         out += "[" + e.Time + "] " + tag + "  " + e.Message;
-        if (e.Count > 1) out += "  (x" + std::to_string(e.Count) + ")";
+        if (cnt[r] > 1) out += "  (x" + std::to_string(cnt[r]) + ")";
         out += "\n";
     }
     return out;
@@ -167,6 +204,15 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::SameLine();
     ImGui::Checkbox("Timestamps", &state.ShowTimestamps);
     if (ImGui::IsItemHovered()) Tooltip(host, "Show the HH:MM:SS each message first arrived");
+    ImGui::SameLine();
+    ImGui::Checkbox("Collapse", &state.Collapse);
+    if (ImGui::IsItemHovered()) Tooltip(host, "Show each identical message once, with a total count - not just consecutive repeats");
+    ImGui::SameLine();
+    ImGui::Checkbox("Clear on Play", &state.ClearOnPlay);
+    if (ImGui::IsItemHovered()) Tooltip(host, "Wipe the console every time you enter Play mode");
+    ImGui::SameLine();
+    ImGui::Checkbox("Error Pause", &state.ErrorPause);
+    if (ImGui::IsItemHovered()) Tooltip(host, "Freeze the running simulation the moment a new error is logged");
 
     // Per-level toggles double as counters, the way Unity's console header does.
     VSeparator();
@@ -207,22 +253,18 @@ void Draw(const EditorModuleHostAPI& host) {
         g_FilterCacheFilter != filter ||
         g_FilterCacheShowInfo != state.ShowInfo ||
         g_FilterCacheShowWarning != state.ShowWarning ||
-        g_FilterCacheShowError != state.ShowError;
+        g_FilterCacheShowError != state.ShowError ||
+        g_FilterCacheCollapse != state.Collapse;
     if (filterCacheStale) {
-        g_FilteredIndices.clear();
-        g_FilteredIndices.reserve((size_t)entryCount);
-        for (int i = 0; i < entryCount; ++i) {
-            Entry e;
-            if (!FetchEntry(host, i, e)) continue;
-            if (!LevelVisible(state, e.Level) || !MatchesFilter(filter, e.Message)) continue;
-            g_FilteredIndices.push_back(i);
-        }
+        BuildFilteredRows(host, state, g_FilteredIndices, g_RowCounts);
         g_FilterCacheRevision = revision;
         g_FilterCacheFilter = filter;
         g_FilterCacheShowInfo = state.ShowInfo;
         g_FilterCacheShowWarning = state.ShowWarning;
         g_FilterCacheShowError = state.ShowError;
+        g_FilterCacheCollapse = state.Collapse;
     }
+    (void)entryCount;
 
     ImGui::Separator();
     if (ImGui::BeginChild("##ConsoleScroll", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar)) {
@@ -239,9 +281,10 @@ void Draw(const EditorModuleHostAPI& host) {
                 if (entry.Level == EditorModuleLogLevel_Warning) { color = ImVec4(1.0f, 0.80f, 0.30f, 1.0f); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
                 else if (entry.Level == EditorModuleLogLevel_Error) { color = ImVec4(1.0f, 0.42f, 0.38f, 1.0f); icon = ICON_FA_CIRCLE_EXCLAMATION; }
 
+                const int rowCount = (row >= 0 && (size_t)row < g_RowCounts.size()) ? g_RowCounts[(size_t)row] : entry.Count;
                 std::string tsPrefix = (state.ShowTimestamps && !entry.Time.empty()) ? ("[" + entry.Time + "]  ") : "";
                 std::string rowLabel = tsPrefix + icon + "  " + entry.Message;
-                if (entry.Count > 1) rowLabel += "  (x" + std::to_string(entry.Count) + ")";
+                if (rowCount > 1) rowLabel += "  (x" + std::to_string(rowCount) + ")";
 
                 // PushID on the entry's stable log index rather than baking a pointer into the
                 // label text: a message long enough to fill a fixed label buffer used to truncate
