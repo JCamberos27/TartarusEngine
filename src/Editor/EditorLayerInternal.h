@@ -194,7 +194,7 @@ inline bool ActiveToggle(const char* id, bool active, bool rowHovered, const cha
     const float sz = ImGui::GetFrameHeight();
     // Width hugs the glyph (+2px) instead of a full sz-square, so the slot doesn't push the
     // rest of the row across the way the old sz-wide Button did (#152 follow-up).
-    const float w = ImMax(ImGui::CalcTextSize(ICON_FA_EYE).x, ImGui::CalcTextSize(ICON_FA_EYE_SLASH).x) + 2.0f;
+    const float w = ImMax(ImGui::CalcTextSize(ICON_FA_SQUARE_CHECK).x, ImGui::CalcTextSize(ICON_FA_SQUARE).x) + 2.0f;
     const ImVec2 p0 = ImGui::GetCursorScreenPos();
     ImGui::PushID(id);
     bool clicked = ImGui::InvisibleButton("##active", ImVec2(w, sz));
@@ -212,11 +212,12 @@ inline bool ActiveToggle(const char* id, bool active, bool rowHovered, const cha
         const ImVec2 ts = ImGui::CalcTextSize(g);
         dl->AddText(ImVec2(c.x - ts.x * 0.5f, glyphTop), col, g);
     };
+    // "Active" reads as a checkbox now, not an eye — Unity's own convention and it frees the eye
+    // metaphor for the SceneVis visibility toggle next to it (#236 B feedback).
     if (!active) {
-        glyph(ICON_FA_EYE_SLASH, ImGui::GetColorU32(ImGuiCol_TextDisabled, selfHover ? 1.0f : 0.90f));
+        glyph(ICON_FA_SQUARE, ImGui::GetColorU32(ImGuiCol_TextDisabled, selfHover ? 1.0f : 0.80f));
     } else {
-        // Always shown now (#236 feedback): a quiet eye at rest, brighter on hover.
-        glyph(ICON_FA_EYE, ImGui::GetColorU32(ImGuiCol_Text, selfHover ? 0.85f : (rowHovered ? 0.55f : 0.32f)));
+        glyph(ICON_FA_SQUARE_CHECK, ImGui::GetColorU32(ImGuiCol_Text, selfHover ? 1.0f : (rowHovered ? 0.85f : 0.65f)));
     }
     return clicked;
 }
@@ -236,13 +237,13 @@ inline bool SceneVisToggle(const char* id, const char* glyphOn, const char* glyp
     ImGui::PopID();
     if (selfHover) EditorUI::SetTooltip("%s", tip);
 
-    // Always drawn (like the Active eye): a barely-there glyph at rest so the column is
-    // discoverable, brighter on row-hover, brightest when set or directly hovered.
+    // Always drawn: a quiet glyph at rest so the column is discoverable, brighter on row-hover,
+    // brightest when set or directly hovered.
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const char* g = on ? glyphOn : glyphOff;
     const ImVec2 ts = ImGui::CalcTextSize(g);
     const float a = on ? (selfHover ? 1.0f : 0.90f)
-                       : (selfHover ? 0.80f : (rowHovered ? 0.42f : 0.16f));
+                       : (selfHover ? 0.85f : (rowHovered ? 0.60f : 0.32f));
     dl->AddText(ImVec2(p0.x + (w - ts.x) * 0.5f, p0.y),
                 ImGui::GetColorU32(on ? ImGuiCol_Text : ImGuiCol_TextDisabled, a), g);
     return clicked;

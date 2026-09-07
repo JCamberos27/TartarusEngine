@@ -925,17 +925,17 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         const float eyeW = ImMax(ImGui::CalcTextSize(ICON_FA_EYE).x, ImGui::CalcTextSize(ICON_FA_EYE_SLASH).x) + 2.0f;
         const float gap  = 4.0f * m_UIScale;
         const float lockW = ImMax(ImGui::CalcTextSize(ICON_FA_LOCK).x, ImGui::CalcTextSize(ICON_FA_LOCK_OPEN).x) + 2.0f;
-        const float hideW = ImMax(ImGui::CalcTextSize(ICON_FA_GHOST).x, ImGui::CalcTextSize(ICON_FA_EYE_LOW_VISION).x) + 2.0f;
+        const float hideW = ImMax(ImGui::CalcTextSize(ICON_FA_EYE).x, ImGui::CalcTextSize(ICON_FA_EYE_SLASH).x) + 2.0f;
 
-        // #236 B — SceneVis-lite: hide (viewport-only) + lock (unpickable) glyphs, hover-reveal,
-        // just left of the Active eye. These never touch the object itself — Game view, physics
-        // and saves are unaffected.
+        // #236 B — SceneVis-lite: an eye (viewport visibility) + a padlock (viewport pickability),
+        // always drawn just left of the Active checkbox. These never touch the object itself —
+        // Game view, physics and saves are unaffected.
         const bool sceneHidden = world.Registry.all_of<HiddenInSceneTag>(entity);
         const bool sceneLocked = world.Registry.all_of<SceneLockedTag>(entity);
 
         ImGui::SameLine();
         ImGui::SetCursorScreenPos(ImVec2(rowMax.x - eyeW - gap - lockW - hideW - 2.0f * gap, rowMin.y));
-        if (SceneVisToggle("##svhide", ICON_FA_GHOST, ICON_FA_EYE_LOW_VISION, sceneHidden, rowHovered,
+        if (SceneVisToggle("##svhide", ICON_FA_EYE_SLASH, ICON_FA_EYE, sceneHidden, rowHovered,
                            sceneHidden ? "Hidden in the Scene view - click to show"
                                        : "Hide in the Scene view (still in the game, still collides, still saved)")) {
             PushUndo(world, "Toggle Scene Visibility");
