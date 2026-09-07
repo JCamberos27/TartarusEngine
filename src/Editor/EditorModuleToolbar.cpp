@@ -214,16 +214,23 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::SameLine();
     if (ActionButton(host, ICON_FA_ROTATE_RIGHT, "Redo (Ctrl+Y)") && host.ToolbarRedo) host.ToolbarRedo();
 
-    const int gizmoOp = host.GetGizmoOp ? host.GetGizmoOp() : 0; // 0 Translate 1 Rotate 2 Scale 3 Rect
+    const int gizmoOp = host.GetGizmoOp ? host.GetGizmoOp() : 0; // 0 Translate 1 Rotate 2 Scale 3 Rect 4 Universal
+    const bool handTool = host.GetHandTool && host.GetHandTool();
     divider();
-    if (ActionButton(host, ICON_FA_UP_DOWN_LEFT_RIGHT, "Translate (W)", gizmoOp == 0) && host.SetGizmoOp) host.SetGizmoOp(0);
+    if (ActionButton(host, ICON_FA_HAND, "Hand — drag to pan the view (Q)", handTool) && host.SetHandTool)
+        host.SetHandTool(!handTool);
     ImGui::SameLine();
-    if (ActionButton(host, ICON_FA_ARROWS_SPIN, "Rotate (E)", gizmoOp == 1) && host.SetGizmoOp) host.SetGizmoOp(1);
+    if (ActionButton(host, ICON_FA_UP_DOWN_LEFT_RIGHT, "Translate (W)", !handTool && gizmoOp == 0) && host.SetGizmoOp) host.SetGizmoOp(0);
     ImGui::SameLine();
-    if (ActionButton(host, ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER, "Scale (R)", gizmoOp == 2) && host.SetGizmoOp) host.SetGizmoOp(2);
+    if (ActionButton(host, ICON_FA_ARROWS_SPIN, "Rotate (E)", !handTool && gizmoOp == 1) && host.SetGizmoOp) host.SetGizmoOp(1);
+    ImGui::SameLine();
+    if (ActionButton(host, ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER, "Scale (R)", !handTool && gizmoOp == 2) && host.SetGizmoOp) host.SetGizmoOp(2);
     ImGui::SameLine();
     if (ActionButton(host, ICON_FA_VECTOR_SQUARE, "Rect — move + non-uniform scale via corner/edge handles (T)",
-            gizmoOp == 3) && host.SetGizmoOp) host.SetGizmoOp(3);
+            !handTool && gizmoOp == 3) && host.SetGizmoOp) host.SetGizmoOp(3);
+    ImGui::SameLine();
+    if (ActionButton(host, ICON_FA_ARROWS_TO_CIRCLE, "Transform — move + rotate + scale in one gizmo (Y)",
+            !handTool && gizmoOp == 4) && host.SetGizmoOp) host.SetGizmoOp(4);
 
     divider(); // transform tools | gizmo-space modifiers
     const bool localSpace = host.GetGizmoLocalSpace && host.GetGizmoLocalSpace();

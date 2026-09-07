@@ -56,6 +56,7 @@
 #include <sstream>
 #include <fstream>
 #include <cmath>
+#include <cstdio>
 #include <cctype>
 #include <cstring>
 #include <functional>
@@ -149,11 +150,12 @@ inline glm::vec3 EulerYXZFromMatrix(const glm::mat4& m) {
 // "Transform" from the gizmo path only (#19 P8).
 const char* GizmoOpUndoLabel(GizmoOp op) {
     switch (op) {
-        case GizmoOp::Rotate: return "Rotate";
-        case GizmoOp::Scale:  return "Scale";
-        case GizmoOp::Rect:   return "Edit Bounds";
+        case GizmoOp::Rotate:    return "Rotate";
+        case GizmoOp::Scale:     return "Scale";
+        case GizmoOp::Rect:      return "Edit Bounds";
+        case GizmoOp::Universal: return "Transform";
         case GizmoOp::Translate:
-        default:              return "Move";
+        default:                 return "Move";
     }
 }
 
@@ -258,6 +260,51 @@ void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
     m_ViewTransition.ToPitch = editorCamera.Pitch;
     m_ViewTransition.ToOrthoHalfHeight = editorCamera.Orthographic
         ? (distance * std::tan(halfFov)) : editorCamera.OrthoHalfHeight;
+}
+
+// #236 E — Hand tool (Q): a left-drag that starts inside the Scene viewport pans the editor
+// camera parallel to the view plane, the same motion as a middle-mouse drag, with no picking or
+// gizmo interaction while the tool is active.
+void EditorLayer::HandleHandToolPan(Camera& editorCamera) {
+    ImGuiIO& io = ImGui::GetIO();
+    const bool overViewport =
+        m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f &&
+        io.MousePos.x >= m_ViewportPos.x && io.MousePos.x <= m_ViewportPos.x + m_ViewportSize.x &&
+        io.MousePos.y >= m_ViewportPos.y && io.MousePos.y <= m_ViewportPos.y + m_ViewportSize.y;
+
+    if (overViewport && !WantsCaptureMouse()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        m_HandPanActive = overViewport && !WantsCaptureMouse() && !m_ViewGizmoBlocking;
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) { m_HandPanActive = false; return; }
+    if (!m_HandPanActive) return;
+
+    // Same fixed rate as the middle-mouse pan in UpdateEditorCamera. Horizontal grabs the scene
+    // (drag right -> view moves left); vertical is inverted from that on purpose (drag down ->
+    // camera moves up), matching how the user expects the Hand tool to feel here.
+    const float kPanSpeed = 0.01f;
+    editorCamera.Position +=
+        (editorCamera.Up() * io.MouseDelta.y - editorCamera.Right() * io.MouseDelta.x) * kPanSpeed;
+}
+
+// #236 E — Lock View to Selected (Shift+F): each frame, shift the camera position by however
+// much the selection's centroid moved since last frame, so the camera rides along with a moving
+// selection without changing its orientation or zoom. Any manual reframe (F) or an empty
+// selection re-arms the tracking so re-acquiring a target never snaps the view.
+void EditorLayer::UpdateLockViewToSelection(World& world, Camera& editorCamera) {
+    if (!m_LockViewToSelection || m_ViewTransition.Active) { m_LockViewHasCentroid = false; return; }
+
+    glm::vec3 bmin, bmax;
+    if (!ComputeSelectionBounds(world, bmin, bmax)) { m_LockViewHasCentroid = false; return; }
+    const glm::vec3 centroid = (bmin + bmax) * 0.5f;
+
+    if (m_LockViewHasCentroid) {
+        const glm::vec3 delta = centroid - m_LockViewCentroid;
+        if (std::isfinite(delta.x) && std::isfinite(delta.y) && std::isfinite(delta.z))
+            editorCamera.Position += delta;
+    }
+    m_LockViewCentroid = centroid;
+    m_LockViewHasCentroid = true;
 }
 
 bool EditorLayer::CanSnapSelectionToGround(World& world) const {
@@ -1542,6 +1589,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     if (m_GizmoOp == GizmoOp::Rotate) op = ImGuizmo::ROTATE;
     else if (m_GizmoOp == GizmoOp::Scale) op = ImGuizmo::SCALE;
     else if (m_GizmoOp == GizmoOp::Rect) op = ImGuizmo::OPERATION(ImGuizmo::TRANSLATE | ImGuizmo::BOUNDS);
+    else if (m_GizmoOp == GizmoOp::Universal) op = ImGuizmo::UNIVERSAL; // #236 E — one gizmo, all three
 
     glm::mat4 matrix = parentWorld * ComposeTransform(transform);
 
@@ -1575,8 +1623,12 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     bool isUsingNow = ImGuizmo::IsUsing();
     if (isUsingNow && !m_GizmoWasUsing) {
         // Drag just started this frame: snapshot the still-unmodified transform (pos/rot/scale
-        // below haven't been written yet) so undo restores to exactly where the drag began.
+        // below haven't been written yet) so undo restores to exactly where the drag began, and
+        // so the live readout below can show a delta from here (#236 E).
         PushUndo(world, GizmoOpUndoLabel(m_GizmoOp));
+        m_GizmoDragStartPos = transform.Position;
+        m_GizmoDragStartRot = transform.RotationEuler;
+        m_GizmoDragStartScale = transform.Scale;
     }
     m_GizmoWasUsing = isUsingNow;
 
@@ -1603,15 +1655,48 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
             case GizmoOp::Translate: transform.Position = newPos;      break;
             case GizmoOp::Rotate:    transform.RotationEuler = newRot;  break;
             case GizmoOp::Scale:     transform.Scale = newScale;        break;
-            default: // Rect / bounds edit resizes from a handle — position and scale both move
+            default: // Rect / Universal / bounds edit — position and scale both move
                 transform.Position = newPos;
                 transform.RotationEuler = newRot;
                 transform.Scale = newScale;
                 break;
         }
+
+        DrawGizmoDragReadout(transform.Position, transform.RotationEuler, transform.Scale);
     }
 
     EndGizmoOverlay();
+}
+
+// #236 E — a small readout near the cursor while a gizmo is dragging: the delta from where the
+// drag started, in the units that match the active tool.
+void EditorLayer::DrawGizmoDragReadout(const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scale) {
+    char buf[96];
+    switch (m_GizmoOp) {
+        case GizmoOp::Rotate: {
+            glm::vec3 d = rot - m_GizmoDragStartRot;
+            std::snprintf(buf, sizeof(buf), "R  %+.1f  %+.1f  %+.1f deg", d.x, d.y, d.z);
+            break;
+        }
+        case GizmoOp::Scale: {
+            std::snprintf(buf, sizeof(buf), "S  %.3f  %.3f  %.3f", scale.x, scale.y, scale.z);
+            break;
+        }
+        default: { // Translate / Rect / Universal
+            glm::vec3 d = pos - m_GizmoDragStartPos;
+            std::snprintf(buf, sizeof(buf), "T  %+.2f  %+.2f  %+.2f  (|%.2f|)",
+                          d.x, d.y, d.z, glm::length(d));
+            break;
+        }
+    }
+    const ImVec2 mp = ImGui::GetIO().MousePos;
+    const ImVec2 at(mp.x + 18.0f, mp.y + 18.0f);
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    const ImVec2 ts = ImGui::CalcTextSize(buf);
+    dl->AddRectFilled(ImVec2(at.x - 5.0f, at.y - 3.0f),
+                      ImVec2(at.x + ts.x + 5.0f, at.y + ts.y + 3.0f),
+                      IM_COL32(20, 20, 24, 220), 3.0f);
+    dl->AddText(at, IM_COL32(255, 255, 255, 255), buf);
 }
 
 void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
@@ -1821,6 +1906,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     ImGuizmo::OPERATION op = ImGuizmo::TRANSLATE;
     if (m_GizmoOp == GizmoOp::Rotate) op = ImGuizmo::ROTATE;
     else if (m_GizmoOp == GizmoOp::Scale) op = ImGuizmo::SCALE;
+    else if (m_GizmoOp == GizmoOp::Universal) op = ImGuizmo::UNIVERSAL; // #236 E
 
     // Only re-center the pivot on the group's current average position when a drag ISN'T in
     // progress — while one is, m_GroupGizmoMatrix is the evolving frame of reference and

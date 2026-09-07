@@ -28,7 +28,7 @@ class Framebuffer;
 
 // Rect = Unity's "Rect Tool" adapted to 3D: translate handles plus bounding-box corner/edge
 // handles for non-uniform scaling, in one combined gizmo (ImGuizmo's TRANSLATE | BOUNDS).
-enum class GizmoOp { Translate, Rotate, Scale, Rect };
+enum class GizmoOp { Translate, Rotate, Scale, Rect, Universal }; // Universal (Y) = move+rotate+scale in one (#236 E)
 
 // One tile in the Asset Browser grid. Built once per frame by EditorLayer::AssetGridFrameBegin
 // into m_AssetGridCells and read by DrawAssetCell (#229: the grid's clipper/row-wrap scaffold
@@ -104,7 +104,12 @@ public:
     void SetTitleBarDragHovered(bool hovered) { m_TitleBarDragHovered = hovered; }
 
     int  GizmoOpIndex() const { return (int)m_GizmoOp; }
-    void SetGizmoOpIndex(int op) { m_GizmoOp = (GizmoOp)op; }
+    void SetGizmoOpIndex(int op) { m_GizmoOp = (GizmoOp)op; m_HandTool = false; } // picking a gizmo tool exits the Hand tool
+    // Viewport tools (#236 E) — Hand tool (Q) and Lock View to Selected (Shift+F).
+    bool HandToolActive() const { return m_HandTool; }
+    void SetHandToolActive(bool on) { m_HandTool = on; }
+    bool LockViewToSelection() const { return m_LockViewToSelection; }
+    void SetLockViewToSelection(bool on) { m_LockViewToSelection = on; m_LockViewHasCentroid = false; }
     int  ShadingModeIndex() const { return (int)m_ShadingMode; }
     void SetShadingModeIndex(int m) { m_ShadingMode = (ShadingMode)m; }
     bool GizmoLocalSpace() const { return m_GizmoLocalSpace; }
@@ -715,6 +720,17 @@ private:
     float m_GizmoSize = 0.09f;      // Compact reach keeps the axes close to the selected object.
     bool m_GizmoEngaged = false;
     bool m_GizmoWasUsing = false;
+
+    // Viewport tools (#236 E). Transient session state — not persisted.
+    bool m_HandTool = false;               // Q: LMB-drag pans the editor camera; no picking / gizmo.
+    bool m_LockViewToSelection = false;    // Shift+F: camera position tracks the selection centroid (no reframing).
+    glm::vec3 m_LockViewCentroid{0.0f};
+    bool m_LockViewHasCentroid = false;
+    bool m_HandPanActive = false;         // a Hand-tool left-drag is in progress (started over the viewport)
+    // Live gizmo drag readout: the transform at the instant a drag began, for the delta text.
+    glm::vec3 m_GizmoDragStartPos{0.0f};
+    glm::vec3 m_GizmoDragStartRot{0.0f};
+    glm::vec3 m_GizmoDragStartScale{1.0f};
     bool m_PrevLeftMouseDown = false;
 
     // Box/marquee select: press-drag-release in empty viewport space. Whether it turns out to
@@ -1374,6 +1390,9 @@ private:
     glm::vec3 m_LightHandleGrabAxis{0.0f}; // world direction the grabbed dot slides along
     float m_LightHandleGrabParam = 0.0f;  // aim-handle distance captured at grab time
     void HandleViewportPicking(World& world, Camera& editorCamera);
+    void HandleHandToolPan(Camera& editorCamera);              // #236 E — Hand tool (Q)
+    void UpdateLockViewToSelection(World& world, Camera& editorCamera); // #236 E — Lock View (Shift+F)
+    void DrawGizmoDragReadout(const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scale); // #236 E
     // Blender/Godot-style navigation gizmo (ImViewGuizmo) pinned to the viewport's top-right
     // corner: a rotate ring plus small dolly/pan buttons underneath. Camera is yaw/pitch, not
     // quaternion, so this converts to/from a quaternion around the call into the library.
