@@ -83,10 +83,12 @@ bool ChordFires(const Chord& c, const ImGuiIO& io) {
     return KeyPressedInclSibling(c.Key) && ModsMatch(io, c.Ctrl, c.Shift, c.Alt, c.Super);
 }
 
-bool CtxOverlaps(std::uint32_t a, std::uint32_t b) {
-    // Global overlaps anything; otherwise the panel bits must intersect.
-    if ((a & Ctx_Global) || (b & Ctx_Global)) return true;
-    return (a & b) != 0;
+// Two bindings genuinely clash only when they can both fire for the same key in the same
+// scope: both Global, or the same panel context. A Global binding paired with a panel-scoped
+// one on the same key is the intended "panel wins while focused" override (Ctrl+D = duplicate
+// entity globally / duplicate asset in the Project panel), not a conflict.
+bool SameConflictScope(std::uint32_t a, std::uint32_t b) {
+    return a == b;
 }
 
 Shortcut* FindMut(const std::string& id) {
@@ -158,6 +160,13 @@ void BuildDefaultTable() {
     Register("view.bottom",      "View: Bottom",          Ctx_Viewport, Ck(ImGuiKey_7));
     Register("view.persp",       "View: Perspective",     Ctx_Viewport, K(ImGuiKey_0));
     Register("view.toggleOrtho", "Toggle Orthographic",   Ctx_Viewport, K(ImGuiKey_5));
+
+    // --- Asset Browser (Ctx_Project) — only while the panel has focus, so F / Ctrl+D don't
+    // collide with the scene-selection bindings. ---
+    Register("project.focusSearch",   "Focus Search",        Ctx_Project, Ck(ImGuiKey_F));
+    Register("project.refresh",       "Refresh",             Ctx_Project, Ck(ImGuiKey_R));
+    Register("project.frameSelected", "Frame Selected Asset", Ctx_Project, K(ImGuiKey_F));
+    Register("project.duplicate",     "Duplicate Asset",     Ctx_Project, Ck(ImGuiKey_D));
 
     // --- Panel focus (Global) — new with the manager (#236 F). Alt+1..4 rather than Ctrl+
     // so it doesn't collide with the Ctrl+digit opposite-view presets above. ---
@@ -248,7 +257,7 @@ std::vector<std::string> Conflicts(const char* selfId, const Chord& chord) {
     const std::uint32_t selfCtx = self ? self->Ctx : (std::uint32_t)Ctx_Global;
     for (const auto& s : g_Table) {
         if (&s == self) continue;
-        if (s.Current == chord && CtxOverlaps(selfCtx, s.Ctx)) out.push_back(s.Id);
+        if (s.Current == chord && SameConflictScope(selfCtx, s.Ctx)) out.push_back(s.Id);
     }
     return out;
 }
