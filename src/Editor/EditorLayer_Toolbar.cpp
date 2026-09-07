@@ -506,6 +506,18 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
                 EditorUI::SetTooltip("Click two points in the viewport to measure the distance. Right-click clears.");
             ImGui::MenuItem(ICON_FA_CROSSHAIRS "  Frame on Select", nullptr, &m_FrameOnSelect);
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Move the camera to frame each object as you select it.");
+
+            {
+                bool muted = EditorSettings::Get().AudioMuted;
+                if (ImGui::MenuItem(muted ? ICON_FA_VOLUME_XMARK "  Mute Audio"
+                                          : ICON_FA_VOLUME_HIGH "  Mute Audio", nullptr, muted)) {
+                    EditorSettings::Get().AudioMuted = !muted;
+                    AudioEngine::SetMuted(!muted);
+                    EditorSettings::Save();
+                }
+                if (ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("Master-mute the audio engine (editor previews and Play-mode sound).");
+            }
             if (ImGui::MenuItem(ICON_FA_BORDER_ALL "  Orthographic", "5", editorCamera.Orthographic)) {
                 ToggleOrthographic(world, editorCamera);
             }
@@ -566,6 +578,26 @@ void EditorLayer::DrawWindowMenuBody() {
             // the engine mark lives in Preferences ▸ Viewport.
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
                 m_ResetLayoutRequested = true;
+            }
+
+            // Layout presets (#236 R2) — named ImGui-ini snapshots in project/layouts/.
+            if (ImGui::BeginMenu(ICON_FA_TABLE_COLUMNS "  Layout Presets")) {
+                const std::vector<std::string> presets = LayoutPresetNames();
+                if (presets.empty()) ImGui::TextDisabled("(none saved yet)");
+                for (const std::string& name : presets) {
+                    if (ImGui::MenuItem(name.c_str())) RequestLoadLayoutPreset(name);
+                    ImGui::SameLine();
+                    ImGui::PushID(name.c_str());
+                    if (ImGui::SmallButton(ICON_FA_XMARK)) DeleteLayoutPreset(name);
+                    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete this preset");
+                    ImGui::PopID();
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save Current Layout\xE2\x80\xA6")) {
+                    m_SaveLayoutName[0] = '\0';
+                    m_ShowSaveLayout = true;
+                }
+                ImGui::EndMenu();
             }
 }
 

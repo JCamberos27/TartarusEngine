@@ -455,6 +455,7 @@ int main(int argc, char** argv) {
 
         EditorLayer editor;
         editor.Init(window.Handle());
+        AudioEngine::SetMuted(EditorSettings::Get().AudioMuted); // #236 R2 — restore the View ▸ Mute Audio choice
 
         // One-shot rig dump: OS, CPU, RAM, GPU, driver, display, build. Collected into a block
         // for Preferences > About — no longer spammed line-by-line to the Console (it lives in
