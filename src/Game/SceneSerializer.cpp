@@ -39,6 +39,17 @@ constexpr int kSceneFormatVersion = 1;
 // (non-thread-local) static: scene loads happen on the main thread only.
 std::string g_LastLoadWarning;
 
+// Guards ApplySceneJson against runaway recursion when a prefab instance stub expands another
+// scene fragment (#236 A2). A flattened .prefab never contains a "prefabInstances" key, so in
+// normal use this only ever reaches depth 2; the cap just stops a hand-broken / cyclic file
+// from looping forever. Main-thread only, same as g_LastLoadWarning.
+int g_ApplyDepth = 0;
+constexpr int kMaxApplyDepth = 8;
+struct ApplyDepthGuard {
+    ApplyDepthGuard()  { ++g_ApplyDepth; }
+    ~ApplyDepthGuard() { --g_ApplyDepth; }
+};
+
 // A non-finite component anywhere in the scene (nan/inf slipped past the Inspector, or a
 // corrupt file) serializes as JSON `null` / a bare `nan` token, neither of which reloads —
 // the whole scene is then lost. Scrub to 0 at the one choke point every vector passes
@@ -263,7 +274,11 @@ std::vector<entt::entity> InCreationOrder(const entt::registry& reg, View view) 
 // When `only` is non-null, just the entities it names are written (an entity-subset fragment
 // for the clipboard or a prefab) and the sky settings are left out, since pasting a couple of
 // objects must not also overwrite the destination scene's environment.
-json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nullptr) {
+// flattenPrefabInstances: write prefab-instance subtrees in full (as plain entities, no stub,
+// no link) instead of collapsing them to a stub. Used when saving a .prefab file — a prefab
+// asset must be self-contained; nested prefab links are stage 4.
+json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nullptr,
+                    bool flattenPrefabInstances = false) {
     json root;
     auto included = [&](entt::entity e) { return !only || only->count(e) > 0; };
     if (!only) {
@@ -333,12 +348,45 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
     std::vector<entt::entity> modelEntities = InCreationOrder(world.Registry, modelViewForIds);
     std::vector<entt::entity> emptyEntities = InCreationOrder(world.Registry, emptyViewForIds);
 
-    for (auto entity : boxEntities) { if (included(entity)) assignId(entity); }
-    for (auto entity : modelEntities) { if (included(entity)) assignId(entity); }
-    for (auto entity : emptyEntities) { if (included(entity)) assignId(entity); }
+    // #236 A2 — a live prefab instance (root has PrefabInstanceComponent) is written as one
+    // compact stub in "prefabInstances"; its descendants are not written at all. The owned set
+    // is recomputed here from each root's HierarchyComponent, so no per-descendant marker is
+    // needed. `flattenPrefabInstances` (saving a .prefab) disables all of this.
+    std::set<entt::entity> prefabOwned;       // descendants — skipped entirely
+    std::vector<entt::entity> prefabRoots;    // holders — written as stubs, in creation order
+    if (!flattenPrefabInstances) {
+        std::function<void(entt::entity)> markSubtree = [&](entt::entity e) {
+            const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+            if (!h) return;
+            for (entt::entity c : h->Children) {
+                if (!included(c) || !prefabOwned.insert(c).second) continue;
+                markSubtree(c);
+            }
+        };
+        auto collect = [&](const std::vector<entt::entity>& v) {
+            for (entt::entity e : v) {
+                if (!included(e) || !world.Registry.all_of<PrefabInstanceComponent>(e)) continue;
+                prefabRoots.push_back(e);
+                markSubtree(e);
+            }
+        };
+        collect(boxEntities); collect(modelEntities); collect(emptyEntities);
+    }
+    // An id goes to every entity that will be referenced by a parentId — normal writable
+    // entities and prefab-instance roots (stubs), but not pure prefab descendants.
+    auto skipWrite = [&](entt::entity e) {
+        return !included(e) || prefabOwned.count(e) > 0;
+    };
+    auto isPrefabRoot = [&](entt::entity e) {
+        return !flattenPrefabInstances && world.Registry.all_of<PrefabInstanceComponent>(e);
+    };
+
+    for (auto entity : boxEntities)   { if (!skipWrite(entity)) assignId(entity); }
+    for (auto entity : modelEntities) { if (!skipWrite(entity)) assignId(entity); }
+    for (auto entity : emptyEntities) { if (!skipWrite(entity)) assignId(entity); }
 
     for (auto entity : boxEntities) {
-        if (!included(entity)) continue;
+        if (skipWrite(entity) || isPrefabRoot(entity)) continue; // #236 A2
         TransformComponent transform = effectiveTransform(entity);
         const auto& name = boxView.get<const NameComponent>(entity);
         const auto& renderable = boxView.get<const RenderableComponent>(entity);
@@ -358,7 +406,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
 
     json empties = json::array();
     for (auto entity : emptyEntities) {
-        if (!included(entity)) continue;
+        if (skipWrite(entity) || isPrefabRoot(entity)) continue; // #236 A2
         TransformComponent transform = effectiveTransform(entity);
         const auto& name = emptyViewForIds.get<const NameComponent>(entity);
         json e = {
@@ -378,7 +426,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
     auto modelView = world.Registry.view<const TransformComponent, const NameComponent,
         const RenderableComponent>(entt::exclude<LevelGeometryTag>);
     for (auto entity : modelEntities) {
-        if (!included(entity)) continue;
+        if (skipWrite(entity) || isPrefabRoot(entity)) continue; // #236 A2
         TransformComponent transform = effectiveTransform(entity);
         const auto& name = modelView.get<const NameComponent>(entity);
         const auto& renderable = modelView.get<const RenderableComponent>(entity);
@@ -422,6 +470,34 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         models.push_back(m);
     }
     root["models"] = models;
+
+    // #236 A2 — prefab-instance stubs. Just the source path plus the root's own transform /
+    // name / tags (the transform-only overrides); the subtree is rebuilt from the .prefab on
+    // load and these re-applied on top.
+    if (!prefabRoots.empty()) {
+        json instances = json::array();
+        for (entt::entity e : prefabRoots) {
+            const auto& pi = world.Registry.get<PrefabInstanceComponent>(e);
+            TransformComponent t = effectiveTransform(e);
+            json s;
+            s["source"]   = pi.SourcePath;
+            s["name"]     = world.Registry.get<NameComponent>(e).Name;
+            s["position"] = Vec3ToJson(t.Position);
+            s["rotation"] = Vec3ToJson(t.RotationEuler);
+            s["scale"]    = Vec3ToJson(t.Scale);
+            s["id"]       = idOf[e];
+            s["parentId"] = parentIdOf(e);
+            if (const auto* o = world.Registry.try_get<OrderComponent>(e)) s["order"] = o->Value;
+            if (world.Registry.all_of<InactiveTag>(e)) s["active"] = false;
+            if (world.Registry.all_of<StaticTag>(e)) s["static"] = true;
+            if (const auto* lc = world.Registry.try_get<LayerComponent>(e); lc && lc->Layer != 0)
+                s["layer"] = lc->Layer;
+            if (const auto* tag = world.Registry.try_get<TagComponent>(e)) s["tag"] = tag->Tag;
+            instances.push_back(std::move(s));
+        }
+        root["prefabInstances"] = std::move(instances);
+    }
+
     return root;
 }
 
@@ -430,6 +506,12 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
 // given, collects every entity this call created so the caller can select or offset them.
 bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
     bool clearFirst = true, std::vector<entt::entity>* outCreated = nullptr) {
+    ApplyDepthGuard depthGuard; // #236 A2 — bounds prefab-stub expansion recursion
+    if (g_ApplyDepth > kMaxApplyDepth) {
+        Log::Error("Scene: prefab instance nesting too deep (" + std::to_string(kMaxApplyDepth) +
+                   "); stopping expansion. Is a .prefab referencing itself?");
+        return false;
+    }
     auto created = [&](entt::entity e) { if (outCreated) outCreated->push_back(e); };
 
     // #195: 0 (the default when the key is absent) means a legacy pre-#195 file or an entity-subset
@@ -590,6 +672,58 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             if (id >= 0) idToEntity[id] = e;
             int parentId = en.value("parentId", -1);
             if (parentId >= 0) pendingParents.emplace_back(e, parentId);
+        }
+    }
+
+    // #236 A2 — expand prefab-instance stubs: rebuild the subtree from the .prefab, then apply
+    // the stub's transform-only overrides on the root. A missing source becomes a visible
+    // broken placeholder rather than a silent hole.
+    if (root.contains("prefabInstances") && root["prefabInstances"].is_array()) {
+        for (const auto& s : root["prefabInstances"]) {
+            const std::string src = s.value("source", std::string());
+            glm::vec3 position = JsonToVec3(s.value("position", json::array({0, 0, 0})));
+            glm::vec3 rotation = JsonToVec3(s.value("rotation", json::array({0, 0, 0})));
+            glm::vec3 scale = JsonToVec3(s.value("scale", json::array({1, 1, 1})), glm::vec3(1.0f));
+            const std::string name = s.value("name", std::string("Prefab Instance"));
+
+            std::vector<entt::entity> instCreated;
+            entt::entity rootE = entt::null;
+            if (!src.empty())
+                rootE = SceneSerializer::InstantiatePrefab(world, assets, src, &instCreated);
+
+            const bool missing = (rootE == entt::null);
+            if (missing) {
+                rootE = world.CreateEmptyEntity(position, rotation, scale, name);
+                world.Registry.emplace_or_replace<PrefabInstanceComponent>(
+                    rootE, PrefabInstanceComponent{src, /*Missing=*/true});
+                if (!src.empty())
+                    Log::Warn("Prefab instance: source '" + src + "' could not be loaded; "
+                              "inserted a placeholder so the reference isn't lost.");
+                instCreated.push_back(rootE);
+            } else {
+                auto& t = world.Registry.get<TransformComponent>(rootE);
+                t.Position = position;
+                t.RotationEuler = rotation;
+                t.Scale = scale;
+                world.Registry.emplace_or_replace<NameComponent>(rootE, NameComponent{name});
+            }
+
+            // Root-level overrides carried by the stub.
+            if (!s.value("active", true)) world.Registry.emplace_or_replace<InactiveTag>(rootE);
+            else                          world.Registry.remove<InactiveTag>(rootE);
+            if (s.value("static", false)) world.Registry.emplace_or_replace<StaticTag>(rootE);
+            if (const int layer = s.value("layer", 0); layer != 0)
+                world.Registry.emplace_or_replace<LayerComponent>(rootE, LayerComponent{layer});
+            if (s.contains("tag"))
+                world.Registry.emplace_or_replace<TagComponent>(rootE, s["tag"].get<std::string>());
+
+            applyOrder(rootE, s);
+            for (entt::entity e : instCreated) created(e);
+
+            const int id = s.value("id", -1);
+            if (id >= 0) idToEntity[id] = rootE;
+            const int parentId = s.value("parentId", -1);
+            if (parentId >= 0) pendingParents.emplace_back(rootE, parentId);
         }
     }
 
@@ -795,7 +929,8 @@ bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const s
     return ApplySceneJson(world, assets, root);
 }
 
-std::string SceneSerializer::SaveEntitiesToString(const World& world, const std::vector<entt::entity>& entities) {
+std::string SceneSerializer::SaveEntitiesToString(const World& world,
+    const std::vector<entt::entity>& entities, bool flattenPrefabInstances) {
     // Descendants come along automatically: a fragment that kept a parent but dropped its
     // children would paste back as a visibly different object than the one that was copied.
     std::set<entt::entity> included;
@@ -807,7 +942,7 @@ std::string SceneSerializer::SaveEntitiesToString(const World& world, const std:
     };
     for (entt::entity e : entities) addWithChildren(e);
 
-    return BuildSceneJson(world, &included).dump();
+    return BuildSceneJson(world, &included, flattenPrefabInstances).dump();
 }
 
 bool SceneSerializer::AppendEntitiesFromString(World& world, AssetLibrary& assets,
@@ -830,13 +965,16 @@ bool SceneSerializer::SavePrefab(const World& world, entt::entity root, const st
         return false;
     }
     // Re-parsed and re-dumped with indentation so a prefab file is human-readable/diffable,
-    // unlike the compact in-memory clipboard form the same function produces.
-    out << json::parse(SaveEntitiesToString(world, {root})).dump(2);
+    // unlike the compact in-memory clipboard form the same function produces. flatten=true: a
+    // .prefab asset is self-contained — if `root` (or a child) is itself a prefab instance it is
+    // baked in fully here, not left as a nested link (#236 A2 — nested prefabs are stage 4).
+    out << json::parse(SaveEntitiesToString(world, {root}, /*flattenPrefabInstances=*/true)).dump(2);
     Log::Info("Saved prefab '" + path + "'.");
     return true;
 }
 
-entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& assets, const std::string& path) {
+entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& assets,
+    const std::string& path, std::vector<entt::entity>* outAll) {
     std::ifstream in(path);
     if (!in.is_open()) {
         Log::Error("Prefab: '" + path + "' could not be opened.");
@@ -849,10 +987,17 @@ entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& asse
     if (!AppendEntitiesFromString(world, assets, buffer.str(), created) || created.empty()) {
         return entt::null;
     }
+    if (outAll) outAll->insert(outAll->end(), created.begin(), created.end());
+
     // The prefab's root is whichever created entity has no parent inside the fragment.
+    entt::entity root = created.front();
     for (entt::entity e : created) {
         const auto* hier = world.Registry.try_get<HierarchyComponent>(e);
-        if (!hier || hier->Parent == entt::null) return e;
+        if (!hier || hier->Parent == entt::null) { root = e; break; }
     }
-    return created.front();
+    // #236 A2 — link the instance to its source. Applies to every path that stamps a prefab:
+    // drag-drop placement, "Place Instance", and scene-load stub expansion. The scene then
+    // stores this instance as a stub, and edits to the .prefab propagate on the next load.
+    world.Registry.emplace_or_replace<PrefabInstanceComponent>(root, PrefabInstanceComponent{path});
+    return root;
 }
