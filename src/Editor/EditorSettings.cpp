@@ -69,6 +69,8 @@ void EditorSettings::Load() {
     s.LightGizmoSelectedOnly = root.value("lightGizmoSelectedOnly", s.LightGizmoSelectedOnly);
     s.LightGizmoOpacity = root.value("lightGizmoOpacity", s.LightGizmoOpacity);
     s.LightGizmoScale = root.value("lightGizmoScale", s.LightGizmoScale);
+    s.LayerVisibleMask = root.value("layerVisibleMask", s.LayerVisibleMask);
+    s.LayerPickLockMask = root.value("layerPickLockMask", s.LayerPickLockMask);
     s.CaptureMode = root.value("captureMode", s.CaptureMode);
     s.CaptureScale = root.value("captureScale", s.CaptureScale);
     s.CaptureResPreset = root.value("captureResPreset", s.CaptureResPreset);
@@ -121,6 +123,8 @@ void EditorSettings::Save() {
     root["lightGizmoSelectedOnly"] = Get().LightGizmoSelectedOnly;
     root["lightGizmoOpacity"] = Get().LightGizmoOpacity;
     root["lightGizmoScale"] = Get().LightGizmoScale;
+    root["layerVisibleMask"] = Get().LayerVisibleMask;
+    root["layerPickLockMask"] = Get().LayerPickLockMask;
     root["captureMode"] = Get().CaptureMode;
     root["captureScale"] = Get().CaptureScale;
     root["captureResPreset"] = Get().CaptureResPreset;
