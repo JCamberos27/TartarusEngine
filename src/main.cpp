@@ -11,6 +11,7 @@
 #include "AssetLibrary.h"
 #include "HotReloadGameModule.h"
 #include "HotReloadEditorModule.h"
+#include "EditorModuleAPI.h" // EditorConsoleState (Clear on Play / Error Pause — #236 A5)
 #include "EditorLayer.h"
 #include "EditorSettings.h"
 #include "Model.h"
@@ -669,9 +670,12 @@ int main(int argc, char** argv) {
         // Unity's play-mode contract: entering Play snapshots the scene and leaving it restores
         // that snapshot, so gameplay (shot crates, moved objects) never silently becomes an
         // edit. EditorLayer owns the snapshot; main.cpp owns the state bits.
+        int errPauseSeen = 0; // #236 A5 — error count baseline for "Error Pause", re-armed each Play
         auto startPlay = [&]() {
             if (playing) return;
+            if (EditorModuleHost::ConsoleState().ClearOnPlay) Log::Clear(); // #236 A5
             editor.OnEnterPlayMode(world);
+            errPauseSeen = Log::CountOf(LogLevel::Error); // ignore errors that predate this run
             playing = true;
             playMaximized = false;
             editorUIVisible = true;
@@ -817,6 +821,15 @@ int main(int argc, char** argv) {
             // the same state the keys drive, one frame later.
             if (playing && (Input::IsKeyPressed(GLFW_KEY_F2) || editor.ConsumePauseToggleRequest()))
                 paused = !paused;
+            // #236 A5 — Error Pause: freeze the sim the frame a fresh error lands.
+            if (playing && !paused && EditorModuleHost::ConsoleState().ErrorPause) {
+                const int errNow = Log::CountOf(LogLevel::Error);
+                if (errNow > errPauseSeen) {
+                    paused = true;
+                    Log::Info("Error Pause: simulation paused on a new error (Console \xE2\x96\xB8 Error Pause).");
+                }
+            }
+            errPauseSeen = Log::CountOf(LogLevel::Error);
             bool stepThisFrame = playing && paused &&
                 (Input::IsKeyPressed(GLFW_KEY_F3) || editor.ConsumeStepRequest());
             // F4 mirrors the toolbar's Fullscreen/Restore button — maximize the Game view over
