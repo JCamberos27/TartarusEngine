@@ -41,7 +41,11 @@
 //   8 - Inspector (frame only): the module owns Begin("Inspector") + End + visibility.
 //       Get/SetShowInspector and one DrawInspectorBody callback — the ~1090-line body (every
 //       component editor, PBR material, add-component, per-field undo) stays host-side.
-constexpr std::uint32_t kEditorModuleAPIVersion = 11;
+//   9-11 - Grid & Snap popover, Gizmos dropdown, Gizmos master toggle (see the tagged sections).
+//   12 - Viewport tools (#236 E): Hand tool (Q) + Lock View to Selected (Shift+F) getters/setters,
+//        and GizmoOp gains a 5th value (4 = Universal / combined transform, driven with the
+//        existing Get/SetGizmoOp int).
+constexpr std::uint32_t kEditorModuleAPIVersion = 12;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -341,6 +345,13 @@ struct EditorModuleHostAPI {
 
     // --- Gizmos master toggle button (API v11) --------------------------------------
     bool (*GetGizmosMasterVisible)() = nullptr;  void (*SetGizmosMasterVisible)(bool on) = nullptr;
+
+    // --- Viewport tools (API v12) --------------------------------------------------
+    // Hand tool: while on, a viewport left-drag pans the camera and picking / the transform
+    // gizmo are suppressed. Setting a GizmoOp (incl. via SetGizmoOp) turns it back off host-side.
+    bool (*GetHandTool)() = nullptr;             void (*SetHandTool)(bool on) = nullptr;
+    // Lock View to Selected: the editor camera position tracks the selection centroid each frame.
+    bool (*GetLockViewToSelection)() = nullptr;  void (*SetLockViewToSelection)(bool on) = nullptr;
 };
 
 struct EditorModuleAPI {
