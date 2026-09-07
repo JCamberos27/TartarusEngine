@@ -927,6 +927,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             {"Align selected Camera to view", "Ctrl+Shift+F"},
             {"Gizmo: move / rotate / scale / rect", "W / E / R / T"},
             {"Vertex grab", "hold V"},
+            {"Surface snap while moving (invert the toggle)", "hold Shift"},
             {"Multi-select", "Ctrl+Click  ·  drag a box"},
             {"Undo / Redo", "Ctrl+Z / Ctrl+Y"},
             {"Save / Save As", "Ctrl+S / Ctrl+Shift+S"},
