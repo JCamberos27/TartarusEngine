@@ -562,6 +562,15 @@ private:
     // material and its texture maps), Unity-style, with a mixed-value dash for properties that
     // differ across the selection.
     std::vector<entt::entity> m_ExtraSelection;
+
+    // #236 C — Inspector lock (padlock). While locked, the Inspector body renders these instead
+    // of the live selection, so you can keep an object's fields on screen while clicking /
+    // moving other objects in the viewport. Snapshotted from the live selection when the lock is
+    // engaged; auto-cleared once every locked entity is gone.
+    bool m_InspectorLocked = false;
+    entt::entity m_InspLockSelected = entt::null;
+    std::vector<entt::entity> m_InspLockExtra;
+
     glm::mat4 m_GroupGizmoMatrix{1.0f}; // pivot frame for the multi-select gizmo, updated across a drag
 
     // The Hierarchy's flattened top-to-bottom order of currently-visible rows (respects group
