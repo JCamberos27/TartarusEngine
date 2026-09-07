@@ -11,13 +11,9 @@ void OnUnload() {}
 // this DLL (or add future gameplay systems here), build TartarusGame, and the open editor will
 // pick up the new code without restarting.
 void Update(const GameModuleHostAPI& host, World& world, float deltaTime) {
-    // A visible cross-DLL smoke test: this request is implemented by the host, while deciding
-    // to request it lives in the reloadable game module. The host side is idempotent, so module
-    // reloads never duplicate the four donuts.
-    if (host.EnsureRoomDonutTestSet) host.EnsureRoomDonutTestSet(world);
+    (void)host; // no host callbacks needed yet — the module→World path is exercised by the systems below
     UpdateTransformControllers(world, deltaTime);
     UpdateSpinners(world, deltaTime); // #184: first reflection-registered component's system
-
 }
 
 const GameModuleAPI kAPI{
