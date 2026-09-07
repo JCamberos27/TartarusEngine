@@ -36,6 +36,7 @@
 #include "GameViewPanel.h"
 #include "ProjectPaths.h"
 #include "LayerRegistry.h"
+#include "ProjectSettings.h"
 #include "SplashScreen.h"
 #include "GLDebug.h"
 #include "Log.h"
@@ -413,6 +414,7 @@ int main(int argc, char** argv) {
         // that was open when the editor last closed, if it still exists (#95).
         EditorSettings::Load();
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
+        ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
         std::string scenePath = ProjectPaths::Resolve("scenes/Showcase.json");
         {
             const std::string& last = EditorSettings::Get().LastScenePath;
@@ -683,6 +685,7 @@ int main(int argc, char** argv) {
             player.Cam.Yaw = editorCamera.Yaw;
             player.Cam.Pitch = editorCamera.Pitch;
             player.Velocity = glm::vec3(0.0f);
+            player.Gravity = ProjectSettings::Physics().Gravity.y; // #236 A4 — project-scoped
             window.SetCursorLocked(false); // click the Game view to take control
         };
         auto stopPlay = [&]() {
