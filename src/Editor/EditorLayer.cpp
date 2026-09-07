@@ -2078,24 +2078,20 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             world.Registry.get<CameraComponent>(m_Selected).FovDegrees = editorCamera.Fov;
         }
 
-        // Unity Project-window-style Asset Browser shortcuts — only while it has focus, so they
-        // don't collide with the scene-selection F/Ctrl+D bindings above. Tab (two-column focus
-        // switch), Ctrl+A (multi-select), and every OSX Cmd-key variant from Unity's manual are
-        // deliberately not implemented — this browser has one grid+tree layout, no multi-select
-        // model for assets, and this is a Windows-only engine.
+        // Unity Project-window-style Asset Browser shortcuts. The four discrete actions are
+        // Ctx_Project shortcuts (rebindable in Preferences); folder navigation (Enter /
+        // Backspace / arrows) stays hard-wired — it's traversal, not a named command.
         if (m_AssetBrowserFocused && m_RenamingAssetKey.empty()) {
-            if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F)) {
-                m_AssetSearchFocusRequested = true;
-            } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_R)) {
-                RefreshAssetBrowser(); // #236 G
-            } else if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F) && !m_SelectedAssetKey.empty()) {
-                // "Frame selected" — Unity shows the asset in its containing folder; here that
-                // just means navigating the browser to it, since it's already always visible
-                // once you're in the right folder.
-                if (!m_SelectedAssetIsFolder) m_CurrentAssetFolder = assets.AssetFolder(m_SelectedAssetKey);
-            } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !m_SelectedAssetKey.empty()) {
+            if (Shortcuts::Triggered("project.focusSearch")) m_AssetSearchFocusRequested = true;
+            if (Shortcuts::Triggered("project.refresh"))     RefreshAssetBrowser(); // #236 G
+            if (Shortcuts::Triggered("project.frameSelected") && !m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder) {
+                // "Frame selected" — navigate the browser to the asset's containing folder.
+                m_CurrentAssetFolder = assets.AssetFolder(m_SelectedAssetKey);
+            }
+            if (Shortcuts::Triggered("project.duplicate") && !m_SelectedAssetKey.empty()) {
                 DuplicateSelectedAsset(world, assets);
-            } else if (ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_Enter)) {
                 if (m_SelectedAssetIsFolder) m_CurrentAssetFolder = m_SelectedAssetKey;
             } else if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
                 m_CurrentAssetFolder = ParentFolderOf(m_CurrentAssetFolder);
