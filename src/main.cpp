@@ -14,6 +14,7 @@
 #include "EditorModuleAPI.h" // EditorConsoleState (Clear on Play / Error Pause — #236 A5)
 #include "EditorLayer.h"
 #include "EditorSettings.h"
+#include "Shortcuts.h" // play / window keys route through the Shortcuts Manager (#236 F)
 #include "Model.h"
 #include "SceneSerializer.h"
 #include "AnimationSystem.h"
@@ -815,11 +816,14 @@ int main(int argc, char** argv) {
                 titleInitialized = true;
             }
 
-            if (Input::IsKeyPressed(GLFW_KEY_F1)) togglePlay();
+            // Play / pause / step / maximize + window fullscreen are Ctx_App shortcuts now
+            // (#236 F) — rebindable in Preferences ▸ Shortcuts, evaluated here via the GLFW
+            // path since this runs before the ImGui frame.
+            if (Shortcuts::TriggeredGlfw("play.toggle")) togglePlay();
             // Pause (F2 / toolbar) and single-frame Step (F3 / toolbar). The toolbar requests are
             // raised during the previous frame's editor draw; consuming them here folds them into
             // the same state the keys drive, one frame later.
-            if (playing && (Input::IsKeyPressed(GLFW_KEY_F2) || editor.ConsumePauseToggleRequest()))
+            if (playing && (Shortcuts::TriggeredGlfw("play.pause") || editor.ConsumePauseToggleRequest()))
                 paused = !paused;
             // #236 A5 — Error Pause: freeze the sim the frame a fresh error lands.
             if (playing && !paused && EditorModuleHost::ConsoleState().ErrorPause) {
@@ -831,12 +835,12 @@ int main(int argc, char** argv) {
             }
             errPauseSeen = Log::CountOf(LogLevel::Error);
             bool stepThisFrame = playing && paused &&
-                (Input::IsKeyPressed(GLFW_KEY_F3) || editor.ConsumeStepRequest());
-            // F4 mirrors the toolbar's Fullscreen/Restore button — maximize the Game view over
+                (Shortcuts::TriggeredGlfw("play.step") || editor.ConsumeStepRequest());
+            // Mirrors the toolbar's Fullscreen/Restore button — maximize the Game view over
             // the editor panels (only meaningful while playing; setMaximized no-ops otherwise).
-            if (playing && Input::IsKeyPressed(GLFW_KEY_F4)) setMaximized(!playMaximized);
+            if (playing && Shortcuts::TriggeredGlfw("play.maximize")) setMaximized(!playMaximized);
 
-            if (Input::IsKeyPressed(GLFW_KEY_F11)) {
+            if (Shortcuts::TriggeredGlfw("window.fullscreen")) {
                 window.ToggleFullscreen();
             }
 

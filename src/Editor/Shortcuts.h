@@ -22,6 +22,10 @@ enum Context : std::uint32_t {
     Ctx_Hierarchy = 1u << 2,
     Ctx_Project   = 1u << 3, // Asset Browser
     Ctx_Inspector = 1u << 4,
+    // Application-level keys evaluated in the main loop (play/pause/step/maximize, window
+    // fullscreen) via TriggeredGlfw() — before an ImGui frame exists. BeginFrame() never sets
+    // this bit, so the editor-side Triggered() never fires them.
+    Ctx_App       = 1u << 5,
 };
 
 // One key + modifiers, optionally preceded by a prefix key to form a two-key sequence
@@ -61,6 +65,11 @@ void BeginFrame(std::uint32_t contextMask);
 
 // True once, on the frame the (possibly two-key) chord completes while its context is active.
 bool Triggered(const char* id);
+
+// GLFW-input variant for Ctx_App shortcuts the main loop evaluates before an ImGui frame
+// exists (F1-F4 play controls, F11 fullscreen). Polls Input:: directly; edge-triggered via
+// Input::IsKeyPressed. Single-chord only — a sequence's prefix is ignored here.
+bool TriggeredGlfw(const char* id);
 
 // --- registry access, for the Preferences > Shortcuts editor --------------------------------
 const std::vector<Shortcut>& All();

@@ -2,8 +2,10 @@
 
 #include "Log.h"
 #include "ProjectPaths.h"
+#include "Input.h" // TriggeredGlfw() — main-loop keys, evaluated before an ImGui frame exists
 
 #include <json.hpp>
+#include <GLFW/glfw3.h>
 
 #include <algorithm>
 #include <fstream>
@@ -174,6 +176,15 @@ void BuildDefaultTable() {
     Register("panel.focus.inspector",  "Focus Inspector Panel",  Ctx_Global, Ak(ImGuiKey_2));
     Register("panel.focus.project",    "Focus Asset Browser",    Ctx_Global, Ak(ImGuiKey_3));
     Register("panel.focus.console",    "Focus Console Panel",    Ctx_Global, Ak(ImGuiKey_4));
+
+    // --- Application / play controls (Ctx_App) — evaluated in the main loop via TriggeredGlfw,
+    // so they work with the editor UI hidden and never clash (own scope) with the Global F2
+    // rename etc. ---
+    Register("play.toggle",       "Play / Stop",             Ctx_App, K(ImGuiKey_F1));
+    Register("play.pause",        "Pause / Resume",          Ctx_App, K(ImGuiKey_F2));
+    Register("play.step",         "Step One Frame",          Ctx_App, K(ImGuiKey_F3));
+    Register("play.maximize",     "Maximize / Restore Game", Ctx_App, K(ImGuiKey_F4));
+    Register("window.fullscreen", "Toggle Window Fullscreen", Ctx_App, K(ImGuiKey_F11));
 }
 
 // --- key <-> name (small, covers everything the table + json can hold) --------------------
@@ -401,6 +412,51 @@ bool Triggered(const char* id) {
     if (!id) return false;
     const auto it = g_Fired.find(id);
     return it != g_Fired.end() && it->second == g_Frame;
+}
+
+// --- GLFW-input path (main loop, no ImGui frame) ------------------------------------------
+namespace {
+int GlfwKeyFromImGui(ImGuiKey k) {
+    if (k >= ImGuiKey_A && k <= ImGuiKey_Z)  return GLFW_KEY_A + (k - ImGuiKey_A);
+    if (k >= ImGuiKey_0 && k <= ImGuiKey_9)  return GLFW_KEY_0 + (k - ImGuiKey_0);
+    if (k >= ImGuiKey_Keypad0 && k <= ImGuiKey_Keypad9) return GLFW_KEY_KP_0 + (k - ImGuiKey_Keypad0);
+    if (k >= ImGuiKey_F1 && k <= ImGuiKey_F12) return GLFW_KEY_F1 + (k - ImGuiKey_F1);
+    switch (k) {
+        case ImGuiKey_Space:      return GLFW_KEY_SPACE;
+        case ImGuiKey_Enter:      return GLFW_KEY_ENTER;
+        case ImGuiKey_KeypadEnter:return GLFW_KEY_KP_ENTER;
+        case ImGuiKey_Tab:        return GLFW_KEY_TAB;
+        case ImGuiKey_Escape:     return GLFW_KEY_ESCAPE;
+        case ImGuiKey_Backspace:  return GLFW_KEY_BACKSPACE;
+        case ImGuiKey_Delete:     return GLFW_KEY_DELETE;
+        case ImGuiKey_Insert:     return GLFW_KEY_INSERT;
+        case ImGuiKey_Home:       return GLFW_KEY_HOME;
+        case ImGuiKey_End:        return GLFW_KEY_END;
+        case ImGuiKey_PageUp:     return GLFW_KEY_PAGE_UP;
+        case ImGuiKey_PageDown:   return GLFW_KEY_PAGE_DOWN;
+        case ImGuiKey_LeftArrow:  return GLFW_KEY_LEFT;
+        case ImGuiKey_RightArrow: return GLFW_KEY_RIGHT;
+        case ImGuiKey_UpArrow:    return GLFW_KEY_UP;
+        case ImGuiKey_DownArrow:  return GLFW_KEY_DOWN;
+        case ImGuiKey_Comma:      return GLFW_KEY_COMMA;
+        case ImGuiKey_Period:     return GLFW_KEY_PERIOD;
+        case ImGuiKey_Minus:      return GLFW_KEY_MINUS;
+        case ImGuiKey_Equal:      return GLFW_KEY_EQUAL;
+        default:                  return -1;
+    }
+}
+} // namespace
+
+bool TriggeredGlfw(const char* id) {
+    Shortcut* s = FindMut(id ? id : "");
+    if (!s || !s->Current.IsBound()) return false;
+    const Chord& c = s->Current; // sequences never reach this path; the prefix half is ignored
+    const int gk = GlfwKeyFromImGui(c.Key);
+    if (gk < 0 || !Input::IsKeyPressed(gk)) return false;
+    const bool ctrl  = Input::IsKeyDown(GLFW_KEY_LEFT_CONTROL) || Input::IsKeyDown(GLFW_KEY_RIGHT_CONTROL);
+    const bool shift = Input::IsKeyDown(GLFW_KEY_LEFT_SHIFT)   || Input::IsKeyDown(GLFW_KEY_RIGHT_SHIFT);
+    const bool alt   = Input::IsKeyDown(GLFW_KEY_LEFT_ALT)     || Input::IsKeyDown(GLFW_KEY_RIGHT_ALT);
+    return ctrl == c.Ctrl && shift == c.Shift && alt == c.Alt;
 }
 
 } // namespace Shortcuts
