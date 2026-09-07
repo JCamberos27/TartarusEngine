@@ -574,6 +574,100 @@ void EditorLayer::Shutdown() {
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 }
+// --- Lighting panel + shared section helpers (#236 R2) -----------------------------------
+void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
+    ImGui::ColorEdit3("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
+    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour at the horizon.");
+    ImGui::ColorEdit3("Zenith color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
+    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour straight up.");
+    ImGui::SetNextItemWidth(w);
+    EditorUI::SliderFloat("Ambient intensity", &world.SkyAmbientIntensity, 0.0f, 3.0f, "%.2f x");
+    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Ambient Intensity");
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip(
+        "Strength of the image-based ambient light and reflections baked from the sky colours "
+        "above. 1.0 is physically consistent; 0 disables environment lighting entirely.");
+}
+
+void EditorLayer::DrawPostProcessSettings(float w) {
+    auto& prefs = EditorSettings::Get();
+    ImGui::SetNextItemWidth(w);
+    EditorUI::SliderFloat("Exposure (EV)", &prefs.ExposureEV, -6.0f, 6.0f, "%+.2f");
+    if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Photographic stops applied before the tone curve. 0 = neutral. Applies live.");
+
+    static const char* kTonemapLabels[] = { "Reinhard", "ACES", "AgX" };
+    int tm = std::clamp(prefs.TonemapOperator, 0, 2);
+    ImGui::SetNextItemWidth(w);
+    if (ImGui::Combo("Tone mapping", &tm, kTonemapLabels, IM_ARRAYSIZE(kTonemapLabels))) {
+        prefs.TonemapOperator = tm;
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Curve that maps linear HDR to display. ACES = punchy filmic; AgX = gentler, less hue shift.");
+}
+
+void EditorLayer::DrawShadowSettings(float w) {
+    auto& prefs = EditorSettings::Get();
+    if (ImGui::Checkbox("Cast sun shadows", &prefs.ShadowsEnabled)) EditorSettings::Save();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Cascaded shadow maps for the Directional light. Point/spot shadows are a later milestone.");
+
+    static const char* kShadowResLabels[] = { "1024", "2048", "4096" };
+    static const int   kShadowResValues[] = { 1024, 2048, 4096 };
+    int srIdx = 1;
+    for (int i = 0; i < 3; ++i) if (kShadowResValues[i] == prefs.ShadowResolution) { srIdx = i; break; }
+    if (!prefs.ShadowsEnabled) ImGui::BeginDisabled();
+    ImGui::SetNextItemWidth(w);
+    if (ImGui::Combo("Shadow resolution", &srIdx, kShadowResLabels, IM_ARRAYSIZE(kShadowResLabels))) {
+        prefs.ShadowResolution = kShadowResValues[srIdx];
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Per-cascade shadow map size. 4x memory + fill from 2048 to 4096.");
+
+    static const char* kCascadeLabels[] = { "2", "3", "4" };
+    int ccIdx = std::clamp(prefs.ShadowCascades - 2, 0, 2);
+    ImGui::SetNextItemWidth(w);
+    if (ImGui::Combo("Cascades", &ccIdx, kCascadeLabels, IM_ARRAYSIZE(kCascadeLabels))) {
+        prefs.ShadowCascades = ccIdx + 2;
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Number of shadow cascades. Fewer = cheaper depth passes, coarser shadows far from the camera.");
+
+    ImGui::SetNextItemWidth(w);
+    EditorUI::SliderFloat("Shadow distance", &prefs.ShadowDistance, 10.0f, 500.0f, "%.0f m");
+    if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("How far from the camera the cascades cover. Shorter = crisper shadows.");
+    if (!prefs.ShadowsEnabled) ImGui::EndDisabled();
+}
+
+void EditorLayer::DrawLightingPanel(World& world) {
+    if (!m_ShowLighting) return;
+    ImGui::SetNextWindowSize(ImVec2(340.0f * m_UIScale, 430.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    PushTabChromeText();
+    const bool open = ImGui::Begin(ICON_FA_LIGHTBULB "  Lighting", &m_ShowLighting);
+    PopTabChromeText();
+    if (!open) { ImGui::End(); return; }
+
+    const float w = 170.0f * m_UIScale;
+    ImGui::SeparatorText("Environment");
+    DrawEnvironmentSettings(world, w);
+    ImGui::Spacing();
+    ImGui::SeparatorText("Post-processing");
+    DrawPostProcessSettings(w);
+    ImGui::Spacing();
+    ImGui::SeparatorText("Shadows (Directional Sun)");
+    DrawShadowSettings(w);
+    ImGui::Spacing();
+    ImGui::TextDisabled("Environment is per-scene; post-processing & shadows persist in editor_prefs.json.");
+    ImGui::End();
+}
+
 void EditorLayer::DrawPreferencesWindow(World& world) {
     if (!m_ShowPreferences) return;
 
@@ -768,20 +862,9 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
 
     case 3: // Environment
         ImGui::SeparatorText("Environment");
-        ImGui::ColorEdit3("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
-        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour at the horizon.");
-        ImGui::ColorEdit3("Zenith color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
-        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour straight up.");
-        // #196: the sky now lights the scene (irradiance + reflection probes baked from these
-        // two colours), so this is the ambient control the engine previously had nowhere.
-        ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Ambient intensity", &world.SkyAmbientIntensity, 0.0f, 3.0f, "%.2f x");
-        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Ambient Intensity");
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip(
-            "Strength of the image-based ambient light and reflections baked from the sky colours "
-            "above. 1.0 is physically consistent; 0 disables environment lighting entirely.");
+        DrawEnvironmentSettings(world, kw); // shared with Window ▸ Lighting (#236 R2)
+        ImGui::Spacing();
+        if (ImGui::SmallButton(ICON_FA_LIGHTBULB "  Open Lighting panel")) m_ShowLighting = true;
         break;
 
     case 4: // Auto-Save
@@ -841,21 +924,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ImGui::Spacing();
         ImGui::SeparatorText("Rendering (HDR)");
 
-        ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Exposure (EV)", &prefs.ExposureEV, -6.0f, 6.0f, "%+.2f");
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Photographic stops applied before the tone curve. 0 = neutral. Applies live.");
-
-        static const char* kTonemapLabels[] = { "Reinhard", "ACES", "AgX" };
-        int tm = std::clamp(prefs.TonemapOperator, 0, 2);
-        ImGui::SetNextItemWidth(kw);
-        if (ImGui::Combo("Tone mapping", &tm, kTonemapLabels, IM_ARRAYSIZE(kTonemapLabels))) {
-            prefs.TonemapOperator = tm;
-            EditorSettings::Save();
-        }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Curve that maps linear HDR to display. ACES = punchy filmic; AgX = gentler, less hue shift.");
+        DrawPostProcessSettings(kw); // exposure + tone mapping — shared with Window ▸ Lighting
 
         static const char* kMsaaLabels[] = { "Off", "2x", "4x", "8x" };
         static const int   kMsaaValues[] = { 1, 2, 4, 8 };
@@ -871,43 +940,12 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
 
         ImGui::Spacing();
         ImGui::SeparatorText("Shadows (Directional Sun)");
-
-        if (ImGui::Checkbox("Cast sun shadows", &prefs.ShadowsEnabled)) EditorSettings::Save();
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Cascaded shadow maps for the Directional light. Point/spot shadows are a later milestone.");
-
-        static const char* kShadowResLabels[] = { "1024", "2048", "4096" };
-        static const int   kShadowResValues[] = { 1024, 2048, 4096 };
-        int srIdx = 1;
-        for (int i = 0; i < 3; ++i) if (kShadowResValues[i] == prefs.ShadowResolution) { srIdx = i; break; }
-        if (!prefs.ShadowsEnabled) ImGui::BeginDisabled();
-        ImGui::SetNextItemWidth(kw);
-        if (ImGui::Combo("Shadow resolution", &srIdx, kShadowResLabels, IM_ARRAYSIZE(kShadowResLabels))) {
-            prefs.ShadowResolution = kShadowResValues[srIdx];
-            EditorSettings::Save();
-        }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Per-cascade shadow map size. 4x memory + fill from 2048 to 4096.");
-
-        static const char* kCascadeLabels[] = { "2", "3", "4" };
-        int ccIdx = std::clamp(prefs.ShadowCascades - 2, 0, 2);
-        ImGui::SetNextItemWidth(kw);
-        if (ImGui::Combo("Cascades", &ccIdx, kCascadeLabels, IM_ARRAYSIZE(kCascadeLabels))) {
-            prefs.ShadowCascades = ccIdx + 2;
-            EditorSettings::Save();
-        }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Number of shadow cascades. Fewer = cheaper depth passes, coarser shadows far from the camera.");
-
-        ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Shadow distance", &prefs.ShadowDistance, 10.0f, 500.0f, "%.0f m");
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("How far from the camera the cascades cover. Shorter = crisper shadows.");
-        if (!prefs.ShadowsEnabled) ImGui::EndDisabled();
+        DrawShadowSettings(kw); // shared with Window ▸ Lighting
 
         ImGui::Spacing();
         ImGui::TextDisabled("Changes apply immediately. All of these persist in editor_prefs.json.");
+        ImGui::SameLine();
+        if (ImGui::SmallButton(ICON_FA_LIGHTBULB "  Lighting panel")) m_ShowLighting = true;
         break;
     }
 
@@ -1626,6 +1664,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawRevertScenePrompt(world, assets);
     DrawPreferencesWindow(world);
     DrawProjectSettingsWindow(world);
+    DrawLightingPanel(world); // #236 R2
     DrawScreenshotPreview();
 
     // Auto-save: only ticks here (Draw() is editor-mode-only, per main.cpp) so it never fires
