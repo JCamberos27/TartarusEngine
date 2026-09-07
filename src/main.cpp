@@ -259,7 +259,14 @@ static void UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm:
     // for dolly instead (Unity's own Scene View split of the same two mouse buttons), so this
     // excludes the Alt-held case rather than fighting it for the same drag.
     if (allowLook && !altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
-        float speed = 8.0f * dt * (Input::IsKeyDown(GLFW_KEY_LEFT_SHIFT) ? 3.0f : 1.0f);
+        // Scroll while flying (RMB held) trims the fly speed, Unity-style — persisted (#236 R2).
+        if (double sc = Input::GetScrollDeltaY(); sc != 0.0) {
+            float& fs = EditorSettings::Get().SceneCameraFlySpeed;
+            fs = std::clamp(fs * std::pow(1.15f, (float)sc), 0.5f, 200.0f);
+            EditorSettings::Save();
+        }
+        float speed = EditorSettings::Get().SceneCameraFlySpeed * dt *
+                      (Input::IsKeyDown(GLFW_KEY_LEFT_SHIFT) ? 3.0f : 1.0f);
         glm::vec3 move{0.0f};
         if (Input::IsKeyDown(GLFW_KEY_W)) move += cam.Front();
         if (Input::IsKeyDown(GLFW_KEY_S)) move -= cam.Front();
@@ -305,7 +312,8 @@ static void UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm:
     // visual effect under an orthographic projection, so orthographic mode instead shrinks/grows
     // OrthoHalfHeight — multiplicatively, so the zoom rate scales with how zoomed-in you already
     // are instead of crawling at large scales or blowing past small ones with a fixed step.
-    if (allowLook) {
+    // ...but not while flying: scroll-while-RMB trims the fly speed instead (handled above).
+    if (allowLook && !(!altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT))) {
         double scroll = Input::GetScrollDeltaY();
         if (scroll != 0.0) {
             if (cam.Orthographic) {
@@ -642,6 +650,7 @@ int main(int argc, char** argv) {
         editorCamera.Position = player.Cam.Position;
         editorCamera.Yaw = player.Cam.Yaw;
         editorCamera.Pitch = player.Cam.Pitch;
+        editorCamera.Fov = EditorSettings::Get().SceneCameraFov; // #236 R2 — persisted editor FOV
         // Deliberately NOT calling editor.FrameSceneBounds() here (audit #87's original fix for
         // "staring at empty space") - for this scene it re-frames to an exterior overview of the
         // whole building, outside every room's floor. Since Play copies its spawn straight from

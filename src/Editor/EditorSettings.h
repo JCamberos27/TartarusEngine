@@ -92,6 +92,12 @@ struct EditorSettings {
     // entity counts) — the editor-side counterpart of GameViewShowStats. Toggled from
     // View > Statistics or the toolbar chart button; persisted so the choice survives a restart.
     bool SceneShowStats = false;
+
+    // Editor fly-camera (#236 R2) — FOV in degrees; fly speed in world units/sec at 1x (Shift
+    // still ×3). Adjustable in View ▸ Camera and, for fly speed, by scrolling while holding RMB.
+    float SceneCameraFov = 75.0f;
+    float SceneCameraFlySpeed = 8.0f;
+
     std::string GameViewPresetLabel = "Free Aspect";
     int GameViewPresetWidth = 0;
     int GameViewPresetHeight = 0;
