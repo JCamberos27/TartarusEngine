@@ -734,6 +734,15 @@ private:
     void DrawSceneVersionWarningPopup();
     std::string m_SceneVersionWarning;
 
+    // Lighting panel (#236 R2) — one place for the environment / post-process / shadow controls
+    // that were split between Preferences ▸ Environment and Preferences ▸ Performance. The three
+    // section helpers are shared, so Preferences renders the same widgets.
+    void DrawLightingPanel(World& world);
+    void DrawEnvironmentSettings(World& world, float itemWidth);
+    void DrawPostProcessSettings(float itemWidth);
+    void DrawShadowSettings(float itemWidth);
+    bool m_ShowLighting = false;
+
     // Preferences window (Ctrl+,) — replaces the old giant Settings menu-bar dropdown (#53).
     void DrawPreferencesWindow(World& world);
     bool m_ShowPreferences = false;
