@@ -87,6 +87,17 @@ struct InactiveTag {};
 // the distinction already recorded, rather than needing a re-pass once that optimization lands.
 struct StaticTag {};
 
+// SceneVis-lite (#236 B), the editor-only counterparts of Unity's Scene-view hand/lock columns.
+// Unlike InactiveTag these change nothing about the object itself — it still renders in the
+// Game view, still collides, still ticks, still saves:
+//   HiddenInSceneTag — not drawn in the editor Scene viewport, and not click-/marquee-pickable
+//                      there (a decluttering aid; the object is still "there").
+//   SceneLockedTag   — still drawn in the Scene viewport, but not click-/marquee-pickable, so a
+//                      finished piece of set dressing can't be grabbed by accident. Hierarchy
+//                      selection and the gizmo still work once selected.
+struct HiddenInSceneTag {};
+struct SceneLockedTag {};
+
 // A dynamic light. Point/Spot use the entity's world position; Directional (the sun) ignores
 // position and takes its travel direction from the entity's -Z axis (rotate the entity to aim
 // it), matching the spot-cone convention. Every kind goes through the same LightBuffer SSBO and

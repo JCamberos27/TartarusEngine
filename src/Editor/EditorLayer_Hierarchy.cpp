@@ -492,6 +492,11 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     // just before this function returns. See the header for why the two buffers are separate.
     m_HierarchyVisibleBuild.clear();
 
+    // #236 B — clear the spring-load dwell target whenever there's no row drag in flight, so a
+    // stale entity can't auto-expand a folder on the next unrelated drag.
+    if (const ImGuiPayload* d = ImGui::GetDragDropPayload(); !d || !d->IsDataType("HIERARCHY_ENTITY"))
+        m_HierarchySpringRow = entt::null;
+
     const bool filtering = !m_HierarchyFilter.empty();
 
     // One flat list — every entity in creation order, no "Level Geometry" / "Objects" split.
@@ -616,6 +621,9 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     auto& name = world.Registry.get<NameComponent>(entity);
     bool selected = IsSelected(entity);
     bool inactive = world.Registry.all_of<InactiveTag>(entity);
+    // #236 B — SceneVis-lite: hidden rows read like inactive ones (dimmed name); locked rows
+    // aren't dimmed (they're still visible) but the row's lock glyph stays lit.
+    bool sceneHiddenRow = world.Registry.all_of<HiddenInSceneTag>(entity);
     const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
     bool hasChildren = hier && !hier->Children.empty() && m_HierarchyFilter.empty();
 
@@ -779,6 +787,21 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
                            : (isFirstRow && my < midY - pInset) ? -1  // above the first name -> insert before
                            : 0;                                        // on the name -> parent onto
 
+            // #236 B — spring-loaded folders: hover the parent zone of a collapsed row with
+            // children for ~0.5s while dragging and it opens itself, so you can drop deep in a
+            // tree without a separate expand click.
+            if (zone == 0 && hasChildren && !open) {
+                const double now = ImGui::GetTime();
+                if (m_HierarchySpringRow != entity) { m_HierarchySpringRow = entity; m_HierarchySpringSince = now; }
+                else if (now - m_HierarchySpringSince > 0.5) {
+                    ImGui::GetStateStorage()->SetInt(nodeStateId, 1);
+                    open = true;
+                    m_HierarchySpringRow = entt::null;
+                }
+            } else if (m_HierarchySpringRow == entity) {
+                m_HierarchySpringRow = entt::null;
+            }
+
             ImDrawList* dl = ImGui::GetWindowDrawList();
             const ImU32 accent = ImGui::GetColorU32(ImGuiCol_DragDropTarget);
             const ImU32 fill   = (accent & 0x00FFFFFFu) | 0x44000000u; // same hue, ~27% alpha block
@@ -863,7 +886,7 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         // Pull the kind glyph + name in toward the eye (#152 follow-up). Parent rows keep enough
         // lead for the disclosure chevron; leaf rows (no chevron) only need a hair of separation.
         const float labelX   = rowMin.x + (hasChildren ? fontSize * 1.15f : fontSize * 0.35f);
-        const ImU32 col = ImGui::GetColorU32(inactive ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+        const ImU32 col = ImGui::GetColorU32((inactive || sceneHiddenRow) ? ImGuiCol_TextDisabled : ImGuiCol_Text);
 
         // Disclosure chevron — a light Font Awesome ">" / "v" (0.66em) centred in the leading
         // slot, in the dim text colour, brightening on arrow-hover. Replaces ImGui's chunky
@@ -895,7 +918,34 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     // how deep it sits. Drawn after the row so a click on it never also selects the row.
     {
         const float eyeW = ImMax(ImGui::CalcTextSize(ICON_FA_EYE).x, ImGui::CalcTextSize(ICON_FA_EYE_SLASH).x) + 2.0f;
+        const float gap  = 4.0f * m_UIScale;
+        const float lockW = ImMax(ImGui::CalcTextSize(ICON_FA_LOCK).x, ImGui::CalcTextSize(ICON_FA_LOCK_OPEN).x) + 2.0f;
+        const float hideW = ImMax(ImGui::CalcTextSize(ICON_FA_GHOST).x, ImGui::CalcTextSize(ICON_FA_EYE_LOW_VISION).x) + 2.0f;
+
+        // #236 B — SceneVis-lite: hide (viewport-only) + lock (unpickable) glyphs, hover-reveal,
+        // just left of the Active eye. These never touch the object itself — Game view, physics
+        // and saves are unaffected.
+        const bool sceneHidden = world.Registry.all_of<HiddenInSceneTag>(entity);
+        const bool sceneLocked = world.Registry.all_of<SceneLockedTag>(entity);
+
         ImGui::SameLine();
+        ImGui::SetCursorScreenPos(ImVec2(rowMax.x - eyeW - gap - lockW - hideW - 2.0f * gap, rowMin.y));
+        if (SceneVisToggle("##svhide", ICON_FA_GHOST, ICON_FA_EYE_LOW_VISION, sceneHidden, rowHovered,
+                           sceneHidden ? "Hidden in the Scene view - click to show"
+                                       : "Hide in the Scene view (still in the game, still collides, still saved)")) {
+            PushUndo(world, "Toggle Scene Visibility");
+            if (sceneHidden) world.Registry.remove<HiddenInSceneTag>(entity);
+            else             world.Registry.emplace<HiddenInSceneTag>(entity);
+        }
+        ImGui::SameLine(0.0f, gap);
+        if (SceneVisToggle("##svlock", ICON_FA_LOCK, ICON_FA_LOCK_OPEN, sceneLocked, rowHovered,
+                           sceneLocked ? "Locked out of Scene-view clicks - click to unlock"
+                                       : "Lock: can't be clicked in the Scene view (Hierarchy select still works)")) {
+            PushUndo(world, "Toggle Scene Lock");
+            if (sceneLocked) world.Registry.remove<SceneLockedTag>(entity);
+            else             world.Registry.emplace<SceneLockedTag>(entity);
+        }
+
         ImGui::SetCursorScreenPos(ImVec2(rowMax.x - eyeW - 4.0f * m_UIScale, rowMin.y));
         if (ActiveToggle("##rowactive", !inactive, rowHovered,
                          inactive ? "Inactive - click to enable" : "Active - click to disable",

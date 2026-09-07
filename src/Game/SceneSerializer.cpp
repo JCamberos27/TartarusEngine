@@ -82,6 +82,8 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
     if (const auto* tag = world.Registry.try_get<TagComponent>(entity)) j["tag"] = tag->Tag;
     if (world.Registry.all_of<InactiveTag>(entity)) j["active"] = false;
     if (world.Registry.all_of<StaticTag>(entity)) j["static"] = true;
+    if (world.Registry.all_of<HiddenInSceneTag>(entity)) j["sceneHidden"] = true; // #236 B — editor SceneVis
+    if (world.Registry.all_of<SceneLockedTag>(entity)) j["sceneLocked"] = true;
 
     if (const auto* light = world.Registry.try_get<LightComponent>(entity)) {
         const char* kindStr = light->Kind == LightComponent::Type::Spot ? "spot"
@@ -154,6 +156,8 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
     if (j.contains("tag")) world.Registry.emplace_or_replace<TagComponent>(entity, j["tag"].get<std::string>());
     if (!j.value("active", true)) world.Registry.emplace_or_replace<InactiveTag>(entity);
     if (j.value("static", false)) world.Registry.emplace_or_replace<StaticTag>(entity);
+    if (j.value("sceneHidden", false)) world.Registry.emplace_or_replace<HiddenInSceneTag>(entity); // #236 B
+    if (j.value("sceneLocked", false)) world.Registry.emplace_or_replace<SceneLockedTag>(entity);
 
     if (j.contains("light")) {
         const json& l = j["light"];
