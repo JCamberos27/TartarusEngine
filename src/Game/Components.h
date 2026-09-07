@@ -87,6 +87,15 @@ struct InactiveTag {};
 // the distinction already recorded, rather than needing a re-pass once that optimization lands.
 struct StaticTag {};
 
+// Unity's layer field, "-lite" (#236 A1): a small integer slot (0..LayerRegistry::kCount-1)
+// grouping entities for editor visibility / pick-locking, camera culling, and (later) PhysX
+// collision filtering. Slot 0 is "Default"; the component is omitted entirely for it, so an
+// entity on the default layer costs nothing — same zero-default pattern as the tags above.
+// Human-readable slot names live in project/layers.json (LayerRegistry), not on the component.
+struct LayerComponent {
+    int Layer = 0;
+};
+
 // A dynamic light. Point/Spot use the entity's world position; Directional (the sun) ignores
 // position and takes its travel direction from the entity's -Z axis (rotate the entity to aim
 // it), matching the spot-cone convention. Every kind goes through the same LightBuffer SSBO and
