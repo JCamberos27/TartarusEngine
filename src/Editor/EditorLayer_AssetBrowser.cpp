@@ -708,6 +708,16 @@ bool DrawClampedGridLabel(ImDrawList* dl, ImVec2 pos, float wrapWidth, float lin
 // Rescans scenes/ on disk into m_ScenesListingCache — only when the cache has been invalidated
 // (timer, Asset Browser focus regained, or an explicit create/delete/duplicate elsewhere in this
 // file). See the header for why this replaced a per-frame directory_iterator (#175).
+void EditorLayer::RefreshAssetBrowser() {
+    InvalidateScenesListing();
+    InvalidateShotsListing();
+    InvalidateModelThumbnail();          // clears every cached model thumbnail
+    m_ShotThumbs.clear();                // shared_ptr<Texture> entries free their GL textures here
+    m_AssetListingRefreshTimer = 0.0f;
+    m_AssetRefreshFlash = 1.6f; // drives the module's brief "Assets refreshed" confirmation
+    Log::Info("Asset Browser refreshed - re-scanned scenes/ and screenshots/, dropped thumbnail caches.");
+}
+
 void EditorLayer::RefreshScenesListingIfNeeded() {
     if (m_ScenesListingCache.valid) return;
     m_ScenesListingCache.paths.clear();
@@ -901,11 +911,66 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         bool show = filtering || assets.AssetFolder(prefab) == m_CurrentAssetFolder;
         if (show) cells.push_back({Cell::Kind::Prefab, prefab, name, nullptr, nullptr});
     }
-    std::sort(cells.begin(), cells.end(), [](const Cell& a, const Cell& b) {
-        bool aFolder = a.kind == Cell::Kind::Folder, bFolder = b.kind == Cell::Kind::Folder;
-        if (aFolder != bFolder) return aFolder;
-        return a.display < b.display;
-    });
+    // Sort control (#236 G) — folders always first; within each group, Name / Type / Date / Size,
+    // ascending or descending. Date/Size stat the on-disk file once here (primitive:// and other
+    // fileless keys fall back to 0, sorting to the "oldest / smallest" end).
+    {
+        const int mode = std::clamp(EditorSettings::Get().AssetSortMode, 0, 3);
+        const bool desc = EditorSettings::Get().AssetSortDesc;
+        auto typeRank = [](Cell::Kind k) {
+            switch (k) {
+                case Cell::Kind::Folder:     return 0;
+                case Cell::Kind::Scene:      return 1;
+                case Cell::Kind::Prefab:     return 2;
+                case Cell::Kind::Model:      return 3;
+                case Cell::Kind::Texture:    return 4;
+                case Cell::Kind::Sound:      return 5;
+                case Cell::Kind::Screenshot: return 6;
+            }
+            return 7;
+        };
+        std::unordered_map<std::string, long long> mtime;
+        std::unordered_map<std::string, unsigned long long> fsize;
+        if (mode == 2 || mode == 3) {
+            std::error_code ec;
+            for (const auto& c : cells) {
+                if (c.kind == Cell::Kind::Folder) continue;
+                std::filesystem::path p(c.key);
+                if (!std::filesystem::exists(p, ec)) continue;
+                if (mode == 2) {
+                    auto t = std::filesystem::last_write_time(p, ec);
+                    if (!ec) mtime[c.key] = (long long)t.time_since_epoch().count();
+                } else {
+                    auto s = std::filesystem::file_size(p, ec);
+                    if (!ec) fsize[c.key] = (unsigned long long)s;
+                }
+            }
+        }
+        auto lower = [](std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; };
+        std::sort(cells.begin(), cells.end(), [&](const Cell& a, const Cell& b) {
+            const bool aFolder = a.kind == Cell::Kind::Folder, bFolder = b.kind == Cell::Kind::Folder;
+            if (aFolder != bFolder) return aFolder; // folders first, always
+            int cmp = 0;
+            switch (mode) {
+                case 1: cmp = typeRank(a.kind) - typeRank(b.kind); break;
+                case 2: {
+                    long long ta = mtime.count(a.key) ? mtime[a.key] : 0;
+                    long long tb = mtime.count(b.key) ? mtime[b.key] : 0;
+                    cmp = (ta < tb) ? -1 : (ta > tb) ? 1 : 0;
+                    break;
+                }
+                case 3: {
+                    unsigned long long sa = fsize.count(a.key) ? fsize[a.key] : 0;
+                    unsigned long long sb = fsize.count(b.key) ? fsize[b.key] : 0;
+                    cmp = (sa < sb) ? -1 : (sa > sb) ? 1 : 0;
+                    break;
+                }
+                default: break;
+            }
+            if (cmp == 0) cmp = lower(a.display).compare(lower(b.display)); // stable tiebreak by name
+            return desc ? cmp > 0 : cmp < 0;
+        });
+    }
 
     // Ctrl+A - select every currently-visible item (respecting the active search/filter, same
     // as Unity's own "select all visible items in list").
@@ -1165,6 +1230,10 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     m_SelectedAssetIsFolder = false;
                 }
                 if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open")) RequestOpenScene(world, assets, cell.key);
+                if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
+                    ImGui::SetClipboardText(cell.key.c_str());
+                    Log::Info("Copied path: " + cell.key);
+                }
 
                 // Act on the whole selection when the right-clicked scene is part of a
                 // multi-selection, same as the generic asset menu.
@@ -1190,6 +1259,10 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     m_SelectedAssetIsFolder = false;
                 }
                 if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Show in folder")) Screenshot::ShowInFolder(cell.key);
+                if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
+                    ImGui::SetClipboardText(cell.key.c_str());
+                    Log::Info("Copied path: " + cell.key);
+                }
                 std::vector<AssetKeyRef> shotsForAction;
                 shotsForAction.push_back({m_SelectedAssetKey, false});
                 for (const auto& e : m_ExtraAssetSelection) shotsForAction.push_back(e);
@@ -1240,6 +1313,11 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 }
                 ImGui::EndPopup();
             }
+            if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
+                ImGui::SetClipboardText(cell.key.c_str());
+                Log::Info("Copied path: " + cell.key);
+            }
+
             // Reimport straight from the context menu instead of only via Import Settings >
             // Apply (#28 P17). Single selection, real imported assets only.
             if (!isFolder && m_ExtraAssetSelection.empty() &&
