@@ -20,6 +20,7 @@
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
 #include "ComponentRegistry.h"
+#include "LayerRegistry.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
 #include "GLStateCache.h"
@@ -786,6 +787,31 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             }
         }
 
+        // Layer (#236 A1) — shared slot across the selection, em-dash when mixed.
+        {
+            int sharedLayer = -1; bool layerMixed = false, firstL = true;
+            forEach([&](entt::entity e) {
+                const auto* lc = world.Registry.try_get<LayerComponent>(e);
+                int l = lc ? lc->Layer : 0;
+                if (firstL) { sharedLayer = l; firstL = false; }
+                else if (l != sharedLayer) layerMixed = true;
+            });
+            PropertyLabel("Layer", "Sets the Layer on every selected object.");
+            const std::string preview = layerMixed ? std::string("\xE2\x80\x94") : LayerRegistry::DisplayName(sharedLayer);
+            if (ImGui::BeginCombo("##mlayer", preview.c_str())) {
+                for (int i = 0; i < LayerRegistry::kCount; ++i) {
+                    if (ImGui::Selectable(LayerRegistry::DisplayName(i).c_str(), !layerMixed && i == sharedLayer)) {
+                        PushUndo(world, "Set Layer");
+                        forEach([&](entt::entity e) {
+                            if (i == 0) world.Registry.remove<LayerComponent>(e);
+                            else world.Registry.emplace_or_replace<LayerComponent>(e, LayerComponent{i});
+                        });
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        }
+
         EndComponentSection();
         }
 
@@ -1252,6 +1278,29 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             EditorUI::SetTooltip("Marks this object as never moving at runtime.\nDoesn't change behavior yet - just records the intent for later optimizations.");
         }
     }
+
+    // --- Layer (#236 A1) — a small named slot; slot 0 ("Default") stores no component.
+    // Drives editor viewport visibility / pick-lock now (Gizmos dropdown ▸ Layers); camera
+    // culling and physics filtering ride on the same slot later.
+    {
+        const auto* lc = registry.try_get<LayerComponent>(entity);
+        const int cur = lc ? lc->Layer : 0;
+        PropertyLabel("Layer", "Groups objects for editor visibility, pick-locking and (later)\ncamera culling. Rename slots in the Gizmos dropdown \xE2\x96\xB8 Layers.");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo("##Layer", LayerRegistry::DisplayName(cur).c_str())) {
+            for (int i = 0; i < LayerRegistry::kCount; ++i) {
+                if (ImGui::Selectable(LayerRegistry::DisplayName(i).c_str(), i == cur)) {
+                    if (i != cur) {
+                        PushUndo(world, "Set Layer");
+                        if (i == 0) registry.remove<LayerComponent>(entity);
+                        else registry.emplace_or_replace<LayerComponent>(entity, LayerComponent{i});
+                    }
+                }
+            }
+            ImGui::EndCombo();
+        }
+    }
+
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();

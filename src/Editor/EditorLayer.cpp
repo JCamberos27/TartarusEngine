@@ -17,6 +17,7 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "LayerRegistry.h"
 #include "GLStateCache.h"
 #include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
 #include "ScreenBlur.h"
@@ -85,6 +86,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     // Editor preferences (currently just the tooltip toggle) are independent of any scene, so
     // they're loaded once here rather than as part of scene load/save.
     EditorSettings::Load();
+    LayerRegistry::Load(); // slot names for LayerComponent (#236 A1); project/layers.json
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see ProjectPaths.h. Must match main.cpp's initial load: prefer the last-open scene if

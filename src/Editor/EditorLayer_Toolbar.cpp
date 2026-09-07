@@ -23,6 +23,7 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "LayerRegistry.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"
 #include "gl.h"
@@ -50,6 +51,7 @@
 #include <cmath>
 #include <cctype>
 #include <cstring>
+#include <cstdio>
 #include <functional>
 #include <cfloat>
 
@@ -600,6 +602,49 @@ void EditorLayer::DrawGizmosPopupBody() {
 
     ImGui::Separator();
     ImGui::Checkbox("Grid", &m_ShowGrid); // independent of the master switch, like Unity's grid
+
+    // --- Layers (#236 A1) -------------------------------------------------------------
+    // Per-layer Scene-viewport visibility (eye) + pick-lock (padlock), plus rename for the
+    // seven authorable slots. Visibility/lock masks are per-user (EditorSettings); the slot
+    // names are project content (LayerRegistry / project/layers.json).
+    ImGui::Separator();
+    if (ImGui::CollapsingHeader("Layers")) {
+        EditorSettings& s = EditorSettings::Get();
+        for (int i = 0; i < LayerRegistry::kCount; ++i) {
+            ImGui::PushID(i);
+            const unsigned bit = 1u << i;
+
+            bool vis = (s.LayerVisibleMask & bit) != 0;
+            if (ImGui::Checkbox("##vis", &vis)) {
+                if (vis) s.LayerVisibleMask |= bit; else s.LayerVisibleMask &= ~bit;
+                EditorSettings::Save();
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show this layer in the Scene viewport.\nHidden layers stay in the scene, the Hierarchy and every save.");
+
+            ImGui::SameLine();
+            bool locked = (s.LayerPickLockMask & bit) != 0;
+            if (ImGui::Checkbox("##lock", &locked)) {
+                if (locked) s.LayerPickLockMask |= bit; else s.LayerPickLockMask &= ~bit;
+                EditorSettings::Save();
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Lock: objects on this layer can't be clicked in the viewport.\nHierarchy selection still works.");
+
+            ImGui::SameLine();
+            if (i == 0) {
+                ImGui::TextUnformatted("Default");
+            } else {
+                char buf[32];
+                std::snprintf(buf, sizeof(buf), "%s", LayerRegistry::Name(i).c_str());
+                char hint[16];
+                std::snprintf(hint, sizeof(hint), "Layer %d", i);
+                ImGui::SetNextItemWidth(150.0f);
+                if (ImGui::InputTextWithHint("##name", hint, buf, sizeof(buf)))
+                    LayerRegistry::SetName(i, buf);
+                if (ImGui::IsItemDeactivatedAfterEdit()) LayerRegistry::Save();
+            }
+            ImGui::PopID();
+        }
+    }
 }
 
 void EditorLayer::RequestCapture() {
