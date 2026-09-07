@@ -610,6 +610,67 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         if (!m_ExtraSelection.empty()) m_ExtraSelection.pop_back();
     }
 
+    // #236 C — Inspector lock. Swap the locked snapshot in for the body's duration (a scope
+    // guard restores the live selection past every early return); the padlock button below
+    // toggles it. Everything downstream — undo, multi-edit, Add Component — then targets the
+    // locked objects, which is the point: edit this while the viewport selection is elsewhere.
+    const entt::entity     liveSelected = m_Selected;
+    std::vector<entt::entity> liveExtra  = m_ExtraSelection;
+    bool inspLockSwapped = false;
+    auto restoreLiveSelection = [&] {
+        if (inspLockSwapped) { m_Selected = liveSelected; m_ExtraSelection = std::move(liveExtra); }
+    };
+    struct RestoreScope { std::function<void()> f; ~RestoreScope() { if (f) f(); } } _restore{restoreLiveSelection};
+
+    if (m_InspectorLocked) {
+        if (m_InspLockSelected != entt::null && !world.Registry.valid(m_InspLockSelected))
+            m_InspLockSelected = entt::null;
+        m_InspLockExtra.erase(std::remove_if(m_InspLockExtra.begin(), m_InspLockExtra.end(),
+            [&](entt::entity e) { return !world.Registry.valid(e) || e == m_InspLockSelected; }),
+            m_InspLockExtra.end());
+        if (m_InspLockSelected == entt::null && !m_InspLockExtra.empty()) {
+            m_InspLockSelected = m_InspLockExtra.back();
+            m_InspLockExtra.pop_back();
+        }
+        if (m_InspLockSelected == entt::null && m_InspLockExtra.empty()) {
+            m_InspectorLocked = false; // everything it pointed at is gone
+        } else {
+            m_Selected = m_InspLockSelected;
+            m_ExtraSelection = m_InspLockExtra;
+            inspLockSwapped = true;
+        }
+    }
+
+    // Padlock toggle, right-aligned on its own line above the rest of the panel.
+    {
+        const float bw = ImGui::GetFrameHeight();
+        ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - bw);
+        if (ActionButton(m_InspectorLocked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN,
+                         m_InspectorLocked ? "Inspector locked - showing a fixed object while you select others. Click to unlock."
+                                           : "Lock the Inspector to the current selection",
+                         m_InspectorLocked, ImVec2(bw, bw))) {
+            if (m_InspectorLocked) {
+                m_InspectorLocked = false;
+            } else if (liveSelected != entt::null) {
+                m_InspectorLocked = true;
+                m_InspLockSelected = liveSelected;
+                m_InspLockExtra = liveExtra;
+                // The swap above already ran for THIS frame off the (then-unlocked) state; do it
+                // now so the body immediately reflects the lock.
+                m_Selected = m_InspLockSelected;
+                m_ExtraSelection = m_InspLockExtra;
+                inspLockSwapped = true;
+            }
+        }
+        if (m_InspectorLocked) {
+            const auto* nm = world.Registry.try_get<NameComponent>(m_InspLockSelected);
+            const int n = 1 + (int)m_InspLockExtra.size();
+            ImGui::TextDisabled(ICON_FA_LOCK "  Locked to %s%s",
+                nm && !nm->Name.empty() ? nm->Name.c_str() : "object",
+                n > 1 ? (" +" + std::to_string(n - 1)).c_str() : "");
+        }
+    }
+
     if (HasGroupSelection()) {
         std::vector<entt::entity> sel;
         sel.push_back(m_Selected);
