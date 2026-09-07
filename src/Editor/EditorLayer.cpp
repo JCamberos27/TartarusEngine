@@ -1357,6 +1357,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
     m_ScreenshotThumbBudgetThisFrame = 8; // at most this many new Asset Browser screenshot thumbnails per frame (#176)
 
+    if (m_AssetRefreshFlash > 0.0f) m_AssetRefreshFlash = std::max(0.0f, m_AssetRefreshFlash - dt); // #236 G
+
     // Prism theme: drift the palette's spectral phase and repaint the hue-driven style colours
     // before any window is submitted this frame. Slow — the band should look like it's tilting,
     // not spinning. Dark Slate: nothing to do.
