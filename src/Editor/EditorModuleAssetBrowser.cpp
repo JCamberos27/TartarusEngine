@@ -468,6 +468,29 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGui::EndPopup();
     }
 
+    // Sort control + Refresh (#236 G).
+    ImGui::SameLine();
+    const int sortPacked = host.GetAssetSort ? host.GetAssetSort() : 0;
+    int sortMode = (sortPacked >> 1) & 3;
+    bool sortDesc = (sortPacked & 1) != 0;
+    if (ImGui::Button(ICON_FA_ARROW_DOWN_SHORT_WIDE)) ImGui::OpenPopup("##AssetSort");
+    if (ImGui::IsItemHovered()) Tooltip(host, "Sort the grid");
+    if (ImGui::BeginPopup("##AssetSort")) {
+        static const char* kModes[] = { "Name", "Type", "Date modified", "Size" };
+        for (int i = 0; i < 4; ++i)
+            if (ImGui::MenuItem(kModes[i], nullptr, sortMode == i)) sortMode = i;
+        ImGui::Separator();
+        if (ImGui::MenuItem("Ascending", nullptr, !sortDesc)) sortDesc = false;
+        if (ImGui::MenuItem("Descending", nullptr, sortDesc)) sortDesc = true;
+        ImGui::EndPopup();
+    }
+    const int newPacked = sortMode * 2 + (sortDesc ? 1 : 0);
+    if (newPacked != sortPacked && host.SetAssetSort) host.SetAssetSort(newPacked);
+
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_ROTATE) && host.RefreshAssetBrowser) host.RefreshAssetBrowser();
+    if (ImGui::IsItemHovered()) Tooltip(host, "Refresh - re-scan folders and thumbnails (Ctrl+R)");
+
     ImGui::EndChild(); // ##AssetToolbar
 
     if (search != searchBefore && host.SetAssetSearch) host.SetAssetSearch(search.c_str());

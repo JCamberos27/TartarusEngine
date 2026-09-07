@@ -62,6 +62,8 @@ void EditorSettings::Load() {
     s.GameViewPresetHeight = root.value("gameViewPresetHeight", s.GameViewPresetHeight);
     s.AssetBrowserTreeWidth = root.value("assetBrowserTreeWidth", s.AssetBrowserTreeWidth);
     s.AssetBrowserIconSize = root.value("assetBrowserIconSize", s.AssetBrowserIconSize);
+    s.AssetSortMode = root.value("assetSortMode", s.AssetSortMode);
+    s.AssetSortDesc = root.value("assetSortDesc", s.AssetSortDesc);
     s.EngineMarkEnabled = root.value("engineMarkEnabled", s.EngineMarkEnabled);
     s.EngineMarkSpinSpeed = root.value("engineMarkSpinSpeed", s.EngineMarkSpinSpeed);
     s.EngineMarkPrism = root.value("engineMarkPrism", s.EngineMarkPrism);
@@ -114,6 +116,8 @@ void EditorSettings::Save() {
     root["gameViewPresetHeight"] = Get().GameViewPresetHeight;
     root["assetBrowserTreeWidth"] = Get().AssetBrowserTreeWidth;
     root["assetBrowserIconSize"] = Get().AssetBrowserIconSize;
+    root["assetSortMode"] = Get().AssetSortMode;
+    root["assetSortDesc"] = Get().AssetSortDesc;
     root["engineMarkEnabled"] = Get().EngineMarkEnabled;
     root["engineMarkSpinSpeed"] = Get().EngineMarkSpinSpeed;
     root["engineMarkPrism"] = Get().EngineMarkPrism;

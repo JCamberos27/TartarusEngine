@@ -101,6 +101,10 @@ struct EditorSettings {
     // the user's last splitter drag / icon-size slider position is written back here.
     float AssetBrowserTreeWidth = 0.0f;
     float AssetBrowserIconSize = 0.0f;
+    // Asset Browser grid sort (#236 G). Mode: 0 Name, 1 Type, 2 Date modified, 3 Size.
+    // Folders always sort before files regardless. Descending flips within each group.
+    int  AssetSortMode = 0;
+    bool AssetSortDesc = false;
 
     // --- Corner "engine mark": the spinning TE monogram in the Scene viewport's bottom-left.
     // EngineMarkSpinSpeed is radians/sec (0 parks it). EngineMarkPrism paints the monogram with

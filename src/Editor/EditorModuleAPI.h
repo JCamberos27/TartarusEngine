@@ -41,7 +41,10 @@
 //   8 - Inspector (frame only): the module owns Begin("Inspector") + End + visibility.
 //       Get/SetShowInspector and one DrawInspectorBody callback — the ~1090-line body (every
 //       component editor, PBR material, add-component, per-field undo) stays host-side.
-constexpr std::uint32_t kEditorModuleAPIVersion = 11;
+//   9-11 - Grid & Snap popover, Gizmos dropdown, Gizmos master toggle (tagged sections below).
+//   12 - Asset Browser sort + refresh (#236 G): Get/SetAssetSort (packed mode*2+desc) and
+//        RefreshAssetBrowser, driven from a sort/refresh button pair in the browser toolbar.
+constexpr std::uint32_t kEditorModuleAPIVersion = 12;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -341,6 +344,13 @@ struct EditorModuleHostAPI {
 
     // --- Gizmos master toggle button (API v11) --------------------------------------
     bool (*GetGizmosMasterVisible)() = nullptr;  void (*SetGizmosMasterVisible)(bool on) = nullptr;
+
+    // --- Asset Browser sort + refresh (API v12) -----------------------------------
+    // Sort is packed: mode * 2 + desc, mode 0 Name / 1 Type / 2 Date modified / 3 Size.
+    // The setter persists to EditorSettings. RefreshAssetBrowser busts every listing +
+    // thumbnail cache (also bound to Ctrl+R host-side when the browser has focus).
+    int  (*GetAssetSort)() = nullptr;   void (*SetAssetSort)(int packed) = nullptr;
+    void (*RefreshAssetBrowser)() = nullptr;
 };
 
 struct EditorModuleAPI {

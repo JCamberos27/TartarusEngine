@@ -388,6 +388,16 @@ void  TbDrawGridSnapPopupBody() { if (g_Editor) g_Editor->DrawGridSnapPopupBody(
 void  TbDrawGizmosPopupBody()   { if (g_Editor) g_Editor->DrawGizmosPopupBody(); }
 bool  TbGetGizmosMasterVisible() { return g_Editor && g_Editor->GizmosMasterVisible(); }
 void  TbSetGizmosMasterVisible(bool on) { if (g_Editor) g_Editor->SetGizmosMasterVisible(on); }
+int   TbGetAssetSort() {
+    return EditorSettings::Get().AssetSortMode * 2 + (EditorSettings::Get().AssetSortDesc ? 1 : 0);
+}
+void  TbSetAssetSort(int packed) {
+    auto& s = EditorSettings::Get();
+    s.AssetSortMode = (packed >> 1) & 3;
+    s.AssetSortDesc = (packed & 1) != 0;
+    EditorSettings::Save();
+}
+void  TbRefreshAssetBrowser() { if (g_Editor) g_Editor->RefreshAssetBrowser(); }
 
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
@@ -490,6 +500,8 @@ const EditorModuleHostAPI kHostAPI{
     &TbDrawGizmosPopupBody,
     // --- Gizmos master toggle button (API v11) — order must match EditorModuleHostAPI exactly ---
     &TbGetGizmosMasterVisible,  &TbSetGizmosMasterVisible,
+    &TbGetAssetSort,            &TbSetAssetSort,
+    &TbRefreshAssetBrowser,
 };
 
 } // namespace
