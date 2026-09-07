@@ -373,7 +373,7 @@ void EditorLayer::DeleteSelection(World& world) {
     ClearSelection();
     Log::Info("Deleted " + std::to_string(count) + (count == 1 ? " object." : " objects."));
 }
-void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets) {
+void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets, bool inPlace) {
     if (!HasAnySelection()) return;
     PushUndo(world, "Duplicate");
 
@@ -406,7 +406,7 @@ void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets) {
         const auto* hier = world.Registry.try_get<HierarchyComponent>(e);
         bool isRoot = !hier || hier->Parent == entt::null;
         if (!isRoot) continue;
-        if (auto* transform = world.Registry.try_get<TransformComponent>(e)) {
+        if (auto* transform = world.Registry.try_get<TransformComponent>(e); transform && !inPlace) {
             transform->Position += glm::vec3(1.0f, 0.0f, 1.0f);
         }
         if (auto* name = world.Registry.try_get<NameComponent>(e)) {

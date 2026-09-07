@@ -19,6 +19,7 @@
 #include "ProjectPaths.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
+#include "Shortcuts.h"
 #include "GLStateCache.h"
 #include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
 #include "ScreenBlur.h"
@@ -89,6 +90,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     EditorSettings::Load();
     LayerRegistry::Load(); // slot names for LayerComponent (#236 A1); project/layers.json
     ProjectSettings::Load(); // physics + tag vocabulary (#236 A4); project/settings.json
+    Shortcuts::Init(); // builtin key table + project/shortcuts.json overrides (#236 F)
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see ProjectPaths.h. Must match main.cpp's initial load: prefer the last-open scene if
@@ -909,59 +911,190 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         break;
     }
 
-    case 6: { // Shortcuts
-        ImGui::SeparatorText("Shortcuts");
-        ImGui::SetNextItemWidth(-1.0f);
-        char buf[64];
-        snprintf(buf, sizeof(buf), "%s", m_PrefsShortcutFilter.c_str());
-        if (ImGui::InputTextWithHint("##scfilter", ICON_FA_MAGNIFYING_GLASS "  Filter...", buf, sizeof(buf)))
-            m_PrefsShortcutFilter = buf;
-        static const std::pair<const char*, const char*> kShortcuts[] = {
-            {"Fly camera", "hold RMB + WASDQE"},
-            {"Zoom / dolly", "scroll wheel  ·  Alt+RMB drag"},
-            {"Pan view", "middle-drag  ·  Hand tool (Q) + left-drag"},
-            {"Orbit selection", "Alt + left-drag"},
-            {"Lock view to selection (camera follows)", "Shift+F"},
-            {"View presets", "1 / 3 / 7 / 0  (or numpad; Ctrl = opposite side)"},
-            {"Toggle orthographic", "5  (or numpad 5)"},
-            {"Frame selection", "F"},
-            {"Quick create (Create menu at cursor)", "Shift+A"},
-            {"Create Empty Child (of the selection)", "Ctrl+Shift+N"},
-            {"Toggle Active State (selection)", "Alt+Shift+A"},
-            {"Select All / Deselect / Invert", "Ctrl+A / Ctrl+Shift+A / Ctrl+I"},
-            {"Align selected Camera to view", "Ctrl+Shift+F"},
-            {"Tools: hand / move / rotate / scale / rect / transform", "Q / W / E / R / T / Y"},
-            {"Vertex grab", "hold V"},
-            {"Surface snap while moving (invert the toggle)", "hold Shift"},
-            {"Multi-select", "Ctrl+Click  ·  drag a box"},
-            {"Undo / Redo", "Ctrl+Z / Ctrl+Y"},
-            {"Save / Save As", "Ctrl+S / Ctrl+Shift+S"},
-            {"New / Open scene", "Ctrl+N / Ctrl+O"},
-            {"Duplicate", "Ctrl+D"},
-            {"Copy / Cut / Paste", "Ctrl+C / Ctrl+X / Ctrl+V"},
-            {"Delete selection", "Delete"},
-            {"Rename selection (edit mode)", "F2  (or double-click in Hierarchy)"},
-            {"Open Preferences", "Ctrl+,"},
-            {"Toggle window fullscreen", "F11"},
-            {"Screenshot (Capture tool)", "Print Screen"},
-            {"Play / Stop", "F1"},
-            {"Pause / Resume  (Play mode)", "F2"},
-            {"Step one frame  (while paused)", "F3"},
-            {"Maximize / restore Game view  (Play mode)", "F4"},
-            {"Release mouse & keyboard from the running game", "Esc"},
+    case 6: { // Shortcuts — compact press-to-bind editor over the Shortcuts registry (#236 F)
+        auto ctxName = [](std::uint32_t c) -> const char* {
+            switch (c) {
+                case Shortcuts::Ctx_Viewport:  return "Viewport";
+                case Shortcuts::Ctx_Hierarchy: return "Hierarchy";
+                case Shortcuts::Ctx_Project:   return "Project";
+                case Shortcuts::Ctx_Inspector: return "Inspector";
+                default:                       return "Global";
+            }
         };
-        if (ImGui::BeginTable("##sctable", 2,
-                ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_ScrollY)) {
-            ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("Keys", ImGuiTableColumnFlags_WidthStretch);
-            for (const auto& [action, keys] : kShortcuts) {
-                if (!MatchesFilter(m_PrefsShortcutFilter, std::string(action) + " " + keys)) continue;
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn(); ImGui::TextUnformatted(action);
-                ImGui::TableNextColumn(); ImGui::TextDisabled("%s", keys);
+
+        // Toolbar row: filter + a single icon button to restore every default.
+        {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "%s", m_PrefsShortcutFilter.c_str());
+            ImGui::SetNextItemWidth(-28.0f * m_UIScale);
+            if (ImGui::InputTextWithHint("##scfilter", ICON_FA_MAGNIFYING_GLASS "  Filter", buf, sizeof(buf)))
+                m_PrefsShortcutFilter = buf;
+            ImGui::SameLine(0.0f, 4.0f * m_UIScale);
+            if (ImGui::Button(ICON_FA_ARROW_ROTATE_LEFT "##resetall", ImVec2(-1.0f, 0.0f))) {
+                Shortcuts::ResetAllToDefault();
+                Shortcuts::Save();
+                m_PrefsCapturingId.clear();
+                m_PrefsCaptureStage = 0;
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Restore every shortcut to its default");
+        }
+
+        // Capture polling. One armed row at a time (m_PrefsCapturingId):
+        //   stage 0 — waiting for the first key. First press is stashed, NOT committed.
+        //   stage 1 — one combo captured; confirm as-is (Enter / click) or press a second key
+        //             to turn it into a two-key sequence (press G, then S).
+        // Esc cancels; Backspace/Delete on an empty field unbinds.
+        auto commitCapture = [&](Shortcuts::Chord chord) {
+            Shortcuts::SetChord(m_PrefsCapturingId.c_str(), chord);
+            Shortcuts::Save();
+            m_PrefsCapturingId.clear();
+            m_PrefsCaptureStage = 0;
+        };
+        if (!m_PrefsCapturingId.empty() && !ImGui::GetIO().WantTextInput) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+                m_PrefsCapturingId.clear();
+                m_PrefsCaptureStage = 0;
+            } else if (m_PrefsCaptureStage == 0 &&
+                       (ImGui::IsKeyPressed(ImGuiKey_Backspace, false) || ImGui::IsKeyPressed(ImGuiKey_Delete, false))) {
+                commitCapture(Shortcuts::Chord{}); // unbind
+            } else if (m_PrefsCaptureStage == 1 && ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+                commitCapture(m_PrefsCapturePrefix);
+            } else {
+                Shortcuts::Chord got;
+                if (Shortcuts::CaptureChord(got)) {
+                    if (m_PrefsCaptureStage == 0) {
+                        m_PrefsCapturePrefix = got;   // provisional single-combo binding
+                        m_PrefsCaptureStage = 1;
+                    } else {
+                        got.PrefixKey   = m_PrefsCapturePrefix.Key;   // chain: earlier combo -> prefix
+                        got.PrefixCtrl  = m_PrefsCapturePrefix.Ctrl;
+                        got.PrefixShift = m_PrefsCapturePrefix.Shift;
+                        got.PrefixAlt   = m_PrefsCapturePrefix.Alt;
+                        commitCapture(got);
+                    }
+                }
+            }
+        }
+
+        ImGui::TextDisabled("Click a binding, press the key. A second key makes a sequence \xC2\xB7 "
+                            "Enter confirms \xC2\xB7 Esc cancels \xC2\xB7 Backspace unbinds.");
+
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,  ImVec2(6.0f * m_UIScale, 2.0f * m_UIScale));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f * m_UIScale, 2.0f * m_UIScale));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,  ImVec2(4.0f * m_UIScale, 3.0f * m_UIScale));
+
+        if (ImGui::BeginTable("##sctable", 3,
+                ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoBordersInBody |
+                ImGuiTableFlags_PadOuterX)) {
+            ImGui::TableSetupColumn("##act",  ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("##bind", ImGuiTableColumnFlags_WidthFixed, 132.0f * m_UIScale);
+            ImGui::TableSetupColumn("##rst",  ImGuiTableColumnFlags_WidthFixed, 20.0f * m_UIScale);
+
+            const std::uint32_t order[] = { Shortcuts::Ctx_Global, Shortcuts::Ctx_Viewport,
+                Shortcuts::Ctx_Hierarchy, Shortcuts::Ctx_Project, Shortcuts::Ctx_Inspector };
+
+            for (std::uint32_t gctx : order) {
+                bool wroteHeader = false;
+                for (const auto& s : Shortcuts::All()) {
+                    if (s.Ctx != gctx) continue;
+                    if (!MatchesFilter(m_PrefsShortcutFilter, s.Label + " " + ctxName(s.Ctx) + " " +
+                            Shortcuts::ToString(s.Current)))
+                        continue;
+
+                    if (!wroteHeader) {
+                        wroteHeader = true;
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::TextDisabled("%s", ctxName(gctx));
+                        ImGui::TableNextColumn();
+                        ImGui::TableNextColumn();
+                    }
+
+                    const bool capturing = (m_PrefsCapturingId == s.Id);
+                    ImGui::TableNextRow();
+                    ImGui::PushID(s.Id.c_str());
+
+                    ImGui::TableNextColumn();
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted(s.Label.c_str());
+                    // Conflict marker sits with the label, not on its own line — keeps rows even.
+                    if (!capturing && s.Current.IsBound()) {
+                        auto clashes = Shortcuts::Conflicts(s.Id.c_str(), s.Current);
+                        if (!clashes.empty()) {
+                            ImGui::SameLine(0.0f, 6.0f * m_UIScale);
+                            ImGui::TextColored(ImVec4(1.0f, 0.78f, 0.30f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION);
+                            if (ImGui::IsItemHovered()) {
+                                std::string names;
+                                for (size_t i = 0; i < clashes.size(); ++i) {
+                                    const Shortcuts::Shortcut* o = Shortcuts::Find(clashes[i].c_str());
+                                    names += (o ? o->Label : clashes[i]);
+                                    if (i + 1 < clashes.size()) names += ", ";
+                                }
+                                EditorUI::SetTooltip("Same keys as: %s", names.c_str());
+                            }
+                        }
+                    }
+
+                    ImGui::TableNextColumn();
+                    // Every binding is the same keycap chip on every row, in every state. An
+                    // always-on 1px border defines the chip even where its fill matches the
+                    // row stripe — that mismatch was why some rows looked like bare text.
+                    std::string label;
+                    bool dim = false;
+                    if (capturing && m_PrefsCaptureStage == 0)      label = "Press a key\xE2\x80\xA6";
+                    else if (capturing)                              label = Shortcuts::ToString(m_PrefsCapturePrefix) + " +\xE2\x80\xA6";
+                    else if (s.Current.IsBound())                    label = Shortcuts::ToString(s.Current);
+                    else                                          { label = "Unbound"; dim = true; }
+
+                    const ImVec4 accent(0.85f, 0.55f, 0.15f, 0.95f);
+                    const ImVec4 baseTxt = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+                    ImVec4 chipFill = capturing ? accent : ImGui::GetStyleColorVec4(ImGuiCol_Button);
+                    ImVec4 chipHov  = capturing ? ImVec4(accent.x, accent.y, accent.z, 1.0f)
+                                                : ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered);
+                    ImVec4 chipTxt  = capturing ? ImVec4(1, 1, 1, 1)
+                                    : dim       ? ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled)
+                                                : baseTxt;
+                    ImVec4 chipBorder(baseTxt.x, baseTxt.y, baseTxt.z, 0.28f);
+
+                    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+                    ImGui::PushStyleColor(ImGuiCol_Button,        chipFill);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, chipHov);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  chipHov);
+                    ImGui::PushStyleColor(ImGuiCol_Text,          chipTxt);
+                    ImGui::PushStyleColor(ImGuiCol_Border,        chipBorder);
+                    // Fixed width + right-aligned so every chip is identical and they line up
+                    // in a clean column regardless of label length.
+                    const float pillW = 124.0f * m_UIScale;
+                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                        std::max(0.0f, ImGui::GetContentRegionAvail().x - pillW));
+                    if (ImGui::Button((label + "###bind").c_str(), ImVec2(pillW, 0.0f))) {
+                        if (capturing && m_PrefsCaptureStage == 1) commitCapture(m_PrefsCapturePrefix);
+                        else if (capturing)                        { m_PrefsCapturingId.clear(); m_PrefsCaptureStage = 0; }
+                        else                                       { m_PrefsCapturingId = s.Id; m_PrefsCaptureStage = 0; }
+                    }
+                    ImGui::PopStyleColor(5);
+                    ImGui::PopStyleVar();
+                    if (!capturing && ImGui::IsItemHovered())
+                        EditorUI::SetTooltip("Click to rebind \xC2\xB7 second key = sequence");
+
+                    ImGui::TableNextColumn();
+                    if (s.Overridden) {
+                        ImGui::AlignTextToFramePadding();
+                        if (ImGui::SmallButton(ICON_FA_ARROW_ROTATE_LEFT)) {
+                            Shortcuts::ResetToDefault(s.Id.c_str());
+                            Shortcuts::Save();
+                            if (capturing) { m_PrefsCapturingId.clear(); m_PrefsCaptureStage = 0; }
+                        }
+                        if (ImGui::IsItemHovered())
+                            EditorUI::SetTooltip("Reset to %s", Shortcuts::ToString(s.Default).c_str());
+                    }
+
+                    ImGui::PopID();
+                }
             }
             ImGui::EndTable();
         }
+        ImGui::PopStyleVar(3);
         break;
     }
 
@@ -1788,7 +1921,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
     // Drawn (and its hover/drag state refreshed) before picking runs below, so a click that
     // lands on the nav gizmo's rotate ring or tool buttons doesn't also start a viewport
-    // box-select/pick underneath it.
+    // box-select/pick underneath it. Its overlay forces itself above the Scene image but then
+    // re-fronts any floating window that could overlap it (see KeepFloatingWindowsAboveOverlay).
     if (!m_HideOverlaysThisFrame) DrawViewGizmo(world, editorCamera);
 
     if (!vHeld) {
@@ -1829,7 +1963,30 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGui::End();
     }
 
-    if (!ImGui::GetIO().WantTextInput && !m_GameInputActive && !OtherWindowOwnsKeyboard()) {
+    // --- Shortcut dispatch (#236 F) ---------------------------------------------------------
+    // The central table + press-to-bind editor live in Shortcuts.{h,cpp}. Here we decide which
+    // context owns the keyboard this frame and let the dispatcher evaluate every chord once;
+    // the call sites below then just ask Shortcuts::Triggered("editor.undo"). Bindings tagged
+    // Ctx_Viewport (the Q/W/E/R/T/Y tools, Shift+A, F) are suppressed while a panel has focus
+    // or Right-drag fly is held — that replaces the old hierarchyOwnsLetters / RMB guards for
+    // the migrated ones.
+    const bool keyboardFree =
+        !ImGui::GetIO().WantTextInput && !m_GameInputActive && !OtherWindowOwnsKeyboard();
+    {
+        std::uint32_t sctx = 0;
+        if (keyboardFree) {
+            sctx = Shortcuts::Ctx_Global;
+            ImGuiWindow* nr = GImGui->NavWindow ? GImGui->NavWindow->RootWindow : nullptr;
+            auto navIs = [&](const char* n) { return nr && nr == ImGui::FindWindowByName(n); };
+            if (navIs("Scene Hierarchy"))                          sctx |= Shortcuts::Ctx_Hierarchy;
+            else if (m_AssetBrowserFocused)                        sctx |= Shortcuts::Ctx_Project;
+            else if (navIs("Inspector"))                           sctx |= Shortcuts::Ctx_Inspector;
+            else if (!ImGui::IsMouseDown(ImGuiMouseButton_Right))  sctx |= Shortcuts::Ctx_Viewport;
+        }
+        Shortcuts::BeginFrame(sctx);
+    }
+
+    if (keyboardFree) {
         ImGuiIO& io = ImGui::GetIO();
 
         // The Scene Hierarchy takes plain letters for type-to-select and the arrows for tree
@@ -1838,49 +1995,41 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGuiWindow* navRoot = GImGui->NavWindow ? GImGui->NavWindow->RootWindow : nullptr;
         const bool hierarchyOwnsLetters = navRoot && navRoot == ImGui::FindWindowByName("Scene Hierarchy");
 
-        // W/E/R/T gizmo-tool shortcuts (Unity's own scheme) only when Right-drag isn't held —
-        // WASDQE fly the camera during Right-drag instead (see main.cpp's UpdateEditorCamera),
-        // so without this guard just walking forward with W would also switch tools every time.
-        if (!ImGui::IsMouseDown(ImGuiMouseButton_Right) && !hierarchyOwnsLetters) {
-            // Q/W/E/R/T/Y viewport tools (Unity's scheme, + Y for the combined gizmo, #236 E).
-            // Selecting any transform tool exits the Hand tool.
-            if (ImGui::IsKeyPressed(ImGuiKey_Q)) m_HandTool = true;
-            if (ImGui::IsKeyPressed(ImGuiKey_W)) { m_GizmoOp = GizmoOp::Translate; m_HandTool = false; }
-            if (ImGui::IsKeyPressed(ImGuiKey_E)) { m_GizmoOp = GizmoOp::Rotate;    m_HandTool = false; }
-            if (ImGui::IsKeyPressed(ImGuiKey_R)) { m_GizmoOp = GizmoOp::Scale;     m_HandTool = false; }
-            if (ImGui::IsKeyPressed(ImGuiKey_T)) { m_GizmoOp = GizmoOp::Rect;      m_HandTool = false; }
-            if (ImGui::IsKeyPressed(ImGuiKey_Y)) { m_GizmoOp = GizmoOp::Universal; m_HandTool = false; }
-            // Shift+A quick-add (Blender's binding) — opens the Add menu as a popup at the
-            // cursor. Guarded with the others so fly-mode's A (strafe left) doesn't trigger it.
-            if (io.KeyShift && !io.KeyCtrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_A)) {
-                m_OpenQuickAdd = true;
-            }
-        }
+        // Q/W/E/R/T/Y viewport tools (Unity's scheme, + Y for the combined gizmo, #236 E).
+        // Ctx_Viewport, so the dispatcher already withholds them while a panel owns the
+        // keyboard or Right-drag fly is active. Selecting any transform tool exits the Hand tool.
+        if (Shortcuts::Triggered("tools.hand"))      m_HandTool = true;
+        if (Shortcuts::Triggered("tools.move"))      { m_GizmoOp = GizmoOp::Translate; m_HandTool = false; }
+        if (Shortcuts::Triggered("tools.rotate"))    { m_GizmoOp = GizmoOp::Rotate;    m_HandTool = false; }
+        if (Shortcuts::Triggered("tools.scale"))     { m_GizmoOp = GizmoOp::Scale;     m_HandTool = false; }
+        if (Shortcuts::Triggered("tools.rect"))      { m_GizmoOp = GizmoOp::Rect;      m_HandTool = false; }
+        if (Shortcuts::Triggered("tools.transform")) { m_GizmoOp = GizmoOp::Universal; m_HandTool = false; }
+        // Shift+A quick-add (Blender's binding) — opens the Add menu as a popup at the cursor.
+        if (Shortcuts::Triggered("gameobject.quickAdd")) m_OpenQuickAdd = true;
 
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) Undo(world, assets);
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) Redo(world, assets);
-        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S)) {
-            DoSaveAs(world, assets);
-        } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S)) {
-            DoSave(world, assets); // prompts for a location if the scene is untitled (New Scene)
-        }
-        if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N)) {
-            RequestNewScene(world, assets);
-        }
+        if (Shortcuts::Triggered("editor.undo")) Undo(world, assets);
+        if (Shortcuts::Triggered("editor.redo")) Redo(world, assets);
+        if (Shortcuts::Triggered("editor.saveAs"))     DoSaveAs(world, assets);
+        else if (Shortcuts::Triggered("editor.save"))  DoSave(world, assets); // prompts for a location if untitled
+        if (Shortcuts::Triggered("editor.newScene")) RequestNewScene(world, assets);
         // GameObject-menu parity (#236): Ctrl+Shift+N = Create Empty Child (of the active
         // selection, or a root Empty if nothing's selected); Alt+Shift+A = Toggle Active State.
-        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N)) {
+        if (Shortcuts::Triggered("gameobject.createEmptyChild")) {
             CreateEmptyChild(world,
                 (m_Selected != entt::null && world.Registry.valid(m_Selected)) ? m_Selected : entt::null);
         }
-        if (io.KeyAlt && io.KeyShift && !io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A)) {
-            ToggleSelectionActive(world);
-        }
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Comma)) m_ShowPreferences = true;
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O)) {
+        if (Shortcuts::Triggered("gameobject.toggleActive")) ToggleSelectionActive(world);
+        if (Shortcuts::Triggered("editor.preferences")) m_ShowPreferences = true;
+        if (Shortcuts::Triggered("editor.openScene")) {
             RequestOpenScene(world, assets, FileDialog::OpenFile("Scene Files\0*.json\0All Files\0*.*\0", m_Window));
         }
-        if (HasAnySelection() && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+
+        // Ctrl+1..4 — focus a panel (new with the Shortcuts Manager, #236 F).
+        if (Shortcuts::Triggered("panel.focus.hierarchy")) ImGui::SetWindowFocus("Scene Hierarchy");
+        if (Shortcuts::Triggered("panel.focus.inspector")) ImGui::SetWindowFocus("Inspector");
+        if (Shortcuts::Triggered("panel.focus.project"))   ImGui::SetWindowFocus("Asset Browser");
+        if (Shortcuts::Triggered("panel.focus.console"))   ImGui::SetWindowFocus("Console");
+        if (HasAnySelection() && Shortcuts::Triggered("edit.delete")) {
             DeleteSelection(world);
         } else if (!m_SelectedAssetKey.empty() && m_RenamingAssetKey.empty() && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
             std::vector<AssetKeyRef> toDelete;
@@ -1896,24 +2045,27 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         bool assetBrowserOwnsKeys = m_AssetBrowserFocused &&
             (!m_SelectedAssetKey.empty() || !m_ExtraAssetSelection.empty());
 
-        if (HasAnySelection() && !assetBrowserOwnsKeys && !hierarchyOwnsLetters && ImGui::IsKeyPressed(ImGuiKey_F)) {
-            if (io.KeyShift) SetLockViewToSelection(!m_LockViewToSelection); // Shift+F — toggle camera-follow (#236 E)
-            else             FocusOnSelection(world, editorCamera);
-        }
-        if (HasAnySelection() && !assetBrowserOwnsKeys && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) DuplicateSelection(world, assets);
+        // F / Shift+F are Ctx_Viewport — the dispatcher already withholds them while a panel
+        // owns the keyboard, so only the selection guard is needed here.
+        if (HasAnySelection() && Shortcuts::Triggered("view.lockToSelection"))
+            SetLockViewToSelection(!m_LockViewToSelection); // Shift+F — toggle camera-follow (#236 E)
+        if (HasAnySelection() && Shortcuts::Triggered("view.frameSelection"))
+            FocusOnSelection(world, editorCamera);
+        if (HasAnySelection() && !assetBrowserOwnsKeys && Shortcuts::Triggered("edit.duplicate"))
+            DuplicateSelection(world, assets, /*inPlace=*/true); // Ctrl+D duplicates without the (1,0,1) nudge (#236 F)
 
         // Edit-menu selection ops (#236). The Hierarchy owns Ctrl+A when it's focused (select all
         // *visible* rows); elsewhere Ctrl+A selects every entity. Ctrl+Shift+A deselects, Ctrl+I
-        // inverts.
-        if (!assetBrowserOwnsKeys && !hierarchyOwnsLetters && io.KeyCtrl) {
-            if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_A))      ClearSelection();
-            else if (ImGui::IsKeyPressed(ImGuiKey_A))               SelectAllEntities(world);
-            else if (ImGui::IsKeyPressed(ImGuiKey_I))               InvertSelection(world);
+        // inverts. These are Ctx_Global, so the panel guards still matter.
+        if (!assetBrowserOwnsKeys && !hierarchyOwnsLetters) {
+            if (Shortcuts::Triggered("edit.deselectAll"))         ClearSelection();
+            else if (Shortcuts::Triggered("edit.selectAll"))      SelectAllEntities(world);
+            else if (Shortcuts::Triggered("edit.invertSelection")) InvertSelection(world);
         }
 
         // Ctrl+Shift+F — snap the selected Camera entity to the editor viewport (Unity's Align
         // With View). Mirrors the Inspector's "Align to View" button.
-        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_F) &&
+        if (Shortcuts::Triggered("camera.alignToView") &&
                 m_Selected != entt::null && world.Registry.valid(m_Selected) &&
                 world.Registry.all_of<CameraComponent>(m_Selected)) {
             PushUndo(world, "Align Camera to View");
@@ -1957,34 +2109,28 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
         // Clipboard. Cut is copy-then-delete, so a cancelled paste still leaves the objects
         // recoverable through undo rather than gone.
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && HasAnySelection()) CopySelection(world);
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_X) && HasAnySelection()) {
+        if (Shortcuts::Triggered("edit.copy") && HasAnySelection()) CopySelection(world);
+        if (Shortcuts::Triggered("edit.cut") && HasAnySelection()) {
             CopySelection(world);
             DeleteSelection(world);
         }
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V)) PasteClipboard(world, assets);
+        if (Shortcuts::Triggered("edit.paste")) PasteClipboard(world, assets);
 
-        // View presets — accepted on BOTH the number row and the numpad. Blender/Maya use the
-        // numpad; laptops often don't have one; so bind both. Ctrl gets the opposite side.
-        auto pressedDigit = [](ImGuiKey row, ImGuiKey pad) {
-            return ImGui::IsKeyPressed(row) || ImGui::IsKeyPressed(pad);
-        };
-        if (pressedDigit(ImGuiKey_7, ImGuiKey_Keypad7)) {
-            SnapToView(world, editorCamera, -90.0f, io.KeyCtrl ? 89.9f : -89.9f, true);
-        }
-        if (pressedDigit(ImGuiKey_1, ImGuiKey_Keypad1)) {
-            SnapToView(world, editorCamera, io.KeyCtrl ? 90.0f : -90.0f, 0.0f, true);
-        }
-        if (pressedDigit(ImGuiKey_3, ImGuiKey_Keypad3)) {
-            SnapToView(world, editorCamera, io.KeyCtrl ? 0.0f : 180.0f, 0.0f, true);
-        }
-        if (pressedDigit(ImGuiKey_0, ImGuiKey_Keypad0)) SnapToView(world, editorCamera, -45.0f, -35.264f, true);
-        if (pressedDigit(ImGuiKey_5, ImGuiKey_Keypad5)) ToggleOrthographic(world, editorCamera);
+        // View presets (Ctx_Viewport; row/numpad interchangeable, handled in the dispatcher).
+        // The three opposite faces are unbound by default — Ctrl+1..4 is panel focus now.
+        if (Shortcuts::Triggered("view.top"))    SnapToView(world, editorCamera, -90.0f, -89.9f, true);
+        if (Shortcuts::Triggered("view.bottom")) SnapToView(world, editorCamera, -90.0f,  89.9f, true);
+        if (Shortcuts::Triggered("view.front"))  SnapToView(world, editorCamera, -90.0f,   0.0f, true);
+        if (Shortcuts::Triggered("view.back"))   SnapToView(world, editorCamera,  90.0f,   0.0f, true);
+        if (Shortcuts::Triggered("view.right"))  SnapToView(world, editorCamera, 180.0f,   0.0f, true);
+        if (Shortcuts::Triggered("view.left"))   SnapToView(world, editorCamera,   0.0f,   0.0f, true);
+        if (Shortcuts::Triggered("view.persp"))  SnapToView(world, editorCamera, -45.0f, -35.264f, true);
+        if (Shortcuts::Triggered("view.toggleOrtho")) ToggleOrthographic(world, editorCamera);
 
         // F2 renames whichever selection is "live": a scene object takes priority over an Asset
         // Browser entry, matching which panel the user most likely just clicked in. In Play mode
         // F2 is Pause instead (#236) — rename is still one double-click away in the Hierarchy.
-        if (!m_InPlayMode && ImGui::IsKeyPressed(ImGuiKey_F2)) {
+        if (!m_InPlayMode && Shortcuts::Triggered("edit.rename")) {
             if (HasAnySelection()) {
                 BeginRenameEntity(m_Selected);
             } else if (!m_SelectedAssetKey.empty() && m_RenamingAssetKey.empty() && m_ExtraAssetSelection.empty()) {

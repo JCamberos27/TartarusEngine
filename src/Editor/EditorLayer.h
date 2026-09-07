@@ -12,6 +12,7 @@
 #include <list>
 #include <memory>
 #include <functional>
+#include "Shortcuts.h" // Shortcuts::Chord - Preferences > Shortcuts capture state below
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
 #include "Model.h"   // ModelImportSettings - same
 #include "ImportQueueManager.h"
@@ -627,7 +628,9 @@ private:
     void SelectItem(entt::entity entity, bool addToSelection);
     void ClearSelection();
     void DeleteSelection(World& world);
-    void DuplicateSelection(World& world, AssetLibrary& assets);
+    // inPlace = true (the Ctrl+D shortcut, #236 F) skips the (1,0,1) nudge given to duplicated
+    // roots, so the copy lands exactly on the original; the menu items keep the nudge.
+    void DuplicateSelection(World& world, AssetLibrary& assets, bool inPlace = false);
     void DrawGroupGizmo(World& world, Camera& editorCamera);
     // Shared setup/teardown behind DrawGizmo() (single-object) and DrawGroupGizmo() (multi-select):
     // opens the fullscreen transparent overlay window ImGuizmo's hit-testing needs and configures
@@ -703,6 +706,12 @@ private:
     bool m_ShowPreferences = false;
     int m_PrefsCategory = 0;
     std::string m_PrefsShortcutFilter;
+    // Preferences > Shortcuts (#236 F) — press-to-bind capture state. Empty id = not capturing.
+    // Stage 0 waits for the first key; stage 1 holds that combo (in m_PrefsCapturePrefix) while
+    // waiting for an Enter/click to confirm it or a second key to make it a G-then-S sequence.
+    std::string m_PrefsCapturingId;
+    int m_PrefsCaptureStage = 0;
+    Shortcuts::Chord m_PrefsCapturePrefix;
 
     // Project Settings window (#236 A4) — project-scoped (project/settings.json + layers.json),
     // kept separate from the per-user Preferences window above.
