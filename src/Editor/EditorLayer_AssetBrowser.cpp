@@ -714,6 +714,7 @@ void EditorLayer::RefreshAssetBrowser() {
     InvalidateModelThumbnail();          // clears every cached model thumbnail
     m_ShotThumbs.clear();                // shared_ptr<Texture> entries free their GL textures here
     m_AssetListingRefreshTimer = 0.0f;
+    m_AssetRefreshFlash = 1.6f; // drives the module's brief "Assets refreshed" confirmation
     Log::Info("Asset Browser refreshed - re-scanned scenes/ and screenshots/, dropped thumbnail caches.");
 }
 
@@ -1229,6 +1230,10 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     m_SelectedAssetIsFolder = false;
                 }
                 if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open")) RequestOpenScene(world, assets, cell.key);
+                if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
+                    ImGui::SetClipboardText(cell.key.c_str());
+                    Log::Info("Copied path: " + cell.key);
+                }
 
                 // Act on the whole selection when the right-clicked scene is part of a
                 // multi-selection, same as the generic asset menu.
@@ -1254,6 +1259,10 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     m_SelectedAssetIsFolder = false;
                 }
                 if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Show in folder")) Screenshot::ShowInFolder(cell.key);
+                if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
+                    ImGui::SetClipboardText(cell.key.c_str());
+                    Log::Info("Copied path: " + cell.key);
+                }
                 std::vector<AssetKeyRef> shotsForAction;
                 shotsForAction.push_back({m_SelectedAssetKey, false});
                 for (const auto& e : m_ExtraAssetSelection) shotsForAction.push_back(e);

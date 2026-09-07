@@ -398,6 +398,7 @@ void  TbSetAssetSort(int packed) {
     EditorSettings::Save();
 }
 void  TbRefreshAssetBrowser() { if (g_Editor) g_Editor->RefreshAssetBrowser(); }
+float TbGetAssetRefreshFlash() { return g_Editor ? g_Editor->AssetRefreshFlash() : 0.0f; }
 
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
@@ -502,6 +503,7 @@ const EditorModuleHostAPI kHostAPI{
     &TbGetGizmosMasterVisible,  &TbSetGizmosMasterVisible,
     &TbGetAssetSort,            &TbSetAssetSort,
     &TbRefreshAssetBrowser,
+    &TbGetAssetRefreshFlash,
 };
 
 } // namespace

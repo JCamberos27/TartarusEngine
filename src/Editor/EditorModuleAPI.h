@@ -351,6 +351,9 @@ struct EditorModuleHostAPI {
     // thumbnail cache (also bound to Ctrl+R host-side when the browser has focus).
     int  (*GetAssetSort)() = nullptr;   void (*SetAssetSort)(int packed) = nullptr;
     void (*RefreshAssetBrowser)() = nullptr;
+    // Seconds left on the post-refresh confirmation flash (0 = none) — the toolbar shows a brief
+    // "Assets refreshed" line off this so Ctrl+R isn't silent.
+    float (*GetAssetRefreshFlash)() = nullptr;
 };
 
 struct EditorModuleAPI {
