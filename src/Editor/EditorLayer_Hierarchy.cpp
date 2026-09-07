@@ -73,7 +73,8 @@ inline void MakeDirectionalLight(World& world, entt::entity e) {
     lc.Kind = LightComponent::Type::Directional;
     lc.Intensity = 6.0f;
     lc.AngularSizeDegrees = 2.0f;
-    lc.Shadow.Enabled = true; // a freshly added sun casts shadows by default
+    lc.Shadow.Enabled = true;      // a freshly added sun casts shadows by default
+    lc.Shadow.Softness = 0.25f;    // crisper penumbra out of the box (~0.25 on the Softness slider)
     world.Registry.get<TransformComponent>(e).RotationEuler = glm::vec3(-36.25f, 53.13f, 0.0f);
 }
 
