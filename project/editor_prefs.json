@@ -31,7 +31,7 @@
   "lightGizmoScale": 1.0,
   "lightGizmoSelectedOnly": true,
   "msaaSamples": 4,
-  "sceneShowStats": true,
+  "sceneShowStats": false,
   "shadowCascades": 4,
   "shadowDistance": 500.0,
   "shadowResolution": 4096,

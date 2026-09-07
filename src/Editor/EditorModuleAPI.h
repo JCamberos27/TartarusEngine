@@ -69,7 +69,7 @@ enum EditorModuleLogLevel : int {
 // its "Toggle Console" button. Anything derived from this (e.g. the cached filtered index list)
 // stays module-side and is simply rebuilt after a reload.
 struct EditorConsoleState {
-    bool Visible = true;
+    bool Visible = false; // hidden on launch; toggled from the toolbar. Not persisted.
     bool ShowInfo = true;
     bool ShowWarning = true;
     bool ShowError = true;

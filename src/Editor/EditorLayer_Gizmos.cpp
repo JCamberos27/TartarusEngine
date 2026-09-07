@@ -1499,6 +1499,23 @@ void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
     draw->PopClipRect();
 }
 
+// The transform gizmo and the nav compass each live in a fullscreen NoInputs overlay that
+// forces itself to the display front every frame (so the Scene image can't cover it). That
+// also parked it on top of the centered Preferences / Project Settings windows. Re-fronting
+// those specific floating windows right after puts them back above the overlay — they're the
+// only editor windows that float free over the viewport rather than dock beside it.
+static void KeepFloatingWindowsAboveOverlay() {
+    static const char* kFloating[] = {
+        ICON_FA_GEAR "  Preferences",
+        ICON_FA_GEARS "  Project Settings",
+    };
+    for (const char* name : kFloating) {
+        ImGuiWindow* w = ImGui::FindWindowByName(name);
+        if (w && w->WasActive && !w->Hidden)
+            ImGui::BringWindowToDisplayFront(w);
+    }
+}
+
 // Shared setup behind DrawGizmo() (single-object) and DrawGroupGizmo() (multi-select). See the
 // declaration in EditorLayer.h for the contract; the comments on the individual calls below
 // explain why each one is needed.
@@ -1531,6 +1548,7 @@ bool EditorLayer::BeginGizmoOverlay(Camera& editorCamera, const char* overlayNam
     // newer, so it was appended in front). Forced to the front explicitly, every frame, so the
     // gizmo actually draws on top of the Scene image instead of being invisibly covered by it.
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+    KeepFloatingWindowsAboveOverlay(); // ...but not on top of Preferences / Project Settings
 
     // ImGuizmo hit-tests against its own draw-list window (this NoInputs overlay), which is never
     // ImGui's g.HoveredWindow — so without this, hovering the actual "Scene" panel makes
@@ -1862,6 +1880,7 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     // higher in ImGui's window stack) covers this NoInputs overlay instead of the other way
     // around.
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+    KeepFloatingWindowsAboveOverlay(); // ...but keep it under Preferences / Project Settings
 
     glm::vec3 camPos = editorCamera.Position;
     glm::quat camRot = glm::quatLookAt(editorCamera.Front(), glm::vec3(0.0f, 1.0f, 0.0f));
