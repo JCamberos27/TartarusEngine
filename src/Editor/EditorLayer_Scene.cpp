@@ -404,6 +404,7 @@ void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& 
 }
 
 void EditorLayer::PushUndo(const World& world, const std::string& label) {
+    m_CtrlZSelectionMode = false; // a real scene edit — Ctrl+Z is scene-undo again (#236 R2)
     const std::string sceneJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                               : SceneSerializer::SaveToString(world);
     UndoEntry entry;
