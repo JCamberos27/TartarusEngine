@@ -871,13 +871,17 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     // A type/label filter still narrows results even inside a specific folder (not just while
     // searching by name) - e.g. "t:Texture" alone, browsing normally, should hide non-textures
     // right where they are rather than forcing a switch to whole-library search first.
-    bool filtering = searching || !parsedSearch.typeTerms.empty() || !parsedSearch.labelTerms.empty();
+    // "filtering" collects candidate cells from the WHOLE library (not just the current
+    // folder). A search/type/label filter does that, and so does the favourites-only view —
+    // its whole point is to gather starred assets from anywhere.
+    bool filtering = searching || !parsedSearch.typeTerms.empty() || !parsedSearch.labelTerms.empty()
+                     || m_AssetFavoritesOnly;
 
     // Search scope (#236 G): unless "whole project" is on, a filtered result must also live in
     // the current folder or one of its descendants. Browsing (no filter) is always folder-local.
     const bool scopeGlobal = EditorSettings::Get().AssetSearchGlobal;
     auto inSearchScope = [&](const std::string& assetFolder) {
-        if (scopeGlobal || m_CurrentAssetFolder.empty()) return true;
+        if (scopeGlobal || m_AssetFavoritesOnly || m_CurrentAssetFolder.empty()) return true;
         return assetFolder == m_CurrentAssetFolder ||
                assetFolder.rfind(m_CurrentAssetFolder + "/", 0) == 0;
     };
