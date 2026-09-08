@@ -1335,7 +1335,7 @@ int main(int argc, char** argv) {
             // per-entity HiddenInSceneTag (#236 B). The running game and its Game view draw everything.
             auto drawScene = [&](const glm::mat4& sceneView, const glm::mat4& sceneProj,
                                   const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats,
-                                  bool editorView = false) {
+                                  bool editorView = false, int debugView = 0) {
                 const EditorSettings& gs = EditorSettings::Get();
 
                 // Shadows for this view. Spot and point shadows only need shadows-enabled +
@@ -1351,6 +1351,7 @@ int main(int argc, char** argv) {
                 modelShader.SetMat4("uView", sceneView);
                 modelShader.SetMat4("uProj", sceneProj);
                 modelShader.SetVec3("uViewPos", viewPos);
+                modelShader.SetInt("uDebugView", debugView); // #236 R2 scene-view debug modes
 
                 // Cascaded-shadow uniforms + the depth array on unit 8 (material maps use 1..7).
                 modelShader.SetInt("uShadowEnabled", sunShadowsOn ? 1 : 0);
@@ -1606,10 +1607,15 @@ int main(int argc, char** argv) {
                 EditorLayer::ShadingMode shading = editor.GetShadingMode();
                 bool sceneWireframe = shading == EditorLayer::ShadingMode::Wireframe;
                 bool sceneUnlit = shading == EditorLayer::ShadingMode::Unlit;
+                int sceneDebugView = 0; // model shader uDebugView: 1 Normals, 2 Cascades, 3 Mip
+                if (shading == EditorLayer::ShadingMode::Normals)  sceneDebugView = 1;
+                else if (shading == EditorLayer::ShadingMode::Cascades) sceneDebugView = 2;
+                else if (shading == EditorLayer::ShadingMode::Mip)      sceneDebugView = 3;
                 if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
                 EditorLayer::RenderStats sceneStats;
-                drawScene(sceneViewMat, sceneProjMat, editorCamera.Position, sceneUnlit, &sceneStats, /*editorView=*/true);
+                drawScene(sceneViewMat, sceneProjMat, editorCamera.Position, sceneUnlit, &sceneStats,
+                          /*editorView=*/true, /*debugView=*/sceneDebugView);
 
                 editor.SetRenderStats(sceneStats);
                 // NB: in Wireframe mode the polygon mode stays GL_LINE through the selection
