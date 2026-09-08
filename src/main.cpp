@@ -35,6 +35,7 @@
 #include "GLStateCache.h"
 #include "Profiler.h"
 #include "Frustum.h"
+#include "PhysicsWorld.h" // #185 — PhysX world stepped during Play
 #include "GameViewPanel.h"
 #include "ProjectPaths.h"
 #include "LayerRegistry.h"
@@ -992,6 +993,9 @@ int main(int argc, char** argv) {
             const bool simThisFrame = (playing && !paused) || stepThisFrame;
 
             if (simThisFrame) {
+                // Step the PhysX world (#185). PR 1: no actors, so this is observably a no-op —
+                // it exercises the create/step/destroy path ahead of PR 2's static colliders.
+                PhysicsWorld::Step(dt);
                 player.Update(dt, world, window.Handle(), gameHasInput);
                 // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
                 // against wherever the player is looking from, updated after the move so the
