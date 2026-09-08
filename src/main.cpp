@@ -374,9 +374,17 @@ int main(int argc, char** argv) {
     // nonzero code if any failed — parsed here, before anything else, so it can never be
     // confused with a scene-path or other future argument.
     bool smokeTestMode = false;
+    // --resave <in.json> <out.json>: load a scene and immediately re-serialize it, then exit.
+    // The one headless path that exercises the SAVE side of the serializer — round-trip tests
+    // (prefab overrides #302 Part B, the reflected-component migrations, ...) all need it. Still
+    // spins up the GL context (texture/mesh loading needs it) but never enters the main loop.
+    std::string resaveIn, resaveOut;
     for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) == "--smoke-test") smokeTestMode = true;
+        std::string a = argv[i];
+        if (a == "--smoke-test") smokeTestMode = true;
+        else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
     }
+    const bool resaveMode = !resaveIn.empty();
 
     try {
         // Up before anything else so it covers the whole startup, including the GL context
@@ -446,6 +454,20 @@ int main(int argc, char** argv) {
                 scenePath = last;
         }
         AssetLibrary assets;
+
+        if (resaveMode) {
+            if (!SceneSerializer::Load(world, assets, resaveIn)) {
+                std::cerr << "[Resave] FAILED to load '" << resaveIn << "'\n";
+                return 2;
+            }
+            if (!SceneSerializer::Save(world, assets, resaveOut)) {
+                std::cerr << "[Resave] FAILED to save '" << resaveOut << "'\n";
+                return 3;
+            }
+            std::cout << "[Resave] " << resaveIn << " -> " << resaveOut << "\n";
+            return 0;
+        }
+
         bool sceneLoaded = SceneSerializer::Load(world, assets, scenePath);
         if (sceneLoaded) {
             std::cout << "Loaded scene from " << scenePath << std::endl;
