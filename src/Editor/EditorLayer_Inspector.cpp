@@ -411,6 +411,21 @@ bool ActiveToggleRow(const char* label, bool anyActive, bool mixed, bool& out, c
     return clicked;
 }
 
+// Small eyedropper button, drawn right after a colour swatch. Arms EditorLayer's viewport
+// eyedropper on `target` (a stable pointer into a component / World member). #236 R2.
+void EyedropperButton(EditorLayer* self, World& world, glm::vec3* target) {
+    ImGui::SameLine(0.0f, 4.0f);
+    ImGui::PushID(target);
+    const bool armed = self->EyedropperArmed();
+    ImGui::PushStyleColor(ImGuiCol_Text, armed ? ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab)
+                                               : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    if (ImGui::SmallButton(ICON_FA_EYE_DROPPER)) self->ArmEyedropper(&world, target);
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Pick a colour from the Scene viewport (Esc / right-click to cancel)");
+    ImGui::PopID();
+}
+
 } // namespace
 
 
@@ -592,6 +607,23 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
 // inside that window scope. The whole body — every component editor, the PBR material editor,
 // add-component, per-field undo — stays here (EnTT + Components.h + material shared_ptr never
 // cross the DLL boundary).
+bool EditorLayer::ConsumeEyedropperSample(float& outX, float& outY) {
+    if (!m_EyedropperSampleRequested || !m_EyedropperTarget) return false;
+    m_EyedropperSampleRequested = false;
+    // Viewport-local pixels, origin top-left.
+    outX = m_EyedropperClickPos.x - m_ViewportPos.x;
+    outY = m_EyedropperClickPos.y - m_ViewportPos.y;
+    return true;
+}
+
+void EditorLayer::ApplyEyedropperSample(const glm::vec3& rgb) {
+    if (!m_EyedropperTarget) return;
+    if (m_EyedropperWorld) PushUndo(*m_EyedropperWorld, "Eyedropper");
+    *m_EyedropperTarget = glm::clamp(rgb, glm::vec3(0.0f), glm::vec3(1.0f));
+    m_EyedropperTarget = nullptr;
+    m_EyedropperWorld = nullptr;
+}
+
 void EditorLayer::ToggleInspectorLock() {
     // Called from the module's title-bar button before DrawInspectorBody() swaps in the locked
     // snapshot, so m_Selected / m_ExtraSelection still hold the live viewport selection here.
@@ -1491,8 +1523,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
 
             if (isLevelGeometry) {
                 PropertyLabel("Color", "Solid tint for this box's surface. Click the swatch\nfor the full color picker, or type a hex value.");
+                ImGui::SetNextItemWidth(-(ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x));
                 ImGui::ColorEdit3("##Color", &renderable->ModelRef->MeshMaterial(0).BaseColor.x, ImGuiColorEditFlags_DisplayHex);
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Color");
+                EyedropperButton(this, world, &renderable->ModelRef->MeshMaterial(0).BaseColor);
             }
 
             if (renderable->ModelRef->HasAnimations()) {
@@ -1627,9 +1661,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 if (ActionButton("RGB##KelvinOff", "Set the colour directly (RGB)")) { PushUndo(world, "Edit Light"); light->ColorTempK = 0.0f; }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Switch back to a custom RGB swatch.");
             } else {
-                ImGui::SetNextItemWidth(-60.0f);
+                ImGui::SetNextItemWidth(-90.0f);
                 ImGui::ColorEdit3("##Color", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+                EyedropperButton(this, world, &light->Color);
                 ImGui::SameLine();
                 if (ActionButton("K##KelvinOn", "Drive the colour from a temperature (Kelvin)")) {
                     PushUndo(world, "Edit Light");
@@ -2221,11 +2256,14 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         }
         glm::vec3 edit = shared;
         ImGui::PushID(label);
+        if (!mixed && mats.size() == 1)
+            ImGui::SetNextItemWidth(-(ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x));
         bool changed = ImGui::ColorEdit3("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
         if (ImGui::IsItemActivated()) StageUndo(world);
         if (changed) for (Material* mm : mats) mm->*field = edit;
         if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
         if (mixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
+        else if (mats.size() == 1) EyedropperButton(this, world, &(mats[0]->*field));
         ImGui::PopID();
     };
     auto scalarRow = [&](const char* label, float Material::* field, float lo, float hi, const char* tip) {
