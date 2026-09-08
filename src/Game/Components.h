@@ -244,4 +244,11 @@ struct PrefabInstanceComponent {
     // Runtime-only: set when SourcePath couldn't be opened on load, so the instance is shown as
     // a broken placeholder rather than silently vanishing. Never serialised.
     bool Missing = false;
+    // Runtime-only (#236 A2 stage 3 / #302 Part B): every entity of this instance in
+    // prefab-local order — index 0 is this root, the rest follow InstantiatePrefab's creation
+    // order (which is deterministic: the .prefab's boxes, then models, then empties, each in
+    // file order). Populated by InstantiatePrefab; used at save time to pair each live entity
+    // with its pristine counterpart in the .prefab file so per-field overrides can be diffed.
+    // Never serialised; entt::null for any descendant the user has since deleted.
+    std::vector<entt::entity> InstanceEntities;
 };
