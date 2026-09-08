@@ -563,9 +563,10 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
         m_PlayModeAudioHandles[e] = handle;
     }
 
-    // Stand up the PhysX world for this Play session (#185). PR 1: empty scene, stepped but
-    // zero actors — no behaviour change. Torn down in OnExitPlayMode.
-    PhysicsWorld::Create();
+    // Stand up the PhysX world for this Play session (#185). PR 2: a static actor per collider,
+    // stepped but not yet driving anything (the Player still moves on the legacy AABB path) —
+    // no behaviour change. Torn down in OnExitPlayMode.
+    PhysicsWorld::Create(world);
 
     Log::Info("Entered play mode - scene state saved, changes will be reverted on exit.");
 }

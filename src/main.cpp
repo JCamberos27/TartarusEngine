@@ -19,6 +19,7 @@
 #include "SceneSerializer.h"
 #include "AnimationSystem.h"
 #include "Grid.h"
+#include "ColliderGizmo.h" // #185 PR 2 — collider wireframe overlay
 #include "Sky.h"
 #include "ModelShaderSource.h"
 #include "TintOverlayRenderer.h"
@@ -414,6 +415,7 @@ int main(int argc, char** argv) {
         glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
         TintOverlayRenderer tintOverlay;
         Grid grid;
+        ColliderGizmo colliderGizmo; // #185 PR 2
         Sky sky;
         IblProbe iblProbe; // #196: sky-baked irradiance / prefiltered specular / BRDF LUT
 
@@ -1744,6 +1746,15 @@ int main(int argc, char** argv) {
                     grid.Draw(sceneViewMat, sceneProjMat, editorCamera.Position,
                               gset.GridMinorSpacing, (float)gset.GridMajorEvery, gridFade,
                               gset.GridOpacity, gset.GridShowAxisLines, gset.GridAxisThickness);
+                }
+
+                // Collider wireframe overlay (#185 PR 2) — depth-tested so scene geometry
+                // occludes it, no depth write so it never blocks anything drawn after.
+                if (EditorSettings::Get().ShowColliders && !editor.OverlaysHidden()) {
+                    glEnable(GL_DEPTH_TEST);
+                    glDepthMask(GL_FALSE);
+                    colliderGizmo.Draw(sceneViewMat, sceneProjMat, world);
+                    glDepthMask(GL_TRUE);
                 }
 
                 // Resolve MSAA + tonemap the linear-HDR scene into the LDR texture the Scene tab
