@@ -30,6 +30,16 @@ listed in `tools/component_registration_allowlist.txt` with a reason. When addin
 prefer registration; reach for the allow-list (and rule 3's disabled `(not implemented)`
 control) only when the editor genuinely needs a bespoke widget.
 
+A registered component may still opt out of one or both generic paths with
+`ReflectComponent::GenericSerialize` / `GenericInspector` (both default true). It stays
+"registered" for the guard rail and keeps its `Icon`/`Category`/`Tooltip` in one place, but a
+hand-coded path owns its JSON and/or its Inspector section — for state that isn't plain
+reflected fields. `RenderableComponent` ("Mesh Renderer") is the first: it holds a
+`shared_ptr<Model>`, its scene form is the box `color`/`size` or model `path`/`material`
+written by dedicated serializer code, and its add restores a stashed `DetachedMeshComponent`
+via the editor-only `AssetLibrary`. Use both opt-outs sparingly; a plain reflected-field
+component should never touch them.
+
 ### Current applications
 
 | Control | Treatment | Unblocks when |

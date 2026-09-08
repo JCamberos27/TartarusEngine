@@ -833,7 +833,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             if (allMesh)     common += ", Mesh Renderer";
             if (allCollider) common += ", Box Collider";
             for (std::size_t i = 0; i < registeredComponents.size(); ++i)
-                if (allReflected[i]) common += std::string(", ") + registeredComponents[i].Meta.Name;
+                if (allReflected[i] && registeredComponents[i].Meta.GenericInspector) // Mesh Renderer listed above
+                    common += std::string(", ") + registeredComponents[i].Meta.Name;
             ImGui::TextDisabled("Common: %s", common.c_str());
         }
 
@@ -1000,6 +1001,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         for (std::size_t ci = 0; ci < registeredComponents.size(); ++ci) {
             if (!allReflected[ci]) continue;
             const RegisteredComponent& rc = registeredComponents[ci];
+            if (!rc.Meta.GenericInspector) continue; // Mesh Renderer: hand-coded, no multi-select section
+
             ImGui::Spacing();
             if (BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, false, mrm, /*defaultOpen=*/true, rc.Meta.Tooltip)) {
                 auto fieldPtr = [&](entt::entity e, const ReflectField& f) -> void* {
@@ -1666,6 +1669,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // gives it a section for free. Undo follows the same lightweight pattern the hand-coded
     // sections above use (push on the frame an edit starts).
     for (const auto& rc : ComponentRegistry::All()) {
+        if (!rc.Meta.GenericInspector) continue; // Mesh Renderer: drawn by its hand-coded section above
         if (!rc.Has(registry, entity)) continue;
         bool reflRemoved = false, reflReset = false, reflCopy = false, reflPaste = false;
         // #315 B4b — this instance added a component its .prefab lacks: tint the header + add
@@ -2245,14 +2249,15 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     auto section = [&](const char* title) { if (filter.empty()) ImGui::SeparatorText(title); };
     // #302: reflection-registered components slot into these same headings via
     // ReflectComponent::Category — so e.g. Camera lists under "Rendering", not "Scripts".
+    // GenericInspector == false components (Mesh Renderer) keep their own hand-coded entry below.
     auto anyReflectedIn = [&](const char* cat) {
         for (const auto& rc : ComponentRegistry::All())
-            if (std::strcmp(rc.Meta.Category, cat) == 0) return true;
+            if (rc.Meta.GenericInspector && std::strcmp(rc.Meta.Category, cat) == 0) return true;
         return false;
     };
     auto reflectedFor = [&](const char* cat) {
         for (const auto& rc : ComponentRegistry::All())
-            if (std::strcmp(rc.Meta.Category, cat) == 0)
+            if (rc.Meta.GenericInspector && std::strcmp(rc.Meta.Category, cat) == 0)
                 entry(rc.Meta.Icon, rc.Meta.Name, rc.Has(registry, entity),
                       [&] { rc.Add(registry, entity); });
     };

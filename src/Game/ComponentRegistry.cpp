@@ -211,6 +211,24 @@ void RegisterEngineComponents() {
         m.Fields[1].Slider = true; m.Fields[1].Format = "%.2f";
         Register<AudioSourceComponent>(std::move(m));
     }
+
+    // #315 — Mesh Renderer. Registered so the component-registration guard rail counts it and
+    // its Icon/Category live here, but BOTH generic paths are opted out: RenderableComponent
+    // holds a shared_ptr<Model> (no reflectable fields), its scene form is the box "color/size"
+    // or model "path" + "material" written by dedicated code in SceneSerializer, and its add
+    // stashes/restores the mesh via DetachedMeshComponent using the editor-only AssetLibrary.
+    // The Inspector section (mesh picker, primitive popup, drag-drop, animation controls, the
+    // level-geometry Color row) stays hand-coded in EditorLayer_Inspector.cpp. Full
+    // genericisation is a follow-up (needs a Model asset-ref field type + an editor-side
+    // add/remove hook); see docs/CONVENTIONS.md.
+    {
+        ReflectComponent m;
+        m.Name = "Mesh Renderer"; m.Icon = ICON_FA_DRAW_POLYGON; m.Category = "Rendering";
+        m.Tooltip = "The mesh this object draws, and its material color/texture options.";
+        m.GenericSerialize = false;
+        m.GenericInspector = false;
+        Register<RenderableComponent>(std::move(m));
+    }
 }
 
 // Runs once, before main(). It only appends to All()'s function-local static, so there is no

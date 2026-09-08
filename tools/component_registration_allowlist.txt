@@ -11,7 +11,6 @@ TransformComponent      = Identity. Every entity has one; the Inspector's Transf
 NameComponent           = Identity. Edited via the Inspector name row, not an Add-Component section.
 OrderComponent          = Serializer-internal stable ordering (see the comment on the struct). No user-facing control.
 HierarchyComponent      = Parent/children graph. Surfaced by the Scene Hierarchy panel's drag-reparent, not an Inspector section.
-RenderableComponent     = "Mesh Renderer" — holds a shared_ptr<Model>, entangled with DetachedMeshComponent / LevelGeometryTag / primitive-vs-imported. Needs a Model AssetRef + mesh picker; tracked as its own follow-up.
 DetachedMeshComponent   = Editor-only, never serialized. Holds the mesh removed via "Mesh Renderer" so re-adding restores it.
 ColliderComponent       = IsTrigger is shown disabled with "(not implemented)" per CONVENTIONS.md rule 3; migrate alongside real trigger fields in #185.
 PrefabInstanceComponent = #236 A2 prefab-instance stub. Its scene representation is a one-line stub written by a dedicated serializer path, not a generic component block.
