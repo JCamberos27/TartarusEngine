@@ -236,6 +236,10 @@ public:
     bool GetShowInspector() const { return m_ShowInspector; }
     void SetShowInspector(bool on) { m_ShowInspector = on; }
     void DrawInspectorBody(World& world, AssetLibrary& assets);                  // EditorLayer_Inspector.cpp
+    // #302 Part B — body of the prefab-override right-click menu (caller Begins the popup).
+    // Public because file-local Inspector helpers (DrawVec3Row) invoke it. Revert is undoable;
+    // Apply mutates the .prefab on disk.
+    void PrefabFieldMenu(World& world, entt::entity entity, const char* component, const char* field);
 
     // --- Reloadable History HUD module bridge (issue #229, frame only, API v15) -------------
     // The module owns the bottom-right pinned HUD window + its pin/height math + the eased
@@ -1481,8 +1485,8 @@ private:
                                           const std::vector<entt::entity>& sel, ReflectExtraPhase phase);
     // #302 Part B — a field label that, when this (component, field) on `entity` differs from
     // the prefab it was instantiated from, tints itself in the selection accent and offers a
-    // right-click "Revert to Prefab". Falls back to a plain PropertyLabel otherwise. `component`
-    // is a ReflectComponent::Name or the specials "Transform" / "Name".
+    // right-click Revert / Apply menu. Falls back to a plain PropertyLabel otherwise.
+    // `component` is a ReflectComponent::Name or the specials "Transform" / "Name".
     void PrefabOverrideLabel(World& world, entt::entity entity, const char* component,
                              const char* field, const char* label, const char* tooltip);
     char m_AddComponentFilter[64] = {};      // type-to-filter text in the Add Component popup (#236)
