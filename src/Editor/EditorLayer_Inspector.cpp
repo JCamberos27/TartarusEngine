@@ -863,12 +863,17 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
 
         auto transformRow = [&](const char* label, float speed, float minV, float maxV,
                                 const std::function<glm::vec3&(TransformComponent&)>& ref,
-                                const char* tip, const char* undoLabel) {
+                                const char* tip, const char* undoLabel, const char* pfField) {
             glm::vec3 shared(0.0f); bool mixed[3];
             reduceVec3([&](const TransformComponent& t) { return ref(const_cast<TransformComponent&>(t)); },
                        shared, mixed);
             glm::vec3 edit = shared; bool touched[3];
-            MultiEditResult res = MultiEditVec3Row(label, edit, mixed, touched, speed, minV, maxV, tip);
+            // #315 — prefab-override marker: tints the label + right-click Revert/Apply when any
+            // selected entity's Transform.<pfField> diverges from its prefab. Always inert for a
+            // prefab-instance ROOT (its transform is per-instance by design) and for non-instance
+            // entities, so a plain multi-select shows nothing.
+            MultiEditResult res = MultiEditVec3Row(label, edit, mixed, touched, speed, minV, maxV, tip,
+                {this, &world, &sel, "Transform", pfField});
             if (res.activated) StageUndo(world);
             if (res.changed) {
                 forEach([&](entt::entity e) {
@@ -895,14 +900,14 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 : "Sets X / Y / Z on every selected object.";
             transformRow(posLabel, 0.05f, 0.0f, 0.0f,
                 [](TransformComponent& t) -> glm::vec3& { return t.Position; },
-                posTip, "Set Position");
+                posTip, "Set Position", "position");
         }
         transformRow("Rotation", 0.5f, 0.0f, 0.0f,
             [](TransformComponent& t) -> glm::vec3& { return t.RotationEuler; },
-            "Sets Euler rotation (degrees) on every selected object.", "Set Rotation");
+            "Sets Euler rotation (degrees) on every selected object.", "Set Rotation", "rotation");
         transformRow("Scale", 0.01f, 0.0f, 0.0f,
             [](TransformComponent& t) -> glm::vec3& { return t.Scale; },
-            "Sets scale on every selected object.", "Set Scale");
+            "Sets scale on every selected object.", "Set Scale", "scale");
 
         EndComponentSection();
         }
