@@ -231,6 +231,15 @@ void EditorLayer::ToggleAssetFavorite(const std::string& key) {
     SaveAssetFavorites();
 }
 
+void EditorLayer::SetAssetFavorites(const std::vector<std::string>& keys, bool on) {
+    bool changed = false;
+    for (const std::string& k : keys) {
+        if (k.empty()) continue;
+        changed |= on ? m_AssetFavorites.insert(k).second : (m_AssetFavorites.erase(k) > 0);
+    }
+    if (changed) SaveAssetFavorites();
+}
+
 // Decoded once per sound path (#236 G). An empty vector means "not decodable / not audio" and
 // is cached too, so a bad file isn't re-probed every frame.
 const std::vector<float>& EditorLayer::SoundWaveform(const std::string& path) {
@@ -1320,10 +1329,16 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     ImGui::SetClipboardText(cell.key.c_str());
                     Log::Info("Copied path: " + cell.key);
                 }
-                if (m_ExtraAssetSelection.empty() &&
-                    ImGui::MenuItem(IsAssetFavorite(cell.key) ? ICON_FA_STAR "  Remove from Favourites"
-                                                             : ICON_FA_STAR "  Add to Favourites"))
-                    ToggleAssetFavorite(cell.key);
+                {
+                    std::vector<std::string> favKeys{ m_SelectedAssetKey };
+                    for (const auto& e : m_ExtraAssetSelection) favKeys.push_back(e.Key);
+                    const bool allFav = std::all_of(favKeys.begin(), favKeys.end(),
+                        [&](const std::string& k) { return IsAssetFavorite(k); });
+                    std::string lbl = std::string(ICON_FA_STAR "  ") +
+                        (allFav ? "Remove from Favourites" : "Add to Favourites");
+                    if (favKeys.size() > 1) lbl += " (" + std::to_string(favKeys.size()) + ")";
+                    if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
+                }
 
                 // Act on the whole selection when the right-clicked scene is part of a
                 // multi-selection, same as the generic asset menu.
@@ -1353,10 +1368,16 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     ImGui::SetClipboardText(cell.key.c_str());
                     Log::Info("Copied path: " + cell.key);
                 }
-                if (m_ExtraAssetSelection.empty() &&
-                    ImGui::MenuItem(IsAssetFavorite(cell.key) ? ICON_FA_STAR "  Remove from Favourites"
-                                                             : ICON_FA_STAR "  Add to Favourites"))
-                    ToggleAssetFavorite(cell.key);
+                {
+                    std::vector<std::string> favKeys{ m_SelectedAssetKey };
+                    for (const auto& e : m_ExtraAssetSelection) favKeys.push_back(e.Key);
+                    const bool allFav = std::all_of(favKeys.begin(), favKeys.end(),
+                        [&](const std::string& k) { return IsAssetFavorite(k); });
+                    std::string lbl = std::string(ICON_FA_STAR "  ") +
+                        (allFav ? "Remove from Favourites" : "Add to Favourites");
+                    if (favKeys.size() > 1) lbl += " (" + std::to_string(favKeys.size()) + ")";
+                    if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
+                }
                 std::vector<AssetKeyRef> shotsForAction;
                 shotsForAction.push_back({m_SelectedAssetKey, false});
                 for (const auto& e : m_ExtraAssetSelection) shotsForAction.push_back(e);
@@ -1411,11 +1432,17 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ImGui::SetClipboardText(cell.key.c_str());
                 Log::Info("Copied path: " + cell.key);
             }
-            if (m_ExtraAssetSelection.empty()) {
-                const bool fav = IsAssetFavorite(cell.key);
-                if (ImGui::MenuItem(fav ? ICON_FA_STAR "  Remove from Favourites"
-                                        : ICON_FA_STAR "  Add to Favourites"))
-                    ToggleAssetFavorite(cell.key);
+            {
+                // Favourites — acts on the whole selection when the right-clicked item is
+                // part of a multi-selection (#236 G).
+                std::vector<std::string> favKeys{ m_SelectedAssetKey };
+                for (const auto& e : m_ExtraAssetSelection) favKeys.push_back(e.Key);
+                const bool allFav = std::all_of(favKeys.begin(), favKeys.end(),
+                    [&](const std::string& k) { return IsAssetFavorite(k); });
+                std::string lbl = std::string(ICON_FA_STAR "  ") +
+                    (allFav ? "Remove from Favourites" : "Add to Favourites");
+                if (favKeys.size() > 1) lbl += " (" + std::to_string(favKeys.size()) + ")";
+                if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
             }
 
             // Reimport straight from the context menu instead of only via Import Settings >
