@@ -213,6 +213,17 @@ struct PrefabRowRef {
     const char* field = nullptr;
 };
 
+// #315 — same idea for a multi-select row: `sel` is the whole selection; the label tints when
+// ANY of them has (comp, field) overridden, and the right-click menu Reverts/Applies across the
+// selection. Defaulted-empty so non-prefab-aware callers pass nothing.
+struct PrefabMultiRef {
+    EditorLayer* self = nullptr;
+    World* world = nullptr;
+    const std::vector<entt::entity>* sel = nullptr;
+    const char* comp = nullptr;
+    const char* field = nullptr;
+};
+
 // Unity/Hazel-style vector row: a colored X/Y/Z button (click to zero that axis) glued to
 // each drag field, instead of ImGui's plain unlabeled DragFloat3. `activatedOut` is set when
 // any axis field starts being dragged this frame, for undo-snapshot timing at the call site.
@@ -326,13 +337,25 @@ struct MultiEditResult {
 // untouched mixed axis is left alone rather than flattened to whatever axis 0 happened to be).
 MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool mixedAxis[3],
                                  bool axisTouched[3], float speed, float minV, float maxV,
-                                 const char* tooltip = nullptr) {
+                                 const char* tooltip = nullptr, PrefabMultiRef pf = {}) {
     MultiEditResult r;
     axisTouched[0] = axisTouched[1] = axisTouched[2] = false;
 
     ImGui::PushID(label);
     static const float col = ImGui::CalcTextSize("Rotation").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+    const bool pfOv = pf.self && pf.field && pf.sel &&
+        pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
+    if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
     AlignToColumn(label, col, tooltip);
+    if (pfOv) {
+        ImGui::PopStyleColor();
+        char pid[96]; std::snprintf(pid, sizeof(pid), "##pfm_%s", label);
+        ImGui::OpenPopupOnItemClick(pid, ImGuiPopupFlags_MouseButtonRight);
+        if (ImGui::BeginPopup(pid)) {
+            pf.self->PrefabFieldMenuMulti(*pf.world, *pf.sel, pf.comp, pf.field);
+            ImGui::EndPopup();
+        }
+    }
 
     float lineHeight = ImGui::GetFrameHeight();
     float buttonW = lineHeight + 4.0f;
@@ -381,10 +404,23 @@ MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool
 
 // A single scalar row with the same mixed-value behaviour.
 MultiEditResult MultiEditFloatRow(const char* label, float& value, bool mixed, float speed,
-                                  float minV, float maxV, const char* tooltip = nullptr) {
+                                  float minV, float maxV, const char* tooltip = nullptr,
+                                  PrefabMultiRef pf = {}) {
     MultiEditResult r;
     ImGui::PushID(label);
+    const bool pfOv = pf.self && pf.field && pf.sel &&
+        pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
+    if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
     PropertyLabel(label, tooltip);
+    if (pfOv) {
+        ImGui::PopStyleColor();
+        char pid[96]; std::snprintf(pid, sizeof(pid), "##pfm_%s", label);
+        ImGui::OpenPopupOnItemClick(pid, ImGuiPopupFlags_MouseButtonRight);
+        if (ImGui::BeginPopup(pid)) {
+            pf.self->PrefabFieldMenuMulti(*pf.world, *pf.sel, pf.comp, pf.field);
+            ImGui::EndPopup();
+        }
+    }
     ImGuiID fieldId = ImGui::GetID("##mf");
     bool editing = ImGui::GetActiveID() == fieldId;
     const char* fmt = (mixed && !editing) ? "\xE2\x80\x94" : "%.3f";
@@ -1012,7 +1048,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                                 if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
                             });
                             float edit = (float)shared;
-                            MultiEditResult r = MultiEditFloatRow(f.Name, edit, mixed, f.DragSpeed, f.Min, f.Max, f.Tooltip);
+                            MultiEditResult r = MultiEditFloatRow(f.Name, edit, mixed, f.DragSpeed, f.Min, f.Max, f.Tooltip,
+                                {this, &world, &sel, rc.Meta.Name, f.Name});
                             if (r.activated) StageUndo(world);
                             if (r.changed) { int v = (int)edit; forEach([&](entt::entity e) { *reinterpret_cast<int*>(fieldPtr(e, f)) = v; }); }
                             if (r.committed) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
@@ -1025,7 +1062,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                                 if (first) { shared = v; first = false; } else if (std::fabs(v - shared) > 1.0e-4f) mixed = true;
                             });
                             float edit = shared;
-                            MultiEditResult r = MultiEditFloatRow(f.Name, edit, mixed, f.DragSpeed, f.Min, f.Max, f.Tooltip);
+                            MultiEditResult r = MultiEditFloatRow(f.Name, edit, mixed, f.DragSpeed, f.Min, f.Max, f.Tooltip,
+                                {this, &world, &sel, rc.Meta.Name, f.Name});
                             if (r.activated) StageUndo(world);
                             if (r.changed) forEach([&](entt::entity e) { *reinterpret_cast<float*>(fieldPtr(e, f)) = edit; });
                             if (r.committed) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
@@ -1040,7 +1078,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                             });
                             glm::vec3 edit = shared;
                             bool touched[3];
-                            MultiEditResult r = MultiEditVec3Row(f.Name, edit, mixedAxis, touched, f.DragSpeed, f.Min, f.Max, f.Tooltip);
+                            MultiEditResult r = MultiEditVec3Row(f.Name, edit, mixedAxis, touched, f.DragSpeed, f.Min, f.Max, f.Tooltip,
+                                {this, &world, &sel, rc.Meta.Name, f.Name});
                             if (r.activated) StageUndo(world);
                             if (r.changed) forEach([&](entt::entity e) {
                                 glm::vec3& v = *reinterpret_cast<glm::vec3*>(fieldPtr(e, f));
@@ -1055,7 +1094,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                                 const std::string& v = *reinterpret_cast<std::string*>(fieldPtr(e, f));
                                 if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
                             });
-                            PropertyLabel(f.Name, f.Tooltip);
+                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, f.Name, f.Name, f.Tooltip); // #315
                             char buf[256];
                             snprintf(buf, sizeof(buf), "%s", mixed ? "" : shared.c_str());
                             bool changed = mixed
@@ -1072,7 +1111,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                                 const std::string& v = *reinterpret_cast<std::string*>(fieldPtr(e, f));
                                 if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
                             });
-                            PropertyLabel(f.Name, f.Tooltip);
+                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, f.Name, f.Name, f.Tooltip); // #315
                             const std::string preview = mixed ? "\xE2\x80\x94"
                                 : (shared.empty() ? "(none)" : std::filesystem::path(shared).filename().string());
                             if (ImGui::BeginCombo("##v", preview.c_str())) {
@@ -1098,7 +1137,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                                 if (first) { shared = c; first = false; }
                                 else for (int a = 0; a < 3; ++a) if (std::fabs(c[a] - shared[a]) > 1.0e-4f) mixed = true;
                             });
-                            PropertyLabel(f.Name, f.Tooltip);
+                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, f.Name, f.Name, f.Tooltip); // #315
                             glm::vec3 edit = shared;
                             bool changed = ImGui::ColorEdit3("##v", &edit.x, ImGuiColorEditFlags_DisplayHex);
                             if (ImGui::IsItemActivated()) StageUndo(world);
@@ -1113,7 +1152,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                                 int v = *reinterpret_cast<int*>(fieldPtr(e, f));
                                 if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
                             });
-                            PropertyLabel(f.Name, f.Tooltip);
+                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, f.Name, f.Name, f.Tooltip); // #315
                             const char* preview = mixed ? "\xE2\x80\x94"
                                 : (shared >= 0 && shared < f.EnumCount ? ReflectEnumLabel(f, shared) : "");
                             if (ImGui::BeginCombo("##v", preview)) {
@@ -1965,6 +2004,61 @@ void EditorLayer::PrefabOverrideLabel(World& world, entt::entity entity, const c
         if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup(popupId.c_str());
         if (ImGui::BeginPopup(popupId.c_str())) {
             PrefabFieldMenu(world, entity, component, field);
+            ImGui::EndPopup();
+        }
+    }
+}
+
+// #315 — multi-select counterparts of the three helpers above.
+bool EditorLayer::AnyPrefabFieldOverridden(World& world, const std::vector<entt::entity>& sel,
+                                           const char* component, const char* field) {
+    for (entt::entity e : sel)
+        if (SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
+            return true;
+    return false;
+}
+
+void EditorLayer::PrefabFieldMenuMulti(World& world, const std::vector<entt::entity>& sel,
+                                       const char* component, const char* field) {
+    int n = 0;
+    for (entt::entity e : sel)
+        if (SceneSerializer::IsPrefabFieldOverridden(world, e, component, field)) ++n;
+    ImGui::TextDisabled("Overridden from prefab on %d of %d selected", n, (int)sel.size());
+    ImGui::Separator();
+    if (ImGui::MenuItem(ICON_FA_ARROW_ROTATE_LEFT "  Revert to Prefab")) {
+        PushUndo(world, "Revert to Prefab");
+        if (m_AssetsPtr)
+            for (entt::entity e : sel)
+                if (SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
+                    SceneSerializer::RevertPrefabField(world, *m_AssetsPtr, e, component, field);
+    }
+    if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab"))
+        for (entt::entity e : sel)
+            if (SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
+                SceneSerializer::ApplyPrefabField(world, e, component, field);
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Write each selected instance's value into its .prefab file.\n"
+                             "Other instances pick it up on their next load. Changes the asset "
+                             "\xE2\x80\x94 not undoable.");
+}
+
+void EditorLayer::PrefabOverrideLabelMulti(World& world, const std::vector<entt::entity>& sel,
+                                           const char* component, const char* field,
+                                           const char* label, const char* tooltip) {
+    const bool overridden = AnyPrefabFieldOverridden(world, sel, component, field);
+    if (overridden)
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+    PropertyLabel(label, tooltip);
+    if (overridden) {
+        ImGui::PopStyleColor();
+        // These labels are drawn INSIDE the field loop's PushID(f.Name) scope, where
+        // IsItemClicked(right) is unreliable (same gotcha B2b hit) — OpenPopupOnItemClick is the
+        // robust form. The id must be unique per (component,field); "M" suffix keeps it distinct
+        // from the single-select popup id.
+        const std::string popupId = std::string(component) + "\x1f" + field + "\x1fM";
+        ImGui::OpenPopupOnItemClick(popupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
+        if (ImGui::BeginPopup(popupId.c_str())) {
+            PrefabFieldMenuMulti(world, sel, component, field);
             ImGui::EndPopup();
         }
     }
