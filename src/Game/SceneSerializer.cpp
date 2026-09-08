@@ -83,6 +83,72 @@ std::shared_ptr<Texture> LoadIfPresent(AssetLibrary& assets, const json& obj, co
     return assets.LoadTexture(path);
 }
 
+// --- One reflected field <-> JSON, in one place -------------------------------------------
+// The generic component write/read (WriteCommonComponents / ReadCommonComponents), and the
+// prefab per-field override diff/replay (#302 Part B), all encode a reflected field the same
+// way. `fp` is the field address from ReflectField::Address.
+json ReflectFieldToJson(const ReflectField& f, const void* fp) {
+    switch (f.Type) {
+        case ReflectFieldType::Bool:   return *static_cast<const bool*>(fp);
+        case ReflectFieldType::Int:    return *static_cast<const int*>(fp);
+        case ReflectFieldType::Float:  return *static_cast<const float*>(fp);
+        case ReflectFieldType::Vec3:
+        case ReflectFieldType::Color:  return Vec3ToJson(*static_cast<const glm::vec3*>(fp));
+        case ReflectFieldType::String:
+        case ReflectFieldType::AssetRef: return *static_cast<const std::string*>(fp);
+        case ReflectFieldType::Enum: {
+            const int v = *static_cast<const int*>(fp);
+            // Round-trip the label text so a reordered EnumLabels list doesn't rewrite scenes;
+            // fall back to the raw int if it's somehow out of range.
+            if (v >= 0 && v < f.EnumCount) return json(ReflectEnumLabel(f, v));
+            return v;
+        }
+    }
+    return nullptr;
+}
+
+void ReflectFieldFromJson(const ReflectField& f, void* fp, const json& v, AssetLibrary& assets) {
+    switch (f.Type) {
+        case ReflectFieldType::Bool:   *static_cast<bool*>(fp)  = v.get<bool>(); break;
+        case ReflectFieldType::Int:    *static_cast<int*>(fp)   = v.get<int>(); break;
+        case ReflectFieldType::Float:  *static_cast<float*>(fp) = v.get<float>(); break;
+        case ReflectFieldType::Vec3:
+        case ReflectFieldType::Color:  *static_cast<glm::vec3*>(fp) = JsonToVec3(v); break;
+        case ReflectFieldType::String: *static_cast<std::string*>(fp) = v.get<std::string>(); break;
+        case ReflectFieldType::AssetRef: {
+            auto& path = *static_cast<std::string*>(fp);
+            path = v.get<std::string>();
+            // Make the referenced asset list in the library even if nothing else imported it,
+            // so the Inspector's picker can still show / re-select it.
+            if (!path.empty() && f.AssetKind == ReflectAssetKind::Sound) assets.RegisterSound(path);
+            break;
+        }
+        case ReflectFieldType::Enum:
+            if      (v.is_string())         *static_cast<int*>(fp) = ReflectEnumIndex(f, v.get<std::string>().c_str());
+            else if (v.is_number_integer()) *static_cast<int*>(fp) = v.get<int>();
+            break;
+    }
+}
+
+// Tolerant equality for the override diff: floats/vectors within a small epsilon (JSON
+// re-encoding and matrix decompose both perturb the low bits), everything else exact.
+bool ReflectJsonNearlyEqual(ReflectFieldType t, const json& a, const json& b) {
+    auto close = [](double x, double y) { return std::fabs(x - y) <= 1e-4; };
+    switch (t) {
+        case ReflectFieldType::Float:
+            return a.is_number() && b.is_number() && close(a.get<double>(), b.get<double>());
+        case ReflectFieldType::Vec3:
+        case ReflectFieldType::Color:
+            if (!a.is_array() || !b.is_array() || a.size() != 3 || b.size() != 3) return a == b;
+            for (int i = 0; i < 3; ++i)
+                if (!a[i].is_number() || !b[i].is_number() || !close(a[i].get<double>(), b[i].get<double>()))
+                    return false;
+            return true;
+        default:
+            return a == b;
+    }
+}
+
 // Components that any entity kind can carry, written/read as one shared block so a box, a
 // placed model, and a bare (Renderable-less) entity all round-trip them identically. Each is
 // omitted entirely when absent, keeping saves of simple scenes as small as they were before
@@ -127,26 +193,8 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
         // const_cast is safe: the component is a live mutable object; this path only reads it.
         void* comp = const_cast<void*>(rc.GetConst(world.Registry, entity));
         json cj;
-        for (const auto& f : rc.Meta.Fields) {
-            const void* fp = f.Address(comp);
-            switch (f.Type) {
-                case ReflectFieldType::Bool:   cj[f.Name] = *static_cast<const bool*>(fp); break;
-                case ReflectFieldType::Int:    cj[f.Name] = *static_cast<const int*>(fp); break;
-                case ReflectFieldType::Float:  cj[f.Name] = *static_cast<const float*>(fp); break;
-                case ReflectFieldType::Vec3:   cj[f.Name] = Vec3ToJson(*static_cast<const glm::vec3*>(fp)); break;
-                case ReflectFieldType::Color:  cj[f.Name] = Vec3ToJson(*static_cast<const glm::vec3*>(fp)); break;
-                case ReflectFieldType::String:
-                case ReflectFieldType::AssetRef: cj[f.Name] = *static_cast<const std::string*>(fp); break;
-                case ReflectFieldType::Enum: {
-                    const int v = *static_cast<const int*>(fp);
-                    // Round-trip the label text so a reordered EnumLabels list doesn't rewrite
-                    // every scene; fall back to the raw int if it's somehow out of range.
-                    if (v >= 0 && v < f.EnumCount) cj[f.Name] = ReflectEnumLabel(f, v);
-                    else                           cj[f.Name] = v;
-                    break;
-                }
-            }
-        }
+        for (const auto& f : rc.Meta.Fields)
+            cj[f.Name] = ReflectFieldToJson(f, f.Address(comp));
         j[rc.Meta.Name] = cj;
     }
 }
@@ -252,37 +300,93 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
         const json& cj = j.at(rc.Meta.Name);
         for (const auto& f : rc.Meta.Fields) {
             if (!cj.contains(f.Name)) continue;
-            void* fp = f.Address(comp);
-            switch (f.Type) {
-                case ReflectFieldType::Bool:   *static_cast<bool*>(fp)  = cj.at(f.Name).get<bool>(); break;
-                case ReflectFieldType::Int:    *static_cast<int*>(fp)   = cj.at(f.Name).get<int>(); break;
-                case ReflectFieldType::Float:  *static_cast<float*>(fp) = cj.at(f.Name).get<float>(); break;
-                case ReflectFieldType::Vec3:   *static_cast<glm::vec3*>(fp) = JsonToVec3(cj.at(f.Name)); break;
-                case ReflectFieldType::Color:  *static_cast<glm::vec3*>(fp) = JsonToVec3(cj.at(f.Name)); break;
-                case ReflectFieldType::String: *static_cast<std::string*>(fp) = cj.at(f.Name).get<std::string>(); break;
-                case ReflectFieldType::AssetRef: {
-                    auto& path = *static_cast<std::string*>(fp);
-                    path = cj.at(f.Name).get<std::string>();
-                    // Make the referenced asset list in the library even if nothing else
-                    // imported it, so the Inspector's picker can still show / re-select it.
-                    if (!path.empty()) {
-                        switch (f.AssetKind) {
-                            case ReflectAssetKind::Sound:   assets.RegisterSound(path); break;
-                            case ReflectAssetKind::Model:    break; // models resolve via RenderableComponent
-                            case ReflectAssetKind::Texture:  break;
-                            case ReflectAssetKind::Script:   break;
-                        }
-                    }
-                    break;
-                }
-                case ReflectFieldType::Enum: {
-                    const json& jv = cj.at(f.Name);
-                    if      (jv.is_string())         *static_cast<int*>(fp) = ReflectEnumIndex(f, jv.get<std::string>().c_str());
-                    else if (jv.is_number_integer()) *static_cast<int*>(fp) = jv.get<int>();
-                    break;
-                }
-            }
+            ReflectFieldFromJson(f, f.Address(comp), cj.at(f.Name), assets);
         }
+    }
+}
+
+// --- Prefab per-field overrides (#236 A2 stage 3 / #302 Part B) --------------------------
+// The .prefab file is the pristine source of truth. Diffing at save time can't instantiate a
+// copy (BuildSceneJson holds a `const World&`), so instead each live instance entity is
+// compared field-by-field against the matching entity object in the .prefab JSON. Pairing is by
+// index: PrefabInstanceComponent::InstanceEntities is in the same order the file lists entities
+// (boxes, then models, then empties, each in file order — see InstantiatePrefab / ApplySceneJson).
+
+// The .prefab file's entity objects, flattened into one list in that canonical order.
+std::vector<const json*> PrefabEntityObjects(const json& prefab) {
+    std::vector<const json*> out;
+    for (const char* key : {"boxes", "models", "empties"})
+        if (auto it = prefab.find(key); it != prefab.end() && it->is_array())
+            for (const json& e : *it) out.push_back(&e);
+    return out;
+}
+
+// Append {e,c,f,v} entries for every field of `live` that differs from `pristine`. `localIndex`
+// is the entity's prefab-local index; `isRoot` skips transform/name (those round-trip through
+// the stub's own top-level fields). Reflected components + Transform + Name only; a component
+// present on one side but not the other is a structural override (Part B4), not handled here.
+void DiffPrefabEntity(const World& world, entt::entity live, const json& pristine,
+                      int localIndex, bool isRoot,
+                      const std::function<TransformComponent(entt::entity)>& effectiveTransform,
+                      json& outOverrides) {
+    auto emit = [&](const char* comp, const char* field, json value) {
+        outOverrides.push_back({{"e", localIndex}, {"c", comp}, {"f", field}, {"v", std::move(value)}});
+    };
+
+    // Reflected components.
+    for (const auto& rc : ComponentRegistry::All()) {
+        if (!rc.Has(world.Registry, live) || !pristine.contains(rc.Meta.Name)) continue;
+        const json& pc = pristine.at(rc.Meta.Name);
+        const void* comp = rc.GetConst(world.Registry, live);
+        for (const auto& f : rc.Meta.Fields) {
+            if (!pc.contains(f.Name)) continue;
+            json now = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
+            if (!ReflectJsonNearlyEqual(f.Type, now, pc.at(f.Name))) emit(rc.Meta.Name, f.Name, now);
+        }
+    }
+
+    if (isRoot) return;
+
+    // Transform (non-root; the root's transform is the stub's own position/rotation/scale). The
+    // box/model/empty writers always emit all three, so `contains` is just defensiveness.
+    const TransformComponent t = effectiveTransform(live);
+    const struct { const char* f; glm::vec3 v; } tf[] = {
+        {"position", t.Position}, {"rotation", t.RotationEuler}, {"scale", t.Scale}};
+    for (const auto& e : tf) {
+        if (!pristine.contains(e.f)) continue;
+        json now = Vec3ToJson(e.v);
+        if (!ReflectJsonNearlyEqual(ReflectFieldType::Vec3, now, pristine.at(e.f)))
+            emit("Transform", e.f, now);
+    }
+
+    // Name.
+    if (const auto* nc = world.Registry.try_get<NameComponent>(live)) {
+        const std::string was = pristine.value("name", std::string());
+        if (nc->Name != was) emit("Name", "name", nc->Name);
+    }
+}
+
+// Apply one loaded override entry to a live instance entity.
+void ApplyPrefabOverride(World& world, AssetLibrary& assets, entt::entity e,
+                         const std::string& comp, const std::string& field, const json& v) {
+    if (comp == "Transform") {
+        auto& t = world.Registry.get<TransformComponent>(e);
+        if      (field == "position") t.Position = JsonToVec3(v);
+        else if (field == "rotation") t.RotationEuler = JsonToVec3(v);
+        else if (field == "scale")    t.Scale = JsonToVec3(v);
+        return;
+    }
+    if (comp == "Name") {
+        world.Registry.emplace_or_replace<NameComponent>(e, NameComponent{v.get<std::string>()});
+        return;
+    }
+    for (const auto& rc : ComponentRegistry::All()) {
+        if (rc.Meta.Name != comp) continue;
+        if (!rc.Has(world.Registry, e)) rc.Add(world.Registry, e);
+        void* c = rc.Get(world.Registry, e);
+        for (const auto& f : rc.Meta.Fields)
+            if (f.Name == field) { ReflectFieldFromJson(f, f.Address(c), v, assets); return; }
+        return;
     }
 }
 
@@ -520,6 +624,26 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             if (const auto* lc = world.Registry.try_get<LayerComponent>(e); lc && lc->Layer != 0)
                 s["layer"] = lc->Layer;
             if (const auto* tag = world.Registry.try_get<TagComponent>(e)) s["tag"] = tag->Tag;
+
+            // #302 Part B — per-field overrides: diff each live instance entity against its
+            // pristine counterpart in the .prefab file, by prefab-local index.
+            if (!pi.InstanceEntities.empty()) {
+                std::ifstream pf(pi.SourcePath);
+                if (pf.is_open()) {
+                    json prefab; pf >> prefab;
+                    std::vector<const json*> pristineEnts = PrefabEntityObjects(prefab);
+                    json overrides = json::array();
+                    const std::size_t n = std::min(pi.InstanceEntities.size(), pristineEnts.size());
+                    for (std::size_t i = 0; i < n; ++i) {
+                        entt::entity le = pi.InstanceEntities[i];
+                        if (!world.Registry.valid(le)) continue;
+                        DiffPrefabEntity(world, le, *pristineEnts[i], (int)i, /*isRoot=*/le == e,
+                                         effectiveTransform, overrides);
+                    }
+                    if (!overrides.empty()) s["overrides"] = std::move(overrides);
+                }
+            }
+
             instances.push_back(std::move(s));
         }
         root["prefabInstances"] = std::move(instances);
@@ -735,6 +859,19 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
                 world.Registry.emplace_or_replace<LayerComponent>(rootE, LayerComponent{layer});
             if (s.contains("tag"))
                 world.Registry.emplace_or_replace<TagComponent>(rootE, s["tag"].get<std::string>());
+
+            // #302 Part B — per-field overrides: replay onto the freshly rebuilt subtree, by
+            // prefab-local index into instCreated (== the .prefab file's entity order).
+            if (!missing && s.contains("overrides") && s["overrides"].is_array()) {
+                for (const auto& ov : s["overrides"]) {
+                    const int idx = ov.value("e", -1);
+                    if (idx < 0 || idx >= (int)instCreated.size() ||
+                        !world.Registry.valid(instCreated[idx]) || !ov.contains("v"))
+                        continue;
+                    ApplyPrefabOverride(world, assets, instCreated[idx],
+                                        ov.value("c", std::string()), ov.value("f", std::string()), ov["v"]);
+                }
+            }
 
             applyOrder(rootE, s);
             for (entt::entity e : instCreated) created(e);
@@ -1017,6 +1154,11 @@ entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& asse
     // #236 A2 — link the instance to its source. Applies to every path that stamps a prefab:
     // drag-drop placement, "Place Instance", and scene-load stub expansion. The scene then
     // stores this instance as a stub, and edits to the .prefab propagate on the next load.
-    world.Registry.emplace_or_replace<PrefabInstanceComponent>(root, PrefabInstanceComponent{path});
+    // `InstanceEntities` keeps the full creation order (== the .prefab file's entity order) so
+    // save-time per-field override diffing can pair each live entity with its pristine
+    // counterpart in the file by index (#302 Part B).
+    PrefabInstanceComponent pi{path};
+    pi.InstanceEntities = created;
+    world.Registry.emplace_or_replace<PrefabInstanceComponent>(root, std::move(pi));
     return root;
 }
