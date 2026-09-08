@@ -873,21 +873,17 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Master strength of the grid lines. The grid also fades out on its own as the view tilts toward the horizon.");
         ImGui::SetNextItemWidth(kw);
-        if (ImGui::DragFloat("Line spacing", &prefs.GridMinorSpacing, 0.05f, 0.05f, 50.0f, "%.2f")) {
-            prefs.GridMinorSpacing = std::clamp(prefs.GridMinorSpacing, 0.05f, 50.0f);
-        }
+        EditorUI::SliderFloat("Line spacing", &prefs.GridMinorSpacing, 0.05f, 50.0f, "%.2f",
+                              ImGuiSliderFlags_Logarithmic);
         if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("World units between minor lines. Also the step used by grid-snapped placement.");
         ImGui::SetNextItemWidth(kw);
-        if (ImGui::DragInt("Major line every", &prefs.GridMajorEvery, 0.2f, 2, 50, "%d cells")) {
-            prefs.GridMajorEvery = std::clamp(prefs.GridMajorEvery, 2, 50);
-        }
+        EditorUI::SliderInt("Major line every", &prefs.GridMajorEvery, 2, 50, "%d cells");
         if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("A brighter major line is drawn every N minor cells.");
         ImGui::SetNextItemWidth(kw);
-        if (ImGui::DragFloat("Fade distance", &prefs.GridFadeDistance, 1.0f, 10.0f, 1000.0f, "%.0f m")) {
-            prefs.GridFadeDistance = std::clamp(prefs.GridFadeDistance, 10.0f, 1000.0f);
-        }
+        EditorUI::SliderFloat("Fade distance", &prefs.GridFadeDistance, 10.0f, 1000.0f, "%.0f m",
+                              ImGuiSliderFlags_Logarithmic);
         if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Distance from the camera at which the grid has fully faded out.");
         if (ImGui::Checkbox("Show axis lines", &prefs.GridShowAxisLines)) EditorSettings::Save();
@@ -902,11 +898,11 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
 
         ImGui::SeparatorText("Snapping");
         ImGui::SetNextItemWidth(kw);
-        ImGui::DragFloat("Position snap", &m_SnapTranslation, 0.05f, 0.01f, 50.0f, "%.2f");
+        EditorUI::SliderFloat("Position snap", &m_SnapTranslation, 0.01f, 50.0f, "%.2f m", ImGuiSliderFlags_Logarithmic);
         ImGui::SetNextItemWidth(kw);
         EditorUI::SliderFloat("Rotation snap", &m_SnapRotationDeg, 1.0f, 180.0f, "%.1f deg");
         ImGui::SetNextItemWidth(kw);
-        ImGui::DragFloat("Scale snap", &m_SnapScale, 0.01f, 0.01f, 5.0f, "%.2f");
+        EditorUI::SliderFloat("Scale snap", &m_SnapScale, 0.01f, 5.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
         ImGui::TextDisabled("The grid + snap on/off toggles are on the toolbar.");
         break;
 

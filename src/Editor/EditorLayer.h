@@ -115,6 +115,10 @@ public:
     // Draw() fades out the transient "Fly speed: N" viewport readout (#236 R2).
     void FlashFlySpeedHud() { m_FlySpeedHudTimer = 1.4f; }
     void RequestArrayDuplicateModal() { m_ShowArrayDuplicate = true; } // toolbar button (#236 R2)
+    // Inspector padlock, driven from the panel's title bar (#236 R2). Toggle captures the live
+    // selection snapshot; call it before DrawInspectorBody() runs this frame.
+    bool IsInspectorLocked() const { return m_InspectorLocked; }
+    void ToggleInspectorLock();
     bool LockViewToSelection() const { return m_LockViewToSelection; }
     void SetLockViewToSelection(bool on) { m_LockViewToSelection = on; m_LockViewHasCentroid = false; }
     int  ShadingModeIndex() const { return (int)m_ShadingMode; }
