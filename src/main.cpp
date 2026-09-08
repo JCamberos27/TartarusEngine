@@ -14,6 +14,7 @@
 #include "EditorModuleAPI.h" // EditorConsoleState (Clear on Play / Error Pause — #236 A5)
 #include "EditorLayer.h"
 #include "EditorSettings.h"
+#include "Shortcuts.h" // play / window keys route through the Shortcuts Manager (#236 F)
 #include "Model.h"
 #include "SceneSerializer.h"
 #include "AnimationSystem.h"
@@ -246,7 +247,17 @@ void main() {
 // Simple fly-camera controls used only while the editor overlay is open. `orbitPivot`, when
 // non-null, is the current selection's world-space center (see EditorLayer::GetSelectionCenter)
 // — Alt+Left-drag orbits around it instead of the plain free-look that Right-drag still does.
-static void UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm::vec3* orbitPivot) {
+// Returns true on any frame the fly speed was changed by scroll (so the caller can flash the
+// on-screen "Fly speed: N" readout — #236 R2).
+static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm::vec3* orbitPivot) {
+    bool flySpeedChanged = false;
+    auto trimFlySpeed = [&](double notches) {
+        float& fs = EditorSettings::Get().SceneCameraFlySpeed;
+        fs = std::clamp(fs * std::pow(1.15f, (float)notches), 0.5f, 200.0f);
+        EditorSettings::Save();
+        flySpeedChanged = true;
+    };
+    const bool ctrlHeld = Input::IsKeyDown(GLFW_KEY_LEFT_CONTROL) || Input::IsKeyDown(GLFW_KEY_RIGHT_CONTROL);
     // WASD/QE flythrough only while Right-drag is held — matches Unity's convention exactly,
     // and is required now that W/E/R/T also double as gizmo-tool shortcuts (EditorLayer::Draw):
     // there'd be no way to tell "pressing W to fly" from "pressing W to switch tools" otherwise.
@@ -258,7 +269,10 @@ static void UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm:
     // for dolly instead (Unity's own Scene View split of the same two mouse buttons), so this
     // excludes the Alt-held case rather than fighting it for the same drag.
     if (allowLook && !altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
-        float speed = 8.0f * dt * (Input::IsKeyDown(GLFW_KEY_LEFT_SHIFT) ? 3.0f : 1.0f);
+        // Scroll while flying (RMB held) trims the fly speed, Unity-style — persisted (#236 R2).
+        if (double sc = Input::GetScrollDeltaY(); sc != 0.0) trimFlySpeed(sc);
+        float speed = EditorSettings::Get().SceneCameraFlySpeed * dt *
+                      (Input::IsKeyDown(GLFW_KEY_LEFT_SHIFT) ? 3.0f : 1.0f);
         glm::vec3 move{0.0f};
         if (Input::IsKeyDown(GLFW_KEY_W)) move += cam.Front();
         if (Input::IsKeyDown(GLFW_KEY_S)) move -= cam.Front();
@@ -304,7 +318,14 @@ static void UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm:
     // visual effect under an orthographic projection, so orthographic mode instead shrinks/grows
     // OrthoHalfHeight — multiplicatively, so the zoom rate scales with how zoomed-in you already
     // are instead of crawling at large scales or blowing past small ones with a fixed step.
-    if (allowLook) {
+    // Ctrl+scroll (no drag needed) also trims the fly speed — Unity's binding — and shows the
+    // same on-screen readout (#236 R2).
+    if (allowLook && ctrlHeld && !Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
+        if (double sc = Input::GetScrollDeltaY(); sc != 0.0) trimFlySpeed(sc);
+    }
+
+    // ...but not while flying (scroll-while-RMB) or trimming speed (Ctrl+scroll) — both handled above.
+    if (allowLook && !(!altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) && !ctrlHeld) {
         double scroll = Input::GetScrollDeltaY();
         if (scroll != 0.0) {
             if (cam.Orthographic) {
@@ -327,6 +348,7 @@ static void UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm:
         float dy = (float)Input::GetMouseDeltaY(); // inverted: up is positive
         cam.Position -= (cam.Right() * dx + cam.Up() * dy) * kPanSpeed;
     }
+    return flySpeedChanged;
 }
 
 // The first active in-scene Camera entity (creation order), or entt::null. The Game view
@@ -446,6 +468,7 @@ int main(int argc, char** argv) {
 
         EditorLayer editor;
         editor.Init(window.Handle());
+        AudioEngine::SetMuted(EditorSettings::Get().AudioMuted); // #236 R2 — restore the View ▸ Mute Audio choice
 
         // One-shot rig dump: OS, CPU, RAM, GPU, driver, display, build. Collected into a block
         // for Preferences > About — no longer spammed line-by-line to the Console (it lives in
@@ -641,6 +664,9 @@ int main(int argc, char** argv) {
         editorCamera.Position = player.Cam.Position;
         editorCamera.Yaw = player.Cam.Yaw;
         editorCamera.Pitch = player.Cam.Pitch;
+        editorCamera.Fov = EditorSettings::Get().SceneCameraFov; // #236 R2 — persisted editor camera
+        editorCamera.NearPlane = EditorSettings::Get().SceneCameraNear;
+        editorCamera.FarPlane = EditorSettings::Get().SceneCameraFar;
         // Deliberately NOT calling editor.FrameSceneBounds() here (audit #87's original fix for
         // "staring at empty space") - for this scene it re-frames to an exterior overview of the
         // whole building, outside every room's floor. Since Play copies its spawn straight from
@@ -815,11 +841,14 @@ int main(int argc, char** argv) {
                 titleInitialized = true;
             }
 
-            if (Input::IsKeyPressed(GLFW_KEY_F1)) togglePlay();
+            // Play / pause / step / maximize + window fullscreen are Ctx_App shortcuts now
+            // (#236 F) — rebindable in Preferences ▸ Shortcuts, evaluated here via the GLFW
+            // path since this runs before the ImGui frame.
+            if (Shortcuts::TriggeredGlfw("play.toggle")) togglePlay();
             // Pause (F2 / toolbar) and single-frame Step (F3 / toolbar). The toolbar requests are
             // raised during the previous frame's editor draw; consuming them here folds them into
             // the same state the keys drive, one frame later.
-            if (playing && (Input::IsKeyPressed(GLFW_KEY_F2) || editor.ConsumePauseToggleRequest()))
+            if (playing && (Shortcuts::TriggeredGlfw("play.pause") || editor.ConsumePauseToggleRequest()))
                 paused = !paused;
             // #236 A5 — Error Pause: freeze the sim the frame a fresh error lands.
             if (playing && !paused && EditorModuleHost::ConsoleState().ErrorPause) {
@@ -831,12 +860,12 @@ int main(int argc, char** argv) {
             }
             errPauseSeen = Log::CountOf(LogLevel::Error);
             bool stepThisFrame = playing && paused &&
-                (Input::IsKeyPressed(GLFW_KEY_F3) || editor.ConsumeStepRequest());
-            // F4 mirrors the toolbar's Fullscreen/Restore button — maximize the Game view over
+                (Shortcuts::TriggeredGlfw("play.step") || editor.ConsumeStepRequest());
+            // Mirrors the toolbar's Fullscreen/Restore button — maximize the Game view over
             // the editor panels (only meaningful while playing; setMaximized no-ops otherwise).
-            if (playing && Input::IsKeyPressed(GLFW_KEY_F4)) setMaximized(!playMaximized);
+            if (playing && Shortcuts::TriggeredGlfw("play.maximize")) setMaximized(!playMaximized);
 
-            if (Input::IsKeyPressed(GLFW_KEY_F11)) {
+            if (Shortcuts::TriggeredGlfw("window.fullscreen")) {
                 window.ToggleFullscreen();
             }
 
@@ -920,8 +949,9 @@ int main(int argc, char** argv) {
                     window.SetCursorLocked(false);
                 }
 
-                UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive,
-                    hasSelection ? &selectionCenter : nullptr);
+                if (UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive,
+                        hasSelection ? &selectionCenter : nullptr))
+                    editor.FlashFlySpeedHud(); // #236 R2 — show the transient "Fly speed: N" readout
             } else if (camDragActive) {
                 camDragActive = false; // dropped into maximized play mid-drag; it owns the cursor now
             }
@@ -1305,7 +1335,7 @@ int main(int argc, char** argv) {
             // per-entity HiddenInSceneTag (#236 B). The running game and its Game view draw everything.
             auto drawScene = [&](const glm::mat4& sceneView, const glm::mat4& sceneProj,
                                   const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats,
-                                  bool editorView = false) {
+                                  bool editorView = false, int debugView = 0) {
                 const EditorSettings& gs = EditorSettings::Get();
 
                 // Shadows for this view. Spot and point shadows only need shadows-enabled +
@@ -1321,6 +1351,7 @@ int main(int argc, char** argv) {
                 modelShader.SetMat4("uView", sceneView);
                 modelShader.SetMat4("uProj", sceneProj);
                 modelShader.SetVec3("uViewPos", viewPos);
+                modelShader.SetInt("uDebugView", debugView); // #236 R2 scene-view debug modes
 
                 // Cascaded-shadow uniforms + the depth array on unit 8 (material maps use 1..7).
                 modelShader.SetInt("uShadowEnabled", sunShadowsOn ? 1 : 0);
@@ -1576,10 +1607,15 @@ int main(int argc, char** argv) {
                 EditorLayer::ShadingMode shading = editor.GetShadingMode();
                 bool sceneWireframe = shading == EditorLayer::ShadingMode::Wireframe;
                 bool sceneUnlit = shading == EditorLayer::ShadingMode::Unlit;
+                int sceneDebugView = 0; // model shader uDebugView: 1 Normals, 2 Cascades, 3 Mip
+                if (shading == EditorLayer::ShadingMode::Normals)  sceneDebugView = 1;
+                else if (shading == EditorLayer::ShadingMode::Cascades) sceneDebugView = 2;
+                else if (shading == EditorLayer::ShadingMode::Mip)      sceneDebugView = 3;
                 if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
                 EditorLayer::RenderStats sceneStats;
-                drawScene(sceneViewMat, sceneProjMat, editorCamera.Position, sceneUnlit, &sceneStats, /*editorView=*/true);
+                drawScene(sceneViewMat, sceneProjMat, editorCamera.Position, sceneUnlit, &sceneStats,
+                          /*editorView=*/true, /*debugView=*/sceneDebugView);
 
                 editor.SetRenderStats(sceneStats);
                 // NB: in Wireframe mode the polygon mode stays GL_LINE through the selection
@@ -1709,6 +1745,27 @@ int main(int argc, char** argv) {
                 // this frame's pointers first.
                 editorModule.SetFrameContext(&editor, &world, &assets, &editorCamera);
                 editorModule.Draw(editorUIVisible, dt);
+
+                // Eyedropper (#236 R2): a colour field armed EditorLayer's viewport eyedropper
+                // and HandleViewportPicking just captured a click. Read that one pixel off the
+                // LDR (tonemapped) scene FBO — still holding this frame's image — and hand the
+                // colour back.
+                if (float ex, ey; editor.ConsumeEyedropperSample(ex, ey)) {
+                    const int fbW = (int)editor.ViewportSize().x;
+                    const int fbH = (int)editor.ViewportSize().y;
+                    const int px = (int)(ex + 0.5f);
+                    const int py = (int)(fbH - 1 - ey);       // GL sample origin is bottom-left
+                    if (px >= 0 && px < fbW && py >= 0 && py < fbH) {
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, sceneFramebuffer.Handle());
+                        unsigned char rgba[4] = {0, 0, 0, 255};
+                        glReadPixels(px, py, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+                        GLStateCache::Invalidate();
+                        editor.ApplyEyedropperSample(glm::vec3(rgba[0], rgba[1], rgba[2]) / 255.0f);
+                    } else {
+                        editor.CancelEyedropper();
+                    }
+                }
             }
 
             // The OS title bar is gone — the toolbar's empty area is the window drag handle.

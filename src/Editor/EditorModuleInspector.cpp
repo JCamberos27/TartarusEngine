@@ -9,6 +9,7 @@
 #include "EditorModuleAPI.h"
 
 #include <imgui.h>
+#include <IconsFontAwesome6.h>
 
 namespace EditorModuleInspector {
 
@@ -38,6 +39,8 @@ void Draw(const EditorModuleHostAPI& host) {
     if (host.SetShowInspector) host.SetShowInspector(visible); // capture the title-bar X
     if (!open) { ImGui::End(); return; }
 
+    // The padlock is drawn by the host, right-aligned on the name row — a docked panel has no
+    // title bar to hang it off, so it rides the first content row instead (#236 R2).
     if (host.DrawInspectorBody) host.DrawInspectorBody();
 
     ImGui::End();

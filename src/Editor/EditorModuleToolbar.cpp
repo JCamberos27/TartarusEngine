@@ -34,11 +34,14 @@ void Tooltip(const EditorModuleHostAPI& host, const char* text) {
 // renderer, none of which belong in this DLL). Flat: no body at rest, faint wash on hover;
 // `active` gives an accent body + a 2px bottom keyline for toggles that are "on".
 bool ActionButton(const EditorModuleHostAPI& host, const char* icon, const char* tooltip, bool active = false) {
-    const ImVec4 keyline(0.55f, 0.60f, 0.72f, 1.0f);
+    // "On" toggles read in the same cyan the styled sliders use (ImGuiCol_SliderGrab): a tinted
+    // body, a matching bottom keyline, and a cyan icon.
+    const ImVec4 acc = ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab);
     if (active) {
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.400f, 0.435f, 0.520f, 0.32f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.400f, 0.435f, 0.520f, 0.45f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.400f, 0.435f, 0.520f, 0.60f));
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(acc.x, acc.y, acc.z, 0.22f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(acc.x, acc.y, acc.z, 0.34f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(acc.x, acc.y, acc.z, 0.46f));
+        ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(acc.x, acc.y, acc.z, 1.0f));
     } else {
         ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
@@ -51,9 +54,9 @@ bool ActionButton(const EditorModuleHostAPI& host, const char* icon, const char*
         const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
         const float y = mx.y - 2.0f;
         ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x + 3.0f, y), ImVec2(mx.x - 3.0f, mx.y - 1.0f),
-                                                  ImGui::ColorConvertFloat4ToU32(keyline), 1.0f);
+                                                  ImGui::ColorConvertFloat4ToU32(acc), 1.0f);
     }
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(active ? 4 : 3);
     if (ImGui::IsItemHovered()) Tooltip(host, tooltip);
     return clicked;
 }
@@ -231,6 +234,13 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::SameLine();
     if (ActionButton(host, ICON_FA_ARROWS_TO_CIRCLE, "Transform — move + rotate + scale in one gizmo (Y)",
             !handTool && gizmoOp == 4) && host.SetGizmoOp) host.SetGizmoOp(4);
+    ImGui::SameLine();
+    const bool measureTool = host.GetMeasureTool && host.GetMeasureTool();
+    if (ActionButton(host, ICON_FA_RULER, "Measure — click two points in the viewport to measure the distance",
+            measureTool) && host.SetMeasureTool) host.SetMeasureTool(!measureTool);
+    ImGui::SameLine();
+    if (ActionButton(host, ICON_FA_CLONE, "Duplicate Array — line/grid of copies of the selection (Ctrl+Shift+D)")
+            && host.RequestDuplicateArray) host.RequestDuplicateArray();
 
     divider(); // transform tools | gizmo-space modifiers
     const bool localSpace = host.GetGizmoLocalSpace && host.GetGizmoLocalSpace();
@@ -303,21 +313,25 @@ void Draw(const EditorModuleHostAPI& host) {
     }
 
     ImGui::SameLine();
-    // Scene-view shading, cycling Shaded -> Wireframe -> Unlit like a draw-mode dropdown — part of
-    // the same "what the viewport shows" cluster as grid / snap / light gizmos.
+    // Scene-view draw-mode dropdown (#236 R2): Shaded / Wireframe / Unlit / Normals /
+    // Cascades / Mip — part of the "what the viewport shows" cluster.
     {
-        const int shading = host.GetShadingMode ? host.GetShadingMode() : 0; // 0 Shaded 1 Wireframe 2 Unlit
-        const char* shadingIcon = ICON_FA_CIRCLE_HALF_STROKE;
-        const char* shadingTip = "Shaded (click for Wireframe)";
-        if (shading == 1) {
-            shadingIcon = ICON_FA_BORDER_NONE;
-            shadingTip = "Wireframe (click for Unlit)";
-        } else if (shading == 2) {
-            shadingIcon = ICON_FA_SUN;
-            shadingTip = "Unlit (click for Shaded)";
-        }
-        if (ActionButton(host, shadingIcon, shadingTip, shading != 0) && host.SetShadingMode) {
-            host.SetShadingMode(shading == 0 ? 1 : (shading == 1 ? 2 : 0));
+        static const char* kDrawModes[] = { "Shaded", "Wireframe", "Unlit",
+                                            "Normals", "Shadow Cascades", "Mip / Texel Density" };
+        static const char* kIcons[] = { ICON_FA_CIRCLE_HALF_STROKE, ICON_FA_BORDER_NONE, ICON_FA_SUN,
+                                        ICON_FA_MOUNTAIN, ICON_FA_LAYER_GROUP, ICON_FA_IMAGE };
+        int shading = host.GetShadingMode ? host.GetShadingMode() : 0;
+        if (shading < 0 || shading >= IM_ARRAYSIZE(kDrawModes)) shading = 0;
+        char tip[96];
+        std::snprintf(tip, sizeof(tip), "Draw mode: %s (click to change)", kDrawModes[shading]);
+        if (ActionButton(host, kIcons[shading], tip, shading != 0)) ImGui::OpenPopup("##DrawModePopup");
+        if (ImGui::BeginPopup("##DrawModePopup")) {
+            xpMenuTextPush();
+            for (int i = 0; i < IM_ARRAYSIZE(kDrawModes); ++i)
+                if (ImGui::MenuItem(kDrawModes[i], nullptr, shading == i) && host.SetShadingMode)
+                    host.SetShadingMode(i);
+            xpMenuTextPop();
+            ImGui::EndPopup();
         }
     }
 
