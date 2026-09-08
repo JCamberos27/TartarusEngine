@@ -410,6 +410,8 @@ bool  TbGetInspectorLocked() { return g_Editor && g_Editor->IsInspectorLocked();
 void  TbToggleInspectorLock() { if (g_Editor) g_Editor->ToggleInspectorLock(); }
 bool  TbGetAssetSearchGlobal() { return EditorSettings::Get().AssetSearchGlobal; }
 void  TbSetAssetSearchGlobal(bool on) { EditorSettings::Get().AssetSearchGlobal = on; EditorSettings::Save(); }
+bool  TbGetAssetFavoritesOnly() { return g_Editor && g_Editor->AssetFavoritesOnly(); }
+void  TbSetAssetFavoritesOnly(bool on) { if (g_Editor) g_Editor->SetAssetFavoritesOnly(on); }
 
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
@@ -521,6 +523,7 @@ const EditorModuleHostAPI kHostAPI{
     &TbRequestDuplicateArray,
     &TbGetInspectorLocked,      &TbToggleInspectorLock,
     &TbGetAssetSearchGlobal,    &TbSetAssetSearchGlobal,
+    &TbGetAssetFavoritesOnly,   &TbSetAssetFavoritesOnly,
 };
 
 } // namespace

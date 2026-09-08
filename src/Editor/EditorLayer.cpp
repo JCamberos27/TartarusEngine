@@ -91,6 +91,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     LayerRegistry::Load(); // slot names for LayerComponent (#236 A1); project/layers.json
     ProjectSettings::Load(); // physics + tag vocabulary (#236 A4); project/settings.json
     Shortcuts::Init(); // builtin key table + project/shortcuts.json overrides (#236 F)
+    LoadAssetFavorites(); // project/asset_favorites.json (#236 G)
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see ProjectPaths.h. Must match main.cpp's initial load: prefer the last-open scene if

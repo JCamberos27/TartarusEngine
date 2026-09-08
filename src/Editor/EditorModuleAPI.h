@@ -374,9 +374,11 @@ struct EditorModuleHostAPI {
     bool (*GetInspectorLocked)() = nullptr;
     void (*ToggleInspectorLock)() = nullptr; // host does the selection-snapshot capture
 
-    // --- Asset Browser search scope (API v14, #236 G) ------------------------------
-    // false = current folder + subfolders; true = whole project.
+    // --- Asset Browser search scope + favourites view (API v14, #236 G) -----------
+    // Search scope: false = current folder + subfolders; true = whole project.
     bool (*GetAssetSearchGlobal)() = nullptr;  void (*SetAssetSearchGlobal)(bool on) = nullptr;
+    // Favourites-only grid filter (the toolbar star toggle).
+    bool (*GetAssetFavoritesOnly)() = nullptr; void (*SetAssetFavoritesOnly)(bool on) = nullptr;
 };
 
 struct EditorModuleAPI {
