@@ -138,6 +138,7 @@ add_library(TartarusEditor SHARED
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleInspector.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleConsole.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleStats.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleHistory.cpp
   ${imgui_SOURCE_DIR}/imgui.cpp
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp

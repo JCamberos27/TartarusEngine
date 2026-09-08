@@ -1949,7 +1949,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         m_SmoothedFrameMs = m_SmoothedFrameMs * 0.92f + frameMs * 0.08f;
 
         DrawViewportStatusBar();
-        DrawHistoryPanel(world, assets);
+        // The Undo History HUD moved into TartarusEditor.dll (EditorModuleHistory.cpp, #229);
+        // the module gates its own draw through EditorModuleHostAPI::GetHistoryHudFrame, which
+        // re-checks m_HideOverlaysThisFrame so a clean capture still suppresses it.
     }
     DrawCaptureFeedback(dt);
 
