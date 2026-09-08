@@ -131,13 +131,9 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
     if (const auto* collider = world.Registry.try_get<ColliderComponent>(entity)) {
         j["collider"] = {{"isTrigger", collider->IsTrigger}};
     }
-    if (const auto* cam = world.Registry.try_get<CameraComponent>(entity)) {
-        j["camera"] = {
-            {"fov", cam->FovDegrees},
-            {"near", cam->NearPlane},
-            {"far", cam->FarPlane},
-        };
-    }
+    // CameraComponent moved onto reflection (#302 Wave 1a) — it now round-trips through the
+    // generic "Camera" block below. The old flat "camera" object is still READ (see LoadEntity)
+    // for scenes authored before the migration.
 
     // #184: components registered through the reflection system serialize generically — one JSON
     // object per component keyed by its Meta.Name, one entry per reflected field. No per-component
@@ -214,7 +210,10 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
         collider.IsTrigger = j["collider"].value("isTrigger", false);
         world.Registry.emplace_or_replace<ColliderComponent>(entity, collider);
     }
-    if (j.contains("camera")) {
+    // Legacy pre-#302 format: CameraComponent moved onto reflection (keyed "Camera" below), but
+    // scenes authored before the migration carry the old flat "camera" object — read it only
+    // when the new key is absent, so a re-saved file goes through the generic path instead.
+    if (!j.contains("Camera") && j.contains("camera")) {
         const json& c = j["camera"];
         CameraComponent cam;
         cam.FovDegrees = c.value("fov", 60.0f);
