@@ -1656,10 +1656,11 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             bool colRowActive = false, colRowCommitted = false;
 
             // Shape.
-            const char* kShapes[] = { "Box", "Sphere", "Capsule" };
+            const char* kShapes[] = { "Box", "Sphere", "Capsule", "Convex Hull", "Mesh" };
             int shapeIdx = (int)collider->Kind;
-            PropertyLabel("Shape", "Box uses Half Extents (x,y,z). Sphere uses Half Extents.x as the radius.\n"
-                                   "Capsule uses .x as the radius and .y as the half-height (axis = local up).");
+            PropertyLabel("Shape", "Box/Sphere/Capsule use Half Extents (Sphere: .x = radius; Capsule: .x radius,\n"
+                                   ".y half-height). Convex Hull / Mesh cook a shape from this object's mesh:\n"
+                                   "Convex Hull works on any body; Mesh (triangle mesh) is static/kinematic only.");
             if (ImGui::Combo("##ColliderShape", &shapeIdx, kShapes, IM_ARRAYSIZE(kShapes))) {
                 PushUndo(world, "Change Collider Shape");
                 collider->Kind = (ColliderComponent::Shape)shapeIdx;

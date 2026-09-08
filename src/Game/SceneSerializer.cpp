@@ -266,7 +266,7 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
         ColliderComponent collider;
         collider.IsTrigger = c.value("isTrigger", false);
         int shape = c.value("shape", 0); // absent => Box (0), the pre-#185 shape
-        collider.Kind = (shape >= 0 && shape <= 2) ? (ColliderComponent::Shape)shape
+        collider.Kind = (shape >= 0 && shape <= 4) ? (ColliderComponent::Shape)shape
                                                    : ColliderComponent::Shape::Box;
         if (c.contains("halfExtents"))
             collider.HalfExtents = JsonToVec3(c["halfExtents"], glm::vec3(0.0f));

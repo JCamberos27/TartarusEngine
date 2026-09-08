@@ -112,6 +112,13 @@ public:
     unsigned int MeshTriangleCount(int index) const { return m_Meshes[index]->IndexCount() / 3u; }
     unsigned int MeshVertexCount(int index) const { return m_Meshes[index]->VertexCount(); }
 
+    // Flatten every sub-mesh's bind-pose geometry into one vertex list + one triangle-index
+    // list (indices rebased per sub-mesh) for PhysX mesh / convex collider cooking (#185 PR 6).
+    // Local space — the caller applies the entity transform via PxMeshScale. Clears the outputs
+    // first; leaves them empty for a model with no meshes.
+    void CollisionGeometry(std::vector<glm::vec3>& outVertices,
+                           std::vector<unsigned int>& outIndices) const;
+
     // #192: the material value-hash this model draws with, so the scene draw loop can sort
     // entities to put value-identical materials adjacent (which is what makes the BindMaterial
     // dedup in GLStateCache actually hit). The override, or the first sub-mesh's material —
