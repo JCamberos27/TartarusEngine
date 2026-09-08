@@ -202,11 +202,22 @@ void PropertyLabel(const char* label, const char* tooltip = nullptr) {
     ImGui::SetNextItemWidth(-FLT_MIN); // fill exactly to the window's right edge
 }
 
+// #302 Part B — optional prefab-override wiring for a Vec3 row's label. When `self` and `field`
+// are set and (comp, field) on `e` differs from the prefab, the label tints + gets the
+// right-click Revert/Apply menu. Defaulted-empty so non-Transform callers pass nothing.
+struct PrefabRowRef {
+    EditorLayer* self = nullptr;
+    World* world = nullptr;
+    entt::entity e = entt::null;
+    const char* comp = nullptr;
+    const char* field = nullptr;
+};
+
 // Unity/Hazel-style vector row: a colored X/Y/Z button (click to zero that axis) glued to
 // each drag field, instead of ImGui's plain unlabeled DragFloat3. `activatedOut` is set when
 // any axis field starts being dragged this frame, for undo-snapshot timing at the call site.
 bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float maxV, bool& activatedOut,
-    bool& committedOut, const char* tooltip = nullptr) {
+    bool& committedOut, const char* tooltip = nullptr, PrefabRowRef pf = {}) {
     activatedOut = false;
     committedOut = false;
     bool changed = false;
@@ -218,7 +229,19 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
     // the label on the SAME line as its row (instead of on its own line above it, as before) is
     // what actually removes the wasted vertical gap between each Position/Rotation/Scale block.
     static const float vec3LabelColumnWidth = ImGui::CalcTextSize("Rotation").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+    const bool pfOverridden = pf.self && pf.field &&
+        SceneSerializer::IsPrefabFieldOverridden(*pf.world, pf.e, pf.comp, pf.field);
+    if (pfOverridden) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
     AlignToColumn(label, vec3LabelColumnWidth, tooltip);
+    if (pfOverridden) {
+        ImGui::PopStyleColor();
+        char pid[80]; std::snprintf(pid, sizeof(pid), "##pf_%s", label);
+        ImGui::OpenPopupOnItemClick(pid, ImGuiPopupFlags_MouseButtonRight);
+        if (ImGui::BeginPopup(pid)) {
+            pf.self->PrefabFieldMenu(*pf.world, pf.e, pf.comp, pf.field);
+            ImGui::EndPopup();
+        }
+    }
 
     float lineHeight = ImGui::GetFrameHeight();
     float buttonW = lineHeight + 4.0f;
@@ -1240,9 +1263,18 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // wasted line above). Locked = cyan glyph.
     const float lockW = ImGui::GetFrameHeight();
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - lockW - ImGui::GetStyle().ItemSpacing.x);
+    // #302 Part B — a prefab child whose name differs from the .prefab: tint the field + offer
+    // the right-click Revert/Apply menu.
+    const bool nameOverridden = SceneSerializer::IsPrefabFieldOverridden(world, entity, "Name", "name");
+    if (nameOverridden) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
     DrawNameField("##Name", name.Name, isLevelGeometry ? "Box" : "Object", activated);
+    if (nameOverridden) ImGui::PopStyleColor();
     if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) EditorUI::SetTooltip("Display name shown in the Hierarchy and here");
     if (activated) PushUndo(world, "Rename");
+    if (nameOverridden) {
+        ImGui::OpenPopupOnItemClick("##pf_name", ImGuiPopupFlags_MouseButtonRight);
+        if (ImGui::BeginPopup("##pf_name")) { PrefabFieldMenu(world, entity, "Name", "name"); ImGui::EndPopup(); }
+    }
     ImGui::SameLine();
     {
         ImGui::PushStyleColor(ImGuiCol_Text, m_InspectorLocked ? ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab)
@@ -1401,15 +1433,17 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         DrawVec3Row("Location", transform.Position, 0.1f, 0.0f, 0.0f, rowActive, rowCommitted,
             hasParent
                 ? "Position in units, relative to this object's parent. Drag a number to\nchange it, or click a colored letter to zero that axis."
-                : "World-space position in units. Drag a number to change it, or\nclick a colored letter to zero that axis.");
+                : "World-space position in units. Drag a number to change it, or\nclick a colored letter to zero that axis.",
+            {this, &world, entity, "Transform", "position"});
         if (rowActive) StageUndo(world);
         if (rowCommitted) CommitStagedUndo(world, "Move");
         DrawVec3Row("Rotation", transform.RotationEuler, 1.0f, 0.0f, 0.0f, rowActive, rowCommitted,
-            "Rotation in degrees around each axis.");
+            "Rotation in degrees around each axis.", {this, &world, entity, "Transform", "rotation"});
         if (rowActive) StageUndo(world);
         if (rowCommitted) CommitStagedUndo(world, "Rotate");
         DrawVec3Row("Scale", transform.Scale, isLevelGeometry ? 0.1f : 0.05f, 0.01f, 100.0f, rowActive, rowCommitted,
-            "Size multiplier per axis - 1 is the original imported/created size.");
+            "Size multiplier per axis - 1 is the original imported/created size.",
+            {this, &world, entity, "Transform", "scale"});
         if (rowActive) StageUndo(world);
         if (rowCommitted) CommitStagedUndo(world, "Scale");
 
@@ -1874,10 +1908,27 @@ void EditorLayer::EndComponentSection() {
     ImGui::Spacing();
 }
 
-// #302 Part B — PropertyLabel plus a prefab per-field override affordance. When (component,
-// field) on `entity` differs from the .prefab it was instantiated from: the label text is
-// tinted with the selection accent and a right-click menu offers "Revert to Prefab". A plain
-// PropertyLabel otherwise (including for any entity that isn't part of a prefab instance).
+// #302 Part B — the body of the right-click override menu (caller has already Begun the popup).
+// Shared by the reflected-field labels, the Transform rows and the Name field.
+void EditorLayer::PrefabFieldMenu(World& world, entt::entity entity, const char* component,
+                                  const char* field) {
+    ImGui::TextDisabled("Overridden from prefab");
+    ImGui::Separator();
+    if (ImGui::MenuItem(ICON_FA_ARROW_ROTATE_LEFT "  Revert to Prefab")) {
+        PushUndo(world, "Revert to Prefab");
+        if (m_AssetsPtr)
+            SceneSerializer::RevertPrefabField(world, *m_AssetsPtr, entity, component, field);
+    }
+    if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab"))
+        SceneSerializer::ApplyPrefabField(world, entity, component, field);
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Write this value into the .prefab file. Other instances\n"
+                             "pick it up on their next load. Changes the asset \xE2\x80\x94 not undoable.");
+}
+
+// PropertyLabel plus the override affordance: when (component, field) on `entity` differs from
+// the .prefab, the label is tinted with the selection accent and a right-click opens
+// PrefabFieldMenu. Plain PropertyLabel otherwise (incl. any non-prefab entity).
 void EditorLayer::PrefabOverrideLabel(World& world, entt::entity entity, const char* component,
                                       const char* field, const char* label, const char* tooltip) {
     const bool overridden =
@@ -1892,18 +1943,7 @@ void EditorLayer::PrefabOverrideLabel(World& world, entt::entity entity, const c
         const std::string popupId = std::string(component) + "\x1f" + field; // unit-sep: never in a name
         if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup(popupId.c_str());
         if (ImGui::BeginPopup(popupId.c_str())) {
-            ImGui::TextDisabled("Overridden from prefab");
-            ImGui::Separator();
-            if (ImGui::MenuItem(ICON_FA_ARROW_ROTATE_LEFT "  Revert to Prefab")) {
-                PushUndo(world, "Revert to Prefab");
-                if (m_AssetsPtr)
-                    SceneSerializer::RevertPrefabField(world, *m_AssetsPtr, entity, component, field);
-            }
-            if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab"))
-                SceneSerializer::ApplyPrefabField(world, entity, component, field);
-            if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("Write this value into the .prefab file. Other instances\n"
-                                     "pick it up on their next load. Changes the asset \xE2\x80\x94 not undoable.");
+            PrefabFieldMenu(world, entity, component, field);
             ImGui::EndPopup();
         }
     }
