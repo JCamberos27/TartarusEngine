@@ -62,6 +62,7 @@ void EditorSettings::Load() {
     s.SceneCameraNear = root.value("sceneCameraNear", s.SceneCameraNear);
     s.SceneCameraFar = root.value("sceneCameraFar", s.SceneCameraFar);
     s.AudioMuted = root.value("audioMuted", s.AudioMuted);
+    s.AssetSearchGlobal = root.value("assetSearchGlobal", s.AssetSearchGlobal);
     s.GameViewPresetLabel = root.value("gameViewPresetLabel", s.GameViewPresetLabel);
     s.GameViewPresetWidth = root.value("gameViewPresetWidth", s.GameViewPresetWidth);
     s.GameViewPresetHeight = root.value("gameViewPresetHeight", s.GameViewPresetHeight);
@@ -123,6 +124,7 @@ void EditorSettings::Save() {
     root["sceneCameraNear"] = Get().SceneCameraNear;
     root["sceneCameraFar"] = Get().SceneCameraFar;
     root["audioMuted"] = Get().AudioMuted;
+    root["assetSearchGlobal"] = Get().AssetSearchGlobal;
     root["gameViewPresetLabel"] = Get().GameViewPresetLabel;
     root["gameViewPresetWidth"] = Get().GameViewPresetWidth;
     root["gameViewPresetHeight"] = Get().GameViewPresetHeight;

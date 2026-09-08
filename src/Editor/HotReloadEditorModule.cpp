@@ -408,6 +408,8 @@ void  TbSetMeasureTool(bool on) { if (g_Editor) g_Editor->SetMeasureToolActive(o
 void  TbRequestDuplicateArray() { if (g_Editor) g_Editor->RequestArrayDuplicateModal(); }
 bool  TbGetInspectorLocked() { return g_Editor && g_Editor->IsInspectorLocked(); }
 void  TbToggleInspectorLock() { if (g_Editor) g_Editor->ToggleInspectorLock(); }
+bool  TbGetAssetSearchGlobal() { return EditorSettings::Get().AssetSearchGlobal; }
+void  TbSetAssetSearchGlobal(bool on) { EditorSettings::Get().AssetSearchGlobal = on; EditorSettings::Save(); }
 
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
@@ -518,6 +520,7 @@ const EditorModuleHostAPI kHostAPI{
     &TbGetMeasureTool,          &TbSetMeasureTool,
     &TbRequestDuplicateArray,
     &TbGetInspectorLocked,      &TbToggleInspectorLock,
+    &TbGetAssetSearchGlobal,    &TbSetAssetSearchGlobal,
 };
 
 } // namespace

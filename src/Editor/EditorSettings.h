@@ -104,6 +104,10 @@ struct EditorSettings {
     // session stays muted after a restart.
     bool AudioMuted = false;
 
+    // Asset Browser search scope (#236 G): false = current folder + subfolders (Unity's
+    // default), true = the whole project. Toggled by the button next to the search box.
+    bool AssetSearchGlobal = false;
+
     std::string GameViewPresetLabel = "Free Aspect";
     int GameViewPresetWidth = 0;
     int GameViewPresetHeight = 0;
