@@ -439,13 +439,31 @@ MultiEditResult MultiEditFloatRow(const char* label, float& value, bool mixed, f
 // Checkbox that renders a filled-square "mixed" state when the selection disagrees. Returns
 // true when the user clicks it; `out` then holds the value to apply to every object (a click
 // on a mixed box resolves the whole selection to checked, like Unity).
-bool MultiEditCheckbox(const char* label, bool anyOn, bool mixed, bool& out) {
+// With a PrefabMultiRef the label moves into the shared property column (tinted + right-click
+// Revert/Apply when any selected entity overrides it), matching the Int/Float multi rows;
+// without one the label stays on the checkbox as before.
+bool MultiEditCheckbox(const char* label, bool anyOn, bool mixed, bool& out, PrefabMultiRef pf = {}) {
     bool value = anyOn;
-    if (mixed) {
-        ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
+    const bool pfRow = pf.self && pf.field && pf.sel;
+    if (pfRow) {
+        ImGui::PushID(label);
+        const bool pfOv = pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
+        if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+        PropertyLabel(label);
+        if (pfOv) {
+            ImGui::PopStyleColor();
+            char pid[96]; std::snprintf(pid, sizeof(pid), "##pfm_%s", label);
+            ImGui::OpenPopupOnItemClick(pid, ImGuiPopupFlags_MouseButtonRight);
+            if (ImGui::BeginPopup(pid)) {
+                pf.self->PrefabFieldMenuMulti(*pf.world, *pf.sel, pf.comp, pf.field);
+                ImGui::EndPopup();
+            }
+        }
     }
-    bool clicked = ImGui::Checkbox(label, &value);
+    if (mixed) ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
+    bool clicked = ImGui::Checkbox(pfRow ? "##mecb" : label, &value);
     if (mixed) ImGui::PopItemFlag();
+    if (pfRow) ImGui::PopID();
     if (clicked) out = mixed ? true : value;
     return clicked;
 }
@@ -1042,7 +1060,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                                 anyOn |= v;
                             });
                             bool out = firstVal;
-                            if (MultiEditCheckbox(f.Name, anyOn, mixed, out)) {
+                            if (MultiEditCheckbox(f.Name, anyOn, mixed, out,
+                                                  {this, &world, &sel, rc.Meta.Name, f.Name})) {
                                 StageUndo(world);
                                 forEach([&](entt::entity e) { *reinterpret_cast<bool*>(fieldPtr(e, f)) = out; });
                                 CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
