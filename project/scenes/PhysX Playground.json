@@ -1,0 +1,134 @@
+{
+  "assetFolders": ["Scenes", "Screenshots"],
+  "assetMeta": [],
+  "formatVersion": 1,
+  "libraryModels": [],
+  "libraryPrefabs": [],
+  "librarySounds": [],
+  "libraryTextures": [],
+  "models": [],
+  "skyAmbientIntensity": 0.35,
+  "skyHorizonColor": [0.6, 0.68, 0.78],
+  "skyZenithColor": [0.2, 0.36, 0.62],
+  "boxes": [
+    {
+      "id": 0, "order": 0, "name": "Floor", "parentId": -1, "static": true,
+      "center": [0.0, -0.1, 0.0], "size": [40.0, 0.2, 40.0], "rotation": [0.0, 0.0, 0.0],
+      "color": [0.28, 0.30, 0.30],
+      "collider": { "isTrigger": false }
+    },
+    {
+      "id": 1, "order": 1, "name": "Wall -Z", "parentId": -1, "static": true,
+      "center": [0.0, 1.5, -14.0], "size": [30.0, 3.0, 0.5], "rotation": [0.0, 0.0, 0.0],
+      "color": [0.32, 0.33, 0.36],
+      "collider": { "isTrigger": false }
+    },
+    {
+      "id": 2, "order": 2, "name": "Wall +Z", "parentId": -1, "static": true,
+      "center": [0.0, 1.5, 10.0], "size": [30.0, 3.0, 0.5], "rotation": [0.0, 0.0, 0.0],
+      "color": [0.32, 0.33, 0.36],
+      "collider": { "isTrigger": false }
+    },
+    {
+      "id": 3, "order": 3, "name": "Wall -X", "parentId": -1, "static": true,
+      "center": [-14.0, 1.5, -2.0], "size": [0.5, 3.0, 26.0], "rotation": [0.0, 0.0, 0.0],
+      "color": [0.32, 0.33, 0.36],
+      "collider": { "isTrigger": false }
+    },
+    {
+      "id": 4, "order": 4, "name": "Wall +X", "parentId": -1, "static": true,
+      "center": [14.0, 1.5, -2.0], "size": [0.5, 3.0, 26.0], "rotation": [0.0, 0.0, 0.0],
+      "color": [0.32, 0.33, 0.36],
+      "collider": { "isTrigger": false }
+    },
+    {
+      "id": 5, "order": 5, "name": "Bumper (static)", "parentId": -1, "static": true,
+      "center": [-5.0, 0.5, 0.0], "size": [2.5, 1.0, 2.5], "rotation": [0.0, 0.0, 0.0],
+      "color": [0.50, 0.45, 0.38],
+      "collider": { "isTrigger": false }
+    },
+    {
+      "id": 6, "order": 6, "name": "1) Drop Me - add Rigidbody", "parentId": -1,
+      "center": [-9.0, 6.0, 2.0], "size": [1.0, 1.0, 1.0], "rotation": [12.0, 20.0, 8.0],
+      "color": [0.30, 0.85, 0.35],
+      "collider": { "isTrigger": false }
+    },
+    {
+      "id": 7, "order": 7, "name": "2) Falls (Rigidbody)", "parentId": -1,
+      "center": [-5.0, 6.0, 0.0], "size": [1.0, 1.0, 1.0], "rotation": [15.0, 0.0, 10.0],
+      "color": [0.90, 0.50, 0.20],
+      "collider": { "isTrigger": false },
+      "Rigidbody": {
+        "Mass": 1.0, "Use Gravity": true, "Is Kinematic": false,
+        "Initial Velocity": [0.0, 0.0, 0.0], "Linear Damping": 0.05, "Angular Damping": 0.05
+      }
+    },
+    {
+      "id": 8, "order": 8, "name": "3) Launcher (Initial Velocity Y=8)", "parentId": -1,
+      "center": [-1.0, 0.75, 3.0], "size": [1.0, 1.0, 1.0], "rotation": [0.0, 0.0, 0.0],
+      "color": [0.20, 0.70, 0.85],
+      "collider": { "isTrigger": false },
+      "Rigidbody": {
+        "Mass": 1.0, "Use Gravity": true, "Is Kinematic": false,
+        "Initial Velocity": [0.0, 8.0, 0.0], "Linear Damping": 0.05, "Angular Damping": 0.05
+      }
+    },
+    {
+      "id": 9, "order": 9, "name": "4) No Gravity (floats)", "parentId": -1,
+      "center": [3.0, 4.0, 2.0], "size": [1.0, 1.0, 1.0], "rotation": [0.0, 25.0, 0.0],
+      "color": [0.85, 0.30, 0.70],
+      "collider": { "isTrigger": false },
+      "Rigidbody": {
+        "Mass": 1.0, "Use Gravity": false, "Is Kinematic": false,
+        "Initial Velocity": [0.0, 0.0, 0.0], "Linear Damping": 0.05, "Angular Damping": 0.05
+      }
+    },
+    {
+      "id": 10, "order": 10, "name": "5) Kinematic Platform (bob + slow orbit)", "parentId": -1,
+      "center": [9.0, 1.4, -6.0], "size": [4.0, 0.4, 4.0], "rotation": [0.0, 0.0, 0.0],
+      "color": [0.85, 0.80, 0.20],
+      "collider": { "isTrigger": false },
+      "Rigidbody": {
+        "Mass": 1.0, "Use Gravity": true, "Is Kinematic": true,
+        "Initial Velocity": [0.0, 0.0, 0.0], "Linear Damping": 0.05, "Angular Damping": 0.05
+      },
+      "Animator": {
+        "Spin Deg/Sec": [0.0, 0.0, 0.0],
+        "Orbit Axis": [0.0, 1.0, 0.0], "Orbit Speed": 18.0, "Orbit Radius": 0.7,
+        "Bob Amplitude": 1.2, "Bob Frequency Hz": 0.3, "Color Cycle Hz": 0.0
+      }
+    },
+    {
+      "id": 11, "order": 11, "name": "5) Rider (Rigidbody)", "parentId": -1,
+      "center": [9.0, 1.9, -6.0], "size": [0.8, 0.8, 0.8], "rotation": [0.0, 0.0, 0.0],
+      "color": [0.85, 0.25, 0.20],
+      "collider": { "isTrigger": false },
+      "Rigidbody": {
+        "Mass": 1.0, "Use Gravity": true, "Is Kinematic": false,
+        "Initial Velocity": [0.0, 0.0, 0.0], "Linear Damping": 0.05, "Angular Damping": 0.05
+      }
+    }
+  ],
+  "empties": [
+    {
+      "id": 12, "order": 12, "name": "Sun", "parentId": -1,
+      "position": [0.0, 12.0, 0.0], "rotation": [-40.0, 50.0, 0.0], "scale": [1.0, 1.0, 1.0],
+      "light": {
+        "kind": "directional", "color": [1.0, 0.96, 0.9], "intensity": 5.5, "range": 12.0,
+        "spotAngle": 35.0, "angularSize": 1.5, "colorTempK": 0.0,
+        "shadow": { "enabled": true, "bias": 1.0, "normalBias": 1.0, "softness": 0.3,
+                    "nearPlane": 0.05, "resolution": 0, "updateMode": 0 }
+      }
+    },
+    {
+      "id": 13, "order": 13, "name": "Fill Light", "parentId": -1,
+      "position": [-6.0, 6.0, 5.0], "rotation": [0.0, 0.0, 0.0], "scale": [1.0, 1.0, 1.0],
+      "light": {
+        "kind": "point", "color": [1.0, 0.85, 0.65], "intensity": 6.0, "range": 22.0,
+        "spotAngle": 35.0, "angularSize": 0.53, "colorTempK": 0.0,
+        "shadow": { "enabled": false, "bias": 1.0, "normalBias": 1.0, "softness": 1.0,
+                    "nearPlane": 0.05, "resolution": 0, "updateMode": 0 }
+      }
+    }
+  ]
+}

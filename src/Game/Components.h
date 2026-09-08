@@ -76,6 +76,22 @@ struct ColliderComponent {
     bool IsTrigger = false;
 };
 
+// Makes a collider entity a *dynamic* PhysX body while playing (#185 PR 4) instead of the
+// static actor a lone ColliderComponent gets: it falls, tumbles, and is pushed around, and its
+// simulated pose is written back to the TransformComponent every frame (Play -> Stop restores
+// the authored pose from the scene snapshot, like every other Play-mode change). Needs a
+// ColliderComponent for its shape — a Rigidbody with no Collider does nothing. Registered
+// through the reflection system (#184), so its Inspector section, serialization and Add
+// Component entry are all generated.
+struct RigidbodyComponent {
+    float Mass = 1.0f;               // kg; ignored when kinematic
+    bool  UseGravity = true;         // when false the body still collides but doesn't fall
+    bool  IsKinematic = false;       // pose driven from TransformComponent each frame, not by forces
+    glm::vec3 InitialVelocity{0.0f}; // linear velocity applied once, on Play-mode entry
+    float LinearDamping = 0.05f;     // per-second velocity bleed (0 = frictionless drift)
+    float AngularDamping = 0.05f;
+};
+
 // Optional clip triggered from the editor Inspector; formerly PlacedModel-only, now any entity.
 struct AudioSourceComponent {
     std::string SoundPath;

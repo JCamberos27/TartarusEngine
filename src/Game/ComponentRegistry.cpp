@@ -212,6 +212,31 @@ void RegisterEngineComponents() {
         Register<AudioSourceComponent>(std::move(m));
     }
 
+    // #185 PR 4 — Rigidbody. Plain reflected fields; the shape comes from the sibling
+    // ColliderComponent (hand-written, PR 2) and PhysicsWorld reads both on Play-enter.
+    Register<RigidbodyComponent>({
+        "Rigidbody", ICON_FA_WEIGHT_HANGING,
+        "Simulates this collider as a dynamic PhysX body while playing - it falls, tumbles and "
+        "gets pushed around, and its pose is written back every frame. Needs a Collider for its "
+        "shape. Play -> Stop restores the authored pose.",
+        "Physics",
+        {
+            { "Mass", T::Float, TARTARUS_REFLECT_FIELD(RigidbodyComponent, Mass), 0.05f,
+              "Body mass in kg. Ignored while Kinematic.", 0.001f, 1000.0f },
+            { "Use Gravity", T::Bool, TARTARUS_REFLECT_FIELD(RigidbodyComponent, UseGravity), 0.0f,
+              "When off the body still collides but doesn't fall." },
+            { "Is Kinematic", T::Bool, TARTARUS_REFLECT_FIELD(RigidbodyComponent, IsKinematic), 0.0f,
+              "Driven from this object's Transform each frame (e.g. an Animator-moved platform) "
+              "instead of by forces - pushes other bodies, isn't pushed back." },
+            { "Initial Velocity", T::Vec3, TARTARUS_REFLECT_FIELD(RigidbodyComponent, InitialVelocity), 0.1f,
+              "Linear velocity (units/sec) applied once, the moment Play starts." },
+            { "Linear Damping", T::Float, TARTARUS_REFLECT_FIELD(RigidbodyComponent, LinearDamping), 0.01f,
+              "Per-second bleed of linear velocity. 0 = drifts forever.", 0.0f, 10.0f },
+            { "Angular Damping", T::Float, TARTARUS_REFLECT_FIELD(RigidbodyComponent, AngularDamping), 0.01f,
+              "Per-second bleed of spin.", 0.0f, 10.0f },
+        },
+    });
+
     // #315 — Mesh Renderer. Registered so the component-registration guard rail counts it and
     // its Icon/Category live here, but BOTH generic paths are opted out: RenderableComponent
     // holds a shared_ptr<Model> (no reflectable fields), its scene form is the box "color/size"

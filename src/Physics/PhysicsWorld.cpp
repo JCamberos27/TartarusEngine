@@ -10,11 +10,14 @@
 #include <PxPhysicsAPI.h>
 
 #include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/euler_angles.hpp> // eulerAngleYXZ / extractEulerAngleYXZ — matches ComposeTransform
 
 #include <algorithm>
 #include <cstdint>
 #include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
 using namespace physx;
 
@@ -53,6 +56,11 @@ struct PhysicsState {
     PxMaterial*           defaultMaterial = nullptr;
     PxControllerManager*  controllerMgr = nullptr; // #185 PR 3
     PxController*         controller    = nullptr; // the Play-mode Player's capsule (lazy)
+    // #185 PR 4 — RigidbodyComponent entities. Force-driven bodies get their pose written back
+    // to TransformComponent after each Step; kinematic bodies are driven the other way, from
+    // TransformComponent, before it. Actors themselves are owned by the scene.
+    std::vector<std::pair<PxRigidDynamic*, entt::entity>> dynamics;
+    std::vector<std::pair<PxRigidDynamic*, entt::entity>> kinematics;
 #ifdef TARTARUS_PHYSX_PVD
     PxPvd*               pvd            = nullptr;
     PxPvdTransport*      pvdTransport   = nullptr;
@@ -74,9 +82,24 @@ float FixedStep() {
     return (t > 0.0f) ? t : kDefaultFixedStep;
 }
 
-// --- Static-actor build (#185 PR 2) --------------------------------------------------------
+// --- Actor build (#185 PR 2 statics, PR 4 dynamics) --------------------------------------
 
 PxVec3 ToPx(const glm::vec3& v) { return PxVec3(v.x, v.y, v.z); }
+
+// Build the actor rotation the same way World's ComposeTransform does (Ry * Rx * Rz), so a
+// rotated collider — and a dynamic body's written-back pose — line up with how the renderer
+// interprets TransformComponent.RotationEuler.
+PxQuat EulerToPx(const glm::vec3& degrees) {
+    glm::mat4 r = glm::eulerAngleYXZ(glm::radians(degrees.y), glm::radians(degrees.x), glm::radians(degrees.z));
+    glm::quat q = glm::quat_cast(r);
+    return PxQuat(q.x, q.y, q.z, q.w);
+}
+glm::vec3 PxQuatToEulerDeg(const PxQuat& q) {
+    glm::quat g(q.w, q.x, q.y, q.z);
+    float ey, ex, ez;
+    glm::extractEulerAngleYXZ(glm::mat4_cast(g), ey, ex, ez);
+    return glm::degrees(glm::vec3(ex, ey, ez));
+}
 
 // entt::entity id <-> the void* PhysX stores per actor. A hit always comes back with an actor,
 // and every actor in our scene is one of ours, so the round-trip needs no sentinel: entity 0
@@ -104,77 +127,106 @@ void AutoBoxWorld(const entt::registry& reg, entt::entity e, const TransformComp
     }
 }
 
-// Create + attach + register one static actor. `geom` is only borrowed for the createShape call.
-void AddStatic(PhysicsState& s, entt::entity e, bool isTrigger,
-               const PxTransform& actorPose, const PxGeometry& geom, const PxTransform& shapeLocal) {
-    PxShapeFlags flags = isTrigger
-        ? (PxShapeFlag::eTRIGGER_SHAPE | PxShapeFlag::eSCENE_QUERY_SHAPE)
-        : (PxShapeFlag::eSIMULATION_SHAPE | PxShapeFlag::eSCENE_QUERY_SHAPE);
-
-    PxShape* shape = s.physics->createShape(geom, *s.defaultMaterial, /*isExclusive=*/true, flags);
-    if (!shape) return;
-    shape->setLocalPose(shapeLocal);
-
-    PxRigidStatic* actor = s.physics->createRigidStatic(actorPose);
-    actor->attachShape(*shape);
-    actor->userData = EntityToUserData(e);
-    shape->release(); // the actor holds the reference now
-    s.scene->addActor(*actor);
-}
-
-void BuildStatics(PhysicsState& s, const World& world) {
-    int built = 0, skipped = 0;
+void BuildActors(PhysicsState& s, const World& world) {
+    int statics = 0, dynamic = 0, kinematic = 0, skipped = 0;
     auto view = world.Registry.view<const TransformComponent, const ColliderComponent>(entt::exclude<InactiveTag>);
     for (entt::entity e : view) {
-        const auto& t = view.get<const TransformComponent>(e);
-        const auto& c = view.get<const ColliderComponent>(e);
+        const auto& t  = view.get<const TransformComponent>(e);
+        const auto& c  = view.get<const ColliderComponent>(e);
+        const auto* rb = world.Registry.try_get<const RigidbodyComponent>(e); // null => static (PR 2)
+
+        const PxShapeFlags flags = c.IsTrigger
+            ? (PxShapeFlag::eTRIGGER_SHAPE | PxShapeFlag::eSCENE_QUERY_SHAPE)
+            : (PxShapeFlag::eSIMULATION_SHAPE | PxShapeFlag::eSCENE_QUERY_SHAPE);
+
+        PxTransform actorPose(PxIdentity);
+        PxTransform shapeLocal(PxIdentity);
+        PxShape* shape = nullptr;
+        auto make = [&](const PxGeometry& g) {
+            shape = s.physics->createShape(g, *s.defaultMaterial, /*isExclusive=*/true, flags);
+        };
+
+        const float sx = std::abs(t.Scale.x), sy = std::abs(t.Scale.y), sz = std::abs(t.Scale.z);
 
         if (c.HalfExtents == glm::vec3(0.0f)) {
-            // Match the legacy path exactly: an axis-aligned box the size of the render bounds,
-            // rotation ignored. Center offset is already folded into the world AABB.
+            // Auto: an axis-aligned box the size of the render bounds.
             glm::vec3 center, half;
             AutoBoxWorld(world.Registry, e, t, center, half);
             if (half.x <= 0.0f || half.y <= 0.0f || half.z <= 0.0f) { ++skipped; continue; }
-            AddStatic(s, e, c.IsTrigger, PxTransform(ToPx(center)), PxBoxGeometry(ToPx(half)), PxTransform(PxIdentity));
-            ++built;
+            make(PxBoxGeometry(ToPx(half)));
+            if (rb) {
+                // Pose at the entity origin so the simulated pose writes straight back to
+                // TransformComponent; the box's offset from that origin becomes the shape pose.
+                actorPose  = PxTransform(ToPx(t.Position), EulerToPx(t.RotationEuler));
+                shapeLocal = PxTransform(ToPx(center - t.Position));
+            } else {
+                actorPose = PxTransform(ToPx(center)); // PR 2 static: AABB centre, no rotation
+            }
+        } else {
+            actorPose  = PxTransform(ToPx(t.Position), EulerToPx(t.RotationEuler));
+            shapeLocal = PxTransform(ToPx(c.Center));
+            switch (c.Kind) {
+                case ColliderComponent::Shape::Box: {
+                    glm::vec3 h = c.HalfExtents * glm::abs(t.Scale);
+                    if (h.x <= 0.0f || h.y <= 0.0f || h.z <= 0.0f) { ++skipped; continue; }
+                    make(PxBoxGeometry(ToPx(h)));
+                    break;
+                }
+                case ColliderComponent::Shape::Sphere: {
+                    float r = c.HalfExtents.x * std::max({sx, sy, sz});
+                    if (r <= 0.0f) { ++skipped; continue; }
+                    make(PxSphereGeometry(r));
+                    break;
+                }
+                case ColliderComponent::Shape::Capsule: {
+                    // PhysX capsules run along local X; author them along Y by rotating the shape
+                    // 90 deg about Z. Radius = max horizontal scale, half-height = vertical.
+                    float r  = c.HalfExtents.x * std::max(sx, sz);
+                    float hh = c.HalfExtents.y * sy;
+                    if (r <= 0.0f || hh <= 0.0f) { ++skipped; continue; }
+                    shapeLocal = shapeLocal * PxTransform(PxQuat(PxHalfPi, PxVec3(0, 0, 1)));
+                    make(PxCapsuleGeometry(r, hh));
+                    break;
+                }
+            }
+        }
+        if (!shape) { ++skipped; continue; }
+        shape->setLocalPose(shapeLocal);
+
+        if (!rb) {
+            PxRigidStatic* a = s.physics->createRigidStatic(actorPose);
+            a->attachShape(*shape);
+            a->userData = EntityToUserData(e);
+            shape->release();
+            s.scene->addActor(*a);
+            ++statics;
             continue;
         }
 
-        glm::quat q(glm::radians(t.RotationEuler));
-        PxTransform actorPose(ToPx(t.Position), PxQuat(q.x, q.y, q.z, q.w));
-        PxTransform shapeLocal(ToPx(c.Center));
-
-        const float sx = std::abs(t.Scale.x), sy = std::abs(t.Scale.y), sz = std::abs(t.Scale.z);
-        switch (c.Kind) {
-            case ColliderComponent::Shape::Box: {
-                glm::vec3 h = c.HalfExtents * glm::abs(t.Scale);
-                if (h.x <= 0.0f || h.y <= 0.0f || h.z <= 0.0f) { ++skipped; continue; }
-                AddStatic(s, e, c.IsTrigger, actorPose, PxBoxGeometry(ToPx(h)), shapeLocal);
-                break;
-            }
-            case ColliderComponent::Shape::Sphere: {
-                float r = c.HalfExtents.x * std::max({sx, sy, sz});
-                if (r <= 0.0f) { ++skipped; continue; }
-                AddStatic(s, e, c.IsTrigger, actorPose, PxSphereGeometry(r), shapeLocal);
-                break;
-            }
-            case ColliderComponent::Shape::Capsule: {
-                // PhysX capsules run along local X; author them along Y (local up) by rotating
-                // the shape 90 deg about Z. Radius follows the max horizontal scale, half-height
-                // the vertical.
-                float r  = c.HalfExtents.x * std::max(sx, sz);
-                float hh = c.HalfExtents.y * sy;
-                if (r <= 0.0f || hh <= 0.0f) { ++skipped; continue; }
-                shapeLocal = shapeLocal * PxTransform(PxQuat(PxHalfPi, PxVec3(0, 0, 1)));
-                AddStatic(s, e, c.IsTrigger, actorPose, PxCapsuleGeometry(r, hh), shapeLocal);
-                break;
-            }
+        PxRigidDynamic* b = s.physics->createRigidDynamic(actorPose);
+        b->attachShape(*shape);
+        b->userData = EntityToUserData(e);
+        shape->release();
+        if (!c.IsTrigger) // setMassAndUpdateInertia needs a simulation shape
+            PxRigidBodyExt::setMassAndUpdateInertia(*b, rb->Mass > 0.0f ? rb->Mass : 1.0f);
+        b->setLinearDamping(std::max(0.0f, rb->LinearDamping));
+        b->setAngularDamping(std::max(0.0f, rb->AngularDamping));
+        b->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, !rb->UseGravity);
+        if (rb->IsKinematic) {
+            b->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
+            s.kinematics.push_back({b, e});
+            ++kinematic;
+        } else {
+            b->setLinearVelocity(ToPx(rb->InitialVelocity));
+            s.dynamics.push_back({b, e});
+            ++dynamic;
         }
-        ++built;
+        s.scene->addActor(*b);
     }
 
-    std::string msg = "PhysX: " + std::to_string(built) + " static collider(s) added";
-    if (skipped) msg += ", " + std::to_string(skipped) + " skipped (degenerate size)";
+    std::string msg = "PhysX: " + std::to_string(statics) + " static, " + std::to_string(dynamic) +
+                      " dynamic, " + std::to_string(kinematic) + " kinematic collider(s)";
+    if (skipped) msg += "; " + std::to_string(skipped) + " skipped (degenerate size)";
     Log::Info(msg + ".");
 }
 
@@ -253,7 +305,7 @@ void Create(const World& world) {
     g_State = s;
     Log::Info("PhysX world created (" + std::to_string(workers) + " worker threads).");
 
-    BuildStatics(*s, world);
+    BuildActors(*s, world);
 }
 
 void Destroy() {
@@ -285,9 +337,18 @@ bool IsActive() {
     return g_State != nullptr;
 }
 
-void Step(float dt) {
+void Step(float dt, World& world) {
     if (!g_State || !g_State->scene) return;
     if (dt <= 0.0f) return;
+
+    // Kinematic bodies are driven by their TransformComponent (e.g. an Animator-moved platform):
+    // push this frame's authored pose into the actor before stepping so it sweeps other bodies.
+    for (auto& [body, e] : g_State->kinematics) {
+        if (!world.Registry.valid(e)) continue;
+        const auto* tc = world.Registry.try_get<const TransformComponent>(e);
+        if (!tc) continue;
+        body->setKinematicTarget(PxTransform(ToPx(tc->Position), EulerToPx(tc->RotationEuler)));
+    }
 
     // Fixed-timestep accumulator: gameplay physics must not vary with frame rate. Cap the
     // catch-up at kMaxSubSteps so a big hitch (asset load, breakpoint) doesn't trigger a
@@ -303,6 +364,18 @@ void Step(float dt) {
         g_State->scene->fetchResults(/*block=*/true);
         g_State->stepAccumulator -= fixedStep;
         ++steps;
+    }
+
+    // Write each force-driven body's simulated pose back to its TransformComponent so the
+    // renderer, gizmos and world-transform cache all see it move. Play -> Stop reloads the
+    // authored scene, so this is never persisted.
+    for (auto& [body, e] : g_State->dynamics) {
+        if (!world.Registry.valid(e)) continue;
+        auto* tc = world.Registry.try_get<TransformComponent>(e);
+        if (!tc) continue;
+        const PxTransform p = body->getGlobalPose();
+        tc->Position      = glm::vec3(p.p.x, p.p.y, p.p.z);
+        tc->RotationEuler = PxQuatToEulerDeg(p.q);
     }
 }
 

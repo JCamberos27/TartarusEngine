@@ -995,9 +995,9 @@ int main(int argc, char** argv) {
             const bool simThisFrame = (playing && !paused) || stepThisFrame;
 
             if (simThisFrame) {
-                // Step the PhysX world (#185). PR 1: no actors, so this is observably a no-op —
-                // it exercises the create/step/destroy path ahead of PR 2's static colliders.
-                PhysicsWorld::Step(dt);
+                // Step the PhysX world (#185): kinematic bodies pushed from their Transforms,
+                // then the sim, then dynamic bodies' poses written back into theirs.
+                PhysicsWorld::Step(dt, world);
                 player.Update(dt, world, window.Handle(), gameHasInput);
                 // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
                 // against wherever the player is looking from, updated after the move so the
