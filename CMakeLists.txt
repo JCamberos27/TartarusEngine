@@ -108,8 +108,9 @@ set(_physx_link_libs
   PhysX
   PhysXCommon
   PhysXFoundation
-  PhysXExtensions_static  # PxDefaultCpuDispatcherCreate, PxDefaultPvdSocketTransportCreate
-  PhysXPvdSDK_static      # PxCreatePvd (used only under TARTARUS_PHYSX_PVD, cheap to always link)
+  PhysXExtensions_static        # PxDefaultCpuDispatcherCreate, PxDefaultPvdSocketTransportCreate
+  PhysXPvdSDK_static            # PxCreatePvd (used only under TARTARUS_PHYSX_PVD, cheap to always link)
+  PhysXCharacterKinematic_static # PxCreateControllerManager + PxCapsuleController (#185 PR 3)
 )
 set(_physx_runtime_dlls PhysX PhysXCommon PhysXFoundation)
 
