@@ -966,11 +966,11 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         if (show) cells.push_back({Cell::Kind::Prefab, prefab, name, nullptr, nullptr});
     }
 
-    // Favourites view (#236 G): a flat list of just the starred assets, from anywhere.
+    // Favourites view (#236 G): a flat list of just the starred entries — assets, folders,
+    // scenes and screenshots alike — from anywhere.
     if (m_AssetFavoritesOnly) {
         cells.erase(std::remove_if(cells.begin(), cells.end(),
-            [&](const Cell& c) { return c.kind == Cell::Kind::Folder || !IsAssetFavorite(c.key); }),
-            cells.end());
+            [&](const Cell& c) { return !IsAssetFavorite(c.key); }), cells.end());
     }
 
     // Sort control (#236 G) — folders always first; within each group, Name / Type / Date / Size,
@@ -1126,7 +1126,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             }
 
             // Favourite star badge, top-right of the tile (#236 G).
-            if (!isFolder && IsAssetFavorite(cell.key)) {
+            if (IsAssetFavorite(cell.key)) {
                 const float ss = std::max(10.0f, m_AssetIconSize * 0.28f);
                 dl->AddText(ImGui::GetFont(), ss, ImVec2(tileMin.x + cellWidth - ss - 3.0f, tileMin.y + 2.0f),
                             ImGui::GetColorU32(ImGuiCol_SliderGrab), ICON_FA_STAR);
@@ -1320,6 +1320,10 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     ImGui::SetClipboardText(cell.key.c_str());
                     Log::Info("Copied path: " + cell.key);
                 }
+                if (m_ExtraAssetSelection.empty() &&
+                    ImGui::MenuItem(IsAssetFavorite(cell.key) ? ICON_FA_STAR "  Remove from Favourites"
+                                                             : ICON_FA_STAR "  Add to Favourites"))
+                    ToggleAssetFavorite(cell.key);
 
                 // Act on the whole selection when the right-clicked scene is part of a
                 // multi-selection, same as the generic asset menu.
@@ -1349,6 +1353,10 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     ImGui::SetClipboardText(cell.key.c_str());
                     Log::Info("Copied path: " + cell.key);
                 }
+                if (m_ExtraAssetSelection.empty() &&
+                    ImGui::MenuItem(IsAssetFavorite(cell.key) ? ICON_FA_STAR "  Remove from Favourites"
+                                                             : ICON_FA_STAR "  Add to Favourites"))
+                    ToggleAssetFavorite(cell.key);
                 std::vector<AssetKeyRef> shotsForAction;
                 shotsForAction.push_back({m_SelectedAssetKey, false});
                 for (const auto& e : m_ExtraAssetSelection) shotsForAction.push_back(e);
