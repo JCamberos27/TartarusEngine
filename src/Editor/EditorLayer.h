@@ -1479,6 +1479,12 @@ private:
     // Multi-select counterpart: `sel` is every selected entity that has this component.
     void DrawReflectedComponentExtraMulti(const char* componentName, World& world,
                                           const std::vector<entt::entity>& sel, ReflectExtraPhase phase);
+    // #302 Part B — a field label that, when this (component, field) on `entity` differs from
+    // the prefab it was instantiated from, tints itself in the selection accent and offers a
+    // right-click "Revert to Prefab". Falls back to a plain PropertyLabel otherwise. `component`
+    // is a ReflectComponent::Name or the specials "Transform" / "Name".
+    void PrefabOverrideLabel(World& world, entt::entity entity, const char* component,
+                             const char* field, const char* label, const char* tooltip);
     char m_AddComponentFilter[64] = {};      // type-to-filter text in the Add Component popup (#236)
     bool m_AddComponentFilterFocus = false;  // grab the keyboard for it the frame the popup opens
     // Draws one removable component section with a header and a trailing "x" — returns true if
