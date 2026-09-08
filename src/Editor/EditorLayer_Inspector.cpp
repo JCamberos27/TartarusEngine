@@ -750,8 +750,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
 
         // ---- Common components: those present on the WHOLE selection ----
-        bool allMesh = true, allLight = true, allCamera = true, allCollider = true,
-             allAudio = true;
+        bool allMesh = true, allLight = true, allCollider = true, allAudio = true;
         // #184: same "present on every selected object" test, generalized over every
         // reflection-registered component instead of one bool per hand-coded component.
         const auto& registeredComponents = ComponentRegistry::All();
@@ -759,7 +758,6 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         forEach([&](entt::entity e) {
             allMesh     &= world.Registry.all_of<RenderableComponent>(e);
             allLight    &= world.Registry.all_of<LightComponent>(e);
-            allCamera   &= world.Registry.all_of<CameraComponent>(e);
             allCollider &= world.Registry.all_of<ColliderComponent>(e);
             allAudio    &= world.Registry.all_of<AudioSourceComponent>(e);
             for (std::size_t i = 0; i < registeredComponents.size(); ++i)
@@ -769,7 +767,6 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             std::string common = "Transform";
             if (allMesh)     common += ", Mesh Renderer";
             if (allLight)    common += ", Light";
-            if (allCamera)   common += ", Camera";
             if (allCollider) common += ", Box Collider";
             if (allAudio)    common += ", Audio Source";
             for (std::size_t i = 0; i < registeredComponents.size(); ++i)
@@ -1064,38 +1061,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             }
         }
 
-        // ===== Camera (only when every selected object has one) =====
-        if (allCamera) {
-            ImGui::Spacing();
-            if (BeginComponentSection(ICON_FA_VIDEO, "Camera", false, mrm)) {
-            auto C = [&](entt::entity e) -> CameraComponent& { return world.Registry.get<CameraComponent>(e); };
-            auto camFloatRow = [&](const char* label, float speed, float minV, float maxV,
-                                   const std::function<float&(CameraComponent&)>& ref,
-                                   const char* tip, const char* undoLabel) {
-                float shared = 0.0f; bool mixed = false, f = true;
-                forEach([&](entt::entity e) {
-                    float v = ref(C(e));
-                    if (f) { shared = v; f = false; } else if (std::fabs(v - shared) > 1.0e-4f) mixed = true;
-                });
-                float edit = shared;
-                MultiEditResult r = MultiEditFloatRow(label, edit, mixed, speed, minV, maxV, tip);
-                if (r.activated) StageUndo(world);
-                if (r.changed) forEach([&](entt::entity e) { ref(C(e)) = edit; });
-                if (r.committed) CommitStagedUndo(world, undoLabel);
-            };
-            camFloatRow("Field of View", 0.25f, 1.0f, 179.0f,
-                [](CameraComponent& c) -> float& { return c.FovDegrees; },
-                "Vertical FOV for every selected camera.", "Set Camera FOV");
-            camFloatRow("Near", 0.01f, 0.001f, 100.0f,
-                [](CameraComponent& c) -> float& { return c.NearPlane; },
-                "Near clip plane for every selected camera.", "Set Camera Near");
-            camFloatRow("Far", 1.0f, 0.1f, 100000.0f,
-                [](CameraComponent& c) -> float& { return c.FarPlane; },
-                "Far clip plane for every selected camera.", "Set Camera Far");
-
-            EndComponentSection(); // Camera
-            }
-        }
+        // Camera moved onto reflection (#302 Wave 1a) — its multi-select section is now produced
+        // by the generic reflected-components block just below, same as Animator's.
 
         // ===== Reflection-registered components (#184) — the multi-select counterpart of the
         // single-select generic loop: one section per component present on the WHOLE selection,
@@ -1787,55 +1754,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         if (lightPaste) PasteComponentFromClip(world, entity);
     }
 
-    // --- Camera (the Game view previews through this while editing) ------------------------
-    if (auto* cam = registry.try_get<CameraComponent>(entity)) {
-        bool camReset = false, camCopy = false, camPaste = false;
-        if (BeginComponentSection(ICON_FA_VIDEO, "Camera", true, removed, /*defaultOpen=*/true,
-                "The Game view renders through this camera while editing, so you can frame a\nshot without walking there. Play mode still uses the first-person controller.",
-                &camReset, &camCopy, &camPaste)) {
-            PropertyLabel("Field of View", "Vertical FOV in degrees.");
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            EditorUI::SliderFloat("##Fov", &cam->FovDegrees, 20.0f, 120.0f, "%.0f deg");
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Camera");
-            PropertyLabel("Near", "Closest distance the camera renders.");
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::DragFloat("##Near", &cam->NearPlane, 0.01f, 0.001f, 10.0f, "%.3f");
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Camera");
-            PropertyLabel("Far", "Farthest distance the camera renders.");
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::DragFloat("##Far", &cam->FarPlane, 1.0f, 1.0f, 100000.0f, "%.0f");
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Camera");
-            if (cam->FarPlane <= cam->NearPlane) cam->FarPlane = cam->NearPlane + 1.0f;
-
-            ImGui::Spacing();
-            if (ImGui::Button(ICON_FA_VIDEO "  Align to View", ImVec2(-FLT_MIN, 0.0f)) && m_EditorCameraPtr) {
-                PushUndo(world, "Align Camera to View");
-                const Camera& ec = *m_EditorCameraPtr;
-                auto& t = registry.get<TransformComponent>(entity);
-                t.Position = ec.Position;
-                glm::vec3 d = glm::normalize(ec.Front());
-                // Match the Add > Camera convention: ComposeTransform yaws (Y) then pitches (X),
-                // local -Z is forward.
-                t.RotationEuler = glm::vec3(
-                    glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
-                    glm::degrees(std::atan2(-d.x, -d.z)),
-                    0.0f);
-                cam->FovDegrees = ec.Fov;
-            }
-            if (ImGui::IsItemHovered()) {
-                EditorUI::SetTooltip("Snap this camera to the editor viewport's current position, aim and FOV.");
-            }
-
-            EndComponentSection();
-        }
-        if (removed) {
-            PushUndo(world, "Remove Camera");
-            registry.remove<CameraComponent>(entity);
-        }
-        if (camReset) { PushUndo(world, "Reset Camera"); *cam = CameraComponent{}; }
-        if (camCopy)  CopyComponentToClip("Camera", *cam);
-        if (camPaste) PasteComponentFromClip(world, entity);
-    }
+    // Camera moved onto reflection (#302 Wave 1a): its fields, section chrome, copy/paste, reset,
+    // Add Component entry and multi-select all come from the generic ComponentRegistry path
+    // below. The one Camera-specific control — "Align to View" — is a registered inspector-extra
+    // (ComponentInspectorExtras(), keyed "Camera"), rendered inside the generic section.
 
     // --- Audio Source (collapsed by default: set-and-forget once a clip is chosen) ---------
     if (auto* audio = registry.try_get<AudioSourceComponent>(entity)) {
@@ -1979,6 +1901,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 if (started) PushUndo(world, std::string("Edit ") + rc.Meta.Name);
                 ImGui::PopID();
             }
+            DrawReflectedComponentExtra(rc.Meta.Name, world, entity); // #302: e.g. Camera "Align to View"
             EndComponentSection();
         }
         if (reflRemoved) {
@@ -2112,6 +2035,41 @@ void EditorLayer::EndComponentSection() {
     }
     ImGui::Spacing();
 }
+
+// #302: custom, editor-only controls appended to a reflection-registered component's generic
+// Inspector section. Reflection covers the data (fields, serialization, Add/Remove, multi-edit);
+// anything that needs editor state the game module can't see (here: the editor camera) lives
+// here instead of as a reflected field. Dispatched by ReflectComponent::Name.
+void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& world, entt::entity entity) {
+    auto& registry = world.Registry;
+
+    if (std::strcmp(componentName, "Camera") == 0) {
+        auto* cam = registry.try_get<CameraComponent>(entity);
+        if (!cam) return;
+        // Keep Far strictly beyond Near — the reflected field clamps can't express a cross-field
+        // relation, and a degenerate range renders nothing.
+        if (cam->FarPlane <= cam->NearPlane) cam->FarPlane = cam->NearPlane + 1.0f;
+
+        ImGui::Spacing();
+        if (ImGui::Button(ICON_FA_VIDEO "  Align to View", ImVec2(-FLT_MIN, 0.0f)) && m_EditorCameraPtr) {
+            PushUndo(world, "Align Camera to View");
+            const Camera& ec = *m_EditorCameraPtr;
+            auto& t = registry.get<TransformComponent>(entity);
+            t.Position = ec.Position;
+            glm::vec3 d = glm::normalize(ec.Front());
+            // Match the Add > Camera convention: ComposeTransform yaws (Y) then pitches (X),
+            // local -Z is forward.
+            t.RotationEuler = glm::vec3(
+                glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
+                glm::degrees(std::atan2(-d.x, -d.z)),
+                0.0f);
+            cam->FovDegrees = ec.Fov;
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Snap this camera to the editor viewport's current position, aim and FOV.");
+    }
+}
+
 void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity) {
     if (ActionButton(ICON_FA_PLUS "  Add Component", "Attach a new capability to this object",
                      false, ImVec2(-1.0f, 0.0f))) {
@@ -2143,6 +2101,19 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     };
     // Category headings are noise once a filter narrows the list to a handful of rows.
     auto section = [&](const char* title) { if (filter.empty()) ImGui::SeparatorText(title); };
+    // #302: reflection-registered components slot into these same headings via
+    // ReflectComponent::Category — so e.g. Camera lists under "Rendering", not "Scripts".
+    auto anyReflectedIn = [&](const char* cat) {
+        for (const auto& rc : ComponentRegistry::All())
+            if (std::strcmp(rc.Meta.Category, cat) == 0) return true;
+        return false;
+    };
+    auto reflectedFor = [&](const char* cat) {
+        for (const auto& rc : ComponentRegistry::All())
+            if (std::strcmp(rc.Meta.Category, cat) == 0)
+                entry(rc.Meta.Icon, rc.Meta.Name, rc.Has(registry, entity),
+                      [&] { rc.Add(registry, entity); });
+    };
 
     section("Rendering");
     // Restores the mesh the entity had before "Mesh Renderer" was removed (DetachedMeshComponent),
@@ -2160,26 +2131,24 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
         });
     entry(ICON_FA_LIGHTBULB, "Light", registry.all_of<LightComponent>(entity),
         [&] { registry.emplace<LightComponent>(entity); });
-    entry(ICON_FA_VIDEO, "Camera", registry.all_of<CameraComponent>(entity),
-        [&] { registry.emplace<CameraComponent>(entity); });
+    reflectedFor("Rendering"); // Camera (#302 Wave 1a)
 
     section("Physics");
     entry(ICON_FA_CUBE, "Box Collider", registry.all_of<ColliderComponent>(entity),
         [&] { registry.emplace<ColliderComponent>(entity); });
+    reflectedFor("Physics");
 
     section("Audio");
     entry(ICON_FA_VOLUME_HIGH, "Audio Source", registry.all_of<AudioSourceComponent>(entity),
         [&] { registry.emplace<AudioSourceComponent>(entity); });
+    reflectedFor("Audio");
 
     // #184: reflection-registered components. Adding one to ComponentRegistry puts it here with
     // no edit to this menu. Animator used to be its own hand-coded "Motion" entry here; now it's
     // just another entry in this list, same as Transform Controller and Spin.
-    if (!ComponentRegistry::All().empty()) {
+    if (anyReflectedIn("Scripts")) {
         section("Scripts");
-        for (const auto& rc : ComponentRegistry::All()) {
-            entry(rc.Meta.Icon, rc.Meta.Name, rc.Has(registry, entity),
-                  [&] { rc.Add(registry, entity); });
-        }
+        reflectedFor("Scripts");
     }
 
     ImGui::EndPopup();
