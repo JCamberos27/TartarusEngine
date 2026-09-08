@@ -178,9 +178,17 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
     // nested "shadow") is still READ (see LoadEntity) for scenes authored before the migration.
 
     // Boxes get a Collider from World::CreateBox already; this only records one that was added
-    // manually (to a placed model, via the Inspector's Add Component).
+    // manually (to a placed model, via the Inspector's Add Component). Shape/HalfExtents/Center
+    // are #185 PR 2 — omitted when at their defaults (Box, auto-size, no offset) so legacy
+    // scenes and every CreateBox collider serialize byte-identically to before.
     if (const auto* collider = world.Registry.try_get<ColliderComponent>(entity)) {
-        j["collider"] = {{"isTrigger", collider->IsTrigger}};
+        json cj = {{"isTrigger", collider->IsTrigger}};
+        if (collider->Kind != ColliderComponent::Shape::Box) cj["shape"] = (int)collider->Kind;
+        if (collider->HalfExtents != glm::vec3(0.0f))
+            cj["halfExtents"] = {collider->HalfExtents.x, collider->HalfExtents.y, collider->HalfExtents.z};
+        if (collider->Center != glm::vec3(0.0f))
+            cj["center"] = {collider->Center.x, collider->Center.y, collider->Center.z};
+        j["collider"] = cj;
     }
     // CameraComponent moved onto reflection (#302 Wave 1a) — it now round-trips through the
     // generic "Camera" block below. The old flat "camera" object is still READ (see LoadEntity)
@@ -254,8 +262,16 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
         world.Registry.emplace_or_replace<LightComponent>(entity, light);
     }
     if (j.contains("collider")) {
+        const json& c = j["collider"];
         ColliderComponent collider;
-        collider.IsTrigger = j["collider"].value("isTrigger", false);
+        collider.IsTrigger = c.value("isTrigger", false);
+        int shape = c.value("shape", 0); // absent => Box (0), the pre-#185 shape
+        collider.Kind = (shape >= 0 && shape <= 2) ? (ColliderComponent::Shape)shape
+                                                   : ColliderComponent::Shape::Box;
+        if (c.contains("halfExtents"))
+            collider.HalfExtents = JsonToVec3(c["halfExtents"], glm::vec3(0.0f));
+        if (c.contains("center"))
+            collider.Center = JsonToVec3(c["center"], glm::vec3(0.0f));
         world.Registry.emplace_or_replace<ColliderComponent>(entity, collider);
     }
     // Legacy pre-#302 format: CameraComponent moved onto reflection (keyed "Camera" below), but
