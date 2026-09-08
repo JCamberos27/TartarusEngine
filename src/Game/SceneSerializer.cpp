@@ -16,6 +16,7 @@
 #include <set>
 #include <functional>
 #include <algorithm>
+#include <cstring>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <cmath>
@@ -38,6 +39,12 @@ constexpr int kSceneFormatVersion = 1;
 // editor can pop a dialog in addition to the Console line ApplySceneJson already logs. Plain
 // (non-thread-local) static: scene loads happen on the main thread only.
 std::string g_LastLoadWarning;
+
+// #302 Part B — session-lived cache of parsed .prefab files for the Inspector's per-field
+// override check (called every frame per visible field on a prefab-instance entity). Cleared on
+// full scene load (ApplySceneJson) and via SceneSerializer::ClearPrefabPristineCache(). The
+// save-time diff reads the file directly — a save is rare and must see the latest on disk.
+std::unordered_map<std::string, json> g_prefabPristineCache;
 
 // Guards ApplySceneJson against runaway recursion when a prefab instance stub expands another
 // scene fragment (#236 A2). A flattened .prefab never contains a "prefabInstances" key, so in
@@ -685,7 +692,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
         g_LastLoadWarning = msg;
     }
 
-    if (clearFirst) world.Registry.clear();
+    if (clearFirst) { world.Registry.clear(); g_prefabPristineCache.clear(); } // #302 Part B
     if (!clearFirst) {
         // A fragment carries no environment settings (BuildSceneJson omits them for subsets),
         // and must not disturb the scene's own.
@@ -1000,6 +1007,52 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
     }
 }
 
+const json* CachedPrefabJson(const std::string& path) {
+    auto it = g_prefabPristineCache.find(path);
+    if (it != g_prefabPristineCache.end()) return &it->second;
+    std::ifstream f(path);
+    if (!f.is_open()) return nullptr;
+    json parsed;
+    try { f >> parsed; } catch (...) { return nullptr; }
+    return &(g_prefabPristineCache[path] = std::move(parsed));
+}
+
+// Given any entity, find its prefab-instance root, the pristine .prefab entity object it was
+// built from, and whether it IS the root. Returns {nullptr,...} if it isn't part of a live
+// instance (or the .prefab is unreadable / the entity is a since-added child not in the file).
+struct PristineHit { const json* ent = nullptr; bool isRoot = false; };
+PristineHit FindPristineEntity(const World& world, entt::entity entity) {
+    entt::entity root = entt::null;
+    for (entt::entity cur = entity; cur != entt::null; ) {
+        if (world.Registry.all_of<PrefabInstanceComponent>(cur)) { root = cur; break; }
+        const auto* h = world.Registry.try_get<HierarchyComponent>(cur);
+        cur = h ? h->Parent : entt::null;
+    }
+    if (root == entt::null) return {};
+    const auto& pi = world.Registry.get<PrefabInstanceComponent>(root);
+    int idx = -1;
+    for (std::size_t i = 0; i < pi.InstanceEntities.size(); ++i)
+        if (pi.InstanceEntities[i] == entity) { idx = (int)i; break; }
+    if (idx < 0) return {};
+    const json* pj = CachedPrefabJson(pi.SourcePath);
+    if (!pj) return {};
+    std::vector<const json*> ents = PrefabEntityObjects(*pj);
+    if (idx >= (int)ents.size()) return {};
+    return { ents[idx], root == entity };
+}
+
+// The pristine JSON value for (component, field) on `hit.ent`, or a null json if absent.
+json PristineFieldValue(const PristineHit& hit, const char* component, const char* field) {
+    if (!hit.ent) return nullptr;
+    if (std::strcmp(component, "Transform") == 0)
+        return hit.ent->contains(field) ? hit.ent->at(field) : json(nullptr);
+    if (std::strcmp(component, "Name") == 0)
+        return json(hit.ent->value("name", std::string()));
+    if (!hit.ent->contains(component)) return nullptr;
+    const json& cj = hit.ent->at(component);
+    return cj.contains(field) ? cj.at(field) : json(nullptr);
+}
+
 } // namespace
 
 bool SceneSerializer::Save(const World& world, const AssetLibrary& assets, const std::string& path) {
@@ -1161,4 +1214,53 @@ entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& asse
     pi.InstanceEntities = created;
     world.Registry.emplace_or_replace<PrefabInstanceComponent>(root, std::move(pi));
     return root;
+}
+
+// --- Prefab per-field overrides, editor helpers (#302 Part B) -------------------------------
+
+void SceneSerializer::ClearPrefabPristineCache() { g_prefabPristineCache.clear(); }
+
+bool SceneSerializer::IsPrefabFieldOverridden(const World& world, entt::entity entity,
+                                              const char* component, const char* field) {
+    PristineHit hit = FindPristineEntity(world, entity);
+    if (!hit.ent) return false;
+    // The root's transform / name / tag are per-instance by design, not overrides.
+    if (hit.isRoot && (std::strcmp(component, "Transform") == 0 || std::strcmp(component, "Name") == 0))
+        return false;
+
+    const json pristine = PristineFieldValue(hit, component, field);
+    if (pristine.is_null()) return false; // field absent from the .prefab — nothing to diff against
+
+    if (std::strcmp(component, "Transform") == 0) {
+        const auto& t = world.Registry.get<TransformComponent>(entity);
+        json now = std::strcmp(field, "position") == 0 ? Vec3ToJson(t.Position)
+                 : std::strcmp(field, "rotation") == 0 ? Vec3ToJson(t.RotationEuler)
+                 : std::strcmp(field, "scale")    == 0 ? Vec3ToJson(t.Scale) : json(nullptr);
+        if (now.is_null()) return false;
+        return !ReflectJsonNearlyEqual(ReflectFieldType::Vec3, now, pristine);
+    }
+    if (std::strcmp(component, "Name") == 0) {
+        const auto* nc = world.Registry.try_get<NameComponent>(entity);
+        return nc && json(nc->Name) != pristine;
+    }
+    for (const auto& rc : ComponentRegistry::All()) {
+        if (std::strcmp(rc.Meta.Name, component) != 0 || !rc.Has(world.Registry, entity)) continue;
+        const void* comp = rc.GetConst(world.Registry, entity);
+        for (const auto& f : rc.Meta.Fields) {
+            if (std::strcmp(f.Name, field) != 0) continue;
+            json now = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
+            return !ReflectJsonNearlyEqual(f.Type, now, pristine);
+        }
+        return false;
+    }
+    return false;
+}
+
+void SceneSerializer::RevertPrefabField(World& world, AssetLibrary& assets, entt::entity entity,
+                                        const char* component, const char* field) {
+    PristineHit hit = FindPristineEntity(world, entity);
+    if (!hit.ent) return;
+    const json pristine = PristineFieldValue(hit, component, field);
+    if (pristine.is_null()) return;
+    ApplyPrefabOverride(world, assets, entity, component, field, pristine);
 }

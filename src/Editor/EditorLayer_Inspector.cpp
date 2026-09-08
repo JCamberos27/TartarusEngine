@@ -1279,8 +1279,9 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             ImGui::PopStyleColor();
             ImGui::TextDisabled("%s", pi.SourcePath.c_str());
             ImGui::TextDisabled(isRoot
-                ? "Transform / name / tag are kept per-instance; everything else tracks the prefab."
-                : "Edits here are overwritten when the prefab reloads \xE2\x80\x94 unpack the root to edit.");
+                ? "Transform / name / tag are kept per-instance; other fields track the prefab unless overridden."
+                : "Changed fields are kept as per-instance overrides \xE2\x80\x94 an accent label,\n"
+                  "right-click \xE2\x96\xB8 Revert to Prefab. Unchanged fields track the prefab.");
             ImGui::Spacing();
             ImGui::Separator();
         }
@@ -1673,7 +1674,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 if (f.EditorHidden) continue;              // drawn by DrawReflectedComponentExtra
                 if (!fieldVisible(f)) continue;
 
-                PropertyLabel(f.Name, f.Tooltip);
+                PrefabOverrideLabel(world, entity, rc.Meta.Name, f.Name, f.Name, f.Tooltip); // #302 Part B
                 ImGui::PushID(f.Name);
                 bool started = false;
                 switch (f.Type) {
@@ -1871,6 +1872,33 @@ void EditorLayer::EndComponentSection() {
         ImGui::Unindent();
     }
     ImGui::Spacing();
+}
+
+// #302 Part B — PropertyLabel plus a prefab per-field override affordance. When (component,
+// field) on `entity` differs from the .prefab it was instantiated from: the label text is
+// tinted with the selection accent and a right-click menu offers "Revert to Prefab". A plain
+// PropertyLabel otherwise (including for any entity that isn't part of a prefab instance).
+void EditorLayer::PrefabOverrideLabel(World& world, entt::entity entity, const char* component,
+                                      const char* field, const char* label, const char* tooltip) {
+    const bool overridden =
+        SceneSerializer::IsPrefabFieldOverridden(world, entity, component, field);
+    if (overridden)
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+    PropertyLabel(label, tooltip);
+    if (overridden) {
+        ImGui::PopStyleColor();
+        const std::string popupId = std::string(component) + "\x1f" + field; // unit-sep: never in a name
+        if (ImGui::BeginPopupContextItem(popupId.c_str())) {
+            ImGui::TextDisabled("Overridden from prefab");
+            ImGui::Separator();
+            if (ImGui::MenuItem(ICON_FA_ARROW_ROTATE_LEFT "  Revert to Prefab")) {
+                PushUndo(world, "Revert to Prefab");
+                if (m_AssetsPtr)
+                    SceneSerializer::RevertPrefabField(world, *m_AssetsPtr, entity, component, field);
+            }
+            ImGui::EndPopup();
+        }
+    }
 }
 
 // #302: custom, editor-only controls a reflection-registered component wants inside its generic
