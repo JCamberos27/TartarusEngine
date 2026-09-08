@@ -76,5 +76,10 @@ namespace SceneSerializer {
     // Set (component, field) on `entity` back to its .prefab value. No-op if not overridden.
     void RevertPrefabField(World& world, AssetLibrary& assets, entt::entity entity,
                            const char* component, const char* field);
+    // Write (component, field)'s current value on `entity` INTO its .prefab file, so the field
+    // is no longer an override on this instance and every other instance picks up the new value
+    // on its next load. Mutates the .prefab on disk (dump(2)); not undoable, like SavePrefab.
+    // Returns false if the entity isn't part of a live instance or the file can't be rewritten.
+    bool ApplyPrefabField(World& world, entt::entity entity, const char* component, const char* field);
     void ClearPrefabPristineCache();
 }

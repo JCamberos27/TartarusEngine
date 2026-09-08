@@ -1887,8 +1887,11 @@ void EditorLayer::PrefabOverrideLabel(World& world, entt::entity entity, const c
     PropertyLabel(label, tooltip);
     if (overridden) {
         ImGui::PopStyleColor();
+        // The label is a bare Text item — BeginPopupContextItem is unreliable on those, so open
+        // the popup explicitly off IsItemClicked(right).
         const std::string popupId = std::string(component) + "\x1f" + field; // unit-sep: never in a name
-        if (ImGui::BeginPopupContextItem(popupId.c_str())) {
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup(popupId.c_str());
+        if (ImGui::BeginPopup(popupId.c_str())) {
             ImGui::TextDisabled("Overridden from prefab");
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_ARROW_ROTATE_LEFT "  Revert to Prefab")) {
@@ -1896,6 +1899,11 @@ void EditorLayer::PrefabOverrideLabel(World& world, entt::entity entity, const c
                 if (m_AssetsPtr)
                     SceneSerializer::RevertPrefabField(world, *m_AssetsPtr, entity, component, field);
             }
+            if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab"))
+                SceneSerializer::ApplyPrefabField(world, entity, component, field);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Write this value into the .prefab file. Other instances\n"
+                                     "pick it up on their next load. Changes the asset \xE2\x80\x94 not undoable.");
             ImGui::EndPopup();
         }
     }
