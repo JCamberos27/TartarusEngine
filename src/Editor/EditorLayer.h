@@ -1502,7 +1502,10 @@ private:
     // heading language — hence no entity argument. Collapse state is keyed by `label`.
     bool BeginComponentSection(const char* icon, const char* label,
         bool removable, bool& removedOut, bool defaultOpen = true, const char* tooltip = nullptr,
-        bool* resetOut = nullptr, bool* copyOut = nullptr, bool* pasteOut = nullptr);
+        bool* resetOut = nullptr, bool* copyOut = nullptr, bool* pasteOut = nullptr,
+        // #315 B4b — when non-null, the header's right-click menu gains "Revert to Prefab" /
+        // "Apply to Prefab" for a component this instance added on top of its .prefab.
+        bool* prefabRevertOut = nullptr, bool* prefabApplyOut = nullptr);
     void EndComponentSection();
 
     // Single-slot component clipboard (#236): "Copy Component" on a header header snapshots the

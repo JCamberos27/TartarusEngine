@@ -1629,8 +1629,19 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     for (const auto& rc : ComponentRegistry::All()) {
         if (!rc.Has(registry, entity)) continue;
         bool reflRemoved = false, reflReset = false, reflCopy = false, reflPaste = false;
+        // #315 B4b — this instance added a component its .prefab lacks: tint the header + add
+        // Revert/Apply to its right-click menu.
+        const bool compAdded = SceneSerializer::IsPrefabComponentAdded(world, entity, rc.Meta.Name);
+        bool reflPfRevert = false, reflPfApply = false;
+        if (compAdded) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
         const bool reflOpen = BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, true, reflRemoved,
-            /*defaultOpen=*/true, rc.Meta.Tooltip, &reflReset, &reflCopy, &reflPaste);
+            /*defaultOpen=*/true, rc.Meta.Tooltip, &reflReset, &reflCopy, &reflPaste,
+            compAdded ? &reflPfRevert : nullptr, compAdded ? &reflPfApply : nullptr);
+        if (compAdded) ImGui::PopStyleColor();
+        // "Revert to Prefab" on an added component == remove it; route through the same
+        // end-of-loop removal path (below) so nothing touches a component mid-teardown.
+        if (reflPfRevert) reflRemoved = true;
+        if (reflPfApply) SceneSerializer::ApplyPrefabComponent(world, entity, rc.Meta.Name);
         if (reflReset) {
             PushUndo(world, std::string("Reset ") + rc.Meta.Name);
             rc.Add(registry, entity); // emplace_or_replace -> back to default-constructed
@@ -1818,11 +1829,13 @@ void EditorLayer::PasteComponentFromClip(World& world, entt::entity entity) {
 
 bool EditorLayer::BeginComponentSection(const char* icon,
     const char* label, bool removable, bool& removedOut, bool defaultOpen, const char* tooltip,
-    bool* resetOut, bool* copyOut, bool* pasteOut) {
+    bool* resetOut, bool* copyOut, bool* pasteOut, bool* prefabRevertOut, bool* prefabApplyOut) {
     removedOut = false;
     if (resetOut) *resetOut = false;
     if (copyOut)  *copyOut = false;
     if (pasteOut) *pasteOut = false;
+    if (prefabRevertOut) *prefabRevertOut = false;
+    if (prefabApplyOut)  *prefabApplyOut = false;
 
     std::string header = std::string(icon) + "  " + label;
     // CollapsingHeader claims its ENTIRE row as one hit-test region by default, so without
@@ -1874,7 +1887,15 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         }
         if ((resetOut || copyOut || pasteOut) && removable) ImGui::Separator();
         if (removable && ImGui::MenuItem(ICON_FA_XMARK "  Remove Component")) removedOut = true;
-        if (!resetOut && !copyOut && !pasteOut && !removable) ImGui::TextDisabled("No actions");
+        if (prefabRevertOut || prefabApplyOut) {
+            ImGui::Separator();
+            ImGui::TextDisabled("Added on top of the prefab");
+            if (prefabRevertOut && ImGui::MenuItem(ICON_FA_ARROW_ROTATE_LEFT "  Revert to Prefab"))
+                *prefabRevertOut = true;
+            if (prefabApplyOut && ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab"))
+                *prefabApplyOut = true;
+        }
+        if (!resetOut && !copyOut && !pasteOut && !removable && !prefabRevertOut) ImGui::TextDisabled("No actions");
         ImGui::EndPopup();
     }
 
