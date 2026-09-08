@@ -236,6 +236,16 @@ public:
     bool GetShowInspector() const { return m_ShowInspector; }
     void SetShowInspector(bool on) { m_ShowInspector = on; }
     void DrawInspectorBody(World& world, AssetLibrary& assets);                  // EditorLayer_Inspector.cpp
+
+    // --- Reloadable History HUD module bridge (issue #229, frame only, API v15) -------------
+    // The module owns the bottom-right pinned HUD window + its pin/height math + the eased
+    // contrast tint. HistoryHudFrame gates the draw and hands over the viewport rect / UI scale
+    // / row count; DrawHistoryListBody renders the click-to-jump rows; SampleHistoryHudLuminance
+    // drives the host-owned PBO readback. ShowHistory()/SetShowHistory() (above) carry the toggle.
+    bool HistoryHudFrame(float* outVpX, float* outVpY, float* outVpW, float* outVpH,
+                         float* outUIScale, int* outRowCount);                   // EditorLayer_Toolbar.cpp
+    void DrawHistoryListBody(World& world, AssetLibrary& assets);                // EditorLayer_Toolbar.cpp
+    float SampleHistoryHudLuminance(float screenCenterX, float screenCenterY, float boxPx); // EditorLayer_Toolbar.cpp
     // Screen-space rect of the live Game view image + its framebuffer's colour texture/size, so
     // the Play-Mode Stop/Fullscreen overlay can anchor to the game viewport and adapt its tint
     // to what's rendered there. Pass a zero size to say "no game view this frame".
@@ -959,7 +969,7 @@ private:
     void StageUndo(const World& world);
     void CommitStagedUndo(const World& world, const std::string& label);
     // Repeatedly calls Undo()/Redo() until the entry at this position in the visible history
-    // list (see DrawHistoryPanel) becomes current - each step costs one patch application plus
+    // list (see DrawHistoryListBody) becomes current - each step costs one patch application plus
     // the scene load it was already doing, so this stays cheap even jumping many steps at once.
     void JumpToUndoEntry(World& world, AssetLibrary& assets, size_t undoStackIndex);
     void JumpToRedoEntry(World& world, AssetLibrary& assets, size_t redoStackIndex);
@@ -968,7 +978,9 @@ private:
     void RestoreSelectionByOrder(World& world, const std::vector<int>& orders);
 
     bool m_ShowHistory = false;
-    void DrawHistoryPanel(World& world, AssetLibrary& assets);
+    // The Undo History HUD moved into TartarusEditor.dll (EditorModuleHistory.cpp, issue #229
+    // API v15); the host half — HistoryHudFrame / DrawHistoryListBody / SampleHistoryHudLuminance
+    // — is declared in the public module-bridge block near the top of this class.
 
     // Per-light solo / mute — editor-only, never serialized, cleared by NewScene/OpenScene.
     // See IsLightSuppressed(); consumed by main.cpp's per-frame light gather.
@@ -1033,9 +1045,8 @@ private:
     // the (capped) Statistics HUD reaches far enough down the left edge to collide with the
     // corner monogram — the mark is skipped while so.
     bool m_HideEngineMarkForStats = false;
-    float m_HistoryHudContrastLum = 1.0f;
-    float m_HistoryHudContrastTarget = 1.0f;
-    float m_HistoryHudSampleAccum = 0.0f;
+    // The History HUD's easing pair lives module-side now (EditorModuleHistory.cpp, API v15); the
+    // host keeps only the readback object, driven from SampleHistoryHudLuminance().
     AsyncLuminanceReadback m_HistoryHudReadback;
     // Live Game-view rect + texture, pushed in each frame by main.cpp (zero size = none). Used by
     // DrawPlayStopButton to place the Stop/Fullscreen control over the game viewport and tint it.
@@ -1370,13 +1381,10 @@ private:
     // Rgb) so the choice persists and the Preferences + Window-menu controls share one source of
     // truth. (Was m_ShowEngineMark — a session-only bool — before the Preferences controls landed.)
 
-    // Contrast-adaptive text tint for the transparent viewport HUDs: sample the scene behind a
-    // screen-space box, ease the eased/target luminance pair (throttled ~10 Hz via `accum`), and
-    // push ImGuiCol_Text + ImGuiCol_TextDisabled so the readout rides white-on-dark / dark-on-
-    // light like the corner mark. Always pushes exactly 2 style colours — caller pops them after
-    // its content. Same maths as DrawEngineMark / DrawViewportStatusBar.
-    void PushAdaptiveHudText(AsyncLuminanceReadback& rb, ImVec2 centerScreen, float boxPx, float dt,
-                             float& easedLum, float& targetLum, float& sampleAccum);
+    // (PushAdaptiveHudText was here — the eased contrast tint for the transparent viewport HUDs.
+    // The Stats and History HUDs both live in TartarusEditor.dll now and each carries its own
+    // module-side copy of the maths; the host keeps only SampleSceneLuminance + the per-HUD
+    // AsyncLuminanceReadback objects. The engine mark / status bar inline the same maths.)
 
     // --- Statistics --------------------------------------------------------------------
     // The compact transparent HUD pinned to the Scene viewport's top-left corner (#149) moved

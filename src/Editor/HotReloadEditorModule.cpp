@@ -413,6 +413,24 @@ void  TbSetAssetSearchGlobal(bool on) { EditorSettings::Get().AssetSearchGlobal 
 bool  TbGetAssetFavoritesOnly() { return g_Editor && g_Editor->AssetFavoritesOnly(); }
 void  TbSetAssetFavoritesOnly(bool on) { if (g_Editor) g_Editor->SetAssetFavoritesOnly(on); }
 
+// --- History HUD, frame only (API v15) ---------------------------------------------------
+// The Undo History HUD's window + pin/height math + eased tint live in EditorModuleHistory.cpp;
+// the rows (undo/redo stacks + World&) stay host-side, exactly like the Hierarchy tree body.
+bool  HistGetHudFrame(float* vx, float* vy, float* vw, float* vh, float* uiScale, int* rowCount) {
+    if (!g_Editor) {
+        if (vx) *vx = 0.0f; if (vy) *vy = 0.0f; if (vw) *vw = 0.0f; if (vh) *vh = 0.0f;
+        if (uiScale) *uiScale = 1.0f; if (rowCount) *rowCount = 0;
+        return false;
+    }
+    return g_Editor->HistoryHudFrame(vx, vy, vw, vh, uiScale, rowCount);
+}
+void  HistDrawListBody() {
+    if (g_Editor && g_World && g_Assets) g_Editor->DrawHistoryListBody(*g_World, *g_Assets);
+}
+float HistSampleLuminance(float cx, float cy, float boxPx) {
+    return g_Editor ? g_Editor->SampleHistoryHudLuminance(cx, cy, boxPx) : -1.0f;
+}
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
@@ -524,6 +542,10 @@ const EditorModuleHostAPI kHostAPI{
     &TbGetInspectorLocked,      &TbToggleInspectorLock,
     &TbGetAssetSearchGlobal,    &TbSetAssetSearchGlobal,
     &TbGetAssetFavoritesOnly,   &TbSetAssetFavoritesOnly,
+    // --- History HUD, frame only (API v15) — order must match EditorModuleHostAPI exactly ---
+    &HistGetHudFrame,
+    &HistDrawListBody,
+    &HistSampleLuminance,
 };
 
 } // namespace

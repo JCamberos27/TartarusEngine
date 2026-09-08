@@ -179,27 +179,11 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) 
 // panel's persistent UI state (EditorModuleHost::ConsoleState()), which the module reads through
 // the EditorModuleHostAPI callback table; main.cpp draws it via editorModule.Draw().
 
-void EditorLayer::PushAdaptiveHudText(AsyncLuminanceReadback& rb, ImVec2 centerScreen, float boxPx, float dt,
-                                     float& easedLum, float& targetLum, float& sampleAccum) {
-    // Throttled (~10 Hz) async readback — see SampleTextureLuminance for the PBO ping-pong that
-    // keeps this off the GPU pipeline's critical path.
-    sampleAccum += dt;
-    if (sampleAccum >= 0.1f) {
-        sampleAccum = 0.0f;
-        float lum = SampleSceneLuminance(rb, centerScreen, boxPx);
-        if (lum >= 0.0f) {
-            float t = (lum - 0.30f) / (0.62f - 0.30f);
-            t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-            targetLum = 1.0f - t * t * (3.0f - 2.0f * t); // 1 = white on dark, 0 = black on light
-        }
-    }
-    float k = 1.0f - expf(-dt / 0.15f);
-    easedLum += (targetLum - easedLum) * k;
-    int v = (int)(easedLum * 255.0f + 0.5f);
-    v = v < 0 ? 0 : (v > 255 ? 255 : v);
-    ImGui::PushStyleColor(ImGuiCol_Text,         IM_COL32(v, v, v, 240));
-    ImGui::PushStyleColor(ImGuiCol_TextDisabled, IM_COL32(v, v, v, 150));
-}
+// EditorLayer::PushAdaptiveHudText used to live here — the host-side eased contrast tint shared by
+// the Stats and History HUDs. Both HUDs are in TartarusEditor.dll now (EditorModuleStats.cpp /
+// EditorModuleHistory.cpp), each with its own module-side copy of the same ~10-line easing maths;
+// the host keeps only SampleSceneLuminance + the per-HUD readback objects. Other adaptive text
+// (the engine mark, the viewport status bar) inlines the same maths directly.
 
 // The Statistics HUD itself moved into the reloadable editor module
 // (src/Editor/EditorModuleStats.cpp). This is the host half of its one GL dependency: the
@@ -307,62 +291,40 @@ void EditorLayer::DrawViewportStatusBar() {
 // highlighted. Clicking any entry jumps straight there via JumpToUndoEntry/JumpToRedoEntry -
 // each step is still a single full-snapshot load (see PushUndo's own comment), not incremental
 // command replay, so jumping several steps at once stays cheap regardless of distance.
-void EditorLayer::DrawHistoryPanel(World& world, AssetLibrary& assets) {
-    if (!m_ShowHistory) return;
+//
+// The HUD window itself — the bottom-right pin, the height ceiling, the contrast-adaptive tint —
+// moved into TartarusEditor.dll (EditorModuleHistory.cpp, issue #229 API v15). These three are
+// the host half the module reaches back through EditorModuleHostAPI.
 
-    // Compact transparent HUD pinned to the viewport's bottom-right corner, matching the Stats
-    // HUD at top-left (#149 follow-up): sized to its text, fully transparent, not dockable, not
-    // persisted so the pin always wins. Unlike Stats it stays interactive — the rows are
-    // click-to-jump.
-    const float hpad = 12.0f * m_UIScale;
-    const float statusBarH = ImGui::GetTextLineHeight() + 8.0f * m_UIScale;
-    // Height ceiling: grow upward from the pin only until a clear line below the top-right nav
-    // cluster, so a long history never climbs into that corner (or past it into the toolbar).
-    // Derived from DrawViewGizmo's layout: margin 14 + rotate-ring Ø128*0.5 + spacing 8 + the
-    // dolly/pan button box + the "Persp" label, all *m_UIScale, plus headroom (~220px @ 1x).
-    // Beyond the ceiling the list scrolls internally instead.
-    const float gizmoZoneH = 220.0f * m_UIScale;
-    const float maxH = std::max(120.0f * m_UIScale,
-                                m_ViewportSize.y - hpad - statusBarH - gizmoZoneH);
+// "Draw the History HUD this frame?" — plus the viewport rect, UI scale and row count the module
+// sizes its window against. Mirrors the old DrawHistoryPanel early-outs: History toggled on, a
+// live non-degenerate Scene viewport, and overlays not suppressed for a clean capture.
+bool EditorLayer::HistoryHudFrame(float* outVpX, float* outVpY, float* outVpW, float* outVpH,
+                                  float* outUIScale, int* outRowCount) {
+    if (outVpX)     *outVpX = m_ViewportPos.x;
+    if (outVpY)     *outVpY = m_ViewportPos.y;
+    if (outVpW)     *outVpW = m_ViewportSize.x;
+    if (outVpH)     *outVpH = m_ViewportSize.y;
+    if (outUIScale) *outUIScale = m_UIScale;
+    if (outRowCount)
+        *outRowCount = (int)m_UndoStack.size() + 1 /*Current*/ + (int)m_RedoStack.size();
+    return m_ShowHistory && !m_HideOverlaysThisFrame && m_SceneViewportVisible &&
+           m_ViewportSize.x >= 1.0f && m_ViewportSize.y >= 1.0f;
+}
 
-    // Rows + chrome, measured directly so the window is exactly as tall as its content up to maxH.
-    const int rowCount = (int)m_UndoStack.size() + 1 /*Current*/ + (int)m_RedoStack.size();
-    const ImGuiStyle& st = ImGui::GetStyle();
-    const float chromeH = ImGui::GetTextLineHeightWithSpacing()       // "History" line
-                        + st.ItemSpacing.y + 2.0f                     // separator
-                        + st.WindowPadding.y * 2.0f;
-    const float desiredH = chromeH + std::max(rowCount, 1) * ImGui::GetTextLineHeightWithSpacing();
-    const float winH = std::min(desiredH, maxH);
+// The host half of the History HUD's one GL dependency: the module asks for a luminance sample
+// under a screen box, the host drives the async PBO readback against its own ping-ponged pair
+// (it owns the Scene framebuffer + GL context). Same shape as SampleStatsHudLuminance.
+float EditorLayer::SampleHistoryHudLuminance(float screenCenterX, float screenCenterY, float boxPx) {
+    return SampleSceneLuminance(m_HistoryHudReadback, ImVec2(screenCenterX, screenCenterY), boxPx);
+}
 
-    ImGui::SetNextWindowPos(
-        ImVec2(m_ViewportPos.x + m_ViewportSize.x - hpad,
-               m_ViewportPos.y + m_ViewportSize.y - hpad - statusBarH),
-        ImGuiCond_Always, ImVec2(1.0f, 1.0f));
-    ImGui::SetNextWindowSize(ImVec2(0.0f, winH)); // x=0 → auto-fit width, height clamped to the ceiling
-    ImGui::SetNextWindowBgAlpha(0.0f);
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
-                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
-                             ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground;
-    if (!ImGui::Begin(ICON_FA_CLOCK_ROTATE_LEFT "  History", &m_ShowHistory, flags)) { ImGui::End(); return; }
-
-    // Contrast-adaptive tint (like the corner mark): sample the scene behind the HUD so the text
-    // stays legible white-on-dark / dark-on-light with no plate behind it.
-    const ImVec2 wpos = ImGui::GetWindowPos(), wsz = ImGui::GetWindowSize();
-    PushAdaptiveHudText(m_HistoryHudReadback, ImVec2(wpos.x + wsz.x * 0.5f, wpos.y + wsz.y * 0.5f), 48.0f * m_UIScale,
-                        ImGui::GetIO().DeltaTime, m_HistoryHudContrastLum, m_HistoryHudContrastTarget,
-                        m_HistoryHudSampleAccum);
-
-    ImGui::TextUnformatted(ICON_FA_CLOCK_ROTATE_LEFT "  History");
-    // Explanation on the heading tooltip (#156) — no persistent "(?)" glyph.
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip(
-        "Every recorded change, oldest to newest. Click any entry to jump\nstraight there - undoing or redoing everything in between automatically.");
-    ImGui::Separator();
-
+// The click-to-jump rows, drawn host-side into the module's window between its heading Separator
+// and its End. The undo/redo stacks, World& and AssetLibrary& never cross the DLL boundary.
+// Pop-balanced on its own pushes; the module owns the two adaptive-tint colours around this call.
+void EditorLayer::DrawHistoryListBody(World& world, AssetLibrary& assets) {
     if (m_UndoStack.empty() && m_RedoStack.empty()) {
         ImGui::TextDisabled("No changes yet.");
-        ImGui::PopStyleColor(2); // adaptive Text + TextDisabled
-        ImGui::End();
         return;
     }
 
@@ -389,9 +351,6 @@ void EditorLayer::DrawHistoryPanel(World& world, AssetLibrary& assets) {
         if (clicked) JumpToRedoEntry(world, assets, idx);
         ImGui::PopID();
     }
-
-    ImGui::PopStyleColor(2); // adaptive Text + TextDisabled
-    ImGui::End();
 }
 // Fixed output sizes offered by the Capture popup's "Resolution" dropdown. Index 0 keeps the
 // live viewport size (and lets Supersample apply); the rest force an exact render target.
