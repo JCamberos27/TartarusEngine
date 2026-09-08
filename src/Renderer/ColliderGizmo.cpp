@@ -117,7 +117,12 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
         col = !c.IsTrigger ? kSolidColor
             : (PhysicsWorld::IsTriggerOccupied(entt::to_integral(e)) ? kOccupiedColor : kTriggerColor);
 
-        if (c.HalfExtents == glm::vec3(0.0f)) {
+        const bool meshKind = (c.Kind == ColliderComponent::Shape::ConvexHull ||
+                               c.Kind == ColliderComponent::Shape::Mesh);
+
+        if (meshKind || c.HalfExtents == glm::vec3(0.0f)) {
+            // Auto-box case, and mesh/convex colliders (their true shape shows in PVD; here we
+            // just outline the render bounds so the collider is visible in the viewport).
             glm::vec3 center, half;
             AutoBoxWorld(world.Registry, e, t, center, half);
             if (half.x > 0.0f && half.y > 0.0f && half.z > 0.0f)
@@ -159,6 +164,7 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
                 arc(bot,  zr, -ur, kCircleSegs / 2);
                 break;
             }
+            default: break; // ConvexHull / Mesh drawn as their render-bounds box above
         }
     }
 

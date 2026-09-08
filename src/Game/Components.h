@@ -57,15 +57,18 @@ struct DetachedMeshComponent {
 // the ColliderWorldBounds helper in World.cpp: axis-aligned, rotation-ignored, sized from the
 // RenderableComponent bounds (or a unit box).
 struct ColliderComponent {
-    // Values are fixed (Box=0/Sphere=1/Capsule=2) — serialized by index, and PhysicsWorld
-    // switches on them. Capsule's axis is Y (its height runs along local up), matching PhysX's
-    // PxCapsuleGeometry convention once rotated by the actor pose.
-    enum class Shape { Box = 0, Sphere = 1, Capsule = 2 };
+    // Values are fixed — serialized by index, and PhysicsWorld switches on them. Capsule's axis
+    // is Y (its height runs along local up). ConvexHull / Mesh cook a shape from the entity's
+    // RenderableComponent geometry (#185 PR 6): ConvexHull works on any body; Mesh is a
+    // triangle mesh and PhysX only allows it on static/kinematic bodies (a Mesh collider with a
+    // non-kinematic Rigidbody falls back to a convex hull).
+    enum class Shape { Box = 0, Sphere = 1, Capsule = 2, ConvexHull = 3, Mesh = 4 };
     Shape Kind = Shape::Box;
 
-    // Per-shape meaning when non-zero: Box -> the three half-extents; Sphere -> .x is the
-    // radius; Capsule -> .x is the radius, .y is the half-height of the cylindrical section.
-    // All-zero means auto-derive a box from the entity's render bounds (see above).
+    // Box/Sphere/Capsule only. Per-shape meaning when non-zero: Box -> the three half-extents;
+    // Sphere -> .x is the radius; Capsule -> .x is the radius, .y is the half-height of the
+    // cylindrical section. All-zero means auto-derive a box from the entity's render bounds
+    // (see above). Ignored by ConvexHull / Mesh, which take their size from the mesh + scale.
     glm::vec3 HalfExtents{0.0f};
 
     // Shape centre offset from the entity origin, entity-local space.

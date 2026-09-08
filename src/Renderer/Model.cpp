@@ -112,6 +112,20 @@ bool Model::Reimport(const ModelImportSettings& settings) {
 
 Model::~Model() = default;
 
+void Model::CollisionGeometry(std::vector<glm::vec3>& outVertices,
+                              std::vector<unsigned int>& outIndices) const {
+    outVertices.clear();
+    outIndices.clear();
+    for (const auto& mesh : m_Meshes) {
+        const auto& pos = mesh->LocalPositions();
+        const auto& idx = mesh->LocalIndices();
+        const unsigned int base = (unsigned int)outVertices.size();
+        outVertices.insert(outVertices.end(), pos.begin(), pos.end());
+        outIndices.reserve(outIndices.size() + idx.size());
+        for (unsigned int i : idx) outIndices.push_back(base + i);
+    }
+}
+
 std::shared_ptr<Model> Model::CreatePrimitive(const std::string& kind, const std::string& path) {
     std::shared_ptr<Model> model(new Model());
     model->m_Path = path;

@@ -108,11 +108,12 @@ set(_physx_link_libs
   PhysX
   PhysXCommon
   PhysXFoundation
+  PhysXCooking                   # PxCreateConvexMesh / PxCreateTriangleMesh (#185 PR 6)
   PhysXExtensions_static        # PxDefaultCpuDispatcherCreate, PxDefaultPvdSocketTransportCreate
   PhysXPvdSDK_static            # PxCreatePvd (used only under TARTARUS_PHYSX_PVD, cheap to always link)
   PhysXCharacterKinematic_static # PxCreateControllerManager + PxCapsuleController (#185 PR 3)
 )
-set(_physx_runtime_dlls PhysX PhysXCommon PhysXFoundation)
+set(_physx_runtime_dlls PhysX PhysXCommon PhysXFoundation PhysXCooking)
 
 # Declared as BUILD_BYPRODUCTS below so a Ninja/Make generator knows these files are produced
 # by the physx_external step and orders the engine link after it.

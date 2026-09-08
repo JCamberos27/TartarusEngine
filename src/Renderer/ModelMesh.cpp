@@ -12,6 +12,7 @@ ModelMesh::ModelMesh(const std::vector<ModelVertex>& vertices, const std::vector
 
     m_LocalPositions.reserve(vertices.size());
     for (const auto& v : vertices) m_LocalPositions.push_back(v.Position);
+    m_LocalIndices = indices; // kept for #185 PR 6 mesh-collider cooking
 
     // glNamedBufferStorage rejects a zero size; a degenerate empty sub-mesh still needs a
     // valid buffer name for the VAO bindings, so floor the allocation at one element.
