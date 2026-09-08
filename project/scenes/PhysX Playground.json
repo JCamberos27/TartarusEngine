@@ -107,11 +107,23 @@
         "Mass": 1.0, "Use Gravity": true, "Is Kinematic": false,
         "Initial Velocity": [0.0, 0.0, 0.0], "Linear Damping": 0.05, "Angular Damping": 0.05
       }
+    },
+    {
+      "id": 12, "order": 12, "name": "6) Trigger Zone (box falls through)", "parentId": -1,
+      "center": [-5.0, 3.5, 0.0], "size": [3.0, 1.6, 3.0], "rotation": [0.0, 0.0, 0.0],
+      "color": [0.90, 0.85, 0.30],
+      "collider": { "isTrigger": true }
+    },
+    {
+      "id": 13, "order": 13, "name": "7) Player Trigger (walk in)", "parentId": -1,
+      "center": [0.0, 1.2, 6.0], "size": [3.0, 2.4, 3.0], "rotation": [0.0, 0.0, 0.0],
+      "color": [0.90, 0.85, 0.30],
+      "collider": { "isTrigger": true }
     }
   ],
   "empties": [
     {
-      "id": 12, "order": 12, "name": "Sun", "parentId": -1,
+      "id": 14, "order": 14, "name": "Sun", "parentId": -1,
       "position": [0.0, 12.0, 0.0], "rotation": [-40.0, 50.0, 0.0], "scale": [1.0, 1.0, 1.0],
       "light": {
         "kind": "directional", "color": [1.0, 0.96, 0.9], "intensity": 5.5, "range": 12.0,
@@ -121,7 +133,7 @@
       }
     },
     {
-      "id": 13, "order": 13, "name": "Fill Light", "parentId": -1,
+      "id": 15, "order": 15, "name": "Fill Light", "parentId": -1,
       "position": [-6.0, 6.0, 5.0], "rotation": [0.0, 0.0, 0.0], "scale": [1.0, 1.0, 1.0],
       "light": {
         "kind": "point", "color": [1.0, 0.85, 0.65], "intensity": 6.0, "range": 22.0,

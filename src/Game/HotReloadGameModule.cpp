@@ -12,13 +12,17 @@ namespace fs = std::filesystem;
 
 namespace {
 
-// The host callback table handed to the game module every Update. #185 PR 2 adds Raycast — a
-// thin forward to the PhysX world, which returns false whenever it isn't live (so a module
-// calling it outside Play just gets a miss).
+// The host callback table handed to the game module every Update. The physics callbacks are
+// thin forwards to the PhysX world and all no-op (miss / 0 events) whenever it isn't live, so
+// a module calling them outside Play just gets nothing back. #185 PR 2 added Raycast, PR 5
+// GetTriggerEvents.
 const GameModuleHostAPI kHostAPI{
     kGameModuleAPIVersion,
     /*Raycast=*/[](const float origin[3], const float dir[3], float maxDistance, RaycastHit& outHit) {
         return PhysicsWorld::Raycast(origin, dir, maxDistance, outHit);
+    },
+    /*GetTriggerEvents=*/[](TriggerEvent* out, int maxEvents) {
+        return PhysicsWorld::GetTriggerEvents(out, maxEvents);
     },
 };
 
