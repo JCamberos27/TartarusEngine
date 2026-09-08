@@ -406,6 +406,8 @@ float TbGetAssetRefreshFlash() { return g_Editor ? g_Editor->AssetRefreshFlash()
 bool  TbGetMeasureTool() { return g_Editor && g_Editor->MeasureToolActive(); }
 void  TbSetMeasureTool(bool on) { if (g_Editor) g_Editor->SetMeasureToolActive(on); }
 void  TbRequestDuplicateArray() { if (g_Editor) g_Editor->RequestArrayDuplicateModal(); }
+bool  TbGetInspectorLocked() { return g_Editor && g_Editor->IsInspectorLocked(); }
+void  TbToggleInspectorLock() { if (g_Editor) g_Editor->ToggleInspectorLock(); }
 
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
@@ -515,6 +517,7 @@ const EditorModuleHostAPI kHostAPI{
     &TbGetAssetRefreshFlash,
     &TbGetMeasureTool,          &TbSetMeasureTool,
     &TbRequestDuplicateArray,
+    &TbGetInspectorLocked,      &TbToggleInspectorLock,
 };
 
 } // namespace
