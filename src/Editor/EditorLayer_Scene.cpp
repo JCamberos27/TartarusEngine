@@ -15,6 +15,7 @@
 #include "Screenshot.h"
 #include "SceneSerializer.h"
 #include "AABB.h"
+#include "PhysicsWorld.h"
 #include "Log.h"
 #include "EditorSettings.h"
 #include "EditorUIHelpers.h"
@@ -562,11 +563,20 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
         m_PlayModeAudioHandles[e] = handle;
     }
 
+    // Stand up the PhysX world for this Play session (#185). PR 1: empty scene, stepped but
+    // zero actors — no behaviour change. Torn down in OnExitPlayMode.
+    PhysicsWorld::Create();
+
     Log::Info("Entered play mode - scene state saved, changes will be reverted on exit.");
 }
 
 void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     m_InPlayMode = false;
+
+    // Always tear the PhysX world down, even on the snapshot-empty early-out below — Create()
+    // may have run regardless (#185). Destroy() is idempotent when nothing is active.
+    PhysicsWorld::Destroy();
+
     if (m_PlayModeSnapshot.empty()) return;
 
     // Stop exactly the voices Play On Start began (not AudioEngine::StopAll(), which would also
