@@ -51,6 +51,8 @@ struct PhysicsState {
     PxDefaultCpuDispatcher* dispatcher  = nullptr;
     PxScene*              scene         = nullptr;
     PxMaterial*           defaultMaterial = nullptr;
+    PxControllerManager*  controllerMgr = nullptr; // #185 PR 3
+    PxController*         controller    = nullptr; // the Play-mode Player's capsule (lazy)
 #ifdef TARTARUS_PHYSX_PVD
     PxPvd*               pvd            = nullptr;
     PxPvdTransport*      pvdTransport   = nullptr;
@@ -246,6 +248,8 @@ void Create(const World& world) {
         return;
     }
 
+    s->controllerMgr = PxCreateControllerManager(*s->scene);
+
     g_State = s;
     Log::Info("PhysX world created (" + std::to_string(workers) + " worker threads).");
 
@@ -258,6 +262,8 @@ void Destroy() {
     g_State = nullptr; // clear first so a re-entrant Step() during teardown is a no-op
 
     // Reverse construction order. scene->release() drops every actor/shape it owns.
+    if (s->controller)      s->controller->release();
+    if (s->controllerMgr)   s->controllerMgr->release();
     if (s->scene)           s->scene->release();
     if (s->defaultMaterial) s->defaultMaterial->release();
     if (s->dispatcher)      s->dispatcher->release();
@@ -320,6 +326,63 @@ bool Raycast(const float origin[3], const float dir[3], float maxDistance, Rayca
     outHit.Normal[0] = b.normal.x;   outHit.Normal[1] = b.normal.y;   outHit.Normal[2] = b.normal.z;
     outHit.Entity = b.actor ? UserDataToEntity(b.actor->userData) : outHit.Entity;
     return true;
+}
+
+// --- Character controller ---------------------------------------------------------------
+
+bool HasCharacter() {
+    return g_State && g_State->controller;
+}
+
+void CreateCharacter(float radius, float cylinderHalfHeight, const float footPos[3]) {
+    if (!g_State || !g_State->controllerMgr || g_State->controller) return;
+    if (radius <= 0.0f || cylinderHalfHeight <= 0.0f) return;
+
+    const float halfCapsule = radius + cylinderHalfHeight; // foot -> centre distance
+
+    PxCapsuleControllerDesc desc;
+    desc.radius       = radius;
+    desc.height       = 2.0f * cylinderHalfHeight; // cylinder segment (sphere-centre to sphere-centre)
+    desc.position     = PxExtendedVec3(footPos[0], footPos[1] + halfCapsule, footPos[2]);
+    desc.upDirection  = PxVec3(0.0f, 1.0f, 0.0f);
+    desc.stepOffset   = 0.3f;                       // auto-climb ledges up to this tall
+    desc.slopeLimit   = std::cos(0.8726646f);       // walkable up to ~50 degrees
+    desc.contactOffset = 0.05f;
+    desc.material     = g_State->defaultMaterial;
+    desc.climbingMode = PxCapsuleClimbingMode::eCONSTRAINED; // don't let the sphere cap boost climbs
+
+    if (!desc.isValid()) {
+        Log::Error("PhysX: capsule controller desc invalid — Player will not collide this session.");
+        return;
+    }
+    g_State->controller = g_State->controllerMgr->createController(desc);
+    if (!g_State->controller)
+        Log::Error("PhysX: createController failed — Player will not collide this session.");
+}
+
+void SetCharacterFootPosition(const float footPos[3]) {
+    if (!HasCharacter()) return;
+    g_State->controller->setFootPosition(PxExtendedVec3(footPos[0], footPos[1], footPos[2]));
+}
+
+void GetCharacterFootPosition(float outFootPos[3]) {
+    if (!HasCharacter()) return;
+    const PxExtendedVec3 f = g_State->controller->getFootPosition();
+    outFootPos[0] = (float)f.x;
+    outFootPos[1] = (float)f.y;
+    outFootPos[2] = (float)f.z;
+}
+
+unsigned MoveCharacter(const float disp[3], float dt) {
+    if (!HasCharacter() || dt <= 0.0f) return 0;
+    PxControllerFilters filters;
+    PxControllerCollisionFlags f =
+        g_State->controller->move(PxVec3(disp[0], disp[1], disp[2]), /*minDist=*/0.001f, dt, filters);
+    unsigned out = 0;
+    if (f & PxControllerCollisionFlag::eCOLLISION_SIDES) out |= CC_SIDES;
+    if (f & PxControllerCollisionFlag::eCOLLISION_UP)    out |= CC_UP;
+    if (f & PxControllerCollisionFlag::eCOLLISION_DOWN)  out |= CC_DOWN;
+    return out;
 }
 
 } // namespace PhysicsWorld
