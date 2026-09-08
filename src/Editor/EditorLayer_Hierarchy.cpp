@@ -233,6 +233,8 @@ void EditorLayer::RecordSelectionHistory() {
     // Our own back/forward change — advance the "last seen" marker, don't append.
     if (m_SelHistoryNavigating) { m_SelHistoryNavigating = false; return; }
 
+    m_CtrlZSelectionMode = true; // a fresh user selection: Ctrl+Z now walks selection history
+
     if (m_SelHistory.empty()) {           // seed with the pre-change state so Back can reach it
         m_SelHistory.push_back(std::move(prev));
         m_SelHistoryPos = 0;

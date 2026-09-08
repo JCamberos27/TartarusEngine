@@ -2110,8 +2110,17 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // Shift+A quick-add (Blender's binding) — opens the Add menu as a popup at the cursor.
         if (Shortcuts::Triggered("gameobject.quickAdd")) m_OpenQuickAdd = true;
 
-        if (Shortcuts::Triggered("editor.undo")) Undo(world, assets);
-        if (Shortcuts::Triggered("editor.redo")) Redo(world, assets);
+        // Ctrl+Z / Ctrl+Y walk the selection history while the last action was a selection
+        // change (#236 R2); otherwise they're the scene undo/redo. Ctrl+[ / Ctrl+] stay pure
+        // selection nav regardless.
+        if (Shortcuts::Triggered("editor.undo")) {
+            if (m_CtrlZSelectionMode && CanSelectionHistoryBack()) SelectionHistoryBack(world);
+            else { Undo(world, assets); m_CtrlZSelectionMode = false; m_SelHistoryNavigating = true; }
+        }
+        if (Shortcuts::Triggered("editor.redo")) {
+            if (m_CtrlZSelectionMode && CanSelectionHistoryForward()) SelectionHistoryForward(world);
+            else { Redo(world, assets); m_CtrlZSelectionMode = false; m_SelHistoryNavigating = true; }
+        }
         if (Shortcuts::Triggered("editor.saveAs"))     DoSaveAs(world, assets);
         else if (Shortcuts::Triggered("editor.save"))  DoSave(world, assets); // prompts for a location if untitled
         if (Shortcuts::Triggered("editor.newScene")) RequestNewScene(world, assets);
@@ -2337,20 +2346,40 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGui::EndPopup();
     }
 
-    // Play-mode tint (#236 R2): a warm border + tag on the Scene viewport so it's obvious that
-    // edits made now are reverted on Stop.
-    if (m_InPlayMode && m_ViewportSize.x > 2.0f && m_ViewportSize.y > 2.0f) {
+    // Play-mode tint (#236 R2): a warm border around the WHOLE editor window (not just the
+    // Scene rect — that hides behind the Game tab) + a centred tag, so it's unmistakable that
+    // edits now revert on Stop.
+    if (m_InPlayMode) {
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
         ImDrawList* dl = ImGui::GetForegroundDrawList();
-        const ImU32 col = IM_COL32(255, 140, 40, 210);
-        ImVec2 a(m_ViewportPos.x + 1.5f, m_ViewportPos.y + 1.5f);
-        ImVec2 b(m_ViewportPos.x + m_ViewportSize.x - 1.5f, m_ViewportPos.y + m_ViewportSize.y - 1.5f);
-        dl->AddRect(a, b, col, 0.0f, 0, 3.0f);
+        const ImU32 col = IM_COL32(255, 140, 40, 230);
+        const float t = 3.0f;
+        ImVec2 a(vp->Pos.x + t * 0.5f, vp->Pos.y + t * 0.5f);
+        ImVec2 b(vp->Pos.x + vp->Size.x - t * 0.5f, vp->Pos.y + vp->Size.y - t * 0.5f);
+        dl->AddRect(a, b, col, 0.0f, 0, t);
         const char* tag = "PLAY MODE \xE2\x80\x94 changes revert on Stop";
         ImVec2 ts = ImGui::CalcTextSize(tag);
-        ImVec2 tp(m_ViewportPos.x + m_ViewportSize.x * 0.5f - ts.x * 0.5f, m_ViewportPos.y + 6.0f);
-        dl->AddRectFilled(ImVec2(tp.x - 6.0f, tp.y - 2.0f), ImVec2(tp.x + ts.x + 6.0f, tp.y + ts.y + 2.0f),
-                          IM_COL32(20, 20, 24, 200), 3.0f);
+        ImVec2 tp(vp->Pos.x + vp->Size.x * 0.5f - ts.x * 0.5f, vp->Pos.y + 4.0f);
+        dl->AddRectFilled(ImVec2(tp.x - 7.0f, tp.y - 2.0f), ImVec2(tp.x + ts.x + 7.0f, tp.y + ts.y + 3.0f),
+                          IM_COL32(20, 20, 24, 210), 3.0f);
         dl->AddText(tp, col, tag);
+    }
+
+    // Transient fly-speed readout near the viewport top (#236 R2) — poked by main.cpp on a
+    // scroll-driven speed change, fades over its last ~0.6s.
+    if (m_FlySpeedHudTimer > 0.0f && m_ViewportSize.x > 4.0f) {
+        m_FlySpeedHudTimer -= dt;
+        const float a = std::clamp(m_FlySpeedHudTimer / 0.6f, 0.0f, 1.0f);
+        char buf[48];
+        std::snprintf(buf, sizeof(buf), ICON_FA_GAUGE_HIGH "  Fly speed  %.1f",
+                      EditorSettings::Get().SceneCameraFlySpeed);
+        ImDrawList* dl = ImGui::GetForegroundDrawList();
+        ImVec2 ts = ImGui::CalcTextSize(buf);
+        ImVec2 c(m_ViewportPos.x + m_ViewportSize.x * 0.5f, m_ViewportPos.y + 34.0f);
+        ImVec2 p(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f);
+        dl->AddRectFilled(ImVec2(p.x - 10.0f, p.y - 5.0f), ImVec2(p.x + ts.x + 10.0f, p.y + ts.y + 5.0f),
+                          IM_COL32(18, 22, 30, (int)(215 * a)), 5.0f);
+        dl->AddText(p, IM_COL32(235, 245, 255, (int)(255 * a)), buf);
     }
 
     DrawArrayDuplicateModal(world, assets); // #236 R2

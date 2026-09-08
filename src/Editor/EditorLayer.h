@@ -109,6 +109,11 @@ public:
     // Viewport tools (#236 E) — Hand tool (Q) and Lock View to Selected (Shift+F).
     bool HandToolActive() const { return m_HandTool; }
     void SetHandToolActive(bool on) { m_HandTool = on; }
+    bool MeasureToolActive() const { return m_MeasureTool; }
+    void SetMeasureToolActive(bool on) { m_MeasureTool = on; m_MeasureCount = 0; if (on) m_HandTool = false; }
+    // main.cpp pokes this whenever the fly speed changes via scroll (RMB-drag or Ctrl+scroll);
+    // Draw() fades out the transient "Fly speed: N" viewport readout (#236 R2).
+    void FlashFlySpeedHud() { m_FlySpeedHudTimer = 1.4f; }
     bool LockViewToSelection() const { return m_LockViewToSelection; }
     void SetLockViewToSelection(bool on) { m_LockViewToSelection = on; m_LockViewHasCentroid = false; }
     int  ShadingModeIndex() const { return (int)m_ShadingMode; }
@@ -531,6 +536,8 @@ private:
     // rebuild the default panel arrangement from scratch.
     bool m_ResetLayoutRequested = false;
 
+    float m_FlySpeedHudTimer = 0.0f; // see FlashFlySpeedHud() (public, above)
+
     // Layout presets (#236 R2 toolbar tail) — named ImGui-ini snapshots in project/layouts/.
     // A load stages the ini text here; Draw() applies it via LoadIniSettingsFromMemory before
     // the dockspace code runs, so the docked windows land where the preset put them.
@@ -619,6 +626,10 @@ private:
     size_t m_SelHistoryPos = 0;
     std::vector<entt::entity> m_SelSnapshotLast;
     bool m_SelHistoryNavigating = false;
+    // When the most recent "action" was a selection change (not a scene edit), Ctrl+Z / Ctrl+Y
+    // walk the selection history instead of the scene undo stack — the user's mental model of
+    // "clicks are undoable actions". Cleared by any scene edit / scene undo / redo.
+    bool m_CtrlZSelectionMode = false;
     // Arrow / Home / End / type-to-select keyboard navigation of the tree (#236), gated the same
     // way Ctrl+A is (panel focused, no text field capturing keys). Runs once per frame after the
     // rows are drawn, off the published m_HierarchyVisibleOrder.

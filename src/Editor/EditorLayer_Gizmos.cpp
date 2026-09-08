@@ -1521,14 +1521,20 @@ void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
 // those specific floating windows right after puts them back above the overlay — they're the
 // only editor windows that float free over the viewport rather than dock beside it.
 static void KeepFloatingWindowsAboveOverlay() {
-    static const char* kFloating[] = {
-        ICON_FA_GEAR "  Preferences",
-        ICON_FA_GEARS "  Project Settings",
-    };
-    for (const char* name : kFloating) {
-        ImGuiWindow* w = ImGui::FindWindowByName(name);
-        if (w && w->WasActive && !w->Hidden)
-            ImGui::BringWindowToDisplayFront(w);
+    // Re-front EVERY free-floating panel/modal — not a hardcoded list — so the gizmo overlay
+    // never paints over Preferences, Lighting, Project Settings, or any modal. Docked panels
+    // (Hierarchy / Inspector / Asset Browser / Console) stay put: they're part of the main
+    // dockspace and don't overlap the viewport. Internal overlays/hosts all have "##" names,
+    // which this skips.
+    ImGuiContext& g = *ImGui::GetCurrentContext();
+    for (ImGuiWindow* w : g.Windows) {
+        if (!w->WasActive || w->Hidden) continue;
+        if (w->ParentWindow != nullptr) continue;                 // child of another window
+        if (w->Flags & ImGuiWindowFlags_ChildWindow) continue;
+        if (w->DockNode != nullptr) continue;                     // docked — not floating over the viewport
+        if (w->Name[0] == '#' && w->Name[1] == '#') continue;     // ##GizmoOverlay / ##DockHost / tooltips / ...
+        if (std::strcmp(w->Name, "Scene") == 0 || std::strcmp(w->Name, "Game") == 0) continue;
+        ImGui::BringWindowToDisplayFront(w);
     }
 }
 

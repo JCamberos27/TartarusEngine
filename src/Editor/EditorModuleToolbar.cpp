@@ -231,6 +231,10 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::SameLine();
     if (ActionButton(host, ICON_FA_ARROWS_TO_CIRCLE, "Transform — move + rotate + scale in one gizmo (Y)",
             !handTool && gizmoOp == 4) && host.SetGizmoOp) host.SetGizmoOp(4);
+    ImGui::SameLine();
+    const bool measureTool = host.GetMeasureTool && host.GetMeasureTool();
+    if (ActionButton(host, ICON_FA_RULER, "Measure — click two points in the viewport to measure the distance",
+            measureTool) && host.SetMeasureTool) host.SetMeasureTool(!measureTool);
 
     divider(); // transform tools | gizmo-space modifiers
     const bool localSpace = host.GetGizmoLocalSpace && host.GetGizmoLocalSpace();

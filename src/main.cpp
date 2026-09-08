@@ -247,7 +247,17 @@ void main() {
 // Simple fly-camera controls used only while the editor overlay is open. `orbitPivot`, when
 // non-null, is the current selection's world-space center (see EditorLayer::GetSelectionCenter)
 // — Alt+Left-drag orbits around it instead of the plain free-look that Right-drag still does.
-static void UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm::vec3* orbitPivot) {
+// Returns true on any frame the fly speed was changed by scroll (so the caller can flash the
+// on-screen "Fly speed: N" readout — #236 R2).
+static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm::vec3* orbitPivot) {
+    bool flySpeedChanged = false;
+    auto trimFlySpeed = [&](double notches) {
+        float& fs = EditorSettings::Get().SceneCameraFlySpeed;
+        fs = std::clamp(fs * std::pow(1.15f, (float)notches), 0.5f, 200.0f);
+        EditorSettings::Save();
+        flySpeedChanged = true;
+    };
+    const bool ctrlHeld = Input::IsKeyDown(GLFW_KEY_LEFT_CONTROL) || Input::IsKeyDown(GLFW_KEY_RIGHT_CONTROL);
     // WASD/QE flythrough only while Right-drag is held — matches Unity's convention exactly,
     // and is required now that W/E/R/T also double as gizmo-tool shortcuts (EditorLayer::Draw):
     // there'd be no way to tell "pressing W to fly" from "pressing W to switch tools" otherwise.
@@ -260,11 +270,7 @@ static void UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm:
     // excludes the Alt-held case rather than fighting it for the same drag.
     if (allowLook && !altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
         // Scroll while flying (RMB held) trims the fly speed, Unity-style — persisted (#236 R2).
-        if (double sc = Input::GetScrollDeltaY(); sc != 0.0) {
-            float& fs = EditorSettings::Get().SceneCameraFlySpeed;
-            fs = std::clamp(fs * std::pow(1.15f, (float)sc), 0.5f, 200.0f);
-            EditorSettings::Save();
-        }
+        if (double sc = Input::GetScrollDeltaY(); sc != 0.0) trimFlySpeed(sc);
         float speed = EditorSettings::Get().SceneCameraFlySpeed * dt *
                       (Input::IsKeyDown(GLFW_KEY_LEFT_SHIFT) ? 3.0f : 1.0f);
         glm::vec3 move{0.0f};
@@ -312,8 +318,14 @@ static void UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm:
     // visual effect under an orthographic projection, so orthographic mode instead shrinks/grows
     // OrthoHalfHeight — multiplicatively, so the zoom rate scales with how zoomed-in you already
     // are instead of crawling at large scales or blowing past small ones with a fixed step.
-    // ...but not while flying: scroll-while-RMB trims the fly speed instead (handled above).
-    if (allowLook && !(!altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT))) {
+    // Ctrl+scroll (no drag needed) also trims the fly speed — Unity's binding — and shows the
+    // same on-screen readout (#236 R2).
+    if (allowLook && ctrlHeld && !Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
+        if (double sc = Input::GetScrollDeltaY(); sc != 0.0) trimFlySpeed(sc);
+    }
+
+    // ...but not while flying (scroll-while-RMB) or trimming speed (Ctrl+scroll) — both handled above.
+    if (allowLook && !(!altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) && !ctrlHeld) {
         double scroll = Input::GetScrollDeltaY();
         if (scroll != 0.0) {
             if (cam.Orthographic) {
@@ -336,6 +348,7 @@ static void UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm:
         float dy = (float)Input::GetMouseDeltaY(); // inverted: up is positive
         cam.Position -= (cam.Right() * dx + cam.Up() * dy) * kPanSpeed;
     }
+    return flySpeedChanged;
 }
 
 // The first active in-scene Camera entity (creation order), or entt::null. The Game view
@@ -936,8 +949,9 @@ int main(int argc, char** argv) {
                     window.SetCursorLocked(false);
                 }
 
-                UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive,
-                    hasSelection ? &selectionCenter : nullptr);
+                if (UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive,
+                        hasSelection ? &selectionCenter : nullptr))
+                    editor.FlashFlySpeedHud(); // #236 R2 — show the transient "Fly speed: N" readout
             } else if (camDragActive) {
                 camDragActive = false; // dropped into maximized play mid-drag; it owns the cursor now
             }
