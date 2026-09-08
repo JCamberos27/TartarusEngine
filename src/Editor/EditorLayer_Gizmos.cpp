@@ -814,6 +814,21 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
     float w = vpSize.x, h = vpSize.y;
     if (w <= 0 || h <= 0) return;
 
+    // Eyedropper (#236 R2): armed by a colour field. The next viewport click captures the
+    // pixel for main.cpp to sample off the tonemapped scene FBO; right-click / Esc cancels.
+    if (EyedropperArmed() && !WantsCaptureMouse() && !m_ViewGizmoBlocking) {
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+            CancelEyedropper();
+            return;
+        }
+        if (leftPressed) {
+            m_EyedropperClickPos = { io.MousePos.x, io.MousePos.y };
+            m_EyedropperSampleRequested = true;
+            return;
+        }
+        return; // armed — swallow every viewport click
+    }
+
     // Measure / ruler tool (#236 R2): clicks drop endpoints instead of selecting; right-click
     // (or Esc, handled in the shortcut block) clears. Consumes the click either way.
     if (m_MeasureTool && !WantsCaptureMouse() && !m_ViewGizmoBlocking && !m_GizmoEngaged) {
