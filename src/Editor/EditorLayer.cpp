@@ -2032,6 +2032,17 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
     UpdateLockViewToSelection(world, editorCamera); // Shift+F — camera follows the selection centroid (#236 E)
     if (m_MeasureTool || m_MeasureCount > 0) DrawMeasurement(editorCamera); // #236 R2 ruler
+    if (EyedropperArmed()) {
+        const ImVec2 mp = ImGui::GetIO().MousePos;
+        ImDrawList* dl = ImGui::GetForegroundDrawList();
+        dl->AddCircle(mp, 9.0f, IM_COL32(120, 220, 255, 235), 0, 2.0f);
+        const char* h = ICON_FA_EYE_DROPPER "  Click a colour  (Esc cancels)";
+        ImVec2 ts = ImGui::CalcTextSize(h);
+        ImVec2 p(mp.x + 16.0f, mp.y + 14.0f);
+        dl->AddRectFilled(ImVec2(p.x - 5.0f, p.y - 3.0f), ImVec2(p.x + ts.x + 5.0f, p.y + ts.y + 3.0f),
+                          IM_COL32(15, 20, 28, 225), 3.0f);
+        dl->AddText(p, IM_COL32(235, 245, 255, 255), h);
+    }
 
     // Anchored to the actual viewport's top-center (a pivot, not a fixed-width guess) so it
     // stays centered over the 3D view itself as the Hierarchy/Inspector/Asset Browser panels

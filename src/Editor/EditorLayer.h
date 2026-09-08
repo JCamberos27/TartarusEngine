@@ -119,6 +119,17 @@ public:
     // selection snapshot; call it before DrawInspectorBody() runs this frame.
     bool IsInspectorLocked() const { return m_InspectorLocked; }
     void ToggleInspectorLock();
+
+    // Eyedropper colour pick (#236 R2 Inspector tail). A colour field arms it with a pointer
+    // to its glm::vec3; the next viewport click samples the displayed Scene pixel there and
+    // writes it. main.cpp does the actual glReadPixels off the tonemapped scene FBO.
+    void ArmEyedropper(World* world, glm::vec3* target)
+        { m_EyedropperWorld = world; m_EyedropperTarget = target; m_EyedropperSampleRequested = false; }
+    void CancelEyedropper() { m_EyedropperTarget = nullptr; m_EyedropperSampleRequested = false; }
+    bool EyedropperArmed() const { return m_EyedropperTarget != nullptr; }
+    // main.cpp: true once on the frame a click landed; fills viewport-local pixel coords.
+    bool ConsumeEyedropperSample(float& outX, float& outY);
+    void ApplyEyedropperSample(const glm::vec3& rgb); // rgb in 0..1 display space
     bool LockViewToSelection() const { return m_LockViewToSelection; }
     void SetLockViewToSelection(bool on) { m_LockViewToSelection = on; m_LockViewHasCentroid = false; }
     int  ShadingModeIndex() const { return (int)m_ShadingMode; }
@@ -548,6 +559,13 @@ private:
     bool m_ResetLayoutRequested = false;
 
     float m_FlySpeedHudTimer = 0.0f; // see FlashFlySpeedHud() (public, above)
+
+    // Eyedropper state (#236 R2). Target is a raw pointer into a live component / World member
+    // that stays valid for the one frame between arm and sample.
+    World* m_EyedropperWorld = nullptr;
+    glm::vec3* m_EyedropperTarget = nullptr;
+    bool m_EyedropperSampleRequested = false;
+    glm::vec2 m_EyedropperClickPos{0.0f};
 
     // Layout presets (#236 R2 toolbar tail) — named ImGui-ini snapshots in project/layouts/.
     // A load stages the ini text here; Draw() applies it via LoadIniSettingsFromMemory before

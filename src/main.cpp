@@ -1745,6 +1745,27 @@ int main(int argc, char** argv) {
                 // this frame's pointers first.
                 editorModule.SetFrameContext(&editor, &world, &assets, &editorCamera);
                 editorModule.Draw(editorUIVisible, dt);
+
+                // Eyedropper (#236 R2): a colour field armed EditorLayer's viewport eyedropper
+                // and HandleViewportPicking just captured a click. Read that one pixel off the
+                // LDR (tonemapped) scene FBO — still holding this frame's image — and hand the
+                // colour back.
+                if (float ex, ey; editor.ConsumeEyedropperSample(ex, ey)) {
+                    const int fbW = (int)editor.ViewportSize().x;
+                    const int fbH = (int)editor.ViewportSize().y;
+                    const int px = (int)(ex + 0.5f);
+                    const int py = (int)(fbH - 1 - ey);       // GL sample origin is bottom-left
+                    if (px >= 0 && px < fbW && py >= 0 && py < fbH) {
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, sceneFramebuffer.Handle());
+                        unsigned char rgba[4] = {0, 0, 0, 255};
+                        glReadPixels(px, py, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+                        GLStateCache::Invalidate();
+                        editor.ApplyEyedropperSample(glm::vec3(rgba[0], rgba[1], rgba[2]) / 255.0f);
+                    } else {
+                        editor.CancelEyedropper();
+                    }
+                }
             }
 
             // The OS title bar is gone — the toolbar's empty area is the window drag handle.
