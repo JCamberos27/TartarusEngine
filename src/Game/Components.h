@@ -47,15 +47,15 @@ struct DetachedMeshComponent {
 
 // Presence of this component means the entity participates in collision/raycasting.
 //
-// Legacy AABB path (World::ResolveCollisions / World::Raycast, still used by the Player until
-// #185 PR 3): axis-aligned, rotation-ignored, size derived from the RenderableComponent bounds
-// (or a unit box) — see the ColliderWorldBounds helper in World.cpp.
+// PhysX path (#185, active only while playing): on Play-enter a static PhysX actor is built
+// per collider. `Shape` picks box/sphere/capsule; `HalfExtents` gives its dimensions and
+// `Center` its offset from the entity origin, both in the entity's local space. `HalfExtents
+// == 0` (the default, and every collider World::CreateBox makes) means "derive an axis-aligned
+// box from the mesh bounds", so existing scenes keep their shape without a migration.
 //
-// PhysX path (#185 PR 2, active only while playing): a static actor is built per collider on
-// Play-enter. `Shape` picks box/sphere/capsule; `HalfExtents` gives its dimensions and `Center`
-// its offset from the entity origin, both in the entity's local space. `HalfExtents == 0` (the
-// default, and every collider World::CreateBox makes) means "derive an axis-aligned box from
-// the mesh bounds", so existing scenes keep the legacy shape without a migration.
+// The editor's AABB Raycast (World::Raycast — drop-to-surface / snap) still reads these via
+// the ColliderWorldBounds helper in World.cpp: axis-aligned, rotation-ignored, sized from the
+// RenderableComponent bounds (or a unit box).
 struct ColliderComponent {
     // Values are fixed (Box=0/Sphere=1/Capsule=2) — serialized by index, and PhysicsWorld
     // switches on them. Capsule's axis is Y (its height runs along local up), matching PhysX's
@@ -71,9 +71,8 @@ struct ColliderComponent {
     // Shape centre offset from the entity origin, entity-local space.
     glm::vec3 Center{0.0f};
 
-    // A trigger reports overlaps but doesn't block movement. PR 2 builds it as a PhysX trigger
-    // shape (non-blocking); enter/stay/exit event dispatch is #185 PR 5. The legacy AABB path
-    // already skips triggers in ResolveCollisions.
+    // A trigger reports overlaps but doesn't block movement. Built as a PhysX trigger shape
+    // (non-blocking); enter/stay/exit event dispatch is #185 PR 5.
     bool IsTrigger = false;
 };
 

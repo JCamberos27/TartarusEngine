@@ -93,50 +93,9 @@ entt::entity World::CreateEmptyEntity(const glm::vec3& position, const glm::vec3
     return e;
 }
 
-bool World::ResolveCollisions(AABB& mover, glm::vec3& velocity) const {
-    bool grounded = false;
-    auto view = Registry.view<const TransformComponent, const ColliderComponent>(entt::exclude<InactiveTag>);
-    for (auto entity : view) {
-        const auto& [transform, collider] = view.get<const TransformComponent, const ColliderComponent>(entity);
-        if (collider.IsTrigger) continue;
-        AABB b = ColliderWorldBounds(Registry, entity, transform);
-        if (!mover.Intersects(b)) continue;
-
-        // --- Stand / land on top --------------------------------------------------------
-        // If the mover isn't heading upward and its feet sit within a short reach of this
-        // collider's top face, treat it as ground: snap the feet exactly onto the surface and
-        // kill downward speed. Handled separately from the min-translation push-out below
-        // because that push moves along the *smallest* overlap axis — and for a thin or
-        // single-quad floor collider (the BuildingKit floor tiles are basically flat slabs)
-        // the vertical overlap is ~0, so MTV barely pushes back and the player sinks straight
-        // through. kGroundGrab only needs to cover one integration substep of penetration
-        // (Player::Update caps a step at a few cm) plus feet resting a hair above the surface.
-        const float kGroundGrab = 0.35f;
-        if (velocity.y <= 0.0f && mover.Min.y >= b.Max.y - kGroundGrab) {
-            float lift = b.Max.y - mover.Min.y; // Intersects() guarantees this is >= 0
-            mover.Min.y += lift;
-            mover.Max.y += lift;
-            velocity.y = 0.0f;
-            grounded = true;
-            continue; // resolved vertically — don't also shove it sideways this frame
-        }
-
-        // --- Generic push-out (walls, ceilings, box sides) ----------------------------
-        glm::vec3 mtv = mover.MTV(b);
-        mover.Min += mtv;
-        mover.Max += mtv;
-        if (mtv.y > 0.0f) {
-            grounded = true;
-            if (velocity.y < 0.0f) velocity.y = 0.0f;
-        } else if (mtv.y < 0.0f) {
-            if (velocity.y > 0.0f) velocity.y = 0.0f;
-        }
-        if (mtv.x != 0.0f) velocity.x = 0.0f;
-        if (mtv.z != 0.0f) velocity.z = 0.0f;
-    }
-    return grounded;
-}
-
+// World::ResolveCollisions (the AABB push-out that moved the Play-mode Player) was removed in
+// #185 PR 3 — the Player now sweeps a PxCapsuleController through PhysicsWorld's scene. The
+// AABB Raycast below stays: the editor still uses it for drop-to-surface / snap queries.
 entt::entity World::Raycast(const glm::vec3& origin, const glm::vec3& dir, float maxDist, float& outDist) const {
     entt::entity best = entt::null;
     float bestT = maxDist;

@@ -19,26 +19,9 @@ struct AABB {
                Min.z <= other.Max.z && Max.z >= other.Min.z;
     }
 
-    // Minimum translation vector to push `this` out of `other` (assumes overlap).
-    glm::vec3 MTV(const AABB& other) const {
-        float overlapX = std::min(Max.x, other.Max.x) - std::max(Min.x, other.Min.x);
-        float overlapY = std::min(Max.y, other.Max.y) - std::max(Min.y, other.Min.y);
-        float overlapZ = std::min(Max.z, other.Max.z) - std::max(Min.z, other.Min.z);
-
-        glm::vec3 centerThis = (Min + Max) * 0.5f;
-        glm::vec3 centerOther = (other.Min + other.Max) * 0.5f;
-
-        if (overlapX < overlapY && overlapX < overlapZ) {
-            float dir = centerThis.x < centerOther.x ? -1.0f : 1.0f;
-            return glm::vec3(overlapX * dir, 0, 0);
-        } else if (overlapY < overlapZ) {
-            float dir = centerThis.y < centerOther.y ? -1.0f : 1.0f;
-            return glm::vec3(0, overlapY * dir, 0);
-        } else {
-            float dir = centerThis.z < centerOther.z ? -1.0f : 1.0f;
-            return glm::vec3(0, 0, overlapZ * dir);
-        }
-    }
+    // (AABB::MTV — the min-translation push-out the old Play-mode Player collision used — was
+    // removed in #185 PR 3 when that moved to a PxCapsuleController. Re-add from git history if
+    // a cheap AABB depenetration is ever needed again.)
 
     // World-space AABB enclosing this local-space box after a (possibly rotating) transform.
     // Rotation means the result isn't tight, but it's exact for the axis-aligned case and a
