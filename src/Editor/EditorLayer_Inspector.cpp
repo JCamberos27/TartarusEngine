@@ -2221,10 +2221,13 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
     auto scalarRow = [&](const char* label, float Material::* field, float lo, float hi, const char* tip) {
         float shared; bool mixed = floatShared(field, shared);
         float edit = shared;
-        MultiEditResult r = MultiEditFloatRow(label, edit, mixed, (hi - lo) * 0.004f, lo, hi, tip);
-        if (r.activated) StageUndo(world);
-        if (r.changed) for (Material* mm : mats) mm->*field = edit;
-        if (r.committed) CommitStagedUndo(world, "Edit Material");
+        PropertyLabel(label, tip);
+        ImGui::PushID(label);
+        bool changed = EditorUI::SliderFloat("##ms", &edit, lo, hi, mixed ? "\xE2\x80\x94" : "%.3f");
+        if (ImGui::IsItemActivated()) StageUndo(world);
+        if (changed && std::isfinite(edit)) for (Material* mm : mats) mm->*field = edit;
+        if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
+        ImGui::PopID();
     };
 
     colorRow("Base Color", &Material::BaseColor,
