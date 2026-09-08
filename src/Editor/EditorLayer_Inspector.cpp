@@ -750,14 +750,13 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
 
         // ---- Common components: those present on the WHOLE selection ----
-        bool allMesh = true, allLight = true, allCollider = true, allAudio = true;
+        bool allMesh = true, allCollider = true, allAudio = true;
         // #184: same "present on every selected object" test, generalized over every
         // reflection-registered component instead of one bool per hand-coded component.
         const auto& registeredComponents = ComponentRegistry::All();
         std::vector<bool> allReflected(registeredComponents.size(), true);
         forEach([&](entt::entity e) {
             allMesh     &= world.Registry.all_of<RenderableComponent>(e);
-            allLight    &= world.Registry.all_of<LightComponent>(e);
             allCollider &= world.Registry.all_of<ColliderComponent>(e);
             allAudio    &= world.Registry.all_of<AudioSourceComponent>(e);
             for (std::size_t i = 0; i < registeredComponents.size(); ++i)
@@ -766,7 +765,6 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         {
             std::string common = "Transform";
             if (allMesh)     common += ", Mesh Renderer";
-            if (allLight)    common += ", Light";
             if (allCollider) common += ", Box Collider";
             if (allAudio)    common += ", Audio Source";
             for (std::size_t i = 0; i < registeredComponents.size(); ++i)
@@ -927,140 +925,6 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         EndComponentSection();
         }
 
-        // ===== Light (only when every selected object has one) =====
-        if (allLight) {
-            ImGui::Spacing();
-            if (BeginComponentSection(ICON_FA_LIGHTBULB, "Light", false, mrm)) {
-            auto L = [&](entt::entity e) -> LightComponent& { return world.Registry.get<LightComponent>(e); };
-
-            int kind = -1; bool kindMixed = false;
-            forEach([&](entt::entity e) {
-                int k = (int)L(e).Kind; // Point=0, Spot=1, Directional=2
-                if (kind < 0) kind = k; else if (k != kind) kindMixed = true;
-            });
-            const char* kinds[] = {"Point", "Spot", "Directional"};
-            PropertyLabel("Kind", "Sets the light type on every selected light.");
-            if (ImGui::BeginCombo("##mlkind", kindMixed ? "\xE2\x80\x94" : kinds[kind < 0 ? 0 : kind])) {
-                for (int k = 0; k < 3; ++k)
-                    if (ImGui::Selectable(kinds[k], !kindMixed && k == kind)) {
-                        PushUndo(world, "Set Light Kind");
-                        forEach([&](entt::entity e) { L(e).Kind = (LightComponent::Type)k; });
-                    }
-                ImGui::EndCombo();
-            }
-
-            // Colour: an RGB swatch, or the shared Kelvin spectrum bar when every selected light
-            // is colour-temperature driven. "K" / "RGB" flips the whole selection between the two.
-            int nKelvin = 0; float kShared = 0.0f; bool kMixed = false, kf = true;
-            forEach([&](entt::entity e) {
-                float kv = L(e).ColorTempK;
-                if (kv > 0.0f) nKelvin++;
-                if (kf) { kShared = kv; kf = false; } else if (std::fabs(kv - kShared) > 0.5f) kMixed = true;
-            });
-            const float mlInnerSp = ImGui::GetStyle().ItemInnerSpacing.x;
-            PropertyLabel("Color", "Sets the colour on every selected light. 'K' drives it from a temperature.");
-            if (nKelvin == count && count > 0) {
-                float k = (!kMixed && kShared > 0.0f) ? kShared : 6500.0f;
-                KelvinBarResult kr = KelvinBar("##mlKelvin", k, kMixed);
-                if (kr.activated) StageUndo(world);
-                if (kr.changed) forEach([&](entt::entity e) { L(e).ColorTempK = k; L(e).Color = KelvinToRGB(k); });
-                if (kr.deactivated) CommitStagedUndo(world, "Set Light Colour Temperature");
-                ImGui::SameLine(0.0f, mlInnerSp);
-                if (ActionButton("RGB##mlKelvinOff", "Switch this selection to a direct RGB colour")) {
-                    PushUndo(world, "Set Light Colour");
-                    forEach([&](entt::entity e) { L(e).ColorTempK = 0.0f; });
-                }
-            } else {
-                glm::vec3 col(1.0f); bool colMixed = false, cf = true;
-                forEach([&](entt::entity e) {
-                    glm::vec3 c = L(e).Color;
-                    if (cf) { col = c; cf = false; return; }
-                    for (int a = 0; a < 3; ++a) if (std::fabs(c[a] - col[a]) > 1.0e-4f) colMixed = true;
-                });
-                glm::vec3 colEdit = col;
-                bool colChanged = ImGui::ColorEdit3("##mlcol", &colEdit.x, ImGuiColorEditFlags_NoInputs);
-                if (ImGui::IsItemActivated()) StageUndo(world);
-                if (colChanged) forEach([&](entt::entity e) { L(e).Color = colEdit; });
-                if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Set Light Color");
-                ImGui::SameLine(0.0f, mlInnerSp);
-                if (ActionButton("K##mlKelvinOn", "Drive this selection's colour from a temperature (Kelvin)")) {
-                    PushUndo(world, "Set Light Colour Temperature");
-                    forEach([&](entt::entity e) { L(e).ColorTempK = 6500.0f; L(e).Color = KelvinToRGB(6500.0f); });
-                }
-                if (colMixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
-            }
-
-            auto lightFloatRow = [&](const char* label, float speed, float minV, float maxV,
-                                     const std::function<float&(LightComponent&)>& ref,
-                                     const char* tip, const char* undoLabel) {
-                float shared = 0.0f; bool mixed = false, f = true;
-                forEach([&](entt::entity e) {
-                    float v = ref(L(e));
-                    if (f) { shared = v; f = false; } else if (std::fabs(v - shared) > 1.0e-4f) mixed = true;
-                });
-                float edit = shared;
-                MultiEditResult r = MultiEditFloatRow(label, edit, mixed, speed, minV, maxV, tip);
-                if (r.activated) StageUndo(world);
-                if (r.changed) forEach([&](entt::entity e) { ref(L(e)) = edit; });
-                if (r.committed) CommitStagedUndo(world, undoLabel);
-            };
-            lightFloatRow("Intensity", 0.05f, 0.0f, 100.0f,
-                [](LightComponent& l) -> float& { return l.Intensity; },
-                "Brightness for every selected light.", "Set Light Intensity");
-            lightFloatRow("Range", 0.1f, 0.0f, 500.0f,
-                [](LightComponent& l) -> float& { return l.Range; },
-                "Falloff distance for every selected light.", "Set Light Range");
-
-            bool allSpot = true, anyDir = false, allDir = true;
-            forEach([&](entt::entity e) {
-                bool d = L(e).Kind == LightComponent::Type::Directional;
-                allSpot &= L(e).Kind == LightComponent::Type::Spot;
-                anyDir |= d;
-                allDir &= d;
-            });
-            if (allSpot)
-                lightFloatRow("Spot Angle", 0.5f, 1.0f, 89.0f,
-                    [](LightComponent& l) -> float& { return l.SpotAngleDegrees; },
-                    "Cone half-angle for every selected spot light.", "Set Spot Angle");
-            if (allDir)
-                lightFloatRow("Angular Size", 0.05f, 0.1f, 20.0f,
-                    [](LightComponent& l) -> float& { return l.AngularSizeDegrees; },
-                    "Sun disc diameter (deg) for every selected directional light.", "Set Angular Size");
-
-            // ---- Shadows (mirrors the single-edit Shadows sub-block) ------------------------
-            ImGui::Spacing();
-            if (BeginComponentSection(ICON_FA_MOON, "Shadows", false, mrm)) {
-
-            int nShadow = 0;
-            forEach([&](entt::entity e) { if (L(e).Shadow.Enabled) nShadow++; });
-            bool shVal = false;
-            if (MultiEditCheckbox("Cast Shadows", nShadow > 0, nShadow != 0 && nShadow != count, shVal)) {
-                PushUndo(world, "Toggle Cast Shadows");
-                forEach([&](entt::entity e) { L(e).Shadow.Enabled = shVal; });
-            }
-
-            lightFloatRow("Bias", 0.02f, 0.0f, 4.0f,
-                [](LightComponent& l) -> float& { return l.Shadow.Bias; },
-                "Depth-bias multiplier for every selected light.", "Set Shadow Bias");
-            lightFloatRow("Normal Bias", 0.02f, 0.0f, 4.0f,
-                [](LightComponent& l) -> float& { return l.Shadow.NormalBias; },
-                "Normal-offset multiplier for every selected light.", "Set Shadow Normal Bias");
-            lightFloatRow("Softness", 0.02f, 0.0f, 4.0f,
-                [](LightComponent& l) -> float& { return l.Shadow.Softness; },
-                "PCF-radius multiplier for every selected light.", "Set Shadow Softness");
-            if (!anyDir)
-                lightFloatRow("Near Plane", 0.01f, 0.001f, 10.0f,
-                    [](LightComponent& l) -> float& { return l.Shadow.NearPlane; },
-                    "Perspective near distance for every selected spot/point light's depth pass.",
-                    "Set Shadow Near Plane");
-
-            EndComponentSection(); // Shadows
-            }
-
-            EndComponentSection(); // Light
-            }
-        }
-
         // Camera moved onto reflection (#302 Wave 1a) — its multi-select section is now produced
         // by the generic reflected-components block just below, same as Animator's.
 
@@ -1092,6 +956,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                     if (mixed) return true;
                     return f.VisibleIfNot ? (shared != f.VisibleIfValue) : (shared == f.VisibleIfValue);
                 };
+                DrawReflectedComponentExtraMulti(rc.Meta.Name, world, sel, ReflectExtraPhase::Top);
                 for (const ReflectField& f : rc.Meta.Fields) {
                     if (f.EditorHidden || !fieldVisibleMulti(f)) continue;
                     ImGui::PushID(f.Name);
@@ -1211,6 +1076,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                     }
                     ImGui::PopID();
                 }
+                DrawReflectedComponentExtraMulti(rc.Meta.Name, world, sel, ReflectExtraPhase::Bottom);
                 EndComponentSection();
             }
         }
@@ -1675,137 +1541,11 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
     }
 
-    // --- Light (open by default — usually the main thing being tuned on a light entity) ----
-    if (auto* light = registry.try_get<LightComponent>(entity)) {
-        bool lightReset = false, lightCopy = false, lightPaste = false;
-        if (BeginComponentSection(ICON_FA_LIGHTBULB, "Light", true, removed,
-            /*defaultOpen=*/true, "Casts light into the scene from this object's position.",
-            &lightReset, &lightCopy, &lightPaste)) {
-            // Slightly slimmer rows for this block — the light sliders read better less chunky.
-            const ImVec2 lightFramePad(ImGui::GetStyle().FramePadding.x,
-                                       std::max(1.0f, ImGui::GetStyle().FramePadding.y - 2.0f));
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, lightFramePad);
-
-            PropertyLabel("Type", "Point: all directions. Spot: a cone. Directional: a sun (parallel rays, no position or range).");
-            int kind = (int)light->Kind; // Point=0, Spot=1, Directional=2
-            if (ImGui::Combo("##Type", &kind, "Point\0Spot\0Directional\0")) {
-                PushUndo(world, "Edit Light");
-                light->Kind = (LightComponent::Type)kind;
-            }
-            const bool isDir = light->Kind == LightComponent::Type::Directional;
-            const bool isSpot = light->Kind == LightComponent::Type::Spot;
-            const bool isPoint = light->Kind == LightComponent::Type::Point;
-
-            // Color: raw swatch, or a Kelvin slider when ColorTempK > 0 (the swatch is then
-            // driven, not authored). The K / RGB button flips between the two.
-            PropertyLabel("Color", "The light's color. Toggle 'K' to drive it from a colour temperature instead.");
-            if (light->ColorTempK > 0.0f) {
-                float k = light->ColorTempK;
-                KelvinBarResult kr = KelvinBar("##KelvinBar", k);
-                if (kr.activated) PushUndo(world, "Edit Light");
-                if (kr.changed) { light->ColorTempK = k; light->Color = KelvinToRGB(k); }
-                ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-                if (ActionButton("RGB##KelvinOff", "Set the colour directly (RGB)")) { PushUndo(world, "Edit Light"); light->ColorTempK = 0.0f; }
-                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Switch back to a custom RGB swatch.");
-            } else {
-                ImGui::SetNextItemWidth(-90.0f);
-                ImGui::ColorEdit3("##Color", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
-                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
-                EyedropperButton(this, world, &light->Color);
-                ImGui::SameLine();
-                if (ActionButton("K##KelvinOn", "Drive the colour from a temperature (Kelvin)")) {
-                    PushUndo(world, "Edit Light");
-                    light->ColorTempK = 6500.0f;
-                    light->Color = KelvinToRGB(6500.0f);
-                }
-                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Drive the colour from a temperature in Kelvin (1500-15000).");
-            }
-
-            PropertyLabel("Intensity", "Brightness multiplier - higher is brighter.");
-            EditorUI::SliderFloat("##Intensity", &light->Intensity, 0.0f, 100.0f, "%.2f",
-                                  ImGuiSliderFlags_Logarithmic);
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
-            if (!isDir) {
-                PropertyLabel("Range", "Distance (in world units) at which the light's effect fades to zero.");
-                EditorUI::SliderFloat("##Range", &light->Range, 0.1f, 200.0f, "%.1f",
-                                      ImGuiSliderFlags_Logarithmic);
-                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
-            }
-            if (isSpot) {
-                PropertyLabel("Spot Angle", "Half-angle of the light cone, in degrees.\nThe cone points along the entity's -Z axis - use Rotation to aim it.");
-                EditorUI::SliderFloat("##SpotAngle", &light->SpotAngleDegrees, 1.0f, 89.0f, "%.0f deg");
-                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
-            }
-            if (isDir) {
-                PropertyLabel("Angular Size", "Apparent diameter of the sun disc, in degrees (~0.53 = Earth's sun).\nWider = softer shadows.\nAim the sun with the entity's Rotation (it shines along -Z).");
-                EditorUI::SliderFloat("##AngularSize", &light->AngularSizeDegrees, 0.1f, 20.0f, "%.2f deg");
-                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
-            }
-
-            // --- Shadows sub-block, bound to light->Shadow --------------------------------
-            auto& sh = light->Shadow;
-            ImGui::Spacing();
-            if (ImGui::TreeNodeEx(ICON_FA_MOON "  Shadows", ImGuiTreeNodeFlags_SpanAvailWidth)) {
-                const char* castTip = isSpot
-                    ? "Render a perspective shadow map for this spot light.\nEach casting spot is an extra full-scene depth pass; up to 4 at once."
-                    : isPoint
-                    ? "Render a 6-face cube shadow map for this point light.\nSix full-scene depth passes per casting light; up to 2 at once."
-                    : "Render cascaded shadow maps for this sun.";
-                PropertyLabel("Cast Shadows", castTip);
-                bool en = sh.Enabled;
-                if (ImGui::Checkbox("##LightCastShadows", &en)) { PushUndo(world, "Edit Light"); sh.Enabled = en; }
-                PropertyLabel("Bias", "Multiplier on the shader's depth bias. >1 pushes the shadow off contact\n(fixes acne); <1 pulls it back toward the caster.");
-                EditorUI::SliderFloat("##ShadowBias", &sh.Bias, 0.0f, 4.0f, "x%.2f");
-                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
-                PropertyLabel("Normal Bias", "Multiplier on the normal-offset term (moves the sample along the surface\nnormal before comparing). Widen if edges show light bleed.");
-                EditorUI::SliderFloat("##ShadowNormalBias", &sh.NormalBias, 0.0f, 4.0f, "x%.2f");
-                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
-                PropertyLabel("Softness", "Multiplier on the PCF filter radius. Higher = wider, softer penumbra.");
-                EditorUI::SliderFloat("##ShadowSoftness", &sh.Softness, 0.0f, 4.0f, "x%.2f");
-                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
-                if (isSpot || isPoint) {
-                    PropertyLabel("Near Plane", "Perspective near distance for this light's depth pass.\nRaise it to reclaim depth precision when the light sits far from what it lights.");
-                    EditorUI::SliderFloat("##ShadowNear", &sh.NearPlane, 0.001f, 10.0f, "%.3f",
-                                          ImGuiSliderFlags_Logarithmic);
-                    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
-                    PropertyLabel("Resolution", "Per-light shadow-map size (applies after per-light shadow maps).");
-                    int res = sh.Resolution;
-                    if (ImGui::Combo("##ShadowRes", &res, "Follow global\0" "512\0" "1024\0" "2048\0" "4096\0")) {
-                        PushUndo(world, "Edit Light"); sh.Resolution = res;
-                    }
-                    PropertyLabel("Update Mode", "Dynamic re-renders every frame; Static bakes once (applies after per-light shadow maps).");
-                    int um = sh.UpdateMode;
-                    if (ImGui::Combo("##ShadowUpdate", &um, "Dynamic\0" "Static (bake once)\0" "Off\0")) {
-                        PushUndo(world, "Edit Light"); sh.UpdateMode = um;
-                    }
-                }
-                ImGui::TreePop();
-            }
-
-            // --- Workflow: look through this light / drop it to the surface below (#140 phase 4)
-            ImGui::Spacing();
-            if (ImGui::Button(ICON_FA_EYE "  Look through", ImVec2(-FLT_MIN, 0.0f)))
-                m_PendingLookThrough = entity;
-            if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("View from this light's POV. Fly the camera to move / re-aim the\nlight from there. Spot uses its cone angle for FOV; Esc restores the camera.");
-            if (ImGui::Button(ICON_FA_DOWN_LONG "  Drop to surface", ImVec2(-FLT_MIN, 0.0f))) {
-                if (!DropLightToSurface(world, entity))
-                    Log::Info("Drop to surface: nothing directly below this light.");
-            }
-            if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("Move the light straight down onto the nearest mesh surface below it.");
-
-            ImGui::PopStyleVar(); // lightFramePad
-            EndComponentSection();
-        }
-        if (removed) {
-            PushUndo(world, "Remove Light");
-            registry.remove<LightComponent>(entity);
-        }
-        if (lightReset) { PushUndo(world, "Reset Light"); *light = LightComponent{}; }
-        if (lightCopy)  CopyComponentToClip("Light", *light);
-        if (lightPaste) PasteComponentFromClip(world, entity);
-    }
+    // Light moved onto reflection (#302 Wave 2b): Type/Intensity/Range/Spot Angle/Angular Size
+    // and the whole Shadows group come from the generic ComponentRegistry path below (Enum,
+    // sliders, per-Type VisibleIf, the "Shadows" TreeNode). The colour + Kelvin control, the
+    // eyedropper and the Look-through / Drop-to-surface buttons are editor-only and render via
+    // DrawReflectedComponentExtra("Light", ...) inside that generic section.
 
     // Camera moved onto reflection (#302 Wave 1a): its fields, section chrome, copy/paste, reset,
     // Add Component entry and multi-select all come from the generic ComponentRegistry path
@@ -1933,6 +1673,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 }
                 return true;
             };
+            DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Top);
             const char* openGroup = nullptr; // current TreeNode group, nullptr = none
             bool groupNodeOpen = true;       // false = current group's node is collapsed
             for (const ReflectField& f : rc.Meta.Fields) {
@@ -1998,7 +1739,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 ImGui::PopID();
             }
             if (openGroup && groupNodeOpen) ImGui::TreePop();
-            DrawReflectedComponentExtra(rc.Meta.Name, world, entity); // #302: e.g. Camera "Align to View"
+            DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Bottom);
             EndComponentSection();
         }
         if (reflRemoved) {
@@ -2133,14 +1874,16 @@ void EditorLayer::EndComponentSection() {
     ImGui::Spacing();
 }
 
-// #302: custom, editor-only controls appended to a reflection-registered component's generic
+// #302: custom, editor-only controls a reflection-registered component wants inside its generic
 // Inspector section. Reflection covers the data (fields, serialization, Add/Remove, multi-edit);
-// anything that needs editor state the game module can't see (here: the editor camera) lives
-// here instead of as a reflected field. Dispatched by ReflectComponent::Name.
-void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& world, entt::entity entity) {
+// anything that needs editor state the game module can't see — the editor camera (Camera), or
+// the eyedropper / Kelvin bar / viewport actions (Light) — lives here. Dispatched by
+// ReflectComponent::Name; `phase` is Top (before the generic fields) or Bottom (after).
+void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& world,
+                                              entt::entity entity, ReflectExtraPhase phase) {
     auto& registry = world.Registry;
 
-    if (std::strcmp(componentName, "Camera") == 0) {
+    if (std::strcmp(componentName, "Camera") == 0 && phase == ReflectExtraPhase::Bottom) {
         auto* cam = registry.try_get<CameraComponent>(entity);
         if (!cam) return;
         // Keep Far strictly beyond Near — the reflected field clamps can't express a cross-field
@@ -2164,6 +1907,110 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
         }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Snap this camera to the editor viewport's current position, aim and FOV.");
+        return;
+    }
+
+    if (std::strcmp(componentName, "Light") == 0) {
+        auto* light = registry.try_get<LightComponent>(entity);
+        if (!light) return;
+
+        if (phase == ReflectExtraPhase::Top) {
+            // Colour: a raw swatch (+ eyedropper), or a Kelvin bar when ColorTempK > 0 (the
+            // swatch is then driven, not authored). The K / RGB button flips between the two.
+            // Ported verbatim from the old hand-coded Light section; sits above the reflected
+            // Type field is not possible, so it leads the section body instead.
+            PropertyLabel("Color", "The light's colour. Toggle 'K' to drive it from a colour temperature instead.");
+            if (light->ColorTempK > 0.0f) {
+                float k = light->ColorTempK;
+                KelvinBarResult kr = KelvinBar("##LightKelvinBar", k);
+                if (kr.activated) PushUndo(world, "Edit Light");
+                if (kr.changed) { light->ColorTempK = k; light->Color = KelvinToRGB(k); }
+                ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+                if (ActionButton("RGB##LightKelvinOff", "Set the colour directly (RGB)")) {
+                    PushUndo(world, "Edit Light"); light->ColorTempK = 0.0f;
+                }
+                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Switch back to a custom RGB swatch.");
+            } else {
+                ImGui::SetNextItemWidth(-90.0f);
+                ImGui::ColorEdit3("##LightColor", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
+                if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+                EyedropperButton(this, world, &light->Color);
+                ImGui::SameLine();
+                if (ActionButton("K##LightKelvinOn", "Drive the colour from a temperature (Kelvin)")) {
+                    PushUndo(world, "Edit Light");
+                    light->ColorTempK = 6500.0f;
+                    light->Color = KelvinToRGB(6500.0f);
+                }
+                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Drive the colour from a temperature in Kelvin (1500-15000).");
+            }
+            return;
+        }
+
+        // Bottom: viewport workflow buttons (#140 phase 4).
+        ImGui::Spacing();
+        if (ImGui::Button(ICON_FA_EYE "  Look through", ImVec2(-FLT_MIN, 0.0f)))
+            m_PendingLookThrough = entity;
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("View from this light's POV. Fly the camera to move / re-aim the\nlight from there. Spot uses its cone angle for FOV; Esc restores the camera.");
+        if (ImGui::Button(ICON_FA_DOWN_LONG "  Drop to surface", ImVec2(-FLT_MIN, 0.0f))) {
+            if (!DropLightToSurface(world, entity))
+                Log::Info("Drop to surface: nothing directly below this light.");
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Move the light straight down onto the nearest mesh surface below it.");
+        return;
+    }
+}
+
+// Multi-select counterpart. Only Light needs one so far: the shared colour / Kelvin control
+// (the reflected Color field is EditorHidden). Ported from the old hand-coded multi-light block.
+void EditorLayer::DrawReflectedComponentExtraMulti(const char* componentName, World& world,
+                                                   const std::vector<entt::entity>& sel,
+                                                   ReflectExtraPhase phase) {
+    if (std::strcmp(componentName, "Light") != 0 || phase != ReflectExtraPhase::Top) return;
+
+    const int count = (int)sel.size();
+    if (count == 0) return;
+    auto L = [&](entt::entity e) -> LightComponent& { return world.Registry.get<LightComponent>(e); };
+    auto forEach = [&](const std::function<void(entt::entity)>& fn) { for (entt::entity e : sel) fn(e); };
+
+    int nKelvin = 0; float kShared = 0.0f; bool kMixed = false, kf = true;
+    forEach([&](entt::entity e) {
+        float kv = L(e).ColorTempK;
+        if (kv > 0.0f) nKelvin++;
+        if (kf) { kShared = kv; kf = false; } else if (std::fabs(kv - kShared) > 0.5f) kMixed = true;
+    });
+    const float innerSp = ImGui::GetStyle().ItemInnerSpacing.x;
+    PropertyLabel("Color", "Sets the colour on every selected light. 'K' drives it from a temperature.");
+    if (nKelvin == count) {
+        float k = (!kMixed && kShared > 0.0f) ? kShared : 6500.0f;
+        KelvinBarResult kr = KelvinBar("##mlKelvin", k, kMixed);
+        if (kr.activated) StageUndo(world);
+        if (kr.changed) forEach([&](entt::entity e) { L(e).ColorTempK = k; L(e).Color = KelvinToRGB(k); });
+        if (kr.deactivated) CommitStagedUndo(world, "Set Light Colour Temperature");
+        ImGui::SameLine(0.0f, innerSp);
+        if (ActionButton("RGB##mlKelvinOff", "Switch this selection to a direct RGB colour")) {
+            PushUndo(world, "Set Light Colour");
+            forEach([&](entt::entity e) { L(e).ColorTempK = 0.0f; });
+        }
+    } else {
+        glm::vec3 col(1.0f); bool colMixed = false, cf = true;
+        forEach([&](entt::entity e) {
+            glm::vec3 c = L(e).Color;
+            if (cf) { col = c; cf = false; return; }
+            for (int a = 0; a < 3; ++a) if (std::fabs(c[a] - col[a]) > 1.0e-4f) colMixed = true;
+        });
+        glm::vec3 colEdit = col;
+        bool colChanged = ImGui::ColorEdit3("##mlcol", &colEdit.x, ImGuiColorEditFlags_NoInputs);
+        if (ImGui::IsItemActivated()) StageUndo(world);
+        if (colChanged) forEach([&](entt::entity e) { L(e).Color = colEdit; });
+        if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Set Light Color");
+        ImGui::SameLine(0.0f, innerSp);
+        if (ActionButton("K##mlKelvinOn", "Drive this selection's colour from a temperature (Kelvin)")) {
+            PushUndo(world, "Set Light Colour Temperature");
+            forEach([&](entt::entity e) { L(e).ColorTempK = 6500.0f; L(e).Color = KelvinToRGB(6500.0f); });
+        }
+        if (colMixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
     }
 }
 
@@ -2226,9 +2073,7 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
             if (!mesh) mesh = assets.CreatePrimitive("cube");
             registry.emplace<RenderableComponent>(entity, std::move(mesh));
         });
-    entry(ICON_FA_LIGHTBULB, "Light", registry.all_of<LightComponent>(entity),
-        [&] { registry.emplace<LightComponent>(entity); });
-    reflectedFor("Rendering"); // Camera (#302 Wave 1a)
+    reflectedFor("Rendering"); // Camera (#302 Wave 1a), Light (#302 Wave 2b)
 
     section("Physics");
     entry(ICON_FA_CUBE, "Box Collider", registry.all_of<ColliderComponent>(entity),
