@@ -1,0 +1,24 @@
+# Components in src/Game/Components.h that are DELIBERATELY not registered with
+# ComponentRegistry (src/Game/ComponentRegistry.cpp). Every struct in Components.h whose name
+# ends in "Component" or "Tag" must be either registered there or listed here with a reason —
+# check_component_registration.py (run in CI and locally) fails otherwise. This is the
+# structural half of docs/CONVENTIONS.md's "ship components fully wired, or not visible" rule:
+# a new component can't be added without a conscious decision about how the editor surfaces it.
+#
+# Format: one "Name = reason" per line. Blank lines and #-comments ignored.
+
+TransformComponent      = Identity. Every entity has one; the Inspector's Transform section is a bespoke widget (per-axis reset, gizmo-space interplay), not a generic field list.
+NameComponent           = Identity. Edited via the Inspector name row, not an Add-Component section.
+OrderComponent          = Serializer-internal stable ordering (see the comment on the struct). No user-facing control.
+HierarchyComponent      = Parent/children graph. Surfaced by the Scene Hierarchy panel's drag-reparent, not an Inspector section.
+RenderableComponent     = "Mesh Renderer" — holds a shared_ptr<Model>, entangled with DetachedMeshComponent / LevelGeometryTag / primitive-vs-imported. Needs a Model AssetRef + mesh picker; tracked as its own follow-up.
+DetachedMeshComponent   = Editor-only, never serialized. Holds the mesh removed via "Mesh Renderer" so re-adding restores it.
+ColliderComponent       = IsTrigger is shown disabled with "(not implemented)" per CONVENTIONS.md rule 3; migrate alongside real trigger fields in #185.
+PrefabInstanceComponent = #236 A2 prefab-instance stub. Its scene representation is a one-line stub written by a dedicated serializer path, not a generic component block.
+LevelGeometryTag        = Structural: selects the Hierarchy section and the "boxes" vs "models" JSON array an entity round-trips through.
+TagComponent            = Free-text classification with a project-defined vocabulary dropdown (ProjectSettings); rendered as an Inspector header field, not an Add-Component section.
+LayerComponent          = Slot index with human names from LayerRegistry (project/layers.json); rendered as an Inspector header field.
+InactiveTag             = The "active" checkbox in the Inspector header (Unity's GameObject enable toggle).
+StaticTag               = The "Static" checkbox in the Inspector header.
+HiddenInSceneTag        = Editor Scene-view "hidden" column in the Hierarchy (#236 B). No runtime effect.
+SceneLockedTag          = Editor Scene-view "locked" column in the Hierarchy (#236 B). No runtime effect.
