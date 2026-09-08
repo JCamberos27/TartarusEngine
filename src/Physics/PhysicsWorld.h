@@ -3,10 +3,12 @@
 // PhysX 5 simulation world — created when Play mode starts, destroyed when it ends (#185).
 //
 // PR 1 stood up an empty PxScene. PR 2 populated it with a static actor per ColliderComponent
-// and added Raycast() scene queries. PR 3 adds the character controller: the Play-mode Player
-// now sweep-moves a PxCapsuleController through this scene instead of the old AABB push-out
-// (World::ResolveCollisions, deleted). Nothing writes back to a TransformComponent, so edit
-// mode is unchanged; Play-mode movement now has real step/slope handling.
+// and added Raycast() scene queries. PR 3 added the PxCapsuleController the Play-mode Player
+// sweeps through it. PR 4 adds dynamic bodies: a collider entity that also has a
+// RigidbodyComponent becomes a PxRigidDynamic, and Step() writes its simulated pose back into
+// the entity's TransformComponent each frame (kinematic bodies go the other way — their
+// Transform drives the actor). Edit mode is still untouched; Play -> Stop restores the
+// authored scene from its JSON snapshot as always.
 //
 // This header deliberately pulls in NO PhysX headers. Every PhysX type lives behind the pimpl
 // in PhysicsWorld.cpp so the SDK's include surface (and its /MD, exception, and alignment
@@ -32,9 +34,10 @@ void Destroy();
 bool IsActive();
 
 // Advance the simulation by real-frame `dt` seconds, accumulated into fixed 1/60 s sub-steps
-// (at most 4 per call, so a long hitch doesn't spiral). No-op when the world isn't active.
-// Called once per simulated frame from the main loop.
-void Step(float dt);
+// (at most 4 per call, so a long hitch doesn't spiral). Before stepping, kinematic bodies are
+// pushed from `world`'s TransformComponents; after, dynamic bodies' simulated poses are written
+// back into them. No-op when the world isn't active. Called once per simulated frame.
+void Step(float dt, World& world);
 
 // Closest hit of the ray `origin` + t*`dir` (dir need not be normalised) within `maxDistance`.
 // Returns true and fills `outHit` on a hit; false (with `outHit` left at defaults) on a miss
