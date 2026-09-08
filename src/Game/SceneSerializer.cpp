@@ -328,10 +328,15 @@ std::vector<const json*> PrefabEntityObjects(const json& prefab) {
     return out;
 }
 
-// Append {e,c,f,v} entries for every field of `live` that differs from `pristine`. `localIndex`
-// is the entity's prefab-local index; `isRoot` skips transform/name (those round-trip through
-// the stub's own top-level fields). Reflected components + Transform + Name only; a component
-// present on one side but not the other is a structural override (Part B4), not handled here.
+// Append override entries for everything on `live` that differs from `pristine`:
+//   { e, c, f, v }                    — a changed reflected field, or a Transform channel / Name
+//   { e, op:"addComponent", c }       — a reflected component the instance gained (its fields
+//                                       follow as normal { e, c, f, v } entries)
+//   { e, op:"removeComponent", c }    — a reflected component the prefab has that the instance
+//                                       deleted
+// `localIndex` is the entity's prefab-local index; `isRoot` only skips Transform/Name (those
+// round-trip through the stub's own top-level fields) — component add/remove applies to the
+// root too.
 void DiffPrefabEntity(const World& world, entt::entity live, const json& pristine,
                       int localIndex, bool isRoot,
                       const std::function<TransformComponent(entt::entity)>& effectiveTransform,
@@ -340,9 +345,27 @@ void DiffPrefabEntity(const World& world, entt::entity live, const json& pristin
         outOverrides.push_back({{"e", localIndex}, {"c", comp}, {"f", field}, {"v", std::move(value)}});
     };
 
-    // Reflected components.
+    // Reflected components — presence diff + field diff.
     for (const auto& rc : ComponentRegistry::All()) {
-        if (!rc.Has(world.Registry, live) || !pristine.contains(rc.Meta.Name)) continue;
+        const bool onLive = rc.Has(world.Registry, live);
+        const bool onPrefab = pristine.contains(rc.Meta.Name);
+        if (!onLive && !onPrefab) continue;
+
+        if (onLive && !onPrefab) {
+            // Instance gained this component — record the add, then every field as an override
+            // (there's no pristine value to compare against, so all of them count).
+            outOverrides.push_back({{"e", localIndex}, {"op", "addComponent"}, {"c", rc.Meta.Name}});
+            const void* comp = rc.GetConst(world.Registry, live);
+            for (const auto& f : rc.Meta.Fields)
+                emit(rc.Meta.Name, f.Name, ReflectFieldToJson(f, f.Address(const_cast<void*>(comp))));
+            continue;
+        }
+        if (!onLive && onPrefab) {
+            outOverrides.push_back({{"e", localIndex}, {"op", "removeComponent"}, {"c", rc.Meta.Name}});
+            continue;
+        }
+
+        // On both — diff each field.
         const json& pc = pristine.at(rc.Meta.Name);
         const void* comp = rc.GetConst(world.Registry, live);
         for (const auto& f : rc.Meta.Fields) {
@@ -867,15 +890,34 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             if (s.contains("tag"))
                 world.Registry.emplace_or_replace<TagComponent>(rootE, s["tag"].get<std::string>());
 
-            // #302 Part B — per-field overrides: replay onto the freshly rebuilt subtree, by
-            // prefab-local index into instCreated (== the .prefab file's entity order).
+            // #302 Part B — overrides: replay onto the freshly rebuilt subtree, by prefab-local
+            // index into instCreated (== the .prefab file's entity order). Two passes so a field
+            // override can't land before its addComponent (matters for hand-edited files; the
+            // diff already emits them in order).
             if (!missing && s.contains("overrides") && s["overrides"].is_array()) {
-                for (const auto& ov : s["overrides"]) {
+                auto entityFor = [&](const json& ov) -> entt::entity {
                     const int idx = ov.value("e", -1);
-                    if (idx < 0 || idx >= (int)instCreated.size() ||
-                        !world.Registry.valid(instCreated[idx]) || !ov.contains("v"))
-                        continue;
-                    ApplyPrefabOverride(world, assets, instCreated[idx],
+                    return (idx >= 0 && idx < (int)instCreated.size() && world.Registry.valid(instCreated[idx]))
+                               ? instCreated[idx] : entt::null;
+                };
+                for (const auto& ov : s["overrides"]) {                     // pass 1: structural
+                    const std::string op = ov.value("op", std::string());
+                    if (op.empty()) continue;
+                    entt::entity e = entityFor(ov);
+                    if (e == entt::null) continue;
+                    const std::string cn = ov.value("c", std::string());
+                    for (const auto& rc : ComponentRegistry::All()) {
+                        if (rc.Meta.Name != cn) continue;
+                        if (op == "addComponent")         { if (!rc.Has(world.Registry, e)) rc.Add(world.Registry, e); }
+                        else if (op == "removeComponent") { if (rc.Has(world.Registry, e)) rc.Remove(world.Registry, e); }
+                        break;
+                    }
+                }
+                for (const auto& ov : s["overrides"]) {                     // pass 2: field values
+                    if (ov.contains("op") || !ov.contains("v")) continue;
+                    entt::entity e = entityFor(ov);
+                    if (e == entt::null) continue;
+                    ApplyPrefabOverride(world, assets, e,
                                         ov.value("c", std::string()), ov.value("f", std::string()), ov["v"]);
                 }
             }
