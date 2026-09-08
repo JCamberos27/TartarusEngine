@@ -47,7 +47,10 @@
 //   13 - Asset Browser sort + refresh (#236 G): Get/SetAssetSort (packed mode*2+desc),
 //        RefreshAssetBrowser, GetAssetRefreshFlash. Also Console (#236 A5): EditorConsoleState
 //        gains Collapse / ClearOnPlay / ErrorPause.
-constexpr std::uint32_t kEditorModuleAPIVersion = 13;
+//   14 - Measure / ruler tool + Duplicate Array (#236 R2): Get/SetMeasureTool,
+//        RequestDuplicateArray for the toolbar buttons. Plus Get/ToggleInspectorLock so the
+//        Inspector's padlock can move into its title bar.
+constexpr std::uint32_t kEditorModuleAPIVersion = 14;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -69,7 +72,7 @@ enum EditorModuleLogLevel : int {
 // its "Toggle Console" button. Anything derived from this (e.g. the cached filtered index list)
 // stays module-side and is simply rebuilt after a reload.
 struct EditorConsoleState {
-    bool Visible = true;
+    bool Visible = false; // hidden on launch; toggled from the toolbar. Not persisted.
     bool ShowInfo = true;
     bool ShowWarning = true;
     bool ShowError = true;
@@ -362,6 +365,20 @@ struct EditorModuleHostAPI {
     int  (*GetAssetSort)() = nullptr;   void (*SetAssetSort)(int packed) = nullptr;
     void (*RefreshAssetBrowser)() = nullptr;
     float (*GetAssetRefreshFlash)() = nullptr;
+
+    // --- Measure / ruler tool + Duplicate Array (API v14, #236 R2) ------------------
+    bool (*GetMeasureTool)() = nullptr;  void (*SetMeasureTool)(bool on) = nullptr;
+    void (*RequestDuplicateArray)() = nullptr; // opens the array-duplicate modal (host self-gates on a selection)
+
+    // --- Inspector lock in the title bar (API v14, #236 R2 Inspector tail) ----------
+    bool (*GetInspectorLocked)() = nullptr;
+    void (*ToggleInspectorLock)() = nullptr; // host does the selection-snapshot capture
+
+    // --- Asset Browser search scope + favourites view (API v14, #236 G) -----------
+    // Search scope: false = current folder + subfolders; true = whole project.
+    bool (*GetAssetSearchGlobal)() = nullptr;  void (*SetAssetSearchGlobal)(bool on) = nullptr;
+    // Favourites-only grid filter (the toolbar star toggle).
+    bool (*GetAssetFavoritesOnly)() = nullptr; void (*SetAssetFavoritesOnly)(bool on) = nullptr;
 };
 
 struct EditorModuleAPI {

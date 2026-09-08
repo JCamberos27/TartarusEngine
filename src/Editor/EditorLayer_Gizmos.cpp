@@ -814,6 +814,37 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
     float w = vpSize.x, h = vpSize.y;
     if (w <= 0 || h <= 0) return;
 
+    // Eyedropper (#236 R2): armed by a colour field. The next viewport click captures the
+    // pixel for main.cpp to sample off the tonemapped scene FBO; right-click / Esc cancels.
+    if (EyedropperArmed() && !WantsCaptureMouse() && !m_ViewGizmoBlocking) {
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+            CancelEyedropper();
+            return;
+        }
+        if (leftPressed) {
+            m_EyedropperClickPos = { io.MousePos.x, io.MousePos.y };
+            m_EyedropperSampleRequested = true;
+            return;
+        }
+        return; // armed — swallow every viewport click
+    }
+
+    // Measure / ruler tool (#236 R2): clicks drop endpoints instead of selecting; right-click
+    // (or Esc, handled in the shortcut block) clears. Consumes the click either way.
+    if (m_MeasureTool && !WantsCaptureMouse() && !m_ViewGizmoBlocking && !m_GizmoEngaged) {
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) { m_MeasureCount = 0; return; }
+        if (leftPressed) {
+            glm::vec3 hit;
+            if (RaycastViewportSurface(world, editorCamera, {io.MousePos.x, io.MousePos.y}, hit)) {
+                if (m_MeasureCount >= 2) m_MeasureCount = 0;
+                if (m_MeasureCount == 0)      { m_MeasureP0 = hit; m_MeasureCount = 1; }
+                else                          { m_MeasureP1 = hit; m_MeasureCount = 2; }
+            }
+            return;
+        }
+        return; // tool active — never fall through to selection / box-select
+    }
+
     const float kDragThreshold = 6.0f; // pixels of movement before a press-drag-release counts as a box select rather than a click
 
     if (leftPressed) {
@@ -1499,6 +1530,29 @@ void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
     draw->PopClipRect();
 }
 
+// The transform gizmo and the nav compass each live in a fullscreen NoInputs overlay that
+// forces itself to the display front every frame (so the Scene image can't cover it). That
+// also parked it on top of the centered Preferences / Project Settings windows. Re-fronting
+// those specific floating windows right after puts them back above the overlay — they're the
+// only editor windows that float free over the viewport rather than dock beside it.
+static void KeepFloatingWindowsAboveOverlay() {
+    // Re-front EVERY free-floating panel/modal — not a hardcoded list — so the gizmo overlay
+    // never paints over Preferences, Lighting, Project Settings, or any modal. Docked panels
+    // (Hierarchy / Inspector / Asset Browser / Console) stay put: they're part of the main
+    // dockspace and don't overlap the viewport. Internal overlays/hosts all have "##" names,
+    // which this skips.
+    ImGuiContext& g = *ImGui::GetCurrentContext();
+    for (ImGuiWindow* w : g.Windows) {
+        if (!w->WasActive || w->Hidden) continue;
+        if (w->ParentWindow != nullptr) continue;                 // child of another window
+        if (w->Flags & ImGuiWindowFlags_ChildWindow) continue;
+        if (w->DockNode != nullptr) continue;                     // docked — not floating over the viewport
+        if (w->Name[0] == '#' && w->Name[1] == '#') continue;     // ##GizmoOverlay / ##DockHost / tooltips / ...
+        if (std::strcmp(w->Name, "Scene") == 0 || std::strcmp(w->Name, "Game") == 0) continue;
+        ImGui::BringWindowToDisplayFront(w);
+    }
+}
+
 // Shared setup behind DrawGizmo() (single-object) and DrawGroupGizmo() (multi-select). See the
 // declaration in EditorLayer.h for the contract; the comments on the individual calls below
 // explain why each one is needed.
@@ -1531,6 +1585,7 @@ bool EditorLayer::BeginGizmoOverlay(Camera& editorCamera, const char* overlayNam
     // newer, so it was appended in front). Forced to the front explicitly, every frame, so the
     // gizmo actually draws on top of the Scene image instead of being invisibly covered by it.
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+    KeepFloatingWindowsAboveOverlay(); // ...but not on top of Preferences / Project Settings
 
     // ImGuizmo hit-tests against its own draw-list window (this NoInputs overlay), which is never
     // ImGui's g.HoveredWindow — so without this, hovering the actual "Scene" panel makes
@@ -1709,6 +1764,81 @@ void EditorLayer::DrawGizmoDragReadout(const glm::vec3& pos, const glm::vec3& ro
     dl->AddText(at, IM_COL32(255, 255, 255, 255), buf);
 }
 
+// Ray from a screen pixel into the scene; returns the nearest renderable-AABB hit, or a point
+// ~20 units out along the ray when nothing is hit (so the ruler still gets a usable endpoint
+// over empty space). Shared by the Measure tool (#236 R2).
+bool EditorLayer::RaycastViewportSurface(World& world, Camera& cam, const glm::vec2& screenPx,
+                                         glm::vec3& outHit) const {
+    const float w = m_ViewportSize.x, h = m_ViewportSize.y;
+    if (w <= 1.0f || h <= 1.0f) return false;
+    const glm::mat4 invVP = glm::inverse(cam.ProjectionMatrix(w / h) * cam.ViewMatrix());
+    const float ndcX = (2.0f * (screenPx.x - m_ViewportPos.x)) / w - 1.0f;
+    const float ndcY = 1.0f - (2.0f * (screenPx.y - m_ViewportPos.y)) / h;
+    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
+    glm::vec4 farP  = invVP * glm::vec4(ndcX, ndcY,  1.0f, 1.0f);
+    nearP /= nearP.w; farP /= farP.w;
+    const glm::vec3 origin = glm::vec3(nearP);
+    const glm::vec3 dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
+
+    float bestT = 1e30f;
+    for (auto e : world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>)) {
+        const auto& r = world.Registry.get<const RenderableComponent>(e);
+        AABB wb = AABB{r.ModelRef->BoundsMin(), r.ModelRef->BoundsMax()}
+                     .Transformed(world.ComposeWorldTransform(e));
+        float t;
+        if (wb.RayIntersect(origin, dir, t) && t > 1e-3f && t < bestT) bestT = t;
+    }
+    outHit = origin + dir * (bestT < 1e29f ? bestT : 20.0f);
+    return true;
+}
+
+void EditorLayer::DrawMeasurement(Camera& cam) {
+    if (m_MeasureCount == 0) return;
+    const float w = m_ViewportSize.x, h = m_ViewportSize.y;
+    if (w <= 1.0f || h <= 1.0f) return;
+    const glm::mat4 vp = cam.ProjectionMatrix(w / h) * cam.ViewMatrix();
+    auto toScreen = [&](const glm::vec3& p, ImVec2& out) -> bool {
+        glm::vec4 c = vp * glm::vec4(p, 1.0f);
+        if (c.w <= 1e-4f) return false;
+        glm::vec3 ndc = glm::vec3(c) / c.w;
+        out = ImVec2(m_ViewportPos.x + (ndc.x * 0.5f + 0.5f) * w,
+                     m_ViewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * h);
+        return true;
+    };
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    const ImU32 col = IM_COL32(120, 220, 255, 255);
+
+    ImVec2 s0;
+    const bool have0 = toScreen(m_MeasureP0, s0);
+    if (have0) dl->AddCircleFilled(s0, 4.0f, col);
+
+    if (m_MeasureCount < 2) return;
+    ImVec2 s1;
+    if (!toScreen(m_MeasureP1, s1) || !have0) return;
+    dl->AddCircleFilled(s1, 4.0f, col);
+    // Dashed line.
+    const ImVec2 d(s1.x - s0.x, s1.y - s0.y);
+    const float len = std::sqrt(d.x * d.x + d.y * d.y);
+    if (len > 1.0f) {
+        const ImVec2 u(d.x / len, d.y / len);
+        for (float t = 0.0f; t < len; t += 10.0f) {
+            float t2 = std::min(t + 5.0f, len);
+            dl->AddLine(ImVec2(s0.x + u.x * t, s0.y + u.y * t),
+                        ImVec2(s0.x + u.x * t2, s0.y + u.y * t2), col, 1.6f);
+        }
+    }
+    const glm::vec3 delta = m_MeasureP1 - m_MeasureP0;
+    char buf[96];
+    std::snprintf(buf, sizeof(buf), "%.3f m   (%+.2f, %+.2f, %+.2f)",
+                  glm::length(delta), delta.x, delta.y, delta.z);
+    ImVec2 mid((s0.x + s1.x) * 0.5f, (s0.y + s1.y) * 0.5f);
+    ImVec2 ts = ImGui::CalcTextSize(buf);
+    ImVec2 tp(mid.x - ts.x * 0.5f, mid.y - ts.y - 6.0f);
+    dl->AddRectFilled(ImVec2(tp.x - 5.0f, tp.y - 3.0f), ImVec2(tp.x + ts.x + 5.0f, tp.y + ts.y + 3.0f),
+                      IM_COL32(15, 20, 28, 225), 3.0f);
+    dl->AddText(tp, IM_COL32(235, 245, 255, 255), buf);
+}
+
 void EditorLayer::ApplySurfaceSnap(World& world, Camera& editorCamera, entt::entity sel,
                                    const glm::mat4& parentWorld) {
     const float w = m_ViewportSize.x, h = m_ViewportSize.y;
@@ -1862,6 +1992,7 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     // higher in ImGui's window stack) covers this NoInputs overlay instead of the other way
     // around.
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+    KeepFloatingWindowsAboveOverlay(); // ...but keep it under Preferences / Project Settings
 
     glm::vec3 camPos = editorCamera.Position;
     glm::quat camRot = glm::quatLookAt(editorCamera.Front(), glm::vec3(0.0f, 1.0f, 0.0f));

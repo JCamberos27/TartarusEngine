@@ -277,6 +277,42 @@ void EditorLayer::RequestOpenScene(World& world, AssetLibrary& assets, const std
     OpenScene(world, assets, path);
 }
 
+void EditorLayer::RequestRevertScene(World& world, AssetLibrary& assets) {
+    if (m_CurrentScenePath.empty()) return; // Untitled — nothing on disk to revert to
+    std::error_code ec;
+    if (!std::filesystem::exists(m_CurrentScenePath, ec) || ec) {
+        Log::Warn("Revert Scene: '" + m_CurrentScenePath + "' no longer exists on disk.");
+        return;
+    }
+    if (m_Dirty) { m_RevertPromptPending = true; return; }
+    OpenScene(world, assets, m_CurrentScenePath);
+}
+
+void EditorLayer::DrawRevertScenePrompt(World& world, AssetLibrary& assets) {
+    if (!m_RevertPromptPending) return;
+    if (!ImGui::IsPopupOpen("Revert Scene?##Revert")) ImGui::OpenPopup("Revert Scene?##Revert");
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (ImGui::BeginPopupModal("Revert Scene?##Revert", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        std::string name = std::filesystem::path(m_CurrentScenePath).filename().string();
+        ImGui::Text("Discard unsaved changes to \"%s\"", name.c_str());
+        ImGui::TextUnformatted("and reload it from disk?");
+        ImGui::Separator();
+        if (PrimaryButton("Revert", ImVec2(110.0f, 0.0f))) {
+            m_RevertPromptPending = false;
+            ImGui::CloseCurrentPopup();
+            OpenScene(world, assets, m_CurrentScenePath);
+        }
+        ImGui::SameLine();
+        if (PrimaryButton("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            m_RevertPromptPending = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
 // "Save changes?" before New/Open discard the current scene (#216) — same Save / Don't Save /
 // Cancel shape as DrawExitPrompt, but for switching scenes rather than closing the window, so it
 // runs the stashed New/Open instead of exiting. A distinct popup ID ("##SceneSwitch") keeps it
@@ -368,6 +404,7 @@ void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& 
 }
 
 void EditorLayer::PushUndo(const World& world, const std::string& label) {
+    m_CtrlZSelectionMode = false; // a real scene edit — Ctrl+Z is scene-undo again (#236 R2)
     const std::string sceneJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                               : SceneSerializer::SaveToString(world);
     UndoEntry entry;

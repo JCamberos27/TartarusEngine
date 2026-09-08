@@ -429,6 +429,12 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
             if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As...", "Ctrl+Shift+S")) {
                 DoSaveAs(world, assets);
             }
+            if (ImGui::MenuItem(ICON_FA_ROTATE_LEFT "  Revert Scene", nullptr, false,
+                                !m_CurrentScenePath.empty())) {
+                RequestRevertScene(world, assets); // #236 R2 — reload from disk, discard edits
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Reload the scene file from disk, discarding unsaved (and in-play) changes.");
             ImGui::Separator();
             {
                 std::string cur = std::filesystem::path(m_CurrentScenePath).filename().string();
@@ -474,22 +480,78 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
                 FrameSceneBounds(world, editorCamera);
             }
 
-            ImGui::SeparatorText("Shading");
-            if (ImGui::MenuItem("  Shaded", nullptr, m_ShadingMode == ShadingMode::Shaded))
-                m_ShadingMode = ShadingMode::Shaded;
-            if (ImGui::MenuItem("  Wireframe", nullptr, m_ShadingMode == ShadingMode::Wireframe))
-                m_ShadingMode = ShadingMode::Wireframe;
-            if (ImGui::MenuItem("  Unlit", nullptr, m_ShadingMode == ShadingMode::Unlit))
-                m_ShadingMode = ShadingMode::Unlit;
+            ImGui::SeparatorText("Selection");
+            if (ImGui::MenuItem(ICON_FA_ARROW_LEFT "  Selection Back", "Ctrl+[", false, CanSelectionHistoryBack()))
+                SelectionHistoryBack(world);
+            if (ImGui::MenuItem(ICON_FA_ARROW_RIGHT "  Selection Forward", "Ctrl+]", false, CanSelectionHistoryForward()))
+                SelectionHistoryForward(world);
+
+            ImGui::SeparatorText("Draw mode");
+            {
+                static const char* kDrawModes[] = { "Shaded", "Wireframe", "Unlit",
+                                                    "Normals", "Shadow Cascades", "Mip / Texel Density" };
+                for (int i = 0; i < IM_ARRAYSIZE(kDrawModes); ++i) {
+                    if (ImGui::MenuItem(kDrawModes[i], nullptr, (int)m_ShadingMode == i))
+                        m_ShadingMode = (ShadingMode)i;
+                }
+                if (ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("Mip: albedo texture LOD as a blue\xE2\x86\x92red ramp (needs a textured object).");
+            }
 
             // Grid lives only on the toolbar now (#148) — the menu keeps just the toggles that
             // have no toolbar home.
             ImGui::SeparatorText("Options");
             ImGui::MenuItem(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform Gizmo", nullptr, &m_ShowGizmos);
+            if (ImGui::MenuItem(ICON_FA_RULER "  Measure Tool", nullptr, m_MeasureTool)) {
+                m_MeasureTool = !m_MeasureTool;
+                m_MeasureCount = 0;
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Click two points in the viewport to measure the distance. Right-click clears.");
             ImGui::MenuItem(ICON_FA_CROSSHAIRS "  Frame on Select", nullptr, &m_FrameOnSelect);
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Move the camera to frame each object as you select it.");
+
+            {
+                bool muted = EditorSettings::Get().AudioMuted;
+                if (ImGui::MenuItem(muted ? ICON_FA_VOLUME_XMARK "  Mute Audio"
+                                          : ICON_FA_VOLUME_HIGH "  Mute Audio", nullptr, muted)) {
+                    EditorSettings::Get().AudioMuted = !muted;
+                    AudioEngine::SetMuted(!muted);
+                    EditorSettings::Save();
+                }
+                if (ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("Master-mute the audio engine (editor previews and Play-mode sound).");
+            }
             if (ImGui::MenuItem(ICON_FA_BORDER_ALL "  Orthographic", "5", editorCamera.Orthographic)) {
                 ToggleOrthographic(world, editorCamera);
+            }
+
+            ImGui::SeparatorText("Camera");
+            {
+                auto& cs = EditorSettings::Get();
+                ImGui::PushItemWidth(190.0f * m_UIScale);
+                if (EditorUI::SliderFloat("FOV", &cs.SceneCameraFov, 30.0f, 110.0f, "%.0f\xC2\xB0")) {
+                    editorCamera.Fov = cs.SceneCameraFov;
+                }
+                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+                if (EditorUI::SliderFloat("Fly speed", &cs.SceneCameraFlySpeed, 0.5f, 60.0f, "%.1f")) {}
+                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+                if (ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("Editor fly-camera speed (Shift = ×3). Also: scroll while holding right-drag.");
+
+                if (EditorUI::SliderFloat("Near", &cs.SceneCameraNear, 0.001f, 10.0f, "%.3f",
+                                          ImGuiSliderFlags_Logarithmic)) {
+                    cs.SceneCameraNear = std::min(cs.SceneCameraNear, cs.SceneCameraFar - 0.01f);
+                    editorCamera.NearPlane = cs.SceneCameraNear;
+                }
+                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+                if (EditorUI::SliderFloat("Far", &cs.SceneCameraFar, 1.0f, 10000.0f, "%.0f",
+                                          ImGuiSliderFlags_Logarithmic)) {
+                    cs.SceneCameraFar = std::max(cs.SceneCameraFar, cs.SceneCameraNear + 0.01f);
+                    editorCamera.FarPlane = cs.SceneCameraFar;
+                }
+                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+                ImGui::PopItemWidth();
             }
 
             ImGui::SeparatorText("Snap to view");
@@ -508,6 +570,9 @@ void EditorLayer::DrawWindowMenuBody() {
             ImGui::MenuItem(ICON_FA_SITEMAP "  Scene Hierarchy", nullptr, &m_ShowHierarchy);
             ImGui::MenuItem(ICON_FA_SLIDERS "  Inspector", nullptr, &m_ShowInspector);
             ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Asset Browser", nullptr, &m_ShowAssetBrowser);
+            ImGui::MenuItem(ICON_FA_LIGHTBULB "  Lighting", nullptr, &m_ShowLighting);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Environment (sky / ambient), post-processing (exposure / tone map) and shadow settings in one place.");
             ImGui::Separator();
             ImGui::MenuItem(ICON_FA_GEARS "  Project Settings", nullptr, &m_ShowProjectSettings);
             if (ImGui::IsItemHovered())
@@ -517,6 +582,26 @@ void EditorLayer::DrawWindowMenuBody() {
             // the engine mark lives in Preferences ▸ Viewport.
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
                 m_ResetLayoutRequested = true;
+            }
+
+            // Layout presets (#236 R2) — named ImGui-ini snapshots in project/layouts/.
+            if (ImGui::BeginMenu(ICON_FA_TABLE_COLUMNS "  Layout Presets")) {
+                const std::vector<std::string> presets = LayoutPresetNames();
+                if (presets.empty()) ImGui::TextDisabled("(none saved yet)");
+                for (const std::string& name : presets) {
+                    if (ImGui::MenuItem(name.c_str())) RequestLoadLayoutPreset(name);
+                    ImGui::SameLine();
+                    ImGui::PushID(name.c_str());
+                    if (ImGui::SmallButton(ICON_FA_XMARK)) DeleteLayoutPreset(name);
+                    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete this preset");
+                    ImGui::PopID();
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save Current Layout\xE2\x80\xA6")) {
+                    m_SaveLayoutName[0] = '\0';
+                    m_ShowSaveLayout = true;
+                }
+                ImGui::EndMenu();
             }
 }
 
@@ -567,11 +652,12 @@ void EditorLayer::DrawGridSnapPopupBody() {
     ImGui::TextDisabled("GRID");
     bool showGrid = m_ShowGrid;
     if (ImGui::Checkbox("Visible", &showGrid)) m_ShowGrid = showGrid;
-    if (ImGui::DragFloat("Cell size", &gs.GridMinorSpacing, 0.05f, 0.05f, 50.0f, "%.2f m"))
-        EditorSettings::Save();
+    EditorUI::SliderFloat("Cell size", &gs.GridMinorSpacing, 0.05f, 50.0f, "%.2f m",
+                          ImGuiSliderFlags_Logarithmic);
+    if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("World units between minor grid lines.\nAlso the step used when snapping a dropped object to the ground grid.");
-    if (ImGui::DragInt("Major every", &gs.GridMajorEvery, 0.2f, 2, 100, "%d cells"))
+    if (EditorUI::SliderInt("Major every", &gs.GridMajorEvery, 2, 100, "%d cells"))
         EditorSettings::Save();
 
     ImGui::Separator();
@@ -579,9 +665,9 @@ void EditorLayer::DrawGridSnapPopupBody() {
     bool snap = m_GridSnapEnabled;
     if (ImGui::Checkbox("Snap enabled", &snap)) m_GridSnapEnabled = snap;
     ImGui::BeginDisabled(!m_GridSnapEnabled);
-    ImGui::DragFloat("Move",   &m_SnapTranslation, 0.05f, 0.001f, 100.0f, "%.3f m");
-    ImGui::DragFloat("Rotate", &m_SnapRotationDeg, 0.5f,  0.1f,   180.0f, "%.1f deg");
-    ImGui::DragFloat("Scale",  &m_SnapScale,       0.01f, 0.001f, 10.0f,  "%.3f");
+    EditorUI::SliderFloat("Move",   &m_SnapTranslation, 0.001f, 100.0f, "%.3f m", ImGuiSliderFlags_Logarithmic);
+    EditorUI::SliderFloat("Rotate", &m_SnapRotationDeg, 0.1f,   180.0f, "%.1f deg");
+    EditorUI::SliderFloat("Scale",  &m_SnapScale,       0.001f, 10.0f,  "%.3f",   ImGuiSliderFlags_Logarithmic);
     ImGui::EndDisabled();
 
     if (ImGui::SmallButton("Match Move snap to grid")) m_SnapTranslation = gs.GridMinorSpacing;

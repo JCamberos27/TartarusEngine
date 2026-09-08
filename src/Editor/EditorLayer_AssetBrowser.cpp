@@ -44,6 +44,7 @@
 #include <set>
 #include <sstream>
 #include <fstream>
+#include <json.hpp>
 #include <cmath>
 #include <cctype>
 #include <cstring>
@@ -202,6 +203,54 @@ bool SearchHasToken(const std::string& filter, const std::string& token) {
 
 } // namespace
 
+
+// --- Asset favourites (#236 G) — project/asset_favorites.json --------------------------------
+void EditorLayer::LoadAssetFavorites() {
+    m_AssetFavorites.clear();
+    std::ifstream in(ProjectPaths::Resolve("asset_favorites.json"));
+    if (!in.is_open()) return;
+    try {
+        nlohmann::json root; in >> root;
+        if (root.is_array())
+            for (const auto& v : root) if (v.is_string()) m_AssetFavorites.insert(v.get<std::string>());
+    } catch (const std::exception& e) {
+        Log::Warn(std::string("Asset favourites: failed to parse: ") + e.what());
+    }
+}
+
+void EditorLayer::SaveAssetFavorites() const {
+    nlohmann::json root = nlohmann::json::array();
+    for (const auto& k : m_AssetFavorites) root.push_back(k);
+    std::ofstream out(ProjectPaths::Resolve("asset_favorites.json"));
+    if (out.is_open()) out << root.dump(2) << '\n';
+}
+
+void EditorLayer::ToggleAssetFavorite(const std::string& key) {
+    if (key.empty()) return;
+    if (!m_AssetFavorites.insert(key).second) m_AssetFavorites.erase(key);
+    SaveAssetFavorites();
+}
+
+void EditorLayer::SetAssetFavorites(const std::vector<std::string>& keys, bool on) {
+    bool changed = false;
+    for (const std::string& k : keys) {
+        if (k.empty()) continue;
+        changed |= on ? m_AssetFavorites.insert(k).second : (m_AssetFavorites.erase(k) > 0);
+    }
+    if (changed) SaveAssetFavorites();
+}
+
+// Decoded once per sound path (#236 G). An empty vector means "not decodable / not audio" and
+// is cached too, so a bad file isn't re-probed every frame.
+const std::vector<float>& EditorLayer::SoundWaveform(const std::string& path) {
+    auto it = m_SoundWaveforms.find(path);
+    if (it == m_SoundWaveforms.end()) {
+        std::vector<float> peaks;
+        AudioEngine::WaveformPeaks(path, 48, peaks);
+        it = m_SoundWaveforms.emplace(path, std::move(peaks)).first;
+    }
+    return it->second;
+}
 
 // Rendered once per Model into its own small texture, then cached. Returns 0 while this frame's
 // render budget is spent — the caller falls back to the type glyph and picks it up next frame.
@@ -831,14 +880,27 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     // A type/label filter still narrows results even inside a specific folder (not just while
     // searching by name) - e.g. "t:Texture" alone, browsing normally, should hide non-textures
     // right where they are rather than forcing a switch to whole-library search first.
-    bool filtering = searching || !parsedSearch.typeTerms.empty() || !parsedSearch.labelTerms.empty();
+    // "filtering" collects candidate cells from the WHOLE library (not just the current
+    // folder). A search/type/label filter does that, and so does the favourites-only view —
+    // its whole point is to gather starred assets from anywhere.
+    bool filtering = searching || !parsedSearch.typeTerms.empty() || !parsedSearch.labelTerms.empty()
+                     || m_AssetFavoritesOnly;
+
+    // Search scope (#236 G): unless "whole project" is on, a filtered result must also live in
+    // the current folder or one of its descendants. Browsing (no filter) is always folder-local.
+    const bool scopeGlobal = EditorSettings::Get().AssetSearchGlobal;
+    auto inSearchScope = [&](const std::string& assetFolder) {
+        if (scopeGlobal || m_AssetFavoritesOnly || m_CurrentAssetFolder.empty()) return true;
+        return assetFolder == m_CurrentAssetFolder ||
+               assetFolder.rfind(m_CurrentAssetFolder + "/", 0) == 0;
+    };
 
     // A special, filesystem-backed folder (not one of AssetLibrary's virtual reference
     // folders) listing every *.json under scenes/ on disk, so scenes can be browsed and
     // opened the same way models/textures/sounds are, instead of only via File > Open.
     static const std::string kScenesFolder = "Scenes";
     assets.CreateFolder(kScenesFolder);
-    if (filtering || m_CurrentAssetFolder == kScenesFolder) {
+    if ((filtering && inSearchScope(kScenesFolder)) || m_CurrentAssetFolder == kScenesFolder) {
         RefreshScenesListingIfNeeded(); // (#175) cached — see m_ScenesListingCache
         for (const auto& path : m_ScenesListingCache.paths) {
             std::string name = std::filesystem::path(path).stem().string();
@@ -852,7 +914,7 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     // disappears). Not AssetLibrary entries — real image files, browsable and deletable here.
     static const std::string kShotsFolder = "Screenshots";
     assets.CreateFolder(kShotsFolder);
-    if (filtering || m_CurrentAssetFolder == kShotsFolder) {
+    if ((filtering && inSearchScope(kShotsFolder)) || m_CurrentAssetFolder == kShotsFolder) {
         RefreshShotsListingIfNeeded(); // (#175) cached — see m_ShotsListingCache
         std::set<std::string> seen;
         for (const auto& path : m_ShotsListingCache.paths) {
@@ -881,7 +943,8 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     }
 
     for (const auto& folder : assets.Folders()) {
-        bool show = filtering ? MatchesAssetSearch(parsedSearch, LeafNameOf(folder), "folder", {})
+        bool show = filtering ? (MatchesAssetSearch(parsedSearch, LeafNameOf(folder), "folder", {})
+                                 && inSearchScope(ParentFolderOf(folder)))
             : (ParentFolderOf(folder) == m_CurrentAssetFolder);
         if (show) cells.push_back({Cell::Kind::Folder, folder, LeafNameOf(folder), nullptr, nullptr});
     }
@@ -889,28 +952,36 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         std::string path = model->Path();
         std::string name = assets.DisplayName(path);
         if (!MatchesAssetSearch(parsedSearch, name, "model", assets.Labels(path))) continue;
-        bool show = filtering || assets.AssetFolder(path) == m_CurrentAssetFolder;
+        bool show = filtering ? inSearchScope(assets.AssetFolder(path)) : (assets.AssetFolder(path) == m_CurrentAssetFolder);
         if (show) cells.push_back({Cell::Kind::Model, path, name, model, nullptr});
     }
     for (const auto& tex : assets.Textures()) {
         std::string path = tex->Path();
         std::string name = assets.DisplayName(path);
         if (!MatchesAssetSearch(parsedSearch, name, "texture", assets.Labels(path))) continue;
-        bool show = filtering || assets.AssetFolder(path) == m_CurrentAssetFolder;
+        bool show = filtering ? inSearchScope(assets.AssetFolder(path)) : (assets.AssetFolder(path) == m_CurrentAssetFolder);
         if (show) cells.push_back({Cell::Kind::Texture, path, name, nullptr, tex});
     }
     for (const auto& sound : assets.Sounds()) {
         std::string name = assets.DisplayName(sound);
         if (!MatchesAssetSearch(parsedSearch, name, "sound", assets.Labels(sound))) continue;
-        bool show = filtering || assets.AssetFolder(sound) == m_CurrentAssetFolder;
+        bool show = filtering ? inSearchScope(assets.AssetFolder(sound)) : (assets.AssetFolder(sound) == m_CurrentAssetFolder);
         if (show) cells.push_back({Cell::Kind::Sound, sound, name, nullptr, nullptr});
     }
     for (const auto& prefab : assets.Prefabs()) {
         std::string name = assets.DisplayName(prefab);
         if (!MatchesAssetSearch(parsedSearch, name, "prefab", assets.Labels(prefab))) continue;
-        bool show = filtering || assets.AssetFolder(prefab) == m_CurrentAssetFolder;
+        bool show = filtering ? inSearchScope(assets.AssetFolder(prefab)) : (assets.AssetFolder(prefab) == m_CurrentAssetFolder);
         if (show) cells.push_back({Cell::Kind::Prefab, prefab, name, nullptr, nullptr});
     }
+
+    // Favourites view (#236 G): a flat list of just the starred entries — assets, folders,
+    // scenes and screenshots alike — from anywhere.
+    if (m_AssetFavoritesOnly) {
+        cells.erase(std::remove_if(cells.begin(), cells.end(),
+            [&](const Cell& c) { return !IsAssetFavorite(c.key); }), cells.end());
+    }
+
     // Sort control (#236 G) — folders always first; within each group, Name / Type / Date / Size,
     // ascending or descending. Date/Size stat the on-disk file once here (primitive:// and other
     // fileless keys fall back to 0, sorting to the "oldest / smallest" end).
@@ -1039,11 +1110,35 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ImVec2 imgSize(m_AssetIconSize, m_AssetIconSize);
                 ImVec2 imgPos(tileMin.x + (cellWidth - imgSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f);
                 dl->AddImage((ImTextureID)(intptr_t)modelThumb, imgPos, ImVec2(imgPos.x + imgSize.x, imgPos.y + imgSize.y));
+            } else if (cell.kind == Cell::Kind::Sound && !SoundWaveform(cell.key).empty()) {
+                // Waveform envelope in the icon square (#236 G), with a small play/stop glyph
+                // bottom-right so it still reads as a clickable sound.
+                const std::vector<float>& peaks = SoundWaveform(cell.key);
+                const float w = m_AssetIconSize, h = m_AssetIconSize;
+                const ImVec2 o(tileMin.x + (cellWidth - w) * 0.5f, tileMin.y + cellPadding * 0.5f);
+                const float midY = o.y + h * 0.5f;
+                const ImU32 wc = ImGui::GetColorU32(ImGuiCol_SliderGrab);
+                for (size_t i = 0; i < peaks.size(); ++i) {
+                    const float x = o.x + (float)i / (float)(peaks.size() - 1) * w;
+                    const float a = std::clamp(peaks[i], 0.0f, 1.0f) * (h * 0.46f);
+                    dl->AddLine(ImVec2(x, midY - a), ImVec2(x, midY + a), wc, 1.2f);
+                }
+                ImFont* font = ImGui::GetFont();
+                const float gs = m_AssetIconSize * 0.32f;
+                dl->AddText(font, gs, ImVec2(o.x + w - gs, o.y + h - gs),
+                            ImGui::GetColorU32(ImGuiCol_Text), playing ? ICON_FA_STOP : ICON_FA_PLAY);
             } else {
                 ImFont* font = ImGui::GetFont();
                 ImVec2 glyphSize = font->CalcTextSizeA(m_AssetIconSize, FLT_MAX, 0.0f, icon);
                 ImVec2 glyphPos(tileMin.x + (cellWidth - glyphSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - glyphSize.y) * 0.5f);
                 dl->AddText(font, m_AssetIconSize, glyphPos, textColor, icon);
+            }
+
+            // Favourite star badge, top-right of the tile (#236 G).
+            if (IsAssetFavorite(cell.key)) {
+                const float ss = std::max(10.0f, m_AssetIconSize * 0.28f);
+                dl->AddText(ImGui::GetFont(), ss, ImVec2(tileMin.x + cellWidth - ss - 3.0f, tileMin.y + 2.0f),
+                            ImGui::GetColorU32(ImGuiCol_SliderGrab), ICON_FA_STAR);
             }
 
             if (!isRenaming) {
@@ -1234,6 +1329,16 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     ImGui::SetClipboardText(cell.key.c_str());
                     Log::Info("Copied path: " + cell.key);
                 }
+                {
+                    std::vector<std::string> favKeys{ m_SelectedAssetKey };
+                    for (const auto& e : m_ExtraAssetSelection) favKeys.push_back(e.Key);
+                    const bool allFav = std::all_of(favKeys.begin(), favKeys.end(),
+                        [&](const std::string& k) { return IsAssetFavorite(k); });
+                    std::string lbl = std::string(ICON_FA_STAR "  ") +
+                        (allFav ? "Remove from Favourites" : "Add to Favourites");
+                    if (favKeys.size() > 1) lbl += " (" + std::to_string(favKeys.size()) + ")";
+                    if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
+                }
 
                 // Act on the whole selection when the right-clicked scene is part of a
                 // multi-selection, same as the generic asset menu.
@@ -1262,6 +1367,16 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
                     ImGui::SetClipboardText(cell.key.c_str());
                     Log::Info("Copied path: " + cell.key);
+                }
+                {
+                    std::vector<std::string> favKeys{ m_SelectedAssetKey };
+                    for (const auto& e : m_ExtraAssetSelection) favKeys.push_back(e.Key);
+                    const bool allFav = std::all_of(favKeys.begin(), favKeys.end(),
+                        [&](const std::string& k) { return IsAssetFavorite(k); });
+                    std::string lbl = std::string(ICON_FA_STAR "  ") +
+                        (allFav ? "Remove from Favourites" : "Add to Favourites");
+                    if (favKeys.size() > 1) lbl += " (" + std::to_string(favKeys.size()) + ")";
+                    if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
                 }
                 std::vector<AssetKeyRef> shotsForAction;
                 shotsForAction.push_back({m_SelectedAssetKey, false});
@@ -1316,6 +1431,18 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
                 ImGui::SetClipboardText(cell.key.c_str());
                 Log::Info("Copied path: " + cell.key);
+            }
+            {
+                // Favourites — acts on the whole selection when the right-clicked item is
+                // part of a multi-selection (#236 G).
+                std::vector<std::string> favKeys{ m_SelectedAssetKey };
+                for (const auto& e : m_ExtraAssetSelection) favKeys.push_back(e.Key);
+                const bool allFav = std::all_of(favKeys.begin(), favKeys.end(),
+                    [&](const std::string& k) { return IsAssetFavorite(k); });
+                std::string lbl = std::string(ICON_FA_STAR "  ") +
+                    (allFav ? "Remove from Favourites" : "Add to Favourites");
+                if (favKeys.size() > 1) lbl += " (" + std::to_string(favKeys.size()) + ")";
+                if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
             }
 
             // Reimport straight from the context menu instead of only via Import Settings >

@@ -57,6 +57,12 @@ void EditorSettings::Load() {
     s.GameViewMaximizeOnPlay = root.value("gameViewMaximizeOnPlay", s.GameViewMaximizeOnPlay);
     s.GameViewShowStats = root.value("gameViewShowStats", s.GameViewShowStats);
     s.SceneShowStats = root.value("sceneShowStats", s.SceneShowStats);
+    s.SceneCameraFov = root.value("sceneCameraFov", s.SceneCameraFov);
+    s.SceneCameraFlySpeed = root.value("sceneCameraFlySpeed", s.SceneCameraFlySpeed);
+    s.SceneCameraNear = root.value("sceneCameraNear", s.SceneCameraNear);
+    s.SceneCameraFar = root.value("sceneCameraFar", s.SceneCameraFar);
+    s.AudioMuted = root.value("audioMuted", s.AudioMuted);
+    s.AssetSearchGlobal = root.value("assetSearchGlobal", s.AssetSearchGlobal);
     s.GameViewPresetLabel = root.value("gameViewPresetLabel", s.GameViewPresetLabel);
     s.GameViewPresetWidth = root.value("gameViewPresetWidth", s.GameViewPresetWidth);
     s.GameViewPresetHeight = root.value("gameViewPresetHeight", s.GameViewPresetHeight);
@@ -113,6 +119,12 @@ void EditorSettings::Save() {
     root["gameViewMaximizeOnPlay"] = Get().GameViewMaximizeOnPlay;
     root["gameViewShowStats"] = Get().GameViewShowStats;
     root["sceneShowStats"] = Get().SceneShowStats;
+    root["sceneCameraFov"] = Get().SceneCameraFov;
+    root["sceneCameraFlySpeed"] = Get().SceneCameraFlySpeed;
+    root["sceneCameraNear"] = Get().SceneCameraNear;
+    root["sceneCameraFar"] = Get().SceneCameraFar;
+    root["audioMuted"] = Get().AudioMuted;
+    root["assetSearchGlobal"] = Get().AssetSearchGlobal;
     root["gameViewPresetLabel"] = Get().GameViewPresetLabel;
     root["gameViewPresetWidth"] = Get().GameViewPresetWidth;
     root["gameViewPresetHeight"] = Get().GameViewPresetHeight;

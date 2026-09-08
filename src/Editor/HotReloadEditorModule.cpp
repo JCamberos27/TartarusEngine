@@ -403,6 +403,15 @@ void  TbSetAssetSort(int packed) {
 }
 void  TbRefreshAssetBrowser() { if (g_Editor) g_Editor->RefreshAssetBrowser(); }
 float TbGetAssetRefreshFlash() { return g_Editor ? g_Editor->AssetRefreshFlash() : 0.0f; }
+bool  TbGetMeasureTool() { return g_Editor && g_Editor->MeasureToolActive(); }
+void  TbSetMeasureTool(bool on) { if (g_Editor) g_Editor->SetMeasureToolActive(on); }
+void  TbRequestDuplicateArray() { if (g_Editor) g_Editor->RequestArrayDuplicateModal(); }
+bool  TbGetInspectorLocked() { return g_Editor && g_Editor->IsInspectorLocked(); }
+void  TbToggleInspectorLock() { if (g_Editor) g_Editor->ToggleInspectorLock(); }
+bool  TbGetAssetSearchGlobal() { return EditorSettings::Get().AssetSearchGlobal; }
+void  TbSetAssetSearchGlobal(bool on) { EditorSettings::Get().AssetSearchGlobal = on; EditorSettings::Save(); }
+bool  TbGetAssetFavoritesOnly() { return g_Editor && g_Editor->AssetFavoritesOnly(); }
+void  TbSetAssetFavoritesOnly(bool on) { if (g_Editor) g_Editor->SetAssetFavoritesOnly(on); }
 
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
@@ -510,6 +519,11 @@ const EditorModuleHostAPI kHostAPI{
     &TbGetAssetSort,            &TbSetAssetSort,
     &TbRefreshAssetBrowser,
     &TbGetAssetRefreshFlash,
+    &TbGetMeasureTool,          &TbSetMeasureTool,
+    &TbRequestDuplicateArray,
+    &TbGetInspectorLocked,      &TbToggleInspectorLock,
+    &TbGetAssetSearchGlobal,    &TbSetAssetSearchGlobal,
+    &TbGetAssetFavoritesOnly,   &TbSetAssetFavoritesOnly,
 };
 
 } // namespace

@@ -41,7 +41,9 @@ glm::mat4 Camera::ViewMatrix() const {
     return glm::lookAt(Position, Position + Front(), glm::vec3(0, 1, 0));
 }
 
-glm::mat4 Camera::ProjectionMatrix(float aspect, float nearPlane, float farPlane) const {
+glm::mat4 Camera::ProjectionMatrix(float aspect, float nearOverride, float farOverride) const {
+    const float nearPlane = nearOverride >= 0.0f ? nearOverride : NearPlane;
+    const float farPlane  = farOverride  >= 0.0f ? farOverride  : FarPlane;
     if (Orthographic) {
         float halfW = OrthoHalfHeight * aspect;
         return glm::ortho(-halfW, halfW, -OrthoHalfHeight, OrthoHalfHeight, nearPlane, farPlane);

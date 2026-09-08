@@ -12,6 +12,7 @@
 #include <list>
 #include <memory>
 #include <functional>
+#include "Shortcuts.h" // Shortcuts::Chord - Preferences > Shortcuts capture state below
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
 #include "Model.h"   // ModelImportSettings - same
 #include "ImportQueueManager.h"
@@ -108,6 +109,27 @@ public:
     // Viewport tools (#236 E) — Hand tool (Q) and Lock View to Selected (Shift+F).
     bool HandToolActive() const { return m_HandTool; }
     void SetHandToolActive(bool on) { m_HandTool = on; }
+    bool MeasureToolActive() const { return m_MeasureTool; }
+    void SetMeasureToolActive(bool on) { m_MeasureTool = on; m_MeasureCount = 0; if (on) m_HandTool = false; }
+    // main.cpp pokes this whenever the fly speed changes via scroll (RMB-drag or Ctrl+scroll);
+    // Draw() fades out the transient "Fly speed: N" viewport readout (#236 R2).
+    void FlashFlySpeedHud() { m_FlySpeedHudTimer = 1.4f; }
+    void RequestArrayDuplicateModal() { m_ShowArrayDuplicate = true; } // toolbar button (#236 R2)
+    // Inspector padlock, driven from the panel's title bar (#236 R2). Toggle captures the live
+    // selection snapshot; call it before DrawInspectorBody() runs this frame.
+    bool IsInspectorLocked() const { return m_InspectorLocked; }
+    void ToggleInspectorLock();
+
+    // Eyedropper colour pick (#236 R2 Inspector tail). A colour field arms it with a pointer
+    // to its glm::vec3; the next viewport click samples the displayed Scene pixel there and
+    // writes it. main.cpp does the actual glReadPixels off the tonemapped scene FBO.
+    void ArmEyedropper(World* world, glm::vec3* target)
+        { m_EyedropperWorld = world; m_EyedropperTarget = target; m_EyedropperSampleRequested = false; }
+    void CancelEyedropper() { m_EyedropperTarget = nullptr; m_EyedropperSampleRequested = false; }
+    bool EyedropperArmed() const { return m_EyedropperTarget != nullptr; }
+    // main.cpp: true once on the frame a click landed; fills viewport-local pixel coords.
+    bool ConsumeEyedropperSample(float& outX, float& outY);
+    void ApplyEyedropperSample(const glm::vec3& rgb); // rgb in 0..1 display space
     bool LockViewToSelection() const { return m_LockViewToSelection; }
     void SetLockViewToSelection(bool on) { m_LockViewToSelection = on; m_LockViewHasCentroid = false; }
     int  ShadingModeIndex() const { return (int)m_ShadingMode; }
@@ -456,7 +478,13 @@ public:
 
     // Scene-view shading, chosen in the toolbar. main.cpp reads it to set the GL polygon mode
     // for the main draw pass (Wireframe) or skip the lighting/texture work entirely (Unlit).
-    enum class ShadingMode { Shaded, Wireframe, Unlit };
+    // Scene-view draw modes (#236 R2). Shaded/Wireframe/Unlit are the originals; Normals /
+    // Cascades / Mip are debug views driven by the model shader's uDebugView uniform.
+    enum class ShadingMode {
+        Shaded, Wireframe, Unlit,
+        Normals, Cascades, Mip,
+        Count
+    };
     ShadingMode GetShadingMode() const { return m_ShadingMode; }
 
     // Per-frame render statistics, filled in by main.cpp's draw loop and displayed by the
@@ -530,6 +558,26 @@ private:
     // rebuild the default panel arrangement from scratch.
     bool m_ResetLayoutRequested = false;
 
+    float m_FlySpeedHudTimer = 0.0f; // see FlashFlySpeedHud() (public, above)
+
+    // Eyedropper state (#236 R2). Target is a raw pointer into a live component / World member
+    // that stays valid for the one frame between arm and sample.
+    World* m_EyedropperWorld = nullptr;
+    glm::vec3* m_EyedropperTarget = nullptr;
+    bool m_EyedropperSampleRequested = false;
+    glm::vec2 m_EyedropperClickPos{0.0f};
+
+    // Layout presets (#236 R2 toolbar tail) — named ImGui-ini snapshots in project/layouts/.
+    // A load stages the ini text here; Draw() applies it via LoadIniSettingsFromMemory before
+    // the dockspace code runs, so the docked windows land where the preset put them.
+    void SaveLayoutPreset(const std::string& name);
+    void RequestLoadLayoutPreset(const std::string& name);
+    void DeleteLayoutPreset(const std::string& name);
+    std::vector<std::string> LayoutPresetNames() const;
+    std::string m_PendingLayoutIni;
+    bool m_ShowSaveLayout = false;
+    char m_SaveLayoutName[64] = "";
+
     // Defaults to a plausible full-window size so nothing divides by zero if anything reads
     // these before the first Draw() has run; overwritten every editor-mode frame after that.
     bool m_FocusSceneTabRequested = true;
@@ -592,6 +640,25 @@ private:
     // Edit-menu ops (#236): every entity in the scene / flip which entities are selected.
     void SelectAllEntities(World& world);
     void InvertSelection(World& world);
+
+    // Selection history (#236 R2) — back/forward through past selections. RecordSelectionHistory()
+    // polls the live selection once per frame from Draw(), so every selection path feeds the
+    // ring without per-call-site hooks; the nav functions set m_SelHistoryNavigating so the poll
+    // doesn't re-record its own change.
+    void RecordSelectionHistory();
+    void SelectionHistoryBack(World& world);
+    void SelectionHistoryForward(World& world);
+    bool CanSelectionHistoryBack() const    { return m_SelHistoryPos > 0; }
+    bool CanSelectionHistoryForward() const  { return m_SelHistoryPos + 1 < m_SelHistory.size(); }
+    void ApplySelectionSnapshot(World& world, const std::vector<entt::entity>& snap);
+    std::vector<std::vector<entt::entity>> m_SelHistory;
+    size_t m_SelHistoryPos = 0;
+    std::vector<entt::entity> m_SelSnapshotLast;
+    bool m_SelHistoryNavigating = false;
+    // When the most recent "action" was a selection change (not a scene edit), Ctrl+Z / Ctrl+Y
+    // walk the selection history instead of the scene undo stack — the user's mental model of
+    // "clicks are undoable actions". Cleared by any scene edit / scene undo / redo.
+    bool m_CtrlZSelectionMode = false;
     // Arrow / Home / End / type-to-select keyboard navigation of the tree (#236), gated the same
     // way Ctrl+A is (panel focused, no text field capturing keys). Runs once per frame after the
     // rows are drawn, off the published m_HierarchyVisibleOrder.
@@ -627,7 +694,27 @@ private:
     void SelectItem(entt::entity entity, bool addToSelection);
     void ClearSelection();
     void DeleteSelection(World& world);
-    void DuplicateSelection(World& world, AssetLibrary& assets);
+    // inPlace = true (the Ctrl+D shortcut, #236 F) skips the (1,0,1) nudge given to duplicated
+    // roots, so the copy lands exactly on the original; the menu items keep the nudge.
+    void DuplicateSelection(World& world, AssetLibrary& assets, bool inPlace = false);
+
+    // Array / grid duplicate (#236 R2): counts per axis, step in world units per axis. The
+    // (0,0,0) cell is the existing selection, so counts {3,1,1} makes 2 new copies.
+    void DuplicateSelectionArray(World& world, AssetLibrary& assets,
+                                 int cx, int cy, int cz, const glm::vec3& step);
+    void DrawArrayDuplicateModal(World& world, AssetLibrary& assets);
+    bool  m_ShowArrayDuplicate = false;
+
+    // Measure / ruler tool (#236 R2). While active, viewport clicks drop the two endpoints
+    // (raycast onto scene geometry, else a point on the far arc); right-click clears. The
+    // readout shows straight-line distance + per-axis deltas.
+    bool  m_MeasureTool = false;
+    int   m_MeasureCount = 0;            // 0 = none, 1 = first point set, 2 = both
+    glm::vec3 m_MeasureP0{0.0f}, m_MeasureP1{0.0f};
+    bool RaycastViewportSurface(World& world, Camera& cam, const glm::vec2& screenPx, glm::vec3& outHit) const;
+    void DrawMeasurement(Camera& cam);
+    int   m_ArrayDupCount[3] = { 3, 1, 1 };
+    float m_ArrayDupStep[3]  = { 2.0f, 0.0f, 0.0f };
     void DrawGroupGizmo(World& world, Camera& editorCamera);
     // Shared setup/teardown behind DrawGizmo() (single-object) and DrawGroupGizmo() (multi-select):
     // opens the fullscreen transparent overlay window ImGuizmo's hit-testing needs and configures
@@ -698,11 +785,26 @@ private:
     void DrawSceneVersionWarningPopup();
     std::string m_SceneVersionWarning;
 
+    // Lighting panel (#236 R2) — one place for the environment / post-process / shadow controls
+    // that were split between Preferences ▸ Environment and Preferences ▸ Performance. The three
+    // section helpers are shared, so Preferences renders the same widgets.
+    void DrawLightingPanel(World& world);
+    void DrawEnvironmentSettings(World& world, float itemWidth);
+    void DrawPostProcessSettings(float itemWidth);
+    void DrawShadowSettings(float itemWidth);
+    bool m_ShowLighting = false;
+
     // Preferences window (Ctrl+,) — replaces the old giant Settings menu-bar dropdown (#53).
     void DrawPreferencesWindow(World& world);
     bool m_ShowPreferences = false;
     int m_PrefsCategory = 0;
     std::string m_PrefsShortcutFilter;
+    // Preferences > Shortcuts (#236 F) — press-to-bind capture state. Empty id = not capturing.
+    // Stage 0 waits for the first key; stage 1 holds that combo (in m_PrefsCapturePrefix) while
+    // waiting for an Enter/click to confirm it or a second key to make it a G-then-S sequence.
+    std::string m_PrefsCapturingId;
+    int m_PrefsCaptureStage = 0;
+    Shortcuts::Chord m_PrefsCapturePrefix;
 
     // Project Settings window (#236 A4) — project-scoped (project/settings.json + layers.json),
     // kept separate from the per-user Preferences window above.
@@ -1001,6 +1103,11 @@ private:
     void RequestNewScene(World& world, AssetLibrary& assets);
     void RequestOpenScene(World& world, AssetLibrary& assets, const std::string& path);
     void DrawSceneSwitchPrompt(World& world, AssetLibrary& assets);
+    // Revert Scene (#236 R2) — reload m_CurrentScenePath from disk, discarding edits (and any
+    // in-play changes). Confirms first when the scene is dirty.
+    void RequestRevertScene(World& world, AssetLibrary& assets);
+    void DrawRevertScenePrompt(World& world, AssetLibrary& assets);
+    bool m_RevertPromptPending = false;
     bool m_ScenePromptPending = false;
     PendingSceneSwitch m_PendingSceneSwitch = PendingSceneSwitch::None;
     std::string m_PendingScenePath;
@@ -1096,6 +1203,26 @@ private:
     // unloaded entries just aren't inserted into the map yet, so they're retried next frame.
     std::unordered_map<std::string, std::shared_ptr<Texture>> m_ShotThumbs;
     int m_ScreenshotThumbBudgetThisFrame = 0;
+
+    // Sound-cell waveform envelopes (#236 G), decoded once per path via AudioEngine.
+    // Empty vector = decode failed / not audio; cached either way.
+    std::unordered_map<std::string, std::vector<float>> m_SoundWaveforms;
+    const std::vector<float>& SoundWaveform(const std::string& path);
+
+    // Asset favourites (#236 G) — a starred subset, persisted to project/asset_favorites.json.
+    // The star toggle on the Asset Browser toolbar filters the grid to just these.
+    std::set<std::string> m_AssetFavorites;
+    bool m_AssetFavoritesOnly = false;
+    void LoadAssetFavorites();
+    void SaveAssetFavorites() const;
+public:
+    bool IsAssetFavorite(const std::string& key) const { return m_AssetFavorites.count(key) != 0; }
+    void ToggleAssetFavorite(const std::string& key);
+    // Batch: set every key's favourite state to `on`, saving once. For multi-select.
+    void SetAssetFavorites(const std::vector<std::string>& keys, bool on);
+    bool AssetFavoritesOnly() const { return m_AssetFavoritesOnly; }
+    void SetAssetFavoritesOnly(bool on) { m_AssetFavoritesOnly = on; }
+private:
 
     // Cached directory listings backing the filesystem-based "Scenes" and "Screenshots" folders
     // (#175) — std::filesystem::directory_iterator used to run every single frame while either

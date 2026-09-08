@@ -386,7 +386,7 @@ void Draw(const EditorModuleHostAPI& host) {
     // Search box + the trailing icon buttons (Filters, Sort, Refresh — #236 G), pinned to the
     // right edge (or a new line if the breadcrumb has crowded them out).
     const float iconBtnW = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x;
-    const float trailingButtonsWidth = iconBtnW * 3.0f;
+    const float trailingButtonsWidth = iconBtnW * 5.0f; // favourites | scope | filter | sort | refresh
     const float targetX = ImGui::GetWindowContentRegionMax().x - (searchWidth + trailingButtonsWidth);
     if (targetX > ImGui::GetCursorPosX()) ImGui::SameLine(targetX);
     else ImGui::NewLine();
@@ -423,6 +423,32 @@ void Draw(const EditorModuleHostAPI& host) {
         anyFilterActive |= SearchHasToken(search, t);
     for (const auto& lbl : knownLabels)
         anyFilterActive |= SearchHasToken(search, "l:" + lbl);
+
+    // Favourites-only toggle (#236 G).
+    ImGui::SameLine();
+    {
+        bool favOnly = host.GetAssetFavoritesOnly && host.GetAssetFavoritesOnly();
+        if (favOnly) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+        if (ImGui::Button(ICON_FA_STAR "##favonly") && host.SetAssetFavoritesOnly)
+            host.SetAssetFavoritesOnly(!favOnly);
+        if (favOnly) ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered())
+            Tooltip(host, favOnly ? "Showing favourites only (click to show all)"
+                                  : "Show favourites only");
+    }
+
+    // Search scope toggle (#236 G): folder (+subfolders) vs whole project.
+    ImGui::SameLine();
+    {
+        bool global = host.GetAssetSearchGlobal && host.GetAssetSearchGlobal();
+        if (global) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+        if (ImGui::Button(global ? ICON_FA_GLOBE : ICON_FA_FOLDER_TREE) && host.SetAssetSearchGlobal)
+            host.SetAssetSearchGlobal(!global);
+        if (global) ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered())
+            Tooltip(host, global ? "Search scope: whole project (click for this folder)"
+                                 : "Search scope: this folder + subfolders (click for whole project)");
+    }
 
     ImGui::SameLine();
     if (anyFilterActive) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_CheckMark));

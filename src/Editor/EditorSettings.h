@@ -92,6 +92,22 @@ struct EditorSettings {
     // entity counts) — the editor-side counterpart of GameViewShowStats. Toggled from
     // View > Statistics or the toolbar chart button; persisted so the choice survives a restart.
     bool SceneShowStats = false;
+
+    // Editor fly-camera (#236 R2) — FOV in degrees; fly speed in world units/sec at 1x (Shift
+    // still ×3). Adjustable in View ▸ Camera and, for fly speed, by scrolling while holding RMB.
+    float SceneCameraFov = 75.0f;
+    float SceneCameraFlySpeed = 8.0f;
+    float SceneCameraNear = 0.05f;
+    float SceneCameraFar = 500.0f;
+
+    // View ▸ Mute Audio (#236 R2) — master-mutes the audio engine. Persisted so a muted
+    // session stays muted after a restart.
+    bool AudioMuted = false;
+
+    // Asset Browser search scope (#236 G): false = current folder + subfolders (Unity's
+    // default), true = the whole project. Toggled by the button next to the search box.
+    bool AssetSearchGlobal = false;
+
     std::string GameViewPresetLabel = "Free Aspect";
     int GameViewPresetWidth = 0;
     int GameViewPresetHeight = 0;

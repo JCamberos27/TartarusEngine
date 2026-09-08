@@ -18,6 +18,11 @@ public:
     bool Orthographic = false;
     float OrthoHalfHeight = 8.0f;
 
+    // Clip planes. Defaults match the old hard-coded ProjectionMatrix() arguments; the editor
+    // exposes them per-scene for the fly camera (#236 R2), the player camera leaves them alone.
+    float NearPlane = 0.05f;
+    float FarPlane  = 500.0f;
+
     glm::vec3 Front() const;
     glm::vec3 Right() const;
     glm::vec3 Up() const;
@@ -25,7 +30,8 @@ public:
     void ProcessMouseLook(float dx, float dy, float sensitivity = 0.1f);
 
     glm::mat4 ViewMatrix() const;
-    glm::mat4 ProjectionMatrix(float aspect, float nearPlane = 0.05f, float farPlane = 500.0f) const;
+    // nearOverride / farOverride < 0 (the default) use the NearPlane / FarPlane members.
+    glm::mat4 ProjectionMatrix(float aspect, float nearOverride = -1.0f, float farOverride = -1.0f) const;
 
 private:
     // Yaw/Pitch are public and frequently set directly (mouse look, editor camera snapping,
