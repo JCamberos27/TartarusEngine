@@ -1544,10 +1544,19 @@ static void KeepFloatingWindowsAboveOverlay() {
     ImGuiContext& g = *ImGui::GetCurrentContext();
     for (ImGuiWindow* w : g.Windows) {
         if (!w->WasActive || w->Hidden) continue;
+        // Popups, context menus and tooltips (a Combo's dropdown list, a right-click menu, a
+        // hover hint) must sit above the overlay no matter which window opened them — otherwise
+        // a Combo opened from Preferences renders behind this transparent fullscreen overlay and
+        // looks like it never opened. They carry ImGui's "##" auto-id names and a ParentWindow,
+        // so they'd be skipped by the floating-window filters below — front them first.
+        if (w->Flags & (ImGuiWindowFlags_Popup | ImGuiWindowFlags_Tooltip)) {
+            ImGui::BringWindowToDisplayFront(w);
+            continue;
+        }
         if (w->ParentWindow != nullptr) continue;                 // child of another window
         if (w->Flags & ImGuiWindowFlags_ChildWindow) continue;
         if (w->DockNode != nullptr) continue;                     // docked — not floating over the viewport
-        if (w->Name[0] == '#' && w->Name[1] == '#') continue;     // ##GizmoOverlay / ##DockHost / tooltips / ...
+        if (w->Name[0] == '#' && w->Name[1] == '#') continue;     // ##GizmoOverlay / ##DockHost / ...
         if (std::strcmp(w->Name, "Scene") == 0 || std::strcmp(w->Name, "Game") == 0) continue;
         ImGui::BringWindowToDisplayFront(w);
     }
