@@ -63,4 +63,18 @@ namespace SceneSerializer {
     bool SavePrefab(const World& world, entt::entity root, const std::string& path);
     entt::entity InstantiatePrefab(World& world, AssetLibrary& assets, const std::string& path,
         std::vector<entt::entity>* outAll = nullptr);
+
+    // --- Prefab per-field overrides, editor helpers (#302 Part B) -------------------------
+    // `component` is a ReflectComponent::Name or the specials "Transform" / "Name".
+    // True if `entity` (a member of a live prefab instance) currently holds a value for
+    // (component, field) that differs from the .prefab it came from. Always false for a field
+    // on the instance ROOT ("Transform" / "Name") — those are per-instance by design — and for
+    // an entity that isn't part of a prefab instance. The parsed .prefab is cached; call
+    // ClearPrefabPristineCache() when a scene loads or a .prefab is reimported.
+    bool IsPrefabFieldOverridden(const World& world, entt::entity entity,
+                                 const char* component, const char* field);
+    // Set (component, field) on `entity` back to its .prefab value. No-op if not overridden.
+    void RevertPrefabField(World& world, AssetLibrary& assets, entt::entity entity,
+                           const char* component, const char* field);
+    void ClearPrefabPristineCache();
 }
