@@ -313,21 +313,25 @@ void Draw(const EditorModuleHostAPI& host) {
     }
 
     ImGui::SameLine();
-    // Scene-view shading, cycling Shaded -> Wireframe -> Unlit like a draw-mode dropdown — part of
-    // the same "what the viewport shows" cluster as grid / snap / light gizmos.
+    // Scene-view draw-mode dropdown (#236 R2): Shaded / Wireframe / Unlit / Normals /
+    // Cascades / Mip — part of the "what the viewport shows" cluster.
     {
-        const int shading = host.GetShadingMode ? host.GetShadingMode() : 0; // 0 Shaded 1 Wireframe 2 Unlit
-        const char* shadingIcon = ICON_FA_CIRCLE_HALF_STROKE;
-        const char* shadingTip = "Shaded (click for Wireframe)";
-        if (shading == 1) {
-            shadingIcon = ICON_FA_BORDER_NONE;
-            shadingTip = "Wireframe (click for Unlit)";
-        } else if (shading == 2) {
-            shadingIcon = ICON_FA_SUN;
-            shadingTip = "Unlit (click for Shaded)";
-        }
-        if (ActionButton(host, shadingIcon, shadingTip, shading != 0) && host.SetShadingMode) {
-            host.SetShadingMode(shading == 0 ? 1 : (shading == 1 ? 2 : 0));
+        static const char* kDrawModes[] = { "Shaded", "Wireframe", "Unlit",
+                                            "Normals", "Shadow Cascades", "Mip / Texel Density" };
+        static const char* kIcons[] = { ICON_FA_CIRCLE_HALF_STROKE, ICON_FA_BORDER_NONE, ICON_FA_SUN,
+                                        ICON_FA_MOUNTAIN, ICON_FA_LAYER_GROUP, ICON_FA_IMAGE };
+        int shading = host.GetShadingMode ? host.GetShadingMode() : 0;
+        if (shading < 0 || shading >= IM_ARRAYSIZE(kDrawModes)) shading = 0;
+        char tip[96];
+        std::snprintf(tip, sizeof(tip), "Draw mode: %s (click to change)", kDrawModes[shading]);
+        if (ActionButton(host, kIcons[shading], tip, shading != 0)) ImGui::OpenPopup("##DrawModePopup");
+        if (ImGui::BeginPopup("##DrawModePopup")) {
+            xpMenuTextPush();
+            for (int i = 0; i < IM_ARRAYSIZE(kDrawModes); ++i)
+                if (ImGui::MenuItem(kDrawModes[i], nullptr, shading == i) && host.SetShadingMode)
+                    host.SetShadingMode(i);
+            xpMenuTextPop();
+            ImGui::EndPopup();
         }
     }
 

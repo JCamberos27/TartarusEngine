@@ -486,13 +486,17 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             if (ImGui::MenuItem(ICON_FA_ARROW_RIGHT "  Selection Forward", "Ctrl+]", false, CanSelectionHistoryForward()))
                 SelectionHistoryForward(world);
 
-            ImGui::SeparatorText("Shading");
-            if (ImGui::MenuItem("  Shaded", nullptr, m_ShadingMode == ShadingMode::Shaded))
-                m_ShadingMode = ShadingMode::Shaded;
-            if (ImGui::MenuItem("  Wireframe", nullptr, m_ShadingMode == ShadingMode::Wireframe))
-                m_ShadingMode = ShadingMode::Wireframe;
-            if (ImGui::MenuItem("  Unlit", nullptr, m_ShadingMode == ShadingMode::Unlit))
-                m_ShadingMode = ShadingMode::Unlit;
+            ImGui::SeparatorText("Draw mode");
+            {
+                static const char* kDrawModes[] = { "Shaded", "Wireframe", "Unlit",
+                                                    "Normals", "Shadow Cascades", "Mip / Texel Density" };
+                for (int i = 0; i < IM_ARRAYSIZE(kDrawModes); ++i) {
+                    if (ImGui::MenuItem(kDrawModes[i], nullptr, (int)m_ShadingMode == i))
+                        m_ShadingMode = (ShadingMode)i;
+                }
+                if (ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("Mip: albedo texture LOD as a blue\xE2\x86\x92red ramp (needs a textured object).");
+            }
 
             // Grid lives only on the toolbar now (#148) — the menu keeps just the toggles that
             // have no toolbar home.

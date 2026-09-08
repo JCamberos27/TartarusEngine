@@ -463,7 +463,13 @@ public:
 
     // Scene-view shading, chosen in the toolbar. main.cpp reads it to set the GL polygon mode
     // for the main draw pass (Wireframe) or skip the lighting/texture work entirely (Unlit).
-    enum class ShadingMode { Shaded, Wireframe, Unlit };
+    // Scene-view draw modes (#236 R2). Shaded/Wireframe/Unlit are the originals; Normals /
+    // Cascades / Mip are debug views driven by the model shader's uDebugView uniform.
+    enum class ShadingMode {
+        Shaded, Wireframe, Unlit,
+        Normals, Cascades, Mip,
+        Count
+    };
     ShadingMode GetShadingMode() const { return m_ShadingMode; }
 
     // Per-frame render statistics, filled in by main.cpp's draw loop and displayed by the

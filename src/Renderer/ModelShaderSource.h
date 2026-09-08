@@ -183,6 +183,12 @@ vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
 // geometry/UV problems read clearly without shading hiding them.
 uniform int uUnlit;
 
+// Scene-view debug draw modes (#236 R2). 0 = off (normal path).
+//   1 Normals   — world-space normal as RGB.
+//   2 Cascades  — tint by which sun-shadow cascade covers this fragment.
+//   3 Mip       — texture LOD of the albedo map as a colour ramp.
+uniform int uDebugView;
+
 // 0 (the real scene path): output LINEAR HDR — the shared Tonemapper pass does exposure +
 // curve + gamma once, after MSAA resolve. 1 (offscreen model preview / any target without a
 // tonemap pass): keep the old baked Reinhard + gamma so those thumbnails look unchanged.
@@ -501,6 +507,28 @@ void main() {
     if (uHasNormalMap == 1) {
         vec3 tangentNormal = texture(uNormalMap, vUV).rgb * 2.0 - 1.0;
         N = normalize(vTBN * tangentNormal);
+    }
+
+    // --- Scene-view debug draw modes (#236 R2) ---
+    if (uDebugView != 0) {
+        if (uDebugView == 1) {            // Normals
+            FragColor = vec4(N * 0.5 + 0.5, 1.0);
+        } else if (uDebugView == 2) {     // Shadow cascades
+            if (uShadowEnabled == 0) { FragColor = vec4(0.30, 0.30, 0.32, 1.0); return; }
+            float vz = -(uView * vec4(vWorldPos, 1.0)).z;
+            int ci = 0;
+            if (vz > uCascadeSplits.x) ci = 1;
+            if (vz > uCascadeSplits.y) ci = 2;
+            if (vz > uCascadeSplits.z) ci = 3;
+            vec3 cc[4] = vec3[4](vec3(0.95,0.35,0.35), vec3(0.35,0.9,0.4),
+                                 vec3(0.4,0.6,1.0),    vec3(1.0,0.95,0.4));
+            FragColor = vec4(mix(albedo, cc[ci], 0.55), 1.0);
+        } else {                          // 3 = Mip / texel density
+            float lod = uHasAlbedoMap == 1 ? textureQueryLod(uAlbedoMap, vUV).x : 0.0;
+            float t = clamp(lod / 6.0, 0.0, 1.0);
+            FragColor = vec4(mix(vec3(0.15,0.5,1.0), vec3(1.0,0.25,0.15), t), 1.0);
+        }
+        return;
     }
 
     vec3 emissiveEarly = uHasEmissiveMap == 1 ? (tri ? SampleTriplanar(uEmissiveMap, vWorldPos, triW, uTriplanarScale)
