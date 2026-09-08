@@ -21,9 +21,14 @@ undiscoverable feature may as well not exist.
    the control to exist), show it **disabled** with an explicit `(not implemented)` label and a
    tooltip pointing at the tracking issue — never rely on a code comment the user never sees.
 
-The native component registration system (#184) is the structural fix: if declaring a component
-generates its serialization, Inspector section and menu entry together, neither failure mode is
-possible by construction. This convention is what to follow until that lands.
+The native component registration system (#184 / #302) is the structural fix: registering a
+component with `ComponentRegistry` (`src/Game/ComponentRegistry.cpp`) generates its
+serialization, Inspector section and Add-Component entry together, so neither failure mode is
+possible by construction. `tools/check_component_registration.py` (a CI step, and runnable
+locally) enforces it — every struct in `src/Game/Components.h` must be registered there or
+listed in `tools/component_registration_allowlist.txt` with a reason. When adding a component,
+prefer registration; reach for the allow-list (and rule 3's disabled `(not implemented)`
+control) only when the editor genuinely needs a bespoke widget.
 
 ### Current applications
 

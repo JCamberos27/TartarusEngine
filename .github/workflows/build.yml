@@ -33,6 +33,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Structural guard for #302 / #184: every ECS component must be registered with
+      # ComponentRegistry (auto-generates its serialization + Inspector + Add Component) or
+      # explicitly allow-listed with a reason. Pure static check, no build needed — run it
+      # first so "added a component, forgot to wire it up" fails in seconds. Only meaningful on
+      # one config; the Debug job is enough.
+      - name: Component registration check
+        if: matrix.config == 'Debug'
+        run: python tools/check_component_registration.py
+
       # CMake's FetchContent re-clones + rebuilds glfw/glm/assimp/entt/imgui/imguizmo from
       # source every configure otherwise (assimp alone is the bulk of the build time). Keyed on
       # CMakeLists.txt so a dependency version bump invalidates the cache automatically.
