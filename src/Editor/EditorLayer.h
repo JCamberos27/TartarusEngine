@@ -240,6 +240,16 @@ public:
     // Public because file-local Inspector helpers (DrawVec3Row) invoke it. Revert is undoable;
     // Apply mutates the .prefab on disk.
     void PrefabFieldMenu(World& world, entt::entity entity, const char* component, const char* field);
+    // #315 — multi-select counterpart. Marker shows when ANY selected entity has (component,
+    // field) overridden; Revert reverts it on every overridden entity in one undo step, Apply
+    // writes each overridden instance's own value into its .prefab. Public for the same reason.
+    bool AnyPrefabFieldOverridden(World& world, const std::vector<entt::entity>& sel,
+                                  const char* component, const char* field);
+    void PrefabFieldMenuMulti(World& world, const std::vector<entt::entity>& sel,
+                              const char* component, const char* field);
+    void PrefabOverrideLabelMulti(World& world, const std::vector<entt::entity>& sel,
+                                  const char* component, const char* field,
+                                  const char* label, const char* tooltip);
 
     // --- Reloadable History HUD module bridge (issue #229, frame only, API v15) -------------
     // The module owns the bottom-right pinned HUD window + its pin/height math + the eased
