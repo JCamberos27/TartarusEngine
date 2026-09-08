@@ -90,6 +90,11 @@ struct PhysicsState {
     std::set<std::uint32_t>     playerTriggers;
     std::vector<TriggerEvent>   triggerEvents;
     std::set<TriggerPair>       enteredThisFrame;
+    // #185 PR 6 — meshes cooked from RenderableComponent geometry for ConvexHull / Mesh
+    // colliders. Refcounted by PhysX; released after the scene (which owns the shapes that
+    // reference them) and before PxPhysics.
+    std::vector<PxConvexMesh*>   convexMeshes;
+    std::vector<PxTriangleMesh*> triangleMeshes;
 #ifdef TARTARUS_PHYSX_PVD
     PxPvd*               pvd            = nullptr;
     PxPvdTransport*      pvdTransport   = nullptr;
@@ -156,6 +161,33 @@ void AutoBoxWorld(const entt::registry& reg, entt::entity e, const TransformComp
     }
 }
 
+// Cook a convex hull / triangle mesh straight into PxPhysics (immediate insertion — no
+// serialize round-trip). Returns null on failure (empty geometry, cook rejected).
+PxConvexMesh* CookConvex(PxPhysics& physics, const std::vector<glm::vec3>& verts) {
+    if (verts.size() < 4) return nullptr;
+    PxConvexMeshDesc d;
+    d.points.count  = (PxU32)verts.size();
+    d.points.stride = sizeof(glm::vec3);
+    d.points.data   = verts.data();
+    d.flags         = PxConvexFlag::eCOMPUTE_CONVEX;
+    d.vertexLimit   = (PxU16)255; // PhysX hull cap; a denser source is decimated to fit
+    PxCookingParams params(physics.getTolerancesScale());
+    return PxCreateConvexMesh(params, d, physics.getPhysicsInsertionCallback());
+}
+PxTriangleMesh* CookTriangle(PxPhysics& physics, const std::vector<glm::vec3>& verts,
+                             const std::vector<unsigned int>& indices) {
+    if (verts.size() < 3 || indices.size() < 3) return nullptr;
+    PxTriangleMeshDesc d;
+    d.points.count     = (PxU32)verts.size();
+    d.points.stride    = sizeof(glm::vec3);
+    d.points.data      = verts.data();
+    d.triangles.count  = (PxU32)(indices.size() / 3);
+    d.triangles.stride = 3 * sizeof(unsigned int);
+    d.triangles.data   = indices.data();
+    PxCookingParams params(physics.getTolerancesScale());
+    return PxCreateTriangleMesh(params, d, physics.getPhysicsInsertionCallback());
+}
+
 void BuildActors(PhysicsState& s, const World& world) {
     int statics = 0, dynamic = 0, kinematic = 0, skipped = 0;
     auto view = world.Registry.view<const TransformComponent, const ColliderComponent>(entt::exclude<InactiveTag>);
@@ -176,8 +208,50 @@ void BuildActors(PhysicsState& s, const World& world) {
         };
 
         const float sx = std::abs(t.Scale.x), sy = std::abs(t.Scale.y), sz = std::abs(t.Scale.z);
+        const bool meshKind = (c.Kind == ColliderComponent::Shape::ConvexHull ||
+                               c.Kind == ColliderComponent::Shape::Mesh);
 
-        if (c.HalfExtents == glm::vec3(0.0f)) {
+        if (meshKind) {
+            // Cook a hull / triangle mesh from the entity's render geometry (#185 PR 6).
+            const auto* rc = world.Registry.try_get<const RenderableComponent>(e);
+            std::vector<glm::vec3> verts;
+            std::vector<unsigned int> idx;
+            if (rc && rc->ModelRef) rc->ModelRef->CollisionGeometry(verts, idx);
+            if (verts.size() < 4) {
+                Log::Warn("PhysX: entity " + std::to_string(entt::to_integral(e)) +
+                          " has a mesh collider but no usable mesh — skipped.");
+                ++skipped;
+                continue;
+            }
+            actorPose  = PxTransform(ToPx(t.Position), EulerToPx(t.RotationEuler));
+            shapeLocal = PxTransform(ToPx(c.Center));
+            const PxMeshScale meshScale(ToPx(glm::abs(t.Scale)));
+
+            // A triangle mesh can't be on a non-kinematic dynamic body (PhysX restriction) —
+            // fall back to a convex hull for that case.
+            const bool dynamicNonKin = rb && !rb->IsKinematic;
+            const bool useTriangle = (c.Kind == ColliderComponent::Shape::Mesh) && !dynamicNonKin;
+            if (c.Kind == ColliderComponent::Shape::Mesh && dynamicNonKin)
+                Log::Warn("PhysX: entity " + std::to_string(entt::to_integral(e)) +
+                          " — a triangle-mesh collider can't be dynamic; using a convex hull.");
+
+            if (useTriangle) {
+                PxTriangleMesh* tm = CookTriangle(*s.physics, verts, idx);
+                if (!tm) { ++skipped; continue; }
+                s.triangleMeshes.push_back(tm);
+                make(PxTriangleMeshGeometry(tm, meshScale));
+            } else {
+                PxConvexMesh* cm = CookConvex(*s.physics, verts);
+                if (!cm) {
+                    Log::Warn("PhysX: entity " + std::to_string(entt::to_integral(e)) +
+                              " — convex cook failed (mesh too complex?) — skipped.");
+                    ++skipped;
+                    continue;
+                }
+                s.convexMeshes.push_back(cm);
+                make(PxConvexMeshGeometry(cm, meshScale));
+            }
+        } else if (c.HalfExtents == glm::vec3(0.0f)) {
             // Auto: an axis-aligned box the size of the render bounds.
             glm::vec3 center, half;
             AutoBoxWorld(world.Registry, e, t, center, half);
@@ -217,6 +291,7 @@ void BuildActors(PhysicsState& s, const World& world) {
                     make(PxCapsuleGeometry(r, hh));
                     break;
                 }
+                default: break; // ConvexHull / Mesh handled above (meshKind)
             }
         }
         if (!shape) { ++skipped; continue; }
@@ -389,6 +464,8 @@ void Destroy() {
     if (s->controller)      s->controller->release();
     if (s->controllerMgr)   s->controllerMgr->release();
     if (s->scene)           s->scene->release();
+    for (PxConvexMesh* m : s->convexMeshes)   if (m) m->release(); // #185 PR 6 — after the scene's shapes
+    for (PxTriangleMesh* m : s->triangleMeshes) if (m) m->release();
     if (s->defaultMaterial) s->defaultMaterial->release();
     if (s->dispatcher)      s->dispatcher->release();
     if (s->physics)         s->physics->release();

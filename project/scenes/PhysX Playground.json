@@ -119,6 +119,16 @@
       "center": [0.0, 1.2, 6.0], "size": [3.0, 2.4, 3.0], "rotation": [0.0, 0.0, 0.0],
       "color": [0.90, 0.85, 0.30],
       "collider": { "isTrigger": true }
+    },
+    {
+      "id": 16, "order": 16, "name": "8) Convex Hull (Rigidbody)", "parentId": -1,
+      "center": [2.0, 6.0, 4.0], "size": [1.0, 1.0, 1.0], "rotation": [20.0, 15.0, 25.0],
+      "color": [0.55, 0.75, 0.95],
+      "collider": { "isTrigger": false, "shape": 3 },
+      "Rigidbody": {
+        "Mass": 1.0, "Use Gravity": true, "Is Kinematic": false,
+        "Initial Velocity": [0.0, 0.0, 0.0], "Linear Damping": 0.05, "Angular Damping": 0.05
+      }
     }
   ],
   "empties": [
