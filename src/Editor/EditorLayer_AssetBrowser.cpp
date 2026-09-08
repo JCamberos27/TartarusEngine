@@ -833,12 +833,21 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     // right where they are rather than forcing a switch to whole-library search first.
     bool filtering = searching || !parsedSearch.typeTerms.empty() || !parsedSearch.labelTerms.empty();
 
+    // Search scope (#236 G): unless "whole project" is on, a filtered result must also live in
+    // the current folder or one of its descendants. Browsing (no filter) is always folder-local.
+    const bool scopeGlobal = EditorSettings::Get().AssetSearchGlobal;
+    auto inSearchScope = [&](const std::string& assetFolder) {
+        if (scopeGlobal || m_CurrentAssetFolder.empty()) return true;
+        return assetFolder == m_CurrentAssetFolder ||
+               assetFolder.rfind(m_CurrentAssetFolder + "/", 0) == 0;
+    };
+
     // A special, filesystem-backed folder (not one of AssetLibrary's virtual reference
     // folders) listing every *.json under scenes/ on disk, so scenes can be browsed and
     // opened the same way models/textures/sounds are, instead of only via File > Open.
     static const std::string kScenesFolder = "Scenes";
     assets.CreateFolder(kScenesFolder);
-    if (filtering || m_CurrentAssetFolder == kScenesFolder) {
+    if ((filtering && inSearchScope(kScenesFolder)) || m_CurrentAssetFolder == kScenesFolder) {
         RefreshScenesListingIfNeeded(); // (#175) cached — see m_ScenesListingCache
         for (const auto& path : m_ScenesListingCache.paths) {
             std::string name = std::filesystem::path(path).stem().string();
@@ -852,7 +861,7 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     // disappears). Not AssetLibrary entries — real image files, browsable and deletable here.
     static const std::string kShotsFolder = "Screenshots";
     assets.CreateFolder(kShotsFolder);
-    if (filtering || m_CurrentAssetFolder == kShotsFolder) {
+    if ((filtering && inSearchScope(kShotsFolder)) || m_CurrentAssetFolder == kShotsFolder) {
         RefreshShotsListingIfNeeded(); // (#175) cached — see m_ShotsListingCache
         std::set<std::string> seen;
         for (const auto& path : m_ShotsListingCache.paths) {
@@ -881,7 +890,8 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     }
 
     for (const auto& folder : assets.Folders()) {
-        bool show = filtering ? MatchesAssetSearch(parsedSearch, LeafNameOf(folder), "folder", {})
+        bool show = filtering ? (MatchesAssetSearch(parsedSearch, LeafNameOf(folder), "folder", {})
+                                 && inSearchScope(ParentFolderOf(folder)))
             : (ParentFolderOf(folder) == m_CurrentAssetFolder);
         if (show) cells.push_back({Cell::Kind::Folder, folder, LeafNameOf(folder), nullptr, nullptr});
     }
@@ -889,26 +899,26 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         std::string path = model->Path();
         std::string name = assets.DisplayName(path);
         if (!MatchesAssetSearch(parsedSearch, name, "model", assets.Labels(path))) continue;
-        bool show = filtering || assets.AssetFolder(path) == m_CurrentAssetFolder;
+        bool show = filtering ? inSearchScope(assets.AssetFolder(path)) : (assets.AssetFolder(path) == m_CurrentAssetFolder);
         if (show) cells.push_back({Cell::Kind::Model, path, name, model, nullptr});
     }
     for (const auto& tex : assets.Textures()) {
         std::string path = tex->Path();
         std::string name = assets.DisplayName(path);
         if (!MatchesAssetSearch(parsedSearch, name, "texture", assets.Labels(path))) continue;
-        bool show = filtering || assets.AssetFolder(path) == m_CurrentAssetFolder;
+        bool show = filtering ? inSearchScope(assets.AssetFolder(path)) : (assets.AssetFolder(path) == m_CurrentAssetFolder);
         if (show) cells.push_back({Cell::Kind::Texture, path, name, nullptr, tex});
     }
     for (const auto& sound : assets.Sounds()) {
         std::string name = assets.DisplayName(sound);
         if (!MatchesAssetSearch(parsedSearch, name, "sound", assets.Labels(sound))) continue;
-        bool show = filtering || assets.AssetFolder(sound) == m_CurrentAssetFolder;
+        bool show = filtering ? inSearchScope(assets.AssetFolder(sound)) : (assets.AssetFolder(sound) == m_CurrentAssetFolder);
         if (show) cells.push_back({Cell::Kind::Sound, sound, name, nullptr, nullptr});
     }
     for (const auto& prefab : assets.Prefabs()) {
         std::string name = assets.DisplayName(prefab);
         if (!MatchesAssetSearch(parsedSearch, name, "prefab", assets.Labels(prefab))) continue;
-        bool show = filtering || assets.AssetFolder(prefab) == m_CurrentAssetFolder;
+        bool show = filtering ? inSearchScope(assets.AssetFolder(prefab)) : (assets.AssetFolder(prefab) == m_CurrentAssetFolder);
         if (show) cells.push_back({Cell::Kind::Prefab, prefab, name, nullptr, nullptr});
     }
     // Sort control (#236 G) — folders always first; within each group, Name / Type / Date / Size,

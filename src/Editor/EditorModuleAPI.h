@@ -373,6 +373,10 @@ struct EditorModuleHostAPI {
     // --- Inspector lock in the title bar (API v14, #236 R2 Inspector tail) ----------
     bool (*GetInspectorLocked)() = nullptr;
     void (*ToggleInspectorLock)() = nullptr; // host does the selection-snapshot capture
+
+    // --- Asset Browser search scope (API v14, #236 G) ------------------------------
+    // false = current folder + subfolders; true = whole project.
+    bool (*GetAssetSearchGlobal)() = nullptr;  void (*SetAssetSearchGlobal)(bool on) = nullptr;
 };
 
 struct EditorModuleAPI {
