@@ -1387,3 +1387,65 @@ bool SceneSerializer::ApplyPrefabField(World& world, entt::entity entity,
               "'. Other instances update on their next load.");
     return true;
 }
+
+// #315 B4b — component add/remove overrides, editor helpers.
+
+bool SceneSerializer::IsPrefabComponentAdded(const World& world, entt::entity entity,
+                                             const char* component) {
+    PristineHit hit = FindPristineEntity(world, entity);
+    if (!hit.ent) return false;
+    for (const auto& rc : ComponentRegistry::All())
+        if (std::strcmp(rc.Meta.Name, component) == 0)
+            return rc.Has(world.Registry, entity) && !hit.ent->contains(component);
+    return false;
+}
+
+void SceneSerializer::RevertPrefabComponent(World& world, AssetLibrary& /*assets*/, entt::entity entity,
+                                            const char* component) {
+    if (!IsPrefabComponentAdded(world, entity, component)) return; // only "added" is revertable here
+    for (const auto& rc : ComponentRegistry::All())
+        if (std::strcmp(rc.Meta.Name, component) == 0) { rc.Remove(world.Registry, entity); return; }
+}
+
+bool SceneSerializer::ApplyPrefabComponent(World& world, entt::entity entity, const char* component) {
+    entt::entity root = entt::null;
+    for (entt::entity cur = entity; cur != entt::null; ) {
+        if (world.Registry.all_of<PrefabInstanceComponent>(cur)) { root = cur; break; }
+        const auto* h = world.Registry.try_get<HierarchyComponent>(cur);
+        cur = h ? h->Parent : entt::null;
+    }
+    if (root == entt::null) return false;
+    const auto& pi = world.Registry.get<PrefabInstanceComponent>(root);
+    int idx = -1;
+    for (std::size_t i = 0; i < pi.InstanceEntities.size(); ++i)
+        if (pi.InstanceEntities[i] == entity) { idx = (int)i; break; }
+    if (idx < 0) return false;
+
+    const RegisteredComponent* rcp = nullptr;
+    for (const auto& rc : ComponentRegistry::All())
+        if (std::strcmp(rc.Meta.Name, component) == 0) { rcp = &rc; break; }
+    if (!rcp || !rcp->Has(world.Registry, entity)) return false;
+
+    json prefab;
+    { std::ifstream f(pi.SourcePath);
+      if (!f.is_open()) return false;
+      try { f >> prefab; } catch (...) { return false; } }
+    json* pe = PrefabEntityObjectMutable(prefab, idx);
+    if (!pe) return false;
+
+    json cj;
+    const void* comp = rcp->GetConst(world.Registry, entity);
+    for (const auto& f : rcp->Meta.Fields)
+        cj[f.Name] = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
+    (*pe)[component] = std::move(cj);
+
+    std::ofstream out(pi.SourcePath);
+    if (!out.is_open()) return false;
+    out << prefab.dump(2);
+    out.close();
+
+    g_prefabPristineCache.erase(pi.SourcePath);
+    Log::Info("Applied component '" + std::string(component) + "' to prefab '" + pi.SourcePath +
+              "'. Other instances update on their next load.");
+    return true;
+}

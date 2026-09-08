@@ -81,5 +81,13 @@ namespace SceneSerializer {
     // on its next load. Mutates the .prefab on disk (dump(2)); not undoable, like SavePrefab.
     // Returns false if the entity isn't part of a live instance or the file can't be rewritten.
     bool ApplyPrefabField(World& world, entt::entity entity, const char* component, const char* field);
+
+    // Component add/remove overrides (#315 B4b). "Added" = `entity` carries a reflected
+    // `component` its .prefab counterpart doesn't. Revert removes it (undo-friendly via the
+    // caller's PushUndo); Apply writes the whole component block into the .prefab file.
+    bool IsPrefabComponentAdded(const World& world, entt::entity entity, const char* component);
+    void RevertPrefabComponent(World& world, AssetLibrary& assets, entt::entity entity, const char* component);
+    bool ApplyPrefabComponent(World& world, entt::entity entity, const char* component);
+
     void ClearPrefabPristineCache();
 }
