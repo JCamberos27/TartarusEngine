@@ -23,6 +23,7 @@ void RegisterEngineComponents() {
     Register<SpinComponent>({
         "Spin", ICON_FA_ARROWS_SPIN,
         "Spins the object around a local axis while playing (SpinSystem, in TartarusGame.dll).",
+        "Scripts",
         {
             { "Axis",  T::Vec3,  TARTARUS_REFLECT_FIELD(SpinComponent, Axis),  0.01f, "Local axis to rotate around." },
             { "Speed", T::Float, TARTARUS_REFLECT_FIELD(SpinComponent, Speed), 1.0f,  "Degrees per second." },
@@ -38,6 +39,7 @@ void RegisterEngineComponents() {
     Register<TransformControllerComponent>({
         "Transform Controller", ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT,
         "Drag-and-drop motion script: rotates, translates and scale-pulses the object while playing.",
+        "Scripts",
         {
             { "Script Path", T::String, TARTARUS_REFLECT_FIELD(TransformControllerComponent, ScriptPath), 0.0f,
               "Informational: which .tescript asset this behaviour was dragged from." },
@@ -65,6 +67,7 @@ void RegisterEngineComponents() {
         "Procedural motion driven every frame in Play mode - continuous spin, orbit around an "
         "axis, vertical bob, and light hue-cycling. All fields are additive and reversible "
         "(turning a rate back to 0 undoes its contribution).",
+        "Scripts",
         {
             { "Spin Deg/Sec", T::Vec3, TARTARUS_REFLECT_FIELD(AnimatorComponent, SpinDegPerSec), 1.0f,
               "Continuous local rotation, in degrees/second per axis." },
@@ -81,6 +84,27 @@ void RegisterEngineComponents() {
             { "Color Cycle Hz", T::Float, TARTARUS_REFLECT_FIELD(AnimatorComponent, ColorCycleHzPerSec), 0.01f,
               "Hue revolutions/second for this object's Light color. 0 leaves the color alone. "
               "Has no effect without a Light component." },
+        },
+    });
+
+    // Migrated from hand-coded serialization/Inspector code onto reflection (#302 Wave 1a). The
+    // three clip-plane / FOV fields are plain floats and multi-select already works generically
+    // (#235); the one Camera-specific control, the "Align to View" button (it reads the editor
+    // camera and writes this entity's TransformComponent), stays editor-side as a registered
+    // inspector-extra keyed "Camera" (EditorLayer_Inspector.cpp), since reflection describes data
+    // only and the editor camera isn't visible from TartarusGame.dll.
+    Register<CameraComponent>({
+        "Camera", ICON_FA_VIDEO,
+        "The Game view renders through this camera while editing, so you can frame a shot "
+        "without walking there. Play mode still uses the first-person controller.",
+        "Rendering",
+        {
+            { "Field of View", T::Float, TARTARUS_REFLECT_FIELD(CameraComponent, FovDegrees), 0.25f,
+              "Vertical field of view, in degrees.", 1.0f, 179.0f },
+            { "Near", T::Float, TARTARUS_REFLECT_FIELD(CameraComponent, NearPlane), 0.01f,
+              "Closest distance the camera renders.", 0.001f, 100.0f },
+            { "Far", T::Float, TARTARUS_REFLECT_FIELD(CameraComponent, FarPlane), 1.0f,
+              "Farthest distance the camera renders.", 0.1f, 100000.0f },
         },
     });
 }

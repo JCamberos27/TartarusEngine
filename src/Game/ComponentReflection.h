@@ -53,5 +53,10 @@ struct ReflectComponent {
     const char* Name = "";          // stable key: JSON object key, section title, menu label
     const char* Icon = "";          // ICON_FA_* string
     const char* Tooltip = nullptr;  // section / menu tooltip
+    // Add Component menu grouping — matches the hand-coded menu's SeparatorText headings
+    // ("Rendering", "Physics", "Audio", "Scripts"). Defaults to "Scripts": the first three
+    // reflected components (Spin, Transform Controller, Animator) are all script-like behaviours,
+    // and a non-script component (Camera) sets this explicitly.
+    const char* Category = "Scripts";
     std::vector<ReflectField> Fields;
 };
