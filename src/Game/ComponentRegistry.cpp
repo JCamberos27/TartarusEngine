@@ -4,6 +4,8 @@
 
 #include <IconsFontAwesome6.h>
 
+#include <cstring>
+
 namespace ComponentRegistry {
 
 namespace {
@@ -107,6 +109,86 @@ void RegisterEngineComponents() {
               "Farthest distance the camera renders.", 0.1f, 100000.0f },
         },
     });
+
+    // Migrated from hand-coded serialization/Inspector code onto reflection (#302 Wave 2b) — the
+    // first component to use every widget hint the reflection layer has (Enum, Color, sliders,
+    // log scale, format strings, per-Kind VisibleIf, the "Shadows" TreeNode group). Kind values
+    // must stay Point=0 / Spot=1 / Directional=2 to match LightComponent::Type and the VisibleIf
+    // gates below. ColorTempK is reflected (so it serializes) but EditorHidden — the Kelvin bar,
+    // eyedropper and Look-through / Drop-to-surface buttons are editor-only and live in
+    // EditorLayer::DrawReflectedComponentExtra / ...ExtraMulti keyed "Light".
+    {
+        ReflectComponent m;
+        m.Name = "Light"; m.Icon = ICON_FA_LIGHTBULB; m.Category = "Rendering";
+        m.Tooltip = "Casts light into the scene from this object's position.";
+        const char* kMoonShadows = ICON_FA_MOON "  Shadows";
+        m.Fields = {
+            { "Type", T::Enum, TARTARUS_REFLECT_FIELD(LightComponent, Kind), 0.0f,
+              "Point: all directions. Spot: a cone. Directional: a sun (parallel rays, no position or range)." },
+            { "Color", T::Color, TARTARUS_REFLECT_FIELD(LightComponent, Color), 0.0f,
+              "The light's colour. The button below drives it from a colour temperature instead." },
+            { "ColorTempK", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, ColorTempK) },
+            { "Intensity", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, Intensity), 0.05f,
+              "Brightness multiplier - higher is brighter.", 0.0f, 100.0f },
+            { "Range", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, Range), 0.1f,
+              "Distance (in world units) at which the light's effect fades to zero.", 0.1f, 200.0f },
+            { "Spot Angle", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, SpotAngleDegrees), 0.5f,
+              "Half-angle of the light cone, in degrees.\nThe cone points along the entity's -Z axis - use Rotation to aim it.",
+              1.0f, 89.0f },
+            { "Angular Size", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, AngularSizeDegrees), 0.05f,
+              "Apparent diameter of the sun disc, in degrees (~0.53 = Earth's sun).\nWider = softer shadows.\n"
+              "Aim the sun with the entity's Rotation (it shines along -Z).", 0.1f, 20.0f },
+            { "Cast Shadows", T::Bool, TARTARUS_REFLECT_FIELD(LightComponent, Shadow.Enabled), 0.0f,
+              "Render a shadow map for this light. Spot: one perspective pass (up to 4). Point: a\n"
+              "6-face cube (up to 2). Directional: cascaded maps for the sun." },
+            { "Shadow Bias", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, Shadow.Bias), 0.02f,
+              "Multiplier on the shader's depth bias. >1 pushes the shadow off contact\n(fixes acne); <1 pulls it back toward the caster.",
+              0.0f, 4.0f },
+            { "Shadow Normal Bias", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, Shadow.NormalBias), 0.02f,
+              "Multiplier on the normal-offset term. Widen if edges show light bleed.", 0.0f, 4.0f },
+            { "Shadow Softness", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, Shadow.Softness), 0.02f,
+              "Multiplier on the PCF filter radius. Higher = wider, softer penumbra.", 0.0f, 4.0f },
+            { "Shadow Near Plane", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, Shadow.NearPlane), 0.01f,
+              "Perspective near distance for this light's depth pass.\nRaise it to reclaim depth precision when the light sits far from what it lights.",
+              0.001f, 10.0f },
+            { "Shadow Resolution", T::Enum, TARTARUS_REFLECT_FIELD(LightComponent, Shadow.Resolution), 0.0f,
+              "Per-light shadow-map size (applies after per-light shadow maps)." },
+            { "Shadow Update Mode", T::Enum, TARTARUS_REFLECT_FIELD(LightComponent, Shadow.UpdateMode), 0.0f,
+              "Dynamic re-renders every frame; Static bakes once (applies after per-light shadow maps)." },
+        };
+        auto F = [&](const char* name) -> ReflectField& {
+            for (auto& f : m.Fields) if (std::strcmp(f.Name, name) == 0) return f;
+            return m.Fields[0];
+        };
+        F("Type").EnumLabels = "Point\0Spot\0Directional\0"; F("Type").EnumCount = 3;
+        // Colour + temperature share one control (RGB swatch OR a Kelvin bar, mutually
+        // exclusive), plus an eyedropper — all editor-only, so both fields serialize but the
+        // widget lives in DrawReflectedComponentExtra / ...ExtraMulti ("Light").
+        F("Color").EditorHidden = true;
+        F("ColorTempK").EditorHidden = true;
+        F("Intensity").Slider = true; F("Intensity").Logarithmic = true; F("Intensity").Format = "%.2f";
+        F("Range").Slider = true; F("Range").Logarithmic = true; F("Range").Format = "%.1f";
+        F("Range").VisibleIfField = "Type"; F("Range").VisibleIfValue = 2; F("Range").VisibleIfNot = true;
+        F("Spot Angle").Slider = true; F("Spot Angle").Format = "%.0f deg";
+        F("Spot Angle").VisibleIfField = "Type"; F("Spot Angle").VisibleIfValue = 1;
+        F("Angular Size").Slider = true; F("Angular Size").Format = "%.2f deg";
+        F("Angular Size").VisibleIfField = "Type"; F("Angular Size").VisibleIfValue = 2;
+        for (const char* g : { "Cast Shadows", "Shadow Bias", "Shadow Normal Bias", "Shadow Softness",
+                               "Shadow Near Plane", "Shadow Resolution", "Shadow Update Mode" })
+            F(g).Group = kMoonShadows;
+        for (const char* s : { "Shadow Bias", "Shadow Normal Bias", "Shadow Softness" }) {
+            F(s).Slider = true; F(s).Format = "x%.2f";
+        }
+        F("Shadow Near Plane").Slider = true; F("Shadow Near Plane").Logarithmic = true; F("Shadow Near Plane").Format = "%.3f";
+        for (const char* s : { "Shadow Near Plane", "Shadow Resolution", "Shadow Update Mode" }) {
+            F(s).VisibleIfField = "Type"; F(s).VisibleIfValue = 2; F(s).VisibleIfNot = true;
+        }
+        F("Shadow Resolution").EnumLabels = "Follow global\0" "512\0" "1024\0" "2048\0" "4096\0";
+        F("Shadow Resolution").EnumCount = 5;
+        F("Shadow Update Mode").EnumLabels = "Dynamic\0" "Static (bake once)\0" "Off\0";
+        F("Shadow Update Mode").EnumCount = 3;
+        Register<LightComponent>(std::move(m));
+    }
 }
 
 // Runs once, before main(). It only appends to All()'s function-local static, so there is no

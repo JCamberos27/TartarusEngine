@@ -1468,12 +1468,17 @@ private:
 
     // --- Inspector: Add / Remove Component -------------------------------------------------
     void DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity);
-    // #302: editor-only custom controls a reflection-registered component wants appended to its
-    // otherwise auto-generated Inspector section — e.g. Camera's "Align to View", which reads the
-    // editor camera (invisible from TartarusGame.dll, so it can't be a reflected field). Called
-    // once per reflected section, after the generic field widgets, inside the section. A no-op
-    // for components with nothing extra.
-    void DrawReflectedComponentExtra(const char* componentName, World& world, entt::entity entity);
+    // #302: editor-only custom controls a reflection-registered component wants inside its
+    // otherwise auto-generated Inspector section — e.g. Camera's "Align to View" or Light's
+    // colour / Kelvin control, which need editor state the game module can't see. Called once
+    // per reflected section at each phase: Top (before the generic field widgets) and Bottom
+    // (after them). A no-op for components with nothing extra.
+    enum class ReflectExtraPhase { Top, Bottom };
+    void DrawReflectedComponentExtra(const char* componentName, World& world, entt::entity entity,
+                                     ReflectExtraPhase phase);
+    // Multi-select counterpart: `sel` is every selected entity that has this component.
+    void DrawReflectedComponentExtraMulti(const char* componentName, World& world,
+                                          const std::vector<entt::entity>& sel, ReflectExtraPhase phase);
     char m_AddComponentFilter[64] = {};      // type-to-filter text in the Add Component popup (#236)
     bool m_AddComponentFilterFocus = false;  // grab the keyboard for it the frame the popup opens
     // Draws one removable component section with a header and a trailing "x" — returns true if
