@@ -100,32 +100,10 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
     if (world.Registry.all_of<HiddenInSceneTag>(entity)) j["sceneHidden"] = true; // #236 B — editor SceneVis
     if (world.Registry.all_of<SceneLockedTag>(entity)) j["sceneLocked"] = true;
 
-    if (const auto* light = world.Registry.try_get<LightComponent>(entity)) {
-        const char* kindStr = light->Kind == LightComponent::Type::Spot ? "spot"
-                            : light->Kind == LightComponent::Type::Directional ? "directional" : "point";
-        const auto& sh = light->Shadow;
-        j["light"] = {
-            {"kind", kindStr},
-            {"color", Vec3ToJson(light->Color)},
-            {"intensity", light->Intensity},
-            {"range", light->Range},
-            {"spotAngle", light->SpotAngleDegrees},
-            {"angularSize", light->AngularSizeDegrees},
-            {"colorTempK", light->ColorTempK},
-            // Legacy key, still written for one release so a scene saved here loads on an older
-            // build; new readers prefer the nested "shadow" object below.
-            {"castShadows", sh.Enabled},
-            {"shadow", {
-                {"enabled", sh.Enabled},
-                {"bias", sh.Bias},
-                {"normalBias", sh.NormalBias},
-                {"softness", sh.Softness},
-                {"nearPlane", sh.NearPlane},
-                {"resolution", sh.Resolution},
-                {"updateMode", sh.UpdateMode},
-            }},
-        };
-    }
+    // LightComponent moved onto reflection (#302 Wave 2b) — it round-trips through the generic
+    // "Light" block below. The old flat "light" object (incl. the legacy "castShadows" bool and
+    // nested "shadow") is still READ (see LoadEntity) for scenes authored before the migration.
+
     // Boxes get a Collider from World::CreateBox already; this only records one that was added
     // manually (to a placed model, via the Inspector's Add Component).
     if (const auto* collider = world.Registry.try_get<ColliderComponent>(entity)) {
@@ -181,7 +159,11 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
     if (j.value("sceneHidden", false)) world.Registry.emplace_or_replace<HiddenInSceneTag>(entity); // #236 B
     if (j.value("sceneLocked", false)) world.Registry.emplace_or_replace<SceneLockedTag>(entity);
 
-    if (j.contains("light")) {
+    // Legacy pre-#302 format: LightComponent moved onto reflection (keyed "Light" below), but
+    // scenes authored before the migration carry the old flat "light" object with its own key
+    // names (and the legacy "castShadows" bool). Read it only when the new key is absent, so a
+    // re-saved file goes through the generic path instead.
+    if (!j.contains("Light") && j.contains("light")) {
         const json& l = j["light"];
         LightComponent light;
         std::string lightKind = l.value("kind", std::string("point"));
