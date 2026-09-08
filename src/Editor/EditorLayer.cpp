@@ -19,6 +19,7 @@
 #include "ProjectPaths.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
+#include "Shortcuts.h"
 #include "GLStateCache.h"
 #include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
 #include "ScreenBlur.h"
@@ -89,6 +90,8 @@ void EditorLayer::Init(GLFWwindow* window) {
     EditorSettings::Load();
     LayerRegistry::Load(); // slot names for LayerComponent (#236 A1); project/layers.json
     ProjectSettings::Load(); // physics + tag vocabulary (#236 A4); project/settings.json
+    Shortcuts::Init(); // builtin key table + project/shortcuts.json overrides (#236 F)
+    LoadAssetFavorites(); // project/asset_favorites.json (#236 G)
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see ProjectPaths.h. Must match main.cpp's initial load: prefer the last-open scene if
@@ -572,6 +575,150 @@ void EditorLayer::Shutdown() {
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 }
+// --- Layout presets (#236 R2 toolbar tail) — named ImGui-ini snapshots in project/layouts/ ---
+namespace {
+std::string LayoutsDir() { return ProjectPaths::Resolve("layouts"); }
+std::string SanitizeLayoutName(const std::string& in) {
+    std::string s;
+    for (char c : in) if (std::isalnum((unsigned char)c) || c == ' ' || c == '-' || c == '_') s += c;
+    while (!s.empty() && s.front() == ' ') s.erase(s.begin());
+    while (!s.empty() && s.back() == ' ') s.pop_back();
+    if (s.size() > 48) s.resize(48);
+    return s;
+}
+}
+
+std::vector<std::string> EditorLayer::LayoutPresetNames() const {
+    std::vector<std::string> names;
+    std::error_code ec;
+    for (const auto& e : std::filesystem::directory_iterator(LayoutsDir(), ec)) {
+        if (ec) break;
+        if (e.is_regular_file() && e.path().extension() == ".ini")
+            names.push_back(e.path().stem().string());
+    }
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+void EditorLayer::SaveLayoutPreset(const std::string& rawName) {
+    const std::string name = SanitizeLayoutName(rawName);
+    if (name.empty()) { Log::Warn("Layout preset: name is empty after sanitising."); return; }
+    std::error_code ec;
+    std::filesystem::create_directories(LayoutsDir(), ec);
+    const std::string path = LayoutsDir() + "/" + name + ".ini";
+    std::ofstream out(path, std::ios::binary);
+    if (!out) { Log::Error("Layout preset: couldn't write '" + path + "'."); return; }
+    out << ImGui::SaveIniSettingsToMemory(nullptr);
+    Log::Info("Saved layout preset: " + name);
+}
+
+void EditorLayer::RequestLoadLayoutPreset(const std::string& name) {
+    const std::string path = LayoutsDir() + "/" + SanitizeLayoutName(name) + ".ini";
+    std::ifstream in(path, std::ios::binary);
+    if (!in) { Log::Error("Layout preset: '" + name + "' not found."); return; }
+    std::stringstream ss; ss << in.rdbuf();
+    m_PendingLayoutIni = ss.str(); // Draw() applies it before the dockspace is built
+}
+
+void EditorLayer::DeleteLayoutPreset(const std::string& name) {
+    std::error_code ec;
+    std::filesystem::remove(LayoutsDir() + "/" + SanitizeLayoutName(name) + ".ini", ec);
+}
+
+// --- Lighting panel + shared section helpers (#236 R2) -----------------------------------
+void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
+    ImGui::ColorEdit3("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
+    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour at the horizon.");
+    ImGui::ColorEdit3("Zenith color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
+    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour straight up.");
+    ImGui::SetNextItemWidth(w);
+    EditorUI::SliderFloat("Ambient intensity", &world.SkyAmbientIntensity, 0.0f, 3.0f, "%.2f x");
+    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Ambient Intensity");
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip(
+        "Strength of the image-based ambient light and reflections baked from the sky colours "
+        "above. 1.0 is physically consistent; 0 disables environment lighting entirely.");
+}
+
+void EditorLayer::DrawPostProcessSettings(float w) {
+    auto& prefs = EditorSettings::Get();
+    ImGui::SetNextItemWidth(w);
+    EditorUI::SliderFloat("Exposure (EV)", &prefs.ExposureEV, -6.0f, 6.0f, "%+.2f");
+    if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Photographic stops applied before the tone curve. 0 = neutral. Applies live.");
+
+    static const char* kTonemapLabels[] = { "Reinhard", "ACES", "AgX" };
+    int tm = std::clamp(prefs.TonemapOperator, 0, 2);
+    ImGui::SetNextItemWidth(w);
+    if (ImGui::Combo("Tone mapping", &tm, kTonemapLabels, IM_ARRAYSIZE(kTonemapLabels))) {
+        prefs.TonemapOperator = tm;
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Curve that maps linear HDR to display. ACES = punchy filmic; AgX = gentler, less hue shift.");
+}
+
+void EditorLayer::DrawShadowSettings(float w) {
+    auto& prefs = EditorSettings::Get();
+    if (ImGui::Checkbox("Cast sun shadows", &prefs.ShadowsEnabled)) EditorSettings::Save();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Cascaded shadow maps for the Directional light. Point/spot shadows are a later milestone.");
+
+    static const char* kShadowResLabels[] = { "1024", "2048", "4096" };
+    static const int   kShadowResValues[] = { 1024, 2048, 4096 };
+    int srIdx = 1;
+    for (int i = 0; i < 3; ++i) if (kShadowResValues[i] == prefs.ShadowResolution) { srIdx = i; break; }
+    if (!prefs.ShadowsEnabled) ImGui::BeginDisabled();
+    ImGui::SetNextItemWidth(w);
+    if (ImGui::Combo("Shadow resolution", &srIdx, kShadowResLabels, IM_ARRAYSIZE(kShadowResLabels))) {
+        prefs.ShadowResolution = kShadowResValues[srIdx];
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Per-cascade shadow map size. 4x memory + fill from 2048 to 4096.");
+
+    static const char* kCascadeLabels[] = { "2", "3", "4" };
+    int ccIdx = std::clamp(prefs.ShadowCascades - 2, 0, 2);
+    ImGui::SetNextItemWidth(w);
+    if (ImGui::Combo("Cascades", &ccIdx, kCascadeLabels, IM_ARRAYSIZE(kCascadeLabels))) {
+        prefs.ShadowCascades = ccIdx + 2;
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Number of shadow cascades. Fewer = cheaper depth passes, coarser shadows far from the camera.");
+
+    ImGui::SetNextItemWidth(w);
+    EditorUI::SliderFloat("Shadow distance", &prefs.ShadowDistance, 10.0f, 500.0f, "%.0f m");
+    if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("How far from the camera the cascades cover. Shorter = crisper shadows.");
+    if (!prefs.ShadowsEnabled) ImGui::EndDisabled();
+}
+
+void EditorLayer::DrawLightingPanel(World& world) {
+    if (!m_ShowLighting) return;
+    ImGui::SetNextWindowSize(ImVec2(340.0f * m_UIScale, 430.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    PushTabChromeText();
+    const bool open = ImGui::Begin(ICON_FA_LIGHTBULB "  Lighting", &m_ShowLighting);
+    PopTabChromeText();
+    if (!open) { ImGui::End(); return; }
+
+    const float w = 170.0f * m_UIScale;
+    ImGui::SeparatorText("Environment");
+    DrawEnvironmentSettings(world, w);
+    ImGui::Spacing();
+    ImGui::SeparatorText("Post-processing");
+    DrawPostProcessSettings(w);
+    ImGui::Spacing();
+    ImGui::SeparatorText("Shadows (Directional Sun)");
+    DrawShadowSettings(w);
+    ImGui::Spacing();
+    ImGui::TextDisabled("Environment is per-scene; post-processing & shadows persist in editor_prefs.json.");
+    ImGui::End();
+}
+
 void EditorLayer::DrawPreferencesWindow(World& world) {
     if (!m_ShowPreferences) return;
 
@@ -727,21 +874,17 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Master strength of the grid lines. The grid also fades out on its own as the view tilts toward the horizon.");
         ImGui::SetNextItemWidth(kw);
-        if (ImGui::DragFloat("Line spacing", &prefs.GridMinorSpacing, 0.05f, 0.05f, 50.0f, "%.2f")) {
-            prefs.GridMinorSpacing = std::clamp(prefs.GridMinorSpacing, 0.05f, 50.0f);
-        }
+        EditorUI::SliderFloat("Line spacing", &prefs.GridMinorSpacing, 0.05f, 50.0f, "%.2f",
+                              ImGuiSliderFlags_Logarithmic);
         if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("World units between minor lines. Also the step used by grid-snapped placement.");
         ImGui::SetNextItemWidth(kw);
-        if (ImGui::DragInt("Major line every", &prefs.GridMajorEvery, 0.2f, 2, 50, "%d cells")) {
-            prefs.GridMajorEvery = std::clamp(prefs.GridMajorEvery, 2, 50);
-        }
+        EditorUI::SliderInt("Major line every", &prefs.GridMajorEvery, 2, 50, "%d cells");
         if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("A brighter major line is drawn every N minor cells.");
         ImGui::SetNextItemWidth(kw);
-        if (ImGui::DragFloat("Fade distance", &prefs.GridFadeDistance, 1.0f, 10.0f, 1000.0f, "%.0f m")) {
-            prefs.GridFadeDistance = std::clamp(prefs.GridFadeDistance, 10.0f, 1000.0f);
-        }
+        EditorUI::SliderFloat("Fade distance", &prefs.GridFadeDistance, 10.0f, 1000.0f, "%.0f m",
+                              ImGuiSliderFlags_Logarithmic);
         if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Distance from the camera at which the grid has fully faded out.");
         if (ImGui::Checkbox("Show axis lines", &prefs.GridShowAxisLines)) EditorSettings::Save();
@@ -756,30 +899,19 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
 
         ImGui::SeparatorText("Snapping");
         ImGui::SetNextItemWidth(kw);
-        ImGui::DragFloat("Position snap", &m_SnapTranslation, 0.05f, 0.01f, 50.0f, "%.2f");
+        EditorUI::SliderFloat("Position snap", &m_SnapTranslation, 0.01f, 50.0f, "%.2f m", ImGuiSliderFlags_Logarithmic);
         ImGui::SetNextItemWidth(kw);
         EditorUI::SliderFloat("Rotation snap", &m_SnapRotationDeg, 1.0f, 180.0f, "%.1f deg");
         ImGui::SetNextItemWidth(kw);
-        ImGui::DragFloat("Scale snap", &m_SnapScale, 0.01f, 0.01f, 5.0f, "%.2f");
+        EditorUI::SliderFloat("Scale snap", &m_SnapScale, 0.01f, 5.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
         ImGui::TextDisabled("The grid + snap on/off toggles are on the toolbar.");
         break;
 
     case 3: // Environment
         ImGui::SeparatorText("Environment");
-        ImGui::ColorEdit3("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
-        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour at the horizon.");
-        ImGui::ColorEdit3("Zenith color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
-        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour straight up.");
-        // #196: the sky now lights the scene (irradiance + reflection probes baked from these
-        // two colours), so this is the ambient control the engine previously had nowhere.
-        ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Ambient intensity", &world.SkyAmbientIntensity, 0.0f, 3.0f, "%.2f x");
-        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Ambient Intensity");
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip(
-            "Strength of the image-based ambient light and reflections baked from the sky colours "
-            "above. 1.0 is physically consistent; 0 disables environment lighting entirely.");
+        DrawEnvironmentSettings(world, kw); // shared with Window ▸ Lighting (#236 R2)
+        ImGui::Spacing();
+        if (ImGui::SmallButton(ICON_FA_LIGHTBULB "  Open Lighting panel")) m_ShowLighting = true;
         break;
 
     case 4: // Auto-Save
@@ -839,21 +971,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ImGui::Spacing();
         ImGui::SeparatorText("Rendering (HDR)");
 
-        ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Exposure (EV)", &prefs.ExposureEV, -6.0f, 6.0f, "%+.2f");
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Photographic stops applied before the tone curve. 0 = neutral. Applies live.");
-
-        static const char* kTonemapLabels[] = { "Reinhard", "ACES", "AgX" };
-        int tm = std::clamp(prefs.TonemapOperator, 0, 2);
-        ImGui::SetNextItemWidth(kw);
-        if (ImGui::Combo("Tone mapping", &tm, kTonemapLabels, IM_ARRAYSIZE(kTonemapLabels))) {
-            prefs.TonemapOperator = tm;
-            EditorSettings::Save();
-        }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Curve that maps linear HDR to display. ACES = punchy filmic; AgX = gentler, less hue shift.");
+        DrawPostProcessSettings(kw); // exposure + tone mapping — shared with Window ▸ Lighting
 
         static const char* kMsaaLabels[] = { "Off", "2x", "4x", "8x" };
         static const int   kMsaaValues[] = { 1, 2, 4, 8 };
@@ -869,99 +987,201 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
 
         ImGui::Spacing();
         ImGui::SeparatorText("Shadows (Directional Sun)");
-
-        if (ImGui::Checkbox("Cast sun shadows", &prefs.ShadowsEnabled)) EditorSettings::Save();
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Cascaded shadow maps for the Directional light. Point/spot shadows are a later milestone.");
-
-        static const char* kShadowResLabels[] = { "1024", "2048", "4096" };
-        static const int   kShadowResValues[] = { 1024, 2048, 4096 };
-        int srIdx = 1;
-        for (int i = 0; i < 3; ++i) if (kShadowResValues[i] == prefs.ShadowResolution) { srIdx = i; break; }
-        if (!prefs.ShadowsEnabled) ImGui::BeginDisabled();
-        ImGui::SetNextItemWidth(kw);
-        if (ImGui::Combo("Shadow resolution", &srIdx, kShadowResLabels, IM_ARRAYSIZE(kShadowResLabels))) {
-            prefs.ShadowResolution = kShadowResValues[srIdx];
-            EditorSettings::Save();
-        }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Per-cascade shadow map size. 4x memory + fill from 2048 to 4096.");
-
-        static const char* kCascadeLabels[] = { "2", "3", "4" };
-        int ccIdx = std::clamp(prefs.ShadowCascades - 2, 0, 2);
-        ImGui::SetNextItemWidth(kw);
-        if (ImGui::Combo("Cascades", &ccIdx, kCascadeLabels, IM_ARRAYSIZE(kCascadeLabels))) {
-            prefs.ShadowCascades = ccIdx + 2;
-            EditorSettings::Save();
-        }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Number of shadow cascades. Fewer = cheaper depth passes, coarser shadows far from the camera.");
-
-        ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Shadow distance", &prefs.ShadowDistance, 10.0f, 500.0f, "%.0f m");
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("How far from the camera the cascades cover. Shorter = crisper shadows.");
-        if (!prefs.ShadowsEnabled) ImGui::EndDisabled();
+        DrawShadowSettings(kw); // shared with Window ▸ Lighting
 
         ImGui::Spacing();
         ImGui::TextDisabled("Changes apply immediately. All of these persist in editor_prefs.json.");
+        ImGui::SameLine();
+        if (ImGui::SmallButton(ICON_FA_LIGHTBULB "  Lighting panel")) m_ShowLighting = true;
         break;
     }
 
-    case 6: { // Shortcuts
-        ImGui::SeparatorText("Shortcuts");
-        ImGui::SetNextItemWidth(-1.0f);
-        char buf[64];
-        snprintf(buf, sizeof(buf), "%s", m_PrefsShortcutFilter.c_str());
-        if (ImGui::InputTextWithHint("##scfilter", ICON_FA_MAGNIFYING_GLASS "  Filter...", buf, sizeof(buf)))
-            m_PrefsShortcutFilter = buf;
-        static const std::pair<const char*, const char*> kShortcuts[] = {
-            {"Fly camera", "hold RMB + WASDQE"},
-            {"Zoom / dolly", "scroll wheel  ·  Alt+RMB drag"},
-            {"Pan view", "middle-drag  ·  Hand tool (Q) + left-drag"},
-            {"Orbit selection", "Alt + left-drag"},
-            {"Lock view to selection (camera follows)", "Shift+F"},
-            {"View presets", "1 / 3 / 7 / 0  (or numpad; Ctrl = opposite side)"},
-            {"Toggle orthographic", "5  (or numpad 5)"},
-            {"Frame selection", "F"},
-            {"Quick create (Create menu at cursor)", "Shift+A"},
-            {"Create Empty Child (of the selection)", "Ctrl+Shift+N"},
-            {"Toggle Active State (selection)", "Alt+Shift+A"},
-            {"Select All / Deselect / Invert", "Ctrl+A / Ctrl+Shift+A / Ctrl+I"},
-            {"Align selected Camera to view", "Ctrl+Shift+F"},
-            {"Tools: hand / move / rotate / scale / rect / transform", "Q / W / E / R / T / Y"},
-            {"Vertex grab", "hold V"},
-            {"Surface snap while moving (invert the toggle)", "hold Shift"},
-            {"Multi-select", "Ctrl+Click  ·  drag a box"},
-            {"Undo / Redo", "Ctrl+Z / Ctrl+Y"},
-            {"Save / Save As", "Ctrl+S / Ctrl+Shift+S"},
-            {"New / Open scene", "Ctrl+N / Ctrl+O"},
-            {"Duplicate", "Ctrl+D"},
-            {"Copy / Cut / Paste", "Ctrl+C / Ctrl+X / Ctrl+V"},
-            {"Delete selection", "Delete"},
-            {"Rename selection (edit mode)", "F2  (or double-click in Hierarchy)"},
-            {"Open Preferences", "Ctrl+,"},
-            {"Toggle window fullscreen", "F11"},
-            {"Screenshot (Capture tool)", "Print Screen"},
-            {"Play / Stop", "F1"},
-            {"Pause / Resume  (Play mode)", "F2"},
-            {"Step one frame  (while paused)", "F3"},
-            {"Maximize / restore Game view  (Play mode)", "F4"},
-            {"Release mouse & keyboard from the running game", "Esc"},
+    case 6: { // Shortcuts — compact press-to-bind editor over the Shortcuts registry (#236 F)
+        auto ctxName = [](std::uint32_t c) -> const char* {
+            switch (c) {
+                case Shortcuts::Ctx_Viewport:  return "Viewport";
+                case Shortcuts::Ctx_Hierarchy: return "Hierarchy";
+                case Shortcuts::Ctx_Project:   return "Project";
+                case Shortcuts::Ctx_Inspector: return "Inspector";
+                case Shortcuts::Ctx_App:       return "App";
+                default:                       return "Global";
+            }
         };
-        if (ImGui::BeginTable("##sctable", 2,
-                ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_ScrollY)) {
-            ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("Keys", ImGuiTableColumnFlags_WidthStretch);
-            for (const auto& [action, keys] : kShortcuts) {
-                if (!MatchesFilter(m_PrefsShortcutFilter, std::string(action) + " " + keys)) continue;
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn(); ImGui::TextUnformatted(action);
-                ImGui::TableNextColumn(); ImGui::TextDisabled("%s", keys);
+
+        // Toolbar row: filter + a single icon button to restore every default.
+        {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "%s", m_PrefsShortcutFilter.c_str());
+            ImGui::SetNextItemWidth(-28.0f * m_UIScale);
+            if (ImGui::InputTextWithHint("##scfilter", ICON_FA_MAGNIFYING_GLASS "  Filter", buf, sizeof(buf)))
+                m_PrefsShortcutFilter = buf;
+            ImGui::SameLine(0.0f, 4.0f * m_UIScale);
+            if (ImGui::Button(ICON_FA_ARROW_ROTATE_LEFT "##resetall", ImVec2(-1.0f, 0.0f))) {
+                Shortcuts::ResetAllToDefault();
+                Shortcuts::Save();
+                m_PrefsCapturingId.clear();
+                m_PrefsCaptureStage = 0;
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Restore every shortcut to its default");
+        }
+
+        // Capture polling. One armed row at a time (m_PrefsCapturingId):
+        //   stage 0 — waiting for the first key. First press is stashed, NOT committed.
+        //   stage 1 — one combo captured; confirm as-is (Enter / click) or press a second key
+        //             to turn it into a two-key sequence (press G, then S).
+        // Esc cancels; Backspace/Delete on an empty field unbinds.
+        auto commitCapture = [&](Shortcuts::Chord chord) {
+            Shortcuts::SetChord(m_PrefsCapturingId.c_str(), chord);
+            Shortcuts::Save();
+            m_PrefsCapturingId.clear();
+            m_PrefsCaptureStage = 0;
+        };
+        if (!m_PrefsCapturingId.empty() && !ImGui::GetIO().WantTextInput) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+                m_PrefsCapturingId.clear();
+                m_PrefsCaptureStage = 0;
+            } else if (m_PrefsCaptureStage == 0 &&
+                       (ImGui::IsKeyPressed(ImGuiKey_Backspace, false) || ImGui::IsKeyPressed(ImGuiKey_Delete, false))) {
+                commitCapture(Shortcuts::Chord{}); // unbind
+            } else if (m_PrefsCaptureStage == 1 && ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+                commitCapture(m_PrefsCapturePrefix);
+            } else {
+                Shortcuts::Chord got;
+                if (Shortcuts::CaptureChord(got)) {
+                    if (m_PrefsCaptureStage == 0) {
+                        m_PrefsCapturePrefix = got;   // provisional single-combo binding
+                        m_PrefsCaptureStage = 1;
+                    } else {
+                        got.PrefixKey   = m_PrefsCapturePrefix.Key;   // chain: earlier combo -> prefix
+                        got.PrefixCtrl  = m_PrefsCapturePrefix.Ctrl;
+                        got.PrefixShift = m_PrefsCapturePrefix.Shift;
+                        got.PrefixAlt   = m_PrefsCapturePrefix.Alt;
+                        commitCapture(got);
+                    }
+                }
+            }
+        }
+
+        ImGui::TextDisabled("Click a binding, press the key. A second key makes a sequence \xC2\xB7 "
+                            "Enter confirms \xC2\xB7 Esc cancels \xC2\xB7 Backspace unbinds.");
+
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,  ImVec2(6.0f * m_UIScale, 2.0f * m_UIScale));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f * m_UIScale, 2.0f * m_UIScale));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,  ImVec2(4.0f * m_UIScale, 3.0f * m_UIScale));
+
+        if (ImGui::BeginTable("##sctable", 3,
+                ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoBordersInBody |
+                ImGuiTableFlags_PadOuterX)) {
+            ImGui::TableSetupColumn("##act",  ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("##bind", ImGuiTableColumnFlags_WidthFixed, 132.0f * m_UIScale);
+            ImGui::TableSetupColumn("##rst",  ImGuiTableColumnFlags_WidthFixed, 20.0f * m_UIScale);
+
+            const std::uint32_t order[] = { Shortcuts::Ctx_Global, Shortcuts::Ctx_App,
+                Shortcuts::Ctx_Viewport, Shortcuts::Ctx_Hierarchy, Shortcuts::Ctx_Project,
+                Shortcuts::Ctx_Inspector };
+
+            for (std::uint32_t gctx : order) {
+                bool wroteHeader = false;
+                for (const auto& s : Shortcuts::All()) {
+                    if (s.Ctx != gctx) continue;
+                    if (!MatchesFilter(m_PrefsShortcutFilter, s.Label + " " + ctxName(s.Ctx) + " " +
+                            Shortcuts::ToString(s.Current)))
+                        continue;
+
+                    if (!wroteHeader) {
+                        wroteHeader = true;
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::TextDisabled("%s", ctxName(gctx));
+                        ImGui::TableNextColumn();
+                        ImGui::TableNextColumn();
+                    }
+
+                    const bool capturing = (m_PrefsCapturingId == s.Id);
+                    ImGui::TableNextRow();
+                    ImGui::PushID(s.Id.c_str());
+
+                    ImGui::TableNextColumn();
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted(s.Label.c_str());
+                    // Conflict marker sits with the label, not on its own line — keeps rows even.
+                    if (!capturing && s.Current.IsBound()) {
+                        auto clashes = Shortcuts::Conflicts(s.Id.c_str(), s.Current);
+                        if (!clashes.empty()) {
+                            ImGui::SameLine(0.0f, 6.0f * m_UIScale);
+                            ImGui::TextColored(ImVec4(1.0f, 0.78f, 0.30f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION);
+                            if (ImGui::IsItemHovered()) {
+                                std::string names;
+                                for (size_t i = 0; i < clashes.size(); ++i) {
+                                    const Shortcuts::Shortcut* o = Shortcuts::Find(clashes[i].c_str());
+                                    names += (o ? o->Label : clashes[i]);
+                                    if (i + 1 < clashes.size()) names += ", ";
+                                }
+                                EditorUI::SetTooltip("Same keys as: %s", names.c_str());
+                            }
+                        }
+                    }
+
+                    ImGui::TableNextColumn();
+                    // Every binding is the same keycap chip on every row, in every state. An
+                    // always-on 1px border defines the chip even where its fill matches the
+                    // row stripe — that mismatch was why some rows looked like bare text.
+                    std::string label;
+                    bool dim = false;
+                    if (capturing && m_PrefsCaptureStage == 0)      label = "Press a key\xE2\x80\xA6";
+                    else if (capturing)                              label = Shortcuts::ToString(m_PrefsCapturePrefix) + " +\xE2\x80\xA6";
+                    else if (s.Current.IsBound())                    label = Shortcuts::ToString(s.Current);
+                    else                                          { label = "Unbound"; dim = true; }
+
+                    const ImVec4 accent(0.85f, 0.55f, 0.15f, 0.95f);
+                    const ImVec4 baseTxt = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+                    ImVec4 chipFill = capturing ? accent : ImGui::GetStyleColorVec4(ImGuiCol_Button);
+                    ImVec4 chipHov  = capturing ? ImVec4(accent.x, accent.y, accent.z, 1.0f)
+                                                : ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered);
+                    ImVec4 chipTxt  = capturing ? ImVec4(1, 1, 1, 1)
+                                    : dim       ? ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled)
+                                                : baseTxt;
+                    ImVec4 chipBorder(baseTxt.x, baseTxt.y, baseTxt.z, 0.28f);
+
+                    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+                    ImGui::PushStyleColor(ImGuiCol_Button,        chipFill);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, chipHov);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  chipHov);
+                    ImGui::PushStyleColor(ImGuiCol_Text,          chipTxt);
+                    ImGui::PushStyleColor(ImGuiCol_Border,        chipBorder);
+                    // Fixed width + right-aligned so every chip is identical and they line up
+                    // in a clean column regardless of label length.
+                    const float pillW = 124.0f * m_UIScale;
+                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                        std::max(0.0f, ImGui::GetContentRegionAvail().x - pillW));
+                    if (ImGui::Button((label + "###bind").c_str(), ImVec2(pillW, 0.0f))) {
+                        if (capturing && m_PrefsCaptureStage == 1) commitCapture(m_PrefsCapturePrefix);
+                        else if (capturing)                        { m_PrefsCapturingId.clear(); m_PrefsCaptureStage = 0; }
+                        else                                       { m_PrefsCapturingId = s.Id; m_PrefsCaptureStage = 0; }
+                    }
+                    ImGui::PopStyleColor(5);
+                    ImGui::PopStyleVar();
+                    if (!capturing && ImGui::IsItemHovered())
+                        EditorUI::SetTooltip("Click to rebind \xC2\xB7 second key = sequence");
+
+                    ImGui::TableNextColumn();
+                    if (s.Overridden) {
+                        ImGui::AlignTextToFramePadding();
+                        if (ImGui::SmallButton(ICON_FA_ARROW_ROTATE_LEFT)) {
+                            Shortcuts::ResetToDefault(s.Id.c_str());
+                            Shortcuts::Save();
+                            if (capturing) { m_PrefsCapturingId.clear(); m_PrefsCaptureStage = 0; }
+                        }
+                        if (ImGui::IsItemHovered())
+                            EditorUI::SetTooltip("Reset to %s", Shortcuts::ToString(s.Default).c_str());
+                    }
+
+                    ImGui::PopID();
+                }
             }
             ImGui::EndTable();
         }
+        ImGui::PopStyleVar(3);
         break;
     }
 
@@ -1488,8 +1708,10 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawRecoveryPrompt(world, assets);
     DrawExitPrompt();
     DrawSceneSwitchPrompt(world, assets);
+    DrawRevertScenePrompt(world, assets);
     DrawPreferencesWindow(world);
     DrawProjectSettingsWindow(world);
+    DrawLightingPanel(world); // #236 R2
     DrawScreenshotPreview();
 
     // Auto-save: only ticks here (Draw() is editor-mode-only, per main.cpp) so it never fires
@@ -1561,6 +1783,14 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // Stash it while "##DockHost" is the current window — KeepDockspaceAlive() runs later with
     // no window pushed and can't re-derive the same id itself (see its comment).
     m_EditorDockspaceId = dockspaceId;
+    // Layout preset requested (#236 R2): apply the saved ImGui-ini snapshot before the
+    // dockspace is built this frame, so every docked window lands where the preset put it.
+    if (!m_PendingLayoutIni.empty()) {
+        ImGui::LoadIniSettingsFromMemory(m_PendingLayoutIni.c_str(), m_PendingLayoutIni.size());
+        m_PendingLayoutIni.clear();
+        m_ShowHierarchy = m_ShowInspector = m_ShowAssetBrowser = true; // never leave a core panel hidden
+    }
+
     bool rebuildLayout = m_ResetLayoutRequested;
     m_ResetLayoutRequested = false;
     // Reset Layout also un-hides any panel the user closed — otherwise "restore the default
@@ -1788,7 +2018,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
     // Drawn (and its hover/drag state refreshed) before picking runs below, so a click that
     // lands on the nav gizmo's rotate ring or tool buttons doesn't also start a viewport
-    // box-select/pick underneath it.
+    // box-select/pick underneath it. Its overlay forces itself above the Scene image but then
+    // re-fronts any floating window that could overlap it (see KeepFloatingWindowsAboveOverlay).
     if (!m_HideOverlaysThisFrame) DrawViewGizmo(world, editorCamera);
 
     if (!vHeld) {
@@ -1801,6 +2032,18 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         }
     }
     UpdateLockViewToSelection(world, editorCamera); // Shift+F — camera follows the selection centroid (#236 E)
+    if (m_MeasureTool || m_MeasureCount > 0) DrawMeasurement(editorCamera); // #236 R2 ruler
+    if (EyedropperArmed()) {
+        const ImVec2 mp = ImGui::GetIO().MousePos;
+        ImDrawList* dl = ImGui::GetForegroundDrawList();
+        dl->AddCircle(mp, 9.0f, IM_COL32(120, 220, 255, 235), 0, 2.0f);
+        const char* h = ICON_FA_EYE_DROPPER "  Click a colour  (Esc cancels)";
+        ImVec2 ts = ImGui::CalcTextSize(h);
+        ImVec2 p(mp.x + 16.0f, mp.y + 14.0f);
+        dl->AddRectFilled(ImVec2(p.x - 5.0f, p.y - 3.0f), ImVec2(p.x + ts.x + 5.0f, p.y + ts.y + 3.0f),
+                          IM_COL32(15, 20, 28, 225), 3.0f);
+        dl->AddText(p, IM_COL32(235, 245, 255, 255), h);
+    }
 
     // Anchored to the actual viewport's top-center (a pivot, not a fixed-width guess) so it
     // stays centered over the 3D view itself as the Hierarchy/Inspector/Asset Browser panels
@@ -1829,7 +2072,30 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGui::End();
     }
 
-    if (!ImGui::GetIO().WantTextInput && !m_GameInputActive && !OtherWindowOwnsKeyboard()) {
+    // --- Shortcut dispatch (#236 F) ---------------------------------------------------------
+    // The central table + press-to-bind editor live in Shortcuts.{h,cpp}. Here we decide which
+    // context owns the keyboard this frame and let the dispatcher evaluate every chord once;
+    // the call sites below then just ask Shortcuts::Triggered("editor.undo"). Bindings tagged
+    // Ctx_Viewport (the Q/W/E/R/T/Y tools, Shift+A, F) are suppressed while a panel has focus
+    // or Right-drag fly is held — that replaces the old hierarchyOwnsLetters / RMB guards for
+    // the migrated ones.
+    const bool keyboardFree =
+        !ImGui::GetIO().WantTextInput && !m_GameInputActive && !OtherWindowOwnsKeyboard();
+    {
+        std::uint32_t sctx = 0;
+        if (keyboardFree) {
+            sctx = Shortcuts::Ctx_Global;
+            ImGuiWindow* nr = GImGui->NavWindow ? GImGui->NavWindow->RootWindow : nullptr;
+            auto navIs = [&](const char* n) { return nr && nr == ImGui::FindWindowByName(n); };
+            if (navIs("Scene Hierarchy"))                          sctx |= Shortcuts::Ctx_Hierarchy;
+            else if (m_AssetBrowserFocused)                        sctx |= Shortcuts::Ctx_Project;
+            else if (navIs("Inspector"))                           sctx |= Shortcuts::Ctx_Inspector;
+            else if (!ImGui::IsMouseDown(ImGuiMouseButton_Right))  sctx |= Shortcuts::Ctx_Viewport;
+        }
+        Shortcuts::BeginFrame(sctx);
+    }
+
+    if (keyboardFree) {
         ImGuiIO& io = ImGui::GetIO();
 
         // The Scene Hierarchy takes plain letters for type-to-select and the arrows for tree
@@ -1838,49 +2104,52 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGuiWindow* navRoot = GImGui->NavWindow ? GImGui->NavWindow->RootWindow : nullptr;
         const bool hierarchyOwnsLetters = navRoot && navRoot == ImGui::FindWindowByName("Scene Hierarchy");
 
-        // W/E/R/T gizmo-tool shortcuts (Unity's own scheme) only when Right-drag isn't held —
-        // WASDQE fly the camera during Right-drag instead (see main.cpp's UpdateEditorCamera),
-        // so without this guard just walking forward with W would also switch tools every time.
-        if (!ImGui::IsMouseDown(ImGuiMouseButton_Right) && !hierarchyOwnsLetters) {
-            // Q/W/E/R/T/Y viewport tools (Unity's scheme, + Y for the combined gizmo, #236 E).
-            // Selecting any transform tool exits the Hand tool.
-            if (ImGui::IsKeyPressed(ImGuiKey_Q)) m_HandTool = true;
-            if (ImGui::IsKeyPressed(ImGuiKey_W)) { m_GizmoOp = GizmoOp::Translate; m_HandTool = false; }
-            if (ImGui::IsKeyPressed(ImGuiKey_E)) { m_GizmoOp = GizmoOp::Rotate;    m_HandTool = false; }
-            if (ImGui::IsKeyPressed(ImGuiKey_R)) { m_GizmoOp = GizmoOp::Scale;     m_HandTool = false; }
-            if (ImGui::IsKeyPressed(ImGuiKey_T)) { m_GizmoOp = GizmoOp::Rect;      m_HandTool = false; }
-            if (ImGui::IsKeyPressed(ImGuiKey_Y)) { m_GizmoOp = GizmoOp::Universal; m_HandTool = false; }
-            // Shift+A quick-add (Blender's binding) — opens the Add menu as a popup at the
-            // cursor. Guarded with the others so fly-mode's A (strafe left) doesn't trigger it.
-            if (io.KeyShift && !io.KeyCtrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_A)) {
-                m_OpenQuickAdd = true;
-            }
-        }
+        // Q/W/E/R/T/Y viewport tools (Unity's scheme, + Y for the combined gizmo, #236 E).
+        // Ctx_Viewport, so the dispatcher already withholds them while a panel owns the
+        // keyboard or Right-drag fly is active. Selecting any transform tool exits the Hand tool.
+        if (Shortcuts::Triggered("tools.hand"))      { m_HandTool = true; m_MeasureTool = false; }
+        if (Shortcuts::Triggered("tools.move"))      { m_GizmoOp = GizmoOp::Translate; m_HandTool = false; m_MeasureTool = false; }
+        if (Shortcuts::Triggered("tools.rotate"))    { m_GizmoOp = GizmoOp::Rotate;    m_HandTool = false; m_MeasureTool = false; }
+        if (Shortcuts::Triggered("tools.scale"))     { m_GizmoOp = GizmoOp::Scale;     m_HandTool = false; m_MeasureTool = false; }
+        if (Shortcuts::Triggered("tools.rect"))      { m_GizmoOp = GizmoOp::Rect;      m_HandTool = false; m_MeasureTool = false; }
+        if (Shortcuts::Triggered("tools.transform")) { m_GizmoOp = GizmoOp::Universal; m_HandTool = false; m_MeasureTool = false; }
+        if (Shortcuts::Triggered("tools.measure"))   { m_MeasureTool = !m_MeasureTool; m_MeasureCount = 0; m_HandTool = false; }
+        if (m_MeasureTool && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { m_MeasureTool = false; m_MeasureCount = 0; }
+        // Shift+A quick-add (Blender's binding) — opens the Add menu as a popup at the cursor.
+        if (Shortcuts::Triggered("gameobject.quickAdd")) m_OpenQuickAdd = true;
 
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) Undo(world, assets);
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) Redo(world, assets);
-        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S)) {
-            DoSaveAs(world, assets);
-        } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S)) {
-            DoSave(world, assets); // prompts for a location if the scene is untitled (New Scene)
+        // Ctrl+Z / Ctrl+Y walk the selection history while the last action was a selection
+        // change (#236 R2); otherwise they're the scene undo/redo. Ctrl+[ / Ctrl+] stay pure
+        // selection nav regardless.
+        if (Shortcuts::Triggered("editor.undo")) {
+            if (m_CtrlZSelectionMode && CanSelectionHistoryBack()) SelectionHistoryBack(world);
+            else { Undo(world, assets); m_CtrlZSelectionMode = false; m_SelHistoryNavigating = true; }
         }
-        if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N)) {
-            RequestNewScene(world, assets);
+        if (Shortcuts::Triggered("editor.redo")) {
+            if (m_CtrlZSelectionMode && CanSelectionHistoryForward()) SelectionHistoryForward(world);
+            else { Redo(world, assets); m_CtrlZSelectionMode = false; m_SelHistoryNavigating = true; }
         }
+        if (Shortcuts::Triggered("editor.saveAs"))     DoSaveAs(world, assets);
+        else if (Shortcuts::Triggered("editor.save"))  DoSave(world, assets); // prompts for a location if untitled
+        if (Shortcuts::Triggered("editor.newScene")) RequestNewScene(world, assets);
         // GameObject-menu parity (#236): Ctrl+Shift+N = Create Empty Child (of the active
         // selection, or a root Empty if nothing's selected); Alt+Shift+A = Toggle Active State.
-        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N)) {
+        if (Shortcuts::Triggered("gameobject.createEmptyChild")) {
             CreateEmptyChild(world,
                 (m_Selected != entt::null && world.Registry.valid(m_Selected)) ? m_Selected : entt::null);
         }
-        if (io.KeyAlt && io.KeyShift && !io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A)) {
-            ToggleSelectionActive(world);
-        }
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Comma)) m_ShowPreferences = true;
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O)) {
+        if (Shortcuts::Triggered("gameobject.toggleActive")) ToggleSelectionActive(world);
+        if (Shortcuts::Triggered("editor.preferences")) m_ShowPreferences = true;
+        if (Shortcuts::Triggered("editor.openScene")) {
             RequestOpenScene(world, assets, FileDialog::OpenFile("Scene Files\0*.json\0All Files\0*.*\0", m_Window));
         }
-        if (HasAnySelection() && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+
+        // Ctrl+1..4 — focus a panel (new with the Shortcuts Manager, #236 F).
+        if (Shortcuts::Triggered("panel.focus.hierarchy")) ImGui::SetWindowFocus("Scene Hierarchy");
+        if (Shortcuts::Triggered("panel.focus.inspector")) ImGui::SetWindowFocus("Inspector");
+        if (Shortcuts::Triggered("panel.focus.project"))   ImGui::SetWindowFocus("Asset Browser");
+        if (Shortcuts::Triggered("panel.focus.console"))   ImGui::SetWindowFocus("Console");
+        if (HasAnySelection() && Shortcuts::Triggered("edit.delete")) {
             DeleteSelection(world);
         } else if (!m_SelectedAssetKey.empty() && m_RenamingAssetKey.empty() && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
             std::vector<AssetKeyRef> toDelete;
@@ -1896,24 +2165,32 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         bool assetBrowserOwnsKeys = m_AssetBrowserFocused &&
             (!m_SelectedAssetKey.empty() || !m_ExtraAssetSelection.empty());
 
-        if (HasAnySelection() && !assetBrowserOwnsKeys && !hierarchyOwnsLetters && ImGui::IsKeyPressed(ImGuiKey_F)) {
-            if (io.KeyShift) SetLockViewToSelection(!m_LockViewToSelection); // Shift+F — toggle camera-follow (#236 E)
-            else             FocusOnSelection(world, editorCamera);
-        }
-        if (HasAnySelection() && !assetBrowserOwnsKeys && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) DuplicateSelection(world, assets);
+        // F / Shift+F are Ctx_Viewport — the dispatcher already withholds them while a panel
+        // owns the keyboard, so only the selection guard is needed here.
+        if (HasAnySelection() && Shortcuts::Triggered("view.lockToSelection"))
+            SetLockViewToSelection(!m_LockViewToSelection); // Shift+F — toggle camera-follow (#236 E)
+        if (HasAnySelection() && Shortcuts::Triggered("view.frameSelection"))
+            FocusOnSelection(world, editorCamera);
+        if (HasAnySelection() && !assetBrowserOwnsKeys && Shortcuts::Triggered("edit.duplicate"))
+            DuplicateSelection(world, assets, /*inPlace=*/true); // Ctrl+D duplicates without the (1,0,1) nudge (#236 F)
+        if (HasAnySelection() && !assetBrowserOwnsKeys && Shortcuts::Triggered("edit.duplicateArray"))
+            m_ShowArrayDuplicate = true;
 
         // Edit-menu selection ops (#236). The Hierarchy owns Ctrl+A when it's focused (select all
         // *visible* rows); elsewhere Ctrl+A selects every entity. Ctrl+Shift+A deselects, Ctrl+I
-        // inverts.
-        if (!assetBrowserOwnsKeys && !hierarchyOwnsLetters && io.KeyCtrl) {
-            if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_A))      ClearSelection();
-            else if (ImGui::IsKeyPressed(ImGuiKey_A))               SelectAllEntities(world);
-            else if (ImGui::IsKeyPressed(ImGuiKey_I))               InvertSelection(world);
+        // inverts. These are Ctx_Global, so the panel guards still matter.
+        if (!assetBrowserOwnsKeys && !hierarchyOwnsLetters) {
+            if (Shortcuts::Triggered("edit.deselectAll"))         ClearSelection();
+            else if (Shortcuts::Triggered("edit.selectAll"))      SelectAllEntities(world);
+            else if (Shortcuts::Triggered("edit.invertSelection")) InvertSelection(world);
         }
+
+        if (Shortcuts::Triggered("select.historyBack"))    SelectionHistoryBack(world);
+        if (Shortcuts::Triggered("select.historyForward")) SelectionHistoryForward(world);
 
         // Ctrl+Shift+F — snap the selected Camera entity to the editor viewport (Unity's Align
         // With View). Mirrors the Inspector's "Align to View" button.
-        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_F) &&
+        if (Shortcuts::Triggered("camera.alignToView") &&
                 m_Selected != entt::null && world.Registry.valid(m_Selected) &&
                 world.Registry.all_of<CameraComponent>(m_Selected)) {
             PushUndo(world, "Align Camera to View");
@@ -1926,24 +2203,20 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             world.Registry.get<CameraComponent>(m_Selected).FovDegrees = editorCamera.Fov;
         }
 
-        // Unity Project-window-style Asset Browser shortcuts — only while it has focus, so they
-        // don't collide with the scene-selection F/Ctrl+D bindings above. Tab (two-column focus
-        // switch), Ctrl+A (multi-select), and every OSX Cmd-key variant from Unity's manual are
-        // deliberately not implemented — this browser has one grid+tree layout, no multi-select
-        // model for assets, and this is a Windows-only engine.
+        // Unity Project-window-style Asset Browser shortcuts. The four discrete actions are
+        // Ctx_Project shortcuts (rebindable in Preferences); folder navigation (Enter /
+        // Backspace / arrows) stays hard-wired — it's traversal, not a named command.
         if (m_AssetBrowserFocused && m_RenamingAssetKey.empty()) {
-            if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F)) {
-                m_AssetSearchFocusRequested = true;
-            } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_R)) {
-                RefreshAssetBrowser(); // #236 G
-            } else if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F) && !m_SelectedAssetKey.empty()) {
-                // "Frame selected" — Unity shows the asset in its containing folder; here that
-                // just means navigating the browser to it, since it's already always visible
-                // once you're in the right folder.
-                if (!m_SelectedAssetIsFolder) m_CurrentAssetFolder = assets.AssetFolder(m_SelectedAssetKey);
-            } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !m_SelectedAssetKey.empty()) {
+            if (Shortcuts::Triggered("project.focusSearch")) m_AssetSearchFocusRequested = true;
+            if (Shortcuts::Triggered("project.refresh"))     RefreshAssetBrowser(); // #236 G
+            if (Shortcuts::Triggered("project.frameSelected") && !m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder) {
+                // "Frame selected" — navigate the browser to the asset's containing folder.
+                m_CurrentAssetFolder = assets.AssetFolder(m_SelectedAssetKey);
+            }
+            if (Shortcuts::Triggered("project.duplicate") && !m_SelectedAssetKey.empty()) {
                 DuplicateSelectedAsset(world, assets);
-            } else if (ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_Enter)) {
                 if (m_SelectedAssetIsFolder) m_CurrentAssetFolder = m_SelectedAssetKey;
             } else if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
                 m_CurrentAssetFolder = ParentFolderOf(m_CurrentAssetFolder);
@@ -1957,34 +2230,28 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
         // Clipboard. Cut is copy-then-delete, so a cancelled paste still leaves the objects
         // recoverable through undo rather than gone.
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && HasAnySelection()) CopySelection(world);
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_X) && HasAnySelection()) {
+        if (Shortcuts::Triggered("edit.copy") && HasAnySelection()) CopySelection(world);
+        if (Shortcuts::Triggered("edit.cut") && HasAnySelection()) {
             CopySelection(world);
             DeleteSelection(world);
         }
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V)) PasteClipboard(world, assets);
+        if (Shortcuts::Triggered("edit.paste")) PasteClipboard(world, assets);
 
-        // View presets — accepted on BOTH the number row and the numpad. Blender/Maya use the
-        // numpad; laptops often don't have one; so bind both. Ctrl gets the opposite side.
-        auto pressedDigit = [](ImGuiKey row, ImGuiKey pad) {
-            return ImGui::IsKeyPressed(row) || ImGui::IsKeyPressed(pad);
-        };
-        if (pressedDigit(ImGuiKey_7, ImGuiKey_Keypad7)) {
-            SnapToView(world, editorCamera, -90.0f, io.KeyCtrl ? 89.9f : -89.9f, true);
-        }
-        if (pressedDigit(ImGuiKey_1, ImGuiKey_Keypad1)) {
-            SnapToView(world, editorCamera, io.KeyCtrl ? 90.0f : -90.0f, 0.0f, true);
-        }
-        if (pressedDigit(ImGuiKey_3, ImGuiKey_Keypad3)) {
-            SnapToView(world, editorCamera, io.KeyCtrl ? 0.0f : 180.0f, 0.0f, true);
-        }
-        if (pressedDigit(ImGuiKey_0, ImGuiKey_Keypad0)) SnapToView(world, editorCamera, -45.0f, -35.264f, true);
-        if (pressedDigit(ImGuiKey_5, ImGuiKey_Keypad5)) ToggleOrthographic(world, editorCamera);
+        // View presets (Ctx_Viewport; row/numpad interchangeable, handled in the dispatcher).
+        // The three opposite faces are unbound by default — Ctrl+1..4 is panel focus now.
+        if (Shortcuts::Triggered("view.top"))    SnapToView(world, editorCamera, -90.0f, -89.9f, true);
+        if (Shortcuts::Triggered("view.bottom")) SnapToView(world, editorCamera, -90.0f,  89.9f, true);
+        if (Shortcuts::Triggered("view.front"))  SnapToView(world, editorCamera, -90.0f,   0.0f, true);
+        if (Shortcuts::Triggered("view.back"))   SnapToView(world, editorCamera,  90.0f,   0.0f, true);
+        if (Shortcuts::Triggered("view.right"))  SnapToView(world, editorCamera, 180.0f,   0.0f, true);
+        if (Shortcuts::Triggered("view.left"))   SnapToView(world, editorCamera,   0.0f,   0.0f, true);
+        if (Shortcuts::Triggered("view.persp"))  SnapToView(world, editorCamera, -45.0f, -35.264f, true);
+        if (Shortcuts::Triggered("view.toggleOrtho")) ToggleOrthographic(world, editorCamera);
 
         // F2 renames whichever selection is "live": a scene object takes priority over an Asset
         // Browser entry, matching which panel the user most likely just clicked in. In Play mode
         // F2 is Pause instead (#236) — rename is still one double-click away in the Hierarchy.
-        if (!m_InPlayMode && ImGui::IsKeyPressed(ImGuiKey_F2)) {
+        if (!m_InPlayMode && Shortcuts::Triggered("edit.rename")) {
             if (HasAnySelection()) {
                 BeginRenameEntity(m_Selected);
             } else if (!m_SelectedAssetKey.empty() && m_RenamingAssetKey.empty() && m_ExtraAssetSelection.empty()) {
@@ -2086,6 +2353,77 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         DrawAddEntityItems(world, assets, editorCamera);
         ImGui::EndPopup();
     }
+
+    // Play-mode tint (#236 R2): a warm border around the WHOLE editor window (not just the
+    // Scene rect — that hides behind the Game tab) + a centred tag, so it's unmistakable that
+    // edits now revert on Stop.
+    if (m_InPlayMode) {
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        ImDrawList* dl = ImGui::GetForegroundDrawList();
+        const ImU32 col = IM_COL32(255, 140, 40, 230);
+        const float t = 3.0f;
+        ImVec2 a(vp->Pos.x + t * 0.5f, vp->Pos.y + t * 0.5f);
+        ImVec2 b(vp->Pos.x + vp->Size.x - t * 0.5f, vp->Pos.y + vp->Size.y - t * 0.5f);
+        dl->AddRect(a, b, col, 0.0f, 0, t);
+        const char* tag = "PLAY MODE \xE2\x80\x94 changes revert on Stop";
+        ImVec2 ts = ImGui::CalcTextSize(tag);
+        ImVec2 tp(vp->Pos.x + vp->Size.x * 0.5f - ts.x * 0.5f, vp->Pos.y + 4.0f);
+        dl->AddRectFilled(ImVec2(tp.x - 7.0f, tp.y - 2.0f), ImVec2(tp.x + ts.x + 7.0f, tp.y + ts.y + 3.0f),
+                          IM_COL32(20, 20, 24, 210), 3.0f);
+        dl->AddText(tp, col, tag);
+    }
+
+    // Transient fly-speed readout — large, centred toward the bottom of the viewport (#236 R2).
+    // Poked by main.cpp on a scroll-driven speed change; fades over its last ~0.6s.
+    if (m_FlySpeedHudTimer > 0.0f && m_ViewportSize.x > 4.0f) {
+        m_FlySpeedHudTimer -= dt;
+        const float a = std::clamp(m_FlySpeedHudTimer / 0.6f, 0.0f, 1.0f);
+        char buf[48];
+        std::snprintf(buf, sizeof(buf), ICON_FA_GAUGE_HIGH "  Fly speed  %.1f",
+                      EditorSettings::Get().SceneCameraFlySpeed);
+        ImFont* font = ImGui::GetFont();
+        const float fs = ImGui::GetFontSize() * 1.7f;
+        ImVec2 ts = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, buf);
+        ImVec2 c(m_ViewportPos.x + m_ViewportSize.x * 0.5f,
+                 m_ViewportPos.y + m_ViewportSize.y - 64.0f);
+        ImVec2 p(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f);
+        ImDrawList* dl = ImGui::GetForegroundDrawList();
+        dl->AddRectFilled(ImVec2(p.x - 16.0f, p.y - 9.0f), ImVec2(p.x + ts.x + 16.0f, p.y + ts.y + 9.0f),
+                          IM_COL32(18, 22, 30, (int)(220 * a)), 8.0f);
+        dl->AddText(font, fs, p, IM_COL32(240, 248, 255, (int)(255 * a)), buf);
+    }
+
+    DrawArrayDuplicateModal(world, assets); // #236 R2
+
+    // Save-layout-preset name prompt (#236 R2).
+    if (m_ShowSaveLayout) {
+        if (!ImGui::IsPopupOpen("Save Layout##SaveLayout")) ImGui::OpenPopup("Save Layout##SaveLayout");
+        ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        if (ImGui::BeginPopupModal("Save Layout##SaveLayout", &m_ShowSaveLayout, ImGuiWindowFlags_AlwaysAutoResize)) {
+            if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+            const bool enter = ImGui::InputTextWithHint("##layoutname", "Preset name", m_SaveLayoutName,
+                sizeof(m_SaveLayoutName), ImGuiInputTextFlags_EnterReturnsTrue);
+            ImGui::Separator();
+            const bool named = m_SaveLayoutName[0] != '\0';
+            ImGui::BeginDisabled(!named);
+            if (PrimaryButton("Save", ImVec2(110.0f, 0.0f)) || (enter && named)) {
+                SaveLayoutPreset(m_SaveLayoutName);
+                m_ShowSaveLayout = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            if (PrimaryButton("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                m_ShowSaveLayout = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+    }
+
+    // Fold this frame's selection into the back/forward history (#236 R2). Last thing in Draw,
+    // so it sees the net result of every panel and shortcut that ran this frame.
+    RecordSelectionHistory();
 }
 bool EditorLayer::AnyModalOpen() const {
     return ImGui::GetTopMostPopupModal() != nullptr;

@@ -411,6 +411,21 @@ bool ActiveToggleRow(const char* label, bool anyActive, bool mixed, bool& out, c
     return clicked;
 }
 
+// Small eyedropper button, drawn right after a colour swatch. Arms EditorLayer's viewport
+// eyedropper on `target` (a stable pointer into a component / World member). #236 R2.
+void EyedropperButton(EditorLayer* self, World& world, glm::vec3* target) {
+    ImGui::SameLine(0.0f, 4.0f);
+    ImGui::PushID(target);
+    const bool armed = self->EyedropperArmed();
+    ImGui::PushStyleColor(ImGuiCol_Text, armed ? ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab)
+                                               : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    if (ImGui::SmallButton(ICON_FA_EYE_DROPPER)) self->ArmEyedropper(&world, target);
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Pick a colour from the Scene viewport (Esc / right-click to cancel)");
+    ImGui::PopID();
+}
+
 } // namespace
 
 
@@ -584,6 +599,33 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
                 m_PendingModelSettings = assets.GetModelSettings(key);
                 m_ImportSettingsDirty = false;
             });
+
+        // Sub-asset list (#236 G): the meshes this file imported to, with their geometry counts
+        // and material tint — a read-only breakdown of what's inside the model.
+        if (model && model->MeshCount() > 0) {
+            ImGui::Spacing();
+            char header[48];
+            std::snprintf(header, sizeof(header), "Meshes (%d)###submeshes", model->MeshCount());
+            if (ImGui::CollapsingHeader(header)) {
+                if (ImGui::BeginTable("##submeshtbl", 3,
+                        ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Mesh", ImGuiTableColumnFlags_WidthStretch, 0.34f);
+                    ImGui::TableSetupColumn("Tris", ImGuiTableColumnFlags_WidthStretch, 0.33f);
+                    ImGui::TableSetupColumn("Mat",  ImGuiTableColumnFlags_WidthStretch, 0.33f);
+                    for (int i = 0; i < model->MeshCount(); ++i) {
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn(); ImGui::Text("Mesh %d", i);
+                        ImGui::TableNextColumn(); ImGui::Text("%u", model->MeshTriangleCount(i));
+                        ImGui::TableNextColumn();
+                        glm::vec3 c = model->MeshMaterial(i).BaseColor;
+                        ImGui::ColorButton("##mc", ImVec4(c.x, c.y, c.z, 1.0f),
+                                           ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
+                                           ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight()));
+                    }
+                    ImGui::EndTable();
+                }
+            }
+        }
     }
 }
 
@@ -592,6 +634,35 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
 // inside that window scope. The whole body — every component editor, the PBR material editor,
 // add-component, per-field undo — stays here (EnTT + Components.h + material shared_ptr never
 // cross the DLL boundary).
+bool EditorLayer::ConsumeEyedropperSample(float& outX, float& outY) {
+    if (!m_EyedropperSampleRequested || !m_EyedropperTarget) return false;
+    m_EyedropperSampleRequested = false;
+    // Viewport-local pixels, origin top-left.
+    outX = m_EyedropperClickPos.x - m_ViewportPos.x;
+    outY = m_EyedropperClickPos.y - m_ViewportPos.y;
+    return true;
+}
+
+void EditorLayer::ApplyEyedropperSample(const glm::vec3& rgb) {
+    if (!m_EyedropperTarget) return;
+    if (m_EyedropperWorld) PushUndo(*m_EyedropperWorld, "Eyedropper");
+    *m_EyedropperTarget = glm::clamp(rgb, glm::vec3(0.0f), glm::vec3(1.0f));
+    m_EyedropperTarget = nullptr;
+    m_EyedropperWorld = nullptr;
+}
+
+void EditorLayer::ToggleInspectorLock() {
+    // Called from the module's title-bar button before DrawInspectorBody() swaps in the locked
+    // snapshot, so m_Selected / m_ExtraSelection still hold the live viewport selection here.
+    if (m_InspectorLocked) {
+        m_InspectorLocked = false;
+    } else if (m_Selected != entt::null) {
+        m_InspectorLocked = true;
+        m_InspLockSelected = m_Selected;
+        m_InspLockExtra = m_ExtraSelection;
+    }
+}
+
 void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // Flat button language for the whole panel (#155/#156): no raised body at rest, a faint wash
     // on hover. Every ImGui::Button below inherits it; ActionButton / DangerIconButton push their
@@ -643,34 +714,15 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
     }
 
-    // Padlock toggle, right-aligned on its own line above the rest of the panel.
-    {
-        const float bw = ImGui::GetFrameHeight();
-        ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - bw);
-        if (ActionButton(m_InspectorLocked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN,
-                         m_InspectorLocked ? "Inspector locked - showing a fixed object while you select others. Click to unlock."
-                                           : "Lock the Inspector to the current selection",
-                         m_InspectorLocked, ImVec2(bw, bw))) {
-            if (m_InspectorLocked) {
-                m_InspectorLocked = false;
-            } else if (liveSelected != entt::null) {
-                m_InspectorLocked = true;
-                m_InspLockSelected = liveSelected;
-                m_InspLockExtra = liveExtra;
-                // The swap above already ran for THIS frame off the (then-unlocked) state; do it
-                // now so the body immediately reflects the lock.
-                m_Selected = m_InspLockSelected;
-                m_ExtraSelection = m_InspLockExtra;
-                inspLockSwapped = true;
-            }
-        }
-        if (m_InspectorLocked) {
-            const auto* nm = world.Registry.try_get<NameComponent>(m_InspLockSelected);
-            const int n = 1 + (int)m_InspLockExtra.size();
-            ImGui::TextDisabled(ICON_FA_LOCK "  Locked to %s%s",
-                nm && !nm->Name.empty() ? nm->Name.c_str() : "object",
-                n > 1 ? (" +" + std::to_string(n - 1)).c_str() : "");
-        }
+    // The padlock lives in the panel's title bar now (drawn by the Inspector module, toggled
+    // through EditorLayer::ToggleInspectorLock). Only a slim "locked to…" note remains here,
+    // and only while locked — the panel starts flush with the name row otherwise (#236 R2).
+    if (m_InspectorLocked) {
+        const auto* nm = world.Registry.try_get<NameComponent>(m_InspLockSelected);
+        const int n = 1 + (int)m_InspLockExtra.size();
+        ImGui::TextDisabled(ICON_FA_LOCK "  Locked to %s%s",
+            nm && !nm->Name.empty() ? nm->Name.c_str() : "object",
+            n > 1 ? (" +" + std::to_string(n - 1)).c_str() : "");
     }
 
     if (HasGroupSelection()) {
@@ -1267,10 +1319,27 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", kindTip);
     ImGui::SameLine();
 
-    ImGui::SetNextItemWidth(-FLT_MIN);
+    // Name field, then the padlock right-aligned on the same row (#236 R2 — moved off its own
+    // wasted line above). Locked = cyan glyph.
+    const float lockW = ImGui::GetFrameHeight();
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - lockW - ImGui::GetStyle().ItemSpacing.x);
     DrawNameField("##Name", name.Name, isLevelGeometry ? "Box" : "Object", activated);
     if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) EditorUI::SetTooltip("Display name shown in the Hierarchy and here");
     if (activated) PushUndo(world, "Rename");
+    ImGui::SameLine();
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, m_InspectorLocked ? ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab)
+                                                               : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        if (ActionButton(m_InspectorLocked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN,
+                         m_InspectorLocked ? "Inspector locked \xE2\x80\x94 click to unlock"
+                                           : "Lock the Inspector to the current selection",
+                         m_InspectorLocked, ImVec2(lockW, lockW))) {
+            ToggleInspectorLock();
+            // ToggleInspectorLock read the live selection; mirror the body swap for this frame.
+            if (m_InspectorLocked) { m_Selected = m_InspLockSelected; m_ExtraSelection = m_InspLockExtra; inspLockSwapped = true; }
+        }
+        ImGui::PopStyleColor();
+    }
 
     // #236 A2 — prefab-instance banner. Walk up to the instance root (if any) and say what's
     // authoritative: the root keeps its own transform/name/tag, everything else tracks the .prefab.
@@ -1481,8 +1550,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
 
             if (isLevelGeometry) {
                 PropertyLabel("Color", "Solid tint for this box's surface. Click the swatch\nfor the full color picker, or type a hex value.");
+                ImGui::SetNextItemWidth(-(ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x));
                 ImGui::ColorEdit3("##Color", &renderable->ModelRef->MeshMaterial(0).BaseColor.x, ImGuiColorEditFlags_DisplayHex);
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Color");
+                EyedropperButton(this, world, &renderable->ModelRef->MeshMaterial(0).BaseColor);
             }
 
             if (renderable->ModelRef->HasAnimations()) {
@@ -1617,9 +1688,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 if (ActionButton("RGB##KelvinOff", "Set the colour directly (RGB)")) { PushUndo(world, "Edit Light"); light->ColorTempK = 0.0f; }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Switch back to a custom RGB swatch.");
             } else {
-                ImGui::SetNextItemWidth(-60.0f);
+                ImGui::SetNextItemWidth(-90.0f);
                 ImGui::ColorEdit3("##Color", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
+                EyedropperButton(this, world, &light->Color);
                 ImGui::SameLine();
                 if (ActionButton("K##KelvinOn", "Drive the colour from a temperature (Kelvin)")) {
                     PushUndo(world, "Edit Light");
@@ -1789,7 +1861,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             }
 
             PropertyLabel("Volume", "Playback volume - 1 is unattenuated.");
-            if (ImGui::DragFloat("##AudioVolume", &audio->Volume, 0.01f, 0.0f, 1.0f, "%.2f")) {
+            if (EditorUI::SliderFloat("##AudioVolume", &audio->Volume, 0.0f, 1.0f, "%.2f")) {
                 audio->Volume = glm::clamp(audio->Volume, 0.0f, 1.0f);
             }
             if (ImGui::IsItemActivated()) PushUndo(world, "Edit Audio Volume");
@@ -2211,20 +2283,26 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         }
         glm::vec3 edit = shared;
         ImGui::PushID(label);
+        if (!mixed && mats.size() == 1)
+            ImGui::SetNextItemWidth(-(ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x));
         bool changed = ImGui::ColorEdit3("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
         if (ImGui::IsItemActivated()) StageUndo(world);
         if (changed) for (Material* mm : mats) mm->*field = edit;
         if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
         if (mixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
+        else if (mats.size() == 1) EyedropperButton(this, world, &(mats[0]->*field));
         ImGui::PopID();
     };
     auto scalarRow = [&](const char* label, float Material::* field, float lo, float hi, const char* tip) {
         float shared; bool mixed = floatShared(field, shared);
         float edit = shared;
-        MultiEditResult r = MultiEditFloatRow(label, edit, mixed, (hi - lo) * 0.004f, lo, hi, tip);
-        if (r.activated) StageUndo(world);
-        if (r.changed) for (Material* mm : mats) mm->*field = edit;
-        if (r.committed) CommitStagedUndo(world, "Edit Material");
+        PropertyLabel(label, tip);
+        ImGui::PushID(label);
+        bool changed = EditorUI::SliderFloat("##ms", &edit, lo, hi, mixed ? "\xE2\x80\x94" : "%.3f");
+        if (ImGui::IsItemActivated()) StageUndo(world);
+        if (changed && std::isfinite(edit)) for (Material* mm : mats) mm->*field = edit;
+        if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
+        ImGui::PopID();
     };
 
     colorRow("Base Color", &Material::BaseColor,

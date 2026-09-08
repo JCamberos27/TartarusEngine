@@ -1,6 +1,8 @@
 #include "AudioEngine.h"
 #include "Log.h"
 #include "miniaudio.h"
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <memory>
 #include <unordered_map>
@@ -268,6 +270,45 @@ void AudioEngine::SetListener(const glm::vec3& position, const glm::vec3& forwar
 
 void AudioEngine::StopAll() {
     for (uint32_t i = 0; i < s_Voices.size(); ++i) FreeSlot(i);
+}
+
+static bool s_Muted = false;
+void AudioEngine::SetMuted(bool muted) {
+    s_Muted = muted;
+    if (s_Initialized) ma_engine_set_volume(&s_Engine, muted ? 0.0f : 1.0f);
+}
+bool AudioEngine::IsMuted() { return s_Muted; }
+
+bool AudioEngine::WaveformPeaks(const std::string& path, int buckets, std::vector<float>& outPeaks) {
+    outPeaks.clear();
+    if (buckets <= 0) return false;
+
+    ma_decoder decoder;
+    ma_decoder_config cfg = ma_decoder_config_init(ma_format_f32, 1, 0); // mono f32, native rate
+    if (ma_decoder_init_file(path.c_str(), &cfg, &decoder) != MA_SUCCESS) return false;
+
+    ma_uint64 totalFrames = 0;
+    ma_decoder_get_length_in_pcm_frames(&decoder, &totalFrames);
+    if (totalFrames == 0) { ma_decoder_uninit(&decoder); return false; }
+
+    outPeaks.assign(buckets, 0.0f);
+    const ma_uint64 framesPerBucket = (totalFrames + buckets - 1) / (ma_uint64)buckets;
+
+    std::vector<float> chunk(4096);
+    ma_uint64 frameIndex = 0;
+    for (;;) {
+        ma_uint64 read = 0;
+        if (ma_decoder_read_pcm_frames(&decoder, chunk.data(), chunk.size(), &read) != MA_SUCCESS || read == 0)
+            break;
+        for (ma_uint64 i = 0; i < read; ++i) {
+            const int b = (int)std::min<ma_uint64>((frameIndex + i) / framesPerBucket, (ma_uint64)buckets - 1);
+            const float a = std::fabs(chunk[i]);
+            if (a > outPeaks[b]) outPeaks[b] = a;
+        }
+        frameIndex += read;
+    }
+    ma_decoder_uninit(&decoder);
+    return true;
 }
 
 void AudioEngine::PlayPreview(const std::string& path) {

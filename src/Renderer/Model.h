@@ -107,6 +107,10 @@ public:
     std::shared_ptr<Material> MaterialOverride() const { return m_MaterialOverride; }
     int MeshCount() const { return (int)m_Meshes.size(); }
     Material& MeshMaterial(int index) { return m_Meshes[index]->Mat; }
+    const Material& MeshMaterial(int index) const { return m_Meshes[index]->Mat; }
+    // Editor sub-asset list (#236 G): per-mesh geometry counts.
+    unsigned int MeshTriangleCount(int index) const { return m_Meshes[index]->IndexCount() / 3u; }
+    unsigned int MeshVertexCount(int index) const { return m_Meshes[index]->VertexCount(); }
 
     // #192: the material value-hash this model draws with, so the scene draw loop can sort
     // entities to put value-identical materials adjacent (which is what makes the BindMaterial
