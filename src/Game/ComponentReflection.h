@@ -129,4 +129,18 @@ struct ReflectComponent {
     // and a non-script component (Camera) sets this explicitly.
     const char* Category = "Scripts";
     std::vector<ReflectField> Fields;
+
+    // When false, the generic SceneSerializer pass skips this component entirely — its JSON is
+    // written/read by a dedicated hand-coded path. For components whose state isn't plain
+    // reflected fields (RenderableComponent holds a shared_ptr<Model>). Positioned after Fields
+    // so the existing positional brace-inits are unaffected.
+    bool GenericSerialize = true;
+
+    // When false, the generic single-/multi-select Inspector loops and the generic slice of the
+    // Add Component menu skip this component — a hand-coded Inspector section draws it instead.
+    // Pairs with GenericSerialize for a component that IS registered (so the component-
+    // registration guard rail counts it, and its Icon/Category/Tooltip live in one place) but
+    // keeps custom editor code because its widgets or add/remove side effects (Mesh Renderer's
+    // DetachedMeshComponent stash needs the editor-only AssetLibrary) don't fit the generic path.
+    bool GenericInspector = true;
 };
