@@ -34,11 +34,14 @@ void Tooltip(const EditorModuleHostAPI& host, const char* text) {
 // renderer, none of which belong in this DLL). Flat: no body at rest, faint wash on hover;
 // `active` gives an accent body + a 2px bottom keyline for toggles that are "on".
 bool ActionButton(const EditorModuleHostAPI& host, const char* icon, const char* tooltip, bool active = false) {
-    const ImVec4 keyline(0.55f, 0.60f, 0.72f, 1.0f);
+    // "On" toggles read in the same cyan the styled sliders use (ImGuiCol_SliderGrab): a tinted
+    // body, a matching bottom keyline, and a cyan icon.
+    const ImVec4 acc = ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab);
     if (active) {
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.400f, 0.435f, 0.520f, 0.32f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.400f, 0.435f, 0.520f, 0.45f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.400f, 0.435f, 0.520f, 0.60f));
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(acc.x, acc.y, acc.z, 0.22f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(acc.x, acc.y, acc.z, 0.34f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(acc.x, acc.y, acc.z, 0.46f));
+        ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(acc.x, acc.y, acc.z, 1.0f));
     } else {
         ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
@@ -51,9 +54,9 @@ bool ActionButton(const EditorModuleHostAPI& host, const char* icon, const char*
         const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
         const float y = mx.y - 2.0f;
         ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x + 3.0f, y), ImVec2(mx.x - 3.0f, mx.y - 1.0f),
-                                                  ImGui::ColorConvertFloat4ToU32(keyline), 1.0f);
+                                                  ImGui::ColorConvertFloat4ToU32(acc), 1.0f);
     }
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(active ? 4 : 3);
     if (ImGui::IsItemHovered()) Tooltip(host, tooltip);
     return clicked;
 }
@@ -235,6 +238,9 @@ void Draw(const EditorModuleHostAPI& host) {
     const bool measureTool = host.GetMeasureTool && host.GetMeasureTool();
     if (ActionButton(host, ICON_FA_RULER, "Measure — click two points in the viewport to measure the distance",
             measureTool) && host.SetMeasureTool) host.SetMeasureTool(!measureTool);
+    ImGui::SameLine();
+    if (ActionButton(host, ICON_FA_CLONE, "Duplicate Array — line/grid of copies of the selection (Ctrl+Shift+D)")
+            && host.RequestDuplicateArray) host.RequestDuplicateArray();
 
     divider(); // transform tools | gizmo-space modifiers
     const bool localSpace = host.GetGizmoLocalSpace && host.GetGizmoLocalSpace();

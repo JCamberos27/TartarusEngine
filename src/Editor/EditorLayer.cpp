@@ -2365,21 +2365,24 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         dl->AddText(tp, col, tag);
     }
 
-    // Transient fly-speed readout near the viewport top (#236 R2) — poked by main.cpp on a
-    // scroll-driven speed change, fades over its last ~0.6s.
+    // Transient fly-speed readout — large, centred toward the bottom of the viewport (#236 R2).
+    // Poked by main.cpp on a scroll-driven speed change; fades over its last ~0.6s.
     if (m_FlySpeedHudTimer > 0.0f && m_ViewportSize.x > 4.0f) {
         m_FlySpeedHudTimer -= dt;
         const float a = std::clamp(m_FlySpeedHudTimer / 0.6f, 0.0f, 1.0f);
         char buf[48];
         std::snprintf(buf, sizeof(buf), ICON_FA_GAUGE_HIGH "  Fly speed  %.1f",
                       EditorSettings::Get().SceneCameraFlySpeed);
-        ImDrawList* dl = ImGui::GetForegroundDrawList();
-        ImVec2 ts = ImGui::CalcTextSize(buf);
-        ImVec2 c(m_ViewportPos.x + m_ViewportSize.x * 0.5f, m_ViewportPos.y + 34.0f);
+        ImFont* font = ImGui::GetFont();
+        const float fs = ImGui::GetFontSize() * 1.7f;
+        ImVec2 ts = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, buf);
+        ImVec2 c(m_ViewportPos.x + m_ViewportSize.x * 0.5f,
+                 m_ViewportPos.y + m_ViewportSize.y - 64.0f);
         ImVec2 p(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f);
-        dl->AddRectFilled(ImVec2(p.x - 10.0f, p.y - 5.0f), ImVec2(p.x + ts.x + 10.0f, p.y + ts.y + 5.0f),
-                          IM_COL32(18, 22, 30, (int)(215 * a)), 5.0f);
-        dl->AddText(p, IM_COL32(235, 245, 255, (int)(255 * a)), buf);
+        ImDrawList* dl = ImGui::GetForegroundDrawList();
+        dl->AddRectFilled(ImVec2(p.x - 16.0f, p.y - 9.0f), ImVec2(p.x + ts.x + 16.0f, p.y + ts.y + 9.0f),
+                          IM_COL32(18, 22, 30, (int)(220 * a)), 8.0f);
+        dl->AddText(font, fs, p, IM_COL32(240, 248, 255, (int)(255 * a)), buf);
     }
 
     DrawArrayDuplicateModal(world, assets); // #236 R2

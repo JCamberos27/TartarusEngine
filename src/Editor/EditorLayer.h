@@ -114,6 +114,7 @@ public:
     // main.cpp pokes this whenever the fly speed changes via scroll (RMB-drag or Ctrl+scroll);
     // Draw() fades out the transient "Fly speed: N" viewport readout (#236 R2).
     void FlashFlySpeedHud() { m_FlySpeedHudTimer = 1.4f; }
+    void RequestArrayDuplicateModal() { m_ShowArrayDuplicate = true; } // toolbar button (#236 R2)
     bool LockViewToSelection() const { return m_LockViewToSelection; }
     void SetLockViewToSelection(bool on) { m_LockViewToSelection = on; m_LockViewHasCentroid = false; }
     int  ShadingModeIndex() const { return (int)m_ShadingMode; }

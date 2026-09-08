@@ -405,6 +405,7 @@ void  TbRefreshAssetBrowser() { if (g_Editor) g_Editor->RefreshAssetBrowser(); }
 float TbGetAssetRefreshFlash() { return g_Editor ? g_Editor->AssetRefreshFlash() : 0.0f; }
 bool  TbGetMeasureTool() { return g_Editor && g_Editor->MeasureToolActive(); }
 void  TbSetMeasureTool(bool on) { if (g_Editor) g_Editor->SetMeasureToolActive(on); }
+void  TbRequestDuplicateArray() { if (g_Editor) g_Editor->RequestArrayDuplicateModal(); }
 
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
@@ -513,6 +514,7 @@ const EditorModuleHostAPI kHostAPI{
     &TbRefreshAssetBrowser,
     &TbGetAssetRefreshFlash,
     &TbGetMeasureTool,          &TbSetMeasureTool,
+    &TbRequestDuplicateArray,
 };
 
 } // namespace

@@ -47,7 +47,8 @@
 //   13 - Asset Browser sort + refresh (#236 G): Get/SetAssetSort (packed mode*2+desc),
 //        RefreshAssetBrowser, GetAssetRefreshFlash. Also Console (#236 A5): EditorConsoleState
 //        gains Collapse / ClearOnPlay / ErrorPause.
-//   14 - Measure / ruler tool (#236 R2): Get/SetMeasureTool for the toolbar toggle.
+//   14 - Measure / ruler tool + Duplicate Array (#236 R2): Get/SetMeasureTool,
+//        RequestDuplicateArray for the toolbar buttons.
 constexpr std::uint32_t kEditorModuleAPIVersion = 14;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
@@ -364,8 +365,9 @@ struct EditorModuleHostAPI {
     void (*RefreshAssetBrowser)() = nullptr;
     float (*GetAssetRefreshFlash)() = nullptr;
 
-    // --- Measure / ruler tool (API v14, #236 R2) -------------------------------------
+    // --- Measure / ruler tool + Duplicate Array (API v14, #236 R2) ------------------
     bool (*GetMeasureTool)() = nullptr;  void (*SetMeasureTool)(bool on) = nullptr;
+    void (*RequestDuplicateArray)() = nullptr; // opens the array-duplicate modal (host self-gates on a selection)
 };
 
 struct EditorModuleAPI {
