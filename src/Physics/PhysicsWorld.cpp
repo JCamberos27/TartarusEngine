@@ -5,7 +5,7 @@
 #include "World.h"
 #include "Components.h"
 #include "Model.h"
-#include "GameModuleAPI.h" // RaycastHit (shared POD)
+#include "GameModuleAPI.h" // RaycastHit / TriggerEvent (shared PODs), kPlayerEntity
 
 #include <PxPhysicsAPI.h>
 
@@ -14,6 +14,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
+#include <set>
 #include <string>
 #include <thread>
 #include <utility>
@@ -46,9 +48,27 @@ public:
     }
 };
 
+using TriggerPair = std::pair<std::uint32_t, std::uint32_t>; // (trigger entity, other entity)
+
+struct PhysicsState;
+
+// PhysX calls this back during fetchResults for every trigger touch found/lost. We only
+// implement onTrigger; the other five events are unused. Enter/Exit go straight onto the
+// frame's event list and the tracked overlap set (Step synthesises Stay from what's left).
+struct TriggerCallback : PxSimulationEventCallback {
+    PhysicsState* owner = nullptr;
+    void onTrigger(PxTriggerPair* pairs, PxU32 count) override;
+    void onContact(const PxContactPairHeader&, const PxContactPair*, PxU32) override {}
+    void onConstraintBreak(PxConstraintInfo*, PxU32) override {}
+    void onWake(PxActor**, PxU32) override {}
+    void onSleep(PxActor**, PxU32) override {}
+    void onAdvance(const PxRigidBody* const*, const PxTransform*, PxU32) override {}
+};
+
 struct PhysicsState {
     PxDefaultAllocator     allocator;
     EngineErrorCallback    errorCallback;
+    TriggerCallback        triggerCb;
     PxFoundation*          foundation   = nullptr;
     PxPhysics*             physics      = nullptr;
     PxDefaultCpuDispatcher* dispatcher  = nullptr;
@@ -61,6 +81,15 @@ struct PhysicsState {
     // TransformComponent, before it. Actors themselves are owned by the scene.
     std::vector<std::pair<PxRigidDynamic*, entt::entity>> dynamics;
     std::vector<std::pair<PxRigidDynamic*, entt::entity>> kinematics;
+    // #185 PR 5 — trigger state. triggerOverlaps: rigidbody pairs currently inside a trigger
+    // (maintained by onTrigger). playerTriggers: trigger entities the Player capsule is inside
+    // (maintained by a per-frame overlap query). triggerEvents: this frame's transitions,
+    // rebuilt each Step and drained by GetTriggerEvents. enteredThisFrame: dedup so a pair that
+    // fired Enter this frame doesn't also get a synthetic Stay.
+    std::set<TriggerPair>       triggerOverlaps;
+    std::set<std::uint32_t>     playerTriggers;
+    std::vector<TriggerEvent>   triggerEvents;
+    std::set<TriggerPair>       enteredThisFrame;
 #ifdef TARTARUS_PHYSX_PVD
     PxPvd*               pvd            = nullptr;
     PxPvdTransport*      pvdTransport   = nullptr;
@@ -230,6 +259,47 @@ void BuildActors(PhysicsState& s, const World& world) {
     Log::Info(msg + ".");
 }
 
+// --- Triggers (#185 PR 5) --------------------------------------------------------------
+
+const char* EntityLabel(std::uint32_t e, char buf[24]) {
+    if (e == kPlayerEntity) return "Player";
+    std::snprintf(buf, 24, "entity %u", e);
+    return buf;
+}
+
+void PushTriggerEvent(PhysicsState& s, std::uint32_t kind, std::uint32_t trig, std::uint32_t other) {
+    TriggerEvent ev;
+    ev.Kind = kind; ev.Trigger = trig; ev.Other = other;
+    s.triggerEvents.push_back(ev);
+    if (kind == TriggerEvent::Enter || kind == TriggerEvent::Exit) {
+        char a[24], b[24];
+        Log::Info(std::string("Trigger ") + (kind == TriggerEvent::Enter ? "enter: " : "exit:  ") +
+                  EntityLabel(other, a) + (kind == TriggerEvent::Enter ? " -> " : " <- ") +
+                  EntityLabel(trig, b));
+    }
+}
+
+void TriggerCallback::onTrigger(PxTriggerPair* pairs, PxU32 count) {
+    if (!owner) return;
+    for (PxU32 i = 0; i < count; ++i) {
+        const PxTriggerPair& p = pairs[i];
+        if (p.flags & (PxTriggerPairFlag::eREMOVED_SHAPE_TRIGGER | PxTriggerPairFlag::eREMOVED_SHAPE_OTHER))
+            continue;
+        const std::uint32_t trig  = UserDataToEntity(p.triggerActor->userData);
+        const std::uint32_t other = UserDataToEntity(p.otherActor->userData);
+        const TriggerPair key{trig, other};
+        if (p.status & PxPairFlag::eNOTIFY_TOUCH_FOUND) {
+            if (owner->triggerOverlaps.insert(key).second) {
+                owner->enteredThisFrame.insert(key);
+                PushTriggerEvent(*owner, TriggerEvent::Enter, trig, other);
+            }
+        } else if (p.status & PxPairFlag::eNOTIFY_TOUCH_LOST) {
+            if (owner->triggerOverlaps.erase(key))
+                PushTriggerEvent(*owner, TriggerEvent::Exit, trig, other);
+        }
+    }
+}
+
 } // namespace
 
 namespace PhysicsWorld {
@@ -280,11 +350,13 @@ void Create(const World& world) {
 
     s->defaultMaterial = s->physics->createMaterial(0.6f, 0.6f, 0.0f);
 
+    s->triggerCb.owner = s; // #185 PR 5
     PxSceneDesc desc(s->physics->getTolerancesScale());
     const glm::vec3 g = ProjectSettings::Physics().Gravity;
-    desc.gravity        = PxVec3(g.x, g.y, g.z);
-    desc.cpuDispatcher  = s->dispatcher;
-    desc.filterShader   = PxDefaultSimulationFilterShader;
+    desc.gravity                 = PxVec3(g.x, g.y, g.z);
+    desc.cpuDispatcher           = s->dispatcher;
+    desc.filterShader            = PxDefaultSimulationFilterShader; // handles trigger pairs
+    desc.simulationEventCallback = &s->triggerCb;
     s->scene = s->physics->createScene(desc);
     if (!s->scene) {
         Log::Error("PhysX: createScene failed — physics disabled for this Play session.");
@@ -337,9 +409,34 @@ bool IsActive() {
     return g_State != nullptr;
 }
 
+// Trigger entities whose volume the Player capsule currently overlaps. One overlap query per
+// Step — cheap for the handful of trigger shapes a scene has.
+void CollectPlayerTriggers(std::set<std::uint32_t>& out) {
+    out.clear();
+    if (!g_State->controller) return;
+    auto* cap = static_cast<PxCapsuleController*>(g_State->controller);
+    const PxExtendedVec3 c = cap->getPosition();
+    const PxCapsuleGeometry geom(cap->getRadius(), 0.5f * cap->getHeight());
+    const PxTransform pose(PxVec3((float)c.x, (float)c.y, (float)c.z),
+                           PxQuat(PxHalfPi, PxVec3(0, 0, 1))); // capsule axis X -> up
+
+    PxOverlapHit hits[16];
+    PxOverlapBuffer buf(hits, 16);
+    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::eNO_BLOCK);
+    if (!g_State->scene->overlap(geom, pose, buf, fd)) return;
+    for (PxU32 i = 0; i < buf.getNbTouches(); ++i) {
+        const PxShape* sh = buf.getTouch(i).shape;
+        if (sh && (sh->getFlags() & PxShapeFlag::eTRIGGER_SHAPE) && buf.getTouch(i).actor)
+            out.insert(UserDataToEntity(buf.getTouch(i).actor->userData));
+    }
+}
+
 void Step(float dt, World& world) {
     if (!g_State || !g_State->scene) return;
     if (dt <= 0.0f) return;
+
+    g_State->triggerEvents.clear();
+    g_State->enteredThisFrame.clear();
 
     // Kinematic bodies are driven by their TransformComponent (e.g. an Animator-moved platform):
     // push this frame's authored pose into the actor before stepping so it sweeps other bodies.
@@ -377,6 +474,29 @@ void Step(float dt, World& world) {
         tc->Position      = glm::vec3(p.p.x, p.p.y, p.p.z);
         tc->RotationEuler = PxQuatToEulerDeg(p.q);
     }
+
+    // --- Trigger transitions (#185 PR 5) -----------------------------------------------
+    // onTrigger (above, during fetchResults) already pushed rigidbody Enter/Exit. The Player
+    // capsule doesn't report through onTrigger, so diff a fresh overlap set against last frame.
+    std::set<std::uint32_t> nowPlayer;
+    CollectPlayerTriggers(nowPlayer);
+    for (std::uint32_t t : nowPlayer)
+        if (!g_State->playerTriggers.count(t)) {
+            g_State->enteredThisFrame.insert({t, kPlayerEntity});
+            PushTriggerEvent(*g_State, TriggerEvent::Enter, t, kPlayerEntity);
+        }
+    for (std::uint32_t t : g_State->playerTriggers)
+        if (!nowPlayer.count(t))
+            PushTriggerEvent(*g_State, TriggerEvent::Exit, t, kPlayerEntity);
+    g_State->playerTriggers.swap(nowPlayer);
+
+    // Synthesise Stay for every overlap still active that didn't just fire Enter.
+    for (const auto& pr : g_State->triggerOverlaps)
+        if (!g_State->enteredThisFrame.count(pr))
+            PushTriggerEvent(*g_State, TriggerEvent::Stay, pr.first, pr.second);
+    for (std::uint32_t t : g_State->playerTriggers)
+        if (!g_State->enteredThisFrame.count({t, kPlayerEntity}))
+            PushTriggerEvent(*g_State, TriggerEvent::Stay, t, kPlayerEntity);
 }
 
 bool Raycast(const float origin[3], const float dir[3], float maxDistance, RaycastHit& outHit) {
@@ -429,8 +549,14 @@ void CreateCharacter(float radius, float cylinderHalfHeight, const float footPos
         return;
     }
     g_State->controller = g_State->controllerMgr->createController(desc);
-    if (!g_State->controller)
+    if (!g_State->controller) {
         Log::Error("PhysX: createController failed — Player will not collide this session.");
+        return;
+    }
+    // Tag the CCT actor so anything that reads userData (trigger callback, a future raycast
+    // hit on the player) can tell it apart from a real entity (#185 PR 5).
+    if (PxRigidActor* a = g_State->controller->getActor())
+        a->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(kPlayerEntity));
 }
 
 void SetCharacterFootPosition(const float footPos[3]) {
@@ -456,6 +582,22 @@ unsigned MoveCharacter(const float disp[3], float dt) {
     if (f & PxControllerCollisionFlag::eCOLLISION_UP)    out |= CC_UP;
     if (f & PxControllerCollisionFlag::eCOLLISION_DOWN)  out |= CC_DOWN;
     return out;
+}
+
+int GetTriggerEvents(TriggerEvent* out, int maxEvents) {
+    if (!g_State) return 0;
+    const int total = (int)g_State->triggerEvents.size();
+    const int n = (maxEvents < total) ? maxEvents : total;
+    for (int i = 0; i < n && out; ++i) out[i] = g_State->triggerEvents[(size_t)i];
+    return total;
+}
+
+bool IsTriggerOccupied(unsigned triggerEntity) {
+    if (!g_State) return false;
+    if (g_State->playerTriggers.count(triggerEntity)) return true;
+    for (const auto& pr : g_State->triggerOverlaps)
+        if (pr.first == triggerEntity) return true;
+    return false;
 }
 
 } // namespace PhysicsWorld

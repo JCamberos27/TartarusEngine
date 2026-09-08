@@ -6,9 +6,9 @@
 #include "Components.h"
 #include "Model.h"
 #include "GLStateCache.h"
+#include "PhysicsWorld.h"
 
 #include <glm/gtc/quaternion.hpp>
-#include <glm/gtc/type_ptr.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -18,18 +18,24 @@ namespace {
 const char* kVertexSrc = R"(
 #version 460 core
 layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aColor;
 uniform mat4 uViewProj;
-void main() { gl_Position = uViewProj * vec4(aPos, 1.0); }
+out vec3 vColor;
+void main() { vColor = aColor; gl_Position = uViewProj * vec4(aPos, 1.0); }
 )";
 
 const char* kFragmentSrc = R"(
 #version 460 core
+in vec3 vColor;
 out vec4 FragColor;
-uniform vec3 uColor;
-void main() { FragColor = vec4(uColor, 1.0); }
+void main() { FragColor = vec4(vColor, 1.0); }
 )";
 
 constexpr int kCircleSegs = 28;
+
+const glm::vec3 kSolidColor   (0.35f, 0.90f, 0.35f); // green
+const glm::vec3 kTriggerColor (0.90f, 0.85f, 0.25f); // yellow
+const glm::vec3 kOccupiedColor(1.00f, 0.55f, 0.15f); // orange — trigger with something inside
 
 // Same axis-aligned box the legacy collider path uses (World.cpp's ColliderWorldBounds): render
 // bounds scaled by the transform, or a unit box for a mesh-less entity.
@@ -54,8 +60,11 @@ ColliderGizmo::ColliderGizmo() {
     glGenBuffers(1, &m_VBO);
     glBindVertexArray(m_VAO);
     glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
+    const GLsizei stride = 2 * (GLsizei)sizeof(glm::vec3);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)sizeof(glm::vec3));
     glBindVertexArray(0);
 }
 
@@ -64,13 +73,15 @@ ColliderGizmo::~ColliderGizmo() {
     if (m_VAO) glDeleteVertexArrays(1, &m_VAO);
 }
 
-void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const World& world,
-                         const glm::vec3& color) {
-    m_Lines.clear();
-    auto& L = m_Lines;
-    auto seg = [&](const glm::vec3& a, const glm::vec3& b) { L.push_back(a); L.push_back(b); };
+void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const World& world) {
+    m_Verts.clear();
+    auto& V = m_Verts;
+    glm::vec3 col = kSolidColor;
+    auto seg = [&](const glm::vec3& a, const glm::vec3& b) {
+        V.push_back(a); V.push_back(col);
+        V.push_back(b); V.push_back(col);
+    };
 
-    // Ring of `segs` chords in the plane spanned by u,v (both length `radius`), centred at c.
     auto ring = [&](const glm::vec3& c, const glm::vec3& u, const glm::vec3& v, int segs) {
         glm::vec3 prev = c + u;
         for (int i = 1; i <= segs; ++i) {
@@ -80,7 +91,6 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
             prev = p;
         }
     };
-    // Half-ring from angle 0..pi (used for capsule end caps).
     auto arc = [&](const glm::vec3& c, const glm::vec3& u, const glm::vec3& v, int segs) {
         glm::vec3 prev = c + u;
         for (int i = 1; i <= segs; ++i) {
@@ -103,6 +113,9 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
     for (entt::entity e : vw) {
         const auto& t = vw.get<const TransformComponent>(e);
         const auto& c = vw.get<const ColliderComponent>(e);
+
+        col = !c.IsTrigger ? kSolidColor
+            : (PhysicsWorld::IsTriggerOccupied(entt::to_integral(e)) ? kOccupiedColor : kTriggerColor);
 
         if (c.HalfExtents == glm::vec3(0.0f)) {
             glm::vec3 center, half;
@@ -149,21 +162,20 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
         }
     }
 
-    if (L.empty()) return;
+    if (V.empty()) return;
 
     glBindVertexArray(m_VAO);
     glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-    if (L.size() > m_Capacity) {
-        glBufferData(GL_ARRAY_BUFFER, L.size() * sizeof(glm::vec3), L.data(), GL_DYNAMIC_DRAW);
-        m_Capacity = L.size();
+    if (V.size() > m_Capacity) {
+        glBufferData(GL_ARRAY_BUFFER, V.size() * sizeof(glm::vec3), V.data(), GL_DYNAMIC_DRAW);
+        m_Capacity = V.size();
     } else {
-        glBufferSubData(GL_ARRAY_BUFFER, 0, L.size() * sizeof(glm::vec3), L.data());
+        glBufferSubData(GL_ARRAY_BUFFER, 0, V.size() * sizeof(glm::vec3), V.data());
     }
 
     m_Shader->Bind();
     m_Shader->SetMat4("uViewProj", proj * view);
-    m_Shader->SetVec3("uColor", color);
-    glDrawArrays(GL_LINES, 0, (GLsizei)L.size());
+    glDrawArrays(GL_LINES, 0, (GLsizei)(V.size() / 2)); // 2 vec3 (pos+colour) per vertex
     glBindVertexArray(0);
 
     GLStateCache::Invalidate(); // raw program/VAO/buffer binds above bypass the cache

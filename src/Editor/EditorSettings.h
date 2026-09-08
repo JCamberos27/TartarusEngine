@@ -141,10 +141,11 @@ struct EditorSettings {
     float LightGizmoOpacity      = 0.5f;
     float LightGizmoScale        = 1.0f;
 
-    // --- Collider gizmos (#185 PR 2): green wireframe of every ColliderComponent's shape
-    // (box/sphere/capsule) in the Scene viewport, in both edit and Play mode. Off by default —
-    // it's an authoring/debug aid, not always-on chrome. Toggled from the toolbar Gizmos popup.
-    bool  ShowColliders          = false;
+    // --- Collider gizmos (#185): wireframe of every ColliderComponent's shape in the Scene
+    // viewport, both edit and Play mode — solid colliders green, triggers yellow (orange while
+    // occupied, #185 PR 5). On by default now that the physics system is real; toggled from the
+    // toolbar Gizmos popup.
+    bool  ShowColliders          = true;
 
     // --- Per-layer viewport mask (#236 A1). One bit per LayerRegistry slot (bit N = layer N).
     // LayerVisibleMask: a clear bit hides that layer's entities in the Scene viewport draw (they

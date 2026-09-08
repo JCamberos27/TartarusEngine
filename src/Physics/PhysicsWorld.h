@@ -4,11 +4,11 @@
 //
 // PR 1 stood up an empty PxScene. PR 2 populated it with a static actor per ColliderComponent
 // and added Raycast() scene queries. PR 3 added the PxCapsuleController the Play-mode Player
-// sweeps through it. PR 4 adds dynamic bodies: a collider entity that also has a
-// RigidbodyComponent becomes a PxRigidDynamic, and Step() writes its simulated pose back into
-// the entity's TransformComponent each frame (kinematic bodies go the other way — their
-// Transform drives the actor). Edit mode is still untouched; Play -> Stop restores the
-// authored scene from its JSON snapshot as always.
+// sweeps through it. PR 4 added dynamic bodies (RigidbodyComponent -> PxRigidDynamic, with
+// pose write-back). PR 5 adds trigger dispatch: a collider with Is Trigger set reports
+// enter/stay/exit for anything overlapping it (Step() collects them from PhysX's onTrigger
+// plus a capsule overlap for the Player), surfaced through GameModuleHostAPI. Edit mode is
+// still untouched; Play -> Stop restores the authored scene from its JSON snapshot as always.
 //
 // This header deliberately pulls in NO PhysX headers. Every PhysX type lives behind the pimpl
 // in PhysicsWorld.cpp so the SDK's include surface (and its /MD, exception, and alignment
@@ -16,7 +16,8 @@
 // host-only (TartarusEngine.exe) — never the reloadable TartarusGame / TartarusEditor DLLs.
 
 class World;
-struct RaycastHit; // GameModuleAPI.h — POD, shared with the gameplay-module ABI
+struct RaycastHit;   // GameModuleAPI.h — POD, shared with the gameplay-module ABI
+struct TriggerEvent; // GameModuleAPI.h — POD, shared with the gameplay-module ABI
 
 namespace PhysicsWorld {
 
@@ -65,5 +66,16 @@ void GetCharacterFootPosition(float outFootPos[3]);
 // Sweep-move the capsule by `disp` (world units, already scaled by dt at the call site).
 // Returns a mask of CharacterCollision bits; 0 when there is no character or world.
 unsigned MoveCharacter(const float disp[3], float dt);
+
+// --- Triggers (#185 PR 5) --------------------------------------------------------------
+// Step() rebuilds this frame's enter/stay/exit list from PhysX's onTrigger callback (dynamic
+// and kinematic bodies) plus a capsule overlap for the Player. Backs
+// GameModuleHostAPI::GetTriggerEvents.
+
+// Copy up to `maxEvents` of this frame's transitions into `out`; return the total count.
+int GetTriggerEvents(TriggerEvent* out, int maxEvents);
+
+// True while something is inside the given trigger entity's volume — for the editor gizmo.
+bool IsTriggerOccupied(unsigned triggerEntity);
 
 } // namespace PhysicsWorld
