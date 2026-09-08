@@ -127,7 +127,7 @@ void BuildDefaultTable() {
 
     // --- Edit (Global) ---
     Register("edit.duplicate",       "Duplicate (in place)",  Ctx_Global, Ck(ImGuiKey_D));
-    Register("edit.duplicateArray",  "Duplicate Array\xE2\x80\xA6", Ctx_Global, Chord{}); // unbound by default
+    Register("edit.duplicateArray",  "Duplicate Array\xE2\x80\xA6", Ctx_Global, CSk(ImGuiKey_D));
     Register("edit.selectAll",       "Select All",            Ctx_Global, Ck(ImGuiKey_A));
     Register("edit.deselectAll",     "Deselect All",          Ctx_Global, CSk(ImGuiKey_A));
     Register("edit.invertSelection", "Invert Selection",      Ctx_Global, Ck(ImGuiKey_I));
