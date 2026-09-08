@@ -1218,6 +1218,8 @@ private:
 public:
     bool IsAssetFavorite(const std::string& key) const { return m_AssetFavorites.count(key) != 0; }
     void ToggleAssetFavorite(const std::string& key);
+    // Batch: set every key's favourite state to `on`, saving once. For multi-select.
+    void SetAssetFavorites(const std::vector<std::string>& keys, bool on);
     bool AssetFavoritesOnly() const { return m_AssetFavoritesOnly; }
     void SetAssetFavoritesOnly(bool on) { m_AssetFavoritesOnly = on; }
 private:
