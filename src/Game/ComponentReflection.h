@@ -29,7 +29,14 @@ enum class ReflectFieldType {
     // int storage, a Combo widget, JSON round-trips the label TEXT (stable if EnumLabels is
     // reordered); an unknown / out-of-range label loads as index 0. See EnumLabels / EnumCount.
     Enum,
+    // std::string storage (a project-relative asset path), same plain-string JSON as String.
+    // The Inspector shows a Combo of the AssetLibrary's assets of the field's AssetKind; on
+    // load the path is registered with the library so it lists even if nothing else imported it.
+    AssetRef,
 };
+
+// Which AssetLibrary list an AssetRef field draws from / registers into.
+enum class ReflectAssetKind { Sound, Model, Texture, Script };
 
 struct ReflectField {
     const char* Name = "";          // Inspector label + JSON key
@@ -56,6 +63,9 @@ struct ReflectField {
     // --- Enum (ReflectFieldType::Enum) ---------------------------------------------------
     const char* EnumLabels = nullptr; // ImGui packed list: "Point\0Spot\0Directional\0"
     int EnumCount = 0;                 // number of labels in EnumLabels
+
+    // --- AssetRef (ReflectFieldType::AssetRef) -----------------------------------------
+    ReflectAssetKind AssetKind = ReflectAssetKind::Sound;
 
     // --- Conditional visibility (Inspector only; the field is always serialized) -----------
     // Shown only when the sibling field named VisibleIfField (an Int or Enum field of the same

@@ -135,7 +135,8 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
                 case ReflectFieldType::Float:  cj[f.Name] = *static_cast<const float*>(fp); break;
                 case ReflectFieldType::Vec3:   cj[f.Name] = Vec3ToJson(*static_cast<const glm::vec3*>(fp)); break;
                 case ReflectFieldType::Color:  cj[f.Name] = Vec3ToJson(*static_cast<const glm::vec3*>(fp)); break;
-                case ReflectFieldType::String: cj[f.Name] = *static_cast<const std::string*>(fp); break;
+                case ReflectFieldType::String:
+                case ReflectFieldType::AssetRef: cj[f.Name] = *static_cast<const std::string*>(fp); break;
                 case ReflectFieldType::Enum: {
                     const int v = *static_cast<const int*>(fp);
                     // Round-trip the label text so a reordered EnumLabels list doesn't rewrite
@@ -150,7 +151,7 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
     }
 }
 
-void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
+void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, entt::entity entity) {
     if (j.contains("tag")) world.Registry.emplace_or_replace<TagComponent>(entity, j["tag"].get<std::string>());
     if (!j.value("active", true)) world.Registry.emplace_or_replace<InactiveTag>(entity);
     if (j.value("static", false)) world.Registry.emplace_or_replace<StaticTag>(entity);
@@ -228,6 +229,20 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
         world.Registry.emplace_or_replace<AnimatorComponent>(entity, anim);
     }
 
+    // Legacy pre-#302 format: AudioSourceComponent moved onto reflection (keyed "Audio Source"
+    // below). Scenes authored before the migration carry flat "sound*" keys on the model object.
+    // Read them only when the new key is absent, so a re-saved file goes through the generic path.
+    if (!j.contains("Audio Source")) {
+        const std::string soundPath = j.value("soundPath", std::string());
+        if (!soundPath.empty()) {
+            assets.RegisterSound(soundPath);
+            auto& audio = world.Registry.emplace_or_replace<AudioSourceComponent>(entity, soundPath);
+            audio.Volume = j.value("soundVolume", 1.0f);
+            audio.Loop = j.value("soundLoop", false);
+            audio.PlayOnStart = j.value("soundPlayOnStart", false);
+        }
+    }
+
     // #184: mirror of the generic write — restore each registered component present in `j`.
     // Missing fields keep the component's own default (the component was just default-added).
     for (const auto& rc : ComponentRegistry::All()) {
@@ -245,6 +260,21 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
                 case ReflectFieldType::Vec3:   *static_cast<glm::vec3*>(fp) = JsonToVec3(cj.at(f.Name)); break;
                 case ReflectFieldType::Color:  *static_cast<glm::vec3*>(fp) = JsonToVec3(cj.at(f.Name)); break;
                 case ReflectFieldType::String: *static_cast<std::string*>(fp) = cj.at(f.Name).get<std::string>(); break;
+                case ReflectFieldType::AssetRef: {
+                    auto& path = *static_cast<std::string*>(fp);
+                    path = cj.at(f.Name).get<std::string>();
+                    // Make the referenced asset list in the library even if nothing else
+                    // imported it, so the Inspector's picker can still show / re-select it.
+                    if (!path.empty()) {
+                        switch (f.AssetKind) {
+                            case ReflectAssetKind::Sound:   assets.RegisterSound(path); break;
+                            case ReflectAssetKind::Model:    break; // models resolve via RenderableComponent
+                            case ReflectAssetKind::Texture:  break;
+                            case ReflectAssetKind::Script:   break;
+                        }
+                    }
+                    break;
+                }
                 case ReflectFieldType::Enum: {
                     const json& jv = cj.at(f.Name);
                     if      (jv.is_string())         *static_cast<int*>(fp) = ReflectEnumIndex(f, jv.get<std::string>().c_str());
@@ -431,7 +461,6 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         TransformComponent transform = effectiveTransform(entity);
         const auto& name = modelView.get<const NameComponent>(entity);
         const auto& renderable = modelView.get<const RenderableComponent>(entity);
-        const auto* audio = world.Registry.try_get<AudioSourceComponent>(entity);
 
         json m;
         m["path"] = renderable.ModelRef->Path();
@@ -439,12 +468,9 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         m["position"] = Vec3ToJson(transform.Position);
         m["rotation"] = Vec3ToJson(transform.RotationEuler);
         m["scale"] = Vec3ToJson(transform.Scale);
-        m["soundPath"] = audio ? audio->SoundPath : std::string();
-        if (audio) {
-            m["soundVolume"] = audio->Volume;
-            m["soundLoop"] = audio->Loop;
-            m["soundPlayOnStart"] = audio->PlayOnStart;
-        }
+        // AudioSourceComponent moved onto reflection (#302 Wave 3): it now round-trips through
+        // the generic "Audio Source" block written by WriteCommonComponents below (for every
+        // entity kind, not just models). The old flat "sound*" keys are still READ.
         m["id"] = idOf[entity];
         m["parentId"] = parentIdOf(entity);
 
@@ -591,7 +617,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             glm::vec3 rotation = JsonToVec3(b.value("rotation", json::array({0, 0, 0})));
             std::string name = b.value("name", std::string());
             entt::entity e = world.CreateBox(center, size, color, rotation, name);
-            ReadCommonComponents(b, world, e);
+            ReadCommonComponents(b, world, assets, e);
             applyOrder(e, b);
             created(e);
 
@@ -613,8 +639,6 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             glm::vec3 position = JsonToVec3(m.value("position", json::array({0, 0, 0})));
             glm::vec3 rotation = JsonToVec3(m.value("rotation", json::array({0, 0, 0})));
             glm::vec3 scale = JsonToVec3(m.value("scale", json::array({1, 1, 1})), glm::vec3(1.0f));
-            std::string soundPath = m.value("soundPath", std::string());
-            if (!soundPath.empty()) assets.RegisterSound(soundPath);
 
             if (m.contains("material")) {
                 const json& mj = m["material"];
@@ -641,13 +665,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             }
 
             entt::entity e = world.CreateModelEntity(model, position, rotation, scale, name);
-            if (!soundPath.empty()) {
-                auto& audio = world.Registry.emplace<AudioSourceComponent>(e, soundPath);
-                audio.Volume = m.value("soundVolume", 1.0f);
-                audio.Loop = m.value("soundLoop", false);
-                audio.PlayOnStart = m.value("soundPlayOnStart", false);
-            }
-            ReadCommonComponents(m, world, e);
+            ReadCommonComponents(m, world, assets, e); // handles the "Audio Source" block + the legacy "sound*" shim
             applyOrder(e, m);
             created(e);
 
@@ -665,7 +683,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             glm::vec3 scale = JsonToVec3(en.value("scale", json::array({1, 1, 1})), glm::vec3(1.0f));
             entt::entity e = world.CreateEmptyEntity(position, rotation, scale,
                 en.value("name", std::string("Empty")));
-            ReadCommonComponents(en, world, e);
+            ReadCommonComponents(en, world, assets, e);
             applyOrder(e, en);
             created(e);
 
