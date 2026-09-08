@@ -108,9 +108,13 @@ instrumented.*
 **Actively developed.** The engine has been through a full seven-round source audit — every file
 in `src/` was read — tracked in
 [issue #187](https://github.com/JCamberos27/TartarusEngine/issues/187) (closed: all 54 findings
-resolved). Current focus is
-[issue #236](https://github.com/JCamberos27/TartarusEngine/issues/236), a feature-gap audit of
-the editor against Unity; much of it has shipped and the rest is that issue's open backlog.
+resolved). The Unity feature-gap audit
+([issue #236](https://github.com/JCamberos27/TartarusEngine/issues/236)) and the native
+component-registration / prefab-override work
+([#302](https://github.com/JCamberos27/TartarusEngine/issues/302),
+[#315](https://github.com/JCamberos27/TartarusEngine/issues/315)) have all landed; the next
+large piece is a real collision system
+([#185](https://github.com/JCamberos27/TartarusEngine/issues/185)).
 Windows-only CI builds every push in Debug and Release.
 
 ## Building
@@ -178,6 +182,7 @@ project/      The scene and editor preferences being authored
 - Image-based lighting baked from the procedural sky ([#196](https://github.com/JCamberos27/TartarusEngine/issues/196))
 - Hot-reloadable editor panels · reflection-registered components · runtime `AudioSourceComponent` playback
 - Editor / Unity parity pass — Hierarchy reordering & keyboard nav, Inspector component menu + copy/paste, Grid & Snap and Gizmos popovers, Pause & Step, GameObject-menu ops ([#236](https://github.com/JCamberos27/TartarusEngine/issues/236))
+- Live prefab instances with per-field & per-component overrides — accent-tinted labels, in-Inspector Revert / Apply to Prefab, Unpack ([#302](https://github.com/JCamberos27/TartarusEngine/issues/302), [#315](https://github.com/JCamberos27/TartarusEngine/issues/315))
 
 ### Next
 
@@ -186,7 +191,7 @@ project/      The scene and editor preferences being authored
 - **Placed reflection probes** — local cubemaps and HDRI input, beyond today's single global sky probe
 - **Screen-space effects** on the HDR buffer — SSAO, bloom
 - **Standalone build export** — ship a scene as a runnable game without the editor
-- Finish the [#236](https://github.com/JCamberos27/TartarusEngine/issues/236) backlog — Asset Browser gaps, Inspector list/array fields, custom Hierarchy folders, tag / layer indicators
+- Remaining editor polish — Inspector list/array fields, component reorder, an "Open Prefab" edit mode, nested prefabs / variants
 
 ## License
 

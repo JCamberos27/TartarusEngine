@@ -7,6 +7,29 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### Component registration → prefab overrides (#302, #315) — 2026-09-08
+
+- **#302 Part A** — native component **registration + reflection**. One `ComponentRegistry`
+  declaration gives a component its JSON serialization, Inspector section, and Add-Component
+  entry with no per-component editor code. Field types: bool / int / float / vec3 / string /
+  color / enum / asset-reference, each with a drag speed, optional min/max, tooltip, and
+  widget hints (slider, log scale, printf format, conditional visibility, collapsible
+  sub-groups). Camera, Light (+ Shadows), and Audio Source were migrated onto it; a CI guard
+  rail (`tools/check_component_registration.py`) fails the build if a component in
+  `Components.h` is neither registered nor allow-listed with a reason. PRs #306–#310.
+- **#302 Part B** — **per-field prefab-instance overrides**. A field changed on an instance
+  child is kept as an override: the Inspector label is accent-tinted with a right-click
+  **Revert to Prefab** / **Apply to Prefab**. Stored as a compact `{e,c,f,v}` delta list on
+  the instance stub, diffed against the `.prefab` on save and replayed on load. A `--resave`
+  CLI gives the save path headless coverage. PRs #311–#314.
+- **#315** — the tail. Override markers extended to the Transform rows, the Name field, and
+  the full multi-select Inspector across every field type (#316, #321, #323, #324).
+  Add/remove-component overrides on an instance — tinted section header + Revert/Apply for
+  the whole component (#317 data model, #319 Inspector). `RenderableComponent` ("Mesh
+  Renderer") registered with new `GenericSerialize` / `GenericInspector` opt-out flags, so it
+  counts for the guard rail while keeping its hand-coded serializer and section (#322). The
+  prefab stage 1–2 manual checklist was run end to end.
+
 ### Editor UI audit (#145) — 2026-09-03
 
 - **#155 (audit)** — The multi-select Inspector now draws its component groups through the
