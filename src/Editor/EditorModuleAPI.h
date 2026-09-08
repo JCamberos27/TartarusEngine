@@ -50,7 +50,13 @@
 //   14 - Measure / ruler tool + Duplicate Array (#236 R2): Get/SetMeasureTool,
 //        RequestDuplicateArray for the toolbar buttons. Plus Get/ToggleInspectorLock so the
 //        Inspector's padlock can move into its title bar.
-constexpr std::uint32_t kEditorModuleAPIVersion = 14;
+//   15 - History HUD (frame only): the module owns the pinned bottom-right transparent HUD
+//        window, its position + height-ceiling math and the contrast-adaptive text tint.
+//        GetHistoryHudFrame (draw? + viewport rect + UI scale + row count), DrawHistoryListBody
+//        (the click-to-jump rows — undo/redo stacks + World& stay host-side) and
+//        SampleHistoryHudLuminance (host-driven PBO readback, like the Stats HUD's).
+//        GetShowHistory/SetShowHistory (v4) still carry the toggle + the title-bar X.
+constexpr std::uint32_t kEditorModuleAPIVersion = 15;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -379,6 +385,27 @@ struct EditorModuleHostAPI {
     bool (*GetAssetSearchGlobal)() = nullptr;  void (*SetAssetSearchGlobal)(bool on) = nullptr;
     // Favourites-only grid filter (the toolbar star toggle).
     bool (*GetAssetFavoritesOnly)() = nullptr; void (*SetAssetFavoritesOnly)(bool on) = nullptr;
+
+    // --- History HUD, frame only (API v15) ---------------------------------------------
+    // The compact transparent HUD pinned to the Scene viewport's bottom-right corner (Unity-style
+    // Undo History). The module owns the window, its pin/height-ceiling math and the eased
+    // contrast tint; the rows stay host-side.
+    // Returns true if the HUD should draw this frame (History toggled on, a live non-degenerate
+    // Scene viewport, and overlays not suppressed for a clean capture). Fills the viewport rect
+    // (screen space), the editor UI scale, and the total row count — undo entries + 1 "Current"
+    // + redo entries — the module sizes the window against.
+    bool (*GetHistoryHudFrame)(float* outVpX, float* outVpY, float* outVpW, float* outVpH,
+                               float* outUIScale, int* outRowCount) = nullptr;
+    // Renders the click-to-jump list into the module's window, between its heading Separator and
+    // its End: every undo-stack row, the highlighted "Current" marker, every redo-stack row, and
+    // their per-row tooltips + JumpToUndo/RedoEntry calls. The undo/redo stacks, World& and
+    // AssetLibrary& never cross the boundary. Pop-balanced on its own pushes; the module owns the
+    // two adaptive-tint style colours pushed around this call.
+    void (*DrawHistoryListBody)() = nullptr;
+    // Host-driven async PBO luminance readback under the given screen box (host owns the Scene
+    // framebuffer + GL context), 0..1, or -1 until a sample lands. Same contract as
+    // SampleViewportLuminance; a separate ping-ponged pair so the two HUDs don't fight.
+    float (*SampleHistoryHudLuminance)(float screenCenterX, float screenCenterY, float boxPx) = nullptr;
 };
 
 struct EditorModuleAPI {

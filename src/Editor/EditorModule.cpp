@@ -20,6 +20,9 @@ namespace EditorModuleConsole {
 namespace EditorModuleStats {
     void Draw(const EditorModuleHostAPI& host);
 }
+namespace EditorModuleHistory {
+    void Draw(const EditorModuleHostAPI& host);
+}
 
 namespace {
 
@@ -55,6 +58,7 @@ void Draw(const EditorModuleHostAPI& host) {
     EditorModuleAssetBrowser::Draw(host);
     EditorModuleConsole::Draw(host);
     EditorModuleStats::Draw(host);
+    EditorModuleHistory::Draw(host);
 }
 
 const EditorModuleAPI kAPI{
