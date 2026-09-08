@@ -3,6 +3,7 @@
 #include "GameModuleAPI.h"
 #include "Log.h"
 #include "World.h"
+#include "PhysicsWorld.h" // #185 PR 2 — Raycast is backed by the host-side PhysX world
 
 #include <string>
 #include <windows.h>
@@ -11,12 +12,14 @@ namespace fs = std::filesystem;
 
 namespace {
 
-// The host callback table handed to the game module every Update. Empty for now — the reload
-// itself logs ("TartarusGame module loaded / reloaded") and the module's systems (SpinSystem,
-// TransformControllerSystem) already prove the module→World path works, so the old
-// donut-spawning cross-DLL smoke test was redundant and has been removed.
+// The host callback table handed to the game module every Update. #185 PR 2 adds Raycast — a
+// thin forward to the PhysX world, which returns false whenever it isn't live (so a module
+// calling it outside Play just gets a miss).
 const GameModuleHostAPI kHostAPI{
     kGameModuleAPIVersion,
+    /*Raycast=*/[](const float origin[3], const float dir[3], float maxDistance, RaycastHit& outHit) {
+        return PhysicsWorld::Raycast(origin, dir, maxDistance, outHit);
+    },
 };
 
 } // namespace

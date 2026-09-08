@@ -663,6 +663,12 @@ void EditorLayer::DrawGizmosPopupBody() {
         EditorSettings::Save();
     }
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Range spheres and spot cones drawn from each light.");
+    bool colliderGiz = EditorSettings::Get().ShowColliders;
+    if (ImGui::Checkbox("Colliders", &colliderGiz)) {
+        EditorSettings::Get().ShowColliders = colliderGiz;
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Green wireframe of every Collider's shape (#185), edit and Play mode.");
     ImGui::EndDisabled();
 
     ImGui::Separator();

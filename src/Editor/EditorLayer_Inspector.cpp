@@ -1648,23 +1648,47 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
     }
 
-    // --- Collider (collapsed by default: a single checkbox, rarely revisited) --------------
+    // --- Collider (#185 PR 2: shape + size + trigger) -------------------------------------
     if (auto* collider = registry.try_get<ColliderComponent>(entity)) {
-        if (BeginComponentSection(ICON_FA_CUBE, "Box Collider", true, removed, /*defaultOpen=*/false,
-                "Lets this object block movement and be hit by raycasts.\nBounds follow its Transform/mesh automatically.")) {
-            // Trigger volumes (non-blocking, enter/stay/exit events) aren't implemented — nothing
-            // reads IsTrigger yet (#185). Per docs/CONVENTIONS.md rule 3 the toggle still shows
-            // (a collider is where you'd look for it) but disabled, so it can't be set on an
-            // assumption that isn't true. The field stays in the component + serializer for
-            // forward-compat, and this re-wires to a live checkbox when #185 lands.
-            PropertyLabel("Is Trigger", "Not implemented yet (#185): every collider blocks movement.\n"
-                                        "Trigger volumes with enter/stay/exit events come with the\n"
-                                        "collision-system work.");
-            ImGui::BeginDisabled();
-            ImGui::Checkbox("##IsTrigger", &collider->IsTrigger);
-            ImGui::EndDisabled();
-            ImGui::SameLine();
-            ImGui::TextDisabled("(not implemented)");
+        if (BeginComponentSection(ICON_FA_CUBE, "Collider", true, removed, /*defaultOpen=*/false,
+                "Blocks movement and is hit by raycasts. While playing this drives a static PhysX\n"
+                "actor; the shape below picks its geometry.")) {
+            bool colRowActive = false, colRowCommitted = false;
+
+            // Shape.
+            const char* kShapes[] = { "Box", "Sphere", "Capsule" };
+            int shapeIdx = (int)collider->Kind;
+            PropertyLabel("Shape", "Box uses Half Extents (x,y,z). Sphere uses Half Extents.x as the radius.\n"
+                                   "Capsule uses .x as the radius and .y as the half-height (axis = local up).");
+            if (ImGui::Combo("##ColliderShape", &shapeIdx, kShapes, IM_ARRAYSIZE(kShapes))) {
+                PushUndo(world, "Change Collider Shape");
+                collider->Kind = (ColliderComponent::Shape)shapeIdx;
+            }
+
+            // Trigger — now live (#185 PR 2 builds a PhysX trigger shape; enter/stay/exit
+            // dispatch is PR 5, but a trigger already stops blocking).
+            bool isTrigger = collider->IsTrigger;
+            PropertyLabel("Is Trigger", "A trigger reports overlaps but doesn't block movement.\n"
+                                        "Enter/stay/exit events arrive in a later step (#185 PR 5).");
+            if (ImGui::Checkbox("##IsTrigger", &isTrigger)) {
+                PushUndo(world, "Toggle Collider Trigger");
+                collider->IsTrigger = isTrigger;
+            }
+
+            // Half Extents / Center.
+            DrawVec3Row("Half Extents", collider->HalfExtents, 0.05f, 0.0f, 0.0f, colRowActive, colRowCommitted,
+                "Half-size of the shape in local units (see Shape for the per-shape meaning).\n"
+                "All zero = auto-fit an axis-aligned box to the mesh bounds.");
+            if (colRowActive) StageUndo(world);
+            if (colRowCommitted) CommitStagedUndo(world, "Resize Collider");
+            DrawVec3Row("Center", collider->Center, 0.05f, 0.0f, 0.0f, colRowActive, colRowCommitted,
+                "Shape offset from the object's origin, local space. Ignored while Half Extents is auto (0,0,0).");
+            if (colRowActive) StageUndo(world);
+            if (colRowCommitted) CommitStagedUndo(world, "Offset Collider");
+
+            if (collider->HalfExtents == glm::vec3(0.0f))
+                ImGui::TextDisabled("Auto-fitted to the mesh bounds.");
+
             EndComponentSection();
         }
         if (removed) {
@@ -2303,7 +2327,7 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     reflectedFor("Rendering"); // Camera (#302 Wave 1a), Light (#302 Wave 2b)
 
     section("Physics");
-    entry(ICON_FA_CUBE, "Box Collider", registry.all_of<ColliderComponent>(entity),
+    entry(ICON_FA_CUBE, "Collider", registry.all_of<ColliderComponent>(entity),
         [&] { registry.emplace<ColliderComponent>(entity); });
     reflectedFor("Physics");
 

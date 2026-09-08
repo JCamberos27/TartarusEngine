@@ -45,12 +45,36 @@ struct DetachedMeshComponent {
     std::shared_ptr<Model> ModelRef;
 };
 
-// Presence of this component means the entity participates in collision/raycasting. The actual
-// AABB is derived from the entity's RenderableComponent bounds (or, absent one, from
-// TransformComponent Position/Scale as a plain unit box) — axis-aligned, ignoring rotation; see
-// World::ColliderWorldBounds. Nothing to keep in sync with the visual size as a result.
+// Presence of this component means the entity participates in collision/raycasting.
+//
+// Legacy AABB path (World::ResolveCollisions / World::Raycast, still used by the Player until
+// #185 PR 3): axis-aligned, rotation-ignored, size derived from the RenderableComponent bounds
+// (or a unit box) — see the ColliderWorldBounds helper in World.cpp.
+//
+// PhysX path (#185 PR 2, active only while playing): a static actor is built per collider on
+// Play-enter. `Shape` picks box/sphere/capsule; `HalfExtents` gives its dimensions and `Center`
+// its offset from the entity origin, both in the entity's local space. `HalfExtents == 0` (the
+// default, and every collider World::CreateBox makes) means "derive an axis-aligned box from
+// the mesh bounds", so existing scenes keep the legacy shape without a migration.
 struct ColliderComponent {
-    bool IsTrigger = false; // reserved for future trigger-volume use; solid (blocking) for now
+    // Values are fixed (Box=0/Sphere=1/Capsule=2) — serialized by index, and PhysicsWorld
+    // switches on them. Capsule's axis is Y (its height runs along local up), matching PhysX's
+    // PxCapsuleGeometry convention once rotated by the actor pose.
+    enum class Shape { Box = 0, Sphere = 1, Capsule = 2 };
+    Shape Kind = Shape::Box;
+
+    // Per-shape meaning when non-zero: Box -> the three half-extents; Sphere -> .x is the
+    // radius; Capsule -> .x is the radius, .y is the half-height of the cylindrical section.
+    // All-zero means auto-derive a box from the entity's render bounds (see above).
+    glm::vec3 HalfExtents{0.0f};
+
+    // Shape centre offset from the entity origin, entity-local space.
+    glm::vec3 Center{0.0f};
+
+    // A trigger reports overlaps but doesn't block movement. PR 2 builds it as a PhysX trigger
+    // shape (non-blocking); enter/stay/exit event dispatch is #185 PR 5. The legacy AABB path
+    // already skips triggers in ResolveCollisions.
+    bool IsTrigger = false;
 };
 
 // Optional clip triggered from the editor Inspector; formerly PlacedModel-only, now any entity.

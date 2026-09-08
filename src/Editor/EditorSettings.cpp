@@ -77,6 +77,7 @@ void EditorSettings::Load() {
     s.LightGizmoSelectedOnly = root.value("lightGizmoSelectedOnly", s.LightGizmoSelectedOnly);
     s.LightGizmoOpacity = root.value("lightGizmoOpacity", s.LightGizmoOpacity);
     s.LightGizmoScale = root.value("lightGizmoScale", s.LightGizmoScale);
+    s.ShowColliders = root.value("showColliders", s.ShowColliders);
     s.LayerVisibleMask = root.value("layerVisibleMask", s.LayerVisibleMask);
     s.LayerPickLockMask = root.value("layerPickLockMask", s.LayerPickLockMask);
     s.CaptureMode = root.value("captureMode", s.CaptureMode);
@@ -139,6 +140,7 @@ void EditorSettings::Save() {
     root["lightGizmoSelectedOnly"] = Get().LightGizmoSelectedOnly;
     root["lightGizmoOpacity"] = Get().LightGizmoOpacity;
     root["lightGizmoScale"] = Get().LightGizmoScale;
+    root["showColliders"] = Get().ShowColliders;
     root["layerVisibleMask"] = Get().LayerVisibleMask;
     root["layerPickLockMask"] = Get().LayerPickLockMask;
     root["captureMode"] = Get().CaptureMode;
