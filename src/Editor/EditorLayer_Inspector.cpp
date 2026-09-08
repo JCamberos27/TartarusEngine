@@ -599,6 +599,33 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
                 m_PendingModelSettings = assets.GetModelSettings(key);
                 m_ImportSettingsDirty = false;
             });
+
+        // Sub-asset list (#236 G): the meshes this file imported to, with their geometry counts
+        // and material tint — a read-only breakdown of what's inside the model.
+        if (model && model->MeshCount() > 0) {
+            ImGui::Spacing();
+            char header[48];
+            std::snprintf(header, sizeof(header), "Meshes (%d)###submeshes", model->MeshCount());
+            if (ImGui::CollapsingHeader(header)) {
+                if (ImGui::BeginTable("##submeshtbl", 3,
+                        ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Mesh", ImGuiTableColumnFlags_WidthStretch, 0.34f);
+                    ImGui::TableSetupColumn("Tris", ImGuiTableColumnFlags_WidthStretch, 0.33f);
+                    ImGui::TableSetupColumn("Mat",  ImGuiTableColumnFlags_WidthStretch, 0.33f);
+                    for (int i = 0; i < model->MeshCount(); ++i) {
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn(); ImGui::Text("Mesh %d", i);
+                        ImGui::TableNextColumn(); ImGui::Text("%u", model->MeshTriangleCount(i));
+                        ImGui::TableNextColumn();
+                        glm::vec3 c = model->MeshMaterial(i).BaseColor;
+                        ImGui::ColorButton("##mc", ImVec4(c.x, c.y, c.z, 1.0f),
+                                           ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
+                                           ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight()));
+                    }
+                    ImGui::EndTable();
+                }
+            }
+        }
     }
 }
 

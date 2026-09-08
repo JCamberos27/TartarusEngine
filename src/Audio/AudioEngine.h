@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 #include <cstdint>
 #include <glm/glm.hpp>
 
@@ -67,6 +68,11 @@ public:
     // View ▸ Mute Audio toggle (#236 R2 toolbar tail).
     static void SetMuted(bool muted);
     static bool IsMuted();
+
+    // Decodes `path` and fills `outPeaks` with `buckets` normalized (0..1) max-amplitude
+    // values — a cheap waveform envelope for the Asset Browser's sound cells (#236 G).
+    // Returns false if the file can't be decoded; `outPeaks` is left empty then.
+    static bool WaveformPeaks(const std::string& path, int buckets, std::vector<float>& outPeaks);
 
     // Asset Browser preview playback: at most one preview plays at a time — starting a new
     // one (even for a different file) stops whatever was previewing before it, so a Play/Stop

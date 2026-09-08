@@ -44,6 +44,7 @@
 #include <set>
 #include <sstream>
 #include <fstream>
+#include <json.hpp>
 #include <cmath>
 #include <cctype>
 #include <cstring>
@@ -202,6 +203,45 @@ bool SearchHasToken(const std::string& filter, const std::string& token) {
 
 } // namespace
 
+
+// --- Asset favourites (#236 G) — project/asset_favorites.json --------------------------------
+void EditorLayer::LoadAssetFavorites() {
+    m_AssetFavorites.clear();
+    std::ifstream in(ProjectPaths::Resolve("asset_favorites.json"));
+    if (!in.is_open()) return;
+    try {
+        nlohmann::json root; in >> root;
+        if (root.is_array())
+            for (const auto& v : root) if (v.is_string()) m_AssetFavorites.insert(v.get<std::string>());
+    } catch (const std::exception& e) {
+        Log::Warn(std::string("Asset favourites: failed to parse: ") + e.what());
+    }
+}
+
+void EditorLayer::SaveAssetFavorites() const {
+    nlohmann::json root = nlohmann::json::array();
+    for (const auto& k : m_AssetFavorites) root.push_back(k);
+    std::ofstream out(ProjectPaths::Resolve("asset_favorites.json"));
+    if (out.is_open()) out << root.dump(2) << '\n';
+}
+
+void EditorLayer::ToggleAssetFavorite(const std::string& key) {
+    if (key.empty()) return;
+    if (!m_AssetFavorites.insert(key).second) m_AssetFavorites.erase(key);
+    SaveAssetFavorites();
+}
+
+// Decoded once per sound path (#236 G). An empty vector means "not decodable / not audio" and
+// is cached too, so a bad file isn't re-probed every frame.
+const std::vector<float>& EditorLayer::SoundWaveform(const std::string& path) {
+    auto it = m_SoundWaveforms.find(path);
+    if (it == m_SoundWaveforms.end()) {
+        std::vector<float> peaks;
+        AudioEngine::WaveformPeaks(path, 48, peaks);
+        it = m_SoundWaveforms.emplace(path, std::move(peaks)).first;
+    }
+    return it->second;
+}
 
 // Rendered once per Model into its own small texture, then cached. Returns 0 while this frame's
 // render budget is spent — the caller falls back to the type glyph and picks it up next frame.
@@ -921,6 +961,14 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         bool show = filtering ? inSearchScope(assets.AssetFolder(prefab)) : (assets.AssetFolder(prefab) == m_CurrentAssetFolder);
         if (show) cells.push_back({Cell::Kind::Prefab, prefab, name, nullptr, nullptr});
     }
+
+    // Favourites view (#236 G): a flat list of just the starred assets, from anywhere.
+    if (m_AssetFavoritesOnly) {
+        cells.erase(std::remove_if(cells.begin(), cells.end(),
+            [&](const Cell& c) { return c.kind == Cell::Kind::Folder || !IsAssetFavorite(c.key); }),
+            cells.end());
+    }
+
     // Sort control (#236 G) — folders always first; within each group, Name / Type / Date / Size,
     // ascending or descending. Date/Size stat the on-disk file once here (primitive:// and other
     // fileless keys fall back to 0, sorting to the "oldest / smallest" end).
@@ -1049,11 +1097,35 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ImVec2 imgSize(m_AssetIconSize, m_AssetIconSize);
                 ImVec2 imgPos(tileMin.x + (cellWidth - imgSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f);
                 dl->AddImage((ImTextureID)(intptr_t)modelThumb, imgPos, ImVec2(imgPos.x + imgSize.x, imgPos.y + imgSize.y));
+            } else if (cell.kind == Cell::Kind::Sound && !SoundWaveform(cell.key).empty()) {
+                // Waveform envelope in the icon square (#236 G), with a small play/stop glyph
+                // bottom-right so it still reads as a clickable sound.
+                const std::vector<float>& peaks = SoundWaveform(cell.key);
+                const float w = m_AssetIconSize, h = m_AssetIconSize;
+                const ImVec2 o(tileMin.x + (cellWidth - w) * 0.5f, tileMin.y + cellPadding * 0.5f);
+                const float midY = o.y + h * 0.5f;
+                const ImU32 wc = ImGui::GetColorU32(ImGuiCol_SliderGrab);
+                for (size_t i = 0; i < peaks.size(); ++i) {
+                    const float x = o.x + (float)i / (float)(peaks.size() - 1) * w;
+                    const float a = std::clamp(peaks[i], 0.0f, 1.0f) * (h * 0.46f);
+                    dl->AddLine(ImVec2(x, midY - a), ImVec2(x, midY + a), wc, 1.2f);
+                }
+                ImFont* font = ImGui::GetFont();
+                const float gs = m_AssetIconSize * 0.32f;
+                dl->AddText(font, gs, ImVec2(o.x + w - gs, o.y + h - gs),
+                            ImGui::GetColorU32(ImGuiCol_Text), playing ? ICON_FA_STOP : ICON_FA_PLAY);
             } else {
                 ImFont* font = ImGui::GetFont();
                 ImVec2 glyphSize = font->CalcTextSizeA(m_AssetIconSize, FLT_MAX, 0.0f, icon);
                 ImVec2 glyphPos(tileMin.x + (cellWidth - glyphSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - glyphSize.y) * 0.5f);
                 dl->AddText(font, m_AssetIconSize, glyphPos, textColor, icon);
+            }
+
+            // Favourite star badge, top-right of the tile (#236 G).
+            if (!isFolder && IsAssetFavorite(cell.key)) {
+                const float ss = std::max(10.0f, m_AssetIconSize * 0.28f);
+                dl->AddText(ImGui::GetFont(), ss, ImVec2(tileMin.x + cellWidth - ss - 3.0f, tileMin.y + 2.0f),
+                            ImGui::GetColorU32(ImGuiCol_SliderGrab), ICON_FA_STAR);
             }
 
             if (!isRenaming) {
@@ -1326,6 +1398,12 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
                 ImGui::SetClipboardText(cell.key.c_str());
                 Log::Info("Copied path: " + cell.key);
+            }
+            if (m_ExtraAssetSelection.empty()) {
+                const bool fav = IsAssetFavorite(cell.key);
+                if (ImGui::MenuItem(fav ? ICON_FA_STAR "  Remove from Favourites"
+                                        : ICON_FA_STAR "  Add to Favourites"))
+                    ToggleAssetFavorite(cell.key);
             }
 
             // Reimport straight from the context menu instead of only via Import Settings >

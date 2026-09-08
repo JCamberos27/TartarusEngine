@@ -1204,6 +1204,24 @@ private:
     std::unordered_map<std::string, std::shared_ptr<Texture>> m_ShotThumbs;
     int m_ScreenshotThumbBudgetThisFrame = 0;
 
+    // Sound-cell waveform envelopes (#236 G), decoded once per path via AudioEngine.
+    // Empty vector = decode failed / not audio; cached either way.
+    std::unordered_map<std::string, std::vector<float>> m_SoundWaveforms;
+    const std::vector<float>& SoundWaveform(const std::string& path);
+
+    // Asset favourites (#236 G) — a starred subset, persisted to project/asset_favorites.json.
+    // The star toggle on the Asset Browser toolbar filters the grid to just these.
+    std::set<std::string> m_AssetFavorites;
+    bool m_AssetFavoritesOnly = false;
+    void LoadAssetFavorites();
+    void SaveAssetFavorites() const;
+public:
+    bool IsAssetFavorite(const std::string& key) const { return m_AssetFavorites.count(key) != 0; }
+    void ToggleAssetFavorite(const std::string& key);
+    bool AssetFavoritesOnly() const { return m_AssetFavoritesOnly; }
+    void SetAssetFavoritesOnly(bool on) { m_AssetFavoritesOnly = on; }
+private:
+
     // Cached directory listings backing the filesystem-based "Scenes" and "Screenshots" folders
     // (#175) — std::filesystem::directory_iterator used to run every single frame while either
     // folder was open or a search/filter was active. Now refreshed only on a short timer, when
