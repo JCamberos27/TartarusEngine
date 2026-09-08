@@ -24,6 +24,11 @@ enum class ReflectFieldType {
     Float,
     Vec3,
     String,
+    // vec3 storage, an RGB swatch widget, same "[r,g,b]" JSON as Vec3 (#302 Wave 2a).
+    Color,
+    // int storage, a Combo widget, JSON round-trips the label TEXT (stable if EnumLabels is
+    // reordered); an unknown / out-of-range label loads as index 0. See EnumLabels / EnumCount.
+    Enum,
 };
 
 struct ReflectField {
@@ -42,7 +47,62 @@ struct ReflectField {
     // behaves exactly as it did before Min/Max existed. Ignored by Bool/String.
     float Min = 0.0f;
     float Max = 0.0f;
+
+    // --- Float widget hints (#302 Wave 2a; ignored by every other type) --------------------
+    bool Slider = false;             // draw an EditorUI::SliderFloat instead of DragFloat (needs Min < Max)
+    bool Logarithmic = false;        // ImGuiSliderFlags_Logarithmic on the slider
+    const char* Format = nullptr;    // printf format e.g. "%.2f deg"; nullptr -> "%.3f"
+
+    // --- Enum (ReflectFieldType::Enum) ---------------------------------------------------
+    const char* EnumLabels = nullptr; // ImGui packed list: "Point\0Spot\0Directional\0"
+    int EnumCount = 0;                 // number of labels in EnumLabels
+
+    // --- Conditional visibility (Inspector only; the field is always serialized) -----------
+    // Shown only when the sibling field named VisibleIfField (an Int or Enum field of the same
+    // component) equals VisibleIfValue — or, with VisibleIfNot, does NOT equal it. In multi-edit
+    // the sibling's shared value is used; a mixed sibling shows the field.
+    const char* VisibleIfField = nullptr;
+    int VisibleIfValue = 0;
+    bool VisibleIfNot = false;
+
+    // --- Grouping (Inspector single-select only; multi-select renders flat) ---------------
+    // A run of consecutive fields with the same non-null Group renders inside one collapsible
+    // TreeNode titled Group. A null Group ends the run.
+    const char* Group = nullptr;
+
+    // --- Inspector suppression -----------------------------------------------------------
+    // Serialized like any field, but NOT drawn by the generic Inspector — a
+    // DrawReflectedComponentExtra() handler draws it with a custom widget (e.g. Light's Color,
+    // which sits behind the Kelvin/RGB toggle).
+    bool EditorHidden = false;
 };
+
+// Walks EnumLabels (an ImGui "a\0b\0c\0" packed list) to the idx-th label. Returns "" for an
+// out-of-range index or a null list. Shared by the serializer and the Inspector.
+inline const char* ReflectEnumLabel(const ReflectField& f, int idx) {
+    if (!f.EnumLabels || idx < 0 || idx >= f.EnumCount) return "";
+    const char* p = f.EnumLabels;
+    for (int i = 0; i < idx; ++i) {
+        while (*p) ++p;   // advance to this label's NUL
+        ++p;              // step past it onto the next label
+    }
+    return p;
+}
+
+// Maps a label back to its index in EnumLabels; returns 0 for no match (the safe default).
+inline int ReflectEnumIndex(const ReflectField& f, const char* label) {
+    if (!f.EnumLabels || !label) return 0;
+    const char* p = f.EnumLabels;
+    for (int i = 0; i < f.EnumCount && *p; ++i) {
+        const char* q = label;
+        const char* r = p;
+        while (*q && *r && *q == *r) { ++q; ++r; }
+        if (*q == '\0' && *r == '\0') return i;
+        while (*p) ++p;
+        ++p;
+    }
+    return 0;
+}
 
 // Builds a ReflectField::Address accessor from a pointer-to-member. The unary + forces the
 // captureless lambda to decay to a plain function pointer.
