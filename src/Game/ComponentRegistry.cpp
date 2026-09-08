@@ -189,6 +189,28 @@ void RegisterEngineComponents() {
         F("Shadow Update Mode").EnumCount = 3;
         Register<LightComponent>(std::move(m));
     }
+
+    // Migrated from hand-coded serialization/Inspector code onto reflection (#302 Wave 3) — first
+    // user of ReflectFieldType::AssetRef (the Clip field picks from AssetLibrary::Sounds()). The
+    // "Preview" button is editor-only and lives in DrawReflectedComponentExtra keyed "Audio Source".
+    {
+        ReflectComponent m;
+        m.Name = "Audio Source"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
+        m.Tooltip = "A sound clip that can be played from this object.";
+        m.Fields = {
+            { "Clip", T::AssetRef, TARTARUS_REFLECT_FIELD(AudioSourceComponent, SoundPath), 0.0f,
+              "Which imported sound this object plays.\nImport sounds via File > Import, or the Asset Browser." },
+            { "Volume", T::Float, TARTARUS_REFLECT_FIELD(AudioSourceComponent, Volume), 0.01f,
+              "Playback volume - 1 is unattenuated.", 0.0f, 1.0f },
+            { "Loop", T::Bool, TARTARUS_REFLECT_FIELD(AudioSourceComponent, Loop), 0.0f,
+              "Restart the clip automatically when it finishes." },
+            { "Play On Start", T::Bool, TARTARUS_REFLECT_FIELD(AudioSourceComponent, PlayOnStart), 0.0f,
+              "Plays this clip automatically the instant Play mode is entered." },
+        };
+        m.Fields[0].AssetKind = ReflectAssetKind::Sound;
+        m.Fields[1].Slider = true; m.Fields[1].Format = "%.2f";
+        Register<AudioSourceComponent>(std::move(m));
+    }
 }
 
 // Runs once, before main(). It only appends to All()'s function-local static, so there is no

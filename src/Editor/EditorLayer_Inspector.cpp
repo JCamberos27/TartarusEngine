@@ -60,6 +60,14 @@ using namespace EditorInternal;
 
 namespace {
 
+// #302 Wave 3: the asset paths a reflected AssetRef field of the given kind picks from. Only
+// Sound is wired up (AudioSourceComponent's Clip); the others return empty until a component
+// needs them (Model/Texture live in AssetLibrary as shared_ptr lists, not plain paths).
+const std::vector<std::string>& AssetRefPathList(const AssetLibrary& assets, ReflectAssetKind kind) {
+    static const std::vector<std::string> kEmpty;
+    return kind == ReflectAssetKind::Sound ? assets.Sounds() : kEmpty;
+}
+
 // Approximate blackbody colour (linear RGB, normalised so the brightest channel is 1) for a
 // colour temperature in Kelvin. Cheap piecewise fit — good enough for authoring a warm lamp vs
 // a cool overcast sky; not a physically exact locus. Clamped to 1000-40000 K.
@@ -750,7 +758,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
 
         // ---- Common components: those present on the WHOLE selection ----
-        bool allMesh = true, allCollider = true, allAudio = true;
+        bool allMesh = true, allCollider = true;
         // #184: same "present on every selected object" test, generalized over every
         // reflection-registered component instead of one bool per hand-coded component.
         const auto& registeredComponents = ComponentRegistry::All();
@@ -758,7 +766,6 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         forEach([&](entt::entity e) {
             allMesh     &= world.Registry.all_of<RenderableComponent>(e);
             allCollider &= world.Registry.all_of<ColliderComponent>(e);
-            allAudio    &= world.Registry.all_of<AudioSourceComponent>(e);
             for (std::size_t i = 0; i < registeredComponents.size(); ++i)
                 if (!registeredComponents[i].Has(world.Registry, e)) allReflected[i] = false;
         });
@@ -766,7 +773,6 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             std::string common = "Transform";
             if (allMesh)     common += ", Mesh Renderer";
             if (allCollider) common += ", Box Collider";
-            if (allAudio)    common += ", Audio Source";
             for (std::size_t i = 0; i < registeredComponents.size(); ++i)
                 if (allReflected[i]) common += std::string(", ") + registeredComponents[i].Meta.Name;
             ImGui::TextDisabled("Common: %s", common.c_str());
@@ -1035,6 +1041,31 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                             if (ImGui::IsItemActivated()) StageUndo(world);
                             if (changed) forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e, f)) = buf; });
                             if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                            break;
+                        }
+                        case ReflectFieldType::AssetRef: {
+                            std::string shared; bool mixed = false, first = true;
+                            forEach([&](entt::entity e) {
+                                const std::string& v = *reinterpret_cast<std::string*>(fieldPtr(e, f));
+                                if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
+                            });
+                            PropertyLabel(f.Name, f.Tooltip);
+                            const std::string preview = mixed ? "\xE2\x80\x94"
+                                : (shared.empty() ? "(none)" : std::filesystem::path(shared).filename().string());
+                            if (ImGui::BeginCombo("##v", preview.c_str())) {
+                                if (ImGui::Selectable("(none)", !mixed && shared.empty())) {
+                                    StageUndo(world);
+                                    forEach([&](entt::entity e) { reinterpret_cast<std::string*>(fieldPtr(e, f))->clear(); });
+                                    CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                                }
+                                for (const std::string& a : AssetRefPathList(assets, f.AssetKind))
+                                    if (ImGui::Selectable(std::filesystem::path(a).filename().string().c_str(), !mixed && a == shared)) {
+                                        StageUndo(world);
+                                        forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e, f)) = a; });
+                                        CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                                    }
+                                ImGui::EndCombo();
+                            }
                             break;
                         }
                         case ReflectFieldType::Color: {
@@ -1552,59 +1583,9 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // below. The one Camera-specific control — "Align to View" — is a registered inspector-extra
     // (ComponentInspectorExtras(), keyed "Camera"), rendered inside the generic section.
 
-    // --- Audio Source (collapsed by default: set-and-forget once a clip is chosen) ---------
-    if (auto* audio = registry.try_get<AudioSourceComponent>(entity)) {
-        bool audioReset = false, audioCopy = false, audioPaste = false;
-        if (BeginComponentSection(ICON_FA_VOLUME_HIGH, "Audio Source", true, removed, /*defaultOpen=*/false,
-                "A sound clip that can be played from this object.", &audioReset, &audioCopy, &audioPaste)) {
-            const std::string preview = audio->SoundPath.empty()
-                ? "(none)" : std::filesystem::path(audio->SoundPath).filename().string();
-            PropertyLabel("Clip", "Which imported sound this object plays.\nImport sounds via File > Import, or the Asset Browser.");
-            if (ImGui::BeginCombo("##Clip", preview.c_str())) {
-                for (const auto& sound : assets.Sounds()) {
-                    bool isSelected = (sound == audio->SoundPath);
-                    if (ImGui::Selectable(std::filesystem::path(sound).filename().string().c_str(), isSelected)) {
-                        PushUndo(world, "Set Sound Clip");
-                        audio->SoundPath = sound;
-                    }
-                }
-                ImGui::EndCombo();
-            }
-            if (!audio->SoundPath.empty() &&
-                ActionButton(ICON_FA_PLAY "  Preview", "Play the clip once, right now, to check how it sounds")) {
-                AudioEngine::Play(audio->SoundPath);
-            }
-
-            PropertyLabel("Volume", "Playback volume - 1 is unattenuated.");
-            if (EditorUI::SliderFloat("##AudioVolume", &audio->Volume, 0.0f, 1.0f, "%.2f")) {
-                audio->Volume = glm::clamp(audio->Volume, 0.0f, 1.0f);
-            }
-            if (ImGui::IsItemActivated()) PushUndo(world, "Edit Audio Volume");
-
-            bool loop = audio->Loop;
-            if (ImGui::Checkbox("Loop", &loop)) {
-                PushUndo(world, "Toggle Audio Loop");
-                audio->Loop = loop;
-            }
-            ImGui::SameLine();
-            bool playOnStart = audio->PlayOnStart;
-            if (ImGui::Checkbox("Play On Start", &playOnStart)) {
-                PushUndo(world, "Toggle Audio Play On Start");
-                audio->PlayOnStart = playOnStart;
-            }
-            if (ImGui::IsItemHovered()) {
-                EditorUI::SetTooltip("Plays this clip automatically the instant Play mode is entered.");
-            }
-            EndComponentSection();
-        }
-        if (removed) {
-            PushUndo(world, "Remove Audio Source");
-            registry.remove<AudioSourceComponent>(entity);
-        }
-        if (audioReset) { PushUndo(world, "Reset Audio Source"); *audio = AudioSourceComponent{}; }
-        if (audioCopy)  CopyComponentToClip("Audio Source", *audio);
-        if (audioPaste) PasteComponentFromClip(world, entity);
-    }
+    // Audio Source moved onto reflection too (#302 Wave 3): Clip is an AssetRef picker over the
+    // sound library, Volume/Loop/Play On Start are plain fields, and the "Preview" button is a
+    // DrawReflectedComponentExtra("Audio Source", Bottom).
 
     // #184: sections for reflection-registered components (ComponentRegistry). One widget per
     // field, chosen by ReflectFieldType — no per-component code here; registering a component
@@ -1633,7 +1614,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                     case ReflectFieldType::Float:  vals.emplace_back(*reinterpret_cast<float*>(p)); break;
                     case ReflectFieldType::Vec3:
                     case ReflectFieldType::Color:  vals.emplace_back(*reinterpret_cast<glm::vec3*>(p)); break;
-                    case ReflectFieldType::String: vals.emplace_back(*reinterpret_cast<std::string*>(p)); break;
+                    case ReflectFieldType::String:
+                    case ReflectFieldType::AssetRef: vals.emplace_back(*reinterpret_cast<std::string*>(p)); break;
                 }
             }
             m_ComponentClipKind = rc.Meta.Name;
@@ -1654,7 +1636,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                         case ReflectFieldType::Float:  *reinterpret_cast<float*>(p) = std::get<float>(v); break;
                         case ReflectFieldType::Vec3:
                         case ReflectFieldType::Color:  *reinterpret_cast<glm::vec3*>(p) = std::get<glm::vec3>(v); break;
-                        case ReflectFieldType::String: *reinterpret_cast<std::string*>(p) = std::get<std::string>(v); break;
+                        case ReflectFieldType::String:
+                        case ReflectFieldType::AssetRef: *reinterpret_cast<std::string*>(p) = std::get<std::string>(v); break;
                     }
                 }
             };
@@ -1732,6 +1715,22 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                         snprintf(buf, sizeof(buf), "%s", s->c_str());
                         if (ImGui::InputText("##v", buf, sizeof(buf))) *s = buf;
                         started = ImGui::IsItemActivated();
+                        break;
+                    }
+                    case ReflectFieldType::AssetRef: {
+                        auto* s = reinterpret_cast<std::string*>(f.Address(fbase));
+                        const std::string preview = s->empty() ? "(none)"
+                            : std::filesystem::path(*s).filename().string();
+                        if (ImGui::BeginCombo("##v", preview.c_str())) {
+                            if (ImGui::Selectable("(none)", s->empty())) {
+                                PushUndo(world, std::string("Edit ") + rc.Meta.Name); s->clear();
+                            }
+                            for (const std::string& a : AssetRefPathList(assets, f.AssetKind))
+                                if (ImGui::Selectable(std::filesystem::path(a).filename().string().c_str(), a == *s)) {
+                                    PushUndo(world, std::string("Edit ") + rc.Meta.Name); *s = a;
+                                }
+                            ImGui::EndCombo();
+                        }
                         break;
                     }
                 }
@@ -1960,6 +1959,14 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             EditorUI::SetTooltip("Move the light straight down onto the nearest mesh surface below it.");
         return;
     }
+
+    if (std::strcmp(componentName, "Audio Source") == 0 && phase == ReflectExtraPhase::Bottom) {
+        auto* audio = registry.try_get<AudioSourceComponent>(entity);
+        if (!audio || audio->SoundPath.empty()) return;
+        if (ActionButton(ICON_FA_PLAY "  Preview", "Play the clip once, right now, to check how it sounds"))
+            AudioEngine::Play(audio->SoundPath);
+        return;
+    }
 }
 
 // Multi-select counterpart. Only Light needs one so far: the shared colour / Kelvin control
@@ -2080,10 +2087,10 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
         [&] { registry.emplace<ColliderComponent>(entity); });
     reflectedFor("Physics");
 
-    section("Audio");
-    entry(ICON_FA_VOLUME_HIGH, "Audio Source", registry.all_of<AudioSourceComponent>(entity),
-        [&] { registry.emplace<AudioSourceComponent>(entity); });
-    reflectedFor("Audio");
+    if (anyReflectedIn("Audio")) {
+        section("Audio");
+        reflectedFor("Audio"); // Audio Source (#302 Wave 3)
+    }
 
     // #184: reflection-registered components. Adding one to ComponentRegistry puts it here with
     // no edit to this menu. Animator used to be its own hand-coded "Motion" entry here; now it's
