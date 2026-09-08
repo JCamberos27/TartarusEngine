@@ -1076,7 +1076,24 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 auto fieldPtr = [&](entt::entity e, const ReflectField& f) -> void* {
                     return f.Address(rc.Get(world.Registry, e));
                 };
+                // #302 Wave 2a: VisibleIf against the sibling's shared value; a mixed sibling
+                // shows the field. Groups render flat here (single-select gets the TreeNode).
+                auto fieldVisibleMulti = [&](const ReflectField& f) -> bool {
+                    if (!f.VisibleIfField) return true;
+                    const ReflectField* sib = nullptr;
+                    for (const ReflectField& s : rc.Meta.Fields)
+                        if (std::strcmp(s.Name, f.VisibleIfField) == 0) { sib = &s; break; }
+                    if (!sib) return true;
+                    int shared = 0; bool mixed = false, first = true;
+                    forEach([&](entt::entity e) {
+                        int v = *reinterpret_cast<int*>(fieldPtr(e, *sib));
+                        if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
+                    });
+                    if (mixed) return true;
+                    return f.VisibleIfNot ? (shared != f.VisibleIfValue) : (shared == f.VisibleIfValue);
+                };
                 for (const ReflectField& f : rc.Meta.Fields) {
+                    if (f.EditorHidden || !fieldVisibleMulti(f)) continue;
                     ImGui::PushID(f.Name);
                     switch (f.Type) {
                         case ReflectFieldType::Bool: {
@@ -1153,6 +1170,42 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                             if (ImGui::IsItemActivated()) StageUndo(world);
                             if (changed) forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e, f)) = buf; });
                             if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                            break;
+                        }
+                        case ReflectFieldType::Color: {
+                            glm::vec3 shared(0.0f); bool mixed = false, first = true;
+                            forEach([&](entt::entity e) {
+                                glm::vec3 c = *reinterpret_cast<glm::vec3*>(fieldPtr(e, f));
+                                if (first) { shared = c; first = false; }
+                                else for (int a = 0; a < 3; ++a) if (std::fabs(c[a] - shared[a]) > 1.0e-4f) mixed = true;
+                            });
+                            PropertyLabel(f.Name, f.Tooltip);
+                            glm::vec3 edit = shared;
+                            bool changed = ImGui::ColorEdit3("##v", &edit.x, ImGuiColorEditFlags_DisplayHex);
+                            if (ImGui::IsItemActivated()) StageUndo(world);
+                            if (changed) forEach([&](entt::entity e) { *reinterpret_cast<glm::vec3*>(fieldPtr(e, f)) = edit; });
+                            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                            if (mixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
+                            break;
+                        }
+                        case ReflectFieldType::Enum: {
+                            int shared = -1; bool mixed = false, first = true;
+                            forEach([&](entt::entity e) {
+                                int v = *reinterpret_cast<int*>(fieldPtr(e, f));
+                                if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
+                            });
+                            PropertyLabel(f.Name, f.Tooltip);
+                            const char* preview = mixed ? "\xE2\x80\x94"
+                                : (shared >= 0 && shared < f.EnumCount ? ReflectEnumLabel(f, shared) : "");
+                            if (ImGui::BeginCombo("##v", preview)) {
+                                for (int k = 0; k < f.EnumCount; ++k)
+                                    if (ImGui::Selectable(ReflectEnumLabel(f, k), !mixed && k == shared)) {
+                                        StageUndo(world);
+                                        forEach([&](entt::entity e) { *reinterpret_cast<int*>(fieldPtr(e, f)) = k; });
+                                        CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                                    }
+                                ImGui::EndCombo();
+                            }
                             break;
                         }
                     }
@@ -1835,9 +1888,11 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 void* p = f.Address(src);
                 switch (f.Type) {
                     case ReflectFieldType::Bool:   vals.emplace_back(*reinterpret_cast<bool*>(p)); break;
-                    case ReflectFieldType::Int:    vals.emplace_back(*reinterpret_cast<int*>(p)); break;
+                    case ReflectFieldType::Int:
+                    case ReflectFieldType::Enum:   vals.emplace_back(*reinterpret_cast<int*>(p)); break;
                     case ReflectFieldType::Float:  vals.emplace_back(*reinterpret_cast<float*>(p)); break;
-                    case ReflectFieldType::Vec3:   vals.emplace_back(*reinterpret_cast<glm::vec3*>(p)); break;
+                    case ReflectFieldType::Vec3:
+                    case ReflectFieldType::Color:  vals.emplace_back(*reinterpret_cast<glm::vec3*>(p)); break;
                     case ReflectFieldType::String: vals.emplace_back(*reinterpret_cast<std::string*>(p)); break;
                 }
             }
@@ -1854,9 +1909,11 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                     const auto& v = vals[i++];
                     switch (f.Type) {
                         case ReflectFieldType::Bool:   *reinterpret_cast<bool*>(p) = std::get<bool>(v); break;
-                        case ReflectFieldType::Int:    *reinterpret_cast<int*>(p) = std::get<int>(v); break;
+                        case ReflectFieldType::Int:
+                        case ReflectFieldType::Enum:   *reinterpret_cast<int*>(p) = std::get<int>(v); break;
                         case ReflectFieldType::Float:  *reinterpret_cast<float*>(p) = std::get<float>(v); break;
-                        case ReflectFieldType::Vec3:   *reinterpret_cast<glm::vec3*>(p) = std::get<glm::vec3>(v); break;
+                        case ReflectFieldType::Vec3:
+                        case ReflectFieldType::Color:  *reinterpret_cast<glm::vec3*>(p) = std::get<glm::vec3>(v); break;
                         case ReflectFieldType::String: *reinterpret_cast<std::string*>(p) = std::get<std::string>(v); break;
                     }
                 }
@@ -1865,7 +1922,33 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         if (reflPaste) PasteComponentFromClip(world, entity);
         if (reflOpen) {
             void* fbase = rc.Get(registry, entity);
+            // #302 Wave 2a: a field is hidden when its VisibleIf sibling (an Int/Enum field of the
+            // same component) doesn't match. Reads the sibling's int value directly.
+            auto fieldVisible = [&](const ReflectField& f) -> bool {
+                if (!f.VisibleIfField) return true;
+                for (const ReflectField& s : rc.Meta.Fields) {
+                    if (std::strcmp(s.Name, f.VisibleIfField) != 0) continue;
+                    const int sv = *reinterpret_cast<int*>(s.Address(fbase));
+                    return f.VisibleIfNot ? (sv != f.VisibleIfValue) : (sv == f.VisibleIfValue);
+                }
+                return true;
+            };
+            const char* openGroup = nullptr; // current TreeNode group, nullptr = none
+            bool groupNodeOpen = true;       // false = current group's node is collapsed
             for (const ReflectField& f : rc.Meta.Fields) {
+                // Group transitions: close the previous node, open the next.
+                if (f.Group != openGroup) {
+                    if (openGroup && groupNodeOpen) ImGui::TreePop();
+                    openGroup = f.Group;
+                    if (openGroup) {
+                        ImGui::Spacing();
+                        groupNodeOpen = ImGui::TreeNodeEx(openGroup, ImGuiTreeNodeFlags_SpanAvailWidth);
+                    }
+                }
+                if (openGroup && !groupNodeOpen) continue; // collapsed group — skip its fields
+                if (f.EditorHidden) continue;              // drawn by DrawReflectedComponentExtra
+                if (!fieldVisible(f)) continue;
+
                 PropertyLabel(f.Name, f.Tooltip);
                 ImGui::PushID(f.Name);
                 bool started = false;
@@ -1879,15 +1962,28 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                             (int)f.Min, (int)f.Max);
                         started = ImGui::IsItemActivated();
                         break;
-                    case ReflectFieldType::Float:
-                        ImGui::DragFloat("##v", reinterpret_cast<float*>(f.Address(fbase)), f.DragSpeed,
-                            f.Min, f.Max, "%.3f");
+                    case ReflectFieldType::Float: {
+                        float* v = reinterpret_cast<float*>(f.Address(fbase));
+                        const char* fmt = f.Format ? f.Format : "%.3f";
+                        const ImGuiSliderFlags sl = f.Logarithmic ? ImGuiSliderFlags_Logarithmic : 0;
+                        if (f.Slider && f.Min < f.Max) EditorUI::SliderFloat("##v", v, f.Min, f.Max, fmt, sl);
+                        else                           ImGui::DragFloat("##v", v, f.DragSpeed, f.Min, f.Max, fmt, sl);
                         started = ImGui::IsItemActivated();
                         break;
+                    }
                     case ReflectFieldType::Vec3:
                         ImGui::DragFloat3("##v", reinterpret_cast<float*>(f.Address(fbase)), f.DragSpeed,
                             f.Min, f.Max);
                         started = ImGui::IsItemActivated();
+                        break;
+                    case ReflectFieldType::Color:
+                        ImGui::ColorEdit3("##v", reinterpret_cast<float*>(f.Address(fbase)),
+                            ImGuiColorEditFlags_DisplayHex);
+                        started = ImGui::IsItemActivated();
+                        break;
+                    case ReflectFieldType::Enum:
+                        if (ImGui::Combo("##v", reinterpret_cast<int*>(f.Address(fbase)), f.EnumLabels))
+                            PushUndo(world, std::string("Edit ") + rc.Meta.Name);
                         break;
                     case ReflectFieldType::String: {
                         auto* s = reinterpret_cast<std::string*>(f.Address(fbase));
@@ -1901,6 +1997,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 if (started) PushUndo(world, std::string("Edit ") + rc.Meta.Name);
                 ImGui::PopID();
             }
+            if (openGroup && groupNodeOpen) ImGui::TreePop();
             DrawReflectedComponentExtra(rc.Meta.Name, world, entity); // #302: e.g. Camera "Align to View"
             EndComponentSection();
         }

@@ -156,7 +156,16 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
                 case ReflectFieldType::Int:    cj[f.Name] = *static_cast<const int*>(fp); break;
                 case ReflectFieldType::Float:  cj[f.Name] = *static_cast<const float*>(fp); break;
                 case ReflectFieldType::Vec3:   cj[f.Name] = Vec3ToJson(*static_cast<const glm::vec3*>(fp)); break;
+                case ReflectFieldType::Color:  cj[f.Name] = Vec3ToJson(*static_cast<const glm::vec3*>(fp)); break;
                 case ReflectFieldType::String: cj[f.Name] = *static_cast<const std::string*>(fp); break;
+                case ReflectFieldType::Enum: {
+                    const int v = *static_cast<const int*>(fp);
+                    // Round-trip the label text so a reordered EnumLabels list doesn't rewrite
+                    // every scene; fall back to the raw int if it's somehow out of range.
+                    if (v >= 0 && v < f.EnumCount) cj[f.Name] = ReflectEnumLabel(f, v);
+                    else                           cj[f.Name] = v;
+                    break;
+                }
             }
         }
         j[rc.Meta.Name] = cj;
@@ -252,7 +261,14 @@ void ReadCommonComponents(const json& j, World& world, entt::entity entity) {
                 case ReflectFieldType::Int:    *static_cast<int*>(fp)   = cj.at(f.Name).get<int>(); break;
                 case ReflectFieldType::Float:  *static_cast<float*>(fp) = cj.at(f.Name).get<float>(); break;
                 case ReflectFieldType::Vec3:   *static_cast<glm::vec3*>(fp) = JsonToVec3(cj.at(f.Name)); break;
+                case ReflectFieldType::Color:  *static_cast<glm::vec3*>(fp) = JsonToVec3(cj.at(f.Name)); break;
                 case ReflectFieldType::String: *static_cast<std::string*>(fp) = cj.at(f.Name).get<std::string>(); break;
+                case ReflectFieldType::Enum: {
+                    const json& jv = cj.at(f.Name);
+                    if      (jv.is_string())         *static_cast<int*>(fp) = ReflectEnumIndex(f, jv.get<std::string>().c_str());
+                    else if (jv.is_number_integer()) *static_cast<int*>(fp) = jv.get<int>();
+                    break;
+                }
             }
         }
     }
