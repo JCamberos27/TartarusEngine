@@ -196,6 +196,7 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
     // below keeps a permanent legacy-format read fallback even though this write path only ever
     // emits the new "Animator" key from here on.
     for (const auto& rc : ComponentRegistry::All()) {
+        if (!rc.Meta.GenericSerialize) continue; // hand-coded elsewhere (e.g. Mesh Renderer)
         if (!rc.Has(world.Registry, entity)) continue;
         // const_cast is safe: the component is a live mutable object; this path only reads it.
         void* comp = const_cast<void*>(rc.GetConst(world.Registry, entity));
@@ -301,6 +302,7 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
     // #184: mirror of the generic write — restore each registered component present in `j`.
     // Missing fields keep the component's own default (the component was just default-added).
     for (const auto& rc : ComponentRegistry::All()) {
+        if (!rc.Meta.GenericSerialize) continue; // hand-coded elsewhere (e.g. Mesh Renderer)
         if (!j.contains(rc.Meta.Name)) continue;
         rc.Add(world.Registry, entity);
         void* comp = rc.Get(world.Registry, entity);
