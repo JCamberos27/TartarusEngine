@@ -35,6 +35,7 @@
 #include "IblProbe.h"
 #include "Cubemap.h"               // PR13: HDRI environment cubemap
 #include "ReflectionProbeArray.h"  // PR14: placed reflection probes
+#include "Ssao.h"                  // PR15: depth pre-pass + screen-space ambient occlusion
 #include "GLStateCache.h"
 #include "Profiler.h"
 #include "Frustum.h"
@@ -435,6 +436,12 @@ int main(int argc, char** argv) {
         bool                      prevWasHdri = false;
         // PR14: reflection probe array — rebuilt from scene each frame, bound per drawScene
         ReflectionProbeArray probeArray;
+        // PR15: SSAO — depth pre-pass FBO + compute + blur shaders (all scene-view only)
+        Ssao ssao;
+        Shader ssaoComputeShader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+                                 ShaderLibrary::ReadFile("Ssao.frag.glsl"));
+        Shader ssaoBlurShader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+                              ShaderLibrary::ReadFile("SsaoBlur.frag.glsl"));
 
         World world;
         HotReloadGameModule gameModule;
@@ -1607,6 +1614,20 @@ int main(int argc, char** argv) {
                 // Uses viewPos as the draw centroid; no-op (uProbeCount=0) when scene has none.
                 probeArray.Bind(modelShader, viewPos);
 
+                // PR15: SSAO occlusion map (unit 15). Pre-computed before this drawScene call.
+                // ssao.IsValid() is false until the first SSAO-enabled frame fills the FBOs.
+                bool ssaoOn = gs.SsaoEnabled && ssao.IsValid() && !unlit;
+                if (ssaoOn) {
+                    glActiveTexture(GL_TEXTURE0 + 15);
+                    glBindTexture(GL_TEXTURE_2D, ssao.OcclusionTexture());
+                    modelShader.SetInt("uSSAOMap", 15);
+                    GLint vp[4] = {0, 0, 0, 0};
+                    glGetIntegerv(GL_VIEWPORT, vp);
+                    modelShader.SetVec2("uScreenSize", glm::vec2((float)vp[2], (float)vp[3]));
+                    glActiveTexture(GL_TEXTURE0);
+                }
+                modelShader.SetInt("uSSAOEnabled", ssaoOn ? 1 : 0);
+
                 // The light SSBO (binding 0) is built once per frame above — just bind it.
                 lightBuffer.Bind(0);
 
@@ -1871,6 +1892,46 @@ int main(int argc, char** argv) {
                 else if (shading == EditorLayer::ShadingMode::Cascades) sceneDebugView = 2;
                 else if (shading == EditorLayer::ShadingMode::Mip)      sceneDebugView = 3;
                 if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+                // PR15: SSAO depth pre-pass — runs before drawScene so the occlusion map is ready.
+                // Reuses shadowShader (ShadowDepth.vert.glsl) with uLightViewProj = proj * view.
+                // Skipped in unlit/wireframe modes where SSAO has no visual effect.
+                if (frameSettings.SsaoEnabled && !sceneUnlit) {
+                    PROFILE_SCOPE("SSAO Depth Pre-pass");
+                    PROFILE_GPU_SCOPE("SSAO Depth Pre-pass");
+                    ssao.Resize(scW, scH);
+                    glBindFramebuffer(GL_FRAMEBUFFER, ssao.DepthFbo());
+                    glViewport(0, 0, scW, scH);
+                    glClear(GL_DEPTH_BUFFER_BIT);
+                    glEnable(GL_DEPTH_TEST);
+                    glDepthMask(GL_TRUE);
+                    glEnable(GL_CULL_FACE);
+                    glCullFace(GL_BACK);
+                    glDisable(GL_BLEND);
+
+                    shadowShader.Bind();
+                    shadowShader.SetMat4("uLightViewProj", sceneProjMat * sceneViewMat);
+                    shadowShader.SetInt("uUseSkinning", 0); // static geometry only
+                    int ssaoModelLoc = shadowShader.Loc("uModel");
+                    auto ssaoRenderables = world.Registry.view<TransformComponent, RenderableComponent>();
+                    for (auto entity : ssaoRenderables) {
+                        if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                        auto& rc = world.Registry.get<RenderableComponent>(entity);
+                        if (!rc.ModelRef) continue;
+                        glm::mat4 model = world.GetCachedWorldTransform(entity);
+                        shadowShader.SetMat4(ssaoModelLoc, model);
+                        rc.ModelRef->DrawDepthOnly(shadowShader, rc.Materials);
+                    }
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                    GLStateCache::Invalidate();
+
+                    ssao.Compute(ssaoComputeShader, sceneProjMat);
+                    ssao.Blur(ssaoBlurShader);
+                    GLStateCache::Invalidate();
+
+                    // Restore HdrTarget for the main scene draw
+                    sceneHdr.BindForRender();
+                }
 
                 EditorLayer::RenderStats sceneStats;
                 drawScene(sceneViewMat, sceneProjMat, editorCamera.Position, sceneUnlit, &sceneStats,
