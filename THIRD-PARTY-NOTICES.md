@@ -50,6 +50,7 @@ Engine means complying with these licenses even though no source is redistribute
 | EnTT | 3.13.2 | MIT | https://github.com/skypjack/entt |
 | Dear ImGui | `docking` branch | MIT | https://github.com/ocornut/imgui |
 | ImGuizmo | `master` | MIT | https://github.com/CedricGuillemet/ImGuizmo |
+| NVIDIA PhysX | `107.3-physx-5.6.1` (built from source) | BSD 3-Clause | https://github.com/NVIDIA-Omniverse/PhysX |
 | libtiff | 4.6.0 | libtiff license (BSD-style) — used only by the `TifSplitter` tool | https://gitlab.com/libtiff/libtiff |
 
 ---
