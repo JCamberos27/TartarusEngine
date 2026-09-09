@@ -1581,6 +1581,8 @@ private:
     // (directional) — projected to screen and drawn into the Scene window's draw list, same
     // clipping treatment as DrawEntityIcons. Gated on EditorSettings::ShowLightGizmos.
     void DrawLightGizmos(World& world, Camera& editorCamera);
+    // PR14: wireframe box overlay for placed ReflectionProbeComponents.
+    void DrawReflectionProbeGizmos(World& world, Camera& editorCamera);
 
     // Unity-style grab dots on the selected light's gizmo: drag to scale Range, open/close the
     // spot cone, or re-aim a spot/directional light — no trip to the Inspector. Draws the dots

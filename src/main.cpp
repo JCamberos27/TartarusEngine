@@ -33,7 +33,8 @@
 #include "SpotShadowMap.h"
 #include "PointShadowMap.h"
 #include "IblProbe.h"
-#include "Cubemap.h"   // PR13: HDRI environment cubemap
+#include "Cubemap.h"               // PR13: HDRI environment cubemap
+#include "ReflectionProbeArray.h"  // PR14: placed reflection probes
 #include "GLStateCache.h"
 #include "Profiler.h"
 #include "Frustum.h"
@@ -432,6 +433,8 @@ int main(int argc, char** argv) {
         std::shared_ptr<Cubemap> hdriCube;
         std::string               hdriCubePath;
         bool                      prevWasHdri = false;
+        // PR14: reflection probe array — rebuilt from scene each frame, bound per drawScene
+        ReflectionProbeArray probeArray;
 
         World world;
         HotReloadGameModule gameModule;
@@ -1487,6 +1490,9 @@ int main(int argc, char** argv) {
                 }
             }
 
+            // PR14: rebuild probe list from scene (cheap CPU gather, once per frame)
+            probeArray.Update(world);
+
             // Renders the lit scene (sky + every Transform+Renderable entity) into whatever
             // framebuffer/viewport is currently bound. Shared by the real on-screen pass below
             // and GameViewPanel's offscreen framebuffer pass, so the two can never silently
@@ -1596,6 +1602,10 @@ int main(int argc, char** argv) {
                 }
                 modelShader.SetInt("uIBLEnabled", iblOn ? 1 : 0);
                 glActiveTexture(GL_TEXTURE0);
+
+                // PR14: bind nearest 2 probes to modelShader for parallax box projection.
+                // Uses viewPos as the draw centroid; no-op (uProbeCount=0) when scene has none.
+                probeArray.Bind(modelShader, viewPos);
 
                 // The light SSBO (binding 0) is built once per frame above — just bind it.
                 lightBuffer.Bind(0);

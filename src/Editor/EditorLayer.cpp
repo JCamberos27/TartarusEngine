@@ -2195,6 +2195,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if (!m_HideOverlaysThisFrame && m_GizmosMasterVisible) {
         if (m_ShowEntityIcons) DrawEntityIcons(world, editorCamera); // DrawLightGizmos self-gates on EditorSettings::ShowLightGizmos
         DrawLightGizmos(world, editorCamera);
+        DrawReflectionProbeGizmos(world, editorCamera); // PR14: probe box overlays
     }
 
     // Drawn (and its hover/drag state refreshed) before picking runs below, so a click that

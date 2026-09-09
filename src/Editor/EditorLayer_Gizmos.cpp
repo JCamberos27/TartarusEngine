@@ -1340,6 +1340,69 @@ void EditorLayer::DrawLightGizmos(World& world, Camera& editorCamera) {
     draw->PopClipRect();
 }
 
+void EditorLayer::DrawReflectionProbeGizmos(World& world, Camera& editorCamera) {
+    if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
+
+    const glm::mat4 view      = editorCamera.ViewMatrix();
+    const glm::mat4 proj      = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y);
+    const glm::mat4 viewProj  = proj * view;
+
+    ImGuiWindow* sceneWin = ImGui::FindWindowByName("Scene");
+    ImDrawList* draw = sceneWin ? sceneWin->DrawList : ImGui::GetForegroundDrawList();
+    const ImVec2 clipMin(m_ViewportPos.x, m_ViewportPos.y);
+    const ImVec2 clipMax(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y);
+    draw->PushClipRect(clipMin, clipMax, true);
+
+    auto project = [&](const glm::vec3& wp, ImVec2& out) -> bool {
+        glm::vec4 clip = viewProj * glm::vec4(wp, 1.0f);
+        if (clip.w <= 0.0001f) return false;
+        glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        out = ImVec2(m_ViewportPos.x + (ndc.x * 0.5f + 0.5f) * m_ViewportSize.x,
+                     m_ViewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * m_ViewportSize.y);
+        return true;
+    };
+    auto strokeEdge = [&](const glm::vec3& a, const glm::vec3& b, ImU32 col, float thick) {
+        ImVec2 sa, sb;
+        if (project(a, sa) && project(b, sb))
+            draw->AddLine(sa, sb, col, thick);
+    };
+
+    const ImU32 kProbeColor    = IM_COL32(100, 200, 255, 200);
+    const ImU32 kProbeSelected = IM_COL32(255, 220,  50, 230);
+    const float kThick = 1.5f;
+
+    auto probeView = world.Registry.view<const TransformComponent, const ReflectionProbeComponent>();
+    for (auto [entity, tc, rp] : probeView.each()) {
+        glm::mat4 wt     = world.GetCachedWorldTransform(entity);
+        glm::vec3 center = glm::vec3(wt[3]);
+        glm::vec3 scale  = glm::vec3(glm::length(glm::vec3(wt[0])),
+                                     glm::length(glm::vec3(wt[1])),
+                                     glm::length(glm::vec3(wt[2])));
+        glm::vec3 hs     = rp.Size * scale * 0.5f;
+
+        bool selected = IsSelected(entity);
+        ImU32 col = selected ? kProbeSelected : kProbeColor;
+
+        // 8 box corners
+        glm::vec3 c[8];
+        for (int i = 0; i < 8; ++i)
+            c[i] = center + glm::vec3(
+                (i & 1) ? hs.x : -hs.x,
+                (i & 2) ? hs.y : -hs.y,
+                (i & 4) ? hs.z : -hs.z);
+
+        // 12 box edges
+        int edges[12][2] = {
+            {0,1},{2,3},{4,5},{6,7}, // along X
+            {0,2},{1,3},{4,6},{5,7}, // along Y
+            {0,4},{1,5},{2,6},{3,7}, // along Z
+        };
+        for (auto& e : edges) strokeEdge(c[e[0]], c[e[1]], col, kThick);
+    }
+
+    draw->PopClipRect();
+}
+
 void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
     m_LightHandleEngaged = false;
     const EditorSettings& prefs = EditorSettings::Get();
