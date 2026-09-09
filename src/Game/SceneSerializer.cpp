@@ -533,6 +533,13 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         root["skyHorizonColor"] = Vec3ToJson(world.SkyHorizonColor);
         root["skyZenithColor"] = Vec3ToJson(world.SkyZenithColor);
         root["skyAmbientIntensity"] = world.SkyAmbientIntensity; // #196
+        // PR13: HDRI sky source (defaults omitted for backwards compatibility)
+        if (world.SkySourceMode != World::SkySource::Procedural)
+            root["skySource"] = (int)world.SkySourceMode;
+        if (!world.SkyHdriPath.empty())
+            root["skyHdriPath"] = world.SkyHdriPath;
+        if (world.SkyRotationDegrees != 0.0f)
+            root["skyRotationDegrees"] = world.SkyRotationDegrees;
     }
 
     // Every box/model entity gets a stable 0-based id (assigned in the exact order written
@@ -835,8 +842,13 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
     }
     // #196: scenes saved before IBL existed carry no ambient intensity — 1.0 (the physically
     // consistent value) is the right default for them, same as a brand-new scene.
-    if (clearFirst)
-        world.SkyAmbientIntensity = root.value("skyAmbientIntensity", 1.0f);
+    if (clearFirst) {
+        world.SkyAmbientIntensity    = root.value("skyAmbientIntensity",    1.0f);
+        // PR13: HDRI sky source fields (absent in old scenes → Procedural defaults)
+        world.SkySourceMode          = (World::SkySource)root.value("skySource",          0);
+        world.SkyHdriPath            = root.value("skyHdriPath",            std::string());
+        world.SkyRotationDegrees     = root.value("skyRotationDegrees",     0.0f);
+    }
 
     // Reconstructs HierarchyComponent parent links from the "id"/"parentId" fields written by
     // BuildSceneJson — both entries are created first (order-independent), then parents are
