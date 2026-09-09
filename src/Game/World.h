@@ -21,6 +21,13 @@ public:
 
     entt::registry Registry;
 
+    // PR13: sky source — default Procedural (gradient) or Hdri (equirectangular .hdr file).
+    // Procedural is the backwards-compatible default; existing scenes are unaffected.
+    enum class SkySource { Procedural = 0, Hdri = 1 };
+    SkySource   SkySourceMode{SkySource::Procedural};
+    std::string SkyHdriPath;               // absolute or project-relative path to a .hdr file
+    float       SkyRotationDegrees{0.0f};  // Y-axis rotation of the HDRI in degrees [0, 360)
+
     // Vertical gradient sky (see Sky.h) — horizon at the world's XZ plane, zenith straight up.
     // Default is pure black: a fresh scene reads as a dark stage, and the sky never washes out
     // the HDR tonemapper or fights a scene's own lighting until it's set deliberately.

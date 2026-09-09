@@ -33,6 +33,7 @@
 #include "SpotShadowMap.h"
 #include "PointShadowMap.h"
 #include "IblProbe.h"
+#include "Cubemap.h"   // PR13: HDRI environment cubemap
 #include "GLStateCache.h"
 #include "Profiler.h"
 #include "Frustum.h"
@@ -427,6 +428,10 @@ int main(int argc, char** argv) {
         ColliderGizmo colliderGizmo; // #185 PR 2
         Sky sky;
         IblProbe iblProbe; // #196: sky-baked irradiance / prefiltered specular / BRDF LUT
+        // PR13: HDRI state — non-null when an HDRI is loaded, path tracks the loaded file
+        std::shared_ptr<Cubemap> hdriCube;
+        std::string               hdriCubePath;
+        bool                      prevWasHdri = false;
 
         World world;
         HotReloadGameModule gameModule;
@@ -1446,13 +1451,40 @@ int main(int argc, char** argv) {
             // burst on the frame after someone drags the sky colour (or loads a scene, or
             // undoes an edit — watching the state rather than any one writer means every path
             // that can change the sky is covered without plumbing a dirty flag through the UI).
-            if (iblProbe.NeedsBake(world.SkyHorizonColor, world.SkyZenithColor)) {
-                PROFILE_SCOPE("IBL Bake");
-                PROFILE_GPU_SCOPE("IBL Bake");
-                iblProbe.Bake(world.SkyHorizonColor, world.SkyZenithColor);
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                glViewport(0, 0, window.GetWidth(), window.GetHeight());
-                GLStateCache::Invalidate();
+            // PR13: HDRI sky path — load/reload cubemap when path changes; bake IBL from it.
+            // Procedural sky path — bake from gradient colours as before.
+            if (world.SkySourceMode == World::SkySource::Hdri) {
+                if (!world.SkyHdriPath.empty() && world.SkyHdriPath != hdriCubePath) {
+                    PROFILE_SCOPE("HDRI Load");
+                    hdriCube     = Cubemap::LoadHdr(world.SkyHdriPath);
+                    hdriCubePath = world.SkyHdriPath;
+                }
+                // NeedsBake(-1,-1,-1) is true unless BakeFromCubemap already ran this HDRI;
+                // the sentinel set by BakeFromCubemap makes the check false until we switch source.
+                if (hdriCube && iblProbe.NeedsBake(glm::vec3(-1.0f), glm::vec3(-1.0f))) {
+                    PROFILE_SCOPE("IBL Bake (HDRI)");
+                    PROFILE_GPU_SCOPE("IBL Bake (HDRI)");
+                    iblProbe.BakeFromCubemap(hdriCube->Texture());
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                    glViewport(0, 0, window.GetWidth(), window.GetHeight());
+                    GLStateCache::Invalidate();
+                }
+                prevWasHdri = true;
+            } else {
+                if (prevWasHdri) {
+                    // Switched back to procedural — clear hdriCube so it's reloaded if HDRI is re-selected
+                    hdriCube.reset();
+                    hdriCubePath.clear();
+                }
+                prevWasHdri = false;
+                if (iblProbe.NeedsBake(world.SkyHorizonColor, world.SkyZenithColor)) {
+                    PROFILE_SCOPE("IBL Bake");
+                    PROFILE_GPU_SCOPE("IBL Bake");
+                    iblProbe.Bake(world.SkyHorizonColor, world.SkyZenithColor);
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                    glViewport(0, 0, window.GetWidth(), window.GetHeight());
+                    GLStateCache::Invalidate();
+                }
             }
 
             // Renders the lit scene (sky + every Transform+Renderable entity) into whatever
@@ -1477,7 +1509,13 @@ int main(int argc, char** argv) {
                 bool shadowsOn = gs.ShadowsEnabled && !unlit;
                 bool sunShadowsOn = shadowsOn && sunShadowsReady;
 
-                sky.Draw(sceneView, sceneProj, world.SkyHorizonColor, world.SkyZenithColor);
+                // PR13: sky draw — HDRI cubemap or procedural gradient
+                if (world.SkySourceMode == World::SkySource::Hdri && hdriCube) {
+                    float rotRad = glm::radians(world.SkyRotationDegrees);
+                    sky.DrawHdri(hdriCube->Texture(), rotRad, sceneView, sceneProj);
+                } else {
+                    sky.Draw(sceneView, sceneProj, world.SkyHorizonColor, world.SkyZenithColor);
+                }
 
                 modelShader.Bind();
                 modelShader.SetMat4("uView", sceneView);
