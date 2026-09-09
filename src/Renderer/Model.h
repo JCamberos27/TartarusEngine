@@ -8,6 +8,7 @@
 #include "ModelMesh.h"
 #include "Animation.h"
 #include "Material.h"
+#include "MaterialAsset.h"
 
 class Texture;
 class Shader;
@@ -66,13 +67,13 @@ public:
     // (AssetLibrary) is responsible for making that path unique per placed instance.
     static std::shared_ptr<Model> CreatePrimitive(const std::string& kind, const std::string& path);
 
-    void Draw(Shader& shader);
+    // Backward-compat: no material slots → uses every submesh's imported Material.
+    void Draw(Shader& shader) { Draw(shader, {}); }
 
-    // Geometry only — no material binds, no texture units. For the shadow / depth pre-pass,
-    // whose fragment shader has none of the PBR uniforms, so the ~23 SetX + 7 texture binds
-    // BindMaterial does per mesh are all wasted (and it runs per cascade). Still uploads bone
-    // matrices + uUseSkinning: the depth vertex shader skins too, so skinned casters animate.
-    void DrawDepthOnly(Shader& shader);
+    // Geometry only — no material binds, no texture units. For the shadow / depth pre-pass.
+    // Still uploads bone matrices + uUseSkinning: the depth vertex shader skins too.
+    // slots: per-submesh MaterialAsset overrides; empty/short → imported mesh material.
+    void DrawDepthOnly(Shader& shader) { DrawDepthOnly(shader, {}); }
 
     bool HasAnimations() const { return !m_Animations.empty(); }
     int AnimationCount() const { return (int)m_Animations.size(); }
@@ -100,11 +101,10 @@ public:
     glm::vec3 BoundsMin() const { return m_BoundsMin; }
     glm::vec3 BoundsMax() const { return m_BoundsMax; }
 
-    // When set, every mesh in this model renders with this material instead of the
-    // one extracted from the source file — this is how the editor lets you override
-    // an imported model's look with a custom PBR material.
-    void SetMaterialOverride(std::shared_ptr<Material> mat) { m_MaterialOverride = std::move(mat); }
-    std::shared_ptr<Material> MaterialOverride() const { return m_MaterialOverride; }
+    // Draw with per-submesh MaterialAsset slots (PR5). slot[i] non-null overrides submesh i's
+    // imported material. Empty or short slots fall back to the imported mesh material.
+    void Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots);
+    void DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots);
     int MeshCount() const { return (int)m_Meshes.size(); }
     Material& MeshMaterial(int index) { return m_Meshes[index]->Mat; }
     const Material& MeshMaterial(int index) const { return m_Meshes[index]->Mat; }
@@ -121,11 +121,9 @@ public:
 
     // #192: the material value-hash this model draws with, so the scene draw loop can sort
     // entities to put value-identical materials adjacent (which is what makes the BindMaterial
-    // dedup in GLStateCache actually hit). The override, or the first sub-mesh's material —
-    // enough to cluster the primitives that share a handful of material values; multi-mesh
-    // imports still group by this plus the model pointer.
+    // Per-model fallback sort key (first mesh). Callers that have a RenderableComponent
+    // should prefer RenderableMaterialSortKey() which accounts for Materials slots.
     std::uint64_t MaterialSortKey() const {
-        if (m_MaterialOverride) return m_MaterialOverride->Hash();
         return m_Meshes.empty() ? 0 : m_Meshes[0]->Mat.Hash();
     }
 
@@ -154,7 +152,6 @@ private:
     std::string m_Directory;
     std::vector<std::unique_ptr<ModelMesh>> m_Meshes;
     std::map<std::string, std::shared_ptr<Texture>> m_TextureCache;
-    std::shared_ptr<Material> m_MaterialOverride;
 
     std::map<std::string, BoneInfo> m_BoneInfoMap;
     int m_BoneCounter = 0;

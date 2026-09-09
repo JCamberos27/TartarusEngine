@@ -86,8 +86,8 @@ std::vector<std::string> FindTextureUsages(const World& world, const Texture* te
     for (auto entity : view) {
         const auto& [name, renderable] = view.get<const NameComponent, const RenderableComponent>(entity);
         bool used = false;
-        if (auto override_ = renderable.ModelRef->MaterialOverride()) {
-            used = MaterialUsesTexture(*override_, tex);
+        if (!renderable.Materials.empty() && renderable.Materials[0]) {
+            used = MaterialUsesTexture(renderable.Materials[0]->Mat, tex);
         } else {
             for (int i = 0; i < renderable.ModelRef->MeshCount(); ++i) {
                 if (MaterialUsesTexture(renderable.ModelRef->MeshMaterial(i), tex)) { used = true; break; }
