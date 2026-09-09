@@ -641,6 +641,8 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
     int alphaTestLoc = shader.Loc("uAlphaTest");
     for (int i = 0; i < (int)m_Meshes.size(); ++i) {
         bool hasSlot = i < (int)slots.size() && slots[i];
+        // Transparent materials don't cast shadows — skip them in the depth-only pass.
+        if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
         const Material& mat = hasSlot ? slots[i]->Mat : m_Meshes[i]->Mat;
         // Only cost paid over a pure depth draw: one texture bind + two uniforms, and only for
         // meshes that actually have an albedo map (cutout foliage/fences) — the shadow then

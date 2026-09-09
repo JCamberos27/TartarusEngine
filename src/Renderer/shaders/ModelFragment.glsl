@@ -128,6 +128,10 @@ uniform vec3 uEmissiveColor;
 uniform int uTriplanar;
 uniform float uTriplanarScale;
 
+// PR 9 — transparent queue. uAlphaBlend = 0 (opaque, default) keeps alpha = 1 (bit-identical).
+uniform int   uAlphaBlend;  // 0 = opaque pass, 1 = transparent pass
+uniform float uOpacity;     // material surface alpha (only used when uAlphaBlend != 0)
+
 uniform int uHasAlbedoMap;             uniform sampler2D uAlbedoMap;
 uniform int uHasNormalMap;             uniform sampler2D uNormalMap;
 uniform int uHasMetallicRoughnessMap;  uniform sampler2D uMetallicRoughnessMap;
@@ -527,5 +531,7 @@ void main() {
     }
     // else: leave linear HDR for the shared Tonemapper pass.
 
-    FragColor = vec4(color, 1.0);
+    FragColor = vec4(color, uAlphaBlend != 0 ? uOpacity : 1.0);
 }
+// OIT (order-independent transparency) is explicitly out of scope for PR 9.
+// Transparent materials use back-to-front painter's algorithm via the transparent draw list.
