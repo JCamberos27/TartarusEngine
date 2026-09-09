@@ -1004,6 +1004,16 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
                 mdl ? (const char*)mdl->Data : nullptr,
                 pfb ? (const char*)pfb->Data : nullptr, entity);
         }
+        // Dropping a material asset assigns it to slot 0 of the renderer.
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MATERIAL_PATH")) {
+            std::string matPath((const char*)payload->Data);
+            if (auto* renderable = world.Registry.try_get<RenderableComponent>(entity)) {
+                PushUndo(world, "Set Material Slot");
+                auto ma = assets.LoadMaterial(matPath);
+                if (renderable->Materials.empty()) renderable->Materials.push_back(ma);
+                else renderable->Materials[0] = ma;
+            }
+        }
         // Existing behavior: dropping a texture from the Asset Browser assigns it as Albedo.
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
             std::string texPath((const char*)payload->Data);

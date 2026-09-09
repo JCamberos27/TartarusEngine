@@ -2475,10 +2475,9 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     ImGui::EndPopup();
 }
 
-// Unified single-/multi-select material editor (#183): a size-1 `sel` is the degenerate case of
-// the general multi-edit path below, so single-select gets the same tri-state "Use Custom
-// Material" handling and mixed-value dashes (which simply never trigger for one object) instead
-// of a second, drifting copy of every field.
+// Material slot UI (PR6) — single-select shows a row per submesh; multi-select shows slot 0
+// with tri-state "Use Custom Material" handling. The PBR property editor below the slot rows
+// is shared by both paths and operates on a vector<Material*> so mixed-value dashes work.
 void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                                      const std::vector<entt::entity>& sel) {
     std::vector<RenderableComponent*> rcs;
@@ -2491,12 +2490,305 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
     }
     if (rcs.empty()) return;
 
+    // mats is filled by whichever branch runs (single-select slot 0 or multi-select).
+    // The PBR property lambdas below capture it by reference so they work for both paths.
+    std::vector<Material*> mats;
+
+    auto DrawPbrFields = [&]() {
+        auto vec3Shared = [&](glm::vec3 Material::* field, glm::vec3& shared) {
+            shared = mats[0]->*field;
+            bool mixed = false;
+            for (Material* mm : mats)
+                for (int a = 0; a < 3; ++a)
+                    if (std::fabs((mm->*field)[a] - shared[a]) > 1.0e-4f) mixed = true;
+            return mixed;
+        };
+        auto floatShared = [&](float Material::* field, float& shared) {
+            shared = mats[0]->*field;
+            bool mixed = false;
+            for (Material* mm : mats) if (std::fabs(mm->*field - shared) > 1.0e-4f) mixed = true;
+            return mixed;
+        };
+
+        auto colorRow = [&](const char* label, glm::vec3 Material::* field, const char* tip) {
+            glm::vec3 shared; bool mixed = vec3Shared(field, shared);
+            PropertyLabel(label, tip);
+            if (mixed) {
+                float w = ImGui::GetContentRegionAvail().x -
+                          ImGui::CalcTextSize(" (mixed)").x - ImGui::GetStyle().ItemSpacing.x;
+                ImGui::SetNextItemWidth(w > 40.0f ? w : 40.0f);
+            }
+            glm::vec3 edit = shared;
+            ImGui::PushID(label);
+            if (!mixed && mats.size() == 1)
+                ImGui::SetNextItemWidth(-(ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x));
+            bool changed = ImGui::ColorEdit3("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
+            if (ImGui::IsItemActivated()) StageUndo(world);
+            if (changed) for (Material* mm : mats) mm->*field = edit;
+            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
+            if (mixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
+            else if (mats.size() == 1) EyedropperButton(this, world, &(mats[0]->*field));
+            ImGui::PopID();
+        };
+        auto scalarRow = [&](const char* label, float Material::* field, float lo, float hi, const char* tip) {
+            float shared; bool mixed = floatShared(field, shared);
+            float edit = shared;
+            PropertyLabel(label, tip);
+            ImGui::PushID(label);
+            bool changed = EditorUI::SliderFloat("##ms", &edit, lo, hi, mixed ? "\xE2\x80\x94" : "%.3f");
+            if (ImGui::IsItemActivated()) StageUndo(world);
+            if (changed && std::isfinite(edit)) for (Material* mm : mats) mm->*field = edit;
+            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
+            ImGui::PopID();
+        };
+
+        colorRow("Base Color", &Material::BaseColor,
+                 "Surface tint, multiplied with the Albedo map. Applied to every selected material.");
+        scalarRow("Metallic", &Material::Metallic, 0.0f, 1.0f,
+                  "0 = non-metal, 1 = pure metal. Ignored where a Metallic map is set.");
+        scalarRow("Roughness", &Material::Roughness, 0.04f, 1.0f,
+                  "0 = mirror-smooth, 1 = fully matte. Ignored where a Roughness map is set.");
+        colorRow("Emissive Color", &Material::EmissiveColor,
+                 "Color this surface glows, independent of scene lighting.");
+        scalarRow("Emissive Strength", &Material::EmissiveStrength, 0.0f, 10.0f,
+                  "Brightness multiplier for the Emissive Color / map.");
+
+        ImGui::SeparatorText("Texture Maps");
+
+        auto mapRow = [&](const char* label, std::shared_ptr<Texture> Material::* texSlot, const char* help) {
+            ImGui::PushID(label);
+            PropertyLabel(label);
+
+            Texture* first = (mats[0]->*texSlot).get();
+            bool mixed = false, anySet = false;
+            for (Material* mm : mats) {
+                Texture* t = (mm->*texSlot).get();
+                if (t) anySet = true;
+                if (t != first) mixed = true;
+            }
+            std::string preview = mixed ? std::string("\xE2\x80\x94  (mixed)")
+                                  : first ? std::filesystem::path(first->Path()).filename().string()
+                                          : std::string("(none)");
+            float clearReserve = anySet ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+            if (ImGui::Button(preview.c_str(), ImVec2(anySet ? -clearReserve : -FLT_MIN, 0.0f))) {
+                std::string path = FileDialog::OpenFile(
+                    "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
+                if (!path.empty()) {
+                    PushUndo(world, std::string("Set ") + label + " Map");
+                    auto tex = assets.LoadTexture(path);
+                    for (Material* mm : mats) mm->*texSlot = tex;
+                }
+            }
+            if (ImGui::IsItemHovered()) {
+                if (!mixed && first) {
+                    ImGui::BeginTooltip();
+                    ImGui::Image((ImTextureID)(intptr_t)first->GLHandle(), ImVec2(96, 96));
+                    ImGui::TextUnformatted(first->Path().c_str());
+                    ImGui::EndTooltip();
+                } else {
+                    EditorUI::SetTooltip("Click to import an image, or drag one from the Asset Browser.\n"
+                                         "Assigned to every selected material.");
+                }
+            }
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
+                    std::string texPath((const char*)payload->Data);
+                    PushUndo(world, std::string("Set ") + label + " Map");
+                    auto tex = assets.LoadTexture(texPath);
+                    for (Material* mm : mats) mm->*texSlot = tex;
+                }
+                ImGui::EndDragDropTarget();
+            }
+            if (anySet) {
+                ImGui::SameLine();
+                if (ActionButton(ICON_FA_XMARK, "Clear on all", false, ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+                    PushUndo(world, std::string("Clear ") + label + " Map");
+                    for (Material* mm : mats) mm->*texSlot = nullptr;
+                }
+            }
+            if (help) EditorUI::HelpMarker(help);
+            ImGui::PopID();
+        };
+
+        mapRow("Albedo",    &Material::AlbedoMap,   "The base color texture (diffuse / base color map).");
+        mapRow("Normal",    &Material::NormalMap,    "Fine surface detail (bumps, grooves) without extra geometry.");
+        mapRow("Metallic",  &Material::MetallicMap,  "Grayscale: white = metal. Overrides the Metallic value above.");
+        mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = matte. Overrides the Roughness value above.");
+        mapRow("AO",        &Material::AOMap,        "Ambient occlusion - darkens crevices and contact points.");
+        mapRow("Emissive",  &Material::EmissiveMap,  "Texture for glowing areas, tinted by Emissive Color.");
+    };
+
+    // -------------------------------------------------------------------------
+    // Single-select: per-slot rows for every submesh
+    // -------------------------------------------------------------------------
+    if (rcs.size() == 1) {
+        RenderableComponent* rc = rcs[0];
+        const int meshCount = rc->ModelRef->MeshCount();
+
+        // Helper: assign a .mat path to slot i, resizing the vector as needed.
+        auto AssignSlot = [&](int i, const std::string& matPath) {
+            PushUndo(world, "Set Material Slot");
+            auto ma = assets.LoadMaterial(matPath);
+            if (i >= (int)rc->Materials.size()) rc->Materials.resize(i + 1);
+            rc->Materials[i] = ma;
+        };
+
+        for (int i = 0; i < meshCount; ++i) {
+            ImGui::PushID(i);
+
+            std::shared_ptr<MaterialAsset> slot =
+                (i < (int)rc->Materials.size()) ? rc->Materials[i] : nullptr;
+
+            bool isFileBacked = slot && !slot->Path.empty();
+            bool isEmbedded   = slot && slot->Path.empty();
+
+            // Label
+            char slotLabel[16]; snprintf(slotLabel, sizeof(slotLabel), "Slot %d", i);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(slotLabel);
+            ImGui::SameLine();
+
+            // Button label
+            std::string btnLabel = isFileBacked
+                ? (slot->Name.empty() ? std::filesystem::path(slot->Path).stem().string() : slot->Name)
+                : isEmbedded ? "Embedded" : "(imported)";
+
+            const float iconW  = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x;
+            const float saveW  = isEmbedded
+                ? (ImGui::CalcTextSize("Save").x + ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetStyle().ItemSpacing.x)
+                : 0.0f;
+            const float clearW = (isFileBacked || isEmbedded) ? iconW : 0.0f;
+            const float btnW   = -(saveW + clearW + FLT_MIN);
+
+            if (ImGui::Button(btnLabel.c_str(), ImVec2(btnW, 0))) {
+                std::string path = FileDialog::OpenFile(
+                    "Material\0*.mat\0All Files\0*.*\0", m_Window);
+                if (!path.empty()) AssignSlot(i, path);
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Click to pick a .mat file, or drag one from the Asset Browser.");
+
+            // Drag-drop target on the button
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MATERIAL_PATH")) {
+                    AssignSlot(i, std::string((const char*)p->Data));
+                }
+                ImGui::EndDragDropTarget();
+            }
+
+            // "Save" button — converts embedded → file-backed
+            if (isEmbedded) {
+                ImGui::SameLine();
+                if (ImGui::Button("Save")) {
+                    std::string path = FileDialog::SaveFile(
+                        "Material\0*.mat\0", "mat", m_Window);
+                    if (!path.empty()) {
+                        PushUndo(world, "Save Material as Asset");
+                        slot->Path = path;
+                        slot->Name = std::filesystem::path(path).stem().string();
+                        slot->AlbedoMapPath            = slot->Mat.AlbedoMap            ? slot->Mat.AlbedoMap->Path()            : "";
+                        slot->NormalMapPath            = slot->Mat.NormalMap            ? slot->Mat.NormalMap->Path()            : "";
+                        slot->MetallicRoughnessMapPath = slot->Mat.MetallicRoughnessMap ? slot->Mat.MetallicRoughnessMap->Path() : "";
+                        slot->MetallicMapPath          = slot->Mat.MetallicMap          ? slot->Mat.MetallicMap->Path()          : "";
+                        slot->RoughnessMapPath         = slot->Mat.RoughnessMap         ? slot->Mat.RoughnessMap->Path()         : "";
+                        slot->AOMapPath                = slot->Mat.AOMap                ? slot->Mat.AOMap->Path()                : "";
+                        slot->EmissiveMapPath          = slot->Mat.EmissiveMap          ? slot->Mat.EmissiveMap->Path()          : "";
+                        slot->Save();
+                        assets.LoadMaterial(path); // register with the library
+                    }
+                }
+                if (ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("Save this embedded material to a .mat file\nso it can be shared across multiple objects.");
+            }
+
+            // Clear button — reverts to the imported mesh material
+            if (isFileBacked || isEmbedded) {
+                ImGui::SameLine();
+                if (ActionButton(ICON_FA_XMARK, "Remove override — restore imported material", false,
+                                 ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+                    PushUndo(world, "Clear Material Slot");
+                    if (i < (int)rc->Materials.size()) rc->Materials[i] = nullptr;
+                }
+            }
+
+            ImGui::PopID();
+        }
+
+        // PBR property editor — only when slot 0 is embedded
+        bool slot0Embedded = !rc->Materials.empty() && rc->Materials[0] && rc->Materials[0]->Path.empty();
+        if (slot0Embedded) {
+            ImGui::Spacing();
+            mats.push_back(&rc->Materials[0]->Mat);
+            DrawPbrFields();
+        }
+
+        return;
+    }
+
+    // -------------------------------------------------------------------------
+    // Multi-select: slot-0 row + tri-state "Use Custom Material" + PBR fields
+    // -------------------------------------------------------------------------
     const int total = (int)rcs.size();
     int nCustom = 0;
     for (RenderableComponent* rc : rcs) if (!rc->Materials.empty() && rc->Materials[0]) nCustom++;
 
-    // Tri-state "Use Custom Material": create an embedded slot-0 MaterialAsset on every entity
-    // that lacks one (copying imported texture maps), or clear slot 0 from all.
+    // Slot 0 row — shows "(mixed)" when the selection has different assets.
+    {
+        // Collect the distinct slot-0 paths across the selection.
+        std::string firstPath;
+        bool mixedSlots = false;
+        for (int i = 0; i < total; ++i) {
+            const std::string& p = (!rcs[i]->Materials.empty() && rcs[i]->Materials[0])
+                ? rcs[i]->Materials[0]->Path : std::string();
+            if (i == 0) firstPath = p;
+            else if (p != firstPath) mixedSlots = true;
+        }
+        std::string btnLabel = mixedSlots ? "\xE2\x80\x94  (mixed)"
+            : firstPath.empty() ? (nCustom > 0 ? "Embedded" : "(imported)")
+            : std::filesystem::path(firstPath).stem().string();
+
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Slot 0");
+        ImGui::SameLine();
+        const float clearW = nCustom > 0 ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+        if (ImGui::Button(btnLabel.c_str(), ImVec2(-clearW - FLT_MIN, 0))) {
+            std::string path = FileDialog::OpenFile("Material\0*.mat\0All Files\0*.*\0", m_Window);
+            if (!path.empty()) {
+                PushUndo(world, "Set Material Slot");
+                auto ma = assets.LoadMaterial(path);
+                for (RenderableComponent* rc : rcs) {
+                    if (rc->Materials.empty()) rc->Materials.push_back(ma);
+                    else rc->Materials[0] = ma;
+                }
+                return; // slots assigned; PBR editor not relevant
+            }
+        }
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MATERIAL_PATH")) {
+                std::string path((const char*)p->Data);
+                PushUndo(world, "Set Material Slot");
+                auto ma = assets.LoadMaterial(path);
+                for (RenderableComponent* rc : rcs) {
+                    if (rc->Materials.empty()) rc->Materials.push_back(ma);
+                    else rc->Materials[0] = ma;
+                }
+                return;
+            }
+            ImGui::EndDragDropTarget();
+        }
+        if (nCustom > 0) {
+            ImGui::SameLine();
+            if (ActionButton(ICON_FA_XMARK, "Remove material override from all selected", false,
+                             ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+                PushUndo(world, "Clear Material Slot");
+                for (RenderableComponent* rc : rcs)
+                    if (!rc->Materials.empty()) rc->Materials[0] = nullptr;
+                nCustom = 0;
+            }
+        }
+    }
+
+    // "Use Custom Material" checkbox — creates embedded slot-0 for entities that lack one.
     bool customMixed = nCustom != 0 && nCustom != total;
     {
         bool value = nCustom > 0;
@@ -2532,138 +2824,19 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         EditorUI::SetTooltip("Override every selected object with one editable PBR material.\n"
                              "Unchecking restores each object's imported / default material.");
 
-    if (nCustom != total) {
+    // Only show PBR fields when all selected objects have an embedded slot-0 material.
+    bool allEmbedded = (nCustom == total);
+    for (RenderableComponent* rc : rcs)
+        if (!rc->Materials.empty() && rc->Materials[0] && !rc->Materials[0]->Path.empty())
+            allEmbedded = false;
+
+    if (!allEmbedded) {
         ImGui::TextDisabled(nCustom == 0
             ? "Using imported / default materials.\nEnable a custom material to edit shared PBR properties."
             : "Only some selected objects use a custom material.\nEnable it on all of them to edit shared properties here.");
         return;
     }
 
-    std::vector<Material*> mats;
     for (RenderableComponent* rc : rcs) mats.push_back(&rc->Materials[0]->Mat);
-
-    auto vec3Shared = [&](glm::vec3 Material::* field, glm::vec3& shared) {
-        shared = mats[0]->*field;
-        bool mixed = false;
-        for (Material* mm : mats)
-            for (int a = 0; a < 3; ++a)
-                if (std::fabs((mm->*field)[a] - shared[a]) > 1.0e-4f) mixed = true;
-        return mixed;
-    };
-    auto floatShared = [&](float Material::* field, float& shared) {
-        shared = mats[0]->*field;
-        bool mixed = false;
-        for (Material* mm : mats) if (std::fabs(mm->*field - shared) > 1.0e-4f) mixed = true;
-        return mixed;
-    };
-
-    // --- Colors: shared swatch, "(mixed)" tag when they disagree; one edit writes all. ---
-    auto colorRow = [&](const char* label, glm::vec3 Material::* field, const char* tip) {
-        glm::vec3 shared; bool mixed = vec3Shared(field, shared);
-        PropertyLabel(label, tip);
-        // PropertyLabel just set the widget to fill to the right edge; when a "(mixed)" tag
-        // has to follow, claw back exactly its width so it isn't clipped off-panel.
-        if (mixed) {
-            float w = ImGui::GetContentRegionAvail().x -
-                      ImGui::CalcTextSize(" (mixed)").x - ImGui::GetStyle().ItemSpacing.x;
-            ImGui::SetNextItemWidth(w > 40.0f ? w : 40.0f);
-        }
-        glm::vec3 edit = shared;
-        ImGui::PushID(label);
-        if (!mixed && mats.size() == 1)
-            ImGui::SetNextItemWidth(-(ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x));
-        bool changed = ImGui::ColorEdit3("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
-        if (ImGui::IsItemActivated()) StageUndo(world);
-        if (changed) for (Material* mm : mats) mm->*field = edit;
-        if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
-        if (mixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
-        else if (mats.size() == 1) EyedropperButton(this, world, &(mats[0]->*field));
-        ImGui::PopID();
-    };
-    auto scalarRow = [&](const char* label, float Material::* field, float lo, float hi, const char* tip) {
-        float shared; bool mixed = floatShared(field, shared);
-        float edit = shared;
-        PropertyLabel(label, tip);
-        ImGui::PushID(label);
-        bool changed = EditorUI::SliderFloat("##ms", &edit, lo, hi, mixed ? "\xE2\x80\x94" : "%.3f");
-        if (ImGui::IsItemActivated()) StageUndo(world);
-        if (changed && std::isfinite(edit)) for (Material* mm : mats) mm->*field = edit;
-        if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
-        ImGui::PopID();
-    };
-
-    colorRow("Base Color", &Material::BaseColor,
-             "Surface tint, multiplied with the Albedo map. Applied to every selected material.");
-    scalarRow("Metallic", &Material::Metallic, 0.0f, 1.0f,
-              "0 = non-metal, 1 = pure metal. Ignored where a Metallic map is set.");
-    scalarRow("Roughness", &Material::Roughness, 0.04f, 1.0f,
-              "0 = mirror-smooth, 1 = fully matte. Ignored where a Roughness map is set.");
-    colorRow("Emissive Color", &Material::EmissiveColor,
-             "Color this surface glows, independent of scene lighting.");
-    scalarRow("Emissive Strength", &Material::EmissiveStrength, 0.0f, 10.0f,
-              "Brightness multiplier for the Emissive Color / map.");
-
-    ImGui::SeparatorText("Texture Maps");
-
-    auto mapRow = [&](const char* label, std::shared_ptr<Texture> Material::* slot, const char* help) {
-        ImGui::PushID(label);
-        PropertyLabel(label);
-
-        Texture* first = (mats[0]->*slot).get();
-        bool mixed = false, anySet = false;
-        for (Material* mm : mats) {
-            Texture* t = (mm->*slot).get();
-            if (t) anySet = true;
-            if (t != first) mixed = true;
-        }
-        std::string preview = mixed ? std::string("\xE2\x80\x94  (mixed)")
-                              : first ? std::filesystem::path(first->Path()).filename().string()
-                                      : std::string("(none)");
-        float clearReserve = anySet ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
-        if (ImGui::Button(preview.c_str(), ImVec2(anySet ? -clearReserve : -FLT_MIN, 0.0f))) {
-            std::string path = FileDialog::OpenFile(
-                "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
-            if (!path.empty()) {
-                PushUndo(world, std::string("Set ") + label + " Map");
-                auto tex = assets.LoadTexture(path);
-                for (Material* mm : mats) mm->*slot = tex;
-            }
-        }
-        if (ImGui::IsItemHovered()) {
-            if (!mixed && first) {
-                ImGui::BeginTooltip();
-                ImGui::Image((ImTextureID)(intptr_t)first->GLHandle(), ImVec2(96, 96));
-                ImGui::TextUnformatted(first->Path().c_str());
-                ImGui::EndTooltip();
-            } else {
-                EditorUI::SetTooltip("Click to import an image, or drag one from the Asset Browser.\n"
-                                     "Assigned to every selected material.");
-            }
-        }
-        if (ImGui::BeginDragDropTarget()) {
-            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
-                std::string texPath((const char*)payload->Data);
-                PushUndo(world, std::string("Set ") + label + " Map");
-                auto tex = assets.LoadTexture(texPath);
-                for (Material* mm : mats) mm->*slot = tex;
-            }
-            ImGui::EndDragDropTarget();
-        }
-        if (anySet) {
-            ImGui::SameLine();
-            if (ActionButton(ICON_FA_XMARK, "Clear on all", false, ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
-                PushUndo(world, std::string("Clear ") + label + " Map");
-                for (Material* mm : mats) mm->*slot = nullptr;
-            }
-        }
-        if (help) EditorUI::HelpMarker(help);
-        ImGui::PopID();
-    };
-
-    mapRow("Albedo", &Material::AlbedoMap, "The base color texture (diffuse / base color map).");
-    mapRow("Normal", &Material::NormalMap, "Fine surface detail (bumps, grooves) without extra geometry.");
-    mapRow("Metallic", &Material::MetallicMap, "Grayscale: white = metal. Overrides the Metallic value above.");
-    mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = matte. Overrides the Roughness value above.");
-    mapRow("AO", &Material::AOMap, "Ambient occlusion - darkens crevices and contact points.");
-    mapRow("Emissive", &Material::EmissiveMap, "Texture for glowing areas, tinted by Emissive Color.");
+    DrawPbrFields();
 }
