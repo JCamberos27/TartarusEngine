@@ -4,6 +4,7 @@
 #include <string>
 
 class AssetLibrary;
+class ShaderAsset;
 
 // A named, file-backed material (.mat JSON, version 1). Wraps a Material struct with a path so
 // it can be browsed in the Asset Browser, drag-dropped onto renderers, and referenced from scene
@@ -12,6 +13,11 @@ class AssetLibrary;
 struct MaterialAsset {
     std::string Path;  // absolute path to the .mat file on disk
     std::string Name;  // display name, defaults to the filename stem
+
+    // Optional shader asset link. When set, the inspector and BindMaterial use the data-driven
+    // property path from ShaderAsset::Properties() instead of the hardcoded PBR field layout.
+    std::string ShaderPath;
+    std::shared_ptr<ShaderAsset> Shader;
 
     // PBR properties. Texture shared_ptr slots are populated by Load() when `lib` is non-null;
     // they remain null when loaded without a library (e.g. Save checks texture paths only).
@@ -39,4 +45,15 @@ struct MaterialAsset {
 
     // Saves Mat and the texture path strings to the .mat file. Returns false on I/O error.
     bool Save() const;
+
+    // Property access by shader property name (e.g. "_BaseColor"). Used by the data-driven
+    // inspector and BindMaterial to map ShaderProperty names to Material field values.
+    static const std::shared_ptr<Texture>& GetTexture(const Material& m, const std::string& name);
+    static glm::vec3 GetColor(const Material& m, const std::string& name);
+    static float     GetFloat(const Material& m, const std::string& name);
+    static bool      GetBool (const Material& m, const std::string& name);
+    static void SetTexture(Material& m, const std::string& name, const std::shared_ptr<Texture>& tex);
+    static void SetColor  (Material& m, const std::string& name, const glm::vec3& v);
+    static void SetFloat  (Material& m, const std::string& name, float v);
+    static void SetBool   (Material& m, const std::string& name, bool v);
 };
