@@ -36,7 +36,7 @@ enum class ReflectFieldType {
 };
 
 // Which AssetLibrary list an AssetRef field draws from / registers into.
-enum class ReflectAssetKind { Sound, Model, Texture, Script };
+enum class ReflectAssetKind { Sound, Model, Texture, Material, Script };
 
 struct ReflectField {
     const char* Name = "";          // Inspector label + JSON key

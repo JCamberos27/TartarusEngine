@@ -4,8 +4,9 @@
 #include <memory>
 #include <map>
 #include <set>
-#include "Texture.h" // TextureImportSettings - stored by value below, needs the full definition
-#include "Model.h"   // ModelImportSettings - same
+#include "Texture.h"       // TextureImportSettings - stored by value below, needs the full definition
+#include "Model.h"         // ModelImportSettings - same
+#include "MaterialAsset.h" // MaterialAsset - owned by the library
 
 // Tracks every asset imported through the editor so it can be reused (by path)
 // and listed in the Asset Browser panel.
@@ -41,8 +42,20 @@ public:
 
     const std::vector<std::shared_ptr<Model>>& Models() const { return m_ModelList; }
     const std::vector<std::shared_ptr<Texture>>& Textures() const { return m_TextureList; }
+    // Flat path list parallel to Textures() — returned as const ref so AssetRefPathList can
+    // return it without copying. Kept in sync by LoadTexture / RemoveTexture.
+    const std::vector<std::string>& TexturePaths() const { return m_TexturePaths; }
     const std::vector<std::string>& Sounds() const { return m_Sounds; }
     const std::vector<std::string>& Prefabs() const { return m_Prefabs; }
+
+    // Loads a .mat file and registers it in the material library (no-op if already loaded).
+    std::shared_ptr<MaterialAsset> LoadMaterial(const std::string& path);
+    // Removes a material from the library without touching the .mat file on disk.
+    void RemoveMaterial(const std::shared_ptr<MaterialAsset>& mat);
+    // All currently registered materials. Stable order (registration order).
+    const std::vector<std::shared_ptr<MaterialAsset>>& Materials() const { return m_MaterialList; }
+    // Flat path list parallel to Materials(), for AssetRefPathList.
+    const std::vector<std::string>& MaterialPaths() const { return m_MaterialPaths; }
 
     // Removes an asset from the browser/cache only — safe to call even while placed objects
     // still reference it, since they hold their own shared_ptr (Model/Texture) or plain path
@@ -86,7 +99,8 @@ public:
     // path stays additive (opening a different scene isn't "forget every known asset").
     void PruneToKeepSet(const std::set<std::string>& modelPaths, const std::set<std::string>& texturePaths,
         const std::set<std::string>& soundPaths, const std::set<std::string>& prefabPaths,
-        const std::set<std::string>& folderPaths);
+        const std::set<std::string>& folderPaths,
+        const std::set<std::string>& materialPaths = {});
 
     // Clears only folder assignments, display names, and import settings — NOT the loaded
     // assets themselves. Paired with PruneToKeepSet and a plain re-application of a snapshot's
@@ -136,8 +150,12 @@ public:
 private:
     std::map<std::string, std::shared_ptr<Model>> m_ModelCache;
     std::map<std::string, std::shared_ptr<Texture>> m_TextureCache;
+    std::map<std::string, std::shared_ptr<MaterialAsset>> m_MaterialCache;
     std::vector<std::shared_ptr<Model>> m_ModelList;
     std::vector<std::shared_ptr<Texture>> m_TextureList;
+    std::vector<std::string> m_TexturePaths;    // parallel to m_TextureList, kept in sync
+    std::vector<std::shared_ptr<MaterialAsset>> m_MaterialList;
+    std::vector<std::string> m_MaterialPaths;   // parallel to m_MaterialList, kept in sync
     std::vector<std::string> m_Sounds;
     std::vector<std::string> m_Prefabs;
 
