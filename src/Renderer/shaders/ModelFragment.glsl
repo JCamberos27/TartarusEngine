@@ -176,13 +176,19 @@ uniform int   uHasThicknessMap;
 uniform sampler2D uThicknessMap;    // per-texel thickness (.r channel)
 #endif
 
+// Viewport size in pixels — used by Transmission (PR12) for NDC->UV and SSAO (PR15) for screenUV.
+uniform vec2 uScreenSize;
+
 // PR12 — Transmission + refraction (#ifdef _TRANSMISSION; zero-keyword variant: dead code)
 #ifdef _TRANSMISSION
 uniform sampler2D uOpaqueColor;         // resolved opaque scene color with mip chain (unit 14)
 uniform float     uTransmissionStrength;// [0,1]
 uniform float     uIOR;                 // index of refraction
-uniform vec2      uScreenSize;          // viewport (width, height) for NDC->UV
 #endif
+
+// PR15 — Screen-space ambient occlusion. uSSAOEnabled == 0 (the GL default) = no occlusion.
+uniform sampler2D uSSAOMap;   // blurred R8 occlusion (unit 15); only read when uSSAOEnabled == 1
+uniform int       uSSAOEnabled;
 
 const float PI = 3.14159265359;
 
@@ -823,6 +829,12 @@ void main() {
         }
     }
 
+    // PR15 — SSAO: sample the blurred occlusion map at this fragment's screen position.
+    // ssaoFactor == 1.0 when SSAO is off (uSSAOEnabled == 0, the GL default) — no change.
+    float ssaoFactor = uSSAOEnabled == 1
+        ? texture(uSSAOMap, gl_FragCoord.xy / uScreenSize).r
+        : 1.0;
+
     // Ambient. With IBL probes bound (#196) this is the standard split-sum approximation:
     // a direction-dependent diffuse term from the cosine-convolved irradiance cube, plus a
     // specular term from the roughness-mipped prefiltered cube scaled by the BRDF LUT's
@@ -876,6 +888,7 @@ void main() {
     } else {
         ambient = vec3(0.03) * albedo * ao;
     }
+    ambient *= ssaoFactor;
     vec3 emissive = emissiveEarly;
 
 #ifdef _CLEARCOAT
