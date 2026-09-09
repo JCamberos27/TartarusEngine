@@ -415,6 +415,12 @@ struct EditorModuleHostAPI {
     // framebuffer + GL context), 0..1, or -1 until a sample lands. Same contract as
     // SampleViewportLuminance; a separate ping-ponged pair so the two HUDs don't fight.
     float (*SampleHistoryHudLuminance)(float screenCenterX, float screenCenterY, float boxPx) = nullptr;
+
+    // --- Reflection probes (API v16 / PR14) --------------------------------------------
+    // Called by the editor to trigger a probe bake on the next frame. The host rebuilds
+    // ReflectionProbeArray from the current world and marks all probes dirty; shader
+    // variants with _REFLECTION_PROBES receive corrected probe data on subsequent draws.
+    void (*RequestBakeReflectionProbes)() = nullptr;
 };
 
 struct EditorModuleAPI {

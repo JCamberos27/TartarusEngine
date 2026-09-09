@@ -332,3 +332,13 @@ struct PrefabInstanceComponent {
     // Never serialised; entt::null for any descendant the user has since deleted.
     std::vector<entt::entity> InstanceEntities;
 };
+
+// PR14 (#333): placed reflection probe. Position comes from TransformComponent; this component
+// adds the box volume for parallax correction and a blend priority. The bake captures the sky
+// IBL (procedural or HDRI) at this probe's position; the shader corrects reflection vectors
+// to the box boundary, giving room-appropriate reflections without per-probe scene captures.
+// No probes in a scene → the shader falls back to the global sky IBL path bit-identically.
+struct ReflectionProbeComponent {
+    glm::vec3 Size{5.0f, 5.0f, 5.0f}; // full extents of the capture volume, in world units
+    float Importance{1.0f};            // higher wins 2-probe selection tie-breaks
+};

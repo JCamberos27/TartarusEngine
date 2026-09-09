@@ -94,6 +94,14 @@ layout(binding = 11) uniform samplerCube uIrradianceMap;
 layout(binding = 12) uniform samplerCube uPrefilteredMap;
 layout(binding = 13) uniform sampler2D uBrdfLut;
 
+// PR14 — Reflection probes: parallax box projection (#ifdef _REFLECTION_PROBES; zero-keyword: dead code)
+#ifdef _REFLECTION_PROBES
+uniform int   uProbeCount;        // 0-2 probes bound this draw call
+uniform vec3  uProbeCenter[2];    // world-space probe origin
+uniform vec3  uProbeHalfSize[2];  // half-extents of the capture box
+uniform float uProbeBlend[2];     // normalised blend weights (sum == 1)
+#endif
+
 // Fresnel with a roughness term: a rough surface's grazing-angle reflectance must not exceed
 // its own specular colour, which the plain Schlick form (which goes to white at 90 degrees)
 // gets badly wrong for ambient, where every direction is grazing for someone.
@@ -834,6 +842,33 @@ void main() {
 
         vec3 R = reflect(-V, N);
         vec3 prefiltered = textureLod(uPrefilteredMap, R, roughness * uIBLSpecularMaxLod).rgb;
+#ifdef _REFLECTION_PROBES
+        // Parallax box projection: for each bound probe, clip R to the probe box and sample
+        // the sky specular cube with the corrected direction, then blend by weight.
+        // Zero probes → uProbeCount == 0 → falls through to the sky sample above.
+        if (uProbeCount > 0) {
+            vec3 blendedPrefilter = vec3(0.0);
+            for (int pi = 0; pi < uProbeCount; ++pi) {
+                // Lagarde's box intersection: find t where R exits the probe box.
+                vec3 rInv = vec3(
+                    abs(R.x) > 1e-6 ? 1.0 / R.x : (R.x >= 0.0 ? 1e6 : -1e6),
+                    abs(R.y) > 1e-6 ? 1.0 / R.y : (R.y >= 0.0 ? 1e6 : -1e6),
+                    abs(R.z) > 1e-6 ? 1.0 / R.z : (R.z >= 0.0 ? 1e6 : -1e6));
+                vec3 rbmax = (uProbeCenter[pi] + uProbeHalfSize[pi] - vWorldPos) * rInv;
+                vec3 rbmin = (uProbeCenter[pi] - uProbeHalfSize[pi] - vWorldPos) * rInv;
+                vec3 rbminmax;
+                rbminmax.x = (R.x >= 0.0) ? rbmax.x : rbmin.x;
+                rbminmax.y = (R.y >= 0.0) ? rbmax.y : rbmin.y;
+                rbminmax.z = (R.z >= 0.0) ? rbmax.z : rbmin.z;
+                float fa = max(min(min(rbminmax.x, rbminmax.y), rbminmax.z), 0.0);
+                vec3 intersect = vWorldPos + R * fa;
+                vec3 correctedR = normalize(intersect - uProbeCenter[pi]);
+                blendedPrefilter += textureLod(uPrefilteredMap, correctedR,
+                                               roughness * uIBLSpecularMaxLod).rgb * uProbeBlend[pi];
+            }
+            prefiltered = blendedPrefilter;
+        }
+#endif
         vec2 ab = texture(uBrdfLut, vec2(NdotV, roughness)).rg;
         vec3 specularIBL = prefiltered * (F * ab.x + ab.y);
 
