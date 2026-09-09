@@ -42,6 +42,7 @@
 #include "ProjectPaths.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
+#include "AssetDatabase.h"
 #include "SplashScreen.h"
 #include "GLDebug.h"
 #include "Log.h"
@@ -450,6 +451,7 @@ int main(int argc, char** argv) {
         EditorSettings::Load();
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
         ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
+        AssetDatabase::ScanProject(); // create .meta sidecars for existing assets (#333 PR 1)
         std::string scenePath = ProjectPaths::Resolve("scenes/Showcase.json");
         {
             const std::string& last = EditorSettings::Get().LastScenePath;
@@ -788,12 +790,13 @@ int main(int argc, char** argv) {
         // interactive session — the whole point of the harness is catching a regression that
         // path could introduce, not a hand-rolled approximation of it.
         constexpr int kSmokeTestFrames = 100;
-        struct SmokeResult { std::string scenePath; int frames; int newGlErrors; int drawCalls; bool pass; };
+        struct SmokeResult { std::string scenePath; int frames; int newGlErrors; int newLogErrors; int drawCalls; bool pass; };
         std::vector<std::string> smokeScenePaths;
         std::vector<SmokeResult> smokeResults;
         size_t smokeSceneIndex = 0;
         int smokeFramesRendered = 0;
         int smokeBaselineGlErrors = 0;
+        int smokeBaselineLogErrors = 0;
         bool smokeSceneActive = false;
         if (smokeTestMode) {
             std::string scenesDir = ProjectPaths::Resolve("scenes");
@@ -824,7 +827,8 @@ int main(int argc, char** argv) {
                     bool loadOk = SceneSerializer::Load(world, assets, path);
                     std::cout << "[SmokeTest] Loading " << path
                               << (loadOk ? "" : "  (Load() reported failure)") << std::endl;
-                    smokeBaselineGlErrors = GLDebug::ErrorCount();
+                    smokeBaselineGlErrors  = GLDebug::ErrorCount();
+                    smokeBaselineLogErrors = Log::CountOf(LogLevel::Error);
                     smokeFramesRendered = 0;
                     smokeSceneActive = true;
                 }
@@ -2195,15 +2199,17 @@ int main(int argc, char** argv) {
             if (smokeTestMode && smokeSceneActive) {
                 ++smokeFramesRendered;
                 if (smokeFramesRendered >= kSmokeTestFrames) {
-                    int newErrors = GLDebug::ErrorCount() - smokeBaselineGlErrors;
-                    int drawCalls = editor.GetRenderStats().DrawCalls;
-                    bool pass = newErrors == 0 && drawCalls > 0;
+                    int newErrors    = GLDebug::ErrorCount() - smokeBaselineGlErrors;
+                    int newLogErrors = Log::CountOf(LogLevel::Error) - smokeBaselineLogErrors;
+                    int drawCalls    = editor.GetRenderStats().DrawCalls;
+                    bool pass = newErrors == 0 && newLogErrors == 0 && drawCalls > 0;
                     const std::string& path = smokeScenePaths[smokeSceneIndex];
-                    smokeResults.push_back({path, smokeFramesRendered, newErrors, drawCalls, pass});
+                    smokeResults.push_back({path, smokeFramesRendered, newErrors, newLogErrors, drawCalls, pass});
                     std::cout << "[SmokeTest] " << (pass ? "PASS" : "FAIL") << "  "
                               << std::filesystem::path(path).filename().string()
                               << "  frames=" << smokeFramesRendered
                               << " newGlErrors=" << newErrors
+                              << " newLogErrors=" << newLogErrors
                               << " drawCalls=" << drawCalls << std::endl;
                     ++smokeSceneIndex;
                     smokeSceneActive = false;
@@ -2220,7 +2226,9 @@ int main(int argc, char** argv) {
             for (const auto& r : smokeResults) {
                 std::cout << "[SmokeTest] " << (r.pass ? "PASS" : "FAIL") << "  "
                           << std::filesystem::path(r.scenePath).filename().string()
-                          << "  frames=" << r.frames << " newGlErrors=" << r.newGlErrors
+                          << "  frames=" << r.frames
+                          << " newGlErrors=" << r.newGlErrors
+                          << " newLogErrors=" << r.newLogErrors
                           << " drawCalls=" << r.drawCalls << std::endl;
                 if (!r.pass) allPassed = false;
             }

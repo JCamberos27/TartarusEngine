@@ -1,6 +1,7 @@
 #include "AssetLibrary.h"
 #include "Model.h"
 #include "Texture.h"
+#include "AssetDatabase.h"
 #include <algorithm>
 
 namespace {
@@ -32,7 +33,10 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
     // not an importable asset — it's cached above so scene entities resolve their path, but it must
     // NOT appear in the Asset Browser listing or get written into libraryModels. Scene boxes[]/
     // models[] recreate their own primitives from their path on load, independent of that list.
-    if (!isPrimitive) m_ModelList.push_back(model);
+    if (!isPrimitive) {
+        m_ModelList.push_back(model);
+        AssetDatabase::EnsureGuid(path);
+    }
     return model;
 }
 
@@ -70,12 +74,14 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path) {
     auto tex = std::make_shared<Texture>(path, GetTextureSettings(path));
     m_TextureCache[path] = tex;
     m_TextureList.push_back(tex);
+    AssetDatabase::EnsureGuid(path);
     return tex;
 }
 
 void AssetLibrary::RegisterSound(const std::string& path) {
     if (std::find(m_Sounds.begin(), m_Sounds.end(), path) == m_Sounds.end()) {
         m_Sounds.push_back(path);
+        AssetDatabase::EnsureGuid(path);
     }
 }
 
@@ -112,6 +118,7 @@ void AssetLibrary::RemoveSound(const std::string& path) {
 void AssetLibrary::RegisterPrefab(const std::string& path) {
     if (std::find(m_Prefabs.begin(), m_Prefabs.end(), path) == m_Prefabs.end()) {
         m_Prefabs.push_back(path);
+        AssetDatabase::EnsureGuid(path);
     }
 }
 
