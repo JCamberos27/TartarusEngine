@@ -19,6 +19,15 @@ struct MaterialAsset {
     std::string ShaderPath;
     std::shared_ptr<ShaderAsset> Shader;
 
+    // Render queue — controls when this material is drawn relative to others.
+    // Opaque: depth-tested, drawn front-to-back by material key (default).
+    // AlphaTest: like Opaque but uses clip() for cutout foliage / fences.
+    // Transparent: no depth write, back-to-front sorted, blended via uOpacity.
+    enum class Queue { Opaque = 0, AlphaTest = 1, Transparent = 2 };
+    Queue RenderQueue = Queue::Opaque;
+    int   QueueIndex  = 2000;  // sort order within the queue (lower = drawn first)
+    float Opacity     = 1.0f;  // surface alpha, used only when RenderQueue == Transparent
+
     // PBR properties. Texture shared_ptr slots are populated by Load() when `lib` is non-null;
     // they remain null when loaded without a library (e.g. Save checks texture paths only).
     Material Mat;
