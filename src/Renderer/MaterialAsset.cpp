@@ -67,10 +67,13 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
             m.Anisotropy         = props.value("_Anisotropy",          0.0f);
             m.AnisotropyRotation = props.value("_AnisotropyRotation",  0.0f);
             // Scalars / PR11
-            m.Sheen           = JsonToVec3(props.value("_Sheen",           json::array({0,0,0})), {});
-            m.SheenRoughness  = props.value("_SheenRoughness",  0.5f);
-            m.SubsurfaceColor = JsonToVec3(props.value("_SubsurfaceColor", json::array({1,0.8f,0.6f})), {1,0.8f,0.6f});
-            m.Thickness       = props.value("_Thickness",        0.5f);
+            m.Sheen               = JsonToVec3(props.value("_Sheen",           json::array({0,0,0})), {});
+            m.SheenRoughness      = props.value("_SheenRoughness",  0.5f);
+            m.SubsurfaceColor     = JsonToVec3(props.value("_SubsurfaceColor", json::array({1,0.8f,0.6f})), {1,0.8f,0.6f});
+            m.Thickness           = props.value("_Thickness",        0.5f);
+            // Scalars / PR12
+            m.TransmissionStrength = props.value("_TransmissionStrength", 0.0f);
+            m.IOR                  = props.value("_IOR",                  1.5f);
             // Texture paths
             ma->AlbedoMapPath            = strProp("_AlbedoMap");
             ma->NormalMapPath            = strProp("_NormalMap");
@@ -166,7 +169,9 @@ bool MaterialAsset::Save() const {
         auto defSSS = glm::vec3(1.0f, 0.8f, 0.6f);
         if (m.SubsurfaceColor != defSSS)   props["_SubsurfaceColor"]     = Vec3ToJson(m.SubsurfaceColor);
         if (m.Thickness       != 0.5f)     props["_Thickness"]           = m.Thickness;
-        if (!ThicknessMapPath.empty())      props["_ThicknessMap"]        = ThicknessMapPath;
+        if (!ThicknessMapPath.empty())              props["_ThicknessMap"]            = ThicknessMapPath;
+        if (m.TransmissionStrength != 0.0f)         props["_TransmissionStrength"]    = m.TransmissionStrength;
+        if (m.IOR                  != 1.5f)         props["_IOR"]                     = m.IOR;
     } else {
         // v1 format (backward compatible)
         j["matVersion"]          = 1;
@@ -224,8 +229,10 @@ float MaterialAsset::GetFloat(const Material& m, const std::string& n) {
     if (n == "_ClearCoatRoughness")  return m.ClearCoatRoughness;
     if (n == "_Anisotropy")          return m.Anisotropy;
     if (n == "_AnisotropyRotation")  return m.AnisotropyRotation;
-    if (n == "_SheenRoughness")      return m.SheenRoughness;
-    if (n == "_Thickness")           return m.Thickness;
+    if (n == "_SheenRoughness")          return m.SheenRoughness;
+    if (n == "_Thickness")               return m.Thickness;
+    if (n == "_TransmissionStrength")    return m.TransmissionStrength;
+    if (n == "_IOR")                     return m.IOR;
     return 0.0f;
 }
 
@@ -262,8 +269,10 @@ void MaterialAsset::SetFloat(Material& m, const std::string& n, float v) {
     if (n == "_ClearCoatRoughness")  { m.ClearCoatRoughness = v; return; }
     if (n == "_Anisotropy")          { m.Anisotropy = v; return; }
     if (n == "_AnisotropyRotation")  { m.AnisotropyRotation = v; return; }
-    if (n == "_SheenRoughness")      { m.SheenRoughness = v; return; }
-    if (n == "_Thickness")           { m.Thickness = v; return; }
+    if (n == "_SheenRoughness")          { m.SheenRoughness = v; return; }
+    if (n == "_Thickness")               { m.Thickness = v; return; }
+    if (n == "_TransmissionStrength")    { m.TransmissionStrength = v; return; }
+    if (n == "_IOR")                     { m.IOR = v; return; }
 }
 
 void MaterialAsset::SetBool(Material& m, const std::string& n, bool v) {

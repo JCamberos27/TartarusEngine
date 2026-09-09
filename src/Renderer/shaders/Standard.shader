@@ -32,6 +32,9 @@ Properties {
     _SubsurfaceColor     ("Subsurface Color",       Color)     = (1, 0.8, 0.6)
     _Thickness           ("Thickness",              Float)     = 0.5
     [Hidden] _ThicknessMap ("Thickness Map",        Texture2D) = "white"
+    // PR12: Transmission + refraction
+    _TransmissionStrength ("Transmission",          Float)     = 0
+    _IOR                  ("IOR",                   Float)     = 1.5
 }
 
 Keywords {
@@ -39,6 +42,7 @@ Keywords {
     _ANISO
     _SHEEN
     _SUBSURFACE
+    _TRANSMISSION
 }
 
 Vertex   { ModelVertex.glsl }

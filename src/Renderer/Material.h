@@ -47,6 +47,10 @@ struct Material {
     float Thickness           = 0.5f;  // surface thickness [0,1]
     std::shared_ptr<Texture> ThicknessMap; // optional per-texel thickness (.r)
 
+    // PR12: Transmission + refraction
+    float TransmissionStrength = 0.0f; // [0,1]; 0 = opaque
+    float IOR                  = 1.5f; // index of refraction (glass=1.5, water=1.33)
+
     // #192: a value hash of everything BindMaterial (Model.cpp) uploads — the scalar/vector
     // factors plus the identity of each bound texture. The draw loop sorts by this and
     // GLStateCache skips BindMaterial when it matches the last-bound one, so value-identical
@@ -66,6 +70,7 @@ struct Material {
             ClearCoat, ClearCoatRoughness, Anisotropy, AnisotropyRotation,
             Sheen.x, Sheen.y, Sheen.z, SheenRoughness,
             SubsurfaceColor.x, SubsurfaceColor.y, SubsurfaceColor.z, Thickness,
+            TransmissionStrength, IOR,
         };
         mix(scalars, sizeof(scalars));
         const std::uint32_t flags = Triplanar ? 1u : 0u;
