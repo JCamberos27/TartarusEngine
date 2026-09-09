@@ -1,6 +1,7 @@
 #pragma once
 #include "AssetGuid.h"
 #include <string>
+#include <vector>
 
 // Host-only asset identity layer. Maintains a GUID ↔ path bimap backed by .meta sidecar
 // files committed alongside each asset. AssetLibrary stays path-keyed; this namespace sits
@@ -38,5 +39,16 @@ void NotifyMoved(const std::string& oldPath, const std::string& newPath);
 // Returns true for synthetic paths like "primitive://cube" that represent generated geometry
 // and must never receive a .meta file or a GUID.
 bool IsSynthetic(const std::string& path);
+
+// Returns the full content of the .meta sidecar for `path` as a JSON-object string, or "{}"
+// on any error (file missing, parse failure, synthetic path). Includes guid/type/metaVersion
+// plus any extra fields written by MergeMetaFields. Thread-safe.
+std::string ReadMetaFields(const std::string& path);
+
+// Merges `fieldsJson` (a JSON-object string, e.g. {"importer":{"isSRGB":true}}) into the
+// .meta sidecar for `path`, preserving guid/type/metaVersion. `path` must already be
+// registered via EnsureGuid or ScanProject. Returns false on I/O error or unregistered path.
+// Silently no-ops for synthetic paths. Thread-safe.
+bool MergeMetaFields(const std::string& path, const std::string& fieldsJson);
 
 } // namespace AssetDatabase

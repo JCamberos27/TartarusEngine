@@ -1,4 +1,5 @@
 #include "TextureCache.h"
+#include "AssetDatabase.h"
 #include "ProjectPaths.h"
 
 #include <cstdint>
@@ -13,28 +14,38 @@ constexpr char kMagic[4] = {'T', 'T', 'E', 'X'};
 // Bump to invalidate every existing entry after a format or decode-behaviour change.
 // v2 (#207): downsample switched from nearest-neighbor to a box filter, so cached pixels baked
 // with the old point-sample must be discarded and re-baked.
-constexpr uint32_t kVersion = 2;
+// v3 (#333 PR3): entry filename changed from FNV(absolutePath) to GUID, so old path-keyed
+// entries are unreachable and treated as stale by Prune (version mismatch).
+constexpr uint32_t kVersion = 3;
 
 std::string CacheDir() {
     static const std::string dir = ProjectPaths::Resolve("Library/Textures");
     return dir;
 }
 
-// Cache entries are keyed by the source's absolute path; the path is also written into the
-// header and compared on load, so a hash collision produces a miss rather than wrong pixels.
+// Cache entries are keyed by the asset's GUID (16 hex chars) when registered in AssetDatabase,
+// falling back to an FNV hash of the absolute path for unregistered sources. The source path is
+// also written into the header and compared on load, so even with GUID keying a collision (two
+// different GUIDs happening to share a prefix) would produce a miss rather than wrong pixels.
 std::string EntryPath(const std::string& sourcePath) {
-    std::error_code ec;
-    std::filesystem::path abs = std::filesystem::absolute(sourcePath, ec);
-    std::string key = ec ? sourcePath : abs.lexically_normal().string();
-
-    uint64_t h = 1469598103934665603ull;
-    for (unsigned char c : key) {
-        h ^= (uint64_t)c;
-        h *= 1099511628211ull;
+    AssetGuid guid = AssetDatabase::GuidForPath(sourcePath);
+    std::string stem;
+    if (guid.IsValid()) {
+        stem = guid.ToString();
+    } else {
+        std::error_code ec;
+        std::filesystem::path abs = std::filesystem::absolute(sourcePath, ec);
+        std::string key = ec ? sourcePath : abs.lexically_normal().string();
+        uint64_t h = 1469598103934665603ull;
+        for (unsigned char c : key) {
+            h ^= (uint64_t)c;
+            h *= 1099511628211ull;
+        }
+        char buf[17];
+        snprintf(buf, sizeof(buf), "%016llx", (unsigned long long)h);
+        stem = buf;
     }
-    char name[32];
-    snprintf(name, sizeof(name), "%016llx.ttex", (unsigned long long)h);
-    return (std::filesystem::path(CacheDir()) / name).string();
+    return (std::filesystem::path(CacheDir()) / (stem + ".ttex")).string();
 }
 
 bool SourceStamp(const std::string& path, uint64_t& outSize, uint64_t& outMtime) {
