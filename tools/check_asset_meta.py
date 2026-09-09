@@ -18,6 +18,7 @@ KNOWN_EXTENSIONS = {
     ".fbx", ".obj", ".gltf", ".glb",
     ".wav", ".mp3", ".ogg", ".flac",
     ".prefab",
+    ".mat",
 }
 
 GUID_RE = re.compile(r"^[0-9a-f]{16}$")

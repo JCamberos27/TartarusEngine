@@ -1,4 +1,5 @@
 #include "AssetLibrary.h"
+#include "MaterialAsset.h"
 #include "Model.h"
 #include "Texture.h"
 #include "AssetDatabase.h"
@@ -153,6 +154,7 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path) {
     auto tex = std::make_shared<Texture>(path, GetTextureSettings(path));
     m_TextureCache[path] = tex;
     m_TextureList.push_back(tex);
+    m_TexturePaths.push_back(path);
     AssetDatabase::EnsureGuid(path);
     return tex;
 }
@@ -186,6 +188,7 @@ void AssetLibrary::RemoveTexture(const std::shared_ptr<Texture>& texture) {
     if (!texture) return;
     m_TextureCache.erase(texture->Path());
     m_TextureList.erase(std::remove(m_TextureList.begin(), m_TextureList.end(), texture), m_TextureList.end());
+    m_TexturePaths.erase(std::remove(m_TexturePaths.begin(), m_TexturePaths.end(), texture->Path()), m_TexturePaths.end());
     m_AssetFolder.erase(texture->Path());
     m_DisplayNames.erase(texture->Path());
     m_TextureSettings.erase(texture->Path());
@@ -198,6 +201,38 @@ void AssetLibrary::RemoveSound(const std::string& path) {
     m_AssetFolder.erase(path);
     m_DisplayNames.erase(path);
     m_Labels.erase(path);
+    m_AllLabelsDirty = true;
+}
+
+std::shared_ptr<MaterialAsset> AssetLibrary::LoadMaterial(const std::string& path) {
+    auto it = m_MaterialCache.find(path);
+    if (it != m_MaterialCache.end()) return it->second;
+
+    auto ma = MaterialAsset::Load(path, this);
+    if (!ma) return nullptr;
+
+    m_MaterialCache[path] = ma;
+    m_MaterialList.push_back(ma);
+    m_MaterialPaths.push_back(path);
+    AssetDatabase::EnsureGuid(path);
+    std::string metaStr = AssetDatabase::ReadMetaFields(path);
+    if (metaStr != "{}") {
+        try {
+            json j = json::parse(metaStr);
+            ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
+        } catch (...) {}
+    }
+    return ma;
+}
+
+void AssetLibrary::RemoveMaterial(const std::shared_ptr<MaterialAsset>& mat) {
+    if (!mat) return;
+    m_MaterialCache.erase(mat->Path);
+    m_MaterialList.erase(std::remove(m_MaterialList.begin(), m_MaterialList.end(), mat), m_MaterialList.end());
+    m_MaterialPaths.erase(std::remove(m_MaterialPaths.begin(), m_MaterialPaths.end(), mat->Path), m_MaterialPaths.end());
+    m_AssetFolder.erase(mat->Path);
+    m_DisplayNames.erase(mat->Path);
+    m_Labels.erase(mat->Path);
     m_AllLabelsDirty = true;
 }
 
@@ -273,7 +308,7 @@ const std::set<std::string>& AssetLibrary::AllKnownLabels() const {
 
 void AssetLibrary::PruneToKeepSet(const std::set<std::string>& modelPaths, const std::set<std::string>& texturePaths,
     const std::set<std::string>& soundPaths, const std::set<std::string>& prefabPaths,
-    const std::set<std::string>& folderPaths) {
+    const std::set<std::string>& folderPaths, const std::set<std::string>& materialPaths) {
     // Copy each list before iterating it - RemoveModel/etc. erase from the very vectors
     // Models()/Textures()/... return, so iterating those directly while removing from them
     // would be iterating a container out from under itself.
@@ -288,6 +323,11 @@ void AssetLibrary::PruneToKeepSet(const std::set<std::string>& modelPaths, const
     }
     for (const auto& p : std::vector<std::string>(m_Prefabs)) {
         if (!prefabPaths.count(p)) RemovePrefab(p);
+    }
+    if (!materialPaths.empty()) {
+        for (const auto& m : std::vector<std::shared_ptr<MaterialAsset>>(m_MaterialList)) {
+            if (!materialPaths.count(m->Path)) RemoveMaterial(m);
+        }
     }
     for (const auto& f : std::vector<std::string>(m_Folders)) {
         // A folder that still has something under it isn't in the keep-set by mistake - it
@@ -357,6 +397,9 @@ void AssetLibrary::DeleteFolderRecursive(const std::string& folderPath) {
     }
     for (const auto& p : std::vector<std::string>(m_Prefabs)) {
         if (isUnderFolder(p)) RemovePrefab(p);
+    }
+    for (const auto& m : std::vector<std::shared_ptr<MaterialAsset>>(m_MaterialList)) {
+        if (isUnderFolder(m->Path)) RemoveMaterial(m);
     }
 
     // Every asset that belonged under this folder is gone now, so every subfolder (and the

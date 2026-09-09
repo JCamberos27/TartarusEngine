@@ -5,6 +5,7 @@
 #include "EditorLayerInternal.h"
 #include "FileDialog.h"
 #include "AssetLibrary.h"
+#include "MaterialAsset.h"
 #include "World.h"
 #include "Camera.h"
 #include "Model.h"
@@ -421,6 +422,9 @@ bool EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const s
         }
         for (const auto& prefab : assets.Prefabs()) {
             if (prefab == key) { assets.RemovePrefab(prefab); break; }
+        }
+        for (const auto& mat : assets.Materials()) {
+            if (mat->Path == key) { assets.RemoveMaterial(mat); break; }
         }
         // A Scene entry is a real .json file, not an AssetLibrary asset — remove it from disk
         // directly, and report why if that fails.
@@ -962,6 +966,13 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         bool show = filtering ? inSearchScope(assets.AssetFolder(path)) : (assets.AssetFolder(path) == m_CurrentAssetFolder);
         if (show) cells.push_back({Cell::Kind::Texture, path, name, nullptr, tex});
     }
+    for (const auto& mat : assets.Materials()) {
+        std::string path = mat->Path;
+        std::string name = assets.DisplayName(path);
+        if (!MatchesAssetSearch(parsedSearch, name, "material", assets.Labels(path))) continue;
+        bool show = filtering ? inSearchScope(assets.AssetFolder(path)) : (assets.AssetFolder(path) == m_CurrentAssetFolder);
+        if (show) cells.push_back({Cell::Kind::Material, path, name, nullptr, nullptr, mat});
+    }
     for (const auto& sound : assets.Sounds()) {
         std::string name = assets.DisplayName(sound);
         if (!MatchesAssetSearch(parsedSearch, name, "sound", assets.Labels(sound))) continue;
@@ -995,8 +1006,9 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
                 case Cell::Kind::Prefab:     return 2;
                 case Cell::Kind::Model:      return 3;
                 case Cell::Kind::Texture:    return 4;
-                case Cell::Kind::Sound:      return 5;
-                case Cell::Kind::Screenshot: return 6;
+                case Cell::Kind::Material:   return 5;
+                case Cell::Kind::Sound:      return 6;
+                case Cell::Kind::Screenshot: return 7;
             }
             return 7;
         };
@@ -1082,6 +1094,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             : cell.kind == Cell::Kind::Scene ? ICON_FA_MAP
             : cell.kind == Cell::Kind::Prefab ? ICON_FA_BOX_ARCHIVE
             : cell.kind == Cell::Kind::Screenshot ? ICON_FA_IMAGE
+            : cell.kind == Cell::Kind::Material ? ICON_FA_DROPLET
             : (playing ? ICON_FA_STOP : ICON_FA_MUSIC);
 
         bool clicked = false;
@@ -1286,6 +1299,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         } else if (cell.kind != Cell::Kind::Scene && cell.kind != Cell::Kind::Screenshot) { // not placeable — nothing to drag into the viewport
             const char* payloadType = cell.kind == Cell::Kind::Model ? "ASSET_MODEL_PATH"
                 : cell.kind == Cell::Kind::Texture ? "ASSET_TEXTURE_PATH"
+                : cell.kind == Cell::Kind::Material ? "ASSET_MATERIAL_PATH"
                 : cell.kind == Cell::Kind::Prefab ? "ASSET_PREFAB_PATH" : "ASSET_SOUND_PATH";
             if (ImGui::BeginDragDropSource()) {
                 ImGui::SetDragDropPayload(payloadType, cell.key.c_str(), cell.key.size() + 1);
@@ -1302,6 +1316,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 EditorUI::SetTooltip(
                     "%s\n\nDrag onto a model to set its Albedo map,\nor onto a map row in the Inspector's PBR Material.\n\n%s",
                     cell.display.c_str(), UsageTooltip(FindTextureUsages(world, cell.texture.get())).c_str());
+            } else if (cell.kind == Cell::Kind::Material) {
+                EditorUI::SetTooltip("%s\n\nDrag onto a model to apply this material.", cell.display.c_str());
             } else if (cell.kind == Cell::Kind::Sound) {
                 EditorUI::SetTooltip("%s\n\nClick to preview\n\n%s",
                     cell.display.c_str(), UsageTooltip(FindSoundUsages(world, cell.key)).c_str());
@@ -1522,6 +1538,21 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
     }
     if (ImGui::BeginPopup("##BrowserBgContext")) {
         if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS "  New Folder")) makeNewFolder();
+        ImGui::Separator();
+        if (ImGui::MenuItem(ICON_FA_DROPLET "  Create Material")) {
+            std::string folder = m_CurrentAssetFolder;
+            std::string base = folder.empty() ? "New Material" : (folder + "/New Material");
+            // Pick a path that doesn't already exist on disk.
+            std::string candidate = base + ".mat";
+            int n = 1;
+            while (std::filesystem::exists(candidate)) candidate = base + " (" + std::to_string(n++) + ").mat";
+            PushUndo(world, "Create Material");
+            auto mat = MaterialAsset::CreateDefault(candidate);
+            if (mat) {
+                assets.LoadMaterial(candidate);
+                BeginRenameAsset(candidate, false, std::filesystem::path(candidate).stem().string());
+            }
+        }
         ImGui::EndPopup();
     }
 }
