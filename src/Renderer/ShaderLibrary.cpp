@@ -3,6 +3,8 @@
 #include <fstream>
 #include <sstream>
 #include <filesystem>
+#include <chrono>
+#include <unordered_map>
 
 namespace ShaderLibrary {
 
@@ -54,6 +56,36 @@ std::string ReadFile(const std::string& filename) {
     std::ostringstream ss;
     ss << f.rdbuf();
     return ResolveIncludes(ss.str(), s_Dir, 0);
+}
+
+void PollForChanges(const std::function<void(const std::string& filename)>& onChanged) {
+    using Clock = std::chrono::steady_clock;
+    static Clock::time_point s_LastPoll;
+    static std::unordered_map<std::string, std::filesystem::file_time_type> s_MTimes;
+
+    constexpr auto kInterval = std::chrono::milliseconds(250); // ~4 Hz
+    auto now = Clock::now();
+    if (now - s_LastPoll < kInterval) return;
+    s_LastPoll = now;
+
+    if (s_Dir.empty()) return;
+    std::error_code ec;
+    for (auto& entry : std::filesystem::directory_iterator(s_Dir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        auto ext = entry.path().extension().string();
+        if (ext != ".glsl" && ext != ".vert" && ext != ".frag" && ext != ".comp") continue;
+
+        auto mtime = entry.last_write_time(ec);
+        if (ec) continue;
+        std::string name = entry.path().filename().string();
+        auto it = s_MTimes.find(name);
+        if (it == s_MTimes.end()) {
+            s_MTimes[name] = mtime; // first seen — no notification
+        } else if (it->second != mtime) {
+            it->second = mtime;
+            onChanged(name);
+        }
+    }
 }
 
 } // namespace ShaderLibrary
