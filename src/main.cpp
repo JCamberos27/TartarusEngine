@@ -897,10 +897,11 @@ int main(int argc, char** argv) {
                 EditorSettings::Get().ShowPhysicsPanel = !EditorSettings::Get().ShowPhysicsPanel;
                 EditorSettings::Save();
             }
-            // F3 toggles the physics debug rendering over the game view (works in maximized play,
+            // F5 toggles the physics debug rendering over the game view (works in maximized play,
             // where the Scene-viewport overlay isn't drawn). Turning it on with nothing selected
             // enables a sensible default set so there's immediately something to see (#185).
-            if (Input::IsKeyPressed(GLFW_KEY_F3)) {
+            // (F3 is Step One Frame; F6 is the Physics panel.)
+            if (Input::IsKeyPressed(GLFW_KEY_F5)) {
                 EditorSettings& es = EditorSettings::Get();
                 es.PlayDebugOverlay = !es.PlayDebugOverlay;
                 if (es.PlayDebugOverlay) {
@@ -1967,7 +1968,7 @@ int main(int argc, char** argv) {
                 EditorLayer::RenderStats gvRenderStats;
                 drawScene(gvView, gvProj, gvEye, /*unlit=*/false, &gvRenderStats);
 
-                // Physics debug overlay over the game view (#185, F3) — depth-tested, no depth write.
+                // Physics debug overlay over the game view (#185, F5) — depth-tested, no depth write.
                 if (playing && EditorSettings::Get().PlayDebugOverlay) {
                     glEnable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
                     colliderGizmo.Draw(gvView, gvProj, world, EditorSettings::Get().ShowColliders);
@@ -2073,7 +2074,7 @@ int main(int argc, char** argv) {
                 EditorLayer::RenderStats stats;
                 drawScene(view, proj, gameCam->Position, /*unlit=*/false, &stats);
                 editor.SetRenderStats(stats);
-                // Physics debug overlay over the game view (#185, F3).
+                // Physics debug overlay over the game view (#185, F5).
                 if (EditorSettings::Get().PlayDebugOverlay) {
                     glEnable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
                     colliderGizmo.Draw(view, proj, world, EditorSettings::Get().ShowColliders);
