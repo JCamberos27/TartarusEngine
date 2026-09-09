@@ -37,6 +37,12 @@ const GameModuleHostAPI kHostAPI{
     /*GetContactEvents=*/[](ContactEvent* out, int maxEvents) {
         return PhysicsWorld::GetContactEvents(out, maxEvents);
     },
+    /*SphereCast=*/[](const float o[3], const float d[3], float r, float maxDist, RaycastHit& hit) {
+        return PhysicsWorld::SphereCast(o, d, r, maxDist, hit);
+    },
+    /*OverlapSphere=*/[](const float c[3], float r, std::uint32_t* out, int maxE) {
+        return PhysicsWorld::OverlapSphere(c, r, out, maxE);
+    },
 };
 
 } // namespace

@@ -234,6 +234,8 @@ void RegisterEngineComponents() {
               "Per-second bleed of linear velocity. 0 = drifts forever.", 0.0f, 10.0f },
             { "Angular Damping", T::Float, TARTARUS_REFLECT_FIELD(RigidbodyComponent, AngularDamping), 0.01f,
               "Per-second bleed of spin.", 0.0f, 10.0f },
+            { "Continuous Collision", T::Bool, TARTARUS_REFLECT_FIELD(RigidbodyComponent, ContinuousCollision), 0.0f,
+              "Swept collision so a fast small body can't tunnel a thin wall (#185). Costs a little." },
         },
     });
 

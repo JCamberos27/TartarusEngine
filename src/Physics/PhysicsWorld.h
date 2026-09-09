@@ -95,4 +95,17 @@ bool GetBodyState(unsigned entity, BodyState& out);
 // This frame's solid-contact transitions; same copy/return convention as GetTriggerEvents.
 int GetContactEvents(ContactEvent* out, int maxEvents);
 
+// --- Shape queries (#185 PR 9) --------------------------------------------------------
+bool SphereCast(const float origin[3], const float dir[3], float radius, float maxDistance,
+                RaycastHit& outHit);
+int  OverlapSphere(const float center[3], float radius, unsigned* out, int maxEntities);
+
+// (#185 PR 10: pushing dynamic bodies and riding moving platforms is handled inside
+// MoveCharacter via the CCT hit report — no extra entry point needed.)
+
+// --- Debug (#185 PR 12) -------------------------------------------------------------
+// Copy up to `maxPoints` world-space contact points from this frame's events (3 floats each)
+// into `outXYZ`; returns the count written. For the collider gizmo's contact markers.
+int CopyContactPoints(float* outXYZ, int maxPoints);
+
 } // namespace PhysicsWorld

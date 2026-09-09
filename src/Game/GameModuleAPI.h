@@ -7,7 +7,7 @@ class World;
 // Deliberately small and versioned: the host keeps ownership of the World, renderer, editor,
 // and every long-lived resource. A hot-reloaded module only receives a non-owning view for its
 // per-frame gameplay work, so unloading it cannot invalidate editor state.
-constexpr std::uint32_t kGameModuleAPIVersion = 6;
+constexpr std::uint32_t kGameModuleAPIVersion = 7;
 
 // One raycast hit against the PhysX world (#185 PR 2). POD, no glm — the API header stays
 // dependency-free so a version mismatch is the only thing that can break the ABI. Position and
@@ -105,6 +105,16 @@ struct GameModuleHostAPI {
     // This frame's solid-contact transitions (see GetTriggerEvents for the copy/return
     // convention). Resting contacts don't spew Stay events — only hits above a small impulse.
     int (*GetContactEvents)(ContactEvent* out, int maxEvents) = nullptr;
+
+    // --- Shape queries (#185 PR 9) ---
+    // Sweep a sphere of `radius` from `origin` along `dir` up to `maxDistance`; fills `outHit`
+    // like Raycast on the first blocking hit. Good for fat projectiles / lookahead.
+    bool (*SphereCast)(const float origin[3], const float dir[3], float radius,
+                       float maxDistance, RaycastHit& outHit) = nullptr;
+    // Entity ids of every solid collider overlapping the sphere; writes up to `maxEntities`
+    // into `out` and returns the total found. The explosion-radius / area-of-effect query.
+    int (*OverlapSphere)(const float center[3], float radius,
+                         std::uint32_t* out, int maxEntities) = nullptr;
 };
 
 struct GameModuleAPI {
