@@ -1,6 +1,7 @@
 #include "ColliderGizmo.h"
 
 #include "Shader.h"
+#include "ShaderLibrary.h"
 #include "gl.h"
 #include "World.h"
 #include "Components.h"
@@ -17,22 +18,6 @@
 #include <unordered_set>
 
 namespace {
-
-const char* kVertexSrc = R"(
-#version 460 core
-layout(location = 0) in vec3 aPos;
-layout(location = 1) in vec4 aColor;
-uniform mat4 uViewProj;
-out vec4 vColor;
-void main() { vColor = aColor; gl_Position = uViewProj * vec4(aPos, 1.0); }
-)";
-
-const char* kFragmentSrc = R"(
-#version 460 core
-in vec4 vColor;
-out vec4 FragColor;
-void main() { FragColor = vColor; }
-)";
 
 constexpr int kCircleSegs = 28;
 
@@ -58,7 +43,8 @@ void AutoBoxWorld(const entt::registry& reg, entt::entity e, const TransformComp
 } // namespace
 
 ColliderGizmo::ColliderGizmo() {
-    m_Shader = std::make_unique<Shader>(kVertexSrc, kFragmentSrc);
+    m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("ColliderGizmo.vert.glsl"),
+                                        ShaderLibrary::ReadFile("ColliderGizmo.frag.glsl"));
     glGenVertexArrays(1, &m_VAO);
     glGenBuffers(1, &m_VBO);
     glBindVertexArray(m_VAO);

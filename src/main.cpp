@@ -21,14 +21,13 @@
 #include "Grid.h"
 #include "ColliderGizmo.h" // #185 PR 2 — collider wireframe overlay
 #include "Sky.h"
-#include "ModelShaderSource.h"
+#include "ShaderLibrary.h"
 #include "TintOverlayRenderer.h"
 #include "HdrTarget.h"
 #include "Screenshot.h"
 #include "Tonemapper.h"
 #include "LightBuffer.h"
 #include "ClusterGrid.h"
-#include "ClusterShaderSource.h"
 #include "CascadedShadowMap.h"
 #include "SpotShadowMap.h"
 #include "PointShadowMap.h"
@@ -406,13 +405,20 @@ int main(int argc, char** argv) {
 
         AudioEngine::Init();
 
-        Shader modelShader(kModelVertexSrc, kModelFragmentSrc);
-        Shader outlineModelShader(kOutlineModelVertexSrc, kOutlineFragmentSrc);
-        Shader outlineDilateShader(kOutlineDilateVertSrc, kOutlineDilateFragSrc);
-        Shader shadowShader(kShadowDepthVertexSrc, kShadowDepthFragmentSrc);
-        Shader localShadowShader(kShadowDepthVertexSrc, kLocalShadowDepthFragmentSrc); // spot/point: linear depth
-        Shader clusterBuildShader(kBuildClustersCompute); // #120: per-view froxel AABBs
-        Shader clusterCullShader(kCullLightsCompute);     // #120: point/spot lights -> froxel lists
+        ShaderLibrary::Init("assets/shaders");
+
+        Shader modelShader(ShaderLibrary::ReadFile("ModelVertex.glsl"),
+                           ShaderLibrary::ReadFile("ModelFragment.glsl"));
+        Shader outlineModelShader(ShaderLibrary::ReadFile("OutlineModel.vert.glsl"),
+                                  ShaderLibrary::ReadFile("Outline.frag.glsl"));
+        Shader outlineDilateShader(ShaderLibrary::ReadFile("OutlineDilate.vert.glsl"),
+                                   ShaderLibrary::ReadFile("OutlineDilate.frag.glsl"));
+        Shader shadowShader(ShaderLibrary::ReadFile("ShadowDepth.vert.glsl"),
+                            ShaderLibrary::ReadFile("ShadowDepth.frag.glsl"));
+        Shader localShadowShader(ShaderLibrary::ReadFile("ShadowDepth.vert.glsl"),
+                                 ShaderLibrary::ReadFile("ShadowDepthLocal.frag.glsl")); // spot/point: linear depth
+        Shader clusterBuildShader(ShaderLibrary::ReadFile("ClusterBuild.comp.glsl")); // #120: per-view froxel AABBs
+        Shader clusterCullShader(ShaderLibrary::ReadFile("ClusterCull.comp.glsl"));   // #120: point/spot lights -> froxel lists
         unsigned int fsQuadVao = 0;
         glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
         TintOverlayRenderer tintOverlay;

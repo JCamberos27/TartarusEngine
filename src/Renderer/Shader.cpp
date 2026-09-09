@@ -1,4 +1,5 @@
 #include "Shader.h"
+#include "ShaderLibrary.h"
 #include "gl.h"
 #include "GLStateCache.h"
 #include <glm/gtc/type_ptr.hpp>
@@ -57,6 +58,40 @@ Shader::Shader(const std::string& computeSrc) {
 
 Shader::~Shader() {
     glDeleteProgram(m_Program);
+}
+
+void Shader::Reload(const std::string& vertFile, const std::string& fragFile) {
+    std::string vertSrc = ShaderLibrary::ReadFile(vertFile);
+    std::string fragSrc = ShaderLibrary::ReadFile(fragFile);
+
+    unsigned int vs = Compile(GL_VERTEX_SHADER, vertSrc);
+    unsigned int fs = 0;
+    try {
+        fs = Compile(GL_FRAGMENT_SHADER, fragSrc);
+    } catch (...) {
+        glDeleteShader(vs);
+        throw;
+    }
+
+    unsigned int newProg = glCreateProgram();
+    glAttachShader(newProg, vs);
+    glAttachShader(newProg, fs);
+    glLinkProgram(newProg);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+
+    int success;
+    glGetProgramiv(newProg, GL_LINK_STATUS, &success);
+    if (!success) {
+        char log[1024];
+        glGetProgramInfoLog(newProg, 1024, nullptr, log);
+        glDeleteProgram(newProg);
+        throw std::runtime_error(std::string("Shader link error: ") + log);
+    }
+
+    glDeleteProgram(m_Program);
+    m_Program = newProg;
+    m_UniformCache.clear();
 }
 
 void Shader::DispatchCompute(unsigned int gx, unsigned int gy, unsigned int gz) const {

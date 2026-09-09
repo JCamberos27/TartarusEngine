@@ -1,260 +1,10 @@
 #include "IblProbe.h"
 #include "Shader.h"
+#include "ShaderLibrary.h"
 #include "Log.h"
 #include "gl.h"
 
-#include <string>
-
 namespace {
-
-// Every bake pass is a full-screen triangle pair with no vertex buffer (same attribute-less
-// gl_VertexID trick as Sky/Grid). vUV is [0,1] across the target face/mip.
-const char* kFullscreenVertexSrc = R"(
-#version 460 core
-out vec2 vUV;
-
-const vec2 kQuad[6] = vec2[](
-    vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(1.0, 1.0),
-    vec2(-1.0, -1.0), vec2(1.0, 1.0), vec2(-1.0, 1.0)
-);
-
-void main() {
-    vec2 p = kQuad[gl_VertexID];
-    vUV = p * 0.5 + 0.5;
-    gl_Position = vec4(p, 0.0, 1.0);
-}
-)";
-
-// Shared by the three cube passes: rebuilds the world-space direction for this texel of the
-// face being rendered, from the face's orthonormal basis uploaded as three uniforms.
-const char* kCubeDirCommon = R"(
-uniform vec3 uFaceForward;
-uniform vec3 uFaceRight;
-uniform vec3 uFaceUp;
-
-vec3 FaceDirection(vec2 uv) {
-    vec2 p = uv * 2.0 - 1.0; // [-1,1] across the face
-    return normalize(uFaceForward + p.x * uFaceRight + p.y * uFaceUp);
-}
-)";
-
-// Pass 1 — sky gradient into the environment cube. Mirrors Sky.cpp's fragment shader exactly
-// for the upper hemisphere so reflections match the sky you actually see. Below the horizon
-// Sky.cpp just clamps to the flat horizon colour (nothing is drawn down there anyway, the
-// ground geometry covers it); a probe DOES get sampled by downward normals and by anything
-// reflecting the floor, and a full-brightness lower hemisphere makes ambient read like a light
-// box, so this darkens toward a dim ground bounce instead.
-const char* kEnvFragmentSrc = R"(
-#version 460 core
-in vec2 vUV;
-out vec4 FragColor;
-
-uniform vec3 uHorizonColor;
-uniform vec3 uZenithColor;
-)"
-R"(
-void main() {
-    vec3 dir = FaceDirection(vUV);
-    vec3 color;
-    if (dir.y >= 0.0) {
-        color = mix(uHorizonColor, uZenithColor, pow(clamp(dir.y, 0.0, 1.0), 0.5));
-    } else {
-        color = mix(uHorizonColor, uHorizonColor * 0.3, pow(clamp(-dir.y, 0.0, 1.0), 0.5));
-    }
-    FragColor = vec4(color, 1.0);
-}
-)";
-
-// Pass 2 — cosine-weighted hemisphere convolution. Fixed-step spherical march (not importance
-// sampling): the input is a smooth gradient, so a regular grid converges with no visible noise
-// and the whole pass is 6 * 32 * 32 texels.
-const char* kIrradianceFragmentSrc = R"(
-#version 460 core
-in vec2 vUV;
-out vec4 FragColor;
-
-uniform samplerCube uEnvMap;
-
-const float PI = 3.14159265359;
-)"
-R"(
-void main() {
-    vec3 N = FaceDirection(vUV);
-
-    vec3 up = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
-    vec3 right = normalize(cross(up, N));
-    up = normalize(cross(N, right));
-
-    vec3 irradiance = vec3(0.0);
-    float sampleCount = 0.0;
-    const float kStep = 0.025;
-    for (float phi = 0.0; phi < 2.0 * PI; phi += kStep * 4.0) {
-        for (float theta = 0.0; theta < 0.5 * PI; theta += kStep) {
-            vec3 tangentSample = vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
-            vec3 dir = tangentSample.x * right + tangentSample.y * up + tangentSample.z * N;
-            irradiance += texture(uEnvMap, dir).rgb * cos(theta) * sin(theta);
-            sampleCount += 1.0;
-        }
-    }
-    // The PI cancels the 1/PI of the Lambert BRDF, so the model shader multiplies this by
-    // albedo directly. For a uniform environment of radiance L this returns exactly L.
-    irradiance = PI * irradiance / max(sampleCount, 1.0);
-    FragColor = vec4(irradiance, 1.0);
-}
-)";
-
-// Pass 3 — GGX prefilter, one mip per roughness step. Standard split-sum first term.
-const char* kPrefilterFragmentSrc = R"(
-#version 460 core
-in vec2 vUV;
-out vec4 FragColor;
-
-uniform samplerCube uEnvMap;
-uniform float uRoughness;
-uniform float uEnvResolution; // base face size of uEnvMap, for the mip-selection heuristic
-
-const float PI = 3.14159265359;
-const uint kSampleCount = 128u;
-
-float RadicalInverseVdC(uint bits) {
-    bits = (bits << 16u) | (bits >> 16u);
-    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
-    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
-    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
-    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
-    return float(bits) * 2.3283064365386963e-10;
-}
-
-vec2 Hammersley(uint i, uint n) { return vec2(float(i) / float(n), RadicalInverseVdC(i)); }
-
-vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {
-    float a = roughness * roughness;
-    float phi = 2.0 * PI * Xi.x;
-    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
-    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
-
-    vec3 H = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
-
-    vec3 up = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
-    vec3 tangent = normalize(cross(up, N));
-    vec3 bitangent = cross(N, tangent);
-    return normalize(tangent * H.x + bitangent * H.y + N * H.z);
-}
-
-float DistributionGGX(float NdotH, float roughness) {
-    float a = roughness * roughness;
-    float a2 = a * a;
-    float d = (NdotH * NdotH) * (a2 - 1.0) + 1.0;
-    return a2 / max(PI * d * d, 1e-7);
-}
-)"
-R"(
-void main() {
-    vec3 N = FaceDirection(vUV);
-    vec3 R = N;
-    vec3 V = N; // the split-sum approximation's standard N == V == R assumption
-
-    vec3 prefiltered = vec3(0.0);
-    float totalWeight = 0.0;
-
-    for (uint i = 0u; i < kSampleCount; ++i) {
-        vec2 Xi = Hammersley(i, kSampleCount);
-        vec3 H = ImportanceSampleGGX(Xi, N, uRoughness);
-        vec3 L = normalize(2.0 * dot(V, H) * H - V);
-
-        float NdotL = dot(N, L);
-        if (NdotL <= 0.0) continue;
-
-        // Sample from a mip chosen by the sample's solid angle vs. a texel's, so sparse
-        // high-roughness samples read a blurred mip instead of aliasing the base level.
-        float NdotH = max(dot(N, H), 0.0);
-        float HdotV = max(dot(H, V), 0.0);
-        float D = DistributionGGX(NdotH, uRoughness);
-        float pdf = (D * NdotH / (4.0 * max(HdotV, 1e-4))) + 1e-4;
-        float saTexel = 4.0 * PI / (6.0 * uEnvResolution * uEnvResolution);
-        float saSample = 1.0 / (float(kSampleCount) * pdf);
-        float mip = uRoughness == 0.0 ? 0.0 : 0.5 * log2(saSample / saTexel);
-
-        prefiltered += textureLod(uEnvMap, L, max(mip, 0.0)).rgb * NdotL;
-        totalWeight += NdotL;
-    }
-
-    FragColor = vec4(prefiltered / max(totalWeight, 1e-4), 1.0);
-}
-)";
-
-// Pass 4 — the split-sum second term: scale/bias on F0 as a function of (NdotV, roughness).
-// Environment-independent, so this is baked once on first use and never rebaked.
-const char* kBrdfFragmentSrc = R"(
-#version 460 core
-in vec2 vUV;
-out vec2 FragColor;
-
-const float PI = 3.14159265359;
-const uint kSampleCount = 1024u;
-
-float RadicalInverseVdC(uint bits) {
-    bits = (bits << 16u) | (bits >> 16u);
-    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
-    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
-    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
-    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
-    return float(bits) * 2.3283064365386963e-10;
-}
-
-vec2 Hammersley(uint i, uint n) { return vec2(float(i) / float(n), RadicalInverseVdC(i)); }
-
-vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {
-    float a = roughness * roughness;
-    float phi = 2.0 * PI * Xi.x;
-    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
-    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
-
-    vec3 H = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
-
-    vec3 up = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
-    vec3 tangent = normalize(cross(up, N));
-    vec3 bitangent = cross(N, tangent);
-    return normalize(tangent * H.x + bitangent * H.y + N * H.z);
-}
-
-// IBL uses the k = a^2/2 remap, NOT the (r+1)^2/8 direct-lighting one in ModelShaderSource.h.
-float GeometrySchlickGGX(float NdotV, float roughness) {
-    float a = roughness;
-    float k = (a * a) / 2.0;
-    return NdotV / (NdotV * (1.0 - k) + k);
-}
-)"
-R"(
-void main() {
-    float NdotV = max(vUV.x, 1e-3);
-    float roughness = vUV.y;
-
-    vec3 V = vec3(sqrt(1.0 - NdotV * NdotV), 0.0, NdotV);
-    vec3 N = vec3(0.0, 0.0, 1.0);
-
-    float A = 0.0;
-    float B = 0.0;
-    for (uint i = 0u; i < kSampleCount; ++i) {
-        vec2 Xi = Hammersley(i, kSampleCount);
-        vec3 H = ImportanceSampleGGX(Xi, N, roughness);
-        vec3 L = normalize(2.0 * dot(V, H) * H - V);
-
-        float NdotL = max(L.z, 0.0);
-        if (NdotL <= 0.0) continue;
-        float NdotH = max(H.z, 0.0);
-        float VdotH = max(dot(V, H), 0.0);
-
-        float G = GeometrySchlickGGX(NdotL, roughness) * GeometrySchlickGGX(NdotV, roughness);
-        float GVis = (G * VdotH) / max(NdotH * NdotV, 1e-4);
-        float Fc = pow(1.0 - VdotH, 5.0);
-
-        A += (1.0 - Fc) * GVis;
-        B += Fc * GVis;
-    }
-    FragColor = vec2(A, B) / float(kSampleCount);
-}
-)";
 
 // Face-local bases for GL_TEXTURE_CUBE_MAP layers 0..5 (+X, -X, +Y, -Y, +Z, -Z). The V axis is
 // flipped relative to world up on the four side faces, matching OpenGL's (left-handed, +Y-down)
@@ -268,19 +18,6 @@ const FaceBasis kFaces[6] = {
     {{ 0,  0,  1}, { 1,  0,  0}, { 0, -1,  0}}, // +Z
     {{ 0,  0, -1}, {-1,  0,  0}, { 0, -1,  0}}, // -Z
 };
-
-std::string CubeFragment(const char* body) { return std::string(kCubeDirCommon) + body; }
-
-// The cube passes need FaceDirection() declared before use but AFTER the #version line, so the
-// shared block is spliced in right after the fragment source's own header rather than prepended.
-std::string SpliceCubeCommon(const char* src) {
-    std::string s(src);
-    const std::string versionLine = "#version 460 core\n";
-    size_t at = s.find(versionLine);
-    if (at == std::string::npos) return CubeFragment(src); // shouldn't happen; still compiles
-    at += versionLine.size();
-    return s.substr(0, at) + kCubeDirCommon + s.substr(at);
-}
 
 } // namespace
 
@@ -338,10 +75,14 @@ void IblProbe::EnsureCreated() {
     glTextureParameteri(m_BrdfLut, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTextureParameteri(m_BrdfLut, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    m_EnvShader = std::make_unique<Shader>(kFullscreenVertexSrc, SpliceCubeCommon(kEnvFragmentSrc));
-    m_IrradianceShader = std::make_unique<Shader>(kFullscreenVertexSrc, SpliceCubeCommon(kIrradianceFragmentSrc));
-    m_PrefilterShader = std::make_unique<Shader>(kFullscreenVertexSrc, SpliceCubeCommon(kPrefilterFragmentSrc));
-    m_BrdfShader = std::make_unique<Shader>(kFullscreenVertexSrc, kBrdfFragmentSrc);
+    m_EnvShader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Ibl.vert.glsl"),
+                                           ShaderLibrary::ReadFile("IblEnv.frag.glsl"));
+    m_IrradianceShader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Ibl.vert.glsl"),
+                                                  ShaderLibrary::ReadFile("IblIrradiance.frag.glsl"));
+    m_PrefilterShader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Ibl.vert.glsl"),
+                                                 ShaderLibrary::ReadFile("IblPrefilter.frag.glsl"));
+    m_BrdfShader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Ibl.vert.glsl"),
+                                            ShaderLibrary::ReadFile("IblBrdf.frag.glsl"));
 
     if (!m_EnvCube || !m_IrradianceCube || !m_SpecularCube || !m_BrdfLut)
         Log::Error("IblProbe: failed to create one or more probe textures");

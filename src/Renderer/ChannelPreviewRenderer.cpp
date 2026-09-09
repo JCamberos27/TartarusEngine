@@ -1,40 +1,11 @@
 #include "ChannelPreviewRenderer.h"
 #include "Texture.h"
 #include "Shader.h"
+#include "ShaderLibrary.h"
 #include "Log.h"
 #include "gl.h"
 
 #include <string>
-
-namespace {
-
-const char* kVertexSrc = R"(
-#version 460 core
-out vec2 vUV;
-void main() {
-    // "Big triangle" trick: 3 vertices covering the whole viewport with no VBO at all - the
-    // same no-attribute-VAO approach Grid.cpp/Sky.cpp use for their own fullscreen geometry.
-    vec2 pos = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); // (0,0), (2,0), (0,2)
-    vUV = pos;
-    gl_Position = vec4(pos * 2.0 - 1.0, 0.0, 1.0);
-}
-)";
-
-const char* kFragmentSrc = R"(
-#version 460 core
-in vec2 vUV;
-out vec4 FragColor;
-uniform sampler2D uTex;
-uniform int uChannel; // -1 = combined passthrough, 0..3 = isolate R/G/B/A as grayscale
-void main() {
-    vec4 texel = texture(uTex, vUV);
-    if (uChannel < 0) { FragColor = texel; return; }
-    float v = texel[uChannel];
-    FragColor = vec4(v, v, v, 1.0);
-}
-)";
-
-} // namespace
 
 ChannelPreviewRenderer::ChannelPreviewRenderer() = default;
 
@@ -46,7 +17,8 @@ ChannelPreviewRenderer::~ChannelPreviewRenderer() {
 
 unsigned int ChannelPreviewRenderer::Render(const Texture& source, int channel, int previewW, int previewH) {
     if (!m_Shader) {
-        m_Shader = std::make_unique<Shader>(kVertexSrc, kFragmentSrc);
+        m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("ChannelPreview.vert.glsl"),
+                                            ShaderLibrary::ReadFile("ChannelPreview.frag.glsl"));
         glGenVertexArrays(1, &m_VAO);
         glGenFramebuffers(1, &m_FBO);
         glGenTextures(1, &m_ColorTex);

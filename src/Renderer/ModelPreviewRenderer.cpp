@@ -1,7 +1,7 @@
 #include "ModelPreviewRenderer.h"
 #include "Model.h"
 #include "Shader.h"
-#include "ModelShaderSource.h"
+#include "ShaderLibrary.h"
 #include "Log.h"
 #include "gl.h"
 
@@ -33,7 +33,8 @@ float ModelPreviewRenderer::ComputeFramingDistance(const Model& model) {
 
 unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, float distance, int previewW, int previewH) {
     if (!m_Shader) {
-        m_Shader = std::make_unique<Shader>(kModelVertexSrc, kModelFragmentSrc);
+        m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("ModelVertex.glsl"),
+                                            ShaderLibrary::ReadFile("ModelFragment.glsl"));
         glGenFramebuffers(1, &m_FBO);
         glGenTextures(1, &m_ColorTex);
         glGenRenderbuffers(1, &m_DepthRBO);
