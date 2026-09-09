@@ -168,6 +168,20 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
         }
     }
 
+    // Contact points from this frame's PhysX events (#185 PR 12) — a small white cross each.
+    {
+        float pts[64 * 3];
+        const int nP = PhysicsWorld::CopyContactPoints(pts, 64);
+        col = glm::vec3(1.0f);
+        const float s = 0.12f;
+        for (int i = 0; i < nP; ++i) {
+            const glm::vec3 p(pts[i * 3], pts[i * 3 + 1], pts[i * 3 + 2]);
+            seg(p - glm::vec3(s, 0, 0), p + glm::vec3(s, 0, 0));
+            seg(p - glm::vec3(0, s, 0), p + glm::vec3(0, s, 0));
+            seg(p - glm::vec3(0, 0, s), p + glm::vec3(0, 0, s));
+        }
+    }
+
     if (V.empty()) return;
 
     glBindVertexArray(m_VAO);

@@ -192,6 +192,17 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
         if (collider->Friction != 0.6f)   cj["friction"]   = collider->Friction;
         j["collider"] = cj;
     }
+    // Joint (#185 PR 11) — hand-serialised (its "other end" isn't a plain reflectable field).
+    if (const auto* joint = world.Registry.try_get<JointComponent>(entity)) {
+        j["joint"] = {
+            {"type", (int)joint->Kind},
+            {"connectedOrder", joint->ConnectedOrder},
+            {"anchor", {joint->Anchor.x, joint->Anchor.y, joint->Anchor.z}},
+            {"axis", {joint->Axis.x, joint->Axis.y, joint->Axis.z}},
+            {"breakForce", joint->BreakForce},
+            {"breakTorque", joint->BreakTorque},
+        };
+    }
     // CameraComponent moved onto reflection (#302 Wave 1a) — it now round-trips through the
     // generic "Camera" block below. The old flat "camera" object is still READ (see LoadEntity)
     // for scenes authored before the migration.
@@ -277,6 +288,18 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
         collider.Bounciness = c.value("bounciness", 0.0f); // #185 PR 7
         collider.Friction   = c.value("friction", 0.6f);
         world.Registry.emplace_or_replace<ColliderComponent>(entity, collider);
+    }
+    if (j.contains("joint")) { // #185 PR 11
+        const json& jc = j["joint"];
+        JointComponent joint;
+        int ty = jc.value("type", 0);
+        joint.Kind = (ty >= 0 && ty <= 4) ? (JointComponent::Type)ty : JointComponent::Type::Fixed;
+        joint.ConnectedOrder = jc.value("connectedOrder", -1);
+        if (jc.contains("anchor")) joint.Anchor = JsonToVec3(jc["anchor"], glm::vec3(0.0f));
+        if (jc.contains("axis"))   joint.Axis   = JsonToVec3(jc["axis"], glm::vec3(1.0f, 0.0f, 0.0f));
+        joint.BreakForce  = jc.value("breakForce", 0.0f);
+        joint.BreakTorque = jc.value("breakTorque", 0.0f);
+        world.Registry.emplace_or_replace<JointComponent>(entity, joint);
     }
     // Legacy pre-#302 format: CameraComponent moved onto reflection (keyed "Camera" below), but
     // scenes authored before the migration carry the old flat "camera" object — read it only
