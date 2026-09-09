@@ -186,6 +186,66 @@ void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor)
     m_BakedZenith = zenithColor;
 }
 
+void IblProbe::BakeFromCubemap(unsigned int envCube) {
+    EnsureCreated();
+    if (!m_Fbo) return;
+
+    glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+    const GLboolean wasDepthTest = glIsEnabled(GL_DEPTH_TEST);
+    const GLboolean wasCull      = glIsEnabled(GL_CULL_FACE);
+    const GLboolean wasBlend     = glIsEnabled(GL_BLEND);
+    GLint prevDepthMask = GL_TRUE;
+    glGetIntegerv(GL_DEPTH_WRITEMASK, &prevDepthMask);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_BLEND);
+    glDepthMask(GL_FALSE);
+
+    glBindVertexArray(m_Vao);
+    if (!m_BrdfLutBaked) BakeBrdfLut();
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, envCube);
+
+    // Pass 2: cosine convolution -> irradiance cube
+    m_IrradianceShader->Bind();
+    m_IrradianceShader->SetInt("uEnvMap", 0);
+    for (int face = 0; face < 6; ++face) {
+        BeginCubeFace(m_IrradianceCube, face, 0, kIrradianceSize);
+        SetFaceBasis(*m_IrradianceShader, face);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+    }
+
+    // Pass 3: GGX prefilter -> specular cube
+    m_PrefilterShader->Bind();
+    m_PrefilterShader->SetInt("uEnvMap", 0);
+    m_PrefilterShader->SetFloat("uEnvResolution", (float)kEnvSize);
+    for (int mip = 0; mip < kSpecularMips; ++mip) {
+        int size = kSpecularSize >> mip;
+        float roughness = (float)mip / (float)(kSpecularMips - 1);
+        m_PrefilterShader->SetFloat("uRoughness", roughness);
+        for (int face = 0; face < 6; ++face) {
+            BeginCubeFace(m_SpecularCube, face, mip, size);
+            SetFaceBasis(*m_PrefilterShader, face);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+        }
+    }
+
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    glBindVertexArray(0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    if (wasDepthTest) glEnable(GL_DEPTH_TEST);
+    if (wasCull)      glEnable(GL_CULL_FACE);
+    if (wasBlend)     glEnable(GL_BLEND);
+    glDepthMask((GLboolean)prevDepthMask);
+
+    m_Baked = true;
+    // Sentinel so NeedsBake() returns true again when switching back to the procedural sky.
+    m_BakedHorizon = glm::vec3(-1.0f);
+    m_BakedZenith  = glm::vec3(-1.0f);
+}
+
 void IblProbe::BakeBrdfLut() {
     glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
     glNamedFramebufferTexture(m_Fbo, GL_COLOR_ATTACHMENT0, m_BrdfLut, 0);

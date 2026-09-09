@@ -58,6 +58,11 @@ public:
     // Bake() if NeedsBake(); returns whether it actually baked.
     bool BakeIfDirty(const glm::vec3& horizonColor, const glm::vec3& zenithColor);
 
+    // PR13: convolve irradiance + specular cubes from an externally supplied env cubemap
+    // (e.g. loaded via Cubemap::LoadHdr). Skips the sky-gradient pass. envCube must be a
+    // GL_TEXTURE_CUBE_MAP with a mip chain already generated.
+    void BakeFromCubemap(unsigned int envCube);
+
     unsigned int IrradianceMap() const { return m_IrradianceCube; } // samplerCube
     unsigned int SpecularMap() const { return m_SpecularCube; }     // samplerCube, kSpecularMips levels
     unsigned int BrdfLut() const { return m_BrdfLut; }              // sampler2D, RG16F

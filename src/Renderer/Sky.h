@@ -15,7 +15,13 @@ public:
     void Draw(const glm::mat4& view, const glm::mat4& proj,
               const glm::vec3& horizonColor, const glm::vec3& zenithColor);
 
+    // PR13: renders the HDRI cubemap as the sky background.
+    // rotationRadians rotates the environment around the world Y axis.
+    void DrawHdri(unsigned int cubeTex, float rotationRadians,
+                  const glm::mat4& view, const glm::mat4& proj);
+
 private:
     unsigned int m_VAO = 0;
     std::unique_ptr<Shader> m_Shader;
+    std::unique_ptr<Shader> m_HdriShader; // PR13
 };

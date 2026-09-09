@@ -628,12 +628,50 @@ void EditorLayer::DeleteLayoutPreset(const std::string& name) {
 
 // --- Lighting panel + shared section helpers (#236 R2) -----------------------------------
 void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
-    ImGui::ColorEdit3("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
-    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour at the horizon.");
-    ImGui::ColorEdit3("Zenith color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
-    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour straight up.");
+    // PR13: sky source selector
+    {
+        int src = (int)world.SkySourceMode;
+        bool changed = false;
+        if (ImGui::RadioButton("Procedural", src == 0)) { src = 0; changed = true; }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("HDRI", src == 1)) { src = 1; changed = true; }
+        if (changed) {
+            PushUndo(world, "Change Sky Source");
+            world.SkySourceMode = (World::SkySource)src;
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky source: procedural gradient or an equirectangular .hdr file.");
+    }
+
+    if (world.SkySourceMode == World::SkySource::Hdri) {
+        // HDRI path input
+        static char hdriPathBuf[1024] = {};
+        // Sync buffer when path changes externally (scene load)
+        if (world.SkyHdriPath.size() < sizeof(hdriPathBuf) &&
+            std::strncmp(hdriPathBuf, world.SkyHdriPath.c_str(), sizeof(hdriPathBuf)) != 0) {
+            strncpy_s(hdriPathBuf, sizeof(hdriPathBuf), world.SkyHdriPath.c_str(), _TRUNCATE);
+        }
+        ImGui::SetNextItemWidth(w);
+        if (ImGui::InputText("HDRI path", hdriPathBuf, sizeof(hdriPathBuf),
+                             ImGuiInputTextFlags_EnterReturnsTrue)) {
+            PushUndo(world, "Set HDRI Path");
+            world.SkyHdriPath = hdriPathBuf;
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Absolute path to an equirectangular .hdr file.");
+
+        // Rotation slider
+        ImGui::SetNextItemWidth(w);
+        EditorUI::SliderFloat("HDRI rotation", &world.SkyRotationDegrees, 0.0f, 360.0f, "%.1f deg");
+        if (ImGui::IsItemActivated()) PushUndo(world, "Edit HDRI Rotation");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Y-axis rotation of the HDRI environment in degrees.");
+    } else {
+        ImGui::ColorEdit3("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
+        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour at the horizon.");
+        ImGui::ColorEdit3("Zenith color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
+        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour straight up.");
+    }
+
     ImGui::SetNextItemWidth(w);
     EditorUI::SliderFloat("Ambient intensity", &world.SkyAmbientIntensity, 0.0f, 3.0f, "%.2f x");
     if (ImGui::IsItemActivated()) PushUndo(world, "Edit Ambient Intensity");
