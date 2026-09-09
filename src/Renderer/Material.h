@@ -33,6 +33,13 @@ struct Material {
     std::shared_ptr<Texture> AOMap;
     std::shared_ptr<Texture> EmissiveMap;
 
+    // PR10: Clear Coat + Anisotropy
+    float ClearCoat           = 0.0f;   // layer strength [0,1]; 0 = disabled
+    float ClearCoatRoughness  = 0.5f;
+    float Anisotropy          = 0.0f;   // [-1,1]; 0 = isotropic
+    float AnisotropyRotation  = 0.0f;   // [0,1] maps to [0°,360°] in tangent plane
+    std::shared_ptr<Texture> ClearCoatMap; // optional mask (.r channel)
+
     // #192: a value hash of everything BindMaterial (Model.cpp) uploads — the scalar/vector
     // factors plus the identity of each bound texture. The draw loop sorts by this and
     // GLStateCache skips BindMaterial when it matches the last-bound one, so value-identical
@@ -49,13 +56,14 @@ struct Material {
             BaseColor.x, BaseColor.y, BaseColor.z, Metallic, Roughness,
             EmissiveColor.x * EmissiveStrength, EmissiveColor.y * EmissiveStrength,
             EmissiveColor.z * EmissiveStrength, TriplanarScale,
+            ClearCoat, ClearCoatRoughness, Anisotropy, AnisotropyRotation,
         };
         mix(scalars, sizeof(scalars));
         const std::uint32_t flags = Triplanar ? 1u : 0u;
         mix(&flags, sizeof(flags));
         const Texture* const texs[] = {
             AlbedoMap.get(), NormalMap.get(), MetallicRoughnessMap.get(), MetallicMap.get(),
-            RoughnessMap.get(), AOMap.get(), EmissiveMap.get(),
+            RoughnessMap.get(), AOMap.get(), EmissiveMap.get(), ClearCoatMap.get(),
         };
         mix(texs, sizeof(texs));
         return h;
