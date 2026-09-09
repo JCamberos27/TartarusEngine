@@ -129,6 +129,16 @@
         "Mass": 1.0, "Use Gravity": true, "Is Kinematic": false,
         "Initial Velocity": [0.0, 0.0, 0.0], "Linear Damping": 0.05, "Angular Damping": 0.05
       }
+    },
+    {
+      "id": 17, "order": 17, "name": "9) Bouncy Ball (Bounciness 0.9)", "parentId": -1,
+      "center": [4.0, 8.0, 1.0], "size": [1.0, 1.0, 1.0], "rotation": [0.0, 0.0, 0.0],
+      "color": [0.95, 0.85, 0.30],
+      "collider": { "isTrigger": false, "shape": 1, "halfExtents": [0.5, 0.0, 0.0], "bounciness": 0.9, "friction": 0.4 },
+      "Rigidbody": {
+        "Mass": 1.0, "Use Gravity": true, "Is Kinematic": false,
+        "Initial Velocity": [0.0, 0.0, 0.0], "Linear Damping": 0.0, "Angular Damping": 0.05
+      }
     }
   ],
   "empties": [
