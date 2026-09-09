@@ -147,6 +147,20 @@ struct EditorSettings {
     // toolbar Gizmos popup.
     bool  ShowColliders          = true;
 
+    // #185 — Debug physics harness while playing: G sets off a shockwave at the Player,
+    // left-click raycasts from the eye and shoves whatever it hits. A dev/testing aid for the
+    // gameplay force + query API until real gameplay drives it; on by default, toggle in the
+    // toolbar Gizmos popup.
+    bool  PhysicsDebugInput      = true;
+
+    // --- Physics visual debugger (#185) --------------------------------------------------
+    bool     ShowPhysicsPanel      = false;  // the dockable Physics debug window
+    bool     PhysicsHudOverlay     = false;  // corner stats overlay while playing
+    unsigned PhysicsDebugDrawFlags = 0;      // PhysicsWorld::PhysicsDebugDrawFlag bitmask
+    float    PhysicsSimTimeScale   = 1.0f;   // slow-mo / freeze on the physics step [0, 2]
+    bool     PlayDebugOverlay      = false;  // F3: draw the collider wireframes + debug channels
+                                             // over the game view during maximized play too
+
     // --- Per-layer viewport mask (#236 A1). One bit per LayerRegistry slot (bit N = layer N).
     // LayerVisibleMask: a clear bit hides that layer's entities in the Scene viewport draw (they
     // stay in the scene, the Hierarchy, and every save). LayerPickLockMask: a set bit makes that

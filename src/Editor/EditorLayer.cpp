@@ -21,6 +21,7 @@
 #include "ProjectSettings.h"
 #include "Shortcuts.h"
 #include "GLStateCache.h"
+#include "PhysicsWorld.h" // #185 — the Physics debug panel + HUD read live sim state
 #include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
 #include "ScreenBlur.h"
 #include "Framebuffer.h"
@@ -1265,6 +1266,19 @@ void EditorLayer::DrawProjectSettingsWindow(World& /*world*/) {
             EditorUI::SetTooltip("Stored in project/settings.json now; consumed once the rigid-body\n"
                                  "step lands (#185). The Play-mode walker uses its own safety substep.");
 
+        // #185 hardening — Play-mode Player tuning.
+        ImGui::SeparatorText("Player");
+        ImGui::SetNextItemWidth(kw);
+        ImGui::DragFloat("Push strength", &p.PlayerPushStrength, 0.05f, 0.0f, 50.0f, "%.2f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("How hard walking into a dynamic body shoves it. 0 = the Player passes through nothing but still can't push.");
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::SliderInt("Player layer", &p.PlayerLayer, 0, LayerRegistry::kCount - 1,
+                             LayerRegistry::DisplayName(p.PlayerLayer).c_str()))
+            ProjectSettings::Save();
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Collision-matrix layer the Player capsule is on.");
+
         // #185 PR 8 — layer collision matrix. Lower triangle: cell (row r, col c) toggles
         // whether layers r and c collide. Applied at the next Play.
         ImGui::SeparatorText("Collision Matrix");
@@ -1395,6 +1409,96 @@ void EditorLayer::EndFrame() {
         }
     }
 }
+// #185 — a small physics visual debugger: sim stats, four viewport draw channels, a slow-mo
+// slider and a single-substep button. That's the general-use set; nothing else.
+void EditorLayer::DrawPhysicsDebugWindow(World& world) {
+    if (!EditorSettings::Get().ShowPhysicsPanel) return;
+    ImGui::SetNextWindowSize(ImVec2(320, 300), ImGuiCond_FirstUseEver);
+    bool open = EditorSettings::Get().ShowPhysicsPanel;
+    const bool visible = ImGui::Begin(ICON_FA_CUBES "  Physics", &open);
+    EditorSettings& es = EditorSettings::Get();
+
+    if (visible) {
+        const PhysicsWorld::PhysicsDebugStats st = PhysicsWorld::GetDebugStats();
+        if (!st.Active) {
+            ImGui::TextDisabled("Not playing.");
+        } else {
+            ImGui::Text("%d bodies  (%d awake)   %d contacts", st.DynamicBodies, st.AwakeBodies,
+                        st.ContactsThisFrame);
+            ImGui::TextDisabled("substep %.2f ms  x%d   gravity %.0f", st.StepMillis, st.Substeps,
+                                st.Gravity[1]);
+        }
+        ImGui::Separator();
+
+        auto chan = [&](const char* label, unsigned bit, const char* tip) {
+            unsigned f = es.PhysicsDebugDrawFlags;
+            if (ImGui::CheckboxFlags(label, &f, bit)) { es.PhysicsDebugDrawFlags = f; EditorSettings::Save(); }
+            if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip(tip);
+        };
+        bool cg = EditorSettings::Get().ShowColliders;
+        if (ImGui::Checkbox("Collider shapes", &cg)) { EditorSettings::Get().ShowColliders = cg; EditorSettings::Save(); }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Wireframe of every collider (also on the Gizmos toolbar).");
+        chan("Contacts & impacts", PhysicsWorld::PDD_Contacts,
+             "Every touch leaves a fading spark; a firm hit (bounce / drop) flashes brighter,\n"
+             "with a normal arrow scaled by the impact impulse.");
+        chan("Raycasts", PhysicsWorld::PDD_Raycasts,
+             "Draws the last ~64 raycasts / sweeps: bright travelled segment, hit burst + hit\n"
+             "normal, faint continuation on a miss. Fades over ~half a second.");
+        chan("Velocities", PhysicsWorld::PDD_Velocity,
+             "An arrow from each awake body's centre of mass, length and colour by speed.");
+        chan("Sleeping bodies", PhysicsWorld::PDD_Sleep, "A dim marker over bodies the solver has put to sleep.");
+
+        ImGui::Separator();
+        float ts = es.PhysicsSimTimeScale;
+        ImGui::SetNextItemWidth(150.0f);
+        if (ImGui::SliderFloat("Slow-mo", &ts, 0.0f, 2.0f, "%.2fx")) { es.PhysicsSimTimeScale = ts; EditorSettings::Save(); }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("1x")) { es.PhysicsSimTimeScale = 1.0f; EditorSettings::Save(); }
+        ImGui::BeginDisabled(!m_InPlayMode);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Step")) PhysicsWorld::StepOneSubstep(world);
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Advance one fixed 1/60 s substep (works while paused).");
+    }
+
+    ImGui::End();
+    if (open != EditorSettings::Get().ShowPhysicsPanel) { EditorSettings::Get().ShowPhysicsPanel = open; EditorSettings::Save(); }
+}
+
+// Corner text overlay while playing (#185 D) — anchored to the Scene viewport, or the main
+// window when maximized (no Scene rect then).
+void EditorLayer::DrawPhysicsHud(bool maximized) {
+    if (!EditorSettings::Get().PhysicsHudOverlay || !m_InPlayMode) return;
+    const PhysicsWorld::PhysicsDebugStats st = PhysicsWorld::GetDebugStats();
+    if (!st.Active) return;
+    ImVec2 anchor(m_ViewportPos.x + 12.0f, m_ViewportPos.y + 12.0f);
+    if (maximized || m_ViewportSize.x < 2.0f) {
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        anchor = ImVec2(vp->WorkPos.x + 12.0f, vp->WorkPos.y + 40.0f);
+    }
+    ImGui::SetNextWindowPos(anchor, ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.55f);
+    const ImGuiWindowFlags f = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav |
+        ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings;
+    if (ImGui::Begin("##physhud", nullptr, f)) {
+        ImGui::Text("PHYSICS  x%.2f", st.TimeScale);
+        ImGui::Text("substeps %d   %.2f ms", st.Substeps, st.StepMillis);
+        ImGui::Text("bodies %d  (%d awake)", st.DynamicBodies, st.AwakeBodies);
+        ImGui::Text("contacts %d   triggers %d", st.ContactsThisFrame, st.TriggerOverlaps);
+        if (st.BrokenJoints) ImGui::TextColored(ImVec4(1, 0.5f, 0.3f, 1), "%d joint(s) broken", st.BrokenJoints);
+        if (PhysicsWorld::IsGrabbing()) ImGui::TextColored(ImVec4(0.4f, 0.9f, 1, 1), "grabbing");
+    }
+    ImGui::End();
+}
+
+// Maximized play skips editor.Draw() entirely; still surface the physics tooling so the sim
+// stays inspectable and the draw channels adjustable without dropping back to the panels (#185).
+void EditorLayer::DrawPlayModeOverlays(World& world) {
+    DrawPhysicsDebugWindow(world);
+    DrawPhysicsHud(/*maximized=*/true);
+}
+
 void EditorLayer::DrawEngineMark(float dt) {
     if (!m_MarkTexture) return;
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
@@ -1740,6 +1844,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawPreferencesWindow(world);
     DrawProjectSettingsWindow(world);
     DrawLightingPanel(world); // #236 R2
+    DrawPhysicsDebugWindow(world); // #185 debug tooling
+    DrawPhysicsHud();             // #185 D
     DrawScreenshotPreview();
 
     // Auto-save: only ticks here (Draw() is editor-mode-only, per main.cpp) so it never fires

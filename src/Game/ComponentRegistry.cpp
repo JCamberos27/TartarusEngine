@@ -214,13 +214,14 @@ void RegisterEngineComponents() {
 
     // #185 PR 4 — Rigidbody. Plain reflected fields; the shape comes from the sibling
     // ColliderComponent (hand-written, PR 2) and PhysicsWorld reads both on Play-enter.
-    Register<RigidbodyComponent>({
-        "Rigidbody", ICON_FA_WEIGHT_HANGING,
-        "Simulates this collider as a dynamic PhysX body while playing - it falls, tumbles and "
-        "gets pushed around, and its pose is written back every frame. Needs a Collider for its "
-        "shape. Play -> Stop restores the authored pose.",
-        "Physics",
-        {
+    {
+        ReflectComponent m;
+        m.Name = "Rigidbody"; m.Icon = ICON_FA_WEIGHT_HANGING; m.Category = "Physics";
+        m.Tooltip =
+            "Simulates this collider as a dynamic PhysX body while playing - it falls, tumbles and "
+            "gets pushed around, and its pose is written back every frame. Needs a Collider for its "
+            "shape. Play -> Stop restores the authored pose.";
+        m.Fields = {
             { "Mass", T::Float, TARTARUS_REFLECT_FIELD(RigidbodyComponent, Mass), 0.05f,
               "Body mass in kg. Ignored while Kinematic.", 0.001f, 1000.0f },
             { "Use Gravity", T::Bool, TARTARUS_REFLECT_FIELD(RigidbodyComponent, UseGravity), 0.0f,
@@ -236,8 +237,28 @@ void RegisterEngineComponents() {
               "Per-second bleed of spin.", 0.0f, 10.0f },
             { "Continuous Collision", T::Bool, TARTARUS_REFLECT_FIELD(RigidbodyComponent, ContinuousCollision), 0.0f,
               "Swept collision so a fast small body can't tunnel a thin wall (#185). Costs a little." },
-        },
-    });
+            { "Freeze Position X", T::Bool, TARTARUS_REFLECT_FIELD(RigidbodyComponent, FreezePositionX), 0.0f,
+              "Lock linear motion along world X." },
+            { "Freeze Position Y", T::Bool, TARTARUS_REFLECT_FIELD(RigidbodyComponent, FreezePositionY), 0.0f,
+              "Lock linear motion along world Y." },
+            { "Freeze Position Z", T::Bool, TARTARUS_REFLECT_FIELD(RigidbodyComponent, FreezePositionZ), 0.0f,
+              "Lock linear motion along world Z." },
+            { "Freeze Rotation X", T::Bool, TARTARUS_REFLECT_FIELD(RigidbodyComponent, FreezeRotationX), 0.0f,
+              "Lock rotation about world X." },
+            { "Freeze Rotation Y", T::Bool, TARTARUS_REFLECT_FIELD(RigidbodyComponent, FreezeRotationY), 0.0f,
+              "Lock rotation about world Y." },
+            { "Freeze Rotation Z", T::Bool, TARTARUS_REFLECT_FIELD(RigidbodyComponent, FreezeRotationZ), 0.0f,
+              "Lock rotation about world Z." },
+        };
+        auto F = [&](const char* name) -> ReflectField& {
+            for (auto& f : m.Fields) if (std::strcmp(f.Name, name) == 0) return f;
+            return m.Fields[0];
+        };
+        for (const char* g : { "Freeze Position X", "Freeze Position Y", "Freeze Position Z",
+                               "Freeze Rotation X", "Freeze Rotation Y", "Freeze Rotation Z" })
+            F(g).Group = "Constraints";
+        Register<RigidbodyComponent>(std::move(m));
+    }
 
     // #315 — Mesh Renderer. Registered so the component-registration guard rail counts it and
     // its Icon/Category live here, but BOTH generic paths are opted out: RenderableComponent

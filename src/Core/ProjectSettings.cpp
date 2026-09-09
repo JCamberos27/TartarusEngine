@@ -77,6 +77,8 @@ void Load() {
         g_Physics.Gravity          = Vec3Or(p, "gravity", g_Physics.Gravity);
         g_Physics.FixedTimestep    = p.value("fixedTimestep", g_Physics.FixedTimestep);
         g_Physics.SolverIterations = p.value("solverIterations", g_Physics.SolverIterations);
+        g_Physics.PlayerPushStrength = p.value("playerPushStrength", g_Physics.PlayerPushStrength);
+        g_Physics.PlayerLayer        = std::clamp(p.value("playerLayer", g_Physics.PlayerLayer), 0, 7);
         if (const auto m = p.find("layerCollision"); m != p.end() && m->is_array()) { // #185 PR 8
             for (int i = 0; i < 8 && i < (int)m->size(); ++i)
                 if ((*m)[i].is_number_unsigned() || (*m)[i].is_number_integer())
@@ -97,6 +99,8 @@ void Save() {
         {"gravity", json::array({g_Physics.Gravity.x, g_Physics.Gravity.y, g_Physics.Gravity.z})},
         {"fixedTimestep", g_Physics.FixedTimestep},
         {"solverIterations", g_Physics.SolverIterations},
+        {"playerPushStrength", g_Physics.PlayerPushStrength},
+        {"playerLayer", g_Physics.PlayerLayer},
         {"layerCollision", json::array({g_Physics.LayerCollisionMask[0], g_Physics.LayerCollisionMask[1],
                                         g_Physics.LayerCollisionMask[2], g_Physics.LayerCollisionMask[3],
                                         g_Physics.LayerCollisionMask[4], g_Physics.LayerCollisionMask[5],

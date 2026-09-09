@@ -201,6 +201,9 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
             {"axis", {joint->Axis.x, joint->Axis.y, joint->Axis.z}},
             {"breakForce", joint->BreakForce},
             {"breakTorque", joint->BreakTorque},
+            {"useLimit", joint->UseLimit},
+            {"limitLower", joint->LimitLower},
+            {"limitUpper", joint->LimitUpper},
         };
     }
     // CameraComponent moved onto reflection (#302 Wave 1a) — it now round-trips through the
@@ -299,6 +302,9 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
         if (jc.contains("axis"))   joint.Axis   = JsonToVec3(jc["axis"], glm::vec3(1.0f, 0.0f, 0.0f));
         joint.BreakForce  = jc.value("breakForce", 0.0f);
         joint.BreakTorque = jc.value("breakTorque", 0.0f);
+        joint.UseLimit    = jc.value("useLimit", false);
+        joint.LimitLower  = jc.value("limitLower", -45.0f);
+        joint.LimitUpper  = jc.value("limitUpper", 45.0f);
         world.Registry.emplace_or_replace<JointComponent>(entity, joint);
     }
     // Legacy pre-#302 format: CameraComponent moved onto reflection (keyed "Camera" below), but
