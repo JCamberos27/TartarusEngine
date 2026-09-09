@@ -44,6 +44,11 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
         // v2 format: "shader" path + "properties" object.
         ma->ShaderPath = j.value("shader", std::string());
 
+        // Queue fields (Opaque by default — dormant on existing materials).
+        ma->RenderQueue = (Queue)j.value("renderQueue", (int)Queue::Opaque);
+        ma->QueueIndex  = j.value("queueIndex",  2000);
+        ma->Opacity     = j.value("opacity",      1.0f);
+
         // Populate Material struct from "properties" (also fills legacy path strings).
         if (j.contains("properties") && j["properties"].is_object()) {
             const auto& props = j["properties"];
@@ -116,9 +121,12 @@ bool MaterialAsset::Save() const {
 
     if (!ShaderPath.empty()) {
         // v2 format: shader reference + properties map
-        j["matVersion"] = 2;
-        j["name"]       = Name;
-        j["shader"]     = ShaderPath;
+        j["matVersion"]  = 2;
+        j["name"]        = Name;
+        j["shader"]      = ShaderPath;
+        if (RenderQueue != Queue::Opaque) j["renderQueue"] = (int)RenderQueue;
+        if (QueueIndex  != 2000)          j["queueIndex"]  = QueueIndex;
+        if (Opacity     != 1.0f)          j["opacity"]     = Opacity;
         json& props     = j["properties"];
         props["_BaseColor"]           = Vec3ToJson(m.BaseColor);
         props["_Metallic"]            = m.Metallic;

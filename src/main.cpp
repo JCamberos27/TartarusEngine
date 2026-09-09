@@ -1612,9 +1612,15 @@ int main(int argc, char** argv) {
                     const std::vector<std::shared_ptr<MaterialAsset>>* Slots;
                     std::uint64_t MatKey;
                     int Meshes, Tris, Verts;
+                    // PR9 transparent queue
+                    MaterialAsset::Queue Queue;
+                    int  QueueIndex;
+                    float ViewDepth; // view-space -Z (more positive = farther) for back-to-front sort
                 };
                 static std::vector<DrawItem> drawList;
+                static std::vector<DrawItem> transparentList;
                 drawList.clear();
+                transparentList.clear();
 
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.all_of<InactiveTag>(entity)) continue; // Hierarchy eye toggle / GameObject active
@@ -1659,15 +1665,35 @@ int main(int argc, char** argv) {
                     const auto& slots = renderable.Materials;
                     std::uint64_t matKey = (!slots.empty() && slots[0])
                         ? slots[0]->Mat.Hash() : m->MaterialSortKey();
-                    drawList.push_back({ model, m, &slots, matKey,
-                                        m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount() });
+                    // PR9: classify into opaque or transparent based on slot 0's queue.
+                    MaterialAsset::Queue q = MaterialAsset::Queue::Opaque;
+                    int qi = 2000;
+                    float viewDepth = 0.0f;
+                    if (!slots.empty() && slots[0]) {
+                        q  = slots[0]->RenderQueue;
+                        qi = slots[0]->QueueIndex;
+                    }
+                    if (q == MaterialAsset::Queue::Transparent) {
+                        // Compute view-space depth of entity centre for back-to-front sort.
+                        glm::vec3 centre = glm::vec3(model[3]);
+                        viewDepth = -(sceneView * glm::vec4(centre, 1.0f)).z;
+                        transparentList.push_back({ model, m, &slots, matKey,
+                            m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
+                            q, qi, viewDepth });
+                    } else {
+                        drawList.push_back({ model, m, &slots, matKey,
+                            m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
+                            q, qi, 0.0f });
+                    }
                 }
 
+                // --- Opaque pass: sort by material key then Model* (unchanged from PR8) --------
                 std::sort(drawList.begin(), drawList.end(), [](const DrawItem& a, const DrawItem& b) {
                     if (a.MatKey != b.MatKey) return a.MatKey < b.MatKey;
                     return reinterpret_cast<std::uintptr_t>(a.Ref) < reinterpret_cast<std::uintptr_t>(b.Ref);
                 });
 
+                modelShader.SetInt("uAlphaBlend", 0); // explicit: ensure opaque pass outputs alpha=1
                 for (const DrawItem& it : drawList) {
                     modelShader.SetMat4(modelModelLoc, it.Xform);
                     // Normal matrix (inverse-transpose) computed here, not per-vertex (#104).
@@ -1678,6 +1704,42 @@ int main(int argc, char** argv) {
                     localStats.DrawCalls += it.Meshes;
                     localStats.Triangles += it.Tris;
                     localStats.Vertices += it.Verts;
+                }
+
+                // --- Transparent pass: back-to-front sorted, blended, no depth write -----------
+                if (!transparentList.empty()) {
+                    // Sort: QueueIndex ascending, then ViewDepth descending (farthest first),
+                    // then MatKey for dedup within the same depth bucket.
+                    std::sort(transparentList.begin(), transparentList.end(),
+                        [](const DrawItem& a, const DrawItem& b) {
+                            if (a.QueueIndex != b.QueueIndex) return a.QueueIndex < b.QueueIndex;
+                            if (a.ViewDepth  != b.ViewDepth)  return a.ViewDepth  > b.ViewDepth;
+                            return a.MatKey < b.MatKey;
+                        });
+
+                    glEnable(GL_BLEND);
+                    glDepthMask(GL_FALSE);
+                    glBlendFuncSeparate(GL_SRC_ALPHA,  GL_ONE_MINUS_SRC_ALPHA,
+                                        0x0001/*GL_ONE*/, GL_ONE_MINUS_SRC_ALPHA);
+                    modelShader.SetInt("uAlphaBlend", 1);
+
+                    for (const DrawItem& it : transparentList) {
+                        float opacity = (!it.Slots->empty() && (*it.Slots)[0])
+                            ? (*it.Slots)[0]->Opacity : 1.0f;
+                        modelShader.SetFloat("uOpacity", opacity);
+                        modelShader.SetMat4(modelModelLoc, it.Xform);
+                        modelShader.SetMat4(modelNormalMatrixLoc,
+                            glm::mat4(glm::transpose(glm::inverse(glm::mat3(it.Xform)))));
+                        it.Ref->Draw(modelShader, *it.Slots);
+
+                        localStats.DrawCalls += it.Meshes;
+                        localStats.Triangles += it.Tris;
+                        localStats.Vertices += it.Verts;
+                    }
+
+                    glDepthMask(GL_TRUE);
+                    glDisable(GL_BLEND);
+                    modelShader.SetInt("uAlphaBlend", 0); // restore for next frame's opaque pass
                 }
                 } // end "Scene Draw" profile scope
                 if (outStats) *outStats = localStats;
