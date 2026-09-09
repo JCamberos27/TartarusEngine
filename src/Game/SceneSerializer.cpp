@@ -5,6 +5,8 @@
 #include "Model.h"
 #include "Texture.h"
 #include "Material.h"
+#include "AssetDatabase.h"
+#include "AssetGuid.h"
 
 #include "Log.h"
 
@@ -32,7 +34,7 @@ namespace {
 // a build that changed something incompatible" — this is the fix. Starting at 1 rather than 0 so
 // that 0 unambiguously means "no formatVersion field was written" (a legacy pre-#195 file), not
 // "written by version 0".
-constexpr int kSceneFormatVersion = 1;
+constexpr int kSceneFormatVersion = 2;
 
 // Set by ApplySceneJson when the file being loaded declares a formatVersion newer than this build
 // understands; read (and cleared) via SceneSerializer::TakeLoadWarning() so a caller like the
@@ -83,9 +85,34 @@ std::string PathOrEmpty(const std::shared_ptr<Texture>& tex) {
     return tex ? tex->Path() : std::string();
 }
 
+// PR 2 (#333): path string → {"path":"...", "pathGuid":"..."} for WRITE. Returns a plain
+// string if the GUID isn't known yet so that v1-era paths still round-trip cleanly.
+json PathRef(const std::string& path) {
+    if (path.empty()) return path;
+    AssetGuid g = AssetDatabase::GuidForPath(path);
+    if (g.IsValid()) return json{{"path", path}, {"pathGuid", g.ToString()}};
+    return path;
+}
+
+// PR 2 (#333): dual path+guid READ. Prefers GUID if present and resolvable, falls back to
+// the plain path. Accepts both the v2 {"path","pathGuid"} object and the v1 plain string.
+std::string ResolveAssetRef(const json& val) {
+    if (val.is_string()) return val.get<std::string>();
+    if (!val.is_object()) return {};
+    std::string path = val.value("path", std::string());
+    AssetGuid g = AssetGuid::FromString(val.value("pathGuid", std::string()));
+    return AssetDatabase::Resolve(g, path);
+}
+// Overload for objects that carry the path and guid as sibling string keys.
+std::string ResolveAssetRef(const json& obj, const char* pathKey, const char* guidKey) {
+    std::string path = obj.value(pathKey, std::string());
+    AssetGuid g = AssetGuid::FromString(obj.value(guidKey, std::string()));
+    return AssetDatabase::Resolve(g, path);
+}
+
 std::shared_ptr<Texture> LoadIfPresent(AssetLibrary& assets, const json& obj, const char* key) {
     if (!obj.contains(key)) return nullptr;
-    std::string path = obj[key].get<std::string>();
+    std::string path = ResolveAssetRef(obj[key]);
     if (path.empty()) return nullptr;
     return assets.LoadTexture(path);
 }
@@ -101,8 +128,8 @@ json ReflectFieldToJson(const ReflectField& f, const void* fp) {
         case ReflectFieldType::Float:  return *static_cast<const float*>(fp);
         case ReflectFieldType::Vec3:
         case ReflectFieldType::Color:  return Vec3ToJson(*static_cast<const glm::vec3*>(fp));
-        case ReflectFieldType::String:
-        case ReflectFieldType::AssetRef: return *static_cast<const std::string*>(fp);
+        case ReflectFieldType::String: return *static_cast<const std::string*>(fp);
+        case ReflectFieldType::AssetRef: return PathRef(*static_cast<const std::string*>(fp));
         case ReflectFieldType::Enum: {
             const int v = *static_cast<const int*>(fp);
             // Round-trip the label text so a reordered EnumLabels list doesn't rewrite scenes;
@@ -124,7 +151,7 @@ void ReflectFieldFromJson(const ReflectField& f, void* fp, const json& v, AssetL
         case ReflectFieldType::String: *static_cast<std::string*>(fp) = v.get<std::string>(); break;
         case ReflectFieldType::AssetRef: {
             auto& path = *static_cast<std::string*>(fp);
-            path = v.get<std::string>();
+            path = ResolveAssetRef(v);  // handles both v1 plain string and v2 {path,pathGuid}
             // Make the referenced asset list in the library even if nothing else imported it,
             // so the Inspector's picker can still show / re-select it.
             if (!path.empty() && f.AssetKind == ReflectAssetKind::Sound) assets.RegisterSound(path);
@@ -649,6 +676,10 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
 
         json m;
         m["path"] = renderable.ModelRef->Path();
+        {
+            AssetGuid g = AssetDatabase::GuidForPath(renderable.ModelRef->Path());
+            if (g.IsValid()) m["pathGuid"] = g.ToString();
+        }
         m["name"] = name.Name;
         m["position"] = Vec3ToJson(transform.Position);
         m["rotation"] = Vec3ToJson(transform.RotationEuler);
@@ -669,13 +700,13 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
                 {"emissiveStrength", mat->EmissiveStrength},
                 {"triplanar", mat->Triplanar},
                 {"triplanarScale", mat->TriplanarScale},
-                {"albedoMap", PathOrEmpty(mat->AlbedoMap)},
-                {"normalMap", PathOrEmpty(mat->NormalMap)},
-                {"metallicRoughnessMap", PathOrEmpty(mat->MetallicRoughnessMap)},
-                {"metallicMap", PathOrEmpty(mat->MetallicMap)},
-                {"roughnessMap", PathOrEmpty(mat->RoughnessMap)},
-                {"aoMap", PathOrEmpty(mat->AOMap)},
-                {"emissiveMap", PathOrEmpty(mat->EmissiveMap)},
+                {"albedoMap",            PathRef(PathOrEmpty(mat->AlbedoMap))},
+                {"normalMap",            PathRef(PathOrEmpty(mat->NormalMap))},
+                {"metallicRoughnessMap", PathRef(PathOrEmpty(mat->MetallicRoughnessMap))},
+                {"metallicMap",          PathRef(PathOrEmpty(mat->MetallicMap))},
+                {"roughnessMap",         PathRef(PathOrEmpty(mat->RoughnessMap))},
+                {"aoMap",                PathRef(PathOrEmpty(mat->AOMap))},
+                {"emissiveMap",          PathRef(PathOrEmpty(mat->EmissiveMap))},
             };
         }
         WriteCommonComponents(m, world, entity);
@@ -692,7 +723,11 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             const auto& pi = world.Registry.get<PrefabInstanceComponent>(e);
             TransformComponent t = effectiveTransform(e);
             json s;
-            s["source"]   = pi.SourcePath;
+            s["source"] = pi.SourcePath;
+            {
+                AssetGuid g = AssetDatabase::GuidForPath(pi.SourcePath);
+                if (g.IsValid()) s["sourceGuid"] = g.ToString();
+            }
             s["name"]     = world.Registry.get<NameComponent>(e).Name;
             s["position"] = Vec3ToJson(t.Position);
             s["rotation"] = Vec3ToJson(t.RotationEuler);
@@ -835,7 +870,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
 
     if (root.contains("models")) {
         for (const auto& m : root["models"]) {
-            std::string modelPath = m.value("path", "");
+            std::string modelPath = ResolveAssetRef(m, "path", "pathGuid");
             if (modelPath.empty()) continue;
 
             auto model = assets.InstantiateModel(modelPath);
@@ -904,7 +939,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
     // broken placeholder rather than a silent hole.
     if (root.contains("prefabInstances") && root["prefabInstances"].is_array()) {
         for (const auto& s : root["prefabInstances"]) {
-            const std::string src = s.value("source", std::string());
+            const std::string src = ResolveAssetRef(s, "source", "sourceGuid");
             glm::vec3 position = JsonToVec3(s.value("position", json::array({0, 0, 0})));
             glm::vec3 rotation = JsonToVec3(s.value("rotation", json::array({0, 0, 0})));
             glm::vec3 scale = JsonToVec3(s.value("scale", json::array({1, 1, 1})), glm::vec3(1.0f));
@@ -998,15 +1033,23 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
 // or one you'd organized into a folder, would simply vanish on the next launch.
 void AppendAssetLibraryJson(json& root, const AssetLibrary& assets) {
     json modelPaths = json::array();
-    for (const auto& m : assets.Models()) modelPaths.push_back(m->Path());
+    for (const auto& m : assets.Models()) modelPaths.push_back(PathRef(m->Path()));
     root["libraryModels"] = modelPaths;
 
     json texPaths = json::array();
-    for (const auto& t : assets.Textures()) texPaths.push_back(t->Path());
+    for (const auto& t : assets.Textures()) texPaths.push_back(PathRef(t->Path()));
     root["libraryTextures"] = texPaths;
 
-    root["librarySounds"] = assets.Sounds();
-    root["libraryPrefabs"] = assets.Prefabs();
+    {
+        json arr = json::array();
+        for (const auto& p : assets.Sounds()) arr.push_back(PathRef(p));
+        root["librarySounds"] = arr;
+    }
+    {
+        json arr = json::array();
+        for (const auto& p : assets.Prefabs()) arr.push_back(PathRef(p));
+        root["libraryPrefabs"] = arr;
+    }
     root["assetFolders"] = assets.Folders();
 
     json meta = json::array();
@@ -1014,7 +1057,10 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets) {
         for (auto& entry : meta) {
             if (entry["path"] == key) return entry;
         }
-        meta.push_back({{"path", key}});
+        json entry{{"path", key}};
+    AssetGuid g = AssetDatabase::GuidForPath(key);
+    if (g.IsValid()) entry["guid"] = g.ToString();
+    meta.push_back(std::move(entry));
         return meta.back();
     };
     for (const auto& [key, folder] : assets.AssetFolders()) findOrCreate(key)["folder"] = folder;
@@ -1045,7 +1091,10 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
     // with the correct settings, instead of once with defaults and once more via Reimport.
     if (root.contains("assetMeta")) {
         for (const auto& entry : root["assetMeta"]) {
-            std::string path = entry.value("path", std::string());
+            // v2: prefer guid resolution; v1: plain path.
+            AssetGuid g = AssetGuid::FromString(entry.value("guid", std::string()));
+            std::string fallback = entry.value("path", std::string());
+            std::string path = AssetDatabase::Resolve(g, fallback);
             if (path.empty()) continue;
             if (entry.contains("folder")) assets.SetAssetFolder(path, entry["folder"].get<std::string>());
             if (entry.contains("displayName")) assets.SetDisplayName(path, entry["displayName"].get<std::string>());
@@ -1084,16 +1133,28 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
         }
     }
     if (root.contains("libraryModels")) {
-        for (const auto& p : root["libraryModels"]) assets.LoadModel(p.get<std::string>());
+        for (const auto& p : root["libraryModels"]) {
+            std::string path = ResolveAssetRef(p);
+            if (!path.empty()) assets.LoadModel(path);
+        }
     }
     if (root.contains("libraryTextures")) {
-        for (const auto& p : root["libraryTextures"]) assets.LoadTexture(p.get<std::string>());
+        for (const auto& p : root["libraryTextures"]) {
+            std::string path = ResolveAssetRef(p);
+            if (!path.empty()) assets.LoadTexture(path);
+        }
     }
     if (root.contains("librarySounds")) {
-        for (const auto& p : root["librarySounds"]) assets.RegisterSound(p.get<std::string>());
+        for (const auto& p : root["librarySounds"]) {
+            std::string path = ResolveAssetRef(p);
+            if (!path.empty()) assets.RegisterSound(path);
+        }
     }
     if (root.contains("libraryPrefabs")) {
-        for (const auto& p : root["libraryPrefabs"]) assets.RegisterPrefab(p.get<std::string>());
+        for (const auto& p : root["libraryPrefabs"]) {
+            std::string path = ResolveAssetRef(p);
+            if (!path.empty()) assets.RegisterPrefab(path);
+        }
     }
     if (root.contains("assetFolders")) {
         for (const auto& f : root["assetFolders"]) assets.CreateFolder(f.get<std::string>());
