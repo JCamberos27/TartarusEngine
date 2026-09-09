@@ -99,8 +99,8 @@ void main() {
             float envelope = smoothstep(0.10, 0.6, r) * (1.0 - smoothstep(40.0, 75.0, r)) * distFade;
             float xLine = AxisLine(worldPos.z, deriv, uAxisThickness) * envelope; // X axis (red)
             float zLine = AxisLine(worldPos.x, deriv, uAxisThickness) * envelope; // Z axis (blue)
-            if (xLine >= zLine && xLine > 0.001) { axisColor = vec3(1.00, 0.24, 0.26); axisAlpha = xLine; }
-            else if (zLine > 0.001)              { axisColor = vec3(0.26, 0.48, 1.00); axisAlpha = zLine; }
+            if (xLine >= zLine && xLine > 0.001) { axisColor = vec3(1.0, 0.0, 0.0); axisAlpha = xLine; }
+            else if (zLine > 0.001)              { axisColor = vec3(0.0, 0.0, 1.0); axisAlpha = zLine; }
         }
     }
 
@@ -141,7 +141,7 @@ void main() {
     float outAlpha = gridAlpha;
     vec3  outColor = vec3(0.55);
     if (axisAlpha > 0.0) { outColor = axisColor; outAlpha = max(outAlpha, axisAlpha); }
-    if (yAlpha > outAlpha) { outColor = vec3(0.28, 0.90, 0.34); outAlpha = yAlpha; } // Y axis (green)
+    if (yAlpha > outAlpha) { outColor = vec3(0.0, 1.0, 0.0); outAlpha = yAlpha; } // Y axis (green)
 
     if (outAlpha <= 0.003) discard;
     FragColor = vec4(outColor, outAlpha);

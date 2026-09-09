@@ -1,10 +1,12 @@
 #pragma once
 #include <memory>
+#include <unordered_map>
 #include <vector>
 #include <glm/glm.hpp>
 
 class Shader;
 class World;
+class Model;
 
 // Scene-viewport wireframe overlay of every ColliderComponent's PhysX shape — box, sphere or
 // capsule (#185 PR 2). Immediate-mode: each Draw() rebuilds a world-space line list from the
@@ -19,12 +21,20 @@ public:
     ColliderGizmo();
     ~ColliderGizmo();
 
-    void Draw(const glm::mat4& view, const glm::mat4& proj, const World& world);
+    // drawShapes false = skip the collider wireframes (Colliders toggle off) but still draw the
+    // contact crosses + physics debug-draw channels, which have their own toggles (#185).
+    void Draw(const glm::mat4& view, const glm::mat4& proj, const World& world, bool drawShapes = true);
 
 private:
     unsigned int m_VAO = 0;
     unsigned int m_VBO = 0;
-    size_t m_Capacity = 0; // current VBO size in glm::vec3 units
+    size_t m_Capacity = 0; // current VBO size in floats
     std::unique_ptr<Shader> m_Shader;
-    std::vector<glm::vec3> m_Verts; // interleaved: pos, colour, pos, colour, ... (2 per endpoint)
+    std::vector<float> m_Verts; // interleaved per vertex: pos.xyz, colour.rgba (7 floats)
+
+    // #185 — model-space UNIQUE edges of a convex-hull / triangle-mesh collider, built once per
+    // Model from its cooked collision geometry and then just transformed each frame. An empty
+    // list means "too dense — draw the bounds box instead". Keyed by raw Model* (stable for the
+    // life of a loaded asset); entries are cheap and never invalidate.
+    std::unordered_map<const Model*, std::vector<glm::vec3>> m_MeshEdgeCache;
 };

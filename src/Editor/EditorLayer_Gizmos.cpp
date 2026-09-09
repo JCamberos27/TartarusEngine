@@ -18,6 +18,7 @@
 #include "Log.h"
 #include "EditorSettings.h"
 #include "EditorUIHelpers.h"
+#include "PhysicsWorld.h"   // #185 — mirror gizmo edits into the live actor while playing
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
@@ -1737,10 +1738,23 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
                 m_SurfaceSnapAlign ? "surface + align" : "surface");
         }
         DrawGizmoDragReadout(transform.Position, transform.RotationEuler, transform.Scale);
+        PushGizmoEditToPhysics(m_Selected, parentWorld * ComposeTransform(transform)); // #185
     }
 
     EndGizmoOverlay();
 }
+
+// #185 — push a transform-gizmo edit into the live PhysX actor during Play so the drag holds
+// (the sim would otherwise write the old pose straight back over it next step).
+void EditorLayer::PushGizmoEditToPhysics(entt::entity e, const glm::mat4& worldMatrix) {
+    if (!m_InPlayMode || !PhysicsWorld::IsActive() || e == entt::null) return;
+    const glm::vec3 p(worldMatrix[3]);
+    const glm::vec3 rot = EulerYXZFromMatrix(worldMatrix);
+    const float pf[3] = { p.x, p.y, p.z };
+    const float rf[3] = { rot.x, rot.y, rot.z };
+    PhysicsWorld::SetActorPose((unsigned)entt::to_integral(e), pf, rf, /*zeroVelocity=*/true);
+}
+
 
 // #236 E — a small readout near the cursor while a gizmo is dragging: the delta from where the
 // drag started, in the units that match the active tool.
@@ -2180,6 +2194,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
             transform.Position = {nt[0], nt[1], nt[2]};
             transform.RotationEuler = EulerYXZFromMatrix(newLocal); // ComposeTransform order, not ImGuizmo's (#108)
             transform.Scale = {ns[0], ns[1], ns[2]};
+            PushGizmoEditToPhysics(r.entity, newWorld); // #185
         }
     }
     m_GizmoWasUsing = isUsingNow;

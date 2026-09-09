@@ -57,6 +57,10 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     if (Grounded && Velocity.y < 0.0f) Velocity.y = 0.0f;          // stop accumulating fall speed
     if ((flags & PhysicsWorld::CC_UP) && Velocity.y > 0.0f) Velocity.y = 0.0f; // bonk head
 
+    // Ride a rotating platform: turn the view with it (#185 hardening). The capsule itself is
+    // radial so only the look direction needs it.
+    Cam.Yaw += PhysicsWorld::PlatformYawDelta();
+
     float out[3] = {feet.x, feet.y, feet.z};
     PhysicsWorld::GetCharacterFootPosition(out);
     Cam.Position = glm::vec3(out[0], out[1], out[2]) + glm::vec3(0, EyeHeight, 0);

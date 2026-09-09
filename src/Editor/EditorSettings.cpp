@@ -78,6 +78,12 @@ void EditorSettings::Load() {
     s.LightGizmoOpacity = root.value("lightGizmoOpacity", s.LightGizmoOpacity);
     s.LightGizmoScale = root.value("lightGizmoScale", s.LightGizmoScale);
     s.ShowColliders = root.value("showColliders", s.ShowColliders);
+    s.PhysicsDebugInput = root.value("physicsDebugInput", s.PhysicsDebugInput);
+    s.ShowPhysicsPanel = root.value("showPhysicsPanel", s.ShowPhysicsPanel);
+    s.PhysicsHudOverlay = root.value("physicsHudOverlay", s.PhysicsHudOverlay);
+    s.PhysicsDebugDrawFlags = root.value("physicsDebugDrawFlags", s.PhysicsDebugDrawFlags);
+    s.PhysicsSimTimeScale = root.value("physicsSimTimeScale", s.PhysicsSimTimeScale);
+    s.PlayDebugOverlay = root.value("playDebugOverlay", s.PlayDebugOverlay);
     s.LayerVisibleMask = root.value("layerVisibleMask", s.LayerVisibleMask);
     s.LayerPickLockMask = root.value("layerPickLockMask", s.LayerPickLockMask);
     s.CaptureMode = root.value("captureMode", s.CaptureMode);
@@ -141,6 +147,12 @@ void EditorSettings::Save() {
     root["lightGizmoOpacity"] = Get().LightGizmoOpacity;
     root["lightGizmoScale"] = Get().LightGizmoScale;
     root["showColliders"] = Get().ShowColliders;
+    root["physicsDebugInput"] = Get().PhysicsDebugInput;
+    root["showPhysicsPanel"] = Get().ShowPhysicsPanel;
+    root["physicsHudOverlay"] = Get().PhysicsHudOverlay;
+    root["physicsDebugDrawFlags"] = Get().PhysicsDebugDrawFlags;
+    root["physicsSimTimeScale"] = Get().PhysicsSimTimeScale;
+    root["playDebugOverlay"] = Get().PlayDebugOverlay;
     root["layerVisibleMask"] = Get().LayerVisibleMask;
     root["layerPickLockMask"] = Get().LayerPickLockMask;
     root["captureMode"] = Get().CaptureMode;

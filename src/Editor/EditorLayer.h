@@ -836,6 +836,17 @@ private:
     bool m_ShowProjectSettings = false;
     int m_ProjSettingsCategory = 0;
     char m_NewTagBuf[48] = {};
+
+    // Physics debug panel + Play HUD overlay (#185). Host-side (EditorLayer is in the exe), so
+    // both call PhysicsWorld:: directly. Visibility persists in EditorSettings.
+    void DrawPhysicsDebugWindow(World& world);
+    void DrawPhysicsHud(bool maximized = false);
+public:
+    // Called from main.cpp during MAXIMIZED play (editor.Draw() is skipped then): the physics
+    // debug window + HUD still render as floating windows over the game so the sim stays
+    // inspectable and the draw channels stay adjustable. #185.
+    void DrawPlayModeOverlays(World& world);
+private:
 public:
     // The launch-time system report (OS/CPU/RAM/GPU/GL/display/build), built by main.cpp.
     // Shown in Preferences > About.
@@ -1556,6 +1567,10 @@ private:
     void DrawMaterialEditor(World& world, AssetLibrary& assets,
                             const std::vector<entt::entity>& sel);
     void DrawGizmo(World& world, Camera& editorCamera);
+    // #185 — while playing, mirror a transform-gizmo edit into the live PhysX actor so the drag
+    // sticks instead of being overwritten by the next simulation step. `worldMatrix` is the
+    // entity's final world transform this frame. No-op outside Play / for a non-physics entity.
+    void PushGizmoEditToPhysics(entt::entity e, const glm::mat4& worldMatrix);
     // Small screen-space markers for entities with no mesh (lights, empties) — without these
     // they'd be invisible and unclickable in the viewport, since there's nothing to rasterize.
     void DrawEntityIcons(World& world, Camera& editorCamera);
