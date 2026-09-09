@@ -197,6 +197,8 @@ float StatsSampleViewportLuminanceFn(float screenCenterX, float screenCenterY, f
     return g_Editor ? g_Editor->SampleStatsHudLuminance(screenCenterX, screenCenterY, boxPx) : -1.0f;
 }
 
+bool GetAdaptiveHudContrastFn() { return EditorSettings::Get().AdaptiveHudContrast; } // v16
+
 // --- Toolbar / menus (API v4) --------------------------------------------------------------
 // Bodies for the reloadable toolbar strip (EditorModuleToolbar.cpp). The strip's window,
 // XP chrome and icon-row layout are module-side; every toggle it shows and every menu it opens
@@ -255,6 +257,7 @@ bool TbCanSnapSelectionToGround() {
 void TbSnapSelectionToGround() { if (g_Editor && g_World) g_Editor->ToolbarSnapToGround(*g_World); }
 void TbRequestResetLayout() { if (g_Editor) g_Editor->RequestResetLayout(); }
 void TbOpenPreferences() { if (g_Editor) g_Editor->OpenPreferences(); }
+void TbOpenProjectSettings() { if (g_Editor) g_Editor->OpenProjectSettings(); }
 
 void TbDrawFileMenuBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawFileMenuBody(*g_World, *g_Assets);
@@ -454,6 +457,7 @@ const EditorModuleHostAPI kHostAPI{
     &StatsGetSmoothedFrameMsFn,
     &StatsSetHideEngineMarkFn,
     &StatsSampleViewportLuminanceFn,
+    &GetAdaptiveHudContrastFn, // v16
     // --- Toolbar / menus (API v4) — order must match EditorModuleHostAPI exactly ---
     &TbGetToolbarMetrics,
     &TbGetEditorTheme,
@@ -478,6 +482,7 @@ const EditorModuleHostAPI kHostAPI{
     &TbSnapSelectionToGround,
     &TbRequestResetLayout,
     &TbOpenPreferences,
+    &TbOpenProjectSettings,
     &TbDrawFileMenuBody,
     &TbDrawAddEntityMenuItems,
     &TbDrawViewMenuBody,

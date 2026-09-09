@@ -35,6 +35,7 @@ void EditorSettings::Load() {
     // new default, Bento.
     if (s.EditorTheme < 0 || s.EditorTheme > 2) s.EditorTheme = 0;
     s.ShowTooltips = root.value("showTooltips", s.ShowTooltips);
+    s.AdaptiveHudContrast = root.value("adaptiveHudContrast", s.AdaptiveHudContrast);
     s.UiScaleOverride = root.value("uiScaleOverride", s.UiScaleOverride);
     s.AutoSaveEnabled = root.value("autoSaveEnabled", s.AutoSaveEnabled);
     s.AutoSaveIntervalMinutes = root.value("autoSaveIntervalMinutes", s.AutoSaveIntervalMinutes);
@@ -104,6 +105,7 @@ void EditorSettings::Save() {
     json root;
     root["editorTheme"] = Get().EditorTheme;
     root["showTooltips"] = Get().ShowTooltips;
+    root["adaptiveHudContrast"] = Get().AdaptiveHudContrast;
     root["uiScaleOverride"] = Get().UiScaleOverride;
     root["autoSaveEnabled"] = Get().AutoSaveEnabled;
     root["autoSaveIntervalMinutes"] = Get().AutoSaveIntervalMinutes;

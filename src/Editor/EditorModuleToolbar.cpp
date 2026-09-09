@@ -199,7 +199,10 @@ void Draw(const EditorModuleHostAPI& host) {
         }
 
         if (ImGui::MenuItem(ICON_FA_GEAR " Preferences") && host.OpenPreferences) host.OpenPreferences();
-        if (ImGui::IsItemHovered()) Tooltip(host, "Editor settings, environment, shortcuts (Ctrl+,)");
+        if (ImGui::IsItemHovered()) Tooltip(host, "Per-user editor settings, environment, shortcuts (Ctrl+,)");
+
+        if (ImGui::MenuItem(ICON_FA_GEARS " Project Settings") && host.OpenProjectSettings) host.OpenProjectSettings();
+        if (ImGui::IsItemHovered()) Tooltip(host, "Physics, tags and layer names \xE2\x80\x94 saved with the project, not your editor prefs");
 
         // Custom window controls, right-aligned — the OS title bar is gone (Win32 custom frame,
         // Window.cpp), so minimize / maximize-restore / close live here instead.
