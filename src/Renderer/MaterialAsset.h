@@ -42,6 +42,7 @@ struct MaterialAsset {
     std::string RoughnessMapPath;
     std::string AOMapPath;
     std::string EmissiveMapPath;
+    std::string ClearCoatMapPath; // PR10
 
     // Loads a MaterialAsset from a .mat JSON file. Resolves and loads textures via `lib` when
     // non-null (they remain null otherwise). Returns nullptr on I/O or parse error.

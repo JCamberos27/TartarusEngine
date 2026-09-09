@@ -61,6 +61,11 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
             m.EmissiveStrength = props.value("_EmissiveStrength", 1.0f);
             m.Triplanar        = props.value("_Triplanar",        false);
             m.TriplanarScale   = props.value("_TriplanarScale",   1.0f);
+            // Scalars / PR10
+            m.ClearCoat          = props.value("_ClearCoat",          0.0f);
+            m.ClearCoatRoughness = props.value("_ClearCoatRoughness",  0.5f);
+            m.Anisotropy         = props.value("_Anisotropy",          0.0f);
+            m.AnisotropyRotation = props.value("_AnisotropyRotation",  0.0f);
             // Texture paths
             ma->AlbedoMapPath            = strProp("_AlbedoMap");
             ma->NormalMapPath            = strProp("_NormalMap");
@@ -69,6 +74,7 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
             ma->RoughnessMapPath         = strProp("_RoughnessMap");
             ma->AOMapPath                = strProp("_AOMap");
             ma->EmissiveMapPath          = strProp("_EmissiveMap");
+            ma->ClearCoatMapPath         = strProp("_ClearCoatMap");
         }
     } else {
         // v1 format: flat property keys, no shader reference.
@@ -100,6 +106,7 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
         m.RoughnessMap         = loadTex(ma->RoughnessMapPath);
         m.AOMap                = loadTex(ma->AOMapPath);
         m.EmissiveMap          = loadTex(ma->EmissiveMapPath);
+        m.ClearCoatMap         = loadTex(ma->ClearCoatMapPath);
 
         // Resolve shader asset when path is set (AssetLibrary handles caching).
         if (!ma->ShaderPath.empty())
@@ -142,6 +149,11 @@ bool MaterialAsset::Save() const {
         props["_RoughnessMap"]        = RoughnessMapPath;
         props["_AOMap"]               = AOMapPath;
         props["_EmissiveMap"]         = EmissiveMapPath;
+        if (m.ClearCoat           != 0.0f) props["_ClearCoat"]          = m.ClearCoat;
+        if (m.ClearCoatRoughness  != 0.5f) props["_ClearCoatRoughness"] = m.ClearCoatRoughness;
+        if (m.Anisotropy          != 0.0f) props["_Anisotropy"]         = m.Anisotropy;
+        if (m.AnisotropyRotation  != 0.0f) props["_AnisotropyRotation"] = m.AnisotropyRotation;
+        if (!ClearCoatMapPath.empty())     props["_ClearCoatMap"]        = ClearCoatMapPath;
     } else {
         // v1 format (backward compatible)
         j["matVersion"]          = 1;
@@ -177,6 +189,7 @@ const std::shared_ptr<Texture>& MaterialAsset::GetTexture(const Material& m, con
     if (n == "_RoughnessMap")         return m.RoughnessMap;
     if (n == "_AOMap")                return m.AOMap;
     if (n == "_EmissiveMap")          return m.EmissiveMap;
+    if (n == "_ClearCoatMap")         return m.ClearCoatMap;
     return sNull;
 }
 
@@ -187,10 +200,14 @@ glm::vec3 MaterialAsset::GetColor(const Material& m, const std::string& n) {
 }
 
 float MaterialAsset::GetFloat(const Material& m, const std::string& n) {
-    if (n == "_Metallic")        return m.Metallic;
-    if (n == "_Roughness")       return m.Roughness;
-    if (n == "_EmissiveStrength")return m.EmissiveStrength;
-    if (n == "_TriplanarScale")  return m.TriplanarScale;
+    if (n == "_Metallic")            return m.Metallic;
+    if (n == "_Roughness")           return m.Roughness;
+    if (n == "_EmissiveStrength")    return m.EmissiveStrength;
+    if (n == "_TriplanarScale")      return m.TriplanarScale;
+    if (n == "_ClearCoat")           return m.ClearCoat;
+    if (n == "_ClearCoatRoughness")  return m.ClearCoatRoughness;
+    if (n == "_Anisotropy")          return m.Anisotropy;
+    if (n == "_AnisotropyRotation")  return m.AnisotropyRotation;
     return 0.0f;
 }
 
@@ -207,6 +224,7 @@ void MaterialAsset::SetTexture(Material& m, const std::string& n, const std::sha
     if (n == "_RoughnessMap")         { m.RoughnessMap = tex; return; }
     if (n == "_AOMap")                { m.AOMap = tex; return; }
     if (n == "_EmissiveMap")          { m.EmissiveMap = tex; return; }
+    if (n == "_ClearCoatMap")         { m.ClearCoatMap = tex; return; }
 }
 
 void MaterialAsset::SetColor(Material& m, const std::string& n, const glm::vec3& v) {
@@ -215,10 +233,14 @@ void MaterialAsset::SetColor(Material& m, const std::string& n, const glm::vec3&
 }
 
 void MaterialAsset::SetFloat(Material& m, const std::string& n, float v) {
-    if (n == "_Metallic")         { m.Metallic = v; return; }
-    if (n == "_Roughness")        { m.Roughness = v; return; }
-    if (n == "_EmissiveStrength") { m.EmissiveStrength = v; return; }
-    if (n == "_TriplanarScale")   { m.TriplanarScale = v; return; }
+    if (n == "_Metallic")            { m.Metallic = v; return; }
+    if (n == "_Roughness")           { m.Roughness = v; return; }
+    if (n == "_EmissiveStrength")    { m.EmissiveStrength = v; return; }
+    if (n == "_TriplanarScale")      { m.TriplanarScale = v; return; }
+    if (n == "_ClearCoat")           { m.ClearCoat = v; return; }
+    if (n == "_ClearCoatRoughness")  { m.ClearCoatRoughness = v; return; }
+    if (n == "_Anisotropy")          { m.Anisotropy = v; return; }
+    if (n == "_AnisotropyRotation")  { m.AnisotropyRotation = v; return; }
 }
 
 void MaterialAsset::SetBool(Material& m, const std::string& n, bool v) {

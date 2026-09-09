@@ -18,9 +18,18 @@ Properties {
     _RoughnessMap      ("Roughness Map",    Texture2D) = "white"
     _AOMap             ("AO",               Texture2D) = "white"
     _EmissiveMap       ("Emissive",         Texture2D) = "black"
+    // PR10: Clear Coat
+    _ClearCoat           ("Clear Coat",           Float)     = 0
+    _ClearCoatRoughness  ("Clear Coat Roughness",  Float)     = 0.5
+    [Hidden] _ClearCoatMap ("Clear Coat Map",      Texture2D) = "white"
+    // PR10: Anisotropy
+    _Anisotropy          ("Anisotropy",            Float)     = 0
+    _AnisotropyRotation  ("Anisotropy Rotation",   Float)     = 0
 }
 
 Keywords {
+    _CLEARCOAT
+    _ANISO
 }
 
 Vertex   { ModelVertex.glsl }
