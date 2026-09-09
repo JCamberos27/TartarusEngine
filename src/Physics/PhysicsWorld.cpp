@@ -68,17 +68,25 @@ struct SimEventCallback : PxSimulationEventCallback {
 };
 
 // Custom filter shader: PxDefaultSimulationFilterShader solves contacts but reports none.
-// This keeps its trigger handling and adds the NOTIFY flags so onContact fires for solid pairs.
+// This keeps its trigger handling, adds the NOTIFY flags so onContact fires for solid pairs
+// (#185 PR 7), kills pairs the layer matrix disables (#185 PR 8; word1 of each shape's filter
+// data is its layer 0-7, constantBlock is ProjectSettings' 8-word mask), and asks for CCD
+// contact detection so a body with the eENABLE_CCD flag actually sweeps (#185 PR 9).
 PxFilterFlags EngineFilterShader(
     PxFilterObjectAttributes attributes0, PxFilterData filterData0,
     PxFilterObjectAttributes attributes1, PxFilterData filterData1,
     PxPairFlags& pairFlags, const void* constantBlock, PxU32 constantBlockSize) {
-    (void)filterData0; (void)filterData1; (void)constantBlock; (void)constantBlockSize;
+    if (constantBlock && constantBlockSize >= sizeof(PxU32) * 8) {
+        const PxU32* mask = static_cast<const PxU32*>(constantBlock);
+        const PxU32 la = filterData0.word1 & 7u, lb = filterData1.word1 & 7u;
+        if (((mask[la] >> lb) & 1u) == 0u) return PxFilterFlag::eKILL;
+    }
     if (PxFilterObjectIsTrigger(attributes0) || PxFilterObjectIsTrigger(attributes1)) {
         pairFlags = PxPairFlag::eTRIGGER_DEFAULT;
         return PxFilterFlag::eDEFAULT;
     }
     pairFlags = PxPairFlag::eCONTACT_DEFAULT
+              | PxPairFlag::eDETECT_CCD_CONTACT
               | PxPairFlag::eNOTIFY_TOUCH_FOUND
               | PxPairFlag::eNOTIFY_TOUCH_PERSISTS
               | PxPairFlag::eNOTIFY_TOUCH_LOST
@@ -86,10 +94,21 @@ PxFilterFlags EngineFilterShader(
     return PxFilterFlag::eDEFAULT;
 }
 
+// The CCT hit report: push dynamic bodies the Player walks into, and remember a kinematic body
+// it's standing on so MoveCharacter can carry it along (#185 PR 10).
+struct PlayerHitReport : PxUserControllerHitReport {
+    PhysicsState* owner = nullptr;
+    void onShapeHit(const PxControllerShapeHit& hit) override;
+    void onControllerHit(const PxControllersHit&) override {}
+    void onObstacleHit(const PxControllerObstacleHit&) override {}
+};
+
 struct PhysicsState {
     PxDefaultAllocator     allocator;
     EngineErrorCallback    errorCallback;
     SimEventCallback       simCb;
+    PlayerHitReport        hitReport;
+    PxU32                  layerMask[8] = {0xFFu,0xFFu,0xFFu,0xFFu,0xFFu,0xFFu,0xFFu,0xFFu}; // #185 PR 8 constant block
     PxFoundation*          foundation   = nullptr;
     PxPhysics*             physics      = nullptr;
     PxDefaultCpuDispatcher* dispatcher  = nullptr;
@@ -121,6 +140,17 @@ struct PhysicsState {
     std::map<std::pair<int, int>, PxMaterial*>       materialCache;
     std::unordered_map<std::uint32_t, PxRigidDynamic*> bodyByEntity;
     std::vector<ContactEvent>                        contactEvents;
+    // #185 PR 11 — joints built on Play-enter, released before the scene.
+    std::vector<PxJoint*> joints;
+    // #185 PR 12 — cooked meshes cached by model path so a Play->Stop->Play doesn't re-cook.
+    // These own the meshes (released in Destroy); convexMeshes/triangleMeshes above just track
+    // the non-cached (should be none now) plus keep the release loop simple.
+    std::unordered_map<std::string, PxConvexMesh*>   convexCache;
+    std::unordered_map<std::string, PxTriangleMesh*> triangleCache;
+    // #185 PR 10 — Player's kinematic ground (moving platform) and its last pose, for carry.
+    PxRigidDynamic* playerGround = nullptr;
+    PxVec3          playerGroundLastPos{0.0f};
+    bool            playerGroundHitThisMove = false;
 #ifdef TARTARUS_PHYSX_PVD
     PxPvd*               pvd            = nullptr;
     PxPvdTransport*      pvdTransport   = nullptr;
@@ -275,20 +305,25 @@ void BuildActors(PhysicsState& s, const World& world) {
                 Log::Warn("PhysX: entity " + std::to_string(entt::to_integral(e)) +
                           " — a triangle-mesh collider can't be dynamic; using a convex hull.");
 
+            // Cook once per model path per Play session (#185 PR 12) — a cooked mesh is
+            // scale-independent (scale rides on the geometry's PxMeshScale), so the cache key
+            // is just the path.
+            const std::string key = (rc && rc->ModelRef) ? rc->ModelRef->Path() : std::string();
             if (useTriangle) {
-                PxTriangleMesh* tm = CookTriangle(*s.physics, verts, idx);
-                if (!tm) { ++skipped; continue; }
-                s.triangleMeshes.push_back(tm);
+                PxTriangleMesh*& tm = s.triangleCache[key];
+                if (!tm) tm = CookTriangle(*s.physics, verts, idx);
+                if (!tm) { s.triangleCache.erase(key); ++skipped; continue; }
                 make(PxTriangleMeshGeometry(tm, meshScale));
             } else {
-                PxConvexMesh* cm = CookConvex(*s.physics, verts);
+                PxConvexMesh*& cm = s.convexCache[key];
+                if (!cm) cm = CookConvex(*s.physics, verts);
                 if (!cm) {
+                    s.convexCache.erase(key);
                     Log::Warn("PhysX: entity " + std::to_string(entt::to_integral(e)) +
                               " — convex cook failed (mesh too complex?) — skipped.");
                     ++skipped;
                     continue;
                 }
-                s.convexMeshes.push_back(cm);
                 make(PxConvexMeshGeometry(cm, meshScale));
             }
         } else if (c.HalfExtents == glm::vec3(0.0f)) {
@@ -337,6 +372,11 @@ void BuildActors(PhysicsState& s, const World& world) {
         if (!shape) { ++skipped; continue; }
         shape->setLocalPose(shapeLocal);
 
+        // #185 PR 8 — stamp the layer (word1) so EngineFilterShader can apply the matrix.
+        const auto* lc = world.Registry.try_get<const LayerComponent>(e);
+        const PxU32 layer = (lc && lc->Layer >= 0 && lc->Layer < 8) ? (PxU32)lc->Layer : 0u;
+        shape->setSimulationFilterData(PxFilterData(1u << layer, layer, 0u, 0u));
+
         if (!rb) {
             PxRigidStatic* a = s.physics->createRigidStatic(actorPose);
             a->attachShape(*shape);
@@ -356,6 +396,8 @@ void BuildActors(PhysicsState& s, const World& world) {
         b->setLinearDamping(std::max(0.0f, rb->LinearDamping));
         b->setAngularDamping(std::max(0.0f, rb->AngularDamping));
         b->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, !rb->UseGravity);
+        if (rb->ContinuousCollision && !rb->IsKinematic)
+            b->setRigidBodyFlag(PxRigidBodyFlag::eENABLE_CCD, true); // #185 PR 9
         if (rb->IsKinematic) {
             b->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
             s.kinematics.push_back({b, e});
@@ -373,6 +415,73 @@ void BuildActors(PhysicsState& s, const World& world) {
                       " dynamic, " + std::to_string(kinematic) + " kinematic collider(s)";
     if (skipped) msg += "; " + std::to_string(skipped) + " skipped (degenerate size)";
     Log::Info(msg + ".");
+}
+
+// --- Joints (#185 PR 11) ---------------------------------------------------------------
+
+// Rotate a joint's default axis (local X) onto `axis`.
+PxQuat AxisToLocalFrame(const glm::vec3& axis) {
+    glm::vec3 a = axis;
+    if (glm::dot(a, a) < 1e-8f) a = glm::vec3(1, 0, 0);
+    a = glm::normalize(a);
+    return PxShortestRotation(PxVec3(1, 0, 0), PxVec3(a.x, a.y, a.z));
+}
+
+void BuildJoints(PhysicsState& s, const World& world) {
+    auto jointView = world.Registry.view<const JointComponent, const TransformComponent>(entt::exclude<InactiveTag>);
+    if (jointView.begin() == jointView.end()) return;
+
+    // Joints reference the other body by its OrderComponent value; index the dynamic/kinematic
+    // bodies we built by that. (Static targets aren't supported yet — connect to the world.)
+    std::unordered_map<int, PxRigidDynamic*> byOrder;
+    for (entt::entity e : world.Registry.view<const OrderComponent>()) {
+        auto it = s.bodyByEntity.find(entt::to_integral(e));
+        if (it != s.bodyByEntity.end())
+            byOrder[world.Registry.get<const OrderComponent>(e).Value] = it->second;
+    }
+
+    int made = 0, skipped = 0;
+    for (entt::entity e : jointView) {
+        const auto& j = jointView.get<const JointComponent>(e);
+        const std::string tag = "entity " + std::to_string(entt::to_integral(e));
+
+        auto self = s.bodyByEntity.find(entt::to_integral(e));
+        if (self == s.bodyByEntity.end()) {
+            Log::Warn("PhysX: " + tag + " has a Joint but no Rigidbody — skipped."); ++skipped; continue;
+        }
+        PxRigidActor* a0 = self->second;
+        PxRigidActor* a1 = nullptr;
+        if (j.ConnectedOrder >= 0) {
+            auto o = byOrder.find(j.ConnectedOrder);
+            if (o == byOrder.end()) {
+                Log::Warn("PhysX: Joint on " + tag + " — connected body (order " +
+                          std::to_string(j.ConnectedOrder) + ") not found — skipped.");
+                ++skipped; continue;
+            }
+            a1 = o->second;
+        }
+
+        const PxTransform f0(ToPx(j.Anchor), AxisToLocalFrame(j.Axis));
+        const PxTransform worldFrame = a0->getGlobalPose() * f0;
+        const PxTransform f1 = a1 ? (a1->getGlobalPose().getInverse() * worldFrame) : worldFrame;
+
+        PxJoint* joint = nullptr;
+        switch (j.Kind) {
+            case JointComponent::Type::Fixed:    joint = PxFixedJointCreate(*s.physics, a0, f0, a1, f1); break;
+            case JointComponent::Type::Hinge:    joint = PxRevoluteJointCreate(*s.physics, a0, f0, a1, f1); break;
+            case JointComponent::Type::Ball:     joint = PxSphericalJointCreate(*s.physics, a0, f0, a1, f1); break;
+            case JointComponent::Type::Slider:   joint = PxPrismaticJointCreate(*s.physics, a0, f0, a1, f1); break;
+            case JointComponent::Type::Distance: joint = PxDistanceJointCreate(*s.physics, a0, f0, a1, f1); break;
+        }
+        if (!joint) { ++skipped; continue; }
+        if (j.BreakForce > 0.0f)
+            joint->setBreakForce(j.BreakForce, j.BreakTorque > 0.0f ? j.BreakTorque : PX_MAX_F32);
+        s.joints.push_back(joint);
+        ++made;
+    }
+    if (made || skipped)
+        Log::Info("PhysX: " + std::to_string(made) + " joint(s)" +
+                  (skipped ? ", " + std::to_string(skipped) + " skipped" : "") + ".");
 }
 
 // --- Triggers (#185 PR 5) --------------------------------------------------------------
@@ -474,6 +583,36 @@ void SimEventCallback::onContact(const PxContactPairHeader& header, const PxCont
     }
 }
 
+// #185 PR 10 — the Player capsule hit something while moving. Push a dynamic body out of the
+// way (scaled so light things fly and heavy things barely budge), and if the thing is a
+// kinematic body underfoot, remember it so MoveCharacter can carry the Player along with it.
+void PlayerHitReport::onShapeHit(const PxControllerShapeHit& hit) {
+    if (!owner || !hit.actor) return;
+    PxRigidDynamic* body = hit.actor->is<PxRigidDynamic>();
+    if (!body) return;
+    const bool kin = (body->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC);
+    const PxVec3 n(hit.worldNormal.x, hit.worldNormal.y, hit.worldNormal.z);
+
+    if (kin) {
+        if (n.y > 0.4f) { // standing on top of a moving platform
+            if (owner->playerGround != body) {
+                owner->playerGround = body;
+                owner->playerGroundLastPos = body->getGlobalPose().p;
+            }
+            owner->playerGroundHitThisMove = true;
+        }
+        return; // don't shove a kinematic body around
+    }
+
+    // Push proportional to how hard we walked into it, inversely to its mass.
+    const PxVec3 dir(hit.dir.x, hit.dir.y, hit.dir.z);
+    const float mass = body->getMass() > 0.0f ? body->getMass() : 1.0f;
+    const float strength = 2.0f; // tune: units of impulse per (dir already ~= move distance)
+    PxRigidBodyExt::addForceAtPos(*body, dir * (strength * mass),
+                                  PxVec3((float)hit.worldPos.x, (float)hit.worldPos.y, (float)hit.worldPos.z),
+                                  PxForceMode::eIMPULSE, true);
+}
+
 } // namespace
 
 namespace PhysicsWorld {
@@ -524,13 +663,20 @@ void Create(const World& world) {
 
     s->defaultMaterial = s->physics->createMaterial(0.6f, 0.6f, 0.0f);
 
-    s->simCb.owner = s; // #185 PR 5
+    s->simCb.owner = s;      // #185 PR 5
+    s->hitReport.owner = s;  // #185 PR 10
+    // #185 PR 8 — snapshot the layer collision matrix; PhysX copies it as the filter constant block.
+    for (int i = 0; i < 8; ++i) s->layerMask[i] = ProjectSettings::Physics().LayerCollisionMask[i];
+
     PxSceneDesc desc(s->physics->getTolerancesScale());
     const glm::vec3 g = ProjectSettings::Physics().Gravity;
     desc.gravity                 = PxVec3(g.x, g.y, g.z);
     desc.cpuDispatcher           = s->dispatcher;
-    desc.filterShader            = EngineFilterShader; // trigger pairs + solid-contact reports (#185 PR 7)
+    desc.filterShader            = EngineFilterShader; // triggers, contacts (#185 PR 7), layers (PR 8), CCD (PR 9)
+    desc.filterShaderData        = s->layerMask;
+    desc.filterShaderDataSize    = sizeof(s->layerMask);
     desc.simulationEventCallback = &s->simCb;
+    desc.flags                  |= PxSceneFlag::eENABLE_CCD; // per-body, opt in via ContinuousCollision (#185 PR 9)
     s->scene = s->physics->createScene(desc);
     if (!s->scene) {
         Log::Error("PhysX: createScene failed — physics disabled for this Play session.");
@@ -552,6 +698,7 @@ void Create(const World& world) {
     Log::Info("PhysX world created (" + std::to_string(workers) + " worker threads).");
 
     BuildActors(*s, world);
+    BuildJoints(*s, world); // #185 PR 11
 }
 
 void Destroy() {
@@ -560,11 +707,14 @@ void Destroy() {
     g_State = nullptr; // clear first so a re-entrant Step() during teardown is a no-op
 
     // Reverse construction order. scene->release() drops every actor/shape it owns.
+    for (PxJoint* j : s->joints)               if (j) j->release(); // #185 PR 11 — before the scene
     if (s->controller)      s->controller->release();
     if (s->controllerMgr)   s->controllerMgr->release();
     if (s->scene)           s->scene->release();
     for (auto& kv : s->materialCache)          if (kv.second) kv.second->release(); // #185 PR 7
-    for (PxConvexMesh* m : s->convexMeshes)   if (m) m->release(); // #185 PR 6 — after the scene's shapes
+    for (auto& kv : s->convexCache)            if (kv.second) kv.second->release(); // #185 PR 6/12 — after the scene's shapes
+    for (auto& kv : s->triangleCache)          if (kv.second) kv.second->release();
+    for (PxConvexMesh* m : s->convexMeshes)   if (m) m->release(); // legacy non-cached path (now unused)
     for (PxTriangleMesh* m : s->triangleMeshes) if (m) m->release();
     if (s->defaultMaterial) s->defaultMaterial->release();
     if (s->dispatcher)      s->dispatcher->release();
@@ -721,6 +871,7 @@ void CreateCharacter(float radius, float cylinderHalfHeight, const float footPos
     desc.contactOffset = 0.05f;
     desc.material     = g_State->defaultMaterial;
     desc.climbingMode = PxCapsuleClimbingMode::eCONSTRAINED; // don't let the sphere cap boost climbs
+    desc.reportCallback = &g_State->hitReport;               // #185 PR 10 — push bodies / ride platforms
 
     if (!desc.isValid()) {
         Log::Error("PhysX: capsule controller desc invalid — Player will not collide this session.");
@@ -732,9 +883,15 @@ void CreateCharacter(float radius, float cylinderHalfHeight, const float footPos
         return;
     }
     // Tag the CCT actor so anything that reads userData (trigger callback, a future raycast
-    // hit on the player) can tell it apart from a real entity (#185 PR 5).
-    if (PxRigidActor* a = g_State->controller->getActor())
+    // hit on the player) can tell it apart from a real entity (#185 PR 5). Filter data layer 0
+    // (Default) so the layer matrix applies to the Player too (#185 PR 8).
+    if (PxRigidActor* a = g_State->controller->getActor()) {
         a->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(kPlayerEntity));
+        const PxU32 nbShapes = a->getNbShapes();
+        std::vector<PxShape*> shapes(nbShapes);
+        a->getShapes(shapes.data(), nbShapes);
+        for (PxShape* sh : shapes) sh->setSimulationFilterData(PxFilterData(1u, 0u, 0u, 0u));
+    }
 }
 
 void SetCharacterFootPosition(const float footPos[3]) {
@@ -752,13 +909,28 @@ void GetCharacterFootPosition(float outFootPos[3]) {
 
 unsigned MoveCharacter(const float disp[3], float dt) {
     if (!HasCharacter() || dt <= 0.0f) return 0;
+
+    PxVec3 d(disp[0], disp[1], disp[2]);
+    // #185 PR 10 — ride a moving platform: add the ground kinematic's motion since last move.
+    g_State->playerGroundHitThisMove = false;
+    if (g_State->playerGround) {
+        const PxVec3 now = g_State->playerGround->getGlobalPose().p;
+        d += now - g_State->playerGroundLastPos;
+        g_State->playerGroundLastPos = now;
+    }
+
     PxControllerFilters filters;
     PxControllerCollisionFlags f =
-        g_State->controller->move(PxVec3(disp[0], disp[1], disp[2]), /*minDist=*/0.001f, dt, filters);
+        g_State->controller->move(d, /*minDist=*/0.001f, dt, filters); // onShapeHit fires in here
+
     unsigned out = 0;
     if (f & PxControllerCollisionFlag::eCOLLISION_SIDES) out |= CC_SIDES;
     if (f & PxControllerCollisionFlag::eCOLLISION_UP)    out |= CC_UP;
     if (f & PxControllerCollisionFlag::eCOLLISION_DOWN)  out |= CC_DOWN;
+
+    // Stepped off the platform (no downward hit on it this move) — stop carrying it.
+    if (!g_State->playerGroundHitThisMove || !(out & CC_DOWN))
+        g_State->playerGround = nullptr;
     return out;
 }
 
@@ -858,6 +1030,69 @@ int GetContactEvents(ContactEvent* out, int maxEvents) {
     const int n = (maxEvents < total) ? maxEvents : total;
     for (int i = 0; i < n && out; ++i) out[i] = g_State->contactEvents[(size_t)i];
     return total;
+}
+
+// --- Shape queries (#185 PR 9) ----------------------------------------------------------
+
+bool SphereCast(const float origin[3], const float dir[3], float radius, float maxDistance,
+                RaycastHit& outHit) {
+    outHit = RaycastHit{};
+    if (!g_State || !g_State->scene || radius <= 0.0f || maxDistance <= 0.0f) return false;
+    PxVec3 d(dir[0], dir[1], dir[2]);
+    const float len = d.magnitude();
+    if (len < 1e-8f) return false;
+    d *= (1.0f / len);
+
+    PxSweepBuffer buf;
+    const PxTransform pose(PxVec3(origin[0], origin[1], origin[2]));
+    if (!g_State->scene->sweep(PxSphereGeometry(radius), pose, d, maxDistance, buf) || !buf.hasBlock)
+        return false;
+    const PxSweepHit& b = buf.block;
+    outHit.Hit = true;
+    outHit.Distance = b.distance;
+    outHit.Point[0]  = b.position.x; outHit.Point[1]  = b.position.y; outHit.Point[2]  = b.position.z;
+    outHit.Normal[0] = b.normal.x;   outHit.Normal[1] = b.normal.y;   outHit.Normal[2] = b.normal.z;
+    outHit.Entity = b.actor ? UserDataToEntity(b.actor->userData) : outHit.Entity;
+    return true;
+}
+
+int OverlapSphere(const float center[3], float radius, unsigned* out, int maxEntities) {
+    if (!g_State || !g_State->scene || radius <= 0.0f) return 0;
+    PxOverlapHit hits[64];
+    PxOverlapBuffer buf(hits, 64);
+    const PxTransform pose(PxVec3(center[0], center[1], center[2]));
+    if (!g_State->scene->overlap(PxSphereGeometry(radius), pose, buf)) return 0;
+
+    int count = 0;
+    for (PxU32 i = 0; i < buf.getNbTouches(); ++i) {
+        const PxOverlapHit& h = buf.getTouch(i);
+        if (h.shape && (h.shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) continue; // solids only
+        if (!h.actor) continue;
+        const unsigned id = UserDataToEntity(h.actor->userData);
+        bool dup = false;
+        for (int k = 0; k < count; ++k) if (out && k < maxEntities && out[k] == id) { dup = true; break; }
+        if (dup) continue;
+        if (out && count < maxEntities) out[count] = id;
+        ++count;
+    }
+    return count;
+}
+
+// --- Debug (#185 PR 12) --------------------------------------------------------------
+
+int CopyContactPoints(float* outXYZ, int maxPoints) {
+    if (!g_State) return 0;
+    int n = 0;
+    for (const ContactEvent& ev : g_State->contactEvents) {
+        if (ev.Kind == ContactEvent::Exit) continue;
+        if (outXYZ && n < maxPoints) {
+            outXYZ[n * 3 + 0] = ev.Point[0];
+            outXYZ[n * 3 + 1] = ev.Point[1];
+            outXYZ[n * 3 + 2] = ev.Point[2];
+        }
+        ++n;
+    }
+    return n;
 }
 
 } // namespace PhysicsWorld

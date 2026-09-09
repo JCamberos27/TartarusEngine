@@ -21,6 +21,24 @@ struct PhysicsSettings {
     // not a fixed sim step). Lands with the #185 physics step.
     float FixedTimestep = 1.0f / 60.0f;
     int   SolverIterations = 8;
+
+    // #185 PR 8 — collision matrix over the 8 LayerRegistry slots. Bit j of LayerCollisionMask[i]
+    // set == entities on layer i and layer j collide. Symmetric (the editor keeps both bits in
+    // sync); default all-on. Copied into the PhysX scene at Play-enter, so edits apply next Play.
+    unsigned LayerCollisionMask[8] = {0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu};
+
+    bool LayersCollide(int a, int b) const {
+        if (a < 0 || a > 7 || b < 0 || b > 7) return true;
+        return (LayerCollisionMask[a] >> b) & 1u;
+    }
+    void SetLayersCollide(int a, int b, bool on) {
+        if (a < 0 || a > 7 || b < 0 || b > 7) return;
+        auto set = [&](int i, int j) {
+            if (on) LayerCollisionMask[i] |= (1u << j);
+            else    LayerCollisionMask[i] &= ~(1u << j);
+        };
+        set(a, b); set(b, a);
+    }
 };
 
 const PhysicsSettings& Physics();

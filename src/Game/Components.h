@@ -99,6 +99,24 @@ struct RigidbodyComponent {
     glm::vec3 InitialVelocity{0.0f}; // linear velocity applied once, on Play-mode entry
     float LinearDamping = 0.05f;     // per-second velocity bleed (0 = frictionless drift)
     float AngularDamping = 0.05f;
+    // #185 PR 9 — swept CCD for this body, so a fast small object can't tunnel a thin wall.
+    // Costs a little; leave off for slow / large bodies.
+    bool  ContinuousCollision = false;
+};
+
+// A PhysX joint constraining this entity's body to another (or to a fixed world frame) while
+// playing (#185 PR 11). Needs a RigidbodyComponent on this entity; the other end is the entity
+// whose OrderComponent value is ConnectedOrder (also needs a Rigidbody), or the world when
+// ConnectedOrder < 0. Hand-serialised like ColliderComponent (a joint's "other end" isn't a
+// plain reflectable field). Play -> Stop restores the authored scene as usual.
+struct JointComponent {
+    enum class Type { Fixed = 0, Hinge = 1, Ball = 2, Slider = 3, Distance = 4 };
+    Type Kind = Type::Fixed;
+    int  ConnectedOrder = -1;        // OrderComponent.Value of the other body; <0 = world
+    glm::vec3 Anchor{0.0f};          // joint point, this entity's local space
+    glm::vec3 Axis{1.0f, 0.0f, 0.0f}; // hinge / slider axis, this entity's local space
+    float BreakForce  = 0.0f;        // 0 = unbreakable
+    float BreakTorque = 0.0f;
 };
 
 // Optional clip triggered from the editor Inspector; formerly PlacedModel-only, now any entity.

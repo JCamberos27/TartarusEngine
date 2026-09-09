@@ -77,6 +77,11 @@ void Load() {
         g_Physics.Gravity          = Vec3Or(p, "gravity", g_Physics.Gravity);
         g_Physics.FixedTimestep    = p.value("fixedTimestep", g_Physics.FixedTimestep);
         g_Physics.SolverIterations = p.value("solverIterations", g_Physics.SolverIterations);
+        if (const auto m = p.find("layerCollision"); m != p.end() && m->is_array()) { // #185 PR 8
+            for (int i = 0; i < 8 && i < (int)m->size(); ++i)
+                if ((*m)[i].is_number_unsigned() || (*m)[i].is_number_integer())
+                    g_Physics.LayerCollisionMask[i] = (*m)[i].get<unsigned>() & 0xFFu;
+        }
     }
 
     if (const auto it = root.find("tags"); it != root.end() && it->is_array()) {
@@ -92,6 +97,10 @@ void Save() {
         {"gravity", json::array({g_Physics.Gravity.x, g_Physics.Gravity.y, g_Physics.Gravity.z})},
         {"fixedTimestep", g_Physics.FixedTimestep},
         {"solverIterations", g_Physics.SolverIterations},
+        {"layerCollision", json::array({g_Physics.LayerCollisionMask[0], g_Physics.LayerCollisionMask[1],
+                                        g_Physics.LayerCollisionMask[2], g_Physics.LayerCollisionMask[3],
+                                        g_Physics.LayerCollisionMask[4], g_Physics.LayerCollisionMask[5],
+                                        g_Physics.LayerCollisionMask[6], g_Physics.LayerCollisionMask[7]})},
     };
     root["tags"] = g_Tags;
 

@@ -1708,6 +1708,74 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
     }
 
+    // --- Joint (#185 PR 11) --------------------------------------------------------------
+    if (auto* joint = registry.try_get<JointComponent>(entity)) {
+        bool jRemoved = false;
+        if (BeginComponentSection(ICON_FA_LINK, "Joint", true, jRemoved, /*defaultOpen=*/false,
+                "Constrains this body to another (or the world) while playing. Needs a Rigidbody\n"
+                "on this object and, unless connected to the world, on the target too.")) {
+            const char* kJTypes[] = { "Fixed", "Hinge", "Ball", "Slider", "Distance" };
+            int jt = (int)joint->Kind;
+            PropertyLabel("Type", "Fixed weld; Hinge/Slider use the Axis; Ball is a point pivot; Distance is a leash.");
+            if (ImGui::Combo("##JointType", &jt, kJTypes, IM_ARRAYSIZE(kJTypes))) {
+                PushUndo(world, "Change Joint Type");
+                joint->Kind = (JointComponent::Type)jt;
+            }
+
+            // Connected body picker: World, or any named entity by its Order value.
+            PropertyLabel("Connected", "The other end. 'World' anchors to a fixed point in space.");
+            std::string preview = joint->ConnectedOrder < 0 ? "World" : ("order " + std::to_string(joint->ConnectedOrder));
+            for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
+                if (registry.get<const OrderComponent>(oe).Value == joint->ConnectedOrder) {
+                    const std::string& nm = registry.get<const NameComponent>(oe).Name;
+                    if (!nm.empty()) preview = nm;
+                    break;
+                }
+            }
+            if (ImGui::BeginCombo("##JointConnected", preview.c_str())) {
+                if (ImGui::Selectable("World", joint->ConnectedOrder < 0)) {
+                    PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = -1;
+                }
+                for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
+                    if (oe == entity) continue;
+                    const int ord = registry.get<const OrderComponent>(oe).Value;
+                    const std::string& nm = registry.get<const NameComponent>(oe).Name;
+                    std::string lbl = (nm.empty() ? ("Entity " + std::to_string(ord)) : nm);
+                    if (ImGui::Selectable(lbl.c_str(), ord == joint->ConnectedOrder)) {
+                        PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = ord;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            bool jRowActive = false, jRowCommitted = false;
+            DrawVec3Row("Anchor", joint->Anchor, 0.05f, 0.0f, 0.0f, jRowActive, jRowCommitted,
+                "Joint point in this object's local space.");
+            if (jRowActive) StageUndo(world);
+            if (jRowCommitted) CommitStagedUndo(world, "Move Joint Anchor");
+            if (joint->Kind == JointComponent::Type::Hinge || joint->Kind == JointComponent::Type::Slider) {
+                DrawVec3Row("Axis", joint->Axis, 0.02f, 0.0f, 0.0f, jRowActive, jRowCommitted,
+                    "Hinge rotation / slider travel axis, this object's local space.");
+                if (jRowActive) StageUndo(world);
+                if (jRowCommitted) CommitStagedUndo(world, "Set Joint Axis");
+            }
+            PropertyLabel("Break Force", "Force (N) that snaps the joint. 0 = unbreakable.");
+            ImGui::DragFloat("##JointBreakF", &joint->BreakForce, 1.0f, 0.0f, 1e6f, "%.0f");
+            if (ImGui::IsItemActivated()) StageUndo(world);
+            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint");
+            PropertyLabel("Break Torque", "Torque (N·m) that snaps the joint. 0 = unbreakable.");
+            ImGui::DragFloat("##JointBreakT", &joint->BreakTorque, 1.0f, 0.0f, 1e6f, "%.0f");
+            if (ImGui::IsItemActivated()) StageUndo(world);
+            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint");
+
+            EndComponentSection();
+        }
+        if (jRemoved) {
+            PushUndo(world, "Remove Joint");
+            registry.remove<JointComponent>(entity);
+        }
+    }
+
     // Light moved onto reflection (#302 Wave 2b): Type/Intensity/Range/Spot Angle/Angular Size
     // and the whole Shadows group come from the generic ComponentRegistry path below (Enum,
     // sliders, per-Type VisibleIf, the "Shadows" TreeNode). The colour + Kelvin control, the
@@ -2340,6 +2408,8 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     section("Physics");
     entry(ICON_FA_CUBE, "Collider", registry.all_of<ColliderComponent>(entity),
         [&] { registry.emplace<ColliderComponent>(entity); });
+    entry(ICON_FA_LINK, "Joint", registry.all_of<JointComponent>(entity),
+        [&] { registry.emplace<JointComponent>(entity); });
     reflectedFor("Physics");
 
     if (anyReflectedIn("Audio")) {

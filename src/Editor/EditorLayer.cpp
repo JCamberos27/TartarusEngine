@@ -1264,6 +1264,34 @@ void EditorLayer::DrawProjectSettingsWindow(World& /*world*/) {
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Stored in project/settings.json now; consumed once the rigid-body\n"
                                  "step lands (#185). The Play-mode walker uses its own safety substep.");
+
+        // #185 PR 8 — layer collision matrix. Lower triangle: cell (row r, col c) toggles
+        // whether layers r and c collide. Applied at the next Play.
+        ImGui::SeparatorText("Collision Matrix");
+        ImGui::TextDisabled("Which layer pairs collide while playing. Name layers in Tags & Layers.");
+        ImGui::Spacing();
+        if (ImGui::BeginTable("##collmatrix", LayerRegistry::kCount + 1,
+                              ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersInnerV)) {
+            ImGui::TableNextColumn(); // corner
+            for (int c = 0; c < LayerRegistry::kCount; ++c) {
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(std::to_string(c).c_str());
+                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", LayerRegistry::DisplayName(c).c_str());
+            }
+            for (int r = 0; r < LayerRegistry::kCount; ++r) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(LayerRegistry::DisplayName(r).c_str());
+                for (int c = 0; c < LayerRegistry::kCount; ++c) {
+                    ImGui::TableNextColumn();
+                    if (c > r) continue; // lower triangle only (symmetric)
+                    bool on = p.LayersCollide(r, c);
+                    char id[16]; std::snprintf(id, sizeof(id), "##m%d_%d", r, c);
+                    if (ImGui::Checkbox(id, &on)) { p.SetLayersCollide(r, c, on); ProjectSettings::Save(); }
+                }
+            }
+            ImGui::EndTable();
+        }
     } else { // Tags & Layers
         ImGui::SeparatorText("Tags");
         ImGui::TextDisabled("Named tags offered in the Inspector's Tag dropdown, on top of tags already in use.");
