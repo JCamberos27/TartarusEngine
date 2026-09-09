@@ -72,7 +72,7 @@ feature can do today and what's still planned.
 | Feature | Summary |
 |---|---|
 | **[Import, browser & prefabs](https://github.com/JCamberos27/TartarusEngine/discussions/265)** | FBX / OBJ / glTF models, common image and audio formats; a folder tree with search and labels; per-asset import settings; drag-in placement with a live preview; save-as-prefab |
-| **[ECS, serialization, physics, audio & caching](https://github.com/JCamberos27/TartarusEngine/discussions/268)** | EnTT with a transform hierarchy; JSON scene format; a first-person controller with sub-stepped AABB collision; miniaudio; a decoded-texture disk cache; a frame profiler |
+| **[ECS, serialization, physics, audio & caching](https://github.com/JCamberos27/TartarusEngine/discussions/268)** | EnTT with a transform hierarchy; JSON scene format; a NVIDIA PhysX 5 world (rigid bodies, character controller, triggers, joints, scene queries); miniaudio; a decoded-texture disk cache; a frame profiler |
 | **[Scene & project management](https://github.com/JCamberos27/TartarusEngine/discussions/279)** | New / Open / Save / Save As, a format-version guard, auto-save with a crash-recovery prompt, and last-scene-reopened-on-launch |
 | **[Game module & built-in systems](https://github.com/JCamberos27/TartarusEngine/discussions/278)** | The hot-reloadable gameplay layer — Spin, Transform Controller, and Animator systems, all driven by reflection-registered components |
 
@@ -112,9 +112,9 @@ resolved). The Unity feature-gap audit
 ([issue #236](https://github.com/JCamberos27/TartarusEngine/issues/236)) and the native
 component-registration / prefab-override work
 ([#302](https://github.com/JCamberos27/TartarusEngine/issues/302),
-[#315](https://github.com/JCamberos27/TartarusEngine/issues/315)) have all landed; the next
-large piece is a real collision system
-([#185](https://github.com/JCamberos27/TartarusEngine/issues/185)).
+[#315](https://github.com/JCamberos27/TartarusEngine/issues/315)), and the collision-system
+rewrite onto **NVIDIA PhysX 5**
+([#185](https://github.com/JCamberos27/TartarusEngine/issues/185)) have all landed.
 Windows-only CI builds every push in Debug and Release.
 
 ## Building
@@ -165,7 +165,7 @@ src/
               ComponentRegistry (reflection), the hot-reloadable game module + systems
   Editor/     Editor layer, asset library, import pipeline, adaptive-contrast sampler,
               and the panel modules compiled into TartarusEditor.dll
-  Physics/    AABB, frustum
+  Physics/    PhysX 5 world (host-only, from source), scene queries, character controller; AABB, frustum
   Audio/      miniaudio wrapper
 extern/       Vendored single-header libraries, icon font, branding
 tools/        TifSplitter — standalone TIFF-to-PNG channel splitter
@@ -183,10 +183,10 @@ project/      The scene and editor preferences being authored
 - Hot-reloadable editor panels · reflection-registered components · runtime `AudioSourceComponent` playback
 - Editor / Unity parity pass — Hierarchy reordering & keyboard nav, Inspector component menu + copy/paste, Grid & Snap and Gizmos popovers, Pause & Step, GameObject-menu ops ([#236](https://github.com/JCamberos27/TartarusEngine/issues/236))
 - Live prefab instances with per-field & per-component overrides — accent-tinted labels, in-Inspector Revert / Apply to Prefab, Unpack ([#302](https://github.com/JCamberos27/TartarusEngine/issues/302), [#315](https://github.com/JCamberos27/TartarusEngine/issues/315))
+- **NVIDIA PhysX 5** collision system (built from source) — rigid bodies, capsule character controller, box/sphere/capsule/convex/mesh colliders, triggers, contact & force APIs, collision-layer matrix, scene queries, CCD, 5 joint types, and a visual debugger ([#185](https://github.com/JCamberos27/TartarusEngine/issues/185))
 
 ### Next
 
-- **Collision beyond AABB** — triggers, gameplay raycasts, capsule and mesh colliders ([#185](https://github.com/JCamberos27/TartarusEngine/issues/185))
 - **GPU timer queries** — GPU-side pass timing is not yet instrumented ([#197](https://github.com/JCamberos27/TartarusEngine/issues/197))
 - **Placed reflection probes** — local cubemaps and HDRI input, beyond today's single global sky probe
 - **Screen-space effects** on the HDR buffer — SSAO, bloom
@@ -196,6 +196,7 @@ project/      The scene and editor preferences being authored
 ## License
 
 Released under the [MIT License](LICENSE). Bundled and fetched third-party components (miniaudio,
-stb, nlohmann/json, Font Awesome, GLFW, GLM, Assimp, EnTT, Dear ImGui, ImGuizmo, libtiff) remain
-under their own licenses — see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Branding assets
-under `extern/branding/` are not covered by the MIT license.
+stb, nlohmann/json, Font Awesome, GLFW, GLM, Assimp, EnTT, Dear ImGui, ImGuizmo, NVIDIA PhysX,
+libtiff) remain under their own licenses — see
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Branding assets under `extern/branding/` are
+not covered by the MIT license.

@@ -7,6 +7,49 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### Collision system → NVIDIA PhysX 5 (#185) — 2026-09-09
+
+The hand-rolled sub-stepped AABB collision path is gone; the engine now runs a real
+**NVIDIA PhysX 5** world, built **from source** as a CMake `ExternalProject` (tag
+`107.3-physx-5.6.1`, patched + harvested by `tools/physx_{patch,harvest}.cmake`). PhysX is
+confined to the one host translation unit `src/Physics/PhysicsWorld.cpp` behind an opaque
+header — never the reloadable game / editor DLLs. The world is created on Play, torn down on
+Stop, and every simulated change reverts from the scene snapshot like any other Play-mode
+edit. Landed as one stack, PRs #327–#336.
+
+- **Bodies & shapes** — `ColliderComponent` grew Box / Sphere / Capsule / Convex Hull / Mesh,
+  half-extents, centre offset, `Is Trigger`, and surface `Bounciness` / `Friction` (one shared
+  `PxMaterial` per distinct pair). `RigidbodyComponent` (mass, gravity, kinematic, initial
+  velocity, linear / angular damping, continuous collision, and six axis-lock constraints)
+  makes a collider a dynamic or kinematic body with pose write-back each frame. Convex-hull
+  and triangle-mesh colliders are cooked straight from the entity's render geometry.
+- **Player** — the first-person controller moves a `PxCapsuleController`; `World::ResolveCollisions`,
+  `AABB::MTV` and `Player::BodyBounds` were deleted. The player pushes dynamic bodies out of
+  the way and rides moving kinematic platforms (including their yaw).
+- **Gameplay API** (host ABI `kGameModuleAPIVersion` 7) — `Raycast` / `SphereCast` /
+  `OverlapSphere` (self-excluding the player capsule), `AddForce` / `AddTorque` /
+  `AddForceAtPosition` / `AddExplosionForce` / `SetLinearVelocity`, `GetBodyState`,
+  trigger enter/stay/exit events, solid-contact enter/stay/exit events with impact
+  point / normal / impulse / closing speed.
+- **Filtering & solver** — a custom `EngineFilterShader` applies an 8×8 project-level
+  collision-layer matrix, per-body CCD, contact notifications, and enhanced determinism.
+- **Joints** — `JointComponent`: Fixed / Hinge / Ball / Slider / Distance, connect to another
+  body or the world, anchor + axis, break force / torque, optional motion limits. Editor
+  entity-picker Inspector.
+- **NaN guard** — a non-finite simulated pose freezes that body at its last good transform
+  instead of poisoning the scene.
+- **Editor & debug** — collider wireframe overlay (`ColliderGizmo`, on by default) drawing
+  every shape incl. the player capsule and the real cooked hull / mesh edges. A lean physics
+  **visual debugger**: fading red contact sparks with impulse-scaled normal arrows and a
+  shockwave ring, red raycast / sweep traces with hit bursts, green velocity arrows, sleep
+  markers — plus a **Window ▸ Physics** panel (live stats, channel toggles, a 0–2× slow-mo
+  slider, single-substep Step) and a corner HUD. **F5** toggles the whole overlay over the
+  game view during maximized play; **F6** toggles the panel. A Half-Life-2-style gravity gun
+  in the physics-playground harness (right-click grab, scroll distance, left-click launch);
+  the transform gizmo can drag a live body during Play. OmniPVD `.ovd` capture is wired
+  behind `TARTARUS_PHYSX_OMNIPVD` (off by default). `project/scenes/PhysX Playground.json`
+  exercises the whole surface.
+
 ### Component registration → prefab overrides (#302, #315) — 2026-09-08
 
 - **#302 Part A** — native component **registration + reflection**. One `ComponentRegistry`

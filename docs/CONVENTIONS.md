@@ -42,9 +42,8 @@ component should never touch them.
 
 ### Current applications
 
-| Control | Treatment | Unblocks when |
-|---|---|---|
-| `ColliderComponent::IsTrigger` | shown disabled, `(not implemented)` — a collider is a place a user looks for a trigger toggle (rule 3) | #185 (collision system) |
+_None._ (`ColliderComponent::IsTrigger` was the last one — the PhysX 5 collision system shipped
+in #185, and it is now a live checkbox.)
 
 ## Editor themes (#92, #234)
 
