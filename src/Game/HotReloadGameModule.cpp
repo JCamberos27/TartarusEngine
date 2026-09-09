@@ -24,6 +24,19 @@ const GameModuleHostAPI kHostAPI{
     /*GetTriggerEvents=*/[](TriggerEvent* out, int maxEvents) {
         return PhysicsWorld::GetTriggerEvents(out, maxEvents);
     },
+    /*AddForce=*/[](std::uint32_t e, const float f[3], std::uint32_t m) { PhysicsWorld::AddForce(e, f, m); },
+    /*AddTorque=*/[](std::uint32_t e, const float tq[3], std::uint32_t m) { PhysicsWorld::AddTorque(e, tq, m); },
+    /*AddForceAtPosition=*/[](std::uint32_t e, const float f[3], const float p[3], std::uint32_t m) {
+        PhysicsWorld::AddForceAtPosition(e, f, p, m);
+    },
+    /*AddExplosionForce=*/[](const float c[3], float r, float s, float up) {
+        PhysicsWorld::AddExplosionForce(c, r, s, up);
+    },
+    /*SetLinearVelocity=*/[](std::uint32_t e, const float v[3]) { PhysicsWorld::SetLinearVelocity(e, v); },
+    /*GetBodyState=*/[](std::uint32_t e, BodyState& out) { return PhysicsWorld::GetBodyState(e, out); },
+    /*GetContactEvents=*/[](ContactEvent* out, int maxEvents) {
+        return PhysicsWorld::GetContactEvents(out, maxEvents);
+    },
 };
 
 } // namespace

@@ -18,6 +18,8 @@
 class World;
 struct RaycastHit;   // GameModuleAPI.h — POD, shared with the gameplay-module ABI
 struct TriggerEvent; // GameModuleAPI.h — POD, shared with the gameplay-module ABI
+struct ContactEvent; // GameModuleAPI.h — POD, shared with the gameplay-module ABI
+struct BodyState;    // GameModuleAPI.h — POD, shared with the gameplay-module ABI
 
 namespace PhysicsWorld {
 
@@ -77,5 +79,20 @@ int GetTriggerEvents(TriggerEvent* out, int maxEvents);
 
 // True while something is inside the given trigger entity's volume — for the editor gizmo.
 bool IsTriggerOccupied(unsigned triggerEntity);
+
+// --- Forces & read-back (#185 PR 7) ---------------------------------------------------
+// `mode` is a GameModuleAPI ForceMode. All no-ops on an unknown / non-dynamic / kinematic
+// entity or outside Play.
+void AddForce(unsigned entity, const float force[3], unsigned mode);
+void AddTorque(unsigned entity, const float torque[3], unsigned mode);
+void AddForceAtPosition(unsigned entity, const float force[3], const float worldPos[3], unsigned mode);
+void AddExplosionForce(const float center[3], float radius, float strength, float upwardBias);
+void SetLinearVelocity(unsigned entity, const float v[3]);
+
+// Fills `out`; returns false (out.Valid == false) for anything but a live dynamic body.
+bool GetBodyState(unsigned entity, BodyState& out);
+
+// This frame's solid-contact transitions; same copy/return convention as GetTriggerEvents.
+int GetContactEvents(ContactEvent* out, int maxEvents);
 
 } // namespace PhysicsWorld

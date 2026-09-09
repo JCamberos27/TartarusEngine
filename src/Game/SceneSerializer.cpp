@@ -188,6 +188,8 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
             cj["halfExtents"] = {collider->HalfExtents.x, collider->HalfExtents.y, collider->HalfExtents.z};
         if (collider->Center != glm::vec3(0.0f))
             cj["center"] = {collider->Center.x, collider->Center.y, collider->Center.z};
+        if (collider->Bounciness != 0.0f) cj["bounciness"] = collider->Bounciness; // #185 PR 7
+        if (collider->Friction != 0.6f)   cj["friction"]   = collider->Friction;
         j["collider"] = cj;
     }
     // CameraComponent moved onto reflection (#302 Wave 1a) — it now round-trips through the
@@ -272,6 +274,8 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
             collider.HalfExtents = JsonToVec3(c["halfExtents"], glm::vec3(0.0f));
         if (c.contains("center"))
             collider.Center = JsonToVec3(c["center"], glm::vec3(0.0f));
+        collider.Bounciness = c.value("bounciness", 0.0f); // #185 PR 7
+        collider.Friction   = c.value("friction", 0.6f);
         world.Registry.emplace_or_replace<ColliderComponent>(entity, collider);
     }
     // Legacy pre-#302 format: CameraComponent moved onto reflection (keyed "Camera" below), but

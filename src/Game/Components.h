@@ -77,6 +77,12 @@ struct ColliderComponent {
     // A trigger reports overlaps but doesn't block movement. Built as a PhysX trigger shape
     // (non-blocking); enter/stay/exit event dispatch is #185 PR 5.
     bool IsTrigger = false;
+
+    // Surface response (#185 PR 7). Bounciness is restitution: 0 = dead stop, 1 = no energy
+    // lost. Friction is the combined static+dynamic coefficient (0 = ice). PhysicsWorld shares
+    // one PxMaterial per distinct (Friction, Bounciness) pair.
+    float Bounciness = 0.0f;
+    float Friction   = 0.6f;
 };
 
 // Makes a collider entity a *dynamic* PhysX body while playing (#185 PR 4) instead of the

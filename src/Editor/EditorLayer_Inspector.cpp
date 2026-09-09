@@ -1690,6 +1690,16 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             if (collider->HalfExtents == glm::vec3(0.0f))
                 ImGui::TextDisabled("Auto-fitted to the mesh bounds.");
 
+            // Surface material (#185 PR 7).
+            PropertyLabel("Bounciness", "Restitution: 0 stops dead, 1 loses no energy on a bounce.");
+            ImGui::SliderFloat("##Bounciness", &collider->Bounciness, 0.0f, 1.0f, "%.2f");
+            if (ImGui::IsItemActivated()) StageUndo(world);
+            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Collider Material");
+            PropertyLabel("Friction", "Combined static + dynamic friction. 0 = ice.");
+            ImGui::SliderFloat("##Friction", &collider->Friction, 0.0f, 2.0f, "%.2f");
+            if (ImGui::IsItemActivated()) StageUndo(world);
+            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Collider Material");
+
             EndComponentSection();
         }
         if (removed) {
