@@ -24,6 +24,7 @@
 #include "ShaderLibrary.h"
 #include "TintOverlayRenderer.h"
 #include "HdrTarget.h"
+#include "OpaqueColorCopy.h"
 #include "Screenshot.h"
 #include "Tonemapper.h"
 #include "LightBuffer.h"
@@ -673,6 +674,8 @@ int main(int argc, char** argv) {
         // framebuffers above (and into FBO 0 for free-aspect maximized play).
         HdrTarget sceneHdr;
         HdrTarget gameHdr;
+        OpaqueColorCopy sceneOpaqueColor;  // PR12: opaque color capture for scene-view refraction
+        OpaqueColorCopy gameOpaqueColor;   // PR12: opaque color capture for game-view refraction
         Tonemapper tonemapper;
         LightBuffer lightBuffer; // scene lights -> std430 SSBO the model shader reads at binding 0
         ClusterGrid clusterGrid; // #120: froxel light lists, rebuilt per rendered view each frame
@@ -1463,7 +1466,8 @@ int main(int argc, char** argv) {
             // per-entity HiddenInSceneTag (#236 B). The running game and its Game view draw everything.
             auto drawScene = [&](const glm::mat4& sceneView, const glm::mat4& sceneProj,
                                   const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats,
-                                  bool editorView = false, int debugView = 0) {
+                                  bool editorView = false, int debugView = 0,
+                                  HdrTarget* txHdr = nullptr, OpaqueColorCopy* txCapture = nullptr) {
                 const EditorSettings& gs = EditorSettings::Get();
 
                 // Shadows for this view. Spot and point shadows only need shadows-enabled +
@@ -1708,6 +1712,19 @@ int main(int argc, char** argv) {
 
                 // --- Transparent pass: back-to-front sorted, blended, no depth write -----------
                 if (!transparentList.empty()) {
+                    // PR12: resolve MSAA opaque color and copy into mipped texture for refraction.
+                    if (txHdr && txCapture) {
+                        txHdr->ResolveTo();
+                        GLint txVp[4] = {0, 0, 0, 0};
+                        glGetIntegerv(GL_VIEWPORT, txVp);
+                        txCapture->CopyFrom(txHdr->ResolvedColorTexture(), txVp[2], txVp[3]);
+                        txHdr->BindForRender(); // rebind MSAA FBO for the transparent draw pass
+                        glActiveTexture(GL_TEXTURE0 + 14);
+                        glBindTexture(GL_TEXTURE_2D, txCapture->Texture());
+                        modelShader.SetInt("uOpaqueColor", 14);
+                        modelShader.SetVec2("uScreenSize", glm::vec2((float)txVp[2], (float)txVp[3]));
+                    }
+
                     // Sort: QueueIndex ascending, then ViewDepth descending (farthest first),
                     // then MatKey for dedup within the same depth bucket.
                     std::sort(transparentList.begin(), transparentList.end(),
@@ -1809,7 +1826,8 @@ int main(int argc, char** argv) {
 
                 EditorLayer::RenderStats sceneStats;
                 drawScene(sceneViewMat, sceneProjMat, editorCamera.Position, sceneUnlit, &sceneStats,
-                          /*editorView=*/true, /*debugView=*/sceneDebugView);
+                          /*editorView=*/true, /*debugView=*/sceneDebugView,
+                          &sceneHdr, &sceneOpaqueColor);
 
                 editor.SetRenderStats(sceneStats);
                 // NB: in Wireframe mode the polygon mode stays GL_LINE through the selection
@@ -2042,7 +2060,8 @@ int main(int argc, char** argv) {
                     gvEye = gameCam->Position;
                 }
                 EditorLayer::RenderStats gvRenderStats;
-                drawScene(gvView, gvProj, gvEye, /*unlit=*/false, &gvRenderStats);
+                drawScene(gvView, gvProj, gvEye, /*unlit=*/false, &gvRenderStats,
+                          /*editorView=*/false, /*debugView=*/0, &gameHdr, &gameOpaqueColor);
 
                 // Physics debug overlay over the game view (#185, F5) — depth-tested, no depth write.
                 if (playing && EditorSettings::Get().PlayDebugOverlay) {
@@ -2148,7 +2167,8 @@ int main(int argc, char** argv) {
                 glm::mat4 view = gameCam->ViewMatrix();
                 glm::mat4 proj = gameCam->ProjectionMatrix(aspect);
                 EditorLayer::RenderStats stats;
-                drawScene(view, proj, gameCam->Position, /*unlit=*/false, &stats);
+                drawScene(view, proj, gameCam->Position, /*unlit=*/false, &stats,
+                          /*editorView=*/false, /*debugView=*/0, &gameHdr, &gameOpaqueColor);
                 editor.SetRenderStats(stats);
                 // Physics debug overlay over the game view (#185, F5).
                 if (EditorSettings::Get().PlayDebugOverlay) {

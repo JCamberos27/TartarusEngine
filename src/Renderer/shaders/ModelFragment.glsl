@@ -168,6 +168,14 @@ uniform int   uHasThicknessMap;
 uniform sampler2D uThicknessMap;    // per-texel thickness (.r channel)
 #endif
 
+// PR12 — Transmission + refraction (#ifdef _TRANSMISSION; zero-keyword variant: dead code)
+#ifdef _TRANSMISSION
+uniform sampler2D uOpaqueColor;         // resolved opaque scene color with mip chain (unit 14)
+uniform float     uTransmissionStrength;// [0,1]
+uniform float     uIOR;                 // index of refraction
+uniform vec2      uScreenSize;          // viewport (width, height) for NDC->UV
+#endif
+
 const float PI = 3.14159265359;
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
@@ -855,6 +863,22 @@ void main() {
 #endif
 #ifdef _SUBSURFACE
     color += LoSSS;
+#endif
+#ifdef _TRANSMISSION
+    {
+        // Screen-space refraction: refract view ray through the surface, project to screen UVs,
+        // then sample the opaque color with roughness-based LOD for frosted-glass blur.
+        float eta = 1.0 / max(uIOR, 1.001);
+        vec3 refrDir = refract(-V, N, eta);
+        // Project the refracted tangential offset to screen UV deltas.
+        float screenAspect = uScreenSize.x / max(uScreenSize.y, 1.0);
+        vec2 refrOffset = refrDir.xy * vec2(1.0, screenAspect) * 0.08 * uTransmissionStrength;
+        vec2 screenUV = gl_FragCoord.xy / uScreenSize;
+        float maxLod = log2(max(uScreenSize.x, uScreenSize.y));
+        float refrLod = roughness * maxLod * 0.5;
+        vec3 refrColor = textureLod(uOpaqueColor, clamp(screenUV + refrOffset, vec2(0.001), vec2(0.999)), refrLod).rgb;
+        color = mix(color, refrColor, uTransmissionStrength * (1.0 - metallic));
+    }
 #endif
     if (uApplyTonemap == 1) {
         color = color / (color + vec3(1.0)); // Reinhard tonemap
