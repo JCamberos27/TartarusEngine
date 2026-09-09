@@ -75,8 +75,7 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
 
     // Reset every field an import populates, so re-running this on an already-imported Model
     // (Reimport) starts from a clean slate instead of appending to/leaking the previous import's
-    // state. Deliberately NOT touched: m_Path, m_Directory, m_MaterialOverride (an independent
-    // editor-set look, not part of what "importing" produces).
+    // state. Deliberately NOT touched: m_Path, m_Directory (set by callers, not the import).
     m_Meshes.clear();
     m_TextureCache.clear();
     m_BoneInfoMap.clear();
@@ -578,22 +577,24 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
 }
 } // namespace
 
-void Model::Draw(Shader& shader) {
+void Model::Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
     UploadBoneMatrices(shader);
     MaterialLocs locs = ResolveMaterialLocs(shader);
-    for (auto& mesh : m_Meshes) {
-        const Material& mat = m_MaterialOverride ? *m_MaterialOverride : mesh->Mat;
+    for (int i = 0; i < (int)m_Meshes.size(); ++i) {
+        bool hasSlot = i < (int)slots.size() && slots[i];
+        const Material& mat = hasSlot ? slots[i]->Mat : m_Meshes[i]->Mat;
         BindMaterial(shader, mat, locs);
-        mesh->Draw();
+        m_Meshes[i]->Draw();
     }
 }
 
-void Model::DrawDepthOnly(Shader& shader) {
+void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
     UploadBoneMatrices(shader);
     int albedoLoc = shader.Loc("uAlbedo");
     int alphaTestLoc = shader.Loc("uAlphaTest");
-    for (auto& mesh : m_Meshes) {
-        const Material& mat = m_MaterialOverride ? *m_MaterialOverride : mesh->Mat;
+    for (int i = 0; i < (int)m_Meshes.size(); ++i) {
+        bool hasSlot = i < (int)slots.size() && slots[i];
+        const Material& mat = hasSlot ? slots[i]->Mat : m_Meshes[i]->Mat;
         // Only cost paid over a pure depth draw: one texture bind + two uniforms, and only for
         // meshes that actually have an albedo map (cutout foliage/fences) — the shadow then
         // follows the cutout instead of a solid silhouette (#116). #192: skip even that when the
@@ -607,7 +608,7 @@ void Model::DrawDepthOnly(Shader& shader) {
                 shader.SetInt(alphaTestLoc, 0);
             }
         }
-        mesh->Draw();
+        m_Meshes[i]->Draw();
     }
 }
 

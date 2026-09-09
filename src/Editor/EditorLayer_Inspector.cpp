@@ -11,6 +11,7 @@
 #include "Model.h"
 #include "Texture.h"
 #include "Material.h"
+#include "MaterialAsset.h"
 #include "AudioEngine.h"
 #include "Screenshot.h"
 #include "SceneSerializer.h"
@@ -2480,27 +2481,22 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
 // of a second, drifting copy of every field.
 void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                                      const std::vector<entt::entity>& sel) {
-    // Two placed instances of the same imported file share one Model — and therefore one
-    // MaterialOverride. Collapse to the distinct Model* set so each override is read/written
-    // exactly once (and one undo step covers the lot).
-    std::vector<Model*> models;
+    std::vector<RenderableComponent*> rcs;
     for (entt::entity e : sel) {
         if (!world.Registry.valid(e)) continue;
         auto* rc = world.Registry.try_get<RenderableComponent>(e);
         if (!rc || !rc->ModelRef) { ImGui::TextDisabled("A selected object has no mesh."); return; }
         if (rc->ModelRef->MeshCount() == 0) { ImGui::TextDisabled("A selected mesh failed to load."); return; }
-        Model* m = rc->ModelRef.get();
-        if (std::find(models.begin(), models.end(), m) == models.end()) models.push_back(m);
+        rcs.push_back(rc);
     }
-    if (models.empty()) return;
+    if (rcs.empty()) return;
 
-    const int total = (int)models.size();
+    const int total = (int)rcs.size();
     int nCustom = 0;
-    for (Model* m : models) if (m->MaterialOverride()) nCustom++;
+    for (RenderableComponent* rc : rcs) if (!rc->Materials.empty() && rc->Materials[0]) nCustom++;
 
-    // Tri-state "Use Custom Material": create a fresh override on every model that lacks one
-    // (keeping its imported texture maps, dropping the leftover diffuse factors — same recipe
-    // as the single-object editor), or clear it from all.
+    // Tri-state "Use Custom Material": create an embedded slot-0 MaterialAsset on every entity
+    // that lacks one (copying imported texture maps), or clear slot 0 from all.
     bool customMixed = nCustom != 0 && nCustom != total;
     {
         bool value = nCustom > 0;
@@ -2510,21 +2506,23 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         if (clicked) {
             bool enable = customMixed ? true : value;
             PushUndo(world, "Edit Material");
-            for (Model* m : models) {
-                if (enable && !m->MaterialOverride()) {
-                    auto mat = std::make_shared<Material>();
-                    if (m->MeshCount() > 0) {
-                        const Material& imported = m->MeshMaterial(0);
-                        mat->AlbedoMap = imported.AlbedoMap;
-                        mat->NormalMap = imported.NormalMap;
-                        mat->MetallicMap = imported.MetallicMap;
-                        mat->RoughnessMap = imported.RoughnessMap;
-                        mat->AOMap = imported.AOMap;
-                        mat->EmissiveMap = imported.EmissiveMap;
+            for (RenderableComponent* rc : rcs) {
+                bool hasCustom = !rc->Materials.empty() && rc->Materials[0];
+                if (enable && !hasCustom) {
+                    auto ma = std::make_shared<MaterialAsset>();
+                    if (rc->ModelRef->MeshCount() > 0) {
+                        const Material& imported = rc->ModelRef->MeshMaterial(0);
+                        ma->Mat.AlbedoMap   = imported.AlbedoMap;
+                        ma->Mat.NormalMap   = imported.NormalMap;
+                        ma->Mat.MetallicMap = imported.MetallicMap;
+                        ma->Mat.RoughnessMap= imported.RoughnessMap;
+                        ma->Mat.AOMap       = imported.AOMap;
+                        ma->Mat.EmissiveMap = imported.EmissiveMap;
                     }
-                    m->SetMaterialOverride(mat);
+                    if (rc->Materials.empty()) rc->Materials.push_back(ma);
+                    else rc->Materials[0] = ma;
                 } else if (!enable) {
-                    m->SetMaterialOverride(nullptr);
+                    if (!rc->Materials.empty()) rc->Materials[0] = nullptr;
                 }
             }
             nCustom = enable ? total : 0;
@@ -2542,7 +2540,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
     }
 
     std::vector<Material*> mats;
-    for (Model* m : models) mats.push_back(m->MaterialOverride().get());
+    for (RenderableComponent* rc : rcs) mats.push_back(&rc->Materials[0]->Mat);
 
     auto vec3Shared = [&](glm::vec3 Material::* field, glm::vec3& shared) {
         shared = mats[0]->*field;
