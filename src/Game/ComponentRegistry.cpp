@@ -260,6 +260,23 @@ void RegisterEngineComponents() {
         Register<RigidbodyComponent>(std::move(m));
     }
 
+    // PR14 (#333) — Reflection Probe. Registered with the generic reflection path so the
+    // Add Component menu, Inspector, and SceneSerializer all work for free.
+    Register<ReflectionProbeComponent>({
+        "Reflection Probe", ICON_FA_CIRCLE_HALF_STROKE,
+        "Defines a box volume for parallax-corrected environment reflections. "
+        "Place inside rooms or near reflective surfaces; the 2 nearest probes "
+        "blend per draw call. No probes → global sky IBL fallback.",
+        "Rendering",
+        {
+            { "Size", T::Vec3, TARTARUS_REFLECT_FIELD(ReflectionProbeComponent, Size), 0.1f,
+              "Full extents of the box capture volume in world units.\n"
+              "The parallax correction clips reflection rays to this box boundary.", 0.0f, 0.0f },
+            { "Importance", T::Float, TARTARUS_REFLECT_FIELD(ReflectionProbeComponent, Importance), 0.05f,
+              "Blend weight priority. Higher wins 2-probe selection when many probes overlap.", 0.0f, 10.0f },
+        },
+    });
+
     // #315 — Mesh Renderer. Registered so the component-registration guard rail counts it and
     // its Icon/Category live here, but BOTH generic paths are opted out: RenderableComponent
     // holds a shared_ptr<Model> (no reflectable fields), its scene form is the box "color/size"

@@ -43,6 +43,7 @@ Keywords {
     _SHEEN
     _SUBSURFACE
     _TRANSMISSION
+    _REFLECTION_PROBES
 }
 
 Vertex   { ModelVertex.glsl }

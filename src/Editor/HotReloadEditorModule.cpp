@@ -551,6 +551,10 @@ const EditorModuleHostAPI kHostAPI{
     &HistGetHudFrame,
     &HistDrawListBody,
     &HistSampleLuminance,
+    // --- Reflection probes (API v16 / PR14) -----------------------------------------------
+    // probeArray.Update() runs every frame in main.cpp; this request is informational for now —
+    // future per-probe scene-capture baking will consume the flag from main.cpp.
+    +[]() { /* probe bake: main.cpp's probeArray.Update() already runs every frame */ },
 };
 
 } // namespace
