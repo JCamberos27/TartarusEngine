@@ -154,6 +154,20 @@ uniform float uAnisotropy;          // [-1,1]: +1 = highlight along T, -1 = alon
 uniform float uAnisotropyRotation;  // [0,1] maps to [0°,360°] rotation in tangent plane
 #endif
 
+// PR11 — Sheen/cloth (#ifdef _SHEEN; zero-keyword variant: dead code, bit-identical to PR10)
+#ifdef _SHEEN
+uniform vec3  uSheen;               // tint color (rgb); zero = sheen disabled
+uniform float uSheenRoughness;      // cloth microfacet roughness [0,1]
+#endif
+
+// PR11 — Subsurface translucency (#ifdef _SUBSURFACE; zero-keyword variant: dead code)
+#ifdef _SUBSURFACE
+uniform vec3  uSubsurfaceColor;     // transmitted tint
+uniform float uThickness;           // surface thickness scalar [0,1]
+uniform int   uHasThicknessMap;
+uniform sampler2D uThicknessMap;    // per-texel thickness (.r channel)
+#endif
+
 const float PI = 3.14159265359;
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
@@ -233,6 +247,54 @@ vec3 ShadeLightAniso(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0
     vec3 specular = D * Vis * F;
     vec3 kD = (1.0 - F) * (1.0 - metallic);
     return (kD * albedo / PI + specular) * radiance * NdotL;
+}
+#endif
+
+// PR11 — Sheen/cloth (Charlie D + Neubelt V + Estevez-Kulla analytic DFG, no new LUT)
+#ifdef _SHEEN
+// Charlie inverted-sine distribution (Estevez & Kulla 2017).
+float D_Charlie(float NdotH, float roughness) {
+    float r2 = roughness * roughness;
+    float sin2h = max(1.0 - NdotH * NdotH, 0.0078125);
+    return (2.0 + 1.0 / r2) * pow(sin2h, 0.5 / r2) / (2.0 * PI);
+}
+
+// Neubelt visibility for cloth (numerically stable, no division by NdotV*NdotL).
+float V_Neubelt(float NdotV, float NdotL) {
+    return clamp(1.0 / (4.0 * (NdotL + NdotV - NdotL * NdotV)), 0.0, 1.0);
+}
+
+// Estevez-Kulla analytic DFG for sheen (avoids a separate BRDF-LUT sample).
+// Approximates the sheen directional albedo as a function of NdotV and roughness.
+float SheenDFG(float NdotV, float roughness) {
+    return mix(0.0, clamp(1.0 - pow(1.0 - NdotV, 2.0 + 4.0 * roughness), 0.0, 1.0), roughness);
+}
+
+// Sheen lobe contribution for one light. Returns vec3 (colored by uSheen tint).
+vec3 SheenLobe(vec3 N, vec3 V, vec3 L, float sheenRoughness) {
+    vec3 H = normalize(V + L);
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float D   = D_Charlie(NdotH, max(sheenRoughness, 0.045));
+    float Vis = V_Neubelt(NdotV, NdotL);
+    return uSheen * D * Vis * NdotL;
+}
+#endif
+
+// PR11 — Subsurface translucency: wrapped diffuse + back-lit thin-surface transmission.
+#ifdef _SUBSURFACE
+// Wrapped diffuse NdotL — softens the terminator into the shadow side.
+float WrappedDiffuse(float NdotL, float wrap) {
+    return clamp((NdotL + wrap) / ((1.0 + wrap) * (1.0 + wrap)), 0.0, 1.0);
+}
+
+// Thin-surface back-lit transmission: light punching through from behind.
+// Only non-zero when the light is on the far side of the surface (-N·L > 0).
+vec3 SubsurfaceTransmission(vec3 N, vec3 L, vec3 radiance, float thickness) {
+    float backDot = max(dot(-N, L), 0.0);
+    float atten = backDot * (1.0 - thickness); // thinner surface = more light through
+    return uSubsurfaceColor * radiance * atten;
 }
 #endif
 
@@ -504,6 +566,60 @@ vec3 ShadePointSpotCC(uint i, vec3 N, vec3 V, float ccRough) {
 }
 #endif
 
+#ifdef _SHEEN
+// Sheen contribution from one point/spot light — same attenuation as ShadePointSpot.
+vec3 ShadePointSpotSheen(uint i, vec3 N, vec3 V, float sheenRoughness) {
+    Light lt = uLights[i];
+    int type = int(lt.PositionType.w);
+    vec3 toLight = lt.PositionType.xyz - vWorldPos;
+    float dist = length(toLight);
+    float range = lt.ColorRange.a;
+    if (dist > range) return vec3(0.0);
+    vec3 L = toLight / max(dist, 1e-4);
+    float t = dist / max(range, 1e-4);
+    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
+    float atten = window * window / (1.0 + dist * dist);
+    if (type == 2) {
+        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float outerCos = lt.DirCutoff.w;
+        float innerCos = lt.Params.x;
+        if (cosAngle < outerCos) return vec3(0.0);
+        atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N);
+    } else {
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N);
+    }
+    if (atten <= 0.0) return vec3(0.0);
+    return SheenLobe(N, V, L, sheenRoughness) * lt.ColorRange.rgb * atten;
+}
+#endif
+
+#ifdef _SUBSURFACE
+// Subsurface back-lit transmission from one point/spot light.
+vec3 ShadePointSpotSSS(uint i, vec3 N, float thickness) {
+    Light lt = uLights[i];
+    int type = int(lt.PositionType.w);
+    vec3 toLight = lt.PositionType.xyz - vWorldPos;
+    float dist = length(toLight);
+    float range = lt.ColorRange.a;
+    if (dist > range) return vec3(0.0);
+    vec3 L = toLight / max(dist, 1e-4);
+    float t = dist / max(range, 1e-4);
+    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
+    float atten = window * window / (1.0 + dist * dist);
+    if (type == 2) {
+        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float outerCos = lt.DirCutoff.w;
+        if (cosAngle < outerCos) return vec3(0.0);
+        atten *= smoothstep(outerCos, max(lt.Params.x, outerCos + 1e-3), cosAngle);
+    }
+    if (atten <= 0.0) return vec3(0.0);
+    return SubsurfaceTransmission(N, L, lt.ColorRange.rgb * atten, thickness);
+}
+#endif
+
 // Per-axis blend weights for triplanar projection, sharpened (raised to a power) so the blend
 // zone between two faces is narrow instead of muddying most of the surface.
 vec3 TriplanarWeights(vec3 n) {
@@ -610,6 +726,16 @@ void main() {
     float ccRough = max(uClearCoatRoughness * uClearCoatRoughness, 0.001);
     float Fc = ClearCoatFresnel(max(dot(N, V), 0.0), ccStrength);
 #endif
+#ifdef _SHEEN
+    vec3 LoSheen = vec3(0.0);
+    float sheenRough = max(uSheenRoughness, 0.045);
+    float sheenDFG = SheenDFG(max(dot(N, V), 0.0), sheenRough);
+#endif
+#ifdef _SUBSURFACE
+    vec3 LoSSS = vec3(0.0);
+    float sssThickness = uThickness;
+    if (uHasThicknessMap == 1) sssThickness *= texture(uThicknessMap, vUV).r;
+#endif
 
     vec3 Lo = vec3(0.0);
 
@@ -626,6 +752,15 @@ void main() {
 #endif
 #ifdef _CLEARCOAT
         LoCc += radiance * max(dot(N, L), 0.0) * ClearCoatLobe(N, V, L, ccRough) * ccStrength;
+#endif
+#ifdef _SHEEN
+        LoSheen += SheenLobe(N, V, L, sheenRough) * radiance;
+#endif
+#ifdef _SUBSURFACE
+        // Wrap the base diffuse and accumulate back-lit transmission for directional lights.
+        float wrapDot = WrappedDiffuse(dot(N, L), 0.5);
+        Lo += (uSubsurfaceColor * albedo / PI) * radiance * wrapDot;
+        LoSSS += SubsurfaceTransmission(N, L, radiance, sssThickness);
 #endif
     }
 
@@ -645,6 +780,12 @@ void main() {
 #ifdef _CLEARCOAT
             LoCc += ShadePointSpotCC(li, N, V, ccRough) * ccStrength;
 #endif
+#ifdef _SHEEN
+            LoSheen += ShadePointSpotSheen(li, N, V, sheenRough);
+#endif
+#ifdef _SUBSURFACE
+            LoSSS += ShadePointSpotSSS(li, N, sssThickness);
+#endif
         }
     } else {
         for (uint i = 0u; i < uLightCount; ++i) {
@@ -656,6 +797,12 @@ void main() {
 #endif
 #ifdef _CLEARCOAT
             LoCc += ShadePointSpotCC(i, N, V, ccRough) * ccStrength;
+#endif
+#ifdef _SHEEN
+            LoSheen += ShadePointSpotSheen(i, N, V, sheenRough);
+#endif
+#ifdef _SUBSURFACE
+            LoSSS += ShadePointSpotSSS(i, N, sssThickness);
 #endif
         }
     }
@@ -692,9 +839,22 @@ void main() {
     // Clear coat intercepts energy before it reaches the base: attenuate Lo and ambient by (1-Fc).
     Lo *= (1.0 - Fc);
     ambient *= (1.0 - Fc);
-    vec3 color = ambient + Lo + LoCc + emissive;
-#else
+#endif
+#ifdef _SHEEN
+    // Sheen energy conservation: reduce base by (1 - sheenDFG * max(uSheen)).
+    float sheenConserve = 1.0 - sheenDFG * max(uSheen.r, max(uSheen.g, uSheen.b));
+    Lo *= sheenConserve;
+    ambient *= sheenConserve;
+#endif
     vec3 color = ambient + Lo + emissive;
+#ifdef _CLEARCOAT
+    color += LoCc;
+#endif
+#ifdef _SHEEN
+    color += LoSheen;
+#endif
+#ifdef _SUBSURFACE
+    color += LoSSS;
 #endif
     if (uApplyTonemap == 1) {
         color = color / (color + vec3(1.0)); // Reinhard tonemap

@@ -25,11 +25,20 @@ Properties {
     // PR10: Anisotropy
     _Anisotropy          ("Anisotropy",            Float)     = 0
     _AnisotropyRotation  ("Anisotropy Rotation",   Float)     = 0
+    // PR11: Sheen/cloth
+    _Sheen               ("Sheen",                 Color)     = (0, 0, 0)
+    _SheenRoughness      ("Sheen Roughness",        Float)     = 0.5
+    // PR11: Subsurface translucency
+    _SubsurfaceColor     ("Subsurface Color",       Color)     = (1, 0.8, 0.6)
+    _Thickness           ("Thickness",              Float)     = 0.5
+    [Hidden] _ThicknessMap ("Thickness Map",        Texture2D) = "white"
 }
 
 Keywords {
     _CLEARCOAT
     _ANISO
+    _SHEEN
+    _SUBSURFACE
 }
 
 Vertex   { ModelVertex.glsl }
