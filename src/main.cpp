@@ -1303,7 +1303,7 @@ int main(int argc, char** argv) {
                             !cascadeFrustum.Intersects(AABB{bmin, bmax}.Transformed(model)))
                             continue;
                         shadowShader.SetMat4(shadowModelLoc, model);
-                        renderable.ModelRef->DrawDepthOnly(shadowShader);
+                        renderable.ModelRef->DrawDepthOnly(shadowShader, renderable.Materials);
                     }
                 }
 
@@ -1356,7 +1356,7 @@ int main(int argc, char** argv) {
                             !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
                             continue;
                         localShadowShader.SetMat4(localModelLoc, model);
-                        r.ModelRef->DrawDepthOnly(localShadowShader);
+                        r.ModelRef->DrawDepthOnly(localShadowShader, r.Materials);
                     }
                 }
 
@@ -1418,7 +1418,7 @@ int main(int argc, char** argv) {
                                 !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
                                 continue;
                             localShadowShader.SetMat4(cubeModelLoc, model);
-                            r.ModelRef->DrawDepthOnly(localShadowShader);
+                            r.ModelRef->DrawDepthOnly(localShadowShader, r.Materials);
                         }
                     }
                 }
@@ -1603,6 +1603,7 @@ int main(int argc, char** argv) {
                 struct DrawItem {
                     glm::mat4 Xform;
                     Model* Ref;
+                    const std::vector<std::shared_ptr<MaterialAsset>>* Slots;
                     std::uint64_t MatKey;
                     int Meshes, Tris, Verts;
                 };
@@ -1649,7 +1650,10 @@ int main(int argc, char** argv) {
                     }
 
                     Model* m = renderable.ModelRef.get();
-                    drawList.push_back({ model, m, m->MaterialSortKey(),
+                    const auto& slots = renderable.Materials;
+                    std::uint64_t matKey = (!slots.empty() && slots[0])
+                        ? slots[0]->Mat.Hash() : m->MaterialSortKey();
+                    drawList.push_back({ model, m, &slots, matKey,
                                         m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount() });
                 }
 
@@ -1663,7 +1667,7 @@ int main(int argc, char** argv) {
                     // Normal matrix (inverse-transpose) computed here, not per-vertex (#104).
                     modelShader.SetMat4(modelNormalMatrixLoc,
                         glm::mat4(glm::transpose(glm::inverse(glm::mat3(it.Xform)))));
-                    it.Ref->Draw(modelShader);
+                    it.Ref->Draw(modelShader, *it.Slots);
 
                     localStats.DrawCalls += it.Meshes;
                     localStats.Triangles += it.Tris;

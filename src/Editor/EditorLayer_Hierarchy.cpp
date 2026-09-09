@@ -10,6 +10,7 @@
 #include "Model.h"
 #include "Texture.h"
 #include "Material.h"
+#include "MaterialAsset.h"
 #include "AudioEngine.h"
 #include "Screenshot.h"
 #include "SceneSerializer.h"
@@ -1009,20 +1010,22 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
             if (auto* renderable = world.Registry.try_get<RenderableComponent>(entity)) {
                 PushUndo(world, "Set Albedo Map");
                 Model* model = renderable->ModelRef.get();
-                auto override_ = model->MaterialOverride();
-                if (!override_) {
-                    override_ = std::make_shared<Material>();
+                std::shared_ptr<MaterialAsset> slot0;
+                if (!renderable->Materials.empty()) slot0 = renderable->Materials[0];
+                if (!slot0) {
+                    slot0 = std::make_shared<MaterialAsset>();
                     if (model->MeshCount() > 0) {
                         const Material& imported = model->MeshMaterial(0);
-                        override_->NormalMap = imported.NormalMap;
-                        override_->MetallicMap = imported.MetallicMap;
-                        override_->RoughnessMap = imported.RoughnessMap;
-                        override_->AOMap = imported.AOMap;
-                        override_->EmissiveMap = imported.EmissiveMap;
+                        slot0->Mat.NormalMap    = imported.NormalMap;
+                        slot0->Mat.MetallicMap  = imported.MetallicMap;
+                        slot0->Mat.RoughnessMap = imported.RoughnessMap;
+                        slot0->Mat.AOMap        = imported.AOMap;
+                        slot0->Mat.EmissiveMap  = imported.EmissiveMap;
                     }
-                    model->SetMaterialOverride(override_);
+                    if (renderable->Materials.empty()) renderable->Materials.push_back(slot0);
+                    else renderable->Materials[0] = slot0;
                 }
-                override_->AlbedoMap = assets.LoadTexture(texPath);
+                slot0->Mat.AlbedoMap = assets.LoadTexture(texPath);
             }
         }
         ImGui::EndDragDropTarget();

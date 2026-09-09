@@ -5,6 +5,7 @@
 #include "Model.h"
 #include "Texture.h"
 #include "Material.h"
+#include "MaterialAsset.h"
 #include "AssetDatabase.h"
 #include "AssetGuid.h"
 
@@ -690,24 +691,38 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         m["id"] = idOf[entity];
         m["parentId"] = parentIdOf(entity);
 
-        auto mat = renderable.ModelRef->MaterialOverride();
-        if (mat) {
-            m["material"] = {
-                {"baseColor", Vec3ToJson(mat->BaseColor)},
-                {"metallic", mat->Metallic},
-                {"roughness", mat->Roughness},
-                {"emissiveColor", Vec3ToJson(mat->EmissiveColor)},
-                {"emissiveStrength", mat->EmissiveStrength},
-                {"triplanar", mat->Triplanar},
-                {"triplanarScale", mat->TriplanarScale},
-                {"albedoMap",            PathRef(PathOrEmpty(mat->AlbedoMap))},
-                {"normalMap",            PathRef(PathOrEmpty(mat->NormalMap))},
-                {"metallicRoughnessMap", PathRef(PathOrEmpty(mat->MetallicRoughnessMap))},
-                {"metallicMap",          PathRef(PathOrEmpty(mat->MetallicMap))},
-                {"roughnessMap",         PathRef(PathOrEmpty(mat->RoughnessMap))},
-                {"aoMap",                PathRef(PathOrEmpty(mat->AOMap))},
-                {"emissiveMap",          PathRef(PathOrEmpty(mat->EmissiveMap))},
-            };
+        const auto& matSlots = renderable.Materials;
+        if (!matSlots.empty()) {
+            json arr = json::array();
+            for (const auto& slot : matSlots) {
+                if (!slot) { arr.push_back(nullptr); continue; }
+                if (!slot->Path.empty()) {
+                    json entry;
+                    AssetGuid g = AssetDatabase::GuidForPath(slot->Path);
+                    if (g.IsValid()) entry["guid"] = g.ToString();
+                    entry["path"] = slot->Path;
+                    arr.push_back(entry);
+                } else {
+                    const auto& smat = slot->Mat;
+                    arr.push_back({{"embedded", {
+                        {"baseColor", Vec3ToJson(smat.BaseColor)},
+                        {"metallic", smat.Metallic},
+                        {"roughness", smat.Roughness},
+                        {"emissiveColor", Vec3ToJson(smat.EmissiveColor)},
+                        {"emissiveStrength", smat.EmissiveStrength},
+                        {"triplanar", smat.Triplanar},
+                        {"triplanarScale", smat.TriplanarScale},
+                        {"albedoMap",            PathRef(PathOrEmpty(smat.AlbedoMap))},
+                        {"normalMap",            PathRef(PathOrEmpty(smat.NormalMap))},
+                        {"metallicRoughnessMap", PathRef(PathOrEmpty(smat.MetallicRoughnessMap))},
+                        {"metallicMap",          PathRef(PathOrEmpty(smat.MetallicMap))},
+                        {"roughnessMap",         PathRef(PathOrEmpty(smat.RoughnessMap))},
+                        {"aoMap",                PathRef(PathOrEmpty(smat.AOMap))},
+                        {"emissiveMap",          PathRef(PathOrEmpty(smat.EmissiveMap))},
+                    }}});
+                }
+            }
+            m["materials"] = arr;
         }
         WriteCommonComponents(m, world, entity);
         models.push_back(m);
@@ -880,31 +895,42 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             glm::vec3 rotation = JsonToVec3(m.value("rotation", json::array({0, 0, 0})));
             glm::vec3 scale = JsonToVec3(m.value("scale", json::array({1, 1, 1})), glm::vec3(1.0f));
 
-            if (m.contains("material")) {
-                const json& mj = m["material"];
-                auto mat = std::make_shared<Material>();
-                mat->BaseColor = JsonToVec3(mj.value("baseColor", json::array({1, 1, 1})), glm::vec3(1.0f));
-                mat->Metallic = mj.value("metallic", 0.0f);
-                mat->Roughness = mj.value("roughness", 0.5f);
-                mat->EmissiveColor = JsonToVec3(mj.value("emissiveColor", json::array({0, 0, 0})));
-                mat->EmissiveStrength = mj.value("emissiveStrength", 1.0f);
-                mat->Triplanar = mj.value("triplanar", false);
-                mat->TriplanarScale = mj.value("triplanarScale", 1.0f);
-                mat->AlbedoMap = LoadIfPresent(assets, mj, "albedoMap");
-                mat->NormalMap = LoadIfPresent(assets, mj, "normalMap");
-                mat->MetallicRoughnessMap = LoadIfPresent(assets, mj, "metallicRoughnessMap");
-                mat->MetallicMap = LoadIfPresent(assets, mj, "metallicMap");
-                mat->RoughnessMap = LoadIfPresent(assets, mj, "roughnessMap");
-                mat->AOMap = LoadIfPresent(assets, mj, "aoMap");
-                mat->EmissiveMap = LoadIfPresent(assets, mj, "emissiveMap");
-                model->SetMaterialOverride(mat);
-            } else {
-                // InstantiateModel already hands back a fresh instance with no override; the
-                // explicit clear just keeps this branch obviously correct if that ever changes.
-                model->SetMaterialOverride(nullptr);
-            }
-
             entt::entity e = world.CreateModelEntity(model, position, rotation, scale, name);
+            auto& rc = world.Registry.get<RenderableComponent>(e);
+
+            auto ReadEmbeddedMat = [&](const json& mj) -> std::shared_ptr<MaterialAsset> {
+                auto ma = std::make_shared<MaterialAsset>();
+                ma->Mat.BaseColor       = JsonToVec3(mj.value("baseColor", json::array({1, 1, 1})), glm::vec3(1.0f));
+                ma->Mat.Metallic        = mj.value("metallic", 0.0f);
+                ma->Mat.Roughness       = mj.value("roughness", 0.5f);
+                ma->Mat.EmissiveColor   = JsonToVec3(mj.value("emissiveColor", json::array({0, 0, 0})));
+                ma->Mat.EmissiveStrength= mj.value("emissiveStrength", 1.0f);
+                ma->Mat.Triplanar       = mj.value("triplanar", false);
+                ma->Mat.TriplanarScale  = mj.value("triplanarScale", 1.0f);
+                ma->Mat.AlbedoMap            = LoadIfPresent(assets, mj, "albedoMap");
+                ma->Mat.NormalMap            = LoadIfPresent(assets, mj, "normalMap");
+                ma->Mat.MetallicRoughnessMap = LoadIfPresent(assets, mj, "metallicRoughnessMap");
+                ma->Mat.MetallicMap          = LoadIfPresent(assets, mj, "metallicMap");
+                ma->Mat.RoughnessMap         = LoadIfPresent(assets, mj, "roughnessMap");
+                ma->Mat.AOMap                = LoadIfPresent(assets, mj, "aoMap");
+                ma->Mat.EmissiveMap          = LoadIfPresent(assets, mj, "emissiveMap");
+                return ma;
+            };
+
+            if (m.contains("materials") && m["materials"].is_array()) {
+                for (const auto& slot_j : m["materials"]) {
+                    if (slot_j.is_null()) { rc.Materials.push_back(nullptr); continue; }
+                    if (slot_j.contains("embedded")) {
+                        rc.Materials.push_back(ReadEmbeddedMat(slot_j["embedded"]));
+                    } else {
+                        std::string path = ResolveAssetRef(slot_j);
+                        rc.Materials.push_back(path.empty() ? nullptr : assets.LoadMaterial(path));
+                    }
+                }
+            } else if (m.contains("material")) {
+                // Legacy pre-PR5 format: single embedded Material → slot 0
+                rc.Materials.assign(1, ReadEmbeddedMat(m["material"]));
+            }
             ReadCommonComponents(m, world, assets, e); // handles the "Audio Source" block + the legacy "sound*" shim
             applyOrder(e, m);
             created(e);
