@@ -59,6 +59,7 @@ const std::unordered_map<std::string, std::string>& KnownExtensions() {
         {".wav",   "audio"},   {".mp3",  "audio"},
         {".ogg",   "audio"},   {".flac", "audio"},
         {".prefab","prefab"},
+        {".mat",   "material"},
     };
     return kExts;
 }

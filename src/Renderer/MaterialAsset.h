@@ -1,0 +1,42 @@
+#pragma once
+#include "Material.h"
+#include <memory>
+#include <string>
+
+class AssetLibrary;
+
+// A named, file-backed material (.mat JSON, version 1). Wraps a Material struct with a path so
+// it can be browsed in the Asset Browser, drag-dropped onto renderers, and referenced from scene
+// files as a first-class asset. PR 4 introduces the asset layer only — the scene draw loop
+// does not route through MaterialAsset yet (that wiring comes in PR 5).
+struct MaterialAsset {
+    std::string Path;  // absolute path to the .mat file on disk
+    std::string Name;  // display name, defaults to the filename stem
+
+    // PBR properties. Texture shared_ptr slots are populated by Load() when `lib` is non-null;
+    // they remain null when loaded without a library (e.g. Save checks texture paths only).
+    Material Mat;
+
+    // Serialized texture paths (parallel to Mat's shared_ptr slots). Written to the .mat file
+    // and used by Load() to resolve textures via AssetLibrary. The shared_ptrs in Mat are only
+    // filled when Load() is given a non-null lib.
+    std::string AlbedoMapPath;
+    std::string NormalMapPath;
+    std::string MetallicRoughnessMapPath;
+    std::string MetallicMapPath;
+    std::string RoughnessMapPath;
+    std::string AOMapPath;
+    std::string EmissiveMapPath;
+
+    // Loads a MaterialAsset from a .mat JSON file. Resolves and loads textures via `lib` when
+    // non-null (they remain null otherwise). Returns nullptr on I/O or parse error.
+    static std::shared_ptr<MaterialAsset> Load(const std::string& path,
+                                               AssetLibrary* lib = nullptr);
+
+    // Creates a new MaterialAsset at `path` with default (white, 0.5 roughness) settings and
+    // writes the .mat file. Returns nullptr on I/O failure. Does NOT register with AssetLibrary.
+    static std::shared_ptr<MaterialAsset> CreateDefault(const std::string& path);
+
+    // Saves Mat and the texture path strings to the .mat file. Returns false on I/O error.
+    bool Save() const;
+};

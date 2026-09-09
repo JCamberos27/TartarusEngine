@@ -36,12 +36,15 @@ enum class GizmoOp { Translate, Rotate, Scale, Rect, Universal }; // Universal (
 // lives in TartarusEditor.dll, the per-cell draw stays host-side). Holds shared_ptr<Model/Texture>
 // so it never crosses the DLL boundary — the module only ever asks for a cell count + a
 // DrawAssetCell(index) callback.
+struct MaterialAsset; // defined in MaterialAsset.h, included by AssetLibrary.h
+
 struct AssetGridCell {
-    enum class Kind { Folder, Model, Texture, Sound, Scene, Prefab, Screenshot } kind;
+    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot } kind;
     std::string key;
     std::string display;
     std::shared_ptr<Model> model;
     std::shared_ptr<Texture> texture;
+    std::shared_ptr<MaterialAsset> material;
 };
 
 #include "AdaptiveContrast.h" // AsyncLuminanceReadback + SampleTextureLuminance (shared with GameViewPanel)

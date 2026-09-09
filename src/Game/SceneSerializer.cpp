@@ -1042,6 +1042,12 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets) {
 
     {
         json arr = json::array();
+        for (const auto& m : assets.Materials()) arr.push_back(PathRef(m->Path));
+        root["libraryMaterials"] = arr;
+    }
+
+    {
+        json arr = json::array();
         for (const auto& p : assets.Sounds()) arr.push_back(PathRef(p));
         root["librarySounds"] = arr;
     }
@@ -1142,6 +1148,12 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
         for (const auto& p : root["libraryTextures"]) {
             std::string path = ResolveAssetRef(p);
             if (!path.empty()) assets.LoadTexture(path);
+        }
+    }
+    if (root.contains("libraryMaterials")) {
+        for (const auto& p : root["libraryMaterials"]) {
+            std::string path = ResolveAssetRef(p);
+            if (!path.empty()) assets.LoadMaterial(path);
         }
     }
     if (root.contains("librarySounds")) {
@@ -1315,13 +1327,14 @@ bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const s
     // (multi-second stalls long enough to trip a GPU driver watchdog on a real project's worth
     // of assets), not just a style choice being reverted here.
     if (root.value("hasAssetLibrarySnapshot", false)) {
-        std::set<std::string> keepModels, keepTextures, keepSounds, keepPrefabs, keepFolders;
+        std::set<std::string> keepModels, keepTextures, keepSounds, keepPrefabs, keepFolders, keepMaterials;
         if (root.contains("libraryModels")) for (const auto& p : root["libraryModels"]) keepModels.insert(p.get<std::string>());
         if (root.contains("libraryTextures")) for (const auto& p : root["libraryTextures"]) keepTextures.insert(p.get<std::string>());
         if (root.contains("librarySounds")) for (const auto& p : root["librarySounds"]) keepSounds.insert(p.get<std::string>());
         if (root.contains("libraryPrefabs")) for (const auto& p : root["libraryPrefabs"]) keepPrefabs.insert(p.get<std::string>());
         if (root.contains("assetFolders")) for (const auto& f : root["assetFolders"]) keepFolders.insert(f.get<std::string>());
-        assets.PruneToKeepSet(keepModels, keepTextures, keepSounds, keepPrefabs, keepFolders);
+        if (root.contains("libraryMaterials")) for (const auto& p : root["libraryMaterials"]) keepMaterials.insert(p.get<std::string>());
+        assets.PruneToKeepSet(keepModels, keepTextures, keepSounds, keepPrefabs, keepFolders, keepMaterials);
         assets.ClearMetadataOnly();
         ApplyAssetLibraryJson(assets, root);
     }

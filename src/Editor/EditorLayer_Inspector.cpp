@@ -60,12 +60,15 @@ using namespace EditorInternal;
 
 namespace {
 
-// #302 Wave 3: the asset paths a reflected AssetRef field of the given kind picks from. Only
-// Sound is wired up (AudioSourceComponent's Clip); the others return empty until a component
-// needs them (Model/Texture live in AssetLibrary as shared_ptr lists, not plain paths).
+// #302 Wave 3 / #333 PR4: the asset paths a reflected AssetRef field of the given kind picks from.
 const std::vector<std::string>& AssetRefPathList(const AssetLibrary& assets, ReflectAssetKind kind) {
     static const std::vector<std::string> kEmpty;
-    return kind == ReflectAssetKind::Sound ? assets.Sounds() : kEmpty;
+    switch (kind) {
+        case ReflectAssetKind::Sound:    return assets.Sounds();
+        case ReflectAssetKind::Texture:  return assets.TexturePaths();
+        case ReflectAssetKind::Material: return assets.MaterialPaths();
+        default: return kEmpty;
+    }
 }
 
 // Approximate blackbody colour (linear RGB, normalised so the brightest channel is 1) for a
