@@ -44,6 +44,7 @@ void EditorSettings::Load() {
     s.ExposureEV = root.value("exposureEV", s.ExposureEV);
     s.TonemapOperator = root.value("tonemapOperator", s.TonemapOperator);
     s.MsaaSamples = root.value("msaaSamples", s.MsaaSamples);
+    s.SsaoEnabled    = root.value("ssaoEnabled",    s.SsaoEnabled);
     s.ShadowsEnabled = root.value("shadowsEnabled", s.ShadowsEnabled);
     s.ShadowResolution = root.value("shadowResolution", s.ShadowResolution);
     s.ShadowCascades = root.value("shadowCascades", s.ShadowCascades);
@@ -114,6 +115,7 @@ void EditorSettings::Save() {
     root["exposureEV"] = Get().ExposureEV;
     root["tonemapOperator"] = Get().TonemapOperator;
     root["msaaSamples"] = Get().MsaaSamples;
+    root["ssaoEnabled"]    = Get().SsaoEnabled;
     root["shadowsEnabled"] = Get().ShadowsEnabled;
     root["shadowResolution"] = Get().ShadowResolution;
     root["shadowCascades"] = Get().ShadowCascades;

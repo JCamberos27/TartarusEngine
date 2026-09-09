@@ -688,6 +688,10 @@ void EditorLayer::DrawPostProcessSettings(float w) {
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Photographic stops applied before the tone curve. 0 = neutral. Applies live.");
 
+    if (ImGui::Checkbox("SSAO", &prefs.SsaoEnabled)) EditorSettings::Save();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Screen-space ambient occlusion. Darkens crevices and contact shadows. Depth pre-pass + blur, scene-view only.");
+
     static const char* kTonemapLabels[] = { "Reinhard", "ACES", "AgX" };
     int tm = std::clamp(prefs.TonemapOperator, 0, 2);
     ImGui::SetNextItemWidth(w);

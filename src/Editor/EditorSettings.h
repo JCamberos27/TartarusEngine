@@ -65,6 +65,9 @@ struct EditorSettings {
     int TonemapOperator = 1;
     int MsaaSamples = 4;
 
+    // --- Screen-space ambient occlusion (PR15). Off by default; toggle in Lighting > Post-processing.
+    bool SsaoEnabled = false;
+
     // --- Directional-sun cascaded shadow maps. 4 cascades, PCF, resolution per layer.
     // ShadowDistance caps how far (world units) the cascades reach from the camera.
     bool ShadowsEnabled = true;
