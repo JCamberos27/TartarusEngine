@@ -1,42 +1,16 @@
 #include "TintOverlayRenderer.h"
 #include "Model.h"
 #include "Shader.h"
+#include "ShaderLibrary.h"
 #include "gl.h"
-
-namespace {
-
-// Only position needs to transform correctly - unused attributes (normal/UV/tangent/bones) in
-// the same VAO are simply never read by this shader, which is fine; Model::Draw()'s material/
-// bone uniform uploads become harmless no-ops against a shader that never declares those names.
-const char* kOverlayVertexSrc = R"(
-#version 460 core
-layout (location = 0) in vec3 aPos;
-uniform mat4 uModel;
-uniform mat4 uView;
-uniform mat4 uProj;
-void main() {
-    gl_Position = uProj * uView * uModel * vec4(aPos, 1.0);
-}
-)";
-
-const char* kOverlayFragmentSrc = R"(
-#version 460 core
-out vec4 FragColor;
-uniform vec3 uTintColor;
-uniform float uAlpha;
-void main() {
-    FragColor = vec4(uTintColor, uAlpha);
-}
-)";
-
-} // namespace
 
 TintOverlayRenderer::TintOverlayRenderer() = default;
 TintOverlayRenderer::~TintOverlayRenderer() = default;
 
 void TintOverlayRenderer::Render(Model& model, const glm::mat4& modelMatrix, const glm::mat4& view,
     const glm::mat4& proj, const glm::vec3& tintColor, float alpha) {
-    if (!m_Shader) m_Shader = std::make_unique<Shader>(kOverlayVertexSrc, kOverlayFragmentSrc);
+    if (!m_Shader) m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("TintOverlay.vert.glsl"),
+                                                        ShaderLibrary::ReadFile("TintOverlay.frag.glsl"));
 
     GLboolean prevBlend = glIsEnabled(GL_BLEND);
     GLboolean prevPolyOffset = glIsEnabled(GL_POLYGON_OFFSET_FILL);

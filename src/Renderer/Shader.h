@@ -30,6 +30,11 @@ public:
     // separate SetMat4 calls (100 uniform-name lookups + 100 draw-call-adjacent GL calls).
     void SetMat4Array(const std::string& name, int count, const glm::mat4* data) const;
 
+    // Re-reads vertFile and fragFile via ShaderLibrary, recompiles and relinks the program in
+    // place, and clears the uniform location cache. Throws on compile/link failure (the old
+    // program remains bound and valid in that case).
+    void Reload(const std::string& vertFile, const std::string& fragFile);
+
     // Resolves (and caches) a uniform's location by name — call this ONCE outside a hot loop,
     // then use the int-location overloads below inside it. Avoids re-constructing and re-hashing
     // the name string on every iteration (#194: per-caster shadow loops, main draw loop).

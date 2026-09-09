@@ -376,6 +376,15 @@ add_custom_command(TARGET TartarusEngine POST_BUILD
     "$<TARGET_FILE_DIR:TartarusEngine>/assets/branding/splash.png"
 )
 
+# GLSL shader files — copied next to the exe so ShaderLibrary::ReadFile("assets/shaders/...")
+# resolves correctly at runtime. copy_directory_if_different keeps incremental builds fast.
+add_custom_command(TARGET TartarusEngine POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:TartarusEngine>/assets/shaders"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/src/Renderer/shaders"
+    "$<TARGET_FILE_DIR:TartarusEngine>/assets/shaders"
+)
+
 # PhysX runtime DLLs (#185) — copied next to the exe like the fonts above. The set for the
 # CPU-only, non-GPU build is just these three (PhysX.dll load-time-depends on PhysXCommon +
 # PhysXFoundation; Cooking / Gpu aren't built). Pulled from the staged Debug/ or Release/
