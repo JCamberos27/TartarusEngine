@@ -140,6 +140,20 @@ uniform int uHasRoughnessMap;          uniform sampler2D uRoughnessMap;
 uniform int uHasAOMap;                 uniform sampler2D uAOMap;
 uniform int uHasEmissiveMap;           uniform sampler2D uEmissiveMap;
 
+// PR10 — Clear Coat (#ifdef _CLEARCOAT; zero-keyword variant: dead code, bit-identical to PR9)
+#ifdef _CLEARCOAT
+uniform float uClearCoat;           // layer strength [0,1]
+uniform float uClearCoatRoughness;  // CC microfacet roughness [0,1]
+uniform int   uHasClearCoatMap;
+uniform sampler2D uClearCoatMap;    // masks uClearCoat via .r channel
+#endif
+
+// PR10 — Anisotropy (#ifdef _ANISO; zero-keyword variant: dead code, bit-identical to PR9)
+#ifdef _ANISO
+uniform float uAnisotropy;          // [-1,1]: +1 = highlight along T, -1 = along B
+uniform float uAnisotropyRotation;  // [0,1] maps to [0°,360°] rotation in tangent plane
+#endif
+
 const float PI = 3.14159265359;
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
@@ -167,6 +181,60 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
 vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
+
+// PR10 — Clear coat lobe: isotropic GGX with fixed F0 = 0.04. Returns scalar specular term.
+#ifdef _CLEARCOAT
+float ClearCoatLobe(vec3 N, vec3 V, vec3 L, float ccRoughness) {
+    vec3 H = normalize(V + L);
+    float NDF = DistributionGGX(N, H, ccRoughness);
+    float G   = GeometrySmith(N, V, L, ccRoughness);
+    float F   = FresnelSchlick(max(dot(H, V), 0.0), vec3(0.04)).r;
+    return (NDF * G * F) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 1e-4);
+}
+
+// CC attenuation factor on the base lobe: FresnelSchlick(NdotV, 0.04) * strength.
+// Applied once to Lo and ambient after all lights are accumulated.
+float ClearCoatFresnel(float NdotV, float ccStrength) {
+    return FresnelSchlick(NdotV, vec3(0.04)).r * ccStrength;
+}
+#endif
+
+// PR10 — Anisotropic BRDF (Burley / Filament §4.9). Only compiled in _ANISO variants.
+#ifdef _ANISO
+// Anisotropic GGX distribution (Heitz / Filament).
+float D_GGX_Aniso(float NdotH, float HdotT, float HdotB, float at, float ab) {
+    float a2 = at * ab;
+    vec3 v = vec3(ab * HdotT, at * HdotB, a2 * NdotH);
+    float v2 = dot(v, v);
+    return a2 * a2 / max(PI * v2 * v2, 1e-7);
+}
+
+// Smith height-correlated masking-shadowing for anisotropic GGX (Heitz 2014).
+float V_SmithGGX_Aniso(float NdotV, float VdotT, float VdotB,
+                        float NdotL, float LdotT, float LdotB, float at, float ab) {
+    float GGX_V = NdotL * length(vec3(at * VdotT, ab * VdotB, NdotV));
+    float GGX_L = NdotV * length(vec3(at * LdotT, ab * LdotB, NdotL));
+    return 0.5 / max(GGX_V + GGX_L, 1e-5);
+}
+
+vec3 ShadeLightAniso(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0,
+                     float metallic, float roughness, vec3 T, vec3 B) {
+    float aniso = clamp(uAnisotropy, -0.99, 0.99);
+    float at = max(roughness * (1.0 + aniso), 0.001);
+    float ab = max(roughness * (1.0 - aniso), 0.001);
+    vec3 H = normalize(V + L);
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float D   = D_GGX_Aniso(NdotH, dot(H, T), dot(H, B), at, ab);
+    float Vis = V_SmithGGX_Aniso(NdotV, dot(V, T), dot(V, B),
+                                  NdotL, dot(L, T), dot(L, B), at, ab);
+    vec3  F   = FresnelSchlick(max(dot(H, V), 0.0), F0);
+    vec3 specular = D * Vis * F;
+    vec3 kD = (1.0 - F) * (1.0 - metallic);
+    return (kD * albedo / PI + specular) * radiance * NdotL;
+}
+#endif
 
 // 16-tap Poisson disk for the soft PCF kernel — rotated per-fragment so the penumbra dithers
 // into noise instead of showing the concentric banding a fixed box filter leaves behind.
@@ -375,6 +443,67 @@ vec3 ShadePointSpot(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float metallic
     return ShadeLight(N, V, L, lt.ColorRange.rgb * atten, albedo, F0, metallic, roughness);
 }
 
+#ifdef _ANISO
+// Anisotropic version of ShadePointSpot — identical attenuation/shadow logic, calls ShadeLightAniso.
+vec3 ShadePointSpotAniso(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float metallic, float roughness,
+                          vec3 T, vec3 B) {
+    Light lt = uLights[i];
+    int type = int(lt.PositionType.w);
+    vec3 toLight = lt.PositionType.xyz - vWorldPos;
+    float dist = length(toLight);
+    float range = lt.ColorRange.a;
+    if (dist > range) return vec3(0.0);
+    vec3 L = toLight / max(dist, 1e-4);
+    float t = dist / max(range, 1e-4);
+    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
+    float atten = window * window / (1.0 + dist * dist);
+    if (type == 2) {
+        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float outerCos = lt.DirCutoff.w;
+        float innerCos = lt.Params.x;
+        if (cosAngle < outerCos) return vec3(0.0);
+        atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N);
+    } else {
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N);
+    }
+    if (atten <= 0.0) return vec3(0.0);
+    return ShadeLightAniso(N, V, L, lt.ColorRange.rgb * atten, albedo, F0, metallic, roughness, T, B);
+}
+#endif
+
+#ifdef _CLEARCOAT
+// Clear coat contribution from one point/spot light — same attenuation as ShadePointSpot.
+vec3 ShadePointSpotCC(uint i, vec3 N, vec3 V, float ccRough) {
+    Light lt = uLights[i];
+    int type = int(lt.PositionType.w);
+    vec3 toLight = lt.PositionType.xyz - vWorldPos;
+    float dist = length(toLight);
+    float range = lt.ColorRange.a;
+    if (dist > range) return vec3(0.0);
+    vec3 L = toLight / max(dist, 1e-4);
+    float t = dist / max(range, 1e-4);
+    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
+    float atten = window * window / (1.0 + dist * dist);
+    if (type == 2) {
+        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float outerCos = lt.DirCutoff.w;
+        float innerCos = lt.Params.x;
+        if (cosAngle < outerCos) return vec3(0.0);
+        atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N);
+    } else {
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N);
+    }
+    if (atten <= 0.0) return vec3(0.0);
+    return lt.ColorRange.rgb * atten * max(dot(N, L), 0.0) * ClearCoatLobe(N, V, L, ccRough);
+}
+#endif
+
 // Per-axis blend weights for triplanar projection, sharpened (raised to a power) so the blend
 // zone between two faces is narrow instead of muddying most of the surface.
 vec3 TriplanarWeights(vec3 n) {
@@ -468,6 +597,20 @@ void main() {
     vec3 V = normalize(uViewPos - vWorldPos);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
+#ifdef _ANISO
+    float anisoAngle = uAnisotropyRotation * 6.28318530718;
+    float anisoC = cos(anisoAngle), anisoS = sin(anisoAngle);
+    vec3 anisoT = anisoC * vTBN[0] + anisoS * vTBN[1];
+    vec3 anisoB = -anisoS * vTBN[0] + anisoC * vTBN[1];
+#endif
+#ifdef _CLEARCOAT
+    vec3 LoCc = vec3(0.0);
+    float ccStrength = uClearCoat;
+    if (uHasClearCoatMap == 1) ccStrength *= texture(uClearCoatMap, vUV).r;
+    float ccRough = max(uClearCoatRoughness * uClearCoatRoughness, 0.001);
+    float Fc = ClearCoatFresnel(max(dot(N, V), 0.0), ccStrength);
+#endif
+
     vec3 Lo = vec3(0.0);
 
     // Directional lights are not clustered (infinite extent) — one cheap pass for type 0.
@@ -476,7 +619,14 @@ void main() {
     for (uint i = 0u; i < uDirectionalCount; ++i) {
         vec3 L = normalize(-uLights[i].DirCutoff.xyz); // DirCutoff.xyz travels forward; L points back
         vec3 radiance = uLights[i].ColorRange.rgb * SunShadow(vWorldPos, N, L);
+#ifdef _ANISO
+        Lo += ShadeLightAniso(N, V, L, radiance, albedo, F0, metallic, roughness, anisoT, anisoB);
+#else
         Lo += ShadeLight(N, V, L, radiance, albedo, F0, metallic, roughness);
+#endif
+#ifdef _CLEARCOAT
+        LoCc += radiance * max(dot(N, L), 0.0) * ClearCoatLobe(N, V, L, ccRough) * ccStrength;
+#endif
     }
 
     // Point + spot lights: this fragment's froxel list when clustering is active (#120),
@@ -487,12 +637,26 @@ void main() {
         uint count = uClusterRange[cl].count;
         for (uint j = 0u; j < count; ++j) {
             uint li = uClusterLightIndices[offset + j];
+#ifdef _ANISO
+            Lo += ShadePointSpotAniso(li, N, V, albedo, F0, metallic, roughness, anisoT, anisoB);
+#else
             Lo += ShadePointSpot(li, N, V, albedo, F0, metallic, roughness);
+#endif
+#ifdef _CLEARCOAT
+            LoCc += ShadePointSpotCC(li, N, V, ccRough) * ccStrength;
+#endif
         }
     } else {
         for (uint i = 0u; i < uLightCount; ++i) {
             if (int(uLights[i].PositionType.w) == 0) continue;
+#ifdef _ANISO
+            Lo += ShadePointSpotAniso(i, N, V, albedo, F0, metallic, roughness, anisoT, anisoB);
+#else
             Lo += ShadePointSpot(i, N, V, albedo, F0, metallic, roughness);
+#endif
+#ifdef _CLEARCOAT
+            LoCc += ShadePointSpotCC(i, N, V, ccRough) * ccStrength;
+#endif
         }
     }
 
@@ -524,7 +688,14 @@ void main() {
     }
     vec3 emissive = emissiveEarly;
 
+#ifdef _CLEARCOAT
+    // Clear coat intercepts energy before it reaches the base: attenuate Lo and ambient by (1-Fc).
+    Lo *= (1.0 - Fc);
+    ambient *= (1.0 - Fc);
+    vec3 color = ambient + Lo + LoCc + emissive;
+#else
     vec3 color = ambient + Lo + emissive;
+#endif
     if (uApplyTonemap == 1) {
         color = color / (color + vec3(1.0)); // Reinhard tonemap
         color = pow(color, vec3(1.0 / 2.2)); // gamma correct
