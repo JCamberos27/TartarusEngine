@@ -3,10 +3,66 @@
 #include "Texture.h"
 #include "AssetDatabase.h"
 #include <algorithm>
+#include <map>
+#include <set>
+#include <json.hpp>
+
+using json = nlohmann::json;
 
 namespace {
 const std::string kPrimitivePrefix = "primitive://";
+
+// Reads import settings from a .meta JSON object into `s`. Returns true if the "importer"
+// key was present (even if individual sub-keys were absent and defaulted).
+bool ParseTextureImporter(const json& j, TextureImportSettings& s) {
+    if (!j.contains("importer") || !j["importer"].is_object()) return false;
+    const auto& imp = j["importer"];
+    s.TextureType    = (TextureImportSettings::Type)imp.value("textureType",   (int)TextureImportSettings::Type::Default);
+    s.GenerateMipmaps= imp.value("generateMipmaps", true);
+    s.IsSRGB         = imp.value("isSRGB",           true);
+    s.FilterMode     = (TextureImportSettings::Filter)imp.value("filterMode",  (int)TextureImportSettings::Filter::Bilinear);
+    s.WrapMode       = (TextureImportSettings::Wrap)imp.value("wrapMode",      (int)TextureImportSettings::Wrap::Repeat);
+    s.MaxTextureSize = imp.value("maxTextureSize",   2048);
+    return true;
 }
+
+bool ParseModelImporter(const json& j, ModelImportSettings& s) {
+    if (!j.contains("importer") || !j["importer"].is_object()) return false;
+    const auto& imp = j["importer"];
+    s.GlobalScale        = imp.value("globalScale",       1.0f);
+    s.ImportNormals      = imp.value("importNormals",     true);
+    s.ImportAnimations   = imp.value("importAnimations",  true);
+    s.ImportSkeleton     = imp.value("importSkeleton",    true);
+    s.OptimizeGraph      = imp.value("optimizeGraph",     true);
+    s.MaterialImportMode = (ModelImportSettings::MaterialMode)imp.value("materialImportMode",
+                               (int)ModelImportSettings::MaterialMode::ImportEmbedded);
+    return true;
+}
+
+// Reads folder/displayName/labels from a .meta JSON object into the AssetLibrary maps (direct
+// map access — callers must not invoke Set* here to avoid recursive write-through).
+void ApplyMetaBrowserData(const json& j, const std::string& path,
+    std::map<std::string, std::string>& folders,
+    std::map<std::string, std::string>& displayNames,
+    std::map<std::string, std::set<std::string>>& labels,
+    bool& labelsDirty)
+{
+    if (j.contains("folder") && j["folder"].is_string()) {
+        std::string f = j["folder"].get<std::string>();
+        if (!f.empty() && folders.find(path) == folders.end()) folders[path] = f;
+    }
+    if (j.contains("displayName") && j["displayName"].is_string()) {
+        std::string n = j["displayName"].get<std::string>();
+        if (!n.empty() && displayNames.find(path) == displayNames.end()) displayNames[path] = n;
+    }
+    if (j.contains("labels") && j["labels"].is_array() && labels.find(path) == labels.end()) {
+        std::set<std::string> ls;
+        for (auto& el : j["labels"]) if (el.is_string()) ls.insert(el.get<std::string>());
+        if (!ls.empty()) { labels[path] = std::move(ls); labelsDirty = true; }
+    }
+}
+
+} // namespace
 
 std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
     auto it = m_ModelCache.find(path);
@@ -22,9 +78,19 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
         std::string kind = rest.substr(0, rest.find('#'));
         model = Model::CreatePrimitive(kind, path);
     } else {
-        // Consult any settings saved for this path (e.g. from a scene's assetMeta, applied
-        // before this is called) so an asset with custom import settings is imported once,
-        // correctly, instead of once with defaults and once more via Reimport.
+        // Populate settings and browser metadata from .meta before constructing the model, so
+        // that the first import uses the persisted settings rather than requiring a Reimport.
+        if (m_ModelSettings.find(path) == m_ModelSettings.end()) {
+            std::string metaStr = AssetDatabase::ReadMetaFields(path);
+            if (metaStr != "{}") {
+                try {
+                    json j = json::parse(metaStr);
+                    ModelImportSettings s;
+                    if (ParseModelImporter(j, s)) m_ModelSettings[path] = s;
+                    ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
+                } catch (...) {}
+            }
+        }
         model = std::make_shared<Model>(path, GetModelSettings(path));
     }
 
@@ -68,9 +134,22 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path) {
     auto it = m_TextureCache.find(path);
     if (it != m_TextureCache.end()) return it->second;
 
-    // Consult any settings saved for this path (e.g. from a scene's assetMeta, applied before
-    // this is called) so an asset with custom import settings is imported once, correctly,
-    // instead of once with defaults and once more via Reimport.
+    // Populate settings and browser metadata from .meta before constructing the texture, so
+    // that the first import uses the persisted settings rather than requiring a Reimport.
+    // If settings were already set in-memory (e.g. from a scene's assetMeta block applied
+    // before this call), skip the .meta read — in-memory wins for the current session.
+    if (m_TextureSettings.find(path) == m_TextureSettings.end()) {
+        std::string metaStr = AssetDatabase::ReadMetaFields(path);
+        if (metaStr != "{}") {
+            try {
+                json j = json::parse(metaStr);
+                TextureImportSettings s;
+                if (ParseTextureImporter(j, s)) m_TextureSettings[path] = s;
+                ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
+            } catch (...) {}
+        }
+    }
+
     auto tex = std::make_shared<Texture>(path, GetTextureSettings(path));
     m_TextureCache[path] = tex;
     m_TextureList.push_back(tex);
@@ -82,6 +161,13 @@ void AssetLibrary::RegisterSound(const std::string& path) {
     if (std::find(m_Sounds.begin(), m_Sounds.end(), path) == m_Sounds.end()) {
         m_Sounds.push_back(path);
         AssetDatabase::EnsureGuid(path);
+        std::string metaStr = AssetDatabase::ReadMetaFields(path);
+        if (metaStr != "{}") {
+            try {
+                json j = json::parse(metaStr);
+                ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
+            } catch (...) {}
+        }
     }
 }
 
@@ -119,6 +205,13 @@ void AssetLibrary::RegisterPrefab(const std::string& path) {
     if (std::find(m_Prefabs.begin(), m_Prefabs.end(), path) == m_Prefabs.end()) {
         m_Prefabs.push_back(path);
         AssetDatabase::EnsureGuid(path);
+        std::string metaStr = AssetDatabase::ReadMetaFields(path);
+        if (metaStr != "{}") {
+            try {
+                json j = json::parse(metaStr);
+                ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
+            } catch (...) {}
+        }
     }
 }
 
@@ -133,6 +226,7 @@ void AssetLibrary::RemovePrefab(const std::string& path) {
 void AssetLibrary::SetAssetFolder(const std::string& assetKey, const std::string& folder) {
     if (folder.empty()) m_AssetFolder.erase(assetKey);
     else m_AssetFolder[assetKey] = folder;
+    AssetDatabase::MergeMetaFields(assetKey, json{{"folder", folder}}.dump());
 }
 
 std::string AssetLibrary::AssetFolder(const std::string& assetKey) const {
@@ -143,6 +237,7 @@ std::string AssetLibrary::AssetFolder(const std::string& assetKey) const {
 void AssetLibrary::SetDisplayName(const std::string& assetKey, const std::string& name) {
     if (name.empty()) m_DisplayNames.erase(assetKey);
     else m_DisplayNames[assetKey] = name;
+    AssetDatabase::MergeMetaFields(assetKey, json{{"displayName", name}}.dump());
 }
 
 std::string AssetLibrary::DisplayName(const std::string& assetKey) const {
@@ -156,6 +251,9 @@ void AssetLibrary::SetLabels(const std::string& assetKey, const std::set<std::st
     if (labels.empty()) m_Labels.erase(assetKey);
     else m_Labels[assetKey] = labels;
     m_AllLabelsDirty = true;
+    json labelsArr = json::array();
+    for (const auto& l : labels) labelsArr.push_back(l);
+    AssetDatabase::MergeMetaFields(assetKey, json{{"labels", labelsArr}}.dump());
 }
 
 const std::set<std::string>& AssetLibrary::Labels(const std::string& assetKey) const {
@@ -276,6 +374,14 @@ TextureImportSettings AssetLibrary::GetTextureSettings(const std::string& path) 
 
 void AssetLibrary::SetTextureSettings(const std::string& path, const TextureImportSettings& settings) {
     m_TextureSettings[path] = settings;
+    json imp;
+    imp["textureType"]    = (int)settings.TextureType;
+    imp["generateMipmaps"]= settings.GenerateMipmaps;
+    imp["isSRGB"]         = settings.IsSRGB;
+    imp["filterMode"]     = (int)settings.FilterMode;
+    imp["wrapMode"]       = (int)settings.WrapMode;
+    imp["maxTextureSize"] = settings.MaxTextureSize;
+    AssetDatabase::MergeMetaFields(path, json{{"importer", imp}}.dump());
 }
 
 ModelImportSettings AssetLibrary::GetModelSettings(const std::string& path) const {
@@ -285,6 +391,14 @@ ModelImportSettings AssetLibrary::GetModelSettings(const std::string& path) cons
 
 void AssetLibrary::SetModelSettings(const std::string& path, const ModelImportSettings& settings) {
     m_ModelSettings[path] = settings;
+    json imp;
+    imp["globalScale"]       = settings.GlobalScale;
+    imp["importNormals"]     = settings.ImportNormals;
+    imp["importAnimations"]  = settings.ImportAnimations;
+    imp["importSkeleton"]    = settings.ImportSkeleton;
+    imp["optimizeGraph"]     = settings.OptimizeGraph;
+    imp["materialImportMode"]= (int)settings.MaterialImportMode;
+    AssetDatabase::MergeMetaFields(path, json{{"importer", imp}}.dump());
 }
 
 bool AssetLibrary::ReimportTexture(const std::string& path) {

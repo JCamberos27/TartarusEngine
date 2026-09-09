@@ -67,17 +67,18 @@ std::string MetaPath(const std::string& assetPath) {
     return assetPath + ".meta";
 }
 
-// Reads the GUID from an existing .meta file. Returns invalid guid on any error.
-AssetGuid ReadMetaGuid(const std::string& metaPath) {
+// Reads the full .meta file; returns an empty object on any error.
+json ReadMetaFull(const std::string& metaPath) {
     std::ifstream f(metaPath);
     if (!f.is_open()) return {};
-    try {
-        json j = json::parse(f);
-        if (!j.contains("guid") || !j["guid"].is_string()) return {};
-        return AssetGuid::FromString(j["guid"].get<std::string>());
-    } catch (...) {
-        return {};
-    }
+    try { return json::parse(f); } catch (...) { return {}; }
+}
+
+// Reads the GUID from an existing .meta file. Returns invalid guid on any error.
+AssetGuid ReadMetaGuid(const std::string& metaPath) {
+    json j = ReadMetaFull(metaPath);
+    if (!j.contains("guid") || !j["guid"].is_string()) return {};
+    return AssetGuid::FromString(j["guid"].get<std::string>());
 }
 
 // Writes a new .meta sidecar. Returns false on I/O error.
@@ -208,6 +209,48 @@ void ScanProject() {
 
         EnsureGuid(path);
     }
+}
+
+std::string ReadMetaFields(const std::string& path) {
+    if (IsSynthetic(path)) return "{}";
+    std::lock_guard<std::mutex> lk(g_Mutex);
+    json j = ReadMetaFull(MetaPath(path));
+    return j.empty() ? "{}" : j.dump();
+}
+
+bool MergeMetaFields(const std::string& path, const std::string& fieldsJson) {
+    if (IsSynthetic(path)) return false;
+
+    json incoming;
+    try { incoming = json::parse(fieldsJson); } catch (...) { return false; }
+    if (!incoming.is_object()) return false;
+
+    std::lock_guard<std::mutex> lk(g_Mutex);
+
+    auto it = g_PathToGuid.find(path);
+    if (it == g_PathToGuid.end()) return false;
+    AssetGuid guid = it->second;
+
+    std::string meta = MetaPath(path);
+    json j = ReadMetaFull(meta);
+
+    if (!j.contains("metaVersion")) j["metaVersion"] = 1;
+    if (!j.contains("guid"))        j["guid"] = guid.ToString();
+    if (!j.contains("type")) {
+        std::string ext = std::filesystem::path(path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+            [](unsigned char c) { return (char)std::tolower(c); });
+        const auto& known = KnownExtensions();
+        auto extIt = known.find(ext);
+        j["type"] = (extIt != known.end()) ? extIt->second : std::string("asset");
+    }
+
+    for (auto& [key, val] : incoming.items()) j[key] = val;
+
+    std::ofstream f(meta);
+    if (!f.is_open()) return false;
+    f << j.dump(2) << "\n";
+    return f.good();
 }
 
 } // namespace AssetDatabase
