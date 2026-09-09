@@ -292,16 +292,24 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
     ImGui::AlignTextToFramePadding();
     ImGui::TextDisabled("%s", summary);
 
-    const float sliderWidth = 100.0f;
+    // A normal-looking slider: a visible rounded track (the footer sits straight on the panel
+    // background, where the theme's default FrameBg is near-invisible) and the px value shown,
+    // matching the sliders in Preferences.
+    const float sliderWidth = 132.0f;
     const float sliderX = ImGui::GetWindowContentRegionMax().x - sliderWidth;
     if (sliderX > ImGui::GetCursorPosX()) ImGui::SameLine(sliderX);
     else ImGui::NewLine();
     ImGui::SetNextItemWidth(sliderWidth);
     float sliderVal = iconSize;
-    if (ImGui::SliderFloat("##IconSize", &sliderVal, listMinIcon * uiScale, 128.0f * uiScale, "") &&
-        host.SetAssetIconSize) {
-        host.SetAssetIconSize(sliderVal, /*commit=*/false);
-    }
+    ImGui::PushStyleColor(ImGuiCol_FrameBg,        ImGui::GetColorU32(ImGuiCol_Border));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImGui::GetColorU32(ImGuiCol_Border));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive,  ImGui::GetColorU32(ImGuiCol_Border));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, ImGui::GetFrameHeight() * 0.5f);
+    const bool changed = ImGui::SliderFloat("##IconSize", &sliderVal,
+                                            listMinIcon * uiScale, 128.0f * uiScale, "%.0f px");
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(3);
+    if (changed && host.SetAssetIconSize) host.SetAssetIconSize(sliderVal, /*commit=*/false);
     if (ImGui::IsItemHovered() && host.SetTooltip)
         host.SetTooltip("Icon size - drag all the way to the left for a compact list view.");
     if (ImGui::IsItemDeactivatedAfterEdit() && host.SetAssetIconSize)

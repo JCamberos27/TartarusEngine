@@ -1990,6 +1990,7 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
         float k = 1.0f - expf(-ImGui::GetIO().DeltaTime / 0.15f);
         m_NavGizmoContrastLum += (m_NavGizmoContrastTarget - m_NavGizmoContrastLum) * k;
     }
+    if (!EditorSettings::Get().AdaptiveHudContrast) m_NavGizmoContrastLum = m_NavGizmoContrastTarget = 1.0f; // #275 toggle
     int navV = (int)(m_NavGizmoContrastLum * 255.0f + 0.5f);
     navV = navV < 0 ? 0 : (navV > 255 ? 255 : navV);
     const int navInv = 255 - navV;

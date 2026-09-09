@@ -816,6 +816,12 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ImGui::Checkbox("Show grid", &m_ShowGrid);
         ImGui::Checkbox("Show transform gizmo", &m_ShowGizmos);
         ImGui::Checkbox("Frame camera on select", &m_FrameOnSelect);
+        if (ImGui::Checkbox("Adaptive HUD contrast", &prefs.AdaptiveHudContrast)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("The transparent viewport HUDs (Stats, History, status line, nav gizmo,\n"
+                                 "Play/Stop, corner monogram, Game-view overlays) sample the render behind\n"
+                                 "themselves and ease their text/pill between light and dark to stay readable.\n"
+                                 "Off: they all draw static near-white text with no backing pill.");
 
         ImGui::SeparatorText("Game view");
         if (ImGui::Checkbox("Maximize on Play", &prefs.GameViewMaximizeOnPlay)) EditorSettings::Save();
@@ -1634,6 +1640,7 @@ void EditorLayer::DrawEngineMark(float dt) {
         float k = 1.0f - expf(-sdt / 0.15f);
         m_MarkContrastLum += (m_MarkContrastTarget - m_MarkContrastLum) * k;
     }
+    if (!EditorSettings::Get().AdaptiveHudContrast) m_MarkContrastLum = m_MarkContrastTarget = 1.0f; // #275 toggle
     int markV = (int)(m_MarkContrastLum * 255.0f + 0.5f);
     markV = markV < 0 ? 0 : (markV > 255 ? 255 : markV);
 

@@ -34,6 +34,14 @@ void PushAdaptiveHudText(const EditorModuleHostAPI& host, float centerX, float c
     static float s_targetLum = 1.0f;
     static float s_sampleAccum = 0.0f;
 
+    // #275 toggle: static near-white text, no sampling.
+    if (host.GetAdaptiveHudContrast && !host.GetAdaptiveHudContrast()) {
+        s_easedLum = s_targetLum = 1.0f;
+        ImGui::PushStyleColor(ImGuiCol_Text,         IM_COL32(255, 255, 255, 240));
+        ImGui::PushStyleColor(ImGuiCol_TextDisabled, IM_COL32(255, 255, 255, 150));
+        return;
+    }
+
     s_sampleAccum += dt;
     if (s_sampleAccum >= 0.1f) {
         s_sampleAccum = 0.0f;

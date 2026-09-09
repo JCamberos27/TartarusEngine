@@ -56,7 +56,11 @@
 //        (the click-to-jump rows — undo/redo stacks + World& stay host-side) and
 //        SampleHistoryHudLuminance (host-driven PBO readback, like the Stats HUD's).
 //        GetShowHistory/SetShowHistory (v4) still carry the toggle + the title-bar X.
-constexpr std::uint32_t kEditorModuleAPIVersion = 15;
+//   16 - Editor chrome polish: OpenProjectSettings (Project Settings opens from its own menu-bar
+//        item beside Preferences, not a Window-menu toggle) and GetAdaptiveHudContrast (the
+//        Preferences ▸ Viewport switch the module Stats/History HUDs read to drop their
+//        luminance sampling + backing pill).
+constexpr std::uint32_t kEditorModuleAPIVersion = 16;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -204,6 +208,10 @@ struct EditorModuleHostAPI {
     // ~10 Hz and does its own easing + text tint.
     float (*SampleViewportLuminance)(float screenCenterX, float screenCenterY, float boxPx) = nullptr;
 
+    // v16 — false: the module HUDs (Stats, History) skip the luminance sample and draw static
+    // near-white text with no backing pill. Preferences ▸ Viewport ▸ "Adaptive HUD contrast".
+    bool (*GetAdaptiveHudContrast)() = nullptr;
+
     // --- Toolbar / menus (API v4) ------------------------------------------------------------
     // The top toolbar strip, its dropdown menus and the window min/max/close controls live in
     // the module now (EditorModuleToolbar.cpp). The module owns the pinned "##Toolbar" window,
@@ -244,6 +252,7 @@ struct EditorModuleHostAPI {
     void (*SnapSelectionToGround)() = nullptr;
     void (*RequestResetLayout)() = nullptr;
     void (*OpenPreferences)() = nullptr;
+    void (*OpenProjectSettings)() = nullptr; // v16 — menu-bar item beside Preferences
 
     // Menu / popup bodies rendered host-side into the module-begun menu or popup — the module
     // calls these between its own BeginMenu/EndMenu (or BeginPopup/EndPopup). The single shared
