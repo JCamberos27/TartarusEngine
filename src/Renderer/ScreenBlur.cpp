@@ -1,42 +1,10 @@
 #include "ScreenBlur.h"
 #include "Shader.h"
+#include "ShaderLibrary.h"
 #include "GLStateCache.h"
 #include "gl.h"
 
 #include <glm/glm.hpp>
-
-namespace {
-
-const char* kVertSrc = R"(#version 460 core
-out vec2 vUV;
-void main() {
-    vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-    vUV = p;
-    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}
-)";
-
-// Standard 9-tap linear-sampled Gaussian (5 texture fetches). uDir carries the per-texel step
-// along one axis; (0,0) degenerates to a plain bilinear copy (weights sum to 1), used for the
-// final upsample.
-const char* kFragSrc = R"(#version 460 core
-in vec2 vUV;
-out vec4 FragColor;
-uniform sampler2D uTex;
-uniform vec2 uDir;
-void main() {
-    vec2 o1 = uDir * 1.3846153846;
-    vec2 o2 = uDir * 3.2307692308;
-    vec3 c  = texture(uTex, vUV).rgb      * 0.2270270270;
-    c += texture(uTex, vUV + o1).rgb * 0.3162162162;
-    c += texture(uTex, vUV - o1).rgb * 0.3162162162;
-    c += texture(uTex, vUV + o2).rgb * 0.0702702703;
-    c += texture(uTex, vUV - o2).rgb * 0.0702702703;
-    FragColor = vec4(c, 1.0);
-}
-)";
-
-} // namespace
 
 ScreenBlur::~ScreenBlur() {
     delete m_Shader;
@@ -47,7 +15,8 @@ ScreenBlur::~ScreenBlur() {
 
 void ScreenBlur::Ensure(int halfW, int halfH) {
     if (!m_Shader) {
-        m_Shader = new Shader(kVertSrc, kFragSrc);
+        m_Shader = new Shader(ShaderLibrary::ReadFile("ScreenBlur.vert.glsl"),
+                              ShaderLibrary::ReadFile("ScreenBlur.frag.glsl"));
         glGenVertexArrays(1, &m_Vao);
     }
     if (m_W == halfW && m_H == halfH && m_Fbo[0]) return;
