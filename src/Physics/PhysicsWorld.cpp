@@ -5,7 +5,7 @@
 #include "World.h"
 #include "Components.h"
 #include "Model.h"
-#include "GameModuleAPI.h" // RaycastHit / TriggerEvent (shared PODs), kPlayerEntity
+#include "GameModuleAPI.h" // RaycastHit / TriggerEvent / ContactEvent / BodyState / ForceMode, kPlayerEntity
 
 #include <PxPhysicsAPI.h>
 
@@ -13,11 +13,14 @@
 #include <glm/gtx/euler_angles.hpp> // eulerAngleYXZ / extractEulerAngleYXZ — matches ComposeTransform
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <map>
 #include <set>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -52,23 +55,41 @@ using TriggerPair = std::pair<std::uint32_t, std::uint32_t>; // (trigger entity,
 
 struct PhysicsState;
 
-// PhysX calls this back during fetchResults for every trigger touch found/lost. We only
-// implement onTrigger; the other five events are unused. Enter/Exit go straight onto the
-// frame's event list and the tracked overlap set (Step synthesises Stay from what's left).
-struct TriggerCallback : PxSimulationEventCallback {
+// PhysX calls this back during fetchResults. onTrigger feeds trigger enter/exit; onContact
+// feeds solid-contact enter/stay/exit (#185 PR 7). The other four events are unused.
+struct SimEventCallback : PxSimulationEventCallback {
     PhysicsState* owner = nullptr;
     void onTrigger(PxTriggerPair* pairs, PxU32 count) override;
-    void onContact(const PxContactPairHeader&, const PxContactPair*, PxU32) override {}
+    void onContact(const PxContactPairHeader& header, const PxContactPair* pairs, PxU32 count) override;
     void onConstraintBreak(PxConstraintInfo*, PxU32) override {}
     void onWake(PxActor**, PxU32) override {}
     void onSleep(PxActor**, PxU32) override {}
     void onAdvance(const PxRigidBody* const*, const PxTransform*, PxU32) override {}
 };
 
+// Custom filter shader: PxDefaultSimulationFilterShader solves contacts but reports none.
+// This keeps its trigger handling and adds the NOTIFY flags so onContact fires for solid pairs.
+PxFilterFlags EngineFilterShader(
+    PxFilterObjectAttributes attributes0, PxFilterData filterData0,
+    PxFilterObjectAttributes attributes1, PxFilterData filterData1,
+    PxPairFlags& pairFlags, const void* constantBlock, PxU32 constantBlockSize) {
+    (void)filterData0; (void)filterData1; (void)constantBlock; (void)constantBlockSize;
+    if (PxFilterObjectIsTrigger(attributes0) || PxFilterObjectIsTrigger(attributes1)) {
+        pairFlags = PxPairFlag::eTRIGGER_DEFAULT;
+        return PxFilterFlag::eDEFAULT;
+    }
+    pairFlags = PxPairFlag::eCONTACT_DEFAULT
+              | PxPairFlag::eNOTIFY_TOUCH_FOUND
+              | PxPairFlag::eNOTIFY_TOUCH_PERSISTS
+              | PxPairFlag::eNOTIFY_TOUCH_LOST
+              | PxPairFlag::eNOTIFY_CONTACT_POINTS;
+    return PxFilterFlag::eDEFAULT;
+}
+
 struct PhysicsState {
     PxDefaultAllocator     allocator;
     EngineErrorCallback    errorCallback;
-    TriggerCallback        triggerCb;
+    SimEventCallback       simCb;
     PxFoundation*          foundation   = nullptr;
     PxPhysics*             physics      = nullptr;
     PxDefaultCpuDispatcher* dispatcher  = nullptr;
@@ -95,6 +116,11 @@ struct PhysicsState {
     // reference them) and before PxPhysics.
     std::vector<PxConvexMesh*>   convexMeshes;
     std::vector<PxTriangleMesh*> triangleMeshes;
+    // #185 PR 7 — one PxMaterial per distinct (friction, bounciness) rounded to 1/100; the
+    // per-entity dynamic-body lookup for the force API; this frame's solid-contact events.
+    std::map<std::pair<int, int>, PxMaterial*>       materialCache;
+    std::unordered_map<std::uint32_t, PxRigidDynamic*> bodyByEntity;
+    std::vector<ContactEvent>                        contactEvents;
 #ifdef TARTARUS_PHYSX_PVD
     PxPvd*               pvd            = nullptr;
     PxPvdTransport*      pvdTransport   = nullptr;
@@ -188,6 +214,19 @@ PxTriangleMesh* CookTriangle(PxPhysics& physics, const std::vector<glm::vec3>& v
     return PxCreateTriangleMesh(params, d, physics.getPhysicsInsertionCallback());
 }
 
+// One PxMaterial per distinct (friction, bounciness), rounded to 1/100 so a slider wobble
+// doesn't spawn hundreds (#185 PR 7). Friction feeds both the static and dynamic coefficient.
+PxMaterial* GetMaterial(PhysicsState& s, float friction, float bounciness) {
+    friction   = std::max(0.0f, friction);
+    bounciness = std::min(1.0f, std::max(0.0f, bounciness));
+    const std::pair<int, int> key{(int)std::lround(friction * 100.0f), (int)std::lround(bounciness * 100.0f)};
+    auto it = s.materialCache.find(key);
+    if (it != s.materialCache.end()) return it->second;
+    PxMaterial* m = s.physics->createMaterial(friction, friction, bounciness);
+    s.materialCache.emplace(key, m);
+    return m;
+}
+
 void BuildActors(PhysicsState& s, const World& world) {
     int statics = 0, dynamic = 0, kinematic = 0, skipped = 0;
     auto view = world.Registry.view<const TransformComponent, const ColliderComponent>(entt::exclude<InactiveTag>);
@@ -203,8 +242,9 @@ void BuildActors(PhysicsState& s, const World& world) {
         PxTransform actorPose(PxIdentity);
         PxTransform shapeLocal(PxIdentity);
         PxShape* shape = nullptr;
+        PxMaterial* mat = GetMaterial(s, c.Friction, c.Bounciness); // #185 PR 7
         auto make = [&](const PxGeometry& g) {
-            shape = s.physics->createShape(g, *s.defaultMaterial, /*isExclusive=*/true, flags);
+            shape = s.physics->createShape(g, *mat, /*isExclusive=*/true, flags);
         };
 
         const float sx = std::abs(t.Scale.x), sy = std::abs(t.Scale.y), sz = std::abs(t.Scale.z);
@@ -325,6 +365,7 @@ void BuildActors(PhysicsState& s, const World& world) {
             s.dynamics.push_back({b, e});
             ++dynamic;
         }
+        s.bodyByEntity[entt::to_integral(e)] = b; // #185 PR 7 — force API + read-back lookup
         s.scene->addActor(*b);
     }
 
@@ -354,7 +395,7 @@ void PushTriggerEvent(PhysicsState& s, std::uint32_t kind, std::uint32_t trig, s
     }
 }
 
-void TriggerCallback::onTrigger(PxTriggerPair* pairs, PxU32 count) {
+void SimEventCallback::onTrigger(PxTriggerPair* pairs, PxU32 count) {
     if (!owner) return;
     for (PxU32 i = 0; i < count; ++i) {
         const PxTriggerPair& p = pairs[i];
@@ -371,6 +412,64 @@ void TriggerCallback::onTrigger(PxTriggerPair* pairs, PxU32 count) {
         } else if (p.status & PxPairFlag::eNOTIFY_TOUCH_LOST) {
             if (owner->triggerOverlaps.erase(key))
                 PushTriggerEvent(*owner, TriggerEvent::Exit, trig, other);
+        }
+    }
+}
+
+// Approx closing speed of the two actors along `n`, from their current velocities. Post-solve
+// (this fires during fetchResults) so it reads near-zero for a resolved rest — Impulse is the
+// real "how hard" measure; NormalSpeed is a cheap extra for glancing / sliding contacts.
+float NormalClosingSpeed(const PxActor* a0, const PxActor* a1, const PxVec3& n) {
+    auto vel = [](const PxActor* a) -> PxVec3 {
+        const PxRigidBody* rb = a ? a->is<PxRigidBody>() : nullptr;
+        return rb ? rb->getLinearVelocity() : PxVec3(0.0f);
+    };
+    return std::abs((vel(a0) - vel(a1)).dot(n));
+}
+
+void SimEventCallback::onContact(const PxContactPairHeader& header, const PxContactPair* pairs, PxU32 count) {
+    if (!owner) return;
+    if (header.flags & (PxContactPairHeaderFlag::eREMOVED_ACTOR_0 | PxContactPairHeaderFlag::eREMOVED_ACTOR_1))
+        return;
+    const std::uint32_t a = UserDataToEntity(header.actors[0] ? header.actors[0]->userData : nullptr);
+    const std::uint32_t b = UserDataToEntity(header.actors[1] ? header.actors[1]->userData : nullptr);
+
+    for (PxU32 i = 0; i < count; ++i) {
+        const PxContactPair& cp = pairs[i];
+        if (cp.flags & (PxContactPairFlag::eREMOVED_SHAPE_0 | PxContactPairFlag::eREMOVED_SHAPE_1)) continue;
+
+        std::uint32_t kind;
+        if      (cp.events & PxPairFlag::eNOTIFY_TOUCH_FOUND)    kind = ContactEvent::Enter;
+        else if (cp.events & PxPairFlag::eNOTIFY_TOUCH_LOST)     kind = ContactEvent::Exit;
+        else if (cp.events & PxPairFlag::eNOTIFY_TOUCH_PERSISTS) kind = ContactEvent::Stay;
+        else continue;
+
+        PxContactPairPoint pts[8];
+        const PxU32 n = cp.extractContacts(pts, 8);
+        float sumImpulse = 0.0f;
+        PxVec3 p0(0.0f), nrm(0.0f, 1.0f, 0.0f);
+        for (PxU32 k = 0; k < n; ++k) {
+            sumImpulse += pts[k].impulse.magnitude();
+            if (k == 0) { p0 = pts[k].position; nrm = pts[k].normal; }
+        }
+        // Resting stacks generate a persistent contact every substep with a small hold impulse;
+        // only surface Stay for genuine ongoing pressure.
+        if (kind == ContactEvent::Stay && sumImpulse < 0.05f) continue;
+
+        ContactEvent ev;
+        ev.Kind = kind; ev.A = a; ev.B = b;
+        ev.Point[0]  = p0.x;  ev.Point[1]  = p0.y;  ev.Point[2]  = p0.z;
+        ev.Normal[0] = nrm.x; ev.Normal[1] = nrm.y; ev.Normal[2] = nrm.z;
+        ev.Impulse     = sumImpulse;
+        ev.NormalSpeed = NormalClosingSpeed(header.actors[0], header.actors[1], nrm);
+        owner->contactEvents.push_back(ev);
+
+        if (kind != ContactEvent::Stay && sumImpulse > 0.75f) {
+            char la[24], lb[24];
+            char imp[32]; std::snprintf(imp, sizeof(imp), " (impulse %.1f)", sumImpulse);
+            Log::Info(std::string("Contact ") + (kind == ContactEvent::Enter ? "hit:  " : "end:  ") +
+                      EntityLabel(a, la) + " <-> " + EntityLabel(b, lb) +
+                      (kind == ContactEvent::Enter ? imp : ""));
         }
     }
 }
@@ -425,13 +524,13 @@ void Create(const World& world) {
 
     s->defaultMaterial = s->physics->createMaterial(0.6f, 0.6f, 0.0f);
 
-    s->triggerCb.owner = s; // #185 PR 5
+    s->simCb.owner = s; // #185 PR 5
     PxSceneDesc desc(s->physics->getTolerancesScale());
     const glm::vec3 g = ProjectSettings::Physics().Gravity;
     desc.gravity                 = PxVec3(g.x, g.y, g.z);
     desc.cpuDispatcher           = s->dispatcher;
-    desc.filterShader            = PxDefaultSimulationFilterShader; // handles trigger pairs
-    desc.simulationEventCallback = &s->triggerCb;
+    desc.filterShader            = EngineFilterShader; // trigger pairs + solid-contact reports (#185 PR 7)
+    desc.simulationEventCallback = &s->simCb;
     s->scene = s->physics->createScene(desc);
     if (!s->scene) {
         Log::Error("PhysX: createScene failed — physics disabled for this Play session.");
@@ -464,6 +563,7 @@ void Destroy() {
     if (s->controller)      s->controller->release();
     if (s->controllerMgr)   s->controllerMgr->release();
     if (s->scene)           s->scene->release();
+    for (auto& kv : s->materialCache)          if (kv.second) kv.second->release(); // #185 PR 7
     for (PxConvexMesh* m : s->convexMeshes)   if (m) m->release(); // #185 PR 6 — after the scene's shapes
     for (PxTriangleMesh* m : s->triangleMeshes) if (m) m->release();
     if (s->defaultMaterial) s->defaultMaterial->release();
@@ -514,6 +614,7 @@ void Step(float dt, World& world) {
 
     g_State->triggerEvents.clear();
     g_State->enteredThisFrame.clear();
+    g_State->contactEvents.clear(); // #185 PR 7 — onContact refills it during the sim below
 
     // Kinematic bodies are driven by their TransformComponent (e.g. an Animator-moved platform):
     // push this frame's authored pose into the actor before stepping so it sweeps other bodies.
@@ -675,6 +776,88 @@ bool IsTriggerOccupied(unsigned triggerEntity) {
     for (const auto& pr : g_State->triggerOverlaps)
         if (pr.first == triggerEntity) return true;
     return false;
+}
+
+// --- Forces & read-back (#185 PR 7) --------------------------------------------------------
+
+namespace {
+// A non-kinematic dynamic body for `entity`, or null. bodyByEntity holds kinematics too, so
+// filter those out here — force/velocity calls on a kinematic body are meaningless.
+PxRigidDynamic* DynamicFor(unsigned entity) {
+    if (!g_State) return nullptr;
+    auto it = g_State->bodyByEntity.find(entity);
+    if (it == g_State->bodyByEntity.end()) return nullptr;
+    PxRigidDynamic* b = it->second;
+    return (b->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC) ? nullptr : b;
+}
+PxForceMode::Enum ToForceMode(unsigned mode) {
+    switch (mode) {
+        case 1:  return PxForceMode::eIMPULSE;
+        case 2:  return PxForceMode::eVELOCITY_CHANGE;
+        case 3:  return PxForceMode::eACCELERATION;
+        default: return PxForceMode::eFORCE;
+    }
+}
+} // namespace
+
+void AddForce(unsigned entity, const float force[3], unsigned mode) {
+    if (PxRigidDynamic* b = DynamicFor(entity))
+        b->addForce(PxVec3(force[0], force[1], force[2]), ToForceMode(mode), /*autowake=*/true);
+}
+void AddTorque(unsigned entity, const float torque[3], unsigned mode) {
+    if (PxRigidDynamic* b = DynamicFor(entity))
+        b->addTorque(PxVec3(torque[0], torque[1], torque[2]), ToForceMode(mode), /*autowake=*/true);
+}
+void AddForceAtPosition(unsigned entity, const float force[3], const float worldPos[3], unsigned mode) {
+    if (PxRigidDynamic* b = DynamicFor(entity))
+        PxRigidBodyExt::addForceAtPos(*b, PxVec3(force[0], force[1], force[2]),
+                                      PxVec3(worldPos[0], worldPos[1], worldPos[2]),
+                                      ToForceMode(mode), /*wakeup=*/true);
+}
+void AddExplosionForce(const float center[3], float radius, float strength, float upwardBias) {
+    if (!g_State || radius <= 0.0f) return;
+    const PxVec3 c(center[0], center[1], center[2]);
+    for (auto& kv : g_State->bodyByEntity) {
+        PxRigidDynamic* b = kv.second;
+        if (b->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC) continue;
+        PxVec3 d = b->getGlobalPose().p - c;
+        const float dist = d.magnitude();
+        if (dist > radius) continue;
+        const float falloff = 1.0f - dist / radius;
+        PxVec3 dir = (dist > 1e-4f) ? (d / dist) : PxVec3(0.0f, 1.0f, 0.0f);
+        dir.y += upwardBias;
+        dir.normalize();
+        b->addForce(dir * (strength * falloff), PxForceMode::eIMPULSE, /*autowake=*/true);
+    }
+}
+void SetLinearVelocity(unsigned entity, const float v[3]) {
+    if (PxRigidDynamic* b = DynamicFor(entity))
+        b->setLinearVelocity(PxVec3(v[0], v[1], v[2]));
+}
+
+bool GetBodyState(unsigned entity, BodyState& out) {
+    out = BodyState{};
+    if (!g_State) return false;
+    auto it = g_State->bodyByEntity.find(entity);
+    if (it == g_State->bodyByEntity.end()) return false;
+    PxRigidDynamic* b = it->second;
+    const bool kin = (b->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC);
+    const PxVec3 v = b->getLinearVelocity();
+    const PxVec3 w = b->getAngularVelocity();
+    out.Valid = true;
+    out.Kinematic = kin;
+    out.Sleeping = !kin && b->isSleeping();
+    out.Velocity[0] = v.x; out.Velocity[1] = v.y; out.Velocity[2] = v.z;
+    out.AngularVelocity[0] = w.x; out.AngularVelocity[1] = w.y; out.AngularVelocity[2] = w.z;
+    return true;
+}
+
+int GetContactEvents(ContactEvent* out, int maxEvents) {
+    if (!g_State) return 0;
+    const int total = (int)g_State->contactEvents.size();
+    const int n = (maxEvents < total) ? maxEvents : total;
+    for (int i = 0; i < n && out; ++i) out[i] = g_State->contactEvents[(size_t)i];
+    return total;
 }
 
 } // namespace PhysicsWorld

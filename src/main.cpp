@@ -995,6 +995,15 @@ int main(int argc, char** argv) {
             const bool simThisFrame = (playing && !paused) || stepThisFrame;
 
             if (simThisFrame) {
+                // #185 PR 7 demo: G sets off a shockwave at the player — proves the force API
+                // path end to end (no gameplay module uses it yet). Remove once real gameplay
+                // drives forces.
+                if (gameHasInput && Input::IsKeyPressed(GLFW_KEY_G)) {
+                    const float c[3] = {player.Cam.Position.x,
+                                        player.Cam.Position.y - player.EyeHeight,
+                                        player.Cam.Position.z};
+                    PhysicsWorld::AddExplosionForce(c, 7.0f, 22.0f, 0.4f);
+                }
                 // Step the PhysX world (#185): kinematic bodies pushed from their Transforms,
                 // then the sim, then dynamic bodies' poses written back into theirs.
                 PhysicsWorld::Step(dt, world);
