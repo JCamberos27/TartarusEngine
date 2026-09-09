@@ -37,6 +37,7 @@
 #include "Profiler.h"
 #include "Frustum.h"
 #include "PhysicsWorld.h" // #185 — PhysX world stepped during Play
+#include "GameModuleAPI.h" // RaycastHit for the debug physics harness
 #include "GameViewPanel.h"
 #include "ProjectPaths.h"
 #include "LayerRegistry.h"
@@ -890,6 +891,28 @@ int main(int argc, char** argv) {
             // the editor panels (only meaningful while playing; setMaximized no-ops otherwise).
             if (playing && Shortcuts::TriggeredGlfw("play.maximize")) setMaximized(!playMaximized);
 
+            // F6 toggles the Physics debug panel from anywhere — the Window menu that also does it
+            // is hidden during maximized play (#185).
+            if (Input::IsKeyPressed(GLFW_KEY_F6)) {
+                EditorSettings::Get().ShowPhysicsPanel = !EditorSettings::Get().ShowPhysicsPanel;
+                EditorSettings::Save();
+            }
+            // F3 toggles the physics debug rendering over the game view (works in maximized play,
+            // where the Scene-viewport overlay isn't drawn). Turning it on with nothing selected
+            // enables a sensible default set so there's immediately something to see (#185).
+            if (Input::IsKeyPressed(GLFW_KEY_F3)) {
+                EditorSettings& es = EditorSettings::Get();
+                es.PlayDebugOverlay = !es.PlayDebugOverlay;
+                if (es.PlayDebugOverlay) {
+                    es.ShowColliders = true;
+                    if (es.PhysicsDebugDrawFlags == 0u)
+                        es.PhysicsDebugDrawFlags = PhysicsWorld::PDD_Contacts |
+                                                   PhysicsWorld::PDD_Raycasts |
+                                                   PhysicsWorld::PDD_Velocity;
+                }
+                EditorSettings::Save();
+            }
+
             if (Shortcuts::TriggeredGlfw("window.fullscreen")) {
                 window.ToggleFullscreen();
             }
@@ -995,14 +1018,71 @@ int main(int argc, char** argv) {
             const bool simThisFrame = (playing && !paused) || stepThisFrame;
 
             if (simThisFrame) {
-                // #185 PR 7 demo: G sets off a shockwave at the player — proves the force API
-                // path end to end (no gameplay module uses it yet). Remove once real gameplay
-                // drives forces.
-                if (gameHasInput && Input::IsKeyPressed(GLFW_KEY_G)) {
-                    const float c[3] = {player.Cam.Position.x,
-                                        player.Cam.Position.y - player.EyeHeight,
-                                        player.Cam.Position.z};
-                    PhysicsWorld::AddExplosionForce(c, 7.0f, 22.0f, 0.4f);
+                // Physics harness (#185): exercises the gameplay force + query API from a real
+                // caller until gameplay code does. G = shockwave at the player. Right-click =
+                // Half-Life-2 gravity gun: grab the dynamic body under the crosshair and carry
+                // it in front of the eye; scroll while holding pulls it nearer / pushes it out;
+                // left-click launches it. With nothing held, left-click shoves whatever it hits.
+                // Toggle: Gizmos > Physics debug input.
+                if (gameHasInput && EditorSettings::Get().PhysicsDebugInput) {
+                    if (Input::IsKeyPressed(GLFW_KEY_G)) {
+                        const float c[3] = {player.Cam.Position.x,
+                                            player.Cam.Position.y - player.EyeHeight,
+                                            player.Cam.Position.z};
+                        PhysicsWorld::AddExplosionForce(c, 7.0f, 22.0f, 0.4f);
+                    }
+
+                    const glm::vec3 eye = player.Cam.Position, fwd = player.Cam.Front();
+                    const float of[3] = {eye.x, eye.y, eye.z}, df[3] = {fwd.x, fwd.y, fwd.z};
+                    static bool s_lmbPrev = false, s_rmbPrev = false;
+                    static float s_holdDist = 3.0f;
+                    const bool lmb = Input::IsMouseButtonDown(0);
+                    const bool rmb = Input::IsMouseButtonDown(1);
+
+                    if (rmb && !s_rmbPrev && !PhysicsWorld::IsGrabbing()) {
+                        RaycastHit hit;
+                        BodyState bs;
+                        if (PhysicsWorld::Raycast(of, df, 100.0f, hit) && hit.Entity != 0xFFFFFFFFu &&
+                            PhysicsWorld::GetBodyState(hit.Entity, bs) && !bs.Kinematic) {
+                            PhysicsWorld::GrabBody(hit.Entity);
+                            s_holdDist = glm::clamp(hit.Distance, 1.5f, 8.0f);
+                        }
+                    }
+
+                    if (PhysicsWorld::IsGrabbing()) {
+                        const double scroll = Input::GetScrollDeltaY();
+                        if (scroll != 0.0)
+                            s_holdDist = glm::clamp(s_holdDist + (float)scroll * 0.6f, 1.5f, 8.0f);
+                        const glm::vec3 t = eye + fwd * s_holdDist;
+                        const float tf[3] = {t.x, t.y, t.z};
+                        PhysicsWorld::UpdateGrab(tf);
+
+                        if (lmb && !s_lmbPrev) {
+                            const glm::vec3 imp = fwd * 18.0f;
+                            const float impf[3] = {imp.x, imp.y, imp.z};
+                            PhysicsWorld::ReleaseBody(/*launch=*/true, impf);
+                        } else if (!rmb && s_rmbPrev) {
+                            const float zero[3] = {0.0f, 0.0f, 0.0f};
+                            PhysicsWorld::ReleaseBody(/*launch=*/false, zero);
+                        }
+                    } else if (lmb && !s_lmbPrev) {
+                        RaycastHit hit;
+                        if (PhysicsWorld::Raycast(of, df, 100.0f, hit) && hit.Entity != 0xFFFFFFFFu) {
+                            const float f[3] = {fwd.x * 6.0f, fwd.y * 6.0f + 2.0f, fwd.z * 6.0f};
+                            PhysicsWorld::AddForceAtPosition(hit.Entity, f, hit.Point, /*Impulse*/1u);
+                        }
+                    }
+
+                    s_lmbPrev = lmb;
+                    s_rmbPrev = rmb;
+                }
+                // Push the editor's physics-debug choices into the sim (#185): draw channels +
+                // slow-mo scale. Query recording auto-follows the Raycasts channel.
+                {
+                    const EditorSettings& es = EditorSettings::Get();
+                    PhysicsWorld::SetDebugDrawFlags(es.PhysicsDebugDrawFlags);
+                    PhysicsWorld::SetSimTimeScale(es.PhysicsSimTimeScale);
+                    PhysicsWorld::SetQueryRecording((es.PhysicsDebugDrawFlags & PhysicsWorld::PDD_Raycasts) != 0u);
                 }
                 // Step the PhysX world (#185): kinematic bodies pushed from their Transforms,
                 // then the sim, then dynamic bodies' poses written back into theirs.
@@ -1758,12 +1838,18 @@ int main(int argc, char** argv) {
                 }
 
                 // Collider wireframe overlay (#185 PR 2) — depth-tested so scene geometry
-                // occludes it, no depth write so it never blocks anything drawn after.
-                if (EditorSettings::Get().ShowColliders && !editor.OverlaysHidden()) {
-                    glEnable(GL_DEPTH_TEST);
-                    glDepthMask(GL_FALSE);
-                    colliderGizmo.Draw(sceneViewMat, sceneProjMat, world);
-                    glDepthMask(GL_TRUE);
+                // occludes it, no depth write so it never blocks anything drawn after. Also
+                // carries the physics visual debug-draw channels (#185 A), which have their own
+                // toggle, so it runs when either is on.
+                {
+                    const bool showShapes = EditorSettings::Get().ShowColliders;
+                    const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u;
+                    if ((showShapes || showDebug) && !editor.OverlaysHidden()) {
+                        glEnable(GL_DEPTH_TEST);
+                        glDepthMask(GL_FALSE);
+                        colliderGizmo.Draw(sceneViewMat, sceneProjMat, world, showShapes);
+                        glDepthMask(GL_TRUE);
+                    }
                 }
 
                 // Resolve MSAA + tonemap the linear-HDR scene into the LDR texture the Scene tab
@@ -1786,6 +1872,7 @@ int main(int argc, char** argv) {
                 // stand down (a shoot-click or strafe key shouldn't also poke the editor).
                 editor.SetGameInputActive(gameHasInput);
                 if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
+                else if (playing)    editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
                 // The reloadable editor module (Stats HUD, toolbar strip + menus) reads live
                 // editor / world / assets / camera state through EditorModuleHostAPI; hand it
                 // this frame's pointers first.
@@ -1879,6 +1966,13 @@ int main(int argc, char** argv) {
                 }
                 EditorLayer::RenderStats gvRenderStats;
                 drawScene(gvView, gvProj, gvEye, /*unlit=*/false, &gvRenderStats);
+
+                // Physics debug overlay over the game view (#185, F3) — depth-tested, no depth write.
+                if (playing && EditorSettings::Get().PlayDebugOverlay) {
+                    glEnable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
+                    colliderGizmo.Draw(gvView, gvProj, world, EditorSettings::Get().ShowColliders);
+                    glDepthMask(GL_TRUE);
+                }
 
                 gameHdr.ResolveTo();
                 {
@@ -1979,6 +2073,12 @@ int main(int argc, char** argv) {
                 EditorLayer::RenderStats stats;
                 drawScene(view, proj, gameCam->Position, /*unlit=*/false, &stats);
                 editor.SetRenderStats(stats);
+                // Physics debug overlay over the game view (#185, F3).
+                if (EditorSettings::Get().PlayDebugOverlay) {
+                    glEnable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
+                    colliderGizmo.Draw(view, proj, world, EditorSettings::Get().ShowColliders);
+                    glDepthMask(GL_TRUE);
+                }
                 gameHdr.ResolveTo();
                 {
                 PROFILE_GPU_SCOPE("Tonemap");

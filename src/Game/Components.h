@@ -102,6 +102,11 @@ struct RigidbodyComponent {
     // #185 PR 9 — swept CCD for this body, so a fast small object can't tunnel a thin wall.
     // Costs a little; leave off for slow / large bodies.
     bool  ContinuousCollision = false;
+    // #185 hardening — per-axis constraints (PxRigidDynamicLockFlag). Freeze linear motion or
+    // rotation on any world axis: e.g. lock rotation X+Z to keep a barrel upright, or lock
+    // position Y to pin a body to a horizontal plane. Ignored while Kinematic.
+    bool  FreezePositionX = false, FreezePositionY = false, FreezePositionZ = false;
+    bool  FreezeRotationX = false, FreezeRotationY = false, FreezeRotationZ = false;
 };
 
 // A PhysX joint constraining this entity's body to another (or to a fixed world frame) while
@@ -117,6 +122,11 @@ struct JointComponent {
     glm::vec3 Axis{1.0f, 0.0f, 0.0f}; // hinge / slider axis, this entity's local space
     float BreakForce  = 0.0f;        // 0 = unbreakable
     float BreakTorque = 0.0f;
+    // Optional motion limits. Hinge: LimitLower/Upper are degrees about Axis. Slider: units
+    // along Axis. Distance: LimitLower = min separation, LimitUpper = max. Ignored by Fixed/Ball.
+    bool  UseLimit   = false;
+    float LimitLower = -45.0f;
+    float LimitUpper =  45.0f;
 };
 
 // Optional clip triggered from the editor Inspector; formerly PlacedModel-only, now any entity.

@@ -18,6 +18,7 @@
 #include "Log.h"
 #include "EditorSettings.h"
 #include "EditorUIHelpers.h"
+#include "PhysicsWorld.h"             // #185 — PDD_* debug-draw channel flags
 #include "EditorModuleAPI.h"          // EditorConsoleState — the Console panel lives in the module now
 #include "HotReloadEditorModule.h"    // EditorModuleHost::ConsoleState()
 #include "AssetImporterInspector.h"
@@ -536,6 +537,14 @@ void EditorLayer::DrawWindowMenuBody() {
             ImGui::MenuItem(ICON_FA_GEARS "  Project Settings", nullptr, &m_ShowProjectSettings);
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Project-scoped settings (physics, tags, layer names) - saved with the project, not your editor prefs.");
+            if (ImGui::MenuItem(ICON_FA_CUBES "  Physics Debug", nullptr, &EditorSettings::Get().ShowPhysicsPanel))
+                EditorSettings::Save();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Live sim stats, visual debug-draw channels, slow-mo / break-on, body + joint + event inspectors (#185).");
+            if (ImGui::MenuItem(ICON_FA_GAUGE_HIGH "  Physics HUD overlay", nullptr, &EditorSettings::Get().PhysicsHudOverlay))
+                EditorSettings::Save();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Corner text overlay on the Scene viewport while playing.");
             ImGui::Separator();
             // Console / Statistics / History / Light Gizmos have dedicated toolbar toggles (#148);
             // the engine mark lives in Preferences ▸ Viewport.
@@ -670,6 +679,32 @@ void EditorLayer::DrawGizmosPopupBody() {
     }
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Green wireframe of every Collider's shape (#185), edit and Play mode.");
     ImGui::EndDisabled();
+
+    bool physDbg = EditorSettings::Get().PhysicsDebugInput;
+    if (ImGui::Checkbox("Physics debug input", &physDbg)) {
+        EditorSettings::Get().PhysicsDebugInput = physDbg;
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("While playing (Game view focused): right-click = gravity-gun grab,\nleft-click = launch / raycast-shove, G = shockwave at the Player (#185).");
+
+    {
+        unsigned& ddf = EditorSettings::Get().PhysicsDebugDrawFlags;
+        bool anyDraw = ddf != 0u;
+        if (ImGui::Checkbox("Physics debug draw", &anyDraw)) {
+            // Toggle a sensible default bundle; the Physics panel has the per-channel toggles.
+            ddf = anyDraw ? (PhysicsWorld::PDD_Contacts | PhysicsWorld::PDD_Raycasts |
+                             PhysicsWorld::PDD_Velocity) : 0u;
+            EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Contact sparks, raycasts and velocity arrows in the Scene viewport.\nWindow \xE2\x96\xB8 Physics has the individual channels + a slow-mo slider.");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Panel\xE2\x80\xA6")) {
+            EditorSettings::Get().ShowPhysicsPanel = true;
+            EditorSettings::Save();
+        }
+    }
 
     ImGui::Separator();
     ImGui::Checkbox("Grid", &m_ShowGrid); // independent of the master switch, like Unity's grid

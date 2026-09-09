@@ -1648,46 +1648,72 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
     }
 
-    // --- Collider (#185 PR 2: shape + size + trigger) -------------------------------------
+    // --- Collider (#185: shape + size + trigger + surface) -----------------------------
     if (auto* collider = registry.try_get<ColliderComponent>(entity)) {
         if (BeginComponentSection(ICON_FA_CUBE, "Collider", true, removed, /*defaultOpen=*/false,
-                "Blocks movement and is hit by raycasts. While playing this drives a static PhysX\n"
-                "actor; the shape below picks its geometry.")) {
+                "Blocks movement and is hit by raycasts. While playing this drives a PhysX actor:\n"
+                "static on its own, dynamic/kinematic with a sibling Rigidbody. The shape below\n"
+                "picks its geometry.")) {
             bool colRowActive = false, colRowCommitted = false;
+            using Shape = ColliderComponent::Shape;
 
             // Shape.
             const char* kShapes[] = { "Box", "Sphere", "Capsule", "Convex Hull", "Mesh" };
             int shapeIdx = (int)collider->Kind;
-            PropertyLabel("Shape", "Box/Sphere/Capsule use Half Extents (Sphere: .x = radius; Capsule: .x radius,\n"
-                                   ".y half-height). Convex Hull / Mesh cook a shape from this object's mesh:\n"
-                                   "Convex Hull works on any body; Mesh (triangle mesh) is static/kinematic only.");
+            PropertyLabel("Shape", "Box / Sphere / Capsule are analytic primitives sized by the fields below.\n"
+                                   "Convex Hull / Mesh cook a shape from this object's mesh + scale:\n"
+                                   "Convex Hull works on any body; Mesh (triangle mesh) is static / kinematic only\n"
+                                   "(a dynamic Mesh collider falls back to a convex hull).");
             if (ImGui::Combo("##ColliderShape", &shapeIdx, kShapes, IM_ARRAYSIZE(kShapes))) {
                 PushUndo(world, "Change Collider Shape");
                 collider->Kind = (ColliderComponent::Shape)shapeIdx;
             }
 
-            // Trigger — now live (#185 PR 2 builds a PhysX trigger shape; enter/stay/exit
-            // dispatch is PR 5, but a trigger already stops blocking).
+            // Trigger.
             bool isTrigger = collider->IsTrigger;
-            PropertyLabel("Is Trigger", "A trigger reports overlaps but doesn't block movement.\n"
-                                        "Enter/stay/exit events arrive in a later step (#185 PR 5).");
+            PropertyLabel("Is Trigger", "A trigger reports enter / stay / exit overlaps to gameplay\n"
+                                        "but doesn't block movement.");
             if (ImGui::Checkbox("##IsTrigger", &isTrigger)) {
                 PushUndo(world, "Toggle Collider Trigger");
                 collider->IsTrigger = isTrigger;
             }
 
-            // Half Extents / Center.
-            DrawVec3Row("Half Extents", collider->HalfExtents, 0.05f, 0.0f, 0.0f, colRowActive, colRowCommitted,
-                "Half-size of the shape in local units (see Shape for the per-shape meaning).\n"
-                "All zero = auto-fit an axis-aligned box to the mesh bounds.");
-            if (colRowActive) StageUndo(world);
-            if (colRowCommitted) CommitStagedUndo(world, "Resize Collider");
+            // Size — per-shape. Box shows all three half-extents; Sphere just a radius; Capsule a
+            // radius + the half-height of its cylindrical section; Convex Hull / Mesh take their
+            // size from the mesh so only the centre offset applies.
+            auto scalarRow = [&](const char* label, float& v, const char* tip) {
+                PropertyLabel(label, tip);
+                ImGui::DragFloat((std::string("##col_") + label).c_str(), &v, 0.05f, 0.0f, 1e5f, "%.3f");
+                if (ImGui::IsItemActivated()) StageUndo(world);
+                if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Resize Collider");
+            };
+            switch (collider->Kind) {
+                case Shape::Box:
+                    DrawVec3Row("Half Extents", collider->HalfExtents, 0.05f, 0.0f, 0.0f, colRowActive, colRowCommitted,
+                        "Half-size on each local axis. All zero = auto-fit an axis-aligned box to the mesh bounds.");
+                    if (colRowActive) StageUndo(world);
+                    if (colRowCommitted) CommitStagedUndo(world, "Resize Collider");
+                    break;
+                case Shape::Sphere:
+                    scalarRow("Radius", collider->HalfExtents.x, "Sphere radius, local units. 0 = auto-fit to the mesh bounds.");
+                    break;
+                case Shape::Capsule:
+                    scalarRow("Radius", collider->HalfExtents.x, "Capsule radius, local units. 0 = auto-fit to the mesh bounds.");
+                    scalarRow("Half Height", collider->HalfExtents.y,
+                        "Half-length of the straight cylindrical section (axis = local Y); the hemisphere caps add Radius on each end.");
+                    break;
+                default: // Convex Hull / Mesh
+                    ImGui::TextDisabled("Sized from the mesh and this object's scale.");
+                    break;
+            }
+
             DrawVec3Row("Center", collider->Center, 0.05f, 0.0f, 0.0f, colRowActive, colRowCommitted,
-                "Shape offset from the object's origin, local space. Ignored while Half Extents is auto (0,0,0).");
+                "Shape offset from the object's origin, local space.");
             if (colRowActive) StageUndo(world);
             if (colRowCommitted) CommitStagedUndo(world, "Offset Collider");
 
-            if (collider->HalfExtents == glm::vec3(0.0f))
+            if ((collider->Kind == Shape::Box || collider->Kind == Shape::Sphere ||
+                 collider->Kind == Shape::Capsule) && collider->HalfExtents == glm::vec3(0.0f))
                 ImGui::TextDisabled("Auto-fitted to the mesh bounds.");
 
             // Surface material (#185 PR 7).
@@ -1767,6 +1793,23 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             ImGui::DragFloat("##JointBreakT", &joint->BreakTorque, 1.0f, 0.0f, 1e6f, "%.0f");
             if (ImGui::IsItemActivated()) StageUndo(world);
             if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint");
+
+            if (joint->Kind == JointComponent::Type::Hinge || joint->Kind == JointComponent::Type::Slider ||
+                joint->Kind == JointComponent::Type::Distance) {
+                bool ul = joint->UseLimit;
+                PropertyLabel("Use Limit", "Hinge: degrees about Axis. Slider: units along Axis. Distance: min/max separation.");
+                if (ImGui::Checkbox("##JointUseLimit", &ul)) { PushUndo(world, "Toggle Joint Limit"); joint->UseLimit = ul; }
+                if (joint->UseLimit) {
+                    PropertyLabel("Limit Lower", nullptr);
+                    ImGui::DragFloat("##JointLimLo", &joint->LimitLower, 0.5f, -1000.0f, 1000.0f, "%.1f");
+                    if (ImGui::IsItemActivated()) StageUndo(world);
+                    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint Limit");
+                    PropertyLabel("Limit Upper", nullptr);
+                    ImGui::DragFloat("##JointLimHi", &joint->LimitUpper, 0.5f, -1000.0f, 1000.0f, "%.1f");
+                    if (ImGui::IsItemActivated()) StageUndo(world);
+                    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint Limit");
+                }
+            }
 
             EndComponentSection();
         }

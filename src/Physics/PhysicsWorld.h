@@ -65,6 +65,11 @@ void CreateCharacter(float radius, float cylinderHalfHeight, const float footPos
 void SetCharacterFootPosition(const float footPos[3]);
 void GetCharacterFootPosition(float outFootPos[3]);
 
+// The Player capsule in world space while playing, for the collider overlay (the Player isn't
+// an ECS entity with a ColliderComponent, so nothing else draws it). Foot position, capsule
+// radius, and the half-height of the cylindrical section. False when there's no character.
+bool GetCharacterCapsule(float outFootPos[3], float* outRadius, float* outCylHalfHeight);
+
 // Sweep-move the capsule by `disp` (world units, already scaled by dt at the call site).
 // Returns a mask of CharacterCollision bits; 0 when there is no character or world.
 unsigned MoveCharacter(const float disp[3], float dt);
@@ -101,7 +106,74 @@ bool SphereCast(const float origin[3], const float dir[3], float radius, float m
 int  OverlapSphere(const float center[3], float radius, unsigned* out, int maxEntities);
 
 // (#185 PR 10: pushing dynamic bodies and riding moving platforms is handled inside
-// MoveCharacter via the CCT hit report — no extra entry point needed.)
+// MoveCharacter via the CCT hit report.) Yaw the ground platform turned through this frame,
+// in degrees — Player::Update adds it to the camera so a spinning platform carries the view.
+// Zero when not standing on a rotating kinematic body.
+float PlatformYawDelta();
+
+// --- Debug tooling (#185) ==========================================================
+// A small, general-use visual debugger: shape wireframes, contacts/impacts, raycasts, and
+// velocity arrows in the Scene viewport, plus a slow-mo control. Everything here is a no-op /
+// empty result when no world is active. None of it touches the game-module ABI.
+
+struct PhysicsDebugStats {
+    bool  Active = false;
+    int   Substeps = 0;              // fixed substeps run in the last Step()
+    float StepMillis = 0.0f;         // wall time inside simulate()+fetchResults() last Step()
+    float TimeScale = 1.0f;
+    int   DynamicBodies = 0, KinematicBodies = 0, StaticActors = 0;
+    int   AwakeBodies = 0, AsleepBodies = 0;
+    int   ContactsThisFrame = 0;
+    int   TriggerOverlaps = 0;
+    int   Joints = 0, BrokenJoints = 0;
+    float Gravity[3] = {0, 0, 0};
+    float FixedStep = 1.0f / 60.0f;
+    unsigned FrameIndex = 0;
+};
+PhysicsDebugStats GetDebugStats();
+
+// The four engine-drawn overlay channels (collision-shape wireframes stay on their own
+// EditorSettings::ShowColliders toggle). Bitmask persists across Play sessions.
+enum PhysicsDebugDrawFlag : unsigned {
+    PDD_Contacts = 1u << 0,   // impact / resting contact points: fading spark + impulse-scaled normal arrow
+    PDD_Raycasts = 1u << 1,   // recent raycasts & sweeps: ray line, hit burst, hit normal — fading
+    PDD_Velocity = 1u << 2,   // per-dynamic-body velocity arrow from the centre of mass
+    PDD_Sleep    = 1u << 3,   // dim "z" marker above each sleeping body
+};
+void     SetDebugDrawFlags(unsigned flags);
+unsigned GetDebugDrawFlags();
+
+// Fill outXYZRGBA (interleaved pos.xyz + colour.rgba — 7 floats/vertex, 2 vertices/line) with
+// this frame's debug lines; returns the line count written (capped at maxLines). Additive-blend
+// friendly: alpha carries the fade.
+int CopyDebugLines(float* outXYZRGBA, int maxLines);
+
+// --- Slow-mo / step ------------------------------------------------------------------
+void  SetSimTimeScale(float scale);     // clamped [0, 2]; 0 = frozen. Persists across sessions.
+float GetSimTimeScale();
+void  StepOneSubstep(World& world);     // run exactly one fixed substep regardless of accumulator
+
+// --- Query recorder ---------------------------------------------------------------
+// Enabled automatically whenever the Raycasts channel is on. Keeps the last 64 queries.
+void SetQueryRecording(bool on);
+bool GetQueryRecording();
+
+// --- Live editing while playing ------------------------------------------------------
+// Teleport a live actor to a world-space pose — lets the editor transform gizmo move a
+// simulated body during Play instead of the sim immediately overwriting the drag. Dynamic:
+// setGlobalPose + (optionally) zero velocities + wake. Kinematic: next kinematic target.
+// Static: setGlobalPose. No-op outside Play or for an unknown entity.
+void SetActorPose(unsigned entity, const float posXYZ[3], const float rotEulerDeg[3], bool zeroVelocity);
+
+// --- Gravity gun (#185 hardening) ---------------------------------------------------
+// Drives the physics-playground grab/throw harness in main.cpp. GrabBody latches a dynamic
+// body and suspends its gravity; UpdateGrab servos it toward `target` (world space) each
+// frame and kills its spin; ReleaseBody restores it, applying `impulse` as a velocity change
+// when `launch` is true. All no-ops outside Play or on a non-dynamic entity.
+void GrabBody(unsigned entity);
+void UpdateGrab(const float target[3]);
+void ReleaseBody(bool launch, const float impulse[3]);
+bool IsGrabbing();
 
 // --- Debug (#185 PR 12) -------------------------------------------------------------
 // Copy up to `maxPoints` world-space contact points from this frame's events (3 floats each)

@@ -27,6 +27,10 @@ struct PhysicsSettings {
     // sync); default all-on. Copied into the PhysX scene at Play-enter, so edits apply next Play.
     unsigned LayerCollisionMask[8] = {0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu};
 
+    // #185 hardening — Play-mode Player tuning.
+    float PlayerPushStrength = 2.0f; // impulse the walking Player imparts to a dynamic body it hits
+    int   PlayerLayer        = 0;    // collision-matrix layer the Player capsule is on (0-7)
+
     bool LayersCollide(int a, int b) const {
         if (a < 0 || a > 7 || b < 0 || b > 7) return true;
         return (LayerCollisionMask[a] >> b) & 1u;
