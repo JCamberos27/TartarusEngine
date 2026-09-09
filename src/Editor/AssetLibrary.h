@@ -8,6 +8,8 @@
 #include "Model.h"         // ModelImportSettings - same
 #include "MaterialAsset.h" // MaterialAsset - owned by the library
 
+class ShaderAsset;
+
 // Tracks every asset imported through the editor so it can be reused (by path)
 // and listed in the Asset Browser panel.
 class AssetLibrary {
@@ -50,6 +52,10 @@ public:
 
     // Loads a .mat file and registers it in the material library (no-op if already loaded).
     std::shared_ptr<MaterialAsset> LoadMaterial(const std::string& path);
+
+    // Loads a .shader asset and caches it by path (no-op if already loaded). Returns nullptr
+    // on parse failure. Cached indefinitely; hot-reload via ShaderAsset::Variant(key).
+    std::shared_ptr<ShaderAsset> LoadShader(const std::string& path);
     // Removes a material from the library without touching the .mat file on disk.
     void RemoveMaterial(const std::shared_ptr<MaterialAsset>& mat);
     // All currently registered materials. Stable order (registration order).
@@ -151,6 +157,7 @@ private:
     std::map<std::string, std::shared_ptr<Model>> m_ModelCache;
     std::map<std::string, std::shared_ptr<Texture>> m_TextureCache;
     std::map<std::string, std::shared_ptr<MaterialAsset>> m_MaterialCache;
+    std::map<std::string, std::shared_ptr<ShaderAsset>> m_ShaderCache;
     std::vector<std::shared_ptr<Model>> m_ModelList;
     std::vector<std::shared_ptr<Texture>> m_TextureList;
     std::vector<std::string> m_TexturePaths;    // parallel to m_TextureList, kept in sync

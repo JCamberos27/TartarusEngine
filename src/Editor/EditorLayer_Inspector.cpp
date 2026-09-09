@@ -12,6 +12,7 @@
 #include "Texture.h"
 #include "Material.h"
 #include "MaterialAsset.h"
+#include "ShaderAsset.h"
 #include "AudioEngine.h"
 #include "Screenshot.h"
 #include "SceneSerializer.h"
@@ -2618,6 +2619,114 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         mapRow("Emissive",  &Material::EmissiveMap,  "Texture for glowing areas, tinted by Emissive Color.");
     };
 
+    // Data-driven inspector for materials that have a linked ShaderAsset.
+    // Iterates ShaderAsset::Properties(), skips Hidden entries, and shows appropriate
+    // ImGui controls per ShaderPropType. Visually equivalent to DrawPbrFields for Standard.shader.
+    auto DrawShaderPropertyRow = [&](const ShaderAsset& sa) {
+        const auto& props = sa.Properties();
+        bool inTexSection = false;
+        for (const ShaderProperty& prop : props) {
+            if (prop.Hidden) continue;
+            ImGui::PushID(prop.Name.c_str());
+            const char* label = prop.DisplayName.c_str();
+
+            if (prop.Type == ShaderPropType::Texture2D && !inTexSection) {
+                ImGui::SeparatorText("Texture Maps");
+                inTexSection = true;
+            }
+
+            switch (prop.Type) {
+            case ShaderPropType::Color: {
+                glm::vec3 shared = MaterialAsset::GetColor(*mats[0], prop.Name);
+                bool mixed = false;
+                for (Material* mm : mats) {
+                    glm::vec3 v = MaterialAsset::GetColor(*mm, prop.Name);
+                    for (int a = 0; a < 3; ++a)
+                        if (std::fabs(v[a] - shared[a]) > 1.0e-4f) mixed = true;
+                }
+                glm::vec3 edit = shared;
+                PropertyLabel(label);
+                bool changed = ImGui::ColorEdit3("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
+                if (ImGui::IsItemActivated()) StageUndo(world);
+                if (changed) for (Material* mm : mats) MaterialAsset::SetColor(*mm, prop.Name, edit);
+                if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
+                if (mixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
+                break;
+            }
+            case ShaderPropType::Float: {
+                float shared = MaterialAsset::GetFloat(*mats[0], prop.Name);
+                bool mixed = false;
+                for (Material* mm : mats)
+                    if (std::fabs(MaterialAsset::GetFloat(*mm, prop.Name) - shared) > 1.0e-4f) mixed = true;
+                float edit = shared;
+                PropertyLabel(label);
+                bool changed = EditorUI::SliderFloat("##f", &edit, prop.DefaultFloat, 1.0f,
+                                                     mixed ? "\xE2\x80\x94" : "%.3f");
+                if (ImGui::IsItemActivated()) StageUndo(world);
+                if (changed && std::isfinite(edit))
+                    for (Material* mm : mats) MaterialAsset::SetFloat(*mm, prop.Name, edit);
+                if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
+                break;
+            }
+            case ShaderPropType::Bool: {
+                bool shared = MaterialAsset::GetBool(*mats[0], prop.Name);
+                PropertyLabel(label);
+                bool edit = shared;
+                if (ImGui::Checkbox("##b", &edit)) {
+                    PushUndo(world, std::string("Edit ") + label);
+                    for (Material* mm : mats) MaterialAsset::SetBool(*mm, prop.Name, edit);
+                }
+                break;
+            }
+            case ShaderPropType::Texture2D: {
+                // Texture picker row — same drag-drop / file-dialog pattern as mapRow.
+                Texture* first = MaterialAsset::GetTexture(*mats[0], prop.Name).get();
+                bool mixed = false, anySet = false;
+                for (Material* mm : mats) {
+                    Texture* t = MaterialAsset::GetTexture(*mm, prop.Name).get();
+                    if (t) anySet = true;
+                    if (t != first) mixed = true;
+                }
+                std::string preview = mixed ? std::string("\xE2\x80\x94  (mixed)")
+                    : first ? std::filesystem::path(first->Path()).filename().string()
+                            : std::string("(none)");
+                PropertyLabel(label);
+                float clearReserve = anySet ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+                if (ImGui::Button(preview.c_str(), ImVec2(anySet ? -clearReserve : -FLT_MIN, 0.0f))) {
+                    std::string path = FileDialog::OpenFile(
+                        "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
+                    if (!path.empty()) {
+                        PushUndo(world, std::string("Set ") + label);
+                        auto tex = assets.LoadTexture(path);
+                        for (Material* mm : mats) MaterialAsset::SetTexture(*mm, prop.Name, tex);
+                    }
+                }
+                if (ImGui::BeginDragDropTarget()) {
+                    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
+                        std::string texPath((const char*)p->Data);
+                        PushUndo(world, std::string("Set ") + label);
+                        auto tex = assets.LoadTexture(texPath);
+                        for (Material* mm : mats) MaterialAsset::SetTexture(*mm, prop.Name, tex);
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+                if (anySet) {
+                    ImGui::SameLine();
+                    if (ActionButton(ICON_FA_XMARK, "Clear on all", false,
+                                     ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+                        PushUndo(world, std::string("Clear ") + label);
+                        for (Material* mm : mats) MaterialAsset::SetTexture(*mm, prop.Name, nullptr);
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+            }
+            ImGui::PopID();
+        }
+    };
+
     // -------------------------------------------------------------------------
     // Single-select: per-slot rows for every submesh
     // -------------------------------------------------------------------------
@@ -2719,7 +2828,13 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         if (slot0Embedded) {
             ImGui::Spacing();
             mats.push_back(&rc->Materials[0]->Mat);
-            DrawPbrFields();
+            auto& slot0 = rc->Materials[0];
+            if (slot0->Shader) {
+                // Data-driven inspector: iterate ShaderAsset::Properties(), skip Hidden.
+                DrawShaderPropertyRow(*slot0->Shader);
+            } else {
+                DrawPbrFields();
+            }
         }
 
         return;

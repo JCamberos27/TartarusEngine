@@ -377,7 +377,7 @@ add_custom_command(TARGET TartarusEngine POST_BUILD
 )
 
 # GLSL shader files — copied next to the exe so ShaderLibrary::ReadFile("assets/shaders/...")
-# resolves correctly at runtime. copy_directory_if_different keeps incremental builds fast.
+# resolves correctly at runtime.
 add_custom_command(TARGET TartarusEngine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:TartarusEngine>/assets/shaders"
   COMMAND ${CMAKE_COMMAND} -E copy_directory

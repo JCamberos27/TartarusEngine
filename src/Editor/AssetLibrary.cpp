@@ -1,5 +1,6 @@
 #include "AssetLibrary.h"
 #include "MaterialAsset.h"
+#include "ShaderAsset.h"
 #include "Model.h"
 #include "Texture.h"
 #include "AssetDatabase.h"
@@ -223,6 +224,15 @@ std::shared_ptr<MaterialAsset> AssetLibrary::LoadMaterial(const std::string& pat
         } catch (...) {}
     }
     return ma;
+}
+
+std::shared_ptr<ShaderAsset> AssetLibrary::LoadShader(const std::string& path) {
+    auto it = m_ShaderCache.find(path);
+    if (it != m_ShaderCache.end()) return it->second;
+    auto sa = ShaderAsset::ParseFile(path);
+    if (!sa) return nullptr;
+    m_ShaderCache[path] = sa;
+    return sa;
 }
 
 void AssetLibrary::RemoveMaterial(const std::shared_ptr<MaterialAsset>& mat) {

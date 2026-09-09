@@ -1,4 +1,6 @@
 #include "Model.h"
+#include "MaterialAsset.h"
+#include "ShaderAsset.h"
 #include "Log.h"
 #include "Texture.h"
 #include "Shader.h"
@@ -575,6 +577,48 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
     bindOptional(mat.AOMap, locs.hasAO, locs.aoMap);
     bindOptional(mat.EmissiveMap, locs.hasEmissive, locs.emissiveMap);
 }
+// Data-driven BindMaterial using ShaderAsset::Bindings() + MaterialAsset property accessors.
+// Activates when the MaterialAsset has a linked ShaderAsset (v2 .mat files referencing a .shader).
+void BindMaterialDataDriven(Shader& shader, const Material& mat, const ShaderAsset& sa) {
+    if (GLStateCache::MaterialAlreadyBound(mat.Hash(), shader.Program())) return;
+
+    const auto& props    = sa.Properties();
+    const auto& bindings = sa.Bindings();
+    for (const PropertyBinding& b : bindings) {
+        const ShaderProperty& prop = props[b.PropIndex];
+        const std::string& pname   = prop.Name;
+        // Derive uniform name: "_AlbedoMap" → "uAlbedoMap"
+        std::string uname = "u" + pname.substr(1);
+
+        switch (prop.Type) {
+        case ShaderPropType::Texture2D: {
+            std::string hasName = "uHas" + pname.substr(1);
+            const auto& tex = MaterialAsset::GetTexture(mat, pname);
+            if (tex) {
+                tex->Bind(b.TextureUnit);
+                shader.SetInt(uname,   b.TextureUnit);
+                shader.SetInt(hasName, 1);
+            } else {
+                shader.SetInt(hasName, 0);
+            }
+            break;
+        }
+        case ShaderPropType::Color:
+        case ShaderPropType::Vec3:
+            shader.SetVec3(uname, MaterialAsset::GetColor(mat, pname));
+            break;
+        case ShaderPropType::Float:
+            shader.SetFloat(uname, MaterialAsset::GetFloat(mat, pname));
+            break;
+        case ShaderPropType::Bool:
+        case ShaderPropType::Int:
+            shader.SetInt(uname, MaterialAsset::GetBool(mat, pname) ? 1 : 0);
+            break;
+        default:
+            break;
+        }
+    }
+}
 } // namespace
 
 void Model::Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
@@ -583,7 +627,10 @@ void Model::Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset
     for (int i = 0; i < (int)m_Meshes.size(); ++i) {
         bool hasSlot = i < (int)slots.size() && slots[i];
         const Material& mat = hasSlot ? slots[i]->Mat : m_Meshes[i]->Mat;
-        BindMaterial(shader, mat, locs);
+        if (hasSlot && slots[i]->Shader)
+            BindMaterialDataDriven(shader, mat, *slots[i]->Shader);
+        else
+            BindMaterial(shader, mat, locs);
         m_Meshes[i]->Draw();
     }
 }
