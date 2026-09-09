@@ -6,6 +6,7 @@
 #include <entt/entt.hpp>
 
 class Model;
+struct MaterialAsset; // full definition in MaterialAsset.h; shared_ptr<MaterialAsset> is valid here
 
 // The ECS component set every placed entity (former level-geometry box, imported model, or
 // procedural primitive) is built from. Replacing the old WorldBox/PlacedModel split — see
@@ -34,8 +35,11 @@ struct OrderComponent {
 
 // What to draw. Every entity — including former "boxes", which now render through the same
 // cube-primitive Model + PBR material as everything else instead of a separate flat-shaded mesh.
+// Materials: per-submesh MaterialAsset overrides. A null or missing slot falls through to the
+// submesh's imported Material. Empty vector (level-geometry boxes) → all imported materials.
 struct RenderableComponent {
     std::shared_ptr<Model> ModelRef;
+    std::vector<std::shared_ptr<MaterialAsset>> Materials;
 };
 
 // Holds the mesh that was on a RenderableComponent when the user removed "Mesh Renderer" from
