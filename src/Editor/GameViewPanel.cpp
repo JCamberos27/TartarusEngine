@@ -61,14 +61,16 @@ void GameViewPanel::DrawAspectControl(float contrast) {
     const int tv = (int)(contrast * 255.0f + 0.5f);        // text: light on dark, dark on light
     const int pv = 255 - tv;                                // plate: the opposite
     const ImU32 textCol = IM_COL32(tv, tv, tv, 255);
+    // #275 toggle: Off -> no plate behind the control, just the (near-white) label.
+    const int plateA = EditorSettings::Get().AdaptiveHudContrast ? 1 : 0;
 
     // Custom button + manual popup rather than BeginCombo: ImGui's combo always re-runs its own
     // auto-placement (prefers Down), so a real "open upward" isn't reachable through it. Here we
     // own the popup, so SetNextWindowPos with a bottom-left pivot makes it grow up from the top
     // edge of the button.
-    ImGui::PushStyleColor(ImGuiCol_Button,        IM_COL32(pv, pv, pv, 150));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(pv, pv, pv, 190));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(pv, pv, pv, 210));
+    ImGui::PushStyleColor(ImGuiCol_Button,        IM_COL32(pv, pv, pv, 150 * plateA));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(pv, pv, pv, plateA ? 190 : 40));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(pv, pv, pv, plateA ? 210 : 60));
     ImGui::PushStyleColor(ImGuiCol_Text,          textCol);
     ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f)); // left-align like a combo
     if (ImGui::Button((m_CurrentPreset.Label + "###aspectbtn").c_str(), ImVec2(itemW, h)))
@@ -208,10 +210,13 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
             eased += (target - eased) * (1.0f - std::exp(-dt / 0.15f));
             return eased;
         };
-        const float topC    = adapt(m_TopLumRb, m_TopLum, m_TopLumTarget, m_TopLumAccum,
-                                    ImVec2(imagePos.x + 60.0f, imagePos.y + 34.0f));
-        const float bottomC = adapt(m_BottomLumRb, m_BottomLum, m_BottomLumTarget, m_BottomLumAccum,
-                                    ImVec2(imagePos.x + rect.Size.x * 0.5f, imagePos.y + rect.Size.y - 26.0f));
+        // #275 toggle: Off -> static near-white text, and the pcol()-plated backings below are
+        // skipped entirely (the aspect control drops its plate too, see DrawAspectControl).
+        const bool hudAdapt = EditorSettings::Get().AdaptiveHudContrast;
+        const float topC    = hudAdapt ? adapt(m_TopLumRb, m_TopLum, m_TopLumTarget, m_TopLumAccum,
+                                    ImVec2(imagePos.x + 60.0f, imagePos.y + 34.0f)) : 1.0f;
+        const float bottomC = hudAdapt ? adapt(m_BottomLumRb, m_BottomLum, m_BottomLumTarget, m_BottomLumAccum,
+                                    ImVec2(imagePos.x + rect.Size.x * 0.5f, imagePos.y + rect.Size.y - 26.0f)) : 1.0f;
         auto tcol = [](float c, int a) { int v = (int)(c * 255.0f + 0.5f); return IM_COL32(v, v, v, a); };
         auto pcol = [](float c, int a) { int v = 255 - (int)(c * 255.0f + 0.5f); return IM_COL32(v, v, v, a); };
 
@@ -236,7 +241,7 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
             ImVec2 ts = ImGui::CalcTextSize(hint);
             ImVec2 anchor(imagePos.x + (rect.Size.x - ts.x) * 0.5f,
                           imagePos.y + rect.Size.y - ts.y - 16.0f);
-            dl->AddRectFilled(ImVec2(anchor.x - 10.0f, anchor.y - 6.0f),
+            if (hudAdapt) dl->AddRectFilled(ImVec2(anchor.x - 10.0f, anchor.y - 6.0f),
                               ImVec2(anchor.x + ts.x + 10.0f, anchor.y + ts.y + 6.0f),
                               pcol(bottomC, 150), 4.0f);
             dl->AddText(anchor, tcol(bottomC, 235), hint);
@@ -245,7 +250,7 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
             ImVec2 ts = ImGui::CalcTextSize(hint);
             ImVec2 anchor(imagePos.x + (rect.Size.x - ts.x) * 0.5f,
                           imagePos.y + rect.Size.y - ts.y - 14.0f);
-            dl->AddRectFilled(ImVec2(anchor.x - 10.0f, anchor.y - 6.0f),
+            if (hudAdapt) dl->AddRectFilled(ImVec2(anchor.x - 10.0f, anchor.y - 6.0f),
                               ImVec2(anchor.x + ts.x + 10.0f, anchor.y + ts.y + 6.0f),
                               pcol(bottomC, 140), 4.0f);
             dl->AddText(anchor, tcol(bottomC, 220), hint);
@@ -259,7 +264,7 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
             snprintf(buf, sizeof(buf), "%d FPS (%.2f ms)\n%d draw calls\n%d tris / %d verts",
                 stats->FPS, stats->FrameMs, stats->DrawCalls, stats->Triangles, stats->Vertices);
             ImVec2 textSize = ImGui::CalcTextSize(buf);
-            dl->AddRectFilled(statsPos, ImVec2(statsPos.x + textSize.x + 12.0f, statsPos.y + textSize.y + 8.0f), pcol(topC, 140), 3.0f);
+            if (hudAdapt) dl->AddRectFilled(statsPos, ImVec2(statsPos.x + textSize.x + 12.0f, statsPos.y + textSize.y + 8.0f), pcol(topC, 140), 3.0f);
             dl->AddText(ImVec2(statsPos.x + 6.0f, statsPos.y + 4.0f), tcol(topC, 255), buf);
         }
 

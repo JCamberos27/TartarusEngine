@@ -110,6 +110,7 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) 
         }
         float k = 1.0f - expf(-ImGui::GetIO().DeltaTime / 0.15f);
         m_PlayBtnContrastLum += (m_PlayBtnContrastTarget - m_PlayBtnContrastLum) * k;
+        if (!EditorSettings::Get().AdaptiveHudContrast) m_PlayBtnContrastLum = m_PlayBtnContrastTarget = 1.0f; // #275 toggle
         fgV = (int)(m_PlayBtnContrastLum * 255.0f + 0.5f);
         fgV = fgV < 0 ? 0 : (fgV > 255 ? 255 : fgV);
 
@@ -236,6 +237,7 @@ void EditorLayer::DrawViewportStatusBar() {
         float k = 1.0f - expf(-ImGui::GetIO().DeltaTime / 0.15f);
         m_StatusBarContrastLum += (m_StatusBarContrastTarget - m_StatusBarContrastLum) * k;
     }
+    if (!EditorSettings::Get().AdaptiveHudContrast) m_StatusBarContrastLum = m_StatusBarContrastTarget = 1.0f; // #275 toggle
     int sbV = (int)(m_StatusBarContrastLum * 255.0f + 0.5f);
     sbV = sbV < 0 ? 0 : (sbV > 255 ? 255 : sbV);
 
@@ -534,9 +536,6 @@ void EditorLayer::DrawWindowMenuBody() {
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Environment (sky / ambient), post-processing (exposure / tone map) and shadow settings in one place.");
             ImGui::Separator();
-            ImGui::MenuItem(ICON_FA_GEARS "  Project Settings", nullptr, &m_ShowProjectSettings);
-            if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("Project-scoped settings (physics, tags, layer names) - saved with the project, not your editor prefs.");
             if (ImGui::MenuItem(ICON_FA_CUBES "  Physics Debug", nullptr, &EditorSettings::Get().ShowPhysicsPanel))
                 EditorSettings::Save();
             if (ImGui::IsItemHovered())
@@ -547,7 +546,8 @@ void EditorLayer::DrawWindowMenuBody() {
                 EditorUI::SetTooltip("Corner text overlay on the Scene viewport while playing.");
             ImGui::Separator();
             // Console / Statistics / History / Light Gizmos have dedicated toolbar toggles (#148);
-            // the engine mark lives in Preferences ▸ Viewport.
+            // the engine mark lives in Preferences ▸ Viewport. Project Settings moved to its own
+            // menu-bar item beside Preferences (it's a settings window, not a dock panel).
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
                 m_ResetLayoutRequested = true;
             }

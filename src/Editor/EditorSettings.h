@@ -26,6 +26,13 @@ struct EditorSettings {
     // ImGui::SetTooltip directly, so this one flag actually governs all of them.
     bool ShowTooltips = true;
 
+    // The transparent viewport HUDs (Stats, History, the bottom status line, the nav-gizmo
+    // cluster, the Play/Stop button, the corner monogram, the Game-view overlays) each sample
+    // the scene luminance behind themselves and ease their text — and, where they have one,
+    // their backing pill — between light and dark so they stay readable over any render
+    // (#178 / #229). Off: they all draw static near-white text with no backing pill.
+    bool AdaptiveHudContrast = true;
+
     // Editor UI scale. 0 = follow the monitor's content scale (Windows display-scaling %), which
     // is right most of the time. Set a value (e.g. 1.25) to override it — useful when a project
     // authored on a high-DPI 4K panel is opened on a plain 1080p monitor and the whole editor
