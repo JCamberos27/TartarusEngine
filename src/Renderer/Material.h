@@ -40,6 +40,13 @@ struct Material {
     float AnisotropyRotation  = 0.0f;   // [0,1] maps to [0°,360°] in tangent plane
     std::shared_ptr<Texture> ClearCoatMap; // optional mask (.r channel)
 
+    // PR11: Sheen/cloth + Subsurface translucency
+    glm::vec3 Sheen{0.0f};             // tint color; zero = sheen disabled
+    float SheenRoughness      = 0.5f;
+    glm::vec3 SubsurfaceColor{1.0f, 0.8f, 0.6f}; // transmitted tint
+    float Thickness           = 0.5f;  // surface thickness [0,1]
+    std::shared_ptr<Texture> ThicknessMap; // optional per-texel thickness (.r)
+
     // #192: a value hash of everything BindMaterial (Model.cpp) uploads — the scalar/vector
     // factors plus the identity of each bound texture. The draw loop sorts by this and
     // GLStateCache skips BindMaterial when it matches the last-bound one, so value-identical
@@ -57,13 +64,16 @@ struct Material {
             EmissiveColor.x * EmissiveStrength, EmissiveColor.y * EmissiveStrength,
             EmissiveColor.z * EmissiveStrength, TriplanarScale,
             ClearCoat, ClearCoatRoughness, Anisotropy, AnisotropyRotation,
+            Sheen.x, Sheen.y, Sheen.z, SheenRoughness,
+            SubsurfaceColor.x, SubsurfaceColor.y, SubsurfaceColor.z, Thickness,
         };
         mix(scalars, sizeof(scalars));
         const std::uint32_t flags = Triplanar ? 1u : 0u;
         mix(&flags, sizeof(flags));
         const Texture* const texs[] = {
             AlbedoMap.get(), NormalMap.get(), MetallicRoughnessMap.get(), MetallicMap.get(),
-            RoughnessMap.get(), AOMap.get(), EmissiveMap.get(), ClearCoatMap.get(),
+            RoughnessMap.get(), AOMap.get(), EmissiveMap.get(),
+            ClearCoatMap.get(), ThicknessMap.get(),
         };
         mix(texs, sizeof(texs));
         return h;

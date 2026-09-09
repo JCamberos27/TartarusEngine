@@ -66,6 +66,11 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
             m.ClearCoatRoughness = props.value("_ClearCoatRoughness",  0.5f);
             m.Anisotropy         = props.value("_Anisotropy",          0.0f);
             m.AnisotropyRotation = props.value("_AnisotropyRotation",  0.0f);
+            // Scalars / PR11
+            m.Sheen           = JsonToVec3(props.value("_Sheen",           json::array({0,0,0})), {});
+            m.SheenRoughness  = props.value("_SheenRoughness",  0.5f);
+            m.SubsurfaceColor = JsonToVec3(props.value("_SubsurfaceColor", json::array({1,0.8f,0.6f})), {1,0.8f,0.6f});
+            m.Thickness       = props.value("_Thickness",        0.5f);
             // Texture paths
             ma->AlbedoMapPath            = strProp("_AlbedoMap");
             ma->NormalMapPath            = strProp("_NormalMap");
@@ -75,6 +80,7 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
             ma->AOMapPath                = strProp("_AOMap");
             ma->EmissiveMapPath          = strProp("_EmissiveMap");
             ma->ClearCoatMapPath         = strProp("_ClearCoatMap");
+            ma->ThicknessMapPath         = strProp("_ThicknessMap");
         }
     } else {
         // v1 format: flat property keys, no shader reference.
@@ -107,6 +113,7 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
         m.AOMap                = loadTex(ma->AOMapPath);
         m.EmissiveMap          = loadTex(ma->EmissiveMapPath);
         m.ClearCoatMap         = loadTex(ma->ClearCoatMapPath);
+        m.ThicknessMap         = loadTex(ma->ThicknessMapPath);
 
         // Resolve shader asset when path is set (AssetLibrary handles caching).
         if (!ma->ShaderPath.empty())
@@ -153,7 +160,13 @@ bool MaterialAsset::Save() const {
         if (m.ClearCoatRoughness  != 0.5f) props["_ClearCoatRoughness"] = m.ClearCoatRoughness;
         if (m.Anisotropy          != 0.0f) props["_Anisotropy"]         = m.Anisotropy;
         if (m.AnisotropyRotation  != 0.0f) props["_AnisotropyRotation"] = m.AnisotropyRotation;
-        if (!ClearCoatMapPath.empty())     props["_ClearCoatMap"]        = ClearCoatMapPath;
+        if (!ClearCoatMapPath.empty())      props["_ClearCoatMap"]         = ClearCoatMapPath;
+        if (m.Sheen != glm::vec3(0.0f))    props["_Sheen"]               = Vec3ToJson(m.Sheen);
+        if (m.SheenRoughness  != 0.5f)     props["_SheenRoughness"]      = m.SheenRoughness;
+        auto defSSS = glm::vec3(1.0f, 0.8f, 0.6f);
+        if (m.SubsurfaceColor != defSSS)   props["_SubsurfaceColor"]     = Vec3ToJson(m.SubsurfaceColor);
+        if (m.Thickness       != 0.5f)     props["_Thickness"]           = m.Thickness;
+        if (!ThicknessMapPath.empty())      props["_ThicknessMap"]        = ThicknessMapPath;
     } else {
         // v1 format (backward compatible)
         j["matVersion"]          = 1;
@@ -190,12 +203,15 @@ const std::shared_ptr<Texture>& MaterialAsset::GetTexture(const Material& m, con
     if (n == "_AOMap")                return m.AOMap;
     if (n == "_EmissiveMap")          return m.EmissiveMap;
     if (n == "_ClearCoatMap")         return m.ClearCoatMap;
+    if (n == "_ThicknessMap")         return m.ThicknessMap;
     return sNull;
 }
 
 glm::vec3 MaterialAsset::GetColor(const Material& m, const std::string& n) {
-    if (n == "_BaseColor")    return m.BaseColor;
-    if (n == "_EmissiveColor")return m.EmissiveColor * m.EmissiveStrength; // pre-multiply
+    if (n == "_BaseColor")      return m.BaseColor;
+    if (n == "_EmissiveColor")  return m.EmissiveColor * m.EmissiveStrength; // pre-multiply
+    if (n == "_Sheen")          return m.Sheen;
+    if (n == "_SubsurfaceColor")return m.SubsurfaceColor;
     return {};
 }
 
@@ -208,6 +224,8 @@ float MaterialAsset::GetFloat(const Material& m, const std::string& n) {
     if (n == "_ClearCoatRoughness")  return m.ClearCoatRoughness;
     if (n == "_Anisotropy")          return m.Anisotropy;
     if (n == "_AnisotropyRotation")  return m.AnisotropyRotation;
+    if (n == "_SheenRoughness")      return m.SheenRoughness;
+    if (n == "_Thickness")           return m.Thickness;
     return 0.0f;
 }
 
@@ -225,11 +243,14 @@ void MaterialAsset::SetTexture(Material& m, const std::string& n, const std::sha
     if (n == "_AOMap")                { m.AOMap = tex; return; }
     if (n == "_EmissiveMap")          { m.EmissiveMap = tex; return; }
     if (n == "_ClearCoatMap")         { m.ClearCoatMap = tex; return; }
+    if (n == "_ThicknessMap")         { m.ThicknessMap = tex; return; }
 }
 
 void MaterialAsset::SetColor(Material& m, const std::string& n, const glm::vec3& v) {
-    if (n == "_BaseColor")     { m.BaseColor = v; return; }
-    if (n == "_EmissiveColor") { m.EmissiveColor = v; return; }
+    if (n == "_BaseColor")       { m.BaseColor = v; return; }
+    if (n == "_EmissiveColor")   { m.EmissiveColor = v; return; }
+    if (n == "_Sheen")           { m.Sheen = v; return; }
+    if (n == "_SubsurfaceColor") { m.SubsurfaceColor = v; return; }
 }
 
 void MaterialAsset::SetFloat(Material& m, const std::string& n, float v) {
@@ -241,6 +262,8 @@ void MaterialAsset::SetFloat(Material& m, const std::string& n, float v) {
     if (n == "_ClearCoatRoughness")  { m.ClearCoatRoughness = v; return; }
     if (n == "_Anisotropy")          { m.Anisotropy = v; return; }
     if (n == "_AnisotropyRotation")  { m.AnisotropyRotation = v; return; }
+    if (n == "_SheenRoughness")      { m.SheenRoughness = v; return; }
+    if (n == "_Thickness")           { m.Thickness = v; return; }
 }
 
 void MaterialAsset::SetBool(Material& m, const std::string& n, bool v) {
