@@ -598,7 +598,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         if (world.SkySourceMode != World::SkySource::Procedural)
             root["skySource"] = (int)world.SkySourceMode;
         if (!world.SkyHdriPath.empty())
-            root["skyHdriPath"] = world.SkyHdriPath;
+            root["skyHdriPath"] = AssetPathForWrite(world.SkyHdriPath); // audit #364 — was stored absolute
         if (world.SkyRotationDegrees != 0.0f)
             root["skyRotationDegrees"] = world.SkyRotationDegrees;
     }
@@ -907,7 +907,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
         world.SkyAmbientIntensity    = root.value("skyAmbientIntensity",    1.0f);
         // PR13: HDRI sky source fields (absent in old scenes → Procedural defaults)
         world.SkySourceMode          = (World::SkySource)root.value("skySource",          0);
-        world.SkyHdriPath            = root.value("skyHdriPath",            std::string());
+        world.SkyHdriPath            = AssetPathForRead(root.value("skyHdriPath", std::string())); // audit #364
         world.SkyRotationDegrees     = root.value("skyRotationDegrees",     0.0f);
     }
 
@@ -1369,6 +1369,37 @@ json* PrefabEntityObjectMutable(json& prefab, int idx) {
     return nullptr;
 }
 
+// audit #364 validation guard: after a scene JSON is built, warn about any string value that
+// still looks machine-absolute (drive letter, UNC prefix) or contains a "../" traversal. These
+// don't survive a move to another machine/checkout. A path to a genuinely out-of-project shared
+// asset library legitimately stays absolute, so this warns (names the JSON pointer) rather than
+// failing the save.
+bool LooksNonPortable(const std::string& s) {
+    if (s.size() >= 2 && std::isalpha((unsigned char)s[0]) && s[1] == ':' &&
+        (s.size() == 2 || s[2] == '/' || s[2] == '\\'))
+        return true;                                   // C:\ or C:/
+    if (s.rfind("\\\\", 0) == 0) return true;          // \\server\share (UNC)
+    if (s.find("/../") != std::string::npos || s.find("\\..\\") != std::string::npos ||
+        s.rfind("../", 0) == 0 || s.rfind("..\\", 0) == 0)
+        return true;
+    return false;
+}
+
+void WarnNonPortablePaths(const json& node, const std::string& pointer) {
+    if (node.is_string()) {
+        const std::string& s = node.get_ref<const std::string&>();
+        if (LooksNonPortable(s))
+            Log::Warn("Scene: non-portable path at '" + pointer + "': '" + s +
+                      "' — will not resolve on another machine/checkout (audit #364).");
+    } else if (node.is_object()) {
+        for (auto it = node.begin(); it != node.end(); ++it)
+            WarnNonPortablePaths(it.value(), pointer + "/" + it.key());
+    } else if (node.is_array()) {
+        for (size_t i = 0; i < node.size(); ++i)
+            WarnNonPortablePaths(node[i], pointer + "/" + std::to_string(i));
+    }
+}
+
 } // namespace
 
 bool SceneSerializer::Save(const World& world, const AssetLibrary& assets, const std::string& path) {
@@ -1379,6 +1410,7 @@ bool SceneSerializer::Save(const World& world, const AssetLibrary& assets, const
     }
     json root = BuildSceneJson(world);
     AppendAssetLibraryJson(root, assets);
+    WarnNonPortablePaths(root, ""); // audit #364 — surface any absolute/'..' path before it's written
     out << root.dump(2);
     return true;
 }
