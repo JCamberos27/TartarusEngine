@@ -6,6 +6,7 @@
 #include "Camera.h"
 #include "Player.h"
 #include "World.h"
+#include "Components.h"
 #include "gl.h"
 
 #include "AudioEngine.h"
@@ -507,6 +508,23 @@ int main(int argc, char** argv) {
         HotReloadGameModule gameModule;
         HotReloadEditorModule editorModule;
         World world;
+
+        // Belt-and-suspenders for the same crash (#389): force *this* (exe) translation unit to
+        // own the registry storage for every component the hot-reload DLLs later touch via
+        // view<>/all_of<>, so a basic_storage<T> is never first-instantiated inside
+        // TartarusGame.dll / TartarusEditor.dll — whose code is FreeLibrary'd on shutdown while
+        // the registry still holds that storage. The declaration order above is the primary
+        // guard; this makes a future reorder non-fatal. Keep in sync with the component types
+        // named in SpinSystem / TransformControllerSystem / the editor Stats panel.
+        (void)world.Registry.storage<TransformComponent>();
+        (void)world.Registry.storage<RenderableComponent>();
+        (void)world.Registry.storage<ColliderComponent>();
+        (void)world.Registry.storage<LightComponent>();
+        (void)world.Registry.storage<InactiveTag>();
+        (void)world.Registry.storage<SpinComponent>();
+        (void)world.Registry.storage<TransformControllerComponent>();
+        (void)world.Registry.storage<AnimatorComponent>();
+
         {
             std::error_code ec;
             std::filesystem::path executable = std::filesystem::absolute(argv[0], ec);
