@@ -15,6 +15,7 @@
 #include "Shortcuts.h" // Shortcuts::Chord - Preferences > Shortcuts capture state below
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
 #include "Model.h"   // ModelImportSettings - same
+#include "RenderStats.h" // ::RenderStats, re-exported below as EditorLayer::RenderStats (#359)
 #include "ImportQueueManager.h"
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
@@ -512,24 +513,11 @@ public:
     };
     ShadingMode GetShadingMode() const { return m_ShadingMode; }
 
-    // Per-frame render statistics, filled in by main.cpp's draw loop and displayed by the
-    // editor's Stats overlay — EditorLayer can count entities itself, but only the renderer
-    // knows how many draw calls actually issued.
-    struct RenderStats {
-        int DrawCalls = 0;
-        int Triangles = 0;
-        int Vertices = 0;
-        int PointLights = 0;
-        int Culled = 0; // entities skipped by frustum culling this frame - not drawn at all
-        // #204: the scene has more active lights than the forward LightBuffer can hold
-        // (LightBuffer::kMaxLights) - the excess were silently dropped before this existed.
-        bool LightBufferOverflowed = false;
-        // #204: the global per-frame cluster light-index list (ClusterGrid::GLOBAL_INDEX_CAPACITY)
-        // ran out of room this frame, so at least one cluster's reserved block was truncated and
-        // may be missing lights that should be shading it (#208: adapted from a per-cluster cap
-        // to this shared-list capacity).
-        bool ClusterSaturated = false;
-    };
+    // Per-frame render statistics, filled in by the scene-draw pass and displayed by the
+    // editor's Stats overlay. The struct now lives in the Renderer layer (Renderer/RenderStats.h)
+    // so SceneRenderer can fill it without depending on the editor; kept re-exported here as
+    // EditorLayer::RenderStats for the existing call sites (audit #359).
+    using RenderStats = ::RenderStats;
     void SetRenderStats(const RenderStats& stats) { m_RenderStats = stats; }
     // Last frame's stats, as set above — read by the --smoke-test harness (main.cpp) to check
     // a loaded scene actually issued draw calls rather than rendering silently empty.
