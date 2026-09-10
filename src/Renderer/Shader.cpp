@@ -157,6 +157,14 @@ void Shader::SetMat4Array(const std::string& name, int count, const glm::mat4* d
     glUniformMatrix4fv(Loc(name), count, GL_FALSE, glm::value_ptr(data[0]));
 }
 
+void Shader::SetVec3Array(const std::string& name, int count, const glm::vec3* data) const {
+    if (count > 0) glUniform3fv(Loc(name), count, glm::value_ptr(data[0]));
+}
+
+void Shader::SetFloatArray(const std::string& name, int count, const float* data) const {
+    if (count > 0) glUniform1fv(Loc(name), count, data);
+}
+
 void Shader::SetVec2(const std::string& name, const glm::vec2& v) const {
     glUniform2f(Loc(name), v.x, v.y);
 }

@@ -32,6 +32,7 @@ PFNGLUNIFORM1IPROC glUniform1i = nullptr;
 PFNGLUNIFORM1FPROC glUniform1f = nullptr;
 PFNGLUNIFORM3FPROC glUniform3f = nullptr;
 PFNGLUNIFORM3FVPROC glUniform3fv = nullptr;
+PFNGLUNIFORM1FVPROC glUniform1fv = nullptr;
 PFNGLUNIFORM4FPROC glUniform4f = nullptr;
 PFNGLACTIVETEXTUREPROC glActiveTexture = nullptr;
 PFNGLGENERATEMIPMAPPROC glGenerateMipmap = nullptr;
@@ -157,6 +158,7 @@ bool GLLoader_Init() {
     LOAD(PFNGLUNIFORM1FPROC, glUniform1f)
     LOAD(PFNGLUNIFORM3FPROC, glUniform3f)
     LOAD(PFNGLUNIFORM3FVPROC, glUniform3fv)
+    LOAD(PFNGLUNIFORM1FVPROC, glUniform1fv)
     LOAD(PFNGLUNIFORM4FPROC, glUniform4f)
     LOAD(PFNGLACTIVETEXTUREPROC, glActiveTexture)
     LOAD(PFNGLGENERATEMIPMAPPROC, glGenerateMipmap)
