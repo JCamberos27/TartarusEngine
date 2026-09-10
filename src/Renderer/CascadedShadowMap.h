@@ -57,6 +57,7 @@ private:
     std::array<glm::mat4, kMaxCascades> m_LightViewProj{};
     std::array<float, kMaxCascades> m_SplitFar{};
     std::array<float, kMaxCascades> m_TexelWorld{}; // 2*radius/resolution per cascade, from Update()
+    mutable bool m_CompleteChecked = false; // audit GL-204 — one-shot FBO completeness check in Begin()
 
     void Release();
 };
