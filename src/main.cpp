@@ -36,6 +36,7 @@
 #include "Cubemap.h"               // PR13: HDRI environment cubemap
 #include "ReflectionProbeArray.h"  // PR14: placed reflection probes
 #include "Ssao.h"                  // PR15: depth pre-pass + screen-space ambient occlusion
+#include "RenderFrameContext.h"    // audit #359 — per-viewport scene-draw inputs
 #include "Bloom.h"                 // PR16: threshold + blur bloom post-process
 #include "GLStateCache.h"
 #include "Profiler.h"
@@ -1572,33 +1573,29 @@ int main(int argc, char** argv) {
             // editorView: the editor Scene viewport (not the Game view). Only that pass applies
             // editor-only visibility filters — the per-layer visibility mask (#236 A1) and the
             // per-entity HiddenInSceneTag (#236 B). The running game and its Game view draw everything.
-            auto drawScene = [&](const glm::mat4& sceneView, const glm::mat4& sceneProj,
-                                  const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats,
-                                  bool editorView = false, int debugView = 0,
-                                  HdrTarget* txHdr = nullptr, OpaqueColorCopy* txCapture = nullptr,
-                                  Ssao* ssaoSrc = nullptr) {
+            auto drawScene = [&](const RenderFrameContext& ctx, EditorLayer::RenderStats* outStats) {
                 const EditorSettings& gs = EditorSettings::Get();
 
                 // Shadows for this view. Spot and point shadows only need shadows-enabled +
                 // a lit pass; the cascaded SUN shadow additionally needs its once-per-frame
                 // pass to have actually run (which requires a directional light). These used to
                 // share one flag, so deleting the sun silently killed spot/point shadows too.
-                bool shadowsOn = gs.ShadowsEnabled && !unlit;
+                bool shadowsOn = gs.ShadowsEnabled && !ctx.Unlit;
                 bool sunShadowsOn = shadowsOn && sunShadowsReady;
 
                 // PR13: sky draw — HDRI cubemap or procedural gradient
                 if (world.SkySourceMode == World::SkySource::Hdri && hdriCube) {
                     float rotRad = glm::radians(world.SkyRotationDegrees);
-                    sky.DrawHdri(hdriCube->Texture(), rotRad, sceneView, sceneProj);
+                    sky.DrawHdri(hdriCube->Texture(), rotRad, ctx.View, ctx.Proj);
                 } else {
-                    sky.Draw(sceneView, sceneProj, world.SkyHorizonColor, world.SkyZenithColor);
+                    sky.Draw(ctx.View, ctx.Proj, world.SkyHorizonColor, world.SkyZenithColor);
                 }
 
                 modelShader.Bind();
-                modelShader.SetMat4("uView", sceneView);
-                modelShader.SetMat4("uProj", sceneProj);
-                modelShader.SetVec3("uViewPos", viewPos);
-                modelShader.SetInt("uDebugView", debugView); // #236 R2 scene-view debug modes
+                modelShader.SetMat4("uView", ctx.View);
+                modelShader.SetMat4("uProj", ctx.Proj);
+                modelShader.SetVec3("uViewPos", ctx.ViewPos);
+                modelShader.SetInt("uDebugView", ctx.DebugView); // #236 R2 scene-view debug modes
 
                 // Cascaded-shadow uniforms + the depth array on unit 8 (material maps use 1..7).
                 modelShader.SetInt("uShadowEnabled", sunShadowsOn ? 1 : 0);
@@ -1673,7 +1670,7 @@ int main(int argc, char** argv) {
                 // IBL probes on units 11/12/13 (#196). The shader declares those units with
                 // layout(binding=) qualifiers, so there's no SetInt here — just the bind. Unlit
                 // mode skips lighting entirely, so it doesn't need them either.
-                bool iblOn = iblProbe.IsValid() && !unlit;
+                bool iblOn = iblProbe.IsValid() && !ctx.Unlit;
                 if (iblOn) {
                     glActiveTexture(GL_TEXTURE0 + 11);
                     glBindTexture(GL_TEXTURE_CUBE_MAP, iblProbe.IrradianceMap());
@@ -1688,17 +1685,17 @@ int main(int argc, char** argv) {
                 glActiveTexture(GL_TEXTURE0);
 
                 // PR14: bind nearest 2 probes to modelShader for parallax box projection.
-                // Uses viewPos as the draw centroid; no-op (uProbeCount=0) when scene has none.
-                probeArray.Bind(modelShader, viewPos);
+                // Uses ctx.ViewPos as the draw centroid; no-op (uProbeCount=0) when scene has none.
+                probeArray.Bind(modelShader, ctx.ViewPos);
 
                 // PR15: SSAO occlusion map (unit 15). Pre-computed before this drawScene call.
-                // ssaoSrc is the caller's own Ssao instance (Scene and Game view each have their
+                // ctx.SsaoSrc is the caller's own Ssao instance (Scene and Game view each have their
                 // own, since both can be rendering in the same frame at different resolutions).
                 // IsValid() is false until the first SSAO-enabled frame fills that instance's FBOs.
-                bool ssaoOn = gs.SsaoEnabled && ssaoSrc && ssaoSrc->IsValid() && !unlit;
+                bool ssaoOn = gs.SsaoEnabled && ctx.SsaoSrc && ctx.SsaoSrc->IsValid() && !ctx.Unlit;
                 if (ssaoOn) {
                     glActiveTexture(GL_TEXTURE0 + 15);
-                    glBindTexture(GL_TEXTURE_2D, ssaoSrc->OcclusionTexture());
+                    glBindTexture(GL_TEXTURE_2D, ctx.SsaoSrc->OcclusionTexture());
                     modelShader.SetInt("uSSAOMap", 15);
                     GLint vp[4] = {0, 0, 0, 0};
                     glGetIntegerv(GL_VIEWPORT, vp);
@@ -1717,13 +1714,13 @@ int main(int argc, char** argv) {
                 // editor view (not perf-critical) falls back to the full loop.
                 GLint vp[4] = {0, 0, 0, 0};
                 glGetIntegerv(GL_VIEWPORT, vp);
-                bool perspective = std::abs(sceneProj[3][3]) < 0.5f; // proj[3][3] == 1 for ortho
-                bool clusterOn = perspective && !unlit && vp[2] > 0 && vp[3] > 0;
+                bool perspective = std::abs(ctx.Proj[3][3]) < 0.5f; // proj[3][3] == 1 for ortho
+                bool clusterOn = perspective && !ctx.Unlit && vp[2] > 0 && vp[3] > 0;
                 if (clusterOn) {
                     PROFILE_GPU_SCOPE("Cluster Cull");
-                    float nearZ = std::abs(sceneProj[3][2] / (sceneProj[2][2] - 1.0f));
-                    float farZ  = std::abs(sceneProj[3][2] / (sceneProj[2][2] + 1.0f));
-                    clusterGrid.Cull(clusterBuildShader, clusterCullShader, sceneView, sceneProj,
+                    float nearZ = std::abs(ctx.Proj[3][2] / (ctx.Proj[2][2] - 1.0f));
+                    float farZ  = std::abs(ctx.Proj[3][2] / (ctx.Proj[2][2] + 1.0f));
+                    clusterGrid.Cull(clusterBuildShader, clusterCullShader, ctx.View, ctx.Proj,
                                      nearZ, farZ, vp[2], vp[3]);
                     modelShader.Bind(); // Cull() left a compute program bound
                     clusterGrid.BindForShading();
@@ -1732,7 +1729,7 @@ int main(int argc, char** argv) {
                 }
                 modelShader.SetInt("uClusterEnabled", clusterOn ? 1 : 0);
 
-                modelShader.SetInt("uUnlit", unlit ? 1 : 0);
+                modelShader.SetInt("uUnlit", ctx.Unlit ? 1 : 0);
                 // Real scene path: emit linear HDR; the shared Tonemapper pass maps it after
                 // MSAA resolve. (Offscreen model thumbnails set this to 1 to self-tonemap.)
                 modelShader.SetInt("uApplyTonemap", 0);
@@ -1744,7 +1741,7 @@ int main(int argc, char** argv) {
                 localStats.PointLights = std::max(0, frameLightCount - 1); // minus the directional sun
                 localStats.LightBufferOverflowed = lightBuffer.Overflowed(); // #204
                 localStats.ClusterSaturated = clusterOn && clusterGrid.Saturated(); // #204
-                Frustum camFrustum = Frustum::FromViewProj(sceneProj * sceneView);
+                Frustum camFrustum = Frustum::FromViewProj(ctx.Proj * ctx.View);
                 { // scope limits PROFILE_SCOPE to just this loop, not the rest of the frame
                 PROFILE_SCOPE("Scene Draw");
                 PROFILE_GPU_SCOPE("Scene Draw"); // shared by both Scene-tab and Game-tab draws
@@ -1779,7 +1776,7 @@ int main(int argc, char** argv) {
 
                     // Editor Scene viewport only: per-entity SceneVis hide (#236 B) + per-layer
                     // visibility mask (#236 A1). The scene, saves and Game view are unaffected.
-                    if (editorView) {
+                    if (ctx.EditorView) {
                         if (world.Registry.all_of<HiddenInSceneTag>(entity)) continue;
                         const auto* lc = world.Registry.try_get<LayerComponent>(entity);
                         const int layer = lc ? lc->Layer : 0;
@@ -1828,7 +1825,7 @@ int main(int argc, char** argv) {
                     if (q == MaterialAsset::Queue::Transparent) {
                         // Compute view-space depth of entity centre for back-to-front sort.
                         glm::vec3 centre = glm::vec3(model[3]);
-                        viewDepth = -(sceneView * glm::vec4(centre, 1.0f)).z;
+                        viewDepth = -(ctx.View * glm::vec4(centre, 1.0f)).z;
                         transparentList.push_back({ model, m, &slots, matKey,
                             m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                             q, qi, viewDepth });
@@ -1861,14 +1858,14 @@ int main(int argc, char** argv) {
                 // --- Transparent pass: back-to-front sorted, blended, no depth write -----------
                 if (!transparentList.empty()) {
                     // PR12: resolve MSAA opaque color and copy into mipped texture for refraction.
-                    if (txHdr && txCapture) {
-                        txHdr->ResolveTo();
+                    if (ctx.TxHdr && ctx.TxCapture) {
+                        ctx.TxHdr->ResolveTo();
                         GLint txVp[4] = {0, 0, 0, 0};
                         glGetIntegerv(GL_VIEWPORT, txVp);
-                        txCapture->CopyFrom(txHdr->ResolvedColorTexture(), txVp[2], txVp[3]);
-                        txHdr->BindForRender(); // rebind MSAA FBO for the transparent draw pass
+                        ctx.TxCapture->CopyFrom(ctx.TxHdr->ResolvedColorTexture(), txVp[2], txVp[3]);
+                        ctx.TxHdr->BindForRender(); // rebind MSAA FBO for the transparent draw pass
                         glActiveTexture(GL_TEXTURE0 + 14);
-                        glBindTexture(GL_TEXTURE_2D, txCapture->Texture());
+                        glBindTexture(GL_TEXTURE_2D, ctx.TxCapture->Texture());
                         modelShader.SetInt("uOpaqueColor", 14);
                         modelShader.SetVec2("uScreenSize", glm::vec2((float)txVp[2], (float)txVp[3]));
                     }
@@ -2016,9 +2013,10 @@ int main(int argc, char** argv) {
                 }
 
                 EditorLayer::RenderStats sceneStats;
-                drawScene(sceneViewMat, sceneProjMat, editorCamera.Position, sceneUnlit, &sceneStats,
-                          /*editorView=*/true, /*debugView=*/sceneDebugView,
-                          &sceneHdr, &sceneOpaqueColor, &ssao);
+                drawScene(RenderFrameContext{ sceneViewMat, sceneProjMat, editorCamera.Position,
+                              sceneUnlit, /*EditorView=*/true, /*DebugView=*/sceneDebugView,
+                              &sceneHdr, &sceneOpaqueColor, &ssao },
+                          &sceneStats);
 
                 editor.SetRenderStats(sceneStats);
                 // NB: in Wireframe mode the polygon mode stays GL_LINE through the selection
@@ -2329,8 +2327,10 @@ int main(int argc, char** argv) {
                 }
 
                 EditorLayer::RenderStats gvRenderStats;
-                drawScene(gvView, gvProj, gvEye, /*unlit=*/false, &gvRenderStats,
-                          /*editorView=*/false, /*debugView=*/0, &gameHdr, &gameOpaqueColor, &gameSsao);
+                drawScene(RenderFrameContext{ gvView, gvProj, gvEye, /*Unlit=*/false,
+                              /*EditorView=*/false, /*DebugView=*/0,
+                              &gameHdr, &gameOpaqueColor, &gameSsao },
+                          &gvRenderStats);
 
                 // Physics debug overlay over the game view (#185, F5) — depth-tested, no depth write.
                 if (playing && EditorSettings::Get().PlayDebugOverlay) {
@@ -2493,8 +2493,10 @@ int main(int argc, char** argv) {
                 }
 
                 EditorLayer::RenderStats stats;
-                drawScene(view, proj, gameCam->Position, /*unlit=*/false, &stats,
-                          /*editorView=*/false, /*debugView=*/0, &gameHdr, &gameOpaqueColor, &gameSsao);
+                drawScene(RenderFrameContext{ view, proj, gameCam->Position, /*Unlit=*/false,
+                              /*EditorView=*/false, /*DebugView=*/0,
+                              &gameHdr, &gameOpaqueColor, &gameSsao },
+                          &stats);
                 editor.SetRenderStats(stats);
                 // Physics debug overlay over the game view (#185, F5).
                 if (EditorSettings::Get().PlayDebugOverlay) {
