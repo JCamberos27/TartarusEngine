@@ -31,28 +31,12 @@ AABB ColliderWorldBounds(const entt::registry& registry, entt::entity entity, co
 }
 } // namespace
 
-World::World() {
-    // Ground.
-    CreateBox({0, -0.5f, 0}, {60.0f, 1.0f, 60.0f}, {0.25f, 0.28f, 0.25f}, {0, 0, 0}, "");
-
-    // A scattering of crate-like placeholder geometry, just so a brand-new scene isn't a bare
-    // plane.
-    struct P { float x, z, s, h; };
-    P layout[] = {
-        {5, 5, 2, 2}, {-6, 4, 2, 3}, {8, -4, 2, 1.5f}, {-4, -6, 2, 2.5f},
-        {0, 10, 2, 2}, {12, 0, 2, 4}, {-12, 0, 2, 2}, {3, -10, 2, 2},
-        {-8, -8, 1.5f, 1.5f}, {10, 8, 2, 2},
-    };
-    glm::vec3 colors[] = {
-        {0.8f,0.3f,0.2f}, {0.2f,0.5f,0.8f}, {0.8f,0.7f,0.2f}, {0.4f,0.8f,0.3f},
-        {0.7f,0.3f,0.7f}, {0.3f,0.8f,0.8f}, {0.9f,0.5f,0.2f}, {0.5f,0.5f,0.9f},
-        {0.9f,0.2f,0.4f}, {0.4f,0.9f,0.6f},
-    };
-    for (int i = 0; i < 10; ++i) {
-        const P& p = layout[i];
-        CreateBox({p.x, p.h * 0.5f, p.z}, {p.s, p.h, p.s}, colors[i], {0, 0, 0}, "");
-    }
-}
+// A default-constructed World is genuinely empty — no ground, no placeholder crates. Every
+// caller that wants a truly blank scene (startup with no scene file, File > New Scene) goes
+// through this constructor, so anything spawned here would show up whether they wanted it or
+// not. Add starter content, if ever wanted again, as an explicit opt-in action instead (e.g. a
+// "New Scene from template" menu item), not as constructor side effects.
+World::World() {}
 
 std::string World::NextPrimitivePath() {
     return "primitive://levelgeometry/" + std::to_string(m_NextPrimitiveId++);
