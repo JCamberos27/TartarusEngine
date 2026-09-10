@@ -441,18 +441,20 @@ int main(int argc, char** argv) {
         // (wrong CWD, incomplete install) throws "Required engine shader not found: <path>" at
         // startup instead of letting an empty source reach the driver as a misleading link
         // error (audit #355 / BUG-102).
+        // The `debugName` third arg labels the GL program (KHR_debug) and logs its id at link
+        // time — see Shader.h (audit GL-102 / #367).
         Shader modelShader(ShaderLibrary::ReadFileRequired("ModelVertex.glsl"),
-                           ShaderLibrary::ReadFileRequired("ModelFragment.glsl"));
+                           ShaderLibrary::ReadFileRequired("ModelFragment.glsl"), "modelShader");
         Shader outlineModelShader(ShaderLibrary::ReadFileRequired("OutlineModel.vert.glsl"),
-                                  ShaderLibrary::ReadFileRequired("Outline.frag.glsl"));
+                                  ShaderLibrary::ReadFileRequired("Outline.frag.glsl"), "outlineModelShader");
         Shader outlineDilateShader(ShaderLibrary::ReadFileRequired("OutlineDilate.vert.glsl"),
-                                   ShaderLibrary::ReadFileRequired("OutlineDilate.frag.glsl"));
+                                   ShaderLibrary::ReadFileRequired("OutlineDilate.frag.glsl"), "outlineDilateShader");
         Shader shadowShader(ShaderLibrary::ReadFileRequired("ShadowDepth.vert.glsl"),
-                            ShaderLibrary::ReadFileRequired("ShadowDepth.frag.glsl"));
+                            ShaderLibrary::ReadFileRequired("ShadowDepth.frag.glsl"), "shadowShader");
         Shader localShadowShader(ShaderLibrary::ReadFileRequired("ShadowDepth.vert.glsl"),
-                                 ShaderLibrary::ReadFileRequired("ShadowDepthLocal.frag.glsl")); // spot/point: linear depth
-        Shader clusterBuildShader(ShaderLibrary::ReadFileRequired("ClusterBuild.comp.glsl")); // #120: per-view froxel AABBs
-        Shader clusterCullShader(ShaderLibrary::ReadFileRequired("ClusterCull.comp.glsl"));   // #120: point/spot lights -> froxel lists
+                                 ShaderLibrary::ReadFileRequired("ShadowDepthLocal.frag.glsl"), "localShadowShader"); // spot/point: linear depth
+        Shader clusterBuildShader(ShaderLibrary::ReadFileRequired("ClusterBuild.comp.glsl"), "clusterBuildShader"); // #120: per-view froxel AABBs
+        Shader clusterCullShader(ShaderLibrary::ReadFileRequired("ClusterCull.comp.glsl"), "clusterCullShader");   // #120: point/spot lights -> froxel lists
         unsigned int fsQuadVao = 0;
         glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
         TintOverlayRenderer tintOverlay;
