@@ -67,6 +67,11 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     modelShader.SetVec3("uViewPos", ctx.ViewPos);
     modelShader.SetInt("uDebugView", ctx.DebugView); // #236 R2 scene-view debug modes
 
+    // The caller set the viewport before this call and nothing here changes it, so read it once
+    // (audit PERF-102: was three separate glGetIntegerv(GL_VIEWPORT) round-trips in this pass).
+    GLint vp[4] = {0, 0, 0, 0};
+    glGetIntegerv(GL_VIEWPORT, vp);
+
     // Cascaded-shadow uniforms + the depth array on unit 8 (material maps use 1..7).
     modelShader.SetInt("uShadowEnabled", sunShadowsOn ? 1 : 0);
     modelShader.SetInt("uShadowCascadeCount", shadowMap.Count());
@@ -99,15 +104,17 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // or in Unlit so the shader's SpotShadow() early-outs.
     int spotCountForView = shadowsOn ? in.spotShadowCount : 0;
     modelShader.SetInt("uSpotShadowCount", spotCountForView);
-    if (spotCountForView > 0)
-        modelShader.SetMat4Array("uSpotShadowVP[0]", spotCountForView, in.spotShadowVP);
-    for (int s = 0; s < spotCountForView; ++s) {
-        modelShader.SetVec3("uSpotShadowPos[" + std::to_string(s) + "]", in.spotShadowPos[s]);
-        modelShader.SetFloat("uSpotShadowFar[" + std::to_string(s) + "]", in.spotShadowFar[s]);
-        modelShader.SetFloat("uSpotShadowHalfTan[" + std::to_string(s) + "]", in.spotShadowHalfTan[s]);
-        modelShader.SetFloat("uSpotShadowBias[" + std::to_string(s) + "]", in.spotShadowBias[s]);
-        modelShader.SetFloat("uSpotShadowNormalBias[" + std::to_string(s) + "]", in.spotShadowNormalBias[s]);
-        modelShader.SetFloat("uSpotShadowSoftness[" + std::to_string(s) + "]", in.spotShadowSoftness[s]);
+    if (spotCountForView > 0) {
+        // Whole-array uploads, one glUniform*fv each — was a per-index std::to_string-built
+        // uniform-name loop every frame (audit PERF-102). The arrays alias main.cpp's
+        // kMaxSpots-sized stack storage; only the first spotCountForView entries are sent.
+        modelShader.SetMat4Array ("uSpotShadowVP[0]",         spotCountForView, in.spotShadowVP);
+        modelShader.SetVec3Array ("uSpotShadowPos[0]",        spotCountForView, in.spotShadowPos);
+        modelShader.SetFloatArray("uSpotShadowFar[0]",        spotCountForView, in.spotShadowFar);
+        modelShader.SetFloatArray("uSpotShadowHalfTan[0]",    spotCountForView, in.spotShadowHalfTan);
+        modelShader.SetFloatArray("uSpotShadowBias[0]",       spotCountForView, in.spotShadowBias);
+        modelShader.SetFloatArray("uSpotShadowNormalBias[0]", spotCountForView, in.spotShadowNormalBias);
+        modelShader.SetFloatArray("uSpotShadowSoftness[0]",   spotCountForView, in.spotShadowSoftness);
     }
     glActiveTexture(GL_TEXTURE0 + 9);
     // A valid depth-compare texture even when no spot shadow map is allocated, so
@@ -124,10 +131,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // Point-light cube shadow maps on unit 10 (#119).
     int pointCountForView = shadowsOn ? in.pointShadowCount : 0;
     modelShader.SetInt("uPointShadowCount", pointCountForView);
-    for (int s = 0; s < pointCountForView; ++s) {
-        modelShader.SetFloat("uPointShadowFar[" + std::to_string(s) + "]", in.pointShadowFar[s]);
-        modelShader.SetFloat("uPointShadowBias[" + std::to_string(s) + "]", in.pointShadowBias[s]);
-        modelShader.SetFloat("uPointShadowNormalBias[" + std::to_string(s) + "]", in.pointShadowNormalBias[s]);
+    if (pointCountForView > 0) {
+        modelShader.SetFloatArray("uPointShadowFar[0]",        pointCountForView, in.pointShadowFar);
+        modelShader.SetFloatArray("uPointShadowBias[0]",       pointCountForView, in.pointShadowBias);
+        modelShader.SetFloatArray("uPointShadowNormalBias[0]", pointCountForView, in.pointShadowNormalBias);
     }
     glActiveTexture(GL_TEXTURE0 + 10);
     { // valid samplerCubeArrayShadow backing even with no point shadow map (audit #357)
@@ -167,8 +174,6 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         glActiveTexture(GL_TEXTURE0 + 15);
         glBindTexture(GL_TEXTURE_2D, ctx.SsaoSrc->OcclusionTexture());
         modelShader.SetInt("uSSAOMap", 15);
-        GLint vp[4] = {0, 0, 0, 0};
-        glGetIntegerv(GL_VIEWPORT, vp);
         modelShader.SetVec2("uScreenSize", glm::vec2((float)vp[2], (float)vp[3]));
         glActiveTexture(GL_TEXTURE0);
     }
@@ -182,8 +187,6 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // a short per-froxel list instead of all uLightCount lights. Perspective views
     // only — the froxel AABB build assumes rays from the eye, so an orthographic
     // editor view (not perf-critical) falls back to the full loop.
-    GLint vp[4] = {0, 0, 0, 0};
-    glGetIntegerv(GL_VIEWPORT, vp);
     bool perspective = std::abs(ctx.Proj[3][3]) < 0.5f; // proj[3][3] == 1 for ortho
     bool clusterOn = perspective && !ctx.Unlit && vp[2] > 0 && vp[3] > 0;
     if (clusterOn) {
@@ -330,14 +333,12 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // PR12: resolve MSAA opaque color and copy into mipped texture for refraction.
         if (ctx.TxHdr && ctx.TxCapture) {
             ctx.TxHdr->ResolveTo();
-            GLint txVp[4] = {0, 0, 0, 0};
-            glGetIntegerv(GL_VIEWPORT, txVp);
-            ctx.TxCapture->CopyFrom(ctx.TxHdr->ResolvedColorTexture(), txVp[2], txVp[3]);
+            ctx.TxCapture->CopyFrom(ctx.TxHdr->ResolvedColorTexture(), vp[2], vp[3]);
             ctx.TxHdr->BindForRender(); // rebind MSAA FBO for the transparent draw pass
             glActiveTexture(GL_TEXTURE0 + 14);
             glBindTexture(GL_TEXTURE_2D, ctx.TxCapture->Texture());
             modelShader.SetInt("uOpaqueColor", 14);
-            modelShader.SetVec2("uScreenSize", glm::vec2((float)txVp[2], (float)txVp[3]));
+            modelShader.SetVec2("uScreenSize", glm::vec2((float)vp[2], (float)vp[3]));
         }
 
         // Sort: QueueIndex ascending, then ViewDepth descending (farthest first),

@@ -41,6 +41,11 @@ public:
     // 100, bones.data())` for a whole GLSL `uniform mat4 uBones[100]` array, instead of 100
     // separate SetMat4 calls (100 uniform-name lookups + 100 draw-call-adjacent GL calls).
     void SetMat4Array(const std::string& name, int count, const glm::mat4* data) const;
+    // Same, for `uniform vec3[]` / `uniform float[]` — `data` must point at `count` contiguous
+    // elements. One name lookup + one glUniform{3,1}fv instead of a per-index string-built loop
+    // (audit PERF-102: the spot/point shadow uniform uploads in the scene pass).
+    void SetVec3Array(const std::string& name, int count, const glm::vec3* data) const;
+    void SetFloatArray(const std::string& name, int count, const float* data) const;
 
     // Re-reads vertFile and fragFile via ShaderLibrary, recompiles and relinks the program in
     // place, and clears the uniform location cache. Throws on compile/link failure (the old
