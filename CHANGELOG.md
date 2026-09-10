@@ -7,6 +7,28 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### Screen-space ambient occlusion & bloom (#333) — 2026-09-09
+
+Two additive screen-space effects, both computed in linear HDR before the shared Tonemapper
+pass so they scale correctly with exposure. Off by default; both toggle from
+**Window ▸ Lighting ▸ Post-processing** (and the docked equivalent).
+
+- **SSAO** — a depth-only pre-pass (the existing shadow-depth shader, reused with the scene
+  camera's view-projection) feeds a 32-sample view-space hemisphere kernel rotated per-pixel by
+  a tiled 4×4 noise texture, range-checked and written to an `R8` occlusion buffer, then
+  softened with a 4×4 box blur. The model shader multiplies ambient light by the blurred
+  occlusion sample at `gl_FragCoord`; `uSSAOEnabled == 0` (the GL default) is a no-op, so the
+  effect costs nothing on shader variants that never opt in. Scene-view only.
+- **Bloom** — a threshold pass extracts HDR energy above a tunable luminance cutoff at half
+  resolution, preserving colour ratio; a separable 9-tap Gaussian (horizontal then vertical)
+  blurs it into a glow buffer that the Tonemapper adds to the linear HDR colour before the tone
+  curve runs, so bloom brightens correctly under every operator (Reinhard / ACES / AgX) and every
+  exposure setting. `Threshold` and `Intensity` sliders in the Post-processing section.
+- **New files** — `src/Renderer/Ssao.{h,cpp}`, `src/Renderer/Bloom.{h,cpp}`, and their GLSL
+  passes (`Ssao.frag`, `SsaoBlur.frag`, `BloomThreshold.frag`, `BloomBlur.frag`); `Tonemapper::Apply`
+  grew optional `bloomTexture` / `bloomIntensity` parameters (default off, existing call sites
+  unchanged).
+
 ### Collision system → NVIDIA PhysX 5 (#185) — 2026-09-09
 
 The hand-rolled sub-stepped AABB collision path is gone; the engine now runs a real

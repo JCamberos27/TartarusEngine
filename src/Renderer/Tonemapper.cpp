@@ -19,7 +19,8 @@ void Tonemapper::EnsureCreated() {
 }
 
 void Tonemapper::Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW, int dstH,
-                       float exposureEV, Operator op) {
+                       float exposureEV, Operator op,
+                       unsigned int bloomTexture, float bloomIntensity) {
     EnsureCreated();
 
     GLboolean prevDepth = glIsEnabled(GL_DEPTH_TEST);
@@ -35,6 +36,17 @@ void Tonemapper::Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW
     m_Shader->SetInt("uHdr", 0);
     m_Shader->SetFloat("uExposure", std::pow(2.0f, exposureEV));
     m_Shader->SetInt("uOperator", (int)op);
+
+    // PR16 — bloom: bind glow texture on unit 1; shader adds it before the tone curve.
+    const bool bloomOn = bloomTexture != 0 && bloomIntensity > 0.0f;
+    if (bloomOn) {
+        glActiveTexture(GL_TEXTURE0 + 1);
+        glBindTexture(GL_TEXTURE_2D, bloomTexture);
+        glActiveTexture(GL_TEXTURE0);
+        m_Shader->SetInt("uBloom", 1);
+        m_Shader->SetFloat("uBloomIntensity", bloomIntensity);
+    }
+    m_Shader->SetInt("uBloomEnabled", bloomOn ? 1 : 0);
 
     glBindVertexArray(m_Vao);
     glDrawArrays(GL_TRIANGLES, 0, 3);

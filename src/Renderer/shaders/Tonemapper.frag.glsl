@@ -3,8 +3,13 @@ in vec2 vUV;
 out vec4 FragColor;
 
 uniform sampler2D uHdr;
-uniform float uExposure;   // linear multiplier (already 2^EV on the CPU)
-uniform int uOperator;     // 0 Reinhard, 1 ACES, 2 AgX
+uniform float uExposure;      // linear multiplier (already 2^EV on the CPU)
+uniform int uOperator;        // 0 Reinhard, 1 ACES, 2 AgX
+
+// PR16 — bloom: blurred half-res glow added to linear HDR before the tone curve.
+uniform sampler2D uBloom;
+uniform int   uBloomEnabled;
+uniform float uBloomIntensity;
 
 // --- ACES (Narkowicz 2015 fitted) --------------------------------------------------------
 vec3 TonemapACES(vec3 x) {
@@ -49,6 +54,8 @@ vec3 TonemapAgX(vec3 val) {
 
 void main() {
     vec3 hdr = texture(uHdr, vUV).rgb * uExposure;
+    if (uBloomEnabled != 0)
+        hdr += texture(uBloom, vUV).rgb * uBloomIntensity;
 
     vec3 mapped;
     if (uOperator == 1)      mapped = TonemapACES(hdr);

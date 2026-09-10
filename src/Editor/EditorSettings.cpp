@@ -45,6 +45,10 @@ void EditorSettings::Load() {
     s.TonemapOperator = root.value("tonemapOperator", s.TonemapOperator);
     s.MsaaSamples = root.value("msaaSamples", s.MsaaSamples);
     s.SsaoEnabled    = root.value("ssaoEnabled",    s.SsaoEnabled);
+    s.BloomEnabled   = root.value("bloomEnabled",   s.BloomEnabled);
+    s.BloomThreshold = root.value("bloomThreshold", s.BloomThreshold);
+    s.BloomKnee      = root.value("bloomKnee",      s.BloomKnee);
+    s.BloomIntensity = root.value("bloomIntensity", s.BloomIntensity);
     s.ShadowsEnabled = root.value("shadowsEnabled", s.ShadowsEnabled);
     s.ShadowResolution = root.value("shadowResolution", s.ShadowResolution);
     s.ShadowCascades = root.value("shadowCascades", s.ShadowCascades);
@@ -116,6 +120,10 @@ void EditorSettings::Save() {
     root["tonemapOperator"] = Get().TonemapOperator;
     root["msaaSamples"] = Get().MsaaSamples;
     root["ssaoEnabled"]    = Get().SsaoEnabled;
+    root["bloomEnabled"]   = Get().BloomEnabled;
+    root["bloomThreshold"] = Get().BloomThreshold;
+    root["bloomKnee"]      = Get().BloomKnee;
+    root["bloomIntensity"] = Get().BloomIntensity;
     root["shadowsEnabled"] = Get().ShadowsEnabled;
     root["shadowResolution"] = Get().ShadowResolution;
     root["shadowCascades"] = Get().ShadowCascades;
