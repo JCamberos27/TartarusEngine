@@ -692,6 +692,27 @@ void EditorLayer::DrawPostProcessSettings(float w) {
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Screen-space ambient occlusion. Darkens crevices and contact shadows. Depth pre-pass + blur, scene-view only.");
 
+    if (ImGui::Checkbox("Bloom", &prefs.BloomEnabled)) EditorSettings::Save();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Bloom post-process: bright pixels bleed glow onto neighbors. Runs at half resolution before tone mapping.");
+    if (prefs.BloomEnabled) {
+        ImGui::SetNextItemWidth(w);
+        EditorUI::SliderFloat("Bloom threshold", &prefs.BloomThreshold, 0.1f, 4.0f, "%.2f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Luminance level above which pixels emit glow (HDR energy units). Lower = more pixels bloom.");
+        ImGui::SetNextItemWidth(w);
+        EditorUI::SliderFloat("Bloom knee", &prefs.BloomKnee, 0.0f, 1.0f, "%.2f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Softens the threshold edge so pixels near the cutoff fade in gradually instead of popping. 0 = hard cutoff.");
+        ImGui::SetNextItemWidth(w);
+        EditorUI::SliderFloat("Bloom intensity", &prefs.BloomIntensity, 0.0f, 2.0f, "%.2f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Additive glow strength before the tone curve. 0.25 is subtle; above 1.0 is very strong.");
+    }
+
     static const char* kTonemapLabels[] = { "Reinhard", "ACES", "AgX" };
     int tm = std::clamp(prefs.TonemapOperator, 0, 2);
     ImGui::SetNextItemWidth(w);

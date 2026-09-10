@@ -36,6 +36,7 @@
 #include "Cubemap.h"               // PR13: HDRI environment cubemap
 #include "ReflectionProbeArray.h"  // PR14: placed reflection probes
 #include "Ssao.h"                  // PR15: depth pre-pass + screen-space ambient occlusion
+#include "Bloom.h"                 // PR16: threshold + blur bloom post-process
 #include "GLStateCache.h"
 #include "Profiler.h"
 #include "Frustum.h"
@@ -442,6 +443,20 @@ int main(int argc, char** argv) {
                                  ShaderLibrary::ReadFile("Ssao.frag.glsl"));
         Shader ssaoBlurShader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
                               ShaderLibrary::ReadFile("SsaoBlur.frag.glsl"));
+        // PR16: Bloom — soft-knee threshold + 5-level downsample/upsample mip pyramid.
+        // Separate Scene/Game instances: both viewports can render in the same frame (Scene tab
+        // + docked Game tab both visible) at different resolutions, so sharing one would thrash
+        // Resize() every frame. The three shaders are stateless GLSL programs, safely shared.
+        Bloom bloom;
+        Bloom gameBloom;
+        Shader bloomThreshShader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+                                 ShaderLibrary::ReadFile("BloomThreshold.frag.glsl"));
+        Shader bloomDownsampleShader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+                                     ShaderLibrary::ReadFile("BloomDownsample.frag.glsl"));
+        Shader bloomUpsampleShader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+                                   ShaderLibrary::ReadFile("BloomUpsample.frag.glsl"));
+        // Same reasoning as gameBloom above — SSAO needs its own depth pre-pass FBO per viewport.
+        Ssao gameSsao;
 
         World world;
         HotReloadGameModule gameModule;
@@ -1512,7 +1527,8 @@ int main(int argc, char** argv) {
             auto drawScene = [&](const glm::mat4& sceneView, const glm::mat4& sceneProj,
                                   const glm::vec3& viewPos, bool unlit, EditorLayer::RenderStats* outStats,
                                   bool editorView = false, int debugView = 0,
-                                  HdrTarget* txHdr = nullptr, OpaqueColorCopy* txCapture = nullptr) {
+                                  HdrTarget* txHdr = nullptr, OpaqueColorCopy* txCapture = nullptr,
+                                  Ssao* ssaoSrc = nullptr) {
                 const EditorSettings& gs = EditorSettings::Get();
 
                 // Shadows for this view. Spot and point shadows only need shadows-enabled +
@@ -1615,11 +1631,13 @@ int main(int argc, char** argv) {
                 probeArray.Bind(modelShader, viewPos);
 
                 // PR15: SSAO occlusion map (unit 15). Pre-computed before this drawScene call.
-                // ssao.IsValid() is false until the first SSAO-enabled frame fills the FBOs.
-                bool ssaoOn = gs.SsaoEnabled && ssao.IsValid() && !unlit;
+                // ssaoSrc is the caller's own Ssao instance (Scene and Game view each have their
+                // own, since both can be rendering in the same frame at different resolutions).
+                // IsValid() is false until the first SSAO-enabled frame fills that instance's FBOs.
+                bool ssaoOn = gs.SsaoEnabled && ssaoSrc && ssaoSrc->IsValid() && !unlit;
                 if (ssaoOn) {
                     glActiveTexture(GL_TEXTURE0 + 15);
-                    glBindTexture(GL_TEXTURE_2D, ssao.OcclusionTexture());
+                    glBindTexture(GL_TEXTURE_2D, ssaoSrc->OcclusionTexture());
                     modelShader.SetInt("uSSAOMap", 15);
                     GLint vp[4] = {0, 0, 0, 0};
                     glGetIntegerv(GL_VIEWPORT, vp);
@@ -1936,7 +1954,7 @@ int main(int argc, char** argv) {
                 EditorLayer::RenderStats sceneStats;
                 drawScene(sceneViewMat, sceneProjMat, editorCamera.Position, sceneUnlit, &sceneStats,
                           /*editorView=*/true, /*debugView=*/sceneDebugView,
-                          &sceneHdr, &sceneOpaqueColor);
+                          &sceneHdr, &sceneOpaqueColor, &ssao);
 
                 editor.SetRenderStats(sceneStats);
                 // NB: in Wireframe mode the polygon mode stays GL_LINE through the selection
@@ -2059,11 +2077,30 @@ int main(int argc, char** argv) {
                 // Resolve MSAA + tonemap the linear-HDR scene into the LDR texture the Scene tab
                 // displays (exposure -> curve -> gamma, once, in Tonemapper).
                 sceneHdr.ResolveTo();
+
+                // PR16: Bloom — soft-knee threshold + mip-pyramid blur before tonemapping.
+                // Resize takes the FULL scene resolution; Bloom halves it internally for mip 0.
+                unsigned int bloomGlowTex  = 0u;
+                float        bloomIntensity = 0.0f;
+                if (EditorSettings::Get().BloomEnabled) {
+                    PROFILE_GPU_SCOPE("Bloom");
+                    bloom.Resize(scW, scH);
+                    bloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
+                                  sceneHdr.ResolvedColorTexture(),
+                                  EditorSettings::Get().BloomThreshold,
+                                  EditorSettings::Get().BloomKnee);
+                    if (bloom.IsValid()) {
+                        bloomGlowTex  = bloom.GlowTexture();
+                        bloomIntensity = EditorSettings::Get().BloomIntensity;
+                    }
+                    GLStateCache::Invalidate();
+                }
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(sceneHdr.ResolvedColorTexture(), sceneFramebuffer.Handle(), scW, scH,
                                  EditorSettings::Get().ExposureEV,
-                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator);
+                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator,
+                                 bloomGlowTex, bloomIntensity);
                 }
 
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
@@ -2168,9 +2205,47 @@ int main(int argc, char** argv) {
                     gvProj = gameCam->ProjectionMatrix(gvAspect);
                     gvEye = gameCam->Position;
                 }
+                // SSAO depth pre-pass for the Game view — own Ssao instance/resolution from the
+                // Scene view's (see gameSsao declaration). Game view has no unlit mode.
+                if (EditorSettings::Get().SsaoEnabled) {
+                    PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
+                    PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
+                    gameSsao.Resize(gvWidth, gvHeight);
+                    glBindFramebuffer(GL_FRAMEBUFFER, gameSsao.DepthFbo());
+                    glViewport(0, 0, gvWidth, gvHeight);
+                    glClear(GL_DEPTH_BUFFER_BIT);
+                    glEnable(GL_DEPTH_TEST);
+                    glDepthMask(GL_TRUE);
+                    glEnable(GL_CULL_FACE);
+                    glCullFace(GL_BACK);
+                    glDisable(GL_BLEND);
+
+                    shadowShader.Bind();
+                    shadowShader.SetMat4("uLightViewProj", gvProj * gvView);
+                    shadowShader.SetInt("uUseSkinning", 0);
+                    int gameSsaoModelLoc = shadowShader.Loc("uModel");
+                    auto gameSsaoRenderables = world.Registry.view<TransformComponent, RenderableComponent>();
+                    for (auto entity : gameSsaoRenderables) {
+                        if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                        auto& rc = world.Registry.get<RenderableComponent>(entity);
+                        if (!rc.ModelRef) continue;
+                        glm::mat4 model = world.GetCachedWorldTransform(entity);
+                        shadowShader.SetMat4(gameSsaoModelLoc, model);
+                        rc.ModelRef->DrawDepthOnly(shadowShader, rc.Materials);
+                    }
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                    GLStateCache::Invalidate();
+
+                    gameSsao.Compute(ssaoComputeShader, gvProj);
+                    gameSsao.Blur(ssaoBlurShader);
+                    GLStateCache::Invalidate();
+
+                    gameHdr.BindForRender(); // restore for the main scene draw below
+                }
+
                 EditorLayer::RenderStats gvRenderStats;
                 drawScene(gvView, gvProj, gvEye, /*unlit=*/false, &gvRenderStats,
-                          /*editorView=*/false, /*debugView=*/0, &gameHdr, &gameOpaqueColor);
+                          /*editorView=*/false, /*debugView=*/0, &gameHdr, &gameOpaqueColor, &gameSsao);
 
                 // Physics debug overlay over the game view (#185, F5) — depth-tested, no depth write.
                 if (playing && EditorSettings::Get().PlayDebugOverlay) {
@@ -2180,11 +2255,29 @@ int main(int argc, char** argv) {
                 }
 
                 gameHdr.ResolveTo();
+
+                // PR16: Bloom for the Game view — own Bloom instance (see gameBloom declaration).
+                unsigned int gvBloomGlowTex   = 0u;
+                float        gvBloomIntensity = 0.0f;
+                if (EditorSettings::Get().BloomEnabled) {
+                    PROFILE_GPU_SCOPE("Bloom (Game)");
+                    gameBloom.Resize(gvWidth, gvHeight);
+                    gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
+                                      gameHdr.ResolvedColorTexture(),
+                                      EditorSettings::Get().BloomThreshold,
+                                      EditorSettings::Get().BloomKnee);
+                    if (gameBloom.IsValid()) {
+                        gvBloomGlowTex   = gameBloom.GlowTexture();
+                        gvBloomIntensity = EditorSettings::Get().BloomIntensity;
+                    }
+                    GLStateCache::Invalidate();
+                }
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameView.GetFramebuffer().Handle(),
                                  gvWidth, gvHeight, EditorSettings::Get().ExposureEV,
-                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator);
+                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator,
+                                 gvBloomGlowTex, gvBloomIntensity);
                 }
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
 
@@ -2275,9 +2368,48 @@ int main(int argc, char** argv) {
                 float aspect = (float)mw / (float)mh;
                 glm::mat4 view = gameCam->ViewMatrix();
                 glm::mat4 proj = gameCam->ProjectionMatrix(aspect);
+
+                // SSAO depth pre-pass — same gameSsao instance the docked Game view uses; the two
+                // paths are mutually exclusive per frame (if/else-if above), so no resize thrash.
+                if (EditorSettings::Get().SsaoEnabled) {
+                    PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
+                    PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
+                    gameSsao.Resize(mw, mh);
+                    glBindFramebuffer(GL_FRAMEBUFFER, gameSsao.DepthFbo());
+                    glViewport(0, 0, mw, mh);
+                    glClear(GL_DEPTH_BUFFER_BIT);
+                    glEnable(GL_DEPTH_TEST);
+                    glDepthMask(GL_TRUE);
+                    glEnable(GL_CULL_FACE);
+                    glCullFace(GL_BACK);
+                    glDisable(GL_BLEND);
+
+                    shadowShader.Bind();
+                    shadowShader.SetMat4("uLightViewProj", proj * view);
+                    shadowShader.SetInt("uUseSkinning", 0);
+                    int gameSsaoModelLoc = shadowShader.Loc("uModel");
+                    auto gameSsaoRenderables = world.Registry.view<TransformComponent, RenderableComponent>();
+                    for (auto entity : gameSsaoRenderables) {
+                        if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                        auto& rc = world.Registry.get<RenderableComponent>(entity);
+                        if (!rc.ModelRef) continue;
+                        glm::mat4 model = world.GetCachedWorldTransform(entity);
+                        shadowShader.SetMat4(gameSsaoModelLoc, model);
+                        rc.ModelRef->DrawDepthOnly(shadowShader, rc.Materials);
+                    }
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                    GLStateCache::Invalidate();
+
+                    gameSsao.Compute(ssaoComputeShader, proj);
+                    gameSsao.Blur(ssaoBlurShader);
+                    GLStateCache::Invalidate();
+
+                    gameHdr.BindForRender(); // restore for the main scene draw below
+                }
+
                 EditorLayer::RenderStats stats;
                 drawScene(view, proj, gameCam->Position, /*unlit=*/false, &stats,
-                          /*editorView=*/false, /*debugView=*/0, &gameHdr, &gameOpaqueColor);
+                          /*editorView=*/false, /*debugView=*/0, &gameHdr, &gameOpaqueColor, &gameSsao);
                 editor.SetRenderStats(stats);
                 // Physics debug overlay over the game view (#185, F5).
                 if (EditorSettings::Get().PlayDebugOverlay) {
@@ -2286,11 +2418,29 @@ int main(int argc, char** argv) {
                     glDepthMask(GL_TRUE);
                 }
                 gameHdr.ResolveTo();
+
+                // PR16: Bloom — same gameBloom instance the docked Game view uses.
+                unsigned int mwBloomGlowTex   = 0u;
+                float        mwBloomIntensity = 0.0f;
+                if (EditorSettings::Get().BloomEnabled) {
+                    PROFILE_GPU_SCOPE("Bloom (Game)");
+                    gameBloom.Resize(mw, mh);
+                    gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
+                                      gameHdr.ResolvedColorTexture(),
+                                      EditorSettings::Get().BloomThreshold,
+                                      EditorSettings::Get().BloomKnee);
+                    if (gameBloom.IsValid()) {
+                        mwBloomGlowTex   = gameBloom.GlowTexture();
+                        mwBloomIntensity = EditorSettings::Get().BloomIntensity;
+                    }
+                    GLStateCache::Invalidate();
+                }
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh,
                                  EditorSettings::Get().ExposureEV,
-                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator);
+                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator,
+                                 mwBloomGlowTex, mwBloomIntensity);
                 }
             }
 

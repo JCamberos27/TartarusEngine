@@ -60,6 +60,7 @@ feature can do today and what's still planned.
 | Feature | Summary |
 |---|---|
 | **[PBR & HDR pipeline](https://github.com/JCamberos27/TartarusEngine/discussions/266)** | Forward PBR (albedo / normal / metallic / roughness / AO / emissive) into a multisampled `RGBA16F` target; exposure + Reinhard / ACES / AgX tone-mapping; per-viewport HDR targets |
+| **[SSAO & Bloom](https://github.com/JCamberos27/TartarusEngine/issues/333)** | Depth pre-pass → view-space hemisphere SSAO (32 samples, TBN noise, 4×4 blur); threshold + separable Gaussian bloom — both additive in linear HDR before the tone curve; toggled in Lighting |
 | **[Lighting & shadows](https://github.com/JCamberos27/TartarusEngine/discussions/267)** | One `std430` GPU light buffer; clustered-forward culling on a 16 × 9 × 24 froxel grid; cascaded sun shadows, plus cube-map point and perspective spot shadows |
 | **[Image-based lighting](https://github.com/JCamberos27/TartarusEngine/discussions/281)** | Split-sum IBL — irradiance + prefiltered-specular cubes and a BRDF LUT baked from the procedural sky, auto-rebaked when it changes |
 | **[Sky & environment](https://github.com/JCamberos27/TartarusEngine/discussions/277)** | Per-scene procedural gradient sky feeding the IBL probes, a scene Ambient control, and a distance-faded infinite grid |
@@ -184,12 +185,12 @@ project/      The scene and editor preferences being authored
 - Editor / Unity parity pass — Hierarchy reordering & keyboard nav, Inspector component menu + copy/paste, Grid & Snap and Gizmos popovers, Pause & Step, GameObject-menu ops ([#236](https://github.com/JCamberos27/TartarusEngine/issues/236))
 - Live prefab instances with per-field & per-component overrides — accent-tinted labels, in-Inspector Revert / Apply to Prefab, Unpack ([#302](https://github.com/JCamberos27/TartarusEngine/issues/302), [#315](https://github.com/JCamberos27/TartarusEngine/issues/315))
 - **NVIDIA PhysX 5** collision system (built from source) — rigid bodies, capsule character controller, box/sphere/capsule/convex/mesh colliders, triggers, contact & force APIs, collision-layer matrix, scene queries, CCD, 5 joint types, and a visual debugger ([#185](https://github.com/JCamberos27/TartarusEngine/issues/185))
+- **Screen-space effects** on the HDR buffer — depth-pre-pass SSAO and threshold/blur bloom, both additive before the tone curve ([#333](https://github.com/JCamberos27/TartarusEngine/issues/333))
 
 ### Next
 
 - **GPU timer queries** — GPU-side pass timing is not yet instrumented ([#197](https://github.com/JCamberos27/TartarusEngine/issues/197))
 - **Placed reflection probes** — local cubemaps and HDRI input, beyond today's single global sky probe
-- **Screen-space effects** on the HDR buffer — SSAO, bloom
 - **Standalone build export** — ship a scene as a runnable game without the editor
 - Remaining editor polish — Inspector list/array fields, component reorder, an "Open Prefab" edit mode, nested prefabs / variants
 
