@@ -21,6 +21,7 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "AtomicFile.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"
 #include "gl.h"
@@ -222,8 +223,8 @@ void EditorLayer::LoadAssetFavorites() {
 void EditorLayer::SaveAssetFavorites() const {
     nlohmann::json root = nlohmann::json::array();
     for (const auto& k : m_AssetFavorites) root.push_back(k);
-    std::ofstream out(ProjectPaths::Resolve("asset_favorites.json"));
-    if (out.is_open()) out << root.dump(2) << '\n';
+    // Atomic: a crash mid-write must not truncate the favourites list (audit CPP-206).
+    AtomicFile::WriteJson(ProjectPaths::Resolve("asset_favorites.json"), root);
 }
 
 void EditorLayer::ToggleAssetFavorite(const std::string& key) {

@@ -17,6 +17,7 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "AtomicFile.h"
 #include "EnginePaths.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
@@ -592,10 +593,10 @@ void EditorLayer::Shutdown() {
 
     FreeGpuResources();
 
-    // Safety net: save preferences on clean shutdown, in case a future control forgets its own
-    // save call. This is not a replacement for per-control saves; it's insurance against silent
-    // data loss if someone adds a new preference and forgets to wire it up.
+    // Safety net: force a preferences write on clean shutdown, in case a future control forgets
+    // its own Save() call, and to flush anything raised dirty since the last per-frame Flush().
     EditorSettings::Save();
+    EditorSettings::Flush();
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -632,9 +633,11 @@ void EditorLayer::SaveLayoutPreset(const std::string& rawName) {
     std::error_code ec;
     std::filesystem::create_directories(LayoutsDir(), ec);
     const std::string path = LayoutsDir() + "/" + name + ".ini";
-    std::ofstream out(path, std::ios::binary);
-    if (!out) { Log::Error("Layout preset: couldn't write '" + path + "'."); return; }
-    out << ImGui::SaveIniSettingsToMemory(nullptr);
+    // Atomic: a crash mid-write must not truncate a saved layout preset (audit CPP-206).
+    if (!AtomicFile::WriteBytes(path, ImGui::SaveIniSettingsToMemory(nullptr), /*binary=*/true)) {
+        Log::Error("Layout preset: couldn't write '" + path + "'.");
+        return;
+    }
     Log::Info("Saved layout preset: " + name);
 }
 

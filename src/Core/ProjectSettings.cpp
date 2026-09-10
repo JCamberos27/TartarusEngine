@@ -1,6 +1,7 @@
 #include "ProjectSettings.h"
 #include "Log.h"
 #include "ProjectPaths.h"
+#include "AtomicFile.h"
 
 #include <json.hpp>
 
@@ -108,12 +109,9 @@ void Save() {
     };
     root["tags"] = g_Tags;
 
-    std::ofstream out(SettingsPath());
-    if (!out.is_open()) {
-        Log::Warn(std::string("ProjectSettings: could not open '") + SettingsPath() + "' for writing");
-        return;
-    }
-    out << root.dump(2) << '\n';
+    // Atomic: a crash mid-write must not truncate project settings (audit CPP-206).
+    if (!AtomicFile::WriteJson(SettingsPath(), root))
+        Log::Warn(std::string("ProjectSettings: could not write '") + SettingsPath() + "'");
 }
 
 } // namespace ProjectSettings
