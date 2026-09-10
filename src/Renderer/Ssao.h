@@ -34,7 +34,9 @@ public:
     // Final blurred R8 occlusion texture. Bind as uSSAOMap (unit 15) before drawScene.
     unsigned int OcclusionTexture() const { return m_BlurColor; }
 
-    bool IsValid() const { return m_DepthFbo != 0; }
+    // True only when every owned FBO created AND validated complete (audit #358). Callers must
+    // gate both the SSAO passes and the model shader's uSSAOMap read on this.
+    bool IsValid() const { return m_DepthFbo != 0 && m_Valid; }
     int  Width()   const { return m_Width; }
     int  Height()  const { return m_Height; }
 
@@ -48,6 +50,7 @@ private:
     std::vector<glm::vec3> m_Kernel;
 
     int m_Width = 0, m_Height = 0;
+    bool m_Valid = false; // all FBOs validated complete this Create() (audit #358)
 
     void Release();
     void Create(int width, int height);

@@ -2,11 +2,24 @@
 #include "gl.h"
 #include "Log.h"
 
+#include <cstdlib>
+#include <cstring>
 #include <string>
 
 namespace GLFramebufferCheck {
 
 namespace {
+
+// Test seam (audit #358): set TARTARUS_FORCE_FBO_INCOMPLETE to make Complete() report failure
+// without touching GL, so the graceful pass-disable / fallback paths can be exercised. An empty
+// value fails every target; a non-empty value fails only owners whose name contains it as a
+// substring (e.g. "Bloom", "Ssao", "IblProbe").
+bool ForcedFail(const char* owner) {
+    const char* v = std::getenv("TARTARUS_FORCE_FBO_INCOMPLETE");
+    if (!v) return false;
+    if (v[0] == '\0') return true;
+    return owner && std::strstr(owner, v) != nullptr;
+}
 const char* StatusText(GLenum s) {
     switch (s) {
         case 0x8CD5: return "COMPLETE";
@@ -24,6 +37,11 @@ const char* StatusText(GLenum s) {
 } // namespace
 
 bool Complete(const char* owner, unsigned int fbo, int width, int height) {
+    if (ForcedFail(owner)) {
+        Log::Error(std::string("Framebuffer forced-incomplete (TARTARUS_FORCE_FBO_INCOMPLETE): ") +
+                   (owner ? owner : "(unknown)"));
+        return false;
+    }
     GLenum status = glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER);
     if (status == 0x8CD5 /* GL_FRAMEBUFFER_COMPLETE */) return true;
     Log::Error(std::string("Framebuffer incomplete: ") + (owner ? owner : "(unknown)") +

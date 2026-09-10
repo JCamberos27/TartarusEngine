@@ -22,11 +22,13 @@ void Bloom::Release() {
         mip.W = mip.H = 0;
     }
     m_Width = m_Height = 0;
+    m_Valid = false;
 }
 
 void Bloom::Create(int width, int height) {
     m_Width  = width;
     m_Height = height;
+    m_Valid  = true; // cleared below if any mip FBO comes back incomplete (audit #358)
 
     const GLenum kColor0 = GL_COLOR_ATTACHMENT0;
     int w = std::max(width / 2, 1), h = std::max(height / 2, 1);
@@ -42,7 +44,8 @@ void Bloom::Create(int width, int height) {
         glCreateFramebuffers(1, &m_Mips[i].Fbo);
         glNamedFramebufferTexture(m_Mips[i].Fbo, GL_COLOR_ATTACHMENT0, m_Mips[i].Tex, 0);
         glNamedFramebufferDrawBuffers(m_Mips[i].Fbo, 1, &kColor0);
-        GLFramebufferCheck::Complete("Bloom mip", m_Mips[i].Fbo, m_Mips[i].W, m_Mips[i].H); // audit #358
+        if (!GLFramebufferCheck::Complete("Bloom mip", m_Mips[i].Fbo, m_Mips[i].W, m_Mips[i].H)) // audit #358
+            m_Valid = false;
         w = std::max(w / 2, 1);
         h = std::max(h / 2, 1);
     }

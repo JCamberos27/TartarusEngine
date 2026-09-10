@@ -1975,10 +1975,13 @@ int main(int argc, char** argv) {
                 // PR15: SSAO depth pre-pass — runs before drawScene so the occlusion map is ready.
                 // Reuses shadowShader (ShadowDepth.vert.glsl) with uLightViewProj = proj * view.
                 // Skipped in unlit/wireframe modes where SSAO has no visual effect.
-                if (frameSettings.SsaoEnabled && !sceneUnlit) {
+                if (frameSettings.SsaoEnabled && !sceneUnlit) ssao.Resize(scW, scH);
+                // audit #358 — if any SSAO FBO came back incomplete, skip the passes outright
+                // (the scene just renders without ambient occlusion) instead of drawing into a
+                // zero/invalid framebuffer.
+                if (frameSettings.SsaoEnabled && !sceneUnlit && ssao.IsValid()) {
                     PROFILE_SCOPE("SSAO Depth Pre-pass");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass");
-                    ssao.Resize(scW, scH);
                     glBindFramebuffer(GL_FRAMEBUFFER, ssao.DepthFbo());
                     glViewport(0, 0, scW, scH);
                     glClear(GL_DEPTH_BUFFER_BIT);
@@ -2117,11 +2120,13 @@ int main(int argc, char** argv) {
                 if (EditorSettings::Get().BloomEnabled) {
                     PROFILE_GPU_SCOPE("Bloom");
                     bloom.Resize(scW, scH);
-                    bloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
-                                  sceneHdr.ResolvedColorTexture(),
-                                  EditorSettings::Get().BloomThreshold,
-                                  EditorSettings::Get().BloomKnee);
+                    // audit #358 — only run the pyramid passes if every mip FBO validated
+                    // complete; otherwise the frame simply has no bloom glow added.
                     if (bloom.IsValid()) {
+                        bloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
+                                      sceneHdr.ResolvedColorTexture(),
+                                      EditorSettings::Get().BloomThreshold,
+                                      EditorSettings::Get().BloomKnee);
                         bloomGlowTex  = bloom.GlowTexture();
                         bloomIntensity = EditorSettings::Get().BloomIntensity;
                     }
@@ -2287,10 +2292,10 @@ int main(int argc, char** argv) {
                 }
                 // SSAO depth pre-pass for the Game view — own Ssao instance/resolution from the
                 // Scene view's (see gameSsao declaration). Game view has no unlit mode.
-                if (EditorSettings::Get().SsaoEnabled) {
+                if (EditorSettings::Get().SsaoEnabled) gameSsao.Resize(gvWidth, gvHeight);
+                if (EditorSettings::Get().SsaoEnabled && gameSsao.IsValid()) { // audit #358 — skip if any FBO incomplete
                     PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
-                    gameSsao.Resize(gvWidth, gvHeight);
                     glBindFramebuffer(GL_FRAMEBUFFER, gameSsao.DepthFbo());
                     glViewport(0, 0, gvWidth, gvHeight);
                     glClear(GL_DEPTH_BUFFER_BIT);
@@ -2342,11 +2347,11 @@ int main(int argc, char** argv) {
                 if (EditorSettings::Get().BloomEnabled) {
                     PROFILE_GPU_SCOPE("Bloom (Game)");
                     gameBloom.Resize(gvWidth, gvHeight);
-                    gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
-                                      gameHdr.ResolvedColorTexture(),
-                                      EditorSettings::Get().BloomThreshold,
-                                      EditorSettings::Get().BloomKnee);
-                    if (gameBloom.IsValid()) {
+                    if (gameBloom.IsValid()) { // audit #358 — no glow if any mip FBO is incomplete
+                        gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
+                                          gameHdr.ResolvedColorTexture(),
+                                          EditorSettings::Get().BloomThreshold,
+                                          EditorSettings::Get().BloomKnee);
                         gvBloomGlowTex   = gameBloom.GlowTexture();
                         gvBloomIntensity = EditorSettings::Get().BloomIntensity;
                     }
@@ -2451,10 +2456,10 @@ int main(int argc, char** argv) {
 
                 // SSAO depth pre-pass — same gameSsao instance the docked Game view uses; the two
                 // paths are mutually exclusive per frame (if/else-if above), so no resize thrash.
-                if (EditorSettings::Get().SsaoEnabled) {
+                if (EditorSettings::Get().SsaoEnabled) gameSsao.Resize(mw, mh);
+                if (EditorSettings::Get().SsaoEnabled && gameSsao.IsValid()) { // audit #358
                     PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
-                    gameSsao.Resize(mw, mh);
                     glBindFramebuffer(GL_FRAMEBUFFER, gameSsao.DepthFbo());
                     glViewport(0, 0, mw, mh);
                     glClear(GL_DEPTH_BUFFER_BIT);
@@ -2505,11 +2510,11 @@ int main(int argc, char** argv) {
                 if (EditorSettings::Get().BloomEnabled) {
                     PROFILE_GPU_SCOPE("Bloom (Game)");
                     gameBloom.Resize(mw, mh);
-                    gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
-                                      gameHdr.ResolvedColorTexture(),
-                                      EditorSettings::Get().BloomThreshold,
-                                      EditorSettings::Get().BloomKnee);
-                    if (gameBloom.IsValid()) {
+                    if (gameBloom.IsValid()) { // audit #358
+                        gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
+                                          gameHdr.ResolvedColorTexture(),
+                                          EditorSettings::Get().BloomThreshold,
+                                          EditorSettings::Get().BloomKnee);
                         mwBloomGlowTex   = gameBloom.GlowTexture();
                         mwBloomIntensity = EditorSettings::Get().BloomIntensity;
                     }
