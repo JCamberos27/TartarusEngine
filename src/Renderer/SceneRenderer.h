@@ -71,6 +71,23 @@ struct SceneRenderInputs {
     const float* pointShadowNormalBias = nullptr;
 };
 
+// The model-shader program state for one frame + view — computed once by RenderScene (the
+// viewport read, the shadow/IBL/SSAO/cluster enable flags, the cluster near/far), then applied
+// to whichever program(s) the draw loop selects via ApplyFrameState(). Non-owning: the pointers
+// alias RenderScene's own arguments for the lifetime of the call (audit #354: this is the seam
+// that lets a material select a ShaderAsset variant and still get the common per-frame state).
+struct FrameState {
+    const RenderFrameContext* ctx   = nullptr;
+    const SceneRenderInputs*  in    = nullptr;
+    World*                    world = nullptr; // SkyAmbientIntensity for uIBLIntensity
+
+    bool shadowsOn = false, sunShadowsOn = false;
+    bool iblOn = false, ssaoOn = false, clusterOn = false;
+    int  spotCountForView = 0, pointCountForView = 0;
+    float clusterNearZ = 0.0f, clusterFarZ = 0.0f;
+    int  vp[4] = {0, 0, 0, 0};
+};
+
 // Host-owned scene-draw pass, extracted from main.cpp's `drawScene` lambda (audit #359, pass 2).
 // No behavior change: same GL calls, same uniform order. main.cpp still owns lifecycle, the
 // shadow/IBL/cluster prerequisite passes, framebuffer binding, and the viewport.
@@ -82,4 +99,15 @@ public:
     // draw-call / triangle / cull / overflow counts for the Stats overlay.
     void RenderScene(World& world, const RenderFrameContext& ctx, const SceneRenderInputs& in,
                      RenderStats* outStats);
+
+private:
+    // Compute this frame's model-shader state (viewport, enable flags, cluster near/far). No GL
+    // writes beyond reading GL_VIEWPORT.
+    FrameState GatherFrameState(World& world, const RenderFrameContext& ctx,
+                                const SceneRenderInputs& in) const;
+
+    // Bind `program` and push the whole common per-frame uniform + texture-unit set onto it
+    // (camera, cascaded/spot/point shadows, IBL, reflection probes, SSAO, clustered lighting,
+    // unlit/tonemap flags). Safe to call once per distinct program used in a frame.
+    void ApplyFrameState(Shader& program, const FrameState& fs) const;
 };
