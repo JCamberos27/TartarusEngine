@@ -106,6 +106,12 @@ PFNGLGETQUERYOBJECTUI64VPROC glGetQueryObjectui64v = nullptr;
 PFNGLMAPNAMEDBUFFERPROC glMapNamedBuffer = nullptr;
 PFNGLUNMAPNAMEDBUFFERPROC glUnmapNamedBuffer = nullptr;
 
+// Fence sync + buffer-to-buffer copy — deferred cluster-overflow readback (PERF-203).
+PFNGLCOPYNAMEDBUFFERSUBDATAPROC glCopyNamedBufferSubData = nullptr;
+PFNGLFENCESYNCPROC glFenceSync = nullptr;
+PFNGLCLIENTWAITSYNCPROC glClientWaitSync = nullptr;
+PFNGLDELETESYNCPROC glDeleteSync = nullptr;
+
 namespace {
 void* LoadGLFunc(const char* name) {
     void* p = (void*)wglGetProcAddress(name);
@@ -224,6 +230,12 @@ bool GLLoader_Init() {
     // Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
     LOAD(PFNGLMAPNAMEDBUFFERPROC, glMapNamedBuffer)
     LOAD(PFNGLUNMAPNAMEDBUFFERPROC, glUnmapNamedBuffer)
+
+    // Fence sync + buffer-to-buffer copy — deferred cluster-overflow readback (PERF-203).
+    LOAD(PFNGLCOPYNAMEDBUFFERSUBDATAPROC, glCopyNamedBufferSubData)
+    LOAD(PFNGLFENCESYNCPROC, glFenceSync)
+    LOAD(PFNGLCLIENTWAITSYNCPROC, glClientWaitSync)
+    LOAD(PFNGLDELETESYNCPROC, glDeleteSync)
 #undef LOAD
     return ok;
 }
