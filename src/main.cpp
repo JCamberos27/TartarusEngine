@@ -904,6 +904,13 @@ int main(int argc, char** argv) {
         int smokeBaselineLogErrors = 0;
         bool smokeSceneActive = false;
         bool smokeSceneLoadOk = false;
+        // A scene whose filename contains "smoke_play" additionally gets two Play -> Stop cycles
+        // driven during its frame budget (audit #368 / #389): CI then exercises play-mode entry
+        // / exit, snapshot save+restore, PhysX world create+destroy, the game module's systems
+        // running from TartarusGame.dll, and — via the normal process exit afterwards — the
+        // teardown ordering that #389 broke. smokePlayCycles counts completed Stop transitions.
+        bool smokePlayScene = false;
+        int  smokePlayCycles = 0;
         if (smokeTestMode) {
             // Scene source: explicit --smoke-test <dir> arg, else the engine's committed
             // regression scenes, else the user project's scenes/ (audit TEST-101).
@@ -955,6 +962,17 @@ int main(int argc, char** argv) {
                               << (smokeSceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
                     smokeFramesRendered = 0;
                     smokeSceneActive = true;
+                    smokePlayScene = path.find("smoke_play") != std::string::npos;
+                    smokePlayCycles = 0;
+                }
+
+                // Play-mode cycles for a smoke_play* scene: enter at 20 / 55, stop at 40 / 75,
+                // within the kSmokeTestFrames budget. togglePlay() is the same entry the F1 key
+                // and the toolbar button use.
+                if (smokeSceneActive && smokePlayScene) {
+                    const int f = smokeFramesRendered;
+                    if ((f == 20 || f == 55) && !playing) { std::cout << "[SmokeTest]   -> Play\n";  togglePlay(); }
+                    if ((f == 40 || f == 75) &&  playing) { std::cout << "[SmokeTest]   -> Stop\n";  togglePlay(); ++smokePlayCycles; }
                 }
             }
             Clock::Update();
@@ -2386,11 +2404,18 @@ int main(int argc, char** argv) {
                     int drawCalls    = editor.GetRenderStats().DrawCalls;
                     // A scene is only viable end-to-end if it loaded, introduced no new GL or
                     // log errors across load+render, and actually drew something (audit #356).
+                    // Leave play mode before scoring / advancing, so the scene snapshot is
+                    // restored and the next scene loads from a clean editor state.
+                    if (playing) { togglePlay(); ++smokePlayCycles; }
+
                     std::string cause;
                     if (!smokeSceneLoadOk)   cause += "Load() failed; ";
                     if (newLogErrors > 0)    cause += std::to_string(newLogErrors) + " new log error(s); ";
                     if (newErrors > 0)       cause += std::to_string(newErrors) + " new GL error(s); ";
                     if (drawCalls <= 0)      cause += "zero draw calls; ";
+                    // A smoke_play* scene must actually have completed its Play -> Stop cycles.
+                    if (smokePlayScene && smokePlayCycles < 2)
+                        cause += "play-mode cycles incomplete (" + std::to_string(smokePlayCycles) + "/2); ";
                     bool pass = cause.empty();
                     const std::string& path = smokeScenePaths[smokeSceneIndex];
                     smokeResults.push_back({path, smokeFramesRendered, newErrors, newLogErrors,
@@ -2402,6 +2427,7 @@ int main(int argc, char** argv) {
                               << " newGlErrors=" << newErrors
                               << " newLogErrors=" << newLogErrors
                               << " drawCalls=" << drawCalls
+                              << (smokePlayScene ? ("  playCycles=" + std::to_string(smokePlayCycles)) : "")
                               << (pass ? "" : ("  cause: " + cause)) << std::endl;
                     ++smokeSceneIndex;
                     smokeSceneActive = false;
