@@ -155,11 +155,17 @@ Every push and pull request runs [`.github/workflows/build.yml`](.github/workflo
 - **Compile gate** — Debug *and* Release, MSVC. This is the conclusive signal.
 - **`--smoke-test`** — loads every scene in the committed `tests/smoke-scenes/` set, renders 100
   frames each, and fails the process (exit 1) unless every scene loaded, produced no new GL or
-  log errors, and issued at least one draw call. Run locally with
+  log errors, and issued at least one draw call. `smoke_play.json` additionally runs two
+  Play → Stop cycles (snapshot save/restore, PhysX world create/destroy, game-module systems),
+  and the run then exits normally so the shutdown path is exercised too. Run locally with
   `build/<Config>/TartarusEngine.exe --smoke-test` (add a directory argument to point it at a
   different scene set). In CI it is `continue-on-error`: hosted GitHub runners have no GPU and
   cannot create the required OpenGL 4.6 core context, so only a PASS or a compile failure there
   is conclusive — a smoke FAIL on the runner needs a local or GPU-equipped run to confirm.
+- **Crash-dump gate** — a follow-up CI step (not `continue-on-error`) fails the build if the
+  smoke run left a `crash_*.dmp` / `crash_*.txt` next to the exe. Shutdown-path faults (like a
+  registry destroyed after the DLLs it bound into were unloaded) are deterministic and show up
+  here regardless of the runner's lack of a GPU.
 
 ## Controls
 

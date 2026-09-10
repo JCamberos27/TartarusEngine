@@ -1,0 +1,35 @@
+{
+  "formatVersion": 2,
+  "_comment": "Engine-owned smoke/regression scene (audit TEST-101 / #368). Play-mode coverage: the --smoke-test harness runs two Play -> Stop cycles over this scene (filename contains 'smoke_play') and then exits, so CI exercises OnEnterPlayMode/OnExitPlayMode, the scene snapshot save+restore, PhysX world create/destroy, and the exit-teardown ordering that #389 broke. DELIBERATELY carries no authored Spin / Transform Controller blocks: those systems live in TartarusGame.dll, so entering Play is the first thing to instantiate their entt registry storage (from DLL code) — exactly the condition that made #389 an access violation on shutdown. One Animator block (AnimationSystem is engine-side) exercises that path too. Engine primitives only; no external assets or absolute paths.",
+  "skyHorizonColor": [0.40, 0.48, 0.60],
+  "skyZenithColor": [0.12, 0.24, 0.52],
+  "skyAmbientIntensity": 1.0,
+  "assetFolders": ["Scenes"],
+  "assetMeta": [],
+  "boxes": [
+    { "center": [0, -0.1, 0], "size": [24, 0.2, 24], "color": [0.34, 0.34, 0.37], "rotation": [0, 0, 0], "name": "Ground", "id": 0, "parentId": -1, "order": 0 },
+    { "center": [-2.0, 1.0, 0], "size": [1.6, 1.6, 1.6], "color": [0.80, 0.30, 0.24], "rotation": [0, 15, 0], "name": "Box A", "id": 1, "parentId": -1, "order": 1 },
+    { "center": [2.0, 1.0, 0], "size": [1.6, 1.6, 1.6], "color": [0.25, 0.55, 0.82], "rotation": [0, -20, 0], "name": "Animated", "id": 2, "parentId": -1, "order": 2,
+      "Animator": {
+        "Spin Deg/Sec": [0.0, 60.0, 0.0],
+        "Orbit Axis": [0.0, 1.0, 0.0],
+        "Orbit Speed": 45.0,
+        "Orbit Radius": 1.2,
+        "Bob Amplitude": 0.5,
+        "Bob Frequency Hz": 0.8,
+        "Color Cycle Hz": 0.0
+      } }
+  ],
+  "empties": [
+    { "name": "Sun", "id": 10, "parentId": -1, "order": 10,
+      "position": [6, 10, 6], "rotation": [52, -36, 0], "scale": [1, 1, 1],
+      "light": { "kind": "directional", "color": [1.0, 0.96, 0.9], "intensity": 4.0, "range": 30.0,
+        "angularSize": 1.0, "castShadows": true,
+        "shadow": { "enabled": true, "bias": 1.0, "normalBias": 1.0, "softness": 0.3, "nearPlane": 0.05, "resolution": 0, "updateMode": 0 } } }
+  ],
+  "models": [],
+  "libraryModels": [],
+  "libraryTextures": [],
+  "librarySounds": [],
+  "libraryPrefabs": []
+}

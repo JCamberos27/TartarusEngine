@@ -74,3 +74,21 @@ jobs:
         continue-on-error: true
         timeout-minutes: 5
         run: build/${{ matrix.config }}/TartarusEngine.exe --smoke-test
+
+      # The smoke step above is swallowed (no GPU here). This one is NOT: the CrashHandler
+      # writes build/<config>/crash_*.dmp on any unhandled fault, including one in the shutdown
+      # path. That teardown crash class (e.g. #389 — registry destroyed after the hot-reload
+      # DLLs it bound into were unloaded) is deterministic C++, not GPU-dependent: if the smoke
+      # run got far enough to leave a dump, that's a real regression regardless of the runner.
+      - name: Assert smoke test left no crash dump
+        if: always()
+        shell: bash
+        run: |
+          shopt -s nullglob
+          dumps=(build/${{ matrix.config }}/crash_*.dmp build/${{ matrix.config }}/crash_*.txt)
+          if (( ${#dumps[@]} )); then
+            echo "::error::smoke test crashed — dump(s): ${dumps[*]}"
+            for t in build/${{ matrix.config }}/crash_*.txt; do echo "--- $t ---"; cat "$t"; done
+            exit 1
+          fi
+          echo "no crash dump — ok"
