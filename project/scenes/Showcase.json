@@ -1,0 +1,2481 @@
+{
+  "formatVersion": 2,
+  "_comment": "Tartarus Engine feature showcase - PBR matrix, sky+IBL, sun/point/spot shadows, clustered lighting, animator, hierarchy. Engine primitives only. Toggle SSAO + Bloom in Preferences > Post-processing for the full effect.",
+  "skyHorizonColor": [
+    0.58,
+    0.44,
+    0.36
+  ],
+  "skyZenithColor": [
+    0.05,
+    0.09,
+    0.2
+  ],
+  "skyAmbientIntensity": 1.05,
+  "assetFolders": [
+    "Scenes"
+  ],
+  "assetMeta": [],
+  "boxes": [
+    {
+      "center": [
+        0,
+        -0.1,
+        0
+      ],
+      "size": [
+        46,
+        0.2,
+        46
+      ],
+      "color": [
+        0.2,
+        0.2,
+        0.22
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Ground",
+      "id": 0,
+      "parentId": -1,
+      "order": 0
+    },
+    {
+      "center": [
+        0,
+        3.4,
+        -7
+      ],
+      "size": [
+        30,
+        7.0,
+        0.4
+      ],
+      "color": [
+        0.34,
+        0.34,
+        0.37
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Backwall",
+      "id": 1,
+      "parentId": -1,
+      "order": 1
+    },
+    {
+      "center": [
+        7.5,
+        0.15,
+        0.5
+      ],
+      "size": [
+        9.0,
+        0.3,
+        5.5
+      ],
+      "color": [
+        0.13,
+        0.13,
+        0.15
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Pedestal",
+      "id": 2,
+      "parentId": -1,
+      "order": 2
+    }
+  ],
+  "empties": [
+    {
+      "name": "Hero Pivot",
+      "position": [
+        7.5,
+        0.3,
+        0.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 39,
+      "parentId": -1,
+      "order": 39
+    },
+    {
+      "name": "Orbit Center",
+      "position": [
+        7.5,
+        3.2,
+        0.4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 48,
+      "parentId": -1,
+      "order": 48
+    },
+    {
+      "name": "Sun",
+      "position": [
+        10,
+        17,
+        11
+      ],
+      "rotation": [
+        52,
+        -38,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 50,
+      "parentId": -1,
+      "order": 50,
+      "light": {
+        "kind": "directional",
+        "color": [
+          1.0,
+          0.93,
+          0.82
+        ],
+        "intensity": 3.1,
+        "range": 60.0,
+        "angularSize": 1.2,
+        "castShadows": true,
+        "shadow": {
+          "enabled": true,
+          "bias": 1.0,
+          "normalBias": 1.0,
+          "softness": 0.35,
+          "nearPlane": 0.05,
+          "resolution": 0,
+          "updateMode": 0
+        }
+      }
+    },
+    {
+      "name": "Point Warm (PBR grid)",
+      "position": [
+        -6.5,
+        3.4,
+        2.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 51,
+      "parentId": -1,
+      "order": 51,
+      "light": {
+        "kind": "point",
+        "color": [
+          1.0,
+          0.52,
+          0.26
+        ],
+        "intensity": 16.0,
+        "range": 15.0,
+        "castShadows": true,
+        "shadow": {
+          "enabled": true,
+          "bias": 1.0,
+          "normalBias": 1.0,
+          "softness": 1.0,
+          "nearPlane": 0.1,
+          "resolution": 0,
+          "updateMode": 0
+        }
+      }
+    },
+    {
+      "name": "Point Cool (hero)",
+      "position": [
+        8.0,
+        3.6,
+        2.6
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 52,
+      "parentId": -1,
+      "order": 52,
+      "light": {
+        "kind": "point",
+        "color": [
+          0.35,
+          0.6,
+          1.0
+        ],
+        "intensity": 18.0,
+        "range": 16.0,
+        "castShadows": true,
+        "shadow": {
+          "enabled": true,
+          "bias": 1.0,
+          "normalBias": 1.0,
+          "softness": 1.0,
+          "nearPlane": 0.1,
+          "resolution": 0,
+          "updateMode": 0
+        }
+      }
+    },
+    {
+      "name": "Spot Rig",
+      "position": [
+        2.5,
+        6.6,
+        5.0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 53,
+      "parentId": -1,
+      "order": 53
+    },
+    {
+      "name": "Spot Key",
+      "position": [
+        2.5,
+        6.6,
+        5.0
+      ],
+      "rotation": [
+        58,
+        22,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 54,
+      "parentId": 53,
+      "order": 54,
+      "light": {
+        "kind": "spot",
+        "color": [
+          1.0,
+          0.96,
+          0.9
+        ],
+        "intensity": 44.0,
+        "range": 24.0,
+        "spotAngle": 27.0,
+        "castShadows": true,
+        "shadow": {
+          "enabled": true,
+          "bias": 1.0,
+          "normalBias": 1.0,
+          "softness": 1.0,
+          "nearPlane": 0.1,
+          "resolution": 0,
+          "updateMode": 0
+        }
+      }
+    },
+    {
+      "name": "Fill 0",
+      "position": [
+        -10.0,
+        1.6,
+        4.0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 55,
+      "parentId": -1,
+      "order": 55,
+      "light": {
+        "kind": "point",
+        "color": [
+          0.9,
+          0.3,
+          0.9
+        ],
+        "intensity": 6.5,
+        "range": 8.0,
+        "castShadows": false
+      }
+    },
+    {
+      "name": "Fill 1",
+      "position": [
+        -3.0,
+        1.4,
+        -4.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 56,
+      "parentId": -1,
+      "order": 56,
+      "light": {
+        "kind": "point",
+        "color": [
+          0.3,
+          0.9,
+          0.6
+        ],
+        "intensity": 6.5,
+        "range": 8.0,
+        "castShadows": false
+      }
+    },
+    {
+      "name": "Fill 2",
+      "position": [
+        3.0,
+        1.4,
+        -4.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 57,
+      "parentId": -1,
+      "order": 57,
+      "light": {
+        "kind": "point",
+        "color": [
+          0.95,
+          0.85,
+          0.4
+        ],
+        "intensity": 6.5,
+        "range": 8.0,
+        "castShadows": false
+      }
+    },
+    {
+      "name": "Fill 3",
+      "position": [
+        12.0,
+        1.8,
+        -3.0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 58,
+      "parentId": -1,
+      "order": 58,
+      "light": {
+        "kind": "point",
+        "color": [
+          0.4,
+          0.7,
+          1.0
+        ],
+        "intensity": 6.5,
+        "range": 8.0,
+        "castShadows": false
+      }
+    },
+    {
+      "name": "Fill 4",
+      "position": [
+        0.0,
+        1.2,
+        6.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 59,
+      "parentId": -1,
+      "order": 59,
+      "light": {
+        "kind": "point",
+        "color": [
+          1.0,
+          0.4,
+          0.4
+        ],
+        "intensity": 6.5,
+        "range": 8.0,
+        "castShadows": false
+      }
+    },
+    {
+      "name": "Fill 5",
+      "position": [
+        -13.0,
+        2.0,
+        -1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 60,
+      "parentId": -1,
+      "order": 60,
+      "light": {
+        "kind": "point",
+        "color": [
+          0.5,
+          0.9,
+          1.0
+        ],
+        "intensity": 6.5,
+        "range": 8.0,
+        "castShadows": false
+      }
+    }
+  ],
+  "models": [
+    {
+      "path": "primitive://sphere#3",
+      "name": "PBR 0-0",
+      "position": [
+        -7.0,
+        1.1,
+        -1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 3,
+      "parentId": -1,
+      "order": 3,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.0,
+            "roughness": 0.03,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#4",
+      "name": "PBR 0-1",
+      "position": [
+        -7.0,
+        1.1,
+        -0.1499999999999999
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 4,
+      "parentId": -1,
+      "order": 4,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.0,
+            "roughness": 0.224,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#5",
+      "name": "PBR 0-2",
+      "position": [
+        -7.0,
+        1.1,
+        1.2000000000000002
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 5,
+      "parentId": -1,
+      "order": 5,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.0,
+            "roughness": 0.41800000000000004,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#6",
+      "name": "PBR 0-3",
+      "position": [
+        -7.0,
+        1.1,
+        2.5500000000000007
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 6,
+      "parentId": -1,
+      "order": 6,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.0,
+            "roughness": 0.612,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#7",
+      "name": "PBR 0-4",
+      "position": [
+        -7.0,
+        1.1,
+        3.9000000000000004
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 7,
+      "parentId": -1,
+      "order": 7,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.0,
+            "roughness": 0.806,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#8",
+      "name": "PBR 0-5",
+      "position": [
+        -7.0,
+        1.1,
+        5.25
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 8,
+      "parentId": -1,
+      "order": 8,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.0,
+            "roughness": 1.0,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#9",
+      "name": "PBR 1-0",
+      "position": [
+        -5.65,
+        1.1,
+        -1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 9,
+      "parentId": -1,
+      "order": 9,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.2,
+            "roughness": 0.03,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#10",
+      "name": "PBR 1-1",
+      "position": [
+        -5.65,
+        1.1,
+        -0.1499999999999999
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 10,
+      "parentId": -1,
+      "order": 10,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.2,
+            "roughness": 0.224,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#11",
+      "name": "PBR 1-2",
+      "position": [
+        -5.65,
+        1.1,
+        1.2000000000000002
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 11,
+      "parentId": -1,
+      "order": 11,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.2,
+            "roughness": 0.41800000000000004,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#12",
+      "name": "PBR 1-3",
+      "position": [
+        -5.65,
+        1.1,
+        2.5500000000000007
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 12,
+      "parentId": -1,
+      "order": 12,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.2,
+            "roughness": 0.612,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#13",
+      "name": "PBR 1-4",
+      "position": [
+        -5.65,
+        1.1,
+        3.9000000000000004
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 13,
+      "parentId": -1,
+      "order": 13,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.2,
+            "roughness": 0.806,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#14",
+      "name": "PBR 1-5",
+      "position": [
+        -5.65,
+        1.1,
+        5.25
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 14,
+      "parentId": -1,
+      "order": 14,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.2,
+            "roughness": 1.0,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#15",
+      "name": "PBR 2-0",
+      "position": [
+        -4.3,
+        1.1,
+        -1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 15,
+      "parentId": -1,
+      "order": 15,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.4,
+            "roughness": 0.03,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#16",
+      "name": "PBR 2-1",
+      "position": [
+        -4.3,
+        1.1,
+        -0.1499999999999999
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 16,
+      "parentId": -1,
+      "order": 16,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.4,
+            "roughness": 0.224,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#17",
+      "name": "PBR 2-2",
+      "position": [
+        -4.3,
+        1.1,
+        1.2000000000000002
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 17,
+      "parentId": -1,
+      "order": 17,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.4,
+            "roughness": 0.41800000000000004,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#18",
+      "name": "PBR 2-3",
+      "position": [
+        -4.3,
+        1.1,
+        2.5500000000000007
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 18,
+      "parentId": -1,
+      "order": 18,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.4,
+            "roughness": 0.612,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#19",
+      "name": "PBR 2-4",
+      "position": [
+        -4.3,
+        1.1,
+        3.9000000000000004
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 19,
+      "parentId": -1,
+      "order": 19,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.4,
+            "roughness": 0.806,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#20",
+      "name": "PBR 2-5",
+      "position": [
+        -4.3,
+        1.1,
+        5.25
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 20,
+      "parentId": -1,
+      "order": 20,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.4,
+            "roughness": 1.0,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#21",
+      "name": "PBR 3-0",
+      "position": [
+        -2.9499999999999993,
+        1.1,
+        -1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 21,
+      "parentId": -1,
+      "order": 21,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.6,
+            "roughness": 0.03,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#22",
+      "name": "PBR 3-1",
+      "position": [
+        -2.9499999999999993,
+        1.1,
+        -0.1499999999999999
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 22,
+      "parentId": -1,
+      "order": 22,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.6,
+            "roughness": 0.224,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#23",
+      "name": "PBR 3-2",
+      "position": [
+        -2.9499999999999993,
+        1.1,
+        1.2000000000000002
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 23,
+      "parentId": -1,
+      "order": 23,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.6,
+            "roughness": 0.41800000000000004,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#24",
+      "name": "PBR 3-3",
+      "position": [
+        -2.9499999999999993,
+        1.1,
+        2.5500000000000007
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 24,
+      "parentId": -1,
+      "order": 24,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.6,
+            "roughness": 0.612,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#25",
+      "name": "PBR 3-4",
+      "position": [
+        -2.9499999999999993,
+        1.1,
+        3.9000000000000004
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 25,
+      "parentId": -1,
+      "order": 25,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.6,
+            "roughness": 0.806,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#26",
+      "name": "PBR 3-5",
+      "position": [
+        -2.9499999999999993,
+        1.1,
+        5.25
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 26,
+      "parentId": -1,
+      "order": 26,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.6,
+            "roughness": 1.0,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#27",
+      "name": "PBR 4-0",
+      "position": [
+        -1.5999999999999996,
+        1.1,
+        -1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 27,
+      "parentId": -1,
+      "order": 27,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.8,
+            "roughness": 0.03,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#28",
+      "name": "PBR 4-1",
+      "position": [
+        -1.5999999999999996,
+        1.1,
+        -0.1499999999999999
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 28,
+      "parentId": -1,
+      "order": 28,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.8,
+            "roughness": 0.224,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#29",
+      "name": "PBR 4-2",
+      "position": [
+        -1.5999999999999996,
+        1.1,
+        1.2000000000000002
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 29,
+      "parentId": -1,
+      "order": 29,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.8,
+            "roughness": 0.41800000000000004,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#30",
+      "name": "PBR 4-3",
+      "position": [
+        -1.5999999999999996,
+        1.1,
+        2.5500000000000007
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 30,
+      "parentId": -1,
+      "order": 30,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.8,
+            "roughness": 0.612,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#31",
+      "name": "PBR 4-4",
+      "position": [
+        -1.5999999999999996,
+        1.1,
+        3.9000000000000004
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 31,
+      "parentId": -1,
+      "order": 31,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.8,
+            "roughness": 0.806,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#32",
+      "name": "PBR 4-5",
+      "position": [
+        -1.5999999999999996,
+        1.1,
+        5.25
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 32,
+      "parentId": -1,
+      "order": 32,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 0.8,
+            "roughness": 1.0,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#33",
+      "name": "PBR 5-0",
+      "position": [
+        -0.25,
+        1.1,
+        -1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 33,
+      "parentId": -1,
+      "order": 33,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 1.0,
+            "roughness": 0.03,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#34",
+      "name": "PBR 5-1",
+      "position": [
+        -0.25,
+        1.1,
+        -0.1499999999999999
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 34,
+      "parentId": -1,
+      "order": 34,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 1.0,
+            "roughness": 0.224,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#35",
+      "name": "PBR 5-2",
+      "position": [
+        -0.25,
+        1.1,
+        1.2000000000000002
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 35,
+      "parentId": -1,
+      "order": 35,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 1.0,
+            "roughness": 0.41800000000000004,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#36",
+      "name": "PBR 5-3",
+      "position": [
+        -0.25,
+        1.1,
+        2.5500000000000007
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 36,
+      "parentId": -1,
+      "order": 36,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 1.0,
+            "roughness": 0.612,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#37",
+      "name": "PBR 5-4",
+      "position": [
+        -0.25,
+        1.1,
+        3.9000000000000004
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 37,
+      "parentId": -1,
+      "order": 37,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 1.0,
+            "roughness": 0.806,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#38",
+      "name": "PBR 5-5",
+      "position": [
+        -0.25,
+        1.1,
+        5.25
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "id": 38,
+      "parentId": -1,
+      "order": 38,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.94,
+              0.9,
+              0.84
+            ],
+            "metallic": 1.0,
+            "roughness": 1.0,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://donut#40",
+      "name": "Gold Torus",
+      "position": [
+        7.5,
+        1.7,
+        0.4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1.35,
+        1.35,
+        1.35
+      ],
+      "id": 40,
+      "parentId": 39,
+      "order": 40,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              1.0,
+              0.78,
+              0.34
+            ],
+            "metallic": 1.0,
+            "roughness": 0.22,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "animator": {
+        "spin": [
+          0,
+          35,
+          0
+        ]
+      }
+    },
+    {
+      "path": "primitive://capsule#41",
+      "name": "Copper Capsule",
+      "position": [
+        5.7,
+        1.15,
+        1.6
+      ],
+      "rotation": [
+        15,
+        0,
+        8
+      ],
+      "scale": [
+        0.55,
+        0.9,
+        0.55
+      ],
+      "id": 41,
+      "parentId": 39,
+      "order": 41,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.96,
+              0.55,
+              0.4
+            ],
+            "metallic": 1.0,
+            "roughness": 0.32,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://cone#42",
+      "name": "Chrome Cone",
+      "position": [
+        9.4,
+        1.2,
+        1.4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.8,
+        1.2,
+        0.8
+      ],
+      "id": 42,
+      "parentId": 39,
+      "order": 42,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.95,
+              0.96,
+              0.97
+            ],
+            "metallic": 1.0,
+            "roughness": 0.04,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://cylinder#43",
+      "name": "Red Plastic Cylinder",
+      "position": [
+        6.3,
+        1.0,
+        -1.4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.7,
+        1.0,
+        0.7
+      ],
+      "id": 43,
+      "parentId": 39,
+      "order": 43,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.72,
+              0.09,
+              0.11
+            ],
+            "metallic": 0.0,
+            "roughness": 0.4,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://pyramid#44",
+      "name": "Ceramic Pyramid",
+      "position": [
+        9.0,
+        1.0,
+        -1.7
+      ],
+      "rotation": [
+        0,
+        25,
+        0
+      ],
+      "scale": [
+        1.0,
+        1.4,
+        1.0
+      ],
+      "id": 44,
+      "parentId": 39,
+      "order": 44,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.93,
+              0.93,
+              0.9
+            ],
+            "metallic": 0.0,
+            "roughness": 0.13,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#45",
+      "name": "Emissive Cyan",
+      "position": [
+        -7.5,
+        0.35,
+        3.6
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.3,
+        0.3,
+        0.3
+      ],
+      "id": 45,
+      "parentId": -1,
+      "order": 45,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.02,
+              0.05,
+              0.06
+            ],
+            "metallic": 0.0,
+            "roughness": 0.5,
+            "emissiveColor": [
+              0.1,
+              0.9,
+              1.0
+            ],
+            "emissiveStrength": 7.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#46",
+      "name": "Emissive Magenta",
+      "position": [
+        0.0,
+        0.35,
+        4.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.3,
+        0.3,
+        0.3
+      ],
+      "id": 46,
+      "parentId": -1,
+      "order": 46,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.06,
+              0.02,
+              0.05
+            ],
+            "metallic": 0.0,
+            "roughness": 0.5,
+            "emissiveColor": [
+              1.0,
+              0.15,
+              0.75
+            ],
+            "emissiveStrength": 7.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#47",
+      "name": "Emissive Amber",
+      "position": [
+        7.5,
+        0.35,
+        3.7
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.3,
+        0.3,
+        0.3
+      ],
+      "id": 47,
+      "parentId": -1,
+      "order": 47,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.06,
+              0.04,
+              0.01
+            ],
+            "metallic": 0.0,
+            "roughness": 0.5,
+            "emissiveColor": [
+              1.0,
+              0.55,
+              0.1
+            ],
+            "emissiveStrength": 7.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "path": "primitive://sphere#49",
+      "name": "Satellite",
+      "position": [
+        7.5,
+        3.2,
+        0.4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.28,
+        0.28,
+        0.28
+      ],
+      "id": 49,
+      "parentId": 48,
+      "order": 49,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.02,
+              0.06,
+              0.02
+            ],
+            "metallic": 0.0,
+            "roughness": 0.5,
+            "emissiveColor": [
+              0.3,
+              1.0,
+              0.35
+            ],
+            "emissiveStrength": 8.0,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "animator": {
+        "orbitAxis": [
+          0,
+          1,
+          0
+        ],
+        "orbitDegPerSec": 40.0,
+        "orbitRadius": 3.2,
+        "bobAmplitude": 0.4,
+        "bobFreqHz": 0.5
+      }
+    }
+  ],
+  "libraryModels": [],
+  "libraryTextures": [],
+  "librarySounds": [],
+  "libraryPrefabs": []
+}
