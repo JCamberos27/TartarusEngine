@@ -1,6 +1,7 @@
 #include "IblProbe.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
+#include "GLFramebufferCheck.h"
 #include "Log.h"
 #include "gl.h"
 
@@ -141,9 +142,30 @@ void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor)
     m_EnvShader->SetVec3("uZenithColor", zenithColor);
     for (int face = 0; face < 6; ++face) {
         BeginCubeFace(m_EnvCube, face, 0, kEnvSize);
+        // audit #358 — a cube-face attachment only makes m_Fbo checkable once attached; do it
+        // once, on face 0. If it's incomplete, stop: skip the remaining ~47 draws + mipgen,
+        // leave m_Baked false, and IsValid() stays false so the model shader falls back to the
+        // flat sky ambient instead of sampling half-written probe cubes.
+        if (face == 0 && !GLFramebufferCheck::Complete("IblProbe env cube", m_Fbo, kEnvSize, kEnvSize)) {
+            m_FboComplete = false;
+            // Mark this (horizon,zenith) "baked" so NeedsBake() stops re-attempting — and
+            // re-logging — the doomed bake every frame. IsValid() is still false via
+            // m_FboComplete, so the model shader uses the flat sky ambient instead.
+            m_Baked = true;
+            m_BakedHorizon = horizonColor;
+            m_BakedZenith  = zenithColor;
+            if (wasDepthTest) glEnable(GL_DEPTH_TEST);
+            if (wasCull) glEnable(GL_CULL_FACE);
+            if (wasBlend) glEnable(GL_BLEND);
+            glDepthMask((GLboolean)prevDepthMask);
+            glBindVertexArray(0);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            return;
+        }
         SetFaceBasis(*m_EnvShader, face);
         glDrawArrays(GL_TRIANGLES, 0, 6);
     }
+    m_FboComplete = true;
     glGenerateTextureMipmap(m_EnvCube);
 
     // --- Pass 2: cosine convolution -> irradiance cube ------------------------------------
@@ -212,9 +234,25 @@ void IblProbe::BakeFromCubemap(unsigned int envCube) {
     m_IrradianceShader->SetInt("uEnvMap", 0);
     for (int face = 0; face < 6; ++face) {
         BeginCubeFace(m_IrradianceCube, face, 0, kIrradianceSize);
+        if (face == 0 && !GLFramebufferCheck::Complete("IblProbe irradiance cube", m_Fbo,
+                                                       kIrradianceSize, kIrradianceSize)) {
+            m_FboComplete = false; // audit #358 — bail; IsValid() stays false -> flat sky ambient
+            m_Baked = true;        // stop NeedsBake() re-attempting the doomed bake every frame
+            m_BakedHorizon = glm::vec3(-1.0f);
+            m_BakedZenith  = glm::vec3(-1.0f);
+            if (wasDepthTest) glEnable(GL_DEPTH_TEST);
+            if (wasCull)      glEnable(GL_CULL_FACE);
+            if (wasBlend)     glEnable(GL_BLEND);
+            glDepthMask((GLboolean)prevDepthMask);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+            glBindVertexArray(0);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            return;
+        }
         SetFaceBasis(*m_IrradianceShader, face);
         glDrawArrays(GL_TRIANGLES, 0, 6);
     }
+    m_FboComplete = true;
 
     // Pass 3: GGX prefilter -> specular cube
     m_PrefilterShader->Bind();

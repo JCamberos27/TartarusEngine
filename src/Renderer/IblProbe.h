@@ -66,7 +66,11 @@ public:
     unsigned int IrradianceMap() const { return m_IrradianceCube; } // samplerCube
     unsigned int SpecularMap() const { return m_SpecularCube; }     // samplerCube, kSpecularMips levels
     unsigned int BrdfLut() const { return m_BrdfLut; }              // sampler2D, RG16F
-    bool IsValid() const { return m_IrradianceCube != 0 && m_SpecularCube != 0 && m_BrdfLut != 0; }
+    // Probe textures exist AND the bake FBO validated complete on the last Bake() (audit #358).
+    // callers (main.cpp's iblOn) gate IBL sampling on this; false -> flat sky ambient fallback.
+    bool IsValid() const {
+        return m_IrradianceCube != 0 && m_SpecularCube != 0 && m_BrdfLut != 0 && m_FboComplete;
+    }
 
     void Release();
 
@@ -92,6 +96,7 @@ private:
     std::unique_ptr<Shader> m_BrdfShader;
 
     bool m_BrdfLutBaked = false; // the LUT is environment-independent: baked once, never rebaked
+    bool m_FboComplete = false;  // last Bake()'s FBO passed GLFramebufferCheck (audit #358)
     bool m_Baked = false;
     glm::vec3 m_BakedHorizon{0.0f};
     glm::vec3 m_BakedZenith{0.0f};

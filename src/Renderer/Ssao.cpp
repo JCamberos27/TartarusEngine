@@ -26,6 +26,7 @@ void Ssao::Release() {
     if (m_BlurColor) { glDeleteTextures(1, &m_BlurColor);      m_BlurColor = 0; }
     if (m_NoiseTex)  { glDeleteTextures(1, &m_NoiseTex);       m_NoiseTex  = 0; }
     m_Width = m_Height = 0;
+    m_Valid = false;
 }
 
 void Ssao::InitKernelAndNoise() {
@@ -102,10 +103,13 @@ void Ssao::Create(int width, int height) {
     glNamedFramebufferTexture(m_BlurFbo, GL_COLOR_ATTACHMENT0, m_BlurColor, 0);
     glNamedFramebufferDrawBuffers(m_BlurFbo, 1, &kColor0);
 
-    // audit #358 — name the owner/dims/status if any of the three targets is incomplete.
-    GLFramebufferCheck::Complete("Ssao depth pre-pass", m_DepthFbo, width, height);
-    GLFramebufferCheck::Complete("Ssao raw occlusion", m_SsaoFbo, width, height);
-    GLFramebufferCheck::Complete("Ssao blur", m_BlurFbo, width, height);
+    // audit #358 — name the owner/dims/status if any of the three targets is incomplete, and
+    // record it so IsValid() reports false. Callers then skip the SSAO passes entirely and the
+    // scene renders without ambient occlusion, instead of the passes running against a bad FBO.
+    bool ok = GLFramebufferCheck::Complete("Ssao depth pre-pass", m_DepthFbo, width, height);
+    ok = GLFramebufferCheck::Complete("Ssao raw occlusion", m_SsaoFbo, width, height) && ok;
+    ok = GLFramebufferCheck::Complete("Ssao blur", m_BlurFbo, width, height) && ok;
+    m_Valid = ok;
 
     glGenVertexArrays(1, &m_Vao);
 }
