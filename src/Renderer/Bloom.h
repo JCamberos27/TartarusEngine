@@ -24,7 +24,9 @@ public:
 
     // Accumulated glow at half source resolution; add into HDR before tonemapping. Valid after Compute().
     unsigned int GlowTexture() const { return m_Mips[0].Tex; }
-    bool IsValid() const { return m_Mips[0].Fbo != 0; }
+    // True only when every mip FBO created AND validated complete (audit #358). main.cpp gates
+    // running Compute() and adding the glow on this — an invalid Bloom just means no glow.
+    bool IsValid() const { return m_Mips[0].Fbo != 0 && m_Valid; }
 
 private:
     static constexpr int kMipCount = 5; // mip0 = half-res; mip1..4 = quarter/8th/16th/32nd
@@ -32,6 +34,7 @@ private:
     Mip m_Mips[kMipCount];
     unsigned int m_Vao = 0;
     int m_Width = 0, m_Height = 0; // full source resolution this was built for
+    bool m_Valid = false;          // all mip FBOs validated complete this Create() (audit #358)
 
     void Release();
     void Create(int width, int height);
