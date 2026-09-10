@@ -2043,6 +2043,38 @@ int main(int argc, char** argv) {
                         glm::vec3(0.3f, 0.85f, 1.0f), 0.45f);
                 }
 
+                // Resolve MSAA now, before the grid/axis-line and collider-wireframe overlays
+                // below — this snapshot is what Bloom reads. Editor-only overlays are never real
+                // scene lighting, so they must never bloom/glow; capturing the bloom source here,
+                // before they're drawn, guarantees that regardless of their color or opacity.
+                sceneHdr.ResolveTo();
+
+                // PR16: Bloom — soft-knee threshold + mip-pyramid blur before tonemapping.
+                // Resize takes the FULL scene resolution; Bloom halves it internally for mip 0.
+                unsigned int bloomGlowTex  = 0u;
+                float        bloomIntensity = 0.0f;
+                if (EditorSettings::Get().BloomEnabled) {
+                    PROFILE_GPU_SCOPE("Bloom");
+                    bloom.Resize(scW, scH);
+                    bloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
+                                  sceneHdr.ResolvedColorTexture(),
+                                  EditorSettings::Get().BloomThreshold,
+                                  EditorSettings::Get().BloomKnee);
+                    if (bloom.IsValid()) {
+                        bloomGlowTex  = bloom.GlowTexture();
+                        bloomIntensity = EditorSettings::Get().BloomIntensity;
+                    }
+                    GLStateCache::Invalidate();
+                }
+
+                // Grid / axis lines and the collider wireframe overlay — drawn AFTER the bloom
+                // source snapshot above so neither ever contributes to bloom (a plain grey grid
+                // line already sits above the default threshold's soft-knee floor, and the green
+                // Y-axis line's luma is higher still, so without this ordering both would visibly
+                // glow). Bloom::Compute (when it ran) leaves FBO 0 bound, so the MSAA HDR target
+                // is rebound here; both overlays still depth-test correctly against the real
+                // scene geometry already in that target's depth buffer.
+                sceneHdr.BindForRender();
                 if (editor.ShowGrid() && !editor.OverlaysHidden()) {
                     // The grid shader fades lines by literal world-space distance from the
                     // camera. That distance is meaningless in orthographic mode — scroll-zoom
@@ -2074,27 +2106,11 @@ int main(int argc, char** argv) {
                     }
                 }
 
-                // Resolve MSAA + tonemap the linear-HDR scene into the LDR texture the Scene tab
-                // displays (exposure -> curve -> gamma, once, in Tonemapper).
+                // Resolve again now that the grid/collider overlays are drawn, so the Scene tab
+                // still shows them — only the earlier, overlay-free resolve above ever reached
+                // Bloom. Tonemap the linear-HDR scene into the LDR texture the Scene tab displays
+                // (exposure -> curve -> gamma, once, in Tonemapper).
                 sceneHdr.ResolveTo();
-
-                // PR16: Bloom — soft-knee threshold + mip-pyramid blur before tonemapping.
-                // Resize takes the FULL scene resolution; Bloom halves it internally for mip 0.
-                unsigned int bloomGlowTex  = 0u;
-                float        bloomIntensity = 0.0f;
-                if (EditorSettings::Get().BloomEnabled) {
-                    PROFILE_GPU_SCOPE("Bloom");
-                    bloom.Resize(scW, scH);
-                    bloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
-                                  sceneHdr.ResolvedColorTexture(),
-                                  EditorSettings::Get().BloomThreshold,
-                                  EditorSettings::Get().BloomKnee);
-                    if (bloom.IsValid()) {
-                        bloomGlowTex  = bloom.GlowTexture();
-                        bloomIntensity = EditorSettings::Get().BloomIntensity;
-                    }
-                    GLStateCache::Invalidate();
-                }
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(sceneHdr.ResolvedColorTexture(), sceneFramebuffer.Handle(), scW, scH,
