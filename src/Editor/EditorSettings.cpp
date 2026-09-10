@@ -1,6 +1,7 @@
 #include "EditorSettings.h"
 #include "Log.h"
 #include "ProjectPaths.h"
+#include "AtomicFile.h"
 
 #include <json.hpp>
 #include <fstream>
@@ -14,6 +15,12 @@ const std::string& PrefsPath() {
     static const std::string path = ProjectPaths::Resolve("editor_prefs.json");
     return path;
 }
+
+// Save() is called from ~40 preference controls, several of them every frame of a slider drag
+// (#221) and dozens of times during a checkbox spree. Rather than a full atomic rewrite per
+// call, Save() just raises this flag and Flush() (once per frame from the editor loop, and on
+// shutdown) does the one real write (audit CPP-206 / PERF-211).
+bool g_PrefsDirty = false;
 }
 
 void EditorSettings::Load() {
@@ -101,11 +108,15 @@ void EditorSettings::Load() {
 }
 
 void EditorSettings::Save() {
-    std::ofstream out(PrefsPath());
-    if (!out.is_open()) {
-        Log::Warn(std::string("EditorSettings: failed to open '") + PrefsPath() + "' for writing.");
-        return;
-    }
+    // Coalesced: the real write happens in Flush(), called once per editor frame and on
+    // shutdown. Worst case a change made this frame is lost to a crash before the frame ends;
+    // that beats dozens of non-atomic full rewrites during a slider drag / toggle spree.
+    g_PrefsDirty = true;
+}
+
+void EditorSettings::Flush() {
+    if (!g_PrefsDirty) return;
+    g_PrefsDirty = false;
 
     json root;
     root["editorTheme"] = Get().EditorTheme;
@@ -173,5 +184,9 @@ void EditorSettings::Save() {
     root["captureFormat"] = Get().CaptureFormat;
     root["captureFlash"] = Get().CaptureFlash;
     root["captureSound"] = Get().CaptureSound;
-    out << root.dump(2);
+
+    // Atomic: a crash mid-write (a toggle spree can still trigger one write) must leave the
+    // previous editor_prefs.json intact, not truncated (audit CPP-206).
+    if (!AtomicFile::WriteJson(PrefsPath(), root))
+        Log::Warn(std::string("EditorSettings: failed to write '") + PrefsPath() + "'.");
 }

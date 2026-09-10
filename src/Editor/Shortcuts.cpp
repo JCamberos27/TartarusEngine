@@ -2,6 +2,7 @@
 
 #include "Log.h"
 #include "ProjectPaths.h"
+#include "AtomicFile.h"
 #include "Input.h" // TriggeredGlfw() — main-loop keys, evaluated before an ImGui frame exists
 
 #include <json.hpp>
@@ -358,12 +359,9 @@ void Save() {
         root["bindings"][s.Id] = j;
     }
 
-    std::ofstream out(Path());
-    if (!out.is_open()) {
+    // Atomic: a crash mid-write must not truncate the keybindings file (audit CPP-206).
+    if (!AtomicFile::WriteJson(Path(), root))
         Log::Warn(std::string("Shortcuts: could not write '") + Path() + "'");
-        return;
-    }
-    out << root.dump(2) << '\n';
 }
 
 void BeginFrame(std::uint32_t contextMask) {
