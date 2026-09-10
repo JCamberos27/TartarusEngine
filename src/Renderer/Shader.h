@@ -5,9 +5,13 @@
 
 class Shader {
 public:
-    Shader(const std::string& vertexSrc, const std::string& fragmentSrc);
+    // debugName (optional): tags the linked GL program via glObjectLabel and, when GL debug
+    // output is active, logs "program <id> = <name>" at link time — so a driver KHR_debug
+    // message that only names a bare program number (e.g. 131218 "vertex shader in program 12
+    // is being recompiled") can be mapped back to a concrete shader (audit GL-102 / #367).
+    Shader(const std::string& vertexSrc, const std::string& fragmentSrc, const char* debugName = nullptr);
     // Compute-only program (single GL_COMPUTE_SHADER stage) — clustered light culling (#120).
-    explicit Shader(const std::string& computeSrc);
+    explicit Shader(const std::string& computeSrc, const char* debugName = nullptr);
     ~Shader();
 
     // Owns a raw GL program name that ~Shader() glDeleteProgram's, so a copy or move would

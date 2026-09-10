@@ -1,13 +1,32 @@
 #include "Shader.h"
 #include "ShaderLibrary.h"
+#include "GLDebug.h"
+#include "Log.h"
 #include "gl.h"
 #include "GLStateCache.h"
+#include <GLFW/glfw3.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <stdexcept>
 #include <vector>
 #include <iostream>
 
-Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc) {
+namespace {
+// GL-101/#367 diagnostic: give the linked program a KHR_debug label and, when the driver's
+// debug output is live, log its id -> name so a "program N" message identifies itself. Loaded
+// via glfwGetProcAddress like GLDebug.cpp does — deliberately not added to the hand-rolled
+// gl.h loader. No-op when the context has no KHR_debug.
+void TagProgram(unsigned int program, const char* debugName) {
+    if (!debugName || program == 0) return;
+    constexpr GLenum kProgramObject = 0x82E2; // GL_PROGRAM
+    using PFN_glObjectLabel = void(__stdcall*)(GLenum, GLuint, GLsizei, const GLchar*);
+    if (auto objectLabel = reinterpret_cast<PFN_glObjectLabel>(glfwGetProcAddress("glObjectLabel")))
+        objectLabel(kProgramObject, program, -1, debugName);
+    if (GLDebug::IsEnabled())
+        Log::Info(std::string("[GL] program ") + std::to_string(program) + " = " + debugName);
+}
+} // namespace
+
+Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc, const char* debugName) {
     unsigned int vs = Compile(GL_VERTEX_SHADER, vertexSrc);
     unsigned int fs = 0;
     try {
@@ -35,9 +54,10 @@ Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc) {
         m_Program = 0;
         throw std::runtime_error(std::string("Shader link error: ") + log);
     }
+    TagProgram(m_Program, debugName);
 }
 
-Shader::Shader(const std::string& computeSrc) {
+Shader::Shader(const std::string& computeSrc, const char* debugName) {
     unsigned int cs = Compile(GL_COMPUTE_SHADER, computeSrc);
 
     m_Program = glCreateProgram();
@@ -54,6 +74,7 @@ Shader::Shader(const std::string& computeSrc) {
         m_Program = 0;
         throw std::runtime_error(std::string("Compute shader link error: ") + log);
     }
+    TagProgram(m_Program, debugName);
 }
 
 Shader::~Shader() {
