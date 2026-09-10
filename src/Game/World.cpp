@@ -1,5 +1,6 @@
 #include "World.h"
 #include "Model.h"
+#include "Log.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -100,12 +101,28 @@ entt::entity World::Raycast(const glm::vec3& origin, const glm::vec3& dir, float
 
 glm::mat4 World::ComposeWorldTransform(entt::entity entity) const {
     if (!Registry.valid(entity)) return glm::mat4(1.0f);
-    glm::mat4 local = ComposeTransform(Registry.get<TransformComponent>(entity));
-    const auto* hier = Registry.try_get<HierarchyComponent>(entity);
-    if (hier && hier->Parent != entt::null && Registry.valid(hier->Parent)) {
-        return ComposeWorldTransform(hier->Parent) * local;
+
+    glm::mat4 world = ComposeTransform(Registry.get<TransformComponent>(entity));
+
+    // Walk up the parent chain iteratively instead of recursing. AttachChildRaw (used by scene
+    // loading) doesn't reject parentId cycles, so a malformed file used to recurse straight
+    // through here into a stack overflow with no diagnostic. Cap the walk exactly as
+    // RebuildWorldTransformCache does for the same reason, and log once if it trips.
+    entt::entity walk = entity;
+    for (size_t depth = 0; ; ++depth) {
+        const auto* hier = Registry.try_get<HierarchyComponent>(walk);
+        if (!hier || hier->Parent == entt::null || !Registry.valid(hier->Parent)) break;
+        if (depth >= kMaxHierarchyDepth) {
+            Log::Error("World::ComposeWorldTransform: parent chain exceeds " +
+                       std::to_string(kMaxHierarchyDepth) +
+                       " levels (cycle in parentId?); world transform truncated.");
+            break;
+        }
+        walk = hier->Parent;
+        if (const auto* t = Registry.try_get<TransformComponent>(walk))
+            world = ComposeTransform(*t) * world;
     }
-    return local;
+    return world;
 }
 
 void World::RebuildWorldTransformCache() {
