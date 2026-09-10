@@ -5,6 +5,7 @@
 #include "Texture.h"
 #include "Shader.h"
 #include "GLStateCache.h"
+#include "DefaultTextures.h"
 #include "PrimitiveMeshes.h"
 #include "gl.h"
 
@@ -557,25 +558,28 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
     shader.SetInt(locs.triplanar, mat.Triplanar ? 1 : 0);
     shader.SetFloat(locs.triplanarScale, mat.TriplanarScale);
 
-    int unit = 1; // unit 0 reserved by caller for nothing; start textures at 1..5
-    auto bindOptional = [&](const std::shared_ptr<Texture>& tex, int hasLoc, int samplerLoc) {
+    // Each map gets a FIXED unit (1..7). An absent map still binds a 1x1 default there, so the
+    // driver never sees texture 0 on a sampler unit the program declares (audit GL-101 / #366:
+    // was ~7 KHR 131204 warnings per draw). uHas*Map still tells the shader whether to use it.
+    auto bindSlot = [&](int unit, const std::shared_ptr<Texture>& tex, int hasLoc, int samplerLoc,
+                        unsigned int fallback) {
         if (tex) {
             tex->Bind(unit);
-            shader.SetInt(samplerLoc, unit);
             shader.SetInt(hasLoc, 1);
-            unit++;
         } else {
+            GLStateCache::BindTexture2D(unit, fallback);
             shader.SetInt(hasLoc, 0);
         }
+        shader.SetInt(samplerLoc, unit);
     };
 
-    bindOptional(mat.AlbedoMap, locs.hasAlbedo, locs.albedoMap);
-    bindOptional(mat.NormalMap, locs.hasNormal, locs.normalMap);
-    bindOptional(mat.MetallicRoughnessMap, locs.hasMetallicRoughness, locs.metallicRoughnessMap);
-    bindOptional(mat.MetallicMap, locs.hasMetallic, locs.metallicMap);
-    bindOptional(mat.RoughnessMap, locs.hasRoughness, locs.roughnessMap);
-    bindOptional(mat.AOMap, locs.hasAO, locs.aoMap);
-    bindOptional(mat.EmissiveMap, locs.hasEmissive, locs.emissiveMap);
+    bindSlot(1, mat.AlbedoMap, locs.hasAlbedo, locs.albedoMap, DefaultTextures::White());
+    bindSlot(2, mat.NormalMap, locs.hasNormal, locs.normalMap, DefaultTextures::FlatNormal());
+    bindSlot(3, mat.MetallicRoughnessMap, locs.hasMetallicRoughness, locs.metallicRoughnessMap, DefaultTextures::White());
+    bindSlot(4, mat.MetallicMap, locs.hasMetallic, locs.metallicMap, DefaultTextures::White());
+    bindSlot(5, mat.RoughnessMap, locs.hasRoughness, locs.roughnessMap, DefaultTextures::White());
+    bindSlot(6, mat.AOMap, locs.hasAO, locs.aoMap, DefaultTextures::White());
+    bindSlot(7, mat.EmissiveMap, locs.hasEmissive, locs.emissiveMap, DefaultTextures::Black());
 }
 // Data-driven BindMaterial using ShaderAsset::Bindings() + MaterialAsset property accessors.
 // Activates when the MaterialAsset has a linked ShaderAsset (v2 .mat files referencing a .shader).

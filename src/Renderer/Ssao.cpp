@@ -1,4 +1,5 @@
 #include "Ssao.h"
+#include "GLFramebufferCheck.h"
 #include "Shader.h"
 #include "gl.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -100,6 +101,11 @@ void Ssao::Create(int width, int height) {
     glCreateFramebuffers(1, &m_BlurFbo);
     glNamedFramebufferTexture(m_BlurFbo, GL_COLOR_ATTACHMENT0, m_BlurColor, 0);
     glNamedFramebufferDrawBuffers(m_BlurFbo, 1, &kColor0);
+
+    // audit #358 — name the owner/dims/status if any of the three targets is incomplete.
+    GLFramebufferCheck::Complete("Ssao depth pre-pass", m_DepthFbo, width, height);
+    GLFramebufferCheck::Complete("Ssao raw occlusion", m_SsaoFbo, width, height);
+    GLFramebufferCheck::Complete("Ssao blur", m_BlurFbo, width, height);
 
     glGenVertexArrays(1, &m_Vao);
 }

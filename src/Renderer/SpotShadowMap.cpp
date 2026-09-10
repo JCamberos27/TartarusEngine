@@ -1,4 +1,5 @@
 #include "SpotShadowMap.h"
+#include "GLFramebufferCheck.h"
 #include "Log.h"
 #include "gl.h"
 
@@ -18,6 +19,7 @@ void SpotShadowMap::Configure(int resolution) {
 
     Release();
     m_Resolution = resolution;
+    m_CompleteChecked = false; // re-check after a resolution change (audit #358)
 
     glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_DepthArray);
     glTextureStorage3D(m_DepthArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, kMaxSpots);
@@ -41,6 +43,10 @@ void SpotShadowMap::Begin(int i) const {
     i = std::clamp(i, 0, kMaxSpots - 1);
     glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
     glNamedFramebufferTextureLayer(m_Fbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0, i);
+    if (!m_CompleteChecked) { // audit #358 — layered FBO: check once, after a layer is attached
+        m_CompleteChecked = true;
+        GLFramebufferCheck::Complete("SpotShadowMap", m_Fbo, m_Resolution, m_Resolution);
+    }
     glViewport(0, 0, m_Resolution, m_Resolution);
     glClear(GL_DEPTH_BUFFER_BIT);
 }

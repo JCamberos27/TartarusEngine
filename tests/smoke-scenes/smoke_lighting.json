@@ -1,0 +1,39 @@
+{
+  "formatVersion": 2,
+  "_comment": "Engine-owned smoke/regression scene (audit TEST-101). Directional + point + spot lights, each shadow-casting, over creased/overlapping geometry. Exercises clustered-forward light culling, all three shadow map paths (cascaded / cube / perspective), SSAO on the box seams, and bloom on the bright spot highlight. Engine primitives only.",
+  "skyHorizonColor": [0.20, 0.22, 0.28],
+  "skyZenithColor": [0.05, 0.06, 0.12],
+  "skyAmbientIntensity": 0.6,
+  "assetFolders": ["Scenes"],
+  "assetMeta": [],
+  "boxes": [
+    { "center": [0, -0.1, 0], "size": [30, 0.2, 30], "color": [0.30, 0.30, 0.32], "rotation": [0, 0, 0], "name": "Ground", "id": 0, "parentId": -1, "order": 0 },
+    { "center": [-4, 1.0, 0], "size": [2, 2, 2], "color": [0.75, 0.75, 0.78], "rotation": [0, 0, 0], "name": "Box A", "id": 1, "parentId": -1, "order": 1 },
+    { "center": [-2.6, 0.6, 0.6], "size": [1.4, 1.2, 1.4], "color": [0.70, 0.55, 0.35], "rotation": [0, 30, 0], "name": "Box A2", "id": 2, "parentId": -1, "order": 2 },
+    { "center": [4, 1.5, -1], "size": [3, 3, 1], "color": [0.25, 0.45, 0.80], "rotation": [0, -15, 0], "name": "Wall", "id": 3, "parentId": -1, "order": 3 },
+    { "center": [0.5, 0.4, 3.5], "size": [1, 0.8, 1], "color": [0.35, 0.75, 0.40], "rotation": [10, 45, 0], "name": "Prop", "id": 4, "parentId": -1, "order": 4 },
+    { "center": [2.2, 2.6, 2.0], "size": [0.6, 0.6, 0.6], "color": [0.9, 0.9, 0.9], "rotation": [0, 0, 0], "name": "Riser", "id": 5, "parentId": -1, "order": 5 }
+  ],
+  "empties": [
+    { "name": "Sun", "id": 10, "parentId": -1, "order": 10,
+      "position": [8, 12, 8], "rotation": [55, -40, 0], "scale": [1, 1, 1],
+      "light": { "kind": "directional", "color": [1.0, 0.95, 0.88], "intensity": 2.2, "range": 40.0,
+        "angularSize": 1.0, "castShadows": true,
+        "shadow": { "enabled": true, "bias": 1.0, "normalBias": 1.0, "softness": 0.3, "nearPlane": 0.05, "resolution": 0, "updateMode": 0 } } },
+    { "name": "Point", "id": 11, "parentId": -1, "order": 11,
+      "position": [-3.5, 3.0, 2.5], "rotation": [0, 0, 0], "scale": [1, 1, 1],
+      "light": { "kind": "point", "color": [1.0, 0.5, 0.3], "intensity": 12.0, "range": 12.0,
+        "castShadows": true,
+        "shadow": { "enabled": true, "bias": 1.0, "normalBias": 1.0, "softness": 1.0, "nearPlane": 0.1, "resolution": 0, "updateMode": 0 } } },
+    { "name": "Spot", "id": 12, "parentId": -1, "order": 12,
+      "position": [3.0, 5.0, 4.0], "rotation": [55, 25, 0], "scale": [1, 1, 1],
+      "light": { "kind": "spot", "color": [0.6, 0.8, 1.0], "intensity": 30.0, "range": 18.0, "spotAngle": 32.0,
+        "castShadows": true,
+        "shadow": { "enabled": true, "bias": 1.0, "normalBias": 1.0, "softness": 1.0, "nearPlane": 0.1, "resolution": 0, "updateMode": 0 } } }
+  ],
+  "models": [],
+  "libraryModels": [],
+  "libraryTextures": [],
+  "librarySounds": [],
+  "libraryPrefabs": []
+}

@@ -44,6 +44,7 @@
 #include "GameModuleAPI.h" // RaycastHit for the debug physics harness
 #include "GameViewPanel.h"
 #include "ProjectPaths.h"
+#include "EnginePaths.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
 #include "AssetDatabase.h"
@@ -51,6 +52,7 @@
 #include "GLDebug.h"
 #include "Log.h"
 #include "TextureCache.h"
+#include "DefaultTextures.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -387,22 +389,44 @@ int main(int argc, char** argv) {
     // (prefab overrides #302 Part B, the reflected-component migrations, ...) all need it. Still
     // spins up the GL context (texture/mesh loading needs it) but never enters the main loop.
     std::string resaveIn, resaveOut;
+    // --smoke-test [dir]: an optional directory of .json scenes to load. Defaults to the
+    // engine's own committed regression scenes (assets/test-scenes/), falling back to the
+    // user project's scenes/ folder — so the harness still means something when the user
+    // project is empty (audit TEST-101).
+    std::string smokeScenesDirArg;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
-        if (a == "--smoke-test") smokeTestMode = true;
+        if (a == "--smoke-test") {
+            smokeTestMode = true;
+            if (i + 1 < argc && argv[i + 1][0] != '-') smokeScenesDirArg = argv[++i];
+        }
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
     }
     const bool resaveMode = !resaveIn.empty();
+    // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
+    // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
+    // (audit BUG-102).
+    const bool headless = smokeTestMode || resaveMode;
+
+    // Resolve shipped engine assets (shaders, fonts, branding) relative to the executable, not
+    // the working directory, so a launch from the repo root or an unrelated CWD still finds
+    // them (audit #355 / BUG-102).
+    EnginePaths::Init(argv[0]);
 
     try {
         // Up before anything else so it covers the whole startup, including the GL context
         // creation and shader compiles below. The main window stays hidden until its first
         // frame is presented (see Window::Show), so the two never overlap.
         SplashScreen splash;
-        splash.Show("assets/branding/splash.png", 1.0f);
+        if (!headless)
+            splash.Show(EnginePaths::Resolve("assets/branding/splash.png"), 1.0f);
 
         Window window(1280, 720, "Tartarus Engine");
         // GL context + loader are live now. No-op unless a Debug build or TARTARUS_GL_DEBUG=1.
+        // The smoke test's whole job is catching GL-level regressions, so force debug output on
+        // for it regardless of build config / env (audit #356) — otherwise newGlErrors is
+        // structurally always 0 in a Release run and the harness only checks "did it draw".
+        if (smokeTestMode) GLDebug::ForceEnable();
         GLDebug::Init();
         Input::Init(window.Handle());
         window.SetCursorLocked(true);
@@ -410,20 +434,24 @@ int main(int argc, char** argv) {
 
         AudioEngine::Init();
 
-        ShaderLibrary::Init("assets/shaders");
+        ShaderLibrary::Init(EnginePaths::Resolve("assets/shaders"));
 
-        Shader modelShader(ShaderLibrary::ReadFile("ModelVertex.glsl"),
-                           ShaderLibrary::ReadFile("ModelFragment.glsl"));
-        Shader outlineModelShader(ShaderLibrary::ReadFile("OutlineModel.vert.glsl"),
-                                  ShaderLibrary::ReadFile("Outline.frag.glsl"));
-        Shader outlineDilateShader(ShaderLibrary::ReadFile("OutlineDilate.vert.glsl"),
-                                   ShaderLibrary::ReadFile("OutlineDilate.frag.glsl"));
-        Shader shadowShader(ShaderLibrary::ReadFile("ShadowDepth.vert.glsl"),
-                            ShaderLibrary::ReadFile("ShadowDepth.frag.glsl"));
-        Shader localShadowShader(ShaderLibrary::ReadFile("ShadowDepth.vert.glsl"),
-                                 ShaderLibrary::ReadFile("ShadowDepthLocal.frag.glsl")); // spot/point: linear depth
-        Shader clusterBuildShader(ShaderLibrary::ReadFile("ClusterBuild.comp.glsl")); // #120: per-view froxel AABBs
-        Shader clusterCullShader(ShaderLibrary::ReadFile("ClusterCull.comp.glsl"));   // #120: point/spot lights -> froxel lists
+        // ReadFileRequired (not ReadFile) for the core programs: a missing shader directory
+        // (wrong CWD, incomplete install) throws "Required engine shader not found: <path>" at
+        // startup instead of letting an empty source reach the driver as a misleading link
+        // error (audit #355 / BUG-102).
+        Shader modelShader(ShaderLibrary::ReadFileRequired("ModelVertex.glsl"),
+                           ShaderLibrary::ReadFileRequired("ModelFragment.glsl"));
+        Shader outlineModelShader(ShaderLibrary::ReadFileRequired("OutlineModel.vert.glsl"),
+                                  ShaderLibrary::ReadFileRequired("Outline.frag.glsl"));
+        Shader outlineDilateShader(ShaderLibrary::ReadFileRequired("OutlineDilate.vert.glsl"),
+                                   ShaderLibrary::ReadFileRequired("OutlineDilate.frag.glsl"));
+        Shader shadowShader(ShaderLibrary::ReadFileRequired("ShadowDepth.vert.glsl"),
+                            ShaderLibrary::ReadFileRequired("ShadowDepth.frag.glsl"));
+        Shader localShadowShader(ShaderLibrary::ReadFileRequired("ShadowDepth.vert.glsl"),
+                                 ShaderLibrary::ReadFileRequired("ShadowDepthLocal.frag.glsl")); // spot/point: linear depth
+        Shader clusterBuildShader(ShaderLibrary::ReadFileRequired("ClusterBuild.comp.glsl")); // #120: per-view froxel AABBs
+        Shader clusterCullShader(ShaderLibrary::ReadFileRequired("ClusterCull.comp.glsl"));   // #120: point/spot lights -> froxel lists
         unsigned int fsQuadVao = 0;
         glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
         TintOverlayRenderer tintOverlay;
@@ -829,7 +857,8 @@ int main(int argc, char** argv) {
         // interactive session — the whole point of the harness is catching a regression that
         // path could introduce, not a hand-rolled approximation of it.
         constexpr int kSmokeTestFrames = 100;
-        struct SmokeResult { std::string scenePath; int frames; int newGlErrors; int newLogErrors; int drawCalls; bool pass; };
+        struct SmokeResult { std::string scenePath; int frames; int newGlErrors; int newLogErrors;
+                             int drawCalls; bool loadOk; bool pass; std::string cause; };
         std::vector<std::string> smokeScenePaths;
         std::vector<SmokeResult> smokeResults;
         size_t smokeSceneIndex = 0;
@@ -837,8 +866,19 @@ int main(int argc, char** argv) {
         int smokeBaselineGlErrors = 0;
         int smokeBaselineLogErrors = 0;
         bool smokeSceneActive = false;
+        bool smokeSceneLoadOk = false;
         if (smokeTestMode) {
-            std::string scenesDir = ProjectPaths::Resolve("scenes");
+            // Scene source: explicit --smoke-test <dir> arg, else the engine's committed
+            // regression scenes, else the user project's scenes/ (audit TEST-101).
+            std::string scenesDir;
+            if (!smokeScenesDirArg.empty()) {
+                scenesDir = smokeScenesDirArg;
+            } else {
+                std::string engineScenes = EnginePaths::Resolve("assets/test-scenes");
+                std::error_code exEc;
+                bool haveEngineScenes = std::filesystem::is_directory(engineScenes, exEc) && !exEc;
+                scenesDir = haveEngineScenes ? engineScenes : ProjectPaths::Resolve("scenes");
+            }
             std::error_code dirEc;
             for (auto& entry : std::filesystem::directory_iterator(scenesDir, dirEc)) {
                 if (dirEc) break;
@@ -848,10 +888,15 @@ int main(int argc, char** argv) {
             std::sort(smokeScenePaths.begin(), smokeScenePaths.end());
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
+            if (smokeScenePaths.empty()) {
+                std::cout << "[SmokeTest] ERROR: no scenes to test - failing." << std::endl;
+            }
             if (!GLDebug::IsEnabled()) {
-                std::cout << "[SmokeTest] WARNING: GLDebug is not active in this build (needs a "
-                             "Debug build or TARTARUS_GL_DEBUG=1) - GL error counts will always "
-                             "read 0." << std::endl;
+                // ForceEnable() above still could not wire up the callback (no KHR_debug on this
+                // context, e.g. a GPU-less CI runner). GL error counts will read 0; the harness
+                // still checks load success, log errors and draw count.
+                std::cout << "[SmokeTest] WARNING: GL debug output could not be enabled on this "
+                             "context - newGlErrors will read 0." << std::endl;
             }
         }
 
@@ -863,11 +908,14 @@ int main(int argc, char** argv) {
                 if (smokeSceneIndex >= smokeScenePaths.size()) break;
                 if (!smokeSceneActive) {
                     const std::string& path = smokeScenePaths[smokeSceneIndex];
-                    bool loadOk = SceneSerializer::Load(world, assets, path);
-                    std::cout << "[SmokeTest] Loading " << path
-                              << (loadOk ? "" : "  (Load() reported failure)") << std::endl;
+                    // Baseline BEFORE the load, so an asset error logged *during* Load() (a
+                    // missing model/texture) counts against this scene instead of being folded
+                    // into the baseline and ignored (audit #356).
                     smokeBaselineGlErrors  = GLDebug::ErrorCount();
                     smokeBaselineLogErrors = Log::CountOf(LogLevel::Error);
+                    smokeSceneLoadOk = SceneSerializer::Load(world, assets, path);
+                    std::cout << "[SmokeTest] Loading " << path
+                              << (smokeSceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
                     smokeFramesRendered = 0;
                     smokeSceneActive = true;
                 }
@@ -1573,7 +1621,10 @@ int main(int argc, char** argv) {
                 modelShader.SetFloat("uSunShadowBias", frameSunShadowBias);
                 modelShader.SetFloat("uSunShadowNormalBias", frameSunShadowNormalBias);
                 glActiveTexture(GL_TEXTURE0 + 8);
-                glBindTexture(GL_TEXTURE_2D_ARRAY, shadowMap.DepthArray());
+                {
+                    unsigned int sunTex = shadowMap.DepthArray();
+                    glBindTexture(GL_TEXTURE_2D_ARRAY, sunTex ? sunTex : DefaultTextures::DepthArray());
+                }
                 modelShader.SetInt("uShadowMap", 8);
                 modelShader.SetFloat("uShadowMapResolution", (float)shadowMap.Resolution()); // #190
 
@@ -1592,7 +1643,14 @@ int main(int argc, char** argv) {
                     modelShader.SetFloat("uSpotShadowSoftness[" + std::to_string(s) + "]", spotShadowSoftness[s]);
                 }
                 glActiveTexture(GL_TEXTURE0 + 9);
-                glBindTexture(GL_TEXTURE_2D_ARRAY, spotShadowMap.DepthArray());
+                // A valid depth-compare texture even when no spot shadow map is allocated, so
+                // the sampler2DArrayShadow on unit 9 is never backed by texture 0 (audit #357:
+                // was a per-frame KHR 131222 "shadow sampler ... undefined behavior"). The
+                // shader still early-outs on uSpotShadowCount == 0.
+                {
+                    unsigned int spotTex = spotShadowMap.DepthArray();
+                    glBindTexture(GL_TEXTURE_2D_ARRAY, spotTex ? spotTex : DefaultTextures::DepthArray());
+                }
                 modelShader.SetInt("uSpotShadowMap", 9);
                 modelShader.SetFloat("uSpotShadowMapResolution", (float)spotShadowMap.Resolution()); // #190
 
@@ -1605,7 +1663,10 @@ int main(int argc, char** argv) {
                     modelShader.SetFloat("uPointShadowNormalBias[" + std::to_string(s) + "]", pointShadowNormalBias[s]);
                 }
                 glActiveTexture(GL_TEXTURE0 + 10);
-                glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, pointShadowMap.DepthCubeArray());
+                { // valid samplerCubeArrayShadow backing even with no point shadow map (audit #357)
+                    unsigned int pointTex = pointShadowMap.DepthCubeArray();
+                    glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, pointTex ? pointTex : DefaultTextures::DepthCubeArray());
+                }
                 modelShader.SetInt("uPointShadowMap", 10);
                 modelShader.SetFloat("uPointShadowMapResolution", (float)pointShadowMap.Resolution()); // #190
 
@@ -2569,15 +2630,25 @@ int main(int argc, char** argv) {
                     int newErrors    = GLDebug::ErrorCount() - smokeBaselineGlErrors;
                     int newLogErrors = Log::CountOf(LogLevel::Error) - smokeBaselineLogErrors;
                     int drawCalls    = editor.GetRenderStats().DrawCalls;
-                    bool pass = newErrors == 0 && newLogErrors == 0 && drawCalls > 0;
+                    // A scene is only viable end-to-end if it loaded, introduced no new GL or
+                    // log errors across load+render, and actually drew something (audit #356).
+                    std::string cause;
+                    if (!smokeSceneLoadOk)   cause += "Load() failed; ";
+                    if (newLogErrors > 0)    cause += std::to_string(newLogErrors) + " new log error(s); ";
+                    if (newErrors > 0)       cause += std::to_string(newErrors) + " new GL error(s); ";
+                    if (drawCalls <= 0)      cause += "zero draw calls; ";
+                    bool pass = cause.empty();
                     const std::string& path = smokeScenePaths[smokeSceneIndex];
-                    smokeResults.push_back({path, smokeFramesRendered, newErrors, newLogErrors, drawCalls, pass});
+                    smokeResults.push_back({path, smokeFramesRendered, newErrors, newLogErrors,
+                                            drawCalls, smokeSceneLoadOk, pass, cause});
                     std::cout << "[SmokeTest] " << (pass ? "PASS" : "FAIL") << "  "
                               << std::filesystem::path(path).filename().string()
                               << "  frames=" << smokeFramesRendered
+                              << " loadOk=" << (smokeSceneLoadOk ? 1 : 0)
                               << " newGlErrors=" << newErrors
                               << " newLogErrors=" << newLogErrors
-                              << " drawCalls=" << drawCalls << std::endl;
+                              << " drawCalls=" << drawCalls
+                              << (pass ? "" : ("  cause: " + cause)) << std::endl;
                     ++smokeSceneIndex;
                     smokeSceneActive = false;
                 }
@@ -2589,14 +2660,18 @@ int main(int argc, char** argv) {
             // save-on-exit) — smoke-tested scenes were never really "open" from the user's
             // point of view and must not get written back to disk.
             std::cout << "\n[SmokeTest] ==== Summary ====" << std::endl;
-            bool allPassed = !smokeResults.empty();
+            // No scenes discovered is itself a failure — an empty scene folder must not read
+            // as a green run (audit #356 / TEST-101).
+            bool allPassed = !smokeResults.empty() && smokeScenePaths.size() == smokeResults.size();
             for (const auto& r : smokeResults) {
                 std::cout << "[SmokeTest] " << (r.pass ? "PASS" : "FAIL") << "  "
                           << std::filesystem::path(r.scenePath).filename().string()
                           << "  frames=" << r.frames
+                          << " loadOk=" << (r.loadOk ? 1 : 0)
                           << " newGlErrors=" << r.newGlErrors
                           << " newLogErrors=" << r.newLogErrors
-                          << " drawCalls=" << r.drawCalls << std::endl;
+                          << " drawCalls=" << r.drawCalls
+                          << (r.pass ? "" : ("  cause: " + r.cause)) << std::endl;
                 if (!r.pass) allPassed = false;
             }
             std::cout << "[SmokeTest] " << smokeResults.size() << " scene(s) - "
@@ -2622,10 +2697,15 @@ int main(int argc, char** argv) {
         AudioEngine::Shutdown();
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
-        // Release builds use the GUI subsystem (see CMakeLists), so there's no console for the
-        // message above to land in — without this, a failure to start would just look like the
-        // engine silently doing nothing.
-        Window::ShowFatalErrorDialog(std::string("Tartarus Engine failed to start.\n\n") + e.what());
+        // Non-interactive runs (--smoke-test / --resave) must never block: a modal MessageBox on
+        // a headless or CI desktop is never dismissed and the process hangs until the job's
+        // timeout (audit BUG-102). stderr + a nonzero exit is the whole contract there.
+        if (!headless) {
+            // Release builds use the GUI subsystem (see CMakeLists), so there's no console for
+            // the message above to land in — without this, a failure to start would just look
+            // like the engine silently doing nothing.
+            Window::ShowFatalErrorDialog(std::string("Tartarus Engine failed to start.\n\n") + e.what());
+        }
         return 1;
     }
 
