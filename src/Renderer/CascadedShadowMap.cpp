@@ -1,4 +1,5 @@
 #include "CascadedShadowMap.h"
+#include "GLFramebufferCheck.h"
 #include "Log.h"
 #include "gl.h"
 
@@ -37,16 +38,14 @@ void CascadedShadowMap::Configure(int resolution, int count) {
 
     glCreateFramebuffers(1, &m_Fbo);
     glNamedFramebufferDrawBuffers(m_Fbo, 0, nullptr); // depth only
-    // Attachment is (re)pointed at a specific layer in Begin().
+    // Attachment is (re)pointed at a specific layer in Begin(); the completeness check moved
+    // there too (audit GL-204) — a layered depth FBO only reports COMPLETE once a layer is
+    // attached, so checking here always spuriously "failed" and the result was ignored anyway.
+    m_CompleteChecked = false; // re-check after a resolution/count change
 
-    GLenum st = glCheckNamedFramebufferStatus(m_Fbo, GL_FRAMEBUFFER);
-    if (st != GL_FRAMEBUFFER_COMPLETE) {
-        // A layered-attachment FBO reports complete only once a layer is attached; re-check in
-        // Begin() would be noisy, so just warn if the base object itself failed to create.
-        if (!m_Fbo || !m_DepthArray)
-            Log::Error("CascadedShadowMap: failed to create depth array (" +
-                       std::to_string(resolution) + "x" + std::to_string(count) + ")");
-    }
+    if (!m_Fbo || !m_DepthArray)
+        Log::Error("CascadedShadowMap: failed to create depth array (" +
+                   std::to_string(resolution) + "x" + std::to_string(count) + ")");
 }
 
 void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camProj,
@@ -124,6 +123,12 @@ void CascadedShadowMap::Begin(int i) const {
     i = std::clamp(i, 0, m_Count - 1);
     glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
     glNamedFramebufferTextureLayer(m_Fbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0, i);
+    // audit GL-204 — a layered depth FBO only reports COMPLETE once a layer is attached, so the
+    // check belongs here, once, rather than in Configure().
+    if (!m_CompleteChecked) {
+        m_CompleteChecked = true;
+        GLFramebufferCheck::Complete("CascadedShadowMap", m_Fbo, m_Resolution, m_Resolution);
+    }
     glViewport(0, 0, m_Resolution, m_Resolution);
     glClear(GL_DEPTH_BUFFER_BIT);
 }

@@ -297,6 +297,11 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevRead);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (unsigned int)prevDraw);
 
+    // The preview render plus the raw glBindTexture calls above never went through GLStateCache;
+    // resync it so a later Texture::Bind() on the same unit isn't skipped as falsely-redundant
+    // (audit GL-202: the "call Invalidate() after every raw-GL pass" rule this path was missing).
+    GLStateCache::Invalidate();
+
     m_ThumbnailLRU.push_front(path);
     m_ModelThumbnails[path] = { dst, m_ThumbnailLRU.begin() };
 

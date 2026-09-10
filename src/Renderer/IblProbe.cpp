@@ -2,6 +2,7 @@
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "GLFramebufferCheck.h"
+#include "GLStateCache.h"
 #include "Log.h"
 #include "gl.h"
 
@@ -160,6 +161,7 @@ void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor)
             glDepthMask((GLboolean)prevDepthMask);
             glBindVertexArray(0);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            GLStateCache::Invalidate(); // raw program / VAO / texture binds above (audit GL-206)
             return;
         }
         SetFaceBasis(*m_EnvShader, face);
@@ -202,6 +204,12 @@ void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor)
     if (wasCull) glEnable(GL_CULL_FACE);
     if (wasBlend) glEnable(GL_BLEND);
     glDepthMask((GLboolean)prevDepthMask);
+
+    // This whole pass drove program / VAO / unit-0 texture with raw GL and reset them with raw
+    // GL, so GLStateCache's shadow of those is now stale. Without this, the first frame after a
+    // bake (the sky IBL bake runs on scene load) skips a real bind it thinks is redundant and
+    // samplers read undefined texture state — audit GL-206 / the residual KHR 131204/131222.
+    GLStateCache::Invalidate();
 
     m_Baked = true;
     m_BakedHorizon = horizonColor;
@@ -247,6 +255,7 @@ void IblProbe::BakeFromCubemap(unsigned int envCube) {
             glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
             glBindVertexArray(0);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            GLStateCache::Invalidate(); // raw program / VAO / texture binds above (audit GL-206)
             return;
         }
         SetFaceBasis(*m_IrradianceShader, face);
@@ -277,6 +286,9 @@ void IblProbe::BakeFromCubemap(unsigned int envCube) {
     if (wasCull)      glEnable(GL_CULL_FACE);
     if (wasBlend)     glEnable(GL_BLEND);
     glDepthMask((GLboolean)prevDepthMask);
+
+    // Raw program / VAO / unit-0 texture binds above — resync GLStateCache (audit GL-206).
+    GLStateCache::Invalidate();
 
     m_Baked = true;
     // Sentinel so NeedsBake() returns true again when switching back to the procedural sky.
