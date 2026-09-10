@@ -1197,6 +1197,12 @@ private:
     bool m_ImportSettingsDirty = false;
     void DrawAssetImportInspector(World& world, AssetLibrary& assets, const std::string& key);
 
+    // Standalone material-asset editor: shown instead of DrawAssetImportInspector when a .mat
+    // file is selected directly in the Asset Browser (no scene entity involved). Lets a material
+    // be authored before it's ever assigned to an object. Edits save straight to the .mat file —
+    // asset edits aren't part of scene Undo/Redo, same as a rename or a texture re-import.
+    void DrawMaterialAssetEditor(World& world, AssetLibrary& assets, const std::string& matPath);
+
     // R/G/B/A channel-isolation toggle on the texture preview above — -1 shows the texture
     // combined/normal. Rendered lazily: m_ChannelPreviewRenderedKey/Channel track what's
     // CURRENTLY in the offscreen texture, so switching tabs and back without changing anything
