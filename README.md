@@ -49,7 +49,7 @@ feature can do today and what's still planned.
 | **[Play mode & Game view](https://github.com/JCamberos27/TartarusEngine/discussions/264)** | Play / Pause / single-frame Step inside the docked Game panel with the editor still live; scene state snapshotted on entry; resolution presets and a contrast-adaptive stats overlay |
 | **[Undo / redo & History](https://github.com/JCamberos27/TartarusEngine/discussions/270)** | Delta-compressed whole-scene history with a jump-to-any-step History panel; covers asset-library operations too |
 | **[Console & logging](https://github.com/JCamberos27/TartarusEngine/discussions/271)** | Streamed engine log with level filter, search, and collapsed repeats |
-| **[Statistics & Profiler HUD](https://github.com/JCamberos27/TartarusEngine/discussions/272)** | FPS, draw calls, triangle / entity counts, GL bind counters, and per-pass CPU timings as a transparent overlay |
+| **[Statistics & Profiler HUD](https://github.com/JCamberos27/TartarusEngine/discussions/272)** | FPS, draw calls, triangle / entity counts, GL bind counters, and per-pass CPU **and GPU** timings as a transparent overlay |
 | **[Screenshot / Capture tool](https://github.com/JCamberos27/TartarusEngine/discussions/273)** | Editor / Scene / clean-Scene / Game modes, fixed-resolution and supersample options, PNG or JPG, `Print Screen` or a sentinel-file trigger |
 | **[Preferences & settings](https://github.com/JCamberos27/TartarusEngine/discussions/274)** | Tabbed settings — theme, UI scale, viewport, light gizmos, grid & snap, capture, a searchable shortcut table — all persisted |
 | **[Adaptive-contrast HUD system](https://github.com/JCamberos27/TartarusEngine/discussions/275)** | A shared async luminance sampler keeps every viewport overlay and the corner monogram legible over any render |
@@ -99,10 +99,11 @@ colour-cycling point and spot lights.
 | CPU per frame | **≈ 2.2 ms** — the remainder is GPU |
 
 Per-pass CPU timings from the built-in profiler: point shadows 0.47 ms · spot shadows 0.36 ms ·
-scene draw 0.24 ms · editor UI build 0.26 ms · ImGui render 0.21 ms.
+scene draw 0.24 ms · editor UI build 0.26 ms · ImGui render 0.21 ms. Per-pass **GPU** timings
+(shadow passes, cluster cull, scene draw, SSAO, bloom, tonemap, IBL bake) are shown live in the
+Statistics overlay's *Profiler (GPU)* section, from non-blocking `GL_TIME_ELAPSED` query rings.
 
-*One scene, one machine — indicative, not a benchmark suite. GPU-side timing is not yet
-instrumented.*
+*One scene, one machine — indicative, not a benchmark suite.*
 
 ## Project status
 
@@ -135,8 +136,30 @@ break the build. The executable lands at `build/Release/TartarusEngine.exe`, wit
 `TartarusGame.dll` and `TartarusEditor.dll` beside it. First launch opens
 `project/scenes/Showcase.json`, then reopens whatever scene you last had open.
 
+CMake `POST_BUILD` steps stage the shipped assets — `assets/shaders/`, `assets/fonts/`,
+`assets/branding/`, `assets/test-scenes/` — next to the executable. At startup the engine
+resolves those from its own location (`argv[0]`), so it runs from any working directory; set
+`TARTARUS_ASSET_ROOT` to override. The editable project (`project/scenes/`, `project/*.json`) is
+found by walking up from the exe for a `project/` folder. Package a build by copying the exe, the
+two DLLs, the staged `assets/` tree, and a `project/` folder together.
+
 > The engine must be closed before rebuilding `TartarusEngine.exe`; the two DLLs can be rebuilt
 > while it runs — see [Hot-reloadable modules](https://github.com/JCamberos27/TartarusEngine/discussions/257).
+
+### Automated checks
+
+Every push and pull request runs [`.github/workflows/build.yml`](.github/workflows/build.yml):
+
+- **Component-registration guard** (`tools/check_component_registration.py`) — every ECS
+  component must be `ComponentRegistry`-registered or allow-listed with a reason.
+- **Compile gate** — Debug *and* Release, MSVC. This is the conclusive signal.
+- **`--smoke-test`** — loads every scene in the committed `tests/smoke-scenes/` set, renders 100
+  frames each, and fails the process (exit 1) unless every scene loaded, produced no new GL or
+  log errors, and issued at least one draw call. Run locally with
+  `build/<Config>/TartarusEngine.exe --smoke-test` (add a directory argument to point it at a
+  different scene set). In CI it is `continue-on-error`: hosted GitHub runners have no GPU and
+  cannot create the required OpenGL 4.6 core context, so only a PASS or a compile failure there
+  is conclusive — a smoke FAIL on the runner needs a local or GPU-equipped run to confirm.
 
 ## Controls
 
@@ -159,7 +182,8 @@ The full, searchable list is in **Preferences ▸ Shortcuts**.
 
 ```
 src/
-  Core/       Window, input, clock, logging, profiler, splash, screenshot, project paths
+  Core/       Window, input, clock, logging, CPU+GPU profiler, splash, screenshot,
+              engine-asset + project path resolution
   Renderer/   GL loader + state cache, shaders, models, meshes, textures, camera,
               framebuffers, shadows, clustered light grid, IBL probes, sky, tonemapper
   Game/       World (EnTT), player controller, scene serialization, components,
@@ -180,17 +204,16 @@ project/      The scene and editor preferences being authored
 - Linear HDR pipeline with tone mapping (Reinhard / ACES / AgX)
 - Cascaded sun shadows; cube-map point and perspective spot shadows
 - GPU (`std430` SSBO) light buffer · clustered-forward light culling (16 × 9 × 24 froxel grid)
-- Image-based lighting baked from the procedural sky ([#196](https://github.com/JCamberos27/TartarusEngine/issues/196))
+- Image-based lighting baked from the procedural sky or a loaded HDRI ([#196](https://github.com/JCamberos27/TartarusEngine/issues/196)); placed reflection probes with parallax box projection ([#333](https://github.com/JCamberos27/TartarusEngine/issues/333))
 - Hot-reloadable editor panels · reflection-registered components · runtime `AudioSourceComponent` playback
 - Editor / Unity parity pass — Hierarchy reordering & keyboard nav, Inspector component menu + copy/paste, Grid & Snap and Gizmos popovers, Pause & Step, GameObject-menu ops ([#236](https://github.com/JCamberos27/TartarusEngine/issues/236))
 - Live prefab instances with per-field & per-component overrides — accent-tinted labels, in-Inspector Revert / Apply to Prefab, Unpack ([#302](https://github.com/JCamberos27/TartarusEngine/issues/302), [#315](https://github.com/JCamberos27/TartarusEngine/issues/315))
 - **NVIDIA PhysX 5** collision system (built from source) — rigid bodies, capsule character controller, box/sphere/capsule/convex/mesh colliders, triggers, contact & force APIs, collision-layer matrix, scene queries, CCD, 5 joint types, and a visual debugger ([#185](https://github.com/JCamberos27/TartarusEngine/issues/185))
 - **Screen-space effects** on the HDR buffer — depth-pre-pass SSAO and threshold/blur bloom, both additive before the tone curve ([#333](https://github.com/JCamberos27/TartarusEngine/issues/333))
+- **GPU timer queries** — non-blocking `GL_TIME_ELAPSED` query-ring scopes (`PROFILE_GPU_SCOPE`) on every major pass; per-pass GPU times in the Statistics overlay's *Profiler (GPU)* section ([#197](https://github.com/JCamberos27/TartarusEngine/issues/197))
 
 ### Next
 
-- **GPU timer queries** — GPU-side pass timing is not yet instrumented ([#197](https://github.com/JCamberos27/TartarusEngine/issues/197))
-- **Placed reflection probes** — local cubemaps and HDRI input, beyond today's single global sky probe
 - **Standalone build export** — ship a scene as a runnable game without the editor
 - Remaining editor polish — Inspector list/array fields, component reorder, an "Open Prefab" edit mode, nested prefabs / variants
 

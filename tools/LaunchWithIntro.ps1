@@ -1,13 +1,18 @@
-# Plays the studio intro fullscreen, then launches Tartarus Engine (Release build).
-# Used by the "Tartarus Engine" desktop shortcut instead of launching the exe directly.
+# Plays an optional studio intro fullscreen, then launches Tartarus Engine (Release build).
+# Point a desktop shortcut at this instead of the exe to get the intro.
+#
+# Paths resolve relative to this script's location in the repo (tools/), so a clone anywhere
+# works. Set TARTARUS_INTRO_VIDEO to an .mp4 to play an intro; with it unset or the file
+# missing, the script skips straight to launching the engine.
 
 $ErrorActionPreference = 'Stop'
 
-$videoPath  = "D:\Jacob\JCamberos\Downloads\Logo Intro 4k.mp4"
-$engineExe  = "C:\Users\Jacob\Desktop\C++ Engine\build\Release\TartarusEngine.exe"
-$engineDir  = "C:\Users\Jacob\Desktop\C++ Engine\build\Release"
+$repoRoot   = Split-Path -Parent $PSScriptRoot
+$videoPath  = $env:TARTARUS_INTRO_VIDEO
+$engineDir  = Join-Path $repoRoot "build\Release"
+$engineExe  = Join-Path $engineDir "TartarusEngine.exe"
 
-if (Test-Path $videoPath) {
+if ($videoPath -and (Test-Path $videoPath)) {
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
     $media = New-Object System.Windows.Controls.MediaElement
