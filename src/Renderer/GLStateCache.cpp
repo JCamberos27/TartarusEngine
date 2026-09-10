@@ -1,6 +1,14 @@
 #include "GLStateCache.h"
 #include "gl.h"
 #include <array>
+#ifndef NDEBUG
+#include "Log.h"
+// Not exposed by the engine's minimal gl.h loader (like GL_ONE / GL_RG elsewhere); only the
+// debug desync check below needs it.
+#ifndef GL_TEXTURE_BINDING_2D
+#define GL_TEXTURE_BINDING_2D 0x8069
+#endif
+#endif
 
 namespace {
 
@@ -15,6 +23,28 @@ bool g_VAOValid = false;
 constexpr int kMaxCachedTextureUnits = 16;
 std::array<unsigned int, kMaxCachedTextureUnits> g_BoundTextures{};
 std::array<bool, kMaxCachedTextureUnits> g_TextureValid{};
+
+#ifndef NDEBUG
+// Debug-only desync detector (audit GL-202). A raw glBindTexture that bypasses this cache
+// without a following Invalidate() leaves the shadow below out of step with real GL state, so a
+// later BindTexture2D wrongly skips the real bind. Once per unit after each Invalidate(), the
+// first skipped bind cross-checks the driver's actual GL_TEXTURE_BINDING_2D and logs on
+// mismatch. Bounded to <=16 glGetIntegerv per frame; compiled out entirely in release.
+std::array<bool, kMaxCachedTextureUnits> g_DebugUnitVerified{};
+
+void DebugVerifyUnit(unsigned int unit, unsigned int expected) {
+    if (g_DebugUnitVerified[unit]) return;
+    g_DebugUnitVerified[unit] = true;
+    GLint actual = 0;
+    glActiveTexture(GL_TEXTURE0 + unit);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &actual);
+    if ((unsigned int)actual != expected) {
+        Log::Error("GLStateCache desync on texture unit " + std::to_string(unit) + ": cache says " +
+                   std::to_string(expected) + ", GL has " + std::to_string(actual) +
+                   " — a raw glBindTexture pass is missing its GLStateCache::Invalidate().");
+    }
+}
+#endif
 
 GLStateCache::FrameStats g_Stats;
 
@@ -34,6 +64,9 @@ void Invalidate() {
     g_VAOValid = false;
     g_BoundMaterialHash = 0;
     g_BoundMaterialProgram = 0;
+#ifndef NDEBUG
+    g_DebugUnitVerified.fill(false);
+#endif
 }
 
 void UseProgram(unsigned int program) {
@@ -58,6 +91,9 @@ void BindTexture2D(unsigned int unit, unsigned int texture) {
         return;
     }
     if (g_TextureValid[unit] && g_BoundTextures[unit] == texture) {
+#ifndef NDEBUG
+        DebugVerifyUnit(unit, texture);
+#endif
         g_Stats.TextureBindsSkipped++;
         return;
     }

@@ -658,11 +658,16 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
         if (!GLStateCache::MaterialAlreadyBound(mat.Hash(), shader.Program())) {
             if (mat.AlbedoMap && mat.AlbedoMap->IsValid()) {
                 mat.AlbedoMap->Bind(0);
-                shader.SetInt(albedoLoc, 0);
                 shader.SetInt(alphaTestLoc, 1);
             } else {
+                // uAlphaTest = 0 means the sampler result is never read, but the ShadowDepth
+                // program still declares `sampler2D uAlbedo`, so unit 0 must hold a real texture
+                // or the driver reports KHR 131204 ("texture 0 ... cannot be used") every draw —
+                // the residual load-time warnings after PR #370 (audit GL-101 / #366 on unit 0).
+                GLStateCache::BindTexture2D(0, DefaultTextures::White());
                 shader.SetInt(alphaTestLoc, 0);
             }
+            shader.SetInt(albedoLoc, 0);
         }
         m_Meshes[i]->Draw();
     }
