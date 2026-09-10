@@ -4,6 +4,7 @@
 #include <sstream>
 #include <filesystem>
 #include <chrono>
+#include <stdexcept>
 #include <unordered_map>
 
 namespace ShaderLibrary {
@@ -44,6 +45,26 @@ static std::string ResolveIncludes(const std::string& src, const std::filesystem
 
 void Init(const std::string& shadersDir) {
     s_Dir = shadersDir;
+}
+
+std::string Dir() {
+    return s_Dir.string();
+}
+
+std::string ReadFileRequired(const std::string& filename) {
+    std::filesystem::path path = s_Dir / filename;
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec) || ec) {
+        throw std::runtime_error(
+            "Required engine shader not found: " + path.string() +
+            "\n(shader directory resolved to: " + (s_Dir.empty() ? std::string("<unset>") : s_Dir.string()) +
+            ")\nLaunch the executable from its output directory, or set TARTARUS_ASSET_ROOT.");
+    }
+    std::string src = ReadFile(filename);
+    if (src.empty()) {
+        throw std::runtime_error("Required engine shader is empty or unreadable: " + path.string());
+    }
+    return src;
 }
 
 std::string ReadFile(const std::string& filename) {

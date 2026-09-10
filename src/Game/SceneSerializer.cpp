@@ -8,6 +8,7 @@
 #include "MaterialAsset.h"
 #include "AssetDatabase.h"
 #include "AssetGuid.h"
+#include "ProjectPaths.h"
 
 #include "Log.h"
 
@@ -20,6 +21,9 @@
 #include <functional>
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
+#include <vector>
+#include <cctype>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <cmath>
@@ -86,27 +90,84 @@ std::string PathOrEmpty(const std::shared_ptr<Texture>& tex) {
     return tex ? tex->Path() : std::string();
 }
 
+// --- Portable asset paths (audit #364 / BUG-101) -----------------------------------------
+// Serialized scenes must not carry machine-absolute paths, or they break on any other machine
+// or checkout location. On WRITE, a path under the project root becomes a '/'-normalised
+// project-relative path; a path outside the project tree (a shared asset library elsewhere) is
+// left absolute rather than turned into a pile of "../..". On READ, a relative path resolves
+// against the current project root, and a legacy absolute path that no longer exists is rebased
+// by matching its longest tail that does exist under this project root.
+// A synthetic reference, not a filesystem path: World's "primitive://..." level-geometry ids,
+// or any other "scheme:"-prefixed id. Never rewritten on the way in or out.
+bool IsSyntheticRef(const std::string& p) {
+    if (p.rfind("primitive:", 0) == 0) return true;
+    // scheme:// with a multi-character scheme (a lone "C:" drive letter is not one).
+    auto colon = p.find(':');
+    if (colon != std::string::npos && colon >= 2) {
+        bool alnum = true;
+        for (size_t i = 0; i < colon; ++i) if (!std::isalnum((unsigned char)p[i])) { alnum = false; break; }
+        if (alnum && colon + 1 < p.size() && p[colon + 1] == '/') return true;
+    }
+    return false;
+}
+
+std::string AssetPathForWrite(const std::string& path) {
+    if (path.empty() || IsSyntheticRef(path)) return path;
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::path root = fs::weakly_canonical(fs::path(ProjectPaths::Root()), ec);
+    if (ec) return path;
+    fs::path abs = fs::weakly_canonical(fs::path(path), ec);
+    if (ec) abs = fs::path(path);
+    fs::path rel = abs.lexically_relative(root);
+    if (rel.empty() || rel.begin() == rel.end()) return path;
+    if (rel.begin()->string() == "..") return path; // outside the project tree
+    return rel.generic_string();
+}
+
+std::string AssetPathForRead(const std::string& path) {
+    if (path.empty() || IsSyntheticRef(path)) return path;
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::path p(path);
+    fs::path root(ProjectPaths::Root());
+    if (p.is_relative())
+        return (root / p).lexically_normal().string();
+    if (fs::exists(p, ec)) return path;
+    // Legacy absolute path authored elsewhere: try each suffix of it under this project root.
+    std::vector<fs::path> parts(p.begin(), p.end());
+    for (size_t i = 0; i < parts.size(); ++i) {
+        fs::path tail;
+        for (size_t j = i; j < parts.size(); ++j) tail /= parts[j];
+        fs::path cand = (root / tail).lexically_normal();
+        if (fs::exists(cand, ec)) return cand.string();
+    }
+    return path; // unresolved — downstream logs a concrete "not found"
+}
+
 // PR 2 (#333): path string → {"path":"...", "pathGuid":"..."} for WRITE. Returns a plain
 // string if the GUID isn't known yet so that v1-era paths still round-trip cleanly.
+// The stored path is always project-relative when possible (audit #364).
 json PathRef(const std::string& path) {
     if (path.empty()) return path;
-    AssetGuid g = AssetDatabase::GuidForPath(path);
-    if (g.IsValid()) return json{{"path", path}, {"pathGuid", g.ToString()}};
-    return path;
+    std::string stored = AssetPathForWrite(path);
+    AssetGuid g = AssetDatabase::GuidForPath(path); // GUID lookup needs the real (absolute) path
+    if (g.IsValid()) return json{{"path", stored}, {"pathGuid", g.ToString()}};
+    return stored;
 }
 
 // PR 2 (#333): dual path+guid READ. Prefers GUID if present and resolvable, falls back to
 // the plain path. Accepts both the v2 {"path","pathGuid"} object and the v1 plain string.
 std::string ResolveAssetRef(const json& val) {
-    if (val.is_string()) return val.get<std::string>();
+    if (val.is_string()) return AssetPathForRead(val.get<std::string>());
     if (!val.is_object()) return {};
-    std::string path = val.value("path", std::string());
+    std::string path = AssetPathForRead(val.value("path", std::string()));
     AssetGuid g = AssetGuid::FromString(val.value("pathGuid", std::string()));
     return AssetDatabase::Resolve(g, path);
 }
 // Overload for objects that carry the path and guid as sibling string keys.
 std::string ResolveAssetRef(const json& obj, const char* pathKey, const char* guidKey) {
-    std::string path = obj.value(pathKey, std::string());
+    std::string path = AssetPathForRead(obj.value(pathKey, std::string()));
     AssetGuid g = AssetGuid::FromString(obj.value(guidKey, std::string()));
     return AssetDatabase::Resolve(g, path);
 }
@@ -683,7 +744,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         const auto& renderable = modelView.get<const RenderableComponent>(entity);
 
         json m;
-        m["path"] = renderable.ModelRef->Path();
+        m["path"] = AssetPathForWrite(renderable.ModelRef->Path()); // audit #364
         {
             AssetGuid g = AssetDatabase::GuidForPath(renderable.ModelRef->Path());
             if (g.IsValid()) m["pathGuid"] = g.ToString();
@@ -707,7 +768,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
                     json entry;
                     AssetGuid g = AssetDatabase::GuidForPath(slot->Path);
                     if (g.IsValid()) entry["guid"] = g.ToString();
-                    entry["path"] = slot->Path;
+                    entry["path"] = AssetPathForWrite(slot->Path); // audit #364
                     arr.push_back(entry);
                 } else {
                     const auto& smat = slot->Mat;
@@ -745,7 +806,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             const auto& pi = world.Registry.get<PrefabInstanceComponent>(e);
             TransformComponent t = effectiveTransform(e);
             json s;
-            s["source"] = pi.SourcePath;
+            s["source"] = AssetPathForWrite(pi.SourcePath); // audit #364
             {
                 AssetGuid g = AssetDatabase::GuidForPath(pi.SourcePath);
                 if (g.IsValid()) s["sourceGuid"] = g.ToString();
@@ -1098,10 +1159,11 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets) {
 
     json meta = json::array();
     auto findOrCreate = [&](const std::string& key) -> json& {
+        const std::string stored = AssetPathForWrite(key); // audit #364 — portable path
         for (auto& entry : meta) {
-            if (entry["path"] == key) return entry;
+            if (entry["path"] == stored) return entry;
         }
-        json entry{{"path", key}};
+        json entry{{"path", stored}};
     AssetGuid g = AssetDatabase::GuidForPath(key);
     if (g.IsValid()) entry["guid"] = g.ToString();
     meta.push_back(std::move(entry));
@@ -1124,6 +1186,20 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets) {
             {"optimizeGraph", s.OptimizeGraph}, {"materialImportMode", (int)s.MaterialImportMode},
         };
     }
+    // Drop assetMeta entries whose asset no longer exists on disk (audit #364): stale rows for
+    // deleted files — e.g. old "Untitled.json" scenes — otherwise persist forever and, when
+    // authored on another machine, carry a dead absolute path into every save.
+    {
+        json live = json::array();
+        for (auto& entry : meta) {
+            AssetGuid g = AssetGuid::FromString(entry.value("guid", std::string()));
+            std::string resolved = AssetDatabase::Resolve(g, AssetPathForRead(entry.value("path", std::string())));
+            std::error_code ec;
+            if (!resolved.empty() && std::filesystem::exists(resolved, ec) && !ec)
+                live.push_back(std::move(entry));
+        }
+        meta = std::move(live);
+    }
     root["assetMeta"] = meta;
 }
 
@@ -1137,7 +1213,7 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
         for (const auto& entry : root["assetMeta"]) {
             // v2: prefer guid resolution; v1: plain path.
             AssetGuid g = AssetGuid::FromString(entry.value("guid", std::string()));
-            std::string fallback = entry.value("path", std::string());
+            std::string fallback = AssetPathForRead(entry.value("path", std::string())); // audit #364
             std::string path = AssetDatabase::Resolve(g, fallback);
             if (path.empty()) continue;
             if (entry.contains("folder")) assets.SetAssetFolder(path, entry["folder"].get<std::string>());

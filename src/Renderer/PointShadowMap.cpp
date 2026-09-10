@@ -1,4 +1,5 @@
 #include "PointShadowMap.h"
+#include "GLFramebufferCheck.h"
 #include "Log.h"
 #include "gl.h"
 
@@ -18,6 +19,7 @@ void PointShadowMap::Configure(int resolution) {
 
     Release();
     m_Resolution = resolution;
+    m_CompleteChecked = false; // re-check after a resolution change (audit #358)
 
     // A cube-map array is a 2D array with depth = numCubes * 6; layer = cube*6 + face.
     glCreateTextures(GL_TEXTURE_CUBE_MAP_ARRAY, 1, &m_DepthArray);
@@ -42,6 +44,12 @@ void PointShadowMap::BeginFace(int slot, int face) const {
     face = std::clamp(face, 0, 5);
     glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
     glNamedFramebufferTextureLayer(m_Fbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0, slot * 6 + face);
+    // audit #358 — a layered depth FBO only reports COMPLETE once a layer is attached, so the
+    // check belongs here, once, rather than in Configure().
+    if (!m_CompleteChecked) {
+        m_CompleteChecked = true;
+        GLFramebufferCheck::Complete("PointShadowMap", m_Fbo, m_Resolution, m_Resolution);
+    }
     glViewport(0, 0, m_Resolution, m_Resolution);
     glClear(GL_DEPTH_BUFFER_BIT);
 }

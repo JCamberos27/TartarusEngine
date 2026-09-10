@@ -1,4 +1,5 @@
 #include "Bloom.h"
+#include "GLFramebufferCheck.h"
 #include "Shader.h"
 #include "gl.h"
 #include <glm/glm.hpp>
@@ -41,6 +42,7 @@ void Bloom::Create(int width, int height) {
         glCreateFramebuffers(1, &m_Mips[i].Fbo);
         glNamedFramebufferTexture(m_Mips[i].Fbo, GL_COLOR_ATTACHMENT0, m_Mips[i].Tex, 0);
         glNamedFramebufferDrawBuffers(m_Mips[i].Fbo, 1, &kColor0);
+        GLFramebufferCheck::Complete("Bloom mip", m_Mips[i].Fbo, m_Mips[i].W, m_Mips[i].H); // audit #358
         w = std::max(w / 2, 1);
         h = std::max(h / 2, 1);
     }

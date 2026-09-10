@@ -35,4 +35,5 @@ private:
     unsigned int m_DepthArray = 0;
     unsigned int m_Fbo = 0;
     int m_Resolution = 0;
+    mutable bool m_CompleteChecked = false; // audit #358 — one-shot FBO completeness check in Begin()
 };

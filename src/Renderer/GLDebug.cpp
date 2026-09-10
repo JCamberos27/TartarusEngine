@@ -25,6 +25,10 @@ constexpr GLenum kTypeError               = 0x824C; // GL_DEBUG_TYPE_ERROR
 // --smoke-test harness in main.cpp to know whether ErrorCount() means anything.
 bool gDebugActive = false;
 
+// Set by GLDebug::ForceEnable() before Init() — makes Enabled() return true no matter the
+// build config or env (audit #356, --smoke-test).
+bool gForceEnable = false;
+
 // Incremented from OnGlMessage for anything the smoke-test harness should treat as a real
 // failure: a driver-flagged GL_DEBUG_TYPE_ERROR, or any GL_DEBUG_SEVERITY_HIGH message (some
 // drivers report undefined-behaviour warnings as HIGH severity under a non-ERROR type instead).
@@ -61,6 +65,7 @@ void __stdcall OnGlMessage(GLenum /*source*/, GLenum type, GLuint id, GLenum sev
 }
 
 bool Enabled() {
+    if (gForceEnable) return true; // --smoke-test forced it on (audit #356)
 #ifndef NDEBUG
     return true; // Debug builds always get it
 #else
@@ -77,6 +82,8 @@ bool Enabled() {
 }
 
 } // namespace
+
+void GLDebug::ForceEnable() { gForceEnable = true; }
 
 void GLDebug::Init() {
     if (!Enabled()) return;

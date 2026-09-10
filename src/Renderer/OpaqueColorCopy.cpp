@@ -1,4 +1,5 @@
 #include "OpaqueColorCopy.h"
+#include "GLFramebufferCheck.h"
 #include "../extern/glloader/gl.h"
 
 OpaqueColorCopy::~OpaqueColorCopy() {
@@ -10,7 +11,8 @@ OpaqueColorCopy::~OpaqueColorCopy() {
 void OpaqueColorCopy::CopyFrom(unsigned int srcTex, int width, int height) {
     if (width <= 0 || height <= 0 || !srcTex) return;
 
-    if (m_Width != width || m_Height != height || !m_Tex) {
+    const bool sizeChanged = (m_Width != width || m_Height != height || !m_Tex);
+    if (sizeChanged) {
         if (m_Tex) glDeleteTextures(1, &m_Tex);
         int maxDim = width > height ? width : height;
         int numMips = 1;
@@ -34,6 +36,11 @@ void OpaqueColorCopy::CopyFrom(unsigned int srcTex, int width, int height) {
     glNamedFramebufferTexture(m_ReadFbo, GL_COLOR_ATTACHMENT0, srcTex, 0);
     // Attach mip 0 of the destination as the draw color attachment.
     glNamedFramebufferTexture(m_DrawFbo, GL_COLOR_ATTACHMENT0, m_Tex, 0);
+
+    if (sizeChanged) { // audit #358 — validate once per resize, not every frame
+        GLFramebufferCheck::Complete("OpaqueColorCopy read", m_ReadFbo, width, height);
+        GLFramebufferCheck::Complete("OpaqueColorCopy draw", m_DrawFbo, width, height);
+    }
 
     glBlitNamedFramebuffer(m_ReadFbo, m_DrawFbo,
                            0, 0, width, height,

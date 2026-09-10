@@ -17,6 +17,7 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "EnginePaths.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
 #include "Shortcuts.h"
@@ -213,7 +214,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     iconConfig.MergeMode = true;
     iconConfig.PixelSnapH = true;
     iconConfig.GlyphMinAdvanceX = baseFontPx;
-    io.Fonts->AddFontFromFileTTF("assets/fonts/fa-solid-900.ttf", baseFontPx, &iconConfig, iconRanges);
+    io.Fonts->AddFontFromFileTTF(EnginePaths::Resolve("assets/fonts/fa-solid-900.ttf").c_str(), baseFontPx, &iconConfig, iconRanges);
 
     // CJK fallback: Segoe UI has no CJK glyphs, so entity names with Chinese/Japanese/Korean
     // text rendered as tofu boxes in the Hierarchy and Inspector (#50 P33). Merge a system CJK
@@ -239,7 +240,7 @@ void EditorLayer::Init(GLFWwindow* window) {
 
     // Wordmark removed in the #92 UI pass — only the corner monogram remains as branding.
 
-    m_MarkTexture = std::make_unique<Texture>("assets/branding/tartarus_engine_mark.png");
+    m_MarkTexture = std::make_unique<Texture>(EnginePaths::Resolve("assets/branding/tartarus_engine_mark.png"));
     if (!m_MarkTexture->IsValid()) m_MarkTexture.reset();
 }
 

@@ -1,0 +1,9 @@
+{
+  "formatVersion": 2,
+  "_comment": "Deliberately broken fixture (audit #356). NOT staged next to the exe - run explicitly: TartarusEngine.exe --smoke-test <this dir>. Proves the harness fails a scene and exits nonzero on a load-time asset error.",
+  "boxes": [],
+  "empties": [],
+  "models": [
+    { "path": "does/not/exist.obj", "name": "Missing Model", "id": 1, "parentId": -1, "order": 1 }
+  ]
+}
