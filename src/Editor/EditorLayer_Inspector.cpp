@@ -719,6 +719,194 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
     }
 }
 
+// Standalone material-asset editor: shown when a .mat file is selected directly in the Asset
+// Browser (no scene entity involved). Previously a bare .mat fell through to
+// DrawAssetImportInspector's generic "no import settings" message — a material could only be
+// edited once assigned to an object's slot, and even then only while "Embedded" (unsaved). This
+// lets a shared material be authored on its own, the same way Unity lets you click a .mat asset
+// and edit it directly. Every change saves straight to the .mat file; asset edits aren't part of
+// scene Undo/Redo, the same as a rename or a texture re-import elsewhere in the Asset Browser.
+void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, const std::string& matPath) {
+    auto ma = assets.LoadMaterial(matPath);
+    if (!ma) {
+        ImGui::TextWrapped("Failed to load this material file.");
+        return;
+    }
+
+    ImGui::SeparatorText(assets.DisplayName(matPath).c_str());
+    ImGui::TextDisabled("%s", matPath.c_str());
+    ImGui::Spacing();
+
+    Material& mat = ma->Mat;
+
+    // Mirrors the embedded -> file-backed "Save" button in DrawMaterialEditor: the parallel path
+    // strings (what Save() actually writes) have to be re-synced from the live texture pointers
+    // before every write, since editing here mutates Mat's shared_ptr slots directly.
+    auto save = [&]() {
+        ma->AlbedoMapPath            = mat.AlbedoMap            ? mat.AlbedoMap->Path()            : "";
+        ma->NormalMapPath            = mat.NormalMap            ? mat.NormalMap->Path()            : "";
+        ma->MetallicRoughnessMapPath = mat.MetallicRoughnessMap ? mat.MetallicRoughnessMap->Path() : "";
+        ma->MetallicMapPath          = mat.MetallicMap          ? mat.MetallicMap->Path()          : "";
+        ma->RoughnessMapPath         = mat.RoughnessMap         ? mat.RoughnessMap->Path()         : "";
+        ma->AOMapPath                = mat.AOMap                ? mat.AOMap->Path()                : "";
+        ma->EmissiveMapPath          = mat.EmissiveMap          ? mat.EmissiveMap->Path()          : "";
+        ma->Save();
+    };
+
+    auto colorRow = [&](const char* label, glm::vec3 Material::* field, const char* tip) {
+        PropertyLabel(label, tip);
+        ImGui::PushID(label);
+        ImGui::SetNextItemWidth(-(ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x));
+        glm::vec3 edit = mat.*field;
+        bool changed = ImGui::ColorEdit3("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
+        if (changed) mat.*field = edit;
+        if (ImGui::IsItemDeactivatedAfterEdit()) save();
+        EyedropperButton(this, world, &(mat.*field));
+        ImGui::PopID();
+    };
+    auto scalarRow = [&](const char* label, float Material::* field, float lo, float hi, const char* tip) {
+        PropertyLabel(label, tip);
+        ImGui::PushID(label);
+        float edit = mat.*field;
+        bool changed = EditorUI::SliderFloat("##ms", &edit, lo, hi, "%.3f");
+        if (changed && std::isfinite(edit)) mat.*field = edit;
+        if (ImGui::IsItemDeactivatedAfterEdit()) save();
+        ImGui::PopID();
+    };
+    auto mapRow = [&](const char* label, std::shared_ptr<Texture> Material::* texSlot, const char* help) {
+        ImGui::PushID(label);
+        PropertyLabel(label);
+        Texture* tex = (mat.*texSlot).get();
+        std::string preview = tex ? std::filesystem::path(tex->Path()).filename().string() : std::string("(none)");
+        float clearReserve = tex ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+        if (ImGui::Button(preview.c_str(), ImVec2(tex ? -clearReserve : -FLT_MIN, 0.0f))) {
+            std::string path = FileDialog::OpenFile(
+                "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
+            if (!path.empty()) {
+                mat.*texSlot = assets.LoadTexture(path);
+                save();
+            }
+        }
+        if (ImGui::IsItemHovered()) {
+            if (tex) {
+                ImGui::BeginTooltip();
+                ImGui::Image((ImTextureID)(intptr_t)tex->GLHandle(), ImVec2(96, 96));
+                ImGui::TextUnformatted(tex->Path().c_str());
+                ImGui::EndTooltip();
+            } else {
+                EditorUI::SetTooltip("Click to import an image, or drag one from the Asset Browser.");
+            }
+        }
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
+                std::string texPath((const char*)payload->Data);
+                mat.*texSlot = assets.LoadTexture(texPath);
+                save();
+            }
+            ImGui::EndDragDropTarget();
+        }
+        if (tex) {
+            ImGui::SameLine();
+            if (ActionButton(ICON_FA_XMARK, "Clear", false, ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+                mat.*texSlot = nullptr;
+                save();
+            }
+        }
+        if (help) EditorUI::HelpMarker(help);
+        ImGui::PopID();
+    };
+
+    if (ma->Shader) {
+        // Data-driven inspector for materials with a linked ShaderAsset — same property list
+        // DrawMaterialEditor's DrawShaderPropertyRow uses, just without the multi-select "mixed"
+        // handling since there's exactly one Material here.
+        const auto& props = ma->Shader->Properties();
+        bool inTexSection = false;
+        for (const ShaderProperty& prop : props) {
+            if (prop.Hidden) continue;
+            ImGui::PushID(prop.Name.c_str());
+            const char* label = prop.DisplayName.c_str();
+            if (prop.Type == ShaderPropType::Texture2D && !inTexSection) {
+                ImGui::SeparatorText("Texture Maps");
+                inTexSection = true;
+            }
+            switch (prop.Type) {
+            case ShaderPropType::Color: {
+                PropertyLabel(label);
+                glm::vec3 edit = MaterialAsset::GetColor(mat, prop.Name);
+                bool changed = ImGui::ColorEdit3("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
+                if (changed) MaterialAsset::SetColor(mat, prop.Name, edit);
+                if (ImGui::IsItemDeactivatedAfterEdit()) save();
+                break;
+            }
+            case ShaderPropType::Float: {
+                PropertyLabel(label);
+                float edit = MaterialAsset::GetFloat(mat, prop.Name);
+                bool changed = EditorUI::SliderFloat("##f", &edit, prop.DefaultFloat, 1.0f, "%.3f");
+                if (changed && std::isfinite(edit)) MaterialAsset::SetFloat(mat, prop.Name, edit);
+                if (ImGui::IsItemDeactivatedAfterEdit()) save();
+                break;
+            }
+            case ShaderPropType::Bool: {
+                PropertyLabel(label);
+                bool edit = MaterialAsset::GetBool(mat, prop.Name);
+                if (ImGui::Checkbox("##b", &edit)) { MaterialAsset::SetBool(mat, prop.Name, edit); save(); }
+                break;
+            }
+            case ShaderPropType::Texture2D: {
+                PropertyLabel(label);
+                Texture* tex = MaterialAsset::GetTexture(mat, prop.Name).get();
+                std::string preview = tex ? std::filesystem::path(tex->Path()).filename().string() : std::string("(none)");
+                float clearReserve = tex ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+                if (ImGui::Button(preview.c_str(), ImVec2(tex ? -clearReserve : -FLT_MIN, 0.0f))) {
+                    std::string path = FileDialog::OpenFile(
+                        "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
+                    if (!path.empty()) { MaterialAsset::SetTexture(mat, prop.Name, assets.LoadTexture(path)); save(); }
+                }
+                if (ImGui::BeginDragDropTarget()) {
+                    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
+                        std::string texPath((const char*)p->Data);
+                        MaterialAsset::SetTexture(mat, prop.Name, assets.LoadTexture(texPath));
+                        save();
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+                if (tex) {
+                    ImGui::SameLine();
+                    if (ActionButton(ICON_FA_XMARK, "Clear", false, ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+                        MaterialAsset::SetTexture(mat, prop.Name, nullptr);
+                        save();
+                    }
+                }
+                break;
+            }
+            default: break;
+            }
+            ImGui::PopID();
+        }
+        return;
+    }
+
+    colorRow("Base Color", &Material::BaseColor,
+             "Surface tint, multiplied with the Albedo map.");
+    scalarRow("Metallic", &Material::Metallic, 0.0f, 1.0f,
+              "0 = non-metal, 1 = pure metal. Ignored where a Metallic map is set.");
+    scalarRow("Roughness", &Material::Roughness, 0.04f, 1.0f,
+              "0 = mirror-smooth, 1 = fully matte. Ignored where a Roughness map is set.");
+    colorRow("Emissive Color", &Material::EmissiveColor,
+             "Color this surface glows, independent of scene lighting.");
+    scalarRow("Emissive Strength", &Material::EmissiveStrength, 0.0f, 10.0f,
+              "Brightness multiplier for the Emissive Color / map.");
+
+    ImGui::SeparatorText("Texture Maps");
+    mapRow("Albedo",    &Material::AlbedoMap,    "The base color texture (diffuse / base color map).");
+    mapRow("Normal",    &Material::NormalMap,    "Fine surface detail (bumps, grooves) without extra geometry.");
+    mapRow("Metallic",  &Material::MetallicMap,  "Grayscale: white = metal. Overrides the Metallic value above.");
+    mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = matte. Overrides the Roughness value above.");
+    mapRow("AO",        &Material::AOMap,        "Ambient occlusion - darkens crevices and contact points.");
+    mapRow("Emissive",  &Material::EmissiveMap,  "Texture for glowing areas, tinted by Emissive Color.");
+}
+
 // The Inspector's body — everything inside the panel window. The module
 // (EditorModuleInspector.cpp, #229) owns Begin("Inspector") + End + visibility and calls this
 // inside that window scope. The whole body — every component editor, the PBR material editor,
@@ -1241,7 +1429,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // No scene entity selected — fall back to whatever's selected in the Asset Browser, if
         // anything, and show its Import Settings instead of just an empty placeholder.
         if (!m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder) {
-            DrawAssetImportInspector(world, assets, m_SelectedAssetKey);
+            if (LowerExt(m_SelectedAssetKey) == ".mat")
+                DrawMaterialAssetEditor(world, assets, m_SelectedAssetKey);
+            else
+                DrawAssetImportInspector(world, assets, m_SelectedAssetKey);
             InspectorEnd();
             return;
         }
