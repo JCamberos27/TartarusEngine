@@ -1,6 +1,7 @@
 #include "Window.h"
 #include "Input.h"
 #include "Clock.h"
+#include "CrashHandler.h"
 #include "Shader.h"
 #include "Camera.h"
 #include "Player.h"
@@ -378,6 +379,10 @@ static entt::entity FindActiveSceneCamera(const World& world) {
 }
 
 int main(int argc, char** argv) {
+    // Before anything else: on an unhandled fault, drop a minidump next to the exe instead of
+    // vanishing with a bare exit 139.
+    CrashHandler::Install();
+
     // --smoke-test: headless-as-possible CI/manual smoke check (audit #187). Loads every scene
     // under project/scenes/, renders a fixed number of frames of each through the exact same
     // per-frame render path the interactive editor uses (see the `smokeTestMode` branches

@@ -313,7 +313,7 @@ target_include_directories(TartarusEngine PRIVATE
 target_link_libraries(TartarusEngine PRIVATE glfw glm::glm assimp EnTT::EnTT physx)
 
 if(WIN32)
-  target_link_libraries(TartarusEngine PRIVATE opengl32 comdlg32 dwmapi winmm)
+  target_link_libraries(TartarusEngine PRIVATE opengl32 comdlg32 dwmapi winmm Dbghelp)
 endif()
 
 # PhysX Visual Debugger hookup (#185) — Debug builds only. Lets PR 2-3's colliders / character
