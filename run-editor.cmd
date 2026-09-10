@@ -17,6 +17,7 @@ if errorlevel 1 (
   pause
 )
 
-rem Must run from build\Release so assets/fonts resolve (see the engine's ProjectPaths).
-cd build\Release
-start "" "TartarusEngine.exe"
+rem The engine resolves its shipped assets from the exe's own location (EnginePaths, audit
+rem #355) and walks up for project/, so the working directory no longer matters — launch it
+rem in place.
+start "" "build\Release\TartarusEngine.exe"
