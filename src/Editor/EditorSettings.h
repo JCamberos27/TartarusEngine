@@ -68,6 +68,14 @@ struct EditorSettings {
     // --- Screen-space ambient occlusion (PR15). Off by default; toggle in Lighting > Post-processing.
     bool SsaoEnabled = false;
 
+    // --- Bloom post-process (PR16). A 5-level mip pyramid: soft-knee threshold extracts pixels
+    // above BloomThreshold (luminance), downsample/upsample passes spread that energy into a
+    // soft multi-scale glow, added into linear HDR before the tone curve. Off by default.
+    bool  BloomEnabled   = false;
+    float BloomThreshold = 1.0f;    // luminance above which pixels emit glow (HDR energy units)
+    float BloomKnee      = 0.5f;    // soft-knee width as a fraction of BloomThreshold (0 = hard cutoff)
+    float BloomIntensity = 0.25f;   // additive glow strength (higher = brighter bloom)
+
     // --- Directional-sun cascaded shadow maps. 4 cascades, PCF, resolution per layer.
     // ShadowDistance caps how far (world units) the cascades reach from the camera.
     bool ShadowsEnabled = true;

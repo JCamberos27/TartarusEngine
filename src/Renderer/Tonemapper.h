@@ -20,8 +20,11 @@ public:
     // srcHdrTexture: linear RGBA16F, single-sample (HdrTarget::ResolvedColorTexture()).
     // dstFbo: target framebuffer object (0 = default). dstW/dstH: its viewport.
     // exposureEV: stops of exposure compensation applied before the curve (0 = neutral).
+    // bloomTexture: half-res blurred glow (Bloom::GlowTexture()); 0 = bloom disabled.
+    // bloomIntensity: additive scale for the glow before the tone curve.
     void Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW, int dstH,
-               float exposureEV, Operator op);
+               float exposureEV, Operator op,
+               unsigned int bloomTexture = 0, float bloomIntensity = 0.0f);
 
 private:
     void EnsureCreated();
