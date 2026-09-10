@@ -495,9 +495,18 @@ int main(int argc, char** argv) {
         // Same reasoning as gameBloom above — SSAO needs its own depth pre-pass FBO per viewport.
         Ssao gameSsao;
 
-        World world;
+        // Declaration order is load-bearing for shutdown: the game and editor modules are
+        // hot-reload DLLs, and EnTT lazily instantiates a component's registry storage in
+        // whichever translation unit first calls registry.view<T>() / storage<T>(). During Play
+        // the game module's systems (SpinSystem, TransformControllerSystem) and the editor
+        // module's Stats panel do exactly that from inside their DLLs, so those storages' vtables
+        // / destructor thunks live in DLL code. If ~World (the registry teardown) ran after the
+        // modules' dtors FreeLibrary'd those DLLs, it would call into unmapped memory -> access
+        // violation on exit (only after Play, which is when the storages get created). Declaring
+        // the modules first makes ~World run before ~HotReload*Module.
         HotReloadGameModule gameModule;
         HotReloadEditorModule editorModule;
+        World world;
         {
             std::error_code ec;
             std::filesystem::path executable = std::filesystem::absolute(argv[0], ec);
