@@ -14,6 +14,11 @@
 // doesn't expose KHR_debug / GL 4.3 debug output, Init() logs one line and does nothing else.
 namespace GLDebug {
 
+// Force debug output on for this process regardless of build config or TARTARUS_GL_DEBUG.
+// Call BEFORE Init(). Used by --smoke-test so its GL error count is never structurally zero
+// (audit #356).
+void ForceEnable();
+
 // Call once, after the GL context and loader are ready (i.e. just after the Window is built).
 // Safe to call when disabled — it just returns.
 void Init();

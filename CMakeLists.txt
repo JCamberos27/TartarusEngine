@@ -385,6 +385,16 @@ add_custom_command(TARGET TartarusEngine POST_BUILD
     "$<TARGET_FILE_DIR:TartarusEngine>/assets/shaders"
 )
 
+# Engine-owned smoke/regression scenes (audit TEST-101) — staged next to the exe as
+# assets/test-scenes/ so `--smoke-test` has meaningful, version-controlled coverage that does
+# not depend on the (deletable, user-editable) project/scenes/ content.
+add_custom_command(TARGET TartarusEngine POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:TartarusEngine>/assets/test-scenes"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/tests/smoke-scenes"
+    "$<TARGET_FILE_DIR:TartarusEngine>/assets/test-scenes"
+)
+
 # PhysX runtime DLLs (#185) — copied next to the exe like the fonts above. The set for the
 # CPU-only, non-GPU build is just these three (PhysX.dll load-time-depends on PhysXCommon +
 # PhysXFoundation; Cooking / Gpu aren't built). Pulled from the staged Debug/ or Release/

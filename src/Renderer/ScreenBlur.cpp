@@ -1,4 +1,5 @@
 #include "ScreenBlur.h"
+#include "GLFramebufferCheck.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "GLStateCache.h"
@@ -34,6 +35,7 @@ void ScreenBlur::Ensure(int halfW, int halfH) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo[i]);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_Tex[i], 0);
+        GLFramebufferCheck::Complete("ScreenBlur ping-pong", m_Fbo[i], halfW, halfH); // audit #358
     }
     glBindTexture(GL_TEXTURE_2D, 0);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
