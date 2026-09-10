@@ -1,6 +1,7 @@
 #include "LayerRegistry.h"
 #include "Log.h"
 #include "ProjectPaths.h"
+#include "AtomicFile.h"
 
 #include <json.hpp>
 
@@ -97,12 +98,9 @@ void Save() {
     arr.push_back(DefaultName());
     for (int i = 1; i < kCount; ++i) arr.push_back(g_Names[i]);
 
-    std::ofstream out(LayersPath());
-    if (!out.is_open()) {
-        Log::Warn(std::string("LayerRegistry: could not open '") + LayersPath() + "' for writing");
-        return;
-    }
-    out << json{{"names", arr}}.dump(2) << '\n';
+    // Atomic: a crash mid-write must not truncate the layer-name table (audit CPP-206).
+    if (!AtomicFile::WriteJson(LayersPath(), json{{"names", arr}}))
+        Log::Warn(std::string("LayerRegistry: could not write '") + LayersPath() + "'");
 }
 
 } // namespace LayerRegistry

@@ -2191,6 +2191,9 @@ int main(int argc, char** argv) {
                 editor.SetGameInputActive(gameHasInput);
                 if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
                 else if (playing)    editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
+                // One coalesced, atomic prefs write per frame for however many preference
+                // controls changed this frame (audit CPP-206 / PERF-211).
+                EditorSettings::Flush();
                 // The reloadable editor module (Stats HUD, toolbar strip + menus) reads live
                 // editor / world / assets / camera state through EditorModuleHostAPI; hand it
                 // this frame's pointers first.

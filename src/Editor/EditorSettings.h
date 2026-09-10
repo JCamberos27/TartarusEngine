@@ -211,10 +211,15 @@ struct EditorSettings {
     // hand-deleted prefs file, is not an error.
     static void Load();
 
-    // Writes the current Get() state to editor_prefs.json. Called immediately whenever a
-    // preference changes (not batched/on-exit-only) so a crash or force-quit never loses a
-    // just-made preference change.
+    // Marks preferences dirty. Cheap — call it freely whenever a preference changes (every
+    // frame of a slider drag is fine). The actual atomic write is coalesced into Flush().
     static void Save();
+
+    // Writes the current Get() state to editor_prefs.json (atomically) if Save() has been
+    // called since the last write. The editor loop calls this once per frame and again on
+    // shutdown, so at most one prefs write happens per frame regardless of how many controls
+    // changed (audit CPP-206 / PERF-211).
+    static void Flush();
 
 private:
     EditorSettings() = default;

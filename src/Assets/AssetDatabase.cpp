@@ -1,6 +1,7 @@
 #include "AssetDatabase.h"
 #include "Log.h"
 #include "ProjectPaths.h"
+#include "AtomicFile.h"
 #include <json.hpp>
 
 #include <filesystem>
@@ -84,14 +85,13 @@ AssetGuid ReadMetaGuid(const std::string& metaPath) {
 
 // Writes a new .meta sidecar. Returns false on I/O error.
 bool WriteMetaFile(const std::string& metaPath, AssetGuid guid, const std::string& type) {
-    std::ofstream f(metaPath);
-    if (!f.is_open()) return false;
     json j;
     j["metaVersion"] = 1;
     j["guid"] = guid.ToString();
     j["type"] = type;
-    f << j.dump(2) << "\n";
-    return f.good();
+    // Atomic: a crash mid-write must not truncate a .meta — the asset would lose its GUID and
+    // every scene reference to it would break (audit CPP-206).
+    return AtomicFile::WriteJson(metaPath, j);
 }
 
 // Registers guid ↔ path in both maps (caller holds g_Mutex).
@@ -248,10 +248,7 @@ bool MergeMetaFields(const std::string& path, const std::string& fieldsJson) {
 
     for (auto& [key, val] : incoming.items()) j[key] = val;
 
-    std::ofstream f(meta);
-    if (!f.is_open()) return false;
-    f << j.dump(2) << "\n";
-    return f.good();
+    return AtomicFile::WriteJson(meta, j); // atomic — see WriteMetaFile (audit CPP-206)
 }
 
 } // namespace AssetDatabase

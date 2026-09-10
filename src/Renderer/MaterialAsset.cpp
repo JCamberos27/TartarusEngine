@@ -3,6 +3,7 @@
 #include "AssetLibrary.h"
 #include "Texture.h"
 #include "Log.h"
+#include "AtomicFile.h"
 
 #include <json.hpp>
 #include <filesystem>
@@ -127,12 +128,6 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
 }
 
 bool MaterialAsset::Save() const {
-    std::error_code ec;
-    std::filesystem::create_directories(std::filesystem::path(Path).parent_path(), ec);
-
-    std::ofstream f(Path);
-    if (!f.is_open()) return false;
-
     const auto& m = Mat;
     json j;
 
@@ -192,8 +187,8 @@ bool MaterialAsset::Save() const {
         j["emissiveMap"]         = EmissiveMapPath;
     }
 
-    f << j.dump(2) << "\n";
-    return f.good();
+    // Atomic write: a crash mid-save must not truncate the .mat (audit CPP-206).
+    return AtomicFile::WriteJson(Path, j);
 }
 
 // --- Property access by shader property name ---
