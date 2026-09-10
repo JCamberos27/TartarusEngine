@@ -74,6 +74,10 @@ bool Input::IsKeyDown(int key) {
 }
 
 bool Input::IsKeyPressed(int key) {
+    // s_CurKeys / s_PrevKeys are bool[512] indexed by raw keycode. GLFW_KEY_UNKNOWN (-1) or a
+    // stale rebindable-shortcut int would be an out-of-bounds read; IsKeyDown is already safe
+    // because glfwGetKey range-checks internally.
+    if (key < 0 || key >= 512) return false;
     return s_CurKeys[key] && !s_PrevKeys[key];
 }
 

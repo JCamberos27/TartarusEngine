@@ -14,8 +14,12 @@ draws nothing (audit #356).
 - `smoke_stress` — ~64 primitive boxes + 4 point lights. Draw-call scaling, material-sorted
   draw list, cluster saturation, culling at volume.
 
-`../smoke-scenes-invalid/` holds a deliberately broken fixture that is **not** staged next to
-the exe; run it explicitly to confirm the harness reports failure and exits nonzero:
+`../smoke-scenes-invalid/` holds deliberately broken fixtures that are **not** staged next to
+the exe; run them explicitly to confirm the harness reports failure and exits nonzero:
+
+- `missing_model` — references a model file that does not exist (load-time asset error, #356).
+- `parent_cycle` — `parentId` links form a cycle; proves `ComposeWorldTransform` bails and logs
+  instead of overflowing the stack (audit BUG-202 / #371).
 
 ```
 TartarusEngine.exe --smoke-test path/to/tests/smoke-scenes-invalid

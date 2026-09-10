@@ -10,6 +10,14 @@ public:
     explicit Shader(const std::string& computeSrc);
     ~Shader();
 
+    // Owns a raw GL program name that ~Shader() glDeleteProgram's, so a copy or move would
+    // double-free it (Framebuffer is = delete for the identical reason). Nothing copies a
+    // Shader today — ShaderAsset holds it by unique_ptr — but make the mistake a compile error.
+    Shader(const Shader&) = delete;
+    Shader& operator=(const Shader&) = delete;
+    Shader(Shader&&) = delete;
+    Shader& operator=(Shader&&) = delete;
+
     void Bind() const;
 
     // The raw GL program name. Used as half the key for the material-bind dedup (#192) — a

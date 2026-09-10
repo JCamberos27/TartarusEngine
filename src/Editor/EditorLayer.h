@@ -795,6 +795,7 @@ private:
     static std::string RecoveryPathFor(const std::string& scenePath);
     void WriteRecoverySnapshot(const World& world, const AssetLibrary& assets);
     void ClearRecoverySnapshot(); // deletes the recovery file for m_CurrentScenePath if present; silent
+    void FreeGpuResources();       // GL teardown shared by Shutdown() and ~EditorLayer; idempotent
     void DrawRecoveryPrompt(World& world, AssetLibrary& assets);
     bool m_RecoveryPromptPending = false;
 
@@ -1050,6 +1051,8 @@ private:
     float m_PlayBtnContrastTarget = 1.0f;
     float m_PlayBtnSampleAccum = 0.0f;
     AsyncLuminanceReadback m_PlayBtnReadback; // ping-ponged PBOs backing the sample above (#178)
+    bool m_ShutdownDone = false;       // guards the clean-exit-only tail of Shutdown()
+    bool m_GpuResourcesFreed = false;  // guards FreeGpuResources() (also reachable from ~EditorLayer)
     unsigned int m_MarkSampleFbo = 0; // scratch read-FBO for the corner-monogram's own synchronous sample
     // Same again for the top-right nav-gizmo cluster (dolly / pan tool buttons + the Persp/axis
     // label): its own sample because the corner it lives in can differ in brightness from the

@@ -1,0 +1,23 @@
+{
+  "formatVersion": 2,
+  "_comment": "Deliberately broken fixture (audit BUG-202 / #371). The two empties parent each other (id 1 -> parentId 2 -> parentId 1), a cycle AttachChildRaw accepts during scene load. Pre-fix, the first World::ComposeWorldTransform on a cycle member recursed unbounded into a stack overflow with no diagnostic; post-fix it bails at kMaxHierarchyDepth and logs one clear error, so the scene loads without crashing. Not staged next to the exe - run explicitly: TartarusEngine.exe --smoke-test path/to/tests/smoke-scenes-invalid",
+  "skyHorizonColor": [0.45, 0.55, 0.68],
+  "skyZenithColor": [0.15, 0.30, 0.60],
+  "skyAmbientIntensity": 1.0,
+  "assetFolders": [],
+  "assetMeta": [],
+  "boxes": [
+    { "center": [0, -0.1, 0], "size": [8, 0.2, 8], "color": [0.35, 0.35, 0.38], "rotation": [0, 0, 0], "name": "Ground", "id": 0, "parentId": -1, "order": 0 }
+  ],
+  "empties": [
+    { "name": "A", "id": 1, "parentId": 2, "order": 1,
+      "position": [0, 1, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1] },
+    { "name": "B", "id": 2, "parentId": 1, "order": 2,
+      "position": [0, 2, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1] }
+  ],
+  "models": [],
+  "libraryModels": [],
+  "libraryTextures": [],
+  "librarySounds": [],
+  "libraryPrefabs": []
+}
