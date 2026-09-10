@@ -50,11 +50,12 @@ public:
     void BindForShading() const;
 
     // True if the global index list (binding 4) would have overflowed its GLOBAL_INDEX_CAPACITY
-    // during the most recent Cull() — i.e. at least one cluster's reserved block was truncated
-    // and some lights that should shade it were dropped (#204, adapted for #208's global list:
-    // the failure mode moved from "one cluster's 100-light cap" to "the shared list is full").
-    // A single-uint readback taken once per Cull() call; cheap enough to always do, not
-    // something to poll every fragment. Drives the Stats panel warning, nothing render-critical.
+    // during a recent Cull() — i.e. at least one cluster's reserved block was truncated and some
+    // lights that should shade it were dropped (#204, adapted for #208's global list: the failure
+    // mode moved from "one cluster's 100-light cap" to "the shared list is full"). Sourced from a
+    // fenced ring readback that lands a couple of frames late (PERF-203), so a scene that only
+    // momentarily saturates still trips the Stats-panel warning within a frame or two; nothing on
+    // the render path reads this.
     bool Saturated() const { return m_LastSaturated; }
 
     // (nearZ, farZ, GRID_Z / ln(far/near), -GRID_Z * ln(near) / ln(far/near)) — lets the
@@ -72,6 +73,17 @@ private:
     // adapted for #208).
     unsigned int m_Overflow = 0;
     bool m_LastSaturated = false;
+
+    // Deferred readback of the overflow flag (PERF-203). Each Cull() copies the one flag uint into
+    // the next ring slot and fences it, then consumes the oldest slot only once its fence has
+    // signalled — so the CPU never blocks on data the same dispatch just produced. Cull() runs
+    // ~2x/frame (Scene + Game views), so 4 slots is ~2 frames of latency. Fences are opaque GLsync
+    // stored as void* to keep gl.h out of this header.
+    static constexpr int kOverflowRing = 4;
+    unsigned int m_OverflowCopy[kOverflowRing] = {}; // 1-uint staging buffers
+    void* m_OverflowFence[kOverflowRing] = {};       // GLsync per slot (null = none pending)
+    bool m_OverflowSlotFilled[kOverflowRing] = {};   // slot has a copy+fence not yet consumed
+    int m_OverflowHead = 0;                           // slot the next Cull() writes into
 
     // Cached projection state for build-pass optimization (#205)
     glm::mat4 m_LastProj = glm::mat4(0.0f);

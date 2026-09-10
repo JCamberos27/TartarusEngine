@@ -563,11 +563,9 @@ void EditorLayer::FreeGpuResources() {
     if (m_GpuResourcesFreed) return;
     m_GpuResourcesFreed = true;
 
-    if (m_MarkSampleFbo) { glDeleteFramebuffers(1, &m_MarkSampleFbo); m_MarkSampleFbo = 0; }
-
     // Async luminance-readback PBOs (#178) — one ping-ponged pair per independently-sampled HUD.
     for (AsyncLuminanceReadback* rb : { &m_PlayBtnReadback, &m_NavGizmoReadback, &m_StatusBarReadback,
-                                        &m_StatsHudReadback, &m_HistoryHudReadback }) {
+                                        &m_StatsHudReadback, &m_HistoryHudReadback, &m_MarkReadback }) {
         if (rb->Pbo[0] || rb->Pbo[1]) glDeleteBuffers(2, rb->Pbo);
         rb->Pbo[0] = rb->Pbo[1] = 0;
         rb->Pending[0] = rb->Pending[1] = 0;
@@ -1682,49 +1680,20 @@ void EditorLayer::DrawEngineMark(float dt) {
     // and steer the tint toward white over dark content / black over light content, so it stays
     // legible wherever it is. m_SceneColorTexture is this frame's finished editor-viewport render
     // (set by main.cpp right before Draw()), sized 1:1 with m_ViewportSize, GL bottom-left origin.
-    // Sampled at ~10 Hz, NOT every frame: the readback's GPU->CPU sync would otherwise be the one
-    // thing in here that could cost a frame. The per-frame ease below hides the low sample rate.
+    // Routed through the same async PBO readback the other HUD samples use (#178, PERF-210): the
+    // result is a frame or two stale, which the per-frame ease below hides, and the GPU is never
+    // stalled waiting for the transfer. Still throttled to ~10 Hz so the PBO pair keeps up.
     m_MarkSampleAccum += dt;
     const float kSampleInterval = 0.1f;
     // Prism monogram: its own setting, OR forced on whenever the Prism editor theme is active.
     const bool prism = EditorSettings::Get().EngineMarkPrism || EditorSettings::Get().EditorTheme == 1;
     if (!prism && m_SceneColorTexture != 0 && m_MarkSampleAccum >= kSampleInterval) {
         m_MarkSampleAccum = 0.0f;
-        int vw = (int)m_ViewportSize.x, vh = (int)m_ViewportSize.y;
-        const int kMaxPatch = 64;
-        // mark centre -> viewport-local top-left -> bottom-left-origin texels
-        int rx = (int)(center.x - m_ViewportPos.x - half);
-        int ry = (int)(m_ViewportSize.y - ((center.y - m_ViewportPos.y - half) + size));
-        int rw = (int)size, rh = (int)size;
-        if (rx < 0) { rw += rx; rx = 0; }
-        if (ry < 0) { rh += ry; ry = 0; }
-        if (rx + rw > vw) rw = vw - rx;
-        if (ry + rh > vh) rh = vh - ry;
-        if (rw > kMaxPatch) { rx += (rw - kMaxPatch) / 2; rw = kMaxPatch; }
-        if (rh > kMaxPatch) { ry += (rh - kMaxPatch) / 2; rh = kMaxPatch; }
-        if (rx >= 0 && ry >= 0 && rw >= 1 && rh >= 1) {
-            if (m_MarkSampleFbo == 0) glGenFramebuffers(1, &m_MarkSampleFbo);
-            GLint prevReadFbo = 0;
-            glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFbo);
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, m_MarkSampleFbo);
-            glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_SceneColorTexture, 0);
-
-            unsigned char px[kMaxPatch * kMaxPatch * 4];
-            glReadPixels(rx, ry, rw, rh, GL_RGBA, GL_UNSIGNED_BYTE, px);
-
-            glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevReadFbo);
-
-            double sum = 0.0;
-            const int n = rw * rh;
-            for (int i = 0; i < n; ++i)
-                sum += 0.2126 * px[i * 4] + 0.7152 * px[i * 4 + 1] + 0.0722 * px[i * 4 + 2];
-            float avgLum = (float)(sum / (n * 255.0)); // 0 = black behind the mark, 1 = white
-
-            float t = (avgLum - 0.30f) / (0.62f - 0.30f);
-            t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-            m_MarkContrastTarget = 1.0f - t * t * (3.0f - 2.0f * t); // white on dark, black on light
-        }
+        // The sampled box is centred on the mark and `size` wide in screen space; SampleSceneLuminance
+        // maps that to bottom-left-origin texels and clamps it to the viewport / patch cap itself.
+        float lum = SampleSceneLuminance(m_MarkReadback, center, size);
+        if (lum >= 0.0f)
+            m_MarkContrastTarget = ContrastForLuminance(lum); // white on dark, black on light
     }
     // Ease toward the target every frame — ~0.15 s time constant, a smooth cross-fade.
     {

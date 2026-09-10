@@ -150,6 +150,15 @@
 #define GL_READ_ONLY 0x88B8
 #define GL_STREAM_READ 0x88E1
 
+// Fence sync + buffer-to-buffer copy — single-value GPU->CPU readback deferred a few
+// dispatches so it never stalls the frame (PERF-203: cluster light-list overflow flag).
+#define GL_SYNC_GPU_COMMANDS_COMPLETE 0x9117
+#define GL_SYNC_FLUSH_COMMANDS_BIT 0x00000001
+#define GL_ALREADY_SIGNALED 0x911A
+#define GL_TIMEOUT_EXPIRED 0x911B
+#define GL_CONDITION_SATISFIED 0x911C
+#define GL_WAIT_FAILED 0x911D
+
 typedef char GLchar;
 typedef ptrdiff_t GLsizeiptr;
 typedef ptrdiff_t GLintptr;
@@ -163,6 +172,7 @@ typedef unsigned char GLubyte;
 typedef float GLfloat;
 typedef double GLdouble;
 typedef unsigned int GLbitfield;
+typedef struct __GLsync* GLsync; // opaque fence-sync handle (PERF-203)
 
 // --- core GL (already exported by opengl32.dll on Windows) ---
 extern "C" {
@@ -406,6 +416,16 @@ typedef void* (__stdcall* PFNGLMAPNAMEDBUFFERPROC)(GLuint, GLenum);
 typedef GLboolean (__stdcall* PFNGLUNMAPNAMEDBUFFERPROC)(GLuint);
 extern PFNGLMAPNAMEDBUFFERPROC glMapNamedBuffer;
 extern PFNGLUNMAPNAMEDBUFFERPROC glUnmapNamedBuffer;
+
+// Fence sync + buffer-to-buffer copy — deferred cluster-overflow readback (PERF-203).
+typedef void (__stdcall* PFNGLCOPYNAMEDBUFFERSUBDATAPROC)(GLuint, GLuint, GLintptr, GLintptr, GLsizeiptr);
+typedef GLsync (__stdcall* PFNGLFENCESYNCPROC)(GLenum, GLbitfield);
+typedef GLenum (__stdcall* PFNGLCLIENTWAITSYNCPROC)(GLsync, GLbitfield, GLuint64);
+typedef void (__stdcall* PFNGLDELETESYNCPROC)(GLsync);
+extern PFNGLCOPYNAMEDBUFFERSUBDATAPROC glCopyNamedBufferSubData;
+extern PFNGLFENCESYNCPROC glFenceSync;
+extern PFNGLCLIENTWAITSYNCPROC glClientWaitSync;
+extern PFNGLDELETESYNCPROC glDeleteSync;
 
 // Call once after a GL context is current (e.g. right after glfwMakeContextCurrent).
 bool GLLoader_Init();

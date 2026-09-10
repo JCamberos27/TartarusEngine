@@ -48,8 +48,6 @@ struct AssetGridCell {
 };
 
 #include "AdaptiveContrast.h" // AsyncLuminanceReadback + SampleTextureLuminance (shared with GameViewPanel)
-// NB: EditorLayer also keeps its own m_MarkSampleFbo (below) — a scratch read-FBO for a separate
-// synchronous corner-monogram luminance sample, unrelated to the async readbacks above.
 
 // In-game editor overlay (Dear ImGui + ImGuizmo): import assets, place/inspect
 // entities, manipulate them with viewport gizmos. Toggle with F1; gameplay pauses
@@ -1042,8 +1040,8 @@ private:
     // fixed colour) so the first frame before any readback looks unchanged.
     float m_MarkContrastLum = 1.0f;    // eased, per-frame
     float m_MarkContrastTarget = 1.0f; // refreshed by the throttled readback
-    float m_MarkSampleAccum = 0.0f;    // seconds since last readback (sampled ~10 Hz, not per-frame,
-                                       // so the GPU->CPU sync never touches the 60 fps frame budget)
+    float m_MarkSampleAccum = 0.0f;    // seconds since last readback (sampled ~10 Hz, not per-frame)
+    AsyncLuminanceReadback m_MarkReadback; // async PBO pair behind the mark's sample (#178, PERF-210)
     // Same contrast-adaptive trick for the viewport-top-center Play/Stop button: sample the scene
     // luminance behind it and steer the glyph white-on-dark / dark-on-light. Its own eased state
     // because it sits far from the corner mark and reads a different patch of the scene.
@@ -1053,7 +1051,6 @@ private:
     AsyncLuminanceReadback m_PlayBtnReadback; // ping-ponged PBOs backing the sample above (#178)
     bool m_ShutdownDone = false;       // guards the clean-exit-only tail of Shutdown()
     bool m_GpuResourcesFreed = false;  // guards FreeGpuResources() (also reachable from ~EditorLayer)
-    unsigned int m_MarkSampleFbo = 0; // scratch read-FBO for the corner-monogram's own synchronous sample
     // Same again for the top-right nav-gizmo cluster (dolly / pan tool buttons + the Persp/axis
     // label): its own sample because the corner it lives in can differ in brightness from the
     // top-center where the Play button sits.
@@ -1421,7 +1418,8 @@ private:
     // (PushAdaptiveHudText was here — the eased contrast tint for the transparent viewport HUDs.
     // The Stats and History HUDs both live in TartarusEditor.dll now and each carries its own
     // module-side copy of the maths; the host keeps only SampleSceneLuminance + the per-HUD
-    // AsyncLuminanceReadback objects. The engine mark / status bar inline the same maths.)
+    // AsyncLuminanceReadback objects. The engine mark uses ContrastForLuminance; the status bar
+    // inlines the same maths.)
 
     // --- Statistics --------------------------------------------------------------------
     // The compact transparent HUD pinned to the Scene viewport's top-left corner (#149) moved
