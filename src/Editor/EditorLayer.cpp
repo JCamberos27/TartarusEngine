@@ -82,7 +82,14 @@
 using namespace EditorInternal;
 
 EditorLayer::EditorLayer() = default;
-EditorLayer::~EditorLayer() = default;
+EditorLayer::~EditorLayer() {
+    // RAII safety net: main() calls Shutdown() on the clean-exit path, but a throw mid-frame
+    // unwinds this object (window still alive) without it, leaking the mark FBO, five readback
+    // PBO pairs, the thumbnail blit FBO and every thumbnail texture. Free only the GPU
+    // resources here — the recovery snapshot and the settings save in Shutdown() are
+    // clean-exit-only and must NOT run while a fatal exception is unwinding.
+    FreeGpuResources();
+}
 
 void EditorLayer::Init(GLFWwindow* window) {
     m_Window = window;
@@ -547,11 +554,13 @@ void EditorLayer::ApplyPrismAnimation(float phase) {
     style.Colors[ImGuiCol_TabSelectedOverline] = band(1.00f, 0.78f, 1.00f, 0.95f); // far end of the smear
 }
 
-void EditorLayer::Shutdown() {
-    // Shutdown() is only reached on a clean exit, and main.cpp saves the real scene file just
-    // before calling it — so any recovery snapshot is now stale and would otherwise trigger a
-    // spurious "restore unsaved changes?" prompt on the next launch.
-    ClearRecoverySnapshot();
+// GL resource teardown, split out of Shutdown() so ~EditorLayer can run it on the
+// exception-unwind path without also triggering the clean-exit-only steps (recovery-snapshot
+// clear, preferences save). Idempotent: every delete self-guards on a nonzero handle and the
+// flag stops a second pass entirely.
+void EditorLayer::FreeGpuResources() {
+    if (m_GpuResourcesFreed) return;
+    m_GpuResourcesFreed = true;
 
     if (m_MarkSampleFbo) { glDeleteFramebuffers(1, &m_MarkSampleFbo); m_MarkSampleFbo = 0; }
 
@@ -567,6 +576,21 @@ void EditorLayer::Shutdown() {
     m_ModelThumbnails.clear();
     m_ThumbnailLRU.clear();
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
+}
+
+void EditorLayer::Shutdown() {
+    // Idempotent: called explicitly by main() on clean exit; ~EditorLayer only calls
+    // FreeGpuResources(), not this. ImGui_Impl*_Shutdown() and DestroyContext() must not run twice.
+    if (m_ShutdownDone) return;
+    m_ShutdownDone = true;
+
+    // main.cpp saves the real scene file just before calling this, so any recovery snapshot is
+    // now stale and would otherwise trigger a spurious "restore unsaved changes?" prompt on the
+    // next launch. Clean-exit path only — never on the ~EditorLayer exception-unwind path, where
+    // the snapshot is exactly what a post-crash relaunch needs.
+    ClearRecoverySnapshot();
+
+    FreeGpuResources();
 
     // Safety net: save preferences on clean shutdown, in case a future control forgets its own
     // save call. This is not a replacement for per-control saves; it's insurance against silent

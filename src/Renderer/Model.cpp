@@ -563,7 +563,10 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
     // was ~7 KHR 131204 warnings per draw). uHas*Map still tells the shader whether to use it.
     auto bindSlot = [&](int unit, const std::shared_ptr<Texture>& tex, int hasLoc, int samplerLoc,
                         unsigned int fallback) {
-        if (tex) {
+        // A Texture whose file failed to decode is still a live non-null object with m_ID == 0
+        // (Texture.cpp logs and returns from the ctor). Treat it as an empty slot: bind the
+        // fallback and leave uHas*Map = 0 so the shader never samples a 0-texture as a real map.
+        if (tex && tex->IsValid()) {
             tex->Bind(unit);
             shader.SetInt(hasLoc, 1);
         } else {
@@ -598,7 +601,7 @@ void BindMaterialDataDriven(Shader& shader, const Material& mat, const ShaderAss
         case ShaderPropType::Texture2D: {
             std::string hasName = "uHas" + pname.substr(1);
             const auto& tex = MaterialAsset::GetTexture(mat, pname);
-            if (tex) {
+            if (tex && tex->IsValid()) {
                 tex->Bind(b.TextureUnit);
                 shader.SetInt(uname,   b.TextureUnit);
                 shader.SetInt(hasName, 1);
@@ -653,7 +656,7 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
         // follows the cutout instead of a solid silhouette (#116). #192: skip even that when the
         // previous mesh in this pass drew with the same material.
         if (!GLStateCache::MaterialAlreadyBound(mat.Hash(), shader.Program())) {
-            if (mat.AlbedoMap) {
+            if (mat.AlbedoMap && mat.AlbedoMap->IsValid()) {
                 mat.AlbedoMap->Bind(0);
                 shader.SetInt(albedoLoc, 0);
                 shader.SetInt(alphaTestLoc, 1);
