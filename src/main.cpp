@@ -69,6 +69,8 @@
 #include <thread>
 #include <vector>
 #include <chrono>
+#pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
+#include <stb_image_write.h> // --asset-load-bench: synthesize PNGs to load (ARCH-201 / #375)
 #include <cstring>
 #include <cstdlib>
 #include <intrin.h>   // __cpuid — CPU brand string for the boot log
@@ -407,6 +409,11 @@ int main(int argc, char** argv) {
     // synthetic scene sizes (audit ARCH-203 / #375). Investigates whether undo/redo's whole-scene
     // JSON round-trip is cheap enough to leave as-is, before committing to a diff-based redesign.
     bool undoBenchMode = false;
+    // --asset-load-bench: one-shot headless timing of AssetLibrary::LoadTexture's decode/upload
+    // split at synthetic library sizes (audit ARCH-201 / #375). The committed project has no
+    // external texture/model assets to bench against, so this synthesizes PNGs the same way
+    // --undo-bench synthesizes entities.
+    bool assetLoadBenchMode = false;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--smoke-test") {
@@ -415,12 +422,13 @@ int main(int argc, char** argv) {
         }
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
         else if (a == "--undo-bench") { undoBenchMode = true; }
+        else if (a == "--asset-load-bench") { assetLoadBenchMode = true; }
     }
     const bool resaveMode = !resaveIn.empty();
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
     // (audit BUG-102).
-    const bool headless = smokeTestMode || resaveMode || undoBenchMode;
+    const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode;
 
     // Resolve shipped engine assets (shaders, fonts, branding) relative to the executable, not
     // the working directory, so a launch from the repo root or an unrelated CWD still finds
@@ -610,6 +618,68 @@ int main(int argc, char** argv) {
                           << " roundTrip(1 Undo)=" << (saveMs + loadMs) << "ms"
                           << (ok ? "" : " LOAD_FAILED") << "\n";
             }
+            return 0;
+        }
+
+        if (assetLoadBenchMode) {
+            // Synthesizes N procedural PNGs (mixed sizes so DownsampleBox gets exercised too),
+            // loads them all through AssetLibrary::LoadTexture, and reports the decode/upload
+            // split TextureLoadStats measured inside Texture::UploadFromFile. Run twice per N:
+            // once cold (fresh files, empty TextureCache) and once warm (same files, but
+            // TextureCache now has decoded pixels on disk from the cold pass) to show the disk
+            // cache's actual saving — a fresh AssetLibrary both times, so the *library's* cache
+            // never masks it.
+            std::error_code benchEc;
+            const std::filesystem::path benchDir =
+                std::filesystem::temp_directory_path(benchEc) / "TartarusEngine" / "AssetLoadBench";
+            if (benchEc) {
+                std::cerr << "[AssetLoadBench] couldn't resolve a temp directory.\n";
+                return 2;
+            }
+            std::filesystem::remove_all(benchDir, benchEc); // clear any previous run's leftovers
+            std::filesystem::create_directories(benchDir, benchEc);
+            if (benchEc) {
+                std::cerr << "[AssetLoadBench] couldn't create '" << benchDir.string() << "'.\n";
+                return 3;
+            }
+
+            // 256/1024/2048 cycle so a texture over the 2048 MaxTextureSize default gets
+            // DownsampleBox'd like a real oversized source would.
+            const int kSizes[] = { 256, 1024, 2048 };
+            for (int n : {10, 50, 200}) {
+                std::vector<std::string> paths;
+                paths.reserve(n);
+                std::vector<unsigned char> pixels((size_t)2048 * 2048 * 4);
+                for (int i = 0; i < n; ++i) {
+                    int size = kSizes[i % 3];
+                    // Solid-but-varying color per file so PNG compression can't special-case an
+                    // all-zero buffer; still trivially fast to synthesize.
+                    unsigned char fill = (unsigned char)(i * 37);
+                    std::fill(pixels.begin(), pixels.begin() + (size_t)size * size * 4, fill);
+                    std::string path = (benchDir / ("tex_" + std::to_string(i) + ".png")).string();
+                    stbi_write_png(path.c_str(), size, size, 4, pixels.data(), size * 4);
+                    paths.push_back(std::move(path));
+                }
+
+                auto runPass = [&](const char* label) {
+                    AssetLibrary passAssets;
+                    TextureLoadStats::Reset();
+                    auto t0 = std::chrono::steady_clock::now();
+                    for (const std::string& p : paths) passAssets.LoadTexture(p);
+                    auto t1 = std::chrono::steady_clock::now();
+                    const TextureLoadStats& stats = TextureLoadStats::Get();
+                    double wallMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+                    std::cout << "[AssetLoadBench] n=" << n << " " << label
+                              << ": decode=" << stats.DecodeMs << "ms"
+                              << " upload=" << stats.UploadMs << "ms"
+                              << " wall=" << wallMs << "ms"
+                              << " loaded=" << stats.Count << "/" << n << "\n";
+                };
+                runPass("cold"); // fresh files, empty TextureCache
+                runPass("cached"); // same files, TextureCache now warm from the cold pass above
+            }
+
+            std::filesystem::remove_all(benchDir, benchEc);
             return 0;
         }
 
