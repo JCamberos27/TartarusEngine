@@ -160,6 +160,14 @@ std::shared_ptr<ShaderAsset> ShaderAsset::ParseFile(const std::string& path) {
                 if (!kw.empty() && kw[0] != '/')
                     sa->m_Keywords.push_back(kw);
             }
+            // The variant key is a 32-bit mask (ShaderVariantKey), so bit 32+ can never be
+            // selected. Enforced in Debug and Release (#354).
+            if (sa->m_Keywords.size() > 32) {
+                Log::Error("ShaderAsset: '" + path + "' declares " +
+                           std::to_string(sa->m_Keywords.size()) +
+                           " keywords; only the first 32 are usable — the rest are dropped.");
+                sa->m_Keywords.resize(32);
+            }
         } else if (token == "Vertex") {
             sa->m_VertFile = Trim(ReadBlock(f));
         } else if (token == "Fragment") {
@@ -174,15 +182,24 @@ std::shared_ptr<ShaderAsset> ShaderAsset::ParseFile(const std::string& path) {
 
 void ShaderAsset::BuildBindings() {
     m_Bindings.clear();
-    int unit = 1; // material texture units start at 1 (engine IBL at 11-13)
+    // Material texture units are 1..7. 0 is the depth-prepass albedo, 8/9/10 the shadow maps,
+    // 11-13 IBL, 14 the opaque-colour copy, 15 SSAO (see SceneRenderer::ApplyFrameState). A
+    // .shader that declares more than 7 Texture2D properties can't fit — the overflow ones get
+    // no unit and never bind. Enforced in Debug and Release (#354).
+    static constexpr int kMaxMaterialTexUnit = 7;
+    int unit = 1;
     for (int i = 0; i < (int)m_Props.size(); ++i) {
         PropertyBinding b;
         b.Type      = m_Props[i].Type;
         b.PropIndex = i;
         b.TextureUnit = -1;
         if (m_Props[i].Type == ShaderPropType::Texture2D) {
-            assert(unit < 11 && "material texture unit collision with engine IBL range");
-            b.TextureUnit = unit++;
+            if (unit > kMaxMaterialTexUnit) {
+                Log::Warn("ShaderAsset: '" + m_Path + "' texture property '" + m_Props[i].Name +
+                          "' exceeds the 7 material texture-unit budget; left unbound.");
+            } else {
+                b.TextureUnit = unit++;
+            }
         }
         m_Bindings.push_back(b);
     }

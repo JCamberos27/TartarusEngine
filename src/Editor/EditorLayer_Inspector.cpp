@@ -2916,6 +2916,26 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             }
             ImGui::PopID();
         }
+
+        // #354: two variant opt-ins that aren't shader Properties() — subsurface and reflection
+        // probes have no natural "off" scalar, so a bool drives their keyword.
+        ImGui::SeparatorText("Variant Options");
+        auto boolRow = [&](const char* label, bool Material::* field, const char* tip) {
+            bool shared = mats[0]->*field, mixed = false;
+            for (Material* mm : mats) if ((mm->*field) != shared) mixed = true;
+            PropertyLabel(label);
+            bool edit = shared;
+            if (ImGui::Checkbox(mixed ? "##b-mixed" : "##b", &edit)) {
+                PushUndo(world, std::string("Edit ") + label);
+                for (Material* mm : mats) mm->*field = edit;
+            }
+            if (mixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
+            if (tip && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+        };
+        boolRow("Subsurface", &Material::SubsurfaceEnabled,
+                "Enable the _SUBSURFACE shader variant (wrapped diffuse + back-lit thin-surface transmission).");
+        boolRow("Reflection Probes", &Material::ReflectionProbes,
+                "Enable the _REFLECTION_PROBES variant — parallax box reflections from the 2 nearest placed probes.");
     };
 
     // -------------------------------------------------------------------------

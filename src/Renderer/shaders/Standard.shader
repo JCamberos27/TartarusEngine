@@ -21,7 +21,6 @@ Properties {
     // PR10: Clear Coat
     _ClearCoat           ("Clear Coat",           Float)     = 0
     _ClearCoatRoughness  ("Clear Coat Roughness",  Float)     = 0.5
-    [Hidden] _ClearCoatMap ("Clear Coat Map",      Texture2D) = "white"
     // PR10: Anisotropy
     _Anisotropy          ("Anisotropy",            Float)     = 0
     _AnisotropyRotation  ("Anisotropy Rotation",   Float)     = 0
@@ -31,7 +30,6 @@ Properties {
     // PR11: Subsurface translucency
     _SubsurfaceColor     ("Subsurface Color",       Color)     = (1, 0.8, 0.6)
     _Thickness           ("Thickness",              Float)     = 0.5
-    [Hidden] _ThicknessMap ("Thickness Map",        Texture2D) = "white"
     // PR12: Transmission + refraction
     _TransmissionStrength ("Transmission",          Float)     = 0
     _IOR                  ("IOR",                   Float)     = 1.5
