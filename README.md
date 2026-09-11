@@ -60,6 +60,7 @@ feature can do today and what's still planned.
 | Feature | Summary |
 |---|---|
 | **[PBR & HDR pipeline](https://github.com/JCamberos27/TartarusEngine/discussions/266)** | Forward PBR (albedo / normal / metallic / roughness / AO / emissive) into a multisampled `RGBA16F` target; exposure + Reinhard / ACES / AgX tone-mapping; per-viewport HDR targets |
+| **[Material system & advanced PBR](https://github.com/JCamberos27/TartarusEngine/issues/333)** | `.mat` assets link a `.shader`; the renderer selects a keyword variant per material from its authored lobes, so **clear coat, anisotropy, sheen, subsurface, transmission/refraction, and parallax-box reflection probes** each compile into a distinct program only where used. `--smoke-test` reports the variant keys drawn |
 | **[SSAO & Bloom](https://github.com/JCamberos27/TartarusEngine/issues/333)** | Depth pre-pass → view-space hemisphere SSAO (32 samples, TBN noise, 4×4 blur); threshold + separable Gaussian bloom — both additive in linear HDR before the tone curve; toggled in Lighting |
 | **[Lighting & shadows](https://github.com/JCamberos27/TartarusEngine/discussions/267)** | One `std430` GPU light buffer; clustered-forward culling on a 16 × 9 × 24 froxel grid; cascaded sun shadows, plus cube-map point and perspective spot shadows |
 | **[Image-based lighting](https://github.com/JCamberos27/TartarusEngine/discussions/281)** | Split-sum IBL — irradiance + prefiltered-specular cubes and a BRDF LUT baked from the procedural sky, auto-rebaked when it changes |
@@ -155,9 +156,11 @@ Every push and pull request runs [`.github/workflows/build.yml`](.github/workflo
 - **Compile gate** — Debug *and* Release, MSVC. This is the conclusive signal.
 - **`--smoke-test`** — loads every scene in the committed `tests/smoke-scenes/` set, renders 100
   frames each, and fails the process (exit 1) unless every scene loaded, produced no new GL or
-  log errors, and issued at least one draw call. `smoke_play.json` additionally runs two
-  Play → Stop cycles (snapshot save/restore, PhysX world create/destroy, game-module systems),
-  and the run then exits normally so the shutdown path is exercised too. Run locally with
+  log errors, and issued at least one draw call, and reports the `ShaderAsset` variant keys each
+  scene drew. `smoke_play.json` additionally runs two Play → Stop cycles (snapshot save/restore,
+  PhysX world create/destroy, game-module systems), and the run then exits normally so the
+  shutdown path is exercised too; `smoke_materials.json` covers every advanced-PBR variant. Run
+  locally with
   `build/<Config>/TartarusEngine.exe --smoke-test` (add a directory argument to point it at a
   different scene set). In CI it is `continue-on-error`: hosted GitHub runners have no GPU and
   cannot create the required OpenGL 4.6 core context, so only a PASS or a compile failure there
@@ -216,6 +219,7 @@ project/      The scene and editor preferences being authored
 - Live prefab instances with per-field & per-component overrides — accent-tinted labels, in-Inspector Revert / Apply to Prefab, Unpack ([#302](https://github.com/JCamberos27/TartarusEngine/issues/302), [#315](https://github.com/JCamberos27/TartarusEngine/issues/315))
 - **NVIDIA PhysX 5** collision system (built from source) — rigid bodies, capsule character controller, box/sphere/capsule/convex/mesh colliders, triggers, contact & force APIs, collision-layer matrix, scene queries, CCD, 5 joint types, and a visual debugger ([#185](https://github.com/JCamberos27/TartarusEngine/issues/185))
 - **Screen-space effects** on the HDR buffer — depth-pre-pass SSAO and threshold/blur bloom, both additive before the tone curve ([#333](https://github.com/JCamberos27/TartarusEngine/issues/333))
+- **Unity-style material system + advanced PBR** — `.shader` assets with keyword variants, a typed property store, and a per-material variant selector wired into the scene draw: clear coat, anisotropy, sheen, subsurface, transmission, and reflection-probe lobes each render through their own compiled program ([#333](https://github.com/JCamberos27/TartarusEngine/issues/333), [#354](https://github.com/JCamberos27/TartarusEngine/issues/354))
 - **GPU timer queries** — non-blocking `GL_TIME_ELAPSED` query-ring scopes (`PROFILE_GPU_SCOPE`) on every major pass; per-pass GPU times in the Statistics overlay's *Profiler (GPU)* section ([#197](https://github.com/JCamberos27/TartarusEngine/issues/197))
 
 ### Next
