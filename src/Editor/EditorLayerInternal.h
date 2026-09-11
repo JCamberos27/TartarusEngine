@@ -126,6 +126,47 @@ inline std::string SanitizeEntityName(const std::string& in, bool trimEnds = tru
     return out;
 }
 
+// Asset Browser rename (folders and the per-asset display name, [#38 B12]) shares the same
+// class of problem as entity names, plus one more: these names get '/'-joined into virtual
+// folder paths (see ParentFolderOf/LeafNameOf above), so a stray '/' or '\' silently rewrites
+// the hierarchy instead of just looking odd in a label. Strip C0 controls + DEL, strip the
+// characters Windows forbids in a real filename (a folder rename doesn't touch disk today, but
+// SetDisplayName round-trips through asset .meta JSON and both are one accidental future commit
+// away from reaching the filesystem — never let one through here), trim the ends, and cap the
+// length. Returns empty when nothing usable is left, which the caller treats as "reject".
+inline std::string SanitizeAssetName(const std::string& in) {
+    std::string out;
+    out.reserve(in.size());
+    static const std::string kIllegal = "<>:\"/\\|?*";
+    for (unsigned char c : in) {
+        if (c < 0x20 || c == 0x7F) continue; // control chars
+        if (kIllegal.find(static_cast<char>(c)) != std::string::npos) continue;
+        out.push_back(static_cast<char>(c));
+    }
+
+    size_t b = out.find_first_not_of(" \t.");
+    size_t e = out.find_last_not_of(" \t.");
+    out = (b == std::string::npos) ? std::string() : out.substr(b, e - b + 1);
+
+    constexpr size_t kMaxAssetNameLen = 100;
+    if (out.size() > kMaxAssetNameLen) {
+        out.resize(kMaxAssetNameLen);
+        while (!out.empty() && (static_cast<unsigned char>(out.back()) & 0xC0) == 0x80)
+            out.pop_back(); // don't leave a half UTF-8 sequence
+    }
+
+    // Windows reserved device names (CON, PRN, AUX, NUL, COM1-9, LPT1-9) are illegal as a
+    // filename regardless of extension — reject them outright rather than silently mangling.
+    static const char* kReserved[] = { "CON", "PRN", "AUX", "NUL",
+        "COM1","COM2","COM3","COM4","COM5","COM6","COM7","COM8","COM9",
+        "LPT1","LPT2","LPT3","LPT4","LPT5","LPT6","LPT7","LPT8","LPT9" };
+    std::string upper = out;
+    for (char& c : upper) c = static_cast<char>(::toupper(static_cast<unsigned char>(c)));
+    for (const char* r : kReserved) if (upper == r) return std::string();
+
+    return out;
+}
+
 
 // ============================================================================================
 // Two — and only two — button treatments across the whole editor (#160):
