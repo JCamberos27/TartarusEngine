@@ -1936,15 +1936,6 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         m_AutoSaveTimer = 0.0f; // don't let it silently accumulate while disabled
     }
 
-    // Drop a staged-but-never-committed undo snapshot once the interaction is definitely over
-    // (its widget vanished mid-edit, e.g. the selection changed before IsItemDeactivatedAfterEdit
-    // could fire) so the next StageUndo captures fresh state instead of a stale one.
-    if (m_HasStagedUndo && !ImGui::IsAnyItemActive() && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-        m_HasStagedUndo = false;
-        m_StagedUndoJson.clear();
-        m_StagedUndoSelectedOrders.clear();
-    }
-
     UpdateViewTransition(editorCamera, dt);
 
     int ww, wh;
@@ -2623,6 +2614,27 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             }
             ImGui::EndPopup();
         }
+    }
+
+    // Drop a staged-but-never-committed undo snapshot once the interaction is definitely over
+    // (its widget vanished mid-edit, e.g. the selection changed before IsItemDeactivatedAfterEdit
+    // could fire) so the next StageUndo captures fresh state instead of a stale one.
+    //
+    // Runs LAST, after every panel (Inspector included) has had its chance to call
+    // CommitStagedUndo this frame. The color-picker *swatch* path in particular reopens a
+    // popup whose drag/release lives on a different ImGui ID than the ColorEdit3 call that
+    // staged the undo; if this cleanup ran at the top of Draw() (before the Inspector redraws),
+    // a frame where ImGui::IsAnyItemActive()/IsMouseDown() both read false *before* the popup's
+    // own deactivation logic had run this frame (e.g. the gap between micro-drags inside the
+    // picker) would wipe m_HasStagedUndo out from under the still-open popup, so the eventual
+    // popup-close commit found m_HasStagedUndo already false and silently dropped the undo step
+    // (#38-adjacent: "color-picker swatch path can drop an undo step"). Placing the check here
+    // means any CommitStagedUndo that legitimately fires this frame already ran and cleared the
+    // flag, so this only ever discards snapshots that are genuinely abandoned.
+    if (m_HasStagedUndo && !ImGui::IsAnyItemActive() && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        m_HasStagedUndo = false;
+        m_StagedUndoJson.clear();
+        m_StagedUndoSelectedOrders.clear();
     }
 
     // Fold this frame's selection into the back/forward history (#236 R2). Last thing in Draw,
