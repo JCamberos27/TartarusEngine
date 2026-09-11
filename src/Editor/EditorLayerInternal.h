@@ -101,6 +101,43 @@ inline std::string LeafNameOf(const std::string& folderPath) {
 }
 
 
+// Trims a byte-length-truncated UTF-8 string back to the last complete codepoint boundary.
+// A naive "pop trailing continuation bytes (10xxxxxx)" loop (the previous approach here) isn't
+// enough: once a hard resize(N) lands mid-sequence, popping every trailing continuation byte can
+// still leave a bare, dangling lead byte at the very end (a byte matching 110xxxxx / 1110xxxx /
+// 11110xxx) with zero continuation bytes following it — itself an invalid, truncated sequence.
+// Concretely: 97 ASCII bytes + one 4-byte emoji (F0 9F 98 80) = 101 bytes. resize(100) leaves
+// "...F0 9F 98". Popping continuation bytes 0x98 then 0x9F stops at 0xF0 (not a continuation
+// byte) and quits, leaving the lead byte 0xF0 dangling with nothing after it.
+//
+// This walks back from the end, finds the run of trailing continuation bytes and the lead byte
+// (if any) just before it, and compares how many continuation bytes that lead byte's own pattern
+// declares against how many are actually still present. Only a genuinely truncated sequence
+// (fewer present than declared) gets dropped — a sequence that happens to end exactly at the
+// truncation boundary (declared count == present count) is left untouched.
+inline void TrimDanglingUtf8Lead(std::string& out) {
+    if (out.empty()) return;
+    // Walk back over the run of trailing continuation bytes (10xxxxxx), at most 3 of them (the
+    // longest UTF-8 sequence is 4 bytes: 1 lead + 3 continuations).
+    size_t contRun = 0;
+    while (contRun < 3 && contRun < out.size() &&
+           (static_cast<unsigned char>(out[out.size() - 1 - contRun]) & 0xC0) == 0x80)
+        ++contRun;
+    if (contRun == out.size()) return; // all continuation bytes, no lead byte in the string at all
+    const size_t leadPos = out.size() - 1 - contRun;
+    const unsigned char lead = static_cast<unsigned char>(out[leadPos]);
+    size_t expected;
+    if ((lead & 0x80) == 0x00)      expected = 0; // ASCII — no continuation bytes should follow
+    else if ((lead & 0xE0) == 0xC0) expected = 1; // 2-byte sequence
+    else if ((lead & 0xF0) == 0xE0) expected = 2; // 3-byte sequence
+    else if ((lead & 0xF8) == 0xF0) expected = 3; // 4-byte sequence
+    else { out.resize(leadPos); return; }         // stray continuation byte acting as a "lead" — drop it too
+
+    if (contRun < expected)
+        out.resize(leadPos); // truncated mid-sequence: drop the dangling lead byte and its partial tail
+    // contRun >= expected: a complete sequence (or, for ASCII, no continuation bytes) — leave as-is.
+}
+
 // A rename field otherwise takes an arbitrary-length string with raw control bytes in it, which
 // truncate oddly in the Hierarchy/Inspector and could reach a log or label path (#38 B12).
 // Strip C0 controls + DEL, cap the length, and (on commit) trim the ends. UTF-8 multibyte
@@ -120,8 +157,7 @@ inline std::string SanitizeEntityName(const std::string& in, bool trimEnds = tru
     constexpr size_t kMaxEntityNameLen = 64;
     if (out.size() > kMaxEntityNameLen) {
         out.resize(kMaxEntityNameLen);
-        while (!out.empty() && (static_cast<unsigned char>(out.back()) & 0xC0) == 0x80)
-            out.pop_back(); // don't leave a half UTF-8 sequence
+        TrimDanglingUtf8Lead(out); // don't leave a half UTF-8 sequence
     }
     return out;
 }
@@ -151,18 +187,21 @@ inline std::string SanitizeAssetName(const std::string& in) {
     constexpr size_t kMaxAssetNameLen = 100;
     if (out.size() > kMaxAssetNameLen) {
         out.resize(kMaxAssetNameLen);
-        while (!out.empty() && (static_cast<unsigned char>(out.back()) & 0xC0) == 0x80)
-            out.pop_back(); // don't leave a half UTF-8 sequence
+        TrimDanglingUtf8Lead(out); // don't leave a half UTF-8 sequence
     }
 
     // Windows reserved device names (CON, PRN, AUX, NUL, COM1-9, LPT1-9) are illegal as a
     // filename regardless of extension — reject them outright rather than silently mangling.
+    // Windows keys this off the *stem* (everything before the first '.'), so "CON.txt" is just
+    // as reserved as bare "CON" — compare against the stem, not the literal full string, or a
+    // trailing extension slips a reserved name straight through.
     static const char* kReserved[] = { "CON", "PRN", "AUX", "NUL",
         "COM1","COM2","COM3","COM4","COM5","COM6","COM7","COM8","COM9",
         "LPT1","LPT2","LPT3","LPT4","LPT5","LPT6","LPT7","LPT8","LPT9" };
-    std::string upper = out;
-    for (char& c : upper) c = static_cast<char>(::toupper(static_cast<unsigned char>(c)));
-    for (const char* r : kReserved) if (upper == r) return std::string();
+    const size_t dot = out.find('.');
+    std::string stem = (dot == std::string::npos) ? out : out.substr(0, dot);
+    for (char& c : stem) c = static_cast<char>(::toupper(static_cast<unsigned char>(c)));
+    for (const char* r : kReserved) if (stem == r) return std::string();
 
     return out;
 }
