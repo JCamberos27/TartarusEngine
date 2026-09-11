@@ -1,0 +1,13 @@
+{
+  "matVersion": 2,
+  "name": "Fixture Sheen",
+  "_comment": "#354 fixture: activates the _SHEEN variant. Shares the baseline PBR of mat_baseline.mat.",
+  "shader": "shaders/Standard.shader",
+
+  "properties": {
+    "_BaseColor": [0.82, 0.82, 0.86],
+    "_Metallic": 0.0,
+    "_Roughness": 0.30,
+    "_Sheen": [0.7, 0.55, 0.4], "_SheenRoughness": 0.35
+  }
+}

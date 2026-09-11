@@ -1,0 +1,12 @@
+{
+  "matVersion": 2,
+  "name": "Fixture Reflection Probes",
+  "_comment": "#354 fixture: _ReflectionProbes opt-in -> _REFLECTION_PROBES variant (parallax box reflections). Needs a Reflection Probe entity in the scene for uProbeCount > 0. Mirror-ish surface so the effect shows.",
+  "shader": "shaders/Standard.shader",
+  "properties": {
+    "_BaseColor": [0.82, 0.82, 0.86],
+    "_Metallic": 1.0,
+    "_Roughness": 0.06,
+    "_ReflectionProbes": true
+  }
+}

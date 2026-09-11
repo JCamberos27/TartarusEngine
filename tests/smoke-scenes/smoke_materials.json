@@ -1,28 +1,46 @@
 {
   "formatVersion": 2,
-  "_comment": "Engine-owned smoke/regression scene (audit TEST-101 / #354). Two primitive spheres: one linked to project/materials/mat_baseline.mat (Standard.shader, no lobe -> zero-keyword variant), one to project/materials/mat_clearcoat.mat (_ClearCoat > 0 -> _CLEARCOAT variant). Proves the ShaderAsset variant selector picks a distinct program per material; the --smoke-test summary reports the variant keys that drew. Needs project/shaders/Standard.shader + project/materials/*.mat (resolved against the project root). Engine primitives only.",
+  "_comment": "Engine-owned smoke/regression scene (audit TEST-101 / #354). One primitive sphere per Standard.shader variant: baseline (zero-keyword) plus _CLEARCOAT, _ANISO, _SHEEN, _SUBSURFACE, _TRANSMISSION, _REFLECTION_PROBES. Proves the ShaderAsset variant selector compiles + binds each distinct program with no GL errors; the --smoke-test summary reports the variant keys that drew. A Reflection Probe entity gives the probe fixture uProbeCount > 0. Needs project/shaders/Standard.shader + project/materials/*.mat (resolved against the project root). Engine primitives only.",
   "skyHorizonColor": [0.42, 0.50, 0.62],
   "skyZenithColor": [0.12, 0.24, 0.52],
   "skyAmbientIntensity": 1.0,
   "assetFolders": ["Scenes"],
   "assetMeta": [],
   "boxes": [
-    { "center": [0, -0.1, 0], "size": [20, 0.2, 20], "color": [0.34, 0.34, 0.37], "rotation": [0, 0, 0], "name": "Ground", "id": 0, "parentId": -1, "order": 0 }
+    { "center": [0, -0.1, 0], "size": [24, 0.2, 12], "color": [0.34, 0.34, 0.37], "rotation": [0, 0, 0], "name": "Ground", "id": 0, "parentId": -1, "order": 0 }
   ],
   "empties": [
     { "name": "Sun", "id": 1, "parentId": -1, "order": 1,
       "position": [6, 10, 6], "rotation": [52, -36, 0], "scale": [1, 1, 1],
-      "light": { "kind": "directional", "color": [1.0, 0.97, 0.92], "intensity": 4.5, "range": 30.0,
+      "light": { "kind": "directional", "color": [1.0, 0.97, 0.92], "intensity": 4.5, "range": 40.0,
         "angularSize": 1.0, "castShadows": true,
-        "shadow": { "enabled": true, "bias": 1.0, "normalBias": 1.0, "softness": 0.3, "nearPlane": 0.05, "resolution": 0, "updateMode": 0 } } }
+        "shadow": { "enabled": true, "bias": 1.0, "normalBias": 1.0, "softness": 0.3, "nearPlane": 0.05, "resolution": 0, "updateMode": 0 } } },
+    { "name": "Probe", "id": 2, "parentId": -1, "order": 2,
+      "position": [0, 2, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1],
+      "Reflection Probe": { "Size": [22, 8, 10], "Importance": 1.0 } }
   ],
   "models": [
-    { "path": "primitive://sphere#10", "name": "Baseline", "id": 10, "parentId": -1, "order": 10,
-      "position": [-1.4, 1.0, 0], "rotation": [0, 0, 0], "scale": [0.9, 0.9, 0.9],
+    { "path": "primitive://sphere#10", "name": "Baseline",     "id": 10, "parentId": -1, "order": 10,
+      "position": [-5.4, 1.0, 0], "rotation": [0, 0, 0], "scale": [0.8, 0.8, 0.8],
       "materials": [ { "path": "materials/mat_baseline.mat" } ] },
-    { "path": "primitive://sphere#11", "name": "ClearCoat", "id": 11, "parentId": -1, "order": 11,
-      "position": [1.4, 1.0, 0], "rotation": [0, 0, 0], "scale": [0.9, 0.9, 0.9],
-      "materials": [ { "path": "materials/mat_clearcoat.mat" } ] }
+    { "path": "primitive://sphere#11", "name": "ClearCoat",    "id": 11, "parentId": -1, "order": 11,
+      "position": [-3.6, 1.0, 0], "rotation": [0, 0, 0], "scale": [0.8, 0.8, 0.8],
+      "materials": [ { "path": "materials/mat_clearcoat.mat" } ] },
+    { "path": "primitive://sphere#12", "name": "Aniso",        "id": 12, "parentId": -1, "order": 12,
+      "position": [-1.8, 1.0, 0], "rotation": [0, 0, 0], "scale": [0.8, 0.8, 0.8],
+      "materials": [ { "path": "materials/mat_aniso.mat" } ] },
+    { "path": "primitive://sphere#13", "name": "Sheen",        "id": 13, "parentId": -1, "order": 13,
+      "position": [0.0, 1.0, 0], "rotation": [0, 0, 0], "scale": [0.8, 0.8, 0.8],
+      "materials": [ { "path": "materials/mat_sheen.mat" } ] },
+    { "path": "primitive://sphere#14", "name": "Subsurface",   "id": 14, "parentId": -1, "order": 14,
+      "position": [1.8, 1.0, 0], "rotation": [0, 0, 0], "scale": [0.8, 0.8, 0.8],
+      "materials": [ { "path": "materials/mat_subsurface.mat" } ] },
+    { "path": "primitive://sphere#15", "name": "Transmission", "id": 15, "parentId": -1, "order": 15,
+      "position": [3.6, 1.0, 0], "rotation": [0, 0, 0], "scale": [0.8, 0.8, 0.8],
+      "materials": [ { "path": "materials/mat_transmission.mat" } ] },
+    { "path": "primitive://sphere#16", "name": "Probes",       "id": 16, "parentId": -1, "order": 16,
+      "position": [5.4, 1.0, 0], "rotation": [0, 0, 0], "scale": [0.8, 0.8, 0.8],
+      "materials": [ { "path": "materials/mat_probes.mat" } ] }
   ],
   "libraryModels": [],
   "libraryTextures": [],
