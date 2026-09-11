@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <functional>
 #include <glm/glm.hpp>
 #include "ModelMesh.h"
 #include "Animation.h"
@@ -105,6 +106,15 @@ public:
     // imported material. Empty or short slots fall back to the imported mesh material.
     void Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots);
     void DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots);
+
+    // Scene-path draw (audit #354): per submesh, `selectProgram(slot)` picks the program (a
+    // ShaderAsset variant, or `fallback` when it returns null / there's no linked shader). This
+    // owns the per-program uModel / uNormalMatrix / bone upload so a mesh can draw through a
+    // different program than its neighbour. `xform` is the entity's world transform.
+    using ProgramSelector = std::function<Shader*(const MaterialAsset*)>;
+    void DrawSelected(Shader& fallback, const glm::mat4& xform,
+                      const std::vector<std::shared_ptr<MaterialAsset>>& slots,
+                      const ProgramSelector& selectProgram, float opacity = 1.0f);
     int MeshCount() const { return (int)m_Meshes.size(); }
     Material& MeshMaterial(int index) { return m_Meshes[index]->Mat; }
     const Material& MeshMaterial(int index) const { return m_Meshes[index]->Mat; }

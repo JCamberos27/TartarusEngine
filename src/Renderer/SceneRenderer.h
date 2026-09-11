@@ -1,7 +1,17 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <cstdint>
+#include <unordered_map>
 #include "RenderStats.h"
+
+// Per-run tally of meshes drawn through each ShaderAsset variant key (audit #354). Key 0 means
+// the default modelShader / a zero-keyword variant. Read by --smoke-test to report which lobes
+// actually rendered; reset it per scene.
+namespace SceneRendererDebug {
+const std::unordered_map<std::uint32_t, std::uint64_t>& VariantDrawCounts();
+void ResetVariantDrawCounts();
+}
 
 class World;
 class Sky;

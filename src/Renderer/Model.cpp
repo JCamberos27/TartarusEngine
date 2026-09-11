@@ -661,6 +661,43 @@ void Model::Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset
     }
 }
 
+void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
+                         const std::vector<std::shared_ptr<MaterialAsset>>& slots,
+                         const ProgramSelector& selectProgram, float opacity) {
+    const glm::mat4 nrm = glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform))));
+
+    Shader*      lastProg = nullptr;
+    MaterialLocs locs{};
+
+    for (int i = 0; i < (int)m_Meshes.size(); ++i) {
+        const bool hasSlot = i < (int)slots.size() && slots[i];
+        Shader* prog = &fallback;
+        if (Shader* p = selectProgram(hasSlot ? slots[i].get() : nullptr)) prog = p;
+
+        if (prog != lastProg) {
+            // Per-program state the single-program Model::Draw sets once up front. Bind first —
+            // the selector only binds a program the first time it applies frame state to it, and
+            // glUniform* always targets the currently bound program.
+            prog->Bind();
+            UploadBoneMatrices(*prog);           // uUseSkinning + bone SSBO
+            locs = ResolveMaterialLocs(*prog);
+            prog->SetMat4(prog->Loc("uModel"), xform);
+            prog->SetMat4(prog->Loc("uNormalMatrix"), nrm);
+            lastProg = prog;
+        }
+        // Per-draw: the transparent pass varies opacity per entity. No-op on opaque programs
+        // (uOpacity is only read when uAlphaBlend == 1; an absent uniform is loc -1).
+        prog->SetFloat("uOpacity", opacity);
+
+        const Material& mat = hasSlot ? slots[i]->Mat : m_Meshes[i]->Mat;
+        if (hasSlot && slots[i]->Shader)
+            BindMaterialDataDriven(*prog, *slots[i], *slots[i]->Shader);
+        else
+            BindMaterial(*prog, mat, locs);
+        m_Meshes[i]->Draw();
+    }
+}
+
 void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
     UploadBoneMatrices(shader);
     int albedoLoc = shader.Loc("uAlbedo");

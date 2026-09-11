@@ -4,6 +4,7 @@
 #include "Texture.h"
 #include "Log.h"
 #include "AtomicFile.h"
+#include "ProjectPaths.h"
 
 #include <json.hpp>
 #include <filesystem>
@@ -120,9 +121,14 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
         m.ClearCoatMap         = loadTex(ma->ClearCoatMapPath);
         m.ThicknessMap         = loadTex(ma->ThicknessMapPath);
 
-        // Resolve shader asset when path is set (AssetLibrary handles caching).
-        if (!ma->ShaderPath.empty())
-            ma->Shader = lib->LoadShader(ma->ShaderPath);
+        // Resolve shader asset when path is set (AssetLibrary handles caching). A project-
+        // relative "shader" value is resolved against the project root so a .mat works from any
+        // working directory (fixtures under project/, #354).
+        if (!ma->ShaderPath.empty()) {
+            std::string sp = ma->ShaderPath;
+            if (std::filesystem::path(sp).is_relative()) sp = ProjectPaths::Resolve(sp);
+            ma->Shader = lib->LoadShader(sp);
+        }
 
         // Typed store for every linked-shader property that isn't a built-in Material field
         // (#354). Value comes from the .mat "properties" object; a missing key falls back to the
