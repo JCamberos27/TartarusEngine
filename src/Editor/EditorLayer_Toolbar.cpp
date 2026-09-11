@@ -492,27 +492,45 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             {
                 auto& cs = EditorSettings::Get();
                 ImGui::PushItemWidth(190.0f * m_UIScale);
-                if (EditorUI::SliderFloat("FOV", &cs.SceneCameraFov, 30.0f, 110.0f, "%.0f\xC2\xB0")) {
-                    editorCamera.Fov = cs.SceneCameraFov;
+                // EditorUI::SliderFloat's out-param is needed for the "commit -> Save()" checks
+                // below: a bare IsItemDeactivatedAfterEdit() after the call only ever sees the
+                // widget's trailing number box (the last ImGui item it submits), so releasing a
+                // drag on the track itself would never persist the change.
+                {
+                    bool committed = false;
+                    if (EditorUI::SliderFloat("FOV", &cs.SceneCameraFov, 30.0f, 110.0f, "%.0f\xC2\xB0",
+                                              0, nullptr, &committed)) {
+                        editorCamera.Fov = cs.SceneCameraFov;
+                    }
+                    if (committed) EditorSettings::Save();
                 }
-                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
-                if (EditorUI::SliderFloat("Fly speed", &cs.SceneCameraFlySpeed, 0.5f, 60.0f, "%.1f")) {}
-                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+                {
+                    bool committed = false;
+                    EditorUI::SliderFloat("Fly speed", &cs.SceneCameraFlySpeed, 0.5f, 60.0f, "%.1f",
+                                          0, nullptr, &committed);
+                    if (committed) EditorSettings::Save();
+                }
                 if (ImGui::IsItemHovered())
                     EditorUI::SetTooltip("Editor fly-camera speed (Shift = ×3). Also: scroll while holding right-drag.");
 
-                if (EditorUI::SliderFloat("Near", &cs.SceneCameraNear, 0.001f, 10.0f, "%.3f",
-                                          ImGuiSliderFlags_Logarithmic)) {
-                    cs.SceneCameraNear = std::min(cs.SceneCameraNear, cs.SceneCameraFar - 0.01f);
-                    editorCamera.NearPlane = cs.SceneCameraNear;
+                {
+                    bool committed = false;
+                    if (EditorUI::SliderFloat("Near", &cs.SceneCameraNear, 0.001f, 10.0f, "%.3f",
+                                              ImGuiSliderFlags_Logarithmic, nullptr, &committed)) {
+                        cs.SceneCameraNear = std::min(cs.SceneCameraNear, cs.SceneCameraFar - 0.01f);
+                        editorCamera.NearPlane = cs.SceneCameraNear;
+                    }
+                    if (committed) EditorSettings::Save();
                 }
-                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
-                if (EditorUI::SliderFloat("Far", &cs.SceneCameraFar, 1.0f, 10000.0f, "%.0f",
-                                          ImGuiSliderFlags_Logarithmic)) {
-                    cs.SceneCameraFar = std::max(cs.SceneCameraFar, cs.SceneCameraNear + 0.01f);
-                    editorCamera.FarPlane = cs.SceneCameraFar;
+                {
+                    bool committed = false;
+                    if (EditorUI::SliderFloat("Far", &cs.SceneCameraFar, 1.0f, 10000.0f, "%.0f",
+                                              ImGuiSliderFlags_Logarithmic, nullptr, &committed)) {
+                        cs.SceneCameraFar = std::max(cs.SceneCameraFar, cs.SceneCameraNear + 0.01f);
+                        editorCamera.FarPlane = cs.SceneCameraFar;
+                    }
+                    if (committed) EditorSettings::Save();
                 }
-                if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
                 ImGui::PopItemWidth();
             }
 
@@ -620,9 +638,14 @@ void EditorLayer::DrawGridSnapPopupBody() {
     ImGui::TextDisabled("GRID");
     bool showGrid = m_ShowGrid;
     if (ImGui::Checkbox("Visible", &showGrid)) m_ShowGrid = showGrid;
-    EditorUI::SliderFloat("Cell size", &gs.GridMinorSpacing, 0.05f, 50.0f, "%.2f m",
-                          ImGuiSliderFlags_Logarithmic);
-    if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+    // EditorUI::SliderFloat's out-param is needed — a bare IsItemDeactivatedAfterEdit() after the
+    // call only ever sees the trailing number box, so releasing a track drag wouldn't save.
+    {
+        bool committed = false;
+        EditorUI::SliderFloat("Cell size", &gs.GridMinorSpacing, 0.05f, 50.0f, "%.2f m",
+                              ImGuiSliderFlags_Logarithmic, nullptr, &committed);
+        if (committed) EditorSettings::Save();
+    }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("World units between minor grid lines.\nAlso the step used when snapping a dropped object to the ground grid.");
     if (EditorUI::SliderInt("Major every", &gs.GridMajorEvery, 2, 100, "%d cells"))

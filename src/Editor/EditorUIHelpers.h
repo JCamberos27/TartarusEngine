@@ -35,8 +35,20 @@ namespace EditorUI {
     // ImGui::SliderFloat / ImGui::SliderInt: identical signature, identical return (true on the
     // frame the value changes). Honors SetNextItemWidth / PushItemWidth for the whole widget
     // (track + box together). Pass "" as the format to drop the number box (track + handle only).
+    //
+    // outActivated / outDeactivatedAfterEdit, when non-null, receive this frame's combined
+    // "interaction started" / "interaction finished after an edit" signal for the WHOLE widget —
+    // true if EITHER the track OR the trailing number box triggered it. This exists because the
+    // widget draws two separate ImGui items (the track via SliderBehavior, then an InputText box);
+    // ImGui's own IsItemActivated()/IsItemDeactivatedAfterEdit(), called after this returns, only
+    // ever see the LAST item submitted — the number box — so a caller relying on those directly
+    // silently misses every drag on the track itself. Any call site that stages/commits an undo
+    // step or persists a value on activate/deactivate MUST use these out-params instead of
+    // IsItemActivated()/IsItemDeactivatedAfterEdit() after the call.
     bool SliderFloat(const char* label, float* v, float v_min, float v_max,
-                     const char* format = "%.3f", ImGuiSliderFlags flags = 0);
+                     const char* format = "%.3f", ImGuiSliderFlags flags = 0,
+                     bool* outActivated = nullptr, bool* outDeactivatedAfterEdit = nullptr);
     bool SliderInt(const char* label, int* v, int v_min, int v_max,
-                   const char* format = "%d", ImGuiSliderFlags flags = 0);
+                   const char* format = "%d", ImGuiSliderFlags flags = 0,
+                   bool* outActivated = nullptr, bool* outDeactivatedAfterEdit = nullptr);
 }

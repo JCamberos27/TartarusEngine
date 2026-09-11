@@ -684,10 +684,17 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
         }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Absolute path to an equirectangular .hdr file.");
 
-        // Rotation slider
+        // Rotation slider. EditorUI::SliderFloat's out-param is needed, not a bare
+        // IsItemActivated(), because the widget submits a trailing number-box item after the
+        // track — IsItemActivated() called afterward only ever sees that box, so dragging the
+        // track directly would never push an undo step.
         ImGui::SetNextItemWidth(w);
-        EditorUI::SliderFloat("HDRI rotation", &world.SkyRotationDegrees, 0.0f, 360.0f, "%.1f deg");
-        if (ImGui::IsItemActivated()) PushUndo(world, "Edit HDRI Rotation");
+        {
+            bool activated = false;
+            EditorUI::SliderFloat("HDRI rotation", &world.SkyRotationDegrees, 0.0f, 360.0f, "%.1f deg",
+                                  0, &activated);
+            if (activated) PushUndo(world, "Edit HDRI Rotation");
+        }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Y-axis rotation of the HDRI environment in degrees.");
     } else {
         ImGui::ColorEdit3("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
@@ -699,8 +706,12 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
     }
 
     ImGui::SetNextItemWidth(w);
-    EditorUI::SliderFloat("Ambient intensity", &world.SkyAmbientIntensity, 0.0f, 3.0f, "%.2f x");
-    if (ImGui::IsItemActivated()) PushUndo(world, "Edit Ambient Intensity");
+    {
+        bool activated = false;
+        EditorUI::SliderFloat("Ambient intensity", &world.SkyAmbientIntensity, 0.0f, 3.0f, "%.2f x",
+                              0, &activated);
+        if (activated) PushUndo(world, "Edit Ambient Intensity");
+    }
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip(
         "Strength of the image-based ambient light and reflections baked from the sky colours "
         "above. 1.0 is physically consistent; 0 disables environment lighting entirely.");
@@ -709,8 +720,12 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
 void EditorLayer::DrawPostProcessSettings(float w) {
     auto& prefs = EditorSettings::Get();
     ImGui::SetNextItemWidth(w);
-    EditorUI::SliderFloat("Exposure (EV)", &prefs.ExposureEV, -6.0f, 6.0f, "%+.2f");
-    if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+    {
+        bool committed = false;
+        EditorUI::SliderFloat("Exposure (EV)", &prefs.ExposureEV, -6.0f, 6.0f, "%+.2f",
+                              0, nullptr, &committed);
+        if (committed) EditorSettings::Save();
+    }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Photographic stops applied before the tone curve. 0 = neutral. Applies live.");
 
@@ -723,18 +738,30 @@ void EditorLayer::DrawPostProcessSettings(float w) {
         EditorUI::SetTooltip("Bloom post-process: bright pixels bleed glow onto neighbors. Runs at half resolution before tone mapping.");
     if (prefs.BloomEnabled) {
         ImGui::SetNextItemWidth(w);
-        EditorUI::SliderFloat("Bloom threshold", &prefs.BloomThreshold, 0.1f, 4.0f, "%.2f");
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        {
+            bool committed = false;
+            EditorUI::SliderFloat("Bloom threshold", &prefs.BloomThreshold, 0.1f, 4.0f, "%.2f",
+                                  0, nullptr, &committed);
+            if (committed) EditorSettings::Save();
+        }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Luminance level above which pixels emit glow (HDR energy units). Lower = more pixels bloom.");
         ImGui::SetNextItemWidth(w);
-        EditorUI::SliderFloat("Bloom knee", &prefs.BloomKnee, 0.0f, 1.0f, "%.2f");
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        {
+            bool committed = false;
+            EditorUI::SliderFloat("Bloom knee", &prefs.BloomKnee, 0.0f, 1.0f, "%.2f",
+                                  0, nullptr, &committed);
+            if (committed) EditorSettings::Save();
+        }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Softens the threshold edge so pixels near the cutoff fade in gradually instead of popping. 0 = hard cutoff.");
         ImGui::SetNextItemWidth(w);
-        EditorUI::SliderFloat("Bloom intensity", &prefs.BloomIntensity, 0.0f, 2.0f, "%.2f");
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        {
+            bool committed = false;
+            EditorUI::SliderFloat("Bloom intensity", &prefs.BloomIntensity, 0.0f, 2.0f, "%.2f",
+                                  0, nullptr, &committed);
+            if (committed) EditorSettings::Save();
+        }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Additive glow strength before the tone curve. 0.25 is subtle; above 1.0 is very strong.");
     }
@@ -780,8 +807,12 @@ void EditorLayer::DrawShadowSettings(float w) {
         EditorUI::SetTooltip("Number of shadow cascades. Fewer = cheaper depth passes, coarser shadows far from the camera.");
 
     ImGui::SetNextItemWidth(w);
-    EditorUI::SliderFloat("Shadow distance", &prefs.ShadowDistance, 10.0f, 500.0f, "%.0f m");
-    if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+    {
+        bool committed = false;
+        EditorUI::SliderFloat("Shadow distance", &prefs.ShadowDistance, 10.0f, 500.0f, "%.0f m",
+                              0, nullptr, &committed);
+        if (committed) EditorSettings::Save();
+    }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("How far from the camera the cascades cover. Shorter = crisper shadows.");
     if (!prefs.ShadowsEnabled) ImGui::EndDisabled();
@@ -874,11 +905,14 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         float uiScale = prefs.UiScaleOverride <= 0.0f ? m_UIScale : prefs.UiScaleOverride;
         ImGui::SetNextItemWidth(kw);
         bool isAuto = prefs.UiScaleOverride <= 0.0f;
-        EditorUI::SliderFloat("UI scale", &uiScale, 0.70f, 2.50f,
-                           isAuto ? "Auto (%.2f)" : "%.2f");
-        if (ImGui::IsItemDeactivatedAfterEdit()) {
-            prefs.UiScaleOverride = uiScale < 0.75f ? 0.0f : uiScale;
-            EditorSettings::Save();
+        {
+            bool committed = false;
+            EditorUI::SliderFloat("UI scale", &uiScale, 0.70f, 2.50f,
+                               isAuto ? "Auto (%.2f)" : "%.2f", 0, nullptr, &committed);
+            if (committed) {
+                prefs.UiScaleOverride = uiScale < 0.75f ? 0.0f : uiScale;
+                EditorSettings::Save();
+            }
         }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Scales the whole editor UI (fonts, panels, spacing).\n"
@@ -924,11 +958,19 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         if (!prefs.ShowLightGizmos) ImGui::BeginDisabled();
         if (ImGui::Checkbox("Only for the selected light", &prefs.LightGizmoSelectedOnly)) EditorSettings::Save();
         ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Opacity", &prefs.LightGizmoOpacity, 0.0f, 1.0f, "%.2f");
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        {
+            bool committed = false;
+            EditorUI::SliderFloat("Opacity", &prefs.LightGizmoOpacity, 0.0f, 1.0f, "%.2f",
+                                  0, nullptr, &committed);
+            if (committed) EditorSettings::Save();
+        }
         ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Arrow / disc scale", &prefs.LightGizmoScale, 0.25f, 3.0f, "%.2fx");
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        {
+            bool committed = false;
+            EditorUI::SliderFloat("Arrow / disc scale", &prefs.LightGizmoScale, 0.25f, 3.0f, "%.2fx",
+                                  0, nullptr, &committed);
+            if (committed) EditorSettings::Save();
+        }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Screen size of the parts that aren't tied to a world measurement (the directional arrow, the sun disc).");
         if (!prefs.ShowLightGizmos) ImGui::EndDisabled();
@@ -939,8 +981,12 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             EditorUI::SetTooltip("The spinning TE monogram in the viewport's bottom-left corner.");
         if (!prefs.EngineMarkEnabled) ImGui::BeginDisabled();
         ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Spin speed", &prefs.EngineMarkSpinSpeed, 0.0f, 4.0f, "%.2f rad/s");
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        {
+            bool committed = false;
+            EditorUI::SliderFloat("Spin speed", &prefs.EngineMarkSpinSpeed, 0.0f, 4.0f, "%.2f rad/s",
+                                  0, nullptr, &committed);
+            if (committed) EditorSettings::Save();
+        }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("How fast the monogram turns. 0 parks it; the default 0.52 is one revolution every ~12 s.");
         {
@@ -965,31 +1011,49 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
     case 2: // Grid & Snapping
         ImGui::SeparatorText("Grid");
         ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Opacity", &prefs.GridOpacity, 0.0f, 1.0f, "%.2f");
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        {
+            bool committed = false;
+            EditorUI::SliderFloat("Opacity", &prefs.GridOpacity, 0.0f, 1.0f, "%.2f",
+                                  0, nullptr, &committed);
+            if (committed) EditorSettings::Save();
+        }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Master strength of the grid lines. The grid also fades out on its own as the view tilts toward the horizon.");
         ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Line spacing", &prefs.GridMinorSpacing, 0.05f, 50.0f, "%.2f",
-                              ImGuiSliderFlags_Logarithmic);
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        {
+            bool committed = false;
+            EditorUI::SliderFloat("Line spacing", &prefs.GridMinorSpacing, 0.05f, 50.0f, "%.2f",
+                                  ImGuiSliderFlags_Logarithmic, nullptr, &committed);
+            if (committed) EditorSettings::Save();
+        }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("World units between minor lines. Also the step used by grid-snapped placement.");
         ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderInt("Major line every", &prefs.GridMajorEvery, 2, 50, "%d cells");
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        {
+            bool committed = false;
+            EditorUI::SliderInt("Major line every", &prefs.GridMajorEvery, 2, 50, "%d cells",
+                                0, nullptr, &committed);
+            if (committed) EditorSettings::Save();
+        }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("A brighter major line is drawn every N minor cells.");
         ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Fade distance", &prefs.GridFadeDistance, 10.0f, 1000.0f, "%.0f m",
-                              ImGuiSliderFlags_Logarithmic);
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        {
+            bool committed = false;
+            EditorUI::SliderFloat("Fade distance", &prefs.GridFadeDistance, 10.0f, 1000.0f, "%.0f m",
+                                  ImGuiSliderFlags_Logarithmic, nullptr, &committed);
+            if (committed) EditorSettings::Save();
+        }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Distance from the camera at which the grid has fully faded out.");
         if (ImGui::Checkbox("Show axis lines", &prefs.GridShowAxisLines)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("The coloured rules through the origin: X (red) and Z (blue) on the ground, and a green Y line straight up.");
         if (!prefs.GridShowAxisLines) ImGui::BeginDisabled();
         ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Axis line thickness", &prefs.GridAxisThickness, 0.5f, 4.0f, "%.1f px");
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        {
+            bool committed = false;
+            EditorUI::SliderFloat("Axis line thickness", &prefs.GridAxisThickness, 0.5f, 4.0f, "%.1f px",
+                                  0, nullptr, &committed);
+            if (committed) EditorSettings::Save();
+        }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Screen-pixel width of the red / green / blue axis lines.");
         if (!prefs.GridShowAxisLines) ImGui::EndDisabled();
 

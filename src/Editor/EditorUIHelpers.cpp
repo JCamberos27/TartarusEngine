@@ -57,7 +57,10 @@ namespace {
 // position come from ImGui::SliderBehavior so keyboard, gamepad, Ctrl+click and range clamping
 // all behave exactly like a stock slider; only the paint and the trailing box are custom.
 bool SliderStyled(const char* label, ImGuiDataType dt, void* p_v,
-                  const void* p_min, const void* p_max, const char* format, ImGuiSliderFlags flags) {
+                  const void* p_min, const void* p_max, const char* format, ImGuiSliderFlags flags,
+                  bool* outActivated, bool* outDeactivatedAfterEdit) {
+    if (outActivated) *outActivated = false;
+    if (outDeactivatedAfterEdit) *outDeactivatedAfterEdit = false;
     ImGuiWindow* window = ImGui::GetCurrentWindow();
     if (window->SkipItems) return false;
 
@@ -96,6 +99,19 @@ bool SliderStyled(const char* label, ImGuiDataType dt, void* p_v,
                                          flags | ImGuiSliderFlags_AlwaysClamp, &grab_bb);
     if (changed) ImGui::MarkItemEdited(id);
 
+    // The track's own activated/deactivated-after-edit signal, captured right here using its own
+    // `id` explicitly (mirroring what ImGui::IsItemActivated()/IsItemDeactivatedAfterEdit() do
+    // internally) rather than via those calls themselves. Those read g.LastItemData, and the
+    // trailing number box below submits its own item right after this — by the time this
+    // function returns, g.LastItemData no longer refers to the track at all, so a caller doing
+    // the naive "call SliderFloat, then check IsItemActivated()" would only ever see the box.
+    const bool trackActivated = (g.ActiveId == id) && (g.ActiveIdPreviousFrame != id);
+    const bool trackDeactivated = (g.DeactivatedItemData.ID == id) &&
+                                   (g.DeactivatedItemData.ElapseFrame >= g.FrameCount);
+    const bool trackDeactivatedAfterEdit = trackDeactivated && g.DeactivatedItemData.HasBeenEditedBefore;
+    if (outActivated && trackActivated) *outActivated = true;
+    if (outDeactivatedAfterEdit && trackDeactivatedAfterEdit) *outDeactivatedAfterEdit = true;
+
     // --- paint: thin track, filled portion, circular grab ---
     ImDrawList* dl = window->DrawList;
     const bool active = (g.ActiveId == id);
@@ -129,7 +145,14 @@ bool SliderStyled(const char* label, ImGuiDataType dt, void* p_v,
             ((dt == ImGuiDataType_Float || dt == ImGuiDataType_Double)
                 ? ImGuiInputTextFlags_CharsScientific : ImGuiInputTextFlags_CharsDecimal);
         const bool entered = ImGui::InputText("##box", buf, IM_ARRAYSIZE(buf), itf);
-        if (entered || ImGui::IsItemDeactivatedAfterEdit()) {
+        // The box IS the last item submitted, so plain ImGui::IsItemActivated() /
+        // IsItemDeactivatedAfterEdit() work correctly for it — captured here (rather than left
+        // for the caller to query after this function returns) so they can be OR'd with the
+        // track's own signal above into one combined result.
+        if (outActivated && ImGui::IsItemActivated()) *outActivated = true;
+        const bool boxDeactivatedAfterEdit = ImGui::IsItemDeactivatedAfterEdit();
+        if (outDeactivatedAfterEdit && boxDeactivatedAfterEdit) *outDeactivatedAfterEdit = true;
+        if (entered || boxDeactivatedAfterEdit) {
             // Tolerate unit prefixes/suffixes baked into `format` ("x%.2f", "%.0f m", ...):
             // skip to the first character that can start a number, then parse.
             const char* s = buf;
@@ -170,13 +193,17 @@ bool SliderStyled(const char* label, ImGuiDataType dt, void* p_v,
 } // namespace
 
 bool EditorUI::SliderFloat(const char* label, float* v, float v_min, float v_max,
-                           const char* format, ImGuiSliderFlags flags) {
+                           const char* format, ImGuiSliderFlags flags,
+                           bool* outActivated, bool* outDeactivatedAfterEdit) {
     if (!format) format = "%.3f";
-    return SliderStyled(label, ImGuiDataType_Float, v, &v_min, &v_max, format, flags);
+    return SliderStyled(label, ImGuiDataType_Float, v, &v_min, &v_max, format, flags,
+                        outActivated, outDeactivatedAfterEdit);
 }
 
 bool EditorUI::SliderInt(const char* label, int* v, int v_min, int v_max,
-                         const char* format, ImGuiSliderFlags flags) {
+                         const char* format, ImGuiSliderFlags flags,
+                         bool* outActivated, bool* outDeactivatedAfterEdit) {
     if (!format) format = "%d";
-    return SliderStyled(label, ImGuiDataType_S32, v, &v_min, &v_max, format, flags);
+    return SliderStyled(label, ImGuiDataType_S32, v, &v_min, &v_max, format, flags,
+                        outActivated, outDeactivatedAfterEdit);
 }
