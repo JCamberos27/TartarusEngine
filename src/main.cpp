@@ -962,6 +962,7 @@ int main(int argc, char** argv) {
                               << (smokeSceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
                     smokeFramesRendered = 0;
                     smokeSceneActive = true;
+                    SceneRendererDebug::ResetVariantDrawCounts(); // #354 per-scene variant tally
                     smokePlayScene = path.find("smoke_play") != std::string::npos;
                     smokePlayCycles = 0;
                 }
@@ -2420,6 +2421,13 @@ int main(int argc, char** argv) {
                     const std::string& path = smokeScenePaths[smokeSceneIndex];
                     smokeResults.push_back({path, smokeFramesRendered, newErrors, newLogErrors,
                                             drawCalls, smokeSceneLoadOk, pass, cause});
+                    // #354: which ShaderAsset variant keys drew this scene (0 = default program).
+                    std::string variants;
+                    for (const auto& [key, n] : SceneRendererDebug::VariantDrawCounts()) {
+                        char vbuf[48];
+                        std::snprintf(vbuf, sizeof(vbuf), " 0x%02x=%llu", key, (unsigned long long)n);
+                        variants += vbuf;
+                    }
                     std::cout << "[SmokeTest] " << (pass ? "PASS" : "FAIL") << "  "
                               << std::filesystem::path(path).filename().string()
                               << "  frames=" << smokeFramesRendered
@@ -2428,6 +2436,7 @@ int main(int argc, char** argv) {
                               << " newLogErrors=" << newLogErrors
                               << " drawCalls=" << drawCalls
                               << (smokePlayScene ? ("  playCycles=" + std::to_string(smokePlayCycles)) : "")
+                              << (variants.empty() ? "" : ("  variants:" + variants))
                               << (pass ? "" : ("  cause: " + cause)) << std::endl;
                     ++smokeSceneIndex;
                     smokeSceneActive = false;
