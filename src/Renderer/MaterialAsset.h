@@ -1,10 +1,24 @@
 #pragma once
 #include "Material.h"
+#include "ShaderAsset.h" // ShaderPropType — the typed store for non-builtin shader properties
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 class AssetLibrary;
-class ShaderAsset;
+
+// One value for a shader property that is NOT one of the built-in PBR fields on Material (audit
+// #354). Only the union member matching Type is meaningful. Texture props keep both the resolved
+// pointer (for binding) and the path (for round-tripping / lib-less loads).
+struct MaterialProp {
+    ShaderPropType Type = ShaderPropType::Float;
+    float                    F = 0.0f;
+    glm::vec4                V{0.0f, 0.0f, 0.0f, 1.0f};
+    bool                     B = false;
+    int                      I = 0;
+    std::string              TexPath;
+    std::shared_ptr<Texture> Tex;
+};
 
 // A named, file-backed material (.mat JSON, version 1). Wraps a Material struct with a path so
 // it can be browsed in the Asset Browser, drag-dropped onto renderers, and referenced from scene
@@ -31,6 +45,16 @@ struct MaterialAsset {
     // PBR properties. Texture shared_ptr slots are populated by Load() when `lib` is non-null;
     // they remain null when loaded without a library (e.g. Save checks texture paths only).
     Material Mat;
+
+    // Values for linked-shader properties that don't map to a Material field — keyed by the
+    // property's internal name ("_Foo"). Populated by Load() from the .mat "properties" object
+    // against ShaderAsset::Properties() (needs a non-null lib to resolve the shader), written
+    // back by Save(), and pushed as `u<Foo>` uniforms by BindMaterialDataDriven (#354).
+    std::unordered_map<std::string, MaterialProp> ExtraProps;
+
+    // True if `name` is one of the built-in PBR property names handled by Get*/Set* below (and
+    // therefore stored on Mat, not in ExtraProps).
+    static bool IsBuiltinProp(const std::string& name);
 
     // Serialized texture paths (parallel to Mat's shared_ptr slots). Written to the .mat file
     // and used by Load() to resolve textures via AssetLibrary. The shared_ptrs in Mat are only
