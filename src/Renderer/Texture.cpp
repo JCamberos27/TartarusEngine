@@ -5,8 +5,14 @@
 #include "TextureCache.h"
 #include "stb_image.h"
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <vector>
+
+TextureLoadStats& TextureLoadStats::Get() {
+    static TextureLoadStats s_Stats;
+    return s_Stats;
+}
 
 namespace {
 
@@ -73,6 +79,12 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
         effective.GenerateMipmaps = false;
     }
 
+    // ARCH-201 / #375: cumulative decode-vs-upload timing, read by --asset-load-bench and anything
+    // else that wants to know where scene-load time actually goes. decodeStart covers both the
+    // TextureCache hit path and the stb_image + DownsampleBox miss path below; uploadStart begins
+    // right after (see the matching TextureLoadStats::Get() update after the GL block).
+    const auto decodeStart = std::chrono::steady_clock::now();
+
     // Warm path: pixels already decoded and downsampled by a previous run. PNG decode dominates
     // scene-load time (measured ~4.6s of a ~5.6s cold boot on a 22-texture library), so skipping
     // it is the single biggest startup win available. See TextureCache.h.
@@ -124,6 +136,8 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
         entry.Pixels.assign(uploadData, uploadData + (size_t)uploadW * uploadH * m_Channels);
         TextureCache::Store(m_Path, settings, entry);
     }
+
+    const auto uploadStart = std::chrono::steady_clock::now();
 
     // Sized internal formats on both branches (#100) — the sRGB branch already used them;
     // the linear branch used to pass bare GL_RGB/GL_RGBA/GL_RED, leaving precision to the driver
@@ -204,6 +218,12 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
 
     if (data) stbi_image_free(data); // null on the cache-hit path, where stb never ran
     m_Settings = settings;
+
+    const auto uploadEnd = std::chrono::steady_clock::now();
+    TextureLoadStats& stats = TextureLoadStats::Get();
+    stats.Count += 1;
+    stats.DecodeMs += std::chrono::duration<double, std::milli>(uploadStart - decodeStart).count();
+    stats.UploadMs += std::chrono::duration<double, std::milli>(uploadEnd - uploadStart).count();
 }
 
 bool Texture::Reimport(const TextureImportSettings& settings) {

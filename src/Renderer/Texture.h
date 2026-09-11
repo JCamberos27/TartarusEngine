@@ -26,6 +26,20 @@ struct TextureImportSettings {
     int MaxTextureSize = 2048;
 };
 
+// Cumulative timing across every Texture::UploadFromFile call this process has made (audit
+// ARCH-201 / #375). Decode covers the TextureCache hit-or-miss path (stb_image + DownsampleBox on
+// a miss); Upload covers the glCreateTextures/.../glGenerateTextureMipmap block. Not thread-safe —
+// fine today since all texture loading is main-thread-only (that's the ARCH-201 finding). Reset()
+// lets a caller (e.g. --asset-load-bench) isolate one batch's cost instead of the process total.
+struct TextureLoadStats {
+    int Count = 0;
+    double DecodeMs = 0.0;
+    double UploadMs = 0.0;
+
+    static TextureLoadStats& Get();
+    static void Reset() { Get() = TextureLoadStats{}; }
+};
+
 // A single 2D GL texture loaded from disk via stb_image (PNG/JPG/TGA/BMP/...).
 class Texture {
 public:
