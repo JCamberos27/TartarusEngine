@@ -768,9 +768,13 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
         PropertyLabel(label, tip);
         ImGui::PushID(label);
         float edit = mat.*field;
-        bool changed = EditorUI::SliderFloat("##ms", &edit, lo, hi, "%.3f");
+        // EditorUI::SliderFloat's out-param is needed here — a bare IsItemDeactivatedAfterEdit()
+        // called after the widget only ever sees its trailing number box, so a track drag never
+        // fires save().
+        bool committed = false;
+        bool changed = EditorUI::SliderFloat("##ms", &edit, lo, hi, "%.3f", 0, nullptr, &committed);
         if (changed && std::isfinite(edit)) mat.*field = edit;
-        if (ImGui::IsItemDeactivatedAfterEdit()) save();
+        if (committed) save();
         ImGui::PopID();
     };
     auto mapRow = [&](const char* label, std::shared_ptr<Texture> Material::* texSlot, const char* help) {
@@ -842,9 +846,13 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
             case ShaderPropType::Float: {
                 PropertyLabel(label);
                 float edit = MaterialAsset::GetFloat(mat, prop.Name);
-                bool changed = EditorUI::SliderFloat("##f", &edit, prop.DefaultFloat, 1.0f, "%.3f");
+                // See scalarRow above — need the widget's own out-param, not a bare
+                // IsItemDeactivatedAfterEdit(), so a track drag also fires save().
+                bool committed = false;
+                bool changed = EditorUI::SliderFloat("##f", &edit, prop.DefaultFloat, 1.0f, "%.3f",
+                                                     0, nullptr, &committed);
                 if (changed && std::isfinite(edit)) MaterialAsset::SetFloat(mat, prop.Name, edit);
-                if (ImGui::IsItemDeactivatedAfterEdit()) save();
+                if (committed) save();
                 break;
             }
             case ShaderPropType::Bool: {
@@ -1912,15 +1920,27 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                  collider->Kind == Shape::Capsule) && collider->HalfExtents == glm::vec3(0.0f))
                 ImGui::TextDisabled("Auto-fitted to the mesh bounds.");
 
-            // Surface material (#185 PR 7).
+            // Surface material (#185 PR 7). EditorUI::SliderFloat submits two ImGui items (the
+            // track, then a trailing number box) — plain ImGui::IsItemActivated() /
+            // IsItemDeactivatedAfterEdit() after the call only ever see the box, so dragging the
+            // track directly silently skipped StageUndo/CommitStagedUndo. Use the widget's own
+            // out-params instead, which combine both items' signals.
             PropertyLabel("Bounciness", "Restitution: 0 stops dead, 1 loses no energy on a bounce.");
-            EditorUI::SliderFloat("##Bounciness", &collider->Bounciness, 0.0f, 1.0f, "%.2f");
-            if (ImGui::IsItemActivated()) StageUndo(world);
-            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Collider Material");
+            {
+                bool slActivated = false, slCommitted = false;
+                EditorUI::SliderFloat("##Bounciness", &collider->Bounciness, 0.0f, 1.0f, "%.2f",
+                                      0, &slActivated, &slCommitted);
+                if (slActivated) StageUndo(world);
+                if (slCommitted) CommitStagedUndo(world, "Edit Collider Material");
+            }
             PropertyLabel("Friction", "Combined static + dynamic friction. 0 = ice.");
-            EditorUI::SliderFloat("##Friction", &collider->Friction, 0.0f, 2.0f, "%.2f");
-            if (ImGui::IsItemActivated()) StageUndo(world);
-            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Collider Material");
+            {
+                bool slActivated = false, slCommitted = false;
+                EditorUI::SliderFloat("##Friction", &collider->Friction, 0.0f, 2.0f, "%.2f",
+                                      0, &slActivated, &slCommitted);
+                if (slActivated) StageUndo(world);
+                if (slCommitted) CommitStagedUndo(world, "Edit Collider Material");
+            }
 
             EndComponentSection();
         }
@@ -2145,9 +2165,18 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                         float* v = reinterpret_cast<float*>(f.Address(fbase));
                         const char* fmt = f.Format ? f.Format : "%.3f";
                         const ImGuiSliderFlags sl = f.Logarithmic ? ImGuiSliderFlags_Logarithmic : 0;
-                        if (f.Slider && f.Min < f.Max) EditorUI::SliderFloat("##v", v, f.Min, f.Max, fmt, sl);
-                        else                           ImGui::DragFloat("##v", v, f.DragSpeed, f.Min, f.Max, fmt, sl);
-                        started = ImGui::IsItemActivated();
+                        if (f.Slider && f.Min < f.Max) {
+                            // EditorUI::SliderFloat submits two ImGui items (track + trailing
+                            // number box); a bare IsItemActivated() below it only ever sees the
+                            // box, so dragging the track would never set `started` and the undo
+                            // push at the bottom of this loop would silently be skipped.
+                            bool slActivated = false;
+                            EditorUI::SliderFloat("##v", v, f.Min, f.Max, fmt, sl, &slActivated);
+                            started = slActivated;
+                        } else {
+                            ImGui::DragFloat("##v", v, f.DragSpeed, f.Min, f.Max, fmt, sl);
+                            started = ImGui::IsItemActivated();
+                        }
                         break;
                     }
                     case ReflectFieldType::Vec3:
@@ -2727,10 +2756,15 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             float edit = shared;
             PropertyLabel(label, tip);
             ImGui::PushID(label);
-            bool changed = EditorUI::SliderFloat("##ms", &edit, lo, hi, mixed ? "\xE2\x80\x94" : "%.3f");
-            if (ImGui::IsItemActivated()) StageUndo(world);
+            // EditorUI::SliderFloat's out-params combine the track's and the number box's own
+            // activated/deactivated signal — a plain IsItemActivated()/IsItemDeactivatedAfterEdit()
+            // called after it only ever sees the trailing box, silently missing every track drag.
+            bool activated = false, committed = false;
+            bool changed = EditorUI::SliderFloat("##ms", &edit, lo, hi, mixed ? "\xE2\x80\x94" : "%.3f",
+                                                 0, &activated, &committed);
+            if (activated) StageUndo(world);
             if (changed && std::isfinite(edit)) for (Material* mm : mats) mm->*field = edit;
-            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
+            if (committed) CommitStagedUndo(world, "Edit Material");
             ImGui::PopID();
         };
 
@@ -2851,12 +2885,17 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                     if (std::fabs(MaterialAsset::GetFloat(*mm, prop.Name) - shared) > 1.0e-4f) mixed = true;
                 float edit = shared;
                 PropertyLabel(label);
+                // See the scalarRow lambda above: EditorUI::SliderFloat's out-params are needed
+                // here, not a bare IsItemActivated()/IsItemDeactivatedAfterEdit(), or dragging the
+                // track (vs. typing in its trailing number box) would silently skip the undo step.
+                bool activated = false, committed = false;
                 bool changed = EditorUI::SliderFloat("##f", &edit, prop.DefaultFloat, 1.0f,
-                                                     mixed ? "\xE2\x80\x94" : "%.3f");
-                if (ImGui::IsItemActivated()) StageUndo(world);
+                                                     mixed ? "\xE2\x80\x94" : "%.3f",
+                                                     0, &activated, &committed);
+                if (activated) StageUndo(world);
                 if (changed && std::isfinite(edit))
                     for (Material* mm : mats) MaterialAsset::SetFloat(*mm, prop.Name, edit);
-                if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
+                if (committed) CommitStagedUndo(world, "Edit Material");
                 break;
             }
             case ShaderPropType::Bool: {
