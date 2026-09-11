@@ -1307,7 +1307,12 @@ private:
     bool m_RenamingIsFolder = false;
     bool m_RenamingJustStarted = false; // one-shot: focus + select-all the rename field on the frame it opens
     char m_RenameBuffer[128] = {};
+    // Seconds left to show the "invalid name" inline flash after CommitRename rejects an edit
+    // that has nothing usable left once illegal characters/reserved names are stripped (#38 B12).
+    // The field stays open (not cleared) so the user can fix it instead of losing the edit.
+    float m_RenameRejectedFlash = 0.0f;
     void BeginRenameAsset(const std::string& key, bool isFolder, const std::string& currentName);
+    void DrawRenameRejectedTooltip(); // inline error for the flash above (#38 B12) - both rename layouts call it
 
     // One entry in the Asset Browser's multi-selection — a key plus whether it's a folder,
     // since folder paths and asset paths are separate namespaces that could theoretically
@@ -1437,6 +1442,9 @@ private:
     entt::entity m_RenamingEntity = entt::null;
     bool m_EntityRenameJustStarted = false;
     char m_EntityRenameBuffer[128] = {};
+    // Mirrors m_RenameRejectedFlash for the Asset Browser (#38 B12): seconds left to show the
+    // "name can't be blank" inline error when a Hierarchy rename sanitizes down to nothing.
+    float m_EntityRenameRejectedFlash = 0.0f;
     // Right-click context menu shared by the Hierarchy's rows and its empty space; `entity` is
     // entt::null for the empty-space case (only the create/paste items apply then).
     void DrawHierarchyContextMenu(World& world, AssetLibrary& assets, entt::entity entity);
