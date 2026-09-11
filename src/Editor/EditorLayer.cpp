@@ -2616,31 +2616,47 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         }
     }
 
+    // NOTE: the staged-undo cleanup and selection-history recording that used to sit here have
+    // moved to PostModuleDraw() (see its declaration in EditorLayer.h) — every editor panel
+    // (Console, Asset Browser, Scene Hierarchy, Inspector) is drawn by the reloadable editor
+    // module via main.cpp's editorModule.Draw(), which runs AFTER this function returns. Code
+    // placed at the bottom of Draw() still runs strictly *before* those panels each frame, so it
+    // can never observe a CommitStagedUndo or a selection change made by them this same frame.
+}
+
+void EditorLayer::PostModuleDraw() {
     // Drop a staged-but-never-committed undo snapshot once the interaction is definitely over
     // (its widget vanished mid-edit, e.g. the selection changed before IsItemDeactivatedAfterEdit
     // could fire) so the next StageUndo captures fresh state instead of a stale one.
     //
-    // Runs LAST, after every panel (Inspector included) has had its chance to call
-    // CommitStagedUndo this frame. The color-picker *swatch* path in particular reopens a
-    // popup whose drag/release lives on a different ImGui ID than the ColorEdit3 call that
-    // staged the undo; if this cleanup ran at the top of Draw() (before the Inspector redraws),
-    // a frame where ImGui::IsAnyItemActive()/IsMouseDown() both read false *before* the popup's
-    // own deactivation logic had run this frame (e.g. the gap between micro-drags inside the
-    // picker) would wipe m_HasStagedUndo out from under the still-open popup, so the eventual
-    // popup-close commit found m_HasStagedUndo already false and silently dropped the undo step
-    // (#38-adjacent: "color-picker swatch path can drop an undo step"). Placing the check here
-    // means any CommitStagedUndo that legitimately fires this frame already ran and cleared the
-    // flag, so this only ever discards snapshots that are genuinely abandoned.
+    // Runs here, after every panel (Inspector included) has had its actual chance to call
+    // CommitStagedUndo this frame — Inspector, Hierarchy, Asset Browser and Console are all
+    // drawn by the reloadable editor module (main.cpp's editorModule.Draw()), which by this
+    // point has already returned for the frame. The color-picker *swatch* path in particular
+    // reopens a popup whose drag/release lives on a different ImGui ID than the ColorEdit3 call
+    // that staged the undo; if this cleanup ran before the Inspector drew (as it used to, at the
+    // bottom of Draw(), which returns before editorModule.Draw() ever runs), a frame where
+    // ImGui::IsAnyItemActive()/IsMouseDown() both read false *before* the popup's own
+    // deactivation logic had run this frame (e.g. the gap between micro-drags inside the picker)
+    // would wipe m_HasStagedUndo out from under the still-open popup, so the eventual popup-close
+    // commit found m_HasStagedUndo already false and silently dropped the undo step (#38-adjacent:
+    // "color-picker swatch path can drop an undo step"). Placing the check here, genuinely after
+    // the module's panels have drawn, means any CommitStagedUndo that legitimately fires this
+    // frame already ran and cleared the flag, so this only ever discards snapshots that are
+    // genuinely abandoned.
     if (m_HasStagedUndo && !ImGui::IsAnyItemActive() && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
         m_HasStagedUndo = false;
         m_StagedUndoJson.clear();
         m_StagedUndoSelectedOrders.clear();
     }
 
-    // Fold this frame's selection into the back/forward history (#236 R2). Last thing in Draw,
-    // so it sees the net result of every panel and shortcut that ran this frame.
+    // Fold this frame's selection into the back/forward history (#236 R2). Runs here, after the
+    // module's Hierarchy/Inspector panels have drawn, so it sees the net result of every panel
+    // and shortcut that ran this frame (a Hierarchy click lives in the module, past Draw()'s
+    // return).
     RecordSelectionHistory();
 }
+
 bool EditorLayer::AnyModalOpen() const {
     return ImGui::GetTopMostPopupModal() != nullptr;
 }
