@@ -648,8 +648,12 @@ void EditorLayer::DrawGridSnapPopupBody() {
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("World units between minor grid lines.\nAlso the step used when snapping a dropped object to the ground grid.");
-    if (EditorUI::SliderInt("Major every", &gs.GridMajorEvery, 2, 100, "%d cells"))
-        EditorSettings::Save();
+    {
+        bool committed = false;
+        EditorUI::SliderInt("Major every", &gs.GridMajorEvery, 2, 100, "%d cells",
+                            0, nullptr, &committed);
+        if (committed) EditorSettings::Save();
+    }
 
     ImGui::Separator();
     ImGui::TextDisabled("SNAP  (hold Ctrl while dragging to invert)");
