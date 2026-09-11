@@ -79,6 +79,15 @@ public:
     void Draw(World& world, AssetLibrary& assets, Camera& editorCamera, float dt);
     void EndFrame();
 
+    // Cleanup that must run after every editor panel has had its chance to act this frame,
+    // Inspector/Hierarchy/Console/Asset Browser included. Those panels are drawn by the
+    // reloadable editor module (main.cpp's editorModule.Draw(), called AFTER Draw() returns),
+    // so this can't live at the bottom of Draw() itself — anything there still runs strictly
+    // before the module's panels this frame. Call this from main.cpp immediately after
+    // editorModule.Draw() returns. Currently: dropping an abandoned staged-undo snapshot, and
+    // folding this frame's selection into the back/forward history.
+    void PostModuleDraw();
+
     // Pull the editor camera back to fit the whole scene's bounds in view, keeping its current
     // aim. No-op on an empty scene. Called once on startup so the editor doesn't open staring
     // at empty space next to the geometry (audit #87).
