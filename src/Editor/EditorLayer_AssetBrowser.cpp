@@ -669,25 +669,47 @@ void EditorLayer::DuplicateSelectedAsset(World& world, AssetLibrary& assets) {
 }
 
 void EditorLayer::CommitRename(World& world, AssetLibrary& assets) {
-    std::string newName = m_RenameBuffer;
-    if (!newName.empty()) {
-        if (m_RenamingIsFolder) {
-            PushUndo(world, "Rename Folder");
-            std::string parent = ParentFolderOf(m_RenamingAssetKey);
-            std::string newPath = parent.empty() ? newName : (parent + "/" + newName);
-            assets.RenameFolder(m_RenamingAssetKey, newPath);
-            if (m_CurrentAssetFolder == m_RenamingAssetKey) {
-                m_CurrentAssetFolder = newPath;
-            } else if (m_CurrentAssetFolder.rfind(m_RenamingAssetKey + "/", 0) == 0) {
-                m_CurrentAssetFolder = newPath + m_CurrentAssetFolder.substr(m_RenamingAssetKey.size());
-            }
-            if (m_SelectedAssetKey == m_RenamingAssetKey) m_SelectedAssetKey = newPath;
-        } else {
-            PushUndo(world, "Rename Asset");
-            assets.SetDisplayName(m_RenamingAssetKey, newName);
+    // Strip control/illegal-filename characters and reserved device names, trim, and cap length
+    // (#38 B12) — these names get '/'-joined into virtual folder paths, so an un-sanitized '/'
+    // or '\' would silently rewrite the hierarchy instead of just looking odd in a label.
+    std::string newName = SanitizeAssetName(m_RenameBuffer);
+    if (newName.empty()) {
+        // Nothing usable survived sanitization (blank, all-illegal, or a reserved name like
+        // "CON") - reject instead of silently accepting garbage or silently discarding the
+        // edit. Leave the field open with the raw text still in it so the user can fix it, and
+        // flash an inline error instead.
+        m_RenameRejectedFlash = 1.6f;
+        return;
+    }
+    if (m_RenamingIsFolder) {
+        PushUndo(world, "Rename Folder");
+        std::string parent = ParentFolderOf(m_RenamingAssetKey);
+        std::string newPath = parent.empty() ? newName : (parent + "/" + newName);
+        assets.RenameFolder(m_RenamingAssetKey, newPath);
+        if (m_CurrentAssetFolder == m_RenamingAssetKey) {
+            m_CurrentAssetFolder = newPath;
+        } else if (m_CurrentAssetFolder.rfind(m_RenamingAssetKey + "/", 0) == 0) {
+            m_CurrentAssetFolder = newPath + m_CurrentAssetFolder.substr(m_RenamingAssetKey.size());
         }
+        if (m_SelectedAssetKey == m_RenamingAssetKey) m_SelectedAssetKey = newPath;
+    } else {
+        PushUndo(world, "Rename Asset");
+        assets.SetDisplayName(m_RenamingAssetKey, newName);
     }
     m_RenamingAssetKey.clear();
+    m_RenameRejectedFlash = 0.0f;
+}
+
+// Inline error for a rejected rename (#38 B12) - a tooltip pinned near the still-open rename
+// field, decaying on its own, rather than a modal the user has to dismiss. Both the grid and
+// list rename layouts call this right after their InputText.
+void EditorLayer::DrawRenameRejectedTooltip() {
+    if (m_RenameRejectedFlash <= 0.0f) return;
+    m_RenameRejectedFlash -= ImGui::GetIO().DeltaTime;
+    ImGui::BeginTooltip();
+    ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.35f, 1.0f),
+        "Name can't be blank, only illegal characters (< > : \" / \\ | ? *), or a reserved name like CON/NUL.");
+    ImGui::EndTooltip();
 }
 
 void EditorLayer::SetFolderExpandedRecursive(AssetLibrary& assets, const std::string& folderPath, bool expand, bool recursive) {
@@ -1182,7 +1204,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 bool cancel = ImGui::IsKeyPressed(ImGuiKey_Escape);
                 bool lostFocus = ImGui::IsItemDeactivated() && !done;
                 if (done) CommitRename(world, assets);
-                else if (cancel || lostFocus) m_RenamingAssetKey.clear();
+                else if (cancel || lostFocus) { m_RenamingAssetKey.clear(); m_RenameRejectedFlash = 0.0f; }
+                DrawRenameRejectedTooltip();
                 ImGui::SetCursorScreenPos(ImVec2(tileMin.x, tileMin.y + tileSize.y));
             }
         } else {
@@ -1210,7 +1233,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 bool cancel = ImGui::IsKeyPressed(ImGuiKey_Escape);
                 bool lostFocus = ImGui::IsItemDeactivated() && !done;
                 if (done) CommitRename(world, assets);
-                else if (cancel || lostFocus) m_RenamingAssetKey.clear();
+                else if (cancel || lostFocus) { m_RenamingAssetKey.clear(); m_RenameRejectedFlash = 0.0f; }
+                DrawRenameRejectedTooltip();
             } else {
                 clicked = ImGui::Selectable(cell.display.c_str(), isSelected);
             }

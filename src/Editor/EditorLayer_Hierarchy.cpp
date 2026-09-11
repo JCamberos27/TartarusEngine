@@ -793,13 +793,37 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
             snprintf(m_EntityRenameBuffer, sizeof(m_EntityRenameBuffer), "%s", name.Name.c_str());
             m_EntityRenameJustStarted = false;
         }
-        if (ImGui::InputText("##Rename", m_EntityRenameBuffer, sizeof(m_EntityRenameBuffer),
-                ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
-            PushUndo(world, "Rename");
-            name.Name = SanitizeEntityName(m_EntityRenameBuffer);
-            m_RenamingEntity = entt::null;
+        bool submitted = ImGui::InputText("##Rename", m_EntityRenameBuffer, sizeof(m_EntityRenameBuffer),
+                ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+        bool rejected = false;
+        if (submitted) {
+            std::string sanitized = SanitizeEntityName(m_EntityRenameBuffer);
+            if (sanitized.empty()) {
+                // Blank (or whitespace-only) name — reject rather than silently leaving the
+                // entity with an empty label (#38 B12). Keep the field open with the raw text
+                // still in it and flash an inline error instead of committing or closing.
+                rejected = true;
+                m_EntityRenameRejectedFlash = 1.6f;
+            } else {
+                PushUndo(world, "Rename");
+                name.Name = sanitized;
+                m_RenamingEntity = entt::null;
+                m_EntityRenameRejectedFlash = 0.0f;
+            }
         }
-        if (ImGui::IsItemDeactivated()) m_RenamingEntity = entt::null;
+        // Deactivated without the Enter branch above committing (blur / Escape) - cancel. Not
+        // when this Enter press was the one that just got rejected, or the field would close
+        // the same frame the error fires, undoing the "keep it open to fix" behaviour above.
+        if (!rejected && ImGui::IsItemDeactivated() && m_RenamingEntity != entt::null) {
+            m_RenamingEntity = entt::null;
+            m_EntityRenameRejectedFlash = 0.0f;
+        }
+        if (m_EntityRenameRejectedFlash > 0.0f) {
+            m_EntityRenameRejectedFlash -= ImGui::GetIO().DeltaTime;
+            ImGui::BeginTooltip();
+            ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.35f, 1.0f), "Name can't be blank.");
+            ImGui::EndTooltip();
+        }
         ImGui::PopID();
         return; // children stay collapsed for the one frame a rename is open — deliberate, keeps the field stable
     }
