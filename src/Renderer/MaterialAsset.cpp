@@ -8,6 +8,7 @@
 #include <json.hpp>
 #include <filesystem>
 #include <fstream>
+#include <unordered_set>
 
 using json = nlohmann::json;
 
@@ -122,6 +123,41 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
         // Resolve shader asset when path is set (AssetLibrary handles caching).
         if (!ma->ShaderPath.empty())
             ma->Shader = lib->LoadShader(ma->ShaderPath);
+
+        // Typed store for every linked-shader property that isn't a built-in Material field
+        // (#354). Value comes from the .mat "properties" object; a missing key falls back to the
+        // property's declared default. Needs the resolved shader for the type + default list.
+        if (ma->Shader) {
+            const json props = (matVersion >= 2 && j.contains("properties") && j["properties"].is_object())
+                                   ? j["properties"] : json::object();
+            for (const ShaderProperty& p : ma->Shader->Properties()) {
+                if (IsBuiltinProp(p.Name)) continue;
+                MaterialProp mp;
+                mp.Type = p.Type;
+                const json* v = props.contains(p.Name) ? &props.at(p.Name) : nullptr;
+                switch (p.Type) {
+                case ShaderPropType::Float: case ShaderPropType::Int:
+                    mp.F = v ? v->get<float>() : p.DefaultFloat;
+                    mp.I = (int)mp.F;
+                    break;
+                case ShaderPropType::Bool:
+                    mp.B = v ? v->get<bool>() : p.DefaultBool;
+                    break;
+                case ShaderPropType::Color: case ShaderPropType::Vec2:
+                case ShaderPropType::Vec3:  case ShaderPropType::Vec4: {
+                    glm::vec3 d = JsonToVec3(json{p.DefaultVec.x, p.DefaultVec.y, p.DefaultVec.z});
+                    glm::vec3 g = v ? JsonToVec3(*v, d) : d;
+                    mp.V = glm::vec4(g, p.DefaultVec.w);
+                    break;
+                }
+                case ShaderPropType::Texture2D:
+                    mp.TexPath = v && v->is_string() ? v->get<std::string>() : std::string();
+                    mp.Tex = mp.TexPath.empty() ? nullptr : lib->LoadTexture(mp.TexPath);
+                    break;
+                }
+                ma->ExtraProps.emplace(p.Name, std::move(mp));
+            }
+        }
     }
 
     return ma;
@@ -167,6 +203,17 @@ bool MaterialAsset::Save() const {
         if (!ThicknessMapPath.empty())              props["_ThicknessMap"]            = ThicknessMapPath;
         if (m.TransmissionStrength != 0.0f)         props["_TransmissionStrength"]    = m.TransmissionStrength;
         if (m.IOR                  != 1.5f)         props["_IOR"]                     = m.IOR;
+
+        // Non-builtin linked-shader properties (#354).
+        for (const auto& [name, p] : ExtraProps) {
+            switch (p.Type) {
+            case ShaderPropType::Float: case ShaderPropType::Int:   props[name] = p.F; break;
+            case ShaderPropType::Bool:                              props[name] = p.B; break;
+            case ShaderPropType::Color: case ShaderPropType::Vec2:
+            case ShaderPropType::Vec3:  case ShaderPropType::Vec4:  props[name] = Vec3ToJson(glm::vec3(p.V)); break;
+            case ShaderPropType::Texture2D:                         props[name] = p.TexPath; break;
+            }
+        }
     } else {
         // v1 format (backward compatible)
         j["matVersion"]          = 1;
@@ -192,6 +239,19 @@ bool MaterialAsset::Save() const {
 }
 
 // --- Property access by shader property name ---
+
+bool MaterialAsset::IsBuiltinProp(const std::string& n) {
+    static const std::unordered_set<std::string> kBuiltin = {
+        "_BaseColor", "_Metallic", "_Roughness", "_EmissiveColor", "_EmissiveStrength",
+        "_Triplanar", "_TriplanarScale",
+        "_ClearCoat", "_ClearCoatRoughness", "_Anisotropy", "_AnisotropyRotation",
+        "_Sheen", "_SheenRoughness", "_SubsurfaceColor", "_Thickness",
+        "_TransmissionStrength", "_IOR",
+        "_AlbedoMap", "_NormalMap", "_MetallicRoughnessMap", "_MetallicMap", "_RoughnessMap",
+        "_AOMap", "_EmissiveMap", "_ClearCoatMap", "_ThicknessMap",
+    };
+    return kBuiltin.count(n) != 0;
+}
 
 const std::shared_ptr<Texture>& MaterialAsset::GetTexture(const Material& m, const std::string& n) {
     static const std::shared_ptr<Texture> sNull;
