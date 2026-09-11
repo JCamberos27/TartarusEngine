@@ -1433,9 +1433,9 @@ void EditorLayer::DrawProjectSettingsWindow(World& /*world*/) {
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("How hard walking into a dynamic body shoves it. 0 = the Player passes through nothing but still can't push.");
         ImGui::SetNextItemWidth(kw);
-        if (ImGui::SliderInt("Player layer", &p.PlayerLayer, 0, LayerRegistry::kCount - 1,
-                             LayerRegistry::DisplayName(p.PlayerLayer).c_str()))
-            ProjectSettings::Save();
+        ImGui::SliderInt("Player layer", &p.PlayerLayer, 0, LayerRegistry::kCount - 1,
+                         LayerRegistry::DisplayName(p.PlayerLayer).c_str());
+        if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Collision-matrix layer the Player capsule is on.");
 
         // #185 PR 8 — layer collision matrix. Lower triangle: cell (row r, col c) toggles
@@ -1610,7 +1610,8 @@ void EditorLayer::DrawPhysicsDebugWindow(World& world) {
         ImGui::Separator();
         float ts = es.PhysicsSimTimeScale;
         ImGui::SetNextItemWidth(150.0f);
-        if (ImGui::SliderFloat("Slow-mo", &ts, 0.0f, 2.0f, "%.2fx")) { es.PhysicsSimTimeScale = ts; EditorSettings::Save(); }
+        if (ImGui::SliderFloat("Slow-mo", &ts, 0.0f, 2.0f, "%.2fx")) es.PhysicsSimTimeScale = ts;
+        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         ImGui::SameLine();
         if (ImGui::SmallButton("1x")) { es.PhysicsSimTimeScale = 1.0f; EditorSettings::Save(); }
         ImGui::BeginDisabled(!m_InPlayMode);
