@@ -77,6 +77,9 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
             // Scalars / PR12
             m.TransmissionStrength = props.value("_TransmissionStrength", 0.0f);
             m.IOR                  = props.value("_IOR",                  1.5f);
+            // #354: variant opt-ins with no natural "off" value (not shader Properties()).
+            m.SubsurfaceEnabled = props.value("_SubsurfaceEnabled", false);
+            m.ReflectionProbes  = props.value("_ReflectionProbes",  false);
             // Texture paths
             ma->AlbedoMapPath            = strProp("_AlbedoMap");
             ma->NormalMapPath            = strProp("_NormalMap");
@@ -209,6 +212,8 @@ bool MaterialAsset::Save() const {
         if (!ThicknessMapPath.empty())              props["_ThicknessMap"]            = ThicknessMapPath;
         if (m.TransmissionStrength != 0.0f)         props["_TransmissionStrength"]    = m.TransmissionStrength;
         if (m.IOR                  != 1.5f)         props["_IOR"]                     = m.IOR;
+        if (m.SubsurfaceEnabled)                    props["_SubsurfaceEnabled"]      = true;
+        if (m.ReflectionProbes)                     props["_ReflectionProbes"]       = true;
 
         // Non-builtin linked-shader properties (#354).
         for (const auto& [name, p] : ExtraProps) {

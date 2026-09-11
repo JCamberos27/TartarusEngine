@@ -1,0 +1,14 @@
+{
+  "matVersion": 2,
+  "name": "Fixture Transmission",
+  "_comment": "#354 fixture: activates the _TRANSMISSION variant. Transparent queue so the refraction pass binds the opaque-colour copy on unit 14.",
+  "shader": "shaders/Standard.shader",
+  "renderQueue": 2,
+  "properties": {
+    "_BaseColor": [0.82, 0.82, 0.86],
+    "_Metallic": 0.0,
+    "_Roughness": 0.08,
+    "_TransmissionStrength": 0.85,
+    "_IOR": 1.45
+  }
+}
