@@ -68,6 +68,7 @@
 #include <cstdint>
 #include <thread>
 #include <vector>
+#include <chrono>
 #include <cstring>
 #include <cstdlib>
 #include <intrin.h>   // __cpuid — CPU brand string for the boot log
@@ -402,6 +403,10 @@ int main(int argc, char** argv) {
     // user project's scenes/ folder — so the harness still means something when the user
     // project is empty (audit TEST-101).
     std::string smokeScenesDirArg;
+    // --undo-bench: one-shot headless timing of SceneSerializer::SaveToString/LoadFromString at
+    // synthetic scene sizes (audit ARCH-203 / #375). Investigates whether undo/redo's whole-scene
+    // JSON round-trip is cheap enough to leave as-is, before committing to a diff-based redesign.
+    bool undoBenchMode = false;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--smoke-test") {
@@ -409,12 +414,13 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && argv[i + 1][0] != '-') smokeScenesDirArg = argv[++i];
         }
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
+        else if (a == "--undo-bench") { undoBenchMode = true; }
     }
     const bool resaveMode = !resaveIn.empty();
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
     // (audit BUG-102).
-    const bool headless = smokeTestMode || resaveMode;
+    const bool headless = smokeTestMode || resaveMode || undoBenchMode;
 
     // Resolve shipped engine assets (shaders, fonts, branding) relative to the executable, not
     // the working directory, so a launch from the repo root or an unrelated CWD still finds
@@ -572,6 +578,38 @@ int main(int argc, char** argv) {
                 return 3;
             }
             std::cout << "[Resave] " << resaveIn << " -> " << resaveOut << "\n";
+            return 0;
+        }
+
+        if (undoBenchMode) {
+            // Mirrors what a single Undo/Redo call does today (EditorLayer_Scene.cpp): one
+            // SaveToString for the entry being pushed, plus a full SaveToString+LoadFromString
+            // round-trip to restore the other side. Empty entities only (CreateBox would time
+            // GL primitive creation, not the serializer).
+            for (int n : {500, 2000, 10000}) {
+                World benchWorld;
+                for (int i = 0; i < n; ++i) {
+                    benchWorld.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f),
+                        "BenchEntity_" + std::to_string(i));
+                }
+
+                auto t0 = std::chrono::steady_clock::now();
+                std::string json = SceneSerializer::SaveToString(benchWorld, assets);
+                auto t1 = std::chrono::steady_clock::now();
+
+                World restoreWorld;
+                bool ok = SceneSerializer::LoadFromString(restoreWorld, assets, json);
+                auto t2 = std::chrono::steady_clock::now();
+
+                double saveMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+                double loadMs = std::chrono::duration<double, std::milli>(t2 - t1).count();
+                std::cout << "[UndoBench] n=" << n
+                          << " bytes=" << json.size()
+                          << " SaveToString=" << saveMs << "ms"
+                          << " LoadFromString=" << loadMs << "ms"
+                          << " roundTrip(1 Undo)=" << (saveMs + loadMs) << "ms"
+                          << (ok ? "" : " LOAD_FAILED") << "\n";
+            }
             return 0;
         }
 
