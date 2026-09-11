@@ -35,10 +35,24 @@ GLFWwindow* g_ParentWindow = nullptr;
 // toolbar's menu bodies / commands (API v4) read from, refreshed every frame by
 // HotReloadEditorModule::SetFrameContext(). Same file-scope rationale as g_ParentWindow: the host
 // API is a flat function-pointer table with nowhere to hang a context pointer.
+//
+// This is a correctness-bearing single-instance assumption (audit ARCH-204 / #375): every one of
+// the exported Fn callbacks above reads these directly, with no per-instance identity, so two live
+// HotReloadEditorModule objects would silently clobber each other's frame context. Only one has
+// ever existed (main.cpp's `editorModule`) and the class isn't copyable, but nothing enforced that
+// invariant — g_InstanceLive below does, and Shutdown() clears these four so a callback invoked
+// after teardown (there shouldn't be one — Draw() is gated on m_API, which Shutdown() also clears)
+// reads null instead of a dangling pointer.
 EditorLayer* g_Editor = nullptr;
 World* g_World = nullptr;
 AssetLibrary* g_Assets = nullptr;
 Camera* g_Camera = nullptr;
+
+// Set for the lifetime of the one HotReloadEditorModule allowed to hold the g_* globals above
+// (from Initialize() to Shutdown()/destruction). A second live instance would share — and fight
+// over — the same globals, so Initialize() asserts this is false and logs instead of silently
+// corrupting the first instance's state.
+bool g_InstanceLive = false;
 
 void DrawStatusPanel(const char* title, const char* message, const char* accent) {
     bool open = true;
@@ -570,6 +584,16 @@ HotReloadEditorModule::~HotReloadEditorModule() {
 
 void HotReloadEditorModule::Initialize(const fs::path& sourceModule, void* parentWindow) {
     Shutdown();
+    // ARCH-204: two live instances would share (and fight over) g_Editor/g_World/g_Assets/g_Camera
+    // — see the comment at their definition. Shutdown() above always clears g_InstanceLive first
+    // for *this* instance's own re-Initialize, so this only trips for a genuinely second instance.
+    if (g_InstanceLive) {
+        Log::Error("Editor hot reload: a HotReloadEditorModule instance is already live; "
+                   "refusing to Initialize a second one (would corrupt shared frame-context state).");
+        return;
+    }
+    g_InstanceLive = true;
+    m_OwnsInstanceGuard = true;
     g_ParentWindow = static_cast<GLFWwindow*>(parentWindow);
     m_SourceModule = sourceModule;
     m_PollElapsed = 0.0f;
@@ -683,4 +707,18 @@ void HotReloadEditorModule::Shutdown() {
     m_Handle = nullptr;
     m_API = nullptr;
     m_LoadedCopy.clear();
+
+    // ARCH-204: release the single-instance guard and null the shared frame-context pointers —
+    // but only if this instance actually holds the guard (a second instance's Initialize() bailed
+    // out before ever setting m_OwnsInstanceGuard, so its Shutdown() must not rip the guard/context
+    // out from under the first, still-live instance).
+    if (m_OwnsInstanceGuard) {
+        g_Editor = nullptr;
+        g_World = nullptr;
+        g_Assets = nullptr;
+        g_Camera = nullptr;
+        g_ParentWindow = nullptr;
+        g_InstanceLive = false;
+        m_OwnsInstanceGuard = false;
+    }
 }
