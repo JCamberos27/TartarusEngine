@@ -586,7 +586,10 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
 }
 // Data-driven BindMaterial using ShaderAsset::Bindings() + MaterialAsset property accessors.
 // Activates when the MaterialAsset has a linked ShaderAsset (v2 .mat files referencing a .shader).
-void BindMaterialDataDriven(Shader& shader, const Material& mat, const ShaderAsset& sa) {
+// Built-in PBR properties read from `ma.Mat`; every other declared property reads from
+// `ma.ExtraProps` (typed store filled by MaterialAsset::Load, #354).
+void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const ShaderAsset& sa) {
+    const Material& mat = ma.Mat;
     if (GLStateCache::MaterialAlreadyBound(mat.Hash(), shader.Program())) return;
 
     const auto& props    = sa.Properties();
@@ -596,11 +599,19 @@ void BindMaterialDataDriven(Shader& shader, const Material& mat, const ShaderAss
         const std::string& pname   = prop.Name;
         // Derive uniform name: "_AlbedoMap" → "uAlbedoMap"
         std::string uname = "u" + pname.substr(1);
+        const bool builtin = MaterialAsset::IsBuiltinProp(pname);
+        const MaterialProp* extra = nullptr;
+        if (!builtin) {
+            auto it = ma.ExtraProps.find(pname);
+            if (it != ma.ExtraProps.end()) extra = &it->second;
+        }
 
         switch (prop.Type) {
         case ShaderPropType::Texture2D: {
             std::string hasName = "uHas" + pname.substr(1);
-            const auto& tex = MaterialAsset::GetTexture(mat, pname);
+            const std::shared_ptr<Texture>& tex =
+                builtin ? MaterialAsset::GetTexture(mat, pname)
+                        : (extra ? extra->Tex : MaterialAsset::GetTexture(mat, pname) /*null*/);
             if (tex && tex->IsValid()) {
                 tex->Bind(b.TextureUnit);
                 shader.SetInt(uname,   b.TextureUnit);
@@ -611,15 +622,23 @@ void BindMaterialDataDriven(Shader& shader, const Material& mat, const ShaderAss
             break;
         }
         case ShaderPropType::Color:
+        case ShaderPropType::Vec2:
         case ShaderPropType::Vec3:
-            shader.SetVec3(uname, MaterialAsset::GetColor(mat, pname));
+        case ShaderPropType::Vec4:
+            shader.SetVec3(uname, builtin ? MaterialAsset::GetColor(mat, pname)
+                                          : (extra ? glm::vec3(extra->V)
+                                                   : glm::vec3(prop.DefaultVec)));
             break;
         case ShaderPropType::Float:
-            shader.SetFloat(uname, MaterialAsset::GetFloat(mat, pname));
+            shader.SetFloat(uname, builtin ? MaterialAsset::GetFloat(mat, pname)
+                                           : (extra ? extra->F : prop.DefaultFloat));
             break;
         case ShaderPropType::Bool:
         case ShaderPropType::Int:
-            shader.SetInt(uname, MaterialAsset::GetBool(mat, pname) ? 1 : 0);
+            shader.SetInt(uname, builtin ? (MaterialAsset::GetBool(mat, pname) ? 1 : 0)
+                                         : (extra ? (prop.Type == ShaderPropType::Bool
+                                                         ? (extra->B ? 1 : 0) : extra->I)
+                                                  : (prop.DefaultBool ? 1 : 0)));
             break;
         default:
             break;
@@ -635,7 +654,7 @@ void Model::Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset
         bool hasSlot = i < (int)slots.size() && slots[i];
         const Material& mat = hasSlot ? slots[i]->Mat : m_Meshes[i]->Mat;
         if (hasSlot && slots[i]->Shader)
-            BindMaterialDataDriven(shader, mat, *slots[i]->Shader);
+            BindMaterialDataDriven(shader, *slots[i], *slots[i]->Shader);
         else
             BindMaterial(shader, mat, locs);
         m_Meshes[i]->Draw();
