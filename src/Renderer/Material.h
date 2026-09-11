@@ -51,6 +51,12 @@ struct Material {
     float TransmissionStrength = 0.0f; // [0,1]; 0 = opaque
     float IOR                  = 1.5f; // index of refraction (glass=1.5, water=1.33)
 
+    // #354: the ShaderAsset variant selector turns a lobe's `#ifdef` on when its authored
+    // strength is nonzero. Subsurface and reflection probes have no natural "off" value
+    // (Thickness defaults to 0.5, probes are a scene resource), so they are explicit opt-ins.
+    bool SubsurfaceEnabled = false; // -> _SUBSURFACE variant
+    bool ReflectionProbes  = false; // -> _REFLECTION_PROBES variant (parallax box reflections)
+
     // #192: a value hash of everything BindMaterial (Model.cpp) uploads — the scalar/vector
     // factors plus the identity of each bound texture. The draw loop sorts by this and
     // GLStateCache skips BindMaterial when it matches the last-bound one, so value-identical
@@ -73,7 +79,9 @@ struct Material {
             TransmissionStrength, IOR,
         };
         mix(scalars, sizeof(scalars));
-        const std::uint32_t flags = Triplanar ? 1u : 0u;
+        const std::uint32_t flags = (Triplanar ? 1u : 0u)
+                                  | (SubsurfaceEnabled ? 2u : 0u)
+                                  | (ReflectionProbes ? 4u : 0u);
         mix(&flags, sizeof(flags));
         const Texture* const texs[] = {
             AlbedoMap.get(), NormalMap.get(), MetallicRoughnessMap.get(), MetallicMap.get(),
