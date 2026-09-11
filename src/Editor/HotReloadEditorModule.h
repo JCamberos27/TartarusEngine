@@ -51,4 +51,10 @@ private:
     const struct EditorModuleAPI* m_API = nullptr;
     float m_PollElapsed = 0.0f;
     unsigned int m_Generation = 0;
+    // True once this instance has claimed the file-scope g_InstanceLive guard in
+    // HotReloadEditorModule.cpp (audit ARCH-204) — i.e. Initialize() didn't bail out because
+    // another instance was already live. Shutdown() only releases the guard (and clears the
+    // shared g_Editor/g_World/g_Assets/g_Camera pointers) when this is true, so a second
+    // instance's failed Initialize()->Shutdown() can't rip the guard out from under the first.
+    bool m_OwnsInstanceGuard = false;
 };
