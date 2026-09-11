@@ -18,6 +18,7 @@
 #include "Ssao.h"
 #include "Model.h"
 #include "MaterialAsset.h"
+#include "ShaderVariant.h"
 #include "DefaultTextures.h"
 #include "Frustum.h"
 #include "gl.h"
@@ -29,6 +30,17 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include <unordered_map>
+
+// Per-run tally of how many meshes drew through each ShaderAsset variant key (audit #354). Read
+// by --smoke-test to log which lobes actually rendered; harmless in normal runs.
+namespace {
+std::unordered_map<std::uint32_t, std::uint64_t> g_variantDrawCounts;
+}
+namespace SceneRendererDebug {
+const std::unordered_map<std::uint32_t, std::uint64_t>& VariantDrawCounts() { return g_variantDrawCounts; }
+void ResetVariantDrawCounts() { g_variantDrawCounts.clear(); }
+}
 
 // Extracted from main.cpp's `drawScene` lambda (audit #359, pass 2) and then split into
 // GatherFrameState + ApplyFrameState (audit #354) so the common per-frame uniform/texture set
@@ -234,9 +246,31 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     { // scope limits PROFILE_SCOPE to just this loop, not the rest of the frame
     PROFILE_SCOPE("Scene Draw");
     PROFILE_GPU_SCOPE("Scene Draw"); // shared by both Scene-tab and Game-tab draws
-    // #194: resolve once, outside the per-entity loop below.
-    int modelModelLoc = modelShader.Loc("uModel");
-    int modelNormalMatrixLoc = modelShader.Loc("uNormalMatrix");
+
+    // Program selection (audit #354). A mesh whose slot-0 material links a ShaderAsset draws
+    // through that asset's variant program (keyword mask from the material's authored lobes);
+    // everything else draws through `modelShader`, which already got ApplyFrameState above. Each
+    // distinct program is brought up to this frame's state exactly once. `passAlphaBlend` is the
+    // opaque/transparent flag for whichever pass is currently running.
+    static std::vector<Shader*> appliedPrograms;
+    appliedPrograms.clear();
+    appliedPrograms.push_back(&modelShader);
+    int passAlphaBlend = 0;
+    auto selectProgram = [&](const MaterialAsset* ma) -> Shader* {
+        Shader* prog = &modelShader;
+        std::uint32_t key = 0;
+        if (ma && ma->Shader) {
+            key = ShaderVariantKeyFor(ma->Mat, *ma->Shader);
+            if (Shader* v = ma->Shader->Variant(key)) prog = v;
+        }
+        if (std::find(appliedPrograms.begin(), appliedPrograms.end(), prog) == appliedPrograms.end()) {
+            ApplyFrameState(*prog, fs);
+            prog->SetInt("uAlphaBlend", passAlphaBlend);
+            appliedPrograms.push_back(prog);
+        }
+        g_variantDrawCounts[prog == &modelShader ? 0u : key]++;
+        return prog;
+    };
 
     // #192: gather the frustum-culled visible set, then sort it by material before drawing, so
     // entities sharing a material land adjacent — which is what makes the BindMaterial dedup
@@ -326,12 +360,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         return reinterpret_cast<std::uintptr_t>(a.Ref) < reinterpret_cast<std::uintptr_t>(b.Ref);
     });
 
+    passAlphaBlend = 0;
     modelShader.SetInt("uAlphaBlend", 0); // explicit: ensure opaque pass outputs alpha=1
     for (const DrawItem& it : drawList) {
-        modelShader.SetMat4(modelModelLoc, it.Xform);
-        modelShader.SetMat4(modelNormalMatrixLoc,
-            glm::mat4(glm::transpose(glm::inverse(glm::mat3(it.Xform)))));
-        it.Ref->Draw(modelShader, *it.Slots);
+        it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram);
 
         localStats.DrawCalls += it.Meshes;
         localStats.Triangles += it.Tris;
@@ -340,15 +372,24 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
 
     // --- Transparent pass: back-to-front sorted, blended, no depth write -----------
     if (!transparentList.empty()) {
-        // PR12: resolve MSAA opaque color and copy into mipped texture for refraction.
+        passAlphaBlend = 1;
+        // Every program already brought up for the opaque pass flips to blended output; new
+        // programs picked up below get passAlphaBlend via the selector.
+        for (Shader* p : appliedPrograms) { p->Bind(); p->SetInt("uAlphaBlend", 1); }
+
+        // PR12: resolve MSAA opaque color and copy into mipped texture for refraction. Bind the
+        // capture on unit 14 for every program that may run the _TRANSMISSION branch.
         if (ctx.TxHdr && ctx.TxCapture) {
             ctx.TxHdr->ResolveTo();
             ctx.TxCapture->CopyFrom(ctx.TxHdr->ResolvedColorTexture(), fs.vp[2], fs.vp[3]);
             ctx.TxHdr->BindForRender(); // rebind MSAA FBO for the transparent draw pass
             glActiveTexture(GL_TEXTURE0 + 14);
             glBindTexture(GL_TEXTURE_2D, ctx.TxCapture->Texture());
-            modelShader.SetInt("uOpaqueColor", 14);
-            modelShader.SetVec2("uScreenSize", glm::vec2((float)fs.vp[2], (float)fs.vp[3]));
+            for (Shader* p : appliedPrograms) {
+                p->Bind();
+                p->SetInt("uOpaqueColor", 14);
+                p->SetVec2("uScreenSize", glm::vec2((float)fs.vp[2], (float)fs.vp[3]));
+            }
         }
 
         // Sort: QueueIndex ascending, then ViewDepth descending (farthest first), then MatKey.
@@ -363,16 +404,11 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         glDepthMask(GL_FALSE);
         glBlendFuncSeparate(GL_SRC_ALPHA,  GL_ONE_MINUS_SRC_ALPHA,
                             0x0001/*GL_ONE*/, GL_ONE_MINUS_SRC_ALPHA);
-        modelShader.SetInt("uAlphaBlend", 1);
 
         for (const DrawItem& it : transparentList) {
             float opacity = (!it.Slots->empty() && (*it.Slots)[0])
                 ? (*it.Slots)[0]->Opacity : 1.0f;
-            modelShader.SetFloat("uOpacity", opacity);
-            modelShader.SetMat4(modelModelLoc, it.Xform);
-            modelShader.SetMat4(modelNormalMatrixLoc,
-                glm::mat4(glm::transpose(glm::inverse(glm::mat3(it.Xform)))));
-            it.Ref->Draw(modelShader, *it.Slots);
+            it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, opacity);
 
             localStats.DrawCalls += it.Meshes;
             localStats.Triangles += it.Tris;
@@ -381,7 +417,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
 
         glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
-        modelShader.SetInt("uAlphaBlend", 0); // restore for next frame's opaque pass
+        for (Shader* p : appliedPrograms) { p->Bind(); p->SetInt("uAlphaBlend", 0); } // restore for next frame's opaque pass
     }
     } // end "Scene Draw" profile scope
     if (outStats) *outStats = localStats;

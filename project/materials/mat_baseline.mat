@@ -1,0 +1,11 @@
+{
+  "matVersion": 2,
+  "name": "Fixture Baseline",
+  "_comment": "#354 fixture: links Standard.shader with no lobe active -> selects the byte-identical zero-keyword variant. Paired with mat_clearcoat.mat in tests/smoke-scenes/smoke_materials.json.",
+  "shader": "shaders/Standard.shader",
+  "properties": {
+    "_BaseColor": [0.85, 0.85, 0.88],
+    "_Metallic": 0.0,
+    "_Roughness": 0.35
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "matVersion": 2,
+  "name": "Fixture Clear Coat",
+  "_comment": "#354 fixture: _ClearCoat > 0 -> ShaderVariantKeyFor sets the _CLEARCOAT bit -> a distinct compiled program with the clear-coat lobe. Same base PBR as mat_baseline.mat so the difference is the coat.",
+  "shader": "shaders/Standard.shader",
+  "properties": {
+    "_BaseColor": [0.85, 0.85, 0.88],
+    "_Metallic": 0.0,
+    "_Roughness": 0.35,
+    "_ClearCoat": 1.0,
+    "_ClearCoatRoughness": 0.04
+  }
+}
