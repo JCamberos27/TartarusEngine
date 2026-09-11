@@ -703,9 +703,14 @@ void EditorLayer::CommitRename(World& world, AssetLibrary& assets) {
 // Inline error for a rejected rename (#38 B12) - a tooltip pinned near the still-open rename
 // field, decaying on its own, rather than a modal the user has to dismiss. Both the grid and
 // list rename layouts call this right after their InputText.
-void EditorLayer::DrawRenameRejectedTooltip() {
+void EditorLayer::DrawRenameRejectedTooltip(ImVec2 fieldMin, ImVec2 fieldMax) {
     if (m_RenameRejectedFlash <= 0.0f) return;
     m_RenameRejectedFlash -= ImGui::GetIO().DeltaTime;
+    // Pinned just below the rename field itself, matching the comment above — a bare
+    // BeginTooltip() with no explicit position follows the mouse cursor instead, which drifts
+    // away from the field the moment the user isn't actively hovering it (e.g. right after the
+    // Enter key submitted the rejected name).
+    ImGui::SetNextWindowPos(ImVec2(fieldMin.x, fieldMax.y + 4.0f));
     ImGui::BeginTooltip();
     ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.35f, 1.0f),
         "Name can't be blank, only illegal characters (< > : \" / \\ | ? *), or a reserved name like CON/NUL.");
@@ -1201,11 +1206,13 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 }
                 bool done = ImGui::InputText("##rename", m_RenameBuffer, sizeof(m_RenameBuffer),
                     ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+                const ImVec2 renameFieldMin = ImGui::GetItemRectMin();
+                const ImVec2 renameFieldMax = ImGui::GetItemRectMax();
                 bool cancel = ImGui::IsKeyPressed(ImGuiKey_Escape);
                 bool lostFocus = ImGui::IsItemDeactivated() && !done;
                 if (done) CommitRename(world, assets);
                 else if (cancel || lostFocus) { m_RenamingAssetKey.clear(); m_RenameRejectedFlash = 0.0f; }
-                DrawRenameRejectedTooltip();
+                DrawRenameRejectedTooltip(renameFieldMin, renameFieldMax);
                 ImGui::SetCursorScreenPos(ImVec2(tileMin.x, tileMin.y + tileSize.y));
             }
         } else {
@@ -1230,11 +1237,13 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 }
                 bool done = ImGui::InputText("##rename", m_RenameBuffer, sizeof(m_RenameBuffer),
                     ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+                const ImVec2 renameFieldMin = ImGui::GetItemRectMin();
+                const ImVec2 renameFieldMax = ImGui::GetItemRectMax();
                 bool cancel = ImGui::IsKeyPressed(ImGuiKey_Escape);
                 bool lostFocus = ImGui::IsItemDeactivated() && !done;
                 if (done) CommitRename(world, assets);
                 else if (cancel || lostFocus) { m_RenamingAssetKey.clear(); m_RenameRejectedFlash = 0.0f; }
-                DrawRenameRejectedTooltip();
+                DrawRenameRejectedTooltip(renameFieldMin, renameFieldMax);
             } else {
                 clicked = ImGui::Selectable(cell.display.c_str(), isSelected);
             }

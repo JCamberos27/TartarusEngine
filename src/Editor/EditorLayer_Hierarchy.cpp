@@ -795,6 +795,11 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         }
         bool submitted = ImGui::InputText("##Rename", m_EntityRenameBuffer, sizeof(m_EntityRenameBuffer),
                 ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+        // Captured now, while the InputText is still the last item — used below to anchor the
+        // rejected-flash tooltip near the field itself rather than wherever the mouse happens to
+        // be (the user just pressed Enter; the cursor is often nowhere near this row).
+        const ImVec2 renameFieldMin = ImGui::GetItemRectMin();
+        const ImVec2 renameFieldMax = ImGui::GetItemRectMax();
         bool rejected = false;
         if (submitted) {
             std::string sanitized = SanitizeEntityName(m_EntityRenameBuffer);
@@ -820,6 +825,11 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         }
         if (m_EntityRenameRejectedFlash > 0.0f) {
             m_EntityRenameRejectedFlash -= ImGui::GetIO().DeltaTime;
+            // Anchored to the rename field (just below it), not the mouse cursor: this fires
+            // right after an Enter-key submit, when the mouse is frequently nowhere near the
+            // row, unlike a normal hover tooltip. EditorUI::SetTooltip() isn't usable here either
+            // way — it's gated on ImGui::IsItemHovered(), which this isn't.
+            ImGui::SetNextWindowPos(ImVec2(renameFieldMin.x, renameFieldMax.y + 4.0f));
             ImGui::BeginTooltip();
             ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.35f, 1.0f), "Name can't be blank.");
             ImGui::EndTooltip();

@@ -1321,7 +1321,11 @@ private:
     // The field stays open (not cleared) so the user can fix it instead of losing the edit.
     float m_RenameRejectedFlash = 0.0f;
     void BeginRenameAsset(const std::string& key, bool isFolder, const std::string& currentName);
-    void DrawRenameRejectedTooltip(); // inline error for the flash above (#38 B12) - both rename layouts call it
+    // Inline error for the flash above (#38 B12) - both rename layouts call it right after their
+    // InputText, passing that field's screen rect (ImGui::GetItemRectMin/Max) so the tooltip is
+    // anchored just below the field itself, not wherever the mouse happens to be (this can fire
+    // right after an Enter-key submit, with the cursor nowhere near the field).
+    void DrawRenameRejectedTooltip(ImVec2 fieldMin, ImVec2 fieldMax);
 
     // One entry in the Asset Browser's multi-selection — a key plus whether it's a folder,
     // since folder paths and asset paths are separate namespaces that could theoretically
