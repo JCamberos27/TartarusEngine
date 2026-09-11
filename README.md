@@ -9,6 +9,9 @@
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](#building)
 [![CMake](https://img.shields.io/badge/build-CMake-064F8C?style=flat-square&logo=cmake&logoColor=white)](#building)
 [![CI](https://img.shields.io/github/actions/workflow/status/JCamberos27/TartarusEngine/build.yml?branch=main&style=flat-square&label=build)](https://github.com/JCamberos27/TartarusEngine/actions)
+[![Renderer](https://img.shields.io/badge/renderer-clustered--forward%20PBR-5586A4?style=flat-square)](https://github.com/JCamberos27/TartarusEngine/discussions/266)
+[![Material system](https://img.shields.io/badge/materials-shader%20variants%20%2B%20advanced%20PBR-8A2BE2?style=flat-square)](https://github.com/JCamberos27/TartarusEngine/issues/333)
+[![PhysX 5](https://img.shields.io/badge/physics-NVIDIA%20PhysX%205-76B900?style=flat-square)](https://github.com/JCamberos27/TartarusEngine/issues/185)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
 </div>
@@ -115,10 +118,16 @@ resolved). The Unity feature-gap audit
 ([issue #236](https://github.com/JCamberos27/TartarusEngine/issues/236)) and the native
 component-registration / prefab-override work
 ([#302](https://github.com/JCamberos27/TartarusEngine/issues/302),
-[#315](https://github.com/JCamberos27/TartarusEngine/issues/315)), and the collision-system
+[#315](https://github.com/JCamberos27/TartarusEngine/issues/315)), the collision-system
 rewrite onto **NVIDIA PhysX 5**
-([#185](https://github.com/JCamberos27/TartarusEngine/issues/185)) have all landed.
-Windows-only CI builds every push in Debug and Release.
+([#185](https://github.com/JCamberos27/TartarusEngine/issues/185)), and the **Unity-style
+material system + advanced-PBR pass**
+([#333](https://github.com/JCamberos27/TartarusEngine/issues/333),
+[#354](https://github.com/JCamberos27/TartarusEngine/issues/354) — `.shader` assets, keyword
+variants selected per material, and clear-coat / anisotropy / sheen / subsurface / transmission
+/ reflection-probe lobes wired into the scene draw) have all landed.
+Windows-only CI builds every push in Debug and Release; `--smoke-test` also reports the
+`ShaderAsset` variant keys each scene draws.
 
 ## Building
 
