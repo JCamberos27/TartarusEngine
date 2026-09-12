@@ -10,3 +10,6 @@ Library/
 
 # Local scratch backups (not authoritative)
 *.json.bak
+
+# Live editor state — rewritten by the running editor, not authoritative
+project/editor_prefs.json
