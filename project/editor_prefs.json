@@ -48,7 +48,7 @@
   "physicsSimTimeScale": 1.0,
   "playDebugOverlay": false,
   "sceneCameraFar": 500.0,
-  "sceneCameraFlySpeed": 8.0,
+  "sceneCameraFlySpeed": 99.43537902832031,
   "sceneCameraFov": 75.0,
   "sceneCameraNear": 0.05000000074505806,
   "sceneShowStats": false,
