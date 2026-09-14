@@ -373,9 +373,19 @@ static void ApplyBentoPalette(ImGuiStyle& style) {
     style.Colors[ImGuiCol_Separator]        = ImVec4(white.x, white.y, white.z, 0.08f);
     style.Colors[ImGuiCol_SeparatorHovered] = cyan;
     style.Colors[ImGuiCol_SeparatorActive]  = cyan;
-    style.Colors[ImGuiCol_FrameBg]          = rgb(14, 14, 14);   // #0E0E0E — recessed
-    style.Colors[ImGuiCol_FrameBgHovered]   = rgb(23, 23, 23);
-    style.Colors[ImGuiCol_FrameBgActive]    = rgb(30, 30, 30);
+    // #34 — was rgb(14,14,14) (#0E0E0E), a ~1.3:1 contrast ratio against WindowBg's #121212:
+    // effectively invisible, and the ONLY visible cue an at-rest frame widget has, since
+    // FrameBorderSize is 0 in this theme (SetSharedMetrics / ApplyThemeStyle) so
+    // ImGuiCol_Border never actually renders on a frame regardless of its own alpha. Every
+    // unchecked checkbox, every unfocused slider/combo/input box, was reading as blank space.
+    // rgb(97,97,97) is WCAG 1.4.11's 3:1 non-text-UI-component floor against #121212, computed
+    // from relative luminance, not eyeballed — a live visual pass against a running build is
+    // still worth doing (e.g. Preferences > General's "Show editor tooltips" checkbox, one of
+    // the three locations this defect named) before calling this final; the math guarantees
+    // the numbers clear the floor, not that the result reads well in the actual UI.
+    style.Colors[ImGuiCol_FrameBg]          = rgb(97, 97, 97);
+    style.Colors[ImGuiCol_FrameBgHovered]   = rgb(112, 112, 112);
+    style.Colors[ImGuiCol_FrameBgActive]    = rgb(127, 127, 127);
     style.Colors[ImGuiCol_ScrollbarBg]      = ImVec4(0, 0, 0, 0);
     style.Colors[ImGuiCol_ScrollbarGrab]        = ImVec4(white.x, white.y, white.z, 0.10f);
     style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(white.x, white.y, white.z, 0.18f);
