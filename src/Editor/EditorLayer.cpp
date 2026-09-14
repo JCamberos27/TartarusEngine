@@ -340,6 +340,27 @@ void EditorLayer::ApplyThemeStyle() {
     }
 
     ApplyEditorTheme();
+
+    // Phase 1 item 1 — startup contrast assert. Runs on every theme switch (cheap: four ratio
+    // computations, not per-frame) so a future palette edit that misses a floor gets a log line
+    // instead of shipping silently, the way #34's invisible checkboxes did.
+    static const auto logContrastWarn = [](const char* msg) { Log::Warn(std::string("[Theme] ") + msg); };
+    EditorUIPrimitives::AssertContrastFloor("Text vs WindowBg", style.Colors[ImGuiCol_Text],
+                                             style.Colors[ImGuiCol_WindowBg], 4.5f, logContrastWarn);
+    EditorUIPrimitives::AssertContrastFloor("TextDisabled vs WindowBg", style.Colors[ImGuiCol_TextDisabled],
+                                             style.Colors[ImGuiCol_WindowBg], 4.5f, logContrastWarn);
+    EditorUIPrimitives::AssertContrastFloor("FrameBg vs WindowBg", style.Colors[ImGuiCol_FrameBg],
+                                             style.Colors[ImGuiCol_WindowBg], 3.0f, logContrastWarn);
+    // Border is alpha-blended, not opaque — composite it over WindowBg first (straight alpha, in
+    // encoded sRGB space, matching how this engine's ImGui backend actually blends: see
+    // EditorUIPrimitives::CompositeOver) or this check compares Border's raw white channel
+    // values against the background, which trivially "passes" regardless of how transparent the
+    // line actually reads on screen.
+    EditorUIPrimitives::AssertContrastFloor(
+        "Border vs WindowBg",
+        EditorUIPrimitives::CompositeOver(style.Colors[ImGuiCol_Border], style.Colors[ImGuiCol_WindowBg]),
+        style.Colors[ImGuiCol_WindowBg], 3.0f, logContrastWarn);
+
     style.ScaleAllSizes(m_UIScale);
 }
 
@@ -368,15 +389,20 @@ static void ApplyBentoPalette(ImGuiStyle& style) {
     style.Colors[ImGuiCol_TitleBg]          = rgb(22, 22, 22);
     style.Colors[ImGuiCol_TitleBgActive]    = rgb(30, 30, 30);   // #1E1E1E
     style.Colors[ImGuiCol_TitleBgCollapsed] = rgb(22, 22, 22);
-    // Phase 1 item 2 — was 0.10f alpha (~2.6:1 against #121212, the darkest surface a border can
-    // sit on): under WCAG 1.4.11's 3:1 non-text floor. 0.12f is the alpha at which a white
-    // overlay's composited luminance clears that floor against #121212 (~3.13:1), computed the
-    // same way as #34's FrameBg fix — with margin, since lighter surfaces (PopupBg #1A1A1A etc.)
-    // only clear it by more. Separator raised to match: it's an at-rest divider glyph too (the
-    // audit's exit criterion: "no divider ... invisible").
-    style.Colors[ImGuiCol_Border]           = ImVec4(white.x, white.y, white.z, 0.12f);
+    // Phase 1 item 2 — was 0.10f alpha (~2.0:1 against #121212, the darkest surface a border can
+    // sit on): under WCAG 1.4.11's 3:1 non-text floor. CORRECTION to this fix's first pass
+    // (which landed at 0.12f, ~1.4:1): that math assumed alpha blending happens in LINEAR light,
+    // but this engine never enables GL_FRAMEBUFFER_SRGB, so ImGui composites straight-alpha in
+    // encoded sRGB space (EditorUIPrimitives::CompositeOver) — blending in the WRONG space
+    // understates how much alpha a light overlay actually needs. Re-solved in that space: 0.34f
+    // is the alpha at which white-over-#121212's *encoded* composite (~#63) clears 3:1 (~3.10:1),
+    // vs. 0.12f's actual ~1.4:1. Separator raised to match: it's an at-rest divider glyph too
+    // (the audit's exit criterion: "no divider ... invisible"). This is a much more visible line
+    // than the original hairline design intended — logged on #65 for a visual pass, since a
+    // WCAG-correct number and "reads right" aren't guaranteed to be the same thing here.
+    style.Colors[ImGuiCol_Border]           = ImVec4(white.x, white.y, white.z, 0.34f);
     style.Colors[ImGuiCol_BorderShadow]     = ImVec4(0, 0, 0, 0);
-    style.Colors[ImGuiCol_Separator]        = ImVec4(white.x, white.y, white.z, 0.12f);
+    style.Colors[ImGuiCol_Separator]        = ImVec4(white.x, white.y, white.z, 0.34f);
     style.Colors[ImGuiCol_SeparatorHovered] = cyan;
     style.Colors[ImGuiCol_SeparatorActive]  = cyan;
     // #34 — was rgb(14,14,14) (#0E0E0E), a ~1.3:1 contrast ratio against WindowBg's #121212:

@@ -29,6 +29,9 @@
 #include <imgui_internal.h> // ImMax (kept for callers of this header that need glyph metrics)
 #include <IconsFontAwesome6.h>
 
+#include <cmath>
+#include <cstdio>
+
 namespace EditorUIPrimitives {
 
 using TooltipFn = void (*)(const char*);
@@ -133,6 +136,56 @@ inline constexpr ImU32 kHudPlateColor        = IM_COL32(10, 10, 10, 190);
 // multi-line stats block).
 inline void DrawHudPlate(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float rounding = 4.0f) {
     dl->AddRectFilled(mn, mx, kHudPlateColor, rounding);
+}
+
+// --- Startup contrast assert (Phase 1 item 1) -----------------------------------------------
+// WCAG relative-luminance / contrast-ratio math, header-only so both the host's ApplyThemeStyle
+// and (if a module ever needs it) a module panel can check a colour pair against a floor without
+// eyeballing it or re-deriving the sRGB formula ad hoc — the same math used by hand for the #34
+// FrameBg fix and the border/text-secondary floor raise above, now a reusable, checkable function
+// instead of a one-off comment showing the arithmetic.
+inline float SrgbChannelToLinear(float c) {
+    return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+}
+
+inline float RelativeLuminance(ImVec4 c) {
+    return 0.2126f * SrgbChannelToLinear(c.x) + 0.7152f * SrgbChannelToLinear(c.y) +
+           0.0722f * SrgbChannelToLinear(c.z);
+}
+
+// WCAG 2.x contrast ratio, order-independent (always >=1.0): (L_lighter+0.05)/(L_darker+0.05).
+inline float ContrastRatio(ImVec4 a, ImVec4 b) {
+    const float la = RelativeLuminance(a), lb = RelativeLuminance(b);
+    const float hi = ImMax(la, lb), lo = ImMin(la, lb);
+    return (hi + 0.05f) / (lo + 0.05f);
+}
+
+// Straight (non-premultiplied) alpha composite of `fg` over opaque `bg`, done in encoded sRGB
+// space (i.e. on the raw 0..1 channel values, no linearize/re-encode round trip) — this engine
+// never enables GL_FRAMEBUFFER_SRGB, so that's the space ImGui's own blending actually happens
+// in, and it's what a contrast check needs to match to mean anything. Returns an opaque colour
+// so the result can go straight into ContrastRatio/AssertContrastFloor. An alpha-blended role
+// (Border, Separator — anything under 1.0 alpha) MUST be composited before checking: comparing
+// its raw (un-composited) channel values against a background is meaningless, since e.g. Border's
+// rgb is literally white regardless of how transparent it actually reads on screen.
+inline ImVec4 CompositeOver(ImVec4 fg, ImVec4 bg) {
+    const float a = fg.w;
+    return ImVec4(bg.x + (fg.x - bg.x) * a, bg.y + (fg.y - bg.y) * a, bg.z + (fg.z - bg.z) * a, 1.0f);
+}
+
+// Logs (does not crash — a failed floor should ship visible-but-flagged, not take the editor
+// down) via the caller-supplied `warnFn` if `fg` against `bg` doesn't clear `floor`. `role` names
+// the pair in the message ("FrameBg vs WindowBg") so a regression is actionable from the log
+// alone. Call once per theme switch, not per frame — this is a correctness check, not a
+// runtime-adaptive system (that machinery was deliberately removed, see kHudTextColor above).
+using ContrastWarnFn = void (*)(const char* message);
+inline void AssertContrastFloor(const char* role, ImVec4 fg, ImVec4 bg, float floor, ContrastWarnFn warnFn) {
+    const float ratio = ContrastRatio(fg, bg);
+    if (ratio + 0.005f < floor) { // small epsilon so a floor computed to land exactly on the line doesn't nag
+        char buf[192];
+        snprintf(buf, sizeof(buf), "Contrast floor missed: %s is %.2f:1, needs >=%.1f:1.", role, ratio, floor);
+        if (warnFn) warnFn(buf);
+    }
 }
 
 } // namespace EditorUIPrimitives
