@@ -477,12 +477,32 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
 }
 
 void EditorLayer::DrawWindowMenuBody() {
+            // #4 item 5 — every dockable surface listed here, not just the ones without their own
+            // toolbar toggle. Scene and Game get entries too (audit's explicit ask), even though
+            // Scene can never be closed and Game's toggle round-trips through main.cpp (it owns
+            // GameViewPanel, not this class) via SetGameViewOpenState/ConsumeGameViewOpenRequest.
+            bool sceneAlwaysOpen = true;
+            ImGui::MenuItem(ICON_FA_CAMERA "  Scene", nullptr, &sceneAlwaysOpen, false);
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Always open — the core viewport can't be closed.");
+            {
+                bool gameOpen = m_GameViewOpenCached;
+                if (ImGui::MenuItem(ICON_FA_DESKTOP "  Game", nullptr, &gameOpen))
+                    m_GameViewOpenRequest = gameOpen ? 1 : 0;
+            }
             ImGui::MenuItem(ICON_FA_SITEMAP "  Scene Hierarchy", nullptr, &m_ShowHierarchy);
             ImGui::MenuItem(ICON_FA_SLIDERS "  Inspector", nullptr, &m_ShowInspector);
             ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Asset Browser", nullptr, &m_ShowAssetBrowser);
             ImGui::MenuItem(ICON_FA_LIGHTBULB "  Lighting", nullptr, &m_ShowLighting);
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Environment (sky / ambient), post-processing (exposure / tone map) and shadow settings in one place.");
+            {
+                bool consoleOpen = EditorModuleHost::ConsoleState().Visible;
+                if (ImGui::MenuItem(ICON_FA_TERMINAL "  Console", nullptr, &consoleOpen))
+                    EditorModuleHost::ConsoleState().Visible = consoleOpen;
+            }
+            if (ImGui::MenuItem(ICON_FA_CHART_SIMPLE "  Statistics", nullptr, &EditorSettings::Get().SceneShowStats))
+                EditorSettings::Save();
+            ImGui::MenuItem(ICON_FA_CLOCK_ROTATE_LEFT "  History", nullptr, &m_ShowHistory);
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_CUBES "  Physics Debug", nullptr, &EditorSettings::Get().ShowPhysicsPanel))
                 EditorSettings::Save();
@@ -493,9 +513,11 @@ void EditorLayer::DrawWindowMenuBody() {
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Corner text overlay on the Scene viewport while playing.");
             ImGui::Separator();
-            // Console / Statistics / History / Light Gizmos have dedicated toolbar toggles (#148);
-            // the engine mark lives in Preferences ▸ Viewport. Project Settings moved to its own
-            // menu-bar item beside Preferences (it's a settings window, not a dock panel).
+            // Console, Statistics, History and every panel above also keep their existing toolbar
+            // toggle (#148) — the menu entry is a second, discoverable path to the same state, not
+            // a replacement. The engine mark lives in Preferences ▸ Viewport. Project Settings
+            // moved to its own menu-bar item beside Preferences (it's a settings window, not a
+            // dock panel).
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
                 m_ResetLayoutRequested = true;
             }
