@@ -517,6 +517,11 @@ static void ApplyLightPalette(ImGuiStyle& style) {
     const ImVec4 tealHi  = rgb(14, 124, 120, 0.22f);
     const ImVec4 blue    = rgb(37, 99, 199);         // #2563C7 — active / pressed
     const ImVec4 black   = rgb(0, 0, 0);
+    // teal only clears ~1.44:1 against FrameBg (#898989) — nowhere near the 3:1 floor
+    // AssertContrastFloor checks the NavCursor/FrameBg pair against below. A darker teal, used
+    // only for the focus ring (every other teal usage below stays the brighter selection color),
+    // clears ~3.5:1 against FrameBg while still reading ~10.7:1 against WindowBg. (Defect, #67)
+    const ImVec4 navCursor = rgb(6, 60, 58);         // #063C3A
 
     style.Colors[ImGuiCol_WindowBg]         = rgb(240, 240, 240);  // #F0F0F0
     style.Colors[ImGuiCol_ChildBg]          = ImVec4(0, 0, 0, 0);
@@ -566,7 +571,7 @@ static void ApplyLightPalette(ImGuiStyle& style) {
     style.Colors[ImGuiCol_TabDimmedSelected]         = rgb(225, 225, 225);
     style.Colors[ImGuiCol_TabSelectedOverline]       = teal;
     style.Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0, 0, 0, 0);
-    style.Colors[ImGuiCol_NavCursor]        = teal;
+    style.Colors[ImGuiCol_NavCursor]        = navCursor;
     style.Colors[ImGuiCol_DockingPreview]  = ImVec4(teal.x, teal.y, teal.z, 0.35f);
     style.Colors[ImGuiCol_DockingEmptyBg]  = rgb(220, 220, 220);
     style.Colors[ImGuiCol_ModalWindowDimBg] = rgb(0, 0, 0, 0.35f);
