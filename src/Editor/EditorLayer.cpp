@@ -254,6 +254,26 @@ void EditorLayer::Init(GLFWwindow* window) {
     // NB: colour emoji (Segoe UI Emoji is COLR/CPAL) needs the FreeType backend with colour
     // glyphs enabled, which this build doesn't compile in — emoji in names still render as tofu.
 
+    // Phase 1 item 5 — a real monospace face for the Console body and numeric readouts (Stats
+    // HUD), so a column of numbers or a log's severity-tag prefix actually lines up instead of
+    // reading loosely with the proportional UI face. A SEPARATE ImFont (not a MergeMode overlay
+    // like the icon/CJK ranges above), pushed explicitly with ImGui::PushFont wherever it's
+    // wanted. Bundled under extern/fonts/ (SIL OFL) exactly like the Inter fallback above — see
+    // THIRD-PARTY-NOTICES.md. No system-font fallback attempted: unlike Segoe UI, this face is
+    // ours to bundle and ship, so there's no "might be missing on this machine" case to cover;
+    // m_MonoFont staying null (a corrupted install) just means callers fall back to the UI font.
+    m_MonoFont = io.Fonts->AddFontFromFileTTF(
+        EnginePaths::Resolve("assets/fonts/JetBrainsMono-Regular.ttf").c_str(), baseFontPx, &baseFontConfig);
+    // The Console's per-row label is one string with a Font Awesome severity glyph (info/warning/
+    // error) inline before the message text — if the mono font's atlas doesn't have those
+    // glyphs, pushing it over that string renders the icon as a tofu box. Merge the same icon
+    // range onto m_MonoFont too, exactly like uiFont's merge above, so a single PushFont covers
+    // the whole row.
+    if (m_MonoFont) {
+        io.Fonts->AddFontFromFileTTF(EnginePaths::Resolve("assets/fonts/fa-solid-900.ttf").c_str(),
+                                     baseFontPx, &iconConfig, iconRanges);
+    }
+
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
 

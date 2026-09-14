@@ -349,9 +349,10 @@ set_source_files_properties(${TARTARUS_VENDORED_SOURCES} PROPERTIES
   COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/W1>$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-w>"
 )
 
-# Editor UI icon font (Font Awesome Free, SIL OFL 1.1) and the Inter UI-text fallback face
-# (Inter, SIL OFL 1.1 — #48) — copied next to the exe so they can be loaded at runtime by a path
-# relative to the working directory, same as scene.json.
+# Editor UI icon font (Font Awesome Free, SIL OFL 1.1), the Inter UI-text fallback face (Inter,
+# SIL OFL 1.1 — #48) and the JetBrains Mono monospace face (SIL OFL 1.1 — Phase 1 item 5, the
+# Console body / numeric-readout face) — copied next to the exe so they can be loaded at runtime
+# by a path relative to the working directory, same as scene.json.
 add_custom_command(TARGET TartarusEngine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:TartarusEngine>/assets/fonts"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -360,6 +361,9 @@ add_custom_command(TARGET TartarusEngine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${CMAKE_SOURCE_DIR}/extern/fonts/InterVariable.ttf"
     "$<TARGET_FILE_DIR:TartarusEngine>/assets/fonts/InterVariable.ttf"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_SOURCE_DIR}/extern/fonts/JetBrainsMono-Regular.ttf"
+    "$<TARGET_FILE_DIR:TartarusEngine>/assets/fonts/JetBrainsMono-Regular.ttf"
 )
 
 # Editor wordmark ("TARTARUS ENGINE" text, no icon) and mark (the "TE" monogram, no text) —

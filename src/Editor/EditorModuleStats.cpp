@@ -64,6 +64,13 @@ void Draw(const EditorModuleHostAPI& host) {
     // overflowing. Not dockable, not persisted — the pin wins.
     const float pad = 12.0f * uiScale;
     const float statusBarH = ImGui::GetTextLineHeight() + 8.0f * uiScale;
+    // Phase 1 item 5 — pushed here, before the row-height math below, not just around the
+    // content further down: lineH/chromeH/desiredH have to measure the SAME font that will
+    // actually render the rows (JetBrains Mono), or the auto-sized window is a few pixels off
+    // from what its own content needs. PushFont/PopFont don't require an active window, so this
+    // is safe to do before Begin() and pop after End() regardless of whether Begin() returns
+    // true (ImGui::End() is unconditional either way — see the Begin/End pair below).
+    ImGui::PushFont(host.GetMonoFont ? host.GetMonoFont() : nullptr, 0.0f);
     const ImGuiStyle& stStats = ImGui::GetStyle();
     const float lineH = ImGui::GetTextLineHeightWithSpacing();
     const int rows = 1 /*fps*/ + 3 /*draw/tri/vert*/ + (rs.Culled > 0 ? 1 : 0)
@@ -94,6 +101,9 @@ void Draw(const EditorModuleHostAPI& host) {
             ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs)) {
+        // Mono for the whole HUD (pushed above): every label below was hand-padded with spaces
+        // ("Draw calls   %d") to fake column alignment against the proportional UI font; a real
+        // monospace face makes that actually true instead of approximate.
         ImGui::TextUnformatted(ICON_FA_CHART_SIMPLE "  Statistics");
         ImGui::Separator();
         ImGui::Text("%.1f FPS  (%.2f ms)", smoothedMs > 0.0001f ? 1000.0f / smoothedMs : 0.0f, smoothedMs);
@@ -133,6 +143,7 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGui::Text("VAO binds      %d (%d skipped)", gl.VaoBinds, gl.VaoBindsSkipped);
     }
     ImGui::End();
+    ImGui::PopFont();
     ImGui::PopStyleColor(3); // WindowBg + Text + TextDisabled
 }
 

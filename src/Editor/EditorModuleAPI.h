@@ -69,13 +69,20 @@
 //        three values (Bento/Prism/Windows XP) to two (Dark/Light); its one module consumer, the
 //        toolbar's Windows-XP Luna-chrome override, is deleted along with the theme, so no module
 //        code reads the raw theme index anymore.
-constexpr std::uint32_t kEditorModuleAPIVersion = 18;
+//   19 - Phase 1 item 5: GetMonoFont, exposing the host-baked JetBrains Mono face so a module can
+//        route its own numeric readouts (the Stats HUD) through it, the same way the Console does.
+constexpr std::uint32_t kEditorModuleAPIVersion = 19;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
 // the allocator pair need to be shared across the boundary).
 using EditorModuleImGuiAllocFn = void* (*)(std::size_t size, void* userData);
 using EditorModuleImGuiFreeFn  = void  (*)(void* ptr, void* userData);
+
+// Forward-declared, not included: GetMonoFont (API v19) hands back an opaque ImFont* a module
+// only ever passes straight to its own ImGui::PushFont — same free-of-<imgui.h> reasoning as the
+// allocator signatures above.
+struct ImFont;
 
 // Mirrors LogLevel from Core/Log.h as a plain int-valued enum so the module never has to include
 // (or link against) the engine's logging translation unit — see EditorModuleHostAPI::LogGetEntry.
@@ -205,6 +212,13 @@ struct EditorModuleHostAPI {
     // Exponentially-smoothed frame time (ms). The host keeps updating this every frame even while
     // the panel is hidden — the viewport status bar reads it too — so the module only reads.
     float (*GetSmoothedFrameMs)() = nullptr;
+
+    // The JetBrains Mono face (API v19, Phase 1 item 5), for the Console body and numeric
+    // readouts (e.g. this panel's own FPS/frame-time/draw-call numbers). Wrap the text that
+    // wants it in ImGui::PushFont(host.GetMonoFont())/PopFont() — null-safe: PushFont(nullptr)
+    // is a documented no-op in this ImGui version, so a caller doesn't need its own null check
+    // if the bundled TTF somehow failed to load.
+    ImFont* (*GetMonoFont)() = nullptr;
 
     // The module's one write-back: true while the (height-capped) Stats HUD reaches far enough
     // down the viewport to collide with the corner engine-mark monogram, so the host hides it.
