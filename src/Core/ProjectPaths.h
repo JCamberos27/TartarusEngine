@@ -21,4 +21,13 @@ const std::string& Root();
 // Root() joined with `name`, as a native path string.
 std::string Resolve(const std::string& name);
 
+// The inverse of Resolve(), for display: an absolute path made relative to Root() with forward
+// slashes (`std::filesystem`'s portable `generic_string()` form), or the input unchanged if it
+// isn't under Root() at all. Defect #18 — Console log lines used to print full native absolute
+// paths, and different call sites picked different separators (one used `.string()`, another
+// `.generic_string()`), so the same session showed both `c:\...\Showcase.json` and
+// `c:/.../Showcase_...png`. Use this at any log call site that would otherwise embed a resolved
+// project path.
+std::string Relativize(const std::string& absolutePath);
+
 } // namespace ProjectPaths

@@ -344,7 +344,12 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PopStyleVar();
 
-    const float searchWidth = 200.0f;
+    // #14 — was a bare 200.0f, so at anything other than 1x UI scale the search box stayed a
+    // fixed pixel width while every neighbouring control (buttons, breadcrumb text) scaled with
+    // it. GetToolbarMetrics is the cheapest host call that reports UI scale from here.
+    float uiScale = 1.0f;
+    if (host.GetToolbarMetrics) host.GetToolbarMetrics(nullptr, nullptr, &uiScale);
+    const float searchWidth = 200.0f * uiScale;
 
     if (ActionButton(host, ICON_FA_PLUS, "Create / Import")) ImGui::OpenPopup("##AssetCreateMenu");
     if (ImGui::BeginPopup("##AssetCreateMenu")) {
@@ -434,8 +439,8 @@ void Draw(const EditorModuleHostAPI& host) {
             host.SetAssetFavoritesOnly(!favOnly);
         if (favOnly) ImGui::PopStyleColor();
         if (ImGui::IsItemHovered())
-            Tooltip(host, favOnly ? "Showing favourites only (click to show all)"
-                                  : "Show favourites only");
+            Tooltip(host, favOnly ? "Showing favorites only (click to show all)" // #19 — en-US
+                                  : "Show favorites only");
     }
 
     // Search scope toggle (#236 G): folder (+subfolders) vs whole project.

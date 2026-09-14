@@ -45,4 +45,15 @@ std::string Resolve(const std::string& name) {
     return (std::filesystem::path(Root()) / name).lexically_normal().string();
 }
 
+std::string Relativize(const std::string& absolutePath) {
+    std::error_code ec;
+    const std::filesystem::path rel =
+        std::filesystem::relative(absolutePath, Root(), ec);
+    const std::string relStr = rel.generic_string();
+    // relative() fails (or walks "up and out" with a leading "..") for a path outside Root() —
+    // fall back to the original string rather than showing a confusing "../../.." chain.
+    if (ec || relStr.empty() || relStr.rfind("..", 0) == 0) return absolutePath;
+    return relStr;
+}
+
 } // namespace ProjectPaths

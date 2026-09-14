@@ -916,6 +916,12 @@ void EditorLayer::DrawScreenshotPreview() {
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 
     if (ImGui::BeginPopupModal("##ShotPreview", &open, flags)) {
+        // #6 — don't rely on ImGui's implicit escape-closes-modal behaviour: the canvas
+        // InvisibleButton below can hold an active ID (mid-drag) that suppresses it, exactly
+        // like the backdrop-dismissal check further down already has to work around. Every other
+        // modal dialog in this file checks Escape explicitly for the same reason — match that.
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { open = false; ImGui::CloseCurrentPopup(); }
+
         // Slim header: filename + native size + current zoom, then icon actions pinned right.
         const std::string name = std::filesystem::path(m_ShotPreviewPath).filename().string();
         ImGui::TextUnformatted(name.c_str());
