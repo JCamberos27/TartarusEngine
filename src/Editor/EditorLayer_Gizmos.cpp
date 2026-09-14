@@ -2035,31 +2035,14 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     ImVec2 dollyPos(dollyCenter.x - toolRadius, dollyCenter.y - toolRadius);
     ImVec2 panPos(panCenter.x - toolRadius, panCenter.y - toolRadius);
 
-    // Contrast-adaptive tint for the dolly / pan tool buttons and the projection label: sample the
-    // scene luminance behind the cluster and steer the glyphs white-on-dark / dark-on-light — the
-    // same readback the corner engine mark and the viewport Play button use (throttled ~10 Hz,
-    // eased per frame). The rotate ball keeps its own red/green/blue axis colours untouched.
-    {
-        m_NavGizmoSampleAccum += ImGui::GetIO().DeltaTime;
-        if (m_NavGizmoSampleAccum >= 0.1f) {
-            m_NavGizmoSampleAccum = 0.0f;
-            float lum = SampleSceneLuminance(m_NavGizmoReadback, ImVec2(rotateCenter.x, toolCenterY), 48.0f * m_UIScale);
-            if (lum >= 0.0f) {
-                float t = (lum - 0.30f) / (0.62f - 0.30f);
-                t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-                m_NavGizmoContrastTarget = 1.0f - t * t * (3.0f - 2.0f * t); // 1 = white on dark, 0 = black on light
-            }
-        }
-        float k = 1.0f - expf(-ImGui::GetIO().DeltaTime / 0.15f);
-        m_NavGizmoContrastLum += (m_NavGizmoContrastTarget - m_NavGizmoContrastLum) * k;
-    }
-    if (!EditorSettings::Get().AdaptiveHudContrast) m_NavGizmoContrastLum = m_NavGizmoContrastTarget = 1.0f; // #275 toggle
-    int navV = (int)(m_NavGizmoContrastLum * 255.0f + 0.5f);
-    navV = navV < 0 ? 0 : (navV > 255 ? 255 : navV);
-    const int navInv = 255 - navV;
-    style.toolButtonIconColor    = IM_COL32(navV, navV, navV, 235);
-    style.toolButtonColor        = IM_COL32(navInv, navInv, navInv, 40);
-    style.toolButtonHoveredColor = IM_COL32(navInv, navInv, navInv, 64);
+    // #54 — used to sample the scene luminance behind the dolly/pan tool buttons and the
+    // projection label, steering their glyphs white-on-dark / dark-on-light. Fixed light icon on
+    // a fixed, real (not 40-alpha-faint) dark plate is legible over anything instead — same
+    // "opaque plate" treatment as the other viewport HUDs. The rotate ball keeps its own
+    // red/green/blue axis colours untouched.
+    style.toolButtonIconColor    = EditorUIPrimitives::kHudTextColor;
+    style.toolButtonColor        = EditorUIPrimitives::kHudPlateColor;
+    style.toolButtonHoveredColor = IM_COL32(40, 40, 40, 220);
 
     // Same fullscreen-transparent-overlay trick as DrawGizmo(): the library hit-tests against
     // raw mouse position within ImGui::GetWindowDrawList()'s owning window, so it needs a real
@@ -2153,17 +2136,19 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
         ImVec2 mouse = ImGui::GetIO().MousePos;
         bool isoHovered = mouse.x >= hitMin.x && mouse.x <= hitMax.x && mouse.y >= hitMin.y && mouse.y <= hitMax.y;
         ImDrawList* labelDl = ImGui::GetWindowDrawList();
+        // #54 — always plated now (used to be plate-on-hover only, bare adaptive-tinted text at
+        // rest), matching the tool buttons above: legible over anything, not just while hovered.
+        labelDl->AddRectFilled(hitMin, hitMax,
+            isoHovered ? ImGui::GetColorU32(ImGuiCol_FrameBgHovered) : EditorUIPrimitives::kHudPlateColor,
+            3.0f * m_UIScale);
         if (isoHovered) {
-            labelDl->AddRectFilled(hitMin, hitMax, ImGui::GetColorU32(ImGuiCol_FrameBgHovered), 3.0f * m_UIScale);
             EditorUI::SetTooltip("Switch between Perspective and Isometric (orthographic) view");
             m_ViewGizmoBlocking = true;
             if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                 ToggleOrthographic(world, editorCamera);
             }
         }
-        // Same contrast-adaptive grey as the tool buttons above (full-strength on hover).
-        ImU32 isoTextColor = IM_COL32(navV, navV, navV, isoHovered ? 255 : 200);
-        labelDl->AddText(font, labelFontSize, textPos, isoTextColor, isoLabel);
+        labelDl->AddText(font, labelFontSize, textPos, EditorUIPrimitives::kHudTextColor, isoLabel);
     }
 
     if (modified) {
