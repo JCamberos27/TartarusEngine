@@ -30,6 +30,25 @@ namespace EditorInternal {
 inline constexpr float kToolbarHeight = 52.0f;
 
 
+// --- Dialog primitive (Phase 1 item 4) ------------------------------------------------------
+// Every fixed-size confirmation/prompt modal (Save changes? — both the exit and scene-switch
+// copies, Revert Scene?, Recover Unsaved Changes?, Newer Scene Format, Duplicate Array, Save
+// Layout — seven call sites) repeated the same three-line shell: open the popup if it isn't
+// already, pin it to the viewport centre on first appearance, then BeginPopupModal with
+// AlwaysAutoResize. One named helper instead of seven copies of that shell — the body (title
+// text, buttons, per-dialog logic) stays exactly as each call site
+// already had it, just wrapped. Left as-is rather than bent to fit this shape: the screenshot
+// lightbox (freely resizable, no AlwaysAutoResize, custom size constraints) and two modals that
+// use a different trigger convention entirely — a one-shot flag consumed by a plain OpenPopup
+// rather than an IsPopupOpen gate, no centring (AssetBrowser's "Can't Delete", GameViewPanel's
+// "Custom Resolution").
+inline bool BeginCenteredModal(const char* id, bool* pOpen = nullptr,
+                                ImGuiWindowFlags extraFlags = 0) {
+    if (!ImGui::IsPopupOpen(id)) ImGui::OpenPopup(id);
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    return ImGui::BeginPopupModal(id, pOpen, ImGuiWindowFlags_AlwaysAutoResize | extraFlags);
+}
+
 // --- Docked-panel tab-bar chrome text -------------------------------------------------------
 // A dock node's tab bar — the tab labels, each tab's close ×, the ▼ window-list button, the
 // node close × — is all drawn in ImGuiCol_Text, with no separate style colour (ImGui's own

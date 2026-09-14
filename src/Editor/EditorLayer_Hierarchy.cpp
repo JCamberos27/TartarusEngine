@@ -537,12 +537,7 @@ void EditorLayer::DrawArrayDuplicateModal(World& world, AssetLibrary& assets) {
     if (!m_ShowArrayDuplicate) return;
     if (!HasAnySelection()) { m_ShowArrayDuplicate = false; return; }
 
-    if (!ImGui::IsPopupOpen("Duplicate Array##ArrayDup")) ImGui::OpenPopup("Duplicate Array##ArrayDup");
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    if (ImGui::BeginPopupModal("Duplicate Array##ArrayDup", &m_ShowArrayDuplicate,
-                               ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (BeginCenteredModal("Duplicate Array##ArrayDup", &m_ShowArrayDuplicate)) {
         ImGui::TextDisabled("Count per axis (the selection is cell 0,0,0)");
         ImGui::PushItemWidth(200.0f * m_UIScale);
         ImGui::InputInt3("Count", m_ArrayDupCount);
