@@ -284,9 +284,14 @@ void Draw(const EditorModuleHostAPI& host) {
                 ImGui::PushID(entryIndex);
                 // A full-width Selectable (rather than a bare Text) so the whole row is a real
                 // item with a hover rect — needed for a reliable right-click context menu.
+                // Phase 1 item 5: the Console body is mono so a timestamp column and repeated-
+                // count suffix actually line up; GetMonoFont has the severity icon range merged
+                // onto it too (EditorLayer.cpp), so the inline FA glyph in rowLabel still renders.
+                ImGui::PushFont(host.GetMonoFont ? host.GetMonoFont() : nullptr, 0.0f);
                 ImGui::PushStyleColor(ImGuiCol_Text, color);
                 ImGui::Selectable(rowLabel.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
                 ImGui::PopStyleColor();
+                ImGui::PopFont();
 
                 if (ImGui::BeginPopupContextItem()) {
                     if (ImGui::MenuItem(ICON_FA_COPY "  Copy message")) ImGui::SetClipboardText(entry.Message.c_str());

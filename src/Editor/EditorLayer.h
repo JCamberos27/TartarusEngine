@@ -402,6 +402,9 @@ public:
     // engine-mark hide flag when its capped height would overlap the corner monogram.
     float UIScale() const { return m_UIScale; }
     float SmoothedFrameMs() const { return m_SmoothedFrameMs; }
+    // Phase 1 item 5 — the JetBrains Mono face for the Console body / numeric readouts, exposed
+    // to modules the same way as the other host-owned resources on this line.
+    ImFont* GetMonoFont() const { return m_MonoFont; }
     void SetHideEngineMarkForStats(bool v) { m_HideEngineMarkForStats = v; }
 
     // The GL color texture main.cpp should hand over each frame (its editor-camera render,
@@ -1021,6 +1024,10 @@ private:
     // Engine mark (the "TE" monogram, no text), spinning slowly in the viewport's bottom-left
     // corner — same load treatment as m_LogoTexture, just the other half of the full lockup.
     std::unique_ptr<Texture> m_MarkTexture;
+    // Phase 1 item 5 — the JetBrains Mono face, baked once in Init(). Owned by ImGui's font
+    // atlas (freed with the ImGuiContext), so this is a non-owning pointer; null only if the
+    // bundled TTF couldn't be read off disk. GetMonoFont() (host API) exposes it to modules.
+    ImFont* m_MonoFont = nullptr;
     float m_MarkSpinAngle = 0.0f; // radians, advanced by dt * EngineMarkSpinSpeed each frame in DrawEngineMark()
     float m_MarkHue = 0.0f;        // 0..1, advanced each frame; drives the tint when EngineMarkRgb is on
     bool m_ShutdownDone = false;       // guards the clean-exit-only tail of Shutdown()

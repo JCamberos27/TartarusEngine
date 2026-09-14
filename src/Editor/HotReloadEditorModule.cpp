@@ -203,6 +203,8 @@ void StatsGetSceneEntityCountsFn(int* outEntities, int* outRenderers, int* outCo
 
 float StatsGetSmoothedFrameMsFn() { return g_Editor ? g_Editor->SmoothedFrameMs() : 0.0f; }
 
+ImFont* GetMonoFontFn() { return g_Editor ? g_Editor->GetMonoFont() : nullptr; }
+
 void StatsSetHideEngineMarkFn(bool hide) {
     if (g_Editor) g_Editor->SetHideEngineMarkForStats(hide);
 }
@@ -459,6 +461,7 @@ const EditorModuleHostAPI kHostAPI{
     &StatsGetGLFrameStatsFn,
     &StatsGetSceneEntityCountsFn,
     &StatsGetSmoothedFrameMsFn,
+    &GetMonoFontFn,
     &StatsSetHideEngineMarkFn,
     // --- Toolbar / menus (API v4) — order must match EditorModuleHostAPI exactly ---
     &TbGetToolbarMetrics,
