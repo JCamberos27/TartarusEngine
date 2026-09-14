@@ -270,8 +270,8 @@ void Draw(const EditorModuleHostAPI& host) {
 
                 ImVec4 color(0.82f, 0.84f, 0.86f, 1.0f);
                 const char* icon = ICON_FA_CIRCLE_INFO;
-                if (entry.Level == EditorModuleLogLevel_Warning) { color = ImVec4(1.0f, 0.80f, 0.30f, 1.0f); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
-                else if (entry.Level == EditorModuleLogLevel_Error) { color = ImVec4(1.0f, 0.42f, 0.38f, 1.0f); icon = ICON_FA_CIRCLE_EXCLAMATION; }
+                if (entry.Level == EditorModuleLogLevel_Warning) { color = EditorUIPrimitives::WarningColor(); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
+                else if (entry.Level == EditorModuleLogLevel_Error) { color = EditorUIPrimitives::DangerColor(); icon = ICON_FA_CIRCLE_EXCLAMATION; }
 
                 const int rowCount = (row >= 0 && (size_t)row < g_RowCounts.size()) ? g_RowCounts[(size_t)row] : entry.Count;
                 std::string tsPrefix = (state.ShowTimestamps && !entry.Time.empty()) ? ("[" + entry.Time + "]  ") : "";

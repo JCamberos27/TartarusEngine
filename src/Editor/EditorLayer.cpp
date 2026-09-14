@@ -368,9 +368,15 @@ static void ApplyBentoPalette(ImGuiStyle& style) {
     style.Colors[ImGuiCol_TitleBg]          = rgb(22, 22, 22);
     style.Colors[ImGuiCol_TitleBgActive]    = rgb(30, 30, 30);   // #1E1E1E
     style.Colors[ImGuiCol_TitleBgCollapsed] = rgb(22, 22, 22);
-    style.Colors[ImGuiCol_Border]           = ImVec4(white.x, white.y, white.z, 0.10f);
+    // Phase 1 item 2 — was 0.10f alpha (~2.6:1 against #121212, the darkest surface a border can
+    // sit on): under WCAG 1.4.11's 3:1 non-text floor. 0.12f is the alpha at which a white
+    // overlay's composited luminance clears that floor against #121212 (~3.13:1), computed the
+    // same way as #34's FrameBg fix — with margin, since lighter surfaces (PopupBg #1A1A1A etc.)
+    // only clear it by more. Separator raised to match: it's an at-rest divider glyph too (the
+    // audit's exit criterion: "no divider ... invisible").
+    style.Colors[ImGuiCol_Border]           = ImVec4(white.x, white.y, white.z, 0.12f);
     style.Colors[ImGuiCol_BorderShadow]     = ImVec4(0, 0, 0, 0);
-    style.Colors[ImGuiCol_Separator]        = ImVec4(white.x, white.y, white.z, 0.08f);
+    style.Colors[ImGuiCol_Separator]        = ImVec4(white.x, white.y, white.z, 0.12f);
     style.Colors[ImGuiCol_SeparatorHovered] = cyan;
     style.Colors[ImGuiCol_SeparatorActive]  = cyan;
     // #34 — was rgb(14,14,14) (#0E0E0E), a ~1.3:1 contrast ratio against WindowBg's #121212:
@@ -391,7 +397,10 @@ static void ApplyBentoPalette(ImGuiStyle& style) {
     style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(white.x, white.y, white.z, 0.18f);
     style.Colors[ImGuiCol_ScrollbarGrabActive]  = ImVec4(white.x, white.y, white.z, 0.26f);
     style.Colors[ImGuiCol_Text]            = rgb(230, 230, 230); // #E6E6E6
-    style.Colors[ImGuiCol_TextDisabled]    = rgb(110, 110, 110); // #6E6E6E
+    // Phase 1 item 2 (text-secondary contrast floor) — was #6E6E6E, ~3.67:1 against #121212:
+    // under WCAG 1.4.3's 4.5:1 normal-text floor. #7D7D7D (125,125,125) computes to ~4.55:1,
+    // same relative-luminance method as #34/border above.
+    style.Colors[ImGuiCol_TextDisabled]    = rgb(125, 125, 125); // #7D7D7D
     style.Colors[ImGuiCol_TextSelectedBg]  = ImVec4(cyan.x, cyan.y, cyan.z, 0.30f);
     style.Colors[ImGuiCol_CheckMark]       = cyan;
     style.Colors[ImGuiCol_SliderGrab]       = cyan;
@@ -943,7 +952,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         // that visible instead of leaving "takes effect on the next launch" as a tooltip-only
         // caveat nobody reads until their layout looks wrong.
         if (prefs.UiScaleOverride != m_UIScaleOverrideAtStartup) {
-            ImGui::TextColored(ImVec4(0.910f, 0.769f, 0.408f, 1.0f),
+            ImGui::TextColored(EditorUIPrimitives::WarningColor(),
                                ICON_FA_TRIANGLE_EXCLAMATION "  Restart the editor to apply the new UI scale.");
         }
         break;
