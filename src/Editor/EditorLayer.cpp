@@ -953,10 +953,12 @@ void EditorLayer::DrawPreferencesWindow(World& /*world*/) {
         if (!prefs.GridShowAxisLines) ImGui::EndDisabled();
 
         ImGui::SeparatorText("Snapping");
+        // #4 item 4 — one vocabulary for these three everywhere they appear (this page and the
+        // toolbar's Grid & Snap popover both edit the same m_SnapTranslation/RotationDeg/Scale).
         ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Position snap", &m_SnapTranslation, 0.01f, 50.0f, "%.2f m", ImGuiSliderFlags_Logarithmic);
+        EditorUI::SliderFloat("Move snap", &m_SnapTranslation, 0.01f, 50.0f, "%.2f m", ImGuiSliderFlags_Logarithmic);
         ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Rotation snap", &m_SnapRotationDeg, 1.0f, 180.0f, "%.1f deg");
+        EditorUI::SliderFloat("Rotate snap", &m_SnapRotationDeg, 1.0f, 180.0f, "%.1f deg");
         ImGui::SetNextItemWidth(kw);
         EditorUI::SliderFloat("Scale snap", &m_SnapScale, 0.01f, 5.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
         ImGui::TextDisabled("The grid + snap on/off toggles are on the toolbar.");

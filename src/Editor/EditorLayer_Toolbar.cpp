@@ -588,8 +588,10 @@ void EditorLayer::DrawGridSnapPopupBody() {
     ImGui::PushItemWidth(120.0f * m_UIScale);
 
     ImGui::TextDisabled("GRID");
+    // #4 item 4 — "Show grid" everywhere this toggle appears (Preferences > Viewport, the Gizmos
+    // popover below, and here) instead of three different labels for the same m_ShowGrid bool.
     bool showGrid = m_ShowGrid;
-    if (ImGui::Checkbox("Visible", &showGrid)) m_ShowGrid = showGrid;
+    if (ImGui::Checkbox("Show grid", &showGrid)) m_ShowGrid = showGrid;
     // EditorUI::SliderFloat's out-param is needed — a bare IsItemDeactivatedAfterEdit() after the
     // call only ever sees the trailing number box, so releasing a track drag wouldn't save.
     {
@@ -612,9 +614,10 @@ void EditorLayer::DrawGridSnapPopupBody() {
     bool snap = m_GridSnapEnabled;
     if (ImGui::Checkbox("Snap enabled", &snap)) m_GridSnapEnabled = snap;
     ImGui::BeginDisabled(!m_GridSnapEnabled);
-    EditorUI::SliderFloat("Move",   &m_SnapTranslation, 0.001f, 100.0f, "%.3f m", ImGuiSliderFlags_Logarithmic);
-    EditorUI::SliderFloat("Rotate", &m_SnapRotationDeg, 0.1f,   180.0f, "%.1f deg");
-    EditorUI::SliderFloat("Scale",  &m_SnapScale,       0.001f, 10.0f,  "%.3f",   ImGuiSliderFlags_Logarithmic);
+    // #4 item 4 — same vocabulary as Preferences > Grid & Snapping's sliders (same three fields).
+    EditorUI::SliderFloat("Move snap",   &m_SnapTranslation, 0.001f, 100.0f, "%.3f m", ImGuiSliderFlags_Logarithmic);
+    EditorUI::SliderFloat("Rotate snap", &m_SnapRotationDeg, 0.1f,   180.0f, "%.1f deg");
+    EditorUI::SliderFloat("Scale snap",  &m_SnapScale,       0.001f, 10.0f,  "%.3f",   ImGuiSliderFlags_Logarithmic);
     ImGui::EndDisabled();
 
     if (ImGui::SmallButton("Match Move snap to grid")) m_SnapTranslation = gs.GridMinorSpacing;
@@ -642,7 +645,11 @@ void EditorLayer::DrawGizmosPopupBody() {
     ImGui::Separator();
 
     ImGui::BeginDisabled(!m_GizmosMasterVisible);
-    ImGui::Checkbox("Transform gizmo", &m_ShowGizmos);
+    // #4 item 4 — "Show transform gizmo" everywhere this checkbox appears, matching Preferences >
+    // Viewport (the View menu's "Transform Gizmo" MenuItem keeps menu-style title case — a MenuItem
+    // reads as a noun, a Checkbox as a sentence, so that's a genuine format difference, not the
+    // same three-different-labels problem this pass is fixing).
+    ImGui::Checkbox("Show transform gizmo", &m_ShowGizmos);
     ImGui::Checkbox("Entity icons", &m_ShowEntityIcons);
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("The billboard light / camera / empty markers.");
     bool lightGiz = EditorSettings::Get().ShowLightGizmos;
@@ -686,7 +693,7 @@ void EditorLayer::DrawGizmosPopupBody() {
     }
 
     ImGui::Separator();
-    ImGui::Checkbox("Grid", &m_ShowGrid); // independent of the master switch, like Unity's grid
+    ImGui::Checkbox("Show grid", &m_ShowGrid); // independent of the master switch, like Unity's grid
 
     // --- Layers (#236 A1) -------------------------------------------------------------
     // Per-layer Scene-viewport visibility (eye) + pick-lock (padlock), plus rename for the
