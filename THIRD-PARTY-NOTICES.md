@@ -42,6 +42,14 @@ stripped-down Windows install), and copied next to the executable at build time 
 Font Awesome above. SIL OFL 1.1 — see `extern/fonts/Inter-OFL.txt`. Copyright 2020 The Inter
 Project Authors. Upstream: <https://github.com/rsms/inter>
 
+### JetBrains Mono
+
+`extern/fonts/JetBrainsMono-Regular.ttf` is the **JetBrains Mono** monospace face, used for the
+Console body and every numeric readout (Phase 1 item 5) so a column of numbers or a log's
+timestamp prefix actually lines up, and copied next to the executable at build time exactly like
+the faces above. SIL OFL 1.1 — see `extern/fonts/JetBrainsMono-OFL.txt`. Copyright 2020 The
+JetBrains Mono Project Authors. Upstream: <https://github.com/JetBrains/JetBrainsMono>
+
 ---
 
 ## Fetched at configure time (CMake `FetchContent`)
