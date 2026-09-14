@@ -269,6 +269,16 @@ public:
         m_GameViewImgPos = imgPos; m_GameViewImgSize = imgSize;
         m_GameViewTex = colorTex; m_GameViewTexW = texW; m_GameViewTexH = texH;
     }
+    // Window > Game menu entry (#4 item 5) — GameViewPanel is owned by main.cpp, not this class,
+    // so its open/closed state round-trips through these each frame: main.cpp pushes the panel's
+    // current IsWindowOpen() in here every frame (so the menu checkbox reads live), and consumes
+    // any request the menu item made (-1 none, 0 close, 1 open) to call GameViewPanel::SetWindowOpen.
+    void SetGameViewOpenState(bool open) { m_GameViewOpenCached = open; }
+    int ConsumeGameViewOpenRequest() {
+        int r = m_GameViewOpenRequest;
+        m_GameViewOpenRequest = -1;
+        return r;
+    }
     bool ConsumePlayStopRequest() {
         bool requested = m_PlayStopRequested;
         m_PlayStopRequested = false;
@@ -1039,6 +1049,9 @@ private:
     unsigned int m_GameViewTex = 0;
     int m_GameViewTexW = 0;
     int m_GameViewTexH = 0;
+    // Window > Game menu round-trip (see SetGameViewOpenState/ConsumeGameViewOpenRequest above).
+    bool m_GameViewOpenCached = true;
+    int m_GameViewOpenRequest = -1; // -1 none, 0 close, 1 open
     // DVD-screensaver idle bounce: after 30 s with no mouse/keyboard input the mark launches out
     // of its corner and ricochets around the viewport edges; any input eases it back home.
     float m_MarkIdleTime = 0.0f;
