@@ -55,10 +55,10 @@ void EditorSettings::Load() {
 
     EditorSettings& s = Get();
     s.EditorTheme = root.value("editorTheme", s.EditorTheme);
-    // Themes were renumbered when Dark Slate was dropped (#234): 0 Bento, 1 Prism, 2 Windows XP.
-    // An out-of-range value from an older prefs file (e.g. the interim "3 = Bento") lands on the
-    // new default, Bento.
-    if (s.EditorTheme < 0 || s.EditorTheme > 2) s.EditorTheme = 0;
+    // Phase 1 item 9 collapsed the theme set to 0 Dark, 1 Light. A prefs file from before that
+    // collapse may have 1 (used to mean Prism — lands on Light now, a reinterpretation, not a
+    // crash) or 2 (Windows XP, now out of range — clamps to the default, Dark).
+    if (s.EditorTheme < 0 || s.EditorTheme > 1) s.EditorTheme = 0;
     s.ShowTooltips = root.value("showTooltips", s.ShowTooltips);
     s.UiScaleOverride = root.value("uiScaleOverride", s.UiScaleOverride);
     s.AutoSaveEnabled = root.value("autoSaveEnabled", s.AutoSaveEnabled);
