@@ -2623,9 +2623,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
     // Save-layout-preset name prompt (#236 R2).
     if (m_ShowSaveLayout) {
-        if (!ImGui::IsPopupOpen("Save Layout##SaveLayout")) ImGui::OpenPopup("Save Layout##SaveLayout");
-        ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-        if (ImGui::BeginPopupModal("Save Layout##SaveLayout", &m_ShowSaveLayout, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (BeginCenteredModal("Save Layout##SaveLayout", &m_ShowSaveLayout)) {
             if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
             const bool enter = ImGui::InputTextWithHint("##layoutname", "Preset name", m_SaveLayoutName,
                 sizeof(m_SaveLayoutName), ImGuiInputTextFlags_EnterReturnsTrue);

@@ -151,13 +151,7 @@ void EditorLayer::DoSave(World& world, AssetLibrary& assets) {
 void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
     if (!m_RecoveryPromptPending) return;
 
-    if (!ImGui::IsPopupOpen("Recover Unsaved Changes?")) {
-        ImGui::OpenPopup("Recover Unsaved Changes?");
-    }
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    if (ImGui::BeginPopupModal("Recover Unsaved Changes?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (BeginCenteredModal("Recover Unsaved Changes?")) {
         ImGui::TextUnformatted(
             "A recovery snapshot newer than the saved scene was found - the editor\n"
             "likely closed before these changes were saved.\n\n"
@@ -200,12 +194,8 @@ void EditorLayer::DrawSceneVersionWarningPopup() {
     if (m_SceneVersionWarning.empty()) return;
 
     const char* kPopupId = "Newer Scene Format";
-    if (!ImGui::IsPopupOpen(kPopupId)) ImGui::OpenPopup(kPopupId);
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(420.0f * m_UIScale, 0.0f));
-
-    if (ImGui::BeginPopupModal(kPopupId, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (BeginCenteredModal(kPopupId)) {
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 380.0f * m_UIScale);
         ImGui::TextUnformatted(m_SceneVersionWarning.c_str());
         ImGui::PopTextWrapPos();
@@ -225,11 +215,7 @@ void EditorLayer::DrawSceneVersionWarningPopup() {
 void EditorLayer::DrawExitPrompt() {
     if (!m_ExitPromptPending) return;
 
-    if (!ImGui::IsPopupOpen("Save changes?")) ImGui::OpenPopup("Save changes?");
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    if (ImGui::BeginPopupModal("Save changes?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (BeginCenteredModal("Save changes?")) {
         std::string sceneName = std::filesystem::path(m_CurrentScenePath).filename().string();
         if (sceneName.empty()) sceneName = "Untitled";
         ImGui::Text("\"%s\" has unsaved changes.", sceneName.c_str());
@@ -291,11 +277,7 @@ void EditorLayer::RequestRevertScene(World& world, AssetLibrary& assets) {
 
 void EditorLayer::DrawRevertScenePrompt(World& world, AssetLibrary& assets) {
     if (!m_RevertPromptPending) return;
-    if (!ImGui::IsPopupOpen("Revert Scene?##Revert")) ImGui::OpenPopup("Revert Scene?##Revert");
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    if (ImGui::BeginPopupModal("Revert Scene?##Revert", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (BeginCenteredModal("Revert Scene?##Revert")) {
         std::string name = std::filesystem::path(m_CurrentScenePath).filename().string();
         ImGui::Text("Discard unsaved changes to \"%s\"", name.c_str());
         ImGui::TextUnformatted("and reload it from disk?");
@@ -321,11 +303,7 @@ void EditorLayer::DrawRevertScenePrompt(World& world, AssetLibrary& assets) {
 void EditorLayer::DrawSceneSwitchPrompt(World& world, AssetLibrary& assets) {
     if (!m_ScenePromptPending) return;
 
-    if (!ImGui::IsPopupOpen("Save changes?##SceneSwitch")) ImGui::OpenPopup("Save changes?##SceneSwitch");
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    if (ImGui::BeginPopupModal("Save changes?##SceneSwitch", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (BeginCenteredModal("Save changes?##SceneSwitch")) {
         std::string sceneName = std::filesystem::path(m_CurrentScenePath).filename().string();
         if (sceneName.empty()) sceneName = "Untitled";
         ImGui::Text("\"%s\" has unsaved changes.", sceneName.c_str());
