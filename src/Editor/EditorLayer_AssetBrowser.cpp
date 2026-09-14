@@ -1464,7 +1464,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             }
             if (ImGui::BeginPopup("##EditLabels")) {
                 ImGui::TextDisabled("Comma-separated labels - searchable as l:label");
-                ImGui::SetNextItemWidth(240.0f);
+                ImGui::SetNextItemWidth(240.0f * m_UIScale); // #37
                 bool enter = ImGui::InputText("##LabelsBuf", m_LabelsEditBuffer, sizeof(m_LabelsEditBuffer),
                     ImGuiInputTextFlags_EnterReturnsTrue);
                 bool apply = enter || ImGui::Button("Apply");

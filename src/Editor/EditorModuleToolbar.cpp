@@ -125,7 +125,7 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings;
     // Tight vertical window padding so the icon row hugs the menu bar and the bottom edge — the
     // strip is only as tall as its two rows (host-owned kToolbarHeight).
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9.0f, 3.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9.0f * uiScale, 3.0f * uiScale)); // #37
 
     // Windows XP theme (2): the toolbar strip is the Luna taskbar blue with white menu/icon text
     // — the one spot the theme shows blue chrome (panels stay beige). ImGui paints one global
