@@ -42,6 +42,13 @@ jobs:
         if: matrix.config == 'Debug'
         run: python tools/check_component_registration.py
 
+      # Structural guard for #160 / Phase 1 item 7: "two — and only two — button treatments"
+      # across the editor. Same pure-static, no-build-needed, Debug-only treatment as the
+      # component check above.
+      - name: Button styling check
+        if: matrix.config == 'Debug'
+        run: python tools/check_button_styling.py
+
       # CMake's FetchContent re-clones + rebuilds glfw/glm/assimp/entt/imgui/imguizmo from
       # source every configure otherwise (assimp alone is the bulk of the build time). Keyed on
       # CMakeLists.txt so a dependency version bump invalidates the cache automatically.

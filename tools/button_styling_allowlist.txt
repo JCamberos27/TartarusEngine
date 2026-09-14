@@ -1,0 +1,18 @@
+# Allow-list for tools/check_button_styling.py (Phase 1 item 7 / #160).
+# One line per file: <filename> = <reason>. Coarse-grained (whole file, not per-line) — see the
+# script's own docstring for why. This is a BASELINE snapshot of what manually pushed
+# ImGuiCol_Button*/Hovered/Active at the time this check was added, not a blessing that every
+# occurrence in a listed file is correct forever — most entries below are pre-existing debt this
+# check exists to stop from growing, not a claim that they're all deliberate one-offs.
+#
+# Format: one "Name = reason" per line, matching tools/component_registration_allowlist.txt.
+# Blank lines and #-comments ignored.
+
+EditorLayer.cpp = The Layers panel's colour-coded filter chip button (fill colour varies per filter, not one of the two fixed treatments) - legitimately not ActionButton-shaped.
+EditorLayer_Inspector.cpp = Mostly the transform gizmo's per-axis X/Y/Z coloured mode buttons (colour IS the information, can't route through a fixed-palette primitive) plus one generic "highlight when active" push and one transparent icon-button treatment; the axis buttons are a real one-off, the rest is pre-existing ActionButton-shaped debt worth migrating opportunistically.
+EditorLayer_Scene.cpp = The screenshot lightbox's folder-open/close icon buttons - pre-existing ActionButton-shaped debt (transparent at rest, white wash on hover, the same treatment ActionButton already encodes), not yet migrated.
+EditorLayer_Toolbar.cpp = The Play/Stop transport button's HUD-intensity-tinted styling (tied to the fixed viewport-HUD text treatment, Defect #54 - not one of the two panel-chrome button treatments) plus its own "paused" active-highlight variant.
+EditorModuleAssetBrowser.cpp = A fully transparent (zero alpha at every state, including hover) click target with no visual button treatment at all - not ActionButton-shaped, since ActionButton always paints a hover wash.
+EditorModuleHierarchy.cpp = Pre-existing ActionButton-shaped debt (a Create/Cancel-style button pair with a fixed hover/active fill), not yet migrated.
+EditorModuleToolbar.cpp = The window min/max/close cluster's batched style push (one push/pop covers three buttons plus a nested close-specific red override - doesn't map onto ActionButton's per-call push/pop/tooltip-ID shape) plus several CARET_DOWN dropdown-caret icon buttons that ARE pre-existing ActionButton-shaped debt, not yet migrated.
+GameViewPanel.cpp = The aspect-ratio control's HUD button, styled via EditorUIPrimitives::kHudPlateColor (the viewport-HUD legibility system, Defect #54) rather than the panel-chrome button system - a deliberate different token family, not debt.
