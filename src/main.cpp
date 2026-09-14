@@ -2124,6 +2124,16 @@ int main(int argc, char** argv) {
                 window.SetFullscreen(wantFullscreen);
             }
 
+            // Window > Game menu entry (#4 item 5) — same request/consume shape as the fullscreen
+            // toggle above, since GameViewPanel is owned here, not by EditorLayer. Refresh the
+            // cached open state every frame so the menu checkbox reads live, then fulfill whatever
+            // the menu item requested last frame.
+            {
+                int req = editor.ConsumeGameViewOpenRequest();
+                if (req >= 0) gameView.SetWindowOpen(req != 0);
+                editor.SetGameViewOpenState(gameView.IsWindowOpen());
+            }
+
             // --- Game View offscreen pass -----------------------------------------------------
             // Rendered whenever the Game panel is actually the visible tab (Scene and Game share
             // one dock node, so only one of them is ever showing - #172) or maximized play has a

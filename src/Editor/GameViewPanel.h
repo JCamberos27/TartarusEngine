@@ -98,6 +98,9 @@ public:
 
     Framebuffer& GetFramebuffer() { return m_Framebuffer; }
     bool IsWindowOpen() const { return m_WindowOpen; }
+    // Window > Game menu entry (#4 item 5) — the tab's own X sets m_WindowOpen false with no way
+    // back; this is that way back (and an explicit close to match, for symmetry).
+    void SetWindowOpen(bool open) { m_WindowOpen = open; }
 
     // Mirrors the rest of the editor's prefs (see EditorSettings) — reads/writes
     // EditorSettings::Get() directly so the chosen preset/toggles survive a relaunch the same
