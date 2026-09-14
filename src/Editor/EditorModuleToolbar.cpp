@@ -31,6 +31,16 @@ void Tooltip(const EditorModuleHostAPI& host, const char* text) {
     if (host.SetTooltip) host.SetTooltip(text);
 }
 
+// #7 — a plain ImGui::BeginPopup is documented to close on Escape by default, but that path
+// runs through Dear ImGui's Nav system, and this editor never sets
+// ImGuiConfigFlags_NavEnableKeyboard (Defect #33, Phase 2) — so none of this toolbar's popovers
+// actually closed on Escape in practice. Call as the first line inside every
+// `if (ImGui::BeginPopup(...))` body below, matching the explicit-Escape-check idiom every modal
+// dialog elsewhere in the editor already uses for the same reason.
+void CloseOnEscape() {
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
+}
+
 // Forwards to the shared implementation (EditorUIPrimitives.h, Defect #53) — kept as a local
 // wrapper so every call site below (which passes `host` first) keeps compiling unchanged.
 bool ActionButton(const EditorModuleHostAPI& host, const char* icon, const char* tooltip, bool active = false) {
@@ -253,6 +263,7 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::PopStyleColor(2);
     if (ImGui::IsItemHovered()) Tooltip(host, "Grid & snap settings");
     if (ImGui::BeginPopup("##GridSnapPopup")) {
+        CloseOnEscape();
         xpMenuTextPush();
         if (host.DrawGridSnapPopupBody) host.DrawGridSnapPopupBody();
         xpMenuTextPop();
@@ -283,6 +294,7 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGui::PopStyleColor(2);
         if (ImGui::IsItemHovered()) Tooltip(host, "Gizmo visibility");
         if (ImGui::BeginPopup("##GizmosPopup")) {
+            CloseOnEscape();
             xpMenuTextPush();
             if (host.DrawGizmosPopupBody) host.DrawGizmosPopupBody();
             xpMenuTextPop();
@@ -305,6 +317,7 @@ void Draw(const EditorModuleHostAPI& host) {
         std::snprintf(tip, sizeof(tip), "Draw mode: %s (click to change)", kDrawModes[shading]);
         if (ActionButton(host, kIcons[shading], tip, shading != 0)) ImGui::OpenPopup("##DrawModePopup");
         if (ImGui::BeginPopup("##DrawModePopup")) {
+            CloseOnEscape();
             xpMenuTextPush();
             for (int i = 0; i < IM_ARRAYSIZE(kDrawModes); ++i)
                 if (ImGui::MenuItem(kDrawModes[i], nullptr, shading == i) && host.SetShadingMode)
@@ -363,6 +376,7 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGui::PopStyleColor(2);
         if (ImGui::IsItemHovered()) Tooltip(host, "Capture options");
         if (ImGui::BeginPopup("##CapturePopup")) {
+            CloseOnEscape();
             xpMenuTextPush();
             if (host.DrawCaptureOptionsPopupBody) host.DrawCaptureOptionsPopupBody();
             xpMenuTextPop();

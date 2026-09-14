@@ -126,7 +126,7 @@ void RegisterEngineComponents() {
             { "Type", T::Enum, TARTARUS_REFLECT_FIELD(LightComponent, Kind), 0.0f,
               "Point: all directions. Spot: a cone. Directional: a sun (parallel rays, no position or range)." },
             { "Color", T::Color, TARTARUS_REFLECT_FIELD(LightComponent, Color), 0.0f,
-              "The light's colour. The button below drives it from a colour temperature instead." },
+              "The light's color. The button below drives it from a color temperature instead." }, // #19
             { "ColorTempK", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, ColorTempK) },
             { "Intensity", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, Intensity), 0.05f,
               "Brightness multiplier - higher is brighter.", 0.0f, 100.0f },

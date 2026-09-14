@@ -711,10 +711,10 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
     } else {
         ImGui::ColorEdit3("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
         if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour at the horizon.");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky color at the horizon."); // #19
         ImGui::ColorEdit3("Zenith color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
         if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky colour straight up.");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky color straight up."); // #19
     }
 
     ImGui::SetNextItemWidth(w);
@@ -725,7 +725,7 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
         if (activated) PushUndo(world, "Edit Ambient Intensity");
     }
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip(
-        "Strength of the image-based ambient light and reflections baked from the sky colours "
+        "Strength of the image-based ambient light and reflections baked from the sky colors " // #19
         "above. 1.0 is physically consistent; 0 disables environment lighting entirely.");
 }
 
@@ -1065,7 +1065,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Distance from the camera at which the grid has fully faded out.");
         if (ImGui::Checkbox("Show axis lines", &prefs.GridShowAxisLines)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("The coloured rules through the origin: X (red) and Z (blue) on the ground, and a green Y line straight up.");
+            EditorUI::SetTooltip("The colored rules through the origin: X (red) and Z (blue) on the ground, and a green Y line straight up."); // #19
         if (!prefs.GridShowAxisLines) ImGui::BeginDisabled();
         ImGui::SetNextItemWidth(kw);
         {
@@ -1434,16 +1434,26 @@ void EditorLayer::DrawProjectSettingsWindow(World& /*world*/) {
             EditorUI::SetTooltip("World gravity. Only the Y component is applied today — it drives the\n"
                                  "Play-mode walk collider. X/Z are stored for rigid bodies (#185).");
 
-        ImGui::SeparatorText("Simulation (reserved for #185)");
-        ImGui::BeginDisabled(true);
+        // #15 — Defect #15: this section's header used to read "Simulation (reserved for
+        // #185)", an internal issue number leaked straight into shipped UI. #185 has since
+        // landed for FixedTimestep specifically (PhysicsWorld.cpp's FixedStep() consumes it
+        // directly), so it's a live, enabled control now rather than a placeholder. Solver
+        // iterations is still genuinely unwired — PxScene never receives it — so it stays
+        // disabled, with a plain "(not yet applied)" tag instead of an issue reference.
+        ImGui::SeparatorText("Simulation");
         ImGui::SetNextItemWidth(kw);
         ImGui::DragFloat("Fixed timestep", &p.FixedTimestep, 0.0001f, 0.001f, 0.1f, "%.4f s");
+        if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("PhysX simulation step size. Guards against zero/negative values\n"
+                                 "turning the step loop infinite.");
+        ImGui::BeginDisabled(true);
         ImGui::SetNextItemWidth(kw);
-        ImGui::DragInt("Solver iterations", &p.SolverIterations, 0.1f, 1, 64);
+        ImGui::DragInt("Solver iterations (not yet applied)", &p.SolverIterations, 0.1f, 1, 64);
         ImGui::EndDisabled();
         if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Stored in project/settings.json now; consumed once the rigid-body\n"
-                                 "step lands (#185). The Play-mode walker uses its own safety substep.");
+            EditorUI::SetTooltip("Stored in project/settings.json, but not yet passed to PxScene's\n"
+                                 "solver — every body still uses PhysX's own default iteration counts.");
 
         // #185 hardening — Play-mode Player tuning.
         ImGui::SeparatorText("Player");
@@ -1624,7 +1634,7 @@ void EditorLayer::DrawPhysicsDebugWindow(World& world) {
              "Draws the last ~64 raycasts / sweeps: bright travelled segment, hit burst + hit\n"
              "normal, faint continuation on a miss. Fades over ~half a second.");
         chan("Velocities", PhysicsWorld::PDD_Velocity,
-             "An arrow from each awake body's centre of mass, length and colour by speed.");
+             "An arrow from each awake body's center of mass, length and color by speed."); // #19
         chan("Sleeping bodies", PhysicsWorld::PDD_Sleep, "A dim marker over bodies the solver has put to sleep.");
 
         ImGui::Separator();
@@ -2317,7 +2327,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         const ImVec2 mp = ImGui::GetIO().MousePos;
         ImDrawList* dl = ImGui::GetForegroundDrawList();
         dl->AddCircle(mp, 9.0f, IM_COL32(120, 220, 255, 235), 0, 2.0f);
-        const char* h = ICON_FA_EYE_DROPPER "  Click a colour  (Esc cancels)";
+        const char* h = ICON_FA_EYE_DROPPER "  Click a color  (Esc cancels)"; // #19
         ImVec2 ts = ImGui::CalcTextSize(h);
         ImVec2 p(mp.x + 16.0f, mp.y + 14.0f);
         dl->AddRectFilled(ImVec2(p.x - 5.0f, p.y - 3.0f), ImVec2(p.x + ts.x + 5.0f, p.y + ts.y + 3.0f),

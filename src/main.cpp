@@ -856,8 +856,8 @@ int main(int argc, char** argv) {
                 std::size_t objs = 0;
                 world.Registry.view<TransformComponent>().each([&](auto...) { ++objs; });
                 if (sceneLoaded)
-                    Log::Info("Scene loaded from " + scenePath + " - " + std::to_string(objs) +
-                              (objs == 1 ? " object." : " objects."));
+                    Log::Info("Scene loaded from " + ProjectPaths::Relativize(scenePath) + " - " +
+                              std::to_string(objs) + (objs == 1 ? " object." : " objects."));
                 else
                     Log::Info("No scene file - started empty.");
             }

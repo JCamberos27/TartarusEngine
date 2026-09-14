@@ -216,7 +216,7 @@ void EditorLayer::LoadAssetFavorites() {
         if (root.is_array())
             for (const auto& v : root) if (v.is_string()) m_AssetFavorites.insert(v.get<std::string>());
     } catch (const std::exception& e) {
-        Log::Warn(std::string("Asset favourites: failed to parse: ") + e.what());
+        Log::Warn(std::string("Asset favorites: failed to parse: ") + e.what()); // #19
     }
 }
 
@@ -1390,7 +1390,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     const bool allFav = std::all_of(favKeys.begin(), favKeys.end(),
                         [&](const std::string& k) { return IsAssetFavorite(k); });
                     std::string lbl = std::string(ICON_FA_STAR "  ") +
-                        (allFav ? "Remove from Favourites" : "Add to Favourites");
+                        (allFav ? "Remove from Favorites" : "Add to Favorites"); // #19 — en-US, matches IsAssetFavorite/SetAssetFavorites
                     if (favKeys.size() > 1) lbl += " (" + std::to_string(favKeys.size()) + ")";
                     if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
                 }
@@ -1429,7 +1429,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     const bool allFav = std::all_of(favKeys.begin(), favKeys.end(),
                         [&](const std::string& k) { return IsAssetFavorite(k); });
                     std::string lbl = std::string(ICON_FA_STAR "  ") +
-                        (allFav ? "Remove from Favourites" : "Add to Favourites");
+                        (allFav ? "Remove from Favorites" : "Add to Favorites"); // #19 — en-US, matches IsAssetFavorite/SetAssetFavorites
                     if (favKeys.size() > 1) lbl += " (" + std::to_string(favKeys.size()) + ")";
                     if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
                 }
@@ -1495,7 +1495,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 const bool allFav = std::all_of(favKeys.begin(), favKeys.end(),
                     [&](const std::string& k) { return IsAssetFavorite(k); });
                 std::string lbl = std::string(ICON_FA_STAR "  ") +
-                    (allFav ? "Remove from Favourites" : "Add to Favourites");
+                    (allFav ? "Remove from Favorites" : "Add to Favorites"); // #19 — en-US, matches IsAssetFavorite/SetAssetFavorites
                 if (favKeys.size() > 1) lbl += " (" + std::to_string(favKeys.size()) + ")";
                 if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
             }

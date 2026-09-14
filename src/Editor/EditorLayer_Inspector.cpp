@@ -116,7 +116,7 @@ inline KelvinBarResult KelvinBar(const char* id, float& k, bool mixed = false) {
         r.changed = true;
     }
     r.deactivated = ImGui::IsItemDeactivatedAfterEdit();
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Drag to set colour temperature (1500-15000 K).");
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Drag to set color temperature (1500-15000 K)."); // #19
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const int kSeg = 48;
@@ -505,7 +505,7 @@ void EyedropperButton(EditorLayer* self, World& world, glm::vec3* target) {
     if (ImGui::SmallButton(ICON_FA_EYE_DROPPER)) self->ArmEyedropper(&world, target);
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered())
-        EditorUI::SetTooltip("Pick a colour from the Scene viewport (Esc / right-click to cancel)");
+        EditorUI::SetTooltip("Pick a color from the Scene viewport (Esc / right-click to cancel)"); // #19
     ImGui::PopID();
 }
 
@@ -2501,14 +2501,14 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             // swatch is then driven, not authored). The K / RGB button flips between the two.
             // Ported verbatim from the old hand-coded Light section; sits above the reflected
             // Type field is not possible, so it leads the section body instead.
-            PropertyLabel("Color", "The light's colour. Toggle 'K' to drive it from a colour temperature instead.");
+            PropertyLabel("Color", "The light's color. Toggle 'K' to drive it from a color temperature instead."); // #19
             if (light->ColorTempK > 0.0f) {
                 float k = light->ColorTempK;
                 KelvinBarResult kr = KelvinBar("##LightKelvinBar", k);
                 if (kr.activated) PushUndo(world, "Edit Light");
                 if (kr.changed) { light->ColorTempK = k; light->Color = KelvinToRGB(k); }
                 ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-                if (ActionButton("RGB##LightKelvinOff", "Set the colour directly (RGB)")) {
+                if (ActionButton("RGB##LightKelvinOff", "Set the color directly (RGB)")) { // #19
                     PushUndo(world, "Edit Light"); light->ColorTempK = 0.0f;
                 }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Switch back to a custom RGB swatch.");
@@ -2518,12 +2518,12 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
                 EyedropperButton(this, world, &light->Color);
                 ImGui::SameLine();
-                if (ActionButton("K##LightKelvinOn", "Drive the colour from a temperature (Kelvin)")) {
+                if (ActionButton("K##LightKelvinOn", "Drive the color from a temperature (Kelvin)")) { // #19
                     PushUndo(world, "Edit Light");
                     light->ColorTempK = 6500.0f;
                     light->Color = KelvinToRGB(6500.0f);
                 }
-                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Drive the colour from a temperature in Kelvin (1500-15000).");
+                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Drive the color from a temperature in Kelvin (1500-15000).");
             }
             return;
         }
@@ -2571,16 +2571,16 @@ void EditorLayer::DrawReflectedComponentExtraMulti(const char* componentName, Wo
         if (kf) { kShared = kv; kf = false; } else if (std::fabs(kv - kShared) > 0.5f) kMixed = true;
     });
     const float innerSp = ImGui::GetStyle().ItemInnerSpacing.x;
-    PropertyLabel("Color", "Sets the colour on every selected light. 'K' drives it from a temperature.");
+    PropertyLabel("Color", "Sets the color on every selected light. 'K' drives it from a temperature."); // #19
     if (nKelvin == count) {
         float k = (!kMixed && kShared > 0.0f) ? kShared : 6500.0f;
         KelvinBarResult kr = KelvinBar("##mlKelvin", k, kMixed);
         if (kr.activated) StageUndo(world);
         if (kr.changed) forEach([&](entt::entity e) { L(e).ColorTempK = k; L(e).Color = KelvinToRGB(k); });
-        if (kr.deactivated) CommitStagedUndo(world, "Set Light Colour Temperature");
+        if (kr.deactivated) CommitStagedUndo(world, "Set Light Color Temperature"); // #19
         ImGui::SameLine(0.0f, innerSp);
-        if (ActionButton("RGB##mlKelvinOff", "Switch this selection to a direct RGB colour")) {
-            PushUndo(world, "Set Light Colour");
+        if (ActionButton("RGB##mlKelvinOff", "Switch this selection to a direct RGB color")) { // #19
+            PushUndo(world, "Set Light Color"); // #19
             forEach([&](entt::entity e) { L(e).ColorTempK = 0.0f; });
         }
     } else {
@@ -2596,8 +2596,8 @@ void EditorLayer::DrawReflectedComponentExtraMulti(const char* componentName, Wo
         if (colChanged) forEach([&](entt::entity e) { L(e).Color = colEdit; });
         if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Set Light Color");
         ImGui::SameLine(0.0f, innerSp);
-        if (ActionButton("K##mlKelvinOn", "Drive this selection's colour from a temperature (Kelvin)")) {
-            PushUndo(world, "Set Light Colour Temperature");
+        if (ActionButton("K##mlKelvinOn", "Drive this selection's color from a temperature (Kelvin)")) { // #19
+            PushUndo(world, "Set Light Color Temperature"); // #19
             forEach([&](entt::entity e) { L(e).ColorTempK = 6500.0f; L(e).Color = KelvinToRGB(6500.0f); });
         }
         if (colMixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
