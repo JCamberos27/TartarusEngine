@@ -63,13 +63,9 @@ public:
     void Init(GLFWwindow* window);
     void Shutdown();
 
-    // Writes the colour palette for EditorSettings::EditorTheme into ImGui's live style. Called
-    // once from Init() and again (colours only — no size/font rebuild) whenever the theme combo
-    // in Preferences changes.
-    void ApplyEditorTheme();
-    // Applies the current theme's *metrics* (rounding / padding / borders) as well as its colours,
-    // DPI-scaled once. Resets to the shared baseline first so a live theme switch never leaks
-    // or double-scales. Call this (not ApplyEditorTheme) on a theme change.
+    // Applies the editor's style — colours and metrics (rounding / padding / borders), DPI-scaled
+    // once. Resets to the shared baseline first so calling it again never leaks or double-scales.
+    // Called once from Init(); safe to call again (e.g. on a live UI-scale change).
     void ApplyThemeStyle();
 
     void BeginFrame();
@@ -1525,13 +1521,6 @@ private:
     // True while BeginComponentSection opened a bordered card (Bento layout) rather than a plain
     // indent — so EndComponentSection closes the matching child/style stack.
     bool m_ComponentSectionIsCard = false;
-
-    // #234 layer 3: the card / translucent-overlay / hairline treatment, originally gated to the
-    // SaaS-dashboard themes (Bento/Prism) vs. Windows XP's flat look. Phase 1 item 9 removed XP
-    // and Prism, so both remaining themes (Dark, Light) now always want it — kept as a named
-    // call rather than inlining `true` at every call site, in case a future theme needs the flat
-    // alternative back. (Defined in EditorLayer.cpp — the header doesn't pull in EditorSettings.)
-    bool UseBentoLayout() const;
 
     ShadingMode m_ShadingMode = ShadingMode::Shaded;
     // Unity's Pivot/Center toggle: false = gizmo sits on the object's own origin, true = on the
