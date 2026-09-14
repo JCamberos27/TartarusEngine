@@ -223,7 +223,6 @@ void TbGetToolbarMetrics(float* outWinW, float* outToolbarH, float* outUIScale) 
     if (outUIScale)  *outUIScale = g_Editor ? g_Editor->UIScale() : 1.0f;
 }
 
-int  TbGetEditorTheme() { return EditorSettings::Get().EditorTheme; }
 void TbSetTitleBarDragHovered(bool hovered) { if (g_Editor) g_Editor->SetTitleBarDragHovered(hovered); }
 
 void TbWindowMinimize() { if (g_ParentWindow) glfwIconifyWindow(g_ParentWindow); }
@@ -463,7 +462,7 @@ const EditorModuleHostAPI kHostAPI{
     &StatsSetHideEngineMarkFn,
     // --- Toolbar / menus (API v4) — order must match EditorModuleHostAPI exactly ---
     &TbGetToolbarMetrics,
-    &TbGetEditorTheme,
+    // TbGetEditorTheme removed at API v18 (Phase 1 item 9) — see EditorModuleAPI.h.
     &TbSetTitleBarDragHovered,
     &TbWindowMinimize,
     &TbWindowToggleMaximize,

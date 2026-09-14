@@ -33,21 +33,22 @@ inline constexpr float kToolbarHeight = 52.0f;
 // --- Docked-panel tab-bar chrome text -------------------------------------------------------
 // A dock node's tab bar — the tab labels, each tab's close ×, the ▼ window-list button, the
 // node close × — is all drawn in ImGuiCol_Text, with no separate style colour (ImGui's own
-// source says as much). On a light-chrome theme (Windows XP) that chrome wants to stay white
-// against the coloured tabs / caption strip. The whole tab bar renders synchronously inside a
-// docked window's ImGui::Begin(), so each panel wraps *just its Begin() call* in these:
+// source says as much). Windows XP's tab bar was a saturated Start-button green regardless of
+// its overall light-beige chrome, so its dark body text needed to flip to white just there.
+// PushTabChromeText/PopTabChromeText existed to do that flip, wrapping *just* each panel's
+// ImGui::Begin() call.
 //
-//     PushTabChromeText();
-//     bool open = ImGui::Begin("Panel", ...);
-//     PopTabChromeText();
-//     if (!open) { ImGui::End(); return; }
-//     ... body draws in the theme's normal text colour, no wrapping needed ...
-//
-// "Light chrome" is detected from ImGuiCol_WindowBg luminance, so any future light theme works
-// and the dark themes are untouched (no-op).
+// Phase 1 item 9 removed Windows XP as a theme. PanelChromeIsLight() used to detect "light
+// chrome" from raw WindowBg luminance — which correctly no-ops on Dark, but is a FALSE POSITIVE
+// on the new Light theme: Light's tabs are neutral greys that already pair with its own normal
+// (dark) Text colour, not a saturated colour needing an override, so the luminance heuristic
+// would push illegible near-white text onto near-white tabs. Hardcoded to false rather than
+// deleted — deleting would mean touching every PushTabChromeText call site across the host and
+// three module TUs (EditorModuleAssetBrowser/Hierarchy/Inspector.cpp each keep their own copy of
+// this pair, same DLL-boundary reason ActionButton used to be duplicated) for a mechanism a
+// future saturated-chrome theme would just re-enable here.
 inline bool PanelChromeIsLight() {
-    const ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
-    return (0.299f * bg.x + 0.587f * bg.y + 0.114f * bg.z) > 0.5f;
+    return false;
 }
 inline void PushTabChromeText() {
     if (PanelChromeIsLight()) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));

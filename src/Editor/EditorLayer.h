@@ -65,11 +65,10 @@ public:
 
     // Writes the colour palette for EditorSettings::EditorTheme into ImGui's live style. Called
     // once from Init() and again (colours only — no size/font rebuild) whenever the theme combo
-    // in Preferences changes. For the Prism theme it also seeds the animated colours below.
+    // in Preferences changes.
     void ApplyEditorTheme();
     // Applies the current theme's *metrics* (rounding / padding / borders) as well as its colours,
-    // DPI-scaled once. Bento (0) and Prism (1) use the rounded-card metrics; Windows XP (2) keeps
-    // the compact baseline. Resets to the shared baseline first so a live theme switch never leaks
+    // DPI-scaled once. Resets to the shared baseline first so a live theme switch never leaks
     // or double-scales. Call this (not ApplyEditorTheme) on a theme change.
     void ApplyThemeStyle();
 
@@ -1046,13 +1045,6 @@ private:
     bool m_MarkPosValid = false;     // false until first laid out, so it doesn't fly in from (0,0)
     void DrawEngineMark(float dt);
 
-    // Prism theme: a hue phase [0,1) advanced every frame in Draw() while EditorTheme == 1, and
-    // the routine that repaints all the hue-driven style colours (accent, buttons, text tint,
-    // tab keyline, ...) from it. ApplyEditorTheme() sets the static near-black backgrounds; this
-    // rides on top each frame so the palette drifts through the spectrum. No-op for Dark Slate.
-    float m_ThemeHue = 0.0f;
-    void ApplyPrismAnimation(float hue);
-
     // The full-width toolbar strip + its dropdown menus moved into TartarusEditor.dll
     // (EditorModuleToolbar.cpp, issue #229). The host keeps the menu/popup *bodies* — declared
     // in the public bridge block above (DrawFileMenuBody / DrawViewMenuBody / DrawWindowMenuBody
@@ -1527,9 +1519,11 @@ private:
     // indent — so EndComponentSection closes the matching child/style stack.
     bool m_ComponentSectionIsCard = false;
 
-    // #234 layer 3: the card / translucent-overlay / hairline treatment is gated to the
-    // SaaS-dashboard themes — Bento (0) and Prism (1). Windows XP (2) keeps the flat look.
-    // (Defined in EditorLayer.cpp — the header doesn't pull in EditorSettings.)
+    // #234 layer 3: the card / translucent-overlay / hairline treatment, originally gated to the
+    // SaaS-dashboard themes (Bento/Prism) vs. Windows XP's flat look. Phase 1 item 9 removed XP
+    // and Prism, so both remaining themes (Dark, Light) now always want it — kept as a named
+    // call rather than inlining `true` at every call site, in case a future theme needs the flat
+    // alternative back. (Defined in EditorLayer.cpp — the header doesn't pull in EditorSettings.)
     bool UseBentoLayout() const;
 
     ShadingMode m_ShadingMode = ShadingMode::Shaded;

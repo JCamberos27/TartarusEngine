@@ -169,10 +169,9 @@ void EditorLayer::Init(GLFWwindow* window) {
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    // Editor style — metrics (rounding / padding / borders) + palette, DPI-scaled. Bento (0) and
-    // Prism (1) use the rounded-card metrics; Windows XP (2) keeps the compact baseline.
-    // ApplyThemeStyle owns that split and the one-time ScaleAllSizes; re-run it live from
-    // Preferences on a theme change. (#92, #234)
+    // Editor style — metrics (rounding / padding / borders) + palette, DPI-scaled. Dark and
+    // Light both use the rounded-card metrics (Phase 1 item 9). ApplyThemeStyle owns that and
+    // the one-time ScaleAllSizes; re-run it live from Preferences on a theme change. (#92, #234)
     ApplyThemeStyle();
     ImGuiStyle& style = ImGui::GetStyle();
 
@@ -264,17 +263,19 @@ void EditorLayer::Init(GLFWwindow* window) {
     if (!m_MarkTexture->IsValid()) m_MarkTexture.reset();
 }
 
-// The editor's colour palette. All themes share the sizes/rounding set in Init(); this only
+// The editor's colour palette. Both themes share the sizes/rounding set in Init(); this only
 // writes style.Colors[], so Preferences can swap it live with no font/size rebuild.
-//   0 Dark Slate — monochrome greys + one desaturated cool-slate accent (the #92 default).
-//   1 Prism      — near-black backgrounds; the accent, buttons, text tint and tab keyline are
-//                  all hue-driven, spread across ~half the wheel and drifting through the
-//                  spectrum together every frame (ApplyPrismAnimation, phase advanced in Draw()).
-//   2 Windows XP — the Luna "Blue" scheme: #ECE9D8 beige-grey chrome, black text, white input
-//                  fields, and a Luna-blue selection/accent. Static, like Dark Slate.
+//   0 Dark  — monochrome greys + one desaturated cool-slate accent (the #92 default, née "Bento").
+//   1 Light — same structure, roles and geometry as Dark, re-solved for a light background: every
+//             colour pair that carries a contrast floor (Text, TextDisabled, FrameBg, Border) was
+//             independently computed for ITS OWN background, not derived from Dark's palette by a
+//             blanket invert.
+// Phase 1 item 9 collapsed the theme set from three (Bento/Prism/Windows XP) to these two:
+// Prism (a live hue-drifting reskin of Bento) and Windows XP (a Luna "Blue" chrome pastiche) are
+// both gone as selectable themes.
 // The metric baseline (raw 96-DPI values; ScaleAllSizes applies the monitor scale afterwards).
-// Bento (0) and Prism (1) override a handful of these in ApplyThemeStyle for the rounded-card
-// look; Windows XP (2) keeps this baseline.
+// ApplyThemeStyle overrides most of these unconditionally for the rounded-card look now that
+// Windows XP's squarer baseline is no longer a live alternative to preserve.
 static void SetSharedMetrics(ImGuiStyle& style) {
     style.WindowRounding = 0.0f;
     style.ChildRounding = 3.0f;
@@ -316,28 +317,27 @@ void EditorLayer::ApplyThemeStyle() {
     ImGuiStyle& style = ImGui::GetStyle();
     style = s_baseStyle;
 
-    // Bento (0) and Prism (1) share the SaaS-dashboard geometry; Windows XP (2) keeps the baseline.
-    if (EditorSettings::Get().EditorTheme <= 1) {
-        // SaaS-dashboard geometry: rounded cards, more air.
-        style.WindowRounding    = 8.0f;
-        style.ChildRounding     = 8.0f;
-        style.PopupRounding     = 8.0f;
-        style.FrameRounding     = 6.0f;
-        style.TabRounding       = 6.0f;
-        style.ScrollbarRounding = 6.0f;
-        style.GrabRounding      = 12.0f; // pill sliders
-        style.WindowPadding     = ImVec2(14.0f, 12.0f);
-        style.FramePadding      = ImVec2(9.0f, 5.0f);
-        style.ItemSpacing       = ImVec2(9.0f, 8.0f);
-        style.ItemInnerSpacing  = ImVec2(7.0f, 5.0f);
-        // ChildBorderSize stays 0 until the opt-in card treatment (#234 layer 3) — with a
-        // transparent ChildBg, a blanket 1px border just outlines every nested BeginChild.
-        style.ChildBorderSize   = 0.0f;
-        style.FrameBorderSize   = 0.0f;
-        style.WindowBorderSize  = 1.0f;
-        style.TabBarBorderSize  = 1.0f;
-        style.SeparatorTextBorderSize = 1.0f;
-    }
+    // Phase 1 item 9 — Dark and Light share this SaaS-dashboard geometry (rounded cards, more
+    // air); Windows XP, which kept SetSharedMetrics' squarer baseline instead, is gone (the
+    // theme collapse removed it as a selectable theme entirely).
+    style.WindowRounding    = 8.0f;
+    style.ChildRounding     = 8.0f;
+    style.PopupRounding     = 8.0f;
+    style.FrameRounding     = 6.0f;
+    style.TabRounding       = 6.0f;
+    style.ScrollbarRounding = 6.0f;
+    style.GrabRounding      = 12.0f; // pill sliders
+    style.WindowPadding     = ImVec2(14.0f, 12.0f);
+    style.FramePadding      = ImVec2(9.0f, 5.0f);
+    style.ItemSpacing       = ImVec2(9.0f, 8.0f);
+    style.ItemInnerSpacing  = ImVec2(7.0f, 5.0f);
+    // ChildBorderSize stays 0 until the opt-in card treatment (#234 layer 3) — with a
+    // transparent ChildBg, a blanket 1px border just outlines every nested BeginChild.
+    style.ChildBorderSize   = 0.0f;
+    style.FrameBorderSize   = 0.0f;
+    style.WindowBorderSize  = 1.0f;
+    style.TabBarBorderSize  = 1.0f;
+    style.SeparatorTextBorderSize = 1.0f;
 
     ApplyEditorTheme();
 
@@ -454,162 +454,102 @@ static void ApplyBentoPalette(ImGuiStyle& style) {
     style.Colors[ImGuiCol_ModalWindowDimBg] = rgb(0, 0, 0, 0.45f);
 }
 
+// Light palette (Phase 1 item 9). Same role structure and geometry as ApplyBentoPalette above,
+// re-solved for a light background rather than derived from Dark by a blanket invert — every
+// colour pair that carries a WCAG floor here (Text, TextDisabled, FrameBg, Border/Separator) was
+// independently computed via EditorUIPrimitives::ContrastRatio/CompositeOver for ITS OWN
+// background, the same way Dark's #34/border/text-secondary fixes were. Two of those floors force
+// choices a "light theme" intuition wouldn't necessarily reach on its own, both because
+// FrameBorderSize is 0 (shared metric — no rendered edge to lean on) and because this engine
+// blends straight-alpha in encoded sRGB space (no GL_FRAMEBUFFER_SRGB), which the corrected
+// Border/Separator fix above already had to account for:
+//   - FrameBg has to be a visibly mid-grey fill (#898989), not a near-white "recessed" look — a
+//     WindowBg this close to white plus a fill-only 3:1 floor leaves no room for both surfaces to
+//     stay pale (verified: rgb(240) WindowBg vs rgb(137) FrameBg is the tightest pairing that
+//     still clears 3:1).
+//   - Border/Separator need ~0.45 BLACK alpha (not the ~0.10-0.15 a "light hairline" instinct
+//     would pick) to hit 3:1 under gamma-space compositing over a near-white WindowBg — notably,
+//     Prism's own (hand-picked, pre-existing) Border alpha was already 0.45, a coincidental
+//     second data point for that number in this exact rendering pipeline.
+// Accent identity carried over from Dark (cyan selection / blue active) but deepened for
+// legibility against a light surface: the teal (#0E7C78) and blue (#2563C7) below both clear
+// ~4.4:1 and ~5.0:1 against WindowBg respectively, comfortably past the graphical 3:1 floor with
+// enough margin to double as text-adjacent accents (e.g. TabSelectedOverline) too.
+static void ApplyLightPalette(ImGuiStyle& style) {
+    auto rgb = [](int r, int g, int b, float a = 1.0f) {
+        return ImVec4(r / 255.0f, g / 255.0f, b / 255.0f, a);
+    };
+    const ImVec4 teal    = rgb(14, 124, 120);        // #0E7C78 — selection (Light's "cyan")
+    const ImVec4 tealHi  = rgb(14, 124, 120, 0.22f);
+    const ImVec4 blue    = rgb(37, 99, 199);         // #2563C7 — active / pressed
+    const ImVec4 black   = rgb(0, 0, 0);
+
+    style.Colors[ImGuiCol_WindowBg]         = rgb(240, 240, 240);  // #F0F0F0
+    style.Colors[ImGuiCol_ChildBg]          = ImVec4(0, 0, 0, 0);
+    style.Colors[ImGuiCol_PopupBg]          = rgb(252, 252, 252, 0.98f);
+    style.Colors[ImGuiCol_MenuBarBg]        = rgb(230, 230, 230);  // #E6E6E6
+    style.Colors[ImGuiCol_TitleBg]          = rgb(230, 230, 230);
+    style.Colors[ImGuiCol_TitleBgActive]    = rgb(220, 220, 220);  // #DCDCDC
+    style.Colors[ImGuiCol_TitleBgCollapsed] = rgb(230, 230, 230);
+    // ~0.45 black alpha — see the function comment above; composited over WindowBg this clears
+    // 3:1 (~3.28:1), where the previously-typical ~0.12-0.15 "light hairline" alpha would have
+    // repeated the same gamma-space-compositing mistake #34/Dark's border fix originally made.
+    style.Colors[ImGuiCol_Border]           = ImVec4(black.x, black.y, black.z, 0.45f);
+    style.Colors[ImGuiCol_BorderShadow]     = ImVec4(0, 0, 0, 0);
+    style.Colors[ImGuiCol_Separator]        = ImVec4(black.x, black.y, black.z, 0.45f);
+    style.Colors[ImGuiCol_SeparatorHovered] = teal;
+    style.Colors[ImGuiCol_SeparatorActive]  = teal;
+    // See the function comment above — a mid-grey fill, not a pale "recessed" one, is what 3:1
+    // against a near-white WindowBg actually requires with FrameBorderSize at 0.
+    style.Colors[ImGuiCol_FrameBg]          = rgb(137, 137, 137);  // #898989, ~3.07:1
+    style.Colors[ImGuiCol_FrameBgHovered]   = rgb(120, 120, 120);
+    style.Colors[ImGuiCol_FrameBgActive]    = rgb(105, 105, 105);
+    style.Colors[ImGuiCol_ScrollbarBg]      = ImVec4(0, 0, 0, 0);
+    style.Colors[ImGuiCol_ScrollbarGrab]        = ImVec4(black.x, black.y, black.z, 0.25f);
+    style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(black.x, black.y, black.z, 0.38f);
+    style.Colors[ImGuiCol_ScrollbarGrabActive]  = ImVec4(black.x, black.y, black.z, 0.50f);
+    // #1A1A1A vs #F0F0F0 ~15.8:1; #6C6C6C (text-secondary) vs #F0F0F0 ~4.77:1 - both computed via
+    // the same relative-luminance method as Dark's text-secondary floor raise, not eyeballed.
+    style.Colors[ImGuiCol_Text]            = rgb(26, 26, 26);      // #1A1A1A
+    style.Colors[ImGuiCol_TextDisabled]    = rgb(108, 108, 108);   // #6C6C6C
+    style.Colors[ImGuiCol_TextSelectedBg]  = ImVec4(teal.x, teal.y, teal.z, 0.30f);
+    style.Colors[ImGuiCol_CheckMark]       = teal;
+    style.Colors[ImGuiCol_SliderGrab]       = teal;
+    style.Colors[ImGuiCol_SliderGrabActive] = blue;
+    style.Colors[ImGuiCol_Button]           = rgb(225, 225, 225);  // #E1E1E1
+    style.Colors[ImGuiCol_ButtonHovered]    = rgb(210, 210, 210);
+    style.Colors[ImGuiCol_ButtonActive]     = rgb(195, 195, 195);
+    style.Colors[ImGuiCol_Header]           = tealHi;
+    style.Colors[ImGuiCol_HeaderHovered]    = ImVec4(teal.x, teal.y, teal.z, 0.34f);
+    style.Colors[ImGuiCol_HeaderActive]     = blue;
+    style.Colors[ImGuiCol_ResizeGrip]        = ImVec4(0, 0, 0, 0);
+    style.Colors[ImGuiCol_ResizeGripHovered] = ImVec4(teal.x, teal.y, teal.z, 0.35f);
+    style.Colors[ImGuiCol_ResizeGripActive]  = blue;
+    style.Colors[ImGuiCol_Tab]                       = rgb(225, 225, 225);
+    style.Colors[ImGuiCol_TabHovered]                = rgb(210, 210, 210);
+    style.Colors[ImGuiCol_TabSelected]               = rgb(250, 250, 250);
+    style.Colors[ImGuiCol_TabDimmed]                 = rgb(215, 215, 215);
+    style.Colors[ImGuiCol_TabDimmedSelected]         = rgb(225, 225, 225);
+    style.Colors[ImGuiCol_TabSelectedOverline]       = teal;
+    style.Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0, 0, 0, 0);
+    style.Colors[ImGuiCol_NavCursor]        = teal;
+    style.Colors[ImGuiCol_DockingPreview]  = ImVec4(teal.x, teal.y, teal.z, 0.35f);
+    style.Colors[ImGuiCol_DockingEmptyBg]  = rgb(220, 220, 220);
+    style.Colors[ImGuiCol_ModalWindowDimBg] = rgb(0, 0, 0, 0.35f);
+}
+
 bool EditorLayer::UseBentoLayout() const { return EditorSettings::Get().EditorTheme <= 1; }
 
 void EditorLayer::ApplyEditorTheme() {
     ImGuiStyle& style = ImGui::GetStyle();
 
-    if (EditorSettings::Get().EditorTheme == 2) {
-        // --- Windows XP (Luna) ---------------------------------------------------------------
-        // Approximates the XP desktop theme: #ECE9D8 beige chrome, black text, white input
-        // fields. The Luna-blue caption bars and the toolbar's own #245EDC taskbar blue (pushed
-        // locally in DrawTopToolbar) are the "blue"; the accent/selection roles are the XP
-        // Start-button green, per request. ImGui paints one global text colour, so the caption
-        // bars use a *lighter* Luna blue than the real #0A64D2 to stay legible under black text.
-        // Geometry (rounding/padding) is shared across all themes — this stays ImGui's rounded
-        // shape, not XP's near-square one.
-        auto rgb = [](int r, int g, int b, float a = 1.0f) {
-            return ImVec4(r / 255.0f, g / 255.0f, b / 255.0f, a);
-        };
-
-        const ImVec4 face       = rgb(236, 233, 216); // #ECE9D8 ButtonFace / window chrome
-        const ImVec4 faceLight  = rgb(244, 242, 232);
-        const ImVec4 faceDark   = rgb(206, 202, 183);
-        const ImVec4 edge       = rgb(172, 168, 153); // #ACA899 3D edge
-        const ImVec4 lunaTitle  = rgb(110, 158, 222); // Luna blue caption / docked-tab-bar strip
-        const ImVec4 lunaSoft   = rgb(153, 174, 199); // greyed Luna for the unfocused caption bar
-        // XP Start-button green — the accent, per request.
-        const ImVec4 green      = rgb( 78, 154,  46); // #4E9A2E face
-        const ImVec4 greenHi    = rgb( 99, 179,  60); // #63B33C hovered
-        const ImVec4 greenLo    = rgb( 58, 122,  34); // #3A7A22 pressed / checkmark
-
-        style.Colors[ImGuiCol_WindowBg]         = face;
-        style.Colors[ImGuiCol_ChildBg]          = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-        style.Colors[ImGuiCol_PopupBg]          = rgb(252, 251, 245, 0.98f);
-        style.Colors[ImGuiCol_MenuBarBg]        = face;
-        style.Colors[ImGuiCol_TitleBg]          = lunaSoft;
-        style.Colors[ImGuiCol_TitleBgActive]    = lunaTitle;
-        style.Colors[ImGuiCol_TitleBgCollapsed] = lunaSoft;
-        style.Colors[ImGuiCol_Border]           = edge;
-        style.Colors[ImGuiCol_BorderShadow]     = ImVec4(1.0f, 1.0f, 1.0f, 0.35f); // fakes the raised bevel
-        style.Colors[ImGuiCol_Separator]        = rgb(172, 168, 153, 0.65f);
-        style.Colors[ImGuiCol_SeparatorHovered] = greenHi;
-        style.Colors[ImGuiCol_SeparatorActive]  = green;
-        style.Colors[ImGuiCol_FrameBg]          = rgb(255, 255, 255);
-        style.Colors[ImGuiCol_FrameBgHovered]   = rgb(238, 246, 235);
-        style.Colors[ImGuiCol_FrameBgActive]    = rgb(224, 240, 219);
-        style.Colors[ImGuiCol_ScrollbarBg]      = rgb(241, 239, 226);
-        style.Colors[ImGuiCol_ScrollbarGrab]        = rgb(212, 208, 200); // #D4D0C8
-        style.Colors[ImGuiCol_ScrollbarGrabHovered] = rgb(180, 214, 165);
-        style.Colors[ImGuiCol_ScrollbarGrabActive]  = rgb(140, 190, 118);
-        style.Colors[ImGuiCol_Text]            = rgb(23, 23, 23);
-        style.Colors[ImGuiCol_TextDisabled]    = rgb(128, 128, 128); // #808080
-        style.Colors[ImGuiCol_TextSelectedBg]  = ImVec4(green.x, green.y, green.z, 0.55f);
-        style.Colors[ImGuiCol_CheckMark]       = greenLo;
-        style.Colors[ImGuiCol_SliderGrab]       = greenHi;
-        style.Colors[ImGuiCol_SliderGrabActive] = green;
-        style.Colors[ImGuiCol_Button]           = faceLight;
-        style.Colors[ImGuiCol_ButtonHovered]    = rgb(223, 240, 214); // XP "hot" — a green wash
-        style.Colors[ImGuiCol_ButtonActive]     = rgb(204, 212, 189); // pressed / sunk
-        style.Colors[ImGuiCol_Header]           = ImVec4(green.x, green.y, green.z, 0.85f);
-        style.Colors[ImGuiCol_HeaderHovered]    = greenHi;
-        style.Colors[ImGuiCol_HeaderActive]     = green;
-        style.Colors[ImGuiCol_ResizeGrip]        = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-        style.Colors[ImGuiCol_ResizeGripHovered] = greenHi;
-        style.Colors[ImGuiCol_ResizeGripActive]  = green;
-        // Panel tabs in the Start-button green, per request: unselected a lighter green (black
-        // tab text still clears AA on it), the selected/front tab the deeper #4E9A2E so it reads
-        // as the active one.
-        style.Colors[ImGuiCol_Tab]                       = rgb(119, 176,  72); // #77B048
-        style.Colors[ImGuiCol_TabHovered]                = rgb(136, 194,  88);
-        style.Colors[ImGuiCol_TabSelected]               = green;              // #4E9A2E front tab
-        style.Colors[ImGuiCol_TabDimmed]                 = rgb( 96, 138,  62);
-        style.Colors[ImGuiCol_TabDimmedSelected]         = rgb( 74, 132,  44);
-        style.Colors[ImGuiCol_TabSelectedOverline]       = rgb(158, 220, 118, 0.95f);
-        style.Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-        style.Colors[ImGuiCol_NavCursor]        = green;
-        style.Colors[ImGuiCol_DockingPreview]  = ImVec4(green.x, green.y, green.z, 0.45f);
-        style.Colors[ImGuiCol_DockingEmptyBg]  = rgb(158, 154, 138);
-        style.Colors[ImGuiCol_ModalWindowDimBg] = rgb(26, 31, 41, 0.28f);
-        return;
-    }
-
     if (EditorSettings::Get().EditorTheme == 1) {
-        // Prism: Bento's charcoal surfaces + geometry, but the accent family (plus the text
-        // tint, buttons and tab keyline) drift through the hue wheel together every frame via
-        // ApplyPrismAnimation - a living-colour Bento. Called here so a fresh switch looks
-        // right, then again every frame from Draw(). #234.
-        ApplyBentoPalette(style);
-        ApplyPrismAnimation(m_ThemeHue);
+        ApplyLightPalette(style);
         return;
     }
 
-    // Bento (dark SaaS-dashboard) is the default - EditorTheme 0, and any out-of-range value.
+    // Dark (née "Bento") is the default - EditorTheme 0, and any out-of-range value.
     ApplyBentoPalette(style);
-}
-
-// Prism theme, per-frame: every hue-carrying style colour is derived from one drifting phase
-// `h`, so accent / buttons / text tint / tab keyline all slide around the wheel together (with
-// fixed hue offsets between them, so they stay a coordinated set rather than one flat colour).
-// Backgrounds are left as ApplyEditorTheme set them — near-black, stationary.
-void EditorLayer::ApplyPrismAnimation(float phase) {
-    ImGuiStyle& style = ImGui::GetStyle();
-    auto hsv = [](float h, float s, float v, float a = 1.0f) {
-        h = h < 0.0f ? 0.0f : (h > 1.0f ? 1.0f : h); // clamp, never wrap — the wrap is the "rainbow"
-        float r, g, b;
-        ImGui::ColorConvertHSVtoRGB(h, s, v, r, g, b);
-        return ImVec4(r, g, b, a);
-    };
-
-    // Match the corner monogram's prism read: a NARROW left→right dispersion — the monogram
-    // smears ~0.30 of the wheel from one side to the other (sat ~0.6, bright) and drifts the
-    // whole smear through the spectrum. So every role here sits at a fixed fraction of that same
-    // 0.30 span from the shared base phase: at any instant the editor is one coherent
-    // adjacent-hue wash (blue→violet, green→cyan, …), never a full red-to-red rainbow, and it
-    // slides around as a unit exactly like the mark.
-    const float h = phase;
-    const float kSpan = 0.30f;
-    auto band = [&](float frac, float s, float v, float a = 1.0f) {
-        return hsv(h + frac * kSpan, s, v, a);
-    };
-
-    // Body text: lightly tinted, full value — legible as the wash drifts.
-    style.Colors[ImGuiCol_Text]            = band(0.50f, 0.16f, 1.00f);
-    style.Colors[ImGuiCol_TextDisabled]    = band(0.50f, 0.12f, 0.55f);
-
-    // Colourful roles at the monogram's saturation/brightness; each state a step along the span.
-    style.Colors[ImGuiCol_Button]          = band(0.10f, 0.55f, 0.48f);
-    style.Colors[ImGuiCol_ButtonHovered]   = band(0.35f, 0.60f, 0.62f);
-    style.Colors[ImGuiCol_ButtonActive]    = band(0.60f, 0.62f, 0.74f);
-
-    ImVec4 accent        = band(0.20f, 0.55f, 0.50f);
-    ImVec4 accentHovered = band(0.45f, 0.58f, 0.62f);
-    ImVec4 accentActive  = band(0.70f, 0.60f, 0.72f);
-    style.Colors[ImGuiCol_Header]            = accent;
-    style.Colors[ImGuiCol_HeaderHovered]     = accentHovered;
-    style.Colors[ImGuiCol_HeaderActive]      = accentActive;
-    style.Colors[ImGuiCol_SeparatorHovered]  = accentHovered;
-    style.Colors[ImGuiCol_SeparatorActive]   = accentActive;
-    style.Colors[ImGuiCol_ResizeGrip]        = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-    style.Colors[ImGuiCol_ResizeGripHovered] = accentHovered;
-    style.Colors[ImGuiCol_ResizeGripActive]  = accentActive;
-    style.Colors[ImGuiCol_NavCursor]         = accentActive;
-    style.Colors[ImGuiCol_DockingPreview]    = ImVec4(accentActive.x, accentActive.y, accentActive.z, 0.55f);
-    style.Colors[ImGuiCol_TextSelectedBg]    = ImVec4(accent.x, accent.y, accent.z, 0.55f);
-
-    style.Colors[ImGuiCol_CheckMark]         = band(1.00f, 0.62f, 1.00f); // far end of the smear, pops
-    style.Colors[ImGuiCol_SliderGrab]        = band(0.45f, 0.58f, 0.66f);
-    style.Colors[ImGuiCol_SliderGrabActive]  = band(0.80f, 0.62f, 0.88f);
-
-    style.Colors[ImGuiCol_Border]            = band(0.30f, 0.48f, 0.55f, 0.45f);
-    style.Colors[ImGuiCol_Separator]         = band(0.45f, 0.42f, 0.38f, 0.55f);
-    style.Colors[ImGuiCol_ScrollbarGrab]        = band(0.10f, 0.34f, 0.38f);
-    style.Colors[ImGuiCol_ScrollbarGrabHovered] = band(0.35f, 0.46f, 0.50f);
-    style.Colors[ImGuiCol_ScrollbarGrabActive]  = band(0.60f, 0.55f, 0.62f);
-
-    style.Colors[ImGuiCol_TitleBgActive]    = band(0.20f, 0.48f, 0.17f); // faint colour on the focused window bar
-    style.Colors[ImGuiCol_TabHovered]       = band(0.45f, 0.44f, 0.22f);
-    style.Colors[ImGuiCol_TabSelectedOverline] = band(1.00f, 0.78f, 1.00f, 0.95f); // far end of the smear
 }
 
 // GL resource teardown, split out of Shutdown() so ~EditorLayer can run it on the
@@ -893,7 +833,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
     if (!m_ShowPreferences) return;
 
     ImGui::SetNextWindowSize(ImVec2(660.0f * m_UIScale, 440.0f * m_UIScale), ImGuiCond_FirstUseEver);
-    PushTabChromeText(); // keep the (blue) title bar text white on XP; body text is unaffected
+    PushTabChromeText(); // no-op now (Windows XP removed, Phase 1 item 9) — see PanelChromeIsLight
     const bool prefsOpen = ImGui::Begin(ICON_FA_GEAR "  Preferences", &m_ShowPreferences);
     PopTabChromeText();
     if (!prefsOpen) { ImGui::End(); return; }
@@ -930,7 +870,8 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             ImGui::SetTooltip("Hover hints on Inspector fields, Hierarchy rows and toolbar buttons.");
 
         {
-            static const char* kThemeLabels[] = { "Bento", "Prism", "Windows XP" };
+            // Phase 1 item 9 — collapsed from three themes (Bento/Prism/Windows XP) to two.
+            static const char* kThemeLabels[] = { "Dark", "Light" };
             int theme = std::clamp(prefs.EditorTheme, 0, (int)IM_ARRAYSIZE(kThemeLabels) - 1);
             ImGui::SetNextItemWidth(kw);
             if (ImGui::Combo("Theme", &theme, kThemeLabels, IM_ARRAYSIZE(kThemeLabels))) {
@@ -939,13 +880,10 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
                 EditorSettings::Save();
             }
             if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("Bento: dark SaaS-dashboard look - layered charcoal surfaces,\n"
+                EditorUI::SetTooltip("Dark: dark SaaS-dashboard look - layered charcoal surfaces,\n"
                                      "hairline borders, rounded corners; cyan selection / blue\n"
                                      "active accents. The default.\n"
-                                     "Prism: the Bento layout, but the accent, buttons and text\n"
-                                     "tint drift through the spectrum together every frame.\n"
-                                     "Windows XP: the Luna \"Blue\" scheme - beige chrome, black\n"
-                                     "text, white fields, Luna-blue selection; compact geometry.");
+                                     "Light: the same layout and roles on a light background.");
         }
 
         ImGui::SeparatorText("Display");
@@ -1043,20 +981,11 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("How fast the monogram turns. 0 parks it; the default 0.52 is one revolution every ~12 s.");
         {
-            // The Prism editor theme forces the monogram prism on too, so show it ticked and
-            // locked while that theme is active.
-            const bool themeForces = prefs.EditorTheme == 1;
-            ImGui::BeginDisabled(themeForces);
-            bool prismShown = prefs.EngineMarkPrism || themeForces;
-            if (ImGui::Checkbox("Prism", &prismShown) && !themeForces) {
-                prefs.EngineMarkPrism = prismShown;
-                EditorSettings::Save();
-            }
-            ImGui::EndDisabled();
+            // Phase 1 item 9 — the Prism editor THEME is gone (collapsed into Dark/Light), so
+            // this is a plain independent toggle now; it no longer has a theme to defer to.
+            if (ImGui::Checkbox("Prism", &prefs.EngineMarkPrism)) EditorSettings::Save();
             if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip(themeForces
-                    ? "On automatically while the Prism editor theme is selected."
-                    : "Paint the monogram with a slowly-drifting spectral gradient instead of the contrast-adaptive grey.");
+                EditorUI::SetTooltip("Paint the monogram with a slowly-drifting spectral gradient instead of the fixed grey.");
         }
         if (!prefs.EngineMarkEnabled) ImGui::EndDisabled();
         break;
@@ -1813,7 +1742,9 @@ void EditorLayer::DrawEngineMark(float dt) {
     // for deleting the whole luminance-sampling subsystem; the mark is decorative chrome, not
     // load-bearing information, and Q10 (Epic #10) already has it off by default with a
     // preference to enable.
-    const bool prism = EditorSettings::Get().EngineMarkPrism || EditorSettings::Get().EditorTheme == 1;
+    // Phase 1 item 9 — the Prism editor THEME is gone; this is purely the independent monogram
+    // toggle now (EditorSettings::EngineMarkPrism), not a theme check.
+    const bool prism = EditorSettings::Get().EngineMarkPrism;
     const int markV = 255;
 
     // Appended to the Scene window's own draw list and clipped to the viewport rect — NOT the
@@ -1840,9 +1771,7 @@ void EditorLayer::DrawEngineMark(float dt) {
         // A spectral band smeared left -> right across the mark, the whole band drifting slowly
         // through the wheel — dispersion through glass, not a flat strobing hue. Needs per-vertex
         // colour, so the quad is written into the draw list by hand (AddImageQuad is one colour).
-        // In the Prism editor theme the whole UI is driven by m_ThemeHue — use it here too so the
-        // mark's dispersion and the editor's sweep the spectrum in lock-step.
-        const float markHue = (EditorSettings::Get().EditorTheme == 1) ? m_ThemeHue : m_MarkHue;
+        const float markHue = m_MarkHue;
         float rL, gL, bL, rR, gR, bR;
         ImGui::ColorConvertHSVtoRGB(markHue,                        0.62f, 1.0f, rL, gL, bL);
         ImGui::ColorConvertHSVtoRGB(fmodf(markHue + 0.30f, 1.0f),   0.62f, 1.0f, rR, gR, bR);
@@ -2003,16 +1932,6 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_ScreenshotThumbBudgetThisFrame = 8; // at most this many new Asset Browser screenshot thumbnails per frame (#176)
 
     if (m_AssetRefreshFlash > 0.0f) m_AssetRefreshFlash = std::max(0.0f, m_AssetRefreshFlash - dt); // #236 G
-
-    // Prism theme: drift the palette's spectral phase and repaint the hue-driven style colours
-    // before any window is submitted this frame. Slow — the band should look like it's tilting,
-    // not spinning. Dark Slate: nothing to do.
-    if (EditorSettings::Get().EditorTheme == 1) {
-        // Same phase + rate as the corner monogram's dispersion, so the editor and the mark
-        // sweep the spectrum in lock-step (DrawEngineMark reads m_ThemeHue in Prism mode too).
-        m_ThemeHue = fmodf(m_ThemeHue + dt * 0.6f, 1.0f);
-        ApplyPrismAnimation(m_ThemeHue);
-    }
 
     // First editor frame after a crash-interrupted session: offer to restore the auto-saved
     // recovery snapshot. No-op unless Init() flagged one as newer than the scene file.
@@ -2200,7 +2119,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     ImGuiWindowFlags sceneFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
         ImGuiWindowFlags_NoFocusOnAppearing;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    PushTabChromeText(); // Scene/Game share a tab bar; keep its text white on XP (drawn in Begin())
+    PushTabChromeText(); // no-op now (Windows XP removed, Phase 1 item 9) — see PanelChromeIsLight
     m_SceneViewportVisible = ImGui::Begin("Scene", nullptr, sceneFlags);
     PopTabChromeText();
     ImGui::PopStyleVar();

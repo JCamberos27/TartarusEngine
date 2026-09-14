@@ -159,13 +159,12 @@ void Draw(const EditorModuleHostAPI& host) {
     EditorConsoleState& state = *host.ConsoleState();
     if (!state.Visible) return;
 
-    // The dock tab bar renders synchronously inside Begin(); on a light-chrome theme (Windows XP)
-    // its text — tab labels, per-tab ×, the ▼ list button, node × — wants to stay white against
-    // the coloured tabs. Detected from WindowBg luminance so it needs no theme knowledge across
-    // the module boundary and is a no-op on the dark themes; the body below is unaffected.
-    const ImVec4 consoleBg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
-    const bool consoleLightChrome =
-        (0.299f * consoleBg.x + 0.587f * consoleBg.y + 0.114f * consoleBg.z) > 0.5f;
+    // This used to flip the dock tab bar's text to white against Windows XP's saturated-green
+    // tab chrome (detected from WindowBg luminance, no theme knowledge needed across the module
+    // boundary). Phase 1 item 9 removed that theme; Light's tabs are neutral and already pair
+    // with its own normal text colour, so the luminance check would be a false positive there
+    // now (see EditorLayerInternal.h's PanelChromeIsLight) — permanently disabled instead.
+    const bool consoleLightChrome = false;
     if (consoleLightChrome) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));
     ImGuiWindowFlags flags = ImGuiWindowFlags_None;
     const bool consoleOpen = ImGui::Begin(ICON_FA_TERMINAL "  Console", &state.Visible, flags);

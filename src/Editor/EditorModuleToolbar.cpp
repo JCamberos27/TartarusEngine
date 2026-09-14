@@ -6,8 +6,9 @@
 // EditorLayer::DrawTopToolbar / DrawWindowControls (EditorLayer_Toolbar.cpp).
 //
 // What changed in the move: the strip owns the pinned "##Toolbar" window (it pins itself against
-// GetToolbarMetrics rather than the caller pre-setting pos/size) and the Windows-XP Luna chrome;
-// every toggle it shows is host state read/written through EditorModuleHostAPI (API v4); and the
+// GetToolbarMetrics rather than the caller pre-setting pos/size; it also used to own the
+// Windows-XP Luna chrome override, removed along with that theme in Phase 1 item 9); every
+// toggle it shows is host state read/written through EditorModuleHostAPI (API v4); and the
 // deep menu contents — scene load/save, entity creation, camera framing, the capture options
 // popup — are still host code, rendered into these menus through the Draw*Body callbacks (the
 // single shared ImGuiContext makes a host-side ImGui call inside a module-begun menu land where
@@ -127,30 +128,11 @@ void Draw(const EditorModuleHostAPI& host) {
     // strip is only as tall as its two rows (host-owned kToolbarHeight).
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9.0f * uiScale, 3.0f * uiScale)); // #37
 
-    // Windows XP theme (2): the toolbar strip is the Luna taskbar blue with white menu/icon text
-    // — the one spot the theme shows blue chrome (panels stay beige). ImGui paints one global
-    // text colour, so the white is pushed for the whole strip and then locally reverted to the
-    // body near-black inside each menu-dropdown / options popup (those render on the beige
-    // PopupBg). See xpMenuTextPush/Pop below.
-    const bool xpBar = host.GetEditorTheme && host.GetEditorTheme() == 2;
-    const ImVec4 xpBodyText(0.09f, 0.09f, 0.09f, 1.0f);
-    const ImVec4 xpBodyTextDim(0.50f, 0.50f, 0.50f, 1.0f);
-    auto xpMenuTextPush = [&]() {
-        if (xpBar) { ImGui::PushStyleColor(ImGuiCol_Text, xpBodyText);
-                     ImGui::PushStyleColor(ImGuiCol_TextDisabled, xpBodyTextDim); }
-    };
-    auto xpMenuTextPop = [&]() { if (xpBar) ImGui::PopStyleColor(2); };
-    const int xpBarCols = xpBar ? 4 : 0;
-    if (xpBar) {
-        ImGui::PushStyleColor(ImGuiCol_WindowBg,     ImVec4(0.161f, 0.396f, 0.878f, 1.0f)); // #295EE0 Luna blue
-        ImGui::PushStyleColor(ImGuiCol_MenuBarBg,    ImVec4(0.133f, 0.337f, 0.804f, 1.0f)); // #2256CD
-        ImGui::PushStyleColor(ImGuiCol_Text,         ImVec4(0.97f, 0.98f, 1.0f, 1.0f));     // white chrome text
-        ImGui::PushStyleColor(ImGuiCol_TextDisabled, ImVec4(0.74f, 0.81f, 0.95f, 1.0f));
-    }
-
+    // Phase 1 item 9 — the Windows XP theme (and its Luna-blue toolbar-strip override, the one
+    // consumer host.GetEditorTheme ever had) is gone; the strip now just follows the active
+    // theme's ordinary MenuBarBg/Text colours like every other panel.
     if (!ImGui::Begin("##Toolbar", nullptr, flags)) {
         ImGui::End();
-        if (xpBarCols) ImGui::PopStyleColor(xpBarCols);
         ImGui::PopStyleVar();
         return;
     }
@@ -160,27 +142,19 @@ void Draw(const EditorModuleHostAPI& host) {
     // bodies are host code (deep scene / entity / camera logic); rendered here through callbacks.
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu(ICON_FA_FOLDER_OPEN " File")) {
-            xpMenuTextPush(); // beige dropdown -> revert the strip's white text to body near-black
             if (host.DrawFileMenuBody) host.DrawFileMenuBody();
-            xpMenuTextPop();
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(ICON_FA_CUBES " Create")) {
-            xpMenuTextPush();
             if (host.DrawAddEntityMenuItems) host.DrawAddEntityMenuItems();
-            xpMenuTextPop();
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(ICON_FA_CAMERA " View")) {
-            xpMenuTextPush();
             if (host.DrawViewMenuBody) host.DrawViewMenuBody();
-            xpMenuTextPop();
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(ICON_FA_TABLE_COLUMNS " Window")) {
-            xpMenuTextPush();
             if (host.DrawWindowMenuBody) host.DrawWindowMenuBody();
-            xpMenuTextPop();
             ImGui::EndMenu();
         }
 
@@ -264,9 +238,7 @@ void Draw(const EditorModuleHostAPI& host) {
     if (ImGui::IsItemHovered()) Tooltip(host, "Grid & snap settings");
     if (ImGui::BeginPopup("##GridSnapPopup")) {
         CloseOnEscape();
-        xpMenuTextPush();
         if (host.DrawGridSnapPopupBody) host.DrawGridSnapPopupBody();
-        xpMenuTextPop();
         ImGui::EndPopup();
     }
     ImGui::PopID();
@@ -295,9 +267,7 @@ void Draw(const EditorModuleHostAPI& host) {
         if (ImGui::IsItemHovered()) Tooltip(host, "Gizmo visibility");
         if (ImGui::BeginPopup("##GizmosPopup")) {
             CloseOnEscape();
-            xpMenuTextPush();
             if (host.DrawGizmosPopupBody) host.DrawGizmosPopupBody();
-            xpMenuTextPop();
             ImGui::EndPopup();
         }
         ImGui::PopID();
@@ -318,11 +288,9 @@ void Draw(const EditorModuleHostAPI& host) {
         if (ActionButton(host, kIcons[shading], tip, shading != 0)) ImGui::OpenPopup("##DrawModePopup");
         if (ImGui::BeginPopup("##DrawModePopup")) {
             CloseOnEscape();
-            xpMenuTextPush();
             for (int i = 0; i < IM_ARRAYSIZE(kDrawModes); ++i)
                 if (ImGui::MenuItem(kDrawModes[i], nullptr, shading == i) && host.SetShadingMode)
                     host.SetShadingMode(i);
-            xpMenuTextPop();
             ImGui::EndPopup();
         }
     }
@@ -377,9 +345,7 @@ void Draw(const EditorModuleHostAPI& host) {
         if (ImGui::IsItemHovered()) Tooltip(host, "Capture options");
         if (ImGui::BeginPopup("##CapturePopup")) {
             CloseOnEscape();
-            xpMenuTextPush();
             if (host.DrawCaptureOptionsPopupBody) host.DrawCaptureOptionsPopupBody();
-            xpMenuTextPop();
             ImGui::EndPopup();
         }
         ImGui::PopID();
@@ -396,7 +362,6 @@ void Draw(const EditorModuleHostAPI& host) {
     if (host.SetTitleBarDragHovered) host.SetTitleBarDragHovered(dragHovered);
 
     ImGui::End();
-    if (xpBarCols) ImGui::PopStyleColor(xpBarCols); // XP toolbar blue + white chrome text
     ImGui::PopStyleVar(); // WindowPadding
 }
 
