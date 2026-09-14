@@ -162,16 +162,9 @@ bool DrawNameField(const char* label, std::string& name, const char* placeholder
     return changed;
 }
 
+// Shared verbatim with the reloadable editor modules — EditorUIPrimitives.h (Defect #53).
 bool DangerIconButton(const char* icon, const char* tooltip, ImVec2 size = ImVec2(0, 0)) {
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.72f, 0.20f, 0.20f, 0.92f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.82f, 0.24f, 0.24f, 1.00f));
-    ImGui::PushID(tooltip);
-    bool clicked = ImGui::Button(icon, size);
-    ImGui::PopID();
-    ImGui::PopStyleColor(3);
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
-    return clicked;
+    return EditorUIPrimitives::DangerIconButton(icon, tooltip, &EditorInternal::ForwardHostTooltip, size);
 }
 
 // The Unity/Blender/Unreal property-grid convention: a fixed-width label column so a field's
@@ -1262,7 +1255,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                             });
                             bool out = firstVal;
                             if (MultiEditCheckbox(f.Name, anyOn, mixed, out,
-                                                  {this, &world, &sel, rc.Meta.Name, f.Name})) {
+                                                  {this, &world, &sel, rc.Meta.Name, ReflectFieldKey(f)})) {
                                 StageUndo(world);
                                 forEach([&](entt::entity e) { *reinterpret_cast<bool*>(fieldPtr(e, f)) = out; });
                                 CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
@@ -1277,7 +1270,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                             });
                             float edit = (float)shared;
                             MultiEditResult r = MultiEditFloatRow(f.Name, edit, mixed, f.DragSpeed, f.Min, f.Max, f.Tooltip,
-                                {this, &world, &sel, rc.Meta.Name, f.Name});
+                                {this, &world, &sel, rc.Meta.Name, ReflectFieldKey(f)});
                             if (r.activated) StageUndo(world);
                             if (r.changed) { int v = (int)edit; forEach([&](entt::entity e) { *reinterpret_cast<int*>(fieldPtr(e, f)) = v; }); }
                             if (r.committed) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
@@ -1291,7 +1284,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                             });
                             float edit = shared;
                             MultiEditResult r = MultiEditFloatRow(f.Name, edit, mixed, f.DragSpeed, f.Min, f.Max, f.Tooltip,
-                                {this, &world, &sel, rc.Meta.Name, f.Name});
+                                {this, &world, &sel, rc.Meta.Name, ReflectFieldKey(f)});
                             if (r.activated) StageUndo(world);
                             if (r.changed) forEach([&](entt::entity e) { *reinterpret_cast<float*>(fieldPtr(e, f)) = edit; });
                             if (r.committed) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
@@ -1307,7 +1300,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                             glm::vec3 edit = shared;
                             bool touched[3];
                             MultiEditResult r = MultiEditVec3Row(f.Name, edit, mixedAxis, touched, f.DragSpeed, f.Min, f.Max, f.Tooltip,
-                                {this, &world, &sel, rc.Meta.Name, f.Name});
+                                {this, &world, &sel, rc.Meta.Name, ReflectFieldKey(f)});
                             if (r.activated) StageUndo(world);
                             if (r.changed) forEach([&](entt::entity e) {
                                 glm::vec3& v = *reinterpret_cast<glm::vec3*>(fieldPtr(e, f));
@@ -1322,7 +1315,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                                 const std::string& v = *reinterpret_cast<std::string*>(fieldPtr(e, f));
                                 if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
                             });
-                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, f.Name, f.Name, f.Tooltip); // #315
+                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip); // #315
                             char buf[256];
                             snprintf(buf, sizeof(buf), "%s", mixed ? "" : shared.c_str());
                             bool changed = mixed
@@ -1339,7 +1332,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                                 const std::string& v = *reinterpret_cast<std::string*>(fieldPtr(e, f));
                                 if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
                             });
-                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, f.Name, f.Name, f.Tooltip); // #315
+                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip); // #315
                             const std::string preview = mixed ? "\xE2\x80\x94"
                                 : (shared.empty() ? "(none)" : std::filesystem::path(shared).filename().string());
                             if (ImGui::BeginCombo("##v", preview.c_str())) {
@@ -1365,7 +1358,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                                 if (first) { shared = c; first = false; }
                                 else for (int a = 0; a < 3; ++a) if (std::fabs(c[a] - shared[a]) > 1.0e-4f) mixed = true;
                             });
-                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, f.Name, f.Name, f.Tooltip); // #315
+                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip); // #315
                             glm::vec3 edit = shared;
                             bool changed = ImGui::ColorEdit3("##v", &edit.x, ImGuiColorEditFlags_DisplayHex);
                             if (ImGui::IsItemActivated()) StageUndo(world);
@@ -1380,7 +1373,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                                 int v = *reinterpret_cast<int*>(fieldPtr(e, f));
                                 if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
                             });
-                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, f.Name, f.Name, f.Tooltip); // #315
+                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip); // #315
                             const char* preview = mixed ? "\xE2\x80\x94"
                                 : (shared >= 0 && shared < f.EnumCount ? ReflectEnumLabel(f, shared) : "");
                             if (ImGui::BeginCombo("##v", preview)) {
@@ -2148,7 +2141,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 if (f.EditorHidden) continue;              // drawn by DrawReflectedComponentExtra
                 if (!fieldVisible(f)) continue;
 
-                PrefabOverrideLabel(world, entity, rc.Meta.Name, f.Name, f.Name, f.Tooltip); // #302 Part B
+                PrefabOverrideLabel(world, entity, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip); // #302 Part B
                 ImGui::PushID(f.Name);
                 bool started = false;
                 switch (f.Type) {

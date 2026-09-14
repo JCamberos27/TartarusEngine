@@ -349,13 +349,17 @@ set_source_files_properties(${TARTARUS_VENDORED_SOURCES} PROPERTIES
   COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/W1>$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-w>"
 )
 
-# Editor UI icon font (Font Awesome Free, SIL OFL 1.1) — copied next to the exe so it can be
-# loaded at runtime by a path relative to the working directory, same as scene.json.
+# Editor UI icon font (Font Awesome Free, SIL OFL 1.1) and the Inter UI-text fallback face
+# (Inter, SIL OFL 1.1 — #48) — copied next to the exe so they can be loaded at runtime by a path
+# relative to the working directory, same as scene.json.
 add_custom_command(TARGET TartarusEngine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:TartarusEngine>/assets/fonts"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${CMAKE_SOURCE_DIR}/extern/fonts/fa-solid-900.ttf"
     "$<TARGET_FILE_DIR:TartarusEngine>/assets/fonts/fa-solid-900.ttf"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_SOURCE_DIR}/extern/fonts/InterVariable.ttf"
+    "$<TARGET_FILE_DIR:TartarusEngine>/assets/fonts/InterVariable.ttf"
 )
 
 # Editor wordmark ("TARTARUS ENGINE" text, no icon) and mark (the "TE" monogram, no text) —

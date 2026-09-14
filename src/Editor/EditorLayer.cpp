@@ -150,6 +150,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     if (EditorSettings::Get().UiScaleOverride > 0.0f) {
         m_UIScale = std::clamp(EditorSettings::Get().UiScaleOverride, 0.75f, 2.5f);
     }
+    m_UIScaleOverrideAtStartup = EditorSettings::Get().UiScaleOverride; // #47 — restart-prompt baseline
 
     // Asset Browser tree width / icon size: restore the user's last size, or fall back to a
     // roomy DPI-scaled default (folder names like "Chesterfield Sofa" fit without a manual drag,
@@ -202,19 +203,30 @@ void EditorLayer::Init(GLFWwindow* window) {
         gz.RotationOuterLineThickness = 5.5f * m_UIScale;
     }
 
-    // UI text font. Loaded straight from the Windows system font directory rather than
-    // bundled into the repo (Segoe UI is Microsoft-licensed, not ours to redistribute).
-    // Falls back to ImGui's built-in bitmap font if it's ever missing (e.g. running under
-    // Wine, or a stripped-down Windows install), so this never hard-fails.
-    // Baked at the monitor's content scale (not left at 1x + FontGlobalScale) so text stays
-    // crisp instead of blurry-upscaled on high-DPI/4K displays.
+    // UI text font. Loaded straight from the Windows system font directory rather than bundled
+    // into the repo (Segoe UI is Microsoft-licensed, not ours to redistribute). Baked at the
+    // monitor's content scale (not left at 1x + FontGlobalScale) so text stays crisp instead of
+    // blurry-upscaled on high-DPI/4K displays.
     const float baseFontPx = 16.0f * m_UIScale;
     ImFontConfig baseFontConfig;
     baseFontConfig.SizePixels = baseFontPx;
     ImFont* uiFont = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", baseFontPx, &baseFontConfig);
     if (!uiFont) {
+        // #48 — this used to fall back to ImGui's built-in bitmap font at a DIFFERENT size
+        // (15px vs. the 16px baseFontPx every layout constant in this file assumes), so a
+        // machine without Segoe UI (Wine, a stripped-down Windows install) silently shifted
+        // every spacing/padding metric in the editor with no visible sign why. Inter — SIL OFL,
+        // bundled under extern/fonts/ — is a real vector fallback at the SAME baseFontPx, so
+        // layout stays correct even when the primary face is missing; only the letterforms
+        // change. See extern/fonts/Inter-OFL.txt / THIRD-PARTY-NOTICES.md.
+        uiFont = io.Fonts->AddFontFromFileTTF(
+            EnginePaths::Resolve("assets/fonts/InterVariable.ttf").c_str(), baseFontPx, &baseFontConfig);
+    }
+    if (!uiFont) {
+        // Last resort if even the bundled fallback can't be read off disk (a corrupted install) —
+        // ImGui's built-in bitmap face, so the editor still never hard-fails to a black screen.
         ImFontConfig fallbackConfig;
-        fallbackConfig.SizePixels = 15.0f * m_UIScale;
+        fallbackConfig.SizePixels = baseFontPx;
         io.Fonts->AddFontDefault(&fallbackConfig);
     }
     static const ImWchar iconRanges[] = {ICON_MIN_FA, ICON_MAX_16_FA, 0};
@@ -924,6 +936,14 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
             if (ActionButton("Auto##uiscale", "Reset to the monitor's detected scale")) { prefs.UiScaleOverride = 0.0f; EditorSettings::Save(); }
         }
         ImGui::TextDisabled("Active: %.2fx%s", m_UIScale, isAuto ? "  (from monitor)" : "  (override)");
+        // #47 — the slider above writes immediately, but m_UIScale (and every font/layout metric
+        // baked from it at Initialize()) only picks up the new value on the next launch. Make
+        // that visible instead of leaving "takes effect on the next launch" as a tooltip-only
+        // caveat nobody reads until their layout looks wrong.
+        if (prefs.UiScaleOverride != m_UIScaleOverrideAtStartup) {
+            ImGui::TextColored(ImVec4(0.910f, 0.769f, 0.408f, 1.0f),
+                               ICON_FA_TRIANGLE_EXCLAMATION "  Restart the editor to apply the new UI scale.");
+        }
         break;
     }
 

@@ -315,7 +315,7 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
         void* comp = const_cast<void*>(rc.GetConst(world.Registry, entity));
         json cj;
         for (const auto& f : rc.Meta.Fields)
-            cj[f.Name] = ReflectFieldToJson(f, f.Address(comp));
+            cj[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(comp));
         j[rc.Meta.Name] = cj;
     }
 }
@@ -446,8 +446,17 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
         void* comp = rc.Get(world.Registry, entity);
         const json& cj = j.at(rc.Meta.Name);
         for (const auto& f : rc.Meta.Fields) {
-            if (!cj.contains(f.Name)) continue;
-            ReflectFieldFromJson(f, f.Address(comp), cj.at(f.Name), assets);
+            // #43: key off ReflectFieldKey, with a LegacyNames fallback — so a scene saved under a
+            // field's old key (before an Inspector-label rename) still loads instead of silently
+            // keeping the component's default for that field.
+            const char* key = ReflectFieldKey(f);
+            if (cj.contains(key)) { ReflectFieldFromJson(f, f.Address(comp), cj.at(key), assets); continue; }
+            for (int i = 0; i < f.LegacyNameCount; ++i) {
+                if (f.LegacyNames[i] && cj.contains(f.LegacyNames[i])) {
+                    ReflectFieldFromJson(f, f.Address(comp), cj.at(f.LegacyNames[i]), assets);
+                    break;
+                }
+            }
         }
     }
 }
@@ -497,7 +506,7 @@ void DiffPrefabEntity(const World& world, entt::entity live, const json& pristin
             outOverrides.push_back({{"e", localIndex}, {"op", "addComponent"}, {"c", rc.Meta.Name}});
             const void* comp = rc.GetConst(world.Registry, live);
             for (const auto& f : rc.Meta.Fields)
-                emit(rc.Meta.Name, f.Name, ReflectFieldToJson(f, f.Address(const_cast<void*>(comp))));
+                emit(rc.Meta.Name, ReflectFieldKey(f), ReflectFieldToJson(f, f.Address(const_cast<void*>(comp))));
             continue;
         }
         if (!onLive && onPrefab) {
@@ -509,9 +518,13 @@ void DiffPrefabEntity(const World& world, entt::entity live, const json& pristin
         const json& pc = pristine.at(rc.Meta.Name);
         const void* comp = rc.GetConst(world.Registry, live);
         for (const auto& f : rc.Meta.Fields) {
-            if (!pc.contains(f.Name)) continue;
+            const char* key = ReflectFieldKey(f);
+            const json* pv = pc.contains(key) ? &pc.at(key) : nullptr;
+            for (int i = 0; !pv && i < f.LegacyNameCount; ++i)
+                if (f.LegacyNames[i] && pc.contains(f.LegacyNames[i])) pv = &pc.at(f.LegacyNames[i]);
+            if (!pv) continue;
             json now = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
-            if (!ReflectJsonNearlyEqual(f.Type, now, pc.at(f.Name))) emit(rc.Meta.Name, f.Name, now);
+            if (!ReflectJsonNearlyEqual(f.Type, now, *pv)) emit(rc.Meta.Name, key, now);
         }
     }
 
@@ -555,7 +568,7 @@ void ApplyPrefabOverride(World& world, AssetLibrary& assets, entt::entity e,
         if (!rc.Has(world.Registry, e)) rc.Add(world.Registry, e);
         void* c = rc.Get(world.Registry, e);
         for (const auto& f : rc.Meta.Fields)
-            if (f.Name == field) { ReflectFieldFromJson(f, f.Address(c), v, assets); return; }
+            if (ReflectFieldMatchesKey(f, field.c_str())) { ReflectFieldFromJson(f, f.Address(c), v, assets); return; }
         return;
     }
 }
@@ -1352,7 +1365,7 @@ json LiveFieldValue(const World& world, entt::entity entity, const char* compone
         if (std::strcmp(rc.Meta.Name, component) != 0 || !rc.Has(world.Registry, entity)) continue;
         const void* comp = rc.GetConst(world.Registry, entity);
         for (const auto& f : rc.Meta.Fields)
-            if (std::strcmp(f.Name, field) == 0)
+            if (ReflectFieldMatchesKey(f, field))
                 return ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
         return nullptr;
     }
@@ -1596,7 +1609,7 @@ bool SceneSerializer::IsPrefabFieldOverridden(const World& world, entt::entity e
         if (std::strcmp(rc.Meta.Name, component) != 0 || !rc.Has(world.Registry, entity)) continue;
         const void* comp = rc.GetConst(world.Registry, entity);
         for (const auto& f : rc.Meta.Fields) {
-            if (std::strcmp(f.Name, field) != 0) continue;
+            if (!ReflectFieldMatchesKey(f, field)) continue;
             json now = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
             return !ReflectJsonNearlyEqual(f.Type, now, pristine);
         }
@@ -1707,7 +1720,7 @@ bool SceneSerializer::ApplyPrefabComponent(World& world, entt::entity entity, co
     json cj;
     const void* comp = rcp->GetConst(world.Registry, entity);
     for (const auto& f : rcp->Meta.Fields)
-        cj[f.Name] = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
+        cj[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
     (*pe)[component] = std::move(cj);
 
     std::ofstream out(pi.SourcePath);
