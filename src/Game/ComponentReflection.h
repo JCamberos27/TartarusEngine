@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstring>
 #include <vector>
 
 // Minimal native reflection for gameplay components (#184, thin slice).
@@ -39,7 +40,7 @@ enum class ReflectFieldType {
 enum class ReflectAssetKind { Sound, Model, Texture, Material, Script };
 
 struct ReflectField {
-    const char* Name = "";          // Inspector label + JSON key
+    const char* Name = "";          // Inspector label
     ReflectFieldType Type = ReflectFieldType::Float;
     // Returns the address of this field within a component instance. Built from a pointer-to-
     // member at the registration site (TARTARUS_REFLECT_FIELD below) rather than an offsetof, so
@@ -85,7 +86,43 @@ struct ReflectField {
     // DrawReflectedComponentExtra() handler draws it with a custom widget (e.g. Light's Color,
     // which sits behind the Kelvin/RGB toggle).
     bool EditorHidden = false;
+
+    // --- Serialization key vs. display label (#43) — positioned last so the existing positional
+    // brace-inits at every registration site are unaffected -------------------------------------
+    // Stable JSON round-trip key. Defaults to Name (via ReflectFieldKey() below) when left null,
+    // so every existing registration keeps serializing exactly as before with zero changes at the
+    // call site. Set this explicitly the moment Name is ever renamed for display (the audit's
+    // §4.8/Q8 nomenclature pass, e.g. `Location` -> `Position`) so old scene/prefab JSON — which
+    // was written with the OLD Name as its key — still finds the field, instead of the rename
+    // silently reading back the field's default (Name used to double as the JSON key, so an
+    // Inspector-label rename was also, invisibly, a save-format break).
+    const char* Key = nullptr;
+
+    // Prior Key/Name values to also try, in order, if the primary key isn't present in the JSON
+    // object being loaded — covers a scene/prefab saved before this field's Key was last changed.
+    // Only consulted on load; never written.
+    const char* const* LegacyNames = nullptr;
+    int LegacyNameCount = 0;
 };
+
+// The field's stable JSON key — Key when set, else Name (see ReflectField::Key). Every
+// serializer/prefab-override site should key off this, never off Name directly, so an
+// Inspector-label-only rename can never silently change what a save file reads/writes.
+inline const char* ReflectFieldKey(const ReflectField& f) {
+    return (f.Key && f.Key[0]) ? f.Key : f.Name;
+}
+
+// True if `key` names this field — its current key, or any of its LegacyNames. Prefer this to a
+// direct string compare against Name/Key wherever an incoming key string (from a scene file, a
+// prefab override entry, a menu action) is matched back to the ReflectField that owns it, so a
+// file saved under a field's old key still resolves after a rename.
+inline bool ReflectFieldMatchesKey(const ReflectField& f, const char* key) {
+    if (!key) return false;
+    if (std::strcmp(ReflectFieldKey(f), key) == 0) return true;
+    for (int i = 0; i < f.LegacyNameCount; ++i)
+        if (f.LegacyNames[i] && std::strcmp(f.LegacyNames[i], key) == 0) return true;
+    return false;
+}
 
 // Walks EnumLabels (an ImGui "a\0b\0c\0" packed list) to the idx-th label. Returns "" for an
 // out-of-range index or a null list. Shared by the serializer and the Inspector.

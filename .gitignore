@@ -11,5 +11,9 @@ Library/
 # Local scratch backups (not authoritative)
 *.json.bak
 
-# Live editor state — rewritten by the running editor, not authoritative
+# Per-user editor state (#42): editor_prefs.json / shortcuts.json now resolve under
+# %LOCALAPPDATA%\TartarusEngine\ (see src/Core/UserPaths.h), not here — nothing left to ignore
+# under project/ for them. A stray copy left by a pre-#42 checkout is still worth ignoring so it
+# doesn't get re-added by accident.
 project/editor_prefs.json
+project/shortcuts.json

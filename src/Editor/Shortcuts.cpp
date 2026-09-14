@@ -2,6 +2,7 @@
 
 #include "Log.h"
 #include "ProjectPaths.h"
+#include "UserPaths.h"
 #include "AtomicFile.h"
 #include "Input.h" // TriggeredGlfw() — main-loop keys, evaluated before an ImGui frame exists
 
@@ -9,6 +10,7 @@
 #include <GLFW/glfw3.h>
 
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <unordered_map>
 
@@ -32,9 +34,23 @@ double   g_PrefixTime = 0.0;
 // Frame the last Triggered() edge was recorded on, per shortcut id. Compared against g_Frame.
 std::unordered_map<std::string, std::uint64_t> g_Fired;
 
+// Per-user, per-machine state (#42) — NOT under the project folder; see UserPaths.h.
 const std::string& Path() {
-    static const std::string p = ProjectPaths::Resolve("shortcuts.json");
+    static const std::string p = UserPaths::Resolve("shortcuts.json");
     return p;
+}
+
+// One-time migration (#42): shortcuts.json used to live under the version-controlled project/
+// folder. Carry an existing one over once rather than silently resetting every rebind to
+// default on first run after upgrading.
+void MigrateLegacyIfNeeded() {
+    std::error_code ec;
+    if (std::filesystem::exists(Path(), ec)) return;
+    const std::string legacyPath = ProjectPaths::Resolve("shortcuts.json");
+    if (!std::filesystem::exists(legacyPath, ec)) return;
+    std::filesystem::copy_file(legacyPath, Path(), ec);
+    if (ec) Log::Warn("Shortcuts: found a legacy project/shortcuts.json but couldn't migrate it.");
+    else Log::Info("Shortcuts: migrated shortcuts.json out of project/ to per-user storage.");
 }
 
 // Modifier keys are never a shortcut's main key — skip them in scans / capture.
@@ -300,6 +316,7 @@ void Init() {
 void Load() {
     for (auto& s : g_Table) { s.Current = s.Default; s.Overridden = false; }
 
+    MigrateLegacyIfNeeded();
     std::ifstream in(Path());
     if (!in.is_open()) return; // no overrides yet — defaults stand, not an error
 

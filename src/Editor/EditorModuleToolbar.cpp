@@ -15,6 +15,7 @@
 // module never sees the handle.
 
 #include "EditorModuleAPI.h"
+#include "EditorUIPrimitives.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImFloor
@@ -30,35 +31,10 @@ void Tooltip(const EditorModuleHostAPI& host, const char* text) {
     if (host.SetTooltip) host.SetTooltip(text);
 }
 
-// EditorInternal::ActionButton, copied module-side (EditorLayerInternal.h pulls in World/EnTT/the
-// renderer, none of which belong in this DLL). Flat: no body at rest, faint wash on hover;
-// `active` gives an accent body + a 2px bottom keyline for toggles that are "on".
+// Forwards to the shared implementation (EditorUIPrimitives.h, Defect #53) — kept as a local
+// wrapper so every call site below (which passes `host` first) keeps compiling unchanged.
 bool ActionButton(const EditorModuleHostAPI& host, const char* icon, const char* tooltip, bool active = false) {
-    // "On" toggles read in the same cyan the styled sliders use (ImGuiCol_SliderGrab): a tinted
-    // body, a matching bottom keyline, and a cyan icon.
-    const ImVec4 acc = ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab);
-    if (active) {
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(acc.x, acc.y, acc.z, 0.22f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(acc.x, acc.y, acc.z, 0.34f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(acc.x, acc.y, acc.z, 0.46f));
-        ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(acc.x, acc.y, acc.z, 1.0f));
-    } else {
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.14f));
-    }
-    ImGui::PushID(tooltip); // Button() folds its label into its ID — scope to the unique tooltip
-    bool clicked = ImGui::Button(icon);
-    ImGui::PopID();
-    if (active) {
-        const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
-        const float y = mx.y - 2.0f;
-        ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x + 3.0f, y), ImVec2(mx.x - 3.0f, mx.y - 1.0f),
-                                                  ImGui::ColorConvertFloat4ToU32(acc), 1.0f);
-    }
-    ImGui::PopStyleColor(active ? 4 : 3);
-    if (ImGui::IsItemHovered()) Tooltip(host, tooltip);
-    return clicked;
+    return EditorUIPrimitives::ActionButton(icon, tooltip, host.SetTooltip, active);
 }
 
 // EditorUI::VSeparator: a 1px rule in ImGuiCol_Separator spanning the frame height, ItemSpacing.x
