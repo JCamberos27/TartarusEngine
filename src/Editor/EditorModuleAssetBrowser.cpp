@@ -177,7 +177,13 @@ void DrawFolderNode(const EditorModuleHostAPI& host, const std::vector<std::stri
                               (isRoot ? "Assets" : LeafNameOf(folderPath));
 
     ImGui::PushID(folderPath.c_str());
+    // NoNav (Defect #43): the host's own Enter/Backspace/Left/Right folder-traversal block
+    // (EditorLayer.cpp) already drives m_CurrentAssetFolder/m_ExpandedAssetFolders off these same
+    // keys — without this flag, ImGui's keyboard nav would also toggle whichever row last got
+    // mouse focus, independently of m_CurrentAssetFolder, once NavEnableKeyboard is on.
+    ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
     const bool open = ImGui::TreeNodeEx("##node", nodeFlags, "%s", label.c_str());
+    ImGui::PopItemFlag();
 
     if (!isRoot && !reveal.empty() && folderPath == reveal) ImGui::SetScrollHereY(0.5f);
 

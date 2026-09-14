@@ -1139,7 +1139,12 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             ImVec2 tileMin = ImGui::GetCursorScreenPos();
             ImVec2 tileSize(cellWidth, cellHeight);
             if (!isRenaming) {
+                // NoNav (Defect #43): the host's Enter/Backspace/Left/Right folder-traversal
+                // block drives selection off m_CurrentAssetFolder directly — ImGui's own
+                // keyboard nav must not also move focus between tiles on the same keys.
+                ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
                 clicked = ImGui::Selectable("##tile", isSelected, ImGuiSelectableFlags_None, tileSize);
+                ImGui::PopItemFlag();
             } else {
                 ImGui::Dummy(tileSize);
             }
@@ -1245,7 +1250,10 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 else if (cancel || lostFocus) { m_RenamingAssetKey.clear(); m_RenameRejectedFlash = 0.0f; }
                 DrawRenameRejectedTooltip(renameFieldMin, renameFieldMax);
             } else {
+                // NoNav (Defect #43): same reasoning as the grid tile above.
+                ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
                 clicked = ImGui::Selectable(cell.display.c_str(), isSelected);
+                ImGui::PopItemFlag();
             }
         }
 
