@@ -115,6 +115,25 @@ inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
     return clicked;
 }
 
+// #4 item 2 — a small inline marker for a control that writes into the *scene* file (pushes an
+// undo step, dirties the scene) rather than editor_prefs.json or a project file. Phase 2 item 1
+// already removed the one case where this ambiguity was an outright bug (Preferences > Environment
+// silently dirtying the scene); this is for panels that legitimately mix both kinds of state in
+// one window, like Window > Lighting's Environment section sitting next to its own
+// Post-processing/Shadows sections (which are editor_prefs.json, not scene data) — so it's a
+// disclosure, not a warning: InfoColor, not WarningColor. Draws as its own item — call
+// ImGui::SameLine() first if the caller wants it beside a preceding label instead of on its own
+// line (SeparatorText, for one, already ends its row, so a badge marking a section it titles
+// reads better on the next line than fighting the separator rule for the same row).
+inline void SceneDataBadge(TooltipFn tooltipFn) {
+    const ImVec4 info = InfoColor();
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(info.x, info.y, info.z, 0.85f));
+    ImGui::TextUnformatted(ICON_FA_FILM "  SCENE");
+    ImGui::PopStyleColor();
+    if (tooltipFn && ImGui::IsItemHovered())
+        tooltipFn("Saved in the scene file, not your editor preferences \xe2\x80\x94 editing this dirties the scene and can be undone (Ctrl+Z).");
+}
+
 // --- Viewport HUD legibility (Defect #54 / Phase 1 item 3) ---------------------------------
 // Every viewport-overlay HUD (Stats, History, the Play/Stop button, the status bar, the
 // nav-gizmo cluster, the Game-view overlays) used to sample the rendered scene's luminance

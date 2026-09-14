@@ -748,6 +748,7 @@ void EditorLayer::DrawLightingPanel(World& world) {
 
     const float w = 170.0f * m_UIScale;
     ImGui::SeparatorText("Environment");
+    EditorUIPrimitives::SceneDataBadge(&EditorInternal::ForwardHostTooltip); // #4 item 2
     DrawEnvironmentSettings(world, w);
     ImGui::Spacing();
     ImGui::SeparatorText("Post-processing");
