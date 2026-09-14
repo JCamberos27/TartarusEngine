@@ -39,6 +39,19 @@ using TooltipFn = void (*)(const char*);
 // selection / "you are here".
 inline ImVec4 AccentColor() { return ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab); }
 
+// Status-role colours (Phase 1 item 2, Appendix B — "add danger/warning/success/info roles").
+// Fixed, not theme-derived: a status colour has to mean the same thing regardless of which of
+// the three themes is active, unlike AccentColor(). All four already clear WCAG 1.4.3's 4.5:1
+// text floor against the darkest surface a status message sits on (#121212) by a wide margin —
+// computed via the same relative-luminance method as the #34/border/text-secondary fixes above,
+// not eyeballed. Existing call sites (DangerIconButton's hover red, Console's per-entry tint)
+// already used colours in this range; these give that a single named source instead of each
+// call site picking its own shade.
+inline ImVec4 DangerColor()  { return ImVec4(1.00f, 0.42f, 0.38f, 1.0f); } // ~6.7:1
+inline ImVec4 WarningColor() { return ImVec4(1.00f, 0.80f, 0.30f, 1.0f); } // ~12.5:1
+inline ImVec4 SuccessColor() { return ImVec4(0.45f, 0.85f, 0.55f, 1.0f); } // ~10.9:1
+inline ImVec4 InfoColor()    { return ImVec4(0.55f, 0.75f, 1.00f, 1.0f); } // ~9.9:1
+
 // Two — and only two — button treatments across the whole editor (#160; see
 // docs/CONVENTIONS.md). ActionButton: flat, no body at rest, faint wash on hover; `active` gives
 // an accent-tinted body + a 2px bottom keyline for toggles that are "on". This is every toolbar
@@ -76,9 +89,10 @@ inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn toolti
 // the component-remove x).
 inline bool DangerIconButton(const char* icon, const char* tooltip, TooltipFn tooltipFn,
                               ImVec2 size = ImVec2(0, 0)) {
+    const ImVec4 danger = DangerColor();
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.72f, 0.20f, 0.20f, 0.92f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.82f, 0.24f, 0.24f, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(danger.x, danger.y, danger.z, 0.92f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(danger.x, danger.y, danger.z, 1.00f));
     ImGui::PushID(tooltip);
     bool clicked = ImGui::Button(icon, size);
     ImGui::PopID();

@@ -252,8 +252,13 @@ inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
 inline bool ActiveToggle(const char* id, bool active, bool rowHovered, const char* tip, bool alignTop) {
     const float sz = ImGui::GetFrameHeight();
     // Width hugs the glyph (+2px) instead of a full sz-square, so the slot doesn't push the
-    // rest of the row across the way the old sz-wide Button did (#152 follow-up).
-    const float w = ImMax(ImGui::CalcTextSize(ICON_FA_SQUARE_CHECK).x, ImGui::CalcTextSize(ICON_FA_SQUARE).x) + 2.0f;
+    // rest of the row across the way the old sz-wide Button did (#152 follow-up). Floored at
+    // `sz` (Phase 1 item 6, hit-target-min 24x24): the glyph alone was 13-16px wide, well under
+    // WCAG 2.5.5's 24px floor, even though the row was already sz-tall. `sz` is already the
+    // theme's correctly-scaled frame height (>=24px at every UI scale/theme this editor ships),
+    // so flooring width at it makes the invisible hit box at least square with no new scale
+    // plumbing — it only ever widens the glyph-hugging box, never narrows it.
+    const float w = ImMax(ImMax(ImGui::CalcTextSize(ICON_FA_SQUARE_CHECK).x, ImGui::CalcTextSize(ICON_FA_SQUARE).x) + 2.0f, sz);
     const ImVec2 p0 = ImGui::GetCursorScreenPos();
     ImGui::PushID(id);
     bool clicked = ImGui::InvisibleButton("##active", ImVec2(w, sz));
@@ -288,7 +293,8 @@ inline bool ActiveToggle(const char* id, bool active, bool rowHovered, const cha
 inline bool SceneVisToggle(const char* id, const char* glyphOn, const char* glyphOff,
                            bool on, bool rowHovered, const char* tip) {
     const float sz = ImGui::GetFrameHeight();
-    const float w  = ImMax(ImGui::CalcTextSize(glyphOn).x, ImGui::CalcTextSize(glyphOff).x) + 2.0f;
+    // Floored at `sz`, same reasoning as ActiveToggle above (Phase 1 item 6).
+    const float w  = ImMax(ImMax(ImGui::CalcTextSize(glyphOn).x, ImGui::CalcTextSize(glyphOff).x) + 2.0f, sz);
     const ImVec2 p0 = ImGui::GetCursorScreenPos();
     ImGui::PushID(id);
     const bool clicked = ImGui::InvisibleButton("##svis", ImVec2(w, sz));

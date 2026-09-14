@@ -1119,10 +1119,15 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     // Active-state eye, pinned to a fixed right-hand column so every row's eye lines up no matter
     // how deep it sits. Drawn after the row so a click on it never also selects the row.
     {
-        const float eyeW = ImMax(ImGui::CalcTextSize(ICON_FA_EYE).x, ImGui::CalcTextSize(ICON_FA_EYE_SLASH).x) + 2.0f;
+        // Phase 1 item 6 (hit-target-min 24x24): these must match the same floor ActiveToggle/
+        // SceneVisToggle apply to their own invisible hit box (ImGui::GetFrameHeight(), already
+        // >=24px at every scale/theme this editor ships), or this outer layout math reserves a
+        // narrower slot than the widget actually occupies and the three toggles overlap.
+        const float minHit = ImGui::GetFrameHeight();
+        const float eyeW = ImMax(ImMax(ImGui::CalcTextSize(ICON_FA_EYE).x, ImGui::CalcTextSize(ICON_FA_EYE_SLASH).x) + 2.0f, minHit);
         const float gap  = 4.0f * m_UIScale;
-        const float lockW = ImMax(ImGui::CalcTextSize(ICON_FA_LOCK).x, ImGui::CalcTextSize(ICON_FA_LOCK_OPEN).x) + 2.0f;
-        const float hideW = ImMax(ImGui::CalcTextSize(ICON_FA_EYE).x, ImGui::CalcTextSize(ICON_FA_EYE_SLASH).x) + 2.0f;
+        const float lockW = ImMax(ImMax(ImGui::CalcTextSize(ICON_FA_LOCK).x, ImGui::CalcTextSize(ICON_FA_LOCK_OPEN).x) + 2.0f, minHit);
+        const float hideW = eyeW;
 
         // #236 B — SceneVis-lite: an eye (viewport visibility) + a padlock (viewport pickability),
         // always drawn just left of the Active checkbox. These never touch the object itself —
