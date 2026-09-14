@@ -558,7 +558,7 @@ void EditorLayer::DrawArrayDuplicateModal(World& world, AssetLibrary& assets) {
         ImGui::Separator();
 
         ImGui::BeginDisabled(!ok);
-        if (PrimaryButton("Create", ImVec2(110.0f, 0.0f))) {
+        if (PrimaryButton("Create", ImVec2(110.0f * m_UIScale, 0.0f))) { // #37
             DuplicateSelectionArray(world, assets, m_ArrayDupCount[0], m_ArrayDupCount[1], m_ArrayDupCount[2],
                                     glm::vec3(m_ArrayDupStep[0], m_ArrayDupStep[1], m_ArrayDupStep[2]));
             m_ShowArrayDuplicate = false;
@@ -566,7 +566,7 @@ void EditorLayer::DrawArrayDuplicateModal(World& world, AssetLibrary& assets) {
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
-        if (PrimaryButton("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        if (PrimaryButton("Cancel", ImVec2(110.0f * m_UIScale, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // #37
             m_ShowArrayDuplicate = false;
             ImGui::CloseCurrentPopup();
         }

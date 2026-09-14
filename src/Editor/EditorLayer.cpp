@@ -1522,7 +1522,7 @@ void EditorLayer::DrawProjectSettingsWindow(World& /*world*/) {
             m_NewTagBuf[0] = '\0';
         }
 
-        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+        ImGui::Dummy(ImVec2(0.0f, 8.0f * m_UIScale)); // #37
         ImGui::SeparatorText("Layers");
         ImGui::TextDisabled("Slot 0 is always \"Default\". Names save to project/layers.json.");
         ImGui::Spacing();
@@ -1600,7 +1600,7 @@ void EditorLayer::EndFrame() {
 // slider and a single-substep button. That's the general-use set; nothing else.
 void EditorLayer::DrawPhysicsDebugWindow(World& world) {
     if (!EditorSettings::Get().ShowPhysicsPanel) return;
-    ImGui::SetNextWindowSize(ImVec2(320, 300), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(320.0f * m_UIScale, 300.0f * m_UIScale), ImGuiCond_FirstUseEver); // #35
     bool open = EditorSettings::Get().ShowPhysicsPanel;
     const bool visible = ImGui::Begin(ICON_FA_CUBES "  Physics", &open);
     EditorSettings& es = EditorSettings::Get();
@@ -1637,7 +1637,7 @@ void EditorLayer::DrawPhysicsDebugWindow(World& world) {
 
         ImGui::Separator();
         float ts = es.PhysicsSimTimeScale;
-        ImGui::SetNextItemWidth(150.0f);
+        ImGui::SetNextItemWidth(150.0f * m_UIScale); // #36
         if (ImGui::SliderFloat("Slow-mo", &ts, 0.0f, 2.0f, "%.2fx")) es.PhysicsSimTimeScale = ts;
         if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
         ImGui::SameLine();
@@ -2678,14 +2678,14 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             ImGui::Separator();
             const bool named = m_SaveLayoutName[0] != '\0';
             ImGui::BeginDisabled(!named);
-            if (PrimaryButton("Save", ImVec2(110.0f, 0.0f)) || (enter && named)) {
+            if (PrimaryButton("Save", ImVec2(110.0f * m_UIScale, 0.0f)) || (enter && named)) { // #37
                 SaveLayoutPreset(m_SaveLayoutName);
                 m_ShowSaveLayout = false;
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndDisabled();
             ImGui::SameLine();
-            if (PrimaryButton("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            if (PrimaryButton("Cancel", ImVec2(110.0f * m_UIScale, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { // #37
                 m_ShowSaveLayout = false;
                 ImGui::CloseCurrentPopup();
             }
