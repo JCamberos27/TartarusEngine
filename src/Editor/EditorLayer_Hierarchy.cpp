@@ -884,7 +884,12 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
 
     // Empty label: the tree node owns the indent / full-row hitbox and every interaction handler
     // below; the chevron + glyph slot + name are painted afterward at a constant X.
+    // NoNav (Defect #43): HandleHierarchyKeyboardNav() already owns arrow/Home/End/type-ahead for
+    // this list — without this flag, ImGui's own keyboard nav would also try to move focus between
+    // rows on the same keypress once NavEnableKeyboard is on.
+    ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
     ImGui::TreeNodeEx("##node", nodeFlags, "%s", "");
+    ImGui::PopItemFlag();
     const ImVec2 rowMin = ImGui::GetItemRectMin();
     const ImVec2 rowMax = ImGui::GetItemRectMax();
 

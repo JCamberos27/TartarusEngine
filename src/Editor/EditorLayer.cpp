@@ -168,6 +168,13 @@ void EditorLayer::Init(GLFWwindow* window) {
     ImGui::StyleColorsDark();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    // Defect #33/#43 (Phase 2) — Tab traversal, arrow-key nav in lists/menus, and Enter/Space
+    // activation, plus the ImGuiCol_NavCursor focus ring (already themed, see ApplyThemeStyle's
+    // contrast asserts below). Hierarchy rows, Asset Browser folder-tree rows and asset tiles
+    // already run their own hand-rolled arrow-key handling (HandleHierarchyKeyboardNav and the
+    // Asset Browser's Enter/Backspace/arrow block) — those widgets are marked NoNav at their
+    // draw sites so ImGui's nav-move doesn't fight them on the same keypress.
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     // Editor style — metrics (rounding / padding / borders) + palette, DPI-scaled. Dark and
     // Light both use the rounded-card metrics (Phase 1 item 9). ApplyThemeStyle owns that and
@@ -380,6 +387,13 @@ void EditorLayer::ApplyThemeStyle() {
         "Border vs WindowBg",
         EditorUIPrimitives::CompositeOver(style.Colors[ImGuiCol_Border], style.Colors[ImGuiCol_WindowBg]),
         style.Colors[ImGuiCol_WindowBg], 3.0f, logContrastWarn);
+    // Defect #43 (Phase 2) — NavCursor is the ring ImGuiConfigFlags_NavEnableKeyboard draws
+    // around the keyboard-focused widget; check it against both a bare window background and a
+    // framed-widget background, since focus can land on either.
+    EditorUIPrimitives::AssertContrastFloor("NavCursor vs WindowBg", style.Colors[ImGuiCol_NavCursor],
+                                             style.Colors[ImGuiCol_WindowBg], 3.0f, logContrastWarn);
+    EditorUIPrimitives::AssertContrastFloor("NavCursor vs FrameBg", style.Colors[ImGuiCol_NavCursor],
+                                             style.Colors[ImGuiCol_FrameBg], 3.0f, logContrastWarn);
 
     style.ScaleAllSizes(m_UIScale);
 }
@@ -1479,7 +1493,11 @@ void EditorLayer::DrawProjectSettingsWindow(World& /*world*/) {
         }
     } else { // Tags & Layers
         ImGui::SeparatorText("Tags");
-        ImGui::TextDisabled("Named tags offered in the Inspector's Tag dropdown, on top of tags already in use.");
+        // Defect #16 — TextDisabled doesn't wrap; this line is long enough to clip mid-sentence
+        // at the Preferences window's default width.
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("Named tags offered in the Inspector's Tag dropdown, on top of tags already in use.");
+        ImGui::PopStyleColor();
         ImGui::Spacing();
 
         const auto& tags = ProjectSettings::Tags();
