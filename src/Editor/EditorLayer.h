@@ -150,8 +150,11 @@ public:
     bool ShowHistory() const { return m_ShowHistory; }
     void SetShowHistory(bool on) { m_ShowHistory = on; }
     void RequestResetLayout() { m_ResetLayoutRequested = true; }
-    void OpenPreferences() { m_ShowPreferences = true; }
-    void OpenProjectSettings() { m_ShowProjectSettings = true; }
+    // #4 item 3 — Preferences and Project Settings are one searchable, dockable "Settings" window
+    // now (DrawSettingsWindow), not two. Both entry points still exist because they mean different
+    // things (which group to land on), they just open the same window instead of two.
+    void OpenPreferences() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; }
+    void OpenProjectSettings() { m_ShowPreferences = true; m_SettingsGroupIsProject = true; }
 
     // Thin forwarders so the non-member host glue (HotReloadEditorModule.cpp) can invoke these;
     // the real methods stay private with their existing call sites. World/Assets/Camera are the
@@ -818,9 +821,15 @@ private:
     void DrawShadowSettings(float itemWidth);
     bool m_ShowLighting = false;
 
-    // Preferences window (Ctrl+,) — replaces the old giant Settings menu-bar dropdown (#53).
-    void DrawPreferencesWindow(World& world);
-    bool m_ShowPreferences = false;
+    // Settings window (Ctrl+,) — #4 item 3 merged the old separate Preferences (per-user,
+    // editor_prefs.json) and Project Settings (#236 A4; project-scoped, project/settings.json +
+    // layers.json) windows into one searchable, dockable window with two category groups. Both
+    // groups' bodies are unchanged from their old separate windows — only the shell (Begin/sidebar/
+    // End) and the entry points (OpenPreferences/OpenProjectSettings above) are unified.
+    void DrawSettingsWindow(World& world);
+    bool m_ShowPreferences = false;      // the whole Settings window's visibility, despite the name
+    bool m_SettingsGroupIsProject = false; // which category group is showing: Editor or Project
+    char m_SettingsSearch[64] = {};        // filters both groups' category list by substring
     int m_PrefsCategory = 0;
     std::string m_PrefsShortcutFilter;
     // Preferences > Shortcuts (#236 F) — press-to-bind capture state. Empty id = not capturing.
@@ -830,10 +839,7 @@ private:
     int m_PrefsCaptureStage = 0;
     Shortcuts::Chord m_PrefsCapturePrefix;
 
-    // Project Settings window (#236 A4) — project-scoped (project/settings.json + layers.json),
-    // kept separate from the per-user Preferences window above.
-    void DrawProjectSettingsWindow(World& world);
-    bool m_ShowProjectSettings = false;
+    void DrawProjectSettingsBody(World& world); // "THIS PROJECT" group's body, called from DrawSettingsWindow
     int m_ProjSettingsCategory = 0;
     char m_NewTagBuf[48] = {};
 
