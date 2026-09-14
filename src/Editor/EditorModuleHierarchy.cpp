@@ -19,10 +19,12 @@ namespace EditorModuleHierarchy {
 
 namespace {
 
-// EditorInternal::PushTabChromeText — keep the dock tab bar's text white on a light (XP) theme.
+// EditorInternal::PushTabChromeText — used to keep the dock tab bar's text white against
+// Windows XP's saturated-green tab chrome. Phase 1 item 9 removed that theme; Light's tabs are
+// neutral and already pair with its own normal text colour, so this is a permanent no-op now
+// (see EditorLayerInternal.h's PanelChromeIsLight for the full explanation).
 bool PanelChromeIsLight() {
-    const ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
-    return (0.299f * bg.x + 0.587f * bg.y + 0.114f * bg.z) > 0.5f;
+    return false;
 }
 void PushTabChromeText() {
     if (PanelChromeIsLight()) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));

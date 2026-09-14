@@ -65,7 +65,11 @@
 //        light text (EditorUIPrimitives.h) instead of sampling the rendered scene's luminance —
 //        the whole async-GPU-readback subsystem (AsyncLuminanceReadback, SampleTextureLuminance,
 //        7+ scratch FBOs, 14+ PBOs, a GLStateCache-bypassing glGetIntegerv call) is gone with it.
-constexpr std::uint32_t kEditorModuleAPIVersion = 17;
+//   18 - Phase 1 item 9 (theme collapse): removed GetEditorTheme. EditorTheme collapsed from
+//        three values (Bento/Prism/Windows XP) to two (Dark/Light); its one module consumer, the
+//        toolbar's Windows-XP Luna-chrome override, is deleted along with the theme, so no module
+//        code reads the raw theme index anymore.
+constexpr std::uint32_t kEditorModuleAPIVersion = 18;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -210,15 +214,16 @@ struct EditorModuleHostAPI {
     // --- Toolbar / menus (API v4) ------------------------------------------------------------
     // The top toolbar strip, its dropdown menus and the window min/max/close controls live in
     // the module now (EditorModuleToolbar.cpp). The module owns the pinned "##Toolbar" window,
-    // the Windows-XP chrome, the icon-button row layout and the menu/popup scaffolding; the deep
-    // host logic behind the menus (scene load/save, entity creation, camera framing, undo) stays
-    // host-side and is rendered into the module's menus through the Draw*Body callbacks below.
+    // the icon-button row layout and the menu/popup scaffolding; the deep host logic behind the
+    // menus (scene load/save, entity creation, camera framing, undo) stays host-side and is
+    // rendered into the module's menus through the Draw*Body callbacks below.
 
     // Window metrics the strip pins itself against, forced every frame: main-window pixel width,
     // toolbar height (host-owned kToolbarHeight * UI scale) and the editor UI scale.
     void (*GetToolbarMetrics)(float* outWinW, float* outToolbarH, float* outUIScale) = nullptr;
-    // EditorSettings::EditorTheme — 2 is Windows XP, where the strip paints the blue Luna chrome.
-    int (*GetEditorTheme)() = nullptr;
+    // GetEditorTheme (API v4) removed at API v18 (Phase 1 item 9) — its only consumer was the
+    // toolbar's Windows-XP Luna-chrome override, and that theme no longer exists. The strip now
+    // just reads style.Colors[] like every other panel; no module code needs the raw theme index.
     // The toolbar's empty area is the window drag handle (the OS caption is gone). Reported back
     // every frame; the host forwards it to Window's WM_NCHITTEST.
     void (*SetTitleBarDragHovered)(bool hovered) = nullptr;

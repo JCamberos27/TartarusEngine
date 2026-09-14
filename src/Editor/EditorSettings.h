@@ -12,12 +12,11 @@ struct EditorSettings {
     // Editor theme, applied by EditorLayer::ApplyThemeStyle() (colours + metrics) at launch and
     // live when changed in Preferences > General. (#234 renumbered these when Dark Slate was
     // dropped; EditorSettings::Load remaps any out-of-range value to 0.)
-    // 0 = Bento — the default (dark SaaS-dashboard: layered charcoal surfaces, hairline borders,
+    // 0 = Dark — the default (dark SaaS-dashboard: layered charcoal surfaces, hairline borders,
     //     rounded-card geometry, cyan selection / blue active accents),
-    // 1 = Prism — the Bento layout, but the accent / buttons / text tint drift through the
-    //     spectrum together each frame (spread across ~half the wheel so several hues show),
-    // 2 = Windows XP — the Luna "Blue" scheme: beige chrome, black text, white fields, Luna-blue
-    //     selection; compact geometry (the shared metric baseline, not Bento's).
+    // 1 = Light — the same layout and roles, re-solved for a light background.
+    // Phase 1 item 9 collapsed this from three themes to these two: Prism (a live hue-drifting
+    // reskin) and Windows XP (a Luna "Blue" chrome pastiche) are both gone as selectable themes.
     int EditorTheme = 0;
 
     // Master switch for every contextual tooltip/help-marker in the editor (Inspector fields,
