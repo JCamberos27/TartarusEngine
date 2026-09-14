@@ -48,8 +48,6 @@ struct AssetGridCell {
     std::shared_ptr<MaterialAsset> material;
 };
 
-#include "AdaptiveContrast.h" // AsyncLuminanceReadback + SampleTextureLuminance (shared with GameViewPanel)
-
 // In-game editor overlay (Dear ImGui + ImGuizmo): import assets, place/inspect
 // entities, manipulate them with viewport gizmos. Toggle with F1; gameplay pauses
 // while the editor is open.
@@ -263,27 +261,19 @@ public:
                                   const char* label, const char* tooltip);
 
     // --- Reloadable History HUD module bridge (issue #229, frame only, API v15) -------------
-    // The module owns the bottom-right pinned HUD window + its pin/height math + the eased
-    // contrast tint. HistoryHudFrame gates the draw and hands over the viewport rect / UI scale
-    // / row count; DrawHistoryListBody renders the click-to-jump rows; SampleHistoryHudLuminance
-    // drives the host-owned PBO readback. ShowHistory()/SetShowHistory() (above) carry the toggle.
+    // The module owns the bottom-right pinned HUD window + its pin/height math. HistoryHudFrame
+    // gates the draw and hands over the viewport rect / UI scale / row count; DrawHistoryListBody
+    // renders the click-to-jump rows. ShowHistory()/SetShowHistory() (above) carry the toggle.
     bool HistoryHudFrame(float* outVpX, float* outVpY, float* outVpW, float* outVpH,
                          float* outUIScale, int* outRowCount);                   // EditorLayer_Toolbar.cpp
     void DrawHistoryListBody(World& world, AssetLibrary& assets);                // EditorLayer_Toolbar.cpp
-    float SampleHistoryHudLuminance(float screenCenterX, float screenCenterY, float boxPx); // EditorLayer_Toolbar.cpp
     // Screen-space rect of the live Game view image + its framebuffer's colour texture/size, so
-    // the Play-Mode Stop/Fullscreen overlay can anchor to the game viewport and adapt its tint
-    // to what's rendered there. Pass a zero size to say "no game view this frame".
+    // the Play-Mode Stop/Fullscreen overlay can anchor to the game viewport. Pass a zero size to
+    // say "no game view this frame".
     void SetGameViewRect(ImVec2 imgPos, ImVec2 imgSize, unsigned int colorTex, int texW, int texH) {
         m_GameViewImgPos = imgPos; m_GameViewImgSize = imgSize;
         m_GameViewTex = colorTex; m_GameViewTexW = texW; m_GameViewTexH = texH;
     }
-    // Average luminance (0..1) of this frame's rendered Scene viewport inside a screen-space box
-    // of `boxPx` centered at `centerScreen`; -1 when no result is available yet (no scene texture,
-    // box entirely outside the viewport, or the async readback hasn't landed yet — see
-    // AsyncLuminanceReadback below). Throttle calls yourself — it still does a GPU->CPU sync, just
-    // a frame or two later and without stalling the pipeline.
-    float SampleSceneLuminance(AsyncLuminanceReadback& rb, ImVec2 centerScreen, float boxPx);
     bool ConsumePlayStopRequest() {
         bool requested = m_PlayStopRequested;
         m_PlayStopRequested = false;
@@ -414,9 +404,6 @@ public:
     float UIScale() const { return m_UIScale; }
     float SmoothedFrameMs() const { return m_SmoothedFrameMs; }
     void SetHideEngineMarkForStats(bool v) { m_HideEngineMarkForStats = v; }
-    // Drives the Stats HUD's own async luminance readback (host owns the Scene framebuffer + the
-    // ping-ponged PBOs). Returns the last completed average luminance under the screen box, or -1.
-    float SampleStatsHudLuminance(float screenCenterX, float screenCenterY, float boxPx);
 
     // The GL color texture main.cpp should hand over each frame (its editor-camera render,
     // already containing the grid/outline/drag-preview overlays) — Draw() displays it inside
@@ -1009,8 +996,8 @@ private:
 
     bool m_ShowHistory = false;
     // The Undo History HUD moved into TartarusEditor.dll (EditorModuleHistory.cpp, issue #229
-    // API v15); the host half — HistoryHudFrame / DrawHistoryListBody / SampleHistoryHudLuminance
-    // — is declared in the public module-bridge block near the top of this class.
+    // API v15); the host half — HistoryHudFrame / DrawHistoryListBody — is declared in the
+    // public module-bridge block near the top of this class.
 
     // Per-light solo / mute — editor-only, never serialized, cleared by NewScene/OpenScene.
     // See IsLightSuppressed(); consumed by main.cpp's per-frame light gather.
@@ -1037,50 +1024,14 @@ private:
     std::unique_ptr<Texture> m_MarkTexture;
     float m_MarkSpinAngle = 0.0f; // radians, advanced by dt * EngineMarkSpinSpeed each frame in DrawEngineMark()
     float m_MarkHue = 0.0f;        // 0..1, advanced each frame; drives the tint when EngineMarkRgb is on
-    // Contrast-adaptive tint for the mark: each frame DrawEngineMark reads back the little patch
-    // of the scene texture directly behind the mark, and eases this toward white over dark
-    // content / black over light content. 1 = white, 0 = black; starts white (matches the old
-    // fixed colour) so the first frame before any readback looks unchanged.
-    float m_MarkContrastLum = 1.0f;    // eased, per-frame
-    float m_MarkContrastTarget = 1.0f; // refreshed by the throttled readback
-    float m_MarkSampleAccum = 0.0f;    // seconds since last readback (sampled ~10 Hz, not per-frame)
-    AsyncLuminanceReadback m_MarkReadback; // async PBO pair behind the mark's sample (#178, PERF-210)
-    // Same contrast-adaptive trick for the viewport-top-center Play/Stop button: sample the scene
-    // luminance behind it and steer the glyph white-on-dark / dark-on-light. Its own eased state
-    // because it sits far from the corner mark and reads a different patch of the scene.
-    float m_PlayBtnContrastLum = 1.0f;
-    float m_PlayBtnContrastTarget = 1.0f;
-    float m_PlayBtnSampleAccum = 0.0f;
-    AsyncLuminanceReadback m_PlayBtnReadback; // ping-ponged PBOs backing the sample above (#178)
     bool m_ShutdownDone = false;       // guards the clean-exit-only tail of Shutdown()
     bool m_GpuResourcesFreed = false;  // guards FreeGpuResources() (also reachable from ~EditorLayer)
-    // Same again for the top-right nav-gizmo cluster (dolly / pan tool buttons + the Persp/axis
-    // label): its own sample because the corner it lives in can differ in brightness from the
-    // top-center where the Play button sits.
-    float m_NavGizmoContrastLum = 1.0f;
-    float m_NavGizmoContrastTarget = 1.0f;
-    float m_NavGizmoSampleAccum = 0.0f;
-    AsyncLuminanceReadback m_NavGizmoReadback;
-    // ...and for the bottom-of-viewport status readout, now a bare adaptive-tinted line of text
-    // with no strip behind it.
-    float m_StatusBarContrastLum = 1.0f;
-    float m_StatusBarContrastTarget = 1.0f;
-    float m_StatusBarSampleAccum = 0.0f;
-    AsyncLuminanceReadback m_StatusBarReadback;
-    // ...and for the two transparent viewport HUDs — Statistics (top-left) and History (bottom-
-    // right). Each reads the patch of scene directly behind it, so they tint independently.
-    // The Stats HUD's easing pair lives module-side now (EditorModuleStats.cpp); the host keeps
-    // only the readback object, driven from SampleStatsHudLuminance() via EditorModuleHostAPI.
-    AsyncLuminanceReadback m_StatsHudReadback;
     // Set each frame by the reloadable Stats module (via SetHideEngineMarkForStats): true when
     // the (capped) Statistics HUD reaches far enough down the left edge to collide with the
     // corner monogram — the mark is skipped while so.
     bool m_HideEngineMarkForStats = false;
-    // The History HUD's easing pair lives module-side now (EditorModuleHistory.cpp, API v15); the
-    // host keeps only the readback object, driven from SampleHistoryHudLuminance().
-    AsyncLuminanceReadback m_HistoryHudReadback;
     // Live Game-view rect + texture, pushed in each frame by main.cpp (zero size = none). Used by
-    // DrawPlayStopButton to place the Stop/Fullscreen control over the game viewport and tint it.
+    // DrawPlayStopButton to place the Stop/Fullscreen control over the game viewport.
     ImVec2 m_GameViewImgPos{0.0f, 0.0f};
     ImVec2 m_GameViewImgSize{0.0f, 0.0f};
     unsigned int m_GameViewTex = 0;
@@ -1427,11 +1378,12 @@ private:
     // Rgb) so the choice persists and the Preferences + Window-menu controls share one source of
     // truth. (Was m_ShowEngineMark — a session-only bool — before the Preferences controls landed.)
 
-    // (PushAdaptiveHudText was here — the eased contrast tint for the transparent viewport HUDs.
-    // The Stats and History HUDs both live in TartarusEditor.dll now and each carries its own
-    // module-side copy of the maths; the host keeps only SampleSceneLuminance + the per-HUD
-    // AsyncLuminanceReadback objects. The engine mark uses ContrastForLuminance; the status bar
-    // inlines the same maths.)
+    // (PushAdaptiveHudText, AsyncLuminanceReadback, SampleTextureLuminance and
+    // ContrastForLuminance were here — the async GPU luminance sampling every viewport HUD used
+    // to steer its text between white-on-dark and black-on-light. Removed by Defect #54 (Phase
+    // 1): every HUD now draws a fixed opaque plate behind fixed light text instead, legible over
+    // anything with no runtime GPU readback. See EditorUIPrimitives.h's "Viewport HUD
+    // legibility" section.)
 
     // --- Statistics --------------------------------------------------------------------
     // The compact transparent HUD pinned to the Scene viewport's top-left corner (#149) moved

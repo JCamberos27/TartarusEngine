@@ -9,12 +9,13 @@
 // Thin slice (issue #229): the row list itself — the undo/redo stacks, the click-to-jump
 // (JumpToUndo/RedoEntry), the per-row tooltips — stays host code, drawn into this window through
 // host.DrawHistoryListBody(). Unlike Stats, the rows are interactive (click to jump), so this
-// window is NOT NoInputs. The contrast-adaptive text tint is owned here now (same decision as the
-// Stats HUD): the host still drives the async PBO luminance readback — it owns the Scene
-// framebuffer and the GL context — but the ~10 Hz throttle and the eased/target luminance pair
-// live module-side as function-local statics that re-converge within ~0.15 s after a reload.
+// window is NOT NoInputs. It used to steer its text between white-on-dark and black-on-light
+// with an async GPU luminance readback the host drove; Defect #54 (Phase 1) replaced that with a
+// fixed opaque plate behind fixed light text. See EditorUIPrimitives.h's "Viewport HUD
+// legibility" section.
 
 #include "EditorModuleAPI.h"
+#include "EditorUIPrimitives.h"
 
 #include <imgui.h>
 #include <IconsFontAwesome6.h>
@@ -23,45 +24,6 @@
 #include <cmath>
 
 namespace EditorModuleHistory {
-
-namespace {
-
-// Contrast-adaptive HUD text — identical maths to EditorModuleStats' copy and the host's old
-// EditorLayer::PushAdaptiveHudText. Pushes exactly two style colours (Text + TextDisabled); the
-// caller pops them after its content.
-void PushAdaptiveHudText(const EditorModuleHostAPI& host, float centerX, float centerY, float boxPx, float dt) {
-    static float s_easedLum = 1.0f;
-    static float s_targetLum = 1.0f;
-    static float s_sampleAccum = 0.0f;
-
-    // #275 toggle: static near-white text, no sampling.
-    if (host.GetAdaptiveHudContrast && !host.GetAdaptiveHudContrast()) {
-        s_easedLum = s_targetLum = 1.0f;
-        ImGui::PushStyleColor(ImGuiCol_Text,         IM_COL32(255, 255, 255, 240));
-        ImGui::PushStyleColor(ImGuiCol_TextDisabled, IM_COL32(255, 255, 255, 150));
-        return;
-    }
-
-    s_sampleAccum += dt;
-    if (s_sampleAccum >= 0.1f) {
-        s_sampleAccum = 0.0f;
-        const float lum = host.SampleHistoryHudLuminance
-                              ? host.SampleHistoryHudLuminance(centerX, centerY, boxPx) : -1.0f;
-        if (lum >= 0.0f) {
-            float t = (lum - 0.30f) / (0.62f - 0.30f);
-            t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-            s_targetLum = 1.0f - t * t * (3.0f - 2.0f * t); // 1 = white on dark, 0 = black on light
-        }
-    }
-    const float k = 1.0f - std::exp(-dt / 0.15f);
-    s_easedLum += (s_targetLum - s_easedLum) * k;
-    int v = (int)(s_easedLum * 255.0f + 0.5f);
-    v = v < 0 ? 0 : (v > 255 ? 255 : v);
-    ImGui::PushStyleColor(ImGuiCol_Text,         IM_COL32(v, v, v, 240));
-    ImGui::PushStyleColor(ImGuiCol_TextDisabled, IM_COL32(v, v, v, 150));
-}
-
-} // namespace
 
 void Draw(const EditorModuleHostAPI& host) {
     float vx = 0.0f, vy = 0.0f, vw = 0.0f, vh = 0.0f, uiScale = 1.0f;
@@ -91,25 +53,24 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::SetNextWindowPos(ImVec2(vx + vw - hpad, vy + vh - hpad - statusBarH),
                             ImGuiCond_Always, ImVec2(1.0f, 1.0f));
     ImGui::SetNextWindowSize(ImVec2(0.0f, winH)); // x=0 → auto-fit width, height clamped
-    ImGui::SetNextWindowBgAlpha(0.0f);
+    // #54 — a real (opaque-ish) plate behind the HUD, not a fully transparent window tinted by
+    // sampling the scene behind it. Legible over anything, no GPU readback.
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, EditorUIPrimitives::kHudPlateColor);
+    ImGui::PushStyleColor(ImGuiCol_Text,         EditorUIPrimitives::kHudTextColor);
+    ImGui::PushStyleColor(ImGuiCol_TextDisabled, EditorUIPrimitives::kHudTextDisabledColor);
     const ImGuiWindowFlags flags =
         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground;
+        ImGuiWindowFlags_NoMove;
 
     bool visible = true;
     if (!ImGui::Begin(ICON_FA_CLOCK_ROTATE_LEFT "  History", &visible, flags)) {
         ImGui::End();
+        ImGui::PopStyleColor(3);
         return;
     }
     if (!visible && host.SetShowHistory) host.SetShowHistory(false); // the title-bar X
-
-    // Sample the scene behind the HUD so the text stays legible white-on-dark / dark-on-light
-    // with no plate behind it.
-    const ImVec2 wpos = ImGui::GetWindowPos(), wsz = ImGui::GetWindowSize();
-    PushAdaptiveHudText(host, wpos.x + wsz.x * 0.5f, wpos.y + wsz.y * 0.5f, 48.0f * uiScale,
-                        ImGui::GetIO().DeltaTime);
 
     ImGui::TextUnformatted(ICON_FA_CLOCK_ROTATE_LEFT "  History");
     // Explanation on the heading tooltip (#156) — no persistent "(?)" glyph.
@@ -120,8 +81,8 @@ void Draw(const EditorModuleHostAPI& host) {
 
     if (host.DrawHistoryListBody) host.DrawHistoryListBody();
 
-    ImGui::PopStyleColor(2); // adaptive Text + TextDisabled
     ImGui::End();
+    ImGui::PopStyleColor(3); // WindowBg + Text + TextDisabled
 }
 
 } // namespace EditorModuleHistory

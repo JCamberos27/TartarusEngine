@@ -7,14 +7,13 @@
 //
 // What changed in the move: every number it shows is host-owned and now arrives through the
 // EditorModuleHostAPI callback table (viewport rect, RenderStats, Profiler samples, GL frame
-// stats, entity counts, the smoothed frame time). The contrast-adaptive text tint is owned here
-// now (issue #229 decision): the host still drives the async PBO luminance readback — it owns the
-// Scene framebuffer and the GL context — but the ~10 Hz throttle, the eased/target luminance pair
-// and the ImGuiCol_Text / ImGuiCol_TextDisabled push all live module-side. That easing state is
-// two floats in function-local statics; after a reload they re-converge within ~0.15 s, same as
-// every other adaptive HUD in the editor does on its first few frames.
+// stats, entity counts, the smoothed frame time). It used to steer its text between white-on-
+// dark and black-on-light with an async GPU luminance readback the host drove; Defect #54 (Phase
+// 1) replaced that with a fixed opaque plate behind fixed light text — legible over anything by
+// construction, no readback needed. See EditorUIPrimitives.h's "Viewport HUD legibility" section.
 
 #include "EditorModuleAPI.h"
+#include "EditorUIPrimitives.h"
 
 #include <imgui.h>
 #include <IconsFontAwesome6.h>
@@ -28,40 +27,6 @@ namespace EditorModuleStats {
 namespace {
 
 constexpr int kMaxProfilerSamples = 32;
-
-// Contrast-adaptive HUD text — the module-side half of what EditorLayer::PushAdaptiveHudText did
-// host-side. Pushes exactly two style colours (Text + TextDisabled); the caller pops them after
-// its content. Same maths as the host's DrawEngineMark / DrawViewportStatusBar / History HUD.
-void PushAdaptiveHudText(const EditorModuleHostAPI& host, float centerX, float centerY, float boxPx, float dt) {
-    static float s_easedLum = 1.0f;
-    static float s_targetLum = 1.0f;
-    static float s_sampleAccum = 0.0f;
-
-    // #275 toggle: static near-white text, no sampling.
-    if (host.GetAdaptiveHudContrast && !host.GetAdaptiveHudContrast()) {
-        s_easedLum = s_targetLum = 1.0f;
-        ImGui::PushStyleColor(ImGuiCol_Text,         IM_COL32(255, 255, 255, 240));
-        ImGui::PushStyleColor(ImGuiCol_TextDisabled, IM_COL32(255, 255, 255, 150));
-        return;
-    }
-
-    s_sampleAccum += dt;
-    if (s_sampleAccum >= 0.1f) {
-        s_sampleAccum = 0.0f;
-        const float lum = host.SampleViewportLuminance ? host.SampleViewportLuminance(centerX, centerY, boxPx) : -1.0f;
-        if (lum >= 0.0f) {
-            float t = (lum - 0.30f) / (0.62f - 0.30f);
-            t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-            s_targetLum = 1.0f - t * t * (3.0f - 2.0f * t); // 1 = white on dark, 0 = black on light
-        }
-    }
-    const float k = 1.0f - std::exp(-dt / 0.15f);
-    s_easedLum += (s_targetLum - s_easedLum) * k;
-    int v = (int)(s_easedLum * 255.0f + 0.5f);
-    v = v < 0 ? 0 : (v > 255 ? 255 : v);
-    ImGui::PushStyleColor(ImGuiCol_Text,         IM_COL32(v, v, v, 240));
-    ImGui::PushStyleColor(ImGuiCol_TextDisabled, IM_COL32(v, v, v, 150));
-}
 
 } // namespace
 
@@ -120,17 +85,15 @@ void Draw(const EditorModuleHostAPI& host) {
 
     ImGui::SetNextWindowPos(ImVec2(vx + pad, vy + pad), ImGuiCond_Always, ImVec2(0.0f, 0.0f));
     ImGui::SetNextWindowSize(ImVec2(0.0f, winH)); // x=0 -> auto-fit width; height clamped
-    ImGui::SetNextWindowBgAlpha(0.0f);
+    // #54 — a real (opaque-ish) plate behind the HUD, not a fully transparent window tinted by
+    // sampling the scene behind it. Legible over anything, no GPU readback.
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, EditorUIPrimitives::kHudPlateColor);
+    ImGui::PushStyleColor(ImGuiCol_Text,         EditorUIPrimitives::kHudTextColor);
+    ImGui::PushStyleColor(ImGuiCol_TextDisabled, EditorUIPrimitives::kHudTextDisabledColor);
     if (ImGui::Begin("##Stats", nullptr,
             ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground)) {
-        // Contrast-adaptive tint (like the corner mark): sample the scene behind the HUD so the
-        // text stays legible white-on-dark / dark-on-light with no plate behind it.
-        const ImVec2 wpos = ImGui::GetWindowPos(), wsz = ImGui::GetWindowSize();
-        PushAdaptiveHudText(host, wpos.x + wsz.x * 0.5f, wpos.y + wsz.y * 0.5f, 48.0f * uiScale,
-                            ImGui::GetIO().DeltaTime);
-
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs)) {
         ImGui::TextUnformatted(ICON_FA_CHART_SIMPLE "  Statistics");
         ImGui::Separator();
         ImGui::Text("%.1f FPS  (%.2f ms)", smoothedMs > 0.0001f ? 1000.0f / smoothedMs : 0.0f, smoothedMs);
@@ -168,9 +131,9 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGui::Text("Shader binds   %d (%d skipped)", gl.ProgramBinds, gl.ProgramBindsSkipped);
         ImGui::Text("Texture binds  %d (%d skipped)", gl.TextureBinds, gl.TextureBindsSkipped);
         ImGui::Text("VAO binds      %d (%d skipped)", gl.VaoBinds, gl.VaoBindsSkipped);
-        ImGui::PopStyleColor(2); // adaptive Text + TextDisabled
     }
     ImGui::End();
+    ImGui::PopStyleColor(3); // WindowBg + Text + TextDisabled
 }
 
 } // namespace EditorModuleStats

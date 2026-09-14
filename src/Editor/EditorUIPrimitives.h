@@ -98,4 +98,27 @@ inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
     return clicked;
 }
 
+// --- Viewport HUD legibility (Defect #54 / Phase 1 item 3) ---------------------------------
+// Every viewport-overlay HUD (Stats, History, the Play/Stop button, the status bar, the
+// nav-gizmo cluster, the Game-view overlays) used to sample the rendered scene's luminance
+// behind it (an async GPU readback, throttled ~10 Hz, per element) and ease its text between
+// white-on-dark and black-on-light so it stayed readable over arbitrary content. That machinery
+// — AsyncLuminanceReadback, SampleTextureLuminance, ContrastForLuminance, 7+ scratch FBOs, 14+
+// PBOs, a glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING) call that bypassed GLStateCache — is gone.
+// A HUD element only ever needs to be legible over ANYTHING; a fixed light text colour on a
+// fixed opaque-ish dark plate is legible by construction, with zero runtime GPU cost and zero
+// "wrong colour this frame" flicker while a readback catches up. Use these two together: draw
+// the plate first, then the text in kHudTextColor on top.
+inline constexpr ImU32 kHudTextColor         = IM_COL32(235, 235, 235, 255);
+inline constexpr ImU32 kHudTextDisabledColor = IM_COL32(235, 235, 235, 150);
+inline constexpr ImU32 kHudPlateColor        = IM_COL32(10, 10, 10, 190);
+
+// Fills `mn`..`mx` with the standard HUD plate colour. Pass the tight bounding box of the
+// content that sits on top (e.g. from ImGui::CalcTextSize / ImFont::CalcTextSizeA), already
+// padded — this does not add its own margin, since callers pad differently (a text hint vs. a
+// multi-line stats block).
+inline void DrawHudPlate(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float rounding = 4.0f) {
+    dl->AddRectFilled(mn, mx, kHudPlateColor, rounding);
+}
+
 } // namespace EditorUIPrimitives
