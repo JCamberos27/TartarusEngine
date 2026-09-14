@@ -787,7 +787,7 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
         if (ImGui::IsItemHovered()) {
             if (tex) {
                 ImGui::BeginTooltip();
-                ImGui::Image((ImTextureID)(intptr_t)tex->GLHandle(), ImVec2(96, 96));
+                ImGui::Image((ImTextureID)(intptr_t)tex->GLHandle(), ImVec2(96.0f * m_UIScale, 96.0f * m_UIScale)); // #37
                 ImGui::TextUnformatted(tex->Path().c_str());
                 ImGui::EndTooltip();
             } else {
@@ -1410,7 +1410,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
 
         ImGui::Spacing();
         // Compact, right-aligned, icon-only (#156) — names + shortcuts live in the tooltips.
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f * m_UIScale, 2.0f * m_UIScale)); // #37
         {
             const float bw = ImGui::GetFrameHeight() + 8.0f;
             ImGui::SameLine(ImGui::GetContentRegionMax().x - bw * 2.0f - ImGui::GetStyle().ItemSpacing.x);
@@ -1713,7 +1713,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // Compact Reset / Copy / Paste for this Transform's values (audit #77). Small buttons so
         // they don't dominate the section.
         ImGui::Spacing();
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f * m_UIScale, 2.0f * m_UIScale)); // #37
         float tw = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2.0f) / 3.0f;
         if (ImGui::Button(ICON_FA_ROTATE_LEFT "  Reset##xf", ImVec2(tw, 0.0f))) {
             PushUndo(world, "Reset Transform");
@@ -2229,7 +2229,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     ImGui::Spacing();
 
     // Compact footer actions — smaller than the default so this row doesn't feel heavy.
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f * m_UIScale, 2.0f * m_UIScale)); // #37
 
     DrawAddComponentMenu(world, assets, entity);
 
@@ -2801,7 +2801,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             if (ImGui::IsItemHovered()) {
                 if (!mixed && first) {
                     ImGui::BeginTooltip();
-                    ImGui::Image((ImTextureID)(intptr_t)first->GLHandle(), ImVec2(96, 96));
+                    ImGui::Image((ImTextureID)(intptr_t)first->GLHandle(), ImVec2(96.0f * m_UIScale, 96.0f * m_UIScale)); // #37
                     ImGui::TextUnformatted(first->Path().c_str());
                     ImGui::EndTooltip();
                 } else {

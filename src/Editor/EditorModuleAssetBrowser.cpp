@@ -317,8 +317,13 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
 void Draw(const EditorModuleHostAPI& host) {
     if (host.GetShowAssetBrowser && !host.GetShowAssetBrowser()) return;
 
+    // #37 — hoisted to the top of Draw() so every unscaled-literal fix below in this function can
+    // share it; GetToolbarMetrics is the cheapest host call that reports UI scale from here.
+    float uiScale = 1.0f;
+    if (host.GetToolbarMetrics) host.GetToolbarMetrics(nullptr, nullptr, &uiScale);
+
     bool visible = true;
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f * uiScale, 4.0f * uiScale)); // #37
     PushTabChromeText();
     const bool open = ImGui::Begin("Asset Browser", &visible, ImGuiWindowFlags_None);
     PopTabChromeText();
@@ -345,10 +350,7 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::PopStyleVar();
 
     // #14 — was a bare 200.0f, so at anything other than 1x UI scale the search box stayed a
-    // fixed pixel width while every neighbouring control (buttons, breadcrumb text) scaled with
-    // it. GetToolbarMetrics is the cheapest host call that reports UI scale from here.
-    float uiScale = 1.0f;
-    if (host.GetToolbarMetrics) host.GetToolbarMetrics(nullptr, nullptr, &uiScale);
+    // fixed pixel width while every neighbouring control (buttons, breadcrumb text) scaled with it.
     const float searchWidth = 200.0f * uiScale;
 
     if (ActionButton(host, ICON_FA_PLUS, "Create / Import")) ImGui::OpenPopup("##AssetCreateMenu");
@@ -481,7 +483,7 @@ void Draw(const EditorModuleHostAPI& host) {
             std::string labelMenuFilter = HostString(host.GetAssetLabelMenuFilter);
             char lbuf[64];
             std::snprintf(lbuf, sizeof(lbuf), "%s", labelMenuFilter.c_str());
-            ImGui::SetNextItemWidth(180.0f);
+            ImGui::SetNextItemWidth(180.0f * uiScale); // #37
             if (ImGui::InputTextWithHint("##LabelMenuFilter", ICON_FA_MAGNIFYING_GLASS "  Search labels...",
                     lbuf, sizeof(lbuf)) && host.SetAssetLabelMenuFilter) {
                 host.SetAssetLabelMenuFilter(lbuf);
@@ -557,7 +559,7 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-    ImGui::Button("##AssetTreeSplitter", ImVec2(6.0f, contentHeight));
+    ImGui::Button("##AssetTreeSplitter", ImVec2(6.0f * uiScale, contentHeight)); // #37
     ImGui::PopStyleColor(3);
     {
         const bool active = ImGui::IsItemActive();

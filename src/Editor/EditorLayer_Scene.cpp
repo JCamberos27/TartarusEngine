@@ -164,7 +164,7 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
             "Restore the unsaved changes, or discard them and keep the saved scene?");
         ImGui::Separator();
 
-        if (PrimaryButton("Restore", ImVec2(120.0f, 0.0f))) {
+        if (PrimaryButton("Restore", ImVec2(120.0f * m_UIScale, 0.0f))) {
             const std::string recoveryPath = RecoveryPathFor(m_CurrentScenePath);
             if (SceneSerializer::Load(world, assets, recoveryPath)) {
                 CheckSceneVersionWarning();
@@ -181,7 +181,7 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (PrimaryButton("Discard", ImVec2(120.0f, 0.0f))) {
+        if (PrimaryButton("Discard", ImVec2(120.0f * m_UIScale, 0.0f))) {
             ClearRecoverySnapshot();
             m_RecoveryPromptPending = false;
             Log::Info("Discarded the recovery snapshot; opened the saved scene.");
@@ -236,19 +236,19 @@ void EditorLayer::DrawExitPrompt() {
         ImGui::TextUnformatted("Save them before closing?");
         ImGui::Separator();
 
-        if (PrimaryButton("Save", ImVec2(110.0f, 0.0f))) {
+        if (PrimaryButton("Save", ImVec2(110.0f * m_UIScale, 0.0f))) {
             m_ExitDecision = ExitDecision::SaveAndExit;
             m_ExitPromptPending = false;
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (PrimaryButton("Don't Save", ImVec2(110.0f, 0.0f))) {
+        if (PrimaryButton("Don't Save", ImVec2(110.0f * m_UIScale, 0.0f))) {
             m_ExitDecision = ExitDecision::DiscardAndExit;
             m_ExitPromptPending = false;
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (PrimaryButton("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        if (PrimaryButton("Cancel", ImVec2(110.0f * m_UIScale, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
             m_ExitDecision = ExitDecision::None;
             m_ExitPromptPending = false; // main sees ExitPromptActive() == false -> stays open
             ImGui::CloseCurrentPopup();
@@ -300,13 +300,13 @@ void EditorLayer::DrawRevertScenePrompt(World& world, AssetLibrary& assets) {
         ImGui::Text("Discard unsaved changes to \"%s\"", name.c_str());
         ImGui::TextUnformatted("and reload it from disk?");
         ImGui::Separator();
-        if (PrimaryButton("Revert", ImVec2(110.0f, 0.0f))) {
+        if (PrimaryButton("Revert", ImVec2(110.0f * m_UIScale, 0.0f))) {
             m_RevertPromptPending = false;
             ImGui::CloseCurrentPopup();
             OpenScene(world, assets, m_CurrentScenePath);
         }
         ImGui::SameLine();
-        if (PrimaryButton("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        if (PrimaryButton("Cancel", ImVec2(110.0f * m_UIScale, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
             m_RevertPromptPending = false;
             ImGui::CloseCurrentPopup();
         }
@@ -339,7 +339,7 @@ void EditorLayer::DrawSceneSwitchPrompt(World& world, AssetLibrary& assets) {
             m_PendingScenePath.clear();
         };
 
-        if (PrimaryButton("Save", ImVec2(110.0f, 0.0f))) {
+        if (PrimaryButton("Save", ImVec2(110.0f * m_UIScale, 0.0f))) {
             // DoSaveAs returns false if the user cancels the file dialog — in that case the
             // switch stays pending and the prompt stays open, same as a fresh Cancel would.
             bool saved = true;
@@ -352,13 +352,13 @@ void EditorLayer::DrawSceneSwitchPrompt(World& world, AssetLibrary& assets) {
             }
         }
         ImGui::SameLine();
-        if (PrimaryButton("Don't Save", ImVec2(110.0f, 0.0f))) {
+        if (PrimaryButton("Don't Save", ImVec2(110.0f * m_UIScale, 0.0f))) {
             runPendingSwitch();
             m_ScenePromptPending = false;
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (PrimaryButton("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        if (PrimaryButton("Cancel", ImVec2(110.0f * m_UIScale, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
             m_PendingSceneSwitch = PendingSceneSwitch::None;
             m_PendingScenePath.clear();
             m_ScenePromptPending = false; // abort entirely — nothing happens
@@ -906,7 +906,7 @@ void EditorLayer::DrawScreenshotPreview() {
     if (m_ShotPreviewAnim > 0.999f) m_ShotPreviewAnim = 1.0f;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 12.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f * m_UIScale, 12.0f * m_UIScale)); // #37
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * m_ShotPreviewAnim);
 
