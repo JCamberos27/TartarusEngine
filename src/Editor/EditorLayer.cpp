@@ -760,7 +760,7 @@ void EditorLayer::DrawLightingPanel(World& world) {
     ImGui::End();
 }
 
-void EditorLayer::DrawPreferencesWindow(World& world) {
+void EditorLayer::DrawPreferencesWindow(World& /*world*/) {
     if (!m_ShowPreferences) return;
 
     ImGui::SetNextWindowSize(ImVec2(660.0f * m_UIScale, 440.0f * m_UIScale), ImGuiCond_FirstUseEver);
@@ -773,7 +773,6 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ICON_FA_UNIVERSAL_ACCESS "  General",
         ICON_FA_CAMERA "  Viewport",
         ICON_FA_TABLE_CELLS "  Grid & Snapping",
-        ICON_FA_SUN "  Environment",
         ICON_FA_CLOCK "  Auto-Save",
         ICON_FA_GAUGE_HIGH "  Performance",
         ICON_FA_KEYBOARD "  Shortcuts",
@@ -963,14 +962,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ImGui::TextDisabled("The grid + snap on/off toggles are on the toolbar.");
         break;
 
-    case 3: // Environment
-        ImGui::SeparatorText("Environment");
-        DrawEnvironmentSettings(world, kw); // shared with Window ▸ Lighting (#236 R2)
-        ImGui::Spacing();
-        if (ImGui::SmallButton(ICON_FA_LIGHTBULB "  Open Lighting panel")) m_ShowLighting = true;
-        break;
-
-    case 4: // Auto-Save
+    case 3: // Auto-Save
         ImGui::SeparatorText("Auto-Save");
         if (ImGui::Checkbox("Enable auto-save", &prefs.AutoSaveEnabled)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
@@ -984,7 +976,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         if (!prefs.AutoSaveEnabled) ImGui::EndDisabled();
         break;
 
-    case 5: { // Performance
+    case 4: { // Performance
         ImGui::SeparatorText("Frame Pacing");
 
         static const char* kVSyncLabels[] = { "Off", "On", "Adaptive" };
@@ -1052,7 +1044,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         break;
     }
 
-    case 6: { // Shortcuts — compact press-to-bind editor over the Shortcuts registry (#236 F)
+    case 5: { // Shortcuts — compact press-to-bind editor over the Shortcuts registry (#236 F)
         auto ctxName = [](std::uint32_t c) -> const char* {
             switch (c) {
                 case Shortcuts::Ctx_Viewport:  return "Viewport";
@@ -1241,7 +1233,7 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         break;
     }
 
-    case 7: { // About
+    case 6: { // About
         ImGui::SeparatorText("About");
         ImGui::TextUnformatted("Tartarus Engine");
         ImGui::TextDisabled("Hand-rolled C++17 / OpenGL 4.6 editor.");
