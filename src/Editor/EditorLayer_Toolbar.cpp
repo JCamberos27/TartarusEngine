@@ -59,13 +59,6 @@
 using namespace EditorInternal;
 
 
-float EditorLayer::SampleSceneLuminance(AsyncLuminanceReadback& rb, ImVec2 centerScreen, float boxPx) {
-    // The editor Scene framebuffer is sized 1:1 with the on-screen viewport, so texW/texH ARE
-    // the viewport size.
-    return SampleTextureLuminance(rb, m_SceneColorTexture, (int)m_ViewportSize.x, (int)m_ViewportSize.y,
-                                  ImVec2(m_ViewportPos.x, m_ViewportPos.y),
-                                  ImVec2(m_ViewportSize.x, m_ViewportSize.y), centerScreen, boxPx);
-}
 void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) {
     int ww, wh;
     glfwGetWindowSize(m_Window, &ww, &wh);
@@ -81,48 +74,26 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) 
     // The transport (Play, or Stop/Pause/Step/Fullscreen) rides over whichever of the two shared-
     // dock-node viewports is actually on screen: the Game view when its tab is up, otherwise the
     // Scene view — so it never floats in a plate over the middle of the window, and it's on the
-    // Scene view too when you tab there mid-play. Same flat "vector + label" treatment with the
-    // engine-mark contrast readback (throttled ~10 Hz, eased) so the glyph stays legible.
+    // Scene view too when you tab there mid-play. #54 — used to sample the scene/game-view
+    // luminance behind it and ease the glyph between white-on-dark and black-on-light; now a
+    // fixed opaque plate (always, not just in the "nothing to anchor to" fallback this used to
+    // be) behind fixed near-white text, legible over anything.
     const bool overGame  = m_GameViewImgSize.x > 1.0f && m_GameViewImgSize.y > 1.0f;
     const bool overScene = !overGame && m_ViewportSize.x > 1.0f && m_ViewportSize.y > 1.0f;
-
-    int fgV = 235; // near-white until the first sample lands
+    const int fgV = 235; // fixed near-white
 
     if (overScene || overGame) {
         const ImVec2 imgPos  = overGame ? m_GameViewImgPos  : ImVec2(m_ViewportPos.x, m_ViewportPos.y);
         const ImVec2 imgSize = overGame ? m_GameViewImgSize : ImVec2(m_ViewportSize.x, m_ViewportSize.y);
         const float cx = imgPos.x + imgSize.x * 0.5f;
         const float cy = imgPos.y + 8.0f * m_UIScale;
-
-        m_PlayBtnSampleAccum += ImGui::GetIO().DeltaTime;
-        if (m_PlayBtnSampleAccum >= 0.1f) {
-            m_PlayBtnSampleAccum = 0.0f;
-            const ImVec2 probe(cx, cy + 14.0f * m_UIScale);
-            const float box = 48.0f * m_UIScale;
-            float lum = overGame
-                ? SampleTextureLuminance(m_PlayBtnReadback, m_GameViewTex, m_GameViewTexW, m_GameViewTexH, imgPos, imgSize, probe, box)
-                : SampleSceneLuminance(m_PlayBtnReadback, probe, box);
-            if (lum >= 0.0f) {
-                float t = (lum - 0.30f) / (0.62f - 0.30f);
-                t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-                m_PlayBtnContrastTarget = 1.0f - t * t * (3.0f - 2.0f * t); // 1 = white on dark, 0 = black on light
-            }
-        }
-        float k = 1.0f - expf(-ImGui::GetIO().DeltaTime / 0.15f);
-        m_PlayBtnContrastLum += (m_PlayBtnContrastTarget - m_PlayBtnContrastLum) * k;
-        if (!EditorSettings::Get().AdaptiveHudContrast) m_PlayBtnContrastLum = m_PlayBtnContrastTarget = 1.0f; // #275 toggle
-        fgV = (int)(m_PlayBtnContrastLum * 255.0f + 0.5f);
-        fgV = fgV < 0 ? 0 : (fgV > 255 ? 255 : fgV);
-
         ImGui::SetNextWindowPos(ImVec2(cx, cy), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
-        ImGui::SetNextWindowBgAlpha(0.0f);
-        flags |= ImGuiWindowFlags_NoBackground;
     } else {
         // No viewport rect to anchor to (maximized play before the first Game-panel frame, or
-        // editor UI hidden) — float near the top of the window with a faint plate to stay legible.
+        // editor UI hidden) — float near the top of the window.
         ImGui::SetNextWindowPos(ImVec2(w * 0.5f, 10.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
-        ImGui::SetNextWindowBgAlpha(0.6f);
     }
+    ImGui::SetNextWindowBgAlpha(0.6f);
 
     ImGui::Begin("##PlayStopButton", nullptr, flags);
     // Forces this to the front of the display order every frame so a dock rebuild elsewhere
@@ -181,20 +152,7 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) 
 // panel's persistent UI state (EditorModuleHost::ConsoleState()), which the module reads through
 // the EditorModuleHostAPI callback table; main.cpp draws it via editorModule.Draw().
 
-// EditorLayer::PushAdaptiveHudText used to live here — the host-side eased contrast tint shared by
-// the Stats and History HUDs. Both HUDs are in TartarusEditor.dll now (EditorModuleStats.cpp /
-// EditorModuleHistory.cpp), each with its own module-side copy of the same ~10-line easing maths;
-// the host keeps only SampleSceneLuminance + the per-HUD readback objects. Other adaptive text
-// (the engine mark, the viewport status bar) inlines the same maths directly.
-
-// The Statistics HUD itself moved into the reloadable editor module
-// (src/Editor/EditorModuleStats.cpp). This is the host half of its one GL dependency: the
-// module asks for a luminance sample under a screen box through EditorModuleHostAPI, and the
-// host drives the async PBO readback (it owns the Scene framebuffer and the GL context) against
-// the same ping-ponged pair the panel always used.
-float EditorLayer::SampleStatsHudLuminance(float screenCenterX, float screenCenterY, float boxPx) {
-    return SampleSceneLuminance(m_StatsHudReadback, ImVec2(screenCenterX, screenCenterY), boxPx);
-}
+// The Statistics HUD itself lives in the reloadable editor module (src/Editor/EditorModuleStats.cpp).
 
 void EditorLayer::DrawViewportStatusBar() {
     if (!m_SceneViewportVisible || m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
@@ -217,38 +175,18 @@ void EditorLayer::DrawViewportStatusBar() {
 
     const float barH = ImGui::GetTextLineHeight() + 8.0f * m_UIScale;
 
-    // No strip behind the readout any more — it's a bare line of text over the 3D view. To stay
-    // legible it borrows the engine mark's contrast-adaptive trick: sample the scene luminance
-    // behind it and steer the text white-on-dark / dark-on-light (throttled ~10 Hz, eased).
-    {
-        m_StatusBarSampleAccum += ImGui::GetIO().DeltaTime;
-        if (m_StatusBarSampleAccum >= 0.1f) {
-            m_StatusBarSampleAccum = 0.0f;
-            float lum = SampleSceneLuminance(m_StatusBarReadback,
-                ImVec2(m_ViewportPos.x + m_ViewportSize.x * 0.5f,
-                       m_ViewportPos.y + m_ViewportSize.y - barH * 0.5f),
-                barH);
-            if (lum >= 0.0f) {
-                float t = (lum - 0.30f) / (0.62f - 0.30f);
-                t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-                m_StatusBarContrastTarget = 1.0f - t * t * (3.0f - 2.0f * t); // 1 = white on dark, 0 = black on light
-            }
-        }
-        float k = 1.0f - expf(-ImGui::GetIO().DeltaTime / 0.15f);
-        m_StatusBarContrastLum += (m_StatusBarContrastTarget - m_StatusBarContrastLum) * k;
-    }
-    if (!EditorSettings::Get().AdaptiveHudContrast) m_StatusBarContrastLum = m_StatusBarContrastTarget = 1.0f; // #275 toggle
-    int sbV = (int)(m_StatusBarContrastLum * 255.0f + 0.5f);
-    sbV = sbV < 0 ? 0 : (sbV > 255 ? 255 : sbV);
-
+    // #54 — used to be a bare line of text over the 3D view, kept legible by sampling the scene
+    // luminance behind it and steering white-on-dark / dark-on-light; now a fixed opaque strip
+    // behind fixed near-white text, legible over anything.
     ImGui::SetNextWindowPos(ImVec2(m_ViewportPos.x, m_ViewportPos.y + m_ViewportSize.y - barH), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(m_ViewportSize.x, barH), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f * m_UIScale, 3.0f * m_UIScale));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::PushStyleColor(ImGuiCol_Text,         IM_COL32(sbV, sbV, sbV, 240));
-    ImGui::PushStyleColor(ImGuiCol_TextDisabled, IM_COL32(sbV, sbV, sbV, 150));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg,     EditorUIPrimitives::kHudPlateColor);
+    ImGui::PushStyleColor(ImGuiCol_Text,         EditorUIPrimitives::kHudTextColor);
+    ImGui::PushStyleColor(ImGuiCol_TextDisabled, EditorUIPrimitives::kHudTextDisabledColor);
     if (ImGui::Begin("##ViewportStatusBar", nullptr,
-            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoDocking |
+            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs)) {
 
@@ -286,7 +224,7 @@ void EditorLayer::DrawViewportStatusBar() {
         ImGui::TextUnformatted(toolBuf);
     }
     ImGui::End();
-    ImGui::PopStyleColor(2);
+    ImGui::PopStyleColor(3);
     ImGui::PopStyleVar(2);
 }
 
@@ -315,16 +253,8 @@ bool EditorLayer::HistoryHudFrame(float* outVpX, float* outVpY, float* outVpW, f
            m_ViewportSize.x >= 1.0f && m_ViewportSize.y >= 1.0f;
 }
 
-// The host half of the History HUD's one GL dependency: the module asks for a luminance sample
-// under a screen box, the host drives the async PBO readback against its own ping-ponged pair
-// (it owns the Scene framebuffer + GL context). Same shape as SampleStatsHudLuminance.
-float EditorLayer::SampleHistoryHudLuminance(float screenCenterX, float screenCenterY, float boxPx) {
-    return SampleSceneLuminance(m_HistoryHudReadback, ImVec2(screenCenterX, screenCenterY), boxPx);
-}
-
 // The click-to-jump rows, drawn host-side into the module's window between its heading Separator
 // and its End. The undo/redo stacks, World& and AssetLibrary& never cross the DLL boundary.
-// Pop-balanced on its own pushes; the module owns the two adaptive-tint colours around this call.
 void EditorLayer::DrawHistoryListBody(World& world, AssetLibrary& assets) {
     if (m_UndoStack.empty() && m_RedoStack.empty()) {
         ImGui::TextDisabled("No changes yet.");

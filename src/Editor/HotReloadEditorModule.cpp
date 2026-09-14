@@ -207,12 +207,6 @@ void StatsSetHideEngineMarkFn(bool hide) {
     if (g_Editor) g_Editor->SetHideEngineMarkForStats(hide);
 }
 
-float StatsSampleViewportLuminanceFn(float screenCenterX, float screenCenterY, float boxPx) {
-    return g_Editor ? g_Editor->SampleStatsHudLuminance(screenCenterX, screenCenterY, boxPx) : -1.0f;
-}
-
-bool GetAdaptiveHudContrastFn() { return EditorSettings::Get().AdaptiveHudContrast; } // v16
-
 // --- Toolbar / menus (API v4) --------------------------------------------------------------
 // Bodies for the reloadable toolbar strip (EditorModuleToolbar.cpp). The strip's window,
 // XP chrome and icon-row layout are module-side; every toggle it shows and every menu it opens
@@ -444,9 +438,6 @@ bool  HistGetHudFrame(float* vx, float* vy, float* vw, float* vh, float* uiScale
 void  HistDrawListBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawHistoryListBody(*g_World, *g_Assets);
 }
-float HistSampleLuminance(float cx, float cy, float boxPx) {
-    return g_Editor ? g_Editor->SampleHistoryHudLuminance(cx, cy, boxPx) : -1.0f;
-}
 
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
@@ -470,8 +461,6 @@ const EditorModuleHostAPI kHostAPI{
     &StatsGetSceneEntityCountsFn,
     &StatsGetSmoothedFrameMsFn,
     &StatsSetHideEngineMarkFn,
-    &StatsSampleViewportLuminanceFn,
-    &GetAdaptiveHudContrastFn, // v16
     // --- Toolbar / menus (API v4) — order must match EditorModuleHostAPI exactly ---
     &TbGetToolbarMetrics,
     &TbGetEditorTheme,
@@ -564,7 +553,6 @@ const EditorModuleHostAPI kHostAPI{
     // --- History HUD, frame only (API v15) — order must match EditorModuleHostAPI exactly ---
     &HistGetHudFrame,
     &HistDrawListBody,
-    &HistSampleLuminance,
     // --- Reflection probes (API v16 / PR14) -----------------------------------------------
     // probeArray.Update() runs every frame in main.cpp; this request is informational for now —
     // future per-probe scene-capture baking will consume the flag from main.cpp.

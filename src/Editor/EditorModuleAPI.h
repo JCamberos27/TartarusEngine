@@ -60,7 +60,12 @@
 //        item beside Preferences, not a Window-menu toggle) and GetAdaptiveHudContrast (the
 //        Preferences ▸ Viewport switch the module Stats/History HUDs read to drop their
 //        luminance sampling + backing pill).
-constexpr std::uint32_t kEditorModuleAPIVersion = 16;
+//   17 - Defect #54 (Phase 1): removed SampleViewportLuminance, SampleHistoryHudLuminance and
+//        GetAdaptiveHudContrast. Every viewport HUD now draws a fixed opaque plate behind fixed
+//        light text (EditorUIPrimitives.h) instead of sampling the rendered scene's luminance —
+//        the whole async-GPU-readback subsystem (AsyncLuminanceReadback, SampleTextureLuminance,
+//        7+ scratch FBOs, 14+ PBOs, a GLStateCache-bypassing glGetIntegerv call) is gone with it.
+constexpr std::uint32_t kEditorModuleAPIVersion = 17;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -201,16 +206,6 @@ struct EditorModuleHostAPI {
     // down the viewport to collide with the corner engine-mark monogram, so the host hides it.
     // Called once per module Draw (false on the early-out paths).
     void (*SetHideEngineMark)(bool hide) = nullptr;
-
-    // Kicks the host's async PBO luminance readback under the given screen-space box (the host
-    // owns the Scene framebuffer + GL context) and returns the most-recently-completed average
-    // luminance there, 0..1, or -1 if no sample has landed yet. The module throttles calls to
-    // ~10 Hz and does its own easing + text tint.
-    float (*SampleViewportLuminance)(float screenCenterX, float screenCenterY, float boxPx) = nullptr;
-
-    // v16 — false: the module HUDs (Stats, History) skip the luminance sample and draw static
-    // near-white text with no backing pill. Preferences ▸ Viewport ▸ "Adaptive HUD contrast".
-    bool (*GetAdaptiveHudContrast)() = nullptr;
 
     // --- Toolbar / menus (API v4) ------------------------------------------------------------
     // The top toolbar strip, its dropdown menus and the window min/max/close controls live in
@@ -397,8 +392,8 @@ struct EditorModuleHostAPI {
 
     // --- History HUD, frame only (API v15) ---------------------------------------------
     // The compact transparent HUD pinned to the Scene viewport's bottom-right corner (Unity-style
-    // Undo History). The module owns the window, its pin/height-ceiling math and the eased
-    // contrast tint; the rows stay host-side.
+    // Undo History). The module owns the window and its pin/height-ceiling math; the rows stay
+    // host-side.
     // Returns true if the HUD should draw this frame (History toggled on, a live non-degenerate
     // Scene viewport, and overlays not suppressed for a clean capture). Fills the viewport rect
     // (screen space), the editor UI scale, and the total row count — undo entries + 1 "Current"
@@ -408,13 +403,8 @@ struct EditorModuleHostAPI {
     // Renders the click-to-jump list into the module's window, between its heading Separator and
     // its End: every undo-stack row, the highlighted "Current" marker, every redo-stack row, and
     // their per-row tooltips + JumpToUndo/RedoEntry calls. The undo/redo stacks, World& and
-    // AssetLibrary& never cross the boundary. Pop-balanced on its own pushes; the module owns the
-    // two adaptive-tint style colours pushed around this call.
+    // AssetLibrary& never cross the boundary.
     void (*DrawHistoryListBody)() = nullptr;
-    // Host-driven async PBO luminance readback under the given screen box (host owns the Scene
-    // framebuffer + GL context), 0..1, or -1 until a sample lands. Same contract as
-    // SampleViewportLuminance; a separate ping-ponged pair so the two HUDs don't fight.
-    float (*SampleHistoryHudLuminance)(float screenCenterX, float screenCenterY, float boxPx) = nullptr;
 
     // --- Reflection probes (API v16 / PR14) --------------------------------------------
     // Called by the editor to trigger a probe bake on the next frame. The host rebuilds

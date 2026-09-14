@@ -585,14 +585,6 @@ void EditorLayer::FreeGpuResources() {
     if (m_GpuResourcesFreed) return;
     m_GpuResourcesFreed = true;
 
-    // Async luminance-readback PBOs (#178) — one ping-ponged pair per independently-sampled HUD.
-    for (AsyncLuminanceReadback* rb : { &m_PlayBtnReadback, &m_NavGizmoReadback, &m_StatusBarReadback,
-                                        &m_StatsHudReadback, &m_HistoryHudReadback, &m_MarkReadback }) {
-        if (rb->Pbo[0] || rb->Pbo[1]) glDeleteBuffers(2, rb->Pbo);
-        rb->Pbo[0] = rb->Pbo[1] = 0;
-        rb->Pending[0] = rb->Pending[1] = 0;
-    }
-
     for (auto& [path, entry] : m_ModelThumbnails) { (void)path; if (entry.first) glDeleteTextures(1, &entry.first); }
     m_ModelThumbnails.clear();
     m_ThumbnailLRU.clear();
@@ -969,12 +961,8 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         ImGui::Checkbox("Show grid", &m_ShowGrid);
         ImGui::Checkbox("Show transform gizmo", &m_ShowGizmos);
         ImGui::Checkbox("Frame camera on select", &m_FrameOnSelect);
-        if (ImGui::Checkbox("Adaptive HUD contrast", &prefs.AdaptiveHudContrast)) EditorSettings::Save();
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("The transparent viewport HUDs (Stats, History, status line, nav gizmo,\n"
-                                 "Play/Stop, corner monogram, Game-view overlays) sample the render behind\n"
-                                 "themselves and ease their text/pill between light and dark to stay readable.\n"
-                                 "Off: they all draw static near-white text with no backing pill.");
+        // "Adaptive HUD contrast" removed (#54): every viewport HUD now draws a fixed opaque
+        // plate behind fixed light text, legible over anything — nothing left to toggle.
 
         ImGui::SeparatorText("Game view");
         if (ImGui::Checkbox("Maximize on Play", &prefs.GameViewMaximizeOnPlay)) EditorSettings::Save();
@@ -1780,34 +1768,18 @@ void EditorLayer::DrawEngineMark(float dt) {
     m_MarkPos.y = m_MarkPos.y < minY ? minY : (m_MarkPos.y > maxY ? maxY : m_MarkPos.y);
     ImVec2 center(m_MarkPos.x, m_MarkPos.y);
 
-    // --- contrast-adaptive tint --------------------------------------------------------------
-    // Read back the little patch of the already-rendered scene texture directly behind the mark
-    // and steer the tint toward white over dark content / black over light content, so it stays
-    // legible wherever it is. m_SceneColorTexture is this frame's finished editor-viewport render
-    // (set by main.cpp right before Draw()), sized 1:1 with m_ViewportSize, GL bottom-left origin.
-    // Routed through the same async PBO readback the other HUD samples use (#178, PERF-210): the
-    // result is a frame or two stale, which the per-frame ease below hides, and the GPU is never
-    // stalled waiting for the transfer. Still throttled to ~10 Hz so the PBO pair keeps up.
-    m_MarkSampleAccum += dt;
-    const float kSampleInterval = 0.1f;
-    // Prism monogram: its own setting, OR forced on whenever the Prism editor theme is active.
+    // --- fixed tint (#54) ---------------------------------------------------------------------
+    // Used to read back the scene patch behind the mark every ~10 Hz (an async PBO GPU readback)
+    // and ease the tint toward white over dark content / black over light content. Unlike the
+    // text HUDs, the mark can't sensibly get an opaque backing plate without turning a small
+    // corner monogram into a visible box — so instead of the general "opaque plate" fix, it's
+    // simply always the near-white tint that used to be its "no sample yet" default. This is a
+    // small accepted tradeoff (slightly lower contrast over a very bright corner of the scene)
+    // for deleting the whole luminance-sampling subsystem; the mark is decorative chrome, not
+    // load-bearing information, and Q10 (Epic #10) already has it off by default with a
+    // preference to enable.
     const bool prism = EditorSettings::Get().EngineMarkPrism || EditorSettings::Get().EditorTheme == 1;
-    if (!prism && m_SceneColorTexture != 0 && m_MarkSampleAccum >= kSampleInterval) {
-        m_MarkSampleAccum = 0.0f;
-        // The sampled box is centred on the mark and `size` wide in screen space; SampleSceneLuminance
-        // maps that to bottom-left-origin texels and clamps it to the viewport / patch cap itself.
-        float lum = SampleSceneLuminance(m_MarkReadback, center, size);
-        if (lum >= 0.0f)
-            m_MarkContrastTarget = ContrastForLuminance(lum); // white on dark, black on light
-    }
-    // Ease toward the target every frame — ~0.15 s time constant, a smooth cross-fade.
-    {
-        float k = 1.0f - expf(-sdt / 0.15f);
-        m_MarkContrastLum += (m_MarkContrastTarget - m_MarkContrastLum) * k;
-    }
-    if (!EditorSettings::Get().AdaptiveHudContrast) m_MarkContrastLum = m_MarkContrastTarget = 1.0f; // #275 toggle
-    int markV = (int)(m_MarkContrastLum * 255.0f + 0.5f);
-    markV = markV < 0 ? 0 : (markV > 255 ? 255 : markV);
+    const int markV = 255;
 
     // Appended to the Scene window's own draw list and clipped to the viewport rect — NOT the
     // foreground list, which paints over every panel (the mark would then sit on top of the
