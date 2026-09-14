@@ -9,16 +9,6 @@
 // a heap-allocated singleton: single-threaded UI code, no dynamic-initialization-order concerns,
 // and every call site just writes EditorSettings::Get().Field like a normal member access.
 struct EditorSettings {
-    // Editor theme, applied by EditorLayer::ApplyThemeStyle() (colours + metrics) at launch and
-    // live when changed in Preferences > General. (#234 renumbered these when Dark Slate was
-    // dropped; EditorSettings::Load remaps any out-of-range value to 0.)
-    // 0 = Dark — the default (dark SaaS-dashboard: layered charcoal surfaces, hairline borders,
-    //     rounded-card geometry, cyan selection / blue active accents),
-    // 1 = Light — the same layout and roles, re-solved for a light background.
-    // Phase 1 item 9 collapsed this from three themes to these two: Prism (a live hue-drifting
-    // reskin) and Windows XP (a Luna "Blue" chrome pastiche) are both gone as selectable themes.
-    int EditorTheme = 0;
-
     // Master switch for every contextual tooltip/help-marker in the editor (Inspector fields,
     // Hierarchy rows, Console controls, Asset Browser, Toolbar Settings). Route all tooltip
     // calls through EditorUI::SetTooltip/HelpMarker (see EditorUIHelpers.h) rather than calling

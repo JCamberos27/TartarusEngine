@@ -290,16 +290,10 @@ void EditorLayer::Init(GLFWwindow* window) {
     if (!m_MarkTexture->IsValid()) m_MarkTexture.reset();
 }
 
-// The editor's colour palette. Both themes share the sizes/rounding set in Init(); this only
-// writes style.Colors[], so Preferences can swap it live with no font/size rebuild.
-//   0 Dark  — monochrome greys + one desaturated cool-slate accent (the #92 default, née "Bento").
-//   1 Light — same structure, roles and geometry as Dark, re-solved for a light background: every
-//             colour pair that carries a contrast floor (Text, TextDisabled, FrameBg, Border) was
-//             independently computed for ITS OWN background, not derived from Dark's palette by a
-//             blanket invert.
-// Phase 1 item 9 collapsed the theme set from three (Bento/Prism/Windows XP) to these two:
-// Prism (a live hue-drifting reskin of Bento) and Windows XP (a Luna "Blue" chrome pastiche) are
-// both gone as selectable themes.
+// The editor's colour palette — monochrome greys + one desaturated cool-slate accent (the #92
+// default, née "Bento"). Phase 1 item 9 collapsed the theme set down from three (Bento/Prism/
+// Windows XP) to a Dark/Light picker; a later pass removed the picker and Light itself entirely
+// (not worth the maintenance cost of a second palette) — this is the only theme now.
 // The metric baseline (raw 96-DPI values; ScaleAllSizes applies the monitor scale afterwards).
 // ApplyThemeStyle overrides most of these unconditionally for the rounded-card look now that
 // Windows XP's squarer baseline is no longer a live alternative to preserve.
@@ -326,13 +320,15 @@ static void SetSharedMetrics(ImGuiStyle& style) {
     style.WindowTitleAlign = ImVec2(0.0f, 0.5f);
 }
 
-// One entry point for "apply the active theme" — colours (ApplyEditorTheme) AND metrics, then a
-// single DPI scale. A full reset to the un-scaled baseline first means switching themes live
-// (Preferences) never leaks Bento's larger radii into another theme or double-scales anything.
+static void ApplyBentoPalette(ImGuiStyle& style); // defined below
+
+// One entry point for "apply the editor's style" — colours (ApplyBentoPalette) AND metrics, then
+// a single DPI scale. A full reset to the un-scaled baseline first means this never leaks larger
+// radii in or double-scales anything if it's ever called again (e.g. a live UI-scale change).
 void EditorLayer::ApplyThemeStyle() {
     // The clean baseline: ImGui's own dark defaults + our shared metrics, captured once before
-    // any DPI scaling. Non-Bento themes only override *some* Colors[], so they rely on this
-    // baseline being the same one they were authored against.
+    // any DPI scaling. ApplyBentoPalette only overrides *some* Colors[], so it relies on this
+    // baseline being the same one it was authored against.
     static bool s_haveBase = false;
     static ImGuiStyle s_baseStyle;
     if (!s_haveBase) {
@@ -344,9 +340,8 @@ void EditorLayer::ApplyThemeStyle() {
     ImGuiStyle& style = ImGui::GetStyle();
     style = s_baseStyle;
 
-    // Phase 1 item 9 — Dark and Light share this SaaS-dashboard geometry (rounded cards, more
-    // air); Windows XP, which kept SetSharedMetrics' squarer baseline instead, is gone (the
-    // theme collapse removed it as a selectable theme entirely).
+    // Phase 1 item 9 — the SaaS-dashboard geometry (rounded cards, more air); Windows XP, which
+    // kept SetSharedMetrics' squarer baseline instead, is gone.
     style.WindowRounding    = 8.0f;
     style.ChildRounding     = 8.0f;
     style.PopupRounding     = 8.0f;
@@ -366,7 +361,7 @@ void EditorLayer::ApplyThemeStyle() {
     style.TabBarBorderSize  = 1.0f;
     style.SeparatorTextBorderSize = 1.0f;
 
-    ApplyEditorTheme();
+    ApplyBentoPalette(style);
 
     // Phase 1 item 1 — startup contrast assert. Runs on every theme switch (cheap: four ratio
     // computations, not per-frame) so a future palette edit that misses a floor gets a log line
@@ -398,11 +393,11 @@ void EditorLayer::ApplyThemeStyle() {
     style.ScaleAllSizes(m_UIScale);
 }
 
-// Bento (dark SaaS-dashboard) palette — the default theme, and the static base Prism drifts on
-// top of. Layered charcoal surfaces (window -> recessed input), hairline borders, and a
-// disciplined accent split: cyan = selection / "you are here", blue = active / pressed, yellow =
-// warning (a convention for host-drawn warning text — almost none of it is a style.Colors[] role;
-// see docs/CONVENTIONS.md). Geometry (larger radii + padding) is set by ApplyThemeStyle. #234.
+// Bento (dark SaaS-dashboard) palette — the editor's only palette. Layered charcoal surfaces
+// (window -> recessed input), hairline borders, and a disciplined accent split: cyan = selection
+// / "you are here", blue = active / pressed, yellow = warning (a convention for host-drawn
+// warning text — almost none of it is a style.Colors[] role; see docs/CONVENTIONS.md). Geometry
+// (larger radii + padding) is set by ApplyThemeStyle. #234.
 static void ApplyBentoPalette(ImGuiStyle& style) {
     auto rgb = [](int r, int g, int b, float a = 1.0f) {
         return ImVec4(r / 255.0f, g / 255.0f, b / 255.0f, a);
@@ -486,109 +481,6 @@ static void ApplyBentoPalette(ImGuiStyle& style) {
     style.Colors[ImGuiCol_DockingPreview]  = ImVec4(cyan.x, cyan.y, cyan.z, 0.35f);
     style.Colors[ImGuiCol_DockingEmptyBg]  = rgb(14, 14, 14);
     style.Colors[ImGuiCol_ModalWindowDimBg] = rgb(0, 0, 0, 0.45f);
-}
-
-// Light palette (Phase 1 item 9). Same role structure and geometry as ApplyBentoPalette above,
-// re-solved for a light background rather than derived from Dark by a blanket invert — every
-// colour pair that carries a WCAG floor here (Text, TextDisabled, FrameBg, Border/Separator) was
-// independently computed via EditorUIPrimitives::ContrastRatio/CompositeOver for ITS OWN
-// background, the same way Dark's #34/border/text-secondary fixes were. Two of those floors force
-// choices a "light theme" intuition wouldn't necessarily reach on its own, both because
-// FrameBorderSize is 0 (shared metric — no rendered edge to lean on) and because this engine
-// blends straight-alpha in encoded sRGB space (no GL_FRAMEBUFFER_SRGB), which the corrected
-// Border/Separator fix above already had to account for:
-//   - FrameBg has to be a visibly mid-grey fill (#898989), not a near-white "recessed" look — a
-//     WindowBg this close to white plus a fill-only 3:1 floor leaves no room for both surfaces to
-//     stay pale (verified: rgb(240) WindowBg vs rgb(137) FrameBg is the tightest pairing that
-//     still clears 3:1).
-//   - Border/Separator need ~0.45 BLACK alpha (not the ~0.10-0.15 a "light hairline" instinct
-//     would pick) to hit 3:1 under gamma-space compositing over a near-white WindowBg — notably,
-//     Prism's own (hand-picked, pre-existing) Border alpha was already 0.45, a coincidental
-//     second data point for that number in this exact rendering pipeline.
-// Accent identity carried over from Dark (cyan selection / blue active) but deepened for
-// legibility against a light surface: the teal (#0E7C78) and blue (#2563C7) below both clear
-// ~4.4:1 and ~5.0:1 against WindowBg respectively, comfortably past the graphical 3:1 floor with
-// enough margin to double as text-adjacent accents (e.g. TabSelectedOverline) too.
-static void ApplyLightPalette(ImGuiStyle& style) {
-    auto rgb = [](int r, int g, int b, float a = 1.0f) {
-        return ImVec4(r / 255.0f, g / 255.0f, b / 255.0f, a);
-    };
-    const ImVec4 teal    = rgb(14, 124, 120);        // #0E7C78 — selection (Light's "cyan")
-    const ImVec4 tealHi  = rgb(14, 124, 120, 0.22f);
-    const ImVec4 blue    = rgb(37, 99, 199);         // #2563C7 — active / pressed
-    const ImVec4 black   = rgb(0, 0, 0);
-    // teal only clears ~1.44:1 against FrameBg (#898989) — nowhere near the 3:1 floor
-    // AssertContrastFloor checks the NavCursor/FrameBg pair against below. A darker teal, used
-    // only for the focus ring (every other teal usage below stays the brighter selection color),
-    // clears ~3.5:1 against FrameBg while still reading ~10.7:1 against WindowBg. (Defect, #67)
-    const ImVec4 navCursor = rgb(6, 60, 58);         // #063C3A
-
-    style.Colors[ImGuiCol_WindowBg]         = rgb(240, 240, 240);  // #F0F0F0
-    style.Colors[ImGuiCol_ChildBg]          = ImVec4(0, 0, 0, 0);
-    style.Colors[ImGuiCol_PopupBg]          = rgb(252, 252, 252, 0.98f);
-    style.Colors[ImGuiCol_MenuBarBg]        = rgb(230, 230, 230);  // #E6E6E6
-    style.Colors[ImGuiCol_TitleBg]          = rgb(230, 230, 230);
-    style.Colors[ImGuiCol_TitleBgActive]    = rgb(220, 220, 220);  // #DCDCDC
-    style.Colors[ImGuiCol_TitleBgCollapsed] = rgb(230, 230, 230);
-    // ~0.45 black alpha — see the function comment above; composited over WindowBg this clears
-    // 3:1 (~3.28:1), where the previously-typical ~0.12-0.15 "light hairline" alpha would have
-    // repeated the same gamma-space-compositing mistake #34/Dark's border fix originally made.
-    style.Colors[ImGuiCol_Border]           = ImVec4(black.x, black.y, black.z, 0.45f);
-    style.Colors[ImGuiCol_BorderShadow]     = ImVec4(0, 0, 0, 0);
-    style.Colors[ImGuiCol_Separator]        = ImVec4(black.x, black.y, black.z, 0.45f);
-    style.Colors[ImGuiCol_SeparatorHovered] = teal;
-    style.Colors[ImGuiCol_SeparatorActive]  = teal;
-    // See the function comment above — a mid-grey fill, not a pale "recessed" one, is what 3:1
-    // against a near-white WindowBg actually requires with FrameBorderSize at 0.
-    style.Colors[ImGuiCol_FrameBg]          = rgb(137, 137, 137);  // #898989, ~3.07:1
-    style.Colors[ImGuiCol_FrameBgHovered]   = rgb(120, 120, 120);
-    style.Colors[ImGuiCol_FrameBgActive]    = rgb(105, 105, 105);
-    style.Colors[ImGuiCol_ScrollbarBg]      = ImVec4(0, 0, 0, 0);
-    style.Colors[ImGuiCol_ScrollbarGrab]        = ImVec4(black.x, black.y, black.z, 0.25f);
-    style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(black.x, black.y, black.z, 0.38f);
-    style.Colors[ImGuiCol_ScrollbarGrabActive]  = ImVec4(black.x, black.y, black.z, 0.50f);
-    // #1A1A1A vs #F0F0F0 ~15.8:1; #6C6C6C (text-secondary) vs #F0F0F0 ~4.77:1 - both computed via
-    // the same relative-luminance method as Dark's text-secondary floor raise, not eyeballed.
-    style.Colors[ImGuiCol_Text]            = rgb(26, 26, 26);      // #1A1A1A
-    style.Colors[ImGuiCol_TextDisabled]    = rgb(108, 108, 108);   // #6C6C6C
-    style.Colors[ImGuiCol_TextSelectedBg]  = ImVec4(teal.x, teal.y, teal.z, 0.30f);
-    style.Colors[ImGuiCol_CheckMark]       = teal;
-    style.Colors[ImGuiCol_SliderGrab]       = teal;
-    style.Colors[ImGuiCol_SliderGrabActive] = blue;
-    style.Colors[ImGuiCol_Button]           = rgb(225, 225, 225);  // #E1E1E1
-    style.Colors[ImGuiCol_ButtonHovered]    = rgb(210, 210, 210);
-    style.Colors[ImGuiCol_ButtonActive]     = rgb(195, 195, 195);
-    style.Colors[ImGuiCol_Header]           = tealHi;
-    style.Colors[ImGuiCol_HeaderHovered]    = ImVec4(teal.x, teal.y, teal.z, 0.34f);
-    style.Colors[ImGuiCol_HeaderActive]     = blue;
-    style.Colors[ImGuiCol_ResizeGrip]        = ImVec4(0, 0, 0, 0);
-    style.Colors[ImGuiCol_ResizeGripHovered] = ImVec4(teal.x, teal.y, teal.z, 0.35f);
-    style.Colors[ImGuiCol_ResizeGripActive]  = blue;
-    style.Colors[ImGuiCol_Tab]                       = rgb(225, 225, 225);
-    style.Colors[ImGuiCol_TabHovered]                = rgb(210, 210, 210);
-    style.Colors[ImGuiCol_TabSelected]               = rgb(250, 250, 250);
-    style.Colors[ImGuiCol_TabDimmed]                 = rgb(215, 215, 215);
-    style.Colors[ImGuiCol_TabDimmedSelected]         = rgb(225, 225, 225);
-    style.Colors[ImGuiCol_TabSelectedOverline]       = teal;
-    style.Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0, 0, 0, 0);
-    style.Colors[ImGuiCol_NavCursor]        = navCursor;
-    style.Colors[ImGuiCol_DockingPreview]  = ImVec4(teal.x, teal.y, teal.z, 0.35f);
-    style.Colors[ImGuiCol_DockingEmptyBg]  = rgb(220, 220, 220);
-    style.Colors[ImGuiCol_ModalWindowDimBg] = rgb(0, 0, 0, 0.35f);
-}
-
-bool EditorLayer::UseBentoLayout() const { return EditorSettings::Get().EditorTheme <= 1; }
-
-void EditorLayer::ApplyEditorTheme() {
-    ImGuiStyle& style = ImGui::GetStyle();
-
-    if (EditorSettings::Get().EditorTheme == 1) {
-        ApplyLightPalette(style);
-        return;
-    }
-
-    // Dark (née "Bento") is the default - EditorTheme 0, and any out-of-range value.
-    ApplyBentoPalette(style);
 }
 
 // GL resource teardown, split out of Shutdown() so ~EditorLayer can run it on the
@@ -907,23 +799,6 @@ void EditorLayer::DrawPreferencesWindow(World& world) {
         if (ImGui::Checkbox("Show editor tooltips", &prefs.ShowTooltips)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Hover hints on Inspector fields, Hierarchy rows and toolbar buttons.");
-
-        {
-            // Phase 1 item 9 — collapsed from three themes (Bento/Prism/Windows XP) to two.
-            static const char* kThemeLabels[] = { "Dark", "Light" };
-            int theme = std::clamp(prefs.EditorTheme, 0, (int)IM_ARRAYSIZE(kThemeLabels) - 1);
-            ImGui::SetNextItemWidth(kw);
-            if (ImGui::Combo("Theme", &theme, kThemeLabels, IM_ARRAYSIZE(kThemeLabels))) {
-                prefs.EditorTheme = theme;
-                ApplyThemeStyle();       // colours + metrics — applies immediately, no restart
-                EditorSettings::Save();
-            }
-            if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("Dark: dark SaaS-dashboard look - layered charcoal surfaces,\n"
-                                     "hairline borders, rounded corners; cyan selection / blue\n"
-                                     "active accents. The default.\n"
-                                     "Light: the same layout and roles on a light background.");
-        }
 
         ImGui::SeparatorText("Display");
         // 0 = auto (follow the monitor). Present the slider from 0.75; a value at/below the

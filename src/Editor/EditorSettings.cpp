@@ -54,11 +54,8 @@ void EditorSettings::Load() {
     }
 
     EditorSettings& s = Get();
-    s.EditorTheme = root.value("editorTheme", s.EditorTheme);
-    // Phase 1 item 9 collapsed the theme set to 0 Dark, 1 Light. A prefs file from before that
-    // collapse may have 1 (used to mean Prism — lands on Light now, a reinterpretation, not a
-    // crash) or 2 (Windows XP, now out of range — clamps to the default, Dark).
-    if (s.EditorTheme < 0 || s.EditorTheme > 1) s.EditorTheme = 0;
+    // editorTheme (int) is intentionally no longer read: the theme picker was removed and the
+    // editor now has one style. An old prefs file's stray "editorTheme" key is simply ignored.
     s.ShowTooltips = root.value("showTooltips", s.ShowTooltips);
     s.UiScaleOverride = root.value("uiScaleOverride", s.UiScaleOverride);
     s.AutoSaveEnabled = root.value("autoSaveEnabled", s.AutoSaveEnabled);
@@ -136,7 +133,6 @@ void EditorSettings::Flush() {
     g_PrefsDirty = false;
 
     json root;
-    root["editorTheme"] = Get().EditorTheme;
     root["showTooltips"] = Get().ShowTooltips;
     root["uiScaleOverride"] = Get().UiScaleOverride;
     root["autoSaveEnabled"] = Get().AutoSaveEnabled;

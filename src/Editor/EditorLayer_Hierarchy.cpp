@@ -653,11 +653,10 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     // Tighter per-level indent than the editor-wide default — this panel is narrow, so a few
     // levels of nesting otherwise push names off the right edge fast (#153).
     ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 13.0f * m_UIScale);
-    // Bento (#234 layer 3): a fixed, tight row gap so every row is the same height regardless of
-    // content (the SaaS-list look). Other themes keep the editor-wide ItemSpacing.
-    const bool bentoRows = UseBentoLayout();
-    if (bentoRows) ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                                       ImVec2(ImGui::GetStyle().ItemSpacing.x, 3.0f * m_UIScale));
+    // #234 layer 3: a fixed, tight row gap so every row is the same height regardless of content
+    // (the SaaS-list look).
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        ImVec2(ImGui::GetStyle().ItemSpacing.x, 3.0f * m_UIScale));
     for (auto entity : ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>())) {
         if (!MatchesHierarchyFilter(world, entity)) continue;
         // A parented entity draws nested under its parent, not as a sibling — except while
@@ -668,7 +667,7 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
         }
         DrawHierarchyNode(world, assets, entity, world.Registry.all_of<LevelGeometryTag>(entity));
     }
-    if (bentoRows) ImGui::PopStyleVar();
+    ImGui::PopStyleVar(); // ItemSpacing
     ImGui::PopStyleVar(); // IndentSpacing
 
     // Auto-scroll while a row is being dragged near the panel's top/bottom edge — otherwise you
