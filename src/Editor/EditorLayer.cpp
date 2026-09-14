@@ -761,16 +761,16 @@ void EditorLayer::DrawLightingPanel(World& world) {
     ImGui::End();
 }
 
-void EditorLayer::DrawPreferencesWindow(World& /*world*/) {
+void EditorLayer::DrawSettingsWindow(World& world) {
     if (!m_ShowPreferences) return;
 
-    ImGui::SetNextWindowSize(ImVec2(660.0f * m_UIScale, 440.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(700.0f * m_UIScale, 460.0f * m_UIScale), ImGuiCond_FirstUseEver);
     PushTabChromeText(); // no-op now (Windows XP removed, Phase 1 item 9) — see PanelChromeIsLight
-    const bool prefsOpen = ImGui::Begin(ICON_FA_GEAR "  Preferences", &m_ShowPreferences);
+    const bool settingsOpen = ImGui::Begin(ICON_FA_GEAR "  Settings", &m_ShowPreferences);
     PopTabChromeText();
-    if (!prefsOpen) { ImGui::End(); return; }
+    if (!settingsOpen) { ImGui::End(); return; }
 
-    static const char* kCats[] = {
+    static const char* kEditorCats[] = {
         ICON_FA_UNIVERSAL_ACCESS "  General",
         ICON_FA_CAMERA "  Viewport",
         ICON_FA_TABLE_CELLS "  Grid & Snapping",
@@ -779,17 +779,58 @@ void EditorLayer::DrawPreferencesWindow(World& /*world*/) {
         ICON_FA_KEYBOARD "  Shortcuts",
         ICON_FA_CIRCLE_INFO "  About",
     };
-    const int kCatCount = (int)(sizeof(kCats) / sizeof(kCats[0]));
-    m_PrefsCategory = std::clamp(m_PrefsCategory, 0, kCatCount - 1);
+    const int kEditorCatCount = (int)(sizeof(kEditorCats) / sizeof(kEditorCats[0]));
+    m_PrefsCategory = std::clamp(m_PrefsCategory, 0, kEditorCatCount - 1);
 
-    ImGui::BeginChild("##PrefCats", ImVec2(150.0f * m_UIScale, 0), ImGuiChildFlags_Borders);
-    for (int i = 0; i < kCatCount; ++i) {
-        if (ImGui::Selectable(kCats[i], m_PrefsCategory == i)) m_PrefsCategory = i;
+    static const char* kProjectCats[] = {
+        ICON_FA_PERSON_FALLING_BURST "  Physics",
+        ICON_FA_TAGS "  Tags & Layers",
+    };
+    const int kProjectCatCount = (int)(sizeof(kProjectCats) / sizeof(kProjectCats[0]));
+    m_ProjSettingsCategory = std::clamp(m_ProjSettingsCategory, 0, kProjectCatCount - 1);
+
+    // #4 item 3 — searchable: a case-insensitive substring match against each category's label.
+    // The icon glyphs at the front of every label are UTF-8 multi-byte sequences that never
+    // collide with ASCII search text, so they're harmless to leave in the haystack.
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputTextWithHint("##SettingsSearch", ICON_FA_MAGNIFYING_GLASS "  Search settings",
+                             m_SettingsSearch, sizeof(m_SettingsSearch));
+    auto matchesSearch = [this](const char* label) {
+        if (m_SettingsSearch[0] == '\0') return true;
+        std::string hay(label), needle(m_SettingsSearch);
+        std::transform(hay.begin(), hay.end(), hay.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+        std::transform(needle.begin(), needle.end(), needle.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+        return hay.find(needle) != std::string::npos;
+    };
+
+    // #4 item 3 — one searchable, dockable window instead of two: "THIS MACHINE" (the old
+    // Preferences window, editor_prefs.json) and "THIS PROJECT" (the old Project Settings window,
+    // project/settings.json + layers.json) are now two labeled groups sharing one sidebar.
+    ImGui::BeginChild("##SettingsCats", ImVec2(170.0f * m_UIScale, 0), ImGuiChildFlags_Borders);
+    ImGui::TextDisabled("THIS MACHINE");
+    for (int i = 0; i < kEditorCatCount; ++i) {
+        if (!matchesSearch(kEditorCats[i])) continue;
+        if (ImGui::Selectable(kEditorCats[i], !m_SettingsGroupIsProject && m_PrefsCategory == i)) {
+            m_SettingsGroupIsProject = false;
+            m_PrefsCategory = i;
+        }
+    }
+    ImGui::Spacing();
+    ImGui::TextDisabled("THIS PROJECT");
+    for (int i = 0; i < kProjectCatCount; ++i) {
+        if (!matchesSearch(kProjectCats[i])) continue;
+        if (ImGui::Selectable(kProjectCats[i], m_SettingsGroupIsProject && m_ProjSettingsCategory == i)) {
+            m_SettingsGroupIsProject = true;
+            m_ProjSettingsCategory = i;
+        }
     }
     ImGui::EndChild();
     ImGui::SameLine();
-    ImGui::BeginChild("##PrefBody", ImVec2(0, 0), ImGuiChildFlags_Borders);
+    ImGui::BeginChild("##SettingsBody", ImVec2(0, 0), ImGuiChildFlags_Borders);
 
+    if (m_SettingsGroupIsProject) {
+        DrawProjectSettingsBody(world);
+    } else {
     EditorSettings& prefs = EditorSettings::Get();
     const float kw = 160.0f * m_UIScale;
 
@@ -1261,37 +1302,17 @@ void EditorLayer::DrawPreferencesWindow(World& /*world*/) {
         break;
     }
     }
+    } // if (m_SettingsGroupIsProject) / else
 
     ImGui::EndChild();
     ImGui::End();
 }
 
-// #236 A4 — Project Settings: project-scoped, saved to project/settings.json (Physics, Tags)
-// and project/layers.json (layer names). Sibling of the per-user Preferences window above;
-// same two-pane category layout.
-void EditorLayer::DrawProjectSettingsWindow(World& /*world*/) {
-    if (!m_ShowProjectSettings) return;
-
-    ImGui::SetNextWindowSize(ImVec2(620.0f * m_UIScale, 420.0f * m_UIScale), ImGuiCond_FirstUseEver);
-    PushTabChromeText();
-    const bool open = ImGui::Begin(ICON_FA_GEARS "  Project Settings", &m_ShowProjectSettings);
-    PopTabChromeText();
-    if (!open) { ImGui::End(); return; }
-
-    static const char* kCats[] = {
-        ICON_FA_PERSON_FALLING_BURST "  Physics",
-        ICON_FA_TAGS "  Tags & Layers",
-    };
-    const int kCatCount = (int)(sizeof(kCats) / sizeof(kCats[0]));
-    m_ProjSettingsCategory = std::clamp(m_ProjSettingsCategory, 0, kCatCount - 1);
-
-    ImGui::BeginChild("##ProjCats", ImVec2(160.0f * m_UIScale, 0), ImGuiChildFlags_Borders);
-    for (int i = 0; i < kCatCount; ++i)
-        if (ImGui::Selectable(kCats[i], m_ProjSettingsCategory == i)) m_ProjSettingsCategory = i;
-    ImGui::EndChild();
-    ImGui::SameLine();
-    ImGui::BeginChild("##ProjBody", ImVec2(0, 0), ImGuiChildFlags_Borders);
-
+// #236 A4 — Project Settings body: project-scoped, saved to project/settings.json (Physics, Tags)
+// and project/layers.json (layer names). Called from DrawSettingsWindow's "THIS PROJECT" group
+// (#4 item 3 merged this and the old per-user Preferences window's shell into one); this function
+// is just the category body, not its own window.
+void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
     const float kw = 200.0f * m_UIScale;
 
     if (m_ProjSettingsCategory == 0) { // Physics
@@ -1423,9 +1444,6 @@ void EditorLayer::DrawProjectSettingsWindow(World& /*world*/) {
             ImGui::PopID();
         }
     }
-
-    ImGui::EndChild();
-    ImGui::End();
 }
 
 void EditorLayer::BeginFrame() {
@@ -1852,8 +1870,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawExitPrompt();
     DrawSceneSwitchPrompt(world, assets);
     DrawRevertScenePrompt(world, assets);
-    DrawPreferencesWindow(world);
-    DrawProjectSettingsWindow(world);
+    DrawSettingsWindow(world); // #4 item 3 — merged Preferences + Project Settings
     DrawLightingPanel(world); // #236 R2
     DrawPhysicsDebugWindow(world); // #185 debug tooling
     DrawPhysicsHud();             // #185 D
