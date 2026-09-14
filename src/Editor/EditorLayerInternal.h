@@ -10,6 +10,7 @@
 #include "World.h"
 #include "Texture.h"
 #include "EditorUIHelpers.h"
+#include "EditorUIPrimitives.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImMax, used by ActiveToggle's glyph metrics
@@ -222,44 +223,20 @@ inline std::string SanitizeAssetName(const std::string& in) {
 //
 // Nothing else. No raw ImGui::Button / ImGui::SmallButton for chrome; no per-site colour pushes.
 // ============================================================================================
+// The actual drawing lives in EditorUIPrimitives.h, shared verbatim with the reloadable editor
+// modules (Defect #53) — these are thin forwarders so every existing host call site (which
+// passes no TooltipFn) keeps compiling unchanged, routed through EditorUI::SetTooltip so the
+// ShowTooltips preference still gates them exactly as before.
+inline void ForwardHostTooltip(const char* text) { EditorUI::SetTooltip("%s", text); }
+
 inline bool ActionButton(const char* icon, const char* tooltip, bool active = false, ImVec2 size = ImVec2(0, 0)) {
-    // "On" toggles read in the same cyan the styled sliders use (ImGuiCol_SliderGrab).
-    const ImVec4 acc = ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab);
-    if (active) {
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(acc.x, acc.y, acc.z, 0.22f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(acc.x, acc.y, acc.z, 0.34f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(acc.x, acc.y, acc.z, 0.46f));
-        ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(acc.x, acc.y, acc.z, 1.0f));
-    } else {
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.14f));
-    }
-    // Button() folds its label into its ID, so two buttons that ever show the same glyph would
-    // collide — scope the ID to the (unique) tooltip string instead.
-    ImGui::PushID(tooltip);
-    bool clicked = ImGui::Button(icon, size);
-    ImGui::PopID();
-    if (active) {
-        const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
-        const float y = mx.y - 2.0f;
-        ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x + 3.0f, y), ImVec2(mx.x - 3.0f, mx.y - 1.0f),
-                                                  ImGui::ColorConvertFloat4ToU32(acc), 1.0f);
-    }
-    ImGui::PopStyleColor(active ? 4 : 3);
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
-    return clicked;
+    return EditorUIPrimitives::ActionButton(icon, tooltip, &ForwardHostTooltip, active, size);
 }
 
 
 // The one filled treatment — theme accent body, for prominent/rare actions only.
 inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImGui::GetStyleColorVec4(ImGuiCol_Header));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive));
-    bool clicked = ImGui::Button(label, size);
-    ImGui::PopStyleColor(3);
-    return clicked;
+    return EditorUIPrimitives::PrimaryButton(label, size);
 }
 
 

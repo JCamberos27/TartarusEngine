@@ -15,6 +15,7 @@
 // survives a reload) via Is/SetAssetFolderExpanded. Drag payloads are bare path strings.
 
 #include "EditorModuleAPI.h"
+#include "EditorUIPrimitives.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImFloor
@@ -37,17 +38,9 @@ void Tooltip(const EditorModuleHostAPI& host, const char* text) {
     if (host.SetTooltip) host.SetTooltip(text);
 }
 
-// EditorInternal::ActionButton (flat, no "active" state needed here), copied module-side.
+// Forwards to the shared implementation (EditorUIPrimitives.h, Defect #53).
 bool ActionButton(const EditorModuleHostAPI& host, const char* icon, const char* tooltip) {
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.14f));
-    ImGui::PushID(tooltip);
-    bool clicked = ImGui::Button(icon);
-    ImGui::PopID();
-    ImGui::PopStyleColor(3);
-    if (ImGui::IsItemHovered()) Tooltip(host, tooltip);
-    return clicked;
+    return EditorUIPrimitives::ActionButton(icon, tooltip, host.SetTooltip);
 }
 
 // EditorUI::VSeparator — a 1px rule spanning the frame height with ItemSpacing.x either side.

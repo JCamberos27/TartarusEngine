@@ -34,6 +34,14 @@ and copied next to the executable at build time. Font Awesome Free is multi-lice
 Attribution is required. Upstream: <https://fontawesome.com> ·
 <https://github.com/FortAwesome/Font-Awesome>
 
+### Inter
+
+`extern/fonts/InterVariable.ttf` is the **Inter** variable font, used as the editor UI's
+fallback text face (#48) when the system-installed Segoe UI can't be found (e.g. Wine, a
+stripped-down Windows install), and copied next to the executable at build time exactly like
+Font Awesome above. SIL OFL 1.1 — see `extern/fonts/Inter-OFL.txt`. Copyright 2020 The Inter
+Project Authors. Upstream: <https://github.com/rsms/inter>
+
 ---
 
 ## Fetched at configure time (CMake `FetchContent`)

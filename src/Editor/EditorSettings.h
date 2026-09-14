@@ -206,9 +206,9 @@ struct EditorSettings {
         return instance;
     }
 
-    // Reads editor_prefs.json from the working directory into Get(), if present. Missing or
-    // unparsable file silently keeps the compiled-in defaults above — first launch, or a
-    // hand-deleted prefs file, is not an error.
+    // Reads editor_prefs.json from per-user storage into Get(), if present (see UserPaths.h).
+    // Missing or unparsable file silently keeps the compiled-in defaults above — first launch,
+    // or a hand-deleted prefs file, is not an error.
     static void Load();
 
     // Marks preferences dirty. Cheap — call it freely whenever a preference changes (every

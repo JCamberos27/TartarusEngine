@@ -571,6 +571,12 @@ private:
     // so the UI reads at a consistent physical size instead of shrinking to illegible on a
     // high-DPI/4K display.
     float m_UIScale = 1.0f;
+    // The UI-scale override in effect at startup (EditorSettings::Get().UiScaleOverride, as read
+    // when m_UIScale was baked above) — #47: the Preferences slider writes a NEW override to disk
+    // immediately, but m_UIScale itself only takes effect on the next launch. Comparing the live
+    // preference against this snapshot is how the Preferences panel knows to show a restart
+    // prompt instead of leaving the "takes effect on next launch" caption as the only signal.
+    float m_UIScaleOverrideAtStartup = 0.0f;
     bool m_PlayStopRequested = false;
     bool m_MaximizeToggleRequested = false;
     bool m_PauseToggleRequested = false;

@@ -8,10 +8,17 @@
 //
 // Replaces the scattered `if (io.KeyCtrl && ImGui::IsKeyPressed(...))` sites in EditorLayer
 // with a named table and one edge-triggered query: Shortcuts::Triggered("editor.undo").
-// User overrides persist to project/shortcuts.json — content-adjacent, like layers.json /
-// settings.json — because a shortcut sheet is a per-project preference, not per-user editor
-// chrome. contexts scope a binding so viewport tool letters (Q/W/E/R/T/Y) don't fire while
-// the Hierarchy has keyboard focus for type-to-select.
+// User overrides persist to per-user storage (UserPaths::Resolve("shortcuts.json"), i.e.
+// %LOCALAPPDATA%\TartarusEngine\shortcuts.json — see UserPaths.h), not project/. This used to be
+// project-scoped deliberately ("a shortcut sheet is a per-project preference, not per-user
+// editor chrome" — the idea being a team standardizes on one rebind sheet); #42 moved it to
+// per-user instead, alongside editor_prefs.json, because in practice a committed shortcuts.json
+// meant every clone shared one file and two machines (or two teammates with different muscle
+// memory) fought over it on every commit, same as the prefs file did. A future real per-project
+// preset system (shipping a *default* rebind sheet with a project, distinct from a user's live
+// overrides) would restore project-scoping deliberately, not by accident of where this file
+// happened to resolve. contexts scope a binding so viewport tool letters (Q/W/E/R/T/Y) don't
+// fire while the Hierarchy has keyboard focus for type-to-select.
 namespace Shortcuts {
 
 // Bit flags: BeginFrame() gets an OR of the contexts active this frame. Global is always set
@@ -53,7 +60,7 @@ struct Shortcut {
     bool          Overridden = false; // Current != Default (from json, or set in Preferences)
 };
 
-// Registers the builtin table, then applies project/shortcuts.json. Call once at editor init.
+// Registers the builtin table, then applies the user's shortcuts.json. Call once at editor init.
 void Init();
 void Load();  // re-apply overrides from disk (defaults already registered by Init)
 void Save();  // write only the overridden entries

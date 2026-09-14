@@ -1,19 +1,36 @@
 #include "EditorSettings.h"
 #include "Log.h"
 #include "ProjectPaths.h"
+#include "UserPaths.h"
 #include "AtomicFile.h"
 
 #include <json.hpp>
 #include <fstream>
+#include <filesystem>
 
 using json = nlohmann::json;
 
 namespace {
-// Resolved under the project folder rather than the working directory, so preferences live
-// alongside the source instead of inside build/ (see ProjectPaths.h).
+// Per-user, per-machine state (#42) — NOT under the project folder, so two teammates (or two
+// machines) on the same project stop fighting over UI scale/theme/layout on every commit. See
+// UserPaths.h.
 const std::string& PrefsPath() {
-    static const std::string path = ProjectPaths::Resolve("editor_prefs.json");
+    static const std::string path = UserPaths::Resolve("editor_prefs.json");
     return path;
+}
+
+// One-time migration (#42): editor_prefs.json used to live under the version-controlled project/
+// folder. If the new user-scoped copy doesn't exist yet but an old project-scoped one does,
+// carry it over once rather than silently resetting every preference to default on first run
+// after upgrading.
+void MigrateLegacyPrefsIfNeeded() {
+    std::error_code ec;
+    if (std::filesystem::exists(PrefsPath(), ec)) return;
+    const std::string legacyPath = ProjectPaths::Resolve("editor_prefs.json");
+    if (!std::filesystem::exists(legacyPath, ec)) return;
+    std::filesystem::copy_file(legacyPath, PrefsPath(), ec);
+    if (ec) Log::Warn("EditorSettings: found a legacy project/editor_prefs.json but couldn't migrate it.");
+    else Log::Info("EditorSettings: migrated editor_prefs.json out of project/ to per-user storage.");
 }
 
 // Save() is called from ~40 preference controls, several of them every frame of a slider drag
@@ -24,6 +41,7 @@ bool g_PrefsDirty = false;
 }
 
 void EditorSettings::Load() {
+    MigrateLegacyPrefsIfNeeded();
     std::ifstream in(PrefsPath());
     if (!in.is_open()) return; // no prefs file yet — defaults stand, not an error
 
@@ -186,7 +204,8 @@ void EditorSettings::Flush() {
     root["captureSound"] = Get().CaptureSound;
 
     // Atomic: a crash mid-write (a toggle spree can still trigger one write) must leave the
-    // previous editor_prefs.json intact, not truncated (audit CPP-206).
+    // previous editor_prefs.json intact, not truncated (audit CPP-206). Lives under UserPaths
+    // now, not project/ (#42).
     if (!AtomicFile::WriteJson(PrefsPath(), root))
         Log::Warn(std::string("EditorSettings: failed to write '") + PrefsPath() + "'.");
 }

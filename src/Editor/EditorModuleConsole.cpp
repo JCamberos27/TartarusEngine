@@ -12,6 +12,7 @@
 // reload doesn't clear the user's filter.
 
 #include "EditorModuleAPI.h"
+#include "EditorUIPrimitives.h"
 
 #include <imgui.h>
 #include <IconsFontAwesome6.h>
@@ -40,18 +41,9 @@ bool MatchesFilter(const std::string& filter, const std::string& text) {
     return toLower(text).find(toLower(filter)) != std::string::npos;
 }
 
-// The editor's flat icon-button treatment (#160), matching EditorInternal::ActionButton.
+// Forwards to the shared implementation (EditorUIPrimitives.h, Defect #53).
 bool ActionButton(const EditorModuleHostAPI& host, const char* icon, const char* tooltip) {
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.14f));
-    // Button() folds its label into its ID, so scope the ID to the (unique) tooltip string.
-    ImGui::PushID(tooltip);
-    bool clicked = ImGui::Button(icon);
-    ImGui::PopID();
-    ImGui::PopStyleColor(3);
-    if (ImGui::IsItemHovered() && host.SetTooltip) host.SetTooltip(tooltip);
-    return clicked;
+    return EditorUIPrimitives::ActionButton(icon, tooltip, host.SetTooltip);
 }
 
 // EditorUI::VSeparator: a 1px rule in ImGuiCol_Separator spanning the frame height, with
