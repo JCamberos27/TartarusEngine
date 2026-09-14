@@ -95,10 +95,13 @@ std::string Save(const unsigned char* pixels, int w, int h, bool flipY,
         ok = stbi_write_png(path.c_str(), w, h, 4, img.data(), w * 4);
     }
     if (ok) {
-        Log::Info("Screenshot -> " + path + "  (" + std::to_string(w) + "x" + std::to_string(h) + ")");
+        // #18 — log the project-relative form; `path` itself (returned below, and what actually
+        // got written to disk) stays the real absolute path callers need.
+        Log::Info("Screenshot -> " + ProjectPaths::Relativize(path) + "  (" +
+                  std::to_string(w) + "x" + std::to_string(h) + ")");
         return path;
     }
-    Log::Error("Screenshot: couldn't write " + path);
+    Log::Error("Screenshot: couldn't write " + ProjectPaths::Relativize(path));
     return {};
 }
 
