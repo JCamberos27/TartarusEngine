@@ -90,8 +90,10 @@ feature can do today and what's still planned.
 
 ## Performance
 
-Measured on the bundled `Showcase` scene — a first-person hall lit entirely by moving,
-colour-cycling point and spot lights.
+Measured on the bundled `Showcase` scene — a first-person hub connecting four zones (a PBR
+lighting/materials gallery, a PhysX physics playground, a joints & contraptions room, and a
+gravity-gun range), lit by a sun/point/spot rig with shadows. (The figures below predate this
+scene's expansion to the four-zone layout and are pending re-measurement.)
 
 | | |
 |---|---|
