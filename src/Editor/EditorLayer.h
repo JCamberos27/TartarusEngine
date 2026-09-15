@@ -459,7 +459,13 @@ public:
     void PrimeCaptureRequest() { m_CaptureReq.primed = true; }
     CaptureRequest ConsumeCaptureRequest() { CaptureRequest r = m_CaptureReq; m_CaptureReq.pending = false; m_CaptureReq.primed = false; return r; }
     void OnCaptureDone(const std::string& path, int w, int h);
-    void DrawCaptureFeedback(float dt);          // fading flash + "saved" toast; called from Draw()
+    void DrawCaptureFeedback(float dt);          // fading white flash only; called from Draw()
+    // Phase 3 item 9 (audit #5, Appendix A #8) — the capture toast used to be click-through
+    // (raw draw-list rect+text, no real ImGui item under it) and transient (auto-faded after a
+    // few seconds). DrawNotifications renders the persistent, interactive replacement: a stack
+    // of dismissible cards, one per capture, each with a thumbnail and Open/Show-in-folder/
+    // Copy-path actions. See EditorNotification below.
+    void DrawNotifications();                    // called from Draw()
     // Double-clicking a shot in the Asset Browser's Screenshots folder opens a centred, sleek
     // in-editor lightbox instead of shelling out to the OS viewer.
     void OpenScreenshotPreview(const std::string& path);
@@ -572,8 +578,20 @@ private:
     bool m_HideOverlaysThisFrame = false;
     float m_CaptureFlashT = 0.0f;              // eased 1 -> 0 over ~0.35s after a shot
     std::string m_LastCapturePath;
-    std::string m_CaptureToast;               // shown in a corner for a few seconds after a shot
-    float m_CaptureToastT = 0.0f;
+
+    // Phase 3 item 9 — one persistent, dismissible card per capture (audit #5 Appendix A #8).
+    // A plain struct + vector rather than a heavier pub-sub system: captures are the only
+    // producer today, and DrawNotifications' stack-of-cards rendering doesn't care how an entry
+    // got added, so a second notification source later just calls PushCaptureNotification's
+    // pattern (or a small sibling Push*) without this needing to change.
+    struct EditorNotification {
+        std::string Title;                 // filename
+        std::string Subtitle;              // "1920x1080"
+        std::string FilePath;              // full path — Open / Show in folder / Copy path
+        std::shared_ptr<Texture> Thumbnail; // small preview; null if the capture failed
+    };
+    std::vector<EditorNotification> m_Notifications;
+    void PushCaptureNotification(const std::string& path, int w, int h);
 
     // Frosted backdrop behind modal dialogs — created lazily the first time a modal opens (see
     // EndFrame): the whole framebuffer is blurred and the dialog window redrawn crisp on top.

@@ -121,6 +121,15 @@ void ShowInFolder(const std::string& path) {
 #endif
 }
 
+void OpenFile(const std::string& path) {
+#if defined(_WIN32)
+    const std::string native = std::filesystem::path(path).make_preferred().string();
+    ShellExecuteA(nullptr, "open", native.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#else
+    (void)path;
+#endif
+}
+
 std::string ShutterClipPath() {
     const std::string path = (std::filesystem::path(Dir()) / ".shutter.wav").generic_string();
     std::error_code ec;
