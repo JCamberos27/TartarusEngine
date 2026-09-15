@@ -78,7 +78,9 @@
 //        inline in the toolbar strip. Replaces the floating `##PlayStopButton` overlay for
 //        windowed play (still host-drawn directly, unchanged API, for the one case with no
 //        toolbar to embed into: maximized play).
-constexpr std::uint32_t kEditorModuleAPIVersion = 21;
+//   22 - Q12 / Phase 4 #6: GetInPlayMode, so a docked panel (Inspector, Hierarchy) can tint
+//        itself while Playing, matching the host's own amber viewport-border banner.
+constexpr std::uint32_t kEditorModuleAPIVersion = 22;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -451,6 +453,13 @@ struct EditorModuleHostAPI {
     // main.cpp, which owns the actual simulation clock) and raises the same request flags the old
     // floating overlay did.
     void (*DrawPlayControlsBody)() = nullptr;
+
+    // --- Play-mode panel tint (API v22, Q12 / Phase 4 #6) ------------------------------
+    // True while Playing - the same flag the host's own amber viewport-border banner reads. A
+    // module panel (Inspector, Hierarchy) uses this to tint itself too, per Q12's settled answer:
+    // editing stays fully live in Play mode (it's genuinely useful for tuning values), so this is
+    // a reminder that edits here revert on Stop, not a lock.
+    bool (*GetInPlayMode)() = nullptr;
 };
 
 struct EditorModuleAPI {

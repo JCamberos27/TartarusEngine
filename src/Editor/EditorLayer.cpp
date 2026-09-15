@@ -2307,8 +2307,14 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             if (m_CtrlZSelectionMode && CanSelectionHistoryForward()) SelectionHistoryForward(world);
             else { Redo(world, assets); m_CtrlZSelectionMode = false; m_SelHistoryNavigating = true; }
         }
-        if (Shortcuts::Triggered("editor.saveAs"))     DoSaveAs(world, assets);
-        else if (Shortcuts::Triggered("editor.save"))  DoSave(world, assets); // prompts for a location if untitled
+        // Q12 — Ctrl+S/Ctrl+Shift+S mirror the File menu's Play-mode gate (DrawFileMenuBody).
+        if (Shortcuts::Triggered("editor.saveAs")) {
+            if (m_InPlayMode) Log::Info("Save is disabled while Playing - changes here revert on Stop anyway.");
+            else DoSaveAs(world, assets);
+        } else if (Shortcuts::Triggered("editor.save")) {
+            if (m_InPlayMode) Log::Info("Save is disabled while Playing - changes here revert on Stop anyway.");
+            else DoSave(world, assets); // prompts for a location if untitled
+        }
         if (Shortcuts::Triggered("editor.newScene")) RequestNewScene(world, assets);
         // GameObject-menu parity (#236): Ctrl+Shift+N = Create Empty Child (of the active
         // selection, or a root Empty if nothing's selected); Alt+Shift+A = Toggle Active State.
@@ -2543,12 +2549,21 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImVec2 a(vp->Pos.x + t * 0.5f, vp->Pos.y + t * 0.5f);
         ImVec2 b(vp->Pos.x + vp->Size.x - t * 0.5f, vp->Pos.y + vp->Size.y - t * 0.5f);
         dl->AddRect(a, b, col, 0.0f, 0, t);
-        const char* tag = "PLAY MODE \xE2\x80\x94 changes revert on Stop";
-        ImVec2 ts = ImGui::CalcTextSize(tag);
+        // Q12 — a slow-mo/frozen physics step is easy to forget about once you leave Preferences,
+        // and looks identical to a performance problem or a stuck simulation until you remember
+        // to check; the one place that's genuinely unmissable while Playing is this banner.
+        std::string tag = "PLAY MODE \xE2\x80\x94 changes revert on Stop";
+        const float timeScale = EditorSettings::Get().PhysicsSimTimeScale;
+        if (std::fabs(timeScale - 1.0f) > 0.001f) {
+            char scaleBuf[32];
+            std::snprintf(scaleBuf, sizeof(scaleBuf), "  \xE2\x80\xA2  Physics %.2fx", timeScale);
+            tag += scaleBuf;
+        }
+        ImVec2 ts = ImGui::CalcTextSize(tag.c_str());
         ImVec2 tp(vp->Pos.x + vp->Size.x * 0.5f - ts.x * 0.5f, vp->Pos.y + 4.0f);
         dl->AddRectFilled(ImVec2(tp.x - 7.0f, tp.y - 2.0f), ImVec2(tp.x + ts.x + 7.0f, tp.y + ts.y + 3.0f),
                           IM_COL32(20, 20, 24, 210), 3.0f);
-        dl->AddText(tp, col, tag);
+        dl->AddText(tp, col, tag.c_str());
     }
 
     // Transient fly-speed readout — large, centred toward the bottom of the viewport (#236 R2).
