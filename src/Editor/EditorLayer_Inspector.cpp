@@ -222,6 +222,25 @@ struct PrefabMultiRef {
     const char* field = nullptr;
 };
 
+// #6 item 8 — a coloured rule under a neutral letter, not a filled R/G/B block: solid red/green/
+// blue fill is the worst possible colour choice for deuteranopia (the most common form of colour
+// blindness can't reliably separate red from green at all), and unlike the old filled buttons this
+// keeps the axis legible from the letter alone — colour becomes a secondary cue, matching the
+// bottom-keyline language ActionButton already uses for an "on" toggle, not the only one carrying
+// the axis's identity. Shared by DrawVec3Row (Transform) and MultiEditVec3Row (every other
+// reflected Vec3 field), which each hand-rolled their own filled-button version of this before.
+bool AxisButton(const char* name, ImVec4 tint, ImVec2 size) {
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(tint.x, tint.y, tint.z, 0.18f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(tint.x, tint.y, tint.z, 0.30f));
+    const bool clicked = ImGui::Button(name, size);
+    ImGui::PopStyleColor(3);
+    const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x + 3.0f, mx.y - 2.0f), ImVec2(mx.x - 3.0f, mx.y - 1.0f),
+                                              ImGui::ColorConvertFloat4ToU32(tint), 1.0f);
+    return clicked;
+}
+
 // Unity/Hazel-style vector row: a colored X/Y/Z button (click to zero that axis) glued to
 // each drag field, instead of ImGui's plain unlabeled DragFloat3. `activatedOut` is set when
 // any axis field starts being dragged this frame, for undo-snapshot timing at the call site.
@@ -258,27 +277,23 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
     float fullWidth = ImGui::GetContentRegionAvail().x;
     float dragW = (fullWidth - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f;
 
-    struct Axis { const char* name; float* value; ImVec4 color, hovered; };
+    struct Axis { const char* name; float* value; ImVec4 tint; };
     Axis axes[3] = {
-        {"X", &v.x, ImVec4(0.66f, 0.20f, 0.20f, 1.0f), ImVec4(0.80f, 0.27f, 0.27f, 1.0f)},
-        {"Y", &v.y, ImVec4(0.22f, 0.52f, 0.22f, 1.0f), ImVec4(0.30f, 0.68f, 0.30f, 1.0f)},
-        {"Z", &v.z, ImVec4(0.18f, 0.38f, 0.72f, 1.0f), ImVec4(0.24f, 0.48f, 0.88f, 1.0f)},
+        {"X", &v.x, ImVec4(0.66f, 0.20f, 0.20f, 1.0f)},
+        {"Y", &v.y, ImVec4(0.22f, 0.52f, 0.22f, 1.0f)},
+        {"Z", &v.z, ImVec4(0.18f, 0.38f, 0.72f, 1.0f)},
     };
 
     for (int i = 0; i < 3; ++i) {
         ImGui::PushID(i);
 
-        ImGui::PushStyleColor(ImGuiCol_Button, axes[i].color);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, axes[i].hovered);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, axes[i].color);
-        if (ImGui::Button(axes[i].name, ImVec2(buttonW, lineHeight))) {
+        if (AxisButton(axes[i].name, axes[i].tint, ImVec2(buttonW, lineHeight))) {
             *axes[i].value = 0.0f;
             changed = true;
             activatedOut = true;   // an instant, one-shot edit — stage + commit it as one step
             committedOut = true;
         }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Click to zero the %s axis", axes[i].name);
-        ImGui::PopStyleColor(3);
 
         ImGui::SameLine(0.0f, innerSpacing);
         ImGui::SetNextItemWidth(dragW);
@@ -361,24 +376,20 @@ MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool
     float fullWidth = ImGui::GetContentRegionAvail().x;
     float dragW = (fullWidth - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f;
 
-    struct Axis { const char* name; float* v; ImVec4 c, h; };
+    struct Axis { const char* name; float* v; ImVec4 tint; };
     Axis axes[3] = {
-        {"X", &value.x, ImVec4(0.66f, 0.20f, 0.20f, 1.0f), ImVec4(0.80f, 0.27f, 0.27f, 1.0f)},
-        {"Y", &value.y, ImVec4(0.22f, 0.52f, 0.22f, 1.0f), ImVec4(0.30f, 0.68f, 0.30f, 1.0f)},
-        {"Z", &value.z, ImVec4(0.18f, 0.38f, 0.72f, 1.0f), ImVec4(0.24f, 0.48f, 0.88f, 1.0f)},
+        {"X", &value.x, ImVec4(0.66f, 0.20f, 0.20f, 1.0f)},
+        {"Y", &value.y, ImVec4(0.22f, 0.52f, 0.22f, 1.0f)},
+        {"Z", &value.z, ImVec4(0.18f, 0.38f, 0.72f, 1.0f)},
     };
 
     for (int i = 0; i < 3; ++i) {
         ImGui::PushID(i);
-        ImGui::PushStyleColor(ImGuiCol_Button, axes[i].c);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, axes[i].h);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, axes[i].c);
-        if (ImGui::Button(axes[i].name, ImVec2(buttonW, lineHeight))) {
+        if (AxisButton(axes[i].name, axes[i].tint, ImVec2(buttonW, lineHeight))) {
             *axes[i].v = 0.0f;
             axisTouched[i] = true;
             r.changed = r.activated = r.committed = true;
         }
-        ImGui::PopStyleColor(3);
         ImGui::SameLine(0.0f, innerSpacing);
 
         ImGui::SetNextItemWidth(dragW);
