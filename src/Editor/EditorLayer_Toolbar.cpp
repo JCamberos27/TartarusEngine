@@ -171,7 +171,7 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) 
 
 // The Statistics HUD itself lives in the reloadable editor module (src/Editor/EditorModuleStats.cpp).
 
-void EditorLayer::DrawViewportStatusBar() {
+void EditorLayer::DrawViewportStatusBar(World& world, Camera& editorCamera) {
     if (!m_SceneViewportVisible || m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
 
     const char* toolName =
@@ -202,12 +202,25 @@ void EditorLayer::DrawViewportStatusBar() {
     ImGui::PushStyleColor(ImGuiCol_WindowBg,     EditorUIPrimitives::kHudPlateColor);
     ImGui::PushStyleColor(ImGuiCol_Text,         EditorUIPrimitives::kHudTextColor);
     ImGui::PushStyleColor(ImGuiCol_TextDisabled, EditorUIPrimitives::kHudTextDisabledColor);
+    // Phase 3 item 5 — NoInputs is gone: the bar used to be pure decoration ("today it is
+    // ImGuiWindowFlags_NoInputs — nothing clickable", audit #5). Individual segments below opt
+    // into a click action via IsItemClicked() on whatever they just drew (Text() items still
+    // register a hoverable/clickable rect — this doesn't require switching them to buttons).
     if (ImGui::Begin("##ViewportStatusBar", nullptr,
             ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs)) {
+            ImGuiWindowFlags_NoMove)) {
 
         auto sep = [&]() { ImGui::SameLine(0, 6); ImGui::TextDisabled("\xc2\xb7"); ImGui::SameLine(0, 6); };
+        // Every interactive segment below shares this: hand cursor + tooltip on hover, act on
+        // click. Kept as a helper rather than repeating the three lines per segment.
+        auto clickable = [](const char* tooltip) -> bool {
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                EditorUI::SetTooltip("%s", tooltip);
+            }
+            return ImGui::IsItemClicked();
+        };
 
         ImGui::AlignTextToFramePadding();
         // Build config, so it's obvious at a glance whether this is the slow (Debug) binary or an
@@ -223,22 +236,66 @@ void EditorLayer::DrawViewportStatusBar() {
         ImGui::TextColored(ImVec4(1.00f, 0.62f, 0.20f, 1.00f), "%s", TARTARUS_BUILD_CONFIG);
 #endif
         sep();
+        // The FPS/ms/draws/tris cluster is one click target — jumps to the deeper Statistics
+        // panel readout instead of duplicating it here.
         ImGui::Text("%.0f FPS", fps);
+        if (clickable("Open the Statistics panel")) {
+            EditorSettings::Get().SceneShowStats = !EditorSettings::Get().SceneShowStats;
+            EditorSettings::Save();
+        }
         sep(); ImGui::TextDisabled("%.1f ms", m_SmoothedFrameMs);
+        if (clickable("Open the Statistics panel")) {
+            EditorSettings::Get().SceneShowStats = !EditorSettings::Get().SceneShowStats;
+            EditorSettings::Save();
+        }
         sep(); ImGui::Text("%s draws", compact(m_RenderStats.DrawCalls).c_str());
+        if (clickable("Open the Statistics panel")) {
+            EditorSettings::Get().SceneShowStats = !EditorSettings::Get().SceneShowStats;
+            EditorSettings::Save();
+        }
         sep(); ImGui::TextDisabled("%s tris", compact(m_RenderStats.Triangles).c_str());
+        if (clickable("Open the Statistics panel")) {
+            EditorSettings::Get().SceneShowStats = !EditorSettings::Get().SceneShowStats;
+            EditorSettings::Save();
+        }
+
+        // Scene name (audit #5 item 5's explicit ask) — click reveals the file, same "Show in
+        // folder" action Capture's toast/menu already use.
         sep();
-        if (selCount == 0) ImGui::TextDisabled("no selection");
-        else               ImGui::Text("%d selected", selCount);
+        {
+            std::string sceneName = std::filesystem::path(m_CurrentScenePath).filename().string();
+            if (sceneName.empty()) sceneName = "Untitled";
+            if (m_Dirty) ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "%s*", sceneName.c_str());
+            else         ImGui::TextUnformatted(sceneName.c_str());
+            if (clickable(m_CurrentScenePath.empty() ? "Untitled scene — Save to give it a file"
+                                                      : "Show the scene file in its folder")) {
+                if (!m_CurrentScenePath.empty()) Screenshot::ShowInFolder(m_CurrentScenePath);
+            }
+        }
 
-        if (m_LockViewToSelection) { sep(); ImGui::Text("%s follow", ICON_FA_LOCK); } // Shift+F (#236 E)
+        sep();
+        if (selCount == 0) {
+            ImGui::TextDisabled("no selection");
+        } else {
+            ImGui::Text("%d selected", selCount);
+            if (clickable("Frame the selection (F)")) FocusOnSelection(world, editorCamera);
+        }
 
-        // Active tool pinned to the right.
+        if (m_LockViewToSelection) {
+            sep();
+            ImGui::Text("%s follow", ICON_FA_LOCK); // Shift+F (#236 E)
+            if (clickable("Stop following the selection (Shift+F)")) SetLockViewToSelection(false);
+        }
+
+        // Active tool pinned to the right — click toggles the Hand tool, the one binary state
+        // (as opposed to the 5-way gizmo-op choice, already one click away in the tool palette).
         char toolBuf[32]; snprintf(toolBuf, sizeof(toolBuf), "%s  %s",
             m_HandTool ? ICON_FA_HAND : ICON_FA_UP_DOWN_LEFT_RIGHT, toolName);
         float tw = ImGui::CalcTextSize(toolBuf).x;
         ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - tw);
         ImGui::TextUnformatted(toolBuf);
+        if (clickable(m_HandTool ? "Switch back to the last transform tool (Q)" : "Hand tool — drag to pan the view (Q)"))
+            SetHandToolActive(!m_HandTool);
     }
     ImGui::End();
     ImGui::PopStyleColor(3);
