@@ -2166,7 +2166,27 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     ImGui::OpenPopupOnItemClick(header.c_str(), ImGuiPopupFlags_MouseButtonRight);
     ImGui::PopStyleColor(3);
     const bool headerHovered = ImGui::IsItemHovered();
-    if (tooltip && headerHovered) EditorUI::SetTooltip("%s", tooltip);
+    // Defect #25/#35 — a plain near-cursor tooltip (EditorUI::SetTooltip's default position) can
+    // land on the section's own body (BeginChild starts right below this header), which reads as
+    // the header's hover text and the body's first-row controls "swapping" at the exact spot the
+    // user is trying to click (first reported against Material's Slot 0 row, but the mechanism is
+    // generic to every section here). Anchored explicitly above the header instead — its bottom-
+    // left pinned to the header's top-left — so it can never overlap what follows below.
+    if (tooltip && headerHovered && EditorSettings::Get().ShowTooltips) {
+        const ImVec2 headerMin = ImGui::GetItemRectMin();
+        if (headerMin.y > 60.0f * m_UIScale) {
+            // Forcing an exact position (ImGuiCond_Always) bypasses ImGui's own clamp-to-viewport
+            // logic for tooltips, so only do it where there's plainly room above — otherwise fall
+            // through to the normal cursor-relative placement rather than risk clipping off the
+            // top of the screen for a header docked right at a panel's top edge.
+            ImGui::SetNextWindowPos(headerMin, ImGuiCond_Always, ImVec2(0.0f, 1.0f));
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted(tooltip);
+            ImGui::EndTooltip();
+        } else {
+            EditorUI::SetTooltip("%s", tooltip);
+        }
+    }
 
     // #6 item 5 — everything the popup below offers (Reset/Copy/Paste/Remove/Revert/Apply) was
     // reachable only by right-clicking the header, which the Phase 4 exit criterion rules out
