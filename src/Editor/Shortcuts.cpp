@@ -171,7 +171,9 @@ void BuildDefaultTable() {
     Register("tools.scale",             "Tool: Scale",               Ctx_Viewport, K(ImGuiKey_R));
     Register("tools.rect",              "Tool: Rect",                Ctx_Viewport, K(ImGuiKey_T));
     Register("tools.transform",         "Tool: Combined Transform",  Ctx_Viewport, K(ImGuiKey_Y));
-    Register("tools.measure",           "Tool: Measure / Ruler",     Ctx_Viewport, Chord{}); // unbound by default
+    // Phase 3 item 7 (audit #5) — "it currently ships unbound" was the audit's exact complaint;
+    // M was free (not used by any other viewport/global shortcut).
+    Register("tools.measure",           "Tool: Measure / Ruler",     Ctx_Viewport, K(ImGuiKey_M));
     // View presets. The number row and the numpad are interchangeable (see DigitSibling); Ctrl
     // picks the opposite face. In Unity those opposite faces are their own rebindable
     // shortcuts, so they get their own rows rather than a hard-coded Ctrl read.

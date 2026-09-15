@@ -468,12 +468,12 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             // have no toolbar home.
             ImGui::SeparatorText("Options");
             ImGui::MenuItem(EDITOR_ICON_TOGGLE_GIZMOS "  Transform Gizmo", nullptr, &m_ShowGizmos);
-            if (ImGui::MenuItem(ICON_FA_RULER "  Measure Tool", nullptr, m_MeasureTool)) {
+            if (ImGui::MenuItem(ICON_FA_RULER "  Measure Tool", "M", m_MeasureTool)) {
                 m_MeasureTool = !m_MeasureTool;
-                m_MeasureCount = 0;
+                m_MeasurePoints.clear();
             }
             if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("Click two points in the viewport to measure the distance. Right-click clears.");
+                EditorUI::SetTooltip("Click to chain measurement points; right-click clears.");
             ImGui::MenuItem(ICON_FA_CROSSHAIRS "  Frame on Select", nullptr, &m_FrameOnSelect);
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Move the camera to frame each object as you select it.");
 
