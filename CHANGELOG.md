@@ -7,6 +7,30 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### [Phase 3] Top bar, viewport chrome, tool palette (#5) — 2026-09-15
+
+All 9 scoped items from the editor UI/UX rework's Phase 3 landed. *"Nothing important is a
+ghost overlay; every viewport control is where the hand is."*
+
+- Document strip: scene name, dirty dot, Undo/Redo, and a visible **Save** button — previously
+  there was no Save control anywhere in the editor (`d244926`).
+- Play/Pause/Step moved into the toolbar's Zone B on a solid plate, replacing the floating
+  `##PlayStopButton` overlay (`8f52bf0`).
+- Vertical tool palette + view-state chips on the viewport edges, retiring the 25-icon top
+  strip (`63d3264`).
+- `EditorIcons.h`: semantic icon names + a uniqueness check, resolving the toolbar/palette glyph
+  collisions (`ICON_FA_UP_DOWN_LEFT_RIGHT`, `ICON_FA_VECTOR_SQUARE`, etc. each meaning two
+  different things) (`6527a17`).
+- Interactive viewport status bar with a solid background and scene name, replacing the
+  `ImGuiWindowFlags_NoInputs` decoration-only bar (`397ff51`).
+- Navigation gizmo enlarged and labelled (~64px → larger, unlabelled negative-axis handles
+  fixed), default gizmo size raised toward `0.15` (`13cd4fd`).
+- Measure tool: no more selection side effect, a persistent readout, chained segments, and a
+  default keybinding (it previously shipped unbound) (`18c4545`).
+- Statistics and History moved out of the viewport into real dockable panels (`e091775`).
+- Capture toast is now a persistent, interactive notification card (thumbnail, filename,
+  Open/Show-in-folder/Copy-path) instead of a click-through, transient one (`bc23f87`).
+
 ### Screen-space ambient occlusion & bloom (#333) — 2026-09-09
 
 Two additive screen-space effects, both computed in linear HDR before the shared Tonemapper
