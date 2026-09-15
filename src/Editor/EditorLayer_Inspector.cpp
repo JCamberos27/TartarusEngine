@@ -1559,26 +1559,15 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             return;
         }
         // Nothing selected anywhere — instead of a near-black void with one line of grey text,
-        // show a short scene summary and a way to add something (audit #72).
+        // give the empty state itself something to say. A scene-statistics dump (object/mesh/
+        // light/camera counts) used to live here (audit #72); Phase 4's review flagged it as the
+        // wrong content for THIS empty state (#6 item 9 / Appendix A #24) — a scene overview
+        // belongs in the real Statistics panel (Window > Statistics; rebuilt properly in Phase 6
+        // item 5), not duplicated, unaligned, into whatever panel happens to have no selection.
         ImGui::Spacing();
         ImGui::TextDisabled("Nothing selected");
         ImGui::Spacing();
         ImGui::TextUnformatted("Select an object in the Scene Hierarchy, or an\nasset in the Asset Browser, to edit it here.");
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
-
-        int objects = 0, meshes = 0, lights = 0, cameras = 0;
-        for (auto e : world.Registry.view<const NameComponent>()) { (void)e; ++objects; }
-        for (auto e : world.Registry.view<const RenderableComponent>()) { (void)e; ++meshes; }
-        for (auto e : world.Registry.view<const LightComponent>()) { (void)e; ++lights; }
-        for (auto e : world.Registry.view<const CameraComponent>()) { (void)e; ++cameras; }
-        ImGui::TextDisabled("Scene");
-        ImGui::BulletText("%d object%s", objects, objects == 1 ? "" : "s");
-        ImGui::BulletText("%d mesh%s", meshes, meshes == 1 ? "" : "es");
-        ImGui::BulletText("%d light%s, %d camera%s", lights, lights == 1 ? "" : "s",
-                          cameras, cameras == 1 ? "" : "s");
-
         ImGui::Spacing();
         ImGui::TextDisabled("Tip: press " ICON_FA_KEYBOARD " Shift+A in the viewport to add an object.");
 
