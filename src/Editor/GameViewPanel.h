@@ -101,6 +101,9 @@ public:
     // Window > Game menu entry (#4 item 5) — the tab's own X sets m_WindowOpen false with no way
     // back; this is that way back (and an explicit close to match, for symmetry).
     void SetWindowOpen(bool open) { m_WindowOpen = open; }
+    // main.cpp skips RenderUI entirely while closed (#69 QA — see its call site), so nothing else
+    // resets IsVisible()/the view rect back to "not shown" on its own; this is that reset.
+    void NotifyClosed() { m_Visible = false; m_LastAvailableRegion = ImVec2(0.0f, 0.0f); m_ViewImageSize = ImVec2(0.0f, 0.0f); }
 
     // Mirrors the rest of the editor's prefs (see EditorSettings) — reads/writes
     // EditorSettings::Get() directly so the chosen preset/toggles survive a relaunch the same
