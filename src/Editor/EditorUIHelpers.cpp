@@ -11,7 +11,11 @@ void EditorUI::SetTooltip(const char* fmt, ...) {
     // preference must bypass string formatting and the ImGui tooltip path entirely, not just
     // suppress the visible result.
     if (!EditorSettings::Get().ShowTooltips) return;
-    if (!ImGui::IsItemHovered()) return;
+    // AllowWhenDisabled: this is a redundant re-check of the caller's own IsItemHovered() guard
+    // (see header), so it must be at least as permissive — a caller gating on a disabled item
+    // (e.g. Window > Scene's "always open" MenuItem, #69) would otherwise pass its own check and
+    // then get silently swallowed here.
+    if (!ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) return;
 
     va_list args;
     va_start(args, fmt);

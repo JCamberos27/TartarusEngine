@@ -483,7 +483,10 @@ void EditorLayer::DrawWindowMenuBody() {
             // GameViewPanel, not this class) via SetGameViewOpenState/ConsumeGameViewOpenRequest.
             bool sceneAlwaysOpen = true;
             ImGui::MenuItem(ICON_FA_CAMERA "  Scene", nullptr, &sceneAlwaysOpen, false);
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Always open — the core viewport can't be closed.");
+            // IsItemHovered() ignores disabled items by default (AllowWhenDisabled) — without this
+            // flag the tooltip below never fires, since this MenuItem is always disabled (#69 QA).
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                EditorUI::SetTooltip("Always open — the core viewport can't be closed.");
             {
                 bool gameOpen = m_GameViewOpenCached;
                 if (ImGui::MenuItem(ICON_FA_DESKTOP "  Game", nullptr, &gameOpen))
