@@ -1078,9 +1078,22 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
                 if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
             });
             PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip);
+            // Defect #50 — the only missing-reference state anywhere in the Inspector was
+            // PrefabInstanceComponent::Missing; an AssetRef pointing at a deleted file rendered
+            // identically to one pointing at a present file. Checked once here in the shared
+            // renderer so every reflected asset field (Audio Source's Clip today, any future one)
+            // gets it for free.
+            const bool missing = !mixed && !shared.empty() && !std::filesystem::exists(shared);
             const std::string preview = mixed ? "\xE2\x80\x94"
-                : (shared.empty() ? "(none)" : std::filesystem::path(shared).filename().string());
-            if (ImGui::BeginCombo("##v", preview.c_str())) {
+                : (shared.empty() ? "(none)"
+                   : (missing ? ICON_FA_TRIANGLE_EXCLAMATION "  " : std::string()) +
+                     std::filesystem::path(shared).filename().string());
+            if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
+            const bool comboOpen = ImGui::BeginCombo("##v", preview.c_str());
+            if (missing) ImGui::PopStyleColor();
+            if (missing && ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Missing: %s\nThe referenced file no longer exists at this path.", shared.c_str());
+            if (comboOpen) {
                 if (ImGui::Selectable("(none)", !mixed && shared.empty())) {
                     StageUndo(world);
                     forEach([&](entt::entity e) { reinterpret_cast<std::string*>(fieldPtr(e))->clear(); });
@@ -1811,7 +1824,32 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // an invisible collider that the Hierarchy still lists under "Level Geometry".
         if (BeginComponentSection(ICON_FA_DRAW_POLYGON, "Mesh Renderer", !isLevelGeometry, removed,
                 /*defaultOpen=*/true, "The mesh this object draws, and its material color/texture options.")) {
-            std::string meshName = std::filesystem::path(renderable->ModelRef->Path()).filename().string();
+            const std::string& modelPath = renderable->ModelRef->Path();
+            std::string meshName;
+            // Defect #5 — a procedural primitive's Path() is "primitive://<kind>#<counter>": the
+            // counter only keeps AssetLibrary's model cache keys unique per instance (CloneModel
+            // mints a fresh one on every scene reload/undo/Play-Stop for an object that was never
+            // touched) and was never a stable identity, but the raw path — filename() of it is
+            // literally "sphere#90" — was shown directly as this button's label regardless. Show
+            // the stable, meaningful primitive kind instead; a real asset-backed model keeps
+            // showing its filename as before.
+            const std::string kPrimitivePrefix = "primitive://";
+            if (isLevelGeometry) {
+                // World::NextPrimitivePath() mints "primitive://levelgeometry/<id>" for a box —
+                // <id> is a stable per-box counter (unlike the placed-primitive case below, it
+                // doesn't churn on reload), but filename()-ing it is exactly the bare "3" the
+                // defect reported: not a kind name at all. Every level-geometry entity is a box by
+                // construction (World::CreateBox), so name it that directly instead of parsing the
+                // path's own internal scheme.
+                meshName = "Box";
+            } else if (modelPath.rfind(kPrimitivePrefix, 0) == 0) {
+                std::string kind = modelPath.substr(kPrimitivePrefix.size());
+                kind = kind.substr(0, kind.find('#'));
+                if (!kind.empty()) kind[0] = (char)std::toupper((unsigned char)kind[0]);
+                meshName = kind.empty() ? "Primitive" : kind;
+            } else {
+                meshName = std::filesystem::path(modelPath).filename().string();
+            }
 
             if (isLevelGeometry) {
                 PropertyLabel("Color", "Solid tint for this box's surface. Click the swatch\nfor the full color picker, or type a hex value.");
@@ -1846,8 +1884,13 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 ImGui::OpenPopup("##ChangeMesh");
             }
             if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen("##ChangeMesh")) {
+                // Procedural-primitive path is an internal cache key ("primitive://sphere#90"),
+                // not something meaningful to show the user — the friendly kind (already the
+                // button's own label) is all there is to say about it.
+                const bool isPrimitive = isLevelGeometry || modelPath.rfind(kPrimitivePrefix, 0) == 0;
                 EditorUI::SetTooltip("%s\n%u tris, %u verts\n\nClick to pick a primitive, or drag a Model here from the Asset Browser.",
-                    renderable->ModelRef->Path().c_str(), renderable->ModelRef->TriangleCount(), renderable->ModelRef->VertexCount());
+                    isPrimitive ? meshName.c_str() : modelPath.c_str(),
+                    renderable->ModelRef->TriangleCount(), renderable->ModelRef->VertexCount());
             }
             if (ImGui::BeginDragDropTarget()) {
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
