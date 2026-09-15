@@ -259,7 +259,11 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
     static const float vec3LabelColumnWidth = ImGui::CalcTextSize("Rotation").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
     const bool pfOverridden = pf.self && pf.field &&
         SceneSerializer::IsPrefabFieldOverridden(*pf.world, pf.e, pf.comp, pf.field);
-    if (pfOverridden) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+    // #6 item 7 — EditorUIPrimitives::InfoColor(), not the theme's SliderGrab cyan: cyan is
+    // reserved for selection / "you are here" (docs/CONVENTIONS.md's accent-discipline table),
+    // and every prefab-override marker in this file was tinting text with it, colliding with that
+    // meaning. Same swap at every other "overridden from prefab" site below.
+    if (pfOverridden) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor());
     AlignToColumn(label, vec3LabelColumnWidth, tooltip);
     if (pfOverridden) {
         ImGui::PopStyleColor();
@@ -358,7 +362,7 @@ MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool
     static const float col = ImGui::CalcTextSize("Rotation").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
     const bool pfOv = pf.self && pf.field && pf.sel &&
         pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
-    if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+    if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
     AlignToColumn(label, col, tooltip);
     if (pfOv) {
         ImGui::PopStyleColor();
@@ -424,7 +428,7 @@ MultiEditResult MultiEditFloatRow(const char* label, float& value, bool mixed, f
     ImGui::PushID(label);
     const bool pfOv = pf.self && pf.field && pf.sel &&
         pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
-    if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+    if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
     PropertyLabel(label, tooltip);
     if (pfOv) {
         ImGui::PopStyleColor();
@@ -472,7 +476,7 @@ bool MultiEditCheckbox(const char* label, bool anyOn, bool mixed, bool& out, Pre
     if (pfRow) {
         ImGui::PushID(label);
         const bool pfOv = pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
-        if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+        if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
         PropertyLabel(label);
         if (pfOv) {
             ImGui::PopStyleColor();
@@ -1010,7 +1014,7 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
             // reintroduce it via this shared path (Defect #44).
             const bool pfOv = pf.self && pf.field && pf.sel &&
                 pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
-            if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+            if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
             PropertyLabel(f.Name, f.Tooltip);
             if (pfOv) {
                 ImGui::PopStyleColor();
@@ -1606,7 +1610,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // #302 Part B — a prefab child whose name differs from the .prefab: tint the field + offer
     // the right-click Revert/Apply menu.
     const bool nameOverridden = SceneSerializer::IsPrefabFieldOverridden(world, entity, "Name", "name");
-    if (nameOverridden) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+    if (nameOverridden) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
     DrawNameField("##Name", name.Name, isLevelGeometry ? "Box" : "Object", activated);
     if (nameOverridden) ImGui::PopStyleColor();
     if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) EditorUI::SetTooltip("Display name shown in the Hierarchy and here");
@@ -2185,7 +2189,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // Revert/Apply to its right-click menu.
         const bool compAdded = SceneSerializer::IsPrefabComponentAdded(world, entity, rc.Meta.Name);
         bool reflPfRevert = false, reflPfApply = false;
-        if (compAdded) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+        if (compAdded) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
         const bool reflOpen = BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, true, reflRemoved,
             /*defaultOpen=*/true, rc.Meta.Tooltip, &reflReset, &reflCopy, &reflPaste,
             compAdded ? &reflPfRevert : nullptr, compAdded ? &reflPfApply : nullptr);
@@ -2440,7 +2444,7 @@ void EditorLayer::PrefabOverrideLabel(World& world, entt::entity entity, const c
     const bool overridden =
         SceneSerializer::IsPrefabFieldOverridden(world, entity, component, field);
     if (overridden)
-        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
     PropertyLabel(label, tooltip);
     if (overridden) {
         ImGui::PopStyleColor();
@@ -2493,7 +2497,7 @@ void EditorLayer::PrefabOverrideLabelMulti(World& world, const std::vector<entt:
                                            const char* label, const char* tooltip) {
     const bool overridden = AnyPrefabFieldOverridden(world, sel, component, field);
     if (overridden)
-        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
     PropertyLabel(label, tooltip);
     if (overridden) {
         ImGui::PopStyleColor();
