@@ -2007,6 +2007,12 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // Console shares the bottom node as a tab beside the Asset Browser, the way Unity docks
         // Project and Console together.
         ImGui::DockBuilderDockWindow(ICON_FA_TERMINAL "  Console", bottom);
+        // Phase 3 item 8 — Statistics and History are real dockable panels now, not viewport-
+        // pinned HUDs; a default home (tabbed with Inspector, both hidden by default per
+        // EditorSettings::SceneShowStats/m_ShowHistory) beats appearing as a floating undocked
+        // window the first time either is toggled on.
+        ImGui::DockBuilderDockWindow(ICON_FA_CHART_SIMPLE "  Statistics", right);
+        ImGui::DockBuilderDockWindow(ICON_FA_CLOCK_ROTATE_LEFT "  History", right);
         // Scene and Game are Unity's own pair of tabs sharing one dock node — Scene is the
         // editor's 3D viewport, Game is the locked-aspect Play Mode preview; only whichever tab
         // is active actually shows/renders (see m_SceneViewportVisible below).

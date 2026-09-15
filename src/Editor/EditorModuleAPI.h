@@ -417,13 +417,12 @@ struct EditorModuleHostAPI {
     bool (*GetAssetFavoritesOnly)() = nullptr; void (*SetAssetFavoritesOnly)(bool on) = nullptr;
 
     // --- History HUD, frame only (API v15) ---------------------------------------------
-    // The compact transparent HUD pinned to the Scene viewport's bottom-right corner (Unity-style
-    // Undo History). The module owns the window and its pin/height-ceiling math; the rows stay
-    // host-side.
-    // Returns true if the HUD should draw this frame (History toggled on, a live non-degenerate
-    // Scene viewport, and overlays not suppressed for a clean capture). Fills the viewport rect
-    // (screen space), the editor UI scale, and the total row count — undo entries + 1 "Current"
-    // + redo entries — the module sizes the window against.
+    // GetHistoryHudFrame is superseded as of Phase 3 item 8: History is a real dockable panel
+    // now (EditorModuleHistory.cpp just reads GetShowHistory/SetShowHistory, API v4, like every
+    // other panel), so nothing calls this pin/height-ceiling query anymore. No struct layout
+    // change, so no version bump — left in place rather than renumbering every positional field
+    // after it (here and in HotReloadEditorModule.cpp's kHostAPI initializer) for one dead
+    // callback; fair game to actually remove in a future cleanup pass.
     bool (*GetHistoryHudFrame)(float* outVpX, float* outVpY, float* outVpW, float* outVpH,
                                float* outUIScale, int* outRowCount) = nullptr;
     // Renders the click-to-jump list into the module's window, between its heading Separator and

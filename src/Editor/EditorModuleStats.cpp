@@ -1,19 +1,25 @@
-// The editor's Statistics HUD, living inside TartarusEditor.dll so its code hot-reloads while the
-// editor stays open with its scene loaded. Ported in behaviour from EditorLayer::DrawStatsPanel
-// (EditorLayer_Toolbar.cpp): the transparent, click-through overlay pinned to the Scene
-// viewport's top-left corner (#149) — FPS/ms, draw/tri/vert counts, per-category entity counts,
-// the Profiler CPU/GPU sample lists, the GL-state-cache bind table — auto-sized to its content
-// and height-capped so it never spills past the viewport status bar.
+// The editor's Statistics panel, living inside TartarusEditor.dll so its code hot-reloads while
+// the editor stays open with its scene loaded. FPS/ms, draw/tri/vert counts, per-category entity
+// counts, the Profiler CPU/GPU sample lists, the GL-state-cache bind table.
+//
+// Phase 3 item 8 (audit #5) — this used to be a transparent, click-through overlay pinned to the
+// Scene viewport's top-left corner (#149), forced there every frame (NoDocking/NoMove/NoInputs)
+// so it could never be dragged, resized, or interacted with. It's a real dockable panel now, same
+// as Hierarchy/Inspector/Console — draggable into any dock node, its position persisted in
+// imgui.ini like theirs, with a title bar and a working close box. The glanceable, always-visible
+// role the old corner HUD served is now the viewport status bar's FPS/ms cluster (Phase 3 item
+// 5, EditorLayer_Toolbar.cpp's DrawViewportStatusBar) — already a collapsed FPS/frame-ms reading
+// that opens this exact panel on click, so this pass didn't need to invent a second one.
 //
 // What changed in the move: every number it shows is host-owned and now arrives through the
-// EditorModuleHostAPI callback table (viewport rect, RenderStats, Profiler samples, GL frame
-// stats, entity counts, the smoothed frame time). It used to steer its text between white-on-
-// dark and black-on-light with an async GPU luminance readback the host drove; Defect #54 (Phase
-// 1) replaced that with a fixed opaque plate behind fixed light text — legible over anything by
-// construction, no readback needed. See EditorUIPrimitives.h's "Viewport HUD legibility" section.
+// EditorModuleHostAPI callback table (RenderStats, Profiler samples, GL frame stats, entity
+// counts, the smoothed frame time). It used to steer its text between white-on-dark and black-on-
+// light with an async GPU luminance readback the host drove; Defect #54 (Phase 1) replaced that
+// with a fixed opaque plate behind fixed light text for the corner-HUD era. As an ordinary docked
+// panel now, it just follows the theme's normal WindowBg/Text like every other panel — no more
+// bespoke plate.
 
 #include "EditorModuleAPI.h"
-#include "EditorUIPrimitives.h"
 
 #include <imgui.h>
 #include <IconsFontAwesome6.h>
@@ -31,16 +37,8 @@ constexpr int kMaxProfilerSamples = 32;
 } // namespace
 
 void Draw(const EditorModuleHostAPI& host) {
-    float vx = 0.0f, vy = 0.0f, vw = 0.0f, vh = 0.0f, uiScale = 1.0f;
-    bool enabled = false;
-    if (host.GetViewportRect) host.GetViewportRect(&vx, &vy, &vw, &vh, &uiScale, &enabled);
-
-    // Toggled off (View > Statistics), or no live Scene viewport to anchor to — draw nothing and
-    // release the engine-mark hide flag so the corner monogram comes back.
-    if (!enabled) {
-        if (host.SetHideEngineMark) host.SetHideEngineMark(false);
-        return;
-    }
+    const bool shown = host.GetShowStats && host.GetShowStats();
+    if (!shown) return;
 
     EditorModuleRenderStats rs;
     if (host.GetRenderStats) host.GetRenderStats(&rs);
@@ -57,55 +55,14 @@ void Draw(const EditorModuleHostAPI& host) {
 
     const float smoothedMs = host.GetSmoothedFrameMs ? host.GetSmoothedFrameMs() : 0.0f;
 
-    // A compact HUD pinned to the viewport's top-left corner (#149): fully transparent so it
-    // doesn't box off the scene, click-through (NoInputs) so it never eats camera-look. Height
-    // is measured from its content and capped so it never spills past the status bar into the
-    // panels below (same treatment as the History HUD); the profiler tail clips rather than
-    // overflowing. Not dockable, not persisted — the pin wins.
-    const float pad = 12.0f * uiScale;
-    const float statusBarH = ImGui::GetTextLineHeight() + 8.0f * uiScale;
-    // Phase 1 item 5 — pushed here, before the row-height math below, not just around the
-    // content further down: lineH/chromeH/desiredH have to measure the SAME font that will
-    // actually render the rows (JetBrains Mono), or the auto-sized window is a few pixels off
-    // from what its own content needs. PushFont/PopFont don't require an active window, so this
-    // is safe to do before Begin() and pop after End() regardless of whether Begin() returns
-    // true (ImGui::End() is unconditional either way — see the Begin/End pair below).
+    // Phase 1 item 5 — pushed before ImGui::Begin so every row below (and ImGui's own layout
+    // pass) measures the same font it renders with: every label was hand-padded with spaces
+    // ("Draw calls   %d") to fake column alignment against the proportional UI font, which only
+    // lines up under a true monospace face.
     ImGui::PushFont(host.GetMonoFont ? host.GetMonoFont() : nullptr, 0.0f);
-    const ImGuiStyle& stStats = ImGui::GetStyle();
-    const float lineH = ImGui::GetTextLineHeightWithSpacing();
-    const int rows = 1 /*fps*/ + 3 /*draw/tri/vert*/ + (rs.Culled > 0 ? 1 : 0)
-                   + 4 /*ent/rend/coll/light*/ + (inactiveCount > 0 ? 1 : 0)
-                   + (rs.LightBufferOverflowed ? 1 : 0) // #204
-                   + (rs.ClusterSaturated ? 1 : 0)      // #204
-                   + profN + (hasGpuSection ? profGpuN : 0) + 3 /*shader/texture/VAO binds*/;
-    const float chromeH = lineH * (2.0f + (hasGpuSection ? 1.0f : 0.0f))  // "Statistics" + "Profiler (CPU)" [+ "Profiler (GPU)"]
-                        + (4.0f + (hasGpuSection ? 1.0f : 0.0f)) * (stStats.ItemSpacing.y + 2.0f) // Separator() rules
-                        + stStats.WindowPadding.y * 2.0f + 4.0f;
-    const float desiredH = chromeH + rows * lineH;
-    const float maxH = std::max(120.0f * uiScale, vh - statusBarH - 2.0f * pad);
-    const float winH = std::min(desiredH, maxH);
 
-    // If the box would reach down into the corner monogram, ask the host to hide the monogram
-    // until it doesn't (host checks this at its DrawEngineMark call site).
-    const float markTop = vh - statusBarH - 14.0f * uiScale - 54.0f * uiScale;
-    if (host.SetHideEngineMark) host.SetHideEngineMark((pad + winH + 8.0f * uiScale) > markTop);
-
-    ImGui::SetNextWindowPos(ImVec2(vx + pad, vy + pad), ImGuiCond_Always, ImVec2(0.0f, 0.0f));
-    ImGui::SetNextWindowSize(ImVec2(0.0f, winH)); // x=0 -> auto-fit width; height clamped
-    // #54 — a real (opaque-ish) plate behind the HUD, not a fully transparent window tinted by
-    // sampling the scene behind it. Legible over anything, no GPU readback.
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, EditorUIPrimitives::kHudPlateColor);
-    ImGui::PushStyleColor(ImGuiCol_Text,         EditorUIPrimitives::kHudTextColor);
-    ImGui::PushStyleColor(ImGuiCol_TextDisabled, EditorUIPrimitives::kHudTextDisabledColor);
-    if (ImGui::Begin("##Stats", nullptr,
-            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
-            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs)) {
-        // Mono for the whole HUD (pushed above): every label below was hand-padded with spaces
-        // ("Draw calls   %d") to fake column alignment against the proportional UI font; a real
-        // monospace face makes that actually true instead of approximate.
-        ImGui::TextUnformatted(ICON_FA_CHART_SIMPLE "  Statistics");
-        ImGui::Separator();
+    bool open = shown;
+    if (ImGui::Begin(ICON_FA_CHART_SIMPLE "  Statistics", &open)) {
         ImGui::Text("%.1f FPS  (%.2f ms)", smoothedMs > 0.0001f ? 1000.0f / smoothedMs : 0.0f, smoothedMs);
         ImGui::Separator();
         ImGui::Text("Draw calls   %d", rs.DrawCalls);
@@ -144,7 +101,8 @@ void Draw(const EditorModuleHostAPI& host) {
     }
     ImGui::End();
     ImGui::PopFont();
-    ImGui::PopStyleColor(3); // WindowBg + Text + TextDisabled
+
+    if (!open && host.SetShowStats) host.SetShowStats(false); // the title-bar X
 }
 
 } // namespace EditorModuleStats
