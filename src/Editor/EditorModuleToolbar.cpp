@@ -201,6 +201,15 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::SameLine();
     if (ActionButton(host, ICON_FA_FLOPPY_DISK, "Save (Ctrl+S)") && host.DoSaveScene) host.DoSaveScene();
 
+    // --- Play controls (Zone B, Phase 3 item 2) ---------------------------------------------
+    // Replaces the old floating `##PlayStopButton` overlay for windowed play — that overlay sat
+    // over the viewport at ~60% opacity and all but disappeared on a pale scene (audit #5's
+    // "single most important control ... least visible thing on screen", ~2:1 contrast). Living
+    // in the toolbar means it's always on a fully opaque background by construction. The floating
+    // version still exists for maximized play only, which hides this whole strip.
+    divider();
+    if (host.DrawPlayControlsBody) host.DrawPlayControlsBody();
+
     const int gizmoOp = host.GetGizmoOp ? host.GetGizmoOp() : 0; // 0 Translate 1 Rotate 2 Scale 3 Rect 4 Universal
     const bool handTool = host.GetHandTool && host.GetHandTool();
     divider();
