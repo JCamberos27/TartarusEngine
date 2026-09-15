@@ -1,6 +1,6 @@
 {
   "formatVersion": 2,
-  "_comment": "Tartarus Engine feature showcase - PBR matrix, sky+IBL, sun/point/spot shadows, clustered lighting, animator, hierarchy. Engine primitives only. Toggle SSAO + Bloom in Preferences > Post-processing for the full effect.",
+  "_comment": "Tartarus Engine feature showcase v2 -- open-plan hub + 4 zones: PBR lighting gallery, PhysX physics playground, joints & contraptions, and the gravity-gun range. Engine primitives only. Toggle SSAO + Bloom in Preferences > Post-processing for the full effect.",
   "skyHorizonColor": [
     0.58,
     0.44,
@@ -24,14 +24,14 @@
         0
       ],
       "size": [
-        46,
+        64,
         0.2,
-        46
+        64
       ],
       "color": [
-        0.2,
-        0.2,
-        0.22
+        0.17,
+        0.17,
+        0.19
       ],
       "rotation": [
         0,
@@ -47,108 +47,1413 @@
       "center": [
         0,
         3.4,
-        -7
+        -26
       ],
       "size": [
-        30,
-        7.0,
+        22,
+        7,
         0.4
       ],
       "color": [
-        0.34,
-        0.34,
-        0.37
+        0.32,
+        0.3,
+        0.32
       ],
       "rotation": [
         0,
         0,
         0
       ],
-      "name": "Backwall",
-      "id": 1,
+      "name": "Gallery Back Wall",
+      "id": 10,
       "parentId": -1,
-      "order": 1
+      "order": 10
     },
     {
       "center": [
-        7.5,
-        0.15,
-        0.5
+        26,
+        3.4,
+        0
       ],
       "size": [
-        9.0,
-        0.3,
-        5.5
+        0.4,
+        7,
+        18
       ],
       "color": [
-        0.13,
-        0.13,
-        0.15
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "name": "Pedestal",
-      "id": 2,
-      "parentId": -1,
-      "order": 2
-    }
-  ],
-  "empties": [
-    {
-      "name": "Hero Pivot",
-      "position": [
-        7.5,
         0.3,
-        0.5
+        0.26,
+        0.22
       ],
       "rotation": [
         0,
         0,
         0
       ],
-      "scale": [
-        1,
-        1,
-        1
-      ],
-      "id": 39,
-      "parentId": -1,
-      "order": 39
-    },
-    {
-      "name": "Orbit Center",
-      "position": [
-        7.5,
-        3.2,
-        0.4
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ],
+      "name": "Physics Back Wall",
       "id": 48,
       "parentId": -1,
       "order": 48
     },
     {
-      "name": "Sun",
-      "position": [
-        10,
-        17,
-        11
+      "center": [
+        16,
+        2.5,
+        -9
+      ],
+      "size": [
+        20,
+        5,
+        0.4
+      ],
+      "color": [
+        0.28,
+        0.24,
+        0.2
       ],
       "rotation": [
-        52,
-        -38,
+        0,
+        0,
+        0
+      ],
+      "name": "Physics South Wall",
+      "id": 49,
+      "parentId": -1,
+      "order": 49
+    },
+    {
+      "center": [
+        16,
+        2.5,
+        9
+      ],
+      "size": [
+        20,
+        5,
+        0.4
+      ],
+      "color": [
+        0.28,
+        0.24,
+        0.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Physics North Wall",
+      "id": 50,
+      "parentId": -1,
+      "order": 50
+    },
+    {
+      "center": [
+        20,
+        0.5,
+        -6.5
+      ],
+      "size": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "color": [
+        0.62,
+        0.44,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Crate 0-0",
+      "id": 51,
+      "parentId": -1,
+      "order": 51,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.7,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 6,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        20,
+        0.5,
+        -5.5
+      ],
+      "size": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "color": [
+        0.62,
+        0.44,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Crate 0-1",
+      "id": 52,
+      "parentId": -1,
+      "order": 52,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.7,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 6,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        20,
+        0.5,
+        -4.5
+      ],
+      "size": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "color": [
+        0.62,
+        0.44,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Crate 0-2",
+      "id": 53,
+      "parentId": -1,
+      "order": 53,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.7,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 6,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        20,
+        0.5,
+        -3.5
+      ],
+      "size": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "color": [
+        0.62,
+        0.44,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Crate 0-3",
+      "id": 54,
+      "parentId": -1,
+      "order": 54,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.7,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 6,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        20,
+        1.5,
+        -6
+      ],
+      "size": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "color": [
+        0.62,
+        0.44,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Crate 1-0",
+      "id": 55,
+      "parentId": -1,
+      "order": 55,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.7,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 6,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        20,
+        1.5,
+        -5
+      ],
+      "size": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "color": [
+        0.62,
+        0.44,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Crate 1-1",
+      "id": 56,
+      "parentId": -1,
+      "order": 56,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.7,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 6,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        20,
+        1.5,
+        -4
+      ],
+      "size": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "color": [
+        0.62,
+        0.44,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Crate 1-2",
+      "id": 57,
+      "parentId": -1,
+      "order": 57,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.7,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 6,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        20,
+        2.5,
+        -5.5
+      ],
+      "size": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "color": [
+        0.62,
+        0.44,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Crate 2-0",
+      "id": 58,
+      "parentId": -1,
+      "order": 58,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.7,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 6,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        20,
+        2.5,
+        -4.5
+      ],
+      "size": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "color": [
+        0.62,
+        0.44,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Crate 2-1",
+      "id": 59,
+      "parentId": -1,
+      "order": 59,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.7,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 6,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        20,
+        3.5,
+        -5
+      ],
+      "size": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "color": [
+        0.62,
+        0.44,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Crate 3-0",
+      "id": 60,
+      "parentId": -1,
+      "order": 60,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.7,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 6,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        11,
+        2.2,
+        4
+      ],
+      "size": [
+        5,
+        0.3,
+        3
+      ],
+      "color": [
+        0.24,
+        0.24,
+        0.27
+      ],
+      "rotation": [
+        0,
+        0,
+        -18
+      ],
+      "name": "Ramp",
+      "id": 61,
+      "parentId": -1,
+      "order": 61
+    },
+    {
+      "center": [
+        22,
+        0.5,
+        -3.5
+      ],
+      "size": [
+        1.2,
+        1,
+        1.2
+      ],
+      "color": [
+        0.18,
+        0.18,
+        0.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Seesaw Fulcrum",
+      "id": 67,
+      "parentId": -1,
+      "order": 67
+    },
+    {
+      "center": [
+        22,
+        1.1,
+        -3.5
+      ],
+      "size": [
+        5,
+        0.2,
+        1.2
+      ],
+      "color": [
+        0.55,
+        0.4,
+        0.22
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Seesaw Plank",
+      "id": 68,
+      "parentId": -1,
+      "order": 68,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.6,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 4,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.2,
+        "Angular Damping": 0.3,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      },
+      "joint": {
+        "type": 1,
+        "connectedOrder": -1,
+        "anchor": [
+          0,
+          0,
+          0
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "breakForce": 0,
+        "breakTorque": 0,
+        "useLimit": true,
+        "limitLower": -20,
+        "limitUpper": 20
+      }
+    },
+    {
+      "center": [
+        0,
+        3.4,
+        26
+      ],
+      "size": [
+        20,
+        7,
+        0.4
+      ],
+      "color": [
+        0.2,
+        0.24,
+        0.3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Joints Back Wall",
+      "id": 74,
+      "parentId": -1,
+      "order": 74
+    },
+    {
+      "center": [
+        -6,
+        5.4,
+        14
+      ],
+      "size": [
+        0.4,
+        2.2,
+        0.4
+      ],
+      "color": [
+        0.18,
+        0.19,
+        0.22
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Pendulum Post",
+      "id": 75,
+      "parentId": -1,
+      "order": 75
+    },
+    {
+      "center": [
+        6,
+        1.8,
+        18
+      ],
+      "size": [
+        0.15,
+        3.4,
+        2.2
+      ],
+      "color": [
+        0.5,
+        0.35,
+        0.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Swinging Door",
+      "id": 77,
+      "parentId": -1,
+      "order": 77,
+      "Rigidbody": {
+        "Mass": 15,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.3,
+        "Angular Damping": 0.4,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      },
+      "joint": {
+        "type": 1,
+        "connectedOrder": -1,
+        "anchor": [
+          0,
+          0,
+          -1.1
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "breakForce": 0,
+        "breakTorque": 0,
+        "useLimit": true,
+        "limitLower": -90,
+        "limitUpper": 0
+      }
+    },
+    {
+      "center": [
+        3,
+        6.4,
+        10
+      ],
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "color": [
+        0.18,
+        0.19,
+        0.22
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Chain Post",
+      "id": 78,
+      "parentId": -1,
+      "order": 78
+    },
+    {
+      "center": [
+        -26,
+        3.4,
+        0
+      ],
+      "size": [
+        0.4,
+        7,
+        18
+      ],
+      "color": [
+        0.2,
+        0.24,
+        0.22
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Range Back Wall",
+      "id": 87,
+      "parentId": -1,
+      "order": 87
+    },
+    {
+      "center": [
+        -16,
+        2.5,
+        -9
+      ],
+      "size": [
+        20,
+        5,
+        0.4
+      ],
+      "color": [
+        0.18,
+        0.22,
+        0.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Range South Wall",
+      "id": 88,
+      "parentId": -1,
+      "order": 88
+    },
+    {
+      "center": [
+        -16,
+        2.5,
+        9
+      ],
+      "size": [
+        20,
+        5,
+        0.4
+      ],
+      "color": [
+        0.18,
+        0.22,
+        0.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Range North Wall",
+      "id": 89,
+      "parentId": -1,
+      "order": 89
+    },
+    {
+      "center": [
+        -10,
+        0.5,
+        5
+      ],
+      "size": [
+        1.2,
+        1,
+        1.2
+      ],
+      "color": [
+        0.22,
+        0.22,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Pedestal Sphere",
+      "id": 90,
+      "parentId": -1,
+      "order": 90
+    },
+    {
+      "center": [
+        -13,
+        0.5,
+        5
+      ],
+      "size": [
+        1.2,
+        1,
+        1.2
+      ],
+      "color": [
+        0.22,
+        0.22,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Pedestal Box",
+      "id": 92,
+      "parentId": -1,
+      "order": 92
+    },
+    {
+      "center": [
+        -13,
+        1.4,
+        5
+      ],
+      "size": [
+        0.7,
+        0.7,
+        0.7
+      ],
+      "color": [
+        0.15,
+        0.55,
+        0.85
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Pickup Crate",
+      "id": 93,
+      "parentId": -1,
+      "order": 93,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.6,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 3,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.05,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        -16,
+        0.5,
+        5
+      ],
+      "size": [
+        1.2,
+        1,
+        1.2
+      ],
+      "color": [
+        0.22,
+        0.22,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Pedestal Capsule",
+      "id": 94,
+      "parentId": -1,
+      "order": 94
+    },
+    {
+      "center": [
+        -19,
+        0.5,
+        5
+      ],
+      "size": [
+        1.2,
+        1,
+        1.2
+      ],
+      "color": [
+        0.22,
+        0.22,
+        0.24
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Pedestal Cone",
+      "id": 96,
+      "parentId": -1,
+      "order": 96
+    },
+    {
+      "center": [
+        -22,
+        0.4,
+        -4.9
+      ],
+      "size": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "color": [
+        0.85,
+        0.82,
+        0.7
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Target 0-0",
+      "id": 98,
+      "parentId": -1,
+      "order": 98,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.5,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 1.5,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        -22,
+        0.4,
+        -4
+      ],
+      "size": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "color": [
+        0.85,
+        0.82,
+        0.7
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Target 0-1",
+      "id": 99,
+      "parentId": -1,
+      "order": 99,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.5,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 1.5,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        -22,
+        0.4,
+        -3.1000000000000005
+      ],
+      "size": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "color": [
+        0.85,
+        0.82,
+        0.7
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Target 0-2",
+      "id": 100,
+      "parentId": -1,
+      "order": 100,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.5,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 1.5,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        -22,
+        1.2000000000000002,
+        -4.45
+      ],
+      "size": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "color": [
+        0.85,
+        0.82,
+        0.7
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Target 1-0",
+      "id": 101,
+      "parentId": -1,
+      "order": 101,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.5,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 1.5,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        -22,
+        1.2000000000000002,
+        -3.5500000000000003
+      ],
+      "size": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "color": [
+        0.85,
+        0.82,
+        0.7
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Target 1-1",
+      "id": 102,
+      "parentId": -1,
+      "order": 102,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.5,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 1.5,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "center": [
+        -22,
+        2,
+        -4
+      ],
+      "size": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "color": [
+        0.85,
+        0.82,
+        0.7
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Target 2-0",
+      "id": 103,
+      "parentId": -1,
+      "order": 103,
+      "collider": {
+        "isTrigger": false,
+        "friction": 0.5,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 1.5,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    }
+  ],
+  "empties": [
+    {
+      "name": "Hub Pivot",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
         0
       ],
       "scale": [
@@ -156,24 +1461,66 @@
         1,
         1
       ],
-      "id": 50,
+      "id": 1,
       "parentId": -1,
-      "order": 50,
+      "order": 1
+    },
+    {
+      "name": "Hub Orbit Center",
+      "position": [
+        0,
+        1.4,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 3,
+      "parentId": -1,
+      "order": 3
+    },
+    {
+      "name": "Hub Sun",
+      "position": [
+        0,
+        7,
+        0
+      ],
+      "rotation": [
+        55,
+        -30,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 5,
+      "parentId": -1,
+      "order": 5,
       "light": {
         "kind": "directional",
         "color": [
-          1.0,
-          0.93,
-          0.82
+          1,
+          0.95,
+          0.88
         ],
-        "intensity": 3.1,
-        "range": 60.0,
+        "intensity": 2,
+        "range": 60,
         "angularSize": 1.2,
         "castShadows": true,
         "shadow": {
           "enabled": true,
-          "bias": 1.0,
-          "normalBias": 1.0,
+          "bias": 1,
+          "normalBias": 1,
           "softness": 0.35,
           "nearPlane": 0.05,
           "resolution": 0,
@@ -182,11 +1529,11 @@
       }
     },
     {
-      "name": "Point Warm (PBR grid)",
+      "name": "Hub Accent Gallery (gold)",
       "position": [
-        -6.5,
-        3.4,
-        2.2
+        0,
+        3,
+        -4
       ],
       "rotation": [
         0,
@@ -198,36 +1545,27 @@
         1,
         1
       ],
-      "id": 51,
+      "id": 6,
       "parentId": -1,
-      "order": 51,
+      "order": 6,
       "light": {
         "kind": "point",
         "color": [
-          1.0,
-          0.52,
-          0.26
+          1,
+          0.85,
+          0.5
         ],
-        "intensity": 16.0,
-        "range": 15.0,
-        "castShadows": true,
-        "shadow": {
-          "enabled": true,
-          "bias": 1.0,
-          "normalBias": 1.0,
-          "softness": 1.0,
-          "nearPlane": 0.1,
-          "resolution": 0,
-          "updateMode": 0
-        }
+        "intensity": 12,
+        "range": 9,
+        "castShadows": false
       }
     },
     {
-      "name": "Point Cool (hero)",
+      "name": "Hub Accent Physics (amber)",
       "position": [
-        8.0,
-        3.6,
-        2.6
+        4,
+        3,
+        0
       ],
       "rotation": [
         0,
@@ -239,36 +1577,59 @@
         1,
         1
       ],
-      "id": 52,
+      "id": 7,
       "parentId": -1,
-      "order": 52,
+      "order": 7,
+      "light": {
+        "kind": "point",
+        "color": [
+          1,
+          0.55,
+          0.2
+        ],
+        "intensity": 12,
+        "range": 9,
+        "castShadows": false
+      }
+    },
+    {
+      "name": "Hub Accent Joints (cyan)",
+      "position": [
+        0,
+        3,
+        4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 8,
+      "parentId": -1,
+      "order": 8,
       "light": {
         "kind": "point",
         "color": [
           0.35,
-          0.6,
-          1.0
+          0.7,
+          1
         ],
-        "intensity": 18.0,
-        "range": 16.0,
-        "castShadows": true,
-        "shadow": {
-          "enabled": true,
-          "bias": 1.0,
-          "normalBias": 1.0,
-          "softness": 1.0,
-          "nearPlane": 0.1,
-          "resolution": 0,
-          "updateMode": 0
-        }
+        "intensity": 12,
+        "range": 9,
+        "castShadows": false
       }
     },
     {
-      "name": "Spot Rig",
+      "name": "Hub Accent Gun Range (green)",
       "position": [
-        2.5,
-        6.6,
-        5.0
+        -4,
+        3,
+        0
       ],
       "rotation": [
         0,
@@ -280,16 +1641,48 @@
         1,
         1
       ],
-      "id": 53,
+      "id": 9,
       "parentId": -1,
-      "order": 53
+      "order": 9,
+      "light": {
+        "kind": "point",
+        "color": [
+          0.4,
+          1,
+          0.5
+        ],
+        "intensity": 12,
+        "range": 9,
+        "castShadows": false
+      }
     },
     {
-      "name": "Spot Key",
+      "name": "Gallery Hero Pivot",
       "position": [
-        2.5,
+        6.5,
+        0.3,
+        -15
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 36,
+      "parentId": -1,
+      "order": 36
+    },
+    {
+      "name": "Gallery Spot Key",
+      "position": [
+        6.5,
         6.6,
-        5.0
+        -13.5
       ],
       "rotation": [
         58,
@@ -301,25 +1694,25 @@
         1,
         1
       ],
-      "id": 54,
-      "parentId": 53,
-      "order": 54,
+      "id": 42,
+      "parentId": -1,
+      "order": 42,
       "light": {
         "kind": "spot",
         "color": [
-          1.0,
+          1,
           0.96,
           0.9
         ],
-        "intensity": 44.0,
-        "range": 24.0,
-        "spotAngle": 27.0,
+        "intensity": 42,
+        "range": 22,
+        "spotAngle": 27,
         "castShadows": true,
         "shadow": {
           "enabled": true,
-          "bias": 1.0,
-          "normalBias": 1.0,
-          "softness": 1.0,
+          "bias": 1,
+          "normalBias": 1,
+          "softness": 1,
           "nearPlane": 0.1,
           "resolution": 0,
           "updateMode": 0
@@ -327,11 +1720,11 @@
       }
     },
     {
-      "name": "Fill 0",
+      "name": "Gallery Point Warm",
       "position": [
-        -10.0,
-        1.6,
-        4.0
+        -4,
+        3.4,
+        -12
       ],
       "rotation": [
         0,
@@ -343,27 +1736,179 @@
         1,
         1
       ],
-      "id": 55,
+      "id": 43,
       "parentId": -1,
-      "order": 55,
+      "order": 43,
       "light": {
         "kind": "point",
         "color": [
-          0.9,
-          0.3,
-          0.9
+          1,
+          0.52,
+          0.26
         ],
-        "intensity": 6.5,
-        "range": 8.0,
+        "intensity": 15,
+        "range": 14,
+        "castShadows": true,
+        "shadow": {
+          "enabled": true,
+          "bias": 1,
+          "normalBias": 1,
+          "softness": 1,
+          "nearPlane": 0.1,
+          "resolution": 0,
+          "updateMode": 0
+        }
+      }
+    },
+    {
+      "name": "Gallery Point Cool",
+      "position": [
+        7,
+        3.6,
+        -12
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 44,
+      "parentId": -1,
+      "order": 44,
+      "light": {
+        "kind": "point",
+        "color": [
+          0.35,
+          0.6,
+          1
+        ],
+        "intensity": 16,
+        "range": 15,
+        "castShadows": true,
+        "shadow": {
+          "enabled": true,
+          "bias": 1,
+          "normalBias": 1,
+          "softness": 1,
+          "nearPlane": 0.1,
+          "resolution": 0,
+          "updateMode": 0
+        }
+      }
+    },
+    {
+      "name": "Gallery Reflection Probe",
+      "position": [
+        6.5,
+        2.5,
+        -15
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 47,
+      "parentId": -1,
+      "order": 47,
+      "Reflection Probe": {
+        "Size": [
+          12,
+          6,
+          10
+        ],
+        "Importance": 1
+      }
+    },
+    {
+      "name": "Physics Overhead",
+      "position": [
+        16,
+        6.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 71,
+      "parentId": -1,
+      "order": 71,
+      "light": {
+        "kind": "point",
+        "color": [
+          1,
+          0.75,
+          0.45
+        ],
+        "intensity": 26,
+        "range": 20,
+        "castShadows": true,
+        "shadow": {
+          "enabled": true,
+          "bias": 1,
+          "normalBias": 1,
+          "softness": 1,
+          "nearPlane": 0.1,
+          "resolution": 0,
+          "updateMode": 0
+        }
+      }
+    },
+    {
+      "name": "Physics Fill A",
+      "position": [
+        10,
+        2.5,
+        -7
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 72,
+      "parentId": -1,
+      "order": 72,
+      "light": {
+        "kind": "point",
+        "color": [
+          1,
+          0.55,
+          0.2
+        ],
+        "intensity": 8,
+        "range": 9,
         "castShadows": false
       }
     },
     {
-      "name": "Fill 1",
+      "name": "Physics Fill B",
       "position": [
-        -3.0,
-        1.4,
-        -4.5
+        22,
+        2.5,
+        6
       ],
       "rotation": [
         0,
@@ -375,91 +1920,69 @@
         1,
         1
       ],
-      "id": 56,
+      "id": 73,
       "parentId": -1,
-      "order": 56,
+      "order": 73,
       "light": {
         "kind": "point",
         "color": [
-          0.3,
-          0.9,
-          0.6
-        ],
-        "intensity": 6.5,
-        "range": 8.0,
-        "castShadows": false
-      }
-    },
-    {
-      "name": "Fill 2",
-      "position": [
-        3.0,
-        1.4,
-        -4.5
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ],
-      "id": 57,
-      "parentId": -1,
-      "order": 57,
-      "light": {
-        "kind": "point",
-        "color": [
-          0.95,
-          0.85,
-          0.4
-        ],
-        "intensity": 6.5,
-        "range": 8.0,
-        "castShadows": false
-      }
-    },
-    {
-      "name": "Fill 3",
-      "position": [
-        12.0,
-        1.8,
-        -3.0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ],
-      "id": 58,
-      "parentId": -1,
-      "order": 58,
-      "light": {
-        "kind": "point",
-        "color": [
-          0.4,
+          1,
           0.7,
-          1.0
+          0.3
         ],
-        "intensity": 6.5,
-        "range": 8.0,
+        "intensity": 8,
+        "range": 9,
         "castShadows": false
       }
     },
     {
-      "name": "Fill 4",
+      "name": "Joints Key Light",
       "position": [
-        0.0,
-        1.2,
-        6.5
+        0,
+        6,
+        20
+      ],
+      "rotation": [
+        45,
+        10,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 85,
+      "parentId": -1,
+      "order": 85,
+      "light": {
+        "kind": "spot",
+        "color": [
+          0.7,
+          0.85,
+          1
+        ],
+        "intensity": 34,
+        "range": 22,
+        "spotAngle": 30,
+        "castShadows": true,
+        "shadow": {
+          "enabled": true,
+          "bias": 1,
+          "normalBias": 1,
+          "softness": 1,
+          "nearPlane": 0.1,
+          "resolution": 0,
+          "updateMode": 0
+        }
+      }
+    },
+    {
+      "name": "Joints Fill",
+      "position": [
+        -3,
+        3,
+        12
       ],
       "rotation": [
         0,
@@ -471,62 +1994,104 @@
         1,
         1
       ],
-      "id": 59,
+      "id": 86,
       "parentId": -1,
-      "order": 59,
+      "order": 86,
       "light": {
         "kind": "point",
         "color": [
-          1.0,
+          0.35,
+          0.7,
+          1
+        ],
+        "intensity": 10,
+        "range": 12,
+        "castShadows": false
+      }
+    },
+    {
+      "name": "Range Rim Light A",
+      "position": [
+        -13,
+        6,
+        -2
+      ],
+      "rotation": [
+        55,
+        -20,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 104,
+      "parentId": -1,
+      "order": 104,
+      "light": {
+        "kind": "spot",
+        "color": [
+          0.6,
+          1,
+          0.7
+        ],
+        "intensity": 30,
+        "range": 20,
+        "spotAngle": 32,
+        "castShadows": true,
+        "shadow": {
+          "enabled": true,
+          "bias": 1,
+          "normalBias": 1,
+          "softness": 1,
+          "nearPlane": 0.1,
+          "resolution": 0,
+          "updateMode": 0
+        }
+      }
+    },
+    {
+      "name": "Range Rim Light B",
+      "position": [
+        -20,
+        4,
+        3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "id": 105,
+      "parentId": -1,
+      "order": 105,
+      "light": {
+        "kind": "point",
+        "color": [
           0.4,
-          0.4
+          1,
+          0.5
         ],
-        "intensity": 6.5,
-        "range": 8.0,
-        "castShadows": false
-      }
-    },
-    {
-      "name": "Fill 5",
-      "position": [
-        -13.0,
-        2.0,
-        -1.5
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ],
-      "id": 60,
-      "parentId": -1,
-      "order": 60,
-      "light": {
-        "kind": "point",
-        "color": [
-          0.5,
-          0.9,
-          1.0
-        ],
-        "intensity": 6.5,
-        "range": 8.0,
+        "intensity": 12,
+        "range": 12,
         "castShadows": false
       }
     }
   ],
   "models": [
     {
-      "path": "primitive://sphere#3",
-      "name": "PBR 0-0",
+      "path": "primitive://donut#hub",
+      "name": "Hub Centerpiece Torus",
       "position": [
-        -7.0,
-        1.1,
-        -1.5
+        0,
+        1.4,
+        0
       ],
       "rotation": [
         0,
@@ -534,42 +2099,49 @@
         0
       ],
       "scale": [
-        0.55,
-        0.55,
-        0.55
+        1.1,
+        1.1,
+        1.1
       ],
-      "id": 3,
-      "parentId": -1,
-      "order": 3,
+      "id": 2,
+      "parentId": 1,
+      "order": 2,
       "materials": [
         {
           "embedded": {
             "baseColor": [
-              0.94,
-              0.9,
-              0.84
+              1,
+              0.78,
+              0.34
             ],
-            "metallic": 0.0,
-            "roughness": 0.03,
+            "metallic": 1,
+            "roughness": 0.2,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
-      ]
+      ],
+      "animator": {
+        "spin": [
+          0,
+          50,
+          0
+        ]
+      }
     },
     {
-      "path": "primitive://sphere#4",
-      "name": "PBR 0-1",
+      "path": "primitive://sphere#hubsat",
+      "name": "Hub Satellite",
       "position": [
-        -7.0,
-        1.1,
-        -0.1499999999999999
+        0,
+        1.4,
+        2.2
       ],
       "rotation": [
         0,
@@ -577,300 +2149,53 @@
         0
       ],
       "scale": [
-        0.55,
-        0.55,
-        0.55
+        0.22,
+        0.22,
+        0.22
       ],
       "id": 4,
-      "parentId": -1,
+      "parentId": 3,
       "order": 4,
       "materials": [
         {
           "embedded": {
             "baseColor": [
-              0.94,
-              0.9,
-              0.84
+              0.02,
+              0.06,
+              0.02
             ],
-            "metallic": 0.0,
-            "roughness": 0.224,
+            "metallic": 0,
+            "roughness": 0.5,
             "emissiveColor": [
-              0,
-              0,
-              0
+              0.3,
+              1,
+              0.6
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 8,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
-      ]
+      ],
+      "animator": {
+        "orbitAxis": [
+          0,
+          1,
+          0
+        ],
+        "orbitDegPerSec": 55,
+        "orbitRadius": 2.2,
+        "bobAmplitude": 0.25,
+        "bobFreqHz": 0.4
+      }
     },
     {
-      "path": "primitive://sphere#5",
-      "name": "PBR 0-2",
+      "path": "primitive://sphere#gal0_0",
+      "name": "PBR 0-0",
       "position": [
-        -7.0,
+        -8,
         1.1,
-        1.2000000000000002
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        0.55,
-        0.55,
-        0.55
-      ],
-      "id": 5,
-      "parentId": -1,
-      "order": 5,
-      "materials": [
-        {
-          "embedded": {
-            "baseColor": [
-              0.94,
-              0.9,
-              0.84
-            ],
-            "metallic": 0.0,
-            "roughness": 0.41800000000000004,
-            "emissiveColor": [
-              0,
-              0,
-              0
-            ],
-            "emissiveStrength": 1.0,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        }
-      ]
-    },
-    {
-      "path": "primitive://sphere#6",
-      "name": "PBR 0-3",
-      "position": [
-        -7.0,
-        1.1,
-        2.5500000000000007
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        0.55,
-        0.55,
-        0.55
-      ],
-      "id": 6,
-      "parentId": -1,
-      "order": 6,
-      "materials": [
-        {
-          "embedded": {
-            "baseColor": [
-              0.94,
-              0.9,
-              0.84
-            ],
-            "metallic": 0.0,
-            "roughness": 0.612,
-            "emissiveColor": [
-              0,
-              0,
-              0
-            ],
-            "emissiveStrength": 1.0,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        }
-      ]
-    },
-    {
-      "path": "primitive://sphere#7",
-      "name": "PBR 0-4",
-      "position": [
-        -7.0,
-        1.1,
-        3.9000000000000004
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        0.55,
-        0.55,
-        0.55
-      ],
-      "id": 7,
-      "parentId": -1,
-      "order": 7,
-      "materials": [
-        {
-          "embedded": {
-            "baseColor": [
-              0.94,
-              0.9,
-              0.84
-            ],
-            "metallic": 0.0,
-            "roughness": 0.806,
-            "emissiveColor": [
-              0,
-              0,
-              0
-            ],
-            "emissiveStrength": 1.0,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        }
-      ]
-    },
-    {
-      "path": "primitive://sphere#8",
-      "name": "PBR 0-5",
-      "position": [
-        -7.0,
-        1.1,
-        5.25
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        0.55,
-        0.55,
-        0.55
-      ],
-      "id": 8,
-      "parentId": -1,
-      "order": 8,
-      "materials": [
-        {
-          "embedded": {
-            "baseColor": [
-              0.94,
-              0.9,
-              0.84
-            ],
-            "metallic": 0.0,
-            "roughness": 1.0,
-            "emissiveColor": [
-              0,
-              0,
-              0
-            ],
-            "emissiveStrength": 1.0,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        }
-      ]
-    },
-    {
-      "path": "primitive://sphere#9",
-      "name": "PBR 1-0",
-      "position": [
-        -5.65,
-        1.1,
-        -1.5
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        0.55,
-        0.55,
-        0.55
-      ],
-      "id": 9,
-      "parentId": -1,
-      "order": 9,
-      "materials": [
-        {
-          "embedded": {
-            "baseColor": [
-              0.94,
-              0.9,
-              0.84
-            ],
-            "metallic": 0.2,
-            "roughness": 0.03,
-            "emissiveColor": [
-              0,
-              0,
-              0
-            ],
-            "emissiveStrength": 1.0,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        }
-      ]
-    },
-    {
-      "path": "primitive://sphere#10",
-      "name": "PBR 1-1",
-      "position": [
-        -5.65,
-        1.1,
-        -0.1499999999999999
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        0.55,
-        0.55,
-        0.55
-      ],
-      "id": 10,
-      "parentId": -1,
-      "order": 10,
-      "materials": [
-        {
-          "embedded": {
-            "baseColor": [
-              0.94,
-              0.9,
-              0.84
-            ],
-            "metallic": 0.2,
-            "roughness": 0.224,
-            "emissiveColor": [
-              0,
-              0,
-              0
-            ],
-            "emissiveStrength": 1.0,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        }
-      ]
-    },
-    {
-      "path": "primitive://sphere#11",
-      "name": "PBR 1-2",
-      "position": [
-        -5.65,
-        1.1,
-        1.2000000000000002
+        -12
       ],
       "rotation": [
         0,
@@ -893,27 +2218,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.2,
-            "roughness": 0.41800000000000004,
+            "metallic": 0,
+            "roughness": 0.03,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#12",
-      "name": "PBR 1-3",
+      "path": "primitive://sphere#gal0_1",
+      "name": "PBR 0-1",
       "position": [
-        -5.65,
+        -8,
         1.1,
-        2.5500000000000007
+        -13.5
       ],
       "rotation": [
         0,
@@ -936,27 +2261,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.2,
-            "roughness": 0.612,
+            "metallic": 0,
+            "roughness": 0.25,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#13",
-      "name": "PBR 1-4",
+      "path": "primitive://sphere#gal0_2",
+      "name": "PBR 0-2",
       "position": [
-        -5.65,
+        -8,
         1.1,
-        3.9000000000000004
+        -15
       ],
       "rotation": [
         0,
@@ -979,27 +2304,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.2,
-            "roughness": 0.806,
+            "metallic": 0,
+            "roughness": 0.5,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#14",
-      "name": "PBR 1-5",
+      "path": "primitive://sphere#gal0_3",
+      "name": "PBR 0-3",
       "position": [
-        -5.65,
+        -8,
         1.1,
-        5.25
+        -16.5
       ],
       "rotation": [
         0,
@@ -1022,27 +2347,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.2,
-            "roughness": 1.0,
+            "metallic": 0,
+            "roughness": 0.75,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#15",
-      "name": "PBR 2-0",
+      "path": "primitive://sphere#gal0_4",
+      "name": "PBR 0-4",
       "position": [
-        -4.3,
+        -8,
         1.1,
-        -1.5
+        -18
       ],
       "rotation": [
         0,
@@ -1065,27 +2390,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.4,
-            "roughness": 0.03,
+            "metallic": 0,
+            "roughness": 1,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#16",
-      "name": "PBR 2-1",
+      "path": "primitive://sphere#gal1_0",
+      "name": "PBR 1-0",
       "position": [
-        -4.3,
+        -6.5,
         1.1,
-        -0.1499999999999999
+        -12
       ],
       "rotation": [
         0,
@@ -1108,27 +2433,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.4,
-            "roughness": 0.224,
+            "metallic": 0.25,
+            "roughness": 0.03,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#17",
-      "name": "PBR 2-2",
+      "path": "primitive://sphere#gal1_1",
+      "name": "PBR 1-1",
       "position": [
-        -4.3,
+        -6.5,
         1.1,
-        1.2000000000000002
+        -13.5
       ],
       "rotation": [
         0,
@@ -1151,27 +2476,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.4,
-            "roughness": 0.41800000000000004,
+            "metallic": 0.25,
+            "roughness": 0.25,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#18",
-      "name": "PBR 2-3",
+      "path": "primitive://sphere#gal1_2",
+      "name": "PBR 1-2",
       "position": [
-        -4.3,
+        -6.5,
         1.1,
-        2.5500000000000007
+        -15
       ],
       "rotation": [
         0,
@@ -1194,27 +2519,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.4,
-            "roughness": 0.612,
+            "metallic": 0.25,
+            "roughness": 0.5,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#19",
-      "name": "PBR 2-4",
+      "path": "primitive://sphere#gal1_3",
+      "name": "PBR 1-3",
       "position": [
-        -4.3,
+        -6.5,
         1.1,
-        3.9000000000000004
+        -16.5
       ],
       "rotation": [
         0,
@@ -1237,27 +2562,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.4,
-            "roughness": 0.806,
+            "metallic": 0.25,
+            "roughness": 0.75,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#20",
-      "name": "PBR 2-5",
+      "path": "primitive://sphere#gal1_4",
+      "name": "PBR 1-4",
       "position": [
-        -4.3,
+        -6.5,
         1.1,
-        5.25
+        -18
       ],
       "rotation": [
         0,
@@ -1280,27 +2605,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.4,
-            "roughness": 1.0,
+            "metallic": 0.25,
+            "roughness": 1,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#21",
-      "name": "PBR 3-0",
+      "path": "primitive://sphere#gal2_0",
+      "name": "PBR 2-0",
       "position": [
-        -2.9499999999999993,
+        -5,
         1.1,
-        -1.5
+        -12
       ],
       "rotation": [
         0,
@@ -1323,27 +2648,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.6,
+            "metallic": 0.5,
             "roughness": 0.03,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#22",
-      "name": "PBR 3-1",
+      "path": "primitive://sphere#gal2_1",
+      "name": "PBR 2-1",
       "position": [
-        -2.9499999999999993,
+        -5,
         1.1,
-        -0.1499999999999999
+        -13.5
       ],
       "rotation": [
         0,
@@ -1366,27 +2691,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.6,
-            "roughness": 0.224,
+            "metallic": 0.5,
+            "roughness": 0.25,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#23",
-      "name": "PBR 3-2",
+      "path": "primitive://sphere#gal2_2",
+      "name": "PBR 2-2",
       "position": [
-        -2.9499999999999993,
+        -5,
         1.1,
-        1.2000000000000002
+        -15
       ],
       "rotation": [
         0,
@@ -1409,27 +2734,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.6,
-            "roughness": 0.41800000000000004,
+            "metallic": 0.5,
+            "roughness": 0.5,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#24",
-      "name": "PBR 3-3",
+      "path": "primitive://sphere#gal2_3",
+      "name": "PBR 2-3",
       "position": [
-        -2.9499999999999993,
+        -5,
         1.1,
-        2.5500000000000007
+        -16.5
       ],
       "rotation": [
         0,
@@ -1452,27 +2777,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.6,
-            "roughness": 0.612,
+            "metallic": 0.5,
+            "roughness": 0.75,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#25",
-      "name": "PBR 3-4",
+      "path": "primitive://sphere#gal2_4",
+      "name": "PBR 2-4",
       "position": [
-        -2.9499999999999993,
+        -5,
         1.1,
-        3.9000000000000004
+        -18
       ],
       "rotation": [
         0,
@@ -1495,27 +2820,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.6,
-            "roughness": 0.806,
+            "metallic": 0.5,
+            "roughness": 1,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#26",
-      "name": "PBR 3-5",
+      "path": "primitive://sphere#gal3_0",
+      "name": "PBR 3-0",
       "position": [
-        -2.9499999999999993,
+        -3.5,
         1.1,
-        5.25
+        -12
       ],
       "rotation": [
         0,
@@ -1538,27 +2863,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.6,
-            "roughness": 1.0,
+            "metallic": 0.75,
+            "roughness": 0.03,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#27",
-      "name": "PBR 4-0",
+      "path": "primitive://sphere#gal3_1",
+      "name": "PBR 3-1",
       "position": [
-        -1.5999999999999996,
+        -3.5,
         1.1,
-        -1.5
+        -13.5
       ],
       "rotation": [
         0,
@@ -1581,27 +2906,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.8,
-            "roughness": 0.03,
+            "metallic": 0.75,
+            "roughness": 0.25,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#28",
-      "name": "PBR 4-1",
+      "path": "primitive://sphere#gal3_2",
+      "name": "PBR 3-2",
       "position": [
-        -1.5999999999999996,
+        -3.5,
         1.1,
-        -0.1499999999999999
+        -15
       ],
       "rotation": [
         0,
@@ -1624,27 +2949,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.8,
-            "roughness": 0.224,
+            "metallic": 0.75,
+            "roughness": 0.5,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#29",
-      "name": "PBR 4-2",
+      "path": "primitive://sphere#gal3_3",
+      "name": "PBR 3-3",
       "position": [
-        -1.5999999999999996,
+        -3.5,
         1.1,
-        1.2000000000000002
+        -16.5
       ],
       "rotation": [
         0,
@@ -1667,27 +2992,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.8,
-            "roughness": 0.41800000000000004,
+            "metallic": 0.75,
+            "roughness": 0.75,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#30",
-      "name": "PBR 4-3",
+      "path": "primitive://sphere#gal3_4",
+      "name": "PBR 3-4",
       "position": [
-        -1.5999999999999996,
+        -3.5,
         1.1,
-        2.5500000000000007
+        -18
       ],
       "rotation": [
         0,
@@ -1710,27 +3035,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.8,
-            "roughness": 0.612,
+            "metallic": 0.75,
+            "roughness": 1,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#31",
-      "name": "PBR 4-4",
+      "path": "primitive://sphere#gal4_0",
+      "name": "PBR 4-0",
       "position": [
-        -1.5999999999999996,
+        -2,
         1.1,
-        3.9000000000000004
+        -12
       ],
       "rotation": [
         0,
@@ -1753,27 +3078,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.8,
-            "roughness": 0.806,
+            "metallic": 1,
+            "roughness": 0.03,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#32",
-      "name": "PBR 4-5",
+      "path": "primitive://sphere#gal4_1",
+      "name": "PBR 4-1",
       "position": [
-        -1.5999999999999996,
+        -2,
         1.1,
-        5.25
+        -13.5
       ],
       "rotation": [
         0,
@@ -1796,27 +3121,27 @@
               0.9,
               0.84
             ],
-            "metallic": 0.8,
-            "roughness": 1.0,
+            "metallic": 1,
+            "roughness": 0.25,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#33",
-      "name": "PBR 5-0",
+      "path": "primitive://sphere#gal4_2",
+      "name": "PBR 4-2",
       "position": [
-        -0.25,
+        -2,
         1.1,
-        -1.5
+        -15
       ],
       "rotation": [
         0,
@@ -1839,27 +3164,27 @@
               0.9,
               0.84
             ],
-            "metallic": 1.0,
-            "roughness": 0.03,
+            "metallic": 1,
+            "roughness": 0.5,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#34",
-      "name": "PBR 5-1",
+      "path": "primitive://sphere#gal4_3",
+      "name": "PBR 4-3",
       "position": [
-        -0.25,
+        -2,
         1.1,
-        -0.1499999999999999
+        -16.5
       ],
       "rotation": [
         0,
@@ -1882,27 +3207,27 @@
               0.9,
               0.84
             ],
-            "metallic": 1.0,
-            "roughness": 0.224,
+            "metallic": 1,
+            "roughness": 0.75,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#35",
-      "name": "PBR 5-2",
+      "path": "primitive://sphere#gal4_4",
+      "name": "PBR 4-4",
       "position": [
-        -0.25,
+        -2,
         1.1,
-        1.2000000000000002
+        -18
       ],
       "rotation": [
         0,
@@ -1925,156 +3250,27 @@
               0.9,
               0.84
             ],
-            "metallic": 1.0,
-            "roughness": 0.41800000000000004,
+            "metallic": 1,
+            "roughness": 1,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#36",
-      "name": "PBR 5-3",
-      "position": [
-        -0.25,
-        1.1,
-        2.5500000000000007
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        0.55,
-        0.55,
-        0.55
-      ],
-      "id": 36,
-      "parentId": -1,
-      "order": 36,
-      "materials": [
-        {
-          "embedded": {
-            "baseColor": [
-              0.94,
-              0.9,
-              0.84
-            ],
-            "metallic": 1.0,
-            "roughness": 0.612,
-            "emissiveColor": [
-              0,
-              0,
-              0
-            ],
-            "emissiveStrength": 1.0,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        }
-      ]
-    },
-    {
-      "path": "primitive://sphere#37",
-      "name": "PBR 5-4",
-      "position": [
-        -0.25,
-        1.1,
-        3.9000000000000004
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        0.55,
-        0.55,
-        0.55
-      ],
-      "id": 37,
-      "parentId": -1,
-      "order": 37,
-      "materials": [
-        {
-          "embedded": {
-            "baseColor": [
-              0.94,
-              0.9,
-              0.84
-            ],
-            "metallic": 1.0,
-            "roughness": 0.806,
-            "emissiveColor": [
-              0,
-              0,
-              0
-            ],
-            "emissiveStrength": 1.0,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        }
-      ]
-    },
-    {
-      "path": "primitive://sphere#38",
-      "name": "PBR 5-5",
-      "position": [
-        -0.25,
-        1.1,
-        5.25
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        0.55,
-        0.55,
-        0.55
-      ],
-      "id": 38,
-      "parentId": -1,
-      "order": 38,
-      "materials": [
-        {
-          "embedded": {
-            "baseColor": [
-              0.94,
-              0.9,
-              0.84
-            ],
-            "metallic": 1.0,
-            "roughness": 1.0,
-            "emissiveColor": [
-              0,
-              0,
-              0
-            ],
-            "emissiveStrength": 1.0,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        }
-      ]
-    },
-    {
-      "path": "primitive://donut#40",
+      "path": "primitive://donut#hero",
       "name": "Gold Torus",
       "position": [
-        7.5,
-        1.7,
-        0.4
+        6.5,
+        1.4,
+        -15
       ],
       "rotation": [
         0,
@@ -2086,27 +3282,27 @@
         1.35,
         1.35
       ],
-      "id": 40,
-      "parentId": 39,
-      "order": 40,
+      "id": 37,
+      "parentId": 36,
+      "order": 37,
       "materials": [
         {
           "embedded": {
             "baseColor": [
-              1.0,
+              1,
               0.78,
               0.34
             ],
-            "metallic": 1.0,
+            "metallic": 1,
             "roughness": 0.22,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ],
@@ -2119,12 +3315,12 @@
       }
     },
     {
-      "path": "primitive://capsule#41",
+      "path": "primitive://capsule#hero",
       "name": "Copper Capsule",
       "position": [
-        5.7,
+        4.7,
         1.15,
-        1.6
+        -13.4
       ],
       "rotation": [
         15,
@@ -2136,9 +3332,9 @@
         0.9,
         0.55
       ],
-      "id": 41,
-      "parentId": 39,
-      "order": 41,
+      "id": 38,
+      "parentId": 36,
+      "order": 38,
       "materials": [
         {
           "embedded": {
@@ -2147,27 +3343,27 @@
               0.55,
               0.4
             ],
-            "metallic": 1.0,
+            "metallic": 1,
             "roughness": 0.32,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://cone#42",
+      "path": "primitive://cone#hero",
       "name": "Chrome Cone",
       "position": [
-        9.4,
+        8.4,
         1.2,
-        1.4
+        -13.6
       ],
       "rotation": [
         0,
@@ -2179,9 +3375,9 @@
         1.2,
         0.8
       ],
-      "id": 42,
-      "parentId": 39,
-      "order": 42,
+      "id": 39,
+      "parentId": 36,
+      "order": 39,
       "materials": [
         {
           "embedded": {
@@ -2190,27 +3386,27 @@
               0.96,
               0.97
             ],
-            "metallic": 1.0,
+            "metallic": 1,
             "roughness": 0.04,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://cylinder#43",
+      "path": "primitive://cylinder#hero",
       "name": "Red Plastic Cylinder",
       "position": [
-        6.3,
-        1.0,
-        -1.4
+        5.3,
+        1,
+        -16.4
       ],
       "rotation": [
         0,
@@ -2219,12 +3415,12 @@
       ],
       "scale": [
         0.7,
-        1.0,
+        1,
         0.7
       ],
-      "id": 43,
-      "parentId": 39,
-      "order": 43,
+      "id": 40,
+      "parentId": 36,
+      "order": 40,
       "materials": [
         {
           "embedded": {
@@ -2233,27 +3429,27 @@
               0.09,
               0.11
             ],
-            "metallic": 0.0,
+            "metallic": 0,
             "roughness": 0.4,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://pyramid#44",
+      "path": "primitive://pyramid#hero",
       "name": "Ceramic Pyramid",
       "position": [
-        9.0,
-        1.0,
-        -1.7
+        8,
+        1,
+        -16.7
       ],
       "rotation": [
         0,
@@ -2261,13 +3457,13 @@
         0
       ],
       "scale": [
-        1.0,
+        1,
         1.4,
-        1.0
+        1
       ],
-      "id": 44,
-      "parentId": 39,
-      "order": 44,
+      "id": 41,
+      "parentId": 36,
+      "order": 41,
       "materials": [
         {
           "embedded": {
@@ -2276,27 +3472,27 @@
               0.93,
               0.9
             ],
-            "metallic": 0.0,
+            "metallic": 0,
             "roughness": 0.13,
             "emissiveColor": [
               0,
               0,
               0
             ],
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#45",
+      "path": "primitive://sphere#emcyan",
       "name": "Emissive Cyan",
       "position": [
-        -7.5,
+        -9,
         0.35,
-        3.6
+        -10.5
       ],
       "rotation": [
         0,
@@ -2319,27 +3515,27 @@
               0.05,
               0.06
             ],
-            "metallic": 0.0,
+            "metallic": 0,
             "roughness": 0.5,
             "emissiveColor": [
               0.1,
               0.9,
-              1.0
+              1
             ],
-            "emissiveStrength": 7.0,
+            "emissiveStrength": 7,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#46",
+      "path": "primitive://sphere#emmag",
       "name": "Emissive Magenta",
       "position": [
-        0.0,
+        0,
         0.35,
-        4.2
+        -9.5
       ],
       "rotation": [
         0,
@@ -2362,27 +3558,27 @@
               0.02,
               0.05
             ],
-            "metallic": 0.0,
+            "metallic": 0,
             "roughness": 0.5,
             "emissiveColor": [
-              1.0,
+              1,
               0.15,
               0.75
             ],
-            "emissiveStrength": 7.0,
+            "emissiveStrength": 7,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ]
     },
     {
-      "path": "primitive://sphere#47",
-      "name": "Emissive Amber",
+      "path": "primitive://sphere#ball0",
+      "name": "Rolling Ball 0",
       "position": [
-        7.5,
-        0.35,
-        3.7
+        9,
+        3.4,
+        3
       ],
       "rotation": [
         0,
@@ -2390,87 +3586,1354 @@
         0
       ],
       "scale": [
-        0.3,
-        0.3,
-        0.3
-      ],
-      "id": 47,
-      "parentId": -1,
-      "order": 47,
-      "materials": [
-        {
-          "embedded": {
-            "baseColor": [
-              0.06,
-              0.04,
-              0.01
-            ],
-            "metallic": 0.0,
-            "roughness": 0.5,
-            "emissiveColor": [
-              1.0,
-              0.55,
-              0.1
-            ],
-            "emissiveStrength": 7.0,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        }
-      ]
-    },
-    {
-      "path": "primitive://sphere#49",
-      "name": "Satellite",
-      "position": [
-        7.5,
-        3.2,
+        0.4,
+        0.4,
         0.4
       ],
+      "id": 62,
+      "parentId": -1,
+      "order": 62,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.9,
+              0.2,
+              0.2
+            ],
+            "metallic": 0.1,
+            "roughness": 0.3,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 1,
+        "halfExtents": [
+          0.5,
+          0,
+          0
+        ],
+        "friction": 0.3,
+        "bounciness": 0.5
+      },
+      "Rigidbody": {
+        "Mass": 1.5,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.02,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "path": "primitive://sphere#ball1",
+      "name": "Rolling Ball 1",
+      "position": [
+        9.05,
+        3.4,
+        2.3
+      ],
       "rotation": [
         0,
         0,
         0
       ],
       "scale": [
-        0.28,
-        0.28,
-        0.28
+        0.4,
+        0.4,
+        0.4
       ],
-      "id": 49,
-      "parentId": 48,
-      "order": 49,
+      "id": 63,
+      "parentId": -1,
+      "order": 63,
       "materials": [
         {
           "embedded": {
             "baseColor": [
-              0.02,
-              0.06,
-              0.02
+              0.2,
+              0.6,
+              0.9
             ],
-            "metallic": 0.0,
-            "roughness": 0.5,
+            "metallic": 0.1,
+            "roughness": 0.3,
             "emissiveColor": [
-              0.3,
-              1.0,
-              0.35
+              0,
+              0,
+              0
             ],
-            "emissiveStrength": 8.0,
+            "emissiveStrength": 1,
             "triplanar": false,
-            "triplanarScale": 1.0
+            "triplanarScale": 1
           }
         }
       ],
-      "animator": {
-        "orbitAxis": [
+      "collider": {
+        "isTrigger": false,
+        "shape": 1,
+        "halfExtents": [
+          0.5,
           0,
-          1,
           0
         ],
-        "orbitDegPerSec": 40.0,
-        "orbitRadius": 3.2,
-        "bobAmplitude": 0.4,
-        "bobFreqHz": 0.5
+        "friction": 0.3,
+        "bounciness": 0.5
+      },
+      "Rigidbody": {
+        "Mass": 1.5,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.02,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "path": "primitive://sphere#ball2",
+      "name": "Rolling Ball 2",
+      "position": [
+        9.1,
+        3.4,
+        1.6
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "id": 64,
+      "parentId": -1,
+      "order": 64,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.95,
+              0.85,
+              0.2
+            ],
+            "metallic": 0.1,
+            "roughness": 0.3,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 1,
+        "halfExtents": [
+          0.5,
+          0,
+          0
+        ],
+        "friction": 0.3,
+        "bounciness": 0.5
+      },
+      "Rigidbody": {
+        "Mass": 1.5,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.02,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "path": "primitive://sphere#ball3",
+      "name": "Rolling Ball 3",
+      "position": [
+        9.15,
+        3.4,
+        0.9000000000000004
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "id": 65,
+      "parentId": -1,
+      "order": 65,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.3,
+              0.9,
+              0.4
+            ],
+            "metallic": 0.1,
+            "roughness": 0.3,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 1,
+        "halfExtents": [
+          0.5,
+          0,
+          0
+        ],
+        "friction": 0.3,
+        "bounciness": 0.5
+      },
+      "Rigidbody": {
+        "Mass": 1.5,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.02,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "path": "primitive://sphere#ball4",
+      "name": "Rolling Ball 4",
+      "position": [
+        9.2,
+        3.4,
+        0.20000000000000018
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "id": 66,
+      "parentId": -1,
+      "order": 66,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.8,
+              0.4,
+              0.9
+            ],
+            "metallic": 0.1,
+            "roughness": 0.3,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 1,
+        "halfExtents": [
+          0.5,
+          0,
+          0
+        ],
+        "friction": 0.3,
+        "bounciness": 0.5
+      },
+      "Rigidbody": {
+        "Mass": 1.5,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.02,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "path": "primitive://capsule#log",
+      "name": "Log",
+      "position": [
+        18,
+        0.3,
+        -6.5
+      ],
+      "rotation": [
+        0,
+        0,
+        90
+      ],
+      "scale": [
+        0.5,
+        1.6,
+        0.5
+      ],
+      "id": 69,
+      "parentId": -1,
+      "order": 69,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.35,
+              0.22,
+              0.12
+            ],
+            "metallic": 0,
+            "roughness": 0.7,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 2,
+        "halfExtents": [
+          0.25,
+          0.25,
+          0
+        ],
+        "friction": 0.5,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 8,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.05,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "path": "primitive://cone#pin",
+      "name": "Traffic Cone",
+      "position": [
+        24,
+        0.6,
+        -6
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.7,
+        1,
+        0.7
+      ],
+      "id": 70,
+      "parentId": -1,
+      "order": 70,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.9,
+              0.35,
+              0.05
+            ],
+            "metallic": 0,
+            "roughness": 0.5,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 3,
+        "friction": 0.6,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 1,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.05,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "path": "primitive://sphere#pend",
+      "name": "Pendulum Weight",
+      "position": [
+        -3.6,
+        3,
+        14
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.7,
+        0.7,
+        0.7
+      ],
+      "id": 76,
+      "parentId": -1,
+      "order": 76,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.6,
+              0.62,
+              0.66
+            ],
+            "metallic": 0.9,
+            "roughness": 0.3,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 1,
+        "halfExtents": [
+          0.5,
+          0,
+          0
+        ],
+        "friction": 0.4,
+        "bounciness": 0.3
+      },
+      "Rigidbody": {
+        "Mass": 12,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.02,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      },
+      "joint": {
+        "type": 1,
+        "connectedOrder": -1,
+        "anchor": [
+          -2.4,
+          3.4,
+          0
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "breakForce": 0,
+        "breakTorque": 0,
+        "useLimit": false,
+        "limitLower": -45,
+        "limitUpper": 45
+      }
+    },
+    {
+      "path": "primitive://capsule#chain0",
+      "name": "Chain Link 0",
+      "position": [
+        3,
+        6,
+        10
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "scale": [
+        0.3,
+        1,
+        0.3
+      ],
+      "id": 79,
+      "parentId": -1,
+      "order": 79,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.3,
+              0.3,
+              0.33
+            ],
+            "metallic": 0.8,
+            "roughness": 0.35,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 2,
+        "halfExtents": [
+          0.25,
+          0.25,
+          0
+        ],
+        "friction": 0.5,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 2,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.2,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      },
+      "joint": {
+        "type": 1,
+        "connectedOrder": -1,
+        "anchor": [
+          0,
+          0.25,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "breakForce": 0,
+        "breakTorque": 0,
+        "useLimit": false,
+        "limitLower": -45,
+        "limitUpper": 45
+      }
+    },
+    {
+      "path": "primitive://capsule#chain1",
+      "name": "Chain Link 1",
+      "position": [
+        3,
+        5.5,
+        10
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "scale": [
+        0.3,
+        1,
+        0.3
+      ],
+      "id": 80,
+      "parentId": -1,
+      "order": 80,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.3,
+              0.3,
+              0.33
+            ],
+            "metallic": 0.8,
+            "roughness": 0.35,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 2,
+        "halfExtents": [
+          0.25,
+          0.25,
+          0
+        ],
+        "friction": 0.5,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 2,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.2,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      },
+      "joint": {
+        "type": 1,
+        "connectedOrder": 79,
+        "anchor": [
+          0,
+          0.25,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "breakForce": 0,
+        "breakTorque": 0,
+        "useLimit": false,
+        "limitLower": -45,
+        "limitUpper": 45
+      }
+    },
+    {
+      "path": "primitive://capsule#chain2",
+      "name": "Chain Link 2",
+      "position": [
+        3,
+        5,
+        10
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "scale": [
+        0.3,
+        1,
+        0.3
+      ],
+      "id": 81,
+      "parentId": -1,
+      "order": 81,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.3,
+              0.3,
+              0.33
+            ],
+            "metallic": 0.8,
+            "roughness": 0.35,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 2,
+        "halfExtents": [
+          0.25,
+          0.25,
+          0
+        ],
+        "friction": 0.5,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 2,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.2,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      },
+      "joint": {
+        "type": 1,
+        "connectedOrder": 80,
+        "anchor": [
+          0,
+          0.25,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "breakForce": 400,
+        "breakTorque": 0,
+        "useLimit": false,
+        "limitLower": -45,
+        "limitUpper": 45
+      }
+    },
+    {
+      "path": "primitive://capsule#chain3",
+      "name": "Chain Link 3",
+      "position": [
+        3,
+        4.5,
+        10
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "scale": [
+        0.3,
+        1,
+        0.3
+      ],
+      "id": 82,
+      "parentId": -1,
+      "order": 82,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.3,
+              0.3,
+              0.33
+            ],
+            "metallic": 0.8,
+            "roughness": 0.35,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 2,
+        "halfExtents": [
+          0.25,
+          0.25,
+          0
+        ],
+        "friction": 0.5,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 2,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.2,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      },
+      "joint": {
+        "type": 1,
+        "connectedOrder": 81,
+        "anchor": [
+          0,
+          0.25,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "breakForce": 0,
+        "breakTorque": 0,
+        "useLimit": false,
+        "limitLower": -45,
+        "limitUpper": 45
+      }
+    },
+    {
+      "path": "primitive://capsule#chain4",
+      "name": "Chain Link 4",
+      "position": [
+        3,
+        4,
+        10
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "scale": [
+        0.3,
+        1,
+        0.3
+      ],
+      "id": 83,
+      "parentId": -1,
+      "order": 83,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.3,
+              0.3,
+              0.33
+            ],
+            "metallic": 0.8,
+            "roughness": 0.35,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 2,
+        "halfExtents": [
+          0.25,
+          0.25,
+          0
+        ],
+        "friction": 0.5,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 2,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.1,
+        "Angular Damping": 0.2,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      },
+      "joint": {
+        "type": 1,
+        "connectedOrder": 82,
+        "anchor": [
+          0,
+          0.25,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "breakForce": 0,
+        "breakTorque": 0,
+        "useLimit": false,
+        "limitLower": -45,
+        "limitUpper": 45
+      }
+    },
+    {
+      "path": "primitive://sphere#chainweight",
+      "name": "Chain Weight",
+      "position": [
+        3,
+        3.5,
+        10
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "id": 84,
+      "parentId": -1,
+      "order": 84,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.5,
+              0.5,
+              0.55
+            ],
+            "metallic": 0.9,
+            "roughness": 0.25,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 1,
+        "halfExtents": [
+          0.5,
+          0,
+          0
+        ],
+        "friction": 0.5,
+        "bounciness": 0.1
+      },
+      "Rigidbody": {
+        "Mass": 5,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.05,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      },
+      "joint": {
+        "type": 1,
+        "connectedOrder": 83,
+        "anchor": [
+          0,
+          0.5,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "breakForce": 0,
+        "breakTorque": 0,
+        "useLimit": false,
+        "limitLower": -45,
+        "limitUpper": 45
+      }
+    },
+    {
+      "path": "primitive://sphere#pick0",
+      "name": "Pickup Sphere",
+      "position": [
+        -10,
+        1.4,
+        5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "id": 91,
+      "parentId": -1,
+      "order": 91,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.85,
+              0.1,
+              0.15
+            ],
+            "metallic": 0.2,
+            "roughness": 0.3,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 1,
+        "halfExtents": [
+          0.5,
+          0,
+          0
+        ],
+        "friction": 0.6,
+        "bounciness": 0.4
+      },
+      "Rigidbody": {
+        "Mass": 2,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.05,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "path": "primitive://capsule#pick2",
+      "name": "Pickup Capsule",
+      "position": [
+        -16,
+        1.5,
+        5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.5,
+        0.9,
+        0.5
+      ],
+      "id": 95,
+      "parentId": -1,
+      "order": 95,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.9,
+              0.7,
+              0.15
+            ],
+            "metallic": 0.1,
+            "roughness": 0.4,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 2,
+        "halfExtents": [
+          0.25,
+          0.25,
+          0
+        ],
+        "friction": 0.6,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 3,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.05,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
+      }
+    },
+    {
+      "path": "primitive://cone#pick3",
+      "name": "Pickup Cone",
+      "position": [
+        -19,
+        1.5,
+        5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.7,
+        1,
+        0.7
+      ],
+      "id": 97,
+      "parentId": -1,
+      "order": 97,
+      "materials": [
+        {
+          "embedded": {
+            "baseColor": [
+              0.55,
+              0.2,
+              0.85
+            ],
+            "metallic": 0.2,
+            "roughness": 0.3,
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveStrength": 1,
+            "triplanar": false,
+            "triplanarScale": 1
+          }
+        }
+      ],
+      "collider": {
+        "isTrigger": false,
+        "shape": 3,
+        "friction": 0.6,
+        "bounciness": 0
+      },
+      "Rigidbody": {
+        "Mass": 2.5,
+        "Use Gravity": true,
+        "Is Kinematic": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Linear Damping": 0.05,
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false
       }
     }
   ],
