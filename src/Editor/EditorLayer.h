@@ -469,6 +469,9 @@ public:
     // True once any edit has happened since the last Save/Save As/Open/New — main.cpp reads
     // this to show an unsaved-changes indicator in the window title.
     bool IsDirty() const { return m_Dirty; }
+    // Public entry point for the toolbar's document-strip Save button (API v20) — DoSave() itself
+    // is private since File > Save already reaches it through DrawFileMenuBody.
+    void SaveScene(World& world, AssetLibrary& assets) { DoSave(world, assets); }
 
     // "Save changes?" on-exit prompt (audit #56). main.cpp intercepts the window-close request
     // when the scene is dirty, calls OpenExitPrompt(), and each frame polls TakeExitDecision():

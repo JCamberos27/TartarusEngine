@@ -440,6 +440,15 @@ void  HistDrawListBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawHistoryListBody(*g_World, *g_Assets);
 }
 
+// --- Document strip (API v20, Phase 3 item 1) --------------------------------------------
+void TbGetSceneDisplayName(char* out, int n) {
+    std::string name = g_Editor ? fs::path(g_Editor->CurrentScenePath()).filename().string() : std::string();
+    if (name.empty()) name = "Untitled";
+    AbPutStr(out, n, name);
+}
+bool TbGetSceneDirty() { return g_Editor && g_Editor->IsDirty(); }
+void TbDoSaveScene() { if (g_Editor && g_World && g_Assets) g_Editor->SaveScene(*g_World, *g_Assets); }
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
@@ -559,6 +568,10 @@ const EditorModuleHostAPI kHostAPI{
     // probeArray.Update() runs every frame in main.cpp; this request is informational for now —
     // future per-probe scene-capture baking will consume the flag from main.cpp.
     +[]() { /* probe bake: main.cpp's probeArray.Update() already runs every frame */ },
+    // --- Document strip (API v20) — order must match EditorModuleHostAPI exactly ---
+    &TbGetSceneDisplayName,
+    &TbGetSceneDirty,
+    &TbDoSaveScene,
 };
 
 } // namespace

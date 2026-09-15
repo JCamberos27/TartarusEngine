@@ -176,9 +176,30 @@ void Draw(const EditorModuleHostAPI& host) {
     // squares (audit #66 / #147).
     auto divider = []() { VSeparator(1.5f); };
 
+    // --- Document strip (Zone A, Phase 3 item 1) --------------------------------------------
+    // The open scene's name + an unsaved-changes dot, plus Undo/Redo/Save — until now there was
+    // no visible Save control anywhere in the editor (audit #5), only File > Save and Ctrl+S.
+    {
+        char sceneName[128] = "Untitled";
+        if (host.GetSceneDisplayName) host.GetSceneDisplayName(sceneName, (int)sizeof(sceneName));
+        const bool dirty = host.GetSceneDirty && host.GetSceneDirty();
+
+        ImGui::AlignTextToFramePadding();
+        if (dirty) {
+            ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), ICON_FA_CIRCLE);
+            if (ImGui::IsItemHovered()) Tooltip(host, "Unsaved changes");
+            ImGui::SameLine(0.0f, 6.0f);
+        }
+        ImGui::TextUnformatted(sceneName);
+        ImGui::SameLine();
+    }
+    divider();
+
     if (ActionButton(host, ICON_FA_ROTATE_LEFT, "Undo (Ctrl+Z)") && host.ToolbarUndo) host.ToolbarUndo();
     ImGui::SameLine();
     if (ActionButton(host, ICON_FA_ROTATE_RIGHT, "Redo (Ctrl+Y)") && host.ToolbarRedo) host.ToolbarRedo();
+    ImGui::SameLine();
+    if (ActionButton(host, ICON_FA_FLOPPY_DISK, "Save (Ctrl+S)") && host.DoSaveScene) host.DoSaveScene();
 
     const int gizmoOp = host.GetGizmoOp ? host.GetGizmoOp() : 0; // 0 Translate 1 Rotate 2 Scale 3 Rect 4 Universal
     const bool handTool = host.GetHandTool && host.GetHandTool();
