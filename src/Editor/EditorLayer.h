@@ -1619,6 +1619,18 @@ private:
     // corner: a rotate ring plus small dolly/pan buttons underneath. Camera is yaw/pitch, not
     // quaternion, so this converts to/from a quaternion around the call into the library.
     void DrawViewGizmo(World& world, Camera& editorCamera);
+
+    // Phase 3 item 3 — the vertical tool palette docked to the Scene viewport's left edge
+    // (Blender's T-panel model, audit #5 Q7): Hand/Translate/Rotate/Scale/Rect/Universal,
+    // Measure, Duplicate Array, and the Local/World + Pivot/Center toggles that used to live in
+    // the top toolbar strip. Drawn inside Scene's own Begin/End (EditorLayer.cpp) as a child
+    // region with its own opaque plate, not a separate floating window — collapsible to a thin
+    // strip via EditorSettings::ToolPaletteCollapsed.
+    void DrawToolPalette(World& world, Camera& editorCamera);
+    // The view-state chips (audit #5 item 3): draw mode + orthographic/perspective, anchored to
+    // the viewport's top-right, left of DrawViewGizmo's nav-gizmo cluster so the two don't
+    // overlap. Also moved out of the top toolbar strip.
+    void DrawViewStateChips(World& world, Camera& editorCamera);
     // True for the frame(s) the mouse is hovering or dragging the nav gizmo above — set inside
     // DrawViewGizmo() (called before HandleViewportPicking() in Draw()) so picking can skip
     // starting a box-select/pick from a click that's actually meant for the nav gizmo. The nav

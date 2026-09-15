@@ -2077,6 +2077,12 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             // unchanged against ViewportPos()/ViewportSize().
             ImGui::Image((ImTextureID)(intptr_t)m_SceneColorTexture, contentSize, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
         }
+
+        // Phase 3 item 3 — drawn inside Scene's own Begin/End (painting on top of the Image()
+        // above, in this same window) rather than a separate floating window; see
+        // EditorLayer_ToolPalette.cpp for why. Skipped for a clean capture, same as every other
+        // viewport overlay.
+        if (!m_HideOverlaysThisFrame) DrawToolPalette(world, editorCamera);
     } else {
         m_ViewportPos = {0.0f, 0.0f};
         m_ViewportSize = {0.0f, 0.0f};
@@ -2177,6 +2183,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // box-select/pick underneath it. Its overlay forces itself above the Scene image but then
     // re-fronts any floating window that could overlap it (see KeepFloatingWindowsAboveOverlay).
     if (!m_HideOverlaysThisFrame) DrawViewGizmo(world, editorCamera);
+    // Phase 3 item 3 — draw mode + ortho/persp chips, offset left of the nav-gizmo cluster above.
+    DrawViewStateChips(world, editorCamera);
 
     if (!vHeld) {
         if (m_HandTool) {
