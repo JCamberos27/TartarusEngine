@@ -277,6 +277,92 @@ void RegisterEngineComponents() {
         },
     });
 
+    // Phase 4 (#6) item 1 — Collider. Registered for the generic Inspector/Add-Component path
+    // only: GenericSerialize stays false because a dedicated hand-written pass in
+    // SceneSerializer.cpp already reads/writes it under a "collider" JSON key predating this
+    // reflection layer (issue #185 PR 2) — flipping GenericSerialize on would have the generic
+    // per-component pass write it a second time under a different key, corrupting saved scenes
+    // with no benefit (Inspector genericization works directly against the live struct, entirely
+    // independent of how it's persisted). HalfExtents is EditorHidden: it means something
+    // different per Shape (three half-extents for Box, just .x as a radius for Sphere, .x/.y as
+    // radius/half-height for Capsule, unused for Convex Hull/Mesh) — a single ReflectField can't
+    // relabel/reshape itself like that, so the per-shape size row stays hand-coded in
+    // DrawReflectedComponentExtra("Collider", Bottom), same escape hatch Light's Kelvin bar uses.
+    {
+        ReflectComponent m;
+        m.Name = "Collider"; m.Icon = ICON_FA_CUBE; m.Category = "Physics";
+        m.Tooltip = "Blocks movement and is hit by raycasts. While playing this drives a PhysX actor:\n"
+                    "static on its own, dynamic/kinematic with a sibling Rigidbody. The shape below\n"
+                    "picks its geometry.";
+        m.GenericSerialize = false;
+        m.Key = "collider"; // matches the hand-written SceneSerializer JSON key (#185 PR 2) — see ReflectComponent::Key
+        m.Fields = {
+            { "Shape", T::Enum, TARTARUS_REFLECT_FIELD(ColliderComponent, Kind), 0.0f,
+              "Box / Sphere / Capsule are analytic primitives sized by the fields below.\n"
+              "Convex Hull / Mesh cook a shape from this object's mesh + scale:\n"
+              "Convex Hull works on any body; Mesh (triangle mesh) is static / kinematic only\n"
+              "(a dynamic Mesh collider falls back to a convex hull)." },
+            { "Is Trigger", T::Bool, TARTARUS_REFLECT_FIELD(ColliderComponent, IsTrigger), 0.0f,
+              "A trigger reports enter / stay / exit overlaps to gameplay\nbut doesn't block movement." },
+            { "Center", T::Vec3, TARTARUS_REFLECT_FIELD(ColliderComponent, Center), 0.05f,
+              "Shape offset from the object's origin, local space." },
+            { "Bounciness", T::Float, TARTARUS_REFLECT_FIELD(ColliderComponent, Bounciness), 0.0f,
+              "Restitution: 0 stops dead, 1 loses no energy on a bounce.", 0.0f, 1.0f },
+            { "Friction", T::Float, TARTARUS_REFLECT_FIELD(ColliderComponent, Friction), 0.0f,
+              "Combined static + dynamic friction. 0 = ice.", 0.0f, 2.0f },
+            { "HalfExtents", T::Vec3, TARTARUS_REFLECT_FIELD(ColliderComponent, HalfExtents), 0.05f },
+        };
+        auto F = [&](const char* name) -> ReflectField& {
+            for (auto& f : m.Fields) if (std::strcmp(f.Name, name) == 0) return f;
+            return m.Fields[0];
+        };
+        F("Shape").EnumLabels = "Box\0Sphere\0Capsule\0Convex Hull\0Mesh\0"; F("Shape").EnumCount = 5;
+        F("Bounciness").Slider = true; F("Bounciness").Format = "%.2f";
+        F("Friction").Slider = true; F("Friction").Format = "%.2f";
+        F("HalfExtents").EditorHidden = true;
+        Register<ColliderComponent>(std::move(m));
+    }
+
+    // Phase 4 (#6) item 1 — Joint. Same GenericSerialize = false reasoning as Collider (a
+    // dedicated hand-written "joint" JSON pass predates this, #185 PR 11). ConnectedOrder needs a
+    // custom entity picker (enumerates every OrderComponent in the scene, not a fixed asset/enum
+    // list); Axis is only meaningful for Hinge/Slider and UseLimit/LimitLower/LimitUpper only for
+    // Hinge/Slider/Distance — VisibleIfField only expresses "equals" or "not-equals" ONE sibling
+    // value, not membership in a set of two, so these stay EditorHidden and hand-coded together in
+    // DrawReflectedComponentExtra("Joint", Bottom) rather than stretching the reflection schema
+    // for one component (see the schema note if a second component ever needs this).
+    {
+        ReflectComponent m;
+        m.Name = "Joint"; m.Icon = ICON_FA_LINK; m.Category = "Physics";
+        m.Tooltip = "Constrains this body to another (or the world) while playing. Needs a Rigidbody\n"
+                    "on this object and, unless connected to the world, on the target too.";
+        m.GenericSerialize = false;
+        m.Key = "joint"; // matches the hand-written SceneSerializer JSON key (#185 PR 11) — see ReflectComponent::Key
+        m.Fields = {
+            { "Type", T::Enum, TARTARUS_REFLECT_FIELD(JointComponent, Kind), 0.0f,
+              "Fixed weld; Hinge/Slider use the Axis; Ball is a point pivot; Distance is a leash." },
+            { "Anchor", T::Vec3, TARTARUS_REFLECT_FIELD(JointComponent, Anchor), 0.05f,
+              "Joint point in this object's local space." },
+            { "Break Force", T::Float, TARTARUS_REFLECT_FIELD(JointComponent, BreakForce), 1.0f,
+              "Force (N) that snaps the joint. 0 = unbreakable.", 0.0f, 1.0e6f, false, false, "%.0f" },
+            { "Break Torque", T::Float, TARTARUS_REFLECT_FIELD(JointComponent, BreakTorque), 1.0f,
+              "Torque (N\xC2\xB7m) that snaps the joint. 0 = unbreakable.", 0.0f, 1.0e6f, false, false, "%.0f" },
+            { "ConnectedOrder", T::Int, TARTARUS_REFLECT_FIELD(JointComponent, ConnectedOrder) },
+            { "Axis", T::Vec3, TARTARUS_REFLECT_FIELD(JointComponent, Axis), 0.02f },
+            { "UseLimit", T::Bool, TARTARUS_REFLECT_FIELD(JointComponent, UseLimit) },
+            { "LimitLower", T::Float, TARTARUS_REFLECT_FIELD(JointComponent, LimitLower), 0.5f },
+            { "LimitUpper", T::Float, TARTARUS_REFLECT_FIELD(JointComponent, LimitUpper), 0.5f },
+        };
+        auto F = [&](const char* name) -> ReflectField& {
+            for (auto& f : m.Fields) if (std::strcmp(f.Name, name) == 0) return f;
+            return m.Fields[0];
+        };
+        F("Type").EnumLabels = "Fixed\0Hinge\0Ball\0Slider\0Distance\0"; F("Type").EnumCount = 5;
+        for (const char* h : { "ConnectedOrder", "Axis", "UseLimit", "LimitLower", "LimitUpper" })
+            F(h).EditorHidden = true;
+        Register<JointComponent>(std::move(m));
+    }
+
     // #315 — Mesh Renderer. Registered so the component-registration guard rail counts it and
     // its Icon/Category live here, but BOTH generic paths are opted out: RenderableComponent
     // holds a shared_ptr<Model> (no reflectable fields), its scene form is the box "color/size"

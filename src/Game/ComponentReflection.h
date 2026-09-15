@@ -157,7 +157,7 @@ inline int ReflectEnumIndex(const ReflectField& f, const char* label) {
     (+[](void* c) -> void* { return &static_cast<ComponentType*>(c)->member; })
 
 struct ReflectComponent {
-    const char* Name = "";          // stable key: JSON object key, section title, menu label
+    const char* Name = "";          // display: section title, menu label, Copy/Paste clipboard tag
     const char* Icon = "";          // ICON_FA_* string
     const char* Tooltip = nullptr;  // section / menu tooltip
     // Add Component menu grouping — matches the hand-coded menu's SeparatorText headings
@@ -180,4 +180,25 @@ struct ReflectComponent {
     // keeps custom editor code because its widgets or add/remove side effects (Mesh Renderer's
     // DetachedMeshComponent stash needs the editor-only AssetLibrary) don't fit the generic path.
     bool GenericInspector = true;
+
+    // Stable prefab/scene JSON object key for this component — mirrors ReflectField::Key's exact
+    // rationale one level up. Defaults to Name (via ReflectComponentKey() below), which is correct
+    // for every GenericSerialize component (the generic pass writes/reads under Name verbatim).
+    // Set this explicitly for a GenericSerialize = false component whose hand-written JSON path
+    // predates this reflection layer under a DIFFERENT key than its display Name (Collider/Joint:
+    // "collider"/"joint", lowercase, #185) — SceneSerializer's prefab-diff/override machinery
+    // (IsPrefabFieldOverridden, IsPrefabComponentAdded, ApplyPrefabField/Component) looks the
+    // component up as a JSON object key, so leaving this at Name for such a component would silent-
+    // ly desync: e.g. IsPrefabComponentAdded would find no "Collider" key in the pristine JSON
+    // (the file has "collider") and misreport every prefab instance's real, unmodified Collider as
+    // user-added — including offering a "Revert to Prefab" that deletes it.
+    const char* Key = nullptr;
 };
+
+// The component's stable JSON key — Key when set, else Name (see ReflectComponent::Key).
+// SceneSerializer's prefab-diff/override lookups (and any other JSON-keyed use of a component's
+// identity) must key off this, never off Name directly, so a GenericSerialize=false component
+// with a legacy JSON key spelling doesn't silently desync — see ReflectComponent::Key.
+inline const char* ReflectComponentKey(const ReflectComponent& c) {
+    return (c.Key && c.Key[0]) ? c.Key : c.Name;
+}

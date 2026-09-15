@@ -1335,14 +1335,23 @@ PristineHit FindPristineEntity(const World& world, entt::entity entity) {
 }
 
 // The pristine JSON value for (component, field) on `hit.ent`, or a null json if absent.
+// `component` is a ReflectComponent::Name (a display label, e.g. from PrefabOverrideLabel/
+// DrawReflectedField) — translated to its JSON Key before touching `hit.ent`, since a
+// GenericSerialize=false component (Collider/Joint) can have a legacy JSON key that differs from
+// its Name (see ReflectComponent::Key). Using Name directly here would find nothing under the
+// pristine entity's actual (differently-spelled) key and silently report "not overridden" for
+// every field of such a component, no matter what the live value actually is.
 json PristineFieldValue(const PristineHit& hit, const char* component, const char* field) {
     if (!hit.ent) return nullptr;
     if (std::strcmp(component, "Transform") == 0)
         return hit.ent->contains(field) ? hit.ent->at(field) : json(nullptr);
     if (std::strcmp(component, "Name") == 0)
         return json(hit.ent->value("name", std::string()));
-    if (!hit.ent->contains(component)) return nullptr;
-    const json& cj = hit.ent->at(component);
+    const char* jsonKey = component;
+    for (const auto& rc : ComponentRegistry::All())
+        if (std::strcmp(rc.Meta.Name, component) == 0) { jsonKey = ReflectComponentKey(rc.Meta); break; }
+    if (!hit.ent->contains(jsonKey)) return nullptr;
+    const json& cj = hit.ent->at(jsonKey);
     return cj.contains(field) ? cj.at(field) : json(nullptr);
 }
 
@@ -1659,7 +1668,15 @@ bool SceneSerializer::ApplyPrefabField(World& world, entt::entity entity,
 
     if (std::strcmp(component, "Transform") == 0)      (*pe)[field] = value;
     else if (std::strcmp(component, "Name") == 0)      (*pe)["name"] = value;
-    else                                              (*pe)[component][field] = value;
+    else {
+        // `component` is a display Name; translate to its JSON Key before writing (see
+        // ReflectComponent::Key / PristineFieldValue's comment) — a GenericSerialize=false
+        // component (Collider/Joint) can have a legacy JSON key that differs from its Name.
+        const char* jsonKey = component;
+        for (const auto& rc : ComponentRegistry::All())
+            if (std::strcmp(rc.Meta.Name, component) == 0) { jsonKey = ReflectComponentKey(rc.Meta); break; }
+        (*pe)[jsonKey][field] = value;
+    }
 
     std::ofstream out(pi.SourcePath);
     if (!out.is_open()) return false;
@@ -1680,7 +1697,12 @@ bool SceneSerializer::IsPrefabComponentAdded(const World& world, entt::entity en
     if (!hit.ent) return false;
     for (const auto& rc : ComponentRegistry::All())
         if (std::strcmp(rc.Meta.Name, component) == 0)
-            return rc.Has(world.Registry, entity) && !hit.ent->contains(component);
+            // ReflectComponentKey, not `component` (a display Name) directly — a
+            // GenericSerialize=false component (Collider/Joint) can have a legacy JSON key that
+            // differs from its Name (see ReflectComponent::Key). Checking Name here would find no
+            // "Collider" key in the pristine JSON (it's stored as "collider") and misreport every
+            // prefab instance's real, unmodified Collider as user-added.
+            return rc.Has(world.Registry, entity) && !hit.ent->contains(ReflectComponentKey(rc.Meta));
     return false;
 }
 
@@ -1721,7 +1743,9 @@ bool SceneSerializer::ApplyPrefabComponent(World& world, entt::entity entity, co
     const void* comp = rcp->GetConst(world.Registry, entity);
     for (const auto& f : rcp->Meta.Fields)
         cj[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
-    (*pe)[component] = std::move(cj);
+    // ReflectComponentKey, not `component` (a display Name) directly — see IsPrefabComponentAdded's
+    // comment above for why (Collider/Joint's legacy lowercase JSON key).
+    (*pe)[ReflectComponentKey(rcp->Meta)] = std::move(cj);
 
     std::ofstream out(pi.SourcePath);
     if (!out.is_open()) return false;
