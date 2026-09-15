@@ -1103,11 +1103,34 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
                 : (shared.empty() ? "(none)"
                    : (missing ? ICON_FA_TRIANGLE_EXCLAMATION "  " : std::string()) +
                      std::filesystem::path(shared).filename().string());
+            // #6 item 3 — a "ping" button (jump the Asset Browser to this reference) alongside the
+            // existing picker combo, so the combo doesn't have to claim the whole row's width.
+            // Only meaningful for a single, resolved, present reference — not mixed/empty/missing.
+            const bool canPing = !mixed && !shared.empty() && !missing;
+            const float pingW = ImGui::GetFrameHeight();
+            ImGui::SetNextItemWidth(-(pingW + ImGui::GetStyle().ItemInnerSpacing.x));
             if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
             const bool comboOpen = ImGui::BeginCombo("##v", preview.c_str());
             if (missing) ImGui::PopStyleColor();
             if (missing && ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Missing: %s\nThe referenced file no longer exists at this path.", shared.c_str());
+            // The AssetKind -> payload-type mapping the Asset Browser's own drag sources already
+            // use (EditorLayer_AssetBrowser.cpp) — Model/Script have no Asset Browser cell kind of
+            // their own yet, so nothing drags for those (matches AssetRefPathList's own gap: no
+            // picker choices for them either).
+            const char* payloadType = f.AssetKind == ReflectAssetKind::Sound    ? "ASSET_SOUND_PATH"
+                                     : f.AssetKind == ReflectAssetKind::Texture ? "ASSET_TEXTURE_PATH"
+                                     : f.AssetKind == ReflectAssetKind::Material ? "ASSET_MATERIAL_PATH"
+                                     : nullptr;
+            if (payloadType && ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(payloadType)) {
+                    std::string path((const char*)p->Data);
+                    StageUndo(world);
+                    forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e)) = path; });
+                    CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                }
+                ImGui::EndDragDropTarget();
+            }
             if (comboOpen) {
                 if (ImGui::Selectable("(none)", !mixed && shared.empty())) {
                     StageUndo(world);
@@ -1122,6 +1145,16 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
                     }
                 ImGui::EndCombo();
             }
+            ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+            ImGui::BeginDisabled(!canPing);
+            if (ActionButton(ICON_FA_MAGNIFYING_GLASS_LOCATION,
+                             canPing ? "Show in Asset Browser" : "Show in Asset Browser (nothing to show)",
+                             false, ImVec2(pingW, 0.0f)) && canPing) {
+                m_SelectedAssetKey = shared;
+                m_SelectedAssetIsFolder = false;
+                m_CurrentAssetFolder = assets.AssetFolder(shared);
+            }
+            ImGui::EndDisabled();
             break;
         }
         case ReflectFieldType::Color: {
