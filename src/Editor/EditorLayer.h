@@ -890,7 +890,9 @@ private:
 
     GizmoOp m_GizmoOp = GizmoOp::Translate;
     bool m_GizmoLocalSpace = false; // false = world-aligned handles, true = aligned to the object's own rotation
-    float m_GizmoSize = 0.09f;      // Compact reach keeps the axes close to the selected object.
+    // Phase 3 item 6 (audit #5) — raised from 0.09, which read as cramped against the object;
+    // still overridable via Preferences > Viewport's "Gizmo size" slider (0.05-0.40).
+    float m_GizmoSize = 0.15f;
     bool m_GizmoEngaged = false;
     bool m_GizmoWasUsing = false;
 

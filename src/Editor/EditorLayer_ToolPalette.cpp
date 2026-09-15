@@ -112,14 +112,15 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
 
 // The view-state chips (audit #5 item 3) — draw mode + orthographic/perspective, pinned to the
 // viewport's top-right. Offset left of DrawViewGizmo's nav-gizmo cluster by a fixed clearance
-// mirroring that function's own margin/gizmoRadius math (EditorLayer_Gizmos.cpp) — Phase 3 item 6
-// (enlarging the nav gizmo) will need to revisit this constant alongside it.
+// mirroring that function's own margin/gizmoRadius math (EditorLayer_Gizmos.cpp).
 void EditorLayer::DrawViewStateChips(World& world, Camera& editorCamera) {
     if (!m_SceneViewportVisible || m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
     if (m_HideOverlaysThisFrame) return;
 
     const float margin = 14.0f * m_UIScale;
-    const float navGizmoClearance = 150.0f * m_UIScale; // ~= margin + 2*gizmoRadius + buffer
+    // Phase 3 item 6 enlarged the nav gizmo (style.scale 0.5 -> 0.7, gizmoRadius 64px -> ~90px at
+    // UIScale 1) — this clearance grew with it: margin(14) + 2*gizmoRadius(~179) + a buffer.
+    const float navGizmoClearance = 210.0f * m_UIScale; // ~= margin + 2*gizmoRadius + buffer
 
     ImGui::SetNextWindowPos(
         ImVec2(m_ViewportPos.x + m_ViewportSize.x - navGizmoClearance, m_ViewportPos.y + margin),
