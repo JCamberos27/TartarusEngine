@@ -22,6 +22,7 @@
 
 #include "EditorModuleAPI.h"
 #include "EditorUIPrimitives.h"
+#include "EditorIcons.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImFloor
@@ -84,14 +85,14 @@ void DrawWindowControls(const EditorModuleHostAPI& host) {
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 1.0f, 1.0f, 0.16f));
 
     ImGui::PushID("win_min");
-    if (ImGui::Button(ICON_FA_MINUS, ImVec2(bw, 0.0f)) && host.WindowMinimize) host.WindowMinimize();
+    if (ImGui::Button(EDITOR_ICON_WINDOW_MINIMIZE, ImVec2(bw, 0.0f)) && host.WindowMinimize) host.WindowMinimize();
     if (ImGui::IsItemHovered()) Tooltip(host, "Minimize");
     ImGui::PopID();
     ImGui::SameLine();
 
     const bool maxed = host.WindowIsMaximized && host.WindowIsMaximized();
     ImGui::PushID("win_max");
-    if (ImGui::Button(maxed ? ICON_FA_COMPRESS : ICON_FA_EXPAND, ImVec2(bw, 0.0f)) && host.WindowToggleMaximize)
+    if (ImGui::Button(maxed ? EDITOR_ICON_WINDOW_RESTORE : EDITOR_ICON_WINDOW_MAXIMIZE, ImVec2(bw, 0.0f)) && host.WindowToggleMaximize)
         host.WindowToggleMaximize();
     if (ImGui::IsItemHovered()) Tooltip(host, maxed ? "Restore" : "Maximize");
     ImGui::PopID();
@@ -100,7 +101,7 @@ void DrawWindowControls(const EditorModuleHostAPI& host) {
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.86f, 0.15f, 0.18f, 0.92f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.78f, 0.12f, 0.15f, 1.0f));
     ImGui::PushID("win_close");
-    if (ImGui::Button(ICON_FA_XMARK, ImVec2(bw, 0.0f)) && host.WindowClose) host.WindowClose();
+    if (ImGui::Button(EDITOR_ICON_WINDOW_CLOSE, ImVec2(bw, 0.0f)) && host.WindowClose) host.WindowClose();
     if (ImGui::IsItemHovered()) Tooltip(host, "Close");
     ImGui::PopID();
     ImGui::PopStyleColor(2);
@@ -200,11 +201,11 @@ void Draw(const EditorModuleHostAPI& host) {
     }
     divider();
 
-    if (ActionButton(host, ICON_FA_ROTATE_LEFT, "Undo (Ctrl+Z)") && host.ToolbarUndo) host.ToolbarUndo();
+    if (ActionButton(host, EDITOR_ICON_UNDO, "Undo (Ctrl+Z)") && host.ToolbarUndo) host.ToolbarUndo();
     ImGui::SameLine();
-    if (ActionButton(host, ICON_FA_ROTATE_RIGHT, "Redo (Ctrl+Y)") && host.ToolbarRedo) host.ToolbarRedo();
+    if (ActionButton(host, EDITOR_ICON_REDO, "Redo (Ctrl+Y)") && host.ToolbarRedo) host.ToolbarRedo();
     ImGui::SameLine();
-    if (ActionButton(host, ICON_FA_FLOPPY_DISK, "Save (Ctrl+S)") && host.DoSaveScene) host.DoSaveScene();
+    if (ActionButton(host, EDITOR_ICON_SAVE, "Save (Ctrl+S)") && host.DoSaveScene) host.DoSaveScene();
 
     // --- Play controls (Zone B, Phase 3 item 2) ---------------------------------------------
     // Replaces the old floating `##PlayStopButton` overlay for windowed play — that overlay sat
@@ -221,10 +222,10 @@ void Draw(const EditorModuleHostAPI& host) {
 
     divider();
     const bool showGrid = host.GetShowGrid && host.GetShowGrid();
-    if (ActionButton(host, ICON_FA_TABLE_CELLS, "Toggle Grid", showGrid) && host.SetShowGrid) host.SetShowGrid(!showGrid);
+    if (ActionButton(host, EDITOR_ICON_GRID, "Toggle Grid", showGrid) && host.SetShowGrid) host.SetShowGrid(!showGrid);
     ImGui::SameLine();
     const bool gridSnap = host.GetGridSnapEnabled && host.GetGridSnapEnabled();
-    if (ActionButton(host, ICON_FA_MAGNET, "Toggle Snap to Grid (hold Ctrl to invert while dragging)", gridSnap)
+    if (ActionButton(host, EDITOR_ICON_SNAP_TO_GRID, "Toggle Snap to Grid (hold Ctrl to invert while dragging)", gridSnap)
             && host.SetGridSnapEnabled) {
         host.SetGridSnapEnabled(!gridSnap);
     }
@@ -232,7 +233,7 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::PushID("##gridSnapOpts");
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
-    if (ImGui::Button(ICON_FA_CARET_DOWN)) ImGui::OpenPopup("##GridSnapPopup");
+    if (ImGui::Button(EDITOR_ICON_CARET_DOWN)) ImGui::OpenPopup("##GridSnapPopup");
     ImGui::PopStyleColor(2);
     if (ImGui::IsItemHovered()) Tooltip(host, "Grid & snap settings");
     if (ImGui::BeginPopup("##GridSnapPopup")) {
@@ -245,14 +246,14 @@ void Draw(const EditorModuleHostAPI& host) {
     {
         const bool canSnap = host.CanSnapSelectionToGround && host.CanSnapSelectionToGround();
         ImGui::BeginDisabled(!canSnap);
-        if (ActionButton(host, ICON_FA_DOWN_LONG, "Snap selection to ground") && host.SnapSelectionToGround)
+        if (ActionButton(host, EDITOR_ICON_SNAP_TO_GROUND, "Snap selection to ground") && host.SnapSelectionToGround)
             host.SnapSelectionToGround();
         ImGui::EndDisabled();
     }
     ImGui::SameLine();
     {
         const bool gizmosOn = host.GetGizmosMasterVisible && host.GetGizmosMasterVisible();
-        if (ActionButton(host, ICON_FA_UP_DOWN_LEFT_RIGHT,
+        if (ActionButton(host, EDITOR_ICON_TOGGLE_GIZMOS,
                 "Toggle Gizmos (transform gizmo, entity icons, light gizmos)\nCaret: per-type visibility",
                 gizmosOn) && host.SetGizmosMasterVisible) {
             host.SetGizmosMasterVisible(!gizmosOn);
@@ -261,7 +262,7 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGui::PushID("##gizmosOpts");
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
-        if (ImGui::Button(ICON_FA_CARET_DOWN)) ImGui::OpenPopup("##GizmosPopup");
+        if (ImGui::Button(EDITOR_ICON_CARET_DOWN)) ImGui::OpenPopup("##GizmosPopup");
         ImGui::PopStyleColor(2);
         if (ImGui::IsItemHovered()) Tooltip(host, "Gizmo visibility");
         if (ImGui::BeginPopup("##GizmosPopup")) {
@@ -278,7 +279,7 @@ void Draw(const EditorModuleHostAPI& host) {
     divider();
     {
         const bool showStats = host.GetShowStats && host.GetShowStats();
-        if (ActionButton(host, ICON_FA_CHART_SIMPLE, "Toggle Statistics", showStats) && host.SetShowStats)
+        if (ActionButton(host, EDITOR_ICON_STATISTICS, "Toggle Statistics", showStats) && host.SetShowStats)
             host.SetShowStats(!showStats);
     }
     ImGui::SameLine();
@@ -287,12 +288,12 @@ void Draw(const EditorModuleHostAPI& host) {
         // across a TartarusEditor.dll reload, and so a hidden Console stays hidden through one.
         EditorConsoleState* cs = host.ConsoleState ? host.ConsoleState() : nullptr;
         const bool consoleVisible = cs && cs->Visible;
-        if (ActionButton(host, ICON_FA_TERMINAL, "Toggle Console", consoleVisible) && cs) cs->Visible = !cs->Visible;
+        if (ActionButton(host, EDITOR_ICON_CONSOLE, "Toggle Console", consoleVisible) && cs) cs->Visible = !cs->Visible;
     }
     ImGui::SameLine();
     {
         const bool showHistory = host.GetShowHistory && host.GetShowHistory();
-        if (ActionButton(host, ICON_FA_CLOCK_ROTATE_LEFT, "Toggle History", showHistory) && host.SetShowHistory)
+        if (ActionButton(host, EDITOR_ICON_HISTORY, "Toggle History", showHistory) && host.SetShowHistory)
             host.SetShowHistory(!showHistory);
     }
 
@@ -302,12 +303,12 @@ void Draw(const EditorModuleHostAPI& host) {
     {
         char tip[128] = "Capture screenshot (Print Screen)";
         if (host.GetCaptureButtonTooltip) host.GetCaptureButtonTooltip(tip, (int)sizeof(tip));
-        if (ActionButton(host, ICON_FA_CAMERA_RETRO, tip) && host.RequestCapture) host.RequestCapture();
+        if (ActionButton(host, EDITOR_ICON_CAPTURE, tip) && host.RequestCapture) host.RequestCapture();
         ImGui::SameLine(0.0f, 1.0f);
         ImGui::PushID("##capOpts");
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
-        if (ImGui::Button(ICON_FA_CARET_DOWN)) ImGui::OpenPopup("##CapturePopup");
+        if (ImGui::Button(EDITOR_ICON_CARET_DOWN)) ImGui::OpenPopup("##CapturePopup");
         ImGui::PopStyleColor(2);
         if (ImGui::IsItemHovered()) Tooltip(host, "Capture options");
         if (ImGui::BeginPopup("##CapturePopup")) {
