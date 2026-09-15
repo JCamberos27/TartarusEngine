@@ -42,7 +42,24 @@ component should never touch them.
 
 ### Current applications
 
-- `RenderableComponent` ("Mesh Renderer") — both opt-outs; see above.
+- `RenderableComponent` ("Mesh Renderer") — both opt-outs; see above. **Settled (#6 item 3,
+  2026-09-15): stays hand-coded, permanently — not a "build an editor-side ReflectComponent-
+  metadata renderer" case.** Every other `ObjectField`-style reference (`ReflectFieldType::
+  AssetRef`: Audio Source's Clip, etc.) is a `std::string` project-relative path that
+  `AssetLibrary` resolves on demand. `RenderableComponent::ModelRef` is not that shape at all —
+  it's a live `shared_ptr<Model>` already loaded, with its own instancing/undo lifecycle
+  (`AssetLibrary::CreatePrimitive`/`InstantiateModel`, the `DetachedMeshComponent` stash on
+  remove). Genuinely unifying it under `AssetRef` would mean rewriting `RenderableComponent` to
+  store a path instead of a live pointer — a large, invasive, unrelated change to rendering and
+  serialization — not a rendering-layer refactor. And since `ComponentRegistry` (`src/Game/`)
+  architecturally cannot depend on `src/Editor/`'s `AssetLibrary`, a new reflected field type for
+  it would carry no drawable metadata anyway; the hand-coded widget would just move, not
+  disappear. The actual user complaint that motivated this item — raw `primitive://sphere#90` /
+  bare `3` handles shown as the field's label — is already fixed (`b26e7c5`, Defect #5/#50): a
+  stable friendly name, a tooltip with tri/vert counts, and a drag-drop target. The one real gap
+  against `AssetRef`'s a7f038e upgrade (a "ping" button to jump the Asset Browser to the
+  referenced asset) is closed directly on the existing hand-coded widget, same as any other
+  `GenericInspector = false` component's editor-only affordance — no metadata renderer needed.
 - `ColliderComponent`, `JointComponent` (Phase 4 / #6 item 1) — `GenericSerialize = false` only:
   each keeps its pre-existing hand-written `"collider"` / `"joint"` JSON block (predates this
   reflection layer, #185), but both are now fully registered with `GenericInspector` left at its
