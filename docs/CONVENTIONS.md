@@ -42,8 +42,13 @@ component should never touch them.
 
 ### Current applications
 
-_None._ (`ColliderComponent::IsTrigger` was the last one — the PhysX 5 collision system shipped
-in #185, and it is now a live checkbox.)
+- `RenderableComponent` ("Mesh Renderer") — both opt-outs; see above.
+- `ColliderComponent`, `JointComponent` (Phase 4 / #6 item 1) — `GenericSerialize = false` only:
+  each keeps its pre-existing hand-written `"collider"` / `"joint"` JSON block (predates this
+  reflection layer, #185), but both are now fully registered with `GenericInspector` left at its
+  default `true` — the generic field-list Inspector draws every field, with the handful that need
+  a bespoke widget (Joint's per-type `Axis`/`UseLimit`/limit fields, Collider's `HalfExtents`)
+  marked `EditorHidden` and drawn by `DrawReflectedComponentExtra` instead.
 
 ## Editor themes (#92, #234)
 
