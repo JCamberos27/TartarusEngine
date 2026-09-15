@@ -1,0 +1,162 @@
+// Phase 3 item 3 — the vertical tool palette docked to the Scene viewport's left edge and the
+// view-state chips pinned to its top-right, both moved out of the old 25-icon top toolbar strip
+// (EditorModuleToolbar.cpp) per the audit's "nothing important is a ghost overlay" exit
+// criterion. Split into its own file rather than folded into EditorLayer_Gizmos.cpp or
+// EditorLayer_Toolbar.cpp since it's a new, self-contained concern (#179's precedent for keeping
+// EditorLayer.cpp's translation units topic-sized).
+
+#include "EditorLayer.h"
+#include "EditorLayerInternal.h"
+#include "World.h"
+#include "Camera.h"
+#include "EditorSettings.h"
+#include "EditorUIHelpers.h"
+#include "EditorUIPrimitives.h"
+
+#include <imgui.h>
+#include <imgui_internal.h> // ImMax, used by EditorUIPrimitives
+#include <IconsFontAwesome6.h>
+
+#include <cstdio>
+
+using namespace EditorInternal;
+
+// The vertical rail (Blender's T-panel model, audit #5 Q7) — a child region drawn INSIDE Scene's
+// own Begin/End (see EditorLayer.cpp, right after the viewport Image()) rather than a separate
+// floating window, so it clips and reorders with the Scene panel automatically instead of
+// recreating the always-on-top-window problem the redesign is trying to solve. Its own opaque
+// plate (same kHudPlateColor every other viewport HUD uses since Defect #54) keeps it legible
+// over the rendered scene without needing to shrink the actual render target.
+void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
+    (void)world; (void)editorCamera; // reserved: a future tool (e.g. a palette-hosted Vertex tool) may need these
+
+    auto& settings = EditorSettings::Get();
+    const float margin = 8.0f * m_UIScale;
+    const float btn = 26.0f * m_UIScale;
+    const float railW = btn + 12.0f * m_UIScale;
+
+    ImGui::SetCursorScreenPos(ImVec2(m_ViewportPos.x + margin, m_ViewportPos.y + margin));
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, EditorUIPrimitives::kHudPlateColor);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f * m_UIScale);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f * m_UIScale, 6.0f * m_UIScale));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 4.0f * m_UIScale));
+
+    ImGui::BeginChild("##ToolPalette", ImVec2(railW, 0.0f),
+        ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding,
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    const bool collapsed = settings.ToolPaletteCollapsed;
+    if (ActionButton(collapsed ? ICON_FA_CHEVRON_RIGHT : ICON_FA_CHEVRON_LEFT,
+            collapsed ? "Expand the tool palette" : "Collapse the tool palette", false, ImVec2(btn, btn))) {
+        settings.ToolPaletteCollapsed = !collapsed;
+        EditorSettings::Save();
+    }
+
+    if (!collapsed) {
+        ImGui::Separator();
+
+        const bool handTool = m_HandTool;
+        if (ActionButton(ICON_FA_HAND, "Hand — drag to pan the view (Q)", handTool, ImVec2(btn, btn)))
+            SetHandToolActive(!handTool);
+
+        const int gizmoOp = GizmoOpIndex(); // 0 Translate 1 Rotate 2 Scale 3 Rect 4 Universal
+        if (ActionButton(ICON_FA_UP_DOWN_LEFT_RIGHT, "Translate (W)", !handTool && gizmoOp == 0, ImVec2(btn, btn)))
+            SetGizmoOpIndex(0);
+        if (ActionButton(ICON_FA_ARROWS_SPIN, "Rotate (E)", !handTool && gizmoOp == 1, ImVec2(btn, btn)))
+            SetGizmoOpIndex(1);
+        if (ActionButton(ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER, "Scale (R)", !handTool && gizmoOp == 2, ImVec2(btn, btn)))
+            SetGizmoOpIndex(2);
+        if (ActionButton(ICON_FA_VECTOR_SQUARE,
+                "Rect — move + non-uniform scale via corner/edge handles (T)",
+                !handTool && gizmoOp == 3, ImVec2(btn, btn)))
+            SetGizmoOpIndex(3);
+        if (ActionButton(ICON_FA_ARROWS_TO_CIRCLE,
+                "Transform — move + rotate + scale in one gizmo (Y)",
+                !handTool && gizmoOp == 4, ImVec2(btn, btn)))
+            SetGizmoOpIndex(4);
+
+        ImGui::Separator();
+
+        const bool measureTool = MeasureToolActive();
+        if (ActionButton(ICON_FA_RULER,
+                "Measure — click two points in the viewport to measure the distance",
+                measureTool, ImVec2(btn, btn)))
+            SetMeasureToolActive(!measureTool);
+        if (ActionButton(ICON_FA_CLONE, "Duplicate Array — line/grid of copies of the selection (Ctrl+Shift+D)",
+                false, ImVec2(btn, btn)))
+            RequestArrayDuplicateModal();
+
+        ImGui::Separator();
+
+        const bool localSpace = GizmoLocalSpace();
+        if (ActionButton(localSpace ? ICON_FA_ARROWS_TO_DOT : ICON_FA_GLOBE,
+                localSpace ? "Local space (click for World)" : "World space (click for Local)",
+                false, ImVec2(btn, btn)))
+            SetGizmoLocalSpace(!localSpace);
+
+        const bool pivotCenter = GizmoPivotCenter();
+        if (ActionButton(pivotCenter ? ICON_FA_CIRCLE_DOT : ICON_FA_CROSSHAIRS,
+                pivotCenter
+                    ? "Center - gizmo sits on the bounding-box center (click for Pivot)"
+                    : "Pivot - gizmo sits on the object's own origin (click for Center)",
+                false, ImVec2(btn, btn)))
+            SetGizmoPivotCenter(!pivotCenter);
+    }
+
+    ImGui::EndChild();
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor();
+}
+
+// The view-state chips (audit #5 item 3) — draw mode + orthographic/perspective, pinned to the
+// viewport's top-right. Offset left of DrawViewGizmo's nav-gizmo cluster by a fixed clearance
+// mirroring that function's own margin/gizmoRadius math (EditorLayer_Gizmos.cpp) — Phase 3 item 6
+// (enlarging the nav gizmo) will need to revisit this constant alongside it.
+void EditorLayer::DrawViewStateChips(World& world, Camera& editorCamera) {
+    if (!m_SceneViewportVisible || m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
+    if (m_HideOverlaysThisFrame) return;
+
+    const float margin = 14.0f * m_UIScale;
+    const float navGizmoClearance = 150.0f * m_UIScale; // ~= margin + 2*gizmoRadius + buffer
+
+    ImGui::SetNextWindowPos(
+        ImVec2(m_ViewportPos.x + m_ViewportSize.x - navGizmoClearance, m_ViewportPos.y + margin),
+        ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+    ImGui::SetNextWindowBgAlpha(0.0f); // chips paint their own plates; the row window itself stays invisible
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+        ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize;
+    ImGui::Begin("##ViewStateChips", nullptr, flags);
+
+    static const char* kDrawModes[] = { "Shaded", "Wireframe", "Unlit",
+                                        "Normals", "Shadow Cascades", "Mip / Texel Density" };
+    static const char* kIcons[] = { ICON_FA_CIRCLE_HALF_STROKE, ICON_FA_BORDER_NONE, ICON_FA_SUN,
+                                    ICON_FA_MOUNTAIN, ICON_FA_LAYER_GROUP, ICON_FA_IMAGE };
+    int shading = ShadingModeIndex();
+    if (shading < 0 || shading >= IM_ARRAYSIZE(kDrawModes)) shading = 0;
+    char chipLabel[64];
+    std::snprintf(chipLabel, sizeof(chipLabel), "%s  %s", kIcons[shading], kDrawModes[shading]);
+    if (ActionButton(chipLabel, "Draw mode (click to change)", shading != 0)) ImGui::OpenPopup("##DrawModeChipPopup");
+    if (ImGui::BeginPopup("##DrawModeChipPopup")) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
+        for (int i = 0; i < IM_ARRAYSIZE(kDrawModes); ++i)
+            if (ImGui::MenuItem(kDrawModes[i], nullptr, shading == i)) SetShadingModeIndex(i);
+        ImGui::EndPopup();
+    }
+
+    ImGui::SameLine();
+
+    const bool ortho = editorCamera.Orthographic;
+    char orthoLabel[32];
+    std::snprintf(orthoLabel, sizeof(orthoLabel), "%s  %s", ortho ? ICON_FA_VECTOR_SQUARE : ICON_FA_EYE,
+                 ortho ? "Ortho" : "Persp");
+    if (ActionButton(orthoLabel,
+            ortho ? "Orthographic (click for Perspective) — 5" : "Perspective (click for Orthographic) — 5",
+            ortho)) {
+        ToolbarToggleOrthographic(world, editorCamera);
+    }
+
+    ImGui::End();
+}

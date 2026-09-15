@@ -105,6 +105,7 @@ void EditorSettings::Load() {
     s.LightGizmoOpacity = root.value("lightGizmoOpacity", s.LightGizmoOpacity);
     s.LightGizmoScale = root.value("lightGizmoScale", s.LightGizmoScale);
     s.ShowColliders = root.value("showColliders", s.ShowColliders);
+    s.ToolPaletteCollapsed = root.value("toolPaletteCollapsed", s.ToolPaletteCollapsed);
     s.PhysicsDebugInput = root.value("physicsDebugInput", s.PhysicsDebugInput);
     s.ShowPhysicsPanel = root.value("showPhysicsPanel", s.ShowPhysicsPanel);
     s.PhysicsHudOverlay = root.value("physicsHudOverlay", s.PhysicsHudOverlay);
@@ -182,6 +183,7 @@ void EditorSettings::Flush() {
     root["lightGizmoOpacity"] = Get().LightGizmoOpacity;
     root["lightGizmoScale"] = Get().LightGizmoScale;
     root["showColliders"] = Get().ShowColliders;
+    root["toolPaletteCollapsed"] = Get().ToolPaletteCollapsed;
     root["physicsDebugInput"] = Get().PhysicsDebugInput;
     root["showPhysicsPanel"] = Get().ShowPhysicsPanel;
     root["physicsHudOverlay"] = Get().PhysicsHudOverlay;

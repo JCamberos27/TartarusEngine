@@ -1,9 +1,14 @@
 // The editor's top toolbar strip — the dropdown menu bar (File / Add / View / Window /
 // Preferences), the custom window min/max/close controls, and the one-click icon row below it
-// (undo/redo, gizmo op + space/pivot, grid/snap/ground, light gizmos, shading, ortho, stats /
-// console / history toggles, screenshot) — living inside TartarusEditor.dll so its layout and
-// chrome hot-reload while the editor stays open with its scene loaded. Ported in behaviour from
+// (document strip, play controls, grid/snap/ground, light gizmos, stats / console / history
+// toggles, screenshot) — living inside TartarusEditor.dll so its layout and chrome hot-reload
+// while the editor stays open with its scene loaded. Ported in behaviour from
 // EditorLayer::DrawTopToolbar / DrawWindowControls (EditorLayer_Toolbar.cpp).
+//
+// Phase 3 item 3 moved the tool-selection cluster (Hand/Translate/Rotate/.../Universal, Measure,
+// Duplicate Array, Local/World, Pivot/Center) and the view-state cluster (draw mode, ortho/persp)
+// out of this strip entirely, into the Scene viewport's own left-edge tool palette and top-right
+// chips (EditorLayer_ToolPalette.cpp) — the audit's "retire the 25-icon top strip".
 //
 // What changed in the move: the strip owns the pinned "##Toolbar" window (it pins itself against
 // GetToolbarMetrics rather than the caller pre-setting pos/size; it also used to own the
@@ -210,45 +215,9 @@ void Draw(const EditorModuleHostAPI& host) {
     divider();
     if (host.DrawPlayControlsBody) host.DrawPlayControlsBody();
 
-    const int gizmoOp = host.GetGizmoOp ? host.GetGizmoOp() : 0; // 0 Translate 1 Rotate 2 Scale 3 Rect 4 Universal
-    const bool handTool = host.GetHandTool && host.GetHandTool();
-    divider();
-    if (ActionButton(host, ICON_FA_HAND, "Hand — drag to pan the view (Q)", handTool) && host.SetHandTool)
-        host.SetHandTool(!handTool);
-    ImGui::SameLine();
-    if (ActionButton(host, ICON_FA_UP_DOWN_LEFT_RIGHT, "Translate (W)", !handTool && gizmoOp == 0) && host.SetGizmoOp) host.SetGizmoOp(0);
-    ImGui::SameLine();
-    if (ActionButton(host, ICON_FA_ARROWS_SPIN, "Rotate (E)", !handTool && gizmoOp == 1) && host.SetGizmoOp) host.SetGizmoOp(1);
-    ImGui::SameLine();
-    if (ActionButton(host, ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER, "Scale (R)", !handTool && gizmoOp == 2) && host.SetGizmoOp) host.SetGizmoOp(2);
-    ImGui::SameLine();
-    if (ActionButton(host, ICON_FA_VECTOR_SQUARE, "Rect — move + non-uniform scale via corner/edge handles (T)",
-            !handTool && gizmoOp == 3) && host.SetGizmoOp) host.SetGizmoOp(3);
-    ImGui::SameLine();
-    if (ActionButton(host, ICON_FA_ARROWS_TO_CIRCLE, "Transform — move + rotate + scale in one gizmo (Y)",
-            !handTool && gizmoOp == 4) && host.SetGizmoOp) host.SetGizmoOp(4);
-    ImGui::SameLine();
-    const bool measureTool = host.GetMeasureTool && host.GetMeasureTool();
-    if (ActionButton(host, ICON_FA_RULER, "Measure — click two points in the viewport to measure the distance",
-            measureTool) && host.SetMeasureTool) host.SetMeasureTool(!measureTool);
-    ImGui::SameLine();
-    if (ActionButton(host, ICON_FA_CLONE, "Duplicate Array — line/grid of copies of the selection (Ctrl+Shift+D)")
-            && host.RequestDuplicateArray) host.RequestDuplicateArray();
-
-    divider(); // transform tools | gizmo-space modifiers
-    const bool localSpace = host.GetGizmoLocalSpace && host.GetGizmoLocalSpace();
-    if (ActionButton(host, localSpace ? ICON_FA_ARROWS_TO_DOT : ICON_FA_GLOBE,
-            localSpace ? "Local space (click for World)" : "World space (click for Local)") && host.SetGizmoLocalSpace) {
-        host.SetGizmoLocalSpace(!localSpace);
-    }
-    ImGui::SameLine();
-    const bool pivotCenter = host.GetGizmoPivotCenter && host.GetGizmoPivotCenter();
-    if (ActionButton(host, pivotCenter ? ICON_FA_CIRCLE_DOT : ICON_FA_CROSSHAIRS,
-            pivotCenter
-                ? "Center - gizmo sits on the bounding-box center (click for Pivot)"
-                : "Pivot - gizmo sits on the object's own origin (click for Center)") && host.SetGizmoPivotCenter) {
-        host.SetGizmoPivotCenter(!pivotCenter);
-    }
+    // Phase 3 item 3 — Hand/Translate/Rotate/Scale/Rect/Universal, Measure, Duplicate Array, and
+    // the Local/World + Pivot/Center modifiers moved out of the strip into the Scene viewport's
+    // own left-edge tool palette (EditorLayer_ToolPalette.cpp, audit #5 Q7's T-panel model).
 
     divider();
     const bool showGrid = host.GetShowGrid && host.GetShowGrid();
@@ -303,40 +272,8 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGui::PopID();
     }
 
-    ImGui::SameLine();
-    // Scene-view draw-mode dropdown (#236 R2): Shaded / Wireframe / Unlit / Normals /
-    // Cascades / Mip — part of the "what the viewport shows" cluster.
-    {
-        static const char* kDrawModes[] = { "Shaded", "Wireframe", "Unlit",
-                                            "Normals", "Shadow Cascades", "Mip / Texel Density" };
-        static const char* kIcons[] = { ICON_FA_CIRCLE_HALF_STROKE, ICON_FA_BORDER_NONE, ICON_FA_SUN,
-                                        ICON_FA_MOUNTAIN, ICON_FA_LAYER_GROUP, ICON_FA_IMAGE };
-        int shading = host.GetShadingMode ? host.GetShadingMode() : 0;
-        if (shading < 0 || shading >= IM_ARRAYSIZE(kDrawModes)) shading = 0;
-        char tip[96];
-        std::snprintf(tip, sizeof(tip), "Draw mode: %s (click to change)", kDrawModes[shading]);
-        if (ActionButton(host, kIcons[shading], tip, shading != 0)) ImGui::OpenPopup("##DrawModePopup");
-        if (ImGui::BeginPopup("##DrawModePopup")) {
-            CloseOnEscape();
-            for (int i = 0; i < IM_ARRAYSIZE(kDrawModes); ++i)
-                if (ImGui::MenuItem(kDrawModes[i], nullptr, shading == i) && host.SetShadingMode)
-                    host.SetShadingMode(i);
-            ImGui::EndPopup();
-        }
-    }
-
-    ImGui::SameLine();
-    // Orthographic / perspective toggle (shortcut 5) — it has a distinct on/off state so it
-    // belongs on the strip beside the shading mode (#148).
-    {
-        const bool ortho = host.IsOrthographic && host.IsOrthographic();
-        if (ActionButton(host, ortho ? ICON_FA_VECTOR_SQUARE : ICON_FA_EYE,
-                ortho ? "Orthographic (click for Perspective) — 5"
-                      : "Perspective (click for Orthographic) — 5",
-                ortho) && host.ToggleOrthographic) {
-            host.ToggleOrthographic();
-        }
-    }
+    // Phase 3 item 3 — the draw-mode dropdown and orthographic/perspective toggle moved into the
+    // Scene viewport's own top-right view-state chips (EditorLayer_ToolPalette.cpp).
 
     divider();
     {
