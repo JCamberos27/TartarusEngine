@@ -787,7 +787,10 @@ void EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera&
 }
 void EditorLayer::OnCaptureDone(const std::string& path, int w, int h) {
     m_LastCapturePath = path;
-    if (path.empty()) { m_CaptureToast = "Screenshot failed — see Console"; m_CaptureToastT = 3.0f; return; }
+    if (path.empty()) {
+        Log::Error("Screenshot failed — see Console"); // was a fading toast; capture failures are rare enough to just log
+        return;
+    }
     InvalidateShotsListing(); // (#175) a new file just landed under screenshots/
     const auto& s = EditorSettings::Get();
     if (s.CaptureFlash) m_CaptureFlashT = 1.0f;
@@ -795,15 +798,29 @@ void EditorLayer::OnCaptureDone(const std::string& path, int w, int h) {
         std::string clip = Screenshot::ShutterClipPath();
         if (!clip.empty()) AudioEngine::Play(clip, 0.6f);
     }
-    m_CaptureToast = std::filesystem::path(path).filename().string() + "   " +
-                     std::to_string(w) + "x" + std::to_string(h);
-    m_CaptureToastT = 3.5f;
+    PushCaptureNotification(path, w, h);
 }
 
-// Called once per frame from Draw() — the fading white flash over the Scene viewport and the
-// little "saved" toast in its bottom-right.
+// Phase 3 item 9 (audit #5 Appendix A #8) — one dismissible card per capture, replacing the old
+// fading/click-through toast. Capped so a capture spree doesn't grow the stack forever; the
+// thumbnail load is a small (128px-capped) synchronous decode, the same cost the Asset Browser's
+// own Screenshots-folder grid already pays per shot.
+void EditorLayer::PushCaptureNotification(const std::string& path, int w, int h) {
+    EditorNotification n;
+    n.Title = std::filesystem::path(path).filename().string();
+    n.Subtitle = std::to_string(w) + "x" + std::to_string(h);
+    n.FilePath = path;
+    n.Thumbnail = LoadScreenshotTexture(path, 128);
+
+    m_Notifications.insert(m_Notifications.begin(), std::move(n));
+    constexpr size_t kMaxNotifications = 4;
+    if (m_Notifications.size() > kMaxNotifications) m_Notifications.resize(kMaxNotifications);
+}
+
+// Called once per frame from Draw() — just the fading white flash over the Scene viewport now;
+// the toast it used to also draw is DrawNotifications' job below.
 void EditorLayer::DrawCaptureFeedback(float dt) {
-    if (m_CaptureFlashT <= 0.0f && m_CaptureToastT <= 0.0f) return;
+    if (m_CaptureFlashT <= 0.0f) return;
     if (m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
 
     ImGuiWindow* sceneWin = ImGui::FindWindowByName("Scene");
@@ -812,23 +829,109 @@ void EditorLayer::DrawCaptureFeedback(float dt) {
     const ImVec2 mx(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y);
     dl->PushClipRect(mn, mx, true);
 
-    if (m_CaptureFlashT > 0.0f) {
-        m_CaptureFlashT -= dt / 0.35f;
-        float a = m_CaptureFlashT;
-        a = a < 0.0f ? 0.0f : a * a; // ease out
-        dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, (int)(a * 220.0f)));
-    }
-    if (m_CaptureToastT > 0.0f) {
-        m_CaptureToastT -= dt;
-        float a = m_CaptureToastT > 0.4f ? 1.0f : m_CaptureToastT / 0.4f;
-        const ImVec2 ts = ImGui::CalcTextSize(m_CaptureToast.c_str());
-        const float pad = 8.0f * m_UIScale;
-        ImVec2 p1(mx.x - ts.x - pad * 2.0f - 16.0f * m_UIScale, mx.y - ts.y - pad * 2.0f - 16.0f * m_UIScale);
-        ImVec2 p2(mx.x - 16.0f * m_UIScale, mx.y - 16.0f * m_UIScale);
-        dl->AddRectFilled(p1, p2, IM_COL32(20, 20, 24, (int)(a * 220.0f)), 4.0f);
-        dl->AddText(ImVec2(p1.x + pad, p1.y + pad), IM_COL32(235, 238, 245, (int)(a * 255.0f)), m_CaptureToast.c_str());
-    }
+    m_CaptureFlashT -= dt / 0.35f;
+    float a = m_CaptureFlashT;
+    a = a < 0.0f ? 0.0f : a * a; // ease out
+    dl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, (int)(a * 220.0f)));
+
     dl->PopClipRect();
+}
+
+// The notification stack itself — a real ImGui window (unlike the old toast, which was bare
+// draw-list rect+text with nothing underneath to click), anchored to the Scene viewport's
+// bottom-right corner. History used to pin there too (Phase 3 item 8 made it a dockable panel),
+// so the corner is free now. Persistent: cards sit until dismissed, not timed out.
+void EditorLayer::DrawNotifications() {
+    if (m_Notifications.empty()) return;
+    if (!m_SceneViewportVisible || m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
+    if (m_HideOverlaysThisFrame) return;
+
+    const float margin = 14.0f * m_UIScale;
+    const float statusBarH = ImGui::GetTextLineHeight() + 8.0f * m_UIScale;
+    const float thumbSize = 48.0f * m_UIScale;
+    const float cardWidth = 260.0f * m_UIScale;
+
+    ImGui::SetNextWindowPos(ImVec2(m_ViewportPos.x + m_ViewportSize.x - margin,
+                                   m_ViewportPos.y + m_ViewportSize.y - margin - statusBarH),
+                            ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+    ImGui::SetNextWindowBgAlpha(0.0f); // cards paint their own plates; the stack window itself stays invisible
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+        ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar;
+    ImGui::Begin("##Notifications", nullptr, flags);
+
+    // Content is 3 stacked rows beside the thumbnail (title, subtitle, button row) — the card
+    // has to be at least that tall, not just as tall as the thumbnail (#0 attempt clipped the
+    // button row entirely: thumbSize alone undershoots 3 text/button lines at any normal font
+    // size).
+    const float lineH = ImGui::GetTextLineHeightWithSpacing();
+    const float btnH = ImGui::GetFrameHeight();
+    const ImGuiStyle& cardStyle = ImGui::GetStyle();
+    const float contentH = lineH * 2.0f + btnH;
+    const float cardH = std::max(thumbSize, contentH) + cardStyle.WindowPadding.y * 2.0f;
+    const float dismissSize = 18.0f * m_UIScale;
+
+    int dismissIndex = -1;
+    for (int i = 0; i < (int)m_Notifications.size(); ++i) {
+        EditorNotification& n = m_Notifications[i];
+        ImGui::PushID(i);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, EditorUIPrimitives::kHudPlateColor);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f * m_UIScale);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f * m_UIScale, 8.0f * m_UIScale));
+        ImGui::BeginChild("##card", ImVec2(cardWidth, cardH),
+            ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar);
+
+        if (n.Thumbnail && n.Thumbnail->GLHandle()) {
+            const float aspect = (float)n.Thumbnail->Width() / std::max(1, n.Thumbnail->Height());
+            const ImVec2 imgSize = aspect >= 1.0f ? ImVec2(thumbSize, thumbSize / aspect)
+                                                   : ImVec2(thumbSize * aspect, thumbSize);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (contentH - imgSize.y) * 0.5f);
+            ImGui::Image((ImTextureID)(intptr_t)n.Thumbnail->GLHandle(), imgSize);
+        } else {
+            ImGui::Dummy(ImVec2(thumbSize, thumbSize));
+        }
+        ImGui::SameLine();
+
+        ImGui::BeginGroup();
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::kHudTextColor);
+        ImGui::TextUnformatted(n.Title.c_str());
+        ImGui::PopStyleColor();
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::kHudTextDisabledColor);
+        ImGui::TextUnformatted(n.Subtitle.c_str());
+        ImGui::PopStyleColor();
+
+        if (ActionButton(ICON_FA_UP_RIGHT_FROM_SQUARE, "Open", false, ImVec2(0, 0)))
+            Screenshot::OpenFile(n.FilePath);
+        ImGui::SameLine(0.0f, 4.0f);
+        if (ActionButton(ICON_FA_FOLDER_OPEN, "Show in folder", false, ImVec2(0, 0)))
+            Screenshot::ShowInFolder(n.FilePath);
+        ImGui::SameLine(0.0f, 4.0f);
+        if (ActionButton(ICON_FA_COPY, "Copy path", false, ImVec2(0, 0)))
+            ImGui::SetClipboardText(n.FilePath.c_str());
+        ImGui::EndGroup();
+
+        // Dismiss — pinned to the card's own top-right corner via an absolute cursor position
+        // (the child's own screen rect, known now that BeginChild has run) rather than chained
+        // off the content above via SameLine, so it lands consistently regardless of how tall
+        // the title/subtitle/button rows above actually came out.
+        {
+            const ImVec2 childPos = ImGui::GetWindowPos();
+            const ImVec2 childSize = ImGui::GetWindowSize();
+            ImGui::SetCursorScreenPos(ImVec2(childPos.x + childSize.x - dismissSize - 4.0f * m_UIScale,
+                                             childPos.y + 4.0f * m_UIScale));
+            if (ActionButton(ICON_FA_XMARK, "Dismiss", false, ImVec2(dismissSize, dismissSize)))
+                dismissIndex = i;
+        }
+
+        ImGui::EndChild();
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor();
+        ImGui::PopID();
+    }
+
+    ImGui::End();
+
+    if (dismissIndex >= 0) m_Notifications.erase(m_Notifications.begin() + dismissIndex);
 }
 // Full-quality load for the lightbox — uncapped, since the user can zoom in.
 static std::shared_ptr<Texture> LoadScreenshotLightboxTexture(const std::string& path) {
