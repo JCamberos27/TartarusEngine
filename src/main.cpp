@@ -2072,6 +2072,10 @@ int main(int argc, char** argv) {
                 // editor / world / assets / camera state through EditorModuleHostAPI; hand it
                 // this frame's pointers first.
                 editorModule.SetFrameContext(&editor, &world, &assets, &editorCamera);
+                // Phase 3 item 2 — the toolbar's Zone B play controls read this cache instead of
+                // EditorLayer owning the simulation clock itself; must land before Draw() below,
+                // which is what actually renders Zone B this frame.
+                editor.SetPlayState(playing, paused, playMaximized);
                 editorModule.Draw(editorUIVisible, dt);
 
                 // Staged-undo cleanup + selection-history recording (#38/#236 R2): must run after
@@ -2108,10 +2112,12 @@ int main(int argc, char** argv) {
             // hidden (maximized play) so the game view never becomes draggable.
             window.SetTitleBarDragActive(editorUIVisible && editor.WantsWindowDrag());
 
-            // Drawn every frame in every state (unlike editor.Draw(), which is editor-UI-only) so
-            // there's always an on-screen Play/Stop, not just F1. Drawn AFTER editor.Draw() so it
-            // layers on top of the toolbar strip instead of being painted over by it.
-            editor.DrawPlayStopButton(playing, playMaximized, paused);
+            // Phase 3 item 2 — windowed play gets its Play/Stop/Pause/Step/Restore from the
+            // toolbar's Zone B now (drawn inside editorModule.Draw() above, via
+            // editor.SetPlayState() + DrawPlayControlsBody). This floating fallback only fires
+            // while the toolbar itself is hidden (maximized play), the one state with nowhere
+            // else for the transport to live.
+            if (!editorUIVisible) editor.DrawPlayStopButton(playing, playMaximized, paused);
             if (editor.ConsumePlayStopRequest()) togglePlay();
             if (editor.ConsumeMaximizeToggleRequest()) setMaximized(!playMaximized);
 

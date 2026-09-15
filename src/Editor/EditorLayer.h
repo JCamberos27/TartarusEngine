@@ -86,13 +86,26 @@ public:
     // at empty space next to the geometry (audit #87).
     void FrameSceneBounds(World& world, Camera& editorCamera);
 
-    // The Play/Stop control cluster, drawn every frame in every state (unlike Draw(), which is
-    // editor-UI-only). While editing it's a lone green Play in the toolbar strip; while playing
-    // it's a red Stop plus a Fullscreen/Restore toggle (maximize the Game view over the editor
-    // panels, or drop back). `maximized` floats it near the top of the window since the toolbar
-    // is hidden then. Clicks only raise request flags — main.cpp owns the play/maximize/cursor
+    // Maximized-play fallback only (Phase 3 item 2) — main.cpp calls this exclusively while
+    // `!editorUIVisible`, since that's the one state with no toolbar for DrawPlayControlsBody's
+    // Zone B cluster to live in. Floats a solid-plated Stop/Pause/Step/Restore strip near the top
+    // of the window. Clicks only raise request flags — main.cpp owns the play/maximize/cursor
     // state itself.
     void DrawPlayStopButton(bool playing, bool maximized, bool paused);
+
+    // The toolbar's Zone B (Phase 3 item 2, API v21) — Play/Stop/Pause/Step/Restore inline in the
+    // strip instead of the old floating `##PlayStopButton` overlay, which sat over the viewport at
+    // ~60% opacity and all but disappeared on a pale scene (~2:1 contrast, audit #5). Reads the
+    // play state SetPlayState() cached in for this frame; raises the same request flags
+    // DrawPlayStopButton does. Rendered by the module (EditorModuleToolbar.cpp) via
+    // EditorModuleHostAPI::DrawPlayControlsBody, so it only ever appears while the toolbar itself
+    // does — i.e. never during maximized play, which is what DrawPlayStopButton above still covers.
+    void DrawPlayControlsBody();
+    // Pushed once per frame (main.cpp owns playing/paused/maximized — this class doesn't run the
+    // simulation clock) so DrawPlayControlsBody can read them without EditorLayer owning them.
+    void SetPlayState(bool playing, bool paused, bool maximized) {
+        m_CachedPlaying = playing; m_CachedPaused = paused; m_CachedPlayMaximized = maximized;
+    }
 
     // True when the cursor is over the toolbar's empty (draggable) area this frame; main.cpp
     // forwards it to Window so its WM_NCHITTEST can treat that region as the window's caption.
@@ -582,6 +595,11 @@ private:
     bool m_MaximizeToggleRequested = false;
     bool m_PauseToggleRequested = false;
     bool m_StepRequested = false;
+    // See SetPlayState() — this frame's play/pause/maximize state, mirrored in from main.cpp so
+    // DrawPlayControlsBody (Phase 3 item 2) can read it without owning the simulation clock.
+    bool m_CachedPlaying = false;
+    bool m_CachedPaused = false;
+    bool m_CachedPlayMaximized = false;
     bool m_GameInputActive = false; // see SetGameInputActive
     // Set by Settings > Reset Layout; consumed at the top of Draw()'s dockspace setup to
     // rebuild the default panel arrangement from scratch.
@@ -1412,6 +1430,10 @@ private:
     // selection count / active tool — the at-a-glance surface (#92). The Statistics panel above
     // is the deeper readout.
     void DrawViewportStatusBar();
+    // The actual Play/Stop/Pause/Step/Restore buttons, shared by DrawPlayControlsBody (toolbar
+    // Zone B) and DrawPlayStopButton (maximized-play floating fallback) — see DrawPlayControlsBody
+    // above for why there are two call sites instead of one.
+    void DrawPlayTransportButtons(bool playing, bool maximized, bool paused);
     // Panel visibility lives in EditorSettings::SceneShowStats (persisted), not a plain member.
     RenderStats m_RenderStats;
     // Smoothed so the number is readable instead of flickering every frame.

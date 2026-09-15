@@ -74,7 +74,11 @@
 //   20 - Phase 3 item 1 (document strip): GetSceneDisplayName, GetSceneDirty and DoSaveScene, so
 //        the toolbar can show the open scene's name + an unsaved-changes dot and offer a Save
 //        button — until now the only way to save was the File menu or Ctrl+S.
-constexpr std::uint32_t kEditorModuleAPIVersion = 20;
+//   21 - Phase 3 item 2 (Zone B): DrawPlayControlsBody renders Play/Stop/Pause/Step/Restore
+//        inline in the toolbar strip. Replaces the floating `##PlayStopButton` overlay for
+//        windowed play (still host-drawn directly, unchanged API, for the one case with no
+//        toolbar to embed into: maximized play).
+constexpr std::uint32_t kEditorModuleAPIVersion = 21;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -441,6 +445,13 @@ struct EditorModuleHostAPI {
     void (*GetSceneDisplayName)(char* out, int n) = nullptr;
     bool (*GetSceneDirty)() = nullptr;
     void (*DoSaveScene)() = nullptr;
+
+    // --- Play controls, Zone B (API v21, Phase 3 item 2) -------------------------------
+    // Renders Play (or Stop + Pause/Resume + Step + Fullscreen/Restore) inline into the toolbar —
+    // the host reads its own cached play/pause/maximize state (pushed in once a frame from
+    // main.cpp, which owns the actual simulation clock) and raises the same request flags the old
+    // floating overlay did.
+    void (*DrawPlayControlsBody)() = nullptr;
 };
 
 struct EditorModuleAPI {
