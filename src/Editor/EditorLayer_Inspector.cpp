@@ -180,23 +180,47 @@ bool DangerIconButton(const char* icon, const char* tooltip, ImVec2 size = ImVec
 // bodies ARE indented (see BeginComponentSection) — capturing the real line-start position
 // first (GetCursorPosX() already includes indent) is what keeps a column aligned at any
 // indent depth instead of drifting left as sections nest.
-void AlignToColumn(const char* label, float columnWidth, const char* tooltip = nullptr) {
+// #6 item 7 — a coloured gutter bar in the row's left margin, for a widget whose own text isn't a
+// plain ImGui item this function drew (a name field's InputText, a component header drawn
+// internally by CollapsingHeader) — call right after that widget. Paired with AlignToColumn's
+// `highlighted` for a plain label; this alone is the fallback for anything else.
+void DrawOverrideGutterBar() {
+    const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x - 6.0f, mn.y), ImVec2(mn.x - 4.0f, mx.y),
+        ImGui::ColorConvertFloat4ToU32(EditorUIPrimitives::InfoColor()), 1.0f);
+}
+
+void AlignToColumn(const char* label, float columnWidth, const char* tooltip = nullptr, bool highlighted = false) {
     float lineStartX = ImGui::GetCursorPosX();
     ImGui::AlignTextToFramePadding();
+    if (highlighted) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor());
     ImGui::TextUnformatted(label);
+    if (highlighted) {
+        ImGui::PopStyleColor();
+        // A gutter bar (DrawOverrideGutterBar's own technique, inlined here since it already has
+        // the item rect) plus a 1px-offset second pass of the label — faux bold, since no bold
+        // font variant is loaded in this editor (see EditorLayer.h's m_MonoFont comment) — instead
+        // of a plain colour tint, which read identically to "this value happens to be blue" as
+        // cyan/selection once was, not "this differs from its prefab source" (#6 item 7).
+        const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImU32 col = ImGui::ColorConvertFloat4ToU32(EditorUIPrimitives::InfoColor());
+        dl->AddRectFilled(ImVec2(mn.x - 6.0f, mn.y), ImVec2(mn.x - 4.0f, mx.y), col, 1.0f);
+        dl->AddText(ImVec2(mn.x + 1.0f, mn.y), col, label);
+    }
     if (tooltip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
     ImGui::SameLine(lineStartX + columnWidth);
 }
 
 // `tooltip`, when given, shows on hovering the label text itself — this is how nearly every
 // field in the Inspector explains what it does and how to use it, without needing a value
-// permanently on screen for it.
-void PropertyLabel(const char* label, const char* tooltip = nullptr) {
+// permanently on screen for it. `highlighted` marks a prefab-overridden field (#6 item 7).
+void PropertyLabel(const char* label, const char* tooltip = nullptr, bool highlighted = false) {
     // Sized to fit "Emissive Strength", the longest label actually used — every row sharing
     // this one constant is what makes their value widgets land in the same column regardless
     // of how long that particular row's own label is. Computed once (the UI font is fixed).
     static const float labelColumnWidth = ImGui::CalcTextSize("Emissive Strength").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
-    AlignToColumn(label, labelColumnWidth, tooltip);
+    AlignToColumn(label, labelColumnWidth, tooltip, highlighted);
     ImGui::SetNextItemWidth(-FLT_MIN); // fill exactly to the window's right edge
 }
 
@@ -259,14 +283,8 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
     static const float vec3LabelColumnWidth = ImGui::CalcTextSize("Rotation").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
     const bool pfOverridden = pf.self && pf.field &&
         SceneSerializer::IsPrefabFieldOverridden(*pf.world, pf.e, pf.comp, pf.field);
-    // #6 item 7 — EditorUIPrimitives::InfoColor(), not the theme's SliderGrab cyan: cyan is
-    // reserved for selection / "you are here" (docs/CONVENTIONS.md's accent-discipline table),
-    // and every prefab-override marker in this file was tinting text with it, colliding with that
-    // meaning. Same swap at every other "overridden from prefab" site below.
-    if (pfOverridden) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor());
-    AlignToColumn(label, vec3LabelColumnWidth, tooltip);
+    AlignToColumn(label, vec3LabelColumnWidth, tooltip, pfOverridden);
     if (pfOverridden) {
-        ImGui::PopStyleColor();
         char pid[80]; std::snprintf(pid, sizeof(pid), "##pf_%s", label);
         ImGui::OpenPopupOnItemClick(pid, ImGuiPopupFlags_MouseButtonRight);
         if (ImGui::BeginPopup(pid)) {
@@ -362,10 +380,8 @@ MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool
     static const float col = ImGui::CalcTextSize("Rotation").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
     const bool pfOv = pf.self && pf.field && pf.sel &&
         pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
-    if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
-    AlignToColumn(label, col, tooltip);
+    AlignToColumn(label, col, tooltip, pfOv);
     if (pfOv) {
-        ImGui::PopStyleColor();
         char pid[96]; std::snprintf(pid, sizeof(pid), "##pfm_%s", label);
         ImGui::OpenPopupOnItemClick(pid, ImGuiPopupFlags_MouseButtonRight);
         if (ImGui::BeginPopup(pid)) {
@@ -428,10 +444,8 @@ MultiEditResult MultiEditFloatRow(const char* label, float& value, bool mixed, f
     ImGui::PushID(label);
     const bool pfOv = pf.self && pf.field && pf.sel &&
         pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
-    if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
-    PropertyLabel(label, tooltip);
+    PropertyLabel(label, tooltip, pfOv);
     if (pfOv) {
-        ImGui::PopStyleColor();
         char pid[96]; std::snprintf(pid, sizeof(pid), "##pfm_%s", label);
         ImGui::OpenPopupOnItemClick(pid, ImGuiPopupFlags_MouseButtonRight);
         if (ImGui::BeginPopup(pid)) {
@@ -476,10 +490,8 @@ bool MultiEditCheckbox(const char* label, bool anyOn, bool mixed, bool& out, Pre
     if (pfRow) {
         ImGui::PushID(label);
         const bool pfOv = pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
-        if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
-        PropertyLabel(label);
+        PropertyLabel(label, nullptr, pfOv);
         if (pfOv) {
-            ImGui::PopStyleColor();
             char pid[96]; std::snprintf(pid, sizeof(pid), "##pfm_%s", label);
             ImGui::OpenPopupOnItemClick(pid, ImGuiPopupFlags_MouseButtonRight);
             if (ImGui::BeginPopup(pid)) {
@@ -1014,10 +1026,8 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
             // reintroduce it via this shared path (Defect #44).
             const bool pfOv = pf.self && pf.field && pf.sel &&
                 pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
-            if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
-            PropertyLabel(f.Name, f.Tooltip);
+            PropertyLabel(f.Name, f.Tooltip, pfOv);
             if (pfOv) {
-                ImGui::PopStyleColor();
                 ImGui::OpenPopupOnItemClick("##pfmInt", ImGuiPopupFlags_MouseButtonRight);
                 if (ImGui::BeginPopup("##pfmInt")) {
                     pf.self->PrefabFieldMenuMulti(*pf.world, *pf.sel, pf.comp, pf.field);
@@ -1643,9 +1653,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // #302 Part B — a prefab child whose name differs from the .prefab: tint the field + offer
     // the right-click Revert/Apply menu.
     const bool nameOverridden = SceneSerializer::IsPrefabFieldOverridden(world, entity, "Name", "name");
-    if (nameOverridden) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
     DrawNameField("##Name", name.Name, isLevelGeometry ? "Box" : "Object", activated);
-    if (nameOverridden) ImGui::PopStyleColor();
+    if (nameOverridden) DrawOverrideGutterBar();
     if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) EditorUI::SetTooltip("Display name shown in the Hierarchy and here");
     if (activated) PushUndo(world, "Rename");
     if (nameOverridden) {
@@ -2050,11 +2059,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // Key) themselves; see their comments.
         const bool compAdded = SceneSerializer::IsPrefabComponentAdded(world, entity, rc.Meta.Name);
         bool reflPfRevert = false, reflPfApply = false;
-        if (compAdded) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
         const bool reflOpen = BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, true, reflRemoved,
             /*defaultOpen=*/true, rc.Meta.Tooltip, &reflReset, &reflCopy, &reflPaste,
             compAdded ? &reflPfRevert : nullptr, compAdded ? &reflPfApply : nullptr);
-        if (compAdded) ImGui::PopStyleColor();
+        if (compAdded) DrawOverrideGutterBar();
         // "Revert to Prefab" on an added component == remove it; route through the same
         // end-of-loop removal path (below) so nothing touches a component mid-teardown.
         if (reflPfRevert) reflRemoved = true;
@@ -2324,11 +2332,8 @@ void EditorLayer::PrefabOverrideLabel(World& world, entt::entity entity, const c
                                       const char* field, const char* label, const char* tooltip) {
     const bool overridden =
         SceneSerializer::IsPrefabFieldOverridden(world, entity, component, field);
-    if (overridden)
-        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
-    PropertyLabel(label, tooltip);
+    PropertyLabel(label, tooltip, overridden);
     if (overridden) {
-        ImGui::PopStyleColor();
         // The label is a bare Text item — BeginPopupContextItem is unreliable on those, so open
         // the popup explicitly off IsItemClicked(right).
         const std::string popupId = std::string(component) + "\x1f" + field; // unit-sep: never in a name
@@ -2377,11 +2382,8 @@ void EditorLayer::PrefabOverrideLabelMulti(World& world, const std::vector<entt:
                                            const char* component, const char* field,
                                            const char* label, const char* tooltip) {
     const bool overridden = AnyPrefabFieldOverridden(world, sel, component, field);
-    if (overridden)
-        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
-    PropertyLabel(label, tooltip);
+    PropertyLabel(label, tooltip, overridden);
     if (overridden) {
-        ImGui::PopStyleColor();
         // These labels are drawn INSIDE the field loop's PushID(f.Name) scope, where
         // IsItemClicked(right) is unreliable (same gotcha B2b hit) — OpenPopupOnItemClick is the
         // robust form. The id must be unique per (component,field); "M" suffix keeps it distinct
