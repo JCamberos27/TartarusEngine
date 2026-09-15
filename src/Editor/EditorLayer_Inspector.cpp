@@ -1922,6 +1922,11 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             } else {
                 meshName = std::filesystem::path(modelPath).filename().string();
             }
+            // #6 item 3 — same "ping" affordance AssetRef fields got in a7f038e (jump the Asset
+            // Browser to this reference), hoisted above the button row so the tooltip below can
+            // share it. A primitive/box has no real Asset Browser location to jump to, same as an
+            // empty/mixed AssetRef combo disables its own ping button.
+            const bool isPrimitive = isLevelGeometry || modelPath.rfind(kPrimitivePrefix, 0) == 0;
 
             if (isLevelGeometry) {
                 PropertyLabel("Color", "Solid tint for this box's surface. Click the swatch\nfor the full color picker, or type a hex value.");
@@ -1952,14 +1957,15 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             // row in this section now shares the exact same label column, so nothing here
             // breaks the grid the rest of the Inspector already uses.
             PropertyLabel("Mesh");
-            if (ImGui::Button(meshName.c_str(), ImVec2(-FLT_MIN, 0.0f))) {
+            const float meshPingW = ImGui::GetFrameHeight();
+            const float meshButtonW = ImGui::GetContentRegionAvail().x - (meshPingW + ImGui::GetStyle().ItemInnerSpacing.x);
+            if (ImGui::Button(meshName.c_str(), ImVec2(meshButtonW, 0.0f))) {
                 ImGui::OpenPopup("##ChangeMesh");
             }
             if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen("##ChangeMesh")) {
                 // Procedural-primitive path is an internal cache key ("primitive://sphere#90"),
                 // not something meaningful to show the user — the friendly kind (already the
                 // button's own label) is all there is to say about it.
-                const bool isPrimitive = isLevelGeometry || modelPath.rfind(kPrimitivePrefix, 0) == 0;
                 EditorUI::SetTooltip("%s\n%u tris, %u verts\n\nClick to pick a primitive, or drag a Model here from the Asset Browser.",
                     isPrimitive ? meshName.c_str() : modelPath.c_str(),
                     renderable->ModelRef->TriangleCount(), renderable->ModelRef->VertexCount());
@@ -1972,6 +1978,16 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 }
                 ImGui::EndDragDropTarget();
             }
+            ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+            ImGui::BeginDisabled(isPrimitive);
+            if (ActionButton(ICON_FA_MAGNIFYING_GLASS_LOCATION,
+                             isPrimitive ? "Show in Asset Browser (nothing to show)" : "Show in Asset Browser",
+                             false, ImVec2(meshPingW, 0.0f)) && !isPrimitive) {
+                m_SelectedAssetKey = modelPath;
+                m_SelectedAssetIsFolder = false;
+                m_CurrentAssetFolder = assets.AssetFolder(modelPath);
+            }
+            ImGui::EndDisabled();
             if (ImGui::BeginPopup("##ChangeMesh")) {
                 auto pick = [&](const char* kind) {
                     PushUndo(world, "Change Mesh");
