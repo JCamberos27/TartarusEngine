@@ -2126,6 +2126,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // re-checks m_HideOverlaysThisFrame so a clean capture still suppresses it.
     }
     DrawCaptureFeedback(dt);
+    DrawNotifications();
 
     // "Look through light" (#140 phase 4): the Inspector/Lights-panel buttons can't see the
     // camera, so they queue a light here; act on it once, then run the per-frame Esc/banner.

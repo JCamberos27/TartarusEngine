@@ -26,6 +26,11 @@ namespace Screenshot {
     // Open the OS file browser with `path` selected (no-op / best effort off Windows).
     void ShowInFolder(const std::string& path);
 
+    // Open `path` in whatever the OS has associated with its extension — the notification card's
+    // "Open" action (Phase 3 item 9, audit #5). No-op / best effort off Windows, same as
+    // ShowInFolder above.
+    void OpenFile(const std::string& path);
+
     // Path to a small procedurally-generated camera-shutter click WAV (written once, into the
     // screenshots folder as ".shutter.wav"). "" if it couldn't be written.
     std::string ShutterClipPath();
