@@ -1239,6 +1239,15 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     };
     struct RestoreScope { std::function<void()> f; ~RestoreScope() { if (f) f(); } } _restore{restoreLiveSelection};
 
+    // A live Asset Browser selection wins over the lock: locking is documented (and understood
+    // by the padlock's own tooltip) as surviving the VIEWPORT/Hierarchy selection moving
+    // elsewhere, not as swallowing a deliberate click on a specific asset with no feedback.
+    // Without this guard the swap below unconditionally overwrote m_Selected every frame the
+    // lock was on, so an active lock permanently starved DrawAssetImportInspector/
+    // DrawMaterialAssetEditor below — reproduced live (Defect #24 / #34): lock to an object,
+    // click any asset in the Browser, Inspector never leaves the locked object.
+    const bool assetSelected = !m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder;
+
     if (m_InspectorLocked) {
         if (m_InspLockSelected != entt::null && !world.Registry.valid(m_InspLockSelected))
             m_InspLockSelected = entt::null;
@@ -1251,7 +1260,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
         if (m_InspLockSelected == entt::null && m_InspLockExtra.empty()) {
             m_InspectorLocked = false; // everything it pointed at is gone
-        } else {
+        } else if (!assetSelected) {
             m_Selected = m_InspLockSelected;
             m_ExtraSelection = m_InspLockExtra;
             inspLockSwapped = true;
@@ -1261,7 +1270,9 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // The padlock lives in the panel's title bar now (drawn by the Inspector module, toggled
     // through EditorLayer::ToggleInspectorLock). Only a slim "locked to…" note remains here,
     // and only while locked — the panel starts flush with the name row otherwise (#236 R2).
-    if (m_InspectorLocked) {
+    // Gated on inspLockSwapped, not m_InspectorLocked directly, so this doesn't claim "Locked to
+    // X" above an asset's Import Settings while an asset selection is temporarily overriding it.
+    if (inspLockSwapped) {
         const auto* nm = world.Registry.try_get<NameComponent>(m_InspLockSelected);
         const int n = 1 + (int)m_InspLockExtra.size();
         ImGui::TextDisabled(ICON_FA_LOCK "  Locked to %s%s",
