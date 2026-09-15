@@ -7,6 +7,7 @@
 
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
+#include "EditorIcons.h"
 #include "World.h"
 #include "Camera.h"
 #include "EditorSettings.h"
@@ -57,21 +58,21 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
         ImGui::Separator();
 
         const bool handTool = m_HandTool;
-        if (ActionButton(ICON_FA_HAND, "Hand — drag to pan the view (Q)", handTool, ImVec2(btn, btn)))
+        if (ActionButton(EDITOR_ICON_HAND_TOOL, "Hand — drag to pan the view (Q)", handTool, ImVec2(btn, btn)))
             SetHandToolActive(!handTool);
 
         const int gizmoOp = GizmoOpIndex(); // 0 Translate 1 Rotate 2 Scale 3 Rect 4 Universal
-        if (ActionButton(ICON_FA_UP_DOWN_LEFT_RIGHT, "Translate (W)", !handTool && gizmoOp == 0, ImVec2(btn, btn)))
+        if (ActionButton(EDITOR_ICON_TRANSLATE, "Translate (W)", !handTool && gizmoOp == 0, ImVec2(btn, btn)))
             SetGizmoOpIndex(0);
-        if (ActionButton(ICON_FA_ARROWS_SPIN, "Rotate (E)", !handTool && gizmoOp == 1, ImVec2(btn, btn)))
+        if (ActionButton(EDITOR_ICON_ROTATE, "Rotate (E)", !handTool && gizmoOp == 1, ImVec2(btn, btn)))
             SetGizmoOpIndex(1);
-        if (ActionButton(ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER, "Scale (R)", !handTool && gizmoOp == 2, ImVec2(btn, btn)))
+        if (ActionButton(EDITOR_ICON_SCALE, "Scale (R)", !handTool && gizmoOp == 2, ImVec2(btn, btn)))
             SetGizmoOpIndex(2);
-        if (ActionButton(ICON_FA_VECTOR_SQUARE,
+        if (ActionButton(EDITOR_ICON_RECT_TOOL,
                 "Rect — move + non-uniform scale via corner/edge handles (T)",
                 !handTool && gizmoOp == 3, ImVec2(btn, btn)))
             SetGizmoOpIndex(3);
-        if (ActionButton(ICON_FA_ARROWS_TO_CIRCLE,
+        if (ActionButton(EDITOR_ICON_UNIVERSAL,
                 "Transform — move + rotate + scale in one gizmo (Y)",
                 !handTool && gizmoOp == 4, ImVec2(btn, btn)))
             SetGizmoOpIndex(4);
@@ -79,24 +80,24 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
         ImGui::Separator();
 
         const bool measureTool = MeasureToolActive();
-        if (ActionButton(ICON_FA_RULER,
+        if (ActionButton(EDITOR_ICON_MEASURE,
                 "Measure — click two points in the viewport to measure the distance",
                 measureTool, ImVec2(btn, btn)))
             SetMeasureToolActive(!measureTool);
-        if (ActionButton(ICON_FA_CLONE, "Duplicate Array — line/grid of copies of the selection (Ctrl+Shift+D)",
+        if (ActionButton(EDITOR_ICON_DUPLICATE_ARRAY, "Duplicate Array — line/grid of copies of the selection (Ctrl+Shift+D)",
                 false, ImVec2(btn, btn)))
             RequestArrayDuplicateModal();
 
         ImGui::Separator();
 
         const bool localSpace = GizmoLocalSpace();
-        if (ActionButton(localSpace ? ICON_FA_ARROWS_TO_DOT : ICON_FA_GLOBE,
+        if (ActionButton(localSpace ? EDITOR_ICON_LOCAL_SPACE : EDITOR_ICON_WORLD_SPACE,
                 localSpace ? "Local space (click for World)" : "World space (click for Local)",
                 false, ImVec2(btn, btn)))
             SetGizmoLocalSpace(!localSpace);
 
         const bool pivotCenter = GizmoPivotCenter();
-        if (ActionButton(pivotCenter ? ICON_FA_CIRCLE_DOT : ICON_FA_CROSSHAIRS,
+        if (ActionButton(pivotCenter ? EDITOR_ICON_PIVOT_CENTER : EDITOR_ICON_PIVOT_ORIGIN,
                 pivotCenter
                     ? "Center - gizmo sits on the bounding-box center (click for Pivot)"
                     : "Pivot - gizmo sits on the object's own origin (click for Center)",
@@ -132,8 +133,8 @@ void EditorLayer::DrawViewStateChips(World& world, Camera& editorCamera) {
 
     static const char* kDrawModes[] = { "Shaded", "Wireframe", "Unlit",
                                         "Normals", "Shadow Cascades", "Mip / Texel Density" };
-    static const char* kIcons[] = { ICON_FA_CIRCLE_HALF_STROKE, ICON_FA_BORDER_NONE, ICON_FA_SUN,
-                                    ICON_FA_MOUNTAIN, ICON_FA_LAYER_GROUP, ICON_FA_IMAGE };
+    static const char* kIcons[] = { EDITOR_ICON_SHADED_MODE, EDITOR_ICON_WIREFRAME_MODE, EDITOR_ICON_UNLIT_MODE,
+                                    EDITOR_ICON_NORMALS_MODE, EDITOR_ICON_CASCADES_MODE, EDITOR_ICON_MIP_MODE };
     int shading = ShadingModeIndex();
     if (shading < 0 || shading >= IM_ARRAYSIZE(kDrawModes)) shading = 0;
     char chipLabel[64];
@@ -150,7 +151,8 @@ void EditorLayer::DrawViewStateChips(World& world, Camera& editorCamera) {
 
     const bool ortho = editorCamera.Orthographic;
     char orthoLabel[32];
-    std::snprintf(orthoLabel, sizeof(orthoLabel), "%s  %s", ortho ? ICON_FA_VECTOR_SQUARE : ICON_FA_EYE,
+    std::snprintf(orthoLabel, sizeof(orthoLabel), "%s  %s",
+                 ortho ? EDITOR_ICON_ORTHOGRAPHIC : EDITOR_ICON_PERSPECTIVE,
                  ortho ? "Ortho" : "Persp");
     if (ActionButton(orthoLabel,
             ortho ? "Orthographic (click for Perspective) — 5" : "Perspective (click for Orthographic) — 5",

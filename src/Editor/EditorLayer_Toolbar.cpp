@@ -4,6 +4,7 @@
 
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
+#include "EditorIcons.h"
 #include "FileDialog.h"
 #include "AssetLibrary.h"
 #include "World.h"
@@ -409,7 +410,7 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             // Grid lives only on the toolbar now (#148) — the menu keeps just the toggles that
             // have no toolbar home.
             ImGui::SeparatorText("Options");
-            ImGui::MenuItem(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform Gizmo", nullptr, &m_ShowGizmos);
+            ImGui::MenuItem(EDITOR_ICON_TOGGLE_GIZMOS "  Transform Gizmo", nullptr, &m_ShowGizmos);
             if (ImGui::MenuItem(ICON_FA_RULER "  Measure Tool", nullptr, m_MeasureTool)) {
                 m_MeasureTool = !m_MeasureTool;
                 m_MeasureCount = 0;
@@ -430,7 +431,7 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
                 if (ImGui::IsItemHovered())
                     EditorUI::SetTooltip("Master-mute the audio engine (editor previews and Play-mode sound).");
             }
-            if (ImGui::MenuItem(ICON_FA_BORDER_ALL "  Orthographic", "5", editorCamera.Orthographic)) {
+            if (ImGui::MenuItem(EDITOR_ICON_ORTHOGRAPHIC "  Orthographic", "5", editorCamera.Orthographic)) {
                 ToggleOrthographic(world, editorCamera);
             }
 
