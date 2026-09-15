@@ -152,6 +152,12 @@ struct EditorSettings {
     // toolbar Gizmos popup.
     bool  ShowColliders          = true;
 
+    // --- Tool palette (Phase 3 item 3): the vertical Hand/Translate/Rotate/Scale/Rect/Universal
+    // + Measure/Duplicate-Array + space/pivot rail docked to the Scene viewport's left edge,
+    // replacing those buttons' old home in the top toolbar strip. Collapsed to a thin strip
+    // (just the chevron) when true; expanded (the default) otherwise.
+    bool  ToolPaletteCollapsed   = false;
+
     // #185 — Debug physics harness while playing: G sets off a shockwave at the Player,
     // left-click raycasts from the eye and shoves whatever it hits. A dev/testing aid for the
     // gameplay force + query API until real gameplay drives it; on by default, toggle in the
