@@ -59,58 +59,17 @@
 using namespace EditorInternal;
 
 
-void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) {
-    int ww, wh;
-    glfwGetWindowSize(m_Window, &ww, &wh);
-    float w = (float)ww;
-
-    // NoDocking: without it this is technically a dockable floating window, and Reset Layout's
-    // DockBuilderRemoveNode + full dockspace rebuild (in Draw()) can knock an undocked-but-
-    // dockable window out of the visible window list entirely.
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-        ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize;
-
-    // The transport (Play, or Stop/Pause/Step/Fullscreen) rides over whichever of the two shared-
-    // dock-node viewports is actually on screen: the Game view when its tab is up, otherwise the
-    // Scene view — so it never floats in a plate over the middle of the window, and it's on the
-    // Scene view too when you tab there mid-play. #54 — used to sample the scene/game-view
-    // luminance behind it and ease the glyph between white-on-dark and black-on-light; now a
-    // fixed opaque plate (always, not just in the "nothing to anchor to" fallback this used to
-    // be) behind fixed near-white text, legible over anything.
-    const bool overGame  = m_GameViewImgSize.x > 1.0f && m_GameViewImgSize.y > 1.0f;
-    const bool overScene = !overGame && m_ViewportSize.x > 1.0f && m_ViewportSize.y > 1.0f;
-    const int fgV = 235; // fixed near-white
-
-    if (overScene || overGame) {
-        const ImVec2 imgPos  = overGame ? m_GameViewImgPos  : ImVec2(m_ViewportPos.x, m_ViewportPos.y);
-        const ImVec2 imgSize = overGame ? m_GameViewImgSize : ImVec2(m_ViewportSize.x, m_ViewportSize.y);
-        const float cx = imgPos.x + imgSize.x * 0.5f;
-        const float cy = imgPos.y + 8.0f * m_UIScale;
-        ImGui::SetNextWindowPos(ImVec2(cx, cy), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
-    } else {
-        // No viewport rect to anchor to (maximized play before the first Game-panel frame, or
-        // editor UI hidden) — float near the top of the window.
-        ImGui::SetNextWindowPos(ImVec2(w * 0.5f, 10.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
-    }
-    ImGui::SetNextWindowBgAlpha(0.6f);
-
-    ImGui::Begin("##PlayStopButton", nullptr, flags);
-    // Forces this to the front of the display order every frame so a dock rebuild elsewhere
-    // (Reset Layout) can't bury it behind whatever the freshly recreated dock host window
-    // ends up as. Skipped while a popup is open (e.g. the toolbar's Capture options) so the
-    // button doesn't punch through a menu that legitimately overlays the viewport top-centre.
-    if (!ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
-        ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
-
-    // Flat "vector" button: no body at rest, just the white (or dark) PLAY glyph + label; a faint
-    // plate of the inverse grey on hover/press so it still reads as pressable.
-    const float f  = fgV / 255.0f;
-    const float iv = 1.0f - f;
-    ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(f, f, f, 1.0f));
+// Shared by the toolbar's Zone B (DrawPlayControlsBody, windowed play) and the maximized-play
+// floating fallback (DrawPlayStopButton) — identical controls and click targets either way.
+// Deliberately doesn't touch ImGuiCol_Text: the floating fallback pushes a fixed light colour for
+// its dark plate before calling this; Zone B just inherits the toolbar's own theme text colour.
+void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool paused) {
+    // Flat "vector" buttons: no body at rest, just the glyph + label; a faint wash of the ambient
+    // foreground on hover/press so they still read as pressable without fighting whatever plate
+    // (or lack of one) the caller drew behind them.
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(iv, iv, iv, 0.16f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(iv, iv, iv, 0.28f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.10f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.18f));
 
     if (!playing) {
         if (ImGui::Button(ICON_FA_PLAY "  Play")) m_PlayStopRequested = true;
@@ -122,7 +81,7 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) 
         // Pause toggle + single-frame Step (#236). Pause reads as pressed-in while active; Step
         // is only meaningful (and only enabled) once paused.
         ImGui::SameLine();
-        if (paused) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(iv, iv, iv, 0.28f));
+        if (paused) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 1.0f, 0.18f));
         if (ImGui::Button(paused ? ICON_FA_PLAY "  Resume" : ICON_FA_PAUSE "  Pause")) m_PauseToggleRequested = true;
         if (paused) ImGui::PopStyleColor();
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip(paused ? "Resume simulation (F2)" : "Freeze simulation, keep rendering (F2)");
@@ -143,7 +102,64 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) 
         }
     }
 
-    ImGui::PopStyleColor(4);
+    ImGui::PopStyleColor(3);
+}
+
+// Phase 3 item 2 — the toolbar's Zone B, drawn inline into the module-owned toolbar strip via
+// EditorModuleHostAPI::DrawPlayControlsBody (API v21). Only ever on screen while the toolbar
+// itself is (i.e. never during maximized play — DrawPlayStopButton below covers that one case).
+void EditorLayer::DrawPlayControlsBody() {
+    DrawPlayTransportButtons(m_CachedPlaying, m_CachedPlayMaximized, m_CachedPaused);
+}
+
+void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) {
+    int ww, wh;
+    glfwGetWindowSize(m_Window, &ww, &wh);
+    float w = (float)ww;
+
+    // NoDocking: without it this is technically a dockable floating window, and Reset Layout's
+    // DockBuilderRemoveNode + full dockspace rebuild (in Draw()) can knock an undocked-but-
+    // dockable window out of the visible window list entirely.
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+        ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize;
+
+    // Rides over whichever of the two shared-dock-node viewports is actually on screen: the Game
+    // view when its tab is up, otherwise the Scene view — so it never floats in a plate over the
+    // middle of the window, and it's on the Scene view too when you tab there mid-play.
+    const bool overGame  = m_GameViewImgSize.x > 1.0f && m_GameViewImgSize.y > 1.0f;
+    const bool overScene = !overGame && m_ViewportSize.x > 1.0f && m_ViewportSize.y > 1.0f;
+
+    if (overScene || overGame) {
+        const ImVec2 imgPos  = overGame ? m_GameViewImgPos  : ImVec2(m_ViewportPos.x, m_ViewportPos.y);
+        const ImVec2 imgSize = overGame ? m_GameViewImgSize : ImVec2(m_ViewportSize.x, m_ViewportSize.y);
+        const float cx = imgPos.x + imgSize.x * 0.5f;
+        const float cy = imgPos.y + 8.0f * m_UIScale;
+        ImGui::SetNextWindowPos(ImVec2(cx, cy), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+    } else {
+        // No viewport rect to anchor to (maximized play before the first Game-panel frame) —
+        // float near the top of the window.
+        ImGui::SetNextWindowPos(ImVec2(w * 0.5f, 10.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+    }
+
+    // #5 item 2 — this used to be a 60%-alpha wash behind fixed near-white text, which (on a pale
+    // scene) was the audit's "single most important control ... the least visible thing on
+    // screen" at ~2:1 contrast. Same fixed opaque plate + fixed light text every other viewport
+    // HUD uses since Defect #54 (kHudPlateColor/kHudTextColor), not a bespoke translucency.
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, EditorUIPrimitives::kHudPlateColor);
+    ImGui::PushStyleColor(ImGuiCol_Text,     EditorUIPrimitives::kHudTextColor);
+
+    ImGui::Begin("##PlayStopButton", nullptr, flags);
+    // Forces this to the front of the display order every frame so a dock rebuild elsewhere
+    // (Reset Layout) can't bury it behind whatever the freshly recreated dock host window
+    // ends up as. Skipped while a popup is open (e.g. the toolbar's Capture options) so the
+    // button doesn't punch through a menu that legitimately overlays the viewport top-centre.
+    if (!ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
+        ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+
+    DrawPlayTransportButtons(playing, maximized, paused);
+
+    ImGui::PopStyleColor(2);
     ImGui::End();
 }
 

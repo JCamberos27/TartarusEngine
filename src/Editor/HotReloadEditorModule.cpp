@@ -449,6 +449,9 @@ void TbGetSceneDisplayName(char* out, int n) {
 bool TbGetSceneDirty() { return g_Editor && g_Editor->IsDirty(); }
 void TbDoSaveScene() { if (g_Editor && g_World && g_Assets) g_Editor->SaveScene(*g_World, *g_Assets); }
 
+// --- Play controls, Zone B (API v21, Phase 3 item 2) -------------------------------------
+void TbDrawPlayControlsBody() { if (g_Editor) g_Editor->DrawPlayControlsBody(); }
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
@@ -572,6 +575,8 @@ const EditorModuleHostAPI kHostAPI{
     &TbGetSceneDisplayName,
     &TbGetSceneDirty,
     &TbDoSaveScene,
+    // --- Play controls, Zone B (API v21) — order must match EditorModuleHostAPI exactly ---
+    &TbDrawPlayControlsBody,
 };
 
 } // namespace
