@@ -1427,9 +1427,13 @@ private:
     // exposes them through EditorModuleHostAPI (see UIScale()/SmoothedFrameMs()/GetRenderStats
     // etc.). main.cpp draws it via editorModule.Draw(), right after this class's Draw().
     // Thin always-on strip along the bottom of the Scene viewport: FPS / ms / draws / tris /
-    // selection count / active tool — the at-a-glance surface (#92). The Statistics panel above
-    // is the deeper readout.
-    void DrawViewportStatusBar();
+    // scene name / selection count / lock-to-selection / active tool — the at-a-glance surface
+    // (#92). The Statistics panel above is the deeper readout. Phase 3 item 5 — genuinely
+    // interactive now (used to be ImGuiWindowFlags_NoInputs, pure decoration): the perf cluster
+    // opens Statistics, the scene name reveals the file, selection count frames it, and the lock
+    // indicator toggles itself off, all in place instead of requiring the Stats panel/menu/
+    // shortcut. World&/Camera& are for Frame Selected.
+    void DrawViewportStatusBar(World& world, Camera& editorCamera);
     // The actual Play/Stop/Pause/Step/Restore buttons, shared by DrawPlayControlsBody (toolbar
     // Zone B) and DrawPlayStopButton (maximized-play floating fallback) — see DrawPlayControlsBody
     // above for why there are two call sites instead of one.
