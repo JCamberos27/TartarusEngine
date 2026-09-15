@@ -1585,10 +1585,13 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", kindTip);
     ImGui::SameLine();
 
-    // Name field, then the padlock right-aligned on the same row (#236 R2 — moved off its own
-    // wasted line above). Locked = cyan glyph.
+    // Name field, then the padlock and a "..." object-actions menu right-aligned on the same row
+    // (#236 R2 — moved off its own wasted line above; #6 item 4 folds Duplicate/Save-as-Prefab/
+    // Delete in here too, off their own orphaned row at the bottom of the panel). Locked = cyan
+    // glyph.
     const float lockW = ImGui::GetFrameHeight();
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - lockW - ImGui::GetStyle().ItemSpacing.x);
+    const float headerBtnReserve = lockW * 2.0f + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - headerBtnReserve);
     // #302 Part B — a prefab child whose name differs from the .prefab: tint the field + offer
     // the right-click Revert/Apply menu.
     const bool nameOverridden = SceneSerializer::IsPrefabFieldOverridden(world, entity, "Name", "name");
@@ -1614,6 +1617,29 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             if (m_InspectorLocked) { m_Selected = m_InspLockSelected; m_ExtraSelection = m_InspLockExtra; inspLockSwapped = true; }
         }
         ImGui::PopStyleColor();
+    }
+    ImGui::SameLine();
+    {
+        // #6 item 4 — Duplicate / Save as Prefab / Delete, previously three unlabelled icon
+        // buttons stranded on their own row below Add Component, disconnected from the header
+        // block Unity groups this kind of action into. One menu here instead.
+        ImGui::PushID("##objectActions");
+        const bool objActionsClicked = ActionButton(ICON_FA_ELLIPSIS_VERTICAL, "Object actions",
+                                                     false, ImVec2(lockW, lockW));
+        ImGui::PopID();
+        if (objActionsClicked) ImGui::OpenPopup("##ObjectActionsMenu");
+        if (ImGui::BeginPopup("##ObjectActionsMenu")) {
+            if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", "Ctrl+D"))
+                DuplicateSelection(world, assets);
+            if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Save as Prefab...")) {
+                std::string path = FileDialog::SaveFile("Prefab Files\0*.prefab\0All Files\0*.*\0", "prefab", m_Window);
+                if (!path.empty() && SceneSerializer::SavePrefab(world, entity, path)) assets.RegisterPrefab(path);
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem(ICON_FA_TRASH "  Delete", "Del"))
+                DeleteSelection(world);
+            ImGui::EndPopup();
+        }
     }
 
     // #236 A2 — prefab-instance banner. Walk up to the instance root (if any) and say what's
@@ -2253,25 +2279,12 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // Compact footer actions — smaller than the default so this row doesn't feel heavy.
+    // Compact footer actions — smaller than the default so this row doesn't feel heavy. Duplicate/
+    // Save-as-Prefab/Delete used to live here too (a second, orphaned icon row below this button);
+    // #6 item 4 moved them into the header's "..." object-actions menu instead.
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f * m_UIScale, 2.0f * m_UIScale)); // #37
 
     DrawAddComponentMenu(world, assets, entity);
-
-    ImGui::Spacing();
-    // Right-aligned flat icon row — Duplicate / Prefab / Delete, names + shortcuts in tooltips.
-    const float ib = ImGui::GetFrameHeight() + 8.0f;
-    ImGui::SameLine(ImGui::GetContentRegionMax().x - ib * 3.0f - ImGui::GetStyle().ItemSpacing.x * 2.0f);
-    if (ActionButton(ICON_FA_CLONE, "Duplicate this object (Ctrl+D)", false, ImVec2(ib, 0.0f)))
-        DuplicateSelection(world, assets);
-    ImGui::SameLine();
-    if (ActionButton(ICON_FA_BOX_ARCHIVE, "Save this object as a reusable .prefab asset", false, ImVec2(ib, 0.0f))) {
-        std::string path = FileDialog::SaveFile("Prefab Files\0*.prefab\0All Files\0*.*\0", "prefab", m_Window);
-        if (!path.empty() && SceneSerializer::SavePrefab(world, entity, path)) assets.RegisterPrefab(path);
-    }
-    ImGui::SameLine();
-    if (DangerIconButton(ICON_FA_TRASH, "Delete this object (Del)", ImVec2(ib, 0.0f)))
-        DeleteSelection(world);
 
     ImGui::PopStyleVar();
 
@@ -2311,6 +2324,25 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     ImGui::PopStyleColor(3);
     const bool headerHovered = ImGui::IsItemHovered();
     if (tooltip && headerHovered) EditorUI::SetTooltip("%s", tooltip);
+
+    // #6 item 5 — everything the popup below offers (Reset/Copy/Paste/Remove/Revert/Apply) was
+    // reachable only by right-clicking the header, which the Phase 4 exit criterion rules out
+    // ("nothing reachable only by right-click"). A visible "..." button opens the identical popup.
+    const bool hasMenu = resetOut || copyOut || pasteOut || removable || prefabRevertOut || prefabApplyOut;
+    if (hasMenu) {
+        const float bw = ImGui::GetFrameHeight();
+        const float removeReserve = removable ? (bw + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - removeReserve - bw);
+        ImGui::PushID(label);
+        ImGui::PushID("##moreActions");
+        const bool moreClicked = ActionButton(ICON_FA_ELLIPSIS_VERTICAL, "More actions", false, ImVec2(bw, 0.0f));
+        ImGui::PopID();
+        ImGui::PopID();
+        // OpenPopup must be called at the same ID-stack depth as OpenPopupOnItemClick/BeginPopup
+        // below (both resolve header.c_str() with no extra PushID active) — inside the PushIDs
+        // above, this would silently open a different, never-checked popup ID.
+        if (moreClicked) ImGui::OpenPopup(header.c_str());
+    }
 
     if (removable) {
         // Right-aligned remove control on the header's line, always visible so it's discoverable
