@@ -71,7 +71,10 @@
 //        code reads the raw theme index anymore.
 //   19 - Phase 1 item 5: GetMonoFont, exposing the host-baked JetBrains Mono face so a module can
 //        route its own numeric readouts (the Stats HUD) through it, the same way the Console does.
-constexpr std::uint32_t kEditorModuleAPIVersion = 19;
+//   20 - Phase 3 item 1 (document strip): GetSceneDisplayName, GetSceneDirty and DoSaveScene, so
+//        the toolbar can show the open scene's name + an unsaved-changes dot and offer a Save
+//        button — until now the only way to save was the File menu or Ctrl+S.
+constexpr std::uint32_t kEditorModuleAPIVersion = 20;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -430,6 +433,14 @@ struct EditorModuleHostAPI {
     // ReflectionProbeArray from the current world and marks all probes dirty; shader
     // variants with _REFLECTION_PROBES receive corrected probe data on subsequent draws.
     void (*RequestBakeReflectionProbes)() = nullptr;
+
+    // --- Document strip (API v20, Phase 3 item 1) --------------------------------------
+    // The toolbar's new left-hand cluster: the open scene's filename ("Untitled" for a new,
+    // unsaved scene), an unsaved-changes dot, and a Save button — the audit's callout that there
+    // was no visible Save control anywhere in the editor.
+    void (*GetSceneDisplayName)(char* out, int n) = nullptr;
+    bool (*GetSceneDirty)() = nullptr;
+    void (*DoSaveScene)() = nullptr;
 };
 
 struct EditorModuleAPI {
