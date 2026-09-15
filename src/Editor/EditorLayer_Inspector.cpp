@@ -401,9 +401,14 @@ MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool
 }
 
 // A single scalar row with the same mixed-value behaviour.
+// `slider`/`logarithmic`/`format` mirror the single-select Inspector's Float widget hints (#302
+// Wave 2a) — without them, a reflected slider field (Light Intensity/Range, log-scaled) would
+// fall back to a plain DragFloat here, which is exactly the fidelity gap that would have appeared
+// when this multi-select body became the shared single+multi renderer (Defect #44 unification).
 MultiEditResult MultiEditFloatRow(const char* label, float& value, bool mixed, float speed,
                                   float minV, float maxV, const char* tooltip = nullptr,
-                                  PrefabMultiRef pf = {}) {
+                                  PrefabMultiRef pf = {}, bool slider = false, bool logarithmic = false,
+                                  const char* format = nullptr) {
     MultiEditResult r;
     ImGui::PushID(label);
     const bool pfOv = pf.self && pf.field && pf.sel &&
@@ -419,13 +424,23 @@ MultiEditResult MultiEditFloatRow(const char* label, float& value, bool mixed, f
             ImGui::EndPopup();
         }
     }
-    ImGuiID fieldId = ImGui::GetID("##mf");
+    ImGuiID fieldId = ImGui::GetID(slider ? "##v" : "##mf"); // SliderFloat's item id is "##v" (see EditorUI::SliderFloat call below)
     bool editing = ImGui::GetActiveID() == fieldId;
-    const char* fmt = (mixed && !editing) ? "\xE2\x80\x94" : "%.3f";
+    const char* activeFmt = format ? format : "%.3f";
+    const char* fmt = (mixed && !editing) ? "\xE2\x80\x94" : activeFmt;
     float before = value;
-    bool fieldChanged = ImGui::DragFloat("##mf", &value, speed, minV, maxV, fmt);
-    if (ImGui::IsItemActivated()) r.activated = true;
-    if (ImGui::IsItemDeactivatedAfterEdit()) r.committed = true;
+    bool fieldChanged;
+    if (slider && minV < maxV) {
+        bool slActivated = false, slDeactivated = false;
+        fieldChanged = EditorUI::SliderFloat("##v", &value, minV, maxV, fmt,
+            logarithmic ? ImGuiSliderFlags_Logarithmic : 0, &slActivated, &slDeactivated);
+        if (slActivated) r.activated = true;
+        if (slDeactivated) r.committed = true;
+    } else {
+        fieldChanged = ImGui::DragFloat("##mf", &value, speed, minV, maxV, fmt);
+        if (ImGui::IsItemActivated()) r.activated = true;
+        if (ImGui::IsItemDeactivatedAfterEdit()) r.committed = true;
+    }
     if (fieldChanged) {
         if (!std::isfinite(value)) value = before;
         else r.changed = true;
@@ -942,6 +957,185 @@ void EditorLayer::ToggleInspectorLock() {
     }
 }
 
+// #6 Defect #44/#54 — the ReflectFieldType switch, shared by the single-select (`sel` of size 1,
+// no mixed-value branch is ever taken) and multi-select Inspector loops below. Previously
+// implemented twice independently (single: ~2147-2213, multi: ~1248-1390 as this file stood
+// before Phase 4), so a new field type or widget fix had to be applied in two places or the two
+// selection modes silently drifted apart (Defect #26/#36's Mesh Renderer field-set inconsistency
+// traced back to exactly this). Body is the former multi-select switch, generalized over `sel`
+// rather than special-cased to it — the mixed-value reduction is a no-op for a one-element `sel`.
+void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const RegisteredComponent& rc,
+                                      const ReflectField& f, const std::vector<entt::entity>& sel) {
+    auto fieldPtr = [&](entt::entity e) -> void* { return f.Address(rc.Get(world.Registry, e)); };
+    auto forEach = [&](const std::function<void(entt::entity)>& fn) { for (entt::entity e : sel) fn(e); };
+    PrefabMultiRef pf{this, &world, &sel, rc.Meta.Name, ReflectFieldKey(f)};
+    ImGui::PushID(f.Name);
+    switch (f.Type) {
+        case ReflectFieldType::Bool: {
+            bool anyOn = false, mixed = false, first = true, firstVal = false;
+            forEach([&](entt::entity e) {
+                bool v = *reinterpret_cast<bool*>(fieldPtr(e));
+                if (first) { firstVal = v; first = false; } else if (v != firstVal) mixed = true;
+                anyOn |= v;
+            });
+            bool out = firstVal;
+            if (MultiEditCheckbox(f.Name, anyOn, mixed, out, pf)) {
+                StageUndo(world);
+                forEach([&](entt::entity e) { *reinterpret_cast<bool*>(fieldPtr(e)) = out; });
+                CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+            }
+            break;
+        }
+        case ReflectFieldType::Int: {
+            int shared = 0; bool mixed = false, first = true;
+            forEach([&](entt::entity e) {
+                int v = *reinterpret_cast<int*>(fieldPtr(e));
+                if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
+            });
+            // A native DragInt ("%d"), not a float-formatted row — the old multi-select-only
+            // switch this replaced ran Int fields through the float row (fractional "%.3f"
+            // display for a whole number); no registered component uses Int today, but the
+            // single-select-only switch never had this gap and a future Int field shouldn't
+            // reintroduce it via this shared path (Defect #44).
+            const bool pfOv = pf.self && pf.field && pf.sel &&
+                pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
+            if (pfOv) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
+            PropertyLabel(f.Name, f.Tooltip);
+            if (pfOv) {
+                ImGui::PopStyleColor();
+                ImGui::OpenPopupOnItemClick("##pfmInt", ImGuiPopupFlags_MouseButtonRight);
+                if (ImGui::BeginPopup("##pfmInt")) {
+                    pf.self->PrefabFieldMenuMulti(*pf.world, *pf.sel, pf.comp, pf.field);
+                    ImGui::EndPopup();
+                }
+            }
+            ImGuiID fieldId = ImGui::GetID("##v");
+            bool editing = ImGui::GetActiveID() == fieldId;
+            const char* fmt = (mixed && !editing) ? "\xE2\x80\x94" : "%d";
+            int edit = shared;
+            bool changed = ImGui::DragInt("##v", &edit, f.DragSpeed, (int)f.Min, (int)f.Max, fmt);
+            if (ImGui::IsItemActivated()) StageUndo(world);
+            if (changed) forEach([&](entt::entity e) { *reinterpret_cast<int*>(fieldPtr(e)) = edit; });
+            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+            break;
+        }
+        case ReflectFieldType::Float: {
+            float shared = 0.0f; bool mixed = false, first = true;
+            forEach([&](entt::entity e) {
+                float v = *reinterpret_cast<float*>(fieldPtr(e));
+                if (first) { shared = v; first = false; } else if (std::fabs(v - shared) > 1.0e-4f) mixed = true;
+            });
+            float edit = shared;
+            // f.Slider/Logarithmic/Format carried through so a slider-hinted field (Light
+            // Intensity/Range) keeps its EditorUI::SliderFloat widget here, same as it did in the
+            // single-select-only switch this replaced (Defect #44).
+            MultiEditResult r = MultiEditFloatRow(f.Name, edit, mixed, f.DragSpeed, f.Min, f.Max, f.Tooltip, pf,
+                f.Slider, f.Logarithmic, f.Format);
+            if (r.activated) StageUndo(world);
+            if (r.changed) forEach([&](entt::entity e) { *reinterpret_cast<float*>(fieldPtr(e)) = edit; });
+            if (r.committed) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+            break;
+        }
+        case ReflectFieldType::Vec3: {
+            glm::vec3 shared(0.0f); bool mixedAxis[3] = {false, false, false}; bool first = true;
+            forEach([&](entt::entity e) {
+                glm::vec3 v = *reinterpret_cast<glm::vec3*>(fieldPtr(e));
+                if (first) { shared = v; first = false; }
+                else for (int a = 0; a < 3; ++a) if (std::fabs(v[a] - shared[a]) > 1.0e-4f) mixedAxis[a] = true;
+            });
+            glm::vec3 edit = shared;
+            bool touched[3];
+            MultiEditResult r = MultiEditVec3Row(f.Name, edit, mixedAxis, touched, f.DragSpeed, f.Min, f.Max, f.Tooltip, pf);
+            if (r.activated) StageUndo(world);
+            if (r.changed) forEach([&](entt::entity e) {
+                glm::vec3& v = *reinterpret_cast<glm::vec3*>(fieldPtr(e));
+                for (int a = 0; a < 3; ++a) if (touched[a]) v[a] = edit[a];
+            });
+            if (r.committed) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+            break;
+        }
+        case ReflectFieldType::String: {
+            std::string shared; bool mixed = false, first = true;
+            forEach([&](entt::entity e) {
+                const std::string& v = *reinterpret_cast<std::string*>(fieldPtr(e));
+                if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
+            });
+            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip);
+            char buf[256];
+            snprintf(buf, sizeof(buf), "%s", mixed ? "" : shared.c_str());
+            bool changed = mixed
+                ? ImGui::InputTextWithHint("##v", "(multiple values)", buf, sizeof(buf))
+                : ImGui::InputText("##v", buf, sizeof(buf));
+            if (ImGui::IsItemActivated()) StageUndo(world);
+            if (changed) forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e)) = buf; });
+            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+            break;
+        }
+        case ReflectFieldType::AssetRef: {
+            std::string shared; bool mixed = false, first = true;
+            forEach([&](entt::entity e) {
+                const std::string& v = *reinterpret_cast<std::string*>(fieldPtr(e));
+                if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
+            });
+            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip);
+            const std::string preview = mixed ? "\xE2\x80\x94"
+                : (shared.empty() ? "(none)" : std::filesystem::path(shared).filename().string());
+            if (ImGui::BeginCombo("##v", preview.c_str())) {
+                if (ImGui::Selectable("(none)", !mixed && shared.empty())) {
+                    StageUndo(world);
+                    forEach([&](entt::entity e) { reinterpret_cast<std::string*>(fieldPtr(e))->clear(); });
+                    CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                }
+                for (const std::string& a : AssetRefPathList(assets, f.AssetKind))
+                    if (ImGui::Selectable(std::filesystem::path(a).filename().string().c_str(), !mixed && a == shared)) {
+                        StageUndo(world);
+                        forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e)) = a; });
+                        CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                    }
+                ImGui::EndCombo();
+            }
+            break;
+        }
+        case ReflectFieldType::Color: {
+            glm::vec3 shared(0.0f); bool mixed = false, first = true;
+            forEach([&](entt::entity e) {
+                glm::vec3 c = *reinterpret_cast<glm::vec3*>(fieldPtr(e));
+                if (first) { shared = c; first = false; }
+                else for (int a = 0; a < 3; ++a) if (std::fabs(c[a] - shared[a]) > 1.0e-4f) mixed = true;
+            });
+            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip);
+            glm::vec3 edit = shared;
+            bool changed = ImGui::ColorEdit3("##v", &edit.x, ImGuiColorEditFlags_DisplayHex);
+            if (ImGui::IsItemActivated()) StageUndo(world);
+            if (changed) forEach([&](entt::entity e) { *reinterpret_cast<glm::vec3*>(fieldPtr(e)) = edit; });
+            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+            if (mixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
+            break;
+        }
+        case ReflectFieldType::Enum: {
+            int shared = -1; bool mixed = false, first = true;
+            forEach([&](entt::entity e) {
+                int v = *reinterpret_cast<int*>(fieldPtr(e));
+                if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
+            });
+            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip);
+            const char* preview = mixed ? "\xE2\x80\x94"
+                : (shared >= 0 && shared < f.EnumCount ? ReflectEnumLabel(f, shared) : "");
+            if (ImGui::BeginCombo("##v", preview)) {
+                for (int k = 0; k < f.EnumCount; ++k)
+                    if (ImGui::Selectable(ReflectEnumLabel(f, k), !mixed && k == shared)) {
+                        StageUndo(world);
+                        forEach([&](entt::entity e) { *reinterpret_cast<int*>(fieldPtr(e)) = k; });
+                        CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                    }
+                ImGui::EndCombo();
+            }
+            break;
+        }
+    }
+    ImGui::PopID();
+}
+
 void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // Flat button language for the whole panel (#155/#156): no raised body at rest, a faint wash
     // on hover. Every ImGui::Button below inherits it; ActionButton / DangerIconButton push their
@@ -1244,151 +1438,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 DrawReflectedComponentExtraMulti(rc.Meta.Name, world, sel, ReflectExtraPhase::Top);
                 for (const ReflectField& f : rc.Meta.Fields) {
                     if (f.EditorHidden || !fieldVisibleMulti(f)) continue;
-                    ImGui::PushID(f.Name);
-                    switch (f.Type) {
-                        case ReflectFieldType::Bool: {
-                            bool anyOn = false, mixed = false, first = true, firstVal = false;
-                            forEach([&](entt::entity e) {
-                                bool v = *reinterpret_cast<bool*>(fieldPtr(e, f));
-                                if (first) { firstVal = v; first = false; } else if (v != firstVal) mixed = true;
-                                anyOn |= v;
-                            });
-                            bool out = firstVal;
-                            if (MultiEditCheckbox(f.Name, anyOn, mixed, out,
-                                                  {this, &world, &sel, rc.Meta.Name, ReflectFieldKey(f)})) {
-                                StageUndo(world);
-                                forEach([&](entt::entity e) { *reinterpret_cast<bool*>(fieldPtr(e, f)) = out; });
-                                CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
-                            }
-                            break;
-                        }
-                        case ReflectFieldType::Int: {
-                            int shared = 0; bool mixed = false, first = true;
-                            forEach([&](entt::entity e) {
-                                int v = *reinterpret_cast<int*>(fieldPtr(e, f));
-                                if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
-                            });
-                            float edit = (float)shared;
-                            MultiEditResult r = MultiEditFloatRow(f.Name, edit, mixed, f.DragSpeed, f.Min, f.Max, f.Tooltip,
-                                {this, &world, &sel, rc.Meta.Name, ReflectFieldKey(f)});
-                            if (r.activated) StageUndo(world);
-                            if (r.changed) { int v = (int)edit; forEach([&](entt::entity e) { *reinterpret_cast<int*>(fieldPtr(e, f)) = v; }); }
-                            if (r.committed) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
-                            break;
-                        }
-                        case ReflectFieldType::Float: {
-                            float shared = 0.0f; bool mixed = false, first = true;
-                            forEach([&](entt::entity e) {
-                                float v = *reinterpret_cast<float*>(fieldPtr(e, f));
-                                if (first) { shared = v; first = false; } else if (std::fabs(v - shared) > 1.0e-4f) mixed = true;
-                            });
-                            float edit = shared;
-                            MultiEditResult r = MultiEditFloatRow(f.Name, edit, mixed, f.DragSpeed, f.Min, f.Max, f.Tooltip,
-                                {this, &world, &sel, rc.Meta.Name, ReflectFieldKey(f)});
-                            if (r.activated) StageUndo(world);
-                            if (r.changed) forEach([&](entt::entity e) { *reinterpret_cast<float*>(fieldPtr(e, f)) = edit; });
-                            if (r.committed) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
-                            break;
-                        }
-                        case ReflectFieldType::Vec3: {
-                            glm::vec3 shared(0.0f); bool mixedAxis[3] = {false, false, false}; bool first = true;
-                            forEach([&](entt::entity e) {
-                                glm::vec3 v = *reinterpret_cast<glm::vec3*>(fieldPtr(e, f));
-                                if (first) { shared = v; first = false; }
-                                else for (int a = 0; a < 3; ++a) if (std::fabs(v[a] - shared[a]) > 1.0e-4f) mixedAxis[a] = true;
-                            });
-                            glm::vec3 edit = shared;
-                            bool touched[3];
-                            MultiEditResult r = MultiEditVec3Row(f.Name, edit, mixedAxis, touched, f.DragSpeed, f.Min, f.Max, f.Tooltip,
-                                {this, &world, &sel, rc.Meta.Name, ReflectFieldKey(f)});
-                            if (r.activated) StageUndo(world);
-                            if (r.changed) forEach([&](entt::entity e) {
-                                glm::vec3& v = *reinterpret_cast<glm::vec3*>(fieldPtr(e, f));
-                                for (int a = 0; a < 3; ++a) if (touched[a]) v[a] = edit[a];
-                            });
-                            if (r.committed) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
-                            break;
-                        }
-                        case ReflectFieldType::String: {
-                            std::string shared; bool mixed = false, first = true;
-                            forEach([&](entt::entity e) {
-                                const std::string& v = *reinterpret_cast<std::string*>(fieldPtr(e, f));
-                                if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
-                            });
-                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip); // #315
-                            char buf[256];
-                            snprintf(buf, sizeof(buf), "%s", mixed ? "" : shared.c_str());
-                            bool changed = mixed
-                                ? ImGui::InputTextWithHint("##v", "(multiple values)", buf, sizeof(buf))
-                                : ImGui::InputText("##v", buf, sizeof(buf));
-                            if (ImGui::IsItemActivated()) StageUndo(world);
-                            if (changed) forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e, f)) = buf; });
-                            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
-                            break;
-                        }
-                        case ReflectFieldType::AssetRef: {
-                            std::string shared; bool mixed = false, first = true;
-                            forEach([&](entt::entity e) {
-                                const std::string& v = *reinterpret_cast<std::string*>(fieldPtr(e, f));
-                                if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
-                            });
-                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip); // #315
-                            const std::string preview = mixed ? "\xE2\x80\x94"
-                                : (shared.empty() ? "(none)" : std::filesystem::path(shared).filename().string());
-                            if (ImGui::BeginCombo("##v", preview.c_str())) {
-                                if (ImGui::Selectable("(none)", !mixed && shared.empty())) {
-                                    StageUndo(world);
-                                    forEach([&](entt::entity e) { reinterpret_cast<std::string*>(fieldPtr(e, f))->clear(); });
-                                    CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
-                                }
-                                for (const std::string& a : AssetRefPathList(assets, f.AssetKind))
-                                    if (ImGui::Selectable(std::filesystem::path(a).filename().string().c_str(), !mixed && a == shared)) {
-                                        StageUndo(world);
-                                        forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e, f)) = a; });
-                                        CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
-                                    }
-                                ImGui::EndCombo();
-                            }
-                            break;
-                        }
-                        case ReflectFieldType::Color: {
-                            glm::vec3 shared(0.0f); bool mixed = false, first = true;
-                            forEach([&](entt::entity e) {
-                                glm::vec3 c = *reinterpret_cast<glm::vec3*>(fieldPtr(e, f));
-                                if (first) { shared = c; first = false; }
-                                else for (int a = 0; a < 3; ++a) if (std::fabs(c[a] - shared[a]) > 1.0e-4f) mixed = true;
-                            });
-                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip); // #315
-                            glm::vec3 edit = shared;
-                            bool changed = ImGui::ColorEdit3("##v", &edit.x, ImGuiColorEditFlags_DisplayHex);
-                            if (ImGui::IsItemActivated()) StageUndo(world);
-                            if (changed) forEach([&](entt::entity e) { *reinterpret_cast<glm::vec3*>(fieldPtr(e, f)) = edit; });
-                            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
-                            if (mixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
-                            break;
-                        }
-                        case ReflectFieldType::Enum: {
-                            int shared = -1; bool mixed = false, first = true;
-                            forEach([&](entt::entity e) {
-                                int v = *reinterpret_cast<int*>(fieldPtr(e, f));
-                                if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
-                            });
-                            PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip); // #315
-                            const char* preview = mixed ? "\xE2\x80\x94"
-                                : (shared >= 0 && shared < f.EnumCount ? ReflectEnumLabel(f, shared) : "");
-                            if (ImGui::BeginCombo("##v", preview)) {
-                                for (int k = 0; k < f.EnumCount; ++k)
-                                    if (ImGui::Selectable(ReflectEnumLabel(f, k), !mixed && k == shared)) {
-                                        StageUndo(world);
-                                        forEach([&](entt::entity e) { *reinterpret_cast<int*>(fieldPtr(e, f)) = k; });
-                                        CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
-                                    }
-                                ImGui::EndCombo();
-                            }
-                            break;
-                        }
-                    }
-                    ImGui::PopID();
+                    DrawReflectedField(world, assets, rc, f, sel); // #6 Defect #44 — shared with single-select
                 }
                 DrawReflectedComponentExtraMulti(rc.Meta.Name, world, sel, ReflectExtraPhase::Bottom);
                 EndComponentSection();
@@ -2127,6 +2177,9 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Top);
             const char* openGroup = nullptr; // current TreeNode group, nullptr = none
             bool groupNodeOpen = true;       // false = current group's node is collapsed
+            // #6 Defect #44 — a one-element selection so the field switch below (shared with
+            // multi-select) takes its no-mixed-value path; see DrawReflectedField.
+            const std::vector<entt::entity> selOne{entity};
             for (const ReflectField& f : rc.Meta.Fields) {
                 // Group transitions: close the previous node, open the next.
                 if (f.Group != openGroup) {
@@ -2141,78 +2194,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 if (f.EditorHidden) continue;              // drawn by DrawReflectedComponentExtra
                 if (!fieldVisible(f)) continue;
 
-                PrefabOverrideLabel(world, entity, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip); // #302 Part B
-                ImGui::PushID(f.Name);
-                bool started = false;
-                switch (f.Type) {
-                    case ReflectFieldType::Bool:
-                        if (ImGui::Checkbox("##v", reinterpret_cast<bool*>(f.Address(fbase))))
-                            PushUndo(world, std::string("Edit ") + rc.Meta.Name);
-                        break;
-                    case ReflectFieldType::Int:
-                        ImGui::DragInt("##v", reinterpret_cast<int*>(f.Address(fbase)), f.DragSpeed,
-                            (int)f.Min, (int)f.Max);
-                        started = ImGui::IsItemActivated();
-                        break;
-                    case ReflectFieldType::Float: {
-                        float* v = reinterpret_cast<float*>(f.Address(fbase));
-                        const char* fmt = f.Format ? f.Format : "%.3f";
-                        const ImGuiSliderFlags sl = f.Logarithmic ? ImGuiSliderFlags_Logarithmic : 0;
-                        if (f.Slider && f.Min < f.Max) {
-                            // EditorUI::SliderFloat submits two ImGui items (track + trailing
-                            // number box); a bare IsItemActivated() below it only ever sees the
-                            // box, so dragging the track would never set `started` and the undo
-                            // push at the bottom of this loop would silently be skipped.
-                            bool slActivated = false;
-                            EditorUI::SliderFloat("##v", v, f.Min, f.Max, fmt, sl, &slActivated);
-                            started = slActivated;
-                        } else {
-                            ImGui::DragFloat("##v", v, f.DragSpeed, f.Min, f.Max, fmt, sl);
-                            started = ImGui::IsItemActivated();
-                        }
-                        break;
-                    }
-                    case ReflectFieldType::Vec3:
-                        ImGui::DragFloat3("##v", reinterpret_cast<float*>(f.Address(fbase)), f.DragSpeed,
-                            f.Min, f.Max);
-                        started = ImGui::IsItemActivated();
-                        break;
-                    case ReflectFieldType::Color:
-                        ImGui::ColorEdit3("##v", reinterpret_cast<float*>(f.Address(fbase)),
-                            ImGuiColorEditFlags_DisplayHex);
-                        started = ImGui::IsItemActivated();
-                        break;
-                    case ReflectFieldType::Enum:
-                        if (ImGui::Combo("##v", reinterpret_cast<int*>(f.Address(fbase)), f.EnumLabels))
-                            PushUndo(world, std::string("Edit ") + rc.Meta.Name);
-                        break;
-                    case ReflectFieldType::String: {
-                        auto* s = reinterpret_cast<std::string*>(f.Address(fbase));
-                        char buf[256];
-                        snprintf(buf, sizeof(buf), "%s", s->c_str());
-                        if (ImGui::InputText("##v", buf, sizeof(buf))) *s = buf;
-                        started = ImGui::IsItemActivated();
-                        break;
-                    }
-                    case ReflectFieldType::AssetRef: {
-                        auto* s = reinterpret_cast<std::string*>(f.Address(fbase));
-                        const std::string preview = s->empty() ? "(none)"
-                            : std::filesystem::path(*s).filename().string();
-                        if (ImGui::BeginCombo("##v", preview.c_str())) {
-                            if (ImGui::Selectable("(none)", s->empty())) {
-                                PushUndo(world, std::string("Edit ") + rc.Meta.Name); s->clear();
-                            }
-                            for (const std::string& a : AssetRefPathList(assets, f.AssetKind))
-                                if (ImGui::Selectable(std::filesystem::path(a).filename().string().c_str(), a == *s)) {
-                                    PushUndo(world, std::string("Edit ") + rc.Meta.Name); *s = a;
-                                }
-                            ImGui::EndCombo();
-                        }
-                        break;
-                    }
-                }
-                if (started) PushUndo(world, std::string("Edit ") + rc.Meta.Name);
-                ImGui::PopID();
+                DrawReflectedField(world, assets, rc, f, selOne);
             }
             if (openGroup && groupNodeOpen) ImGui::TreePop();
             DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Bottom);

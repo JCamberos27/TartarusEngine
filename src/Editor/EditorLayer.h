@@ -38,6 +38,8 @@ enum class GizmoOp { Translate, Rotate, Scale, Rect, Universal }; // Universal (
 // so it never crosses the DLL boundary — the module only ever asks for a cell count + a
 // DrawAssetCell(index) callback.
 struct MaterialAsset; // defined in MaterialAsset.h, included by AssetLibrary.h
+struct RegisteredComponent; // ComponentRegistry.h
+struct ReflectField;        // ComponentReflection.h
 
 struct AssetGridCell {
     enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot } kind;
@@ -1552,6 +1554,13 @@ private:
     // `component` is a ReflectComponent::Name or the specials "Transform" / "Name".
     void PrefabOverrideLabel(World& world, entt::entity entity, const char* component,
                              const char* field, const char* label, const char* tooltip);
+    // #6 Defect #44/#54 — the ReflectFieldType switch, shared by the single-select (`sel` of size
+    // 1, no mixed-value branch ever taken) and multi-select Inspector loops so a new field type or
+    // widget improvement is written once instead of drifting between two independent copies. Draws
+    // one field's row: label (with prefab-override tint/menu), widget, undo staging. `sel` must be
+    // non-empty and every entity in it must have `rc`'s component.
+    void DrawReflectedField(World& world, AssetLibrary& assets, const RegisteredComponent& rc,
+                            const ReflectField& f, const std::vector<entt::entity>& sel);
     char m_AddComponentFilter[64] = {};      // type-to-filter text in the Add Component popup (#236)
     bool m_AddComponentFilterFocus = false;  // grab the keyboard for it the frame the popup opens
     // Draws one removable component section with a header and a trailing "x" — returns true if
