@@ -1979,188 +1979,13 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
     }
 
-    // --- Collider (#185: shape + size + trigger + surface) -----------------------------
-    if (auto* collider = registry.try_get<ColliderComponent>(entity)) {
-        if (BeginComponentSection(ICON_FA_CUBE, "Collider", true, removed, /*defaultOpen=*/false,
-                "Blocks movement and is hit by raycasts. While playing this drives a PhysX actor:\n"
-                "static on its own, dynamic/kinematic with a sibling Rigidbody. The shape below\n"
-                "picks its geometry.")) {
-            bool colRowActive = false, colRowCommitted = false;
-            using Shape = ColliderComponent::Shape;
-
-            // Shape.
-            const char* kShapes[] = { "Box", "Sphere", "Capsule", "Convex Hull", "Mesh" };
-            int shapeIdx = (int)collider->Kind;
-            PropertyLabel("Shape", "Box / Sphere / Capsule are analytic primitives sized by the fields below.\n"
-                                   "Convex Hull / Mesh cook a shape from this object's mesh + scale:\n"
-                                   "Convex Hull works on any body; Mesh (triangle mesh) is static / kinematic only\n"
-                                   "(a dynamic Mesh collider falls back to a convex hull).");
-            if (ImGui::Combo("##ColliderShape", &shapeIdx, kShapes, IM_ARRAYSIZE(kShapes))) {
-                PushUndo(world, "Change Collider Shape");
-                collider->Kind = (ColliderComponent::Shape)shapeIdx;
-            }
-
-            // Trigger.
-            bool isTrigger = collider->IsTrigger;
-            PropertyLabel("Is Trigger", "A trigger reports enter / stay / exit overlaps to gameplay\n"
-                                        "but doesn't block movement.");
-            if (ImGui::Checkbox("##IsTrigger", &isTrigger)) {
-                PushUndo(world, "Toggle Collider Trigger");
-                collider->IsTrigger = isTrigger;
-            }
-
-            // Size — per-shape. Box shows all three half-extents; Sphere just a radius; Capsule a
-            // radius + the half-height of its cylindrical section; Convex Hull / Mesh take their
-            // size from the mesh so only the centre offset applies.
-            auto scalarRow = [&](const char* label, float& v, const char* tip) {
-                PropertyLabel(label, tip);
-                ImGui::DragFloat((std::string("##col_") + label).c_str(), &v, 0.05f, 0.0f, 1e5f, "%.3f");
-                if (ImGui::IsItemActivated()) StageUndo(world);
-                if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Resize Collider");
-            };
-            switch (collider->Kind) {
-                case Shape::Box:
-                    DrawVec3Row("Half Extents", collider->HalfExtents, 0.05f, 0.0f, 0.0f, colRowActive, colRowCommitted,
-                        "Half-size on each local axis. All zero = auto-fit an axis-aligned box to the mesh bounds.");
-                    if (colRowActive) StageUndo(world);
-                    if (colRowCommitted) CommitStagedUndo(world, "Resize Collider");
-                    break;
-                case Shape::Sphere:
-                    scalarRow("Radius", collider->HalfExtents.x, "Sphere radius, local units. 0 = auto-fit to the mesh bounds.");
-                    break;
-                case Shape::Capsule:
-                    scalarRow("Radius", collider->HalfExtents.x, "Capsule radius, local units. 0 = auto-fit to the mesh bounds.");
-                    scalarRow("Half Height", collider->HalfExtents.y,
-                        "Half-length of the straight cylindrical section (axis = local Y); the hemisphere caps add Radius on each end.");
-                    break;
-                default: // Convex Hull / Mesh
-                    ImGui::TextDisabled("Sized from the mesh and this object's scale.");
-                    break;
-            }
-
-            DrawVec3Row("Center", collider->Center, 0.05f, 0.0f, 0.0f, colRowActive, colRowCommitted,
-                "Shape offset from the object's origin, local space.");
-            if (colRowActive) StageUndo(world);
-            if (colRowCommitted) CommitStagedUndo(world, "Offset Collider");
-
-            if ((collider->Kind == Shape::Box || collider->Kind == Shape::Sphere ||
-                 collider->Kind == Shape::Capsule) && collider->HalfExtents == glm::vec3(0.0f))
-                ImGui::TextDisabled("Auto-fitted to the mesh bounds.");
-
-            // Surface material (#185 PR 7). EditorUI::SliderFloat submits two ImGui items (the
-            // track, then a trailing number box) — plain ImGui::IsItemActivated() /
-            // IsItemDeactivatedAfterEdit() after the call only ever see the box, so dragging the
-            // track directly silently skipped StageUndo/CommitStagedUndo. Use the widget's own
-            // out-params instead, which combine both items' signals.
-            PropertyLabel("Bounciness", "Restitution: 0 stops dead, 1 loses no energy on a bounce.");
-            {
-                bool slActivated = false, slCommitted = false;
-                EditorUI::SliderFloat("##Bounciness", &collider->Bounciness, 0.0f, 1.0f, "%.2f",
-                                      0, &slActivated, &slCommitted);
-                if (slActivated) StageUndo(world);
-                if (slCommitted) CommitStagedUndo(world, "Edit Collider Material");
-            }
-            PropertyLabel("Friction", "Combined static + dynamic friction. 0 = ice.");
-            {
-                bool slActivated = false, slCommitted = false;
-                EditorUI::SliderFloat("##Friction", &collider->Friction, 0.0f, 2.0f, "%.2f",
-                                      0, &slActivated, &slCommitted);
-                if (slActivated) StageUndo(world);
-                if (slCommitted) CommitStagedUndo(world, "Edit Collider Material");
-            }
-
-            EndComponentSection();
-        }
-        if (removed) {
-            PushUndo(world, "Remove Collider");
-            registry.remove<ColliderComponent>(entity);
-        }
-    }
-
-    // --- Joint (#185 PR 11) --------------------------------------------------------------
-    if (auto* joint = registry.try_get<JointComponent>(entity)) {
-        bool jRemoved = false;
-        if (BeginComponentSection(ICON_FA_LINK, "Joint", true, jRemoved, /*defaultOpen=*/false,
-                "Constrains this body to another (or the world) while playing. Needs a Rigidbody\n"
-                "on this object and, unless connected to the world, on the target too.")) {
-            const char* kJTypes[] = { "Fixed", "Hinge", "Ball", "Slider", "Distance" };
-            int jt = (int)joint->Kind;
-            PropertyLabel("Type", "Fixed weld; Hinge/Slider use the Axis; Ball is a point pivot; Distance is a leash.");
-            if (ImGui::Combo("##JointType", &jt, kJTypes, IM_ARRAYSIZE(kJTypes))) {
-                PushUndo(world, "Change Joint Type");
-                joint->Kind = (JointComponent::Type)jt;
-            }
-
-            // Connected body picker: World, or any named entity by its Order value.
-            PropertyLabel("Connected", "The other end. 'World' anchors to a fixed point in space.");
-            std::string preview = joint->ConnectedOrder < 0 ? "World" : ("order " + std::to_string(joint->ConnectedOrder));
-            for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
-                if (registry.get<const OrderComponent>(oe).Value == joint->ConnectedOrder) {
-                    const std::string& nm = registry.get<const NameComponent>(oe).Name;
-                    if (!nm.empty()) preview = nm;
-                    break;
-                }
-            }
-            if (ImGui::BeginCombo("##JointConnected", preview.c_str())) {
-                if (ImGui::Selectable("World", joint->ConnectedOrder < 0)) {
-                    PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = -1;
-                }
-                for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
-                    if (oe == entity) continue;
-                    const int ord = registry.get<const OrderComponent>(oe).Value;
-                    const std::string& nm = registry.get<const NameComponent>(oe).Name;
-                    std::string lbl = (nm.empty() ? ("Entity " + std::to_string(ord)) : nm);
-                    if (ImGui::Selectable(lbl.c_str(), ord == joint->ConnectedOrder)) {
-                        PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = ord;
-                    }
-                }
-                ImGui::EndCombo();
-            }
-
-            bool jRowActive = false, jRowCommitted = false;
-            DrawVec3Row("Anchor", joint->Anchor, 0.05f, 0.0f, 0.0f, jRowActive, jRowCommitted,
-                "Joint point in this object's local space.");
-            if (jRowActive) StageUndo(world);
-            if (jRowCommitted) CommitStagedUndo(world, "Move Joint Anchor");
-            if (joint->Kind == JointComponent::Type::Hinge || joint->Kind == JointComponent::Type::Slider) {
-                DrawVec3Row("Axis", joint->Axis, 0.02f, 0.0f, 0.0f, jRowActive, jRowCommitted,
-                    "Hinge rotation / slider travel axis, this object's local space.");
-                if (jRowActive) StageUndo(world);
-                if (jRowCommitted) CommitStagedUndo(world, "Set Joint Axis");
-            }
-            PropertyLabel("Break Force", "Force (N) that snaps the joint. 0 = unbreakable.");
-            ImGui::DragFloat("##JointBreakF", &joint->BreakForce, 1.0f, 0.0f, 1e6f, "%.0f");
-            if (ImGui::IsItemActivated()) StageUndo(world);
-            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint");
-            PropertyLabel("Break Torque", "Torque (N·m) that snaps the joint. 0 = unbreakable.");
-            ImGui::DragFloat("##JointBreakT", &joint->BreakTorque, 1.0f, 0.0f, 1e6f, "%.0f");
-            if (ImGui::IsItemActivated()) StageUndo(world);
-            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint");
-
-            if (joint->Kind == JointComponent::Type::Hinge || joint->Kind == JointComponent::Type::Slider ||
-                joint->Kind == JointComponent::Type::Distance) {
-                bool ul = joint->UseLimit;
-                PropertyLabel("Use Limit", "Hinge: degrees about Axis. Slider: units along Axis. Distance: min/max separation.");
-                if (ImGui::Checkbox("##JointUseLimit", &ul)) { PushUndo(world, "Toggle Joint Limit"); joint->UseLimit = ul; }
-                if (joint->UseLimit) {
-                    PropertyLabel("Limit Lower", nullptr);
-                    ImGui::DragFloat("##JointLimLo", &joint->LimitLower, 0.5f, -1000.0f, 1000.0f, "%.1f");
-                    if (ImGui::IsItemActivated()) StageUndo(world);
-                    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint Limit");
-                    PropertyLabel("Limit Upper", nullptr);
-                    ImGui::DragFloat("##JointLimHi", &joint->LimitUpper, 0.5f, -1000.0f, 1000.0f, "%.1f");
-                    if (ImGui::IsItemActivated()) StageUndo(world);
-                    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint Limit");
-                }
-            }
-
-            EndComponentSection();
-        }
-        if (jRemoved) {
-            PushUndo(world, "Remove Joint");
-            registry.remove<JointComponent>(entity);
-        }
-    }
+    // Collider and Joint moved onto reflection (Phase 4 / #6 item 1): Shape/Type, Is Trigger,
+    // Center, Bounciness/Friction, Anchor, Break Force/Torque and their section chrome (card
+    // border, Reset/Copy/Paste, multi-select — which this hand-coded section never had) all come
+    // from the generic ComponentRegistry path below now. HalfExtents (Collider) and
+    // ConnectedOrder/Axis/UseLimit/LimitLower/LimitUpper (Joint) stay editor-only and render via
+    // DrawReflectedComponentExtra("Collider" / "Joint", Bottom) inside those generic sections —
+    // see ComponentRegistry.cpp's registration comments for why each needed to stay hand-coded.
 
     // Light moved onto reflection (#302 Wave 2b): Type/Intensity/Range/Spot Angle/Angular Size
     // and the whole Shadows group come from the generic ComponentRegistry path below (Enum,
@@ -2186,7 +2011,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         if (!rc.Has(registry, entity)) continue;
         bool reflRemoved = false, reflReset = false, reflCopy = false, reflPaste = false;
         // #315 B4b — this instance added a component its .prefab lacks: tint the header + add
-        // Revert/Apply to its right-click menu.
+        // Revert/Apply to its right-click menu. Passed as rc.Meta.Name (display Name, not the
+        // JSON Key) — IsPrefabComponentAdded/ApplyPrefabComponent look the component up in
+        // ComponentRegistry by Name and translate to its JSON Key internally (ReflectComponent::
+        // Key) themselves; see their comments.
         const bool compAdded = SceneSerializer::IsPrefabComponentAdded(world, entity, rc.Meta.Name);
         bool reflPfRevert = false, reflPfApply = false;
         if (compAdded) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor()); // #6 item 7
@@ -2619,6 +2447,107 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             AudioEngine::Play(audio->SoundPath);
         return;
     }
+
+    // Collider moved onto reflection (Phase 4 / #6 item 1): Shape/Is Trigger/Center/Bounciness/
+    // Friction come from the generic fields above. HalfExtents means something different per
+    // Shape (see ComponentRegistry.cpp's registration comment), so it stays hand-coded here,
+    // same escape hatch Light's Kelvin bar uses.
+    if (std::strcmp(componentName, "Collider") == 0 && phase == ReflectExtraPhase::Bottom) {
+        auto* collider = registry.try_get<ColliderComponent>(entity);
+        if (!collider) return;
+        using Shape = ColliderComponent::Shape;
+        bool colRowActive = false, colRowCommitted = false;
+        auto scalarRow = [&](const char* label, float& v, const char* tip) {
+            PropertyLabel(label, tip);
+            ImGui::DragFloat((std::string("##col_") + label).c_str(), &v, 0.05f, 0.0f, 1e5f, "%.3f");
+            if (ImGui::IsItemActivated()) StageUndo(world);
+            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Resize Collider");
+        };
+        switch (collider->Kind) {
+            case Shape::Box:
+                DrawVec3Row("Half Extents", collider->HalfExtents, 0.05f, 0.0f, 0.0f, colRowActive, colRowCommitted,
+                    "Half-size on each local axis. All zero = auto-fit an axis-aligned box to the mesh bounds.");
+                if (colRowActive) StageUndo(world);
+                if (colRowCommitted) CommitStagedUndo(world, "Resize Collider");
+                break;
+            case Shape::Sphere:
+                scalarRow("Radius", collider->HalfExtents.x, "Sphere radius, local units. 0 = auto-fit to the mesh bounds.");
+                break;
+            case Shape::Capsule:
+                scalarRow("Radius", collider->HalfExtents.x, "Capsule radius, local units. 0 = auto-fit to the mesh bounds.");
+                scalarRow("Half Height", collider->HalfExtents.y,
+                    "Half-length of the straight cylindrical section (axis = local Y); the hemisphere caps add Radius on each end.");
+                break;
+            default: // Convex Hull / Mesh
+                ImGui::TextDisabled("Sized from the mesh and this object's scale.");
+                break;
+        }
+        if ((collider->Kind == Shape::Box || collider->Kind == Shape::Sphere ||
+             collider->Kind == Shape::Capsule) && collider->HalfExtents == glm::vec3(0.0f))
+            ImGui::TextDisabled("Auto-fitted to the mesh bounds.");
+        return;
+    }
+
+    // Joint moved onto reflection (Phase 4 / #6 item 1): Type/Anchor/Break Force/Break Torque come
+    // from the generic fields above. ConnectedOrder needs a custom entity picker; Axis and the
+    // Use Limit block are only meaningful for a subset of Type values that VisibleIfField can't
+    // express (see ComponentRegistry.cpp's registration comment) — all hand-coded here together,
+    // in their original visual grouping.
+    if (std::strcmp(componentName, "Joint") == 0 && phase == ReflectExtraPhase::Bottom) {
+        auto* joint = registry.try_get<JointComponent>(entity);
+        if (!joint) return;
+
+        PropertyLabel("Connected", "The other end. 'World' anchors to a fixed point in space.");
+        std::string preview = joint->ConnectedOrder < 0 ? "World" : ("order " + std::to_string(joint->ConnectedOrder));
+        for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
+            if (registry.get<const OrderComponent>(oe).Value == joint->ConnectedOrder) {
+                const std::string& nm = registry.get<const NameComponent>(oe).Name;
+                if (!nm.empty()) preview = nm;
+                break;
+            }
+        }
+        if (ImGui::BeginCombo("##JointConnected", preview.c_str())) {
+            if (ImGui::Selectable("World", joint->ConnectedOrder < 0)) {
+                PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = -1;
+            }
+            for (auto oe : registry.view<const NameComponent, const OrderComponent>()) {
+                if (oe == entity) continue;
+                const int ord = registry.get<const OrderComponent>(oe).Value;
+                const std::string& nm = registry.get<const NameComponent>(oe).Name;
+                std::string lbl = (nm.empty() ? ("Entity " + std::to_string(ord)) : nm);
+                if (ImGui::Selectable(lbl.c_str(), ord == joint->ConnectedOrder)) {
+                    PushUndo(world, "Set Joint Target"); joint->ConnectedOrder = ord;
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        bool jRowActive = false, jRowCommitted = false;
+        if (joint->Kind == JointComponent::Type::Hinge || joint->Kind == JointComponent::Type::Slider) {
+            DrawVec3Row("Axis", joint->Axis, 0.02f, 0.0f, 0.0f, jRowActive, jRowCommitted,
+                "Hinge rotation / slider travel axis, this object's local space.");
+            if (jRowActive) StageUndo(world);
+            if (jRowCommitted) CommitStagedUndo(world, "Set Joint Axis");
+        }
+
+        if (joint->Kind == JointComponent::Type::Hinge || joint->Kind == JointComponent::Type::Slider ||
+            joint->Kind == JointComponent::Type::Distance) {
+            bool ul = joint->UseLimit;
+            PropertyLabel("Use Limit", "Hinge: degrees about Axis. Slider: units along Axis. Distance: min/max separation.");
+            if (ImGui::Checkbox("##JointUseLimit", &ul)) { PushUndo(world, "Toggle Joint Limit"); joint->UseLimit = ul; }
+            if (joint->UseLimit) {
+                PropertyLabel("Limit Lower", nullptr);
+                ImGui::DragFloat("##JointLimLo", &joint->LimitLower, 0.5f, -1000.0f, 1000.0f, "%.1f");
+                if (ImGui::IsItemActivated()) StageUndo(world);
+                if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint Limit");
+                PropertyLabel("Limit Upper", nullptr);
+                ImGui::DragFloat("##JointLimHi", &joint->LimitUpper, 0.5f, -1000.0f, 1000.0f, "%.1f");
+                if (ImGui::IsItemActivated()) StageUndo(world);
+                if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Joint Limit");
+            }
+        }
+        return;
+    }
 }
 
 // Multi-select counterpart. Only Light needs one so far: the shared colour / Kelvin control
@@ -2736,11 +2665,7 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     reflectedFor("Rendering"); // Camera (#302 Wave 1a), Light (#302 Wave 2b)
 
     section("Physics");
-    entry(ICON_FA_CUBE, "Collider", registry.all_of<ColliderComponent>(entity),
-        [&] { registry.emplace<ColliderComponent>(entity); });
-    entry(ICON_FA_LINK, "Joint", registry.all_of<JointComponent>(entity),
-        [&] { registry.emplace<JointComponent>(entity); });
-    reflectedFor("Physics");
+    reflectedFor("Physics"); // Rigidbody, Collider and Joint (#6 item 1) all list here now
 
     if (anyReflectedIn("Audio")) {
         section("Audio");
