@@ -368,10 +368,12 @@ void RegisterEngineComponents() {
     // holds a shared_ptr<Model> (no reflectable fields), its scene form is the box "color/size"
     // or model "path" + "material" written by dedicated code in SceneSerializer, and its add
     // stashes/restores the mesh via DetachedMeshComponent using the editor-only AssetLibrary.
-    // The Inspector section (mesh picker, primitive popup, drag-drop, animation controls, the
-    // level-geometry Color row) stays hand-coded in EditorLayer_Inspector.cpp. Full
-    // genericisation is a follow-up (needs a Model asset-ref field type + an editor-side
-    // add/remove hook); see docs/CONVENTIONS.md.
+    // The Inspector section (mesh picker, primitive popup, drag-drop, ping, animation controls,
+    // the level-geometry Color row) stays hand-coded in EditorLayer_Inspector.cpp, permanently —
+    // settled #6 item 3, not a deferred follow-up: ModelRef is a live shared_ptr<Model>, not an
+    // AssetRef-shaped path, so genericising it would mean rewriting RenderableComponent's storage,
+    // not just its Inspector widget. See docs/CONVENTIONS.md's "Current applications" for the
+    // full reasoning.
     {
         ReflectComponent m;
         m.Name = "Mesh Renderer"; m.Icon = ICON_FA_DRAW_POLYGON; m.Category = "Rendering";
