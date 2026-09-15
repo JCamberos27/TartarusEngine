@@ -2262,33 +2262,44 @@ int main(int argc, char** argv) {
             // Drawn only while the editor UI is up — maximized play has no docked panels (see
             // editor.Draw() above), and its FBO pass already rendered this frame's real output.
             if (editorUIVisible) {
-                PROFILE_SCOPE("Game View UI");
-                // Scene/Game go unsubmitted whenever play is maximized - reapplying Game's dock
-                // assignment right before its Begin() (inside RenderUI) guards against ImGui
-                // failing to remember it across that gap and popping it out into its own floating
-                // window (observed after a maximize/restore cycle). ImGuiCond_Appearing makes
-                // this a no-op once Game is being submitted continuously, so it never fights a
-                // manual re-dock the user did.
-                ImGuiID sceneGameDockId = editor.GetSceneGameDockNodeId();
-                if (sceneGameDockId != 0) {
-                    ImGui::SetNextWindowDockID(sceneGameDockId, ImGuiCond_Appearing);
-                }
-                gameView.RenderUI(&gameViewStats, window.IsFullscreen(), playing, gameInputEngaged,
-                                  /*noSceneCamera=*/!playing && FindActiveSceneCamera(world) == entt::null);
+                // Window > Game / the tab's own X (#69 QA) — RenderUI must not run once closed:
+                // ImGui::Begin("Game", &m_WindowOpen, ...) shows the window regardless of the bool
+                // it was handed, it only ever WRITES false into it when the user clicks the tab's
+                // X. Calling RenderUI unconditionally every frame therefore made the close a no-op
+                // (the window popped right back up next frame) with no way to notice it had ever
+                // "closed". Skipping the call here is the other half SetWindowOpen was missing.
+                if (gameView.IsWindowOpen()) {
+                    PROFILE_SCOPE("Game View UI");
+                    // Scene/Game go unsubmitted whenever play is maximized - reapplying Game's dock
+                    // assignment right before its Begin() (inside RenderUI) guards against ImGui
+                    // failing to remember it across that gap and popping it out into its own floating
+                    // window (observed after a maximize/restore cycle). ImGuiCond_Appearing makes
+                    // this a no-op once Game is being submitted continuously, so it never fights a
+                    // manual re-dock the user did.
+                    ImGuiID sceneGameDockId = editor.GetSceneGameDockNodeId();
+                    if (sceneGameDockId != 0) {
+                        ImGui::SetNextWindowDockID(sceneGameDockId, ImGuiCond_Appearing);
+                    }
+                    gameView.RenderUI(&gameViewStats, window.IsFullscreen(), playing, gameInputEngaged,
+                                      /*noSceneCamera=*/!playing && FindActiveSceneCamera(world) == entt::null);
 
-                // Hand the editor this frame's Game-view image rect + framebuffer so the Play-Mode
-                // Stop/Fullscreen overlay can sit over the game viewport and adapt its tint to it.
-                {
-                    Framebuffer& gvfb = gameView.GetFramebuffer();
-                    editor.SetGameViewRect(gameView.GetViewImagePos(), gameView.GetViewImageSize(),
-                                           gvfb.ColorTexture(), gvfb.Width(), gvfb.Height());
-                }
+                    // Hand the editor this frame's Game-view image rect + framebuffer so the Play-Mode
+                    // Stop/Fullscreen overlay can sit over the game viewport and adapt its tint to it.
+                    {
+                        Framebuffer& gvfb = gameView.GetFramebuffer();
+                        editor.SetGameViewRect(gameView.GetViewImagePos(), gameView.GetViewImageSize(),
+                                               gvfb.ColorTexture(), gvfb.Width(), gvfb.Height());
+                    }
 
-                // Click inside the running Game view (while it doesn't yet own input) captures
-                // the cursor for the player. Esc / Stop release it (handled above / in stopPlay).
-                if (playing && !playMaximized && gameView.ConsumeEngageClick()) {
-                    gameInputEngaged = true;
-                    window.SetCursorLocked(true);
+                    // Click inside the running Game view (while it doesn't yet own input) captures
+                    // the cursor for the player. Esc / Stop release it (handled above / in stopPlay).
+                    if (playing && !playMaximized && gameView.ConsumeEngageClick()) {
+                        gameInputEngaged = true;
+                        window.SetCursorLocked(true);
+                    }
+                } else {
+                    gameView.NotifyClosed();
+                    editor.SetGameViewRect(ImVec2(0.0f, 0.0f), ImVec2(0.0f, 0.0f), 0, 0, 0);
                 }
 
                 // Called here, after BOTH Scene's and Game's Begin() calls have run this frame,
