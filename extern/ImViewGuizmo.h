@@ -406,9 +406,13 @@ namespace ImViewGuizmo {
             if (ctx.hoveredAxisID == axis.id)
                 drawList->AddCircle(handlePos, scaledHighlightRadius, style.highlightColor, 0, scaledHighlightWidth);
 
-            // Negative labels only reveal themselves on hover.
-            if (isPrimary || ctx.hoveredAxisID == axis.id) {
+            // Phase 3 item 6 (audit #5) — negative labels used to only reveal themselves on
+            // hover ("unlabelled negative-axis handles"); now always drawn like the positive
+            // ones, just dimmer (their handle fill/outline already gets the same treatment
+            // above) so the six stay visually ranked without six mystery dots at rest.
+            {
                 float textFactor = std::max(0.0f, std::min(1.0f, 1.0f + axis.depth * 2.5f));
+                if (!isPrimary) textFactor *= 0.75f;
                 if (textFactor > 0.01f) {
                     ImVec4 textColor = ImGui::ColorConvertU32ToFloat4(style.labelColor);
                     textColor.w *= textFactor;

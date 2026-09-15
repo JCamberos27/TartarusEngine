@@ -1629,6 +1629,17 @@ static void KeepFloatingWindowsAboveOverlay() {
 // Shared setup behind DrawGizmo() (single-object) and DrawGroupGizmo() (multi-select). See the
 // declaration in EditorLayer.h for the contract; the comments on the individual calls below
 // explain why each one is needed.
+//
+// Phase 3 item 6's third clause ("add depth-test-off gizmo rendering so it's never hidden behind
+// geometry", audit #5) is already true by construction here, not something this pass needed to
+// add: ImGuizmo draws into this fullscreen ImGui overlay's draw list, which BringWindowToDisplayFront
+// below forces in front of "Scene" every frame — a flat 2D composite painted AFTER the 3D scene
+// resolves to a texture, with zero depth-buffer participation. Same story for the nav gizmo
+// (DrawViewGizmo), light gizmos and entity icons (DrawLightGizmos/DrawEntityIcons) — all project
+// world space into an ImDrawList by hand rather than rendering real 3D geometry. The one thing
+// that IS depth-tested, the collider wireframe (main.cpp, colliderGizmo.Draw), is deliberately so
+// per its own #185 PR 2 comment — "depth-tested so scene geometry occludes it" is the intended
+// reading (a collider behind a wall should look behind the wall), not a bug this item should undo.
 bool EditorLayer::BeginGizmoOverlay(Camera& editorCamera, const char* overlayName) {
     int w, h;
     glfwGetWindowSize(m_Window, &w, &h);
@@ -2012,9 +2023,12 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     if (w <= 0 || h <= 0) return;
 
     // The library's own defaults (256px rotate ring, 50px tool buttons) are sized for a full
-    // editor viewport; shrink them to sit unobtrusively in the corner instead.
+    // editor viewport; scaled down to sit in the corner instead of taking it over. Phase 3 item
+    // 6 (audit #5) — was halved (0.5) to ~64px radius, which the audit called out as too small
+    // alongside the unlabelled negative axes fixed in ImViewGuizmo.h; 0.7 (~90px) keeps it a
+    // corner overlay, not a takeover, while actually being readable.
     ImViewGuizmo::Style& style = ImViewGuizmo::GetStyle();
-    style.scale = m_UIScale * 0.5f;
+    style.scale = m_UIScale * 0.7f;
 
     float gizmoRadius = 128.0f * style.scale; // half of the library's fixed 256px rotate-ring box
     float toolRadius = style.toolButtonRadius * style.scale;
