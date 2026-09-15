@@ -45,7 +45,7 @@
 #include "Profiler.h"
 #include "Frustum.h"
 #include "PhysicsWorld.h" // #185 — PhysX world stepped during Play
-#include "GameModuleAPI.h" // RaycastHit for the debug physics harness
+#include "GravityGun.h" // the player's always-on grab/throw ability
 #include "GameViewPanel.h"
 #include "ProjectPaths.h"
 #include "EnginePaths.h"
@@ -553,10 +553,11 @@ int main(int argc, char** argv) {
             editorModule.Initialize(executable.parent_path() / TARTARUS_EDITOR_MODULE_FILENAME, window.Handle());
         }
         Player player;
-        // Default spawn/editor-camera start: on the outdoor plaza, facing through the open
-        // entrance toward the showroom's hero display and its walkable floor.
-        player.Cam.Position = glm::vec3(0.0f, 2.0f, 11.0f);
-        player.Cam.Yaw = -90.0f;  // faces -Z, toward the shape cluster at the origin
+        GravityGun gravityGun;
+        // Default spawn/editor-camera start: in the showcase's central Hub, facing north through
+        // the open doorway toward the Lighting & Materials Gallery.
+        player.Cam.Position = glm::vec3(0.0f, 2.0f, 4.0f);
+        player.Cam.Yaw = -90.0f;  // faces -Z, toward the Gallery doorway
         player.Cam.Pitch = 5.0f;
 
         // Resolved under the project folder (see ProjectPaths.h) rather than the working
@@ -1274,12 +1275,13 @@ int main(int argc, char** argv) {
             const bool simThisFrame = (playing && !paused) || stepThisFrame;
 
             if (simThisFrame) {
-                // Physics harness (#185): exercises the gameplay force + query API from a real
-                // caller until gameplay code does. G = shockwave at the player. Right-click =
-                // Half-Life-2 gravity gun: grab the dynamic body under the crosshair and carry
-                // it in front of the eye; scroll while holding pulls it nearer / pushes it out;
-                // left-click launches it. With nothing held, left-click shoves whatever it hits.
-                // Toggle: Gizmos > Physics debug input.
+                // The gravity gun (#185, promoted off its old debug harness) is a normal part of
+                // Play mode, not a debug tool — always live whenever the game has input focus.
+                if (gameHasInput) {
+                    gravityGun.Update(dt, player);
+                }
+                // G = explosion shockwave at the player. A separate physics *debug/test* tool
+                // (not part of the gravity gun above) — stays behind Gizmos > Physics debug input.
                 if (gameHasInput && EditorSettings::Get().PhysicsDebugInput) {
                     if (Input::IsKeyPressed(GLFW_KEY_G)) {
                         const float c[3] = {player.Cam.Position.x,
@@ -1287,50 +1289,6 @@ int main(int argc, char** argv) {
                                             player.Cam.Position.z};
                         PhysicsWorld::AddExplosionForce(c, 7.0f, 22.0f, 0.4f);
                     }
-
-                    const glm::vec3 eye = player.Cam.Position, fwd = player.Cam.Front();
-                    const float of[3] = {eye.x, eye.y, eye.z}, df[3] = {fwd.x, fwd.y, fwd.z};
-                    static bool s_lmbPrev = false, s_rmbPrev = false;
-                    static float s_holdDist = 3.0f;
-                    const bool lmb = Input::IsMouseButtonDown(0);
-                    const bool rmb = Input::IsMouseButtonDown(1);
-
-                    if (rmb && !s_rmbPrev && !PhysicsWorld::IsGrabbing()) {
-                        RaycastHit hit;
-                        BodyState bs;
-                        if (PhysicsWorld::Raycast(of, df, 100.0f, hit) && hit.Entity != 0xFFFFFFFFu &&
-                            PhysicsWorld::GetBodyState(hit.Entity, bs) && !bs.Kinematic) {
-                            PhysicsWorld::GrabBody(hit.Entity);
-                            s_holdDist = glm::clamp(hit.Distance, 1.5f, 8.0f);
-                        }
-                    }
-
-                    if (PhysicsWorld::IsGrabbing()) {
-                        const double scroll = Input::GetScrollDeltaY();
-                        if (scroll != 0.0)
-                            s_holdDist = glm::clamp(s_holdDist + (float)scroll * 0.6f, 1.5f, 8.0f);
-                        const glm::vec3 t = eye + fwd * s_holdDist;
-                        const float tf[3] = {t.x, t.y, t.z};
-                        PhysicsWorld::UpdateGrab(tf);
-
-                        if (lmb && !s_lmbPrev) {
-                            const glm::vec3 imp = fwd * 18.0f;
-                            const float impf[3] = {imp.x, imp.y, imp.z};
-                            PhysicsWorld::ReleaseBody(/*launch=*/true, impf);
-                        } else if (!rmb && s_rmbPrev) {
-                            const float zero[3] = {0.0f, 0.0f, 0.0f};
-                            PhysicsWorld::ReleaseBody(/*launch=*/false, zero);
-                        }
-                    } else if (lmb && !s_lmbPrev) {
-                        RaycastHit hit;
-                        if (PhysicsWorld::Raycast(of, df, 100.0f, hit) && hit.Entity != 0xFFFFFFFFu) {
-                            const float f[3] = {fwd.x * 6.0f, fwd.y * 6.0f + 2.0f, fwd.z * 6.0f};
-                            PhysicsWorld::AddForceAtPosition(hit.Entity, f, hit.Point, /*Impulse*/1u);
-                        }
-                    }
-
-                    s_lmbPrev = lmb;
-                    s_rmbPrev = rmb;
                 }
                 // Push the editor's physics-debug choices into the sim (#185): draw channels +
                 // slow-mo scale. Query recording auto-follows the Raycasts channel.
