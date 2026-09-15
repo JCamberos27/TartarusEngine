@@ -452,6 +452,9 @@ void TbDoSaveScene() { if (g_Editor && g_World && g_Assets) g_Editor->SaveScene(
 // --- Play controls, Zone B (API v21, Phase 3 item 2) -------------------------------------
 void TbDrawPlayControlsBody() { if (g_Editor) g_Editor->DrawPlayControlsBody(); }
 
+// --- Play-mode panel tint (API v22, Q12 / Phase 4 #6) -------------------------------------
+bool TbGetInPlayMode() { return g_Editor && g_Editor->InPlayMode(); }
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
@@ -577,6 +580,8 @@ const EditorModuleHostAPI kHostAPI{
     &TbDoSaveScene,
     // --- Play controls, Zone B (API v21) — order must match EditorModuleHostAPI exactly ---
     &TbDrawPlayControlsBody,
+    // --- Play-mode panel tint (API v22) — order must match EditorModuleHostAPI exactly ---
+    &TbGetInPlayMode,
 };
 
 } // namespace

@@ -34,10 +34,25 @@ void PopTabChromeText() {
 void Draw(const EditorModuleHostAPI& host) {
     if (host.GetShowInspector && !host.GetShowInspector()) return;
 
+    // Q12 (Phase 4 / #6) — a faint warm wash on the panel background while Playing, echoing the
+    // host's own amber viewport-border banner, so a value tweaked here still visibly reads as
+    // "this reverts on Stop" even with the viewport out of view. Editing itself stays fully live
+    // (Q12's settled answer: useful for tuning, not locked) — this is a reminder, not a gate.
+    const bool inPlayMode = host.GetInPlayMode && host.GetInPlayMode();
+    if (inPlayMode) {
+        const ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+        const ImVec4 amber(1.0f, 0.549f, 0.157f, 1.0f); // matches the viewport banner's IM_COL32(255,140,40,230)
+        const float mix = 0.08f;
+        ImGui::PushStyleColor(ImGuiCol_WindowBg,
+            ImVec4(bg.x + (amber.x - bg.x) * mix, bg.y + (amber.y - bg.y) * mix,
+                   bg.z + (amber.z - bg.z) * mix, bg.w));
+    }
+
     bool visible = true;
     PushTabChromeText();
     const bool open = ImGui::Begin("Inspector", &visible, ImGuiWindowFlags_None);
     PopTabChromeText();
+    if (inPlayMode) ImGui::PopStyleColor();
     if (host.SetShowInspector) host.SetShowInspector(visible); // capture the title-bar X
     if (!open) { ImGui::End(); return; }
 

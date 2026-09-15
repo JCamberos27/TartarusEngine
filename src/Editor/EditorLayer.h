@@ -493,6 +493,9 @@ public:
     // Public entry point for the toolbar's document-strip Save button (API v20) — DoSave() itself
     // is private since File > Save already reaches it through DrawFileMenuBody.
     void SaveScene(World& world, AssetLibrary& assets) { DoSave(world, assets); }
+    // API v22, Q12 (Phase 4 / #6) — lets a module (Inspector, Hierarchy) tint its own panel while
+    // Playing, the same live flag the host's own amber viewport banner already reads.
+    bool InPlayMode() const { return m_InPlayMode; }
 
     // "Save changes?" on-exit prompt (audit #56). main.cpp intercepts the window-close request
     // when the scene is dirty, calls OpenExitPrompt(), and each frame polls TakeExitDecision():

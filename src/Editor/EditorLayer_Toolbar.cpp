@@ -389,12 +389,22 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
                 RequestOpenScene(world, assets, FileDialog::OpenFile(
                     "Scene Files\0*.json\0All Files\0*.*\0", m_Window));
             }
-            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save", "Ctrl+S")) {
+            // Q12 (Phase 4 / #6) — disabled while Playing rather than left live: a Play-mode edit
+            // reverts on Stop anyway (OnEnterPlayMode snapshots the scene), so saving mid-Play
+            // would either silently discard that guarantee or persist a state the user never
+            // meant to keep. Editing itself stays fully live — this only gates the two ways to
+            // write it to disk. AllowWhenDisabled so the "why" tooltip still shows on the greyed
+            // item, not just when it's enabled.
+            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save", "Ctrl+S", false, !m_InPlayMode)) {
                 DoSave(world, assets);
             }
-            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As...", "Ctrl+Shift+S")) {
+            if (m_InPlayMode && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                EditorUI::SetTooltip("Disabled while Playing \xE2\x80\x94 changes here revert on Stop anyway.");
+            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As...", "Ctrl+Shift+S", false, !m_InPlayMode)) {
                 DoSaveAs(world, assets);
             }
+            if (m_InPlayMode && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                EditorUI::SetTooltip("Disabled while Playing \xE2\x80\x94 changes here revert on Stop anyway.");
             if (ImGui::MenuItem(ICON_FA_ROTATE_LEFT "  Revert Scene", nullptr, false,
                                 !m_CurrentScenePath.empty())) {
                 RequestRevertScene(world, assets); // #236 R2 — reload from disk, discard edits
