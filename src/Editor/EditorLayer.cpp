@@ -2203,7 +2203,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         }
     }
     UpdateLockViewToSelection(world, editorCamera); // Shift+F — camera follows the selection centroid (#236 E)
-    if (m_MeasureTool || m_MeasureCount > 0) DrawMeasurement(editorCamera); // #236 R2 ruler
+    if (m_MeasureTool || !m_MeasurePoints.empty()) DrawMeasurement(editorCamera); // #236 R2 ruler
     if (EyedropperArmed()) {
         const ImVec2 mp = ImGui::GetIO().MousePos;
         ImDrawList* dl = ImGui::GetForegroundDrawList();
@@ -2284,8 +2284,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (Shortcuts::Triggered("tools.scale"))     { m_GizmoOp = GizmoOp::Scale;     m_HandTool = false; m_MeasureTool = false; }
         if (Shortcuts::Triggered("tools.rect"))      { m_GizmoOp = GizmoOp::Rect;      m_HandTool = false; m_MeasureTool = false; }
         if (Shortcuts::Triggered("tools.transform")) { m_GizmoOp = GizmoOp::Universal; m_HandTool = false; m_MeasureTool = false; }
-        if (Shortcuts::Triggered("tools.measure"))   { m_MeasureTool = !m_MeasureTool; m_MeasureCount = 0; m_HandTool = false; }
-        if (m_MeasureTool && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { m_MeasureTool = false; m_MeasureCount = 0; }
+        if (Shortcuts::Triggered("tools.measure"))   { m_MeasureTool = !m_MeasureTool; m_MeasurePoints.clear(); m_HandTool = false; }
+        if (m_MeasureTool && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { m_MeasureTool = false; m_MeasurePoints.clear(); }
         // Shift+A quick-add (Blender's binding) — opens the Add menu as a popup at the cursor.
         if (Shortcuts::Triggered("gameobject.quickAdd")) m_OpenQuickAdd = true;
 

@@ -127,7 +127,7 @@ public:
     bool HandToolActive() const { return m_HandTool; }
     void SetHandToolActive(bool on) { m_HandTool = on; }
     bool MeasureToolActive() const { return m_MeasureTool; }
-    void SetMeasureToolActive(bool on) { m_MeasureTool = on; m_MeasureCount = 0; if (on) m_HandTool = false; }
+    void SetMeasureToolActive(bool on) { m_MeasureTool = on; m_MeasurePoints.clear(); if (on) m_HandTool = false; }
     // main.cpp pokes this whenever the fly speed changes via scroll (RMB-drag or Ctrl+scroll);
     // Draw() fades out the transient "Fly speed: N" viewport readout (#236 R2).
     void FlashFlySpeedHud() { m_FlySpeedHudTimer = 1.4f; }
@@ -752,12 +752,14 @@ private:
     void DrawArrayDuplicateModal(World& world, AssetLibrary& assets);
     bool  m_ShowArrayDuplicate = false;
 
-    // Measure / ruler tool (#236 R2). While active, viewport clicks drop the two endpoints
-    // (raycast onto scene geometry, else a point on the far arc); right-click clears. The
-    // readout shows straight-line distance + per-axis deltas.
+    // Measure / ruler tool (#236 R2, Phase 3 item 7). While active, each viewport click appends
+    // a point (raycast onto scene geometry, else a point on the far arc), chaining segments end
+    // to end instead of capping at one; right-click or Escape clears the whole chain. The readout
+    // (DrawMeasurement) persists — drawn whenever there's at least one point, not just while the
+    // tool is the active one — with a Clear/Copy/unit-toggle HUD.
     bool  m_MeasureTool = false;
-    int   m_MeasureCount = 0;            // 0 = none, 1 = first point set, 2 = both
-    glm::vec3 m_MeasureP0{0.0f}, m_MeasureP1{0.0f};
+    std::vector<glm::vec3> m_MeasurePoints;
+    bool  m_MeasureUnitFeet = false;     // false = meters, true = feet — HUD toggle, not persisted
     bool RaycastViewportSurface(World& world, Camera& cam, const glm::vec2& screenPx, glm::vec3& outHit) const;
     void DrawMeasurement(Camera& cam);
     int   m_ArrayDupCount[3] = { 3, 1, 1 };

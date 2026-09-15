@@ -81,7 +81,7 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
 
         const bool measureTool = MeasureToolActive();
         if (ActionButton(EDITOR_ICON_MEASURE,
-                "Measure — click two points in the viewport to measure the distance",
+                "Measure — click to chain measurement points; right-click clears (M)",
                 measureTool, ImVec2(btn, btn)))
             SetMeasureToolActive(!measureTool);
         if (ActionButton(EDITOR_ICON_DUPLICATE_ARRAY, "Duplicate Array — line/grid of copies of the selection (Ctrl+Shift+D)",

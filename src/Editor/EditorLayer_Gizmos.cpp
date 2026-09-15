@@ -830,17 +830,16 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         return; // armed — swallow every viewport click
     }
 
-    // Measure / ruler tool (#236 R2): clicks drop endpoints instead of selecting; right-click
-    // (or Esc, handled in the shortcut block) clears. Consumes the click either way.
+    // Measure / ruler tool (#236 R2, Phase 3 item 7): clicks drop endpoints instead of
+    // selecting — never falls through to picking / box-select below. Each left-click APPENDS a
+    // point, chaining segments end to end (used to reset back to a single fresh segment after
+    // the second click); right-click (or Esc, handled in the shortcut block) clears the chain.
     if (m_MeasureTool && !WantsCaptureMouse() && !m_ViewGizmoBlocking && !m_GizmoEngaged) {
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) { m_MeasureCount = 0; return; }
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) { m_MeasurePoints.clear(); return; }
         if (leftPressed) {
             glm::vec3 hit;
-            if (RaycastViewportSurface(world, editorCamera, {io.MousePos.x, io.MousePos.y}, hit)) {
-                if (m_MeasureCount >= 2) m_MeasureCount = 0;
-                if (m_MeasureCount == 0)      { m_MeasureP0 = hit; m_MeasureCount = 1; }
-                else                          { m_MeasureP1 = hit; m_MeasureCount = 2; }
-            }
+            if (RaycastViewportSurface(world, editorCamera, {io.MousePos.x, io.MousePos.y}, hit))
+                m_MeasurePoints.push_back(hit);
             return;
         }
         return; // tool active — never fall through to selection / box-select
@@ -1889,8 +1888,15 @@ bool EditorLayer::RaycastViewportSurface(World& world, Camera& cam, const glm::v
     return true;
 }
 
+// m_MeasureUnitFeet ? feet : meters — the scene's native unit is always meters, so this only
+// affects display formatting, never the stored point data.
+static void FormatMeasureLength(float meters, bool feet, char* buf, size_t n) {
+    if (feet) std::snprintf(buf, n, "%.3f ft", meters * 3.28084f);
+    else      std::snprintf(buf, n, "%.3f m", meters);
+}
+
 void EditorLayer::DrawMeasurement(Camera& cam) {
-    if (m_MeasureCount == 0) return;
+    if (m_MeasurePoints.empty()) return;
     const float w = m_ViewportSize.x, h = m_ViewportSize.y;
     if (w <= 1.0f || h <= 1.0f) return;
     const glm::mat4 vp = cam.ProjectionMatrix(w / h) * cam.ViewMatrix();
@@ -1905,35 +1911,84 @@ void EditorLayer::DrawMeasurement(Camera& cam) {
     ImDrawList* dl = ImGui::GetForegroundDrawList();
     const ImU32 col = IM_COL32(120, 220, 255, 255);
 
-    ImVec2 s0;
-    const bool have0 = toScreen(m_MeasureP0, s0);
-    if (have0) dl->AddCircleFilled(s0, 4.0f, col);
-
-    if (m_MeasureCount < 2) return;
-    ImVec2 s1;
-    if (!toScreen(m_MeasureP1, s1) || !have0) return;
-    dl->AddCircleFilled(s1, 4.0f, col);
-    // Dashed line.
-    const ImVec2 d(s1.x - s0.x, s1.y - s0.y);
-    const float len = std::sqrt(d.x * d.x + d.y * d.y);
-    if (len > 1.0f) {
-        const ImVec2 u(d.x / len, d.y / len);
-        for (float t = 0.0f; t < len; t += 10.0f) {
-            float t2 = std::min(t + 5.0f, len);
-            dl->AddLine(ImVec2(s0.x + u.x * t, s0.y + u.y * t),
-                        ImVec2(s0.x + u.x * t2, s0.y + u.y * t2), col, 1.6f);
-        }
+    // Phase 3 item 7 — chained segments: every consecutive pair of points is its own dashed leg
+    // with its own length label, and the total across the whole chain feeds the HUD below.
+    std::vector<ImVec2> screenPts(m_MeasurePoints.size());
+    std::vector<bool> valid(m_MeasurePoints.size());
+    for (size_t i = 0; i < m_MeasurePoints.size(); ++i) {
+        valid[i] = toScreen(m_MeasurePoints[i], screenPts[i]);
+        if (valid[i]) dl->AddCircleFilled(screenPts[i], 4.0f, col);
     }
-    const glm::vec3 delta = m_MeasureP1 - m_MeasureP0;
-    char buf[96];
-    std::snprintf(buf, sizeof(buf), "%.3f m   (%+.2f, %+.2f, %+.2f)",
-                  glm::length(delta), delta.x, delta.y, delta.z);
-    ImVec2 mid((s0.x + s1.x) * 0.5f, (s0.y + s1.y) * 0.5f);
-    ImVec2 ts = ImGui::CalcTextSize(buf);
-    ImVec2 tp(mid.x - ts.x * 0.5f, mid.y - ts.y - 6.0f);
-    dl->AddRectFilled(ImVec2(tp.x - 5.0f, tp.y - 3.0f), ImVec2(tp.x + ts.x + 5.0f, tp.y + ts.y + 3.0f),
-                      IM_COL32(15, 20, 28, 225), 3.0f);
-    dl->AddText(tp, IM_COL32(235, 245, 255, 255), buf);
+
+    float totalMeters = 0.0f;
+    for (size_t i = 0; i + 1 < m_MeasurePoints.size(); ++i) {
+        const float segMeters = glm::length(m_MeasurePoints[i + 1] - m_MeasurePoints[i]);
+        totalMeters += segMeters;
+        if (!valid[i] || !valid[i + 1]) continue;
+        const ImVec2 s0 = screenPts[i], s1 = screenPts[i + 1];
+        const ImVec2 d(s1.x - s0.x, s1.y - s0.y);
+        const float len = std::sqrt(d.x * d.x + d.y * d.y);
+        if (len > 1.0f) {
+            const ImVec2 u(d.x / len, d.y / len);
+            for (float t = 0.0f; t < len; t += 10.0f) {
+                float t2 = std::min(t + 5.0f, len);
+                dl->AddLine(ImVec2(s0.x + u.x * t, s0.y + u.y * t),
+                            ImVec2(s0.x + u.x * t2, s0.y + u.y * t2), col, 1.6f);
+            }
+        }
+        char segBuf[32];
+        FormatMeasureLength(segMeters, m_MeasureUnitFeet, segBuf, sizeof(segBuf));
+        ImVec2 mid((s0.x + s1.x) * 0.5f, (s0.y + s1.y) * 0.5f);
+        ImVec2 ts = ImGui::CalcTextSize(segBuf);
+        ImVec2 tp(mid.x - ts.x * 0.5f, mid.y - ts.y - 6.0f);
+        dl->AddRectFilled(ImVec2(tp.x - 5.0f, tp.y - 3.0f), ImVec2(tp.x + ts.x + 5.0f, tp.y + ts.y + 3.0f),
+                          IM_COL32(15, 20, 28, 225), 3.0f);
+        dl->AddText(tp, IM_COL32(235, 245, 255, 255), segBuf);
+    }
+
+    // Persistent HUD (audit's "Clear/Copy/unit toggle") — a real ImGui window, not just draw-list
+    // text, so it can host buttons. Shown whenever there's at least one point, same as the chain
+    // itself (m_MeasureTool || !m_MeasurePoints.empty() at the call site), so the reading stays
+    // on screen after switching to another tool, until explicitly cleared.
+    {
+        const float barBottomMargin = 46.0f * m_UIScale; // clears DrawViewportStatusBar below it
+        ImGui::SetNextWindowPos(ImVec2(m_ViewportPos.x + m_ViewportSize.x * 0.5f,
+                                       m_ViewportPos.y + m_ViewportSize.y - barBottomMargin),
+                                ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, EditorUIPrimitives::kHudPlateColor);
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::kHudTextColor);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f * m_UIScale, 6.0f * m_UIScale));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f * m_UIScale);
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+            ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize;
+        ImGui::Begin("##MeasureHud", nullptr, flags);
+
+        char totalBuf[48];
+        FormatMeasureLength(totalMeters, m_MeasureUnitFeet, totalBuf, sizeof(totalBuf));
+        if (m_MeasurePoints.size() > 2) {
+            ImGui::Text(ICON_FA_RULER "  Total: %s  (%d segments)", totalBuf, (int)m_MeasurePoints.size() - 1);
+        } else {
+            ImGui::Text(ICON_FA_RULER "  %s", totalBuf);
+        }
+        ImGui::SameLine();
+
+        if (ActionButton(ICON_FA_COPY, "Copy the total distance") && !m_MeasurePoints.empty()) {
+            ImGui::SetClipboardText(totalBuf);
+        }
+        ImGui::SameLine();
+        if (ActionButton(m_MeasureUnitFeet ? "ft" : "m", "Toggle meters / feet")) {
+            m_MeasureUnitFeet = !m_MeasureUnitFeet;
+        }
+        ImGui::SameLine();
+        if (ActionButton(ICON_FA_XMARK, "Clear (right-click in the viewport does the same)")) {
+            m_MeasurePoints.clear();
+        }
+
+        ImGui::End();
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(2);
+    }
 }
 
 void EditorLayer::ApplySurfaceSnap(World& world, Camera& editorCamera, entt::entity sel,
