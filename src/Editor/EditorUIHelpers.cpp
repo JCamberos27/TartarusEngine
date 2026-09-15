@@ -91,6 +91,16 @@ bool SliderStyled(const char* label, ImGuiDataType dt, void* p_v,
 
     const bool hovered = ImGui::ItemHoverable(frame_bb, id, g.LastItemData.ItemFlags);
     const bool clicked = hovered && g.IO.MouseClicked[0];
+    // Ctrl+click on the track: stock ImGui sliders special-case this into a temporary type-in
+    // edit instead of jumping the value to the click position — but that's implemented one level
+    // up, in SliderScalar's own click handling, which this custom-painted slider never goes
+    // through (it calls SliderBehavior directly). Without it, Ctrl+click fell through to
+    // SliderBehavior's plain click-to-set-position path (Defect #4: observed "0.000 -> 0.467" on
+    // a Metallic slider) with no way to recover it — a plain click, not a sustained drag, so by
+    // the time Escape is pressed the interaction has already ended and there's nothing left to
+    // cancel. Fixed below by letting the click through as normal, then immediately undoing it and
+    // handing keyboard focus to the trailing number box (already auto-select-all) instead.
+    const bool ctrlClickToType = clicked && g.IO.KeyCtrl;
     if (clicked || g.NavActivateId == id) {
         ImGui::SetActiveID(id, window);
         ImGui::SetFocusID(id, window);
@@ -99,8 +109,22 @@ bool SliderStyled(const char* label, ImGuiDataType dt, void* p_v,
     }
 
     ImRect grab_bb;
+    float valueBeforeCtrlClick = 0.0f;
+    if (ctrlClickToType)
+        valueBeforeCtrlClick = (dt == ImGuiDataType_S32) ? (float)*(const int*)p_v : *(const float*)p_v;
     bool changed = ImGui::SliderBehavior(frame_bb, id, dt, p_v, p_min, p_max, format,
                                          flags | ImGuiSliderFlags_AlwaysClamp, &grab_bb);
+    if (ctrlClickToType) {
+        // Revert the jump SliderBehavior just applied. grab_bb (painted below) still reflects the
+        // jumped position for this one frame — imperceptible, since keyboard focus is about to
+        // move to the number box anyway. Escape now "reverts" for free: the box's own value never
+        // actually changed away from valueBeforeCtrlClick, so cancelling out of it (stock
+        // InputText Escape behavior) leaves *p_v exactly where it started.
+        if (dt == ImGuiDataType_S32) *(int*)p_v = (int)valueBeforeCtrlClick;
+        else *(float*)p_v = valueBeforeCtrlClick;
+        changed = false;
+        ImGui::ClearActiveID();
+    }
     if (changed) ImGui::MarkItemEdited(id);
 
     // The track's own activated/deactivated-after-edit signal, captured right here using its own
@@ -141,6 +165,7 @@ bool SliderStyled(const char* label, ImGuiDataType dt, void* p_v,
     if (show_box) {
         ImGui::SameLine(0.0f, gap);
         ImGui::SetNextItemWidth(box_w);
+        if (ctrlClickToType) ImGui::SetKeyboardFocusHere(); // route the Ctrl+click into typing here
         char buf[64];
         ImGui::DataTypeFormatString(buf, IM_ARRAYSIZE(buf), dt, p_v, format);
         ImGui::PushID((int)id);
