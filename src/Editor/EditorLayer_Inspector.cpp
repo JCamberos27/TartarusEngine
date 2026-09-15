@@ -2524,7 +2524,18 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                 }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Switch back to a custom RGB swatch.");
             } else {
-                ImGui::SetNextItemWidth(-90.0f);
+                // Defect #1 — this row's trailing space was a hardcoded -90.0f, sized for neither
+                // of the two buttons that actually follow (the eyedropper, then "K"): on any panel
+                // width the swatch claimed pixels the "K" button needed, clipping it off the right
+                // edge with no wrap/scroll (widening the panel didn't help — the reserve was fixed,
+                // not content-region-relative). Budgeted from the real button sizes instead, the
+                // same way KelvinBar already budgets its own single trailing "RGB" button above.
+                const ImGuiStyle& lcStyle = ImGui::GetStyle();
+                const float eyedropW = ImGui::CalcTextSize(ICON_FA_EYE_DROPPER).x; // SmallButton: zero frame padding
+                const float kBtnW = ImGui::CalcTextSize("K").x + lcStyle.FramePadding.x * 2.0f;
+                const float trailing = 4.0f /* EyedropperButton's own SameLine gap */ + eyedropW
+                    + lcStyle.ItemSpacing.x + kBtnW;
+                ImGui::SetNextItemWidth(-trailing);
                 ImGui::ColorEdit3("##LightColor", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
                 EyedropperButton(this, world, &light->Color);
