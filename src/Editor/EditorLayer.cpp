@@ -1,4 +1,5 @@
 #include "EditorLayer.h"
+#include "EditorIcons.h"
 #include "FileDialog.h"
 #include "AssetLibrary.h"
 #include "World.h"
@@ -389,6 +390,12 @@ void EditorLayer::ApplyThemeStyle() {
                                              style.Colors[ImGuiCol_WindowBg], 3.0f, logContrastWarn);
     EditorUIPrimitives::AssertContrastFloor("NavCursor vs FrameBg", style.Colors[ImGuiCol_NavCursor],
                                              style.Colors[ImGuiCol_FrameBg], 3.0f, logContrastWarn);
+
+    // Phase 3 item 4 — the same "log, don't crash" startup check for the toolbar/tool-palette/
+    // view-chip icon set: every glyph must decode inside the atlas's merged icon range, and no
+    // two different concepts may share a glyph (EditorIcons.h).
+    static const auto logIconWarn = [](const char* msg) { Log::Warn(std::string("[Icons] ") + msg); };
+    EditorIcons::AssertEditorIconsUnique(logIconWarn);
 
     style.ScaleAllSizes(m_UIScale);
 }
