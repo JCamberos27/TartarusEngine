@@ -2424,7 +2424,7 @@ int main(int argc, char** argv) {
             // Capture: PrintScreen, or a ".shot" sentinel file next to the exe (triggerable
             // without keyboard focus). Both just raise a request; it's serviced next.
             {
-                bool ps = Input::IsKeyPressed(GLFW_KEY_PRINT_SCREEN);
+                bool ps = Shortcuts::TriggeredGlfw("capture.now");
                 // The sentinel only exists to let an external script trigger a capture, so a
                 // quarter-second of latency is irrelevant — stat'ing the filesystem every single
                 // frame (up to 240x/sec at the FPS cap) just to poll a rarely-present file isn't
