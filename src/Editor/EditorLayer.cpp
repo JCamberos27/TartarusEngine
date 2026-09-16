@@ -2408,20 +2408,20 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             if (Shortcuts::Triggered("project.refresh"))     RefreshAssetBrowser(); // #236 G
             if (Shortcuts::Triggered("project.frameSelected") && !m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder) {
                 // "Frame selected" — navigate the browser to the asset's containing folder.
-                m_CurrentAssetFolder = assets.AssetFolder(m_SelectedAssetKey);
+                NavigateAssetFolder(assets.AssetFolder(m_SelectedAssetKey));
             }
             if (Shortcuts::Triggered("project.duplicate") && !m_SelectedAssetKey.empty()) {
                 DuplicateSelectedAsset(world, assets);
             }
             if (ImGui::IsKeyPressed(ImGuiKey_Enter)) {
-                if (m_SelectedAssetIsFolder) m_CurrentAssetFolder = m_SelectedAssetKey;
+                if (m_SelectedAssetIsFolder) NavigateAssetFolder(m_SelectedAssetKey);
             } else if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
-                m_CurrentAssetFolder = ParentFolderOf(m_CurrentAssetFolder);
+                NavigateAssetFolder(ParentFolderOf(m_CurrentAssetFolder));
             } else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow) && !m_CurrentAssetFolder.empty()) {
                 m_ExpandedAssetFolders.insert(m_CurrentAssetFolder);
             } else if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow) && !m_CurrentAssetFolder.empty()) {
                 if (m_ExpandedAssetFolders.count(m_CurrentAssetFolder)) m_ExpandedAssetFolders.erase(m_CurrentAssetFolder);
-                else m_CurrentAssetFolder = ParentFolderOf(m_CurrentAssetFolder);
+                else NavigateAssetFolder(ParentFolderOf(m_CurrentAssetFolder));
             }
         }
 

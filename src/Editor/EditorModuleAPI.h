@@ -80,7 +80,11 @@
 //        toolbar to embed into: maximized play).
 //   22 - Q12 / Phase 4 #6: GetInPlayMode, so a docked panel (Inspector, Hierarchy) can tint
 //        itself while Playing, matching the host's own amber viewport-border banner.
-constexpr std::uint32_t kEditorModuleAPIVersion = 22;
+//   23 - Phase 5 item 3: AssetFolderHistoryBack/Forward + Can* queries, so the Asset Browser's
+//        new Back/Forward buttons can walk the host's folder-navigation trail. Navigating TO a
+//        folder (breadcrumb segments, Up) still goes through the existing SetCurrentAssetFolder —
+//        no new pointer needed there, since the host now records history inside it.
+constexpr std::uint32_t kEditorModuleAPIVersion = 23;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -460,6 +464,15 @@ struct EditorModuleHostAPI {
     // editing stays fully live in Play mode (it's genuinely useful for tuning values), so this is
     // a reminder that edits here revert on Stop, not a lock.
     bool (*GetInPlayMode)() = nullptr;
+
+    // --- Asset Browser folder history, Phase 5 item 3 (API v23) ------------------------
+    // Back/Forward over the trail NavigateAssetFolder (host-side) records every time
+    // SetCurrentAssetFolder (above) points the browser somewhere new. The Can* queries drive the
+    // module's Back/Forward button enabled state.
+    void (*AssetFolderHistoryBack)() = nullptr;
+    void (*AssetFolderHistoryForward)() = nullptr;
+    bool (*CanAssetFolderHistoryBack)() = nullptr;
+    bool (*CanAssetFolderHistoryForward)() = nullptr;
 };
 
 struct EditorModuleAPI {
