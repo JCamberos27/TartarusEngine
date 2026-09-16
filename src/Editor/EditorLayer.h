@@ -218,6 +218,18 @@ public:
         m_AssetFolderHistoryPos = (int)m_AssetFolderHistory.size() - 1;
         m_CurrentAssetFolder = folder;
     }
+    // Phase 6 item 4 (API v27) — the Console's click-to-navigate. Same "jump the Asset Browser
+    // to this reference" move as the Inspector's AssetRef ping button (EditorLayer_Inspector.cpp),
+    // generalised to a path that isn't necessarily a registered AssetLibrary entry: also resolves
+    // raw scenes/ and screenshots/ files, the two categories the Asset Browser lists straight off
+    // disk rather than through the library. False (no navigation) if the path doesn't exist.
+    bool PingAssetPath(AssetLibrary& assets, const std::string& path);
+    // Same API v27 host bridge, entity half: resolves a raw entt integral, as printed by
+    // std::to_string(entt::to_integral(e)) in log messages (PhysX/Scene), back to a live entity
+    // and selects it (SelectItem below). False if the id no longer names a valid entity — the
+    // entity may have been deleted since the message was logged. Public for the same reason as
+    // PingAssetPath above: HotReloadEditorModule.cpp's free-function glue isn't a member.
+    bool SelectEntityByRawId(World& world, unsigned int rawId);
     void AssetFolderHistoryBack() {
         if (!CanAssetFolderHistoryBack()) return;
         m_CurrentAssetFolder = m_AssetFolderHistory[--m_AssetFolderHistoryPos];

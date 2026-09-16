@@ -103,6 +103,14 @@ void LogClearFn() { Log::Clear(); }
 void LogInfoFn(const char* message) { Log::Info(message ? message : ""); }
 void LogErrorFn(const char* message) { Log::Error(message ? message : ""); }
 
+// --- Console click-to-navigate (API v27) ------------------------------------------------------
+bool SelectEntityRawFn(unsigned int rawEntityId) {
+    return g_Editor && g_World && g_Editor->SelectEntityByRawId(*g_World, rawEntityId);
+}
+bool PingAssetPathFn(const char* path) {
+    return g_Editor && g_Assets && path && g_Editor->PingAssetPath(*g_Assets, path);
+}
+
 // --- Editor services -------------------------------------------------------------------------
 // Not variadic: a format string crossing the boundary buys nothing, and the module can format its
 // own text. Still routed here so EditorSettings::Get().ShowTooltips (another host-side singleton)
@@ -492,6 +500,8 @@ const EditorModuleHostAPI kHostAPI{
     &LogClearFn,
     &LogInfoFn,
     &LogErrorFn,
+    &SelectEntityRawFn,
+    &PingAssetPathFn,
     &SetTooltipFn,
     &SaveFileDialogFn,
     &ConsoleStateFn,
