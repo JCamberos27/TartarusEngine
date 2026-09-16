@@ -20,8 +20,11 @@ every reference is named and clickable, and nothing is reachable only by right-c
 - Mesh Renderer shows a stable, friendly mesh name instead of a churning runtime handle
   (`primitive://sphere#90` → "Sphere") (`b26e7c5`).
 - Light's Kelvin/RGB toggle row budgets its trailing space from real button sizes instead of a
-  hardcoded reserve — fixes the width-clipping half of the "K" button bug; a separate,
-  still-open rendering bug (invisible glyph, functional hitbox) remains under #11 (`ad62984`).
+  hardcoded reserve — fixes the width-clipping half of the "K" button bug (`ad62984`). The
+  remaining invisible-glyph half is fixed too: the reserve math was correct on paper but the
+  button still landed almost entirely outside its component-card child window's clip rect —
+  anchored to `GetWindowContentRegionMax()` instead, the same coordinate the card's own
+  right-aligned buttons already use (`c42b536`, closes #11).
 - Entity header rebuilt: discoverable "…" actions menu (Reset/Copy/Paste/Remove/Revert/Apply)
   on every component section and the header itself, retiring the three orphaned bottom icons
   (`a956fad`).
