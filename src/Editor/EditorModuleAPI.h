@@ -88,7 +88,21 @@
 //        to the icon-size slider. Grid vs. list mode is still derived from icon size (via
 //        GetAssetGridMetrics, unchanged) — this just flips it, and the host remembers the last
 //        grid zoom level so toggling back to Grid doesn't reset it to the default.
-constexpr std::uint32_t kEditorModuleAPIVersion = 24;
+//   25 - Phase 5 item 6 (remainder): Hierarchy type-filter chips + sort control, mirroring the
+//        Asset Browser's own Get/SetAssetSort (API v13). Get/SetHierarchyTypeFilter takes a
+//        kHierarchyFilter* bitmask (0 = no filter); Get/SetHierarchySort takes a packed
+//        mode*2+desc int. Row height itself (24px) needed no new pointer — it's a host-side style
+//        tweak inside the existing DrawHierarchyTreeBody callback.
+constexpr std::uint32_t kEditorModuleAPIVersion = 25;
+
+// Hierarchy type-filter chip bits (API v25). Passed to Get/SetHierarchyTypeFilter as a bitmask;
+// 0 means "no filter" (every kind shown). Mirrors the priority used by the per-row kind badge
+// (mesh > light > camera > empty) but as independent bits so a chip toggles regardless of which
+// kind a row's badge happens to show.
+constexpr int kHierarchyFilterMesh   = 1 << 0;
+constexpr int kHierarchyFilterLight  = 1 << 1;
+constexpr int kHierarchyFilterCamera = 1 << 2;
+constexpr int kHierarchyFilterOther  = 1 << 3;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -486,6 +500,13 @@ struct EditorModuleHostAPI {
     // it was at before collapsing to list, so toggling back to Grid restores that zoom instead of
     // resetting to the default.
     void (*ToggleAssetViewMode)() = nullptr;
+
+    // --- Hierarchy type filter + sort, Phase 5 item 6 remainder (API v25) --------------
+    // GetHierarchyTypeFilter/SetHierarchyTypeFilter carry a kHierarchyFilter* bitmask for the
+    // toolbar's four kind chips. GetHierarchySort/SetHierarchySort carry a packed mode*2+desc int,
+    // same shape as Get/SetAssetSort above (mode: 0 Creation order, 1 Name, 2 Type).
+    int  (*GetHierarchyTypeFilter)() = nullptr; void (*SetHierarchyTypeFilter)(int mask) = nullptr;
+    int  (*GetHierarchySort)() = nullptr;       void (*SetHierarchySort)(int packed) = nullptr;
 };
 
 struct EditorModuleAPI {

@@ -1567,6 +1567,10 @@ private:
     // Children of `parent` (or the scene roots when `parent == entt::null`) in Hierarchy display
     // order: OrderComponent ascending, entity handle as the stable tiebreak.
     std::vector<entt::entity> HierarchySiblingsInOrder(const World& world, entt::entity parent) const;
+    // Phase 5 item 6 — re-sorts `rows` in place for display only (Name / Type), per the toolbar's
+    // sort control. A no-op for mode 0 (Creation order), since callers already pass rows in that
+    // order. Never touches OrderComponent, so drag-drop / ReorderHierarchySiblings are unaffected.
+    void ApplyHierarchyDisplaySort(const World& world, std::vector<entt::entity>& rows) const;
     // Instantiate a model/prefab dragged from the Asset Browser onto the Hierarchy (#236). Pass
     // exactly one of the two payload strings; `parent` nests it under a row, or entt::null drops
     // it at the scene root. Models land at the origin, prefabs keep their authored transform.
