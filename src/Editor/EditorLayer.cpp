@@ -669,11 +669,11 @@ void EditorLayer::DrawPostProcessSettings(float w) {
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Photographic stops applied before the tone curve. 0 = neutral. Applies live.");
 
-    if (ImGui::Checkbox("SSAO", &prefs.SsaoEnabled)) EditorSettings::Save();
+    if (EditorUIPrimitives::Checkbox("SSAO", &prefs.SsaoEnabled)) EditorSettings::Save();
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Screen-space ambient occlusion. Darkens crevices and contact shadows. Depth pre-pass + blur, scene-view only.");
 
-    if (ImGui::Checkbox("Bloom", &prefs.BloomEnabled)) EditorSettings::Save();
+    if (EditorUIPrimitives::Checkbox("Bloom", &prefs.BloomEnabled)) EditorSettings::Save();
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Bloom post-process: bright pixels bleed glow onto neighbors. Runs at half resolution before tone mapping.");
     if (prefs.BloomEnabled) {
@@ -719,7 +719,7 @@ void EditorLayer::DrawPostProcessSettings(float w) {
 
 void EditorLayer::DrawShadowSettings(float w) {
     auto& prefs = EditorSettings::Get();
-    if (ImGui::Checkbox("Cast sun shadows", &prefs.ShadowsEnabled)) EditorSettings::Save();
+    if (EditorUIPrimitives::Checkbox("Cast sun shadows", &prefs.ShadowsEnabled)) EditorSettings::Save();
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Cascaded shadow maps for the Directional light. Point/spot shadows are a later milestone.");
 
@@ -909,7 +909,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
     switch (m_PrefsCategory) {
     case 0: { // General
         ImGui::SeparatorText("General");
-        if (ImGui::Checkbox("Show editor tooltips", &prefs.ShowTooltips)) EditorSettings::Save();
+        if (EditorUIPrimitives::Checkbox("Show editor tooltips", &prefs.ShowTooltips)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Hover hints on Inspector fields, Hierarchy rows and toolbar buttons.");
 
@@ -958,23 +958,23 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         EditorUI::SliderFloat("Vertex pick radius (px)", &m_VertexPickPixels, 5.0f, 150.0f, "%.0f");
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("How close (screen pixels) the cursor must be to a vertex to hover/grab/snap it while holding V.");
-        ImGui::Checkbox("Show grid", &m_ShowGrid);
-        ImGui::Checkbox("Show transform gizmo", &m_ShowGizmos);
-        ImGui::Checkbox("Frame camera on select", &m_FrameOnSelect);
+        EditorUIPrimitives::Checkbox("Show grid", &m_ShowGrid);
+        EditorUIPrimitives::Checkbox("Show transform gizmo", &m_ShowGizmos);
+        EditorUIPrimitives::Checkbox("Frame camera on select", &m_FrameOnSelect);
         // "Adaptive HUD contrast" removed (#54): every viewport HUD now draws a fixed opaque
         // plate behind fixed light text, legible over anything — nothing left to toggle.
 
         ImGui::SeparatorText("Game view");
-        if (ImGui::Checkbox("Maximize on Play", &prefs.GameViewMaximizeOnPlay)) EditorSettings::Save();
+        if (EditorUIPrimitives::Checkbox("Maximize on Play", &prefs.GameViewMaximizeOnPlay)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Entering Play Mode expands the Game view to borderless fullscreen\ninstead of staying windowed.");
 
         ImGui::SeparatorText("Light gizmos");
-        if (ImGui::Checkbox("Show light gizmos", &prefs.ShowLightGizmos)) EditorSettings::Save();
+        if (EditorUIPrimitives::Checkbox("Show light gizmos", &prefs.ShowLightGizmos)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("3D wireframe shapes in the viewport: range sphere for point lights, cone for spots, aim arrow for directional.");
         if (!prefs.ShowLightGizmos) ImGui::BeginDisabled();
-        if (ImGui::Checkbox("Only for the selected light", &prefs.LightGizmoSelectedOnly)) EditorSettings::Save();
+        if (EditorUIPrimitives::Checkbox("Only for the selected light", &prefs.LightGizmoSelectedOnly)) EditorSettings::Save();
         ImGui::SetNextItemWidth(kw);
         {
             bool committed = false;
@@ -994,7 +994,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         if (!prefs.ShowLightGizmos) ImGui::EndDisabled();
 
         ImGui::SeparatorText("Corner monogram");
-        if (ImGui::Checkbox("Show engine mark", &prefs.EngineMarkEnabled)) EditorSettings::Save();
+        if (EditorUIPrimitives::Checkbox("Show engine mark", &prefs.EngineMarkEnabled)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("The spinning TE monogram in the viewport's bottom-left corner.");
         if (!prefs.EngineMarkEnabled) ImGui::BeginDisabled();
@@ -1010,7 +1010,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         {
             // Phase 1 item 9 — the Prism editor THEME is gone (collapsed into Dark/Light), so
             // this is a plain independent toggle now; it no longer has a theme to defer to.
-            if (ImGui::Checkbox("Prism", &prefs.EngineMarkPrism)) EditorSettings::Save();
+            if (EditorUIPrimitives::Checkbox("Prism", &prefs.EngineMarkPrism)) EditorSettings::Save();
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Paint the monogram with a slowly-drifting spectral gradient instead of the fixed grey.");
         }
@@ -1052,7 +1052,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
             if (committed) EditorSettings::Save();
         }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Distance from the camera at which the grid has fully faded out.");
-        if (ImGui::Checkbox("Show axis lines", &prefs.GridShowAxisLines)) EditorSettings::Save();
+        if (EditorUIPrimitives::Checkbox("Show axis lines", &prefs.GridShowAxisLines)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("The colored rules through the origin: X (red) and Z (blue) on the ground, and a green Y line straight up."); // #19
         if (!prefs.GridShowAxisLines) ImGui::BeginDisabled();
@@ -1080,7 +1080,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
 
     case 3: // Auto-Save
         ImGui::SeparatorText("Auto-Save");
-        if (ImGui::Checkbox("Enable auto-save", &prefs.AutoSaveEnabled)) EditorSettings::Save();
+        if (EditorUIPrimitives::Checkbox("Enable auto-save", &prefs.AutoSaveEnabled)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Periodically writes the scene to its file while you work, on top of the save on exit. Only writes when there are unsaved changes.");
         if (!prefs.AutoSaveEnabled) ImGui::BeginDisabled();
@@ -1454,7 +1454,7 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
                     if (c > r) continue; // lower triangle only (symmetric)
                     bool on = p.LayersCollide(r, c);
                     char id[16]; std::snprintf(id, sizeof(id), "##m%d_%d", r, c);
-                    if (ImGui::Checkbox(id, &on)) { p.SetLayersCollide(r, c, on); ProjectSettings::Save(); }
+                    if (EditorUIPrimitives::Checkbox(id, &on)) { p.SetLayersCollide(r, c, on); ProjectSettings::Save(); }
                 }
             }
             ImGui::EndTable();
@@ -1609,7 +1609,7 @@ void EditorLayer::DrawPhysicsDebugWindow(World& world) {
             if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip(tip);
         };
         bool cg = EditorSettings::Get().ShowColliders;
-        if (ImGui::Checkbox("Collider shapes", &cg)) { EditorSettings::Get().ShowColliders = cg; EditorSettings::Save(); }
+        if (EditorUIPrimitives::Checkbox("Collider shapes", &cg)) { EditorSettings::Get().ShowColliders = cg; EditorSettings::Save(); }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Wireframe of every collider (also on the Gizmos toolbar).");
         chan("Contacts & impacts", PhysicsWorld::PDD_Contacts,
              "Every touch leaves a fading spark; a firm hit (bounce / drop) flashes brighter,\n"

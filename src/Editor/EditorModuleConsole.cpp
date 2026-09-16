@@ -55,48 +55,10 @@ bool ActionButton(const EditorModuleHostAPI& host, const char* icon, const char*
 // #121212 toolbar, small enough and low-contrast enough to disappear at a glance and in any
 // compressed/rescaled screenshot — which is exactly the "no checkbox or button frame" the audit
 // (reasonably) reported. Auto-scroll/Timestamps read fine only because they default checked, and
-// a checked box's CheckboxSelectedBg fill + CheckMark tick are both far more saturated.
-// Fixed by giving the box its own explicit 1px border (independent of the theme's global
-// FrameBorderSize) so a toggle control reads as one on sight regardless of check state, instead
-// of raising FrameBg's fill contrast further and hoping — draws its own frame manually, the same
-// pattern KelvinBar/ActiveToggle already use elsewhere in this codebase for a control that has to
-// read clearly regardless of the widget's own default styling. Same id/hover/click contract as
-// ImGui::Checkbox otherwise.
-bool ReliableCheckbox(const char* label, bool* v) {
-    ImGui::PushID(label);
-    const ImGuiStyle& style = ImGui::GetStyle();
-    const float sz = ImGui::GetFrameHeight();
-    const ImVec2 p = ImGui::GetCursorScreenPos();
-    const ImVec2 labelSize = ImGui::CalcTextSize(label);
-    const float innerSp = style.ItemInnerSpacing.x;
-    const ImVec2 totalSize(sz + (labelSize.x > 0.0f ? innerSp + labelSize.x : 0.0f), sz);
-    const bool clicked = ImGui::InvisibleButton("##cb", totalSize);
-    if (clicked) *v = !*v;
-    const bool hovered = ImGui::IsItemHovered();
-    const bool active = ImGui::IsItemActive();
-
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    const ImU32 bg = ImGui::GetColorU32((active && hovered) ? ImGuiCol_FrameBgActive
-        : hovered ? ImGuiCol_FrameBgHovered : (*v ? ImGuiCol_CheckboxSelectedBg : ImGuiCol_FrameBg));
-    dl->AddRectFilled(p, ImVec2(p.x + sz, p.y + sz), bg, style.FrameRounding);
-    // The border this theme otherwise omits (FrameBorderSize 0) — the actual fix: an unchecked
-    // box now reads as a distinct control by its outline even where its fill barely clears the
-    // background. TextDisabled, not full Text/Border, so it doesn't fight the CheckMark tick or
-    // outshine the label for a control this minor.
-    dl->AddRect(p, ImVec2(p.x + sz, p.y + sz), ImGui::GetColorU32(ImGuiCol_TextDisabled), style.FrameRounding, 0, 1.0f);
-    if (*v) {
-        const ImU32 check = ImGui::GetColorU32(ImGuiCol_CheckMark);
-        const float pad = sz * 0.2f;
-        dl->AddLine(ImVec2(p.x + pad, p.y + sz * 0.5f), ImVec2(p.x + sz * 0.42f, p.y + sz - pad), check, 2.0f);
-        dl->AddLine(ImVec2(p.x + sz * 0.42f, p.y + sz - pad), ImVec2(p.x + sz - pad, p.y + pad), check, 2.0f);
-    }
-    if (labelSize.x > 0.0f) {
-        const ImVec2 textPos(p.x + sz + innerSp, p.y + (sz - labelSize.y) * 0.5f);
-        dl->AddText(textPos, ImGui::GetColorU32(ImGuiCol_Text), label);
-    }
-    ImGui::PopID();
-    return clicked;
-}
+// a checked box's CheckboxSelectedBg fill + CheckMark tick are both far more saturated. The same
+// pattern turned up editor-wide (#73), so the fix now lives as EditorUIPrimitives::Checkbox — a
+// thin wrapper that keeps real ImGui::Checkbox for all of the actual behaviour and just adds the
+// outline this theme otherwise omits.
 
 // EditorUI::VSeparator: a 1px rule in ImGuiCol_Separator spanning the frame height, with
 // ItemSpacing.x of breathing room either side. Advances the cursor itself.
@@ -242,19 +204,19 @@ void Draw(const EditorModuleHostAPI& host) {
         }
     }
     ImGui::SameLine();
-    ReliableCheckbox("Auto-scroll", &state.AutoScroll);
+    EditorUIPrimitives::Checkbox("Auto-scroll", &state.AutoScroll);
     if (ImGui::IsItemHovered()) Tooltip(host, "Automatically jump to the newest message as it arrives");
     ImGui::SameLine();
-    ReliableCheckbox("Timestamps", &state.ShowTimestamps);
+    EditorUIPrimitives::Checkbox("Timestamps", &state.ShowTimestamps);
     if (ImGui::IsItemHovered()) Tooltip(host, "Show the HH:MM:SS each message first arrived");
     ImGui::SameLine();
-    ReliableCheckbox("Collapse", &state.Collapse);
+    EditorUIPrimitives::Checkbox("Collapse", &state.Collapse);
     if (ImGui::IsItemHovered()) Tooltip(host, "Show each identical message once, with a total count - not just consecutive repeats");
     ImGui::SameLine();
-    ReliableCheckbox("Clear on Play", &state.ClearOnPlay);
+    EditorUIPrimitives::Checkbox("Clear on Play", &state.ClearOnPlay);
     if (ImGui::IsItemHovered()) Tooltip(host, "Wipe the console every time you enter Play mode");
     ImGui::SameLine();
-    ReliableCheckbox("Error Pause", &state.ErrorPause);
+    EditorUIPrimitives::Checkbox("Error Pause", &state.ErrorPause);
     if (ImGui::IsItemHovered()) Tooltip(host, "Freeze the running simulation the moment a new error is logged");
 
     // Per-level toggles double as counters, the way Unity's console header does.
@@ -266,16 +228,16 @@ void Draw(const EditorModuleHostAPI& host) {
     snprintf(infoLabel, sizeof(infoLabel), ICON_FA_CIRCLE_INFO " %d", infoCount);
     snprintf(warnLabel, sizeof(warnLabel), ICON_FA_TRIANGLE_EXCLAMATION " %d", warnCount);
     snprintf(errorLabel, sizeof(errorLabel), ICON_FA_CIRCLE_EXCLAMATION " %d", errorCount);
-    ImGui::Checkbox(infoLabel, &state.ShowInfo);
+    EditorUIPrimitives::Checkbox(infoLabel, &state.ShowInfo);
     if (ImGui::IsItemHovered()) Tooltip(host, "Show/hide informational messages");
     ImGui::SameLine();
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.80f, 0.30f, 1.0f));
-    ImGui::Checkbox(warnLabel, &state.ShowWarning);
+    EditorUIPrimitives::Checkbox(warnLabel, &state.ShowWarning);
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) Tooltip(host, "Show/hide warnings");
     ImGui::SameLine();
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.42f, 0.38f, 1.0f));
-    ImGui::Checkbox(errorLabel, &state.ShowError);
+    EditorUIPrimitives::Checkbox(errorLabel, &state.ShowError);
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) Tooltip(host, "Show/hide errors");
 

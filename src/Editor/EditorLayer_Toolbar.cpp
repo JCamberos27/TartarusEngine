@@ -664,9 +664,9 @@ void EditorLayer::DrawCaptureOptionsPopupBody() {
             ImGui::EndDisabled();
             static const char* kFmt[] = { "PNG", "JPG" };
             if (ImGui::Combo("Format", &cs.CaptureFormat, kFmt, IM_ARRAYSIZE(kFmt))) EditorSettings::Save();
-            if (ImGui::Checkbox("Flash", &cs.CaptureFlash)) EditorSettings::Save();
+            if (EditorUIPrimitives::Checkbox("Flash", &cs.CaptureFlash)) EditorSettings::Save();
             ImGui::SameLine();
-            if (ImGui::Checkbox("Sound", &cs.CaptureSound)) EditorSettings::Save();
+            if (EditorUIPrimitives::Checkbox("Sound", &cs.CaptureSound)) EditorSettings::Save();
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_CAMERA_RETRO "  Capture now")) { RequestCapture(); ImGui::CloseCurrentPopup(); }
             if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open screenshots folder"))
@@ -684,7 +684,7 @@ void EditorLayer::DrawGridSnapPopupBody() {
     // #4 item 4 — "Show grid" everywhere this toggle appears (Preferences > Viewport, the Gizmos
     // popover below, and here) instead of three different labels for the same m_ShowGrid bool.
     bool showGrid = m_ShowGrid;
-    if (ImGui::Checkbox("Show grid", &showGrid)) m_ShowGrid = showGrid;
+    if (EditorUIPrimitives::Checkbox("Show grid", &showGrid)) m_ShowGrid = showGrid;
     // EditorUI::SliderFloat's out-param is needed — a bare IsItemDeactivatedAfterEdit() after the
     // call only ever sees the trailing number box, so releasing a track drag wouldn't save.
     {
@@ -705,7 +705,7 @@ void EditorLayer::DrawGridSnapPopupBody() {
     ImGui::Separator();
     ImGui::TextDisabled("SNAP  (hold Ctrl while dragging to invert)");
     bool snap = m_GridSnapEnabled;
-    if (ImGui::Checkbox("Snap enabled", &snap)) m_GridSnapEnabled = snap;
+    if (EditorUIPrimitives::Checkbox("Snap enabled", &snap)) m_GridSnapEnabled = snap;
     ImGui::BeginDisabled(!m_GridSnapEnabled);
     // #4 item 4 — same vocabulary as Preferences > Grid & Snapping's sliders (same three fields).
     EditorUI::SliderFloat("Move snap",   &m_SnapTranslation, 0.001f, 100.0f, "%.3f m", ImGuiSliderFlags_Logarithmic);
@@ -719,11 +719,11 @@ void EditorLayer::DrawGridSnapPopupBody() {
 
     ImGui::Separator();
     ImGui::TextDisabled("SURFACE  (hold Shift while dragging to invert)");
-    ImGui::Checkbox("Snap to surface under cursor", &m_SurfaceSnap);
+    EditorUIPrimitives::Checkbox("Snap to surface under cursor", &m_SurfaceSnap);
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("While dragging the Move gizmo, drop the object where the cursor\nray meets another object's surface instead of following the axis.");
     ImGui::BeginDisabled(!m_SurfaceSnap);
-    ImGui::Checkbox("Align to surface normal", &m_SurfaceSnapAlign);
+    EditorUIPrimitives::Checkbox("Align to surface normal", &m_SurfaceSnapAlign);
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Also orient the object's up axis to the face it lands on.");
     ImGui::EndDisabled();
@@ -732,7 +732,7 @@ void EditorLayer::DrawGridSnapPopupBody() {
 }
 
 void EditorLayer::DrawGizmosPopupBody() {
-    ImGui::Checkbox("Gizmos", &m_GizmosMasterVisible);
+    EditorUIPrimitives::Checkbox("Gizmos", &m_GizmosMasterVisible);
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Master switch for every viewport gizmo and icon below.\nThe nav cube and selection outline are unaffected.");
     ImGui::Separator();
@@ -742,17 +742,17 @@ void EditorLayer::DrawGizmosPopupBody() {
     // Viewport (the View menu's "Transform Gizmo" MenuItem keeps menu-style title case — a MenuItem
     // reads as a noun, a Checkbox as a sentence, so that's a genuine format difference, not the
     // same three-different-labels problem this pass is fixing).
-    ImGui::Checkbox("Show transform gizmo", &m_ShowGizmos);
-    ImGui::Checkbox("Entity icons", &m_ShowEntityIcons);
+    EditorUIPrimitives::Checkbox("Show transform gizmo", &m_ShowGizmos);
+    EditorUIPrimitives::Checkbox("Entity icons", &m_ShowEntityIcons);
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("The billboard light / camera / empty markers.");
     bool lightGiz = EditorSettings::Get().ShowLightGizmos;
-    if (ImGui::Checkbox("Light gizmos", &lightGiz)) {
+    if (EditorUIPrimitives::Checkbox("Light gizmos", &lightGiz)) {
         EditorSettings::Get().ShowLightGizmos = lightGiz;
         EditorSettings::Save();
     }
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Range spheres and spot cones drawn from each light.");
     bool colliderGiz = EditorSettings::Get().ShowColliders;
-    if (ImGui::Checkbox("Colliders", &colliderGiz)) {
+    if (EditorUIPrimitives::Checkbox("Colliders", &colliderGiz)) {
         EditorSettings::Get().ShowColliders = colliderGiz;
         EditorSettings::Save();
     }
@@ -760,7 +760,7 @@ void EditorLayer::DrawGizmosPopupBody() {
     ImGui::EndDisabled();
 
     bool physDbg = EditorSettings::Get().PhysicsDebugInput;
-    if (ImGui::Checkbox("Physics debug input", &physDbg)) {
+    if (EditorUIPrimitives::Checkbox("Physics debug input", &physDbg)) {
         EditorSettings::Get().PhysicsDebugInput = physDbg;
         EditorSettings::Save();
     }
@@ -770,7 +770,7 @@ void EditorLayer::DrawGizmosPopupBody() {
     {
         unsigned& ddf = EditorSettings::Get().PhysicsDebugDrawFlags;
         bool anyDraw = ddf != 0u;
-        if (ImGui::Checkbox("Physics debug draw", &anyDraw)) {
+        if (EditorUIPrimitives::Checkbox("Physics debug draw", &anyDraw)) {
             // Toggle a sensible default bundle; the Physics panel has the per-channel toggles.
             ddf = anyDraw ? (PhysicsWorld::PDD_Contacts | PhysicsWorld::PDD_Raycasts |
                              PhysicsWorld::PDD_Velocity) : 0u;
@@ -786,7 +786,7 @@ void EditorLayer::DrawGizmosPopupBody() {
     }
 
     ImGui::Separator();
-    ImGui::Checkbox("Show grid", &m_ShowGrid); // independent of the master switch, like Unity's grid
+    EditorUIPrimitives::Checkbox("Show grid", &m_ShowGrid); // independent of the master switch, like Unity's grid
 
     // --- Layers (#236 A1) -------------------------------------------------------------
     // Per-layer Scene-viewport visibility (eye) + pick-lock (padlock), plus rename for the
@@ -800,7 +800,7 @@ void EditorLayer::DrawGizmosPopupBody() {
             const unsigned bit = 1u << i;
 
             bool vis = (s.LayerVisibleMask & bit) != 0;
-            if (ImGui::Checkbox("##vis", &vis)) {
+            if (EditorUIPrimitives::Checkbox("##vis", &vis)) {
                 if (vis) s.LayerVisibleMask |= bit; else s.LayerVisibleMask &= ~bit;
                 EditorSettings::Save();
             }
@@ -808,7 +808,7 @@ void EditorLayer::DrawGizmosPopupBody() {
 
             ImGui::SameLine();
             bool locked = (s.LayerPickLockMask & bit) != 0;
-            if (ImGui::Checkbox("##lock", &locked)) {
+            if (EditorUIPrimitives::Checkbox("##lock", &locked)) {
                 if (locked) s.LayerPickLockMask |= bit; else s.LayerPickLockMask &= ~bit;
                 EditorSettings::Save();
             }
