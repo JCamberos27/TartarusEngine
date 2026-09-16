@@ -46,6 +46,24 @@ Closed. Items 1-6 and 8 landed in earlier sessions (#68, #69, #41). The last ite
 
 In progress. Landed so far:
 
+- Lights Solo/Mute UI: a "Lights" section in the Lighting panel, one row per light with Solo
+  (isolate — suppresses every other light while any Solo is active) and Mute (suppress just this
+  one) toggle buttons, dimmed name when suppressed, click the name to select that light.
+  `m_SoloLights`/`m_MutedLights`/`IsLightSuppressed()` already existed and were fully wired into
+  `main.cpp`'s per-frame light gather, but had zero write sites anywhere in the editor — the
+  feature was completely unreachable. Session-only (cleared on scene load). Live-verified: Solo on
+  one light visibly darkened the scene and dimmed every other row's name; Mute did the same for
+  just its own light (`12d2485`, closes item 9).
+- History panel agrees with the real undo stack (Q6): a genuine user selection change now becomes
+  its own `m_UndoStack` entry (`RecordSelectionHistory`, once per frame) instead of living in a
+  separate `m_SelHistory` system the History panel never saw — the audit's "a material edit needed
+  3 Ctrl+Z presses but History showed 1 entry" traced to exactly this split. Selection-only entries
+  show dimmed with a cursor glyph and don't dirty the scene (`m_ContentDepth` tracks only
+  real-edit entries for the dirty check); an edit that also changes selection as a side effect
+  (Duplicate, Paste, Add Cube, ...) doesn't get a redundant second Select entry
+  (`m_EditPushedThisFrame` guards it). Live-verified: selected two entities in turn, saw both as
+  History entries, Ctrl+Z correctly walked back through the selection step (moving it to a redo
+  entry below Current) with no unsaved-changes dot appearing (`12d2485`, closes item 6).
 - Physics Debug panel rebuild: title now matches its own Window-menu entry, Step button no
   longer clips off the window, its tooltip fires outside Play mode (`AllowWhenDisabled`),
   `PhysicsSimTimeScale` is session-only so a session left at 0x can't silently freeze physics on
