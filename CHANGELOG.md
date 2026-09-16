@@ -21,6 +21,11 @@ In progress. Landed so far:
   folder/Delete/Close) (`558f354`, closes #23).
 - Console: unchecked toggles (Collapse/Clear on Play/Error Pause) now paint a visible 1px border
   so they read as controls at a glance, not bare text labels (`61f61f2`, closes #20).
+- The same fix promoted to a shared `EditorUIPrimitives::Checkbox` and swapped in at every
+  remaining `ImGui::Checkbox` call site editor-wide (45 sites across `EditorLayer.cpp`,
+  `EditorLayer_Toolbar.cpp`, `EditorLayer_Inspector.cpp`, `AssetImporterInspector.cpp`, plus
+  Console's own remaining 3) — every unchecked checkbox in the editor now reads as a control on
+  sight, not just Console's (`8555ec0`, closes #73).
 
 ### [Phase 4] Inspector rebuild (#6) — 2026-09-15
 
