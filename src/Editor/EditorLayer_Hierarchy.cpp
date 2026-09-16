@@ -1211,6 +1211,22 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                         (secBase & 0x00FFFFFFu) | 0xB4000000u, secondaryGlyph);
         }
         dl->AddText(ImVec2(labelX + slotW, rowMin.y), col, shownName.c_str());
+
+        // Phase 5 item 8 — a badge glyph beside the name, not just the blue/red colour tint
+        // above: on its own, that tint collides with the palette's blue=active role (the camera
+        // kind glyph and the selection accent are both blue-family too), so colour alone doesn't
+        // reliably say "this is a prefab instance."
+        if (prefabInst && !inactive && !sceneHiddenRow) {
+            const ImVec2 nameSize = ImGui::CalcTextSize(shownName.c_str());
+            const float badgeSize = fontSize * 0.72f;
+            const ImVec2 badgePos(labelX + slotW + nameSize.x + fontSize * 0.35f,
+                                   rowMin.y + (fontSize - badgeSize) * 0.5f);
+            dl->AddText(ImGui::GetFont(), badgeSize, badgePos, col,
+                        prefabInst->Missing ? ICON_FA_LINK_SLASH : ICON_FA_BOX_ARCHIVE);
+            if (ImGui::IsMouseHoveringRect(badgePos, ImVec2(badgePos.x + badgeSize, badgePos.y + badgeSize)))
+                EditorUI::SetTooltip(prefabInst->Missing ? "Prefab instance - link to its source is broken"
+                                                          : "Prefab instance");
+        }
     }
 
     // Active-state eye, pinned to a fixed right-hand column so every row's eye lines up no matter
