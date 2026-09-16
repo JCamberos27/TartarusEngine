@@ -29,8 +29,18 @@ std::string NowHMS() {
     return buf;
 }
 
-void Push(LogLevel level, const std::string& message) {
+// Normalizes any embedded Windows path separators to '/'. Call sites pass a mix — some route
+// paths through ProjectPaths::Relativize() first (generic_string(), already '/'), others log a
+// raw OS path straight from a file dialog or ProjectPaths::Resolve() (native, '\' on Windows) —
+// so the same session's Console otherwise shows both in adjacent lines (Appendix A #18).
+std::string NormalizeSeparators(std::string message) {
+    for (char& c : message) if (c == '\\') c = '/';
+    return message;
+}
+
+void Push(LogLevel level, const std::string& rawMessage) {
     auto& entries = Storage();
+    const std::string message = NormalizeSeparators(rawMessage);
 
     if (!entries.empty() && entries.back().Level == level && entries.back().Message == message) {
         entries.back().Count++;

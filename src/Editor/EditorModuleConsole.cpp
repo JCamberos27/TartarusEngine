@@ -23,6 +23,7 @@
 #include <fstream>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace EditorModuleConsole {
@@ -94,6 +95,46 @@ bool FetchEntry(const EditorModuleHostAPI& host, int index, Entry& out) {
     out.Message = message ? message : "";
     out.Time = time ? time : "";
     return true;
+}
+
+// Phase 6 item 4 — a category column, derived from the message's own "Prefix: " convention
+// (already used editor- and engine-wide, e.g. "PhysX: ...", "Scene: ...") rather than a second
+// tag every call site would have to remember to pass. Variant prefixes that mean the same thing
+// ("Hot reload" / "Editor hot reload") collapse onto one bucket; anything unrecognised falls back
+// to its own raw prefix so it still sits in a stable column instead of "General" swallowing it.
+const char* CanonicalCategory(const std::string& prefix) {
+    static const std::pair<const char*, const char*> kBuckets[] = {
+        {"PhysX", "PhysX"},
+        {"Hot reload", "HotReload"}, {"Editor hot reload", "HotReload"},
+        {"Scene", "Scene"}, {"New Scene", "Scene"}, {"Revert Scene", "Scene"},
+        {"Prefab", "Scene"}, {"World", "Scene"},
+        {"Screenshot", "Capture"}, {"Copy image", "Capture"}, {"Copied path", "Capture"},
+        {"Sent screenshot", "Capture"}, {"Drop to surface", "Capture"},
+        {"Audio", "Audio"},
+        {"AssetDatabase", "Assets"}, {"ThumbnailCache", "Assets"}, {"Model", "Assets"},
+        {"Texture", "Assets"}, {"Cubemap", "Assets"}, {"ShaderLibrary", "Assets"},
+        {"ShaderAsset", "Assets"}, {"AtomicFile", "Assets"},
+        {"Shortcuts", "Editor"}, {"EditorSettings", "Editor"}, {"ProjectSettings", "Editor"},
+        {"LayerRegistry", "Editor"}, {"Layout preset", "Editor"}, {"Saved layout preset", "Editor"},
+        {"Undo history", "Editor"}, {"Paste failed", "Editor"},
+        {"GLDebug", "Renderer"}, {"SpotShadowMap", "Renderer"}, {"PointShadowMap", "Renderer"},
+        {"ModelPreviewRenderer", "Renderer"}, {"Framebuffer", "Renderer"},
+        {"CascadedShadowMap", "Renderer"}, {"ChannelPreviewRenderer", "Renderer"},
+    };
+    for (const auto& [p, cat] : kBuckets)
+        if (prefix.rfind(p, 0) == 0) return cat;
+    return nullptr;
+}
+
+// Static storage for the fallback case (an unrecognised prefix used verbatim) — the caller needs
+// a stable const char* to hand to snprintf, not a temporary.
+std::string DeriveCategory(const std::string& message) {
+    const size_t colon = message.find(": ");
+    if (colon == std::string::npos || colon > 24) return "General";
+    const std::string prefix = message.substr(0, colon);
+    if (prefix.empty()) return "General";
+    if (const char* canon = CanonicalCategory(prefix)) return canon;
+    return prefix.size() <= 12 ? prefix : prefix.substr(0, 12);
 }
 
 bool LevelVisible(const EditorConsoleState& state, int level) {
@@ -288,8 +329,21 @@ void Draw(const EditorModuleHostAPI& host) {
 
                 const int rowCount = (row >= 0 && (size_t)row < g_RowCounts.size()) ? g_RowCounts[(size_t)row] : entry.Count;
                 std::string tsPrefix = (state.ShowTimestamps && !entry.Time.empty()) ? ("[" + entry.Time + "]  ") : "";
-                std::string rowLabel = tsPrefix + icon + "  " + entry.Message;
+                // Phase 6 item 4 — category column. Padded (monospace body font) rather than a
+                // separate ImGui column so it stays part of the one full-width Selectable the
+                // right-click menu and double-click both depend on.
+                char categoryField[16];
+                snprintf(categoryField, sizeof(categoryField), "%-10s", DeriveCategory(entry.Message).c_str());
+                std::string rowLabel = tsPrefix + categoryField + icon + "  " + entry.Message;
                 if (rowCount > 1) rowLabel += "  (x" + std::to_string(rowCount) + ")";
+
+                // Phase 6 item 4 — a 3px severity band down the row's left edge, in addition to
+                // the icon+colour: colour alone fails at a glance for anyone who can't rely on
+                // hue (the icon already covers that; this is a second, position-based cue matching
+                // Console's leftmost real estate rather than adding a fourth ImGui column).
+                const ImVec2 rowTop = ImGui::GetCursorScreenPos();
+                const float rowHeight = ImGui::GetTextLineHeightWithSpacing();
+                ImGui::Indent(6.0f);
 
                 // PushID on the entry's stable log index rather than baking a pointer into the
                 // label text: a message long enough to fill a fixed label buffer used to truncate
@@ -306,6 +360,11 @@ void Draw(const EditorModuleHostAPI& host) {
                 ImGui::Selectable(rowLabel.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
                 ImGui::PopStyleColor();
                 ImGui::PopFont();
+
+                ImDrawList* rowDl = ImGui::GetWindowDrawList();
+                rowDl->AddRectFilled(rowTop, ImVec2(rowTop.x + 3.0f, rowTop.y + rowHeight),
+                                     ImGui::ColorConvertFloat4ToU32(color));
+                ImGui::Unindent(6.0f);
 
                 if (ImGui::BeginPopupContextItem()) {
                     if (ImGui::MenuItem(ICON_FA_COPY "  Copy message")) ImGui::SetClipboardText(entry.Message.c_str());
