@@ -1173,7 +1173,7 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
                              false, ImVec2(pingW, 0.0f)) && canPing) {
                 m_SelectedAssetKey = shared;
                 m_SelectedAssetIsFolder = false;
-                m_CurrentAssetFolder = assets.AssetFolder(shared);
+                NavigateAssetFolder(assets.AssetFolder(shared));
             }
             ImGui::EndDisabled();
             break;
@@ -2022,7 +2022,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                              false, ImVec2(meshPingW, 0.0f)) && !isPrimitive) {
                 m_SelectedAssetKey = modelPath;
                 m_SelectedAssetIsFolder = false;
-                m_CurrentAssetFolder = assets.AssetFolder(modelPath);
+                NavigateAssetFolder(assets.AssetFolder(modelPath));
             }
             ImGui::EndDisabled();
             if (ImGui::BeginPopup("##ChangeMesh")) {

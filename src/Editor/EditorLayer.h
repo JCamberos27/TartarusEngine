@@ -200,11 +200,33 @@ public:
     void  SetShowAssetBrowser(bool on) { m_ShowAssetBrowser = on; }
     const std::string& CurrentAssetFolder() const { return m_CurrentAssetFolder; }
     void  SetCurrentAssetFolderFromTree(const std::string& folder) {
-        m_CurrentAssetFolder = folder;
+        NavigateAssetFolder(folder);
         ClearAssetSelection();
         m_SelectedAssetKey = folder;
         m_SelectedAssetIsFolder = true;
     }
+    // Phase 5 item 3 — Back/Forward history over m_CurrentAssetFolder, the same shape as
+    // SelectionHistoryBack/Forward for object selection. NavigateAssetFolder is the one entry
+    // point every real "go to this folder" action (tree click, breadcrumb segment, Up, double-
+    // clicking a folder tile, the folder-navigation keyboard shortcuts) should call, so Back/
+    // Forward has a consistent trail to walk; a no-op when already there.
+    void NavigateAssetFolder(const std::string& folder) {
+        if (folder == m_CurrentAssetFolder) return;
+        m_AssetFolderHistory.resize(m_AssetFolderHistoryPos + 1); // drop any stale forward branch
+        m_AssetFolderHistory.push_back(folder);
+        m_AssetFolderHistoryPos = (int)m_AssetFolderHistory.size() - 1;
+        m_CurrentAssetFolder = folder;
+    }
+    void AssetFolderHistoryBack() {
+        if (!CanAssetFolderHistoryBack()) return;
+        m_CurrentAssetFolder = m_AssetFolderHistory[--m_AssetFolderHistoryPos];
+    }
+    void AssetFolderHistoryForward() {
+        if (!CanAssetFolderHistoryForward()) return;
+        m_CurrentAssetFolder = m_AssetFolderHistory[++m_AssetFolderHistoryPos];
+    }
+    bool CanAssetFolderHistoryBack() const    { return m_AssetFolderHistoryPos > 0; }
+    bool CanAssetFolderHistoryForward() const { return m_AssetFolderHistoryPos + 1 < (int)m_AssetFolderHistory.size(); }
     const std::string& AssetSearchFilter() const { return m_AssetSearchFilter; }
     void  SetAssetSearchFilter(const std::string& s) { m_AssetSearchFilter = s; }
     const std::string& AssetLabelMenuFilter() const { return m_AssetLabelMenuFilter; }
@@ -1175,6 +1197,11 @@ private:
     std::string m_CurrentAssetFolder;
     std::string m_SelectedAssetKey;
     bool m_SelectedAssetIsFolder = false;
+
+    // Phase 5 item 3 — Back/Forward trail for m_CurrentAssetFolder (NavigateAssetFolder above).
+    // Starts with one entry (the initial "" root) so History[HistoryPos] is always valid.
+    std::vector<std::string> m_AssetFolderHistory{std::string()};
+    int m_AssetFolderHistoryPos = 0;
 
     // Rebuilt once per frame by AssetGridFrameBegin; read by DrawAssetCell and the shift/ctrl
     // multi-select (m_AssetSelectionAnchorIndex indexes into this). Never mutated between

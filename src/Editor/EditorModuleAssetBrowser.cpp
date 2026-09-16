@@ -380,15 +380,82 @@ void Draw(const EditorModuleHostAPI& host) {
 
     VSeparator();
 
+    // Phase 5 item 3 — Back / Forward / Up. Back/Forward walk the host's NavigateAssetFolder
+    // trail; Up is just "go to my own parent," computed client-side and sent through the same
+    // SetCurrentAssetFolder the tree/breadcrumb already use (which now records history itself).
+    {
+        const bool canBack = host.CanAssetFolderHistoryBack && host.CanAssetFolderHistoryBack();
+        const bool canForward = host.CanAssetFolderHistoryForward && host.CanAssetFolderHistoryForward();
+        const bool canUp = !curFolder.empty();
+
+        ImGui::BeginDisabled(!canBack);
+        if (ActionButton(host, ICON_FA_ARROW_LEFT, "Back") && host.AssetFolderHistoryBack)
+            host.AssetFolderHistoryBack();
+        ImGui::EndDisabled();
+        ImGui::SameLine(0.0f, 2.0f);
+        ImGui::BeginDisabled(!canForward);
+        if (ActionButton(host, ICON_FA_ARROW_RIGHT, "Forward") && host.AssetFolderHistoryForward)
+            host.AssetFolderHistoryForward();
+        ImGui::EndDisabled();
+        ImGui::SameLine(0.0f, 2.0f);
+        ImGui::BeginDisabled(!canUp);
+        if (ActionButton(host, ICON_FA_ARROW_UP, "Up one folder") && host.SetCurrentAssetFolder)
+            host.SetCurrentAssetFolder(ParentFolderOf(curFolder).c_str());
+        ImGui::EndDisabled();
+    }
+
+    VSeparator();
+
     const float refreshFlash = host.GetAssetRefreshFlash ? host.GetAssetRefreshFlash() : 0.0f;
 
-    // Breadcrumb — context only, non-interactive. The post-refresh confirmation (#236 G) rides
-    // here on the toolbar itself rather than adding a row below it; it fades over its last second.
+    // Breadcrumb — each segment is its own borderless button, jumping straight to that folder
+    // (Phase 5 item 3; used to be one static TextDisabled line, "context only, non-interactive").
+    // The post-refresh confirmation (#236 G) still rides on the toolbar here rather than a row
+    // below it; it fades over its last second.
     {
-        std::string crumb = "Assets";
-        for (char c : curFolder) crumb += (c == '/') ? " / " : std::string(1, c);
         ImGui::AlignTextToFramePadding();
-        ImGui::TextDisabled("%s", crumb.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.14f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, ImGui::GetStyle().FramePadding.y));
+
+        // The root segment is only a link when we're not already there; otherwise it's just the
+        // "you are here" label like every other trailing segment below.
+        if (curFolder.empty()) {
+            ImGui::TextUnformatted("Assets");
+        } else if (ImGui::Button("Assets") && host.SetCurrentAssetFolder) {
+            host.SetCurrentAssetFolder("");
+        }
+        if (!curFolder.empty() && ImGui::IsItemHovered()) Tooltip(host, "Go to the Assets root.");
+
+        std::string prefix;
+        size_t segStart = 0;
+        while (segStart < curFolder.size()) {
+            size_t slash = curFolder.find('/', segStart);
+            std::string segment = curFolder.substr(segStart, slash == std::string::npos ? std::string::npos : slash - segStart);
+            prefix = prefix.empty() ? segment : (prefix + "/" + segment);
+            const bool isLast = slash == std::string::npos;
+
+            ImGui::SameLine(0.0f, 0.0f);
+            ImGui::TextDisabled(" / ");
+            ImGui::SameLine(0.0f, 0.0f);
+            ImGui::PushID((int)segStart);
+            if (isLast) {
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted(segment.c_str());
+            } else {
+                if (ImGui::Button(segment.c_str()) && host.SetCurrentAssetFolder)
+                    host.SetCurrentAssetFolder(prefix.c_str());
+                if (ImGui::IsItemHovered()) Tooltip(host, ("Go to " + prefix + ".").c_str());
+            }
+            ImGui::PopID();
+
+            if (isLast) break;
+            segStart = slash + 1;
+        }
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+
         if (refreshFlash > 0.0f) {
             const float a = refreshFlash > 1.0f ? 1.0f : refreshFlash;
             ImGui::SameLine(0.0f, 12.0f);
