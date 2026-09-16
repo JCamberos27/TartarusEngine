@@ -562,6 +562,58 @@ std::string LowerExt(const std::string& path) {
 }
 }
 
+// Phase 6 item 15 — read-only monospace source preview + a compile-status badge/error list for
+// a .shader file selected in the Asset Browser. Deliberately not a text editor (out of scope per
+// the review's Q5 decision): "Open Externally" on the Asset Browser cell (double-click, or the
+// context menu) is the edit path; this is scan-and-diagnose only.
+void EditorLayer::DrawShaderPreviewInspector(AssetLibrary& assets, const std::string& key) {
+    if (m_ShaderPreviewKey != key) {
+        m_ShaderPreviewKey = key;
+
+        std::ifstream f(key, std::ios::binary);
+        std::ostringstream ss;
+        ss << f.rdbuf();
+        m_ShaderPreviewSource = ss.str();
+
+        // One-shot compile attempt (the key-0 / no-keywords variant) so a broken shader shows its
+        // real GL error here instead of only surfacing as a Console line the next time a material
+        // actually renders with it. Not re-run per frame — compiling has real GL cost.
+        m_ShaderPreviewOk = false;
+        m_ShaderPreviewError.clear();
+        try {
+            auto shader = assets.LoadShader(key);
+            if (!shader) {
+                m_ShaderPreviewError = "Failed to parse — see Console for details.";
+            } else if (!shader->Variant(0)) {
+                m_ShaderPreviewError = "Compile failed (no diagnostic returned).";
+            } else {
+                m_ShaderPreviewOk = true;
+            }
+        } catch (const std::exception& e) {
+            m_ShaderPreviewError = e.what();
+        }
+    }
+
+    if (m_ShaderPreviewOk) {
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.5f, 1.0f), ICON_FA_CIRCLE_CHECK "  Compiles OK");
+    } else {
+        ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.35f, 1.0f), ICON_FA_CIRCLE_XMARK "  Compile Error");
+        ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
+        ImGui::TextWrapped("%s", m_ShaderPreviewError.c_str());
+        ImGui::PopTextWrapPos();
+    }
+    ImGui::Spacing();
+
+    if (ImGui::Button(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open Externally")) Screenshot::OpenFile(key);
+    ImGui::Spacing();
+
+    ImGui::SeparatorText("Source");
+    ImGui::PushFont(GetMonoFont(), 0.0f);
+    ImGui::InputTextMultiline("##shaderSrc", m_ShaderPreviewSource.data(), m_ShaderPreviewSource.size() + 1,
+        ImVec2(-FLT_MIN, 320.0f * m_UIScale), ImGuiInputTextFlags_ReadOnly);
+    ImGui::PopFont();
+}
+
 // Unity-AssetImporter-style Import Settings panel, shown in the Inspector when an asset (not a
 // scene entity) is selected in the Asset Browser. Only textures and models have any settings to
 // show — sounds/prefabs/scenes just get a name/path readout, matching Unity (not every asset
@@ -574,6 +626,11 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
     ImGui::SeparatorText(assets.DisplayName(key).c_str());
     ImGui::TextDisabled("%s", key.c_str());
     ImGui::Spacing();
+
+    if (ext == ".shader") {
+        DrawShaderPreviewInspector(assets, key);
+        return;
+    }
 
     if (!isTexture && !isModel) {
         ImGui::TextWrapped("This asset type has no import settings.");
