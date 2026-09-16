@@ -1653,3 +1653,15 @@ void EditorLayer::SetAssetIconSize(float px, bool commit) {
     m_AssetIconSize = std::clamp(px, kListViewIconSize * m_UIScale, 128.0f * m_UIScale);
     if (commit) { EditorSettings::Get().AssetBrowserIconSize = m_AssetIconSize; EditorSettings::Save(); }
 }
+
+void EditorLayer::ToggleAssetViewMode() {
+    const bool gridMode = m_AssetIconSize > kListViewIconSize * m_UIScale;
+    if (gridMode) {
+        m_AssetGridIconSizeMemory = m_AssetIconSize;
+        SetAssetIconSize(kListViewIconSize * m_UIScale, /*commit=*/true);
+    } else {
+        const float restore = m_AssetGridIconSizeMemory > kListViewIconSize * m_UIScale
+            ? m_AssetGridIconSizeMemory : 64.0f * m_UIScale;
+        SetAssetIconSize(restore, /*commit=*/true);
+    }
+}

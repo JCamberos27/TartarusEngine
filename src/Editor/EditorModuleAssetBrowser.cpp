@@ -293,13 +293,23 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
     ImGui::AlignTextToFramePadding();
     ImGui::TextDisabled("%s", summary);
 
+    // Phase 5 item 3 (remainder): an explicit Grid/List toggle beside the slider — the slider
+    // alone (drag-to-minimum) was the only way to reach list view, which isn't discoverable.
+    // Icon reflects the mode you'd SWITCH TO, matching the rest of the toolbar's toggle buttons.
+    const float toggleWidth = ImGui::GetFrameHeight();
+    const float sliderWidth = 132.0f;
+    const float toggleX = ImGui::GetWindowContentRegionMax().x - sliderWidth - toggleWidth - ImGui::GetStyle().ItemSpacing.x;
+    if (toggleX > ImGui::GetCursorPosX()) ImGui::SameLine(toggleX);
+    else ImGui::NewLine();
+    if (ActionButton(host, gridMode ? ICON_FA_LIST : ICON_FA_TABLE_CELLS_LARGE, gridMode ? "List view" : "Grid view")
+        && host.ToggleAssetViewMode)
+        host.ToggleAssetViewMode();
+
     // A normal-looking slider: a visible rounded track (the footer sits straight on the panel
     // background, where the theme's default FrameBg is near-invisible) and the px value shown,
     // matching the sliders in Preferences.
-    const float sliderWidth = 132.0f;
     const float sliderX = ImGui::GetWindowContentRegionMax().x - sliderWidth;
-    if (sliderX > ImGui::GetCursorPosX()) ImGui::SameLine(sliderX);
-    else ImGui::NewLine();
+    ImGui::SameLine(sliderX);
     ImGui::SetNextItemWidth(sliderWidth);
     float sliderVal = iconSize;
     ImGui::PushStyleColor(ImGuiCol_FrameBg,        ImGui::GetColorU32(ImGuiCol_Border));

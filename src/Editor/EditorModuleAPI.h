@@ -84,7 +84,11 @@
 //        new Back/Forward buttons can walk the host's folder-navigation trail. Navigating TO a
 //        folder (breadcrumb segments, Up) still goes through the existing SetCurrentAssetFolder —
 //        no new pointer needed there, since the host now records history inside it.
-constexpr std::uint32_t kEditorModuleAPIVersion = 23;
+//   24 - Phase 5 item 3 (remainder): ToggleAssetViewMode, an explicit Grid/List toggle button next
+//        to the icon-size slider. Grid vs. list mode is still derived from icon size (via
+//        GetAssetGridMetrics, unchanged) — this just flips it, and the host remembers the last
+//        grid zoom level so toggling back to Grid doesn't reset it to the default.
+constexpr std::uint32_t kEditorModuleAPIVersion = 24;
 
 // ImGui's own allocator signatures, spelled out here so this header stays free of <imgui.h>
 // (the host and the module each compile their own ImGui translation units; only the context and
@@ -475,6 +479,13 @@ struct EditorModuleHostAPI {
     void (*AssetFolderHistoryForward)() = nullptr;
     bool (*CanAssetFolderHistoryBack)() = nullptr;
     bool (*CanAssetFolderHistoryForward)() = nullptr;
+
+    // --- Asset Browser view-mode toggle, Phase 5 item 3 remainder (API v24) ------------
+    // Flips grid <-> list by driving the existing icon-size mechanism (Get/SetAssetIconSize,
+    // GetAssetGridMetrics) - there is no separate "mode" enum. The host remembers the icon size
+    // it was at before collapsing to list, so toggling back to Grid restores that zoom instead of
+    // resetting to the default.
+    void (*ToggleAssetViewMode)() = nullptr;
 };
 
 struct EditorModuleAPI {

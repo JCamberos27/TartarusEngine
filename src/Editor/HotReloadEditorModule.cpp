@@ -461,6 +461,9 @@ void AbFolderHistoryForward()       { if (g_Editor) g_Editor->AssetFolderHistory
 bool AbCanFolderHistoryBack()       { return g_Editor && g_Editor->CanAssetFolderHistoryBack(); }
 bool AbCanFolderHistoryForward()    { return g_Editor && g_Editor->CanAssetFolderHistoryForward(); }
 
+// --- Asset Browser view-mode toggle (API v24, Phase 5 item 3 remainder) ------------------
+void AbToggleAssetViewMode()        { if (g_Editor) g_Editor->ToggleAssetViewMode(); }
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
@@ -593,6 +596,8 @@ const EditorModuleHostAPI kHostAPI{
     &AbFolderHistoryForward,
     &AbCanFolderHistoryBack,
     &AbCanFolderHistoryForward,
+    // --- Asset Browser view-mode toggle (API v24) — order must match EditorModuleHostAPI exactly ---
+    &AbToggleAssetViewMode,
 };
 
 } // namespace

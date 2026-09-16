@@ -263,6 +263,7 @@ public:
     void  GetAssetSelectionSummary(AssetLibrary& assets, char* out, int n) const;
     float GetAssetIconSize() const { return m_AssetIconSize; }
     void  SetAssetIconSize(float px, bool commit);                              // clamps; persists on commit
+    void  ToggleAssetViewMode();                                                // Grid <-> List (Phase 5 item 3 remainder)
     void  AssetGridFrameEnd(World& world, AssetLibrary& assets) { DrawDeleteConfirmPopup(world, assets); }
 
     // --- Reloadable Scene Hierarchy module bridge (issue #229, thin slice) ------------------
@@ -1235,6 +1236,10 @@ private:
     // matching Unity's "slide to the extreme left for list view" behavior.
     float m_AssetIconSize = 64.0f;
     static constexpr float kListViewIconSize = 24.0f;
+    // Phase 5 item 3 (remainder): remembers the icon size we were at before an explicit
+    // Grid/List toggle collapsed it to kListViewIconSize, so toggling back to Grid restores that
+    // zoom instead of resetting to the 64px default. Only written when leaving grid mode.
+    float m_AssetGridIconSizeMemory = 64.0f;
 
     // Import Settings panel state (see DrawAssetImportInspector): a local, edited-but-not-yet-
     // applied copy of whichever texture/model's settings are currently shown, plus which asset
