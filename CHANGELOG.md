@@ -7,6 +7,15 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### [Phase 5] Asset Browser and Hierarchy (#7) — 2026-09-16
+
+Closed. Items 3-11 landed in earlier sessions. No code change this session — item 2 (a freshly
+captured screenshot appearing at the Assets root instead of the Screenshots folder, #19) was
+live-verified across 3 capture/navigation scenarios and could not be reproduced against the
+current build; likely fixed incidentally by later Phase 5 work. Item 1 (re-root the Asset Browser
+on the real project directory) is deliberately not part of this close — a data migration, batched
+into Phase M (#9) per this issue's own scope note.
+
 ### [Phase 2] Information architecture & keyboard navigation (#4) — 2026-09-16
 
 Closed. Items 1-6 and 8 landed in earlier sessions (#68, #69, #41). The last item:
