@@ -2371,6 +2371,21 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             else if (m_AssetBrowserFocused)                        sctx |= Shortcuts::Ctx_Project;
             else if (navIs("Inspector"))                           sctx |= Shortcuts::Ctx_Inspector;
             else if (!ImGui::IsMouseDown(ImGuiMouseButton_Right))  sctx |= Shortcuts::Ctx_Viewport;
+            // Defect #22 — the above is focus-based (Scene had to actually be clicked first,
+            // NavWindow == Scene), which contradicts the Inspector empty-state's own tip ("press
+            // Shift+A in the viewport") and every other viewport tool shortcut's implied Blender/
+            // Unity contract: hovering the viewport should be enough. Grant Ctx_Viewport
+            // additively whenever the mouse is actually over the viewport image, regardless of
+            // which panel last held keyboard focus — this only ever adds the bit (Hierarchy's
+            // type-ahead and Inspector's own bindings above are untouched when the mouse isn't
+            // over the viewport), so it can't steal a shortcut from a panel the mouse is actually
+            // sitting over.
+            const bool overViewport = m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f &&
+                ImGui::GetIO().MousePos.x >= m_ViewportPos.x &&
+                ImGui::GetIO().MousePos.x <  m_ViewportPos.x + m_ViewportSize.x &&
+                ImGui::GetIO().MousePos.y >= m_ViewportPos.y &&
+                ImGui::GetIO().MousePos.y <  m_ViewportPos.y + m_ViewportSize.y;
+            if (overViewport && !ImGui::IsMouseDown(ImGuiMouseButton_Right)) sctx |= Shortcuts::Ctx_Viewport;
         }
         Shortcuts::BeginFrame(sctx);
     }
