@@ -1281,6 +1281,11 @@ void EditorLayer::SetHierarchyExpandedRecursive(World& world, entt::entity entit
 void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, entt::entity entity) {
     bool hasEntity = entity != entt::null && world.Registry.valid(entity);
 
+    // Phase 5 item 7 (#7) — the flat 19-item menu grouped into labelled sections, so scanning it
+    // doesn't mean reading every line; "Frame Selected" (previously missing here even though the
+    // Scene viewport already has it) and a clearer name for the object-moving "Move To View" item
+    // (see below) land in this pass too.
+    ImGui::SeparatorText(ICON_FA_CUBES "  Create");
     if (ImGui::BeginMenu(ICON_FA_PLUS "  Create")) {
         // Same body as the toolbar Create menu and the Shift+A quick-add, so every "add an
         // object" entry point offers the same list. New objects spawn in front of the editor
@@ -1292,12 +1297,16 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
         CreateEmptyChild(world, entity);
     }
 
-    ImGui::Separator();
+    ImGui::SeparatorText(ICON_FA_OBJECT_UNGROUP "  Select");
     const bool anyEntities = world.Registry.view<const NameComponent>().begin() != world.Registry.view<const NameComponent>().end();
     if (ImGui::MenuItem(ICON_FA_OBJECT_UNGROUP "  Select All", "Ctrl+A", false, anyEntities)) SelectAllEntities(world);
     if (ImGui::MenuItem(ICON_FA_BAN "  Deselect All", "Ctrl+Shift+A", false, HasAnySelection())) ClearSelection();
     if (ImGui::MenuItem(ICON_FA_RIGHT_LEFT "  Invert Selection", "Ctrl+I", false, anyEntities)) InvertSelection(world);
-    ImGui::Separator();
+    if (ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS_PLUS "  Frame Selected", "F", false, HasAnySelection()) && m_EditorCameraPtr) {
+        FocusOnSelection(world, *m_EditorCameraPtr);
+    }
+
+    ImGui::SeparatorText(ICON_FA_SITEMAP "  Arrange");
     if (ImGui::MenuItem(ICON_FA_OBJECT_GROUP "  Group into Empty Parent", nullptr, false, HasAnySelection())) {
         CreateEmptyParentForSelection(world);
     }
@@ -1324,11 +1333,15 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
         SetHierarchySiblingExtreme(world, entity, /*first=*/true);
     if (ImGui::MenuItem(ICON_FA_ANGLES_DOWN "  Set as Last Sibling", nullptr, false, hasEntity))
         SetHierarchySiblingExtreme(world, entity, /*first=*/false);
-    ImGui::Separator();
 
+    ImGui::SeparatorText(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT "  Transform");
     if (ImGui::MenuItem(ICON_FA_EYE "  Toggle Active State", "Alt+Shift+A", false, HasAnySelection()))
         ToggleSelectionActive(world);
-    if (ImGui::MenuItem(ICON_FA_LOCATION_CROSSHAIRS "  Move To View", nullptr, false, HasAnySelection()))
+    // Renamed from "Move To View" (Phase 5 item 7) — that name read like a camera action (framing
+    // the view on the selection, what "Frame Selected" above actually does) when it's the
+    // opposite: it MOVES the selected object's transform to sit in front of the camera. "Move to
+    // Camera" says what it actually does to the object.
+    if (ImGui::MenuItem(ICON_FA_LOCATION_CROSSHAIRS "  Move to Camera", nullptr, false, HasAnySelection()))
         MoveSelectionToView(world);
     if (ImGui::IsItemHovered() && HasAnySelection())
         EditorUI::SetTooltip("Move the selection to just in front of the editor camera.");
@@ -1343,8 +1356,15 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
             world.Registry.get<CameraComponent>(entity).FovDegrees = m_EditorCameraPtr->Fov;
         }
     }
-    ImGui::Separator();
+    const bool isLight = hasEntity && world.Registry.all_of<LightComponent>(entity);
+    if (isLight) {
+        if (ImGui::MenuItem(ICON_FA_DOWN_LONG "  Drop Light to Surface")) {
+            if (!DropLightToSurface(world, entity))
+                Log::Info("Drop to surface: nothing directly below this light.");
+        }
+    }
 
+    ImGui::SeparatorText(ICON_FA_COPY "  Edit");
     if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C", false, hasEntity)) CopySelection(world);
     if (ImGui::MenuItem(ICON_FA_SCISSORS "  Cut", "Ctrl+X", false, hasEntity)) {
         CopySelection(world);
@@ -1359,25 +1379,15 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     if (ImGui::MenuItem(ICON_FA_TABLE_CELLS "  Duplicate Array\xE2\x80\xA6", nullptr, false, hasEntity)) {
         m_ShowArrayDuplicate = true;
     }
-
-    const bool isLight = hasEntity && world.Registry.all_of<LightComponent>(entity);
-    if (isLight) {
-        ImGui::Separator();
-        if (ImGui::MenuItem(ICON_FA_DOWN_LONG "  Drop Light to Surface")) {
-            if (!DropLightToSurface(world, entity))
-                Log::Info("Drop to surface: nothing directly below this light.");
-        }
-    }
-    ImGui::Separator();
-
     if (ImGui::MenuItem(ICON_FA_PEN "  Rename", "F2", false, hasEntity)) BeginRenameEntity(entity);
+
+    ImGui::SeparatorText(ICON_FA_BOX_ARCHIVE "  Prefab");
     if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Save as Prefab...", nullptr, false, hasEntity)) {
         std::string path = FileDialog::SaveFile("Prefab Files\0*.prefab\0All Files\0*.*\0", "prefab", m_Window);
         if (!path.empty() && SceneSerializer::SavePrefab(world, entity, path)) {
             assets.RegisterPrefab(path);
         }
     }
-
     // #236 A2 — prefab-instance actions, only on an instance root.
     if (hasEntity && world.Registry.all_of<PrefabInstanceComponent>(entity)) {
         const auto& pi = world.Registry.get<PrefabInstanceComponent>(entity);
@@ -1389,9 +1399,13 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
             EditorUI::SetTooltip("Break the link to %s.\nThe objects stay; they just stop tracking the prefab.",
                                  pi.SourcePath.c_str());
     }
-    ImGui::Separator();
 
+    ImGui::Separator();
+    // Danger-tinted, matching DangerIconButton's palette (EditorUIPrimitives::DangerColor) —
+    // Delete is the one destructive, unrecoverable-without-undo action in this menu.
+    ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
     if (ImGui::MenuItem(ICON_FA_TRASH "  Delete", "Del", false, hasEntity)) DeleteSelection(world);
+    ImGui::PopStyleColor();
 }
 
 void EditorLayer::BeginRenameEntity(entt::entity entity) {
