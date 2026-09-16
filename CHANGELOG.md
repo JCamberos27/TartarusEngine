@@ -118,6 +118,13 @@ In progress. Landed so far:
   (not bindable)" note (type-ahead jump, drag-to-reparent, `t:`/`l:` search prefixes). Live-
   verified: Ctrl+Shift+C opened/closed Console, Alt+G toggled the grid icon, Ctrl+Shift+P opened
   Project Settings, Alt+D/Alt+Shift+D cycled the draw-mode chip (`6e943af`, closes item 11).
+- Statistics panel rebuild: replaces the "unaligned text dump" with a 120-frame raw frame-time
+  sparkline (new host ring buffer, API v30 `GetFrameTimeHistory`), every numeric readout in a
+  real right-aligned/thousands-separated table column instead of hand-padded space-strings, and
+  CPU/GPU profiler sections as `CollapsingHeader`s with a proportional bar per row (scaled to that
+  list's own slowest sample). Live-verified: sparkline shows an "N ms peak" overlay, draw calls/
+  tris/verts/entity counts line up with commas (35,318 / 19,338), collapsing Profiler (CPU) leaves
+  GPU open (`8993528`, closes item 5).
 
 ### [Phase 4] Inspector rebuild (#6) — 2026-09-15
 
