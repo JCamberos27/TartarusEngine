@@ -28,6 +28,13 @@ struct MaterialAsset {
     std::string Path;  // absolute path to the .mat file on disk
     std::string Name;  // display name, defaults to the filename stem
 
+    // #6 Defect #50 — set when Load() was given a non-empty path that couldn't be opened or
+    // parsed (deleted/corrupt .mat file), mirroring PrefabInstanceComponent::Missing. Path and
+    // Name are still populated so the caller (a mesh's material slot) can show which reference is
+    // broken instead of silently rendering as if no override were ever set. Every other field
+    // stays at its default-constructed value — never meaningful to read when Missing is true.
+    bool Missing = false;
+
     // Optional shader asset link. When set, the inspector and BindMaterial use the data-driven
     // property path from ShaderAsset::Properties() instead of the hardcoded PBR field layout.
     std::string ShaderPath;

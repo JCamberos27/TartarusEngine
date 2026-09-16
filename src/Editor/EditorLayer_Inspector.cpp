@@ -3058,6 +3058,10 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
 
             bool isFileBacked = slot && !slot->Path.empty();
             bool isEmbedded   = slot && slot->Path.empty();
+            // #6 Defect #50 — MaterialAsset::Load() now returns a Missing placeholder (Path/Name
+            // still set) instead of nullptr for a deleted/corrupt .mat, so a real override isn't
+            // silently indistinguishable from "no override was ever set" (see MaterialAsset.h).
+            bool missing = slot && slot->Missing;
 
             // Label
             char slotLabel[16]; snprintf(slotLabel, sizeof(slotLabel), "Slot %d", i);
@@ -3067,7 +3071,8 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
 
             // Button label
             std::string btnLabel = isFileBacked
-                ? (slot->Name.empty() ? std::filesystem::path(slot->Path).stem().string() : slot->Name)
+                ? (missing ? ICON_FA_TRIANGLE_EXCLAMATION "  " : std::string())
+                    + (slot->Name.empty() ? std::filesystem::path(slot->Path).stem().string() : slot->Name)
                 : isEmbedded ? "Embedded" : "(imported)";
 
             const float iconW  = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x;
@@ -3077,13 +3082,19 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             const float clearW = (isFileBacked || isEmbedded) ? iconW : 0.0f;
             const float btnW   = -(saveW + clearW + FLT_MIN);
 
+            if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
             if (ImGui::Button(btnLabel.c_str(), ImVec2(btnW, 0))) {
                 std::string path = FileDialog::OpenFile(
                     "Material\0*.mat\0All Files\0*.*\0", m_Window);
                 if (!path.empty()) AssignSlot(i, path);
             }
-            if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("Click to pick a .mat file, or drag one from the Asset Browser.");
+            if (missing) ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) {
+                if (missing)
+                    EditorUI::SetTooltip("Missing: %s\nThe referenced material file no longer exists at this path.\nClick to pick a replacement, or drag one from the Asset Browser.", slot->Path.c_str());
+                else
+                    EditorUI::SetTooltip("Click to pick a .mat file, or drag one from the Asset Browser.");
+            }
 
             // Drag-drop target on the button
             if (ImGui::BeginDragDropTarget()) {
@@ -3166,14 +3177,21 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             if (i == 0) firstPath = p;
             else if (p != firstPath) mixedSlots = true;
         }
+        // #6 Defect #50 — only meaningful when every selected object agrees on the same
+        // file-backed slot (mixedSlots false, firstPath non-empty); see the single-select branch
+        // above for why Missing exists on MaterialAsset at all.
+        const bool missing = !mixedSlots && !firstPath.empty()
+            && !rcs[0]->Materials.empty() && rcs[0]->Materials[0] && rcs[0]->Materials[0]->Missing;
         std::string btnLabel = mixedSlots ? "\xE2\x80\x94  (mixed)"
             : firstPath.empty() ? (nCustom > 0 ? "Embedded" : "(imported)")
-            : std::filesystem::path(firstPath).stem().string();
+            : (missing ? ICON_FA_TRIANGLE_EXCLAMATION "  " : std::string())
+                + std::filesystem::path(firstPath).stem().string();
 
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted("Slot 0");
         ImGui::SameLine();
         const float clearW = nCustom > 0 ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+        if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
         if (ImGui::Button(btnLabel.c_str(), ImVec2(-clearW - FLT_MIN, 0))) {
             std::string path = FileDialog::OpenFile("Material\0*.mat\0All Files\0*.*\0", m_Window);
             if (!path.empty()) {
@@ -3186,6 +3204,9 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 return; // slots assigned; PBR editor not relevant
             }
         }
+        if (missing) ImGui::PopStyleColor();
+        if (missing && ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Missing: %s\nThe referenced material file no longer exists at this path.\nClick to pick a replacement, or drag one from the Asset Browser.", firstPath.c_str());
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MATERIAL_PATH")) {
                 std::string path((const char*)p->Data);

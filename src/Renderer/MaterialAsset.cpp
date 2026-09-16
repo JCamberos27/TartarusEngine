@@ -25,14 +25,27 @@ glm::vec3 JsonToVec3(const json& j, const glm::vec3& def = {}) {
 } // namespace
 
 
+namespace {
+// #6 Defect #50 — a non-empty path that couldn't be loaded becomes a "missing" placeholder
+// (still carrying Path/Name) rather than nullptr, which was indistinguishable from "no override
+// was ever set" once stored in a mesh's material slot (RenderableComponent::Materials).
+std::shared_ptr<MaterialAsset> MissingPlaceholder(const std::string& path) {
+    auto ma = std::make_shared<MaterialAsset>();
+    ma->Path = path;
+    ma->Name = std::filesystem::path(path).stem().string();
+    ma->Missing = true;
+    return ma;
+}
+} // namespace
+
 std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, AssetLibrary* lib) {
     std::ifstream f(path);
-    if (!f.is_open()) return nullptr;
+    if (!f.is_open()) return MissingPlaceholder(path);
 
     json j;
     try { j = json::parse(f); } catch (...) {
         Log::Error("MaterialAsset: JSON parse error in '" + path + "'");
-        return nullptr;
+        return MissingPlaceholder(path);
     }
 
     auto ma = std::make_shared<MaterialAsset>();
