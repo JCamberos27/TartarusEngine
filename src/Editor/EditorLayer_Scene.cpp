@@ -661,6 +661,46 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
 // it should be filed under, '/'-joined the same way m_CurrentAssetFolder is. Factored out of
 // HandleDroppedFiles so a dropped folder's contents can each land in their own mirrored
 // subfolder instead of everything collapsing into whichever folder happened to be open.
+std::string EditorLayer::CopyAssetIntoProject(const std::string& sourcePath, const std::string& subfolder) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::path abs = fs::absolute(sourcePath, ec);
+    if (ec) return sourcePath;
+
+    // Already under the project root (re-importing something the library already owns, or
+    // dragging a file from inside project/ itself) — reference it in place. Re-organizing an
+    // existing asset must never silently duplicate its file.
+    const std::string root = fs::path(ProjectPaths::Root()).lexically_normal().generic_string();
+    const std::string absStr = abs.lexically_normal().generic_string();
+    if (absStr == root || absStr.rfind(root + "/", 0) == 0) return sourcePath;
+
+    const std::string destDir = ProjectPaths::Resolve("assets/" + subfolder);
+    fs::create_directories(destDir, ec);
+    if (ec) {
+        Log::Error("Couldn't create '" + destDir + "' (" + ec.message() + ") - importing '" +
+                   sourcePath + "' from its original location instead.");
+        return sourcePath;
+    }
+
+    // Name collision — append " (2)", " (3)"... rather than overwrite a different file that
+    // happens to share a name, matching the naming convention CreateFolder/Duplicate already use
+    // elsewhere in the Asset Browser.
+    const std::string stem = abs.stem().string();
+    const std::string ext = abs.extension().string();
+    fs::path dest = fs::path(destDir) / abs.filename();
+    for (int n = 2; fs::exists(dest, ec); ++n) {
+        dest = fs::path(destDir) / (stem + " (" + std::to_string(n) + ")" + ext);
+    }
+
+    fs::copy_file(abs, dest, ec);
+    if (ec) {
+        Log::Error("Couldn't copy '" + sourcePath + "' into the project (" + ec.message() +
+                   ") - importing from its original location instead.");
+        return sourcePath;
+    }
+    return dest.generic_string();
+}
+
 void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& editorCamera,
     const std::string& path, const std::string& targetFolder) {
     (void)editorCamera; // kept for signature symmetry with HandleDroppedFiles; not needed here
@@ -671,26 +711,31 @@ void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& 
     Log::Info("Importing '" + path + "'...");
 
     if (ext == ".fbx" || ext == ".obj" || ext == ".gltf" || ext == ".glb") {
+        // Phase 5 item 11 — copied into project/assets/models/ first (unless already inside the
+        // project), rather than left referencing wherever the source file happened to sit.
+        std::string projectPath = CopyAssetIntoProject(path, "models");
         // Imports into the library only - it shows up in the Asset Browser, nothing more.
         // Deliberately NOT placed into the scene: that used to happen automatically here, but
         // it meant every dropped/imported model needed an undo (or a manual delete) if you only
         // wanted it available to drag in later. Explicit placement is now always the Asset
         // Browser -> Viewport drag (DrawViewportDropTarget's live ghost preview).
-        assets.LoadModel(path);
-        assets.SetAssetFolder(path, targetFolder);
+        assets.LoadModel(projectPath);
+        assets.SetAssetFolder(projectPath, targetFolder);
         Log::Info("Imported model '" + name + "'.");
     } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") {
-        auto tex = assets.LoadTexture(path);
+        std::string projectPath = CopyAssetIntoProject(path, "textures");
+        auto tex = assets.LoadTexture(projectPath);
         if (tex) {
-            assets.SetAssetFolder(path, targetFolder);
+            assets.SetAssetFolder(projectPath, targetFolder);
             Log::Info("Imported texture '" + name + "'.");
         } else {
             Log::Error("Failed to load texture '" + path + "'.");
         }
     } else if (ext == ".wav" || ext == ".mp3" || ext == ".ogg" || ext == ".flac") {
-        if (AudioEngine::Load(path)) {
-            assets.RegisterSound(path);
-            assets.SetAssetFolder(path, targetFolder);
+        std::string projectPath = CopyAssetIntoProject(path, "audio");
+        if (AudioEngine::Load(projectPath)) {
+            assets.RegisterSound(projectPath);
+            assets.SetAssetFolder(projectPath, targetFolder);
             Log::Info("Imported sound '" + name + "'.");
         } else {
             Log::Error("Failed to load sound '" + path + "'.");
