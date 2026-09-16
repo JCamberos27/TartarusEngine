@@ -694,12 +694,13 @@ private:
     // The Hierarchy's flattened top-to-bottom order of currently-visible rows (respects group
     // headers, expand/collapse state, and the search filter). Ctrl+A selects all of it;
     // Shift+Click selects the contiguous run between the anchor and the clicked row along it.
-    // Two buffers: rows accumulate into ...Build as DrawHierarchyNode draws them, then it is
-    // published to ...Order at the end of the pass. A click handler fires PART-WAY through the
-    // draw (only rows above the clicked one exist in ...Build yet), so it must read the
-    // fully-populated ...Order from the previous frame instead — otherwise an upward range
-    // (anchor below the clicked row) would see the anchor missing and fall back to a single
-    // pick.
+    // Two buffers: ...Build is filled in one pass by FlattenHierarchyRows before any row is drawn
+    // (Defect #45 — this is also the source list ImGuiListClipper draws from), then published to
+    // ...Order once the draw loop finishes. Click handlers still read ...Order rather than
+    // ...Build: a click fires mid-draw-loop, and although ...Build is already complete by then
+    // (unlike before this pass split), ...Order is what every other frame's stale-anchor lookups
+    // expect, so range-select keeps reading the previous frame's list rather than this frame's
+    // half-drawn one for consistency.
     std::vector<entt::entity> m_HierarchyVisibleOrder;
     std::vector<entt::entity> m_HierarchyVisibleBuild;
     // Range-select anchor: the last row picked with a plain or Ctrl+Click. Shift+Click extends
@@ -1489,11 +1490,22 @@ private:
     // Right-click context menu shared by the Hierarchy's rows and its empty space; `entity` is
     // entt::null for the empty-space case (only the create/paste items apply then).
     void DrawHierarchyContextMenu(World& world, AssetLibrary& assets, entt::entity entity);
-    // One Hierarchy row plus its children — recursive, so parenting shows as real nesting.
-    void DrawHierarchyNode(World& world, AssetLibrary& assets, entt::entity entity, bool isLevelGeometry);
+    // Defect #45 — one row, flattened out of the tree structure (Depth replaces the old nested
+    // Indent()/recursion) so ImGuiListClipper can skip drawing rows scrolled off-screen. Populated
+    // by FlattenHierarchyRows before the clipped draw loop runs.
+    struct HierarchyFlatRow { entt::entity Entity; int Depth; };
+    // Depth-first walk of the currently-expanded, currently-filtered tree — no drawing, just the
+    // row list. Reads each node's open/closed flag via the same PushID(entity)/"##node" nesting
+    // DrawHierarchyRowBody uses when it actually draws that row, so both sides agree on IDs.
+    void FlattenHierarchyRows(World& world, entt::entity entity, int depth, std::vector<HierarchyFlatRow>& out);
+    // One Hierarchy row's body — selection, rename, drag/drop, context menu. No recursion; the
+    // caller (DrawHierarchyTreeBody) has already expanded this row's place in the flat list and
+    // pushed its full ancestor-to-self ID chain, matching what the old recursive DrawHierarchyNode
+    // left on the ID stack at the equivalent point.
+    void DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt::entity entity, bool isFirstRow);
     // Alt-clicking a parent's foldout arrow expands/collapses every descendant, not just its
     // immediate children (Unity's Hierarchy gesture) — ImGui tracks each TreeNodeEx's open state
-    // itself, keyed by ID, so this walks the same PushID(entity)/"##node" nesting DrawHierarchyNode
+    // itself, keyed by ID, so this walks the same PushID(entity)/"##node" nesting DrawHierarchyRowBody
     // uses and pokes that stored state directly rather than keeping a second, parallel expanded-set
     // the way the Asset Browser's folder tree does. Must be called from inside the same ID stack
     // position the target entity's own row would be drawn at (i.e. from within its parent's
