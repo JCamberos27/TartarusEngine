@@ -468,19 +468,9 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             if (ImGui::MenuItem(ICON_FA_ARROW_RIGHT "  Selection Forward", "Ctrl+]", false, CanSelectionHistoryForward()))
                 SelectionHistoryForward(world);
 
-            ImGui::SeparatorText("Draw mode");
-            {
-                static const char* kDrawModes[] = { "Shaded", "Wireframe", "Unlit",
-                                                    "Normals", "Shadow Cascades", "Mip / Texel Density" };
-                for (int i = 0; i < IM_ARRAYSIZE(kDrawModes); ++i) {
-                    if (ImGui::MenuItem(kDrawModes[i], nullptr, (int)m_ShadingMode == i))
-                        m_ShadingMode = (ShadingMode)i;
-                }
-                if (ImGui::IsItemHovered())
-                    EditorUI::SetTooltip("Mip: albedo texture LOD as a blue\xE2\x86\x92red ramp (needs a textured object).");
-            }
-
-            // Grid lives only on the toolbar now (#148) — the menu keeps just the toggles that
+            // #4 item 7 — Draw mode moved out: Phase 3's DrawViewStateChips gave it a viewport
+            // chip (top-right, click to change), so this menu copy was a live duplicate once
+            // Phase 3 landed. Grid lives only on the toolbar now (#148) — the menu keeps just the toggles that
             // have no toolbar home.
             ImGui::SeparatorText("Options");
             ImGui::MenuItem(EDITOR_ICON_TOGGLE_GIZMOS "  Transform Gizmo", nullptr, &m_ShowGizmos);
@@ -508,51 +498,9 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
                 ToggleOrthographic(world, editorCamera);
             }
 
-            ImGui::SeparatorText("Camera");
-            {
-                auto& cs = EditorSettings::Get();
-                ImGui::PushItemWidth(190.0f * m_UIScale);
-                // EditorUI::SliderFloat's out-param is needed for the "commit -> Save()" checks
-                // below: a bare IsItemDeactivatedAfterEdit() after the call only ever sees the
-                // widget's trailing number box (the last ImGui item it submits), so releasing a
-                // drag on the track itself would never persist the change.
-                {
-                    bool committed = false;
-                    if (EditorUI::SliderFloat("FOV", &cs.SceneCameraFov, 30.0f, 110.0f, "%.0f\xC2\xB0",
-                                              0, nullptr, &committed)) {
-                        editorCamera.Fov = cs.SceneCameraFov;
-                    }
-                    if (committed) EditorSettings::Save();
-                }
-                {
-                    bool committed = false;
-                    EditorUI::SliderFloat("Fly speed", &cs.SceneCameraFlySpeed, 0.5f, 60.0f, "%.1f",
-                                          0, nullptr, &committed);
-                    if (committed) EditorSettings::Save();
-                }
-                if (ImGui::IsItemHovered())
-                    EditorUI::SetTooltip("Editor fly-camera speed (Shift = ×3). Also: scroll while holding right-drag.");
-
-                {
-                    bool committed = false;
-                    if (EditorUI::SliderFloat("Near", &cs.SceneCameraNear, 0.001f, 10.0f, "%.3f",
-                                              ImGuiSliderFlags_Logarithmic, nullptr, &committed)) {
-                        cs.SceneCameraNear = std::min(cs.SceneCameraNear, cs.SceneCameraFar - 0.01f);
-                        editorCamera.NearPlane = cs.SceneCameraNear;
-                    }
-                    if (committed) EditorSettings::Save();
-                }
-                {
-                    bool committed = false;
-                    if (EditorUI::SliderFloat("Far", &cs.SceneCameraFar, 1.0f, 10000.0f, "%.0f",
-                                              ImGuiSliderFlags_Logarithmic, nullptr, &committed)) {
-                        cs.SceneCameraFar = std::max(cs.SceneCameraFar, cs.SceneCameraNear + 0.01f);
-                        editorCamera.FarPlane = cs.SceneCameraFar;
-                    }
-                    if (committed) EditorSettings::Save();
-                }
-                ImGui::PopItemWidth();
-            }
+            // #4 item 7 — Camera sliders (FOV/Fly speed/Near/Far) moved to Preferences > Viewport
+            // > Camera, the only home they didn't already have; the persisted fields are unchanged
+            // (EditorSettings::SceneCameraFov etc.), so existing editor_prefs.json values carry over.
 
             ImGui::SeparatorText("Snap to view");
             if (ImGui::MenuItem("  Iso", "0")) {
