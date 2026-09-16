@@ -1938,6 +1938,14 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             // share it. A primitive/box has no real Asset Browser location to jump to, same as an
             // empty/mixed AssetRef combo disables its own ping button.
             const bool isPrimitive = isLevelGeometry || modelPath.rfind(kPrimitivePrefix, 0) == 0;
+            // #6 Defect #50 — Model::ImportFromFile leaves m_Meshes empty (and logs an error) when
+            // the file is gone or fails to parse, but AssetLibrary::LoadModel still hands back a
+            // real, non-null Model either way — there's no "load failed" flag to check, just zero
+            // meshes on what should be a real asset. A primitive is legitimately meshless before
+            // CreatePrimitive builds its geometry only in the sense that it never IS meshless once
+            // constructed, so this can't misfire on one.
+            const bool missingMesh = !isPrimitive && renderable->ModelRef->MeshCount() == 0;
+            if (missingMesh) meshName = ICON_FA_TRIANGLE_EXCLAMATION "  " + meshName;
 
             if (isLevelGeometry) {
                 PropertyLabel("Color", "Solid tint for this box's surface. Click the swatch\nfor the full color picker, or type a hex value.");
@@ -1970,16 +1978,23 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             PropertyLabel("Mesh");
             const float meshPingW = ImGui::GetFrameHeight();
             const float meshButtonW = ImGui::GetContentRegionAvail().x - (meshPingW + ImGui::GetStyle().ItemInnerSpacing.x);
+            if (missingMesh) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
             if (ImGui::Button(meshName.c_str(), ImVec2(meshButtonW, 0.0f))) {
                 ImGui::OpenPopup("##ChangeMesh");
             }
+            if (missingMesh) ImGui::PopStyleColor();
             if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen("##ChangeMesh")) {
-                // Procedural-primitive path is an internal cache key ("primitive://sphere#90"),
-                // not something meaningful to show the user — the friendly kind (already the
-                // button's own label) is all there is to say about it.
-                EditorUI::SetTooltip("%s\n%u tris, %u verts\n\nClick to pick a primitive, or drag a Model here from the Asset Browser.",
-                    isPrimitive ? meshName.c_str() : modelPath.c_str(),
-                    renderable->ModelRef->TriangleCount(), renderable->ModelRef->VertexCount());
+                if (missingMesh) {
+                    EditorUI::SetTooltip("Missing: %s\nThe referenced model file no longer exists at this path (or failed to import).\nClick to pick a primitive, or drag a Model here from the Asset Browser.",
+                        modelPath.c_str());
+                } else {
+                    // Procedural-primitive path is an internal cache key ("primitive://sphere#90"),
+                    // not something meaningful to show the user — the friendly kind (already the
+                    // button's own label) is all there is to say about it.
+                    EditorUI::SetTooltip("%s\n%u tris, %u verts\n\nClick to pick a primitive, or drag a Model here from the Asset Browser.",
+                        isPrimitive ? meshName.c_str() : modelPath.c_str(),
+                        renderable->ModelRef->TriangleCount(), renderable->ModelRef->VertexCount());
+                }
             }
             if (ImGui::BeginDragDropTarget()) {
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
