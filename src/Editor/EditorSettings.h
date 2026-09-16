@@ -146,6 +146,13 @@ struct EditorSettings {
     float EngineMarkSpinSpeed = 0.52f;
     bool  EngineMarkPrism     = false;
 
+    // Phase 6 item 12 — parks the corner monogram's spin and hue drift, and makes the nav-gizmo
+    // view-preset camera transition (EditorLayer_Gizmos.cpp's m_ViewTransition) snap instantly
+    // instead of easing over its usual 0.28s, for anyone sensitive to on-screen motion. Doesn't
+    // touch EngineMarkSpinSpeed itself - that preference is preserved, just not applied while
+    // this is on, so turning it back off resumes the user's own spin rate.
+    bool ReduceMotion = false;
+
     // --- Light gizmos: the 3D wireframe shapes drawn for each light in the Scene viewport
     // (range sphere for point, cone for spot, aim arrow for directional). Controls live in
     // Preferences > Viewport and the Window menu. LightGizmoSelectedOnly (default: on) draws
