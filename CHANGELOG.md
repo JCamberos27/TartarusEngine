@@ -7,6 +7,21 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### [Phase 6] Theme consolidation and the long tail (#8) — 2026-09-16
+
+In progress. Landed so far:
+
+- Physics Debug panel rebuild: title now matches its own Window-menu entry, Step button no
+  longer clips off the window, its tooltip fires outside Play mode (`AllowWhenDisabled`),
+  `PhysicsSimTimeScale` is session-only so a session left at 0x can't silently freeze physics on
+  a future launch, and the Play-mode HUD no longer overlaps the Statistics HUD (`87c477e`,
+  closes #38, #39, #40, #41).
+- Screenshot lightbox rebuild: an accurate zoom readout (was hardcoded "100%" at fit-to-canvas),
+  `←`/`→` folder navigation, and a six-action bar (Open externally/Copy path/Copy image/Show in
+  folder/Delete/Close) (`558f354`, closes #23).
+- Console: unchecked toggles (Collapse/Clear on Play/Error Pause) now paint a visible 1px border
+  so they read as controls at a glance, not bare text labels (`61f61f2`, closes #20).
+
 ### [Phase 4] Inspector rebuild (#6) — 2026-09-15
 
 Every scoped item landed except one genuine open bug. *"The Inspector is scannable left-to-right,
