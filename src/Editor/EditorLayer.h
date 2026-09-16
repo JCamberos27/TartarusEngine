@@ -263,7 +263,8 @@ public:
     void  GetAssetSelectionSummary(AssetLibrary& assets, char* out, int n) const;
     float GetAssetIconSize() const { return m_AssetIconSize; }
     void  SetAssetIconSize(float px, bool commit);                              // clamps; persists on commit
-    void  ToggleAssetViewMode();                                                // Grid <-> List (Phase 5 item 3 remainder)
+    void  ToggleAssetViewMode();                                                // cycles Grid -> List -> Details (Phase 5 item 3/4)
+    int   GetAssetViewMode() const;                                             // 0 Grid, 1 List, 2 Details (Phase 5 item 4)
     void  AssetGridFrameEnd(World& world, AssetLibrary& assets) { DrawDeleteConfirmPopup(world, assets); }
 
     // --- Reloadable Scene Hierarchy module bridge (issue #229, thin slice) ------------------
