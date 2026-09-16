@@ -563,16 +563,69 @@ void EditorLayer::DrawWindowMenuBody() {
                 m_ResetLayoutRequested = true;
             }
 
-            // Layout presets (#236 R2) — named ImGui-ini snapshots in project/layouts/.
+            // Layout presets (#236 R2, extended Phase 6 item 10) — named ImGui-ini snapshots in
+            // project/layouts/, plus four shipped arrangements that need no file on disk.
             if (ImGui::BeginMenu(ICON_FA_TABLE_COLUMNS "  Layout Presets")) {
+                if (ImGui::BeginMenu(ICON_FA_TABLE_CELLS "  Default Layouts")) {
+                    if (ImGui::MenuItem("Default")) RequestDefaultLayout(LayoutKind::Default);
+                    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("The standard arrangement: Hierarchy / Scene / Inspector, Asset Browser + Console below.");
+                    if (ImGui::MenuItem("Wide")) RequestDefaultLayout(LayoutKind::Wide);
+                    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Narrower side panels, more viewport width — for ultrawide monitors.");
+                    if (ImGui::MenuItem("Tall")) RequestDefaultLayout(LayoutKind::Tall);
+                    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Taller Asset Browser / Console strip — for portrait or stacked monitors.");
+                    if (ImGui::MenuItem("Focus")) RequestDefaultLayout(LayoutKind::Focus);
+                    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Hides Hierarchy and Inspector to maximize the Scene viewport.");
+                    ImGui::EndMenu();
+                }
+                ImGui::Separator();
                 const std::vector<std::string> presets = LayoutPresetNames();
                 if (presets.empty()) ImGui::TextDisabled("(none saved yet)");
                 for (const std::string& name : presets) {
-                    if (ImGui::MenuItem(name.c_str())) RequestLoadLayoutPreset(name);
-                    ImGui::SameLine();
                     ImGui::PushID(name.c_str());
-                    if (ImGui::SmallButton(ICON_FA_XMARK)) DeleteLayoutPreset(name);
-                    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete this preset");
+                    if (m_RenamingLayoutPreset == name) {
+                        ImGui::SetNextItemWidth(150.0f * m_UIScale);
+                        bool enter = ImGui::InputText("##Rename", m_RenameLayoutBuf, sizeof(m_RenameLayoutBuf),
+                                                       ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+                        if (ImGui::IsWindowAppearing() || ImGui::IsItemActivated()) ImGui::SetKeyboardFocusHere(-1);
+                        if (enter) {
+                            RenameLayoutPreset(name, m_RenameLayoutBuf);
+                            m_RenamingLayoutPreset.clear();
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton(ICON_FA_CHECK)) { RenameLayoutPreset(name, m_RenameLayoutBuf); m_RenamingLayoutPreset.clear(); }
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton(ICON_FA_XMARK)) m_RenamingLayoutPreset.clear();
+                    } else {
+                        const bool isDefault = EditorSettings::Get().DefaultLayoutPreset == name;
+                        std::string label = isDefault ? (ICON_FA_STAR "  " + name) : name;
+                        // MenuItem spans the full row by default, so without AllowOverlap it eats
+                        // the click before it ever reaches the rename/duplicate/star/delete
+                        // buttons drawn on top of it below (same fix as EditorLayer_Inspector.cpp).
+                        ImGui::SetNextItemAllowOverlap();
+                        if (ImGui::MenuItem(label.c_str())) RequestLoadLayoutPreset(name);
+                        if (ImGui::IsItemHovered() && isDefault) EditorUI::SetTooltip("Startup default — Reset Layout rebuilds to this preset.");
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton(ICON_FA_PEN)) {
+                            m_RenamingLayoutPreset = name;
+                            std::snprintf(m_RenameLayoutBuf, sizeof(m_RenameLayoutBuf), "%s", name.c_str());
+                        }
+                        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Rename this preset");
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton(ICON_FA_COPY)) DuplicateLayoutPreset(name);
+                        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Duplicate this preset");
+                        ImGui::SameLine();
+                        if (!isDefault) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                        const bool starClicked = ImGui::SmallButton(ICON_FA_STAR);
+                        if (!isDefault) ImGui::PopStyleColor();
+                        if (starClicked) {
+                            EditorSettings::Get().DefaultLayoutPreset = isDefault ? std::string() : name;
+                            EditorSettings::Save();
+                        }
+                        if (ImGui::IsItemHovered()) EditorUI::SetTooltip(isDefault ? "Unset as startup default" : "Set as startup default (Reset Layout rebuilds to this)");
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton(ICON_FA_TRASH)) DeleteLayoutPreset(name);
+                        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete this preset");
+                    }
                     ImGui::PopID();
                 }
                 ImGui::Separator();

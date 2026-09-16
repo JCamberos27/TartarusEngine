@@ -153,6 +153,11 @@ struct EditorSettings {
     // this is on, so turning it back off resumes the user's own spin rate.
     bool ReduceMotion = false;
 
+    // Phase 6 item 10 — name of the layout preset (project/layouts/<name>.ini) that
+    // Window > Reset Layout rebuilds to, in place of the four shipped Default/Wide/Tall/Focus
+    // arrangements. Empty means "use the shipped Default layout" — the original behavior.
+    std::string DefaultLayoutPreset;
+
     // --- Light gizmos: the 3D wireframe shapes drawn for each light in the Scene viewport
     // (range sphere for point, cone for spot, aim arrow for directional). Controls live in
     // Preferences > Viewport and the Window menu. LightGizmoSelectedOnly (default: on) draws
