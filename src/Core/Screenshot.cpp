@@ -12,6 +12,7 @@
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
+#include <stb_image.h> // CopyImageToClipboard decodes back off disk - Texture never crosses into Core/
 
 #include <filesystem>
 #include <ctime>
@@ -173,6 +174,75 @@ std::string ShutterClipPath() {
     std::fwrite(s.data(), 2, s.size(), fp);
     std::fclose(fp);
     return path;
+}
+
+bool CopyImageToClipboard(const std::string& path) {
+#if defined(_WIN32)
+    int w = 0, h = 0, channels = 0;
+    unsigned char* data = stbi_load(path.c_str(), &w, &h, &channels, 4); // force RGBA
+    if (!data) {
+        Log::Error("Copy image: couldn't decode '" + ProjectPaths::Relativize(path) + "'.");
+        return false;
+    }
+
+    // CF_DIB: a BITMAPINFOHEADER immediately followed by bottom-up, 4-byte-row-aligned pixel
+    // data. 24bpp BGR (no alpha) for the widest paste compatibility - Paint, Word, browsers, etc.
+    const int rowBytes = ((w * 3 + 3) / 4) * 4;
+    const size_t pixelBytes = (size_t)rowBytes * h;
+    const size_t totalBytes = sizeof(BITMAPINFOHEADER) + pixelBytes;
+
+    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, totalBytes);
+    if (!hMem) {
+        stbi_image_free(data);
+        Log::Error("Copy image: out of memory.");
+        return false;
+    }
+    void* mem = GlobalLock(hMem);
+    if (!mem) {
+        GlobalFree(hMem);
+        stbi_image_free(data);
+        Log::Error("Copy image: couldn't lock clipboard memory.");
+        return false;
+    }
+
+    BITMAPINFOHEADER* bih = (BITMAPINFOHEADER*)mem;
+    bih->biSize = sizeof(BITMAPINFOHEADER);
+    bih->biWidth = w;
+    bih->biHeight = h; // positive = bottom-up, the DIB convention
+    bih->biPlanes = 1;
+    bih->biBitCount = 24;
+    bih->biCompression = BI_RGB;
+    bih->biSizeImage = (DWORD)pixelBytes;
+
+    unsigned char* dst = (unsigned char*)mem + sizeof(BITMAPINFOHEADER);
+    for (int y = 0; y < h; ++y) {
+        // Row 0 of a bottom-up DIB is the image's LAST row; stb_image decodes top-down.
+        const unsigned char* srcRow = data + (size_t)(h - 1 - y) * (size_t)w * 4;
+        unsigned char* dstRow = dst + (size_t)y * rowBytes;
+        for (int x = 0; x < w; ++x) {
+            dstRow[x * 3 + 0] = srcRow[x * 4 + 2]; // B
+            dstRow[x * 3 + 1] = srcRow[x * 4 + 1]; // G
+            dstRow[x * 3 + 2] = srcRow[x * 4 + 0]; // R
+        }
+    }
+    GlobalUnlock(hMem);
+    stbi_image_free(data);
+
+    if (!OpenClipboard(nullptr)) {
+        GlobalFree(hMem);
+        Log::Error("Copy image: couldn't open the clipboard (another app may be holding it).");
+        return false;
+    }
+    EmptyClipboard();
+    const bool ok = SetClipboardData(CF_DIB, hMem) != nullptr;
+    CloseClipboard(); // on success the clipboard now owns hMem; on failure we still must not free
+                       // it ourselves per SetClipboardData's contract, so just report the error
+    if (!ok) Log::Error("Copy image: SetClipboardData failed.");
+    return ok;
+#else
+    (void)path;
+    return false;
+#endif
 }
 
 } // namespace Screenshot

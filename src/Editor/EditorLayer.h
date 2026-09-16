@@ -496,7 +496,10 @@ public:
     // Double-clicking a shot in the Asset Browser's Screenshots folder opens a centred, sleek
     // in-editor lightbox instead of shelling out to the OS viewer.
     void OpenScreenshotPreview(const std::string& path);
-    void DrawScreenshotPreview();                // centred image lightbox; called from Draw()
+    void DrawScreenshotPreview(World& world, AssetLibrary& assets); // centred image lightbox; called from Draw()
+    // Phase 6 item 7 — every image file in the screenshots folder, sorted so </>-arrow nav
+    // reads chronologically (Screenshot::Save's filenames are date/time-suffixed).
+    std::vector<std::string> ListScreenshotsSorted() const;
     // Set by main.cpp for the single frame a "clean viewport" capture renders — every editor
     // overlay (grid, gizmos, entity icons, light gizmos, engine mark, HUDs, status bar) skips.
     void SetHideOverlaysThisFrame(bool v) { m_HideOverlaysThisFrame = v; }
