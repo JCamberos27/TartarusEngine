@@ -114,7 +114,9 @@ void EditorSettings::Load() {
     s.ShowPhysicsPanel = root.value("showPhysicsPanel", s.ShowPhysicsPanel);
     s.PhysicsHudOverlay = root.value("physicsHudOverlay", s.PhysicsHudOverlay);
     s.PhysicsDebugDrawFlags = root.value("physicsDebugDrawFlags", s.PhysicsDebugDrawFlags);
-    s.PhysicsSimTimeScale = root.value("physicsSimTimeScale", s.PhysicsSimTimeScale);
+    // PhysicsSimTimeScale (Phase 6 item 13 / Appendix B #39) is deliberately NOT loaded - it stays
+    // session-only (see the struct field's comment), so a session left slowed/frozen can't leave
+    // physics silently frozen the next time the editor opens.
     s.PlayDebugOverlay = root.value("playDebugOverlay", s.PlayDebugOverlay);
     s.LayerVisibleMask = root.value("layerVisibleMask", s.LayerVisibleMask);
     s.LayerPickLockMask = root.value("layerPickLockMask", s.LayerPickLockMask);
@@ -196,7 +198,7 @@ void EditorSettings::Flush() {
     root["showPhysicsPanel"] = Get().ShowPhysicsPanel;
     root["physicsHudOverlay"] = Get().PhysicsHudOverlay;
     root["physicsDebugDrawFlags"] = Get().PhysicsDebugDrawFlags;
-    root["physicsSimTimeScale"] = Get().PhysicsSimTimeScale;
+    // PhysicsSimTimeScale is session-only - see the matching comment in Load().
     root["playDebugOverlay"] = Get().PlayDebugOverlay;
     root["layerVisibleMask"] = Get().LayerVisibleMask;
     root["layerPickLockMask"] = Get().LayerPickLockMask;
