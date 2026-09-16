@@ -166,6 +166,11 @@ public:
     bool ShowHistory() const { return m_ShowHistory; }
     void SetShowHistory(bool on) { m_ShowHistory = on; }
     void RequestResetLayout() { m_ResetLayoutRequested = true; }
+    // Phase 6 item 10 — the four shipped panel arrangements offered alongside user-saved
+    // layout presets. Wide/Tall favor ultrawide/portrait monitors; Focus hides the Hierarchy
+    // and Inspector to maximize the Scene viewport.
+    enum class LayoutKind { Default, Wide, Tall, Focus };
+    void RequestDefaultLayout(LayoutKind kind) { m_ResetLayoutKind = kind; m_ResetLayoutRequested = true; }
     // #4 item 3 — Preferences and Project Settings are one searchable, dockable "Settings" window
     // now (DrawSettingsWindow), not two. Both entry points still exist because they mean different
     // things (which group to land on), they just open the same window instead of two.
@@ -672,6 +677,9 @@ private:
     // Set by Settings > Reset Layout; consumed at the top of Draw()'s dockspace setup to
     // rebuild the default panel arrangement from scratch.
     bool m_ResetLayoutRequested = false;
+    // Which shipped arrangement m_ResetLayoutRequested rebuilds to (Phase 6 item 10). Reset
+    // Layout without a EditorSettings::DefaultLayoutPreset override always uses Default.
+    LayoutKind m_ResetLayoutKind = LayoutKind::Default;
 
     float m_FlySpeedHudTimer = 0.0f; // see FlashFlySpeedHud() (public, above)
 
@@ -688,10 +696,15 @@ private:
     void SaveLayoutPreset(const std::string& name);
     void RequestLoadLayoutPreset(const std::string& name);
     void DeleteLayoutPreset(const std::string& name);
+    void RenameLayoutPreset(const std::string& oldName, const std::string& newName);
+    void DuplicateLayoutPreset(const std::string& name);
     std::vector<std::string> LayoutPresetNames() const;
     std::string m_PendingLayoutIni;
     bool m_ShowSaveLayout = false;
     char m_SaveLayoutName[64] = "";
+    // Non-empty while the rename textbox for a preset is open (holds the preset's original name).
+    std::string m_RenamingLayoutPreset;
+    char m_RenameLayoutBuf[64] = "";
 
     // Defaults to a plausible full-window size so nothing divides by zero if anything reads
     // these before the first Draw() has run; overwritten every editor-mode frame after that.
