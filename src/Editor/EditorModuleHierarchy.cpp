@@ -85,7 +85,9 @@ void Draw(const EditorModuleHostAPI& host) {
     }
     if (ImGui::IsItemHovered() && !ImGui::IsItemActive() && host.SetTooltip) {
         host.SetTooltip("Type a name to filter the list below.\n"
-                        "Type \"t:\" followed by a tag (e.g. t:Enemy) to filter by Tag instead.");
+                        "Type \"t:\" followed by a tag (e.g. t:Enemy) to filter by Tag instead.\n\n"
+                        "Tip: click a row in the tree, then type a name (without clicking here) "
+                        "to jump to the next entity starting with those letters.");
     }
 
     ImGui::SameLine();

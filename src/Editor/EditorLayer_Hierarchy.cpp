@@ -645,6 +645,12 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
 
     const bool filtering = !m_HierarchyFilter.empty();
 
+    // Defect #51 — whether the scene has any entities at all, independent of the current filter,
+    // so the empty-state message below can tell "nothing in the scene" apart from "nothing
+    // matches the search".
+    const auto nameView = world.Registry.view<const NameComponent>();
+    const bool sceneHasEntities = nameView.begin() != nameView.end();
+
     // One flat list — every entity in creation order, no "Level Geometry" / "Objects" split.
     // A box, a model, a light and an empty are all just entities; the old grouping only ever
     // added a header to scroll past. LevelGeometryTag survives as an invisible serialization /
@@ -669,6 +675,24 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     }
     ImGui::PopStyleVar(); // ItemSpacing
     ImGui::PopStyleVar(); // IndentSpacing
+
+    // Defect #51 — a genuinely empty scene rendered nothing at all: no icon, no message, no
+    // action. Give it something to say, distinct from "the search matched nothing" (also blank
+    // before this fix, per the audit's §3.3F finding).
+    if (m_HierarchyVisibleBuild.empty()) {
+        ImGui::Spacing();
+        if (!sceneHasEntities) {
+            ImGui::TextDisabled("Scene is empty");
+            ImGui::Spacing();
+            ImGui::TextUnformatted("Nothing has been added to this scene yet.");
+            ImGui::Spacing();
+            ImGui::TextDisabled("Tip: press " ICON_FA_KEYBOARD " Shift+A in the viewport to add an object.");
+        } else {
+            ImGui::TextDisabled("No matches");
+            ImGui::Spacing();
+            ImGui::TextUnformatted("No entity in this scene matches the current search.");
+        }
+    }
 
     // Auto-scroll while a row is being dragged near the panel's top/bottom edge — otherwise you
     // can only drop among the rows that happen to be on screen when the drag starts.
