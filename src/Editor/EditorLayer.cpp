@@ -2343,6 +2343,11 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         const float frameMs = dt * 1000.0f;
         m_SmoothedFrameMs = m_SmoothedFrameMs * 0.92f + frameMs * 0.08f;
 
+        // Phase 6 item 5 — raw ring buffer feeding the Statistics panel's sparkline.
+        m_FrameTimeHistory[m_FrameTimeHistoryHead] = frameMs;
+        m_FrameTimeHistoryHead = (m_FrameTimeHistoryHead + 1) % kFrameTimeHistoryCount;
+        if (m_FrameTimeHistoryFilled < kFrameTimeHistoryCount) ++m_FrameTimeHistoryFilled;
+
         DrawViewportStatusBar(world, editorCamera);
         // The Undo History HUD moved into TartarusEditor.dll (EditorModuleHistory.cpp, #229);
         // the module gates its own draw through EditorModuleHostAPI::GetHistoryHudFrame, which

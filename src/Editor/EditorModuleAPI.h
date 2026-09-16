@@ -114,7 +114,9 @@
 //        focus-scene, snap-to-ground) in the Shortcuts table, and added a Help menu whose
 //        "Shortcuts" item (OpenShortcutsReference) jumps straight to the existing press-to-bind
 //        editor (Preferences category 5) instead of leaving it something you only find browsing.
-constexpr std::uint32_t kEditorModuleAPIVersion = 29;
+//   30 - Phase 6 item 5: Statistics panel rebuild. GetFrameTimeHistory reads the host's 120-frame
+//        raw (unsmoothed) ring buffer for the panel's sparkline.
+constexpr std::uint32_t kEditorModuleAPIVersion = 30;
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -282,6 +284,11 @@ struct EditorModuleHostAPI {
     // Exponentially-smoothed frame time (ms). The host keeps updating this every frame even while
     // the panel is hidden — the viewport status bar reads it too — so the module only reads.
     float (*GetSmoothedFrameMs)() = nullptr;
+
+    // Phase 6 item 5 — raw (unsmoothed) per-frame ms, oldest-to-newest, up to `maxCount` entries
+    // (the host keeps 120). Returns how many it actually wrote. For the Statistics panel's
+    // frame-time sparkline; the smoothed figure above is still what the FPS text itself shows.
+    int (*GetFrameTimeHistory)(float* out, int maxCount) = nullptr;
 
     // The JetBrains Mono face (API v19, Phase 1 item 5), for the Console body and numeric
     // readouts (e.g. this panel's own FPS/frame-time/draw-call numbers). Wrap the text that
