@@ -598,6 +598,11 @@ private:
     // folder can route each of its contents into its own mirrored subfolder.
     void ImportDroppedFile(World& world, AssetLibrary& assets, Camera& editorCamera,
         const std::string& path, const std::string& targetFolder);
+    // Phase 5 item 11 — physically copies an imported model/texture/sound into
+    // project/assets/{models,textures,audio}/ so it stops referencing an arbitrary external path
+    // forever. Returns `sourcePath` unchanged (no copy) when it's already inside the project, or
+    // if the copy itself fails. `subfolder` is "models"/"textures"/"audio".
+    std::string CopyAssetIntoProject(const std::string& sourcePath, const std::string& subfolder);
 
     GLFWwindow* m_Window = nullptr;
 
