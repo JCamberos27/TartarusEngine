@@ -171,6 +171,14 @@ void Draw(const EditorModuleHostAPI& host) {
         if (ImGui::MenuItem(ICON_FA_GEARS " Project Settings") && host.OpenProjectSettings) host.OpenProjectSettings();
         if (ImGui::IsItemHovered()) Tooltip(host, "Physics, tags and layer names \xE2\x80\x94 saved with the project, not your editor prefs");
 
+        // Phase 6 item 11 — the shortcut coverage pass's own "add a Help ▸ Shortcuts reference"
+        // ask. Jumps straight to the existing press-to-bind editor rather than duplicating it.
+        if (ImGui::BeginMenu(ICON_FA_CIRCLE_QUESTION " Help")) {
+            if (ImGui::MenuItem(ICON_FA_KEYBOARD "  Shortcuts") && host.OpenShortcutsReference)
+                host.OpenShortcutsReference();
+            ImGui::EndMenu();
+        }
+
         // Custom window controls, right-aligned — the OS title bar is gone (Win32 custom frame,
         // Window.cpp), so minimize / maximize-restore / close live here instead.
         DrawWindowControls(host);

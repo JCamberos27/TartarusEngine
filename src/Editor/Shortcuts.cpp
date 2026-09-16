@@ -185,6 +185,31 @@ void BuildDefaultTable() {
     Register("view.bottom",      "View: Bottom",          Ctx_Viewport, Ck(ImGuiKey_7));
     Register("view.persp",       "View: Perspective",     Ctx_Viewport, K(ImGuiKey_0));
     Register("view.toggleOrtho", "Toggle Orthographic",   Ctx_Viewport, K(ImGuiKey_5));
+    Register("view.focusScene",  "Focus Scene View",      Ctx_Global,   Ak(ImGuiKey_0));
+
+    // --- Gizmo / grid / snap toggles (Global) — Phase 6 item 11, the audit's "currently
+    // unbound: World/Local, Pivot/Center, Snap-to-ground, grid/snap toggles". Alt+letter chords
+    // throughout this block: plain letters are already spoken for by the viewport tool row
+    // (Q/W/E/R/T/Y/F/M) and Ctrl+letter by Edit, so Alt is the free modifier left to claim.
+    Register("gizmo.toggleSpace", "Toggle Gizmo World/Local Space", Ctx_Global, Ak(ImGuiKey_X));
+    Register("gizmo.togglePivot", "Toggle Gizmo Pivot/Center",      Ctx_Global, ASk(ImGuiKey_X));
+    Register("grid.toggle",       "Toggle Grid",                    Ctx_Global, Ak(ImGuiKey_G));
+    Register("snap.toggleGrid",   "Toggle Snap to Grid",            Ctx_Global, ASk(ImGuiKey_G));
+    Register("tools.snapToGround","Snap Selection to Ground",       Ctx_Global, Ak(ImGuiKey_H));
+    Register("view.nextDrawMode", "Next Draw Mode",                 Ctx_Global, Ak(ImGuiKey_D));
+    Register("view.prevDrawMode", "Previous Draw Mode",             Ctx_Global, ASk(ImGuiKey_D));
+
+    // --- Panel toggles beyond the existing focus row (Global) — Console/Statistics/History,
+    // the Lighting panel, and Project Settings were all reachable only by mouse. ---
+    Register("console.toggle",   "Toggle Console",         Ctx_Global, CSk(ImGuiKey_C));
+    Register("stats.toggle",     "Toggle Statistics",      Ctx_Global, CSk(ImGuiKey_T));
+    Register("history.toggle",   "Toggle History",         Ctx_Global, CSk(ImGuiKey_H));
+    Register("lighting.toggle",  "Toggle Lighting Panel",  Ctx_Global, CSk(ImGuiKey_L));
+    Register("project.settings", "Open Project Settings",  Ctx_Global, CSk(ImGuiKey_P));
+
+    // --- Capture (Ctx_App, evaluated via TriggeredGlfw like the play controls above — capture
+    // has to work even with editor UI hidden / no panel focused). ---
+    Register("capture.now",      "Capture Screenshot",     Ctx_App, K(ImGuiKey_PrintScreen));
 
     // --- Asset Browser (Ctx_Project) — only while the panel has focus, so F / Ctrl+D don't
     // collide with the scene-selection bindings. ---

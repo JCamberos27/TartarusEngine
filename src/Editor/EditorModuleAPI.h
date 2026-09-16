@@ -109,7 +109,12 @@
 //        never count); MarkNotificationsRead clears it (called the moment the bell's dropdown
 //        opens); DrawNotificationsPopupBody renders that dropdown's contents (host code, same
 //        Draw*PopupBody callback pattern the capture options popup already uses).
-constexpr std::uint32_t kEditorModuleAPIVersion = 28;
+//   29 - Phase 6 item 11: shortcut coverage pass. Registered a dozen previously-mouse-only
+//        actions (panel toggles, gizmo space/pivot, grid/snap, draw-mode cycling, capture,
+//        focus-scene, snap-to-ground) in the Shortcuts table, and added a Help menu whose
+//        "Shortcuts" item (OpenShortcutsReference) jumps straight to the existing press-to-bind
+//        editor (Preferences category 5) instead of leaving it something you only find browsing.
+constexpr std::uint32_t kEditorModuleAPIVersion = 29;
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -332,6 +337,7 @@ struct EditorModuleHostAPI {
     void (*RequestResetLayout)() = nullptr;
     void (*OpenPreferences)() = nullptr;
     void (*OpenProjectSettings)() = nullptr; // v16 — menu-bar item beside Preferences
+    void (*OpenShortcutsReference)() = nullptr; // v29 — Help menu's Shortcuts item
 
     // Menu / popup bodies rendered host-side into the module-begun menu or popup — the module
     // calls these between its own BeginMenu/EndMenu (or BeginPopup/EndPopup). The single shared
