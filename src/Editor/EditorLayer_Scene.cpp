@@ -98,6 +98,7 @@ void EditorLayer::ClearUndoHistory() {
     m_UndoStack.clear();
     m_UndoBaseJson.clear();
     m_UndoBaseJson.shrink_to_fit();
+    m_ContentDepth = 0; // Q6 — the live stack is empty, so is its count of real (non-selection) edits
     ClearRedoHistory();
 }
 
@@ -130,7 +131,7 @@ bool EditorLayer::DoSaveAs(World& world, AssetLibrary& assets) {
     EditorSettings::Get().LastScenePath = path; // reopen this one next launch (#95)
     EditorSettings::Save();
     m_Dirty = false;
-    m_SavedUndoDepth = (int)m_UndoStack.size(); // this history position now matches disk
+    m_SavedUndoDepth = m_ContentDepth; // this history position now matches disk
     m_AutoSaveTimer = 0.0f;
     InvalidateScenesListing(); // (#175) may have written a new file under scenes/
     return true;
@@ -143,7 +144,7 @@ void EditorLayer::DoSave(World& world, AssetLibrary& assets) {
     }
     SceneSerializer::Save(world, assets, m_CurrentScenePath);
     m_Dirty = false;
-    m_SavedUndoDepth = (int)m_UndoStack.size(); // this history position now matches disk
+    m_SavedUndoDepth = m_ContentDepth; // this history position now matches disk
     m_AutoSaveTimer = 0.0f;
     ClearRecoverySnapshot();            // the real file is now current — the snapshot is stale
 }
@@ -346,19 +347,26 @@ void EditorLayer::DrawSceneSwitchPrompt(World& world, AssetLibrary& assets) {
     }
 }
 std::vector<int> EditorLayer::CaptureSelectedOrders(const World& world) const {
+    return CaptureSelectedOrders(world, GetSelectedItems());
+}
+
+std::vector<int> EditorLayer::CaptureSelectedOrders(const World& world,
+                                                     const std::vector<entt::entity>& entities) const {
     std::vector<int> orders;
-    auto addIfValid = [&](entt::entity e) {
+    for (entt::entity e : entities) {
         if (e != entt::null && world.Registry.valid(e) && world.Registry.all_of<OrderComponent>(e)) {
             orders.push_back(world.Registry.get<OrderComponent>(e).Value);
         }
-    };
-    addIfValid(m_Selected);
-    for (entt::entity e : m_ExtraSelection) addIfValid(e);
+    }
     return orders;
 }
 
 void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& orders) {
     ClearSelection();
+    // This selection change is Undo/Redo/JumpTo* restoring what an UndoEntry recorded, not a new
+    // user action — swallow the next RecordSelectionHistory() poll (Q6) so it doesn't also push a
+    // redundant "Select" entry (or m_SelHistory row) for a change we just drove ourselves.
+    m_SelHistoryNavigating = true;
     if (orders.empty()) return;
 
     // OrderComponent values are assigned once per entity and unique (unlike NameComponent,
@@ -382,37 +390,57 @@ void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& 
     }
 }
 
-void EditorLayer::PushUndo(const World& world, const std::string& label) {
-    m_CtrlZSelectionMode = false; // a real scene edit — Ctrl+Z is scene-undo again (#236 R2)
+void EditorLayer::PushUndo(const World& world, const std::string& label, bool selectionOnly,
+                           const std::vector<int>* selectedOrdersOverride) {
     const std::string sceneJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                               : SceneSerializer::SaveToString(world);
     UndoEntry entry;
     entry.Hash = HashSceneJson(sceneJson);
+    entry.SelectedOrders = selectedOrdersOverride ? *selectedOrdersOverride : CaptureSelectedOrders(world);
     // Plenty of call sites fire on "field focused" / "gizmo grabbed" before anything actually
     // changes — a double-click-to-type on a Transform field lands here twice with no edit
     // between. Don't stack a byte-identical snapshot on the last one: it produced phantom
     // History entries and left extra Ctrl+Z presses that did nothing (#19 P8, #23 P23).
     // Compared by hash rather than the full JSON string (#174 stage 1) - scenes can be
-    // megabytes, and this compare runs on every single edit.
-    if (!m_UndoStack.empty() && m_UndoStack.back().Hash == entry.Hash) {
+    // megabytes, and this compare runs on every single edit. Also requires SelectedOrders to
+    // match (Q6/Phase 6 item 6): a scene-identical push whose ONLY difference is a new selection
+    // is exactly what RecordSelectionHistory's "Select" entries look like, and those must NOT be
+    // deduped away — that's the whole point of unifying selection changes into this same stack.
+    if (!m_UndoStack.empty() && m_UndoStack.back().Hash == entry.Hash &&
+        m_UndoStack.back().SelectedOrders == entry.SelectedOrders) {
         ClearRedoHistory(); // still a fresh edit intent — a stale redo branch shouldn't survive it
         RefreshDirtyFromHistory();
         return;
     }
-    entry.SelectedOrders = CaptureSelectedOrders(world);
     entry.Label = label;
+    entry.SelectionOnly = selectionOnly;
     // Branching off a mid-history position discards the redo entries — the saved state may be
     // among them, in which case there's no longer a clean point to return to (#22 P22).
     if (m_SavedUndoDepth >= 0 && !m_RedoStack.empty()) m_SavedUndoDepth = -1;
     PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(entry), sceneJson);
+    if (!selectionOnly) m_ContentDepth++; // Q6 — only real edits count toward the dirty flag
     if (m_UndoStack.size() > kMaxHistory) {
         // Safe with the delta chain as-is: entry 0's patch only ever rebuilt entry 0 from
         // entry 1, so dropping it leaves every remaining link intact (#174 stage 2).
+        const bool evictedWasContent = !m_UndoStack.front().SelectionOnly;
         m_UndoStack.erase(m_UndoStack.begin());
-        if (m_SavedUndoDepth > 0) m_SavedUndoDepth--; // the whole stack shifted down by one
+        if (evictedWasContent) {
+            if (m_SavedUndoDepth > 0) m_SavedUndoDepth--; // the whole stack shifted down by one
+            m_ContentDepth--;
+        }
     }
     ClearRedoHistory(); // a fresh edit invalidates whatever redo history existed
     RefreshDirtyFromHistory();
+    if (!selectionOnly) m_EditPushedThisFrame = true; // tells RecordSelectionHistory not to ALSO push a Select entry
+}
+
+// Phase 6 item 6 / Q6 helper — see the header's comment on SelectionUndoLabel.
+std::string EditorLayer::SelectionUndoLabel(const World& world) const {
+    const size_t count = (m_Selected != entt::null ? 1u : 0u) + m_ExtraSelection.size();
+    if (count == 0) return "Deselect";
+    if (count > 1) return "Select " + std::to_string(count) + " objects";
+    const auto* name = world.Registry.try_get<NameComponent>(m_Selected);
+    return "Select " + (name && !name->Name.empty() ? name->Name : std::string("Object"));
 }
 
 void EditorLayer::StageUndo(const World& world) {
@@ -451,13 +479,19 @@ void EditorLayer::CommitStagedUndo(const World& world, const std::string& label)
     entry.Label = label;
     if (m_SavedUndoDepth >= 0 && !m_RedoStack.empty()) m_SavedUndoDepth = -1;
     PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(entry), stagedJson);
+    m_ContentDepth++; // Q6 — a staged edit is always a real edit, never SelectionOnly
     if (m_UndoStack.size() > kMaxHistory) {
+        const bool evictedWasContent = !m_UndoStack.front().SelectionOnly;
         m_UndoStack.erase(m_UndoStack.begin());
-        if (m_SavedUndoDepth > 0) m_SavedUndoDepth--;
+        if (evictedWasContent) {
+            if (m_SavedUndoDepth > 0) m_SavedUndoDepth--;
+            m_ContentDepth--;
+        }
     }
     ClearRedoHistory();
     RefreshDirtyFromHistory();
     m_HasStagedUndo = false;
+    m_EditPushedThisFrame = true; // Q6 — see PushUndo's matching line
 }
 
 void EditorLayer::Undo(World& world, AssetLibrary& assets) {
@@ -468,11 +502,13 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     redoEntry.Hash = HashSceneJson(currentJson);
     redoEntry.SelectedOrders = CaptureSelectedOrders(world);
     redoEntry.Label = m_UndoStack.back().Label; // the action Redo would re-apply from here
+    redoEntry.SelectionOnly = m_UndoStack.back().SelectionOnly; // Q6 — carry the flag across stacks
     PushHistoryEntry(m_RedoStack, m_RedoBaseJson, std::move(redoEntry), currentJson);
 
     UndoEntry entry;
     std::string targetJson;
     if (!PopHistoryEntry(m_UndoStack, m_UndoBaseJson, entry, targetJson)) return;
+    if (!entry.SelectionOnly) m_ContentDepth--; // Q6 — a real-edit entry just left the live stack
     SceneSerializer::LoadFromString(world, assets, targetJson);
     RestoreSelectionByOrder(world, entry.SelectedOrders);
     InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
@@ -487,6 +523,8 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     undoEntry.Hash = HashSceneJson(currentJson);
     undoEntry.SelectedOrders = CaptureSelectedOrders(world);
     undoEntry.Label = m_RedoStack.back().Label;
+    undoEntry.SelectionOnly = m_RedoStack.back().SelectionOnly; // Q6 — carry the flag across stacks
+    if (!undoEntry.SelectionOnly) m_ContentDepth++; // Q6 — a real-edit entry is returning to the live stack
     PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(undoEntry), currentJson);
 
     UndoEntry entry;
@@ -620,7 +658,7 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
         ClearRecoverySnapshot();
         m_CurrentScenePath = pathStr;
         m_Dirty = false;                       // matches disk
-        m_SavedUndoDepth = (int)m_UndoStack.size();
+        m_SavedUndoDepth = m_ContentDepth;
         EditorSettings::Get().LastScenePath = pathStr;
         EditorSettings::Save();
         InvalidateScenesListing(); // (#175) wrote a new file under scenes/

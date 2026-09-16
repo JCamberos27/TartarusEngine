@@ -80,8 +80,9 @@ public:
     // so this can't live at the bottom of Draw() itself — anything there still runs strictly
     // before the module's panels this frame. Call this from main.cpp immediately after
     // editorModule.Draw() returns. Currently: dropping an abandoned staged-undo snapshot, and
-    // folding this frame's selection into the back/forward history.
-    void PostModuleDraw();
+    // folding this frame's selection into the back/forward history (and, per Q6, the scene undo
+    // stack — see RecordSelectionHistory).
+    void PostModuleDraw(const World& world);
 
     // Pull the editor camera back to fit the whole scene's bounds in view, keeping its current
     // aim. No-op on an empty scene. Called once on startup so the editor doesn't open staring
@@ -741,11 +742,12 @@ private:
     void SelectAllEntities(World& world);
     void InvertSelection(World& world);
 
-    // Selection history (#236 R2) — back/forward through past selections. RecordSelectionHistory()
-    // polls the live selection once per frame from Draw(), so every selection path feeds the
-    // ring without per-call-site hooks; the nav functions set m_SelHistoryNavigating so the poll
-    // doesn't re-record its own change.
-    void RecordSelectionHistory();
+    // Selection history (#236 R2) — back/forward through past selections (Ctrl+[ / Ctrl+]), kept
+    // independent of the scene undo stack below. RecordSelectionHistory() polls the live selection
+    // once per frame from PostModuleDraw(), so every selection path feeds the ring without
+    // per-call-site hooks; the nav functions set m_SelHistoryNavigating so the poll doesn't
+    // re-record its own change.
+    void RecordSelectionHistory(const World& world);
     void SelectionHistoryBack(World& world);
     void SelectionHistoryForward(World& world);
     bool CanSelectionHistoryBack() const    { return m_SelHistoryPos > 0; }
@@ -754,11 +756,18 @@ private:
     std::vector<std::vector<entt::entity>> m_SelHistory;
     size_t m_SelHistoryPos = 0;
     std::vector<entt::entity> m_SelSnapshotLast;
+    // Set by SelectionHistoryBack/Forward and by RestoreSelectionByOrder (Undo/Redo/JumpTo*) alike
+    // — any selection change WE drove ourselves, so the next RecordSelectionHistory() poll swallows
+    // it instead of recording a redundant Select* entry (into m_SelHistory, or, per Q6 below, into
+    // the scene undo stack).
     bool m_SelHistoryNavigating = false;
-    // When the most recent "action" was a selection change (not a scene edit), Ctrl+Z / Ctrl+Y
-    // walk the selection history instead of the scene undo stack — the user's mental model of
-    // "clicks are undoable actions". Cleared by any scene edit / scene undo / redo.
-    bool m_CtrlZSelectionMode = false;
+    // Phase 6 item 6 / Q6 — a genuine user selection change with no edit this same frame becomes
+    // its own real m_UndoStack entry (see RecordSelectionHistory), so Ctrl+Z / Ctrl+Y and the
+    // History panel agree with each other with no special-casing. Set by PushUndo/CommitStagedUndo
+    // and read+reset once per frame by RecordSelectionHistory, so an edit that also changes
+    // selection as its own side effect (Duplicate, Paste, Add Cube, ...) doesn't ALSO get a
+    // separate, redundant "Select" entry for the selection its own edit already caused.
+    bool m_EditPushedThisFrame = false;
     // Arrow / Home / End / type-to-select keyboard navigation of the tree (#236), gated the same
     // way Ctrl+A is (panel focused, no text field capturing keys). Runs once per frame after the
     // rows are drawn, off the published m_HierarchyVisibleOrder.
@@ -847,13 +856,21 @@ private:
     // working directory. Left as a bare filename here only as a harmless pre-Init default.
     std::string m_CurrentScenePath = "scenes/Showcase.json";
     bool m_Dirty = false;
-    // Undo-stack depth at the last save. When history is walked back to exactly this point the
-    // scene matches disk again, so the title should drop its "*" (#22 P22). -1 = no clean point
-    // (untitled, or a branching edit discarded the saved state from the redo stack). Starts at 0:
-    // the initial scene load in main.cpp leaves an empty history that matches the file on disk.
+    // Count of real-edit (non-SelectionOnly) entries currently on m_UndoStack — NOT the same as
+    // m_UndoStack.size() since Phase 6 item 6 / Q6, which also pushes a SelectionOnly entry for
+    // every plain selection change. Kept in lockstep with every push/pop/evict of m_UndoStack (see
+    // PushUndo, CommitStagedUndo, Undo, Redo) rather than recomputed by scanning the stack, since
+    // it's touched every frame a selection changes.
+    int m_ContentDepth = 0;
+    // m_ContentDepth's value at the last save. When history is walked back to exactly this content
+    // depth the scene matches disk again, so the title should drop its "*" (#22 P22) — a pure
+    // selection change never moves this, so clicking around never dirties an unedited scene.
+    // -1 = no clean point (untitled, or a branching edit discarded the saved state from the redo
+    // stack). Starts at 0: the initial scene load in main.cpp leaves an empty history that matches
+    // the file on disk.
     int m_SavedUndoDepth = 0;
     void RefreshDirtyFromHistory() {
-        m_Dirty = (m_SavedUndoDepth < 0) || ((int)m_UndoStack.size() != m_SavedUndoDepth);
+        m_Dirty = (m_SavedUndoDepth < 0) || (m_ContentDepth != m_SavedUndoDepth);
     }
     // Seconds since the last save (manual or auto) — ticked in Draw(), reset by any of the
     // manual Save/Save As/Open/New Scene paths so auto-save never fires moments after one of
@@ -895,6 +912,10 @@ private:
     void DrawEnvironmentSettings(World& world, float itemWidth);
     void DrawPostProcessSettings(float itemWidth);
     void DrawShadowSettings(float itemWidth);
+    // Phase 6 item 9 — the Solo/Mute mixer row list. m_SoloLights/m_MutedLights and
+    // IsLightSuppressed() (above) predate this UI and were already wired into main.cpp's per-frame
+    // light gather; this is the first and only place anything writes to either set.
+    void DrawLightsSection(World& world, float itemWidth);
     bool m_ShowLighting = false;
 
     // Settings window (Ctrl+,) — #4 item 3 merged the old separate Preferences (per-user,
@@ -1032,6 +1053,11 @@ private:
         // full string compare to detect a no-op push. Only ever compared against another
         // entry's hash, never used on its own - which is why it survives delta encoding.
         uint64_t Hash = 0;
+        // Phase 6 item 6 / Q6 — true for an entry RecordSelectionHistory pushed for a pure
+        // selection change (scene content unchanged, only SelectedOrders differs). Lets the dirty
+        // flag (see m_ContentDepth) count only real edits, so merely clicking around the scene
+        // never marks it as needing a save.
+        bool SelectionOnly = false;
     };
     std::vector<UndoEntry> m_UndoStack;
     std::vector<UndoEntry> m_RedoStack;
@@ -1062,9 +1088,20 @@ private:
     // "Align to View") reach the editor camera without threading it through every draw helper.
     Camera* m_EditorCameraPtr = nullptr;
 
-    void PushUndo(const World& world, const std::string& label = "Edit");
+    // selectionOnly (Q6/Phase 6 item 6): set true only by RecordSelectionHistory's own push, for
+    // an entry that represents a pure selection change (scene content byte-identical to the entry
+    // below it) — see UndoEntry::SelectionOnly and m_ContentDepth. selectedOrdersOverride, when
+    // non-null, is stored as the entry's SelectedOrders instead of the live selection — needed for
+    // that same selection-only push, since by the time it's called the live selection is already
+    // the NEW one, not the pre-change snapshot every UndoEntry is supposed to hold.
+    void PushUndo(const World& world, const std::string& label = "Edit", bool selectionOnly = false,
+                  const std::vector<int>* selectedOrdersOverride = nullptr);
     void Undo(World& world, AssetLibrary& assets);
     void Redo(World& world, AssetLibrary& assets);
+    // Phase 6 item 6 / Q6 — a plain-English label for the selection-change entry RecordSelectionHistory
+    // pushes ("Select Cube", "Select 3 objects", "Deselect"), read off the CURRENT (post-change)
+    // selection.
+    std::string SelectionUndoLabel(const World& world) const;
 
     // Staged undo for widgets whose one logical edit spans many frames / a popup (colour
     // pickers, sliders). StageUndo snapshots once, on the first activation of the interaction;
@@ -1084,6 +1121,12 @@ private:
     void JumpToRedoEntry(World& world, AssetLibrary& assets, size_t redoStackIndex);
 
     std::vector<int> CaptureSelectedOrders(const World& world) const;
+    // Same OrderComponent lookup as above, but for an explicit entity list rather than the LIVE
+    // m_Selected/m_ExtraSelection — Q6/Phase 6 item 6's selection-undo entry needs the selection
+    // as it was BEFORE the change being recorded (matching every other UndoEntry's "snapshot taken
+    // before the thing this entry undoes" contract), which by the time RecordSelectionHistory
+    // notices the change is no longer what's live.
+    std::vector<int> CaptureSelectedOrders(const World& world, const std::vector<entt::entity>& entities) const;
     void RestoreSelectionByOrder(World& world, const std::vector<int>& orders);
 
     bool m_ShowHistory = false;

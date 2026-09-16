@@ -337,9 +337,15 @@ void EditorLayer::DrawHistoryListBody(World& world, AssetLibrary& assets) {
 
     for (size_t k = 0; k < m_UndoStack.size(); ++k) {
         ImGui::PushID((int)k);
-        if (ImGui::Selectable(m_UndoStack[k].Label.c_str())) {
-            JumpToUndoEntry(world, assets, k);
-        }
+        // Q6/Phase 6 item 6 — a selection-change row reads as secondary (dimmed, cursor glyph)
+        // next to a real edit, without hiding it: the panel must list every step, selection
+        // included, so Ctrl+Z's press count always matches what's shown here.
+        const bool selOnly = m_UndoStack[k].SelectionOnly;
+        if (selOnly) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        const std::string label = (selOnly ? std::string(ICON_FA_ARROW_POINTER "  ") : std::string()) + m_UndoStack[k].Label;
+        bool clicked = ImGui::Selectable(label.c_str());
+        if (selOnly) ImGui::PopStyleColor();
+        if (clicked) JumpToUndoEntry(world, assets, k);
         ImGui::PopID();
     }
 

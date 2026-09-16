@@ -247,16 +247,32 @@ std::vector<entt::entity> SnapshotSelection(entt::entity primary, const std::vec
 }
 } // namespace
 
-void EditorLayer::RecordSelectionHistory() {
+void EditorLayer::RecordSelectionHistory(const World& world) {
     auto cur = SnapshotSelection(m_Selected, m_ExtraSelection);
-    if (cur == m_SelSnapshotLast) return;
+    if (cur == m_SelSnapshotLast) { m_EditPushedThisFrame = false; return; }
     auto prev = std::move(m_SelSnapshotLast);
     m_SelSnapshotLast = cur;
 
-    // Our own back/forward change — advance the "last seen" marker, don't append.
-    if (m_SelHistoryNavigating) { m_SelHistoryNavigating = false; return; }
+    // Our own back/forward (or Undo/Redo/JumpTo*) change — advance the "last seen" marker, don't
+    // append to either history.
+    if (m_SelHistoryNavigating) { m_SelHistoryNavigating = false; m_EditPushedThisFrame = false; return; }
 
-    m_CtrlZSelectionMode = true; // a fresh user selection: Ctrl+Z now walks selection history
+    // Phase 6 item 6 / Q6 — a genuine user selection change becomes its own m_UndoStack entry,
+    // UNLESS an edit already pushed one this frame (Duplicate/Paste/Add Cube/... all change
+    // selection as a side effect of their own PushUndo/CommitStagedUndo; that's not a second,
+    // separate user action worth its own row). PushUndo's dedup only rejects a push whose scene
+    // hash AND selection both match the current top — a selection-only change always differs in
+    // SelectedOrders, so it's never silently dropped there.
+    //
+    // The entry must hold the PRE-change selection (`prev`), not the current one — same "snapshot
+    // taken before the thing this entry undoes" contract every other UndoEntry follows. Passed as
+    // an override since CaptureSelectedOrders(world) alone would only ever see the live (already
+    // new) selection by the time this runs.
+    if (!m_EditPushedThisFrame) {
+        const std::vector<int> prevOrders = CaptureSelectedOrders(world, prev);
+        PushUndo(world, SelectionUndoLabel(world), /*selectionOnly=*/true, &prevOrders);
+    }
+    m_EditPushedThisFrame = false;
 
     if (m_SelHistory.empty()) {           // seed with the pre-change state so Back can reach it
         m_SelHistory.push_back(std::move(prev));
