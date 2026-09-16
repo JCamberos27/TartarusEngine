@@ -97,6 +97,45 @@ void Draw(const EditorModuleHostAPI& host) {
     if (FlatGlyphButton(host, ICON_FA_ANGLES_UP, "Collapse all") && host.HierarchyExpandAll)
         host.HierarchyExpandAll(false);
 
+    // Phase 5 item 6 (remainder) — type-filter chips + sort control, a second toolbar row. Chips
+    // are additive toggles (multiple kinds can be shown at once); an active chip is tinted like a
+    // pressed button so the filter state reads at a glance without a tooltip.
+    int typeMask = host.GetHierarchyTypeFilter ? host.GetHierarchyTypeFilter() : 0;
+    auto chip = [&](const char* icon, const char* tip, int bit) {
+        const bool active = (typeMask & bit) != 0;
+        if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        if (ImGui::Button(icon)) {
+            typeMask ^= bit;
+            if (host.SetHierarchyTypeFilter) host.SetHierarchyTypeFilter(typeMask);
+        }
+        if (active) ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered() && host.SetTooltip) host.SetTooltip(tip);
+        ImGui::SameLine();
+    };
+    chip(ICON_FA_CUBE, "Meshes only", kHierarchyFilterMesh);
+    chip(ICON_FA_LIGHTBULB, "Lights only", kHierarchyFilterLight);
+    chip(ICON_FA_VIDEO, "Cameras only", kHierarchyFilterCamera);
+    chip(ICON_FA_VECTOR_SQUARE, "Empties / other only", kHierarchyFilterOther);
+
+    const int sortPacked = host.GetHierarchySort ? host.GetHierarchySort() : 0;
+    int sortMode = (sortPacked >> 1) & 3;
+    bool sortDesc = (sortPacked & 1) != 0;
+    const float sortBtnW = ImGui::CalcTextSize(ICON_FA_ARROW_DOWN_SHORT_WIDE).x + st.FramePadding.x * 2.0f;
+    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - sortBtnW);
+    if (ImGui::Button(ICON_FA_ARROW_DOWN_SHORT_WIDE)) ImGui::OpenPopup("##HierarchySort");
+    if (ImGui::IsItemHovered() && host.SetTooltip) host.SetTooltip("Sort the list");
+    if (ImGui::BeginPopup("##HierarchySort")) {
+        static const char* kModes[] = { "Creation order", "Name", "Type" };
+        for (int i = 0; i < 3; ++i)
+            if (ImGui::MenuItem(kModes[i], nullptr, sortMode == i)) sortMode = i;
+        ImGui::Separator();
+        if (ImGui::MenuItem("Ascending", nullptr, !sortDesc)) sortDesc = false;
+        if (ImGui::MenuItem("Descending", nullptr, sortDesc)) sortDesc = true;
+        ImGui::EndPopup();
+    }
+    const int newSortPacked = sortMode * 2 + (sortDesc ? 1 : 0);
+    if (newSortPacked != sortPacked && host.SetHierarchySort) host.SetHierarchySort(newSortPacked);
+
     if (host.DrawHierarchyTreeBody) host.DrawHierarchyTreeBody();
 
     ImGui::End();

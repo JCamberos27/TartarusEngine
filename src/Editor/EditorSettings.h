@@ -127,6 +127,14 @@ struct EditorSettings {
     int  AssetSortMode = 0;
     bool AssetSortDesc = false;
 
+    // Hierarchy row sort (Phase 5 item 6). Mode: 0 Creation order (default, OrderComponent), 1
+    // Name, 2 Type. Only applies at each sibling level - parenting itself is untouched.
+    int  HierarchySortMode = 0;
+    bool HierarchySortDesc = false;
+    // Type-filter chips bitmask: bit0 Mesh, bit1 Light, bit2 Camera, bit3 Empty/other. 0 or
+    // all-bits-set both mean "no filter" (every kind shown).
+    int  HierarchyTypeFilterMask = 0;
+
     // --- Corner "engine mark": the spinning TE monogram in the Scene viewport's bottom-left.
     // EngineMarkSpinSpeed is radians/sec (0 parks it). EngineMarkPrism paints the monogram with
     // a slowly-drifting spectral gradient instead of the default contrast-adaptive grey.
