@@ -1,5 +1,6 @@
 #include "AssetImporterInspector.h"
 #include "EditorUIHelpers.h"
+#include "EditorUIPrimitives.h"
 #include <imgui.h>
 
 namespace {
@@ -35,10 +36,10 @@ void AssetImporterInspector::DrawTextureSettings(TextureImportSettings& settings
     }
 
     Row("Generate Mipmaps", "Builds progressively smaller versions for filtering at a\ndistance. Off saves memory/import time for UI or other never-minified textures.");
-    isDirty |= ImGui::Checkbox("##Mipmaps", &settings.GenerateMipmaps);
+    isDirty |= EditorUIPrimitives::Checkbox("##Mipmaps", &settings.GenerateMipmaps);
 
     Row("sRGB (Color Texture)", "On for albedo/base-color textures (authored in sRGB by every\npaint/photo tool). Off for normal maps and other data maps (roughness,\nmetallic, AO, height) - those numbers ARE linear already.");
-    isDirty |= ImGui::Checkbox("##sRGB", &settings.IsSRGB);
+    isDirty |= EditorUIPrimitives::Checkbox("##sRGB", &settings.IsSRGB);
 
     Row("Filter Mode", "Point = blocky/pixel-art. Bilinear = smooth, no blending between\nmip levels. Trilinear = smooth with blending between mip levels too\n(best quality at oblique angles, marginally more GPU cost).");
     const char* kFilters[] = {"Point", "Bilinear", "Trilinear"};
@@ -76,19 +77,19 @@ void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bo
     isDirty |= ImGui::DragFloat("##Scale", &settings.GlobalScale, 0.01f, 0.001f, 1000.0f, "%.3f");
 
     Row("Generate Normals/Tangents", "Computes smooth normals and tangent-space basis\nvectors for normal mapping. Leave on unless the source file already\nauthors its own normals you specifically want preserved as-is.");
-    isDirty |= ImGui::Checkbox("##Normals", &settings.ImportNormals);
+    isDirty |= EditorUIPrimitives::Checkbox("##Normals", &settings.ImportNormals);
 
     Row("Optimize Mesh", "Merges identical/duplicate vertices and welds mesh pieces that\nshare a material - fewer draw calls and less GPU memory, purely a\nperformance optimization with no visible difference.");
-    isDirty |= ImGui::Checkbox("##OptimizeGraph", &settings.OptimizeGraph);
+    isDirty |= EditorUIPrimitives::Checkbox("##OptimizeGraph", &settings.OptimizeGraph);
 
     ImGui::Spacing();
     ImGui::SeparatorText("Rig & Animation");
 
     Row("Import Animation", "Reads animation clips embedded in the file. Off if this asset\nis only ever used as a static prop - skips clip data entirely.");
-    isDirty |= ImGui::Checkbox("##ImportAnim", &settings.ImportAnimations);
+    isDirty |= EditorUIPrimitives::Checkbox("##ImportAnim", &settings.ImportAnimations);
 
     Row("Import Skeleton", "Reads bone weights so the mesh can be posed/animated. Off\nimports every mesh as static geometry, baked at its bind pose -\ncheaper, but Import Animation has nothing to play without this.");
-    isDirty |= ImGui::Checkbox("##ImportSkeleton", &settings.ImportSkeleton);
+    isDirty |= EditorUIPrimitives::Checkbox("##ImportSkeleton", &settings.ImportSkeleton);
 
     ImGui::Spacing();
     ImGui::SeparatorText("Materials");

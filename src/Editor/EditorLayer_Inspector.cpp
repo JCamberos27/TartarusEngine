@@ -501,7 +501,7 @@ bool MultiEditCheckbox(const char* label, bool anyOn, bool mixed, bool& out, Pre
         }
     }
     if (mixed) ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
-    bool clicked = ImGui::Checkbox(pfRow ? "##mecb" : label, &value);
+    bool clicked = EditorUIPrimitives::Checkbox(pfRow ? "##mecb" : label, &value);
     if (mixed) ImGui::PopItemFlag();
     if (pfRow) ImGui::PopID();
     if (clicked) out = mixed ? true : value;
@@ -904,7 +904,7 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
             case ShaderPropType::Bool: {
                 PropertyLabel(label);
                 bool edit = MaterialAsset::GetBool(mat, prop.Name);
-                if (ImGui::Checkbox("##b", &edit)) { MaterialAsset::SetBool(mat, prop.Name, edit); save(); }
+                if (EditorUIPrimitives::Checkbox("##b", &edit)) { MaterialAsset::SetBool(mat, prop.Name, edit); save(); }
                 break;
             }
             case ShaderPropType::Texture2D: {
@@ -1800,7 +1800,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
         ImGui::SameLine();
         bool isStatic = registry.all_of<StaticTag>(entity);
-        if (ImGui::Checkbox("Static", &isStatic)) {
+        if (EditorUIPrimitives::Checkbox("Static", &isStatic)) {
             PushUndo(world, "Toggle Static");
             if (isStatic) registry.emplace<StaticTag>(entity);
             else registry.remove<StaticTag>(entity);
@@ -2647,7 +2647,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             joint->Kind == JointComponent::Type::Distance) {
             bool ul = joint->UseLimit;
             PropertyLabel("Use Limit", "Hinge: degrees about Axis. Slider: units along Axis. Distance: min/max separation.");
-            if (ImGui::Checkbox("##JointUseLimit", &ul)) { PushUndo(world, "Toggle Joint Limit"); joint->UseLimit = ul; }
+            if (EditorUIPrimitives::Checkbox("##JointUseLimit", &ul)) { PushUndo(world, "Toggle Joint Limit"); joint->UseLimit = ul; }
             if (joint->UseLimit) {
                 PropertyLabel("Limit Lower", nullptr);
                 ImGui::DragFloat("##JointLimLo", &joint->LimitLower, 0.5f, -1000.0f, 1000.0f, "%.1f");
@@ -3012,7 +3012,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 bool shared = MaterialAsset::GetBool(*mats[0], prop.Name);
                 PropertyLabel(label);
                 bool edit = shared;
-                if (ImGui::Checkbox("##b", &edit)) {
+                if (EditorUIPrimitives::Checkbox("##b", &edit)) {
                     PushUndo(world, std::string("Edit ") + label);
                     for (Material* mm : mats) MaterialAsset::SetBool(*mm, prop.Name, edit);
                 }
@@ -3082,7 +3082,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             for (Material* mm : mats) if ((mm->*field) != shared) mixed = true;
             PropertyLabel(label);
             bool edit = shared;
-            if (ImGui::Checkbox(mixed ? "##b-mixed" : "##b", &edit)) {
+            if (EditorUIPrimitives::Checkbox(mixed ? "##b-mixed" : "##b", &edit)) {
                 PushUndo(world, std::string("Edit ") + label);
                 for (Material* mm : mats) mm->*field = edit;
             }
@@ -3297,7 +3297,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
     {
         bool value = nCustom > 0;
         if (customMixed) ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
-        bool clicked = ImGui::Checkbox("Use Custom Material", &value);
+        bool clicked = EditorUIPrimitives::Checkbox("Use Custom Material", &value);
         if (customMixed) ImGui::PopItemFlag();
         if (clicked) {
             bool enable = customMixed ? true : value;
