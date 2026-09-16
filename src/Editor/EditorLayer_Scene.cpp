@@ -890,6 +890,7 @@ void EditorLayer::OnCaptureDone(const std::string& path, int w, int h) {
 // own Screenshots-folder grid already pays per shot.
 void EditorLayer::PushCaptureNotification(const std::string& path, int w, int h) {
     EditorNotification n;
+    n.Level = NotificationLevel::Success;
     n.Title = std::filesystem::path(path).filename().string();
     n.Subtitle = std::to_string(w) + "x" + std::to_string(h);
     n.FilePath = path;
@@ -898,6 +899,44 @@ void EditorLayer::PushCaptureNotification(const std::string& path, int w, int h)
     m_Notifications.insert(m_Notifications.begin(), std::move(n));
     constexpr size_t kMaxNotifications = 4;
     if (m_Notifications.size() > kMaxNotifications) m_Notifications.resize(kMaxNotifications);
+}
+
+// Phase 6 item 14 — the generic entry point: no thumbnail, no FilePath (nothing to open/show in
+// folder for a log-sourced warning). Only Warning/Error bump the bell's unread badge — Info never
+// reaches here (PollLogNotifications only forwards Warning/Error) and Success is captures, which
+// already have their own always-visible card.
+void EditorLayer::PushNotification(NotificationLevel level, const std::string& title, const std::string& subtitle) {
+    EditorNotification n;
+    n.Level = level;
+    n.Title = title;
+    n.Subtitle = subtitle;
+    m_Notifications.insert(m_Notifications.begin(), std::move(n));
+    constexpr size_t kMaxNotifications = 8; // a little deeper than captures alone needed
+    if (m_Notifications.size() > kMaxNotifications) m_Notifications.resize(kMaxNotifications);
+    if (level == NotificationLevel::Warning || level == NotificationLevel::Error) ++m_NotificationUnreadCount;
+}
+
+// Diffs Log::Revision() once a frame instead of re-scanning the whole ring buffer — cheap even
+// with kMaxEntries=1000. A message that only repeats (Log::Push's dedup) bumps the revision
+// without adding a new entry, so m_LogEntriesSeen intentionally tracks entries.size(), not the
+// revision counter itself; a pure repeat is silently skipped (the first occurrence already
+// notified).
+void EditorLayer::PollLogNotifications() {
+    const unsigned int rev = Log::Revision();
+    if (rev == m_LastLogRevisionSeen) return;
+    m_LastLogRevisionSeen = rev;
+
+    const auto& entries = Log::Entries();
+    if (entries.size() < m_LogEntriesSeen) m_LogEntriesSeen = 0; // Log::Clear() shrank the buffer
+    for (; m_LogEntriesSeen < entries.size(); ++m_LogEntriesSeen) {
+        const LogEntry& e = entries[m_LogEntriesSeen];
+        if (e.Level != LogLevel::Warning && e.Level != LogLevel::Error) continue;
+        std::string title = e.Message;
+        constexpr size_t kMaxTitleLen = 80;
+        if (title.size() > kMaxTitleLen) { title.resize(kMaxTitleLen - 1); title += "\xE2\x80\xA6"; }
+        PushNotification(e.Level == LogLevel::Error ? NotificationLevel::Error : NotificationLevel::Warning,
+                          title, e.Time);
+    }
 }
 
 // Called once per frame from Draw() — just the fading white flash over the Scene viewport now;
@@ -971,7 +1010,22 @@ void EditorLayer::DrawNotifications() {
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (contentH - imgSize.y) * 0.5f);
             ImGui::Image((ImTextureID)(intptr_t)n.Thumbnail->GLHandle(), imgSize);
         } else {
+            // Log-sourced entries (item 14): a level-coloured glyph stands in for the missing
+            // thumbnail instead of blank space. Reserve the same box the thumbnail would've used
+            // (via Dummy) so the title/subtitle column lines up identically either way, then paint
+            // the glyph centred on top of it.
+            const ImVec2 boxMin = ImGui::GetCursorScreenPos();
             ImGui::Dummy(ImVec2(thumbSize, thumbSize));
+            const char* glyph = n.Level == NotificationLevel::Error ? ICON_FA_CIRCLE_XMARK
+                               : n.Level == NotificationLevel::Warning ? ICON_FA_TRIANGLE_EXCLAMATION
+                               : ICON_FA_CIRCLE_CHECK;
+            const ImVec4 col = n.Level == NotificationLevel::Error ? ImVec4(0.95f, 0.35f, 0.35f, 1.0f)
+                              : n.Level == NotificationLevel::Warning ? ImVec4(0.95f, 0.75f, 0.25f, 1.0f)
+                              : ImVec4(0.4f, 0.8f, 0.5f, 1.0f);
+            const ImVec2 glyphSize = ImGui::CalcTextSize(glyph);
+            const ImVec2 glyphPos(boxMin.x + (thumbSize - glyphSize.x) * 0.5f,
+                                  boxMin.y + (thumbSize - glyphSize.y) * 0.5f);
+            ImGui::GetWindowDrawList()->AddText(glyphPos, ImGui::GetColorU32(col), glyph);
         }
         ImGui::SameLine();
 
@@ -983,14 +1037,16 @@ void EditorLayer::DrawNotifications() {
         ImGui::TextUnformatted(n.Subtitle.c_str());
         ImGui::PopStyleColor();
 
-        if (ActionButton(ICON_FA_UP_RIGHT_FROM_SQUARE, "Open", false, ImVec2(0, 0)))
-            Screenshot::OpenFile(n.FilePath);
-        ImGui::SameLine(0.0f, 4.0f);
-        if (ActionButton(ICON_FA_FOLDER_OPEN, "Show in folder", false, ImVec2(0, 0)))
-            Screenshot::ShowInFolder(n.FilePath);
-        ImGui::SameLine(0.0f, 4.0f);
-        if (ActionButton(ICON_FA_COPY, "Copy path", false, ImVec2(0, 0)))
-            ImGui::SetClipboardText(n.FilePath.c_str());
+        if (!n.FilePath.empty()) {
+            if (ActionButton(ICON_FA_UP_RIGHT_FROM_SQUARE, "Open", false, ImVec2(0, 0)))
+                Screenshot::OpenFile(n.FilePath);
+            ImGui::SameLine(0.0f, 4.0f);
+            if (ActionButton(ICON_FA_FOLDER_OPEN, "Show in folder", false, ImVec2(0, 0)))
+                Screenshot::ShowInFolder(n.FilePath);
+            ImGui::SameLine(0.0f, 4.0f);
+            if (ActionButton(ICON_FA_COPY, "Copy path", false, ImVec2(0, 0)))
+                ImGui::SetClipboardText(n.FilePath.c_str());
+        }
         ImGui::EndGroup();
 
         // Dismiss — pinned to the card's own top-right corner via an absolute cursor position
@@ -1016,6 +1072,46 @@ void EditorLayer::DrawNotifications() {
 
     if (dismissIndex >= 0) m_Notifications.erase(m_Notifications.begin() + dismissIndex);
 }
+
+// The bell's dropdown (Phase 6 item 14) — a compact list, one row per notification, newest
+// first, same underlying m_Notifications the floating cards read from. No thumbnails here (the
+// cards already show those); this is meant as a scan-and-jump list, not a second copy of the card
+// UI. Opening it doesn't mark anything read by itself — EditorModuleToolbar calls
+// MarkNotificationsRead() the moment the popup opens, matching how a bell icon behaves everywhere
+// else (badge clears once you've looked, not once you've closed the list).
+void EditorLayer::DrawNotificationsPopupBody() {
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f * m_UIScale, 4.0f * m_UIScale));
+    if (m_Notifications.empty()) {
+        ImGui::TextDisabled("No notifications");
+    }
+    int dismissIndex = -1;
+    for (int i = 0; i < (int)m_Notifications.size(); ++i) {
+        EditorNotification& n = m_Notifications[i];
+        ImGui::PushID(i);
+        const char* glyph = n.Level == NotificationLevel::Error ? ICON_FA_CIRCLE_XMARK
+                           : n.Level == NotificationLevel::Warning ? ICON_FA_TRIANGLE_EXCLAMATION
+                           : ICON_FA_CIRCLE_CHECK;
+        const ImVec4 col = n.Level == NotificationLevel::Error ? ImVec4(0.95f, 0.35f, 0.35f, 1.0f)
+                          : n.Level == NotificationLevel::Warning ? ImVec4(0.95f, 0.75f, 0.25f, 1.0f)
+                          : ImVec4(0.4f, 0.8f, 0.5f, 1.0f);
+        ImGui::TextColored(col, "%s", glyph);
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+        ImGui::TextUnformatted(n.Title.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+        ImGui::TextUnformatted(n.Subtitle.c_str());
+        ImGui::PopStyleColor();
+        ImGui::EndGroup();
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 18.0f * m_UIScale);
+        if (ActionButton(ICON_FA_XMARK, "Dismiss", false, ImVec2(16.0f * m_UIScale, 16.0f * m_UIScale)))
+            dismissIndex = i;
+        if (i + 1 < (int)m_Notifications.size()) ImGui::Separator();
+        ImGui::PopID();
+    }
+    ImGui::PopStyleVar();
+    if (dismissIndex >= 0) m_Notifications.erase(m_Notifications.begin() + dismissIndex);
+}
+
 // Full-quality load for the lightbox — uncapped, since the user can zoom in.
 static std::shared_ptr<Texture> LoadScreenshotLightboxTexture(const std::string& path) {
     return LoadScreenshotTexture(path, 0);
