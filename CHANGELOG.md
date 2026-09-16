@@ -7,6 +7,15 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### [Phase 2] Information architecture & keyboard navigation (#4) — 2026-09-16
+
+Closed. Items 1-6 and 8 landed in earlier sessions (#68, #69, #41). The last item:
+
+- View menu emptied of Draw mode (removed outright — Phase 3's viewport chip, `DrawViewStateChips`,
+  made it a duplicate) and Camera sliders FOV/Fly speed/Near/Far (relocated to Preferences >
+  Viewport > Camera, reusing the existing persisted fields; a drag still applies to the live
+  camera immediately) (`ce4252d`, item 7, closes #4).
+
 ### [Phase 3] Interaction fixes — 2026-09-16
 
 - Viewport shortcuts (Shift+A quick-add and friends) now trigger on hover, not just on having
