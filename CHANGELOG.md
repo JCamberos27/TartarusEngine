@@ -7,6 +7,23 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### [Phase 3] Interaction fixes — 2026-09-16
+
+- Viewport shortcuts (Shift+A quick-add and friends) now trigger on hover, not just on having
+  actually clicked the Scene panel first — matching the Inspector empty-state's own "press
+  Shift+A in the viewport" tip (`4201e4d`, closes #22).
+- Console toolbar toggle: clicking it while Console is open but buried behind a sibling dock tab
+  now brings it to front instead of closing it (`6f23678`, closes #11).
+- Closed without a code change, already fixed by earlier work: Measure tool's selection side
+  effect / missing clear-multi-segment-units-copy (closes #21, `18c4545`), two icon glyphs each
+  carrying two meanings in the toolbar (closes #27, the `#161` icon-collision cleanup), capture
+  toast being click-through/transient (closes #8, the Phase 3 item 9 notification stack),
+  captures baking in the selection outline/world axis lines with no suppress option (closes #30,
+  the "Scene viewport (clean)" capture mode), and Game tab needing two clicks to activate from
+  Scene (closes #12, couldn't reproduce against the current dock-tab focus code).
+- Game view's resolution overlay is legible now (Phase 1's opaque-HUD-plate work covered it too),
+  but it still has no toolbar of its own — #29 stays open for that structural gap.
+
 ### [Phase 6] Theme consolidation and the long tail (#8) — 2026-09-16
 
 In progress. Landed so far:
