@@ -307,9 +307,14 @@ inline bool ActiveToggle(const char* id, bool active, bool rowHovered, const cha
 }
 
 // #236 B — a hover-reveal glyph toggle for the Hierarchy's SceneVis columns (hide / lock).
-// Nothing is drawn at rest unless `on`; hovering the row fades the glyph in so the column
-// doesn't clutter every row. Returns true on click. Same top-aligned glyph metrics as
-// ActiveToggle so the little cluster lines up with the eye.
+// Returns true on click. Same top-aligned glyph metrics as ActiveToggle so the little cluster
+// lines up with the eye.
+// Phase 5 item 6 (#7) — the resting "off" glyph used to sit at 0.32 alpha over
+// TextDisabled, ~1.35:1 against the panel background: an interactive control well under the
+// WCAG 2.5.5-adjacent 3:1 floor this codebase already asserts for text (see
+// EditorUIPrimitives::AssertContrastFloor). It's brighter now at every tier, matching the floor
+// ActiveToggle's own unchecked glyph already clears — the "quiet until hovered" declutter effect
+// is smaller than it was, but an interactive glyph invisible at rest isn't discoverable at all.
 inline bool SceneVisToggle(const char* id, const char* glyphOn, const char* glyphOff,
                            bool on, bool rowHovered, const char* tip) {
     const float sz = ImGui::GetFrameHeight();
@@ -322,13 +327,13 @@ inline bool SceneVisToggle(const char* id, const char* glyphOn, const char* glyp
     ImGui::PopID();
     if (selfHover) EditorUI::SetTooltip("%s", tip);
 
-    // Always drawn: a quiet glyph at rest so the column is discoverable, brighter on row-hover,
+    // Always drawn: a dim-but-legible glyph at rest (>=3:1, see above), brighter on row-hover,
     // brightest when set or directly hovered.
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const char* g = on ? glyphOn : glyphOff;
     const ImVec2 ts = ImGui::CalcTextSize(g);
     const float a = on ? (selfHover ? 1.0f : 0.90f)
-                       : (selfHover ? 0.85f : (rowHovered ? 0.60f : 0.32f));
+                       : (selfHover ? 1.0f : (rowHovered ? 0.85f : 0.78f));
     dl->AddText(ImVec2(p0.x + (w - ts.x) * 0.5f, p0.y),
                 ImGui::GetColorU32(on ? ImGuiCol_Text : ImGuiCol_TextDisabled, a), g);
     return clicked;
