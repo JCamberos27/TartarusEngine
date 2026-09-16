@@ -1373,6 +1373,10 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             } else if (cell.kind == Cell::Kind::Prefab) {
                 EditorUI::SetTooltip("%s\n\nDrag into the viewport to place an instance,\nor double-click to place one at the origin.",
                     cell.display.c_str());
+            } else if (cell.kind == Cell::Kind::Screenshot) {
+                // Defect #17 — this used to fall into the folder-oriented default below ("Drag
+                // assets onto it to file them here"), which only makes sense for an actual folder.
+                EditorUI::SetTooltip("%s\n\nDouble-click to preview.", cell.display.c_str());
             } else {
                 EditorUI::SetTooltip("%s\n\nDouble-click to open. Drag assets onto it to file them here.", cell.display.c_str());
             }
