@@ -1563,27 +1563,46 @@ void EditorLayer::EndFrame() {
         }
     }
 }
-// #185 — a small physics visual debugger: sim stats, four viewport draw channels, a slow-mo
-// slider and a single-substep button. That's the general-use set; nothing else.
+// #185 / Phase 6 item 13 — a small physics visual debugger: sim stats, four viewport draw
+// channels, a slow-mo slider and a single-substep button. That's the general-use set; nothing
+// else. Rebuilt per the review's live-verification findings (Appendix B #32/35/36/38/39/40/41):
+// title now matches its own Window-menu entry, the Step button no longer clips off the window,
+// its tooltip fires even while disabled (that's exactly when it's most useful), a real empty
+// state offers to enter Play instead of a bare "Not playing.", Slow-mo is session-only so a
+// saved 0x can't silently freeze physics on a later launch, and the HUD anchors to the opposite
+// corner from the Statistics panel's own default dock.
 void EditorLayer::DrawPhysicsDebugWindow(World& world) {
     if (!EditorSettings::Get().ShowPhysicsPanel) return;
-    ImGui::SetNextWindowSize(ImVec2(320.0f * m_UIScale, 300.0f * m_UIScale), ImGuiCond_FirstUseEver); // #35
+    // Wide enough that Slow-mo + 1x + Step never wrap/clip regardless of UI scale (#32).
+    ImGui::SetNextWindowSize(ImVec2(360.0f * m_UIScale, 320.0f * m_UIScale), ImGuiCond_FirstUseEver);
     bool open = EditorSettings::Get().ShowPhysicsPanel;
-    const bool visible = ImGui::Begin(ICON_FA_CUBES "  Physics", &open);
+    PushTabChromeText();
+    // #40 — the title now reads exactly like its Window-menu entry ("Physics Debug"), not the
+    // shorter "Physics" the menu item disagreed with.
+    const bool visible = ImGui::Begin(ICON_FA_CUBES "  Physics Debug", &open);
+    PopTabChromeText();
     EditorSettings& es = EditorSettings::Get();
 
     if (visible) {
         const PhysicsWorld::PhysicsDebugStats st = PhysicsWorld::GetDebugStats();
         if (!st.Active) {
-            ImGui::TextDisabled("Not playing.");
+            // #41-adjacent — a real empty state instead of a bare, dead-end "Not playing.": the
+            // whole panel is otherwise inert outside Play, so offer the one action that changes
+            // that right here instead of sending the user hunting for the toolbar's Play button.
+            ImGui::Spacing();
+            ImGui::TextDisabled("Physics runs in Play mode.");
+            ImGui::Spacing();
+            if (EditorUIPrimitives::PrimaryButton(ICON_FA_PLAY "  Enter Play", ImVec2(-FLT_MIN, 0.0f)))
+                m_PlayStopRequested = true;
         } else {
             ImGui::Text("%d bodies  (%d awake)   %d contacts", st.DynamicBodies, st.AwakeBodies,
                         st.ContactsThisFrame);
             ImGui::TextDisabled("substep %.2f ms  x%d   gravity %.0f", st.StepMillis, st.Substeps,
                                 st.Gravity[1]);
         }
-        ImGui::Separator();
 
+        ImGui::Spacing();
+        ImGui::SeparatorText("Draw channels");
         auto chan = [&](const char* label, unsigned bit, const char* tip) {
             unsigned f = es.PhysicsDebugDrawFlags;
             if (ImGui::CheckboxFlags(label, &f, bit)) { es.PhysicsDebugDrawFlags = f; EditorSettings::Save(); }
@@ -1602,18 +1621,33 @@ void EditorLayer::DrawPhysicsDebugWindow(World& world) {
              "An arrow from each awake body's center of mass, length and color by speed."); // #19
         chan("Sleeping bodies", PhysicsWorld::PDD_Sleep, "A dim marker over bodies the solver has put to sleep.");
 
-        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::SeparatorText("Simulation");
+        // #39 — PhysicsSimTimeScale is intentionally NOT written to editor_prefs.json (see
+        // EditorSettings::Save/Load) so a session left at 0x can't silently freeze physics on
+        // every future launch; EditorSettings::Save() below still persists the OTHER prefs this
+        // frame touched (draw flags, panel visibility), same as any other call site.
         float ts = es.PhysicsSimTimeScale;
-        ImGui::SetNextItemWidth(150.0f * m_UIScale); // #36
+        ImGui::SetNextItemWidth(150.0f * m_UIScale);
         if (ImGui::SliderFloat("Slow-mo", &ts, 0.0f, 2.0f, "%.2fx")) es.PhysicsSimTimeScale = ts;
-        if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+        if (ts != 1.0f) {
+            ImGui::SameLine();
+            ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Not 1x - physics runs faster/slower than real time this session.");
+        }
         ImGui::SameLine();
-        if (ImGui::SmallButton("1x")) { es.PhysicsSimTimeScale = 1.0f; EditorSettings::Save(); }
+        if (ImGui::SmallButton("1x")) es.PhysicsSimTimeScale = 1.0f;
+        // #38 — AllowWhenDisabled: without it, IsItemHovered() reports false for a disabled
+        // item, so this tooltip (explaining WHY Step is greyed out) never fired outside Play,
+        // exactly when a user hovering a disabled button most wants to know why.
         ImGui::BeginDisabled(!m_InPlayMode);
-        ImGui::SameLine();
-        if (ImGui::SmallButton("Step")) PhysicsWorld::StepOneSubstep(world);
+        if (ImGui::Button("Step", ImVec2(-FLT_MIN, 0.0f))) PhysicsWorld::StepOneSubstep(world);
         ImGui::EndDisabled();
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Advance one fixed 1/60 s substep (works while paused).");
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            EditorUI::SetTooltip(m_InPlayMode
+                ? "Advance one fixed 1/60 s substep (works while paused)."
+                : "Advance one fixed 1/60 s substep - only while Playing.");
     }
 
     ImGui::End();
@@ -1621,17 +1655,20 @@ void EditorLayer::DrawPhysicsDebugWindow(World& world) {
 }
 
 // Corner text overlay while playing (#185 D) — anchored to the Scene viewport, or the main
-// window when maximized (no Scene rect then).
+// window when maximized (no Scene rect then). Phase 6 item 13 / Appendix B #41 — anchors to the
+// top-RIGHT now (pivot (1,0): the given point is the window's top-right corner, so it grows
+// leftward and needs no width estimate), not the top-left the Statistics panel's own default
+// dock position already claims.
 void EditorLayer::DrawPhysicsHud(bool maximized) {
     if (!EditorSettings::Get().PhysicsHudOverlay || !m_InPlayMode) return;
     const PhysicsWorld::PhysicsDebugStats st = PhysicsWorld::GetDebugStats();
     if (!st.Active) return;
-    ImVec2 anchor(m_ViewportPos.x + 12.0f, m_ViewportPos.y + 12.0f);
+    ImVec2 anchor(m_ViewportPos.x + m_ViewportSize.x - 12.0f, m_ViewportPos.y + 12.0f);
     if (maximized || m_ViewportSize.x < 2.0f) {
         const ImGuiViewport* vp = ImGui::GetMainViewport();
-        anchor = ImVec2(vp->WorkPos.x + 12.0f, vp->WorkPos.y + 40.0f);
+        anchor = ImVec2(vp->WorkPos.x + vp->WorkSize.x - 12.0f, vp->WorkPos.y + 40.0f);
     }
-    ImGui::SetNextWindowPos(anchor, ImGuiCond_Always);
+    ImGui::SetNextWindowPos(anchor, ImGuiCond_Always, ImVec2(1.0f, 0.0f));
     ImGui::SetNextWindowBgAlpha(0.55f);
     const ImGuiWindowFlags f = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav |
         ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize |

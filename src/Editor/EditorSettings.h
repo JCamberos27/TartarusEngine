@@ -179,7 +179,10 @@ struct EditorSettings {
     bool     ShowPhysicsPanel      = false;  // the dockable Physics debug window
     bool     PhysicsHudOverlay     = false;  // corner stats overlay while playing
     unsigned PhysicsDebugDrawFlags = 0;      // PhysicsWorld::PhysicsDebugDrawFlag bitmask
-    float    PhysicsSimTimeScale   = 1.0f;   // slow-mo / freeze on the physics step [0, 2]
+    // Slow-mo / freeze on the physics step [0, 2]. Phase 6 item 13 / Appendix B #39 -
+    // deliberately session-only (NOT read/written by Load/Save below): a session left at 0x
+    // must not silently freeze physics again the next time the editor opens.
+    float    PhysicsSimTimeScale   = 1.0f;
     bool     PlayDebugOverlay      = false;  // F3: draw the collider wireframes + debug channels
                                              // over the game view during maximized play too
 
