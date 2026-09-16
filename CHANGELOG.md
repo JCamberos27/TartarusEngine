@@ -108,6 +108,16 @@ In progress. Landed so far:
   never bumps it. New host-module API (v28) `GetNotificationUnreadCount`/`MarkNotificationsRead`/
   `DrawNotificationsPopupBody`. Live-verified: triggered a real warning, watched the card and the
   "1" badge appear, opened the dropdown (badge cleared), dismissed it (`95bf28a`, closes item 14).
+- Shortcut coverage pass: registered a dozen previously mouse-only actions (panel toggles for
+  Console/Statistics/History/Lighting, gizmo World/Local + Pivot/Center, grid/snap toggles,
+  snap-to-ground, draw-mode cycling, focus-scene, Project Settings, capture) in the Shortcuts
+  table — Alt+letter throughout, since plain letters and Ctrl+letter were already claimed by the
+  viewport tools and Edit menu. `capture.now` replaces `main.cpp`'s hardcoded PrintScreen check,
+  so it's rebindable like everything else. Added a Help menu (host-module API v29) whose
+  "Shortcuts" item jumps to the existing press-to-bind editor, which also gained a "Discoverable
+  (not bindable)" note (type-ahead jump, drag-to-reparent, `t:`/`l:` search prefixes). Live-
+  verified: Ctrl+Shift+C opened/closed Console, Alt+G toggled the grid icon, Ctrl+Shift+P opened
+  Project Settings, Alt+D/Alt+Shift+D cycled the draw-mode chip (`6e943af`, closes item 11).
 
 ### [Phase 4] Inspector rebuild (#6) — 2026-09-15
 
