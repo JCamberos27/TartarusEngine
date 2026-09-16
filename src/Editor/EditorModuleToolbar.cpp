@@ -288,7 +288,21 @@ void Draw(const EditorModuleHostAPI& host) {
         // across a TartarusEditor.dll reload, and so a hidden Console stays hidden through one.
         EditorConsoleState* cs = host.ConsoleState ? host.ConsoleState() : nullptr;
         const bool consoleVisible = cs && cs->Visible;
-        if (ActionButton(host, EDITOR_ICON_CONSOLE, "Toggle Console", consoleVisible) && cs) cs->Visible = !cs->Visible;
+        if (ActionButton(host, EDITOR_ICON_CONSOLE, "Toggle Console", consoleVisible) && cs) {
+            // Defect #11 — this used to just flip Visible off whenever Console was already open,
+            // even when it was sitting open-but-buried behind a sibling dock tab (Asset Browser):
+            // the click closed it instead of surfacing it, so bringing it forward took a second
+            // click on this same button (open again, only THEN visible). If it's currently a
+            // hidden (non-selected) tab, focus it instead of closing it — only actually close when
+            // it's already the front/selected tab.
+            if (!cs->Visible) {
+                cs->Visible = true;
+            } else {
+                ImGuiWindow* consoleWin = ImGui::FindWindowByName(ICON_FA_TERMINAL "  Console");
+                if (consoleWin && consoleWin->Hidden) ImGui::FocusWindow(consoleWin);
+                else cs->Visible = false;
+            }
+        }
     }
     ImGui::SameLine();
     {
