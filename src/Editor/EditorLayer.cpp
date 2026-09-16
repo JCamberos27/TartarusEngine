@@ -964,6 +964,52 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         // "Adaptive HUD contrast" removed (#54): every viewport HUD now draws a fixed opaque
         // plate behind fixed light text, legible over anything — nothing left to toggle.
 
+        // #4 item 7 — relocated from the View menu now that Phase 3 exists: Draw mode got its
+        // own viewport chip (DrawViewStateChips) so the View menu's copy was a live duplicate;
+        // these sliders had no other home, so they land in the same settings tab as every other
+        // viewport preference. m_EditorCameraPtr (set once per frame in Draw()) lets a drag apply
+        // to the live camera immediately, matching the old menu's feel instead of only taking
+        // effect on the next launch.
+        ImGui::SeparatorText("Camera");
+        ImGui::SetNextItemWidth(kw);
+        {
+            bool committed = false;
+            if (EditorUI::SliderFloat("FOV", &prefs.SceneCameraFov, 30.0f, 110.0f, "%.0f\xC2\xB0",
+                                      0, nullptr, &committed)) {
+                if (m_EditorCameraPtr) m_EditorCameraPtr->Fov = prefs.SceneCameraFov;
+            }
+            if (committed) EditorSettings::Save();
+        }
+        ImGui::SetNextItemWidth(kw);
+        {
+            bool committed = false;
+            EditorUI::SliderFloat("Fly speed", &prefs.SceneCameraFlySpeed, 0.5f, 60.0f, "%.1f",
+                                  0, nullptr, &committed);
+            if (committed) EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Editor fly-camera speed (Shift = \xC3\x97" "3). Also: scroll while holding right-drag.");
+        ImGui::SetNextItemWidth(kw);
+        {
+            bool committed = false;
+            if (EditorUI::SliderFloat("Near", &prefs.SceneCameraNear, 0.001f, 10.0f, "%.3f",
+                                      ImGuiSliderFlags_Logarithmic, nullptr, &committed)) {
+                prefs.SceneCameraNear = std::min(prefs.SceneCameraNear, prefs.SceneCameraFar - 0.01f);
+                if (m_EditorCameraPtr) m_EditorCameraPtr->NearPlane = prefs.SceneCameraNear;
+            }
+            if (committed) EditorSettings::Save();
+        }
+        ImGui::SetNextItemWidth(kw);
+        {
+            bool committed = false;
+            if (EditorUI::SliderFloat("Far", &prefs.SceneCameraFar, 1.0f, 10000.0f, "%.0f",
+                                      ImGuiSliderFlags_Logarithmic, nullptr, &committed)) {
+                prefs.SceneCameraFar = std::max(prefs.SceneCameraFar, prefs.SceneCameraNear + 0.01f);
+                if (m_EditorCameraPtr) m_EditorCameraPtr->FarPlane = prefs.SceneCameraFar;
+            }
+            if (committed) EditorSettings::Save();
+        }
+
         ImGui::SeparatorText("Game view");
         if (EditorUIPrimitives::Checkbox("Maximize on Play", &prefs.GameViewMaximizeOnPlay)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
