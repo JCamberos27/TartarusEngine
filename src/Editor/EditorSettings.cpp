@@ -104,6 +104,7 @@ void EditorSettings::Load() {
     s.EngineMarkEnabled = root.value("engineMarkEnabled", s.EngineMarkEnabled);
     s.EngineMarkSpinSpeed = root.value("engineMarkSpinSpeed", s.EngineMarkSpinSpeed);
     s.EngineMarkPrism = root.value("engineMarkPrism", s.EngineMarkPrism);
+    s.ReduceMotion = root.value("reduceMotion", s.ReduceMotion);
     s.ShowLightGizmos = root.value("showLightGizmos", s.ShowLightGizmos);
     s.LightGizmoSelectedOnly = root.value("lightGizmoSelectedOnly", s.LightGizmoSelectedOnly);
     s.LightGizmoOpacity = root.value("lightGizmoOpacity", s.LightGizmoOpacity);
@@ -188,6 +189,7 @@ void EditorSettings::Flush() {
     root["engineMarkEnabled"] = Get().EngineMarkEnabled;
     root["engineMarkSpinSpeed"] = Get().EngineMarkSpinSpeed;
     root["engineMarkPrism"] = Get().EngineMarkPrism;
+    root["reduceMotion"] = Get().ReduceMotion;
     root["showLightGizmos"] = Get().ShowLightGizmos;
     root["lightGizmoSelectedOnly"] = Get().LightGizmoSelectedOnly;
     root["lightGizmoOpacity"] = Get().LightGizmoOpacity;

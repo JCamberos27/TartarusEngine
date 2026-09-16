@@ -1015,6 +1015,11 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                 EditorUI::SetTooltip("Paint the monogram with a slowly-drifting spectral gradient instead of the fixed grey.");
         }
         if (!prefs.EngineMarkEnabled) ImGui::EndDisabled();
+
+        ImGui::SeparatorText("Motion");
+        if (EditorUIPrimitives::Checkbox("Reduce motion", &prefs.ReduceMotion)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Parks the corner monogram's spin/hue drift and makes the nav-gizmo view-preset camera snap instantly instead of easing.");
         break;
 
     case 2: // Grid & Snapping
@@ -1696,14 +1701,17 @@ void EditorLayer::DrawEngineMark(float dt) {
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
 
     // Spin rate is user-set (Preferences > Viewport). Default 0.52 rad/s is a full turn every
-    // ~12 s — a slow idle spin, not a dizzying logo-spinner; 0 parks it.
+    // ~12 s — a slow idle spin, not a dizzying logo-spinner; 0 parks it. Phase 6 item 12: Reduce
+    // Motion parks both the spin and the Prism hue drift below without touching the user's own
+    // EngineMarkSpinSpeed value, so turning Reduce Motion back off resumes their chosen rate.
     const float kTwoPi = 6.28318530718f;
-    float spinSpeed = EditorSettings::Get().EngineMarkSpinSpeed;
+    const bool reduceMotion = EditorSettings::Get().ReduceMotion;
+    float spinSpeed = reduceMotion ? 0.0f : EditorSettings::Get().EngineMarkSpinSpeed;
     m_MarkSpinAngle = fmodf(m_MarkSpinAngle + dt * spinSpeed, kTwoPi);
     if (m_MarkSpinAngle < 0.0f) m_MarkSpinAngle += kTwoPi; // stay in [0, 2pi) even for a negative speed
     // Prism mode's spectral band drifts through the wheel on its own clock, independent of spin
     // (so it still moves at spin speed 0). Gentle — this is ambient colour, not a strobe.
-    m_MarkHue = fmodf(m_MarkHue + dt * 0.6f, 1.0f); // ~1.7 s per full sweep of the wheel
+    m_MarkHue = fmodf(m_MarkHue + dt * (reduceMotion ? 0.0f : 0.6f), 1.0f); // ~1.7 s per full sweep of the wheel
 
     float size = 54.0f * m_UIScale; // 25% down from the #19-P19 bump; still reads as a mark, less visual weight
     float margin = 14.0f * m_UIScale;
