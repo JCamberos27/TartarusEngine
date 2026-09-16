@@ -104,6 +104,25 @@ inline bool DangerIconButton(const char* icon, const char* tooltip, TooltipFn to
     return clicked;
 }
 
+// Defect #20 / #73 — an unchecked checkbox's frame meets this theme's 3:1 WCAG floor (FrameBg vs
+// WindowBg — see EditorLayer.cpp's #34 comment) but this theme runs FrameBorderSize 0 everywhere,
+// so it has no outline at all: a small, low-contrast fill with no edge to define it, easy to miss
+// entirely at a glance (confirmed live via raw-pixel sampling against a running build — it does
+// render, just imperceptibly). Checked boxes don't have this problem: ImGuiCol_CheckboxSelectedBg
+// and the CheckMark tick are both far more saturated than a plain unchecked fill. First fixed
+// locally in the Console module (Defect #20) with a full manual reimplementation; promoted here,
+// simplified to a thin wrapper, once the same pattern turned up editor-wide (#73) — real
+// ImGui::Checkbox handles every bit of actual behaviour (click/hover/id/tri-state/keyboard nav/
+// disabled), this only adds the one outline it's missing, drawn over its own item rect afterward.
+inline bool Checkbox(const char* label, bool* v) {
+    const bool changed = ImGui::Checkbox(label, v);
+    const ImVec2 mn = ImGui::GetItemRectMin();
+    const float sz = ImGui::GetFrameHeight(); // Checkbox()'s own box is always this tall/wide, at the item's top-left
+    ImGui::GetWindowDrawList()->AddRect(mn, ImVec2(mn.x + sz, mn.y + sz),
+        ImGui::GetColorU32(ImGuiCol_TextDisabled), ImGui::GetStyle().FrameRounding, 0, 1.0f);
+    return changed;
+}
+
 // The one filled treatment — theme accent body, for prominent/rare actions only (modal-dialog
 // buttons: Save / Don't Save / Restore / Cancel …).
 inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
