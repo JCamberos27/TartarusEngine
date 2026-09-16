@@ -125,6 +125,14 @@ In progress. Landed so far:
   list's own slowest sample). Live-verified: sparkline shows an "N ms peak" overlay, draw calls/
   tris/verts/entity counts line up with commas (35,318 / 19,338), collapsing Profiler (CPU) leaves
   GPU open (`8993528`, closes item 5).
+- Shaders: a new "Shaders" Asset Browser folder (raw-disk-scan of `project/shaders/*.shader`,
+  same pattern as Scenes/Screenshots) makes shaders browsable for the first time — previously zero
+  `ShaderAsset` references existed in the Asset Browser at all. Selecting one shows a read-only
+  monospace source preview plus a one-shot compile-status badge (parses + links the shader,
+  catching the real GL error on failure) in the Inspector; double-click or the context menu opens
+  it externally via `ShellExecute`. No in-editor text editor, per the review's Q5 scope decision.
+  Live-verified against `project/shaders/Standard.shader`: correct icon, green "Compiles OK",
+  source preview, and Open Externally correctly invoking the OS handler (`bbb05ef`, closes item 15).
 
 ### [Phase 4] Inspector rebuild (#6) — 2026-09-15
 
