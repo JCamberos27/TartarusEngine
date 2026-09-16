@@ -171,6 +171,11 @@ public:
     // and Inspector to maximize the Scene viewport.
     enum class LayoutKind { Default, Wide, Tall, Focus };
     void RequestDefaultLayout(LayoutKind kind) { m_ResetLayoutKind = kind; m_ResetLayoutRequested = true; }
+    // Phase 6 item 14 — the top toolbar's notification bell. Unread only counts Warning/Error
+    // entries (see EditorNotification::Level); the bell's dropdown lists every notification.
+    int NotificationUnreadCount() const { return m_NotificationUnreadCount; }
+    void MarkNotificationsRead() { m_NotificationUnreadCount = 0; }
+    void DrawNotificationsPopupBody();
     // #4 item 3 — Preferences and Project Settings are one searchable, dockable "Settings" window
     // now (DrawSettingsWindow), not two. Both entry points still exist because they mean different
     // things (which group to land on), they just open the same window instead of two.
@@ -639,14 +644,28 @@ private:
     // producer today, and DrawNotifications' stack-of-cards rendering doesn't care how an entry
     // got added, so a second notification source later just calls PushCaptureNotification's
     // pattern (or a small sibling Push*) without this needing to change.
+    // Phase 6 item 14 — generalized beyond captures: a Log::Warn/Error also lands here now (no
+    // thumbnail, FilePath empty), and the top toolbar's bell shows how many of those are unread.
+    // Info/Success entries (captures) never count toward that badge — they're already visible as
+    // their own dismissible card, badging them too would just be noise for routine, expected
+    // events.
+    enum class NotificationLevel { Info, Success, Warning, Error };
     struct EditorNotification {
-        std::string Title;                 // filename
-        std::string Subtitle;              // "1920x1080"
-        std::string FilePath;              // full path — Open / Show in folder / Copy path
-        std::shared_ptr<Texture> Thumbnail; // small preview; null if the capture failed
+        NotificationLevel Level = NotificationLevel::Success;
+        std::string Title;                 // filename, or a truncated log message
+        std::string Subtitle;              // "1920x1080", or the log entry's timestamp
+        std::string FilePath;              // full path — Open / Show in folder / Copy path; empty for log-sourced entries
+        std::shared_ptr<Texture> Thumbnail; // small preview; null if the capture failed or n/a
     };
     std::vector<EditorNotification> m_Notifications;
     void PushCaptureNotification(const std::string& path, int w, int h);
+    void PushNotification(NotificationLevel level, const std::string& title, const std::string& subtitle);
+    // Diffs Core/Log.h's ring buffer once a frame (Log::Revision()) and turns any new
+    // Warning/Error entry into a bell notification — called from Draw().
+    void PollLogNotifications();
+    size_t m_LogEntriesSeen = 0;
+    unsigned int m_LastLogRevisionSeen = 0;
+    int m_NotificationUnreadCount = 0;
 
     // Frosted backdrop behind modal dialogs — created lazily the first time a modal opens (see
     // EndFrame): the whole framebuffer is blurred and the dialog window redrawn crisp on top.

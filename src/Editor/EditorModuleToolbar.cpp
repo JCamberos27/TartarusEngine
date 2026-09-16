@@ -29,6 +29,7 @@
 #include <IconsFontAwesome6.h>
 
 #include <cstdio>
+#include <algorithm>
 
 namespace EditorModuleToolbar {
 
@@ -331,6 +332,40 @@ void Draw(const EditorModuleHostAPI& host) {
             ImGui::EndPopup();
         }
         ImGui::PopID();
+    }
+
+    // --- Notification bell (Phase 6 item 14) -------------------------------------------------
+    // Unread count is Warning/Error only (see EditorNotification::Level) — captures and other
+    // info/success entries never badge the bell, only ever show up as their own floating card.
+    divider();
+    {
+        const int unread = host.GetNotificationUnreadCount ? host.GetNotificationUnreadCount() : 0;
+        char tip[32];
+        std::snprintf(tip, sizeof(tip), "Notifications%s", unread > 0 ? " (unread)" : "");
+        if (ActionButton(host, ICON_FA_BELL, tip)) {
+            ImGui::OpenPopup("##NotificationsPopup");
+            if (host.MarkNotificationsRead) host.MarkNotificationsRead();
+        }
+        if (unread > 0) {
+            const ImVec2 btnMin = ImGui::GetItemRectMin();
+            const ImVec2 btnMax = ImGui::GetItemRectMax();
+            char countStr[8];
+            std::snprintf(countStr, sizeof(countStr), "%d", unread > 99 ? 99 : unread);
+            const ImVec2 textSize = ImGui::CalcTextSize(countStr);
+            const float badgeR = std::max(7.0f * uiScale, textSize.x * 0.5f + 2.0f * uiScale);
+            const ImVec2 center(btnMax.x - badgeR * 0.7f, btnMin.y + badgeR * 0.7f);
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            dl->AddCircleFilled(center, badgeR, IM_COL32(219, 60, 60, 255));
+            dl->AddText(ImVec2(center.x - textSize.x * 0.5f, center.y - textSize.y * 0.5f),
+                        IM_COL32(255, 255, 255, 255), countStr);
+        }
+        if (ImGui::BeginPopup("##NotificationsPopup")) {
+            CloseOnEscape();
+            ImGui::TextDisabled("Notifications");
+            ImGui::Separator();
+            if (host.DrawNotificationsPopupBody) host.DrawNotificationsPopupBody();
+            ImGui::EndPopup();
+        }
     }
 
     // The toolbar's empty space is the window drag handle (the OS caption is gone). True only

@@ -104,7 +104,12 @@
 //        Asset Browser to a path if it resolves to a real, existing project file — a registered
 //        AssetLibrary entry (model/texture/material/sound/prefab), or a raw scenes/screenshots
 //        file, the same two categories the Console's own listings already cover.
-constexpr std::uint32_t kEditorModuleAPIVersion = 27;
+//   28 - Phase 6 item 14: notification bell in the top toolbar. GetNotificationUnreadCount reads
+//        the badge (Warning/Error entries only — captures and other info/success notifications
+//        never count); MarkNotificationsRead clears it (called the moment the bell's dropdown
+//        opens); DrawNotificationsPopupBody renders that dropdown's contents (host code, same
+//        Draw*PopupBody callback pattern the capture options popup already uses).
+constexpr std::uint32_t kEditorModuleAPIVersion = 28;
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -223,6 +228,11 @@ struct EditorModuleHostAPI {
     // the caller uses that to decide whether a row's context-menu item should even appear.
     bool (*SelectEntityRaw)(unsigned int rawEntityId) = nullptr;
     bool (*PingAssetPath)(const char* path) = nullptr;
+
+    // --- Notification bell (API v28) ---------------------------------------------------------
+    int (*GetNotificationUnreadCount)() = nullptr;
+    void (*MarkNotificationsRead)() = nullptr;
+    void (*DrawNotificationsPopupBody)() = nullptr;
 
     // --- Editor services --------------------------------------------------------------------
     // Routed through the host so the module doesn't duplicate EditorSettings (another singleton)

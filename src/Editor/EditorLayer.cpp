@@ -2337,6 +2337,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // the module gates its own draw through EditorModuleHostAPI::GetHistoryHudFrame, which
         // re-checks m_HideOverlaysThisFrame so a clean capture still suppresses it.
     }
+    PollLogNotifications();
     DrawCaptureFeedback(dt);
     DrawNotifications();
 
