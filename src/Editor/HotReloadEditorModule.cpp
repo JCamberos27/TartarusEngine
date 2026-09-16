@@ -455,6 +455,12 @@ void TbDrawPlayControlsBody() { if (g_Editor) g_Editor->DrawPlayControlsBody(); 
 // --- Play-mode panel tint (API v22, Q12 / Phase 4 #6) -------------------------------------
 bool TbGetInPlayMode() { return g_Editor && g_Editor->InPlayMode(); }
 
+// --- Asset Browser folder history (API v23, Phase 5 item 3) ------------------------------
+void AbFolderHistoryBack()          { if (g_Editor) g_Editor->AssetFolderHistoryBack(); }
+void AbFolderHistoryForward()       { if (g_Editor) g_Editor->AssetFolderHistoryForward(); }
+bool AbCanFolderHistoryBack()       { return g_Editor && g_Editor->CanAssetFolderHistoryBack(); }
+bool AbCanFolderHistoryForward()    { return g_Editor && g_Editor->CanAssetFolderHistoryForward(); }
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
@@ -582,6 +588,11 @@ const EditorModuleHostAPI kHostAPI{
     &TbDrawPlayControlsBody,
     // --- Play-mode panel tint (API v22) — order must match EditorModuleHostAPI exactly ---
     &TbGetInPlayMode,
+    // --- Asset Browser folder history (API v23) — order must match EditorModuleHostAPI exactly ---
+    &AbFolderHistoryBack,
+    &AbFolderHistoryForward,
+    &AbCanFolderHistoryBack,
+    &AbCanFolderHistoryForward,
 };
 
 } // namespace

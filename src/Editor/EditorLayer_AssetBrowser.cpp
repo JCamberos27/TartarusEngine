@@ -412,7 +412,10 @@ bool EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const s
     const std::string leaf = std::filesystem::path(key).filename().string();
     if (isFolder) {
         assets.DeleteFolderRecursive(key);
-        // Don't leave the browser pointed at a folder that no longer exists.
+        // Don't leave the browser pointed at a folder that no longer exists. A raw assignment,
+        // not NavigateAssetFolder (Phase 5 item 3) - this is a forced correction after the
+        // current folder vanished out from under the user, not a real navigation they'd expect
+        // Back to retrace.
         if (m_CurrentAssetFolder == key || m_CurrentAssetFolder.rfind(key + "/", 0) == 0) {
             m_CurrentAssetFolder = ParentFolderOf(key);
         }
@@ -686,11 +689,17 @@ void EditorLayer::CommitRename(World& world, AssetLibrary& assets) {
         std::string parent = ParentFolderOf(m_RenamingAssetKey);
         std::string newPath = parent.empty() ? newName : (parent + "/" + newName);
         assets.RenameFolder(m_RenamingAssetKey, newPath);
-        if (m_CurrentAssetFolder == m_RenamingAssetKey) {
-            m_CurrentAssetFolder = newPath;
-        } else if (m_CurrentAssetFolder.rfind(m_RenamingAssetKey + "/", 0) == 0) {
-            m_CurrentAssetFolder = newPath + m_CurrentAssetFolder.substr(m_RenamingAssetKey.size());
-        }
+        // Path-patching, not navigation (Phase 5 item 3's NavigateAssetFolder) - the user hasn't
+        // gone anywhere, the folder they were already in just changed name out from under them.
+        // Patch every history entry that pointed into the renamed subtree too, or Back could walk
+        // to a path that no longer exists.
+        auto patchRenamedPath = [&](std::string& path) {
+            if (path == m_RenamingAssetKey) path = newPath;
+            else if (path.rfind(m_RenamingAssetKey + "/", 0) == 0)
+                path = newPath + path.substr(m_RenamingAssetKey.size());
+        };
+        patchRenamedPath(m_CurrentAssetFolder);
+        for (std::string& histPath : m_AssetFolderHistory) patchRenamedPath(histPath);
         if (m_SelectedAssetKey == m_RenamingAssetKey) m_SelectedAssetKey = newPath;
     } else {
         PushUndo(world, "Rename Asset");
@@ -1294,7 +1303,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             }
         }
         if (isFolder && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            m_CurrentAssetFolder = cell.key;
+            NavigateAssetFolder(cell.key);
         }
         if (cell.kind == Cell::Kind::Scene && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             RequestOpenScene(world, assets, cell.key);
