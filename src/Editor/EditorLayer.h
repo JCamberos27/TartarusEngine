@@ -43,7 +43,7 @@ struct RegisteredComponent; // ComponentRegistry.h
 struct ReflectField;        // ComponentReflection.h
 
 struct AssetGridCell {
-    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot } kind;
+    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot, Shader } kind;
     std::string key;
     std::string display;
     std::shared_ptr<Model> model;
@@ -1358,6 +1358,17 @@ private:
     bool m_ImportSettingsDirty = false;
     void DrawAssetImportInspector(World& world, AssetLibrary& assets, const std::string& key);
 
+    // Phase 6 item 15 — the .shader preview shown by DrawAssetImportInspector: raw file text plus
+    // a one-shot compile attempt (parse + link the key-0 variant) so a broken shader shows its
+    // real GL error instead of only surfacing as a Console line the next time something actually
+    // renders with it. Re-run only when the selection changes (m_ShaderPreviewKey), not per frame —
+    // compiling has real GL cost and side effects.
+    std::string m_ShaderPreviewKey;
+    std::string m_ShaderPreviewSource;
+    bool m_ShaderPreviewOk = false;
+    std::string m_ShaderPreviewError;
+    void DrawShaderPreviewInspector(AssetLibrary& assets, const std::string& key);
+
     // Standalone material-asset editor: shown instead of DrawAssetImportInspector when a .mat
     // file is selected directly in the Asset Browser (no scene entity involved). Lets a material
     // be authored before it's ever assigned to an object. Edits save straight to the .mat file —
@@ -1442,12 +1453,16 @@ private:
     };
     AssetDirListingCache m_ScenesListingCache;
     AssetDirListingCache m_ShotsListingCache;
+    // Same idea for project/shaders/ — Phase 6 item 15's "browsable" Shaders folder.
+    AssetDirListingCache m_ShadersListingCache;
     float m_AssetListingRefreshTimer = 0.0f;   // ticks up in DrawAssetBrowser; see kAssetListingRefreshInterval
     bool m_AssetBrowserFocusedLastFrame = false; // edge-detects m_AssetBrowserFocused for "just gained focus"
     void RefreshScenesListingIfNeeded();
     void RefreshShotsListingIfNeeded();
+    void RefreshShadersListingIfNeeded();
     void InvalidateScenesListing() { m_ScenesListingCache.valid = false; }
     void InvalidateShotsListing() { m_ShotsListingCache.valid = false; }
+    void InvalidateShadersListing() { m_ShadersListingCache.valid = false; }
 public:
     // #236 G — Refresh / Reimport All (Ctrl+R): bust every Asset Browser cache so the next frame
     // re-scans the scenes/ and screenshots/ folders and re-renders thumbnails from disk.
