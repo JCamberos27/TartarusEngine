@@ -1042,11 +1042,29 @@ void EditorLayer::OpenScreenshotPreview(const std::string& path) {
     }
 }
 
+// Phase 6 item 7 — every image in the screenshots folder, sorted (Screenshot::Save's filenames
+// are date/time-suffixed, so alphabetical reads chronological within a scene).
+std::vector<std::string> EditorLayer::ListScreenshotsSorted() const {
+    std::vector<std::string> files;
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator(Screenshot::Dir(), ec)) {
+        if (ec || !entry.is_regular_file()) continue;
+        std::string ext = entry.path().extension().string();
+        for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg")
+            files.push_back(entry.path().generic_string());
+    }
+    std::sort(files.begin(), files.end());
+    return files;
+}
+
 // A centred, chrome-light lightbox for a saved screenshot. The backdrop gets the same frosted
 // blur as the delete-confirmation modal (EndFrame() blurs whatever's behind the top-most modal),
 // so no extra dim is applied here. The window is freely movable and resizable; over the image,
-// the scroll wheel zooms about the cursor and left-drag pans. Esc / X / a backdrop click closes.
-void EditorLayer::DrawScreenshotPreview() {
+// the scroll wheel zooms about the cursor and left-drag pans. Esc / X / a backdrop click closes,
+// Left/Right arrows step to the previous/next screenshot in the folder (#7), and the header's
+// action bar covers Open externally / Copy path / Copy image / Show in folder / Delete / Close.
+void EditorLayer::DrawScreenshotPreview(World& world, AssetLibrary& assets) {
     if (!m_ShotPreviewOpen) return;
 
     if (!ImGui::IsPopupOpen("##ShotPreview")) ImGui::OpenPopup("##ShotPreview");
@@ -1086,22 +1104,87 @@ void EditorLayer::DrawScreenshotPreview() {
         // modal dialog in this file checks Escape explicitly for the same reason — match that.
         if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { open = false; ImGui::CloseCurrentPopup(); }
 
+        // #7 — Left/Right steps to the previous/next screenshot in the folder. Re-opening via
+        // OpenScreenshotPreview resets zoom/pan for the new image, same as clicking a different
+        // thumbnail in the Asset Browser would.
+        if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false) || ImGui::IsKeyPressed(ImGuiKey_RightArrow, false)) {
+            const std::vector<std::string> shots = ListScreenshotsSorted();
+            const auto it = std::find(shots.begin(), shots.end(), m_ShotPreviewPath);
+            if (it != shots.end()) {
+                if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false) && it != shots.begin()) {
+                    const std::string prev = *(it - 1);
+                    ImGui::EndPopup();
+                    ImGui::PopStyleVar(4);
+                    OpenScreenshotPreview(prev);
+                    return;
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, false) && (it + 1) != shots.end()) {
+                    const std::string next = *(it + 1);
+                    ImGui::EndPopup();
+                    ImGui::PopStyleVar(4);
+                    OpenScreenshotPreview(next);
+                    return;
+                }
+            }
+        }
+
         // Slim header: filename + native size + current zoom, then icon actions pinned right.
         const std::string name = std::filesystem::path(m_ShotPreviewPath).filename().string();
         ImGui::TextUnformatted(name.c_str());
         ImGui::SameLine();
         ImGui::TextDisabled("%d x %d", (int)iw, (int)ih);
         ImGui::SameLine();
-        ImGui::TextDisabled("\xE2\x80\xA2  %.0f%%", m_ShotPreviewZoom * 100.0f);
+        // #7 — this used to just print m_ShotPreviewZoom*100, so it claimed "100%" at the
+        // DEFAULT (fit-to-canvas) zoom instead of the image's true native-pixel percentage.
+        // `fit` isn't known yet this early (it depends on the canvas rect, established further
+        // down after the header), so estimate it the same way with the header's own height
+        // subtracted - close enough for a rounded display percentage, and self-corrects every
+        // frame regardless.
+        {
+            const float estHeaderH = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
+            const ImVec2 avail = ImGui::GetContentRegionAvail();
+            const float estCanvasW = std::max(avail.x, 32.0f);
+            const float estCanvasH = std::max(avail.y - estHeaderH, 32.0f);
+            const float estFit = std::min(estCanvasW / iw, estCanvasH / ih);
+            if (estFit * m_ShotPreviewZoom >= 0.995f && estFit * m_ShotPreviewZoom < 1.005f)
+                ImGui::TextDisabled("\xE2\x80\xA2  100%%");
+            else
+                ImGui::TextDisabled("\xE2\x80\xA2  %.0f%%", estFit * m_ShotPreviewZoom * 100.0f);
+        }
 
         const float btnW = 26.0f * m_UIScale;
-        float rightX = ImGui::GetContentRegionMax().x - btnW * 2.0f - 6.0f;
+        const int   btnCount = 6; // open externally, copy path, copy image, show in folder, delete, close
+        float rightX = ImGui::GetContentRegionMax().x - btnW * (float)btnCount - 6.0f * (float)(btnCount - 1);
         if (rightX > ImGui::GetCursorPosX()) ImGui::SameLine(rightX);
         else ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+        if (ImGui::Button(ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE, ImVec2(btnW, 0.0f)))
+            Screenshot::OpenFile(m_ShotPreviewPath);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Open externally");
+        ImGui::SameLine(0.0f, 6.0f);
+        if (ImGui::Button(ICON_FA_COPY, ImVec2(btnW, 0.0f))) {
+            ImGui::SetClipboardText(m_ShotPreviewPath.c_str());
+            Log::Info("Copied path: " + m_ShotPreviewPath);
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Copy path");
+        ImGui::SameLine(0.0f, 6.0f);
+        if (ImGui::Button(ICON_FA_IMAGE, ImVec2(btnW, 0.0f))) {
+            if (Screenshot::CopyImageToClipboard(m_ShotPreviewPath)) Log::Info("Copied image to clipboard.");
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Copy image");
+        ImGui::SameLine(0.0f, 6.0f);
         if (ImGui::Button(ICON_FA_FOLDER_OPEN, ImVec2(btnW, 0.0f))) Screenshot::ShowInFolder(m_ShotPreviewPath);
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show in folder");
+        ImGui::SameLine(0.0f, 6.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
+        if (ImGui::Button(ICON_FA_TRASH, ImVec2(btnW, 0.0f))) {
+            RequestDeleteAssets(world, assets, { AssetKeyRef{ m_ShotPreviewPath, false } }, /*skipDialog=*/false);
+            open = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete");
         ImGui::SameLine(0.0f, 6.0f);
         if (ImGui::Button(ICON_FA_XMARK, ImVec2(btnW, 0.0f))) { open = false; ImGui::CloseCurrentPopup(); }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Close (Esc)");
@@ -1151,7 +1234,8 @@ void EditorLayer::DrawScreenshotPreview() {
             m_ShotPreviewPan = ImVec2(0.0f, 0.0f);
         }
         if (canvasHovered && !m_ShotPreviewPanning)
-            EditorUI::SetTooltip("Scroll to zoom  \xE2\x80\xA2  drag to pan  \xE2\x80\xA2  double-click to reset");
+            EditorUI::SetTooltip("Scroll to zoom  \xE2\x80\xA2  drag to pan  \xE2\x80\xA2  double-click to reset\n"
+                                 "\xE2\x86\x90 / \xE2\x86\x92 for the previous / next screenshot"); // #7
 
         const float dispW = iw * fit * m_ShotPreviewZoom;
         const float dispH = ih * fit * m_ShotPreviewZoom;

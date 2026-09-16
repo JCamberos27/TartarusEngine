@@ -1983,7 +1983,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawLightingPanel(world); // #236 R2
     DrawPhysicsDebugWindow(world); // #185 debug tooling
     DrawPhysicsHud();             // #185 D
-    DrawScreenshotPreview();
+    DrawScreenshotPreview(world, assets);
 
     // Auto-save: only ticks here (Draw() is editor-mode-only, per main.cpp) so it never fires
     // mid-Play - the same reason OnExitPlayMode's revert-to-snapshot exists, autosaving
