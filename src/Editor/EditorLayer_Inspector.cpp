@@ -816,8 +816,15 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
         ImGui::PushID(label);
         PropertyLabel(label);
         Texture* tex = (mat.*texSlot).get();
-        std::string preview = tex ? std::filesystem::path(tex->Path()).filename().string() : std::string("(none)");
+        // #6 Defect #50 — Texture::UploadFromFile already tracks this itself (m_ID stays 0, the
+        // GL default for "no texture", when stbi_load fails): IsValid() was sitting unused by
+        // every Inspector call site. A failed load still returns a real, non-null Texture, same
+        // shape as the Model/MeshCount() and MaterialAsset::Missing cases above.
+        bool missing = tex && !tex->IsValid();
+        std::string preview = (missing ? ICON_FA_TRIANGLE_EXCLAMATION "  " : std::string())
+            + (tex ? std::filesystem::path(tex->Path()).filename().string() : std::string("(none)"));
         float clearReserve = tex ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+        if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
         if (ImGui::Button(preview.c_str(), ImVec2(tex ? -clearReserve : -FLT_MIN, 0.0f))) {
             std::string path = FileDialog::OpenFile(
                 "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
@@ -826,8 +833,12 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
                 save();
             }
         }
+        if (missing) ImGui::PopStyleColor();
         if (ImGui::IsItemHovered()) {
-            if (tex) {
+            if (missing) {
+                EditorUI::SetTooltip("Missing: %s\nThe referenced texture file no longer exists at this path (or failed to load).\nClick to pick a replacement, or drag one from the Asset Browser.",
+                    tex->Path().c_str());
+            } else if (tex) {
                 ImGui::BeginTooltip();
                 ImGui::Image((ImTextureID)(intptr_t)tex->GLHandle(), ImVec2(96.0f * m_UIScale, 96.0f * m_UIScale)); // #37
                 ImGui::TextUnformatted(tex->Path().c_str());
@@ -2865,10 +2876,16 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 if (t) anySet = true;
                 if (t != first) mixed = true;
             }
+            // #6 Defect #50 — see the DrawMaterialAssetEditor mapRow above for why Texture::
+            // IsValid() (m_ID != 0) is the "did this actually load" signal. Only meaningful when
+            // every selected material agrees on the same texture (!mixed).
+            const bool missing = !mixed && first && !first->IsValid();
             std::string preview = mixed ? std::string("\xE2\x80\x94  (mixed)")
-                                  : first ? std::filesystem::path(first->Path()).filename().string()
-                                          : std::string("(none)");
+                : first ? (missing ? ICON_FA_TRIANGLE_EXCLAMATION "  " : std::string())
+                          + std::filesystem::path(first->Path()).filename().string()
+                        : std::string("(none)");
             float clearReserve = anySet ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+            if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
             if (ImGui::Button(preview.c_str(), ImVec2(anySet ? -clearReserve : -FLT_MIN, 0.0f))) {
                 std::string path = FileDialog::OpenFile(
                     "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
@@ -2878,8 +2895,12 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                     for (Material* mm : mats) mm->*texSlot = tex;
                 }
             }
+            if (missing) ImGui::PopStyleColor();
             if (ImGui::IsItemHovered()) {
-                if (!mixed && first) {
+                if (missing) {
+                    EditorUI::SetTooltip("Missing: %s\nThe referenced texture file no longer exists at this path (or failed to load).\nClick to pick a replacement, or drag one from the Asset Browser.",
+                        first->Path().c_str());
+                } else if (!mixed && first) {
                     ImGui::BeginTooltip();
                     ImGui::Image((ImTextureID)(intptr_t)first->GLHandle(), ImVec2(96.0f * m_UIScale, 96.0f * m_UIScale)); // #37
                     ImGui::TextUnformatted(first->Path().c_str());
@@ -2990,11 +3011,15 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                     if (t) anySet = true;
                     if (t != first) mixed = true;
                 }
+                // #6 Defect #50 — same Texture::IsValid() check as the two mapRow lambdas above.
+                const bool missing = !mixed && first && !first->IsValid();
                 std::string preview = mixed ? std::string("\xE2\x80\x94  (mixed)")
-                    : first ? std::filesystem::path(first->Path()).filename().string()
+                    : first ? (missing ? ICON_FA_TRIANGLE_EXCLAMATION "  " : std::string())
+                              + std::filesystem::path(first->Path()).filename().string()
                             : std::string("(none)");
                 PropertyLabel(label);
                 float clearReserve = anySet ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+                if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
                 if (ImGui::Button(preview.c_str(), ImVec2(anySet ? -clearReserve : -FLT_MIN, 0.0f))) {
                     std::string path = FileDialog::OpenFile(
                         "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
@@ -3004,6 +3029,10 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                         for (Material* mm : mats) MaterialAsset::SetTexture(*mm, prop.Name, tex);
                     }
                 }
+                if (missing) ImGui::PopStyleColor();
+                if (missing && ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("Missing: %s\nThe referenced texture file no longer exists at this path (or failed to load).\nClick to pick a replacement, or drag one from the Asset Browser.",
+                        first->Path().c_str());
                 if (ImGui::BeginDragDropTarget()) {
                     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
                         std::string texPath((const char*)p->Data);
