@@ -50,6 +50,9 @@ In progress. Landed so far:
   longer mixes native and relativized paths (`70cf742`, item 4 partial — still open:
   click-to-navigate to the referenced entity/asset, which needs new host-module API to reach
   selection from the Console DLL).
+- Reduce Motion preference (Preferences > Viewport > Motion): parks the corner monogram's spin
+  and Prism hue drift, and makes the nav-gizmo view-preset camera transition snap instead of
+  easing — live-verified (`8daeb0c`, closes item 12).
 
 ### [Phase 4] Inspector rebuild (#6) — 2026-09-15
 
