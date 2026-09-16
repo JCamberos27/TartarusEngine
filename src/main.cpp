@@ -2040,7 +2040,7 @@ int main(int argc, char** argv) {
                 // every module panel (Inspector, Hierarchy, Asset Browser, Console) has had its
                 // chance to act this frame — those are all drawn inside editorModule.Draw() above,
                 // not inside editor.Draw(). See EditorLayer::PostModuleDraw()'s comment.
-                editor.PostModuleDraw();
+                editor.PostModuleDraw(world);
 
                 // Eyedropper (#236 R2): a colour field armed EditorLayer's viewport eyedropper
                 // and HandleViewportPicking just captured a click. Read that one pixel off the

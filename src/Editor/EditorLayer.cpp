@@ -758,6 +758,54 @@ void EditorLayer::DrawShadowSettings(float w) {
     if (!prefs.ShadowsEnabled) ImGui::EndDisabled();
 }
 
+// Phase 6 item 9 — a Unity-style mixer list: click a name to select that light, Solo isolates it
+// (every other light suppresses while any Solo is active), Mute suppresses just that one. Both
+// sets are session-only (cleared on scene load, EditorLayer_Scene.cpp) rather than serialized —
+// this is a scrubbing/auditing aid, not scene data.
+void EditorLayer::DrawLightsSection(World& world, float w) {
+    (void)w;
+    auto view = world.Registry.view<LightComponent>();
+    if (view.begin() == view.end()) {
+        ImGui::TextDisabled("No lights in this scene.");
+        return;
+    }
+    for (entt::entity e : view) {
+        if (!world.Registry.valid(e)) continue;
+        ImGui::PushID((int)entt::to_integral(e));
+
+        const bool soloed = m_SoloLights.count(e) != 0;
+        const bool muted = m_MutedLights.count(e) != 0;
+        const bool suppressed = IsLightSuppressed(e);
+
+        if (EditorUIPrimitives::ActionButton("S", "Solo - isolate this light, suppressing every other",
+                                             &EditorInternal::ForwardHostTooltip, soloed)) {
+            if (soloed) m_SoloLights.erase(e); else m_SoloLights.insert(e);
+        }
+        ImGui::SameLine();
+        if (EditorUIPrimitives::ActionButton("M", "Mute - suppress just this light",
+                                             &EditorInternal::ForwardHostTooltip, muted)) {
+            if (muted) m_MutedLights.erase(e); else m_MutedLights.insert(e);
+        }
+        ImGui::SameLine();
+
+        const auto* light = world.Registry.try_get<LightComponent>(e);
+        const char* kindIcon = light && light->Kind == LightComponent::Type::Directional ? ICON_FA_SUN
+            : light && light->Kind == LightComponent::Type::Spot ? ICON_FA_LIGHTBULB
+            : ICON_FA_LIGHTBULB;
+        const auto* name = world.Registry.try_get<NameComponent>(e);
+        std::string label = std::string(kindIcon) + "  " +
+            (name && !name->Name.empty() ? name->Name : std::string("Light"));
+
+        if (suppressed) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        if (ImGui::Selectable(label.c_str(), IsSelected(e))) SelectItem(e, false);
+        if (suppressed) ImGui::PopStyleColor();
+        if (suppressed && ImGui::IsItemHovered())
+            EditorUI::SetTooltip(muted ? "Muted." : "Suppressed - another light is soloed.");
+
+        ImGui::PopID();
+    }
+}
+
 void EditorLayer::DrawLightingPanel(World& world) {
     if (!m_ShowLighting) return;
     ImGui::SetNextWindowSize(ImVec2(340.0f * m_UIScale, 430.0f * m_UIScale), ImGuiCond_FirstUseEver);
@@ -777,7 +825,11 @@ void EditorLayer::DrawLightingPanel(World& world) {
     ImGui::SeparatorText("Shadows (Directional Sun)");
     DrawShadowSettings(w);
     ImGui::Spacing();
-    ImGui::TextDisabled("Environment is per-scene; post-processing & shadows persist in editor_prefs.json.");
+    ImGui::SeparatorText("Lights");
+    DrawLightsSection(world, w);
+    ImGui::Spacing();
+    ImGui::TextDisabled("Environment is per-scene; post-processing & shadows persist in editor_prefs.json.\n"
+                        "Solo/Mute are session-only - they reset when a scene loads.");
     ImGui::End();
 }
 
@@ -2309,17 +2361,11 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // Shift+A quick-add (Blender's binding) — opens the Add menu as a popup at the cursor.
         if (Shortcuts::Triggered("gameobject.quickAdd")) m_OpenQuickAdd = true;
 
-        // Ctrl+Z / Ctrl+Y walk the selection history while the last action was a selection
-        // change (#236 R2); otherwise they're the scene undo/redo. Ctrl+[ / Ctrl+] stay pure
-        // selection nav regardless.
-        if (Shortcuts::Triggered("editor.undo")) {
-            if (m_CtrlZSelectionMode && CanSelectionHistoryBack()) SelectionHistoryBack(world);
-            else { Undo(world, assets); m_CtrlZSelectionMode = false; m_SelHistoryNavigating = true; }
-        }
-        if (Shortcuts::Triggered("editor.redo")) {
-            if (m_CtrlZSelectionMode && CanSelectionHistoryForward()) SelectionHistoryForward(world);
-            else { Redo(world, assets); m_CtrlZSelectionMode = false; m_SelHistoryNavigating = true; }
-        }
+        // Ctrl+Z / Ctrl+Y are uniformly the scene undo/redo stack (Phase 6 item 6 / Q6) — a
+        // selection change is just another entry on it now, same as any edit. Ctrl+[ / Ctrl+]
+        // stay their own, separate selection-only back/forward (SelectionHistoryBack/Forward).
+        if (Shortcuts::Triggered("editor.undo")) Undo(world, assets);
+        if (Shortcuts::Triggered("editor.redo")) Redo(world, assets);
         // Q12 — Ctrl+S/Ctrl+Shift+S mirror the File menu's Play-mode gate (DrawFileMenuBody).
         if (Shortcuts::Triggered("editor.saveAs")) {
             if (m_InPlayMode) Log::Info("Save is disabled while Playing - changes here revert on Stop anyway.");
@@ -2633,7 +2679,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // can never observe a CommitStagedUndo or a selection change made by them this same frame.
 }
 
-void EditorLayer::PostModuleDraw() {
+void EditorLayer::PostModuleDraw(const World& world) {
     // Drop a staged-but-never-committed undo snapshot once the interaction is definitely over
     // (its widget vanished mid-edit, e.g. the selection changed before IsItemDeactivatedAfterEdit
     // could fire) so the next StageUndo captures fresh state instead of a stale one.
@@ -2663,7 +2709,7 @@ void EditorLayer::PostModuleDraw() {
     // module's Hierarchy/Inspector panels have drawn, so it sees the net result of every panel
     // and shortcut that ran this frame (a Hierarchy click lives in the module, past Draw()'s
     // return).
-    RecordSelectionHistory();
+    RecordSelectionHistory(world);
 }
 
 bool EditorLayer::AnyModalOpen() const {
