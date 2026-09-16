@@ -12,6 +12,7 @@
 #include <list>
 #include <memory>
 #include <functional>
+#include <algorithm>
 #include "Shortcuts.h" // Shortcuts::Chord - Preferences > Shortcuts capture state below
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
 #include "Model.h"   // ModelImportSettings - same
@@ -476,6 +477,18 @@ public:
     // engine-mark hide flag when its capped height would overlap the corner monogram.
     float UIScale() const { return m_UIScale; }
     float SmoothedFrameMs() const { return m_SmoothedFrameMs; }
+    // Phase 6 item 5 — raw (unsmoothed) per-frame ms, oldest-to-newest, for the Statistics
+    // panel's sparkline. Kept host-side (not in the reloadable module) so a DLL reload mid-session
+    // doesn't blank the last two seconds of history.
+    static constexpr int kFrameTimeHistoryCount = 120;
+    int FrameTimeHistory(float* out, int maxCount) const {
+        const int n = std::min(maxCount, m_FrameTimeHistoryFilled);
+        for (int i = 0; i < n; ++i) {
+            const int idx = (m_FrameTimeHistoryHead - n + i + kFrameTimeHistoryCount) % kFrameTimeHistoryCount;
+            out[i] = m_FrameTimeHistory[idx];
+        }
+        return n;
+    }
     // Phase 1 item 5 — the JetBrains Mono face for the Console body / numeric readouts, exposed
     // to modules the same way as the other host-owned resources on this line.
     ImFont* GetMonoFont() const { return m_MonoFont; }
@@ -1601,6 +1614,11 @@ private:
     RenderStats m_RenderStats;
     // Smoothed so the number is readable instead of flickering every frame.
     float m_SmoothedFrameMs = 16.6f;
+    // Raw per-frame ms ring buffer backing FrameTimeHistory() (Phase 6 item 5's sparkline) —
+    // unsmoothed on purpose, so a real spike (a hitch, a heavy asset load) actually shows.
+    float m_FrameTimeHistory[kFrameTimeHistoryCount] = {};
+    int m_FrameTimeHistoryHead = 0;   // next slot to write
+    int m_FrameTimeHistoryFilled = 0; // caps at kFrameTimeHistoryCount
 
     // --- Clipboard (Ctrl+C / Ctrl+X / Ctrl+V) ---------------------------------------------
     // Copied entities as a scene-fragment JSON string, so a paste rebuilds them through the
