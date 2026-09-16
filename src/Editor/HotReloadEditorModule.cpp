@@ -464,6 +464,19 @@ bool AbCanFolderHistoryForward()    { return g_Editor && g_Editor->CanAssetFolde
 // --- Asset Browser view-mode toggle (API v24, Phase 5 item 3 remainder) ------------------
 void AbToggleAssetViewMode()        { if (g_Editor) g_Editor->ToggleAssetViewMode(); }
 
+// --- Hierarchy type filter + sort (API v25, Phase 5 item 6 remainder) --------------------
+int  HierGetTypeFilter()            { return EditorSettings::Get().HierarchyTypeFilterMask; }
+void HierSetTypeFilter(int mask)    { EditorSettings::Get().HierarchyTypeFilterMask = mask; EditorSettings::Save(); }
+int  HierGetSort() {
+    return EditorSettings::Get().HierarchySortMode * 2 + (EditorSettings::Get().HierarchySortDesc ? 1 : 0);
+}
+void HierSetSort(int packed) {
+    auto& s = EditorSettings::Get();
+    s.HierarchySortMode = (packed >> 1) & 3;
+    s.HierarchySortDesc = (packed & 1) != 0;
+    EditorSettings::Save();
+}
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
@@ -598,6 +611,11 @@ const EditorModuleHostAPI kHostAPI{
     &AbCanFolderHistoryForward,
     // --- Asset Browser view-mode toggle (API v24) — order must match EditorModuleHostAPI exactly ---
     &AbToggleAssetViewMode,
+    // --- Hierarchy type filter + sort (API v25) — order must match EditorModuleHostAPI exactly ---
+    &HierGetTypeFilter,
+    &HierSetTypeFilter,
+    &HierGetSort,
+    &HierSetSort,
 };
 
 } // namespace

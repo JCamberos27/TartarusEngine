@@ -97,6 +97,9 @@ void EditorSettings::Load() {
     s.AssetBrowserIconSize = root.value("assetBrowserIconSize", s.AssetBrowserIconSize);
     s.AssetSortMode = root.value("assetSortMode", s.AssetSortMode);
     s.AssetSortDesc = root.value("assetSortDesc", s.AssetSortDesc);
+    s.HierarchySortMode = root.value("hierarchySortMode", s.HierarchySortMode);
+    s.HierarchySortDesc = root.value("hierarchySortDesc", s.HierarchySortDesc);
+    s.HierarchyTypeFilterMask = root.value("hierarchyTypeFilterMask", s.HierarchyTypeFilterMask);
     s.EngineMarkEnabled = root.value("engineMarkEnabled", s.EngineMarkEnabled);
     s.EngineMarkSpinSpeed = root.value("engineMarkSpinSpeed", s.EngineMarkSpinSpeed);
     s.EngineMarkPrism = root.value("engineMarkPrism", s.EngineMarkPrism);
@@ -175,6 +178,9 @@ void EditorSettings::Flush() {
     root["assetBrowserIconSize"] = Get().AssetBrowserIconSize;
     root["assetSortMode"] = Get().AssetSortMode;
     root["assetSortDesc"] = Get().AssetSortDesc;
+    root["hierarchySortMode"] = Get().HierarchySortMode;
+    root["hierarchySortDesc"] = Get().HierarchySortDesc;
+    root["hierarchyTypeFilterMask"] = Get().HierarchyTypeFilterMask;
     root["engineMarkEnabled"] = Get().EngineMarkEnabled;
     root["engineMarkSpinSpeed"] = Get().EngineMarkSpinSpeed;
     root["engineMarkPrism"] = Get().EngineMarkPrism;

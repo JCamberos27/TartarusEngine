@@ -3,6 +3,7 @@
 
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
+#include "EditorModuleAPI.h" // kHierarchyFilter* bitmask constants, shared with EditorModuleHierarchy.cpp
 #include "FileDialog.h"
 #include "AssetLibrary.h"
 #include "World.h"
@@ -102,6 +103,27 @@ int CreationOrdinal(const entt::registry& reg, entt::entity entity) {
     for (size_t i = 0; i < list.size(); ++i)
         if (list[i] == entity) return static_cast<int>(i) + 1;
     return 0;
+}
+
+// Phase 5 item 6 — the type-filter chips' bitmask, and the tiebreak key the Type sort mode uses.
+// Independent of the per-row kind BADGE (DrawHierarchyRowBody's own hasMesh/hasLight/hasCamera),
+// which picks one primary glyph by priority — this instead sets every bit an entity qualifies
+// for, so a mesh-with-a-light still matches either chip.
+int HierarchyKindMask(const entt::registry& reg, entt::entity e) {
+    int mask = 0;
+    if (reg.all_of<RenderableComponent>(e)) mask |= kHierarchyFilterMesh;
+    if (reg.all_of<LightComponent>(e))      mask |= kHierarchyFilterLight;
+    if (reg.all_of<CameraComponent>(e))     mask |= kHierarchyFilterCamera;
+    if (mask == 0) mask |= kHierarchyFilterOther;
+    return mask;
+}
+
+// Same "(unnamed)" fallback DrawHierarchyRowBody shows, so the Name sort mode orders rows exactly
+// the way they read on screen instead of putting every unnamed entity first as an empty string.
+std::string HierarchyDisplayName(const entt::registry& reg, entt::entity e) {
+    const auto* name = reg.try_get<NameComponent>(e);
+    if (name && !name->Name.empty()) return name->Name;
+    return "Object " + std::to_string(CreationOrdinal(reg, e));
 }
 
 } // namespace
@@ -644,7 +666,9 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     if (const ImGuiPayload* d = ImGui::GetDragDropPayload(); !d || !d->IsDataType("HIERARCHY_ENTITY"))
         m_HierarchySpringRow = entt::null;
 
-    const bool filtering = !m_HierarchyFilter.empty();
+    // Phase 5 item 6 — a type-filter chip narrows the list exactly like a text filter does: rows
+    // that match show flat, ignoring parent/child structure, same as a name/tag search.
+    const bool filtering = !m_HierarchyFilter.empty() || EditorSettings::Get().HierarchyTypeFilterMask != 0;
 
     // Defect #51 — whether the scene has any entities at all, independent of the current filter,
     // so the empty-state message below can tell "nothing in the scene" apart from "nothing
@@ -660,17 +684,26 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     // Tighter per-level indent than the editor-wide default — this panel is narrow, so a few
     // levels of nesting otherwise push names off the right edge fast (#153).
     ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 13.0f * m_UIScale);
+    // Phase 5 item 6 — calibrated to a 24px row pitch at 1x UI scale: FrameHeight (font size 16 +
+    // FramePadding.y*2 = 3*2 = 6, giving 22) plus a 2px gap between rows = 24. Only the vertical
+    // FramePadding is touched — horizontal stays the theme default so button/text padding elsewhere
+    // in the row is unaffected.
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(ImGui::GetStyle().FramePadding.x, 3.0f * m_UIScale));
     // #234 layer 3: a fixed, tight row gap so every row is the same height regardless of content
     // (the SaaS-list look).
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                        ImVec2(ImGui::GetStyle().ItemSpacing.x, 3.0f * m_UIScale));
+                        ImVec2(ImGui::GetStyle().ItemSpacing.x, 2.0f * m_UIScale));
 
     // Defect #45 — flatten the expanded/filtered tree into one ordered list first, then let
     // ImGuiListClipper decide which rows are actually worth drawing this frame. Before this, every
     // entity's row was walked and measured every frame regardless of scroll position: invisible at
     // 61 objects, ~4,000 text measurements/frame at 1,000+.
     std::vector<HierarchyFlatRow> flatRows;
-    for (auto entity : ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>())) {
+    std::vector<entt::entity> rootEntities =
+        ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>());
+    ApplyHierarchyDisplaySort(world, rootEntities); // Phase 5 item 6 — display-only, doesn't touch OrderComponent
+    for (entt::entity entity : rootEntities) {
         if (!MatchesHierarchyFilter(world, entity)) continue;
         // A parented entity draws nested under its parent, not as a sibling — except while
         // filtering, where the parent may be filtered out, so matches are shown flat instead.
@@ -723,6 +756,7 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
         }
     }
     ImGui::PopStyleVar(); // ItemSpacing
+    ImGui::PopStyleVar(); // FramePadding
     ImGui::PopStyleVar(); // IndentSpacing
 
     // Defect #51 — a genuinely empty scene rendered nothing at all: no icon, no message, no
@@ -815,6 +849,12 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
 }
 
 bool EditorLayer::MatchesHierarchyFilter(const World& world, entt::entity entity) const {
+    // Phase 5 item 6 — the type-filter chips apply first and independently of the text filter
+    // below; a row must satisfy both to show.
+    const int typeMask = EditorSettings::Get().HierarchyTypeFilterMask;
+    if (typeMask != 0 && (HierarchyKindMask(world.Registry, entity) & typeMask) == 0)
+        return false;
+
     if (m_HierarchyFilter.empty()) return true;
 
     if (m_HierarchyFilter.rfind("t:", 0) == 0) {
@@ -839,7 +879,8 @@ void EditorLayer::FlattenHierarchyRows(World& world, entt::entity entity, int de
     if (entity == m_RenamingEntity) return;
 
     const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
-    bool hasChildren = hier && !hier->Children.empty() && m_HierarchyFilter.empty();
+    bool hasChildren = hier && !hier->Children.empty() &&
+        m_HierarchyFilter.empty() && EditorSettings::Get().HierarchyTypeFilterMask == 0;
     if (!hasChildren) return;
 
     // Same PushID(entity)/"##node" lookup DrawHierarchyRowBody uses when it actually draws this
@@ -850,6 +891,9 @@ void EditorLayer::FlattenHierarchyRows(World& world, entt::entity entity, int de
         // Sorted by OrderComponent (not raw HierarchyComponent::Children insertion order) so
         // sibling reordering shows.
         std::vector<entt::entity> children = HierarchySiblingsInOrder(world, entity);
+        // Phase 5 item 6 — display-only re-sort; HierarchySiblingsInOrder's own OrderComponent
+        // order is left untouched, since ReorderHierarchySiblings and drag-drop key off it.
+        ApplyHierarchyDisplaySort(world, children);
         for (entt::entity child : children) {
             if (world.Registry.valid(child)) FlattenHierarchyRows(world, child, depth + 1, out);
         }
@@ -869,7 +913,8 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     // #236 B — SceneVis-lite: a row hidden in the Scene view reads like an inactive one (dimmed).
     bool sceneHiddenRow = world.Registry.all_of<HiddenInSceneTag>(entity);
     const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
-    bool hasChildren = hier && !hier->Children.empty() && m_HierarchyFilter.empty();
+    bool hasChildren = hier && !hier->Children.empty() &&
+        m_HierarchyFilter.empty() && EditorSettings::Get().HierarchyTypeFilterMask == 0;
 
     // Defect #45 — the caller (DrawHierarchyTreeBody) already pushed this row's full
     // ancestor-to-self ID chain (ending with this entity's own PushID) before calling here, so
@@ -1500,6 +1545,24 @@ std::vector<entt::entity> EditorLayer::HierarchySiblingsInOrder(const World& wor
         return va != vb ? va < vb : a < b;
     });
     return out;
+}
+
+// Phase 5 item 6 — the sort control's display-only re-sort. Mode 0 (Creation order) is a no-op
+// since the caller's list already comes out of ViewInCreationOrder/HierarchySiblingsInOrder in
+// that order; modes 1/2 stable_sort by name or kind on top of it, so ties (e.g. two meshes) keep
+// their creation-order relative position. This never touches OrderComponent or Children — pure
+// display, so drag-drop / ReorderHierarchySiblings behave exactly as before regardless of sort.
+void EditorLayer::ApplyHierarchyDisplaySort(const World& world, std::vector<entt::entity>& rows) const {
+    const int mode = EditorSettings::Get().HierarchySortMode;
+    if (mode == 0 || rows.size() < 2) return;
+    const bool desc = EditorSettings::Get().HierarchySortDesc;
+    auto less = [&](entt::entity a, entt::entity b) {
+        if (mode == 1) return HierarchyDisplayName(world.Registry, a) < HierarchyDisplayName(world.Registry, b);
+        return HierarchyKindMask(world.Registry, a) < HierarchyKindMask(world.Registry, b);
+    };
+    std::stable_sort(rows.begin(), rows.end(), [&](entt::entity a, entt::entity b) {
+        return desc ? less(b, a) : less(a, b);
+    });
 }
 
 void EditorLayer::ReorderHierarchySiblings(World& world, const std::vector<entt::entity>& movingIn,
