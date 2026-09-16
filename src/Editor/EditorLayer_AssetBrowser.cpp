@@ -1415,9 +1415,12 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 const bool multi = scenesForAction.size() > 1;
                 const bool anyOpen = std::any_of(scenesForAction.begin(), scenesForAction.end(),
                     [&](const AssetKeyRef& r) { return r.Key == m_CurrentScenePath; });
+                ImGui::Separator();
+                ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
                 if (ImGui::MenuItem(multi ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete",
                                     nullptr, false, !(!multi && anyOpen)))
                     RequestDeleteAssets(world, assets, scenesForAction, /*skipDialog=*/false);
+                ImGui::PopStyleColor();
                 if (!multi && anyOpen && ImGui::IsItemHovered())
                     EditorUI::SetTooltip("This scene is open — open a different scene first.");
                 ImGui::EndPopup();
@@ -1449,8 +1452,11 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 shotsForAction.push_back({m_SelectedAssetKey, false});
                 for (const auto& e : m_ExtraAssetSelection) shotsForAction.push_back(e);
                 const bool multi = shotsForAction.size() > 1;
+                ImGui::Separator();
+                ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
                 if (ImGui::MenuItem(multi ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete"))
                     RequestDeleteAssets(world, assets, shotsForAction, /*skipDialog=*/false);
+                ImGui::PopStyleColor();
                 ImGui::EndPopup();
             }
         } else if (ImGui::BeginPopupContextItem()) {
@@ -1462,6 +1468,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 m_SelectedAssetKey = cell.key;
                 m_SelectedAssetIsFolder = isFolder;
             }
+            ImGui::SeparatorText(ICON_FA_PEN "  Edit");
             if (ImGui::MenuItem(ICON_FA_PEN "  Rename (F2)", nullptr, false, m_ExtraAssetSelection.empty())) {
                 BeginRenameAsset(cell.key, isFolder, cell.display);
             }
@@ -1516,6 +1523,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             // Apply (#28 P17). Single selection, real imported assets only.
             if (!isFolder && m_ExtraAssetSelection.empty() &&
                 (cell.kind == Cell::Kind::Model || cell.kind == Cell::Kind::Texture)) {
+                ImGui::SeparatorText(ICON_FA_ROTATE "  Actions");
                 if (ImGui::MenuItem(ICON_FA_ROTATE "  Reimport")) {
                     if (cell.kind == Cell::Kind::Model) {
                         PushUndo(world, "Reimport Model");
@@ -1540,9 +1548,12 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete Folder";
 
             if (isFolder) {
+                ImGui::Separator();
+                ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
                 if (ImGui::MenuItem(deleteLabel)) {
                     RequestDeleteAssets(world, assets, selectionForAction, /*skipDialog=*/false);
                 }
+                ImGui::PopStyleColor();
             } else {
                 if (cell.kind == Cell::Kind::Prefab && selectionForAction.size() == 1 && ImGui::MenuItem(ICON_FA_PLUS "  Place Instance")) {
                     PushUndo(world, "Place Prefab Instance");
@@ -1554,9 +1565,12 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 }
                 const char* removeLabel = selectionForAction.size() > 1
                     ? ICON_FA_TRASH "  Remove Selected from Library" : ICON_FA_TRASH "  Remove from Library";
+                ImGui::Separator();
+                ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
                 if (ImGui::MenuItem(removeLabel)) {
                     RequestDeleteAssets(world, assets, selectionForAction, /*skipDialog=*/false);
                 }
+                ImGui::PopStyleColor();
                 if (cell.kind == Cell::Kind::Prefab) ImGui::TextDisabled("The .prefab file stays on disk.");
             }
             ImGui::EndPopup();
