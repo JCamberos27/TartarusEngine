@@ -252,9 +252,12 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
     const bool detailsMode = viewMode == 2;
     const bool gridMode = !detailsMode && iconSize > listMinIcon * uiScale;
 
+    // A fixed, known height rather than measuring one via GetCursorPosY() deltas - Separator()
+    // interacting with several SameLine(absoluteX)-positioned items on the same line was pushing
+    // ImGui's line-height tracking (CursorMaxPos) up by a large, inconsistent amount, which then
+    // fed into the BeginChild size below and squeezed the row list down to nothing.
     float headerH = 0.0f;
     if (detailsMode) {
-        const float startY = ImGui::GetCursorPosY();
         const float rightEdge = ImGui::GetWindowContentRegionMax().x;
         const float typeX = rightEdge - (kAssetDetailsTypeColW + kAssetDetailsSizeColW + kAssetDetailsModifiedColW) * uiScale;
         const float sizeX = rightEdge - (kAssetDetailsSizeColW + kAssetDetailsModifiedColW) * uiScale;
@@ -263,11 +266,18 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
         ImGui::SameLine(typeX); ImGui::TextDisabled("Type");
         ImGui::SameLine(sizeX); ImGui::TextDisabled("Size");
         ImGui::SameLine(modX);  ImGui::TextDisabled("Modified");
+        ImGui::NewLine(); // end the SameLine chain on a clean, single-line cursor advance first
         ImGui::Separator();
-        headerH = ImGui::GetCursorPosY() - startY; // just the header + separator's own height
+        headerH = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
     }
 
-    ImGui::BeginChild("##AssetList", ImVec2(0, contentHeight - headerH), ImGuiChildFlags_None);
+    // ImGui::BeginChild treats a <=0 size specially ("fill available" for 0, "fill available minus
+    // |size|" for negative) rather than as a literal small height - on a short docked panel where
+    // headerH can meet or exceed contentHeight, contentHeight - headerH could be exactly that, and
+    // the child would balloon past the panel instead of shrinking, pushing its rows (and the
+    // footer below it) off-screen. Floor it to at least one row so the size is always explicit.
+    const float listH = std::max(contentHeight - headerH, ImGui::GetFrameHeightWithSpacing());
+    ImGui::BeginChild("##AssetList", ImVec2(0, listH), ImGuiChildFlags_None);
 
     if (host.AssetGridFrameBegin) host.AssetGridFrameBegin();
 
