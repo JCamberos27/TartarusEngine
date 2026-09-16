@@ -452,6 +452,19 @@ void EditorLayer::UpdateViewTransition(Camera& editorCamera, float dt) {
         return;
     }
 
+    // Phase 6 item 12 — Reduce Motion snaps straight to the target instead of easing over
+    // kDuration below, the same "any transition" scope named alongside the monogram spin
+    // (DrawEngineMark, EditorLayer.cpp).
+    if (EditorSettings::Get().ReduceMotion) {
+        editorCamera.Yaw = m_ViewTransition.ToYaw;
+        editorCamera.Pitch = m_ViewTransition.ToPitch;
+        editorCamera.Position = m_ViewTransition.ToPos;
+        editorCamera.OrthoHalfHeight = m_ViewTransition.ToOrthoHalfHeight;
+        editorCamera.Fov = m_ViewTransition.ToFov;
+        m_ViewTransition.Active = false;
+        return;
+    }
+
     const float kDuration = 0.28f;
     m_ViewTransition.T = std::min(1.0f, m_ViewTransition.T + dt / kDuration);
     float t = m_ViewTransition.T;
