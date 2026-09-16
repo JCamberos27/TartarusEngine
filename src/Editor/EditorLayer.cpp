@@ -390,6 +390,19 @@ void EditorLayer::ApplyThemeStyle() {
                                              style.Colors[ImGuiCol_WindowBg], 3.0f, logContrastWarn);
     EditorUIPrimitives::AssertContrastFloor("NavCursor vs FrameBg", style.Colors[ImGuiCol_NavCursor],
                                              style.Colors[ImGuiCol_FrameBg], 3.0f, logContrastWarn);
+    // Phase 5 item 6 — SceneVisToggle's (EditorLayerInternal.h) Hierarchy eye/lock glyphs used to
+    // sit at 0.32 alpha at rest, ~1.35:1 against WindowBg — an interactive control well under this
+    // codebase's own 3:1 floor. Its dimmest tier is now 0.78; guard it the same alpha-composited
+    // way the Border check above does, so a future alpha tweak that dips back under the floor
+    // gets a log line instead of shipping silently.
+    {
+        ImVec4 hierarchyToggleResting = style.Colors[ImGuiCol_TextDisabled];
+        hierarchyToggleResting.w *= 0.78f;
+        EditorUIPrimitives::AssertContrastFloor(
+            "Hierarchy toggle (resting) vs WindowBg",
+            EditorUIPrimitives::CompositeOver(hierarchyToggleResting, style.Colors[ImGuiCol_WindowBg]),
+            style.Colors[ImGuiCol_WindowBg], 3.0f, logContrastWarn);
+    }
 
     // Phase 3 item 4 — the same "log, don't crash" startup check for the toolbar/tool-palette/
     // view-chip icon set: every glyph must decode inside the atlas's merged icon range, and no
