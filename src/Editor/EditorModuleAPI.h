@@ -347,8 +347,10 @@ struct EditorModuleHostAPI {
     void (*MoveAssetToFolderUndoable)(const char* assetKey, const char* folder) = nullptr;
     // Start the in-place rename editor on a folder (host BeginRenameAsset(path, isFolder=true)).
     void (*BeginRenameFolder)(const char* path) = nullptr;
-    // kind 0/1/2 = model / texture / sound; host opens FileDialog then ImportDroppedFile into
-    // `intoFolder` (the current folder).
+    // kind 0/1/2 = model / texture / sound, 3 = any (Phase 5 item 5's unified "Import Asset...";
+    // kind only picks the dialog's filter — ImportDroppedFile infers the real type from the
+    // extension regardless); host opens FileDialog then ImportDroppedFile into `intoFolder` (the
+    // current folder).
     void (*ImportAssetViaDialog)(int kind, const char* intoFolder) = nullptr;
 
     // --- Asset grid layout slice (API v6) -------------------------------------------------

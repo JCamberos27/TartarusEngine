@@ -369,12 +369,16 @@ void Draw(const EditorModuleHostAPI& host) {
             if (host.BeginRenameFolder) host.BeginRenameFolder(candidate.c_str());
         }
         ImGui::Separator();
-        if (ImGui::MenuItem(ICON_FA_CUBE "  Import Model...") && host.ImportAssetViaDialog)
-            host.ImportAssetViaDialog(0, curFolder.c_str());
-        if (ImGui::MenuItem(ICON_FA_IMAGE "  Import Texture...") && host.ImportAssetViaDialog)
-            host.ImportAssetViaDialog(1, curFolder.c_str());
-        if (ImGui::MenuItem(ICON_FA_MUSIC "  Import Sound...") && host.ImportAssetViaDialog)
-            host.ImportAssetViaDialog(2, curFolder.c_str());
+        // Phase 5 item 5 — one "Import Asset..." entry replacing the three separate
+        // Model/Texture/Sound items; ImportAssetViaDialog(3, ...) opens a combined-filter file
+        // picker and ImportDroppedFile (host-side) infers the real type from the extension either
+        // way, the same as it always has for a drag-drop or a folder-drop import.
+        if (ImGui::MenuItem(ICON_FA_FILE_IMPORT "  Import Asset...") && host.ImportAssetViaDialog)
+            host.ImportAssetViaDialog(3, curFolder.c_str());
+        if (ImGui::IsItemHovered())
+            Tooltip(host, "Model (.fbx/.obj/.gltf/.glb), image (.png/.jpg/.tga/.bmp) or\n"
+                          "audio (.wav/.mp3/.ogg/.flac) - the type is detected automatically.\n"
+                          "You can also just drag a file in from Explorer.");
         ImGui::EndPopup();
     }
 

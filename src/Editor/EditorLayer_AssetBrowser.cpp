@@ -845,13 +845,18 @@ void EditorLayer::RefreshShotsListingIfNeeded() {
     m_ShotsListingCache.valid = true;
 }
 
-// kind 0/1/2 = model / texture / sound. Opens the OS file dialog, then imports into the current
-// folder — the host half of the module's +Create/Import menu.
+// kind 0/1/2 = model / texture / sound; 3 = any (Phase 5 item 5's unified "Import Asset..." —
+// ImportDroppedFile already infers the real type from the extension regardless of which kind
+// picked the dialog's filter, so kind only ever chooses what the OS file picker shows/defaults
+// to). Opens the OS file dialog, then imports into the current folder — the host half of the
+// module's +Create/Import menu.
 void EditorLayer::AssetBrowserImportViaDialog(World& world, AssetLibrary& assets, int kind, const std::string& intoFolder) {
     const char* filter =
         kind == 0 ? "3D Models\0*.fbx;*.obj;*.gltf;*.glb\0All Files\0*.*\0" :
         kind == 1 ? "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0" :
-                    "Audio\0*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0";
+        kind == 2 ? "Audio\0*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0" :
+                    "All Assets\0*.fbx;*.obj;*.gltf;*.glb;*.png;*.jpg;*.jpeg;*.tga;*.bmp;"
+                    "*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0";
     std::string p = FileDialog::OpenFile(filter, m_Window);
     if (!p.empty() && m_EditorCameraPtr)
         ImportDroppedFile(world, assets, *m_EditorCameraPtr, p, intoFolder);
