@@ -294,9 +294,10 @@ void EditorLayer::HandleHierarchyKeyboardNav(World& world) {
     if (vis.empty()) return;
 
     // A node's open/closed flag lives in this window's storage under the "##node" id computed
-    // inside DrawHierarchyNode's PushID stack — and rows nest, so that stack is PushID(root) …
-    // PushID(entity), one per ancestor. Rebuild the whole chain here or the id won't match for
-    // any row below the top level (which is why Left/Right did nothing on nested rows).
+    // from the row's ancestor-to-self PushID chain (DrawHierarchyTreeBody pushes PushID(root) …
+    // PushID(entity), one per ancestor, before drawing each row). Rebuild the whole chain here or
+    // the id won't match for any row below the top level (which is why Left/Right did nothing on
+    // nested rows).
     auto nodeId = [&](entt::entity e) {
         std::vector<entt::entity> chain;
         for (entt::entity w = e; w != entt::null; ) {
@@ -634,8 +635,8 @@ void EditorLayer::HierarchyExpandAll(World& world, bool open) {
 // context menus, selection, undo and Ctrl+A stay here (EnTT + Components.h never cross the DLL
 // boundary).
 void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
-    // Accumulates as each row is drawn (DrawHierarchyNode); published to m_HierarchyVisibleOrder
-    // just before this function returns. See the header for why the two buffers are separate.
+    // Filled by FlattenHierarchyRows below, then published to m_HierarchyVisibleOrder just before
+    // this function returns. See the header for why the two buffers are separate.
     m_HierarchyVisibleBuild.clear();
 
     // #236 B — clear the spring-load dwell target whenever there's no row drag in flight, so a
@@ -663,6 +664,12 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     // (the SaaS-list look).
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                         ImVec2(ImGui::GetStyle().ItemSpacing.x, 3.0f * m_UIScale));
+
+    // Defect #45 — flatten the expanded/filtered tree into one ordered list first, then let
+    // ImGuiListClipper decide which rows are actually worth drawing this frame. Before this, every
+    // entity's row was walked and measured every frame regardless of scroll position: invisible at
+    // 61 objects, ~4,000 text measurements/frame at 1,000+.
+    std::vector<HierarchyFlatRow> flatRows;
     for (auto entity : ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>())) {
         if (!MatchesHierarchyFilter(world, entity)) continue;
         // A parented entity draws nested under its parent, not as a sibling — except while
@@ -671,7 +678,49 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
             const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
             if (hier && hier->Parent != entt::null) continue;
         }
-        DrawHierarchyNode(world, assets, entity, world.Registry.all_of<LevelGeometryTag>(entity));
+        FlattenHierarchyRows(world, entity, /*depth=*/0, flatRows);
+    }
+
+    // The full list, independent of clipping — Ctrl+A, Shift+Click and keyboard nav all key off
+    // this, not off which rows happen to be on-screen this frame.
+    m_HierarchyVisibleBuild.reserve(flatRows.size());
+    for (const HierarchyFlatRow& row : flatRows) m_HierarchyVisibleBuild.push_back(row.Entity);
+
+    const float rowPitch = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y;
+    ImGuiListClipper clipper;
+    // A keyboard-nav / rename-reveal target may be scrolled off-screen; force its row into this
+    // frame's processed range so the SetScrollHereY() call inside DrawHierarchyRowBody still
+    // fires — Step() otherwise skips indices outside both the visible window and any included
+    // range. Must be called before the first Step().
+    if (m_HierarchyScrollToEntity != entt::null) {
+        for (int i = 0; i < (int)flatRows.size(); ++i) {
+            if (flatRows[i].Entity == m_HierarchyScrollToEntity) { clipper.IncludeItemByIndex(i); break; }
+        }
+    }
+    clipper.Begin((int)flatRows.size(), rowPitch);
+    while (clipper.Step()) {
+        for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+            const HierarchyFlatRow& row = flatRows[i];
+            if (!world.Registry.valid(row.Entity)) continue;
+
+            // Push this row's full ancestor-to-self ID chain so every ID (rename buffer, drag
+            // payload, popups, the "##node" open/closed flag) lands exactly where the old
+            // recursive walk would have left it at the equivalent nesting depth.
+            std::vector<entt::entity> chain;
+            for (entt::entity w = row.Entity; w != entt::null; ) {
+                chain.push_back(w);
+                const auto* h = world.Registry.try_get<HierarchyComponent>(w);
+                w = h ? h->Parent : entt::null;
+            }
+            for (auto it = chain.rbegin(); it != chain.rend(); ++it)
+                ImGui::PushID((int)entt::to_integral(*it));
+
+            if (row.Depth > 0) ImGui::Indent(row.Depth * ImGui::GetStyle().IndentSpacing);
+            DrawHierarchyRowBody(world, assets, row.Entity, /*isFirstRow=*/i == 0);
+            if (row.Depth > 0) ImGui::Unindent(row.Depth * ImGui::GetStyle().IndentSpacing);
+
+            for (size_t p = 0; p < chain.size(); ++p) ImGui::PopID();
+        }
     }
     ImGui::PopStyleVar(); // ItemSpacing
     ImGui::PopStyleVar(); // IndentSpacing
@@ -779,13 +828,38 @@ bool EditorLayer::MatchesHierarchyFilter(const World& world, entt::entity entity
     return MatchesFilter(m_HierarchyFilter, name ? name->Name : std::string());
 }
 
-void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::entity entity, bool isLevelGeometry) {
+void EditorLayer::FlattenHierarchyRows(World& world, entt::entity entity, int depth,
+                                        std::vector<HierarchyFlatRow>& out) {
     if (!world.Registry.valid(entity)) return;
+    out.push_back({entity, depth});
 
-    // This row is about to be drawn — record it in visible top-to-bottom order for Ctrl+A and
-    // Shift+Click. Children append themselves in the recursive calls below, and only when this
-    // node is expanded, so the list mirrors exactly what the user sees.
-    m_HierarchyVisibleBuild.push_back(entity);
+    // Mirrors the pre-Defect-#45 recursive walk's one deliberate quirk: don't descend into a
+    // row's children while it's being renamed, keeping the inline edit field stable for the one
+    // frame it's open.
+    if (entity == m_RenamingEntity) return;
+
+    const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
+    bool hasChildren = hier && !hier->Children.empty() && m_HierarchyFilter.empty();
+    if (!hasChildren) return;
+
+    // Same PushID(entity)/"##node" lookup DrawHierarchyRowBody uses when it actually draws this
+    // row — both sides must agree on the open/closed flag's ID.
+    ImGui::PushID((int)entt::to_integral(entity));
+    bool open = ImGui::GetStateStorage()->GetInt(ImGui::GetID("##node"), 1) != 0;
+    if (open) {
+        // Sorted by OrderComponent (not raw HierarchyComponent::Children insertion order) so
+        // sibling reordering shows.
+        std::vector<entt::entity> children = HierarchySiblingsInOrder(world, entity);
+        for (entt::entity child : children) {
+            if (world.Registry.valid(child)) FlattenHierarchyRows(world, child, depth + 1, out);
+        }
+    }
+    ImGui::PopID();
+}
+
+void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt::entity entity,
+                                        bool isFirstRow) {
+    if (!world.Registry.valid(entity)) return;
 
     auto& name = world.Registry.get<NameComponent>(entity);
     bool selected = IsSelected(entity);
@@ -797,7 +871,9 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
     const auto* hier = world.Registry.try_get<HierarchyComponent>(entity);
     bool hasChildren = hier && !hier->Children.empty() && m_HierarchyFilter.empty();
 
-    ImGui::PushID((int)entt::to_integral(entity));
+    // Defect #45 — the caller (DrawHierarchyTreeBody) already pushed this row's full
+    // ancestor-to-self ID chain (ending with this entity's own PushID) before calling here, so
+    // every ID below lands exactly where the old recursive DrawHierarchyNode would have left it.
 
     // The active-state eye toggle used to lead every row, so it indented with tree depth. It now
     // sits in a fixed right-hand column (drawn after the row below), Unity-style — one straight
@@ -852,7 +928,6 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
             ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.35f, 1.0f), "Name can't be blank.");
             ImGui::EndTooltip();
         }
-        ImGui::PopID();
         return; // children stay collapsed for the one frame a rename is open — deliberate, keeps the field stable
     }
 
@@ -989,7 +1064,6 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         const float pitch = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y;
         const float half  = pitch * 0.5f;
         const float pInset = pitch * 0.30f;          // parent zone = +/- this around the name
-        const bool  isFirstRow = m_HierarchyVisibleBuild.size() == 1;
         const float zoneTop = isFirstRow ? midY - half : midY - pInset;
         if (ImGui::IsMouseHoveringRect(ImVec2(rowMin.x, zoneTop), ImVec2(rowMax.x, midY + half), /*clip=*/false)) {
             const float my = ImGui::GetIO().MousePos.y;
@@ -1186,21 +1260,9 @@ void EditorLayer::DrawHierarchyNode(World& world, AssetLibrary& assets, entt::en
         }
     }
 
-    if (hasChildren && open) {
-        // Every row is NoTreePushOnOpen now, so ImGui no longer auto-indents children — do it
-        // here (IndentSpacing is the tightened 13*uiScale pushed by DrawHierarchyTreeBody).
-        ImGui::Indent(ImGui::GetStyle().IndentSpacing);
-        // Sorted by OrderComponent (not raw HierarchyComponent::Children insertion order) so
-        // sibling reordering shows, and it's a fresh copy anyway — a re-parent or delete from a
-        // child's own context menu would otherwise mutate Children mid-iteration.
-        std::vector<entt::entity> children = HierarchySiblingsInOrder(world, entity);
-        for (entt::entity child : children) {
-            if (world.Registry.valid(child)) DrawHierarchyNode(world, assets, child, isLevelGeometry);
-        }
-        ImGui::Unindent(ImGui::GetStyle().IndentSpacing);
-    }
-
-    ImGui::PopID();
+    // Defect #45 — children no longer recurse from here: FlattenHierarchyRows already expanded
+    // this row's children (if any, and if open) into their own entries in the flat list that
+    // DrawHierarchyTreeBody's clipped loop is iterating.
 }
 
 void EditorLayer::SetHierarchyExpandedRecursive(World& world, entt::entity entity, bool open) {
