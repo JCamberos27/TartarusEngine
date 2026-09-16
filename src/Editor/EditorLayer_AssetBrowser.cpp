@@ -22,6 +22,7 @@
 #include "Profiler.h"
 #include "ProjectPaths.h"
 #include "AtomicFile.h"
+#include "ThumbnailCache.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"
 #include "gl.h"
@@ -270,37 +271,64 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
     m_ThumbnailBudgetThisFrame--;
 
     const int kSize = 128;
-    const float dist = ModelPreviewRenderer::ComputeFramingDistance(model);
-    const unsigned int src = m_ThumbnailPreview.Render(model, 0.7f, 0.5f, dist, kSize, kSize);
-
     unsigned int dst = 0;
-    glGenTextures(1, &dst);
-    glBindTexture(GL_TEXTURE_2D, dst);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kSize, kSize, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    // Copy the shared preview render into `dst` via a scratch read-FBO. Predates the 4.6
-    // upgrade (4.3+ has glCopyImageSubData) but glCopyTexSubImage2D from a bound READ
-    // framebuffer works fine and is already loaded, so it's kept as-is.
-    GLint prevRead = 0, prevDraw = 0;
-    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
-    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevDraw);
-    if (!m_ThumbnailBlitFbo) glGenFramebuffers(1, &m_ThumbnailBlitFbo);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, m_ThumbnailBlitFbo);
-    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, src, 0);
-    glBindTexture(GL_TEXTURE_2D, dst);
-    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, kSize, kSize);
-    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevRead);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (unsigned int)prevDraw);
+    // Phase 5 item 9 — a persistent cache hit skips the render pass (and the model load it
+    // implies) entirely: just upload the decoded PNG. Still spends this frame's thumbnail
+    // budget above, since a decode-and-upload at scale (1,000+ objects) is exactly the frame-time
+    // cost item 9 was written to bound, not only the render.
+    std::vector<unsigned char> cachedPixels;
+    if (ThumbnailCache::Load(path, kSize, cachedPixels)) {
+        glGenTextures(1, &dst);
+        glBindTexture(GL_TEXTURE_2D, dst);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kSize, kSize, 0, GL_RGBA, GL_UNSIGNED_BYTE, cachedPixels.data());
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        GLStateCache::Invalidate(); // raw glBindTexture above — see the matching note below
+    } else {
+        const float dist = ModelPreviewRenderer::ComputeFramingDistance(model);
+        const unsigned int src = m_ThumbnailPreview.Render(model, 0.7f, 0.5f, dist, kSize, kSize);
 
-    // The preview render plus the raw glBindTexture calls above never went through GLStateCache;
-    // resync it so a later Texture::Bind() on the same unit isn't skipped as falsely-redundant
-    // (audit GL-202: the "call Invalidate() after every raw-GL pass" rule this path was missing).
-    GLStateCache::Invalidate();
+        glGenTextures(1, &dst);
+        glBindTexture(GL_TEXTURE_2D, dst);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kSize, kSize, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        // Copy the shared preview render into `dst` via a scratch read-FBO. Predates the 4.6
+        // upgrade (4.3+ has glCopyImageSubData) but glCopyTexSubImage2D from a bound READ
+        // framebuffer works fine and is already loaded, so it's kept as-is.
+        GLint prevRead = 0, prevDraw = 0;
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevDraw);
+        if (!m_ThumbnailBlitFbo) glGenFramebuffers(1, &m_ThumbnailBlitFbo);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, m_ThumbnailBlitFbo);
+        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, src, 0);
+        glBindTexture(GL_TEXTURE_2D, dst);
+        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, kSize, kSize);
+
+        // Phase 5 item 9 — persist what was just rendered, so the NEXT launch is a cache hit.
+        // glGetTexImage isn't in this codebase's trimmed GL loader (extern/glloader/gl.h); read
+        // via glReadPixels from `src` instead, while it's still the bound READ_FRAMEBUFFER
+        // attachment above — the exact same pixels glCopyTexSubImage2D just copied into `dst`.
+        std::vector<unsigned char> freshPixels((size_t)kSize * kSize * 4);
+        glReadPixels(0, 0, kSize, kSize, GL_RGBA, GL_UNSIGNED_BYTE, freshPixels.data());
+        ThumbnailCache::Save(path, kSize, freshPixels.data());
+
+        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevRead);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (unsigned int)prevDraw);
+
+        // The preview render plus the raw glBindTexture calls above never went through
+        // GLStateCache; resync it so a later Texture::Bind() on the same unit isn't skipped as
+        // falsely-redundant (audit GL-202: the "call Invalidate() after every raw-GL pass" rule
+        // this path was missing).
+        GLStateCache::Invalidate();
+    }
 
     m_ThumbnailLRU.push_front(path);
     m_ModelThumbnails[path] = { dst, m_ThumbnailLRU.begin() };
