@@ -34,4 +34,10 @@ namespace Screenshot {
     // Path to a small procedurally-generated camera-shutter click WAV (written once, into the
     // screenshots folder as ".shutter.wav"). "" if it couldn't be written.
     std::string ShutterClipPath();
+
+    // Decodes the image at `path` and places it on the OS clipboard as a real image (Phase 6
+    // item 7's lightbox "Copy image" action) - Windows CF_DIB, so a paste into another app lands
+    // pixels, not a file reference. Returns false on any decode/clipboard failure (logs why);
+    // no-op / false off Windows.
+    bool CopyImageToClipboard(const std::string& path);
 }
