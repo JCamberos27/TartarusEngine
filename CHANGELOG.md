@@ -7,6 +7,53 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### [Phase 4] Inspector rebuild (#6) — 2026-09-15
+
+Every scoped item landed except one genuine open bug. *"The Inspector is scannable left-to-right,
+every reference is named and clickable, and nothing is reachable only by right-click."*
+
+- Single- and multi-select field rendering unified into one `ReflectFieldType` switch
+  (`DrawReflectedField`) instead of two independently-drifting copies — the mechanism behind
+  several since-closed "inconsistent between objects" reports (`6756109`).
+- Ctrl+Click on a slider now hands focus to its type-in box instead of jumping the value, and
+  Escape correctly reverts (`6756109`).
+- Mesh Renderer shows a stable, friendly mesh name instead of a churning runtime handle
+  (`primitive://sphere#90` → "Sphere") (`b26e7c5`).
+- Light's Kelvin/RGB toggle row budgets its trailing space from real button sizes instead of a
+  hardcoded reserve — fixes the width-clipping half of the "K" button bug; a separate,
+  still-open rendering bug (invisible glyph, functional hitbox) remains under #11 (`ad62984`).
+- Entity header rebuilt: discoverable "…" actions menu (Reset/Copy/Paste/Remove/Revert/Apply)
+  on every component section and the header itself, retiring the three orphaned bottom icons
+  (`a956fad`).
+- Vec3 axis chips are a neutral button + coloured underline, not filled R/G/B blocks — pure
+  RGB was the worst accessible choice for deuteranopia (`be67d7d`).
+- Prefab-override markers: bold label + left gutter bar, freeing cyan for its selection-only role
+  (`a4595d9`, `daaefb5`).
+- Component-header tooltips anchor above the header instead of following the cursor into the
+  body, so they can't overlap the very controls a user is about to click (`b8824a3`).
+- Collider and Joint migrated onto `ComponentRegistry`'s reflection layer — the registration
+  guard-rail's remaining stragglers (Transform, Tag, Layer, PrefabInstance, the tag-structs) are
+  deliberate, documented allow-list exceptions, not gaps (`d8248bc`, `3d67c54`).
+- AssetRef fields (Audio Source's Clip) got ping/drag-drop and a missing-reference warning state
+  (`a7f038e`).
+- **Mesh Renderer / ObjectField architecture, settled:** stays hand-coded permanently —
+  `RenderableComponent::ModelRef` is a live `shared_ptr<Model>`, not a path-shaped `AssetRef`
+  field, so genericising it would mean rewriting the component's storage, not its widget. Closed
+  the one real remaining gap (a ping button) directly on the existing widget (`435ec7c`).
+- Inspector's "nothing selected" empty state no longer dumps scene statistics — that belongs in
+  the real Statistics panel (Phase 6), not duplicated wherever nothing happens to be selected
+  (`7039e71`).
+- Asset Browser selection now overrides Inspector Lock instead of being silently swallowed by it;
+  the lock stays armed and resumes the moment the asset selection clears (`8ae2abf`).
+- Missing-reference state extended to every asset kind an object can reference — materials,
+  meshes, and texture-map slots now get the same red-tint/warning-icon/tooltip treatment sound
+  references already had (`ba4951a`, `914a6e3`, `38bd57a`).
+- Material help-text tooltip no longer swaps with the Slot 0 controls on hover (`b8824a3`).
+
+**Known open issue:** [#11](https://github.com/JCamberos27/TartarusEngine/issues/11) — the Light
+Kelvin "K" button's glyph renders invisible (hitbox and tooltip work fine) under a condition not
+yet root-caused; needs an attached debugger, not more static analysis.
+
 ### [Phase 3] Top bar, viewport chrome, tool palette (#5) — 2026-09-15
 
 All 9 scoped items from the editor UI/UX rework's Phase 3 landed. *"Nothing important is a
