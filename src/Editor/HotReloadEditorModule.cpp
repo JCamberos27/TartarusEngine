@@ -111,6 +111,11 @@ bool PingAssetPathFn(const char* path) {
     return g_Editor && g_Assets && path && g_Editor->PingAssetPath(*g_Assets, path);
 }
 
+// --- Notification bell (API v28) ----------------------------------------------------------------
+int GetNotificationUnreadCountFn() { return g_Editor ? g_Editor->NotificationUnreadCount() : 0; }
+void MarkNotificationsReadFn() { if (g_Editor) g_Editor->MarkNotificationsRead(); }
+void DrawNotificationsPopupBodyFn() { if (g_Editor) g_Editor->DrawNotificationsPopupBody(); }
+
 // --- Editor services -------------------------------------------------------------------------
 // Not variadic: a format string crossing the boundary buys nothing, and the module can format its
 // own text. Still routed here so EditorSettings::Get().ShowTooltips (another host-side singleton)
@@ -502,6 +507,9 @@ const EditorModuleHostAPI kHostAPI{
     &LogErrorFn,
     &SelectEntityRawFn,
     &PingAssetPathFn,
+    &GetNotificationUnreadCountFn,
+    &MarkNotificationsReadFn,
+    &DrawNotificationsPopupBodyFn,
     &SetTooltipFn,
     &SaveFileDialogFn,
     &ConsoleStateFn,
