@@ -590,6 +590,36 @@ void EditorLayer::RequestLoadLayoutPreset(const std::string& name) {
 void EditorLayer::DeleteLayoutPreset(const std::string& name) {
     std::error_code ec;
     std::filesystem::remove(LayoutsDir() + "/" + SanitizeLayoutName(name) + ".ini", ec);
+    if (EditorSettings::Get().DefaultLayoutPreset == name) {
+        EditorSettings::Get().DefaultLayoutPreset.clear();
+        EditorSettings::Save();
+    }
+}
+
+void EditorLayer::RenameLayoutPreset(const std::string& oldName, const std::string& rawNewName) {
+    const std::string newName = SanitizeLayoutName(rawNewName);
+    if (newName.empty() || newName == oldName) return;
+    std::error_code ec;
+    std::filesystem::rename(LayoutsDir() + "/" + SanitizeLayoutName(oldName) + ".ini",
+                             LayoutsDir() + "/" + newName + ".ini", ec);
+    if (ec) { Log::Error("Layout preset: couldn't rename '" + oldName + "' to '" + newName + "'."); return; }
+    if (EditorSettings::Get().DefaultLayoutPreset == oldName) {
+        EditorSettings::Get().DefaultLayoutPreset = newName;
+        EditorSettings::Save();
+    }
+    Log::Info("Renamed layout preset '" + oldName + "' to '" + newName + "'.");
+}
+
+void EditorLayer::DuplicateLayoutPreset(const std::string& name) {
+    const std::string src = LayoutsDir() + "/" + SanitizeLayoutName(name) + ".ini";
+    std::string copyName = name + " Copy";
+    for (int i = 2; std::filesystem::exists(LayoutsDir() + "/" + SanitizeLayoutName(copyName) + ".ini"); ++i)
+        copyName = name + " Copy " + std::to_string(i);
+    std::error_code ec;
+    std::filesystem::copy_file(src, LayoutsDir() + "/" + SanitizeLayoutName(copyName) + ".ini",
+                                std::filesystem::copy_options::none, ec);
+    if (ec) { Log::Error("Layout preset: couldn't duplicate '" + name + "'."); return; }
+    Log::Info("Duplicated layout preset '" + name + "' as '" + copyName + "'.");
 }
 
 // --- Lighting panel + shared section helpers (#236 R2) -----------------------------------
@@ -2108,7 +2138,17 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
 
     bool rebuildLayout = m_ResetLayoutRequested;
+    // Reset Layout defers to a user-designated startup preset (Phase 6 item 10, set via the
+    // Layout Presets menu's "Set as Default") instead of the shipped Default arrangement, when
+    // one is configured and still exists on disk.
+    if (rebuildLayout && m_ResetLayoutKind == LayoutKind::Default &&
+        !EditorSettings::Get().DefaultLayoutPreset.empty()) {
+        RequestLoadLayoutPreset(EditorSettings::Get().DefaultLayoutPreset);
+        rebuildLayout = false;
+    }
     m_ResetLayoutRequested = false;
+    const LayoutKind layoutKind = m_ResetLayoutKind;
+    m_ResetLayoutKind = LayoutKind::Default;
     // Reset Layout also un-hides any panel the user closed — otherwise "restore the default
     // layout" would leave a panel missing with no obvious way to get it back — and re-derives
     // the Asset Browser's tree width / icon size from the current UI scale. Those are stored as
@@ -2152,13 +2192,29 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // strip: the Hierarchy needs width for longer object names, the Inspector for field
         // labels beside their values, and the Asset Browser — now a two-column tree+grid —
         // needs real height or its own content ends up cramped.
-        ImGuiID center = dockspaceId;
-        ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.18f, nullptr, &center);
-        ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.22f, nullptr, &center);
-        ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.28f, nullptr, &center);
+        //
+        // Phase 6 item 10 — Wide/Tall/Focus reuse this same tree, just with different ratios
+        // (and, for Focus, the side panels omitted) so the four shipped layouts share one
+        // source of truth instead of four hand-duplicated DockBuilder blocks.
+        float leftRatio = 0.18f, rightRatio = 0.22f, bottomRatio = 0.28f;
+        bool wantLeft = true, wantRight = true;
+        switch (layoutKind) {
+            case LayoutKind::Wide:  leftRatio = 0.14f; rightRatio = 0.16f; bottomRatio = 0.24f; break;
+            case LayoutKind::Tall:  leftRatio = 0.16f; rightRatio = 0.18f; bottomRatio = 0.36f; break;
+            case LayoutKind::Focus: wantLeft = wantRight = false; bottomRatio = 0.22f; break;
+            default: break;
+        }
 
-        ImGui::DockBuilderDockWindow("Scene Hierarchy", left);
-        ImGui::DockBuilderDockWindow("Inspector", right);
+        ImGuiID center = dockspaceId;
+        ImGuiID left = 0, right = 0;
+        if (wantLeft) left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, leftRatio, nullptr, &center);
+        if (wantRight) right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, rightRatio, nullptr, &center);
+        ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, bottomRatio, nullptr, &center);
+
+        if (wantLeft) ImGui::DockBuilderDockWindow("Scene Hierarchy", left);
+        if (wantRight) ImGui::DockBuilderDockWindow("Inspector", right);
+        else m_ShowInspector = false;
+        if (!wantLeft) m_ShowHierarchy = false;
         ImGui::DockBuilderDockWindow("Asset Browser", bottom);
         // Console shares the bottom node as a tab beside the Asset Browser, the way Unity docks
         // Project and Console together.
@@ -2167,8 +2223,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // pinned HUDs; a default home (tabbed with Inspector, both hidden by default per
         // EditorSettings::SceneShowStats/m_ShowHistory) beats appearing as a floating undocked
         // window the first time either is toggled on.
-        ImGui::DockBuilderDockWindow(ICON_FA_CHART_SIMPLE "  Statistics", right);
-        ImGui::DockBuilderDockWindow(ICON_FA_CLOCK_ROTATE_LEFT "  History", right);
+        ImGui::DockBuilderDockWindow(ICON_FA_CHART_SIMPLE "  Statistics", wantRight ? right : bottom);
+        ImGui::DockBuilderDockWindow(ICON_FA_CLOCK_ROTATE_LEFT "  History", wantRight ? right : bottom);
         // Scene and Game are Unity's own pair of tabs sharing one dock node — Scene is the
         // editor's 3D viewport, Game is the locked-aspect Play Mode preview; only whichever tab
         // is active actually shows/renders (see m_SceneViewportVisible below).
