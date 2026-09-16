@@ -23,6 +23,8 @@
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
 #include "Shortcuts.h"
+#include "HotReloadEditorModule.h" // EditorModuleHost::ConsoleState() — console.toggle shortcut
+#include "EditorModuleAPI.h"       // EditorConsoleState's full definition (Visible)
 #include "GLStateCache.h"
 #include "PhysicsWorld.h" // #185 — the Physics debug panel + HUD read live sim state
 #include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
@@ -1427,6 +1429,15 @@ void EditorLayer::DrawSettingsWindow(World& world) {
             ImGui::EndTable();
         }
         ImGui::PopStyleVar(3);
+
+        // Phase 6 item 11 — not every useful editor behaviour is a bindable chord; the review's
+        // G5 finding asked that those still be listed here rather than left purely tribal.
+        ImGui::Spacing();
+        ImGui::SeparatorText("Discoverable (not bindable)");
+        ImGui::TextDisabled(
+            "Hierarchy: type a letter to jump to the next row starting with it.\n"
+            "Hierarchy / Scene: drag a row onto another to reparent it.\n"
+            "Asset Browser / Hierarchy search: \"t:\" filters by type, \"l:\" by layer (e.g. \"t:light\").");
         break;
     }
 
@@ -2653,6 +2664,41 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (Shortcuts::Triggered("view.left"))   SnapToView(world, editorCamera,   0.0f,   0.0f, true);
         if (Shortcuts::Triggered("view.persp"))  SnapToView(world, editorCamera, -45.0f, -35.264f, true);
         if (Shortcuts::Triggered("view.toggleOrtho")) ToggleOrthographic(world, editorCamera);
+        if (Shortcuts::Triggered("view.focusScene")) ImGui::SetWindowFocus("Scene");
+
+        // Phase 6 item 11 — the shortcut coverage pass: everything below was reachable only by
+        // mouse before this (toolbar buttons, menu items, panel toggles).
+        if (Shortcuts::Triggered("gizmo.toggleSpace")) SetGizmoLocalSpace(!GizmoLocalSpace());
+        if (Shortcuts::Triggered("gizmo.togglePivot")) SetGizmoPivotCenter(!GizmoPivotCenter());
+        if (Shortcuts::Triggered("grid.toggle"))       SetShowGrid(!ShowGrid());
+        if (Shortcuts::Triggered("snap.toggleGrid"))   SetGridSnapEnabled(!GridSnapEnabled());
+        if (Shortcuts::Triggered("tools.snapToGround") && CanSnapSelectionToGround(world))
+            SnapSelectionToGround(world);
+        if (Shortcuts::Triggered("view.nextDrawMode"))
+            SetShadingModeIndex((ShadingModeIndex() + 1) % (int)ShadingMode::Count);
+        if (Shortcuts::Triggered("view.prevDrawMode"))
+            SetShadingModeIndex((ShadingModeIndex() + (int)ShadingMode::Count - 1) % (int)ShadingMode::Count);
+
+        if (Shortcuts::Triggered("stats.toggle")) {
+            auto& s = EditorSettings::Get();
+            s.SceneShowStats = !s.SceneShowStats;
+            EditorSettings::Save();
+        }
+        if (Shortcuts::Triggered("history.toggle")) SetShowHistory(!ShowHistory());
+        if (Shortcuts::Triggered("lighting.toggle")) m_ShowLighting = !m_ShowLighting;
+        if (Shortcuts::Triggered("project.settings")) OpenProjectSettings();
+        if (Shortcuts::Triggered("console.toggle")) {
+            // Same "surface a buried tab instead of closing it" behaviour as the toolbar's own
+            // Console button (Defect #11) — see EditorModuleToolbar.cpp's DrawTopToolbar.
+            EditorConsoleState& cs = EditorModuleHost::ConsoleState();
+            if (!cs.Visible) {
+                cs.Visible = true;
+            } else {
+                ImGuiWindow* consoleWin = ImGui::FindWindowByName(ICON_FA_TERMINAL "  Console");
+                if (consoleWin && consoleWin->Hidden) ImGui::FocusWindow(consoleWin);
+                else cs.Visible = false;
+            }
+        }
 
         // F2 renames whichever selection is "live": a scene object takes priority over an Asset
         // Browser entry, matching which panel the user most likely just clicked in. In Play mode

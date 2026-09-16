@@ -181,6 +181,9 @@ public:
     // things (which group to land on), they just open the same window instead of two.
     void OpenPreferences() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; }
     void OpenProjectSettings() { m_ShowPreferences = true; m_SettingsGroupIsProject = true; }
+    // Phase 6 item 11 — Help > Shortcuts jumps straight to the existing press-to-bind editor
+    // (Preferences category 5) instead of leaving it something you only find by browsing.
+    void OpenShortcutsReference() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; m_PrefsCategory = 5; }
 
     // Thin forwarders so the non-member host glue (HotReloadEditorModule.cpp) can invoke these;
     // the real methods stay private with their existing call sites. World/Assets/Camera are the

@@ -280,6 +280,7 @@ void TbSnapSelectionToGround() { if (g_Editor && g_World) g_Editor->ToolbarSnapT
 void TbRequestResetLayout() { if (g_Editor) g_Editor->RequestResetLayout(); }
 void TbOpenPreferences() { if (g_Editor) g_Editor->OpenPreferences(); }
 void TbOpenProjectSettings() { if (g_Editor) g_Editor->OpenProjectSettings(); }
+void TbOpenShortcutsReference() { if (g_Editor) g_Editor->OpenShortcutsReference(); }
 
 void TbDrawFileMenuBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawFileMenuBody(*g_World, *g_Assets);
@@ -546,6 +547,7 @@ const EditorModuleHostAPI kHostAPI{
     &TbRequestResetLayout,
     &TbOpenPreferences,
     &TbOpenProjectSettings,
+    &TbOpenShortcutsReference,
     &TbDrawFileMenuBody,
     &TbDrawAddEntityMenuItems,
     &TbDrawViewMenuBody,
