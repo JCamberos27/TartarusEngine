@@ -43,6 +43,13 @@ In progress. Landed so far:
   `EditorLayer_Toolbar.cpp`, `EditorLayer_Inspector.cpp`, `AssetImporterInspector.cpp`, plus
   Console's own remaining 3) — every unchecked checkbox in the editor now reads as a control on
   sight, not just Console's (`8555ec0`, closes #73).
+- Console: a 3px severity-colour band down each row's left edge (a second, position-based cue
+  alongside the existing icon+colour), a category column derived from each message's own
+  "Prefix: " convention (PhysX/Scene/HotReload/Capture/Audio/Assets/Editor/Renderer buckets), and
+  '\\'→'/' path-separator normalisation centralised in `Log::Push` so a session's Console no
+  longer mixes native and relativized paths (`70cf742`, item 4 partial — still open:
+  click-to-navigate to the referenced entity/asset, which needs new host-module API to reach
+  selection from the Console DLL).
 
 ### [Phase 4] Inspector rebuild (#6) — 2026-09-15
 
