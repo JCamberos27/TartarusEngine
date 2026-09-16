@@ -126,6 +126,9 @@ struct EditorSettings {
     // Folders always sort before files regardless. Descending flips within each group.
     int  AssetSortMode = 0;
     bool AssetSortDesc = false;
+    // Phase 5 item 4 — Details view is a separate bool from Grid/List (which is still derived
+    // from AssetBrowserIconSize): true shows Name/Type/Size/Modified rows instead of the grid.
+    bool AssetDetailsMode = false;
 
     // Hierarchy row sort (Phase 5 item 6). Mode: 0 Creation order (default, OrderComponent), 1
     // Name, 2 Type. Only applies at each sibling level - parenting itself is untouched.

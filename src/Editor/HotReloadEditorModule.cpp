@@ -477,6 +477,9 @@ void HierSetSort(int packed) {
     EditorSettings::Save();
 }
 
+// --- Asset Browser Details view (API v26, Phase 5 item 4) --------------------------------
+int  AbGetViewMode()                { return g_Editor ? g_Editor->GetAssetViewMode() : 0; }
+
 const EditorModuleHostAPI kHostAPI{
     kEditorModuleAPIVersion,
     &DrawStatusPanel,
@@ -616,6 +619,8 @@ const EditorModuleHostAPI kHostAPI{
     &HierSetTypeFilter,
     &HierGetSort,
     &HierSetSort,
+    // --- Asset Browser Details view (API v26) — order must match EditorModuleHostAPI exactly ---
+    &AbGetViewMode,
 };
 
 } // namespace

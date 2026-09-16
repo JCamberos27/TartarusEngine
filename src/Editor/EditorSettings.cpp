@@ -97,6 +97,7 @@ void EditorSettings::Load() {
     s.AssetBrowserIconSize = root.value("assetBrowserIconSize", s.AssetBrowserIconSize);
     s.AssetSortMode = root.value("assetSortMode", s.AssetSortMode);
     s.AssetSortDesc = root.value("assetSortDesc", s.AssetSortDesc);
+    s.AssetDetailsMode = root.value("assetDetailsMode", s.AssetDetailsMode);
     s.HierarchySortMode = root.value("hierarchySortMode", s.HierarchySortMode);
     s.HierarchySortDesc = root.value("hierarchySortDesc", s.HierarchySortDesc);
     s.HierarchyTypeFilterMask = root.value("hierarchyTypeFilterMask", s.HierarchyTypeFilterMask);
@@ -178,6 +179,7 @@ void EditorSettings::Flush() {
     root["assetBrowserIconSize"] = Get().AssetBrowserIconSize;
     root["assetSortMode"] = Get().AssetSortMode;
     root["assetSortDesc"] = Get().AssetSortDesc;
+    root["assetDetailsMode"] = Get().AssetDetailsMode;
     root["hierarchySortMode"] = Get().HierarchySortMode;
     root["hierarchySortDesc"] = Get().HierarchySortDesc;
     root["hierarchyTypeFilterMask"] = Get().HierarchyTypeFilterMask;

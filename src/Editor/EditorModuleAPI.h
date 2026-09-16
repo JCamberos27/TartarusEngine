@@ -93,7 +93,18 @@
 //        kHierarchyFilter* bitmask (0 = no filter); Get/SetHierarchySort takes a packed
 //        mode*2+desc int. Row height itself (24px) needed no new pointer — it's a host-side style
 //        tweak inside the existing DrawHierarchyTreeBody callback.
-constexpr std::uint32_t kEditorModuleAPIVersion = 25;
+//   26 - Phase 5 item 4: Asset Browser Details view, a third view mode alongside Grid/List.
+//        GetAssetViewMode reads it (0 Grid, 1 List, 2 Details); ToggleAssetViewMode (v24) now
+//        cycles through all three instead of just Grid<->List. Details renders as single-column
+//        rows (like List) with Type/Size/Modified text appended — kAssetDetails*ColW are shared
+//        so the module's header row and the host's per-row text land at the same X.
+constexpr std::uint32_t kEditorModuleAPIVersion = 26;
+
+// Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
+// scale). Name gets whatever's left of the row after these three.
+constexpr float kAssetDetailsTypeColW = 90.0f;
+constexpr float kAssetDetailsSizeColW = 80.0f;
+constexpr float kAssetDetailsModifiedColW = 150.0f;
 
 // Hierarchy type-filter chip bits (API v25). Passed to Get/SetHierarchyTypeFilter as a bitmask;
 // 0 means "no filter" (every kind shown). Mirrors the priority used by the per-row kind badge
@@ -495,10 +506,11 @@ struct EditorModuleHostAPI {
     bool (*CanAssetFolderHistoryForward)() = nullptr;
 
     // --- Asset Browser view-mode toggle, Phase 5 item 3 remainder (API v24) ------------
-    // Flips grid <-> list by driving the existing icon-size mechanism (Get/SetAssetIconSize,
-    // GetAssetGridMetrics) - there is no separate "mode" enum. The host remembers the icon size
-    // it was at before collapsing to list, so toggling back to Grid restores that zoom instead of
-    // resetting to the default.
+    // Cycles Grid -> List -> Details -> Grid (Details added in v26). Grid<->List still drives the
+    // existing icon-size mechanism (Get/SetAssetIconSize, GetAssetGridMetrics) - the host
+    // remembers the icon size it was at before collapsing to list, so toggling back to Grid
+    // restores that zoom instead of resetting to the default. Details is a separate bool the
+    // icon-size slider doesn't touch either way.
     void (*ToggleAssetViewMode)() = nullptr;
 
     // --- Hierarchy type filter + sort, Phase 5 item 6 remainder (API v25) --------------
@@ -507,6 +519,11 @@ struct EditorModuleHostAPI {
     // same shape as Get/SetAssetSort above (mode: 0 Creation order, 1 Name, 2 Type).
     int  (*GetHierarchyTypeFilter)() = nullptr; void (*SetHierarchyTypeFilter)(int mask) = nullptr;
     int  (*GetHierarchySort)() = nullptr;       void (*SetHierarchySort)(int packed) = nullptr;
+
+    // --- Asset Browser Details view, Phase 5 item 4 (API v26) --------------------------
+    // 0 Grid, 1 List, 2 Details. Drives whether the module forces single-column rows (List and
+    // Details both do) and whether it draws the Name/Type/Size/Modified header row.
+    int (*GetAssetViewMode)() = nullptr;
 };
 
 struct EditorModuleAPI {

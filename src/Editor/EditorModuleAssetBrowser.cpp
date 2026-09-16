@@ -241,17 +241,42 @@ void DrawFolderNode(const EditorModuleHostAPI& host, const std::vector<std::stri
 // and cellsPerRow are pure math from GetAssetGridMetrics — ported from the host's old
 // DrawAssetGridBody.
 void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
-    ImGui::BeginChild("##AssetList", ImVec2(0, contentHeight), ImGuiChildFlags_None);
-
-    if (host.AssetGridFrameBegin) host.AssetGridFrameBegin();
-
     float iconSize = 64.0f, uiScale = 1.0f, listMinIcon = 24.0f;
     if (host.GetAssetGridMetrics) host.GetAssetGridMetrics(&iconSize, &uiScale, &listMinIcon);
 
-    const bool gridMode = iconSize > listMinIcon * uiScale;
+    // Phase 5 item 4 — Details is a third mode layered on top of the existing icon-size-derived
+    // Grid/List split: it always forces single-column rows (like List), plus a fixed header row
+    // above the scrolling list (Explorer/Finder's own Details convention) that this function
+    // draws before BeginChild so it doesn't scroll with the rows.
+    const int viewMode = host.GetAssetViewMode ? host.GetAssetViewMode() : -1;
+    const bool detailsMode = viewMode == 2;
+    const bool gridMode = !detailsMode && iconSize > listMinIcon * uiScale;
+
+    float headerH = 0.0f;
+    if (detailsMode) {
+        const float startY = ImGui::GetCursorPosY();
+        const float rightEdge = ImGui::GetWindowContentRegionMax().x;
+        const float typeX = rightEdge - (kAssetDetailsTypeColW + kAssetDetailsSizeColW + kAssetDetailsModifiedColW) * uiScale;
+        const float sizeX = rightEdge - (kAssetDetailsSizeColW + kAssetDetailsModifiedColW) * uiScale;
+        const float modX  = rightEdge - kAssetDetailsModifiedColW * uiScale;
+        ImGui::TextDisabled("Name");
+        ImGui::SameLine(typeX); ImGui::TextDisabled("Type");
+        ImGui::SameLine(sizeX); ImGui::TextDisabled("Size");
+        ImGui::SameLine(modX);  ImGui::TextDisabled("Modified");
+        ImGui::Separator();
+        headerH = ImGui::GetCursorPosY() - startY; // just the header + separator's own height
+    }
+
+    ImGui::BeginChild("##AssetList", ImVec2(0, contentHeight - headerH), ImGuiChildFlags_None);
+
+    if (host.AssetGridFrameBegin) host.AssetGridFrameBegin();
+
     const float cellPadding = 8.0f;
     const float cellWidth = iconSize + cellPadding * 2.0f;
-    const float cellHeight = iconSize + cellPadding + ImGui::GetTextLineHeightWithSpacing();
+    // Phase 5 item 4 — grid labels wrap to 2 lines now (was 1); reserve a second line height.
+    // List/Details rows are unaffected (clipRowHeight below uses GetFrameHeightWithSpacing() for
+    // those, not cellHeight).
+    const float cellHeight = iconSize + cellPadding + ImGui::GetTextLineHeightWithSpacing() * 2.0f;
 
     const int cellCount = host.AssetGridCellCount ? host.AssetGridCellCount() : 0;
 
@@ -293,16 +318,18 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
     ImGui::AlignTextToFramePadding();
     ImGui::TextDisabled("%s", summary);
 
-    // Phase 5 item 3 (remainder): an explicit Grid/List toggle beside the slider — the slider
-    // alone (drag-to-minimum) was the only way to reach list view, which isn't discoverable.
-    // Icon reflects the mode you'd SWITCH TO, matching the rest of the toolbar's toggle buttons.
+    // Phase 5 item 3/4: an explicit Grid/List/Details toggle beside the slider — the slider alone
+    // (drag-to-minimum) was the only way to reach list view, which isn't discoverable, and Details
+    // has no icon-size equivalent at all. Icon + tooltip reflect the mode you'd SWITCH TO
+    // (Grid -> List -> Details -> Grid), matching the rest of the toolbar's toggle buttons.
     const float toggleWidth = ImGui::GetFrameHeight();
     const float sliderWidth = 132.0f;
     const float toggleX = ImGui::GetWindowContentRegionMax().x - sliderWidth - toggleWidth - ImGui::GetStyle().ItemSpacing.x;
     if (toggleX > ImGui::GetCursorPosX()) ImGui::SameLine(toggleX);
     else ImGui::NewLine();
-    if (ActionButton(host, gridMode ? ICON_FA_LIST : ICON_FA_TABLE_CELLS_LARGE, gridMode ? "List view" : "Grid view")
-        && host.ToggleAssetViewMode)
+    const char* nextIcon = viewMode == 0 ? ICON_FA_LIST : viewMode == 1 ? ICON_FA_TABLE_LIST : ICON_FA_TABLE_CELLS_LARGE;
+    const char* nextTip  = viewMode == 0 ? "List view"  : viewMode == 1 ? "Details view"       : "Grid view";
+    if (ActionButton(host, nextIcon, nextTip) && host.ToggleAssetViewMode)
         host.ToggleAssetViewMode();
 
     // A normal-looking slider: a visible rounded track (the footer sits straight on the panel
@@ -316,13 +343,18 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImGui::GetColorU32(ImGuiCol_Border));
     ImGui::PushStyleColor(ImGuiCol_FrameBgActive,  ImGui::GetColorU32(ImGuiCol_Border));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, ImGui::GetFrameHeight() * 0.5f);
+    // Details rows don't use the icon-size slider at all (a fixed small icon, like List) — disable
+    // rather than hide it, so the toggle button next to it doesn't jump position when cycling.
+    ImGui::BeginDisabled(detailsMode);
     const bool changed = ImGui::SliderFloat("##IconSize", &sliderVal,
                                             listMinIcon * uiScale, 128.0f * uiScale, "%.0f px");
+    ImGui::EndDisabled();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
     if (changed && host.SetAssetIconSize) host.SetAssetIconSize(sliderVal, /*commit=*/false);
     if (ImGui::IsItemHovered() && host.SetTooltip)
-        host.SetTooltip("Icon size - drag all the way to the left for a compact list view.");
+        host.SetTooltip(detailsMode ? "Icon size (Grid/List only)" :
+                        "Icon size - drag all the way to the left for a compact list view.");
     if (ImGui::IsItemDeactivatedAfterEdit() && host.SetAssetIconSize)
         host.SetAssetIconSize(sliderVal, /*commit=*/true);
     ImGui::EndChild();

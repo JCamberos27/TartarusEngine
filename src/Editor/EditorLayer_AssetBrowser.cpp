@@ -23,6 +23,7 @@
 #include "ProjectPaths.h"
 #include "AtomicFile.h"
 #include "ThumbnailCache.h"
+#include "EditorModuleAPI.h" // kAssetDetails*ColW, shared with EditorModuleAssetBrowser.cpp's header row
 #include "GLStateCache.h"
 #include "Framebuffer.h"
 #include "gl.h"
@@ -51,8 +52,11 @@
 #include <cmath>
 #include <cctype>
 #include <cstring>
+#include <cstdio>
 #include <functional>
 #include <cfloat>
+#include <chrono>
+#include <ctime>
 
 using namespace EditorInternal;
 
@@ -820,6 +824,51 @@ bool DrawClampedGridLabel(ImDrawList* dl, ImVec2 pos, float wrapWidth, float lin
     }
     return true;
 }
+
+// Phase 5 item 4 — the three text columns Details view appends after a list row's name. Mirrors
+// the Explorer/Finder convention of leaving Size blank for folders (a recursive folder size isn't
+// worth a stat-per-subfile here) rather than showing 0.
+const char* AssetKindLabel(Cell::Kind k) {
+    switch (k) {
+        case Cell::Kind::Folder:     return "Folder";
+        case Cell::Kind::Scene:      return "Scene";
+        case Cell::Kind::Prefab:     return "Prefab";
+        case Cell::Kind::Model:      return "Model";
+        case Cell::Kind::Texture:    return "Texture";
+        case Cell::Kind::Material:   return "Material";
+        case Cell::Kind::Sound:      return "Sound";
+        case Cell::Kind::Screenshot: return "Screenshot";
+    }
+    return "";
+}
+
+std::string FormatFileSize(unsigned long long bytes) {
+    static const char* kUnits[] = { "B", "KB", "MB", "GB" };
+    double v = (double)bytes;
+    int unit = 0;
+    while (v >= 1024.0 && unit < 3) { v /= 1024.0; ++unit; }
+    char buf[32];
+    snprintf(buf, sizeof(buf), unit == 0 ? "%.0f %s" : "%.1f %s", v, kUnits[unit]);
+    return buf;
+}
+
+std::string FormatModifiedTime(const std::filesystem::file_time_type& t) {
+    // file_clock -> system_clock (C++20's clock_cast isn't available pre-20 here) via the
+    // duration-since-epoch difference between the two clocks' "now", same trick used wherever
+    // this codebase already bridges the two (kept local since it's only needed for this column).
+    const auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+        t - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
+    const std::time_t tt = std::chrono::system_clock::to_time_t(sctp);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &tt);
+#else
+    localtime_r(&tt, &tm);
+#endif
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm);
+    return buf;
+}
 } // namespace
 
 // Unity Project window's left pane (a real folder hierarchy with expand/collapse arrows, Alt+click
@@ -1238,9 +1287,11 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 // Label box spans the whole cell (like the icon above it, which is centred in
                 // cellWidth), with a small inset so a full-width line doesn't touch the edges —
                 // DrawClampedGridLabel centres each line within this box.
+                // Phase 5 item 4 — two lines instead of one, so a longer name (a common case once
+                // the browser is re-rooted on the real project tree) doesn't truncate as eagerly.
                 ImVec2 labelPos(tileMin.x + 3.0f, tileMin.y + m_AssetIconSize + cellPadding);
                 bool truncated = DrawClampedGridLabel(dl, labelPos, cellWidth - 6.0f,
-                    ImGui::GetTextLineHeightWithSpacing(), textColor, cell.display.c_str(), /*maxLines=*/1);
+                    ImGui::GetTextLineHeightWithSpacing(), textColor, cell.display.c_str(), /*maxLines=*/2);
                 if (truncated && ImGui::IsItemHovered()) {
                     EditorUI::SetTooltip(cell.display.c_str());
                 }
@@ -1276,6 +1327,14 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             }
             ImGui::SameLine();
 
+            // Phase 5 item 4 — Details view appends Type/Size/Modified after the name, all within
+            // this same row/Selectable so click/drag/rename/context-menu below stay untouched.
+            const bool detailsMode = !isRenaming && EditorSettings::Get().AssetDetailsMode;
+            const float rightEdge = ImGui::GetWindowContentRegionMax().x;
+            const float reservedW = (kAssetDetailsTypeColW + kAssetDetailsSizeColW + kAssetDetailsModifiedColW) * m_UIScale;
+            const float nameW = detailsMode
+                ? std::max(40.0f * m_UIScale, (rightEdge - ImGui::GetCursorPosX()) - reservedW) : 0.0f;
+
             if (isRenaming) {
                 ImGui::SetNextItemWidth(-1);
                 if (m_RenamingJustStarted) {
@@ -1294,8 +1353,31 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             } else {
                 // NoNav (Defect #43): same reasoning as the grid tile above.
                 ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
-                clicked = ImGui::Selectable(cell.display.c_str(), isSelected);
+                clicked = ImGui::Selectable(cell.display.c_str(), isSelected, ImGuiSelectableFlags_None,
+                    detailsMode ? ImVec2(nameW, 0.0f) : ImVec2(0.0f, 0.0f));
                 ImGui::PopItemFlag();
+
+                if (detailsMode) {
+                    const float typeX = rightEdge - (kAssetDetailsTypeColW + kAssetDetailsSizeColW + kAssetDetailsModifiedColW) * m_UIScale;
+                    const float sizeX = rightEdge - (kAssetDetailsSizeColW + kAssetDetailsModifiedColW) * m_UIScale;
+                    const float modX  = rightEdge - kAssetDetailsModifiedColW * m_UIScale;
+
+                    std::error_code ec;
+                    std::string sizeStr = "-", modStr = "-";
+                    if (!isFolder) {
+                        const std::filesystem::path p(cell.key);
+                        if (std::filesystem::exists(p, ec)) {
+                            const auto sz = std::filesystem::file_size(p, ec);
+                            if (!ec) sizeStr = FormatFileSize(sz);
+                            const auto mt = std::filesystem::last_write_time(p, ec);
+                            if (!ec) modStr = FormatModifiedTime(mt);
+                        }
+                    }
+
+                    ImGui::SameLine(typeX); ImGui::TextDisabled("%s", AssetKindLabel(cell.kind));
+                    ImGui::SameLine(sizeX); ImGui::TextDisabled("%s", sizeStr.c_str());
+                    ImGui::SameLine(modX);  ImGui::TextDisabled("%s", modStr.c_str());
+                }
             }
         }
 
@@ -1682,14 +1764,32 @@ void EditorLayer::SetAssetIconSize(float px, bool commit) {
     if (commit) { EditorSettings::Get().AssetBrowserIconSize = m_AssetIconSize; EditorSettings::Save(); }
 }
 
+// Phase 5 item 4 — Grid/List (0/1) is still purely icon-size-derived (unchanged from item 3's
+// remainder); Details (2) is a separate persisted bool layered on top, so the icon-size slider
+// keeps meaning exactly what it always did within Grid/List and Details doesn't disturb it.
+int EditorLayer::GetAssetViewMode() const {
+    if (EditorSettings::Get().AssetDetailsMode) return 2;
+    return (m_AssetIconSize > kListViewIconSize * m_UIScale) ? 0 : 1;
+}
+
 void EditorLayer::ToggleAssetViewMode() {
-    const bool gridMode = m_AssetIconSize > kListViewIconSize * m_UIScale;
-    if (gridMode) {
-        m_AssetGridIconSizeMemory = m_AssetIconSize;
-        SetAssetIconSize(kListViewIconSize * m_UIScale, /*commit=*/true);
-    } else {
+    if (EditorSettings::Get().AssetDetailsMode) {
+        // Details -> Grid, restoring whatever zoom Grid was left at.
+        EditorSettings::Get().AssetDetailsMode = false;
+        EditorSettings::Save();
         const float restore = m_AssetGridIconSizeMemory > kListViewIconSize * m_UIScale
             ? m_AssetGridIconSizeMemory : 64.0f * m_UIScale;
         SetAssetIconSize(restore, /*commit=*/true);
+        return;
+    }
+    const bool gridMode = m_AssetIconSize > kListViewIconSize * m_UIScale;
+    if (gridMode) {
+        // Grid -> List.
+        m_AssetGridIconSizeMemory = m_AssetIconSize;
+        SetAssetIconSize(kListViewIconSize * m_UIScale, /*commit=*/true);
+    } else {
+        // List -> Details.
+        EditorSettings::Get().AssetDetailsMode = true;
+        EditorSettings::Save();
     }
 }
