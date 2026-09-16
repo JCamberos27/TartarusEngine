@@ -2500,18 +2500,34 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                 // of the two buttons that actually follow (the eyedropper, then "K"): on any panel
                 // width the swatch claimed pixels the "K" button needed, clipping it off the right
                 // edge with no wrap/scroll (widening the panel didn't help — the reserve was fixed,
-                // not content-region-relative). Budgeted from the real button sizes instead, the
-                // same way KelvinBar already budgets its own single trailing "RGB" button above.
+                // not content-region-relative).
+                //
+                // Defect #1 follow-up — a first fix budgeted the reserve from CalcTextSize() sums fed
+                // into SetNextItemWidth(-trailing) on the ColorEdit3 (mirroring how KelvinBar budgets
+                // its own trailing "RGB" button). That neither clipped nor left a gap on paper, but
+                // live-verified (zoomed screenshots + a temporary solid-red-rect probe drawn over the
+                // K button's own item rect) it was clipped almost entirely — only a 2-3px sliver of a
+                // ~16px button painted, hitbox/tooltip unaffected since hover-testing ignores the clip
+                // rect. This component's body draws inside BeginComponentSection's card, a BeginChild
+                // with ImGuiChildFlags_AutoResizeY — CalcItemWidth()'s ContentRegionAvail()-relative
+                // math (correct on paper) and this child's actual live ClipRect disagreed by a wide
+                // margin in that context. GetWindowContentRegionMax().x is the anchor
+                // BeginComponentSection's own right-aligned "..."/remove buttons already use
+                // successfully in this exact child (confirmed live, they render fine) — anchor the
+                // eyedropper and K to that instead of trusting the child to honour a negative
+                // SetNextItemWidth budget.
                 const ImGuiStyle& lcStyle = ImGui::GetStyle();
                 const float eyedropW = ImGui::CalcTextSize(ICON_FA_EYE_DROPPER).x; // SmallButton: zero frame padding
                 const float kBtnW = ImGui::CalcTextSize("K").x + lcStyle.FramePadding.x * 2.0f;
-                const float trailing = 4.0f /* EyedropperButton's own SameLine gap */ + eyedropW
-                    + lcStyle.ItemSpacing.x + kBtnW;
-                ImGui::SetNextItemWidth(-trailing);
+                const float contentRight = ImGui::GetWindowContentRegionMax().x;
+                const float kBtnX = contentRight - kBtnW;
+                const float eyedropX = kBtnX - lcStyle.ItemSpacing.x - eyedropW;
+                const float colorEditRight = eyedropX - 4.0f; // EyedropperButton's own SameLine gap
+                ImGui::SetNextItemWidth(colorEditRight - ImGui::GetCursorPosX());
                 ImGui::ColorEdit3("##LightColor", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
                 EyedropperButton(this, world, &light->Color);
-                ImGui::SameLine();
+                ImGui::SameLine(kBtnX);
                 if (ActionButton("K##LightKelvinOn", "Drive the color from a temperature (Kelvin)")) { // #19
                     PushUndo(world, "Edit Light");
                     light->ColorTempK = 6500.0f;
