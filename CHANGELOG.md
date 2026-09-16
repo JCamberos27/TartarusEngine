@@ -82,6 +82,14 @@ In progress. Landed so far:
   so the new SmallButtons drawn over it via `SameLine()` silently ate no clicks until
   `SetNextItemAllowOverlap()` was added — same fix already used in
   `EditorLayer_Inspector.cpp`/`GameViewPanel.cpp` (`4466400`, closes item 10).
+- Notification bell in the top toolbar, generalizing the capture-only notification stack:
+  `EditorNotification` gains a Level (Info/Success/Warning/Error); a new `PollLogNotifications()`
+  diffs `Log::Revision()` each frame and turns any new Warning/Error Console entry into a bell
+  notification too (no thumbnail — a level-coloured glyph stands in). The bell badges Warning/
+  Error only, matching the item's "info/success suppressed by default" — a capture landing still
+  never bumps it. New host-module API (v28) `GetNotificationUnreadCount`/`MarkNotificationsRead`/
+  `DrawNotificationsPopupBody`. Live-verified: triggered a real warning, watched the card and the
+  "1" badge appear, opened the dropdown (badge cleared), dismissed it (`95bf28a`, closes item 14).
 
 ### [Phase 4] Inspector rebuild (#6) — 2026-09-15
 
