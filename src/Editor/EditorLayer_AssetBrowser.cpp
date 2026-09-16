@@ -959,6 +959,37 @@ void EditorLayer::AssetBrowserMoveAssetToFolder(World& world, AssetLibrary& asse
     assets.SetAssetFolder(assetKey, folder);
 }
 
+namespace {
+// True if `path` names an existing entry inside directory `dir`. Used below to recognise the two
+// raw filesystem-backed virtual folders (Screenshots/Scenes) that AssetFolder() doesn't know about.
+bool IsUnder(const std::string& path, const std::string& dir) {
+    std::error_code ec;
+    auto rel = std::filesystem::relative(path, dir, ec);
+    return !ec && rel.string().rfind("..", 0) != 0;
+}
+} // namespace
+
+// Phase 6 item 4 — Console click-to-navigate's asset half (see the header comment). Unlike the
+// Inspector's ping button, `path` here comes from parsed log-message text, so it might not be a
+// real path at all — the existence check is load-bearing, not a formality.
+bool EditorLayer::PingAssetPath(AssetLibrary& assets, const std::string& path) {
+    std::error_code ec;
+    if (path.empty() || !std::filesystem::exists(path, ec)) return false;
+
+    // Screenshots and Scenes are raw filesystem-backed virtual folders (RefreshShotsListingIfNeeded
+    // / RefreshScenesListingIfNeeded above) rather than AssetLibrary entries, so AssetFolder() would
+    // return "" (root) for them — check those two directories first, same as the grid does.
+    std::string folder;
+    if (IsUnder(path, Screenshot::Dir())) folder = "Screenshots";
+    else if (IsUnder(path, ProjectPaths::Resolve("scenes"))) folder = "Scenes";
+    else folder = assets.AssetFolder(path);
+
+    m_SelectedAssetKey = path;
+    m_SelectedAssetIsFolder = false;
+    NavigateAssetFolder(folder);
+    return true;
+}
+
 // Per-frame prep the module calls before drawing the folder tree: keep the scenes/screenshots
 // directory-listing caches fresh (short timer + focus-gained edge), make sure the two
 // filesystem-backed virtual folders exist, and — whenever the current folder changed from

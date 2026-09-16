@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <string>
 #include <unordered_map>
@@ -135,6 +136,40 @@ std::string DeriveCategory(const std::string& message) {
     if (prefix.empty()) return "General";
     if (const char* canon = CanonicalCategory(prefix)) return canon;
     return prefix.size() <= 12 ? prefix : prefix.substr(0, 12);
+}
+
+// Phase 6 item 4 — click-to-navigate. Both parsers are deliberately loose: a false-positive
+// candidate is harmless (the host API v27 callbacks reject anything that doesn't resolve to a
+// live entity / an existing file), and messages were never written with this in mind, so there's
+// no delimiter convention to lean on beyond what already reads naturally to a human.
+
+// Matches PhysX/Scene log lines' own "entity 1234" phrasing (see e.g. PhysicsWorld.cpp,
+// EditorLayer_Gizmos.cpp's "Joint broke on entity %d.").
+bool ParseEntityRef(const std::string& msg, unsigned int& outId) {
+    size_t pos = msg.find("entity ");
+    while (pos != std::string::npos) {
+        size_t start = pos + 7; // strlen("entity ")
+        size_t end = start;
+        while (end < msg.size() && msg[end] >= '0' && msg[end] <= '9') ++end;
+        if (end > start) {
+            outId = (unsigned int)std::strtoul(msg.substr(start, end - start).c_str(), nullptr, 10);
+            return true;
+        }
+        pos = msg.find("entity ", pos + 1);
+    }
+    return false;
+}
+
+// Most path-bearing messages quote the path in single quotes ("failed to load sound '...'",
+// "failed to open '...'"). Takes the first quoted run; PingAssetPath's existence check is what
+// actually decides whether it was a real path.
+bool ParsePathRef(const std::string& msg, std::string& outPath) {
+    size_t start = msg.find('\'');
+    if (start == std::string::npos) return false;
+    size_t end = msg.find('\'', start + 1);
+    if (end == std::string::npos || end <= start + 1) return false;
+    outPath = msg.substr(start + 1, end - start - 1);
+    return true;
 }
 
 bool LevelVisible(const EditorConsoleState& state, int level) {
@@ -357,7 +392,7 @@ void Draw(const EditorModuleHostAPI& host) {
                 // onto it too (EditorLayer.cpp), so the inline FA glyph in rowLabel still renders.
                 ImGui::PushFont(host.GetMonoFont ? host.GetMonoFont() : nullptr, 0.0f);
                 ImGui::PushStyleColor(ImGuiCol_Text, color);
-                ImGui::Selectable(rowLabel.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+                const bool rowClicked = ImGui::Selectable(rowLabel.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
                 ImGui::PopStyleColor();
                 ImGui::PopFont();
 
@@ -366,11 +401,35 @@ void Draw(const EditorModuleHostAPI& host) {
                                      ImGui::ColorConvertFloat4ToU32(color));
                 ImGui::Unindent(6.0f);
 
+                // Phase 6 item 4 — click-to-navigate. An entity reference wins over an asset one
+                // when a message happens to parse as both (hasn't come up in practice, but PhysX
+                // lines already quote asset-ish text around an entity id in a couple of cases).
+                unsigned int entityRef = 0;
+                std::string assetRef;
+                const bool hasEntityRef = host.SelectEntityRaw && ParseEntityRef(entry.Message, entityRef);
+                const bool hasAssetRef = !hasEntityRef && host.PingAssetPath && ParsePathRef(entry.Message, assetRef);
+
+                if (rowClicked && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                    if (hasEntityRef) host.SelectEntityRaw(entityRef);
+                    else if (hasAssetRef) host.PingAssetPath(assetRef.c_str());
+                }
+
                 if (ImGui::BeginPopupContextItem()) {
                     if (ImGui::MenuItem(ICON_FA_COPY "  Copy message")) ImGui::SetClipboardText(entry.Message.c_str());
                     if (ImGui::MenuItem(ICON_FA_COPY "  Copy all shown")) {
                         std::string all = BuildShownText(host, state);
                         ImGui::SetClipboardText(all.c_str());
+                    }
+                    if (hasEntityRef || hasAssetRef) {
+                        ImGui::Separator();
+                        if (hasEntityRef) {
+                            std::string label = ICON_FA_LOCATION_CROSSHAIRS "  Select entity #" + std::to_string(entityRef);
+                            if (ImGui::MenuItem(label.c_str())) host.SelectEntityRaw(entityRef);
+                        }
+                        if (hasAssetRef) {
+                            std::string label = ICON_FA_MAGNIFYING_GLASS_LOCATION "  Show in Asset Browser";
+                            if (ImGui::MenuItem(label.c_str())) host.PingAssetPath(assetRef.c_str());
+                        }
                     }
                     ImGui::Separator();
                     if (ImGui::MenuItem(ICON_FA_TRASH "  Clear console")) {
@@ -378,7 +437,11 @@ void Draw(const EditorModuleHostAPI& host) {
                     }
                     ImGui::EndPopup();
                 }
-                if (ImGui::IsItemHovered()) Tooltip(host, "Right-click for copy / clear");
+                if (ImGui::IsItemHovered()) {
+                    Tooltip(host, (hasEntityRef || hasAssetRef)
+                        ? "Double-click to navigate. Right-click for copy / clear."
+                        : "Right-click for copy / clear");
+                }
                 ImGui::PopID();
             }
         }

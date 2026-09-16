@@ -167,6 +167,13 @@ void EditorLayer::ClearSelection() {
     m_LightHandleArmedFor = entt::null;
 }
 
+bool EditorLayer::SelectEntityByRawId(World& world, unsigned int rawId) {
+    entt::entity entity = (entt::entity)rawId;
+    if (!world.Registry.valid(entity)) return false;
+    SelectItem(entity, false);
+    return true;
+}
+
 void EditorLayer::SelectItem(entt::entity entity, bool addToSelection) {
     // Any selection that isn't a viewport icon-click disarms the light grab handles;
     // HandleViewportPicking re-arms them right after it calls this for a light it picked.

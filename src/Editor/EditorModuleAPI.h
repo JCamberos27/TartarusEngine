@@ -98,7 +98,13 @@
 //        cycles through all three instead of just Grid<->List. Details renders as single-column
 //        rows (like List) with Type/Size/Modified text appended — kAssetDetails*ColW are shared
 //        so the module's header row and the host's per-row text land at the same X.
-constexpr std::uint32_t kEditorModuleAPIVersion = 26;
+//   27 - Phase 6 item 4 (remainder): Console click-to-navigate. SelectEntityRaw resolves a raw
+//        entt integral (as printed by std::to_string(entt::to_integral(e)) in PhysX/Scene log
+//        lines) back to a live entity and selects it if still valid. PingAssetPath jumps the
+//        Asset Browser to a path if it resolves to a real, existing project file — a registered
+//        AssetLibrary entry (model/texture/material/sound/prefab), or a raw scenes/screenshots
+//        file, the same two categories the Console's own listings already cover.
+constexpr std::uint32_t kEditorModuleAPIVersion = 27;
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -210,6 +216,13 @@ struct EditorModuleHostAPI {
     void (*LogClear)() = nullptr;
     void (*LogInfo)(const char* message) = nullptr;
     void (*LogError)(const char* message) = nullptr;
+
+    // --- Console click-to-navigate (API v27) ------------------------------------------------
+    // Resolves a reference parsed out of a log message's text and jumps the editor to it.
+    // Both return false (no-op) when the reference doesn't resolve to anything live/present —
+    // the caller uses that to decide whether a row's context-menu item should even appear.
+    bool (*SelectEntityRaw)(unsigned int rawEntityId) = nullptr;
+    bool (*PingAssetPath)(const char* path) = nullptr;
 
     // --- Editor services --------------------------------------------------------------------
     // Routed through the host so the module doesn't duplicate EditorSettings (another singleton)
