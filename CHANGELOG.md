@@ -74,6 +74,14 @@ In progress. Landed so far:
   (v27) `SelectEntityRaw`/`PingAssetPath` so the Console DLL can reach host-side selection and
   Asset Browser navigation. Live-verified in Play mode against PhysX contact-hit log lines
   (`f293e29`, closes item 4).
+- Layout Presets: four shipped arrangements (Default/Wide/Tall/Focus) alongside user-saved
+  presets, sharing one parametrized `DockBuilder` block instead of four duplicated trees; plus
+  rename, duplicate, and set/unset-as-startup-default (`EditorSettings::DefaultLayoutPreset`,
+  which Reset Layout defers to when set, and which clears if that preset is deleted). Live
+  verification caught a real bug: `ImGui::MenuItem()` claims the whole row's hit-test by default,
+  so the new SmallButtons drawn over it via `SameLine()` silently ate no clicks until
+  `SetNextItemAllowOverlap()` was added — same fix already used in
+  `EditorLayer_Inspector.cpp`/`GameViewPanel.cpp` (`4466400`, closes item 10).
 
 ### [Phase 4] Inspector rebuild (#6) — 2026-09-15
 
