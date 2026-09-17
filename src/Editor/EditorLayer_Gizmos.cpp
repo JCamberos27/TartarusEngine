@@ -2099,32 +2099,10 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     style.scale = m_UIScale * 0.7f;
 
     float gizmoRadius = 128.0f * style.scale; // half of the library's fixed 256px rotate-ring box
-    float toolRadius = style.toolButtonRadius * style.scale;
     float margin = 14.0f * m_UIScale;
-    float spacing = 8.0f * m_UIScale;
 
-    // Rotate's `position` param is the ring's CENTER, but Dolly/Pan's is the TOP-LEFT of their
-    // button box (confirmed by reading ImViewGuizmo.h — the two widget kinds don't agree on
-    // that convention despite the doc comments implying otherwise). Laying out from a shared
-    // center point and converting only for Dolly/Pan keeps the whole cluster symmetric.
-    ImVec2 rotateCenter(m_ViewportPos.x + m_ViewportSize.x - margin - gizmoRadius,
+    ImVec2 rotatePos(m_ViewportPos.x + m_ViewportSize.x - margin - gizmoRadius,
         m_ViewportPos.y + margin + gizmoRadius);
-    float toolCenterY = rotateCenter.y + gizmoRadius + spacing + toolRadius;
-    ImVec2 dollyCenter(rotateCenter.x - spacing * 0.5f - toolRadius, toolCenterY);
-    ImVec2 panCenter(rotateCenter.x + spacing * 0.5f + toolRadius, toolCenterY);
-
-    ImVec2 rotatePos = rotateCenter;
-    ImVec2 dollyPos(dollyCenter.x - toolRadius, dollyCenter.y - toolRadius);
-    ImVec2 panPos(panCenter.x - toolRadius, panCenter.y - toolRadius);
-
-    // #54 — used to sample the scene luminance behind the dolly/pan tool buttons and the
-    // projection label, steering their glyphs white-on-dark / dark-on-light. Fixed light icon on
-    // a fixed, real (not 40-alpha-faint) dark plate is legible over anything instead — same
-    // "opaque plate" treatment as the other viewport HUDs. The rotate ball keeps its own
-    // red/green/blue axis colours untouched.
-    style.toolButtonIconColor    = EditorUIPrimitives::kHudTextColor;
-    style.toolButtonColor        = EditorUIPrimitives::kHudPlateColor;
-    style.toolButtonHoveredColor = IM_COL32(40, 40, 40, 220);
 
     // Same fullscreen-transparent-overlay trick as DrawGizmo(): the library hit-tests against
     // raw mouse position within ImGui::GetWindowDrawList()'s owning window, so it needs a real
@@ -2161,15 +2139,15 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
         pivot = camPos + editorCamera.Front() * 6.0f;
     }
 
-    bool modified = false;
-    modified |= ImViewGuizmo::Rotate(camPos, camRot, pivot, rotatePos);
-    modified |= ImViewGuizmo::Dolly(camPos, camRot, dollyPos);
-    modified |= ImViewGuizmo::Pan(camPos, camRot, panPos);
+    bool modified = ImViewGuizmo::Rotate(camPos, camRot, pivot, rotatePos);
     m_ViewGizmoBlocking = ImViewGuizmo::IsOver() || ImViewGuizmo::IsUsing();
 
-    // Tooltips - the tool buttons above give no feedback on their own (they're manually
-    // hit-tested inside the vendored gizmo library, not real ImGui widgets, so
-    // ImGui::IsItemHovered() can't see them); read the library's own hover state instead.
+    // Tooltips - the rotate ring gives no feedback on its own (it's manually hit-tested inside
+    // the vendored gizmo library, not a real ImGui widget, so ImGui::IsItemHovered() can't see
+    // it); read the library's own hover state instead. The Dolly/Pan tool buttons and the
+    // Persp/Iso label that used to live below the ring were removed (redundant with the tool
+    // palette's own draw-mode/ortho controls and the editor's existing zoom/pan camera input) —
+    // only the axis-handle and orbit tooltips are left to read.
     const auto& gizmoCtx = ImViewGuizmo::GetContext();
     if (gizmoCtx.hoveredAxisID == 6) {
         EditorUI::SetTooltip("Drag to orbit the view");
@@ -2183,54 +2161,6 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
             "Click to look along -Z",
         };
         EditorUI::SetTooltip("%s", kAxisTooltips[gizmoCtx.hoveredAxisID]);
-    } else if (gizmoCtx.isZoomButtonHovered) {
-        EditorUI::SetTooltip("Click and drag to dolly the view closer to/further from the pivot");
-    } else if (gizmoCtx.isPanButtonHovered) {
-        EditorUI::SetTooltip("Click and drag to pan the view");
-    }
-
-    // "Persp"/"Iso" label under the gizmo, mirroring Unity's own - click to switch the editor
-    // camera between perspective and orthographic (isometric) projection without changing the
-    // current viewing angle. Manually hit-tested against the raw mouse position, same as the
-    // tool buttons above, since this overlay window is ImGuiWindowFlags_NoInputs.
-    {
-        // Name the view when the camera is aligned to a canonical axis (Front/Right/Top/...),
-        // as set by the nav-gizmo axis handles or the numpad views — falling back to
-        // Persp/Iso only when it's a free angle (#25 P14).
-        const char* isoLabel = [&]() -> const char* {
-            const glm::vec3 f = editorCamera.Front();
-            const float k = 0.999f; // within ~2.5 degrees of dead-on
-            if (f.z < -k) return "Front";
-            if (f.z >  k) return "Back";
-            if (f.x < -k) return "Right";
-            if (f.x >  k) return "Left";
-            if (f.y < -k) return "Top";
-            if (f.y >  k) return "Bottom";
-            return editorCamera.Orthographic ? "Iso" : "Persp";
-        }();
-        ImFont* font = ImGui::GetFont();
-        float labelFontSize = ImGui::GetFontSize();
-        ImVec2 textSize = font->CalcTextSizeA(labelFontSize, FLT_MAX, 0.0f, isoLabel);
-        ImVec2 textPos(rotateCenter.x - textSize.x * 0.5f, toolCenterY + toolRadius + spacing);
-        ImVec2 padding(4.0f * m_UIScale, 2.0f * m_UIScale);
-        ImVec2 hitMin(textPos.x - padding.x, textPos.y - padding.y);
-        ImVec2 hitMax(textPos.x + textSize.x + padding.x, textPos.y + textSize.y + padding.y);
-        ImVec2 mouse = ImGui::GetIO().MousePos;
-        bool isoHovered = mouse.x >= hitMin.x && mouse.x <= hitMax.x && mouse.y >= hitMin.y && mouse.y <= hitMax.y;
-        ImDrawList* labelDl = ImGui::GetWindowDrawList();
-        // #54 — always plated now (used to be plate-on-hover only, bare adaptive-tinted text at
-        // rest), matching the tool buttons above: legible over anything, not just while hovered.
-        labelDl->AddRectFilled(hitMin, hitMax,
-            isoHovered ? ImGui::GetColorU32(ImGuiCol_FrameBgHovered) : EditorUIPrimitives::kHudPlateColor,
-            3.0f * m_UIScale);
-        if (isoHovered) {
-            EditorUI::SetTooltip("Switch between Perspective and Isometric (orthographic) view");
-            m_ViewGizmoBlocking = true;
-            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                ToggleOrthographic(world, editorCamera);
-            }
-        }
-        labelDl->AddText(font, labelFontSize, textPos, EditorUIPrimitives::kHudTextColor, isoLabel);
     }
 
     if (modified) {

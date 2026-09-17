@@ -1853,10 +1853,6 @@ private:
     // region with its own opaque plate, not a separate floating window — collapsible to a thin
     // strip via EditorSettings::ToolPaletteCollapsed.
     void DrawToolPalette(World& world, Camera& editorCamera);
-    // The view-state chips (audit #5 item 3): draw mode + orthographic/perspective, anchored to
-    // the viewport's top-right, left of DrawViewGizmo's nav-gizmo cluster so the two don't
-    // overlap. Also moved out of the top toolbar strip.
-    void DrawViewStateChips(World& world, Camera& editorCamera);
     // True for the frame(s) the mouse is hovering or dragging the nav gizmo above — set inside
     // DrawViewGizmo() (called before HandleViewportPicking() in Draw()) so picking can skip
     // starting a box-select/pick from a click that's actually meant for the nav gizmo. The nav
