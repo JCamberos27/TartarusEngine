@@ -64,10 +64,8 @@ void GameViewPanel::DrawAspectControl() {
     // matching the other Game-view overlays.
     const ImU32 textCol = EditorUIPrimitives::kHudTextColor;
 
-    // Custom button + manual popup rather than BeginCombo: ImGui's combo always re-runs its own
-    // auto-placement (prefers Down), so a real "open upward" isn't reachable through it. Here we
-    // own the popup, so SetNextWindowPos with a bottom-left pivot makes it grow up from the top
-    // edge of the button.
+    // Custom button + manual popup rather than BeginCombo/ImGui's own auto-placement, so the
+    // caret can match the popup's actual open direction below.
     ImGui::PushStyleColor(ImGuiCol_Button,        EditorUIPrimitives::kHudPlateColor);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(40, 40, 40, 220));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(50, 50, 50, 230));
@@ -96,7 +94,7 @@ void GameViewPanel::DrawAspectControl() {
         EditorUI::SetTooltip("Locks the Game View (and Play Mode) to this aspect ratio or exact\nresolution, letterboxing the rest. Free Aspect fills whatever space is available.");
     }
 
-    ImGui::SetNextWindowPos(ImVec2(p0.x, p0.y - 2.0f), ImGuiCond_Always, ImVec2(0.0f, 1.0f)); // grow upward
+    ImGui::SetNextWindowPos(ImVec2(p0.x, p0.y + h + 2.0f), ImGuiCond_Always, ImVec2(0.0f, 0.0f)); // grow downward, below the toolbar button
     ImGui::SetNextWindowSizeConstraints(ImVec2(itemW, 0.0f), ImVec2(itemW, 600.0f));
     if (ImGui::BeginPopup("##AspectPopup")) {
         auto row = [&](const ResolutionPreset& preset) {
@@ -171,6 +169,15 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         return;
     }
 
+    // #29 — a real toolbar row (in normal ImGui layout flow, like the Asset Browser's own
+    // toolbar strip) instead of the aspect/resolution control floating as a bottom-left overlay
+    // on top of the rendered image. The control's own styling/popup is unchanged; only where it's
+    // drawn from moved.
+    ImGui::BeginChild("##GameToolbar", ImVec2(0.0f, ImGui::GetFrameHeight()), ImGuiChildFlags_None,
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    DrawAspectControl();
+    ImGui::EndChild();
+
     ImVec2 avail = ImGui::GetContentRegionAvail();
     m_LastAvailableRegion = avail;
     m_ViewImageSize = ImVec2(0.0f, 0.0f);
@@ -191,8 +198,6 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         ImGui::SetCursorScreenPos(imagePos);
         // uv0=(0,1)/uv1=(1,0): OpenGL textures are bottom-left origin, ImGui::Image expects
         // top-left, so this flips the framebuffer's color attachment right-side up.
-        // AllowOverlap so the aspect-ratio control drawn on top of it (below) can take its own clicks.
-        ImGui::SetNextItemAllowOverlap();
         ImGui::Image((ImTextureID)(intptr_t)m_Framebuffer.ColorTexture(), rect.Size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
         m_ViewHovered = ImGui::IsItemHovered();
 
@@ -200,21 +205,10 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         // overlays (throttled ~10 Hz, eased) and steer them between light-on-dark and
         // dark-on-light. Fixed opaque plates + fixed light text are legible over anything.
 
-        // Aspect / resolution control — bottom-left overlay (was a top strip). Drawn before the
-        // click-to-engage check so a click here never falls through to the game view.
-        bool overAspectCtl;
-        {
-            const float ctlH = ImGui::GetFrameHeight();
-            ImGui::SetCursorScreenPos(ImVec2(imagePos.x + 8.0f, imagePos.y + rect.Size.y - ctlH - 8.0f));
-            DrawAspectControl();
-            overAspectCtl = ImGui::IsItemHovered() || ImGui::IsItemActive() || m_AspectComboOpen;
-        }
-        if (overAspectCtl) m_ViewHovered = false; // the control ate this hover, not the view
-
         // In-panel play: first click inside the running view captures mouse/keyboard for the
         // game; until then, a hint sits over the image. (Esc releases — handled in main.cpp.)
         if (playing && !inputEngaged) {
-            if (m_ViewHovered && !overAspectCtl && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            if (m_ViewHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                 m_EngageClickPending = true;
             }
             const char* hint = "Click to control  \xE2\x80\xA2  Esc to release";
