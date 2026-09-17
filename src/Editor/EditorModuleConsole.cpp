@@ -307,12 +307,12 @@ void Draw(const EditorModuleHostAPI& host) {
     EditorUIPrimitives::Checkbox(infoLabel, &state.ShowInfo);
     if (ImGui::IsItemHovered()) Tooltip(host, "Show/hide informational messages");
     ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.80f, 0.30f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::WarningColor());
     EditorUIPrimitives::Checkbox(warnLabel, &state.ShowWarning);
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) Tooltip(host, "Show/hide warnings");
     ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.42f, 0.38f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
     EditorUIPrimitives::Checkbox(errorLabel, &state.ShowError);
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) Tooltip(host, "Show/hide errors");

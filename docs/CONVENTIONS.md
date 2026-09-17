@@ -112,8 +112,8 @@ triad has a fixed semantic split — do not mix roles:
 
 | Colour | Role | Where |
 |---|---|---|
-| **cyan** `#3DD6D0` (Dark) / **teal** `#0E7C78` (Light) | selection / "you are here" | `Header`, `CheckMark`, `SliderGrab`, `Separator{Hovered,Active}`, `TabSelectedOverline`, `NavCursor`, `DockingPreview`, `TextSelectedBg`, `ResizeGripHovered` |
-| **blue** `#5B9DF9` (Dark) / `#2563C7` (Light) | active / pressed / in-progress | `HeaderActive`, `SliderGrabActive`, `ResizeGripActive` |
+| **"cyan"** `#2C5D87` — Unity's "Highlight Background" | selection / "you are here" | `Header`, `CheckMark`, `SliderGrab`, `Separator{Hovered,Active}`, `TabSelectedOverline`, `NavCursor`, `DockingPreview`, `TextSelectedBg`, `ResizeGripHovered` |
+| **"blue"** `#4C7EFF` — Unity's "Link Text" / focus blue | active / pressed / in-progress | `HeaderActive`, `SliderGrabActive`, `ResizeGripActive` |
 | **yellow / warning** | warning / one data highlight | `EditorUIPrimitives::WarningColor()` (Phase 1 item 2) — a fixed, non-theme-derived accessor alongside `DangerColor()`/`SuccessColor()`/`InfoColor()`; a status colour has to mean the same thing regardless of which theme is active, unlike the selection/active accents above |
 
 Light's accent hues are independently WCAG-checked against its own background, not derived from
