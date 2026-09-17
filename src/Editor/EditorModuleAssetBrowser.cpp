@@ -474,6 +474,7 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.14f));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, ImGui::GetStyle().FramePadding.y));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // flat breadcrumb, no hairline box
 
         // The root segment is only a link when we're not already there; otherwise it's just the
         // "you are here" label like every other trailing segment below.
@@ -509,7 +510,7 @@ void Draw(const EditorModuleHostAPI& host) {
             if (isLast) break;
             segStart = slash + 1;
         }
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(3);
 
         if (refreshFlash > 0.0f) {
@@ -690,7 +691,9 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // invisible drag handle, no hairline box
     ImGui::Button("##AssetTreeSplitter", ImVec2(6.0f * uiScale, contentHeight)); // #37
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
     {
         const bool active = ImGui::IsItemActive();

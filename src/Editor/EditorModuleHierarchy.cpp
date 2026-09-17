@@ -38,9 +38,11 @@ bool FlatGlyphButton(const EditorModuleHostAPI& host, const char* icon, const ch
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f)); // flat at rest
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.245f, 0.250f, 0.275f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.300f, 0.310f, 0.345f, 1.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // no hairline box on this flat button
     ImGui::PushID(tip);
     bool clicked = ImGui::Button(icon);
     ImGui::PopID();
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
     if (ImGui::IsItemHovered() && host.SetTooltip) host.SetTooltip(tip);
     return clicked;
