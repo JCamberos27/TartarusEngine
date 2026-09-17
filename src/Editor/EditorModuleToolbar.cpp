@@ -99,8 +99,11 @@ void DrawWindowControls(const EditorModuleHostAPI& host) {
     ImGui::PopID();
     ImGui::SameLine();
 
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.86f, 0.15f, 0.18f, 0.92f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.78f, 0.12f, 0.15f, 1.0f));
+    {
+        ImVec4 danger = EditorUIPrimitives::DangerColor(); // Unity "Error Text" #D32222
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(danger.x, danger.y, danger.z, 0.92f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(danger.x * 0.9f, danger.y * 0.9f, danger.z * 0.9f, 1.0f));
+    }
     ImGui::PushID("win_close");
     if (ImGui::Button(EDITOR_ICON_WINDOW_CLOSE, ImVec2(bw, 0.0f)) && host.WindowClose) host.WindowClose();
     if (ImGui::IsItemHovered()) Tooltip(host, "Close");
@@ -165,11 +168,14 @@ void Draw(const EditorModuleHostAPI& host) {
             ImGui::EndMenu();
         }
 
-        if (ImGui::MenuItem(ICON_FA_GEAR " Preferences") && host.OpenPreferences) host.OpenPreferences();
-        if (ImGui::IsItemHovered()) Tooltip(host, "Per-user editor settings, environment, shortcuts (Ctrl+,)");
-
-        if (ImGui::MenuItem(ICON_FA_GEARS " Project Settings") && host.OpenProjectSettings) host.OpenProjectSettings();
-        if (ImGui::IsItemHovered()) Tooltip(host, "Physics, tags and layer names \xE2\x80\x94 saved with the project, not your editor prefs");
+        // Preferences and Project Settings are one and the same searchable window (a "THIS
+        // MACHINE" / "THIS PROJECT" sidebar inside DrawSettingsWindow) — two separate menu items
+        // both opening it just made it look like two different destinations. One entry now;
+        // Ctrl+, still lands on the editor side, Ctrl+Shift+P still lands on the project side
+        // (editor.preferences / project.settings shortcuts, unchanged), and either way both
+        // groups are one click away in the sidebar once it's open.
+        if (ImGui::MenuItem(ICON_FA_GEAR " Settings") && host.OpenPreferences) host.OpenPreferences();
+        if (ImGui::IsItemHovered()) Tooltip(host, "Editor preferences and project settings (Ctrl+,)");
 
         // Phase 6 item 11 — the shortcut coverage pass's own "add a Help ▸ Shortcuts reference"
         // ask. Jumps straight to the existing press-to-bind editor rather than duplicating it.
