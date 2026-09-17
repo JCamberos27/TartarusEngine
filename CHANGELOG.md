@@ -44,7 +44,16 @@ Closed. Items 1-6 and 8 landed in earlier sessions (#68, #69, #41). The last ite
 
 ### [Phase 6] Theme consolidation and the long tail (#8) — 2026-09-16
 
-In progress. Landed so far:
+Closed — all 15 items done.
+
+- In-editor asset picker for texture/material assignment (item 8, the phase's last open item):
+  every texture/material *assignment* button in the Inspector (single- and multi-select PBR
+  texture slots, shader-driven texture properties, mesh renderer material slots) now opens a
+  searchable in-editor popup listing what's already registered in the `AssetLibrary` — the same
+  set the Asset Browser shows, so the two can't disagree — instead of going straight to the raw
+  OS file dialog. Each popup keeps an "Import from disk..." escape hatch for genuinely importing
+  a file from outside the project, which is the only place the OS dialog still appears for these
+  slots; scene/prefab open/save and fresh asset import are unaffected (`ee3b7a8`, closes #8).
 
 - Lights Solo/Mute UI: a "Lights" section in the Lighting panel, one row per light with Solo
   (isolate — suppresses every other light while any Solo is active) and Mute (suppress just this
