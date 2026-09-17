@@ -1255,6 +1255,7 @@ void EditorLayer::DrawScreenshotPreview(World& world, AssetLibrary& assets) {
         else ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // flat icon row, no hairline box
         if (ImGui::Button(ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE, ImVec2(btnW, 0.0f)))
             Screenshot::OpenFile(m_ShotPreviewPath);
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Open externally");
@@ -1284,6 +1285,7 @@ void EditorLayer::DrawScreenshotPreview(World& world, AssetLibrary& assets) {
         ImGui::SameLine(0.0f, 6.0f);
         if (ImGui::Button(ICON_FA_XMARK, ImVec2(btnW, 0.0f))) { open = false; ImGui::CloseCurrentPopup(); }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Close (Esc)");
+        ImGui::PopStyleVar();
         ImGui::PopStyleColor(2);
 
         ImGui::Spacing();

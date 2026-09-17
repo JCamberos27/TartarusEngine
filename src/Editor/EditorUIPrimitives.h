@@ -42,6 +42,14 @@ using TooltipFn = void (*)(const char*);
 // selection / "you are here".
 inline ImVec4 AccentColor() { return ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab); }
 
+// The brighter of the theme's two accents (Unity's "Link Text" / focus blue, vs. AccentColor's
+// dimmer selection cyan) — ~4.8:1 against the toolbar's MenuBarBg vs. AccentColor's ~2.5:1, under
+// this codebase's own 3:1 non-text floor. Used where an "on" state has to read as on by itself:
+// ActionButton's toggle keyline used to lean on FrameBorderSize's hairline to help delineate it,
+// but that border is suppressed on flat buttons now (see ActionButton's own comment) so the
+// keyline/active-text color needs to clear the floor unassisted.
+inline ImVec4 ActiveAccentColor() { return ImGui::GetStyleColorVec4(ImGuiCol_SliderGrabActive); }
+
 // Status-role colours (Phase 1 item 2, Appendix B — "add danger/warning/success/info roles").
 // Fixed, not theme-derived: a status colour has to mean the same thing regardless of which of
 // the three themes is active, unlike AccentColor(). All four already clear WCAG 1.4.3's 4.5:1
@@ -61,7 +69,26 @@ inline ImVec4 InfoColor()    { return ImVec4(0.55f, 0.75f, 1.00f, 1.0f); } // ~9
 // tool, every panel toggle, every low-frequency icon action.
 inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn tooltipFn,
                           bool active = false, ImVec2 size = ImVec2(0, 0)) {
-    const ImVec4 acc = AccentColor();
+    const ImVec4 acc = ActiveAccentColor();
+    // At rest an ActionButton had no visual cue at all — same full-bright ImGuiCol_Text as any
+    // plain label, distinguished only by the wash that only appears once you're already hovering
+    // it. Dimming the glyph at rest (same 0.78-alpha treatment the Hierarchy eye/lock toggles use
+    // — still clears the 3:1 floor against WindowBg) and popping it back to full brightness on
+    // hover/press gives the icon row a legible "these are buttons" cue before the cursor arrives.
+    // Approximates Button()'s own hit-test (cursor pos + FramePadding) since the hover state has
+    // to be known before the glyph color is pushed, one frame ahead of ImGui::Button() itself.
+    if (!active) {
+        const ImVec2 cursor = ImGui::GetCursorScreenPos();
+        const ImVec2 iconSize = ImGui::CalcTextSize(icon);
+        const ImVec2 pad = ImGui::GetStyle().FramePadding;
+        const ImVec2 btnSize(size.x > 0.0f ? size.x : iconSize.x + pad.x * 2.0f,
+                              size.y > 0.0f ? size.y : iconSize.y + pad.y * 2.0f);
+        const bool willHover = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+            ImGui::IsMouseHoveringRect(cursor, ImVec2(cursor.x + btnSize.x, cursor.y + btnSize.y));
+        ImVec4 text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+        if (!willHover) text.w *= 0.78f;
+        ImGui::PushStyleColor(ImGuiCol_Text, text);
+    }
     if (active) {
         ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(acc.x, acc.y, acc.z, 0.22f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(acc.x, acc.y, acc.z, 0.34f));
@@ -90,7 +117,8 @@ inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn toolti
         ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x + 3.0f, y), ImVec2(mx.x - 3.0f, mx.y - 1.0f),
                                                   ImGui::ColorConvertFloat4ToU32(acc), 1.0f);
     }
-    ImGui::PopStyleColor(active ? 4 : 3);
+    // Button/Hovered/Active + Text, either the accent-text push (active) or the dim-at-rest push above.
+    ImGui::PopStyleColor(4);
     if (tooltipFn && ImGui::IsItemHovered()) tooltipFn(tooltip);
     return clicked;
 }

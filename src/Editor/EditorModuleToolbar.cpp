@@ -55,6 +55,26 @@ bool ActionButton(const EditorModuleHostAPI& host, const char* icon, const char*
     return EditorUIPrimitives::ActionButton(icon, tooltip, host.SetTooltip, active);
 }
 
+// A slim caret strip beside a full ActionButton, opening a per-cluster options popup (grid/snap,
+// gizmos, capture). Used to sit flush against its parent icon with only a 1px SameLine gap, which
+// read as one oddly-shaped button rather than two controls; a touch more gap plus a narrower
+// FramePadding.x (a slim strip, not a second full-width icon button) makes the two legible as
+// separate click targets at a glance.
+void CaretDropdownButton(const EditorModuleHostAPI& host, const char* popupId, const char* tooltip) {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+    ImGui::PushID(popupId);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x * 0.5f, style.FramePadding.y));
+    if (ImGui::Button(EDITOR_ICON_CARET_DOWN)) ImGui::OpenPopup(popupId);
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+    if (ImGui::IsItemHovered()) Tooltip(host, tooltip);
+    ImGui::PopID();
+}
+
 // EditorUI::VSeparator: a 1px rule in ImGuiCol_Separator spanning the frame height, ItemSpacing.x
 // of breathing room either side. `gapScale` widens that gap for a cluster break.
 void VSeparator(float gapScale = 1.0f) {
@@ -63,7 +83,13 @@ void VSeparator(float gapScale = 1.0f) {
     ImGui::SameLine(0.0f, gap);
     const ImVec2 p = ImGui::GetCursorScreenPos();
     const float h = ImGui::GetFrameHeight();
-    ImGui::GetWindowDrawList()->AddLine(ImVec2(p.x, p.y), ImVec2(p.x, p.y + h),
+    // Inset top/bottom rather than spanning the full frame height — a full-height rule reads as
+    // hard as the icon glyphs themselves, so every cluster break looked identical to every other
+    // one and the whole strip read as one dense row rather than distinct groups (history · tools ·
+    // grid/snap · view · panels · capture). A shorter, inset tick is the same visual weight
+    // Unity's own toolbar dividers use and lets the wider `divider()` gap do most of the grouping.
+    const float inset = h * 0.22f;
+    ImGui::GetWindowDrawList()->AddLine(ImVec2(p.x, p.y + inset), ImVec2(p.x, p.y + h - inset),
                                         ImGui::GetColorU32(ImGuiCol_Separator));
     ImGui::Dummy(ImVec2(1.0f, h));
     ImGui::SameLine(0.0f, gap);
@@ -245,21 +271,12 @@ void Draw(const EditorModuleHostAPI& host) {
             && host.SetGridSnapEnabled) {
         host.SetGridSnapEnabled(!gridSnap);
     }
-    ImGui::SameLine(0.0f, 1.0f);
-    ImGui::PushID("##gridSnapOpts");
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
-    if (ImGui::Button(EDITOR_ICON_CARET_DOWN)) ImGui::OpenPopup("##GridSnapPopup");
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(2);
-    if (ImGui::IsItemHovered()) Tooltip(host, "Grid & snap settings");
+    CaretDropdownButton(host, "##GridSnapPopup", "Grid & snap settings");
     if (ImGui::BeginPopup("##GridSnapPopup")) {
         CloseOnEscape();
         if (host.DrawGridSnapPopupBody) host.DrawGridSnapPopupBody();
         ImGui::EndPopup();
     }
-    ImGui::PopID();
     ImGui::SameLine();
     {
         const bool canSnap = host.CanSnapSelectionToGround && host.CanSnapSelectionToGround();
@@ -276,21 +293,12 @@ void Draw(const EditorModuleHostAPI& host) {
                 gizmosOn) && host.SetGizmosMasterVisible) {
             host.SetGizmosMasterVisible(!gizmosOn);
         }
-        ImGui::SameLine(0.0f, 1.0f);
-        ImGui::PushID("##gizmosOpts");
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
-        if (ImGui::Button(EDITOR_ICON_CARET_DOWN)) ImGui::OpenPopup("##GizmosPopup");
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor(2);
-        if (ImGui::IsItemHovered()) Tooltip(host, "Gizmo visibility");
+        CaretDropdownButton(host, "##GizmosPopup", "Gizmo visibility");
         if (ImGui::BeginPopup("##GizmosPopup")) {
             CloseOnEscape();
             if (host.DrawGizmosPopupBody) host.DrawGizmosPopupBody();
             ImGui::EndPopup();
         }
-        ImGui::PopID();
     }
 
     // Phase 3 item 3 — the draw-mode dropdown and orthographic/perspective toggle moved into the
@@ -338,21 +346,12 @@ void Draw(const EditorModuleHostAPI& host) {
         char tip[128] = "Capture screenshot (Print Screen)";
         if (host.GetCaptureButtonTooltip) host.GetCaptureButtonTooltip(tip, (int)sizeof(tip));
         if (ActionButton(host, EDITOR_ICON_CAPTURE, tip) && host.RequestCapture) host.RequestCapture();
-        ImGui::SameLine(0.0f, 1.0f);
-        ImGui::PushID("##capOpts");
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
-        if (ImGui::Button(EDITOR_ICON_CARET_DOWN)) ImGui::OpenPopup("##CapturePopup");
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor(2);
-        if (ImGui::IsItemHovered()) Tooltip(host, "Capture options");
+        CaretDropdownButton(host, "##CapturePopup", "Capture options");
         if (ImGui::BeginPopup("##CapturePopup")) {
             CloseOnEscape();
             if (host.DrawCaptureOptionsPopupBody) host.DrawCaptureOptionsPopupBody();
             ImGui::EndPopup();
         }
-        ImGui::PopID();
     }
 
     // --- Notification bell (Phase 6 item 14) -------------------------------------------------

@@ -1384,7 +1384,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.14f));
-    auto InspectorEnd = []() { ImGui::PopStyleColor(3); };
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // flat buttons, no hairline box
+    auto InspectorEnd = []() { ImGui::PopStyleVar(); ImGui::PopStyleColor(3); };
 
     // Prune handles for objects deleted since the selection was made, so the multi/single
     // Inspector split below (and everything downstream) sees an accurate count.
