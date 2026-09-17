@@ -61,10 +61,8 @@
 using namespace EditorInternal;
 
 
-// Shared by the toolbar's Zone B (DrawPlayControlsBody, windowed play) and the maximized-play
-// floating fallback (DrawPlayStopButton) — identical controls and click targets either way.
-// Deliberately doesn't touch ImGuiCol_Text: the floating fallback pushes a fixed light colour for
-// its dark plate before calling this; Zone B just inherits the toolbar's own theme text colour.
+// Called from DrawViewportActionBar, which pushes a fixed light ImGuiCol_Text for its dark HUD
+// plate before calling this — so this deliberately doesn't touch ImGuiCol_Text itself.
 void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool paused) {
     // Flat "vector" buttons: no body at rest, just the glyph + label; a faint wash of the ambient
     // foreground on hover/press so they still read as pressable without fighting whatever plate
@@ -121,14 +119,28 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
     ImGui::PopStyleColor(3);
 }
 
-// Phase 3 item 2 — the toolbar's Zone B, drawn inline into the module-owned toolbar strip via
-// EditorModuleHostAPI::DrawPlayControlsBody (API v21). Only ever on screen while the toolbar
-// itself is (i.e. never during maximized play — DrawPlayStopButton below covers that one case).
+// Phase 3 item 2's toolbar Zone B — Play/Stop/Pause/Step drawn inline into the module-owned
+// toolbar strip — is dead now that the whole icon row moved out of the toolbar (see
+// EditorModuleToolbar.cpp's file comment); DrawViewportActionBar below is the only place these
+// controls render, always, not just during maximized play. DrawPlayControlsBody / the
+// m_Cached* play-state mirror it read from are kept as unused rather than torn out, since
+// EditorModuleHostAPI is an additive, versioned contract (each entry is annotated with the API
+// version that added it) that other code hasn't been audited to confirm nothing else expects.
 void EditorLayer::DrawPlayControlsBody() {
     DrawPlayTransportButtons(m_CachedPlaying, m_CachedPlayMaximized, m_CachedPaused);
 }
 
-void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) {
+// The floating action bar centered over whichever of the Scene/Game viewports is on screen —
+// Undo/Redo/Save, the Play/Stop/Pause/Step/Fullscreen transport, and the panel-toggle /
+// screenshot / notification cluster that all used to live in the toolbar's one-click icon row.
+// Moving them here (instead of a fixed toolbar strip) means they're always over the content
+// they act on, in both Scene and Game view, and freed the toolbar down to just its menu bar
+// (kToolbarHeight shrank to match — more of the window is now viewport). Replaces the old
+// DrawPlayStopButton, which only handled this positioning for the one case (maximized play)
+// where the toolbar was hidden entirely; every other state routed Play/Stop through the
+// toolbar's Zone B instead. Now there's only one path, used unconditionally.
+void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
+                                         bool playing, bool maximized, bool paused) {
     int ww, wh;
     glfwGetWindowSize(m_Window, &ww, &wh);
     float w = (float)ww;
@@ -153,8 +165,8 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) 
         const float cy = imgPos.y + 8.0f * m_UIScale;
         ImGui::SetNextWindowPos(ImVec2(cx, cy), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
     } else {
-        // No viewport rect to anchor to (maximized play before the first Game-panel frame) —
-        // float near the top of the window.
+        // No viewport rect to anchor to (before the first Scene/Game frame) — float near the
+        // top of the window.
         ImGui::SetNextWindowPos(ImVec2(w * 0.5f, 10.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
     }
 
@@ -165,15 +177,115 @@ void EditorLayer::DrawPlayStopButton(bool playing, bool maximized, bool paused) 
     ImGui::PushStyleColor(ImGuiCol_WindowBg, EditorUIPrimitives::kHudPlateColor);
     ImGui::PushStyleColor(ImGuiCol_Text,     EditorUIPrimitives::kHudTextColor);
 
-    ImGui::Begin("##PlayStopButton", nullptr, flags);
+    ImGui::Begin("##ViewportActionBar", nullptr, flags);
     // Forces this to the front of the display order every frame so a dock rebuild elsewhere
     // (Reset Layout) can't bury it behind whatever the freshly recreated dock host window
-    // ends up as. Skipped while a popup is open (e.g. the toolbar's Capture options) so the
-    // button doesn't punch through a menu that legitimately overlays the viewport top-centre.
+    // ends up as. Skipped while a popup is open (e.g. Capture options) so the bar doesn't punch
+    // through a menu that legitimately overlays the viewport top-centre.
     if (!ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
         ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 
+    // A short inset tick between clusters — same treatment the old toolbar row's dividers used,
+    // lighter than the icons themselves rather than another hard-edged shape the same weight.
+    auto divider = [this]() {
+        ImGui::SameLine(0.0f, 10.0f * m_UIScale);
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        const float h = ImGui::GetFrameHeight();
+        const float inset = h * 0.22f;
+        ImGui::GetWindowDrawList()->AddLine(ImVec2(p.x, p.y + inset), ImVec2(p.x, p.y + h - inset),
+                                            ImGui::GetColorU32(ImGuiCol_Separator));
+        ImGui::Dummy(ImVec2(1.0f, h));
+        ImGui::SameLine(0.0f, 10.0f * m_UIScale);
+    };
+
+    // --- Undo / Redo / Save ------------------------------------------------------------------
+    if (ActionButton(EDITOR_ICON_UNDO, "Undo (Ctrl+Z)")) ToolbarUndo(world, assets);
+    ImGui::SameLine();
+    if (ActionButton(EDITOR_ICON_REDO, "Redo (Ctrl+Y)")) ToolbarRedo(world, assets);
+    ImGui::SameLine();
+    if (ActionButton(EDITOR_ICON_SAVE, "Save (Ctrl+S)")) SaveScene(world, assets);
+
+    // --- Play / Stop / Pause / Step / Fullscreen ---------------------------------------------
+    divider();
     DrawPlayTransportButtons(playing, maximized, paused);
+
+    // --- Panel toggles ------------------------------------------------------------------------
+    divider();
+    {
+        bool showStats = EditorSettings::Get().SceneShowStats;
+        if (ActionButton(EDITOR_ICON_STATISTICS, "Toggle Statistics", showStats)) {
+            EditorSettings::Get().SceneShowStats = !showStats;
+            EditorSettings::Save();
+        }
+    }
+    ImGui::SameLine();
+    {
+        // Defect #11 — flip Visible off only when Console is already the front/selected tab;
+        // if it's hidden behind a sibling dock tab (Asset Browser), focus it instead of closing
+        // an already-closed panel.
+        EditorConsoleState& cs = EditorModuleHost::ConsoleState();
+        if (ActionButton(EDITOR_ICON_CONSOLE, "Toggle Console", cs.Visible)) {
+            if (!cs.Visible) {
+                cs.Visible = true;
+            } else {
+                ImGuiWindow* consoleWin = ImGui::FindWindowByName(ICON_FA_TERMINAL "  Console");
+                if (consoleWin && consoleWin->Hidden) ImGui::FocusWindow(consoleWin);
+                else cs.Visible = false;
+            }
+        }
+    }
+    ImGui::SameLine();
+    if (ActionButton(EDITOR_ICON_HISTORY, "Toggle History", m_ShowHistory)) m_ShowHistory = !m_ShowHistory;
+
+    // --- Capture + notifications ---------------------------------------------------------------
+    divider();
+    {
+        char tip[128];
+        const EditorSettings& s = EditorSettings::Get();
+        static const char* kModes[] = { "Full editor window", "Scene viewport",
+                                        "Scene viewport (clean)", "Game view" };
+        const int cm = std::clamp(s.CaptureMode, 0, 3);
+        std::snprintf(tip, sizeof(tip), "Capture screenshot \xe2\x80\x94 %s%s (Print Screen)",
+                      kModes[cm], (cm == 1 || cm == 2) && s.CaptureScale > 1 ? " x2+" : "");
+        if (ActionButton(EDITOR_ICON_CAPTURE, tip)) RequestCapture();
+        ImGui::SameLine(0.0f, 1.0f * m_UIScale);
+        if (ActionButton(EDITOR_ICON_CARET_DOWN, "Capture options")) ImGui::OpenPopup("##ActionBarCapturePopup");
+        if (ImGui::BeginPopup("##ActionBarCapturePopup")) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
+            DrawCaptureOptionsPopupBody();
+            ImGui::EndPopup();
+        }
+    }
+    ImGui::SameLine();
+    {
+        const int unread = NotificationUnreadCount();
+        char tip[32];
+        std::snprintf(tip, sizeof(tip), "Notifications%s", unread > 0 ? " (unread)" : "");
+        if (ActionButton(ICON_FA_BELL, tip)) {
+            ImGui::OpenPopup("##ActionBarNotificationsPopup");
+            MarkNotificationsRead();
+        }
+        if (unread > 0) {
+            const ImVec2 btnMin = ImGui::GetItemRectMin();
+            const ImVec2 btnMax = ImGui::GetItemRectMax();
+            char countStr[8];
+            std::snprintf(countStr, sizeof(countStr), "%d", unread > 99 ? 99 : unread);
+            const ImVec2 textSize = ImGui::CalcTextSize(countStr);
+            const float badgeR = std::max(7.0f * m_UIScale, textSize.x * 0.5f + 2.0f * m_UIScale);
+            const ImVec2 center(btnMax.x - badgeR * 0.7f, btnMin.y + badgeR * 0.7f);
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            dl->AddCircleFilled(center, badgeR, IM_COL32(219, 60, 60, 255));
+            dl->AddText(ImVec2(center.x - textSize.x * 0.5f, center.y - textSize.y * 0.5f),
+                        IM_COL32(255, 255, 255, 255), countStr);
+        }
+        if (ImGui::BeginPopup("##ActionBarNotificationsPopup")) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
+            ImGui::TextDisabled("Notifications");
+            ImGui::Separator();
+            DrawNotificationsPopupBody();
+            ImGui::EndPopup();
+        }
+    }
 
     ImGui::PopStyleColor(2);
     ImGui::End();

@@ -2070,12 +2070,12 @@ int main(int argc, char** argv) {
             // hidden (maximized play) so the game view never becomes draggable.
             window.SetTitleBarDragActive(editorUIVisible && editor.WantsWindowDrag());
 
-            // Phase 3 item 2 — windowed play gets its Play/Stop/Pause/Step/Restore from the
-            // toolbar's Zone B now (drawn inside editorModule.Draw() above, via
-            // editor.SetPlayState() + DrawPlayControlsBody). This floating fallback only fires
-            // while the toolbar itself is hidden (maximized play), the one state with nowhere
-            // else for the transport to live.
-            if (!editorUIVisible) editor.DrawPlayStopButton(playing, playMaximized, paused);
+            // Undo/Redo/Save, Play/Stop/Pause/Step/Restore, and the panel-toggle/Capture/
+            // notification cluster all live in this one floating action bar now, centered over
+            // whichever of Scene/Game is on screen — drawn unconditionally, not just during
+            // maximized play (the toolbar's old Zone B icon row is gone; see
+            // EditorModuleToolbar.cpp's file comment).
+            editor.DrawViewportActionBar(world, assets, playing, playMaximized, paused);
             if (editor.ConsumePlayStopRequest()) togglePlay();
             if (editor.ConsumeMaximizeToggleRequest()) setMaximized(!playMaximized);
 
