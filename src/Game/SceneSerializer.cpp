@@ -9,6 +9,7 @@
 #include "AssetDatabase.h"
 #include "AssetGuid.h"
 #include "ProjectPaths.h"
+#include "EditorSettings.h"
 
 #include "Log.h"
 
@@ -39,13 +40,50 @@ namespace {
 // a build that changed something incompatible" — this is the fix. Starting at 1 rather than 0 so
 // that 0 unambiguously means "no formatVersion field was written" (a legacy pre-#195 file), not
 // "written by version 0".
-constexpr int kSceneFormatVersion = 2;
+// v3 (#9, Phase M item 1): post-processing/shadow settings move from editor_prefs.json onto the
+// scene itself (see World.h's ExposureEV et al.) — they're scene-authored content, not per-user
+// editor prefs. One-way: a pre-v3 file has its values migrated forward from editor_prefs.json on
+// load (see ApplySceneJson's MigratePostProcessSettingsFromPrefs call) and is immediately
+// re-saved by SceneSerializer::Load(), after writing a ".bak" of the original.
+constexpr int kSceneFormatVersion = 3;
 
 // Set by ApplySceneJson when the file being loaded declares a formatVersion newer than this build
 // understands; read (and cleared) via SceneSerializer::TakeLoadWarning() so a caller like the
 // editor can pop a dialog in addition to the Console line ApplySceneJson already logs. Plain
 // (non-thread-local) static: scene loads happen on the main thread only.
 std::string g_LastLoadWarning;
+
+// Populated by ApplySceneJson during a pre-v3 migration; drained by SceneSerializer::Load() to
+// log exactly what moved (review §7 Q13: "logs exactly what moved"). Plain static — same
+// single-threaded assumption as g_LastLoadWarning above.
+std::vector<std::string> g_MigrationLog;
+
+// #9, Phase M item 1 — a pre-v3 scene carries no post-processing/shadow keys of its own; those
+// values lived in editor_prefs.json. Read them straight off that file on disk (EditorSettings no
+// longer declares these fields, so Get() can't provide them) and copy the user's real authored
+// values onto World, rather than silently resetting to compiled defaults.
+void MigratePostProcessSettingsFromPrefs(World& world) {
+    std::ifstream in(EditorSettings::PrefsFilePath());
+    json prefs;
+    if (in.is_open()) {
+        try { in >> prefs; } catch (const std::exception&) { prefs = json::object(); }
+    }
+    world.ExposureEV       = prefs.value("exposureEV", 0.0f);
+    world.TonemapOperator  = prefs.value("tonemapOperator", 1);
+    world.MsaaSamples      = prefs.value("msaaSamples", 4);
+    world.SsaoEnabled      = prefs.value("ssaoEnabled", false);
+    world.BloomEnabled     = prefs.value("bloomEnabled", false);
+    world.BloomThreshold   = prefs.value("bloomThreshold", 1.0f);
+    world.BloomKnee        = prefs.value("bloomKnee", 0.5f);
+    world.BloomIntensity   = prefs.value("bloomIntensity", 0.25f);
+    world.ShadowsEnabled   = prefs.value("shadowsEnabled", true);
+    world.ShadowResolution = prefs.value("shadowResolution", 4096);
+    world.ShadowCascades   = prefs.value("shadowCascades", 4);
+    world.ShadowDistance   = prefs.value("shadowDistance", 500.0f);
+    g_MigrationLog.push_back("post-processing/shadow settings (exposure=" +
+        std::to_string(world.ExposureEV) + ", bloom=" + (world.BloomEnabled ? "on" : "off") +
+        ", ssao=" + (world.SsaoEnabled ? "on" : "off") + ") migrated from editor_prefs.json");
+}
 
 // #302 Part B — session-lived cache of parsed .prefab files for the Inspector's per-field
 // override check (called every frame per visible field on a prefab-instance entity). Cleared on
@@ -614,6 +652,20 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             root["skyHdriPath"] = AssetPathForWrite(world.SkyHdriPath); // audit #364 — was stored absolute
         if (world.SkyRotationDegrees != 0.0f)
             root["skyRotationDegrees"] = world.SkyRotationDegrees;
+
+        // #9, Phase M item 1 — post-processing/shadow settings, scene-authored since v3.
+        root["exposureEV"] = world.ExposureEV;
+        root["tonemapOperator"] = world.TonemapOperator;
+        root["msaaSamples"] = world.MsaaSamples;
+        root["ssaoEnabled"] = world.SsaoEnabled;
+        root["bloomEnabled"] = world.BloomEnabled;
+        root["bloomThreshold"] = world.BloomThreshold;
+        root["bloomKnee"] = world.BloomKnee;
+        root["bloomIntensity"] = world.BloomIntensity;
+        root["shadowsEnabled"] = world.ShadowsEnabled;
+        root["shadowResolution"] = world.ShadowResolution;
+        root["shadowCascades"] = world.ShadowCascades;
+        root["shadowDistance"] = world.ShadowDistance;
     }
 
     // Every box/model entity gets a stable 0-based id (assigned in the exact order written
@@ -922,6 +974,26 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
         world.SkySourceMode          = (World::SkySource)root.value("skySource",          0);
         world.SkyHdriPath            = AssetPathForRead(root.value("skyHdriPath", std::string())); // audit #364
         world.SkyRotationDegrees     = root.value("skyRotationDegrees",     0.0f);
+
+        // #9, Phase M item 1 — v3+ scenes own these directly; a pre-v3 file has none of these
+        // keys (BuildSceneJson only started writing them at v3), which is exactly the signal to
+        // migrate the user's real values forward from editor_prefs.json instead of defaulting.
+        if (root.contains("exposureEV")) {
+            world.ExposureEV       = root.value("exposureEV", 0.0f);
+            world.TonemapOperator  = root.value("tonemapOperator", 1);
+            world.MsaaSamples      = root.value("msaaSamples", 4);
+            world.SsaoEnabled      = root.value("ssaoEnabled", false);
+            world.BloomEnabled     = root.value("bloomEnabled", false);
+            world.BloomThreshold   = root.value("bloomThreshold", 1.0f);
+            world.BloomKnee        = root.value("bloomKnee", 0.5f);
+            world.BloomIntensity   = root.value("bloomIntensity", 0.25f);
+            world.ShadowsEnabled   = root.value("shadowsEnabled", true);
+            world.ShadowResolution = root.value("shadowResolution", 4096);
+            world.ShadowCascades   = root.value("shadowCascades", 4);
+            world.ShadowDistance   = root.value("shadowDistance", 500.0f);
+        } else {
+            MigratePostProcessSettingsFromPrefs(world);
+        }
     }
 
     // Reconstructs HierarchyComponent parent links from the "id"/"parentId" fields written by
@@ -1454,8 +1526,29 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
         Log::Error("Scene: failed to parse '" + path + "': " + e.what());
         return false;
     }
+
+    // #9, Phase M item 1: one .bak of the whole file before a pre-v3 load mutates anything in
+    // memory, per the review's Q13 "one backup" requirement. .json.bak is already in .gitignore.
+    const int formatVersion = root.value("formatVersion", 0);
+    const bool migrating = formatVersion < kSceneFormatVersion;
+    if (migrating) {
+        std::error_code ec;
+        std::filesystem::copy_file(path, path + ".bak", std::filesystem::copy_options::overwrite_existing, ec);
+        if (ec) Log::Warn("Scene: couldn't write a backup of '" + path + "' before migrating it: " + ec.message());
+    }
+
+    g_MigrationLog.clear();
     ApplyAssetLibraryJson(assets, root); // before ApplySceneJson: harmless either order, but library assets should exist first
-    return ApplySceneJson(world, assets, root);
+    bool ok = ApplySceneJson(world, assets, root);
+
+    if (ok && migrating && !g_MigrationLog.empty()) {
+        Log::Info("Scene: upgraded '" + path + "' to format v" + std::to_string(kSceneFormatVersion) + ":");
+        for (const auto& line : g_MigrationLog) Log::Info("  - " + line);
+        // Write the upgrade back immediately (review §7 Q13: "one build upgrade" moves the
+        // project in one pass) so a second load doesn't re-read the now-stale prefs values.
+        Save(world, assets, path);
+    }
+    return ok;
 }
 
 std::string SceneSerializer::SaveToString(const World& world) {

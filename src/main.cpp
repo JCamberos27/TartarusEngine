@@ -1418,7 +1418,7 @@ int main(int argc, char** argv) {
                     float cosOuter = cosf(glm::radians(lc.SpotAngleDegrees));
                     float cosInner = cosf(glm::radians(lc.SpotAngleDegrees * 0.9f));
                     int slot = -1;
-                    if (lc.Shadow.Enabled && frameSettings.ShadowsEnabled &&
+                    if (lc.Shadow.Enabled && world.ShadowsEnabled &&
                         spotShadowCount < SpotShadowMap::kMaxSpots) {
                         slot = spotShadowCount++;
                         glm::vec3 up = std::abs(aim.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
@@ -1437,7 +1437,7 @@ int main(int argc, char** argv) {
                     lightBuffer.AddSpot(pos, aim, lc.Color, lc.Intensity, lc.Range, cosOuter, cosInner, slot);
                 } else {
                     int slot = -1;
-                    if (lc.Shadow.Enabled && frameSettings.ShadowsEnabled &&
+                    if (lc.Shadow.Enabled && world.ShadowsEnabled &&
                         pointShadowCount < PointShadowMap::kMaxPoints) {
                         slot = pointShadowCount++;
                         pointShadowPos[slot] = pos;
@@ -1455,7 +1455,7 @@ int main(int argc, char** argv) {
             const int frameLightCount = lightBuffer.Count();
 
             bool sunShadowsReady = false;
-            if (frameSettings.ShadowsEnabled && frameHaveDirectional && frameSunCastShadows) {
+            if (world.ShadowsEnabled && frameHaveDirectional && frameSunCastShadows) {
                 PROFILE_SCOPE("Sun Shadow Pass");
                 PROFILE_GPU_SCOPE("Sun Shadow Pass");
 
@@ -1470,8 +1470,8 @@ int main(int argc, char** argv) {
                 glm::mat4 fitView = fitCam.ViewMatrix();
                 glm::mat4 fitProj = fitCam.ProjectionMatrix(fitRegion.x / fitRegion.y);
 
-                shadowMap.Configure(frameSettings.ShadowResolution, frameSettings.ShadowCascades);
-                shadowMap.Update(fitView, fitProj, frameSunDir, frameSettings.ShadowDistance);
+                shadowMap.Configure(world.ShadowResolution, world.ShadowCascades);
+                shadowMap.Update(fitView, fitProj, frameSunDir, world.ShadowDistance);
 
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
@@ -1525,10 +1525,10 @@ int main(int argc, char** argv) {
             }
 
             // --- Spot-light shadow maps (#119) — once per frame, like the sun CSM ------------
-            if (frameSettings.ShadowsEnabled) {
-                spotShadowMap.Configure(std::min(frameSettings.ShadowResolution, 2048));
+            if (world.ShadowsEnabled) {
+                spotShadowMap.Configure(std::min(world.ShadowResolution, 2048));
             }
-            if (frameSettings.ShadowsEnabled && spotShadowCount > 0) {
+            if (world.ShadowsEnabled && spotShadowCount > 0) {
                 PROFILE_SCOPE("Spot Shadow Pass");
                 PROFILE_GPU_SCOPE("Spot Shadow Pass");
                 glEnable(GL_DEPTH_TEST);
@@ -1577,10 +1577,10 @@ int main(int argc, char** argv) {
             }
 
             // --- Point-light cube shadow maps (#119) — six faces per casting point light ------
-            if (frameSettings.ShadowsEnabled) {
-                pointShadowMap.Configure(std::min(frameSettings.ShadowResolution, 1024));
+            if (world.ShadowsEnabled) {
+                pointShadowMap.Configure(std::min(world.ShadowResolution, 1024));
             }
-            if (frameSettings.ShadowsEnabled && pointShadowCount > 0) {
+            if (world.ShadowsEnabled && pointShadowCount > 0) {
                 PROFILE_SCOPE("Point Shadow Pass");
                 PROFILE_GPU_SCOPE("Point Shadow Pass");
                 // Standard GL cube-map face order: +X -X +Y -Y +Z -Z, with the conventional ups.
@@ -1729,8 +1729,8 @@ int main(int argc, char** argv) {
             sceneInputs.pointShadowFar        = pointShadowFar;
             sceneInputs.pointShadowBias       = pointShadowBias;
             sceneInputs.pointShadowNormalBias = pointShadowNormalBias;
-            sceneInputs.shadowsEnabled   = frameSettings.ShadowsEnabled;
-            sceneInputs.ssaoEnabled      = frameSettings.SsaoEnabled;
+            sceneInputs.shadowsEnabled   = world.ShadowsEnabled;
+            sceneInputs.ssaoEnabled      = world.SsaoEnabled;
             sceneInputs.layerVisibleMask = frameSettings.LayerVisibleMask;
             auto drawScene = [&](const RenderFrameContext& ctx, EditorLayer::RenderStats* outStats) {
                 sceneRenderer.RenderScene(world, ctx, sceneInputs, outStats);
@@ -1780,7 +1780,7 @@ int main(int argc, char** argv) {
                 }
 
                 sceneFramebuffer.Resize(scW, scH);
-                sceneHdr.Resize(scW, scH, EditorSettings::Get().MsaaSamples);
+                sceneHdr.Resize(scW, scH, world.MsaaSamples);
                 sceneHdr.BindForRender();
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1801,11 +1801,11 @@ int main(int argc, char** argv) {
                 // PR15: SSAO depth pre-pass — runs before drawScene so the occlusion map is ready.
                 // Reuses shadowShader (ShadowDepth.vert.glsl) with uLightViewProj = proj * view.
                 // Skipped in unlit/wireframe modes where SSAO has no visual effect.
-                if (frameSettings.SsaoEnabled && !sceneUnlit) ssao.Resize(scW, scH);
+                if (world.SsaoEnabled && !sceneUnlit) ssao.Resize(scW, scH);
                 // audit #358 — if any SSAO FBO came back incomplete, skip the passes outright
                 // (the scene just renders without ambient occlusion) instead of drawing into a
                 // zero/invalid framebuffer.
-                if (frameSettings.SsaoEnabled && !sceneUnlit && ssao.IsValid()) {
+                if (world.SsaoEnabled && !sceneUnlit && ssao.IsValid()) {
                     PROFILE_SCOPE("SSAO Depth Pre-pass");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass");
                     glBindFramebuffer(GL_FRAMEBUFFER, ssao.DepthFbo());
@@ -1944,7 +1944,7 @@ int main(int argc, char** argv) {
                 // Resize takes the FULL scene resolution; Bloom halves it internally for mip 0.
                 unsigned int bloomGlowTex  = 0u;
                 float        bloomIntensity = 0.0f;
-                if (EditorSettings::Get().BloomEnabled) {
+                if (world.BloomEnabled) {
                     PROFILE_GPU_SCOPE("Bloom");
                     bloom.Resize(scW, scH);
                     // audit #358 — only run the pyramid passes if every mip FBO validated
@@ -1952,10 +1952,10 @@ int main(int argc, char** argv) {
                     if (bloom.IsValid()) {
                         bloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
                                       sceneHdr.ResolvedColorTexture(),
-                                      EditorSettings::Get().BloomThreshold,
-                                      EditorSettings::Get().BloomKnee);
+                                      world.BloomThreshold,
+                                      world.BloomKnee);
                         bloomGlowTex  = bloom.GlowTexture();
-                        bloomIntensity = EditorSettings::Get().BloomIntensity;
+                        bloomIntensity = world.BloomIntensity;
                     }
                     GLStateCache::Invalidate();
                 }
@@ -2007,8 +2007,8 @@ int main(int argc, char** argv) {
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(sceneHdr.ResolvedColorTexture(), sceneFramebuffer.Handle(), scW, scH,
-                                 EditorSettings::Get().ExposureEV,
-                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator,
+                                 world.ExposureEV,
+                                 (Tonemapper::Operator)world.TonemapOperator,
                                  bloomGlowTex, bloomIntensity);
                 }
 
@@ -2116,7 +2116,7 @@ int main(int argc, char** argv) {
                 int gvWidth, gvHeight;
                 gameView.ComputeTargetSize(available, gvWidth, gvHeight);
                 gameView.GetFramebuffer().Resize(gvWidth, gvHeight);
-                gameHdr.Resize(gvWidth, gvHeight, EditorSettings::Get().MsaaSamples);
+                gameHdr.Resize(gvWidth, gvHeight, world.MsaaSamples);
                 gameHdr.BindForRender();
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -2141,8 +2141,8 @@ int main(int argc, char** argv) {
                 }
                 // SSAO depth pre-pass for the Game view — own Ssao instance/resolution from the
                 // Scene view's (see gameSsao declaration). Game view has no unlit mode.
-                if (EditorSettings::Get().SsaoEnabled) gameSsao.Resize(gvWidth, gvHeight);
-                if (EditorSettings::Get().SsaoEnabled && gameSsao.IsValid()) { // audit #358 — skip if any FBO incomplete
+                if (world.SsaoEnabled) gameSsao.Resize(gvWidth, gvHeight);
+                if (world.SsaoEnabled && gameSsao.IsValid()) { // audit #358 — skip if any FBO incomplete
                     PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
                     glBindFramebuffer(GL_FRAMEBUFFER, gameSsao.DepthFbo());
@@ -2195,24 +2195,24 @@ int main(int argc, char** argv) {
                 // PR16: Bloom for the Game view — own Bloom instance (see gameBloom declaration).
                 unsigned int gvBloomGlowTex   = 0u;
                 float        gvBloomIntensity = 0.0f;
-                if (EditorSettings::Get().BloomEnabled) {
+                if (world.BloomEnabled) {
                     PROFILE_GPU_SCOPE("Bloom (Game)");
                     gameBloom.Resize(gvWidth, gvHeight);
                     if (gameBloom.IsValid()) { // audit #358 — no glow if any mip FBO is incomplete
                         gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
                                           gameHdr.ResolvedColorTexture(),
-                                          EditorSettings::Get().BloomThreshold,
-                                          EditorSettings::Get().BloomKnee);
+                                          world.BloomThreshold,
+                                          world.BloomKnee);
                         gvBloomGlowTex   = gameBloom.GlowTexture();
-                        gvBloomIntensity = EditorSettings::Get().BloomIntensity;
+                        gvBloomIntensity = world.BloomIntensity;
                     }
                     GLStateCache::Invalidate();
                 }
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameView.GetFramebuffer().Handle(),
-                                 gvWidth, gvHeight, EditorSettings::Get().ExposureEV,
-                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator,
+                                 gvWidth, gvHeight, world.ExposureEV,
+                                 (Tonemapper::Operator)world.TonemapOperator,
                                  gvBloomGlowTex, gvBloomIntensity);
                 }
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
@@ -2308,7 +2308,7 @@ int main(int argc, char** argv) {
                 // Free-Aspect maximized play: render the scene into the HDR target at the
                 // window's native aspect, then tonemap straight onto the backbuffer.
                 int mw = window.GetWidth(), mh = window.GetHeight();
-                gameHdr.Resize(mw, mh, EditorSettings::Get().MsaaSamples);
+                gameHdr.Resize(mw, mh, world.MsaaSamples);
                 gameHdr.BindForRender();
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -2318,8 +2318,8 @@ int main(int argc, char** argv) {
 
                 // SSAO depth pre-pass — same gameSsao instance the docked Game view uses; the two
                 // paths are mutually exclusive per frame (if/else-if above), so no resize thrash.
-                if (EditorSettings::Get().SsaoEnabled) gameSsao.Resize(mw, mh);
-                if (EditorSettings::Get().SsaoEnabled && gameSsao.IsValid()) { // audit #358
+                if (world.SsaoEnabled) gameSsao.Resize(mw, mh);
+                if (world.SsaoEnabled && gameSsao.IsValid()) { // audit #358
                     PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
                     glBindFramebuffer(GL_FRAMEBUFFER, gameSsao.DepthFbo());
@@ -2371,24 +2371,24 @@ int main(int argc, char** argv) {
                 // PR16: Bloom — same gameBloom instance the docked Game view uses.
                 unsigned int mwBloomGlowTex   = 0u;
                 float        mwBloomIntensity = 0.0f;
-                if (EditorSettings::Get().BloomEnabled) {
+                if (world.BloomEnabled) {
                     PROFILE_GPU_SCOPE("Bloom (Game)");
                     gameBloom.Resize(mw, mh);
                     if (gameBloom.IsValid()) { // audit #358
                         gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
                                           gameHdr.ResolvedColorTexture(),
-                                          EditorSettings::Get().BloomThreshold,
-                                          EditorSettings::Get().BloomKnee);
+                                          world.BloomThreshold,
+                                          world.BloomKnee);
                         mwBloomGlowTex   = gameBloom.GlowTexture();
-                        mwBloomIntensity = EditorSettings::Get().BloomIntensity;
+                        mwBloomIntensity = world.BloomIntensity;
                     }
                     GLStateCache::Invalidate();
                 }
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh,
-                                 EditorSettings::Get().ExposureEV,
-                                 (Tonemapper::Operator)EditorSettings::Get().TonemapOperator,
+                                 world.ExposureEV,
+                                 (Tonemapper::Operator)world.TonemapOperator,
                                  mwBloomGlowTex, mwBloomIntensity);
                 }
             }

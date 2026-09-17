@@ -41,6 +41,26 @@ public:
     // itself. Purely a shader uniform — changing it does NOT rebake the probes.
     float SkyAmbientIntensity{1.0f};
 
+    // Post-processing / shadow settings (#9, Phase M item 1) — scene-authored content, moved off
+    // EditorSettings/editor_prefs.json onto the scene itself: these are look choices the scene's
+    // author makes, not per-user editor preferences, so they belong in the file that travels with
+    // the scene. See EditorLayer::DrawPostProcessSettings/DrawShadowSettings for the editing UI.
+    float ExposureEV{0.0f};        // photographic stops applied before the tone curve, 0 = neutral
+    int   TonemapOperator{1};      // 0 Reinhard, 1 ACES, 2 AgX
+    int   MsaaSamples{4};          // 1 / 2 / 4 / 8 for the HDR target
+
+    bool  SsaoEnabled{false};
+
+    bool  BloomEnabled{false};
+    float BloomThreshold{1.0f};
+    float BloomKnee{0.5f};
+    float BloomIntensity{0.25f};
+
+    bool  ShadowsEnabled{true};
+    int   ShadowResolution{4096};
+    int   ShadowCascades{4};
+    float ShadowDistance{500.0f};
+
     // Creates a level-geometry entity: a fresh (unshared) cube-primitive Model tinted `color`,
     // a Collider, and LevelGeometryTag. `size` becomes the entity's Transform Scale, matching
     // the old WorldBox::Size (the native cube primitive is -0.5..0.5, so scale == world-space

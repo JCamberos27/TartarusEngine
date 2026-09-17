@@ -982,8 +982,8 @@ private:
     // section helpers are shared, so Preferences renders the same widgets.
     void DrawLightingPanel(World& world);
     void DrawEnvironmentSettings(World& world, float itemWidth);
-    void DrawPostProcessSettings(float itemWidth);
-    void DrawShadowSettings(float itemWidth);
+    void DrawPostProcessSettings(World& world, float itemWidth);
+    void DrawShadowSettings(World& world, float itemWidth);
     // Phase 6 item 9 — the Solo/Mute mixer row list. m_SoloLights/m_MutedLights and
     // IsLightSuppressed() (above) predate this UI and were already wired into main.cpp's per-frame
     // light gather; this is the first and only place anything writes to either set.
