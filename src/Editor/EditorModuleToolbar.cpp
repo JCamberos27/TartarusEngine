@@ -256,7 +256,22 @@ void Draw(const EditorModuleHostAPI& host) {
     // in the toolbar means it's always on a fully opaque background by construction. The floating
     // version still exists for maximized play only, which hides this whole strip.
     divider();
-    if (host.DrawPlayControlsBody) host.DrawPlayControlsBody();
+    {
+        // Play/Stop/Pause/Step/Fullscreen center themselves in the toolbar row, matching Unity's
+        // own layout — the play cluster anchors to the middle of the strip regardless of what
+        // sits either side of it, rather than immediately following Undo/Redo/Save. The cluster's
+        // width isn't known until after it's drawn, so this centers off last frame's width (a
+        // one-frame lag on a resize or Play/Stop state change is imperceptible) — the standard
+        // immediate-mode centering trick.
+        static float s_playClusterW = 0.0f;
+        const float startX = ImGui::GetCursorPosX();
+        const float centerX = (winW - s_playClusterW) * 0.5f;
+        if (centerX > startX) ImGui::SetCursorPosX(centerX);
+        ImGui::BeginGroup();
+        if (host.DrawPlayControlsBody) host.DrawPlayControlsBody();
+        ImGui::EndGroup();
+        s_playClusterW = ImGui::GetItemRectSize().x;
+    }
 
     // Phase 3 item 3 — Hand/Translate/Rotate/Scale/Rect/Universal, Measure, Duplicate Array, and
     // the Local/World + Pivot/Center modifiers moved out of the strip into the Scene viewport's

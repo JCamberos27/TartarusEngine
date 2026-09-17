@@ -19,6 +19,7 @@
 #include "Log.h"
 #include "EditorSettings.h"
 #include "EditorUIHelpers.h"
+#include "EditorUIPrimitives.h" // SuccessColor() — the Play button's green
 #include "PhysicsWorld.h"             // #185 — PDD_* debug-draw channel flags
 #include "EditorModuleAPI.h"          // EditorConsoleState — the Console panel lives in the module now
 #include "HotReloadEditorModule.h"    // EditorModuleHost::ConsoleState()
@@ -77,7 +78,16 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
 
     if (!playing) {
+        // The one control every other toolbar button treatment defers to — Unity's own Play
+        // button is the single green accent in an otherwise monochrome toolbar, and that's the
+        // whole point of the color: it has to read as "the important one" at a glance, not blend
+        // into the flat/grey buttons around it.
+        const ImVec4 green = EditorUIPrimitives::SuccessColor();
+        ImGui::PushStyleColor(ImGuiCol_Text,          green);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(green.x, green.y, green.z, 0.20f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(green.x, green.y, green.z, 0.32f));
         if (ImGui::Button(ICON_FA_PLAY "  Play")) m_PlayStopRequested = true;
+        ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Play the scene in the Game panel (F1)");
     } else {
         if (ImGui::Button(ICON_FA_STOP "  Stop")) m_PlayStopRequested = true;
