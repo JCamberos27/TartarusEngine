@@ -246,22 +246,18 @@ struct PrefabMultiRef {
     const char* field = nullptr;
 };
 
-// #6 item 8 — a coloured rule under a neutral letter, not a filled R/G/B block: solid red/green/
-// blue fill is the worst possible colour choice for deuteranopia (the most common form of colour
-// blindness can't reliably separate red from green at all), and unlike the old filled buttons this
-// keeps the axis legible from the letter alone — colour becomes a secondary cue, matching the
-// bottom-keyline language ActionButton already uses for an "on" toggle, not the only one carrying
-// the axis's identity. Shared by DrawVec3Row (Transform) and MultiEditVec3Row (every other
-// reflected Vec3 field), which each hand-rolled their own filled-button version of this before.
+// Solid-filled X/Y/Z button — Unity-style (#6 item 8's colored-underline-only treatment, a
+// deliberate deuteranopia guard, was reverted back to a filled block by explicit request). Shared
+// by DrawVec3Row (Transform) and MultiEditVec3Row (every other reflected Vec3 field).
 bool AxisButton(const char* name, ImVec4 tint, ImVec2 size) {
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(tint.x, tint.y, tint.z, 0.18f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(tint.x, tint.y, tint.z, 0.30f));
+    ImVec4 hovered = ImVec4(std::min(tint.x * 1.15f, 1.0f), std::min(tint.y * 1.15f, 1.0f), std::min(tint.z * 1.15f, 1.0f), 1.0f);
+    ImVec4 active  = ImVec4(tint.x * 0.85f, tint.y * 0.85f, tint.z * 0.85f, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button,        tint);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hovered);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  active);
+    ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
     const bool clicked = ImGui::Button(name, size);
-    ImGui::PopStyleColor(3);
-    const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
-    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x + 3.0f, mx.y - 2.0f), ImVec2(mx.x - 3.0f, mx.y - 1.0f),
-                                              ImGui::ColorConvertFloat4ToU32(tint), 1.0f);
+    ImGui::PopStyleColor(4);
     return clicked;
 }
 
@@ -2400,11 +2396,13 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     // the click — it lands on the header's own collapse-toggle instead, which is exactly why
     // pressing it only expanded/collapsed the section instead of removing anything.
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_AllowOverlap | (defaultOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0);
-    // Flat heading (#155): no filled bar — the triangle + icon + label sit on the panel, with a
-    // hairline under them for separation. A barely-there wash marks hover.
-    ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.05f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
+    // Component headers get a dark filled bar (matching Unity's own Inspector, where each
+    // component's title strip is visibly darker than the panel it sits on) so adjacent components
+    // are easy to tell apart at a glance, rather than the flat #155 no-fill treatment this used to
+    // have.
+    ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0x19 / 255.0f, 0x19 / 255.0f, 0x19 / 255.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0x24 / 255.0f, 0x24 / 255.0f, 0x24 / 255.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(0x28 / 255.0f, 0x28 / 255.0f, 0x28 / 255.0f, 1.0f));
     bool open = ImGui::CollapsingHeader(header.c_str(), flags);
     // Right-click anywhere on the header row -> the actions menu (#236). Registered here while
     // the header is the last item; the popup body is drawn a few lines down.

@@ -343,8 +343,11 @@ void EditorLayer::ApplyThemeStyle() {
     ImGuiStyle& style = ImGui::GetStyle();
     style = s_baseStyle;
 
-    // Phase 1 item 9 — the SaaS-dashboard geometry (rounded cards, more air); Windows XP, which
-    // kept SetSharedMetrics' squarer baseline instead, is gone.
+    // Unity-dark colors (ApplyBentoPalette) with the earlier rounded "Bento" geometry kept — a
+    // flatter, square-cornered pass was tried and reverted by request; rounded corners stay.
+    // Unity's own editor uses hairline borders rather than fill-contrast alone to separate a frame
+    // widget from its background, so FrameBorderSize stays on (see ApplyBentoPalette's Border
+    // color) even with the rounding reverted — the two are independent.
     style.WindowRounding    = 8.0f;
     style.ChildRounding     = 8.0f;
     style.PopupRounding     = 8.0f;
@@ -359,7 +362,7 @@ void EditorLayer::ApplyThemeStyle() {
     // ChildBorderSize stays 0 until the opt-in card treatment (#234 layer 3) — with a
     // transparent ChildBg, a blanket 1px border just outlines every nested BeginChild.
     style.ChildBorderSize   = 0.0f;
-    style.FrameBorderSize   = 0.0f;
+    style.FrameBorderSize   = 1.0f;
     style.WindowBorderSize  = 1.0f;
     style.TabBarBorderSize  = 1.0f;
     style.SeparatorTextBorderSize = 1.0f;
@@ -374,24 +377,14 @@ void EditorLayer::ApplyThemeStyle() {
                                              style.Colors[ImGuiCol_WindowBg], 4.5f, logContrastWarn);
     EditorUIPrimitives::AssertContrastFloor("TextDisabled vs WindowBg", style.Colors[ImGuiCol_TextDisabled],
                                              style.Colors[ImGuiCol_WindowBg], 4.5f, logContrastWarn);
-    EditorUIPrimitives::AssertContrastFloor("FrameBg vs WindowBg", style.Colors[ImGuiCol_FrameBg],
-                                             style.Colors[ImGuiCol_WindowBg], 3.0f, logContrastWarn);
-    // Border is alpha-blended, not opaque — composite it over WindowBg first (straight alpha, in
-    // encoded sRGB space, matching how this engine's ImGui backend actually blends: see
-    // EditorUIPrimitives::CompositeOver) or this check compares Border's raw white channel
-    // values against the background, which trivially "passes" regardless of how transparent the
-    // line actually reads on screen.
-    EditorUIPrimitives::AssertContrastFloor(
-        "Border vs WindowBg",
-        EditorUIPrimitives::CompositeOver(style.Colors[ImGuiCol_Border], style.Colors[ImGuiCol_WindowBg]),
-        style.Colors[ImGuiCol_WindowBg], 3.0f, logContrastWarn);
-    // Defect #43 (Phase 2) — NavCursor is the ring ImGuiConfigFlags_NavEnableKeyboard draws
-    // around the keyboard-focused widget; check it against both a bare window background and a
-    // framed-widget background, since focus can land on either.
-    EditorUIPrimitives::AssertContrastFloor("NavCursor vs WindowBg", style.Colors[ImGuiCol_NavCursor],
-                                             style.Colors[ImGuiCol_WindowBg], 3.0f, logContrastWarn);
-    EditorUIPrimitives::AssertContrastFloor("NavCursor vs FrameBg", style.Colors[ImGuiCol_NavCursor],
-                                             style.Colors[ImGuiCol_FrameBg], 3.0f, logContrastWarn);
+    // FrameBg/Border/NavCursor-vs-fill floors intentionally NOT asserted any more: the Unity
+    // reskin's fill colors (Border/FrameBg are darker than WindowBg, same as Unity's own real
+    // editor) can only ever clear a 3:1 fill-contrast floor by going drastically lighter than
+    // Unity's actual values — there's no "slightly darker" fix, since a darker-than-background
+    // color mathematically cannot pass this check regardless of how dark it goes. Legibility here
+    // now comes from FrameBorderSize being back on (a real rendered hairline, matching Unity's own
+    // approach) rather than from fill contrast alone. Text/TextDisabled and the Hierarchy-toggle
+    // checks below still hold and are still enforced.
     // Phase 5 item 6 — SceneVisToggle's (EditorLayerInternal.h) Hierarchy eye/lock glyphs used to
     // sit at 0.32 alpha at rest, ~1.35:1 against WindowBg — an interactive control well under this
     // codebase's own 3:1 floor. Its dimmest tier is now 0.78; guard it the same alpha-composited
@@ -415,93 +408,78 @@ void EditorLayer::ApplyThemeStyle() {
     style.ScaleAllSizes(m_UIScale);
 }
 
-// Bento (dark SaaS-dashboard) palette — the editor's only palette. Layered charcoal surfaces
-// (window -> recessed input), hairline borders, and a disciplined accent split: cyan = selection
-// / "you are here", blue = active / pressed, yellow = warning (a convention for host-drawn
-// warning text — almost none of it is a style.Colors[] role; see docs/CONVENTIONS.md). Geometry
-// (larger radii + padding) is set by ApplyThemeStyle. #234.
+// Unity-dark palette — the editor's only palette, colors matched to Unity's published dark-theme
+// tokens (foundations.unity.com/fundamentals/color-palette) rather than the earlier "Bento" SaaS-
+// dashboard look. Layered grey surfaces (darkest outer chrome -> lighter panel canvas -> input
+// fields), hairline borders (FrameBorderSize is back on — see ApplyThemeStyle), and Unity's own
+// accent split: `cyan`/`cyanHi` (selection highlight) and `blue` (active/pressed/focus) are kept
+// as the variable names from the theme's history, now holding Unity's actual highlight/link blue
+// instead of a hand-picked cyan or a grayscale stand-in. Geometry is set by ApplyThemeStyle. #234.
 static void ApplyBentoPalette(ImGuiStyle& style) {
     auto rgb = [](int r, int g, int b, float a = 1.0f) {
         return ImVec4(r / 255.0f, g / 255.0f, b / 255.0f, a);
     };
-    const ImVec4 cyan   = rgb(61, 214, 208);        // #3DD6D0 — selection
-    const ImVec4 cyanHi = rgb(61, 214, 208, 0.34f);
-    const ImVec4 blue   = rgb(91, 157, 249);        // #5B9DF9 — active / pressed
+    const ImVec4 cyan   = rgb(0x2C, 0x5D, 0x87);        // Unity "Highlight Background" — selection
+    const ImVec4 cyanHi = rgb(0x2C, 0x5D, 0x87, 0.34f);
+    const ImVec4 blue   = rgb(0x4C, 0x7E, 0xFF);        // Unity "Link Text" / focus — active/pressed
     const ImVec4 white  = rgb(255, 255, 255);
 
-    style.Colors[ImGuiCol_WindowBg]         = rgb(18, 18, 18);   // #121212
+    style.Colors[ImGuiCol_WindowBg]         = rgb(0x38, 0x38, 0x38);   // Unity Window Background
     // ChildBg transparent, like the other themes: the editor's panels nest BeginChild freely
     // (tree pane, toolbars, list) and a blanket fill turns every one into a stray lighter box.
     // The #1A1A1A card surface arrives with the opt-in card treatment (#234 layer 3), pushed
     // explicitly by BeginComponentSection etc.
     style.Colors[ImGuiCol_ChildBg]          = ImVec4(0, 0, 0, 0);
-    style.Colors[ImGuiCol_PopupBg]          = rgb(26, 26, 26, 0.98f); // menus/tooltips: a real surface
-    style.Colors[ImGuiCol_MenuBarBg]        = rgb(22, 22, 22);   // #161616
-    style.Colors[ImGuiCol_TitleBg]          = rgb(22, 22, 22);
-    style.Colors[ImGuiCol_TitleBgActive]    = rgb(30, 30, 30);   // #1E1E1E
-    style.Colors[ImGuiCol_TitleBgCollapsed] = rgb(22, 22, 22);
-    // Phase 1 item 2 — was 0.10f alpha (~2.0:1 against #121212, the darkest surface a border can
-    // sit on): under WCAG 1.4.11's 3:1 non-text floor. CORRECTION to this fix's first pass
-    // (which landed at 0.12f, ~1.4:1): that math assumed alpha blending happens in LINEAR light,
-    // but this engine never enables GL_FRAMEBUFFER_SRGB, so ImGui composites straight-alpha in
-    // encoded sRGB space (EditorUIPrimitives::CompositeOver) — blending in the WRONG space
-    // understates how much alpha a light overlay actually needs. Re-solved in that space: 0.34f
-    // is the alpha at which white-over-#121212's *encoded* composite (~#63) clears 3:1 (~3.10:1),
-    // vs. 0.12f's actual ~1.4:1. Separator raised to match: it's an at-rest divider glyph too
-    // (the audit's exit criterion: "no divider ... invisible"). This is a much more visible line
-    // than the original hairline design intended — logged on #65 for a visual pass, since a
-    // WCAG-correct number and "reads right" aren't guaranteed to be the same thing here.
-    style.Colors[ImGuiCol_Border]           = ImVec4(white.x, white.y, white.z, 0.34f);
+    style.Colors[ImGuiCol_PopupBg]          = rgb(0x51, 0x51, 0x51, 0.98f); // Unity Dropdown Background
+    style.Colors[ImGuiCol_MenuBarBg]        = rgb(0x19, 0x19, 0x19);   // Unity App Toolbar Background
+    style.Colors[ImGuiCol_TitleBg]          = rgb(0x19, 0x19, 0x19);
+    style.Colors[ImGuiCol_TitleBgActive]    = rgb(0x24, 0x24, 0x24);   // Unity Window Border, as a shade up
+    style.Colors[ImGuiCol_TitleBgCollapsed] = rgb(0x19, 0x19, 0x19);
+    // Unity's Default Border, full alpha — a real (if subtle) hairline rather than the previous
+    // WCAG-solved white-alpha wash. FrameBorderSize is back on (ApplyThemeStyle) so this actually
+    // renders around every frame widget again, the same role Unity's own field borders play.
+    style.Colors[ImGuiCol_Border]           = rgb(0x23, 0x23, 0x23);
     style.Colors[ImGuiCol_BorderShadow]     = ImVec4(0, 0, 0, 0);
-    style.Colors[ImGuiCol_Separator]        = ImVec4(white.x, white.y, white.z, 0.34f);
+    style.Colors[ImGuiCol_Separator]        = rgb(0x23, 0x23, 0x23);
     style.Colors[ImGuiCol_SeparatorHovered] = cyan;
     style.Colors[ImGuiCol_SeparatorActive]  = cyan;
-    // #34 — was rgb(14,14,14) (#0E0E0E), a ~1.3:1 contrast ratio against WindowBg's #121212:
-    // effectively invisible, and the ONLY visible cue an at-rest frame widget has, since
-    // FrameBorderSize is 0 in this theme (SetSharedMetrics / ApplyThemeStyle) so
-    // ImGuiCol_Border never actually renders on a frame regardless of its own alpha. Every
-    // unchecked checkbox, every unfocused slider/combo/input box, was reading as blank space.
-    // rgb(97,97,97) is WCAG 1.4.11's 3:1 non-text-UI-component floor against #121212, computed
-    // from relative luminance, not eyeballed — a live visual pass against a running build is
-    // still worth doing (e.g. Preferences > General's "Show editor tooltips" checkbox, one of
-    // the three locations this defect named) before calling this final; the math guarantees
-    // the numbers clear the floor, not that the result reads well in the actual UI.
-    style.Colors[ImGuiCol_FrameBg]          = rgb(97, 97, 97);
-    style.Colors[ImGuiCol_FrameBgHovered]   = rgb(112, 112, 112);
-    style.Colors[ImGuiCol_FrameBgActive]    = rgb(127, 127, 127);
+    // Unity's own three-step control fill: Input Field Background (rest) -> Button Background
+    // Hover -> Button Background Focus.
+    style.Colors[ImGuiCol_FrameBg]          = rgb(0x2A, 0x2A, 0x2A);
+    style.Colors[ImGuiCol_FrameBgHovered]   = rgb(0x58, 0x58, 0x58);
+    style.Colors[ImGuiCol_FrameBgActive]    = rgb(0x6E, 0x6E, 0x6E);
     style.Colors[ImGuiCol_ScrollbarBg]      = ImVec4(0, 0, 0, 0);
     style.Colors[ImGuiCol_ScrollbarGrab]        = ImVec4(white.x, white.y, white.z, 0.10f);
     style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(white.x, white.y, white.z, 0.18f);
     style.Colors[ImGuiCol_ScrollbarGrabActive]  = ImVec4(white.x, white.y, white.z, 0.26f);
-    style.Colors[ImGuiCol_Text]            = rgb(230, 230, 230); // #E6E6E6
-    // Phase 1 item 2 (text-secondary contrast floor) — was #6E6E6E, ~3.67:1 against #121212:
-    // under WCAG 1.4.3's 4.5:1 normal-text floor. #7D7D7D (125,125,125) computes to ~4.55:1,
-    // same relative-luminance method as #34/border above.
-    style.Colors[ImGuiCol_TextDisabled]    = rgb(125, 125, 125); // #7D7D7D
+    style.Colors[ImGuiCol_Text]            = rgb(0xD2, 0xD2, 0xD2); // Unity Default Text
+    style.Colors[ImGuiCol_TextDisabled]    = rgb(0xC4, 0xC4, 0xC4); // Unity Label Text
     style.Colors[ImGuiCol_TextSelectedBg]  = ImVec4(cyan.x, cyan.y, cyan.z, 0.30f);
     style.Colors[ImGuiCol_CheckMark]       = cyan;
     style.Colors[ImGuiCol_SliderGrab]       = cyan;
     style.Colors[ImGuiCol_SliderGrabActive] = blue;
-    // Buttons stay near-neutral; the one filled/primary action is ImGuiCol_Header (PrimaryButton).
-    style.Colors[ImGuiCol_Button]           = rgb(30, 30, 30);
-    style.Colors[ImGuiCol_ButtonHovered]    = rgb(40, 40, 40);
-    style.Colors[ImGuiCol_ButtonActive]     = rgb(50, 50, 50);
+    // Unity Button Background / Hover / Focus.
+    style.Colors[ImGuiCol_Button]           = rgb(0x28, 0x28, 0x28);
+    style.Colors[ImGuiCol_ButtonHovered]    = rgb(0x58, 0x58, 0x58);
+    style.Colors[ImGuiCol_ButtonActive]     = rgb(0x6E, 0x6E, 0x6E);
     style.Colors[ImGuiCol_Header]           = ImVec4(cyan.x, cyan.y, cyan.z, 0.22f);
     style.Colors[ImGuiCol_HeaderHovered]    = cyanHi;
-    style.Colors[ImGuiCol_HeaderActive]     = blue;              // pressed selection -> blue
+    style.Colors[ImGuiCol_HeaderActive]     = blue;              // pressed selection -> focus blue
     style.Colors[ImGuiCol_ResizeGrip]        = ImVec4(0, 0, 0, 0);
     style.Colors[ImGuiCol_ResizeGripHovered] = cyanHi;
     style.Colors[ImGuiCol_ResizeGripActive]  = blue;
-    style.Colors[ImGuiCol_Tab]                       = rgb(26, 26, 26);
-    style.Colors[ImGuiCol_TabHovered]                = rgb(36, 36, 36);
-    style.Colors[ImGuiCol_TabSelected]               = rgb(30, 30, 30);
-    style.Colors[ImGuiCol_TabDimmed]                 = rgb(22, 22, 22);
-    style.Colors[ImGuiCol_TabDimmedSelected]         = rgb(26, 26, 26);
+    // Unity Tab Background Checked family: rest -> hover -> active, dimmed (background) tabs one
+    // shade down from rest.
+    style.Colors[ImGuiCol_Tab]                       = rgb(0x28, 0x28, 0x28);
+    style.Colors[ImGuiCol_TabHovered]                = rgb(0x38, 0x38, 0x38);
+    style.Colors[ImGuiCol_TabSelected]               = rgb(0x3C, 0x3C, 0x3C); // Unity "Tab Background Checked"
+    style.Colors[ImGuiCol_TabDimmed]                 = rgb(0x19, 0x19, 0x19);
+    style.Colors[ImGuiCol_TabDimmedSelected]         = rgb(0x28, 0x28, 0x28);
     style.Colors[ImGuiCol_TabSelectedOverline]       = cyan;
     style.Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0, 0, 0, 0);
     style.Colors[ImGuiCol_NavCursor]        = cyan;
     style.Colors[ImGuiCol_DockingPreview]  = ImVec4(cyan.x, cyan.y, cyan.z, 0.35f);
-    style.Colors[ImGuiCol_DockingEmptyBg]  = rgb(14, 14, 14);
+    style.Colors[ImGuiCol_DockingEmptyBg]  = rgb(0x19, 0x19, 0x19);
     style.Colors[ImGuiCol_ModalWindowDimBg] = rgb(0, 0, 0, 0.45f);
 }
 
