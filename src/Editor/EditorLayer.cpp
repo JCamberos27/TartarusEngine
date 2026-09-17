@@ -973,7 +973,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         // plate behind fixed light text, legible over anything — nothing left to toggle.
 
         // #4 item 7 — relocated from the View menu now that Phase 3 exists: Draw mode got its
-        // own viewport chip (DrawViewStateChips) so the View menu's copy was a live duplicate;
+        // own viewport control (the left tool palette) so the View menu's copy was a live duplicate;
         // these sliders had no other home, so they land in the same settings tab as every other
         // viewport preference. m_EditorCameraPtr (set once per frame in Draw()) lets a drag apply
         // to the live camera immediately, matching the old menu's feel instead of only taking
@@ -2398,12 +2398,12 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
 
     // Drawn (and its hover/drag state refreshed) before picking runs below, so a click that
-    // lands on the nav gizmo's rotate ring or tool buttons doesn't also start a viewport
-    // box-select/pick underneath it. Its overlay forces itself above the Scene image but then
-    // re-fronts any floating window that could overlap it (see KeepFloatingWindowsAboveOverlay).
+    // lands on the nav gizmo's rotate ring doesn't also start a viewport box-select/pick
+    // underneath it. Its overlay forces itself above the Scene image but then re-fronts any
+    // floating window that could overlap it (see KeepFloatingWindowsAboveOverlay). Draw mode and
+    // ortho/persp used to get their own chip row here too (DrawViewStateChips) — moved into the
+    // left tool palette (DrawToolPalette, called elsewhere) instead.
     if (!m_HideOverlaysThisFrame) DrawViewGizmo(world, editorCamera);
-    // Phase 3 item 3 — draw mode + ortho/persp chips, offset left of the nav-gizmo cluster above.
-    DrawViewStateChips(world, editorCamera);
 
     if (!vHeld) {
         if (m_HandTool) {
