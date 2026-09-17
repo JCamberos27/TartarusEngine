@@ -7,6 +7,28 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### [Phase M] Batched project format migration (#9) — 2026-09-16
+
+Closed, with a narrower scope than originally written: of the four items batched under one
+`formatVersion` bump, two had already landed in earlier sessions (the `ReflectField` key/display
+split + `LegacyNames[]`, #43; the prefs/shortcuts relocation to a user-scoped path, #42). Of the
+remaining two, the asset-folder → label demotion is **not** part of this close — after review,
+folders and labels stay as two independent, coexisting ways to organize assets rather than folders
+being retired, so no migration was needed there (this reverses the "demote virtual folders to
+labels" plan from Phase 5's audit note; the deferred Asset Browser project-directory re-root from
+Phase 5 is unaffected and still open separately).
+
+- Scene Settings split: `ExposureEV`/`TonemapOperator`/`MsaaSamples`/`SsaoEnabled`/`BloomEnabled`+
+  three tuning fields/`ShadowsEnabled`+three tuning fields move from `EditorSettings`
+  (`editor_prefs.json`, a per-user file) onto `World` — they're scene-authored look choices, not
+  per-user editor preferences, so they now live in the scene file itself alongside sky/ambient.
+  `kSceneFormatVersion` bumped 2 → 3; a pre-v3 scene has its real values migrated forward from the
+  user's `editor_prefs.json` on load (not silently reset to compiled defaults), backed up to a
+  `.bak` first and immediately re-saved so the upgrade lands in one pass. Live-verified: seeded
+  distinctive prefs values (exposure 1.75, bloom/SSAO on), loaded the v2 `Showcase.json`, confirmed
+  the Console logged the exact migrated values, a `Showcase.json.bak` appeared at v2, and the live
+  file came out at v3 carrying those same values (`b9912a9`, closes #9).
+
 ### [Phase 5] Asset Browser and Hierarchy (#7) — 2026-09-16
 
 Closed. Items 3-11 landed in earlier sessions. No code change this session — item 2 (a freshly
