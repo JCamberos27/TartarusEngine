@@ -271,6 +271,15 @@ public:
     void  AssetBrowserRenameFolder(World& world, AssetLibrary& assets, const std::string& oldPath, const std::string& newPath);
     void  AssetBrowserMoveAssetToFolder(World& world, AssetLibrary& assets, const std::string& assetKey, const std::string& folder);
     void  AssetBrowserImportViaDialog(World& world, AssetLibrary& assets, int kind, const std::string& intoFolder); // EditorLayer_AssetBrowser.cpp
+
+    // #8 item 8 — in-editor asset picker for *assignment* operations (texture/material slots),
+    // replacing the raw OS file dialog there. Call ImGui::OpenPopup(popupId) on the assigning
+    // button's click, then call this every frame right after — it owns BeginPopup/EndPopup and
+    // returns true (with outPath set) on the frame something is picked, either from the project's
+    // already-imported assets or via the "Import from disk..." escape hatch (still the OS dialog,
+    // since that's a genuine import from outside the project, not an assignment). EditorLayer_Inspector.cpp.
+    bool TexturePickerPopup(const char* popupId, AssetLibrary& assets, std::string& outPath);
+    bool MaterialPickerPopup(const char* popupId, AssetLibrary& assets, std::string& outPath);
     // Per-frame tree prep: virtual folders, listing-cache refresh, ancestor-expand on folder
     // change; returns the folder to scroll into view this frame ("" = none).
     std::string AssetBrowserTreeFrameSetup(AssetLibrary& assets);                // EditorLayer_AssetBrowser.cpp

@@ -811,6 +811,104 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
     }
 }
 
+// #8 item 8 — in-editor asset picker popups, replacing the OS file dialog for texture/material
+// *assignment* (the OS dialog stays only for genuinely importing a new file from outside the
+// project, offered here as "Import from disk..."). Both list what's already registered in the
+// AssetLibrary (i.e. what the Asset Browser already shows) rather than re-scanning the project
+// folder, so a picker and the Asset Browser can never disagree about what counts as an asset.
+bool EditorLayer::TexturePickerPopup(const char* popupId, AssetLibrary& assets, std::string& outPath) {
+    bool picked = false;
+    ImGui::SetNextWindowSize(ImVec2(340.0f * m_UIScale, 380.0f * m_UIScale), ImGuiCond_Appearing);
+    if (ImGui::BeginPopup(popupId)) {
+        static char search[128] = "";
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint("##texPickerSearch", "Search textures...", search, sizeof(search));
+        std::string needle = search;
+        for (char& c : needle) c = (char)tolower((unsigned char)c);
+
+        ImGui::Separator();
+        ImGui::BeginChild("##texPickerList", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()));
+        for (const std::string& path : assets.TexturePaths()) {
+            std::string name = std::filesystem::path(path).filename().string();
+            std::string lname = name;
+            for (char& c : lname) c = (char)tolower((unsigned char)c);
+            if (!needle.empty() && lname.find(needle) == std::string::npos) continue;
+
+            ImGui::PushID(path.c_str());
+            Texture* tex = assets.LoadTexture(path).get(); // cache hit, already imported
+            if (tex && tex->IsValid()) {
+                ImGui::Image((ImTextureID)(intptr_t)tex->GLHandle(),
+                             ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight()));
+                ImGui::SameLine();
+            }
+            if (ImGui::Selectable(name.c_str())) {
+                outPath = path;
+                picked = true;
+                ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", path.c_str());
+            ImGui::PopID();
+        }
+        ImGui::EndChild();
+
+        ImGui::Separator();
+        if (ImGui::Button("Import from disk...", ImVec2(-FLT_MIN, 0.0f))) {
+            std::string diskPath = FileDialog::OpenFile(
+                "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
+            if (!diskPath.empty()) {
+                outPath = diskPath;
+                picked = true;
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::EndPopup();
+    }
+    return picked;
+}
+
+bool EditorLayer::MaterialPickerPopup(const char* popupId, AssetLibrary& assets, std::string& outPath) {
+    bool picked = false;
+    ImGui::SetNextWindowSize(ImVec2(340.0f * m_UIScale, 380.0f * m_UIScale), ImGuiCond_Appearing);
+    if (ImGui::BeginPopup(popupId)) {
+        static char search[128] = "";
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint("##matPickerSearch", "Search materials...", search, sizeof(search));
+        std::string needle = search;
+        for (char& c : needle) c = (char)tolower((unsigned char)c);
+
+        ImGui::Separator();
+        ImGui::BeginChild("##matPickerList", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()));
+        for (const std::string& path : assets.MaterialPaths()) {
+            std::string name = assets.DisplayName(path);
+            std::string lname = name;
+            for (char& c : lname) c = (char)tolower((unsigned char)c);
+            if (!needle.empty() && lname.find(needle) == std::string::npos) continue;
+
+            ImGui::PushID(path.c_str());
+            if (ImGui::Selectable(name.c_str())) {
+                outPath = path;
+                picked = true;
+                ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", path.c_str());
+            ImGui::PopID();
+        }
+        ImGui::EndChild();
+
+        ImGui::Separator();
+        if (ImGui::Button("Import from disk...", ImVec2(-FLT_MIN, 0.0f))) {
+            std::string diskPath = FileDialog::OpenFile("Material\0*.mat\0All Files\0*.*\0", m_Window);
+            if (!diskPath.empty()) {
+                outPath = diskPath;
+                picked = true;
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::EndPopup();
+    }
+    return picked;
+}
+
 // Standalone material-asset editor: shown when a .mat file is selected directly in the Asset
 // Browser (no scene entity involved). Previously a bare .mat fell through to
 // DrawAssetImportInspector's generic "no import settings" message — a material could only be
@@ -883,9 +981,11 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
         float clearReserve = tex ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
         if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
         if (ImGui::Button(preview.c_str(), ImVec2(tex ? -clearReserve : -FLT_MIN, 0.0f))) {
-            std::string path = FileDialog::OpenFile(
-                "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
-            if (!path.empty()) {
+            ImGui::OpenPopup("##texPicker");
+        }
+        {
+            std::string path;
+            if (TexturePickerPopup("##texPicker", assets, path)) {
                 mat.*texSlot = assets.LoadTexture(path);
                 save();
             }
@@ -970,9 +1070,14 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
                 std::string preview = tex ? std::filesystem::path(tex->Path()).filename().string() : std::string("(none)");
                 float clearReserve = tex ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
                 if (ImGui::Button(preview.c_str(), ImVec2(tex ? -clearReserve : -FLT_MIN, 0.0f))) {
-                    std::string path = FileDialog::OpenFile(
-                        "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
-                    if (!path.empty()) { MaterialAsset::SetTexture(mat, prop.Name, assets.LoadTexture(path)); save(); }
+                    ImGui::OpenPopup("##texPicker");
+                }
+                {
+                    std::string path;
+                    if (TexturePickerPopup("##texPicker", assets, path)) {
+                        MaterialAsset::SetTexture(mat, prop.Name, assets.LoadTexture(path));
+                        save();
+                    }
                 }
                 if (ImGui::BeginDragDropTarget()) {
                     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
@@ -2960,9 +3065,11 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             float clearReserve = anySet ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
             if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
             if (ImGui::Button(preview.c_str(), ImVec2(anySet ? -clearReserve : -FLT_MIN, 0.0f))) {
-                std::string path = FileDialog::OpenFile(
-                    "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
-                if (!path.empty()) {
+                ImGui::OpenPopup("##texPicker");
+            }
+            {
+                std::string path;
+                if (TexturePickerPopup("##texPicker", assets, path)) {
                     PushUndo(world, std::string("Set ") + label + " Map");
                     auto tex = assets.LoadTexture(path);
                     for (Material* mm : mats) mm->*texSlot = tex;
@@ -3094,9 +3201,11 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 float clearReserve = anySet ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
                 if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
                 if (ImGui::Button(preview.c_str(), ImVec2(anySet ? -clearReserve : -FLT_MIN, 0.0f))) {
-                    std::string path = FileDialog::OpenFile(
-                        "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
-                    if (!path.empty()) {
+                    ImGui::OpenPopup("##texPicker");
+                }
+                {
+                    std::string path;
+                    if (TexturePickerPopup("##texPicker", assets, path)) {
                         PushUndo(world, std::string("Set ") + label);
                         auto tex = assets.LoadTexture(path);
                         for (Material* mm : mats) MaterialAsset::SetTexture(*mm, prop.Name, tex);
@@ -3201,9 +3310,11 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
 
             if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
             if (ImGui::Button(btnLabel.c_str(), ImVec2(btnW, 0))) {
-                std::string path = FileDialog::OpenFile(
-                    "Material\0*.mat\0All Files\0*.*\0", m_Window);
-                if (!path.empty()) AssignSlot(i, path);
+                ImGui::OpenPopup("##matPicker");
+            }
+            {
+                std::string path;
+                if (MaterialPickerPopup("##matPicker", assets, path)) AssignSlot(i, path);
             }
             if (missing) ImGui::PopStyleColor();
             if (ImGui::IsItemHovered()) {
@@ -3310,8 +3421,11 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         const float clearW = nCustom > 0 ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
         if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
         if (ImGui::Button(btnLabel.c_str(), ImVec2(-clearW - FLT_MIN, 0))) {
-            std::string path = FileDialog::OpenFile("Material\0*.mat\0All Files\0*.*\0", m_Window);
-            if (!path.empty()) {
+            ImGui::OpenPopup("##matPicker");
+        }
+        {
+            std::string path;
+            if (MaterialPickerPopup("##matPicker", assets, path)) {
                 PushUndo(world, "Set Material Slot");
                 auto ma = assets.LoadMaterial(path);
                 for (RenderableComponent* rc : rcs) {
