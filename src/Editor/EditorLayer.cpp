@@ -689,105 +689,103 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
         "above. 1.0 is physically consistent; 0 disables environment lighting entirely.");
 }
 
-void EditorLayer::DrawPostProcessSettings(float w) {
-    auto& prefs = EditorSettings::Get();
+void EditorLayer::DrawPostProcessSettings(World& world, float w) {
     ImGui::SetNextItemWidth(w);
     {
-        bool committed = false;
-        EditorUI::SliderFloat("Exposure (EV)", &prefs.ExposureEV, -6.0f, 6.0f, "%+.2f",
-                              0, nullptr, &committed);
-        if (committed) EditorSettings::Save();
+        bool activated = false;
+        EditorUI::SliderFloat("Exposure (EV)", &world.ExposureEV, -6.0f, 6.0f, "%+.2f",
+                              0, &activated);
+        if (activated) PushUndo(world, "Edit Exposure");
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Photographic stops applied before the tone curve. 0 = neutral. Applies live.");
 
-    if (EditorUIPrimitives::Checkbox("SSAO", &prefs.SsaoEnabled)) EditorSettings::Save();
+    if (EditorUIPrimitives::Checkbox("SSAO", &world.SsaoEnabled)) PushUndo(world, "Toggle SSAO");
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Screen-space ambient occlusion. Darkens crevices and contact shadows. Depth pre-pass + blur, scene-view only.");
 
-    if (EditorUIPrimitives::Checkbox("Bloom", &prefs.BloomEnabled)) EditorSettings::Save();
+    if (EditorUIPrimitives::Checkbox("Bloom", &world.BloomEnabled)) PushUndo(world, "Toggle Bloom");
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Bloom post-process: bright pixels bleed glow onto neighbors. Runs at half resolution before tone mapping.");
-    if (prefs.BloomEnabled) {
+    if (world.BloomEnabled) {
         ImGui::SetNextItemWidth(w);
         {
-            bool committed = false;
-            EditorUI::SliderFloat("Bloom threshold", &prefs.BloomThreshold, 0.1f, 4.0f, "%.2f",
-                                  0, nullptr, &committed);
-            if (committed) EditorSettings::Save();
+            bool activated = false;
+            EditorUI::SliderFloat("Bloom threshold", &world.BloomThreshold, 0.1f, 4.0f, "%.2f",
+                                  0, &activated);
+            if (activated) PushUndo(world, "Edit Bloom Threshold");
         }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Luminance level above which pixels emit glow (HDR energy units). Lower = more pixels bloom.");
         ImGui::SetNextItemWidth(w);
         {
-            bool committed = false;
-            EditorUI::SliderFloat("Bloom knee", &prefs.BloomKnee, 0.0f, 1.0f, "%.2f",
-                                  0, nullptr, &committed);
-            if (committed) EditorSettings::Save();
+            bool activated = false;
+            EditorUI::SliderFloat("Bloom knee", &world.BloomKnee, 0.0f, 1.0f, "%.2f",
+                                  0, &activated);
+            if (activated) PushUndo(world, "Edit Bloom Knee");
         }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Softens the threshold edge so pixels near the cutoff fade in gradually instead of popping. 0 = hard cutoff.");
         ImGui::SetNextItemWidth(w);
         {
-            bool committed = false;
-            EditorUI::SliderFloat("Bloom intensity", &prefs.BloomIntensity, 0.0f, 2.0f, "%.2f",
-                                  0, nullptr, &committed);
-            if (committed) EditorSettings::Save();
+            bool activated = false;
+            EditorUI::SliderFloat("Bloom intensity", &world.BloomIntensity, 0.0f, 2.0f, "%.2f",
+                                  0, &activated);
+            if (activated) PushUndo(world, "Edit Bloom Intensity");
         }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Additive glow strength before the tone curve. 0.25 is subtle; above 1.0 is very strong.");
     }
 
     static const char* kTonemapLabels[] = { "Reinhard", "ACES", "AgX" };
-    int tm = std::clamp(prefs.TonemapOperator, 0, 2);
+    int tm = std::clamp(world.TonemapOperator, 0, 2);
     ImGui::SetNextItemWidth(w);
     if (ImGui::Combo("Tone mapping", &tm, kTonemapLabels, IM_ARRAYSIZE(kTonemapLabels))) {
-        prefs.TonemapOperator = tm;
-        EditorSettings::Save();
+        PushUndo(world, "Change Tone Mapping");
+        world.TonemapOperator = tm;
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Curve that maps linear HDR to display. ACES = punchy filmic; AgX = gentler, less hue shift.");
 }
 
-void EditorLayer::DrawShadowSettings(float w) {
-    auto& prefs = EditorSettings::Get();
-    if (EditorUIPrimitives::Checkbox("Cast sun shadows", &prefs.ShadowsEnabled)) EditorSettings::Save();
+void EditorLayer::DrawShadowSettings(World& world, float w) {
+    if (EditorUIPrimitives::Checkbox("Cast sun shadows", &world.ShadowsEnabled)) PushUndo(world, "Toggle Sun Shadows");
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Cascaded shadow maps for the Directional light. Point/spot shadows are a later milestone.");
 
     static const char* kShadowResLabels[] = { "1024", "2048", "4096" };
     static const int   kShadowResValues[] = { 1024, 2048, 4096 };
     int srIdx = 1;
-    for (int i = 0; i < 3; ++i) if (kShadowResValues[i] == prefs.ShadowResolution) { srIdx = i; break; }
-    if (!prefs.ShadowsEnabled) ImGui::BeginDisabled();
+    for (int i = 0; i < 3; ++i) if (kShadowResValues[i] == world.ShadowResolution) { srIdx = i; break; }
+    if (!world.ShadowsEnabled) ImGui::BeginDisabled();
     ImGui::SetNextItemWidth(w);
     if (ImGui::Combo("Shadow resolution", &srIdx, kShadowResLabels, IM_ARRAYSIZE(kShadowResLabels))) {
-        prefs.ShadowResolution = kShadowResValues[srIdx];
-        EditorSettings::Save();
+        PushUndo(world, "Edit Shadow Resolution");
+        world.ShadowResolution = kShadowResValues[srIdx];
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Per-cascade shadow map size. 4x memory + fill from 2048 to 4096.");
 
     static const char* kCascadeLabels[] = { "2", "3", "4" };
-    int ccIdx = std::clamp(prefs.ShadowCascades - 2, 0, 2);
+    int ccIdx = std::clamp(world.ShadowCascades - 2, 0, 2);
     ImGui::SetNextItemWidth(w);
     if (ImGui::Combo("Cascades", &ccIdx, kCascadeLabels, IM_ARRAYSIZE(kCascadeLabels))) {
-        prefs.ShadowCascades = ccIdx + 2;
-        EditorSettings::Save();
+        PushUndo(world, "Edit Shadow Cascades");
+        world.ShadowCascades = ccIdx + 2;
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Number of shadow cascades. Fewer = cheaper depth passes, coarser shadows far from the camera.");
 
     ImGui::SetNextItemWidth(w);
     {
-        bool committed = false;
-        EditorUI::SliderFloat("Shadow distance", &prefs.ShadowDistance, 10.0f, 500.0f, "%.0f m",
-                              0, nullptr, &committed);
-        if (committed) EditorSettings::Save();
+        bool activated = false;
+        EditorUI::SliderFloat("Shadow distance", &world.ShadowDistance, 10.0f, 500.0f, "%.0f m",
+                              0, &activated);
+        if (activated) PushUndo(world, "Edit Shadow Distance");
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("How far from the camera the cascades cover. Shorter = crisper shadows.");
-    if (!prefs.ShadowsEnabled) ImGui::EndDisabled();
+    if (!world.ShadowsEnabled) ImGui::EndDisabled();
 }
 
 // Phase 6 item 9 — a Unity-style mixer list: click a name to select that light, Solo isolates it
@@ -852,10 +850,10 @@ void EditorLayer::DrawLightingPanel(World& world) {
     DrawEnvironmentSettings(world, w);
     ImGui::Spacing();
     ImGui::SeparatorText("Post-processing");
-    DrawPostProcessSettings(w);
+    DrawPostProcessSettings(world, w);
     ImGui::Spacing();
     ImGui::SeparatorText("Shadows (Directional Sun)");
-    DrawShadowSettings(w);
+    DrawShadowSettings(world, w);
     ImGui::Spacing();
     ImGui::SeparatorText("Lights");
     DrawLightsSection(world, w);
@@ -1218,26 +1216,26 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         ImGui::Spacing();
         ImGui::SeparatorText("Rendering (HDR)");
 
-        DrawPostProcessSettings(kw); // exposure + tone mapping — shared with Window ▸ Lighting
+        DrawPostProcessSettings(world, kw); // exposure + tone mapping — shared with Window ▸ Lighting
 
         static const char* kMsaaLabels[] = { "Off", "2x", "4x", "8x" };
         static const int   kMsaaValues[] = { 1, 2, 4, 8 };
         int msIdx = 2;
-        for (int i = 0; i < 4; ++i) if (kMsaaValues[i] == prefs.MsaaSamples) { msIdx = i; break; }
+        for (int i = 0; i < 4; ++i) if (kMsaaValues[i] == world.MsaaSamples) { msIdx = i; break; }
         ImGui::SetNextItemWidth(kw);
         if (ImGui::Combo("MSAA", &msIdx, kMsaaLabels, IM_ARRAYSIZE(kMsaaLabels))) {
-            prefs.MsaaSamples = kMsaaValues[msIdx];
-            EditorSettings::Save();
+            PushUndo(world, "Change MSAA");
+            world.MsaaSamples = kMsaaValues[msIdx];
         }
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Multisample level of the HDR scene/game target. Takes effect next frame.");
 
         ImGui::Spacing();
         ImGui::SeparatorText("Shadows (Directional Sun)");
-        DrawShadowSettings(kw); // shared with Window ▸ Lighting
+        DrawShadowSettings(world, kw); // shared with Window ▸ Lighting
 
         ImGui::Spacing();
-        ImGui::TextDisabled("Changes apply immediately. All of these persist in editor_prefs.json.");
+        ImGui::TextDisabled("Changes apply immediately and are saved with the scene.");
         ImGui::SameLine();
         if (ImGui::SmallButton(ICON_FA_LIGHTBULB "  Lighting panel")) m_ShowLighting = true;
         break;

@@ -40,6 +40,10 @@ void MigrateLegacyPrefsIfNeeded() {
 bool g_PrefsDirty = false;
 }
 
+const std::string& EditorSettings::PrefsFilePath() {
+    return PrefsPath();
+}
+
 void EditorSettings::Load() {
     MigrateLegacyPrefsIfNeeded();
     std::ifstream in(PrefsPath());
@@ -62,18 +66,10 @@ void EditorSettings::Load() {
     s.AutoSaveIntervalMinutes = root.value("autoSaveIntervalMinutes", s.AutoSaveIntervalMinutes);
     s.VSyncMode = root.value("vsyncMode", s.VSyncMode);
     s.FpsLimit = root.value("fpsLimit", s.FpsLimit);
-    s.ExposureEV = root.value("exposureEV", s.ExposureEV);
-    s.TonemapOperator = root.value("tonemapOperator", s.TonemapOperator);
-    s.MsaaSamples = root.value("msaaSamples", s.MsaaSamples);
-    s.SsaoEnabled    = root.value("ssaoEnabled",    s.SsaoEnabled);
-    s.BloomEnabled   = root.value("bloomEnabled",   s.BloomEnabled);
-    s.BloomThreshold = root.value("bloomThreshold", s.BloomThreshold);
-    s.BloomKnee      = root.value("bloomKnee",      s.BloomKnee);
-    s.BloomIntensity = root.value("bloomIntensity", s.BloomIntensity);
-    s.ShadowsEnabled = root.value("shadowsEnabled", s.ShadowsEnabled);
-    s.ShadowResolution = root.value("shadowResolution", s.ShadowResolution);
-    s.ShadowCascades = root.value("shadowCascades", s.ShadowCascades);
-    s.ShadowDistance = root.value("shadowDistance", s.ShadowDistance);
+    // exposureEV/tonemapOperator/msaaSamples/ssaoEnabled/bloom*/shadow* intentionally no longer
+    // read here (#9, Phase M item 1) — moved to World/scene data. A pre-v3 scene's values are
+    // migrated forward by SceneSerializer reading this file's legacy keys directly (see
+    // EditorSettings::PrefsFilePath()); an old prefs file's stray keys are simply ignored here.
     s.GridOpacity = root.value("gridOpacity", s.GridOpacity);
     s.GridMinorSpacing = root.value("gridMinorSpacing", s.GridMinorSpacing);
     s.GridMajorEvery = root.value("gridMajorEvery", s.GridMajorEvery);
@@ -148,18 +144,9 @@ void EditorSettings::Flush() {
     root["autoSaveIntervalMinutes"] = Get().AutoSaveIntervalMinutes;
     root["vsyncMode"] = Get().VSyncMode;
     root["fpsLimit"] = Get().FpsLimit;
-    root["exposureEV"] = Get().ExposureEV;
-    root["tonemapOperator"] = Get().TonemapOperator;
-    root["msaaSamples"] = Get().MsaaSamples;
-    root["ssaoEnabled"]    = Get().SsaoEnabled;
-    root["bloomEnabled"]   = Get().BloomEnabled;
-    root["bloomThreshold"] = Get().BloomThreshold;
-    root["bloomKnee"]      = Get().BloomKnee;
-    root["bloomIntensity"] = Get().BloomIntensity;
-    root["shadowsEnabled"] = Get().ShadowsEnabled;
-    root["shadowResolution"] = Get().ShadowResolution;
-    root["shadowCascades"] = Get().ShadowCascades;
-    root["shadowDistance"] = Get().ShadowDistance;
+    // exposureEV/tonemapOperator/msaaSamples/ssaoEnabled/bloom*/shadow* intentionally no longer
+    // written here — see the matching comment in Load(). Once every project has been opened at
+    // least once under formatVersion 3+, an old prefs file's stray legacy keys simply age out.
     root["gridOpacity"] = Get().GridOpacity;
     root["gridMinorSpacing"] = Get().GridMinorSpacing;
     root["gridMajorEvery"] = Get().GridMajorEvery;

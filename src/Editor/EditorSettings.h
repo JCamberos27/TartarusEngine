@@ -44,31 +44,11 @@ struct EditorSettings {
     int VSyncMode = 1;
     int FpsLimit = 240;
 
-    // --- HDR / tone mapping (lighting overhaul). The scene renders to a linear RGBA16F MSAA
-    // target; a fullscreen pass then applies exposure -> curve -> gamma. ExposureEV is in
-    // photographic stops (0 = neutral). TonemapOperator: 0 Reinhard, 1 ACES, 2 AgX.
-    // MsaaSamples: 1 / 2 / 4 / 8 for the HDR target (clamped to the driver max).
-    float ExposureEV = 0.0f;
-    int TonemapOperator = 1;
-    int MsaaSamples = 4;
-
-    // --- Screen-space ambient occlusion (PR15). Off by default; toggle in Lighting > Post-processing.
-    bool SsaoEnabled = false;
-
-    // --- Bloom post-process (PR16). A 5-level mip pyramid: soft-knee threshold extracts pixels
-    // above BloomThreshold (luminance), downsample/upsample passes spread that energy into a
-    // soft multi-scale glow, added into linear HDR before the tone curve. Off by default.
-    bool  BloomEnabled   = false;
-    float BloomThreshold = 1.0f;    // luminance above which pixels emit glow (HDR energy units)
-    float BloomKnee      = 0.5f;    // soft-knee width as a fraction of BloomThreshold (0 = hard cutoff)
-    float BloomIntensity = 0.25f;   // additive glow strength (higher = brighter bloom)
-
-    // --- Directional-sun cascaded shadow maps. 4 cascades, PCF, resolution per layer.
-    // ShadowDistance caps how far (world units) the cascades reach from the camera.
-    bool ShadowsEnabled = true;
-    int ShadowResolution = 4096;
-    int ShadowCascades = 4;          // 2..4 — fewer = cheaper, coarser far shadows
-    float ShadowDistance = 500.0f;
+    // HDR/tone mapping, SSAO, bloom, and shadow settings moved to World (#9, Phase M item 1) —
+    // they're scene-authored content, not per-user editor prefs. See World.h's ExposureEV et al.
+    // A pre-v3 scene's values are migrated forward from this file's on-disk legacy keys by
+    // SceneSerializer's format-version migration (see kSceneFormatVersion), not read from here at
+    // runtime any more.
 
     // --- Scene-view ground grid. GridOpacity is a 0..1 master multiplier on the shader's line
     // alpha; the grid also dissolves as the view tilts toward the horizon, like Unity's. The
@@ -239,6 +219,12 @@ struct EditorSettings {
     // shutdown, so at most one prefs write happens per frame regardless of how many controls
     // changed (audit CPP-206 / PERF-211).
     static void Flush();
+
+    // Absolute path to editor_prefs.json (per-user storage, see UserPaths.h). Exposed so
+    // SceneSerializer's format-version migration (#9, Phase M item 1) can read a pre-v3 scene's
+    // legacy post-processing/shadow values straight off disk — those fields no longer exist on
+    // this struct, so they can't be read through Get() any more.
+    static const std::string& PrefsFilePath();
 
 private:
     EditorSettings() = default;
