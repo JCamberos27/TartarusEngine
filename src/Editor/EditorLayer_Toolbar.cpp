@@ -71,6 +71,10 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.10f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.18f));
+    // The Unity-dark reskin's FrameBorderSize=1 (EditorLayer.cpp ApplyThemeStyle) draws a hairline
+    // around every frame widget including plain Button() — suppress it for these flat transport
+    // buttons the same way EditorUIPrimitives::ActionButton does.
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
 
     if (!playing) {
         if (ImGui::Button(ICON_FA_PLAY "  Play")) m_PlayStopRequested = true;
@@ -103,6 +107,7 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
         }
     }
 
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
 }
 

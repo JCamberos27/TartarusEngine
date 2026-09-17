@@ -81,6 +81,7 @@ void DrawWindowControls(const EditorModuleHostAPI& host) {
 
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, st.ItemSpacing.y));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // flat window controls, no hairline box
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.09f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 1.0f, 1.0f, 0.16f));
@@ -111,7 +112,7 @@ void DrawWindowControls(const EditorModuleHostAPI& host) {
     ImGui::PopStyleColor(2);
 
     ImGui::PopStyleColor(3);
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleVar(3);
 }
 
 } // namespace
@@ -248,7 +249,9 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::PushID("##gridSnapOpts");
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
     if (ImGui::Button(EDITOR_ICON_CARET_DOWN)) ImGui::OpenPopup("##GridSnapPopup");
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor(2);
     if (ImGui::IsItemHovered()) Tooltip(host, "Grid & snap settings");
     if (ImGui::BeginPopup("##GridSnapPopup")) {
@@ -277,7 +280,9 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGui::PushID("##gizmosOpts");
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
         if (ImGui::Button(EDITOR_ICON_CARET_DOWN)) ImGui::OpenPopup("##GizmosPopup");
+        ImGui::PopStyleVar();
         ImGui::PopStyleColor(2);
         if (ImGui::IsItemHovered()) Tooltip(host, "Gizmo visibility");
         if (ImGui::BeginPopup("##GizmosPopup")) {
@@ -337,7 +342,9 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGui::PushID("##capOpts");
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
         if (ImGui::Button(EDITOR_ICON_CARET_DOWN)) ImGui::OpenPopup("##CapturePopup");
+        ImGui::PopStyleVar();
         ImGui::PopStyleColor(2);
         if (ImGui::IsItemHovered()) Tooltip(host, "Capture options");
         if (ImGui::BeginPopup("##CapturePopup")) {

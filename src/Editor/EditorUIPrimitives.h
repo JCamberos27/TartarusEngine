@@ -72,11 +72,18 @@ inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn toolti
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.14f));
     }
+    // The Unity-dark reskin turned FrameBorderSize back on editor-wide (a real hairline around
+    // input fields, matching Unity's own field borders) — but ImGui::Button() draws that same
+    // frame border regardless of the transparent Button fill above, so every flat toolbar icon
+    // picked up an unwanted dark outline (#160's "no body at rest" treatment). Suppress it just
+    // for this flat treatment; real frame widgets (inputs, combos) keep their border untouched.
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
     // Button() folds its label into its ID, so two buttons that ever show the same glyph would
     // collide — scope the ID to the (unique) tooltip string instead.
     ImGui::PushID(tooltip);
     bool clicked = ImGui::Button(icon, size);
     ImGui::PopID();
+    ImGui::PopStyleVar();
     if (active) {
         const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
         const float y = mx.y - 2.0f;
@@ -96,9 +103,11 @@ inline bool DangerIconButton(const char* icon, const char* tooltip, TooltipFn to
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(danger.x, danger.y, danger.z, 0.92f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(danger.x, danger.y, danger.z, 1.00f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // see ActionButton's comment
     ImGui::PushID(tooltip);
     bool clicked = ImGui::Button(icon, size);
     ImGui::PopID();
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
     if (tooltipFn && ImGui::IsItemHovered()) tooltipFn(tooltip);
     return clicked;
