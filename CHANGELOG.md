@@ -7,6 +7,21 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### [Defect #29] Game view toolbar (#39) — 2026-09-16
+
+The aspect-ratio/resolution control moves from a bottom-left overlay floating on top of the
+rendered image into a real toolbar row at the top of the Game panel (`##GameToolbar`, matching the
+Asset Browser's own top-toolbar-strip pattern) — the illegibility half of this defect was already
+fixed by Phase 1's opaque-HUD-plate work; this is the remaining structural half. Its popup, which
+used to grow upward from a bottom-anchored button, now grows downward below the toolbar button
+instead — live-verified the old upward growth would have collided with the app's own menu bar from
+the control's new position. The hover-suppression code coupling the control's old on-image overlay
+position to `m_ViewHovered` is removed as dead weight now that the control no longer overlaps the
+rendered image at all. Live-verified: opened the Game view, confirmed the "Free Aspect" dropdown
+renders in its own toolbar strip (not over the video), opened the popup (renders fully below the
+button, all 8 presets visible, no menu-bar collision), and selected 16:9 Aspect (letterboxed
+correctly, button label updated) (`a9e9670`, closes #39).
+
 ### [Phase M] Batched project format migration (#9) — 2026-09-16
 
 Closed, with a narrower scope than originally written: of the four items batched under one
