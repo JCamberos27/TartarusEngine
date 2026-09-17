@@ -1,9 +1,15 @@
-// Phase 3 item 3 — the vertical tool palette docked to the Scene viewport's left edge and the
-// view-state chips pinned to its top-right, both moved out of the old 25-icon top toolbar strip
-// (EditorModuleToolbar.cpp) per the audit's "nothing important is a ghost overlay" exit
-// criterion. Split into its own file rather than folded into EditorLayer_Gizmos.cpp or
-// EditorLayer_Toolbar.cpp since it's a new, self-contained concern (#179's precedent for keeping
-// EditorLayer.cpp's translation units topic-sized).
+// Phase 3 item 3 — the vertical tool palette docked to the Scene viewport's left edge, moved out
+// of the old 25-icon top toolbar strip (EditorModuleToolbar.cpp) per the audit's "nothing
+// important is a ghost overlay" exit criterion. Split into its own file rather than folded into
+// EditorLayer_Gizmos.cpp or EditorLayer_Toolbar.cpp since it's a new, self-contained concern
+// (#179's precedent for keeping EditorLayer.cpp's translation units topic-sized).
+//
+// The view-state chips (draw mode + ortho/persp) used to live in their own floating row pinned to
+// the viewport's top-right, offset from the nav-gizmo cluster; they joined this rail instead
+// (icon-only, at the bottom, below Grid/Snap/Gizmos) so the top-right corner isn't a second
+// scattered cluster of viewport controls. The nav gizmo's own redundant Dolly/Pan tool buttons
+// and Persp/Iso label — the same ortho toggle duplicated a second time — were removed from
+// DrawViewGizmo (EditorLayer_Gizmos.cpp) at the same time.
 
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
@@ -18,8 +24,6 @@
 #include <imgui_internal.h> // ImMax, used by EditorUIPrimitives
 #include <IconsFontAwesome6.h>
 
-#include <cstdio>
-
 using namespace EditorInternal;
 
 // The vertical rail (Blender's T-panel model, audit #5 Q7) — a child region drawn INSIDE Scene's
@@ -29,8 +33,6 @@ using namespace EditorInternal;
 // plate (same kHudPlateColor every other viewport HUD uses since Defect #54) keeps it legible
 // over the rendered scene without needing to shrink the actual render target.
 void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
-    (void)world; (void)editorCamera; // reserved: a future tool (e.g. a palette-hosted Vertex tool) may need these
-
     auto& settings = EditorSettings::Get();
     const float margin = 8.0f * m_UIScale;
     const float btn = 26.0f * m_UIScale;
@@ -149,63 +151,39 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
             DrawGizmosPopupBody();
             ImGui::EndPopup();
         }
+
+        // Draw mode + ortho/persp joined the rail from the top-right view-state chip row (that
+        // row is gone — moving the nav-gizmo cluster's own redundant zoom/pan buttons and Persp
+        // label out at the same time, per request). Icon-only here (no room for the chip's text
+        // label in a one-column rail); the popup listing every draw mode still shows the mode
+        // names, and the tooltip on the ortho toggle names the current state.
+        ImGui::Separator();
+
+        static const char* kDrawModes[] = { "Shaded", "Wireframe", "Unlit",
+                                            "Normals", "Shadow Cascades", "Mip / Texel Density" };
+        static const char* kDrawModeIcons[] = { EDITOR_ICON_SHADED_MODE, EDITOR_ICON_WIREFRAME_MODE,
+                                                EDITOR_ICON_UNLIT_MODE, EDITOR_ICON_NORMALS_MODE,
+                                                EDITOR_ICON_CASCADES_MODE, EDITOR_ICON_MIP_MODE };
+        int shading = ShadingModeIndex();
+        if (shading < 0 || shading >= IM_ARRAYSIZE(kDrawModes)) shading = 0;
+        if (ActionButton(kDrawModeIcons[shading], "Draw mode (click to change)", shading != 0, ImVec2(btn, btn)))
+            ImGui::OpenPopup("##PaletteDrawModePopup");
+        if (ImGui::BeginPopup("##PaletteDrawModePopup")) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
+            for (int i = 0; i < IM_ARRAYSIZE(kDrawModes); ++i)
+                if (ImGui::MenuItem(kDrawModes[i], nullptr, shading == i)) SetShadingModeIndex(i);
+            ImGui::EndPopup();
+        }
+
+        const bool ortho = editorCamera.Orthographic;
+        if (ActionButton(ortho ? EDITOR_ICON_ORTHOGRAPHIC : EDITOR_ICON_PERSPECTIVE,
+                ortho ? "Orthographic (click for Perspective) — 5" : "Perspective (click for Orthographic) — 5",
+                ortho, ImVec2(btn, btn))) {
+            ToolbarToggleOrthographic(world, editorCamera);
+        }
     }
 
     ImGui::EndChild();
     ImGui::PopStyleVar(3);
     ImGui::PopStyleColor();
-}
-
-// The view-state chips (audit #5 item 3) — draw mode + orthographic/perspective, pinned to the
-// viewport's top-right. Offset left of DrawViewGizmo's nav-gizmo cluster by a fixed clearance
-// mirroring that function's own margin/gizmoRadius math (EditorLayer_Gizmos.cpp).
-void EditorLayer::DrawViewStateChips(World& world, Camera& editorCamera) {
-    if (!m_SceneViewportVisible || m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
-    if (m_HideOverlaysThisFrame) return;
-
-    const float margin = 14.0f * m_UIScale;
-    // Phase 3 item 6 enlarged the nav gizmo (style.scale 0.5 -> 0.7, gizmoRadius 64px -> ~90px at
-    // UIScale 1) — this clearance grew with it: margin(14) + 2*gizmoRadius(~179) + a buffer.
-    const float navGizmoClearance = 210.0f * m_UIScale; // ~= margin + 2*gizmoRadius + buffer
-
-    ImGui::SetNextWindowPos(
-        ImVec2(m_ViewportPos.x + m_ViewportSize.x - navGizmoClearance, m_ViewportPos.y + margin),
-        ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-    ImGui::SetNextWindowBgAlpha(0.0f); // chips paint their own plates; the row window itself stays invisible
-
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-        ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize;
-    ImGui::Begin("##ViewStateChips", nullptr, flags);
-
-    static const char* kDrawModes[] = { "Shaded", "Wireframe", "Unlit",
-                                        "Normals", "Shadow Cascades", "Mip / Texel Density" };
-    static const char* kIcons[] = { EDITOR_ICON_SHADED_MODE, EDITOR_ICON_WIREFRAME_MODE, EDITOR_ICON_UNLIT_MODE,
-                                    EDITOR_ICON_NORMALS_MODE, EDITOR_ICON_CASCADES_MODE, EDITOR_ICON_MIP_MODE };
-    int shading = ShadingModeIndex();
-    if (shading < 0 || shading >= IM_ARRAYSIZE(kDrawModes)) shading = 0;
-    char chipLabel[64];
-    std::snprintf(chipLabel, sizeof(chipLabel), "%s  %s", kIcons[shading], kDrawModes[shading]);
-    if (ActionButton(chipLabel, "Draw mode (click to change)", shading != 0)) ImGui::OpenPopup("##DrawModeChipPopup");
-    if (ImGui::BeginPopup("##DrawModeChipPopup")) {
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
-        for (int i = 0; i < IM_ARRAYSIZE(kDrawModes); ++i)
-            if (ImGui::MenuItem(kDrawModes[i], nullptr, shading == i)) SetShadingModeIndex(i);
-        ImGui::EndPopup();
-    }
-
-    ImGui::SameLine();
-
-    const bool ortho = editorCamera.Orthographic;
-    char orthoLabel[32];
-    std::snprintf(orthoLabel, sizeof(orthoLabel), "%s  %s",
-                 ortho ? EDITOR_ICON_ORTHOGRAPHIC : EDITOR_ICON_PERSPECTIVE,
-                 ortho ? "Ortho" : "Persp");
-    if (ActionButton(orthoLabel,
-            ortho ? "Orthographic (click for Perspective) — 5" : "Perspective (click for Orthographic) — 5",
-            ortho)) {
-        ToolbarToggleOrthographic(world, editorCamera);
-    }
-
-    ImGui::End();
 }

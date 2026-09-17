@@ -595,10 +595,10 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             if (ImGui::MenuItem(ICON_FA_ARROW_RIGHT "  Selection Forward", "Ctrl+]", false, CanSelectionHistoryForward()))
                 SelectionHistoryForward(world);
 
-            // #4 item 7 — Draw mode moved out: Phase 3's DrawViewStateChips gave it a viewport
-            // chip (top-right, click to change), so this menu copy was a live duplicate once
-            // Phase 3 landed. Grid lives only on the toolbar now (#148) — the menu keeps just the toggles that
-            // have no toolbar home.
+            // #4 item 7 — Draw mode moved out: it has its own viewport control (the left tool
+            // palette's draw-mode icon, DrawToolPalette in EditorLayer_ToolPalette.cpp), so this
+            // menu copy was a live duplicate. Grid lives only there too (#148) — the menu keeps
+            // just the toggles that have no viewport-control home.
             ImGui::SeparatorText("Options");
             ImGui::MenuItem(EDITOR_ICON_TOGGLE_GIZMOS "  Transform Gizmo", nullptr, &m_ShowGizmos);
             if (ImGui::MenuItem(ICON_FA_RULER "  Measure Tool", "M", m_MeasureTool)) {
