@@ -135,3 +135,29 @@ Side note: the color-picker *swatch* path can drop an undo step when the popup c
 frame the stale-staged-undo cleanup (`EditorLayer.cpp`, added in `5faa4de`) also fires —
 predates this sweep; worth a hands-on look. The hex-field path records one entry per edit,
 as intended.
+
+### 2026-09-17 — session 4  (headless QA sweep — no GUI access this session)
+
+Interactive `computer-use` access to the editor window was denied (nobody at the keyboard to
+approve the permission dialog), so this pass drove the engine entirely through its headless
+CLI surfaces instead: `--smoke-test` (default scenes, `tests/smoke-scenes-invalid/`, and a
+battery of hand-written fuzz fixtures — truncated JSON, empty file, non-object top-level JSON,
+a synthetic 1030-level `parentId` chain), `--resave` round-trip/idempotency checks against every
+committed scene plus `project/scenes/Showcase.json`, and both `--undo-bench` /
+`--asset-load-bench`. 15 consecutive `--smoke-test` runs produced no crash dumps and no leaked
+errors. The 1024-level hierarchy-depth cap does **not** false-positive on legitimately deep,
+acyclic chains — only true `parentId` cycles trip it.
+
+Four findings filed, all live-verified against a local Release build (real GPU, not the
+CI runner):
+
+| Issue | Summary |
+|---|---|
+| [#77](https://github.com/JCamberos27/TartarusEngine/issues/77) | **Most severe.** `SceneSerializer::Load`'s v2→v3 migration unconditionally `Save()`s back to the original path — fires from any load, not just interactive ones. `--smoke-test` silently rewrote its own committed regression fixtures (and stripped `parent_cycle.json`'s explanatory `_comment`), and ordinary headless startup (loading the last-opened scene) rewrote `project/scenes/Showcase.json` on every `--smoke-test` / `--resave` / bench invocation. Same shape as the original sweep's [D1] (#1, fixed) but reachable from every `Load()` caller, not one menu action. Unintended working-tree changes this caused were reverted with `git checkout` after root-causing. |
+| [#74](https://github.com/JCamberos27/TartarusEngine/issues/74) | `World::ComposeWorldTransform`'s cycle-cap log fires every call (every frame) instead of once, despite its own comment saying "log once" — floods the Console/log on any `parentId` cycle. The sibling cap in `RebuildWorldTransformCache` does the opposite: truncates silently, no log at all. |
+| [#75](https://github.com/JCamberos27/TartarusEngine/issues/75) | `--asset-load-bench`'s "cached" pass builds a fresh `AssetLibrary` per pass, so it never actually hits a warm `TextureCache` — the bench can't measure what it was built to measure (ARCH-201/#375). |
+| [#76](https://github.com/JCamberos27/TartarusEngine/issues/76) | A scene file that's valid JSON but not an object at the top level (e.g. bare `[]`) throws an uncaught `json::type_error` that isn't caught per-scene the way parse errors are — it escapes to `main()`'s outermost catch and takes down the whole process/batch. Same unguarded `SceneSerializer::Load` call site is used by interactive Open Scene (`EditorLayer_Scene.cpp:678`); that half is flagged needs-manual-verify since it wasn't hands-on tested this session. |
+
+**Not covered this session** (needs GUI/keyboard access): all mouse- and keyboard-driven
+editor interaction, Play-mode input, gizmos, panels, dialogs — i.e. everything the 2026-08-29
+sweep exercised. Worth a follow-up pass once interactive access is available.
