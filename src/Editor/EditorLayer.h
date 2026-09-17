@@ -90,20 +90,19 @@ public:
     // at empty space next to the geometry (audit #87).
     void FrameSceneBounds(World& world, Camera& editorCamera);
 
-    // Maximized-play fallback only (Phase 3 item 2) — main.cpp calls this exclusively while
-    // `!editorUIVisible`, since that's the one state with no toolbar for DrawPlayControlsBody's
-    // Zone B cluster to live in. Floats a solid-plated Stop/Pause/Step/Restore strip near the top
-    // of the window. Clicks only raise request flags — main.cpp owns the play/maximize/cursor
-    // state itself.
-    void DrawPlayStopButton(bool playing, bool maximized, bool paused);
+    // The floating action bar centered over the Scene/Game viewport — Undo/Redo/Save, the
+    // Play/Stop/Pause/Step/Fullscreen transport, and the panel-toggle/Capture/notification
+    // cluster that used to live in the toolbar's one-click icon row (that row is gone; see
+    // EditorModuleToolbar.cpp's file comment). main.cpp calls this every frame, unconditionally.
+    // Clicks only raise request flags — main.cpp owns the play/maximize/cursor state itself.
+    void DrawViewportActionBar(World& world, AssetLibrary& assets, bool playing, bool maximized, bool paused);
 
-    // The toolbar's Zone B (Phase 3 item 2, API v21) — Play/Stop/Pause/Step/Restore inline in the
-    // strip instead of the old floating `##PlayStopButton` overlay, which sat over the viewport at
-    // ~60% opacity and all but disappeared on a pale scene (~2:1 contrast, audit #5). Reads the
-    // play state SetPlayState() cached in for this frame; raises the same request flags
-    // DrawPlayStopButton does. Rendered by the module (EditorModuleToolbar.cpp) via
-    // EditorModuleHostAPI::DrawPlayControlsBody, so it only ever appears while the toolbar itself
-    // does — i.e. never during maximized play, which is what DrawPlayStopButton above still covers.
+    // Dead code: DrawPlayControlsBody rendered the toolbar's old Zone B cluster inline in the
+    // strip via EditorModuleHostAPI::DrawPlayControlsBody. Nothing calls it any more now that
+    // DrawViewportActionBar above covers Play/Stop/Pause/Step unconditionally, but it (and the
+    // EditorModuleHostAPI callback slot, and SetPlayState below) are left in place rather than
+    // torn out, since EditorModuleHostAPI is an additive, versioned contract — removing a slot
+    // is a bigger, separately-considered change, not a side effect of this move.
     void DrawPlayControlsBody();
     // Pushed once per frame (main.cpp owns playing/paused/maximized — this class doesn't run the
     // simulation clock) so DrawPlayControlsBody can read them without EditorLayer owning them.
@@ -1242,7 +1241,7 @@ private:
     // corner monogram — the mark is skipped while so.
     bool m_HideEngineMarkForStats = false;
     // Live Game-view rect + texture, pushed in each frame by main.cpp (zero size = none). Used by
-    // DrawPlayStopButton to place the Stop/Fullscreen control over the game viewport.
+    // DrawViewportActionBar to place the action bar over the game viewport.
     ImVec2 m_GameViewImgPos{0.0f, 0.0f};
     ImVec2 m_GameViewImgSize{0.0f, 0.0f};
     unsigned int m_GameViewTex = 0;
@@ -1630,9 +1629,9 @@ private:
     // indicator toggles itself off, all in place instead of requiring the Stats panel/menu/
     // shortcut. World&/Camera& are for Frame Selected.
     void DrawViewportStatusBar(World& world, Camera& editorCamera);
-    // The actual Play/Stop/Pause/Step/Restore buttons, shared by DrawPlayControlsBody (toolbar
-    // Zone B) and DrawPlayStopButton (maximized-play floating fallback) — see DrawPlayControlsBody
-    // above for why there are two call sites instead of one.
+    // The actual Play/Stop/Pause/Step/Restore buttons. DrawViewportActionBar is the only live
+    // caller now; the dead DrawPlayControlsBody (see its own comment) still calls this too, kept
+    // compiling for the same additive-API-contract reason.
     void DrawPlayTransportButtons(bool playing, bool maximized, bool paused);
     // Panel visibility lives in EditorSettings::SceneShowStats (persisted), not a plain member.
     RenderStats m_RenderStats;

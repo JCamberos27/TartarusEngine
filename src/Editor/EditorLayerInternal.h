@@ -25,9 +25,13 @@
 
 namespace EditorInternal {
 
-// Height of the top toolbar: the dropdown menu bar row + the one-click icon row, trimmed so the
-// icons sit snug against the bottom edge instead of floating in a tall strip of dead space.
-inline constexpr float kToolbarHeight = 52.0f;
+// Height of the top toolbar strip. Used to be the dropdown menu bar row plus a one-click icon
+// row beneath it; the icon row moved out into viewport-docked clusters (Play/Undo/Redo/Save and
+// panel toggles float over the Scene/Game view, Grid/Snap/Gizmos joined the left tool palette),
+// so this is just the menu bar row now — freeing that vertical space back to the viewport, which
+// was the point of the move. Tuned empirically against the actual menu-bar row height; adjust if
+// a future font/metric change leaves a visible gap or clips the row.
+inline constexpr float kToolbarHeight = 30.0f;
 
 
 // --- Dialog primitive (Phase 1 item 4) ------------------------------------------------------

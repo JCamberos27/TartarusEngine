@@ -103,6 +103,52 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
                     : "Pivot - gizmo sits on the object's own origin (click for Center)",
                 false, ImVec2(btn, btn)))
             SetGizmoPivotCenter(!pivotCenter);
+
+        // Grid / snap / gizmo-visibility joined this rail from the old top toolbar's icon row,
+        // which is gone now (moved into viewport clusters per request) — these are viewport
+        // display options in the same spirit as Hand/Translate/Rotate above, so they belong in
+        // the same strip rather than a separate cluster. No room for a second slim caret button
+        // per icon in a one-column rail, so the settings popovers (grid cell size / snap
+        // increments, per-type gizmo visibility) open on right-click instead of a dedicated caret
+        // — left-click still just toggles.
+        ImGui::Separator();
+
+        const bool showGrid = m_ShowGrid;
+        if (ActionButton(EDITOR_ICON_GRID, "Toggle Grid (right-click: grid & snap settings)",
+                showGrid, ImVec2(btn, btn)))
+            m_ShowGrid = !showGrid;
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup("##PaletteGridSnapPopup");
+        if (ImGui::BeginPopup("##PaletteGridSnapPopup")) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
+            DrawGridSnapPopupBody();
+            ImGui::EndPopup();
+        }
+
+        const bool gridSnap = m_GridSnapEnabled;
+        if (ActionButton(EDITOR_ICON_SNAP_TO_GRID,
+                "Toggle Snap to Grid (hold Ctrl to invert while dragging)", gridSnap, ImVec2(btn, btn)))
+            m_GridSnapEnabled = !gridSnap;
+
+        {
+            const bool canSnap = CanSnapSelectionToGround(world);
+            ImGui::BeginDisabled(!canSnap);
+            if (ActionButton(EDITOR_ICON_SNAP_TO_GROUND, "Snap selection to ground", false, ImVec2(btn, btn)))
+                SnapSelectionToGround(world);
+            ImGui::EndDisabled();
+        }
+
+        ImGui::Separator();
+
+        const bool gizmosOn = m_GizmosMasterVisible;
+        if (ActionButton(EDITOR_ICON_TOGGLE_GIZMOS,
+                "Toggle Gizmos (right-click: per-type visibility)", gizmosOn, ImVec2(btn, btn)))
+            m_GizmosMasterVisible = !gizmosOn;
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup("##PaletteGizmosPopup");
+        if (ImGui::BeginPopup("##PaletteGizmosPopup")) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
+            DrawGizmosPopupBody();
+            ImGui::EndPopup();
+        }
     }
 
     ImGui::EndChild();
