@@ -119,6 +119,8 @@ struct GameModuleHostAPI {
 
 struct GameModuleAPI {
     std::uint32_t Version = kGameModuleAPIVersion;
+    // Reload contract (#172/#187): the host validates a rebuilt DLL, calls the OLD module's
+    // OnUnload and frees it, and only then calls the NEW module's OnLoad. The two never overlap.
     void (*OnLoad)() = nullptr;
     void (*OnUnload)() = nullptr;
     void (*Update)(const GameModuleHostAPI& host, World& world, float deltaTime) = nullptr;
