@@ -313,6 +313,10 @@ int main(int argc, char** argv) {
     // them (audit #355 / BUG-102).
     EnginePaths::Init(argv[0]);
 
+    // #146: a persistent log for bug reports (Unity's Editor.log). Headless runs get their own
+    // file so a smoke test on a dev machine doesn't rotate away the last real editor session's.
+    Log::OpenFile(headless ? "Headless.log" : "Editor.log");
+
     try {
         // Up before anything else so it covers the whole startup, including the GL context
         // creation and shader compiles below. The main window stays hidden until its first
