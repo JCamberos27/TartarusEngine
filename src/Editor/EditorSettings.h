@@ -227,6 +227,12 @@ struct EditorSettings {
     // lands on a connected monitor; otherwise the window opens maximized as before. The rect is
     // the restored ("normal") one, so a window closed maximized comes back maximized and
     // un-maximizes to where it was. Coordinates: see Window::Placement.
+    // #154 — F11 / Game-view fullscreen: 0 Borderless (covers the monitor, instant alt-tab),
+    // 1 Exclusive (takes over the video mode). FullscreenMonitor: -1 = the monitor the window is
+    // on, else an index into the connected displays.
+    int  FullscreenMode = 0;
+    int  FullscreenMonitor = -1;
+
     bool WindowPlacementValid = false;
     int  WindowX = 0, WindowY = 0, WindowWidth = 0, WindowHeight = 0;
     bool WindowMaximized = true;
