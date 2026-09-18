@@ -61,7 +61,11 @@ public:
     // PR13: convolve irradiance + specular cubes from an externally supplied env cubemap
     // (e.g. loaded via Cubemap::LoadHdr). Skips the sky-gradient pass. envCube must be a
     // GL_TEXTURE_CUBE_MAP with a mip chain already generated.
-    void BakeFromCubemap(unsigned int envCube);
+    // #108 — rotationRadians: the HDRI's Y rotation (World::SkyRotationDegrees), applied while
+    // convolving so diffuse / specular lighting match the rotated sky. faceSize: envCube's base
+    // face size, for the prefilter's mip-selection heuristic (was a fixed 128).
+    void BakeFromCubemap(unsigned int envCube, int faceSize, float rotationRadians);
+    float BakedRotation() const { return m_BakedRotation; }
 
     unsigned int IrradianceMap() const { return m_IrradianceCube; } // samplerCube
     unsigned int SpecularMap() const { return m_SpecularCube; }     // samplerCube, kSpecularMips levels
@@ -98,6 +102,7 @@ private:
     bool m_BrdfLutBaked = false; // the LUT is environment-independent: baked once, never rebaked
     bool m_FboComplete = false;  // last Bake()'s FBO passed GLFramebufferCheck (audit #358)
     bool m_Baked = false;
+    float m_BakedRotation = 0.0f; // #108
     glm::vec3 m_BakedHorizon{0.0f};
     glm::vec3 m_BakedZenith{0.0f};
 };
