@@ -1514,11 +1514,8 @@ int main(int argc, char** argv) {
 
             glm::vec3 lightDir(-0.4f, -1.0f, -0.3f);
 
-            // --- Sun shadow map: built ONCE per frame, from the primary view -------------------
-            // This used to live inside drawScene, i.e. it ran once per viewport (Scene + Game)
-            // every frame — 8 cascade renders of the entire scene when the sun and the geometry
-            // are identical between the two views. Now the 4 depth slices render once, here, and
-            // every drawScene() below only samples them.
+            // --- Sun shadow map: rendered per view (renderSunShadows, called from drawScene, #109)
+            // and skipped when a second view in the same frame has the same matrices.
             const EditorSettings& frameSettings = EditorSettings::Get();
 
             // Build the light SSBO ONCE per frame — it used to be rebuilt inside every
@@ -1646,21 +1643,26 @@ int main(int argc, char** argv) {
             lightBuffer.Upload();
             const int frameLightCount = lightBuffer.Count();
 
-            bool sunShadowsReady = false;
-            if (world.ShadowsEnabled && frameHaveDirectional && frameSunCastShadows) {
+            // #109 — the sun's cascades are fitted to the view being RENDERED, per drawScene():
+            // they used to be fitted once per frame to one camera (the player's in Play, else the
+            // editor's) while both the Scene and Game views sampled them, so the other view had
+            // missing or blurry shadows. In the default layout Scene and Game are tabs and only one
+            // renders per frame, so this costs nothing extra; with both on screen the cascades
+            // render twice. A second view with the same matrices in the same frame reuses them.
+            const bool sunShadowsWanted = world.ShadowsEnabled && frameHaveDirectional && frameSunCastShadows;
+            struct SunShadowFit { std::uint64_t frame = ~0ull; glm::mat4 view{0.0f}, proj{0.0f}; };
+            static SunShadowFit lastSunFit;
+            auto renderSunShadows = [&](const glm::mat4& fitView, const glm::mat4& fitProj) -> bool {
+                if (!sunShadowsWanted) return false;
+                if (lastSunFit.frame == (std::uint64_t)frameIndex && lastSunFit.view == fitView && lastSunFit.proj == fitProj)
+                    return true; // already fitted to exactly this view this frame
                 PROFILE_SCOPE("Sun Shadow Pass");
                 PROFILE_GPU_SCOPE("Sun Shadow Pass");
-
-                // Fit the cascades to whichever camera drives this frame's main view: the game
-                // camera while playing, else the editor free-cam (the Scene tab is the working
-                // view). The other viewport samples the same cascades — a looser texel fit there
-                // is invisible next to rebuilding the whole map a second time.
-                Camera& fitCam = playing ? *gameCam : editorCamera;
-                glm::vec2 fitRegion = editor.GetLastSceneContentRegion();
-                if (fitRegion.x < 1.0f || fitRegion.y < 1.0f)
-                    fitRegion = { (float)window.GetWidth(), (float)window.GetHeight() };
-                glm::mat4 fitView = fitCam.ViewMatrix();
-                glm::mat4 fitProj = fitCam.ProjectionMatrix(fitRegion.x / fitRegion.y);
+                // The caller has its own target bound; the pass renders into the cascade array.
+                GLint prevDrawFbo = 0, prevReadFbo = 0, prevViewport[4] = {0, 0, 0, 0};
+                glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFbo);
+                glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFbo);
+                glGetIntegerv(GL_VIEWPORT, prevViewport);
 
                 shadowMap.Configure(world.ShadowResolution, world.ShadowCascades);
                 // #160 — world bounds of everything that can cast, so the cascades' near planes
@@ -1727,11 +1729,13 @@ int main(int argc, char** argv) {
 
                 glDisable(GL_POLYGON_OFFSET_FILL);
                 glCullFace(GL_BACK);
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                glViewport(0, 0, window.GetWidth(), window.GetHeight());
+                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)prevDrawFbo);
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFbo);
+                glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
                 GLStateCache::Invalidate();
-                sunShadowsReady = true;
-            }
+                lastSunFit = {(std::uint64_t)frameIndex, fitView, fitProj};
+                return true;
+            };
 
             // --- Spot-light shadow maps (#119) — once per frame, like the sun CSM ------------
             if (world.ShadowsEnabled) {
@@ -1925,7 +1929,7 @@ int main(int argc, char** argv) {
             sceneInputs.lightBuffer        = &lightBuffer;
             sceneInputs.clusterGrid        = &clusterGrid;
             sceneInputs.hdriCube           = hdriCube.get();
-            sceneInputs.sunShadowsReady    = sunShadowsReady;
+            sceneInputs.sunShadowsReady    = false; // set per view in drawScene (#109)
             sceneInputs.frameLightCount    = frameLightCount;
             sceneInputs.sunAngularDeg       = frameSunAngularDeg;
             sceneInputs.sunShadowSoftness   = frameSunShadowSoftness;
@@ -1948,6 +1952,7 @@ int main(int argc, char** argv) {
             sceneInputs.ssaoIntensity    = world.SsaoIntensity;
             sceneInputs.layerVisibleMask = frameSettings.LayerVisibleMask;
             auto drawScene = [&](const RenderFrameContext& ctx, EditorLayer::RenderStats* outStats) {
+                sceneInputs.sunShadowsReady = renderSunShadows(ctx.View, ctx.Proj); // #109
                 sceneRenderer.RenderScene(world, ctx, sceneInputs, outStats);
             };
 
