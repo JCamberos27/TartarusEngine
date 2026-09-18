@@ -1226,6 +1226,22 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("0 / Unlimited removes the software cap. Applies to the whole editor and the game simulation.");
 
+        // #143: background throttle. Presets only; the cap never applies in Play mode.
+        static const char* kBgPresets[] = { "No extra cap", "10", "30", "60" };
+        static const int   kBgValues[]  = { 0, 10, 30, 60 };
+        int bgIdx = 0;
+        for (int i = 0; i < IM_ARRAYSIZE(kBgValues); ++i)
+            if (kBgValues[i] == prefs.UnfocusedFpsLimit) { bgIdx = i; break; }
+        ImGui::SetNextItemWidth(kw);
+        if (ImGui::Combo("Background FPS", &bgIdx, kBgPresets, IM_ARRAYSIZE(kBgPresets))) {
+            prefs.UnfocusedFpsLimit = kBgValues[bgIdx];
+            EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Frame cap while the editor window isn't focused and not in Play mode,\n"
+                                 "so an idle editor behind other apps saves GPU and battery.\n"
+                                 "A minimized editor doesn't render at all.");
+
         ImGui::Spacing();
         ImGui::SeparatorText("Rendering (HDR)");
 

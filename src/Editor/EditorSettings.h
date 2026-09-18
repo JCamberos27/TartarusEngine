@@ -43,6 +43,10 @@ struct EditorSettings {
     //   The cap is applied whatever VSyncMode is, but it's really meant for VSyncMode 0.
     int VSyncMode = 1;
     int FpsLimit = 240;
+    // #143: cap while the editor window is in the background and not in Play mode, so an idle
+    // editor behind other apps doesn't render at full rate (Unity's "Interaction Mode"). 0 = no
+    // extra cap. A minimized window doesn't render at all, whatever this is.
+    int UnfocusedFpsLimit = 30;
 
     // HDR/tone mapping, SSAO, bloom, and shadow settings moved to World (#9, Phase M item 1) —
     // they're scene-authored content, not per-user editor prefs. See World.h's ExposureEV et al.
