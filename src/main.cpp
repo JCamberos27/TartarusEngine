@@ -946,6 +946,23 @@ int main(int argc, char** argv) {
                     smokeSceneLoadOk = SceneSerializer::Load(world, assets, path, /*persistMigration=*/false);
                     std::cout << "[SmokeTest] Loading " << path
                               << (smokeSceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
+                    // #116 regression: the exact triangle raycast behind editor picking / surface
+                    // snapping. smoke_min's cube is centred at y=1 with size 2 (top face y=2), rotated
+                    // 20 deg about Y, so a ray straight down from y=10 must hit it 8 units out.
+                    if (smokeSceneLoadOk && path.find("smoke_min") != std::string::npos) {
+                        float bestT = 1e30f;
+                        for (auto re : world.Registry.view<RenderableComponent>()) {
+                            const auto& rc = world.Registry.get<RenderableComponent>(re);
+                            float t;
+                            if (rc.ModelRef && rc.ModelRef->RaycastTriangles(world.ComposeWorldTransform(re),
+                                    glm::vec3(0.0f, 10.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), t))
+                                bestT = std::min(bestT, t);
+                        }
+                        if (std::abs(bestT - 8.0f) > 0.01f)
+                            Log::Error("[SmokeTest] triangle raycast expected t=8, got " + std::to_string(bestT));
+                        else
+                            std::cout << "[SmokeTest]   triangle raycast OK (t=" << bestT << ")" << std::endl;
+                    }
                     // #81 regression: the undo/redo path round-trips the scene + asset library
                     // through SaveToString/LoadFromString. It must neither throw (GUID PathRef
                     // entries used to crash it) nor drop/re-import library assets.
