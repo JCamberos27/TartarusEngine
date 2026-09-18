@@ -724,8 +724,11 @@ void main() {
         return;
     }
 
+    // #102 — the map is TINTED by Emissive Color x Strength (uEmissiveColor carries both), the
+    // same as Unity and glTF; it used to replace them, so the colour/strength controls did
+    // nothing once a map was assigned.
     vec3 emissiveEarly = uHasEmissiveMap == 1 ? (tri ? SampleTriplanar(uEmissiveMap, vWorldPos, triW, uTriplanarScale)
-                                                      : texture(uEmissiveMap, vUV)).rgb : uEmissiveColor;
+                                                      : texture(uEmissiveMap, vUV)).rgb * uEmissiveColor : uEmissiveColor;
     if (uUnlit == 1) {
         vec3 flatColor = albedo + emissiveEarly;
         FragColor = vec4(uApplyTonemap == 1 ? pow(flatColor, vec3(1.0 / 2.2)) : flatColor, 1.0);

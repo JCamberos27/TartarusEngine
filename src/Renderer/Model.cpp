@@ -242,13 +242,21 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     return gpuMesh;
 }
 
-std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath) {
-    auto it = m_TextureCache.find(fullPath);
+std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath, TextureRole role) {
+    // #95 — the role decides the colour space. Every map used to be loaded with the default
+    // (sRGB) settings, so normal / metallic / roughness / AO maps were gamma-decoded on sample:
+    // bent normals and wrong roughness on essentially every imported model. Only albedo and
+    // emissive are colour data. Keyed by path + role, in case one file feeds both kinds of slot.
+    const std::string key = fullPath + (role == TextureRole::Color ? "|srgb" : role == TextureRole::Normal ? "|normal" : "|linear");
+    auto it = m_TextureCache.find(key);
     if (it != m_TextureCache.end()) return it->second;
 
-    auto tex = std::make_shared<Texture>(fullPath);
+    TextureImportSettings settings;
+    settings.IsSRGB = role == TextureRole::Color;
+    if (role == TextureRole::Normal) settings.TextureType = TextureImportSettings::Type::NormalMap;
+    auto tex = std::make_shared<Texture>(fullPath, settings);
     if (!tex->IsValid()) return nullptr;
-    m_TextureCache[fullPath] = tex;
+    m_TextureCache[key] = tex;
     return tex;
 }
 
@@ -311,7 +319,7 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
     Material mat;
     aiMaterial* material = scene->mMaterials[materialIndex];
 
-    auto loadSlot = [&](aiTextureType type) -> std::shared_ptr<Texture> {
+    auto loadSlot = [&](aiTextureType type, TextureRole role) -> std::shared_ptr<Texture> {
         if (material->GetTextureCount(type) == 0) return nullptr;
         aiString str;
         material->GetTexture(type, 0, &str);
@@ -325,20 +333,20 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
                       ") which isn't supported yet - that map slot will be blank.");
             return nullptr;
         }
-        return LoadCachedTexture(resolved);
+        return LoadCachedTexture(resolved, role);
     };
 
-    mat.AlbedoMap = loadSlot(aiTextureType_DIFFUSE);
-    if (!mat.AlbedoMap) mat.AlbedoMap = loadSlot(aiTextureType_BASE_COLOR); // glTF2 alt slot
-    mat.NormalMap = loadSlot(aiTextureType_NORMALS);
-    mat.MetallicRoughnessMap = loadSlot(aiTextureType_UNKNOWN); // assimp puts glTF2 packed metal-rough here
+    mat.AlbedoMap = loadSlot(aiTextureType_DIFFUSE, TextureRole::Color);
+    if (!mat.AlbedoMap) mat.AlbedoMap = loadSlot(aiTextureType_BASE_COLOR, TextureRole::Color); // glTF2 alt slot
+    mat.NormalMap = loadSlot(aiTextureType_NORMALS, TextureRole::Normal);
+    mat.MetallicRoughnessMap = loadSlot(aiTextureType_UNKNOWN, TextureRole::Data); // assimp puts glTF2 packed metal-rough here
     // Standalone maps — NOT the packed slot above, which is a different (G=rough, B=metal)
     // texture layout that a plain grayscale roughness/metalness map would be misread against.
-    mat.RoughnessMap = loadSlot(aiTextureType_DIFFUSE_ROUGHNESS);
-    mat.MetallicMap = loadSlot(aiTextureType_METALNESS);
-    mat.AOMap = loadSlot(aiTextureType_LIGHTMAP);
-    if (!mat.AOMap) mat.AOMap = loadSlot(aiTextureType_AMBIENT_OCCLUSION);
-    mat.EmissiveMap = loadSlot(aiTextureType_EMISSIVE);
+    mat.RoughnessMap = loadSlot(aiTextureType_DIFFUSE_ROUGHNESS, TextureRole::Data);
+    mat.MetallicMap = loadSlot(aiTextureType_METALNESS, TextureRole::Data);
+    mat.AOMap = loadSlot(aiTextureType_LIGHTMAP, TextureRole::Data);
+    if (!mat.AOMap) mat.AOMap = loadSlot(aiTextureType_AMBIENT_OCCLUSION, TextureRole::Data);
+    mat.EmissiveMap = loadSlot(aiTextureType_EMISSIVE, TextureRole::Color);
 
     aiColor4D color;
     if (material->Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS) {
@@ -347,6 +355,9 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
     if (material->Get(AI_MATKEY_COLOR_EMISSIVE, color) == AI_SUCCESS) {
         mat.EmissiveColor = {color.r, color.g, color.b};
     }
+    // #102 — the emissive map is now tinted by EmissiveColor; files that ship an emissive map
+    // with no (or a black) emissive factor mean "the map as-is".
+    if (mat.EmissiveMap && mat.EmissiveColor == glm::vec3(0.0f)) mat.EmissiveColor = glm::vec3(1.0f);
     float scalar;
     if (material->Get(AI_MATKEY_METALLIC_FACTOR, scalar) == AI_SUCCESS) mat.Metallic = scalar;
     if (material->Get(AI_MATKEY_ROUGHNESS_FACTOR, scalar) == AI_SUCCESS) mat.Roughness = scalar;
