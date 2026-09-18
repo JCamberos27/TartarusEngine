@@ -102,6 +102,7 @@ PFNGLBEGINQUERYPROC glBeginQuery = nullptr;
 PFNGLENDQUERYPROC glEndQuery = nullptr;
 PFNGLGETQUERYOBJECTIVPROC glGetQueryObjectiv = nullptr;
 PFNGLGETQUERYOBJECTUI64VPROC glGetQueryObjectui64v = nullptr;
+PFNGLQUERYCOUNTERPROC glQueryCounter = nullptr;
 
 // Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
 PFNGLMAPNAMEDBUFFERPROC glMapNamedBuffer = nullptr;
@@ -231,6 +232,7 @@ bool GLLoader_Init() {
     LOAD(PFNGLENDQUERYPROC, glEndQuery)
     LOAD(PFNGLGETQUERYOBJECTIVPROC, glGetQueryObjectiv)
     LOAD(PFNGLGETQUERYOBJECTUI64VPROC, glGetQueryObjectui64v)
+    LOAD(PFNGLQUERYCOUNTERPROC, glQueryCounter)
 
     // Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
     LOAD(PFNGLMAPNAMEDBUFFERPROC, glMapNamedBuffer)
