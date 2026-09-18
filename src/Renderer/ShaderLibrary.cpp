@@ -1,6 +1,8 @@
 #include "ShaderLibrary.h"
+#include "Shader.h"
 #include "Log.h"
 #include "ProjectPaths.h"
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <filesystem>
@@ -48,8 +50,17 @@ static bool StepBlockComment(const std::string& line, bool& inBlock) {
 // comment; before, "// #include" or a mention inside /* */ was expanded too. `#pragma once` is
 // honoured per top-level ReadFile. Every include is bracketed with #line directives so compile
 // errors map back to the file and line they came from.
+std::string DependencyKey(const std::string& path) {
+    std::string key = std::filesystem::path(path).lexically_normal().generic_string();
+#ifdef _WIN32
+    for (char& c : key) c = (char)std::tolower((unsigned char)c);
+#endif
+    return key;
+}
+
 static std::string ResolveIncludes(const std::string& src, const std::filesystem::path& dir, int depth,
-                                   const std::string& fileName, std::set<std::string>& onceFiles) {
+                                   const std::string& fileName, std::set<std::string>& onceFiles,
+                                   std::vector<std::string>* deps) {
     if (depth > 8) {
         Log::Error("ShaderLibrary: #include nesting too deep");
         return src;
@@ -96,7 +107,8 @@ static std::string ResolveIncludes(const std::string& src, const std::filesystem
                 } else {
                     std::ostringstream content;
                     content << f.rdbuf();
-                    out << ResolveIncludes(content.str(), incPath.parent_path(), depth + 1, name, onceFiles);
+                    if (deps) deps->push_back(DependencyKey(incPath.string()));
+                    out << ResolveIncludes(content.str(), incPath.parent_path(), depth + 1, name, onceFiles, deps);
                     out << "#line " << (lineNo + 1) << ' ' << fileIdx << '\n';
                 }
                 continue;
@@ -156,8 +168,9 @@ std::string ReadFileRequired(const std::string& filename) {
     return src;
 }
 
-std::string ReadFile(const std::string& filename) {
+std::string ReadFile(const std::string& filename, std::vector<std::string>* deps) {
     std::filesystem::path path = s_Dir / filename;
+    if (deps) deps->push_back(DependencyKey(path.string()));
     std::ifstream f(path);
     if (!f.is_open()) {
         Log::Error("ShaderLibrary: cannot open shader: " + path.string());
@@ -166,11 +179,12 @@ std::string ReadFile(const std::string& filename) {
     std::ostringstream ss;
     ss << f.rdbuf();
     std::set<std::string> onceFiles;
-    return ResolveIncludes(ss.str(), s_Dir, 0, filename, onceFiles);
+    return ResolveIncludes(ss.str(), s_Dir, 0, filename, onceFiles, deps);
 }
 
-std::string ReadFileAt(const std::string& pathStr, const std::string& referencedBy) {
+std::string ReadFileAt(const std::string& pathStr, const std::string& referencedBy, std::vector<std::string>* deps) {
     const std::filesystem::path path(pathStr);
+    if (deps) deps->push_back(DependencyKey(pathStr));
     std::ifstream f(path);
     if (!f.is_open()) {
         Log::Error("ShaderLibrary: cannot open shader: " + path.string() +
@@ -181,7 +195,7 @@ std::string ReadFileAt(const std::string& pathStr, const std::string& referenced
     std::ostringstream ss;
     ss << f.rdbuf();
     std::set<std::string> onceFiles;
-    return ResolveIncludes(ss.str(), path.parent_path(), 0, path.filename().string(), onceFiles);
+    return ResolveIncludes(ss.str(), path.parent_path(), 0, path.filename().string(), onceFiles, deps);
 }
 
 std::string ResolveRef(const std::string& ref, const std::string& baseDir) {
@@ -201,34 +215,92 @@ std::string ResolveRef(const std::string& ref, const std::string& baseDir) {
     return baseDir.empty() ? engine.string() : (std::filesystem::path(baseDir) / p).string();
 }
 
-void PollForChanges(const std::function<void(const std::string& filename)>& onChanged) {
+std::vector<std::string> PollChangedFiles(const std::vector<std::string>& extraRoots) {
     using Clock = std::chrono::steady_clock;
     static Clock::time_point s_LastPoll;
     static std::unordered_map<std::string, std::filesystem::file_time_type> s_MTimes;
+    std::vector<std::string> changed;
 
     constexpr auto kInterval = std::chrono::milliseconds(250); // ~4 Hz
-    auto now = Clock::now();
-    if (now - s_LastPoll < kInterval) return;
+    const auto now = Clock::now();
+    if (now - s_LastPoll < kInterval) return changed;
     s_LastPoll = now;
 
-    if (s_Dir.empty()) return;
-    std::error_code ec;
-    for (auto& entry : std::filesystem::directory_iterator(s_Dir, ec)) {
-        if (!entry.is_regular_file()) continue;
-        auto ext = entry.path().extension().string();
-        if (ext != ".glsl" && ext != ".vert" && ext != ".frag" && ext != ".comp") continue;
-
-        auto mtime = entry.last_write_time(ec);
-        if (ec) continue;
-        std::string name = entry.path().filename().string();
-        auto it = s_MTimes.find(name);
-        if (it == s_MTimes.end()) {
-            s_MTimes[name] = mtime; // first seen — no notification
-        } else if (it->second != mtime) {
-            it->second = mtime;
-            onChanged(name);
+    std::vector<std::filesystem::path> roots;
+    if (!s_Dir.empty()) roots.push_back(s_Dir);
+    for (const auto& r : extraRoots) if (!r.empty()) roots.emplace_back(r);
+    for (const auto& root : roots) {
+        std::error_code ec;
+        for (auto it = std::filesystem::recursive_directory_iterator(
+                 root, std::filesystem::directory_options::skip_permission_denied, ec);
+             !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+            std::error_code fileEc;
+            if (!it->is_regular_file(fileEc)) continue;
+            const std::string ext = it->path().extension().string();
+            if (ext != ".glsl" && ext != ".vert" && ext != ".frag" && ext != ".comp" && ext != ".shader") continue;
+            const auto mtime = it->last_write_time(fileEc);
+            if (fileEc) continue;
+            const std::string key = DependencyKey(it->path().string());
+            auto found = s_MTimes.find(key);
+            if (found == s_MTimes.end()) {
+                s_MTimes.emplace(key, mtime); // first sighting — not a change
+            } else if (found->second != mtime) {
+                found->second = mtime;
+                changed.push_back(key);
+            }
         }
     }
+    return changed;
+}
+
+namespace {
+struct HotReloadEntry {
+    Shader* Program;
+    std::string Vert, Frag;
+    std::vector<std::string> Deps;
+};
+std::vector<HotReloadEntry>& HotReloadEntries() {
+    static std::vector<HotReloadEntry> entries;
+    return entries;
+}
+std::vector<std::string> DepsOf(const std::string& vert, const std::string& frag) {
+    std::vector<std::string> deps;
+    ReadFile(vert, &deps);
+    ReadFile(frag, &deps);
+    return deps;
+}
+} // namespace
+
+void RegisterForHotReload(Shader& shader, const std::string& vertFile, const std::string& fragFile) {
+    UnregisterForHotReload(shader);
+    HotReloadEntries().push_back({&shader, vertFile, fragFile, DepsOf(vertFile, fragFile)});
+}
+
+void UnregisterForHotReload(Shader& shader) {
+    auto& e = HotReloadEntries();
+    e.erase(std::remove_if(e.begin(), e.end(), [&](const HotReloadEntry& h) { return h.Program == &shader; }), e.end());
+}
+
+void ClearHotReload() { HotReloadEntries().clear(); }
+
+int ReloadChanged(const std::vector<std::string>& changed) {
+    int reloaded = 0;
+    for (HotReloadEntry& h : HotReloadEntries()) {
+        const bool affected = std::any_of(h.Deps.begin(), h.Deps.end(), [&](const std::string& d) {
+            return std::find(changed.begin(), changed.end(), d) != changed.end();
+        });
+        if (!affected) continue;
+        try {
+            h.Program->Reload(h.Vert, h.Frag);
+            h.Deps = DepsOf(h.Vert, h.Frag); // the edit may have added or removed an #include
+            ++reloaded;
+            Log::Info("Shader hot reload: recompiled " + h.Vert + " + " + h.Frag + ".");
+        } catch (const std::exception& e) {
+            Log::Error("Shader hot reload: " + h.Vert + " + " + h.Frag + " failed to compile - kept the previous version. " +
+                       AnnotateLog(e.what()));
+        }
+    }
+    return reloaded;
 }
 
 } // namespace ShaderLibrary
