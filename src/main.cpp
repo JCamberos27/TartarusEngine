@@ -333,9 +333,16 @@ int main(int argc, char** argv) {
         // Up before anything else so it covers the whole startup, including the GL context
         // creation and shader compiles below. The main window stays hidden until its first
         // frame is presented (see Window::Show), so the two never overlap.
+        // Preferences first: the splash centres on the monitor the saved window placement is on
+        // (#155), and nothing earlier reads them. Per-user file, no GL or project state needed.
+        EditorSettings::Load();
         SplashScreen splash;
-        if (!headless)
-            splash.Show(EnginePaths::Resolve("assets/branding/splash.png"), 1.0f);
+        if (!headless) {
+            const EditorSettings& es = EditorSettings::Get();
+            SplashScreen::TargetRect target{es.WindowX, es.WindowY, es.WindowWidth, es.WindowHeight};
+            splash.Show(EnginePaths::Resolve("assets/branding/splash.png"), 1.0f,
+                        es.WindowPlacementValid ? &target : nullptr);
+        }
 
         // The smoke test's whole job is catching GL-level regressions, so force debug output on
         // for it regardless of build config / env (audit #356) — otherwise newGlErrors is
@@ -460,8 +467,8 @@ int main(int argc, char** argv) {
         // Resolved under the project folder (see ProjectPaths.h) rather than the working
         // directory, so the scene being edited lives alongside the source instead of inside
         // build/, where it was gitignored and a clean rebuild would delete it. Prefer the scene
-        // that was open when the editor last closed, if it still exists (#95).
-        EditorSettings::Load();
+        // that was open when the editor last closed, if it still exists (#95). (EditorSettings
+        // itself was loaded before the splash.)
         {
             // #143: reopen where the user left the window. Falls back to maximized (not true
             // fullscreen, no monitor video-mode switch; F11 still enters fullscreen) on first
