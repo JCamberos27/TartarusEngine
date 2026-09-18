@@ -2,6 +2,7 @@
 
 #include "Log.h"
 #include "ProjectSettings.h"
+#include "TimeService.h"
 #include "World.h"
 #include "Components.h"
 #include "Model.h"
@@ -225,7 +226,6 @@ constexpr int   kMaxSubSteps      = 4;
 // The editor sets these from the Physics panel; they must survive Play->Stop->Play, so they
 // can't live in PhysicsState.
 unsigned g_DebugDrawFlags = 0;
-float    g_SimTimeScale   = 1.0f;
 bool     g_QueryRecording = false;
 
 // Recent contact points, for the fading impact sparks (PDD_Contacts). Appended in onContact,
@@ -1018,20 +1018,21 @@ bool PoseIsFinite(const PxTransform& p) {
            ok(p.q.x) && ok(p.q.y) && ok(p.q.z) && ok(p.q.w);
 }
 
-void Step(float dt, World& world) {
+void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFixedStep) {
     if (!g_State || !g_State->scene) return;
-    if (dt <= 0.0f) return;
-    const float rawDt = dt;
-    dt *= g_SimTimeScale;                 // #185 — slow-mo / freeze
+    // dt arrives time-scaled (Time::DeltaTime); the debug-draw history fades in real time.
+    const float rawDt = Time::UnscaledDeltaTime();
+    g_State->triggerEvents.clear();
+    g_State->enteredThisFrame.clear();
+    g_State->contactEvents.clear(); // #185 PR 7 — onContact refills it during the sim below
+    // Frozen (time scale 0): no sim, so no events this frame - but last frame's are cleared above
+    // rather than replayed to the game module every frame. The debug-draw history keeps its age,
+    // so contact sparks stay visible to inspect while frozen.
     if (dt <= 0.0f) { g_State->lastSubsteps = 0; g_State->lastStepMillis = 0.0f; return; }
 
     // Age the debug-draw history (contacts / queries) so sparks fade over ~½ second.
     for (int i = 0; i < g_ContactCount; ++i) g_Contacts[i].age += rawDt;
     for (int i = 0; i < g_QueryCount; ++i)   g_Queries[i].age  += rawDt;
-
-    g_State->triggerEvents.clear();
-    g_State->enteredThisFrame.clear();
-    g_State->contactEvents.clear(); // #185 PR 7 — onContact refills it during the sim below
 
     // Kinematic bodies are driven by their TransformComponent (e.g. an Animator-moved platform):
     // push this frame's authored pose into the actor before stepping so it sweeps other bodies.
@@ -1053,6 +1054,7 @@ void Step(float dt, World& world) {
     const auto t0 = std::chrono::steady_clock::now();
     int steps = 0;
     while (g_State->stepAccumulator >= fixedStep && steps < kMaxSubSteps) {
+        if (onFixedStep) onFixedStep(fixedStep); // FixedUpdate runs before the sim, as in Unity
         RunOneSubstep(*g_State, fixedStep);
         g_State->stepAccumulator -= fixedStep;
         ++steps;
@@ -1463,7 +1465,7 @@ PhysicsDebugStats GetDebugStats() {
     s.Active = true;
     s.Substeps = g_State->lastSubsteps;
     s.StepMillis = g_State->lastStepMillis;
-    s.TimeScale = g_SimTimeScale;
+    s.TimeScale = Time::EffectiveTimeScale();
     s.DynamicBodies = (int)g_State->dynamics.size();
     s.KinematicBodies = (int)g_State->kinematics.size();
     s.StaticActors = (int)g_State->staticByEntity.size();
@@ -1609,8 +1611,6 @@ int CopyDebugLines(float* out, int maxLines) {
     return n;
 }
 
-void  SetSimTimeScale(float scale) { g_SimTimeScale = std::clamp(scale, 0.0f, 2.0f); }
-float GetSimTimeScale()            { return g_SimTimeScale; }
 
 void StepOneSubstep(World& world) {
     if (!g_State || !g_State->scene) return;
