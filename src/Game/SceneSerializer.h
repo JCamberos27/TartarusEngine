@@ -16,7 +16,13 @@ namespace SceneSerializer {
 
     // Clears world.Boxes/world.Models and repopulates them from the file.
     // Returns false (leaving world untouched) if the file doesn't exist or fails to parse.
-    bool Load(World& world, AssetLibrary& assets, const std::string& path);
+    //
+    // persistMigration (default true): if the file predates the current format, Load() normally
+    // writes the upgraded scene straight back to `path` (see the .cpp for why). Pass false for
+    // any caller that's meant to be read-only against the file on disk — headless tooling
+    // (--smoke-test, --resave's input load) must never mutate a scene file just because it was
+    // loaded for inspection (audit #77).
+    bool Load(World& world, AssetLibrary& assets, const std::string& path, bool persistMigration = true);
 
     // Every full scene (not an entity-subset fragment) carries a "formatVersion" integer at its
     // root, written by Save/SaveToString and checked on every load (#195). A file whose

@@ -152,11 +152,22 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path) {
         }
     }
 
+    // Register the GUID BEFORE constructing the Texture, not after (audit #75). TextureCache's
+    // on-disk entry is keyed by AssetDatabase::GuidForPath when one is registered, falling back
+    // to a hash of the absolute path otherwise (TextureCache.cpp's EntryPath) — the Texture
+    // constructor below is what actually reads/writes that entry. Calling EnsureGuid after
+    // construction meant the very first decode of any not-yet-scanned texture wrote its cache
+    // entry under the path-hash key (no GUID existed yet), while every later load of that same
+    // path found a GUID already registered and looked the entry up under a DIFFERENT key — a
+    // guaranteed cache miss on every load after the first. In normal project use this was masked
+    // by AssetDatabase::ScanProject() registering every known asset's GUID at startup, before any
+    // texture is ever loaded — but anything loaded from outside that scan (freshly imported
+    // files, or --asset-load-bench's synthetic textures) hit it on every single load.
+    AssetDatabase::EnsureGuid(path);
     auto tex = std::make_shared<Texture>(path, GetTextureSettings(path));
     m_TextureCache[path] = tex;
     m_TextureList.push_back(tex);
     m_TexturePaths.push_back(path);
-    AssetDatabase::EnsureGuid(path);
     return tex;
 }
 

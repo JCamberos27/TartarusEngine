@@ -266,7 +266,7 @@ void main() {
 // — Alt+Left-drag orbits around it instead of the plain free-look that Right-drag still does.
 // Returns true on any frame the fly speed was changed by scroll (so the caller can flash the
 // on-screen "Fly speed: N" readout — #236 R2).
-static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm::vec3* orbitPivot) {
+static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, bool gizmoDragging, const glm::vec3* orbitPivot) {
     bool flySpeedChanged = false;
     auto trimFlySpeed = [&](double notches) {
         float& fs = EditorSettings::Get().SceneCameraFlySpeed;
@@ -322,7 +322,9 @@ static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, const glm:
         }
     }
 
-    if (allowLook && orbitPivot && altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT)) {
+    // gizmoDragging excludes this branch while ImGuizmo actually has the left button captured
+    // for a handle drag (audit #79) — the two would otherwise fight over the same Alt+LMB chord.
+    if (allowLook && orbitPivot && altHeld && !gizmoDragging && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT)) {
         // Same look-rotation input as free-look above, but the camera's position is then pinned
         // to a sphere of constant radius around the pivot instead of staying put — the pivot
         // (the selected object) stays centered in view as the camera swings around it.
@@ -578,7 +580,9 @@ int main(int argc, char** argv) {
         AssetLibrary assets;
 
         if (resaveMode) {
-            if (!SceneSerializer::Load(world, assets, resaveIn)) {
+            // false: --resave's whole point is choosing where the migrated scene lands
+            // (resaveOut, below) — Load() must not also silently overwrite resaveIn (audit #77).
+            if (!SceneSerializer::Load(world, assets, resaveIn, /*persistMigration=*/false)) {
                 std::cerr << "[Resave] FAILED to load '" << resaveIn << "'\n";
                 return 2;
             }
@@ -684,7 +688,12 @@ int main(int argc, char** argv) {
             return 0;
         }
 
-        bool sceneLoaded = SceneSerializer::Load(world, assets, scenePath);
+        // persistMigration is false for every headless mode that reaches this line (currently
+        // just --smoke-test; --resave/--undo-bench/--asset-load-bench already returned above):
+        // the harness must never rewrite the startup scene just from opening it for a read-only
+        // regression check (audit #77). Ordinary interactive startup keeps the existing
+        // "upgrade once" behavior.
+        bool sceneLoaded = SceneSerializer::Load(world, assets, scenePath, /*persistMigration=*/!headless);
         if (sceneLoaded) {
             std::cout << "Loaded scene from " << scenePath << std::endl;
         }
@@ -706,6 +715,24 @@ int main(int argc, char** argv) {
 
         EditorLayer editor;
         editor.Init(window.Handle());
+        // Headless runs (--smoke-test / --resave / the benches) must not write imgui.ini either
+        // — same "read-only unless explicitly told otherwise" contract as the scene-file fix
+        // above (audit #77). ImGui's own periodic autosave (every io.IniSavingRate seconds,
+        // default 5) would otherwise still fire mid-run since a multi-scene --smoke-test easily
+        // runs past that. Null IniFilename disables load AND save; layout is never meant to
+        // persist for a one-shot headless process anyway.
+        if (headless) {
+            // Load whatever layout is already on disk (same as a normal launch would) before
+            // cutting off future saves — building --smoke-test's default DockBuilder layout
+            // from scratch instead turned out to change which viewport ends up sized/visible
+            // for the Scene panel, which silently changed what the harness's own DrawCalls
+            // stat was actually measuring after the first couple of scenes. Loading once avoids
+            // that; nulling IniFilename afterward still blocks every autosave for the rest of
+            // this headless run (audit #77's "read-only unless told otherwise" contract).
+            ImGuiIO& io = ImGui::GetIO();
+            if (io.IniFilename) ImGui::LoadIniSettingsFromDisk(io.IniFilename);
+            io.IniFilename = nullptr;
+        }
         AudioEngine::SetMuted(EditorSettings::Get().AudioMuted); // #236 R2 — restore the View ▸ Mute Audio choice
 
         // One-shot rig dump: OS, CPU, RAM, GPU, driver, display, build. Collected into a block
@@ -1066,7 +1093,11 @@ int main(int argc, char** argv) {
                     // into the baseline and ignored (audit #356).
                     smokeBaselineGlErrors  = GLDebug::ErrorCount();
                     smokeBaselineLogErrors = Log::CountOf(LogLevel::Error);
-                    smokeSceneLoadOk = SceneSerializer::Load(world, assets, path);
+                    // false: the smoke-test harness only reads these scenes to render and check
+                    // them — it must never rewrite a committed regression fixture on disk just
+                    // from loading it (audit #77; tests/smoke-scenes-invalid/ in particular is
+                    // documented as static, hand-authored fixtures).
+                    smokeSceneLoadOk = SceneSerializer::Load(world, assets, path, /*persistMigration=*/false);
                     std::cout << "[SmokeTest] Loading " << path
                               << (smokeSceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
                     smokeFramesRendered = 0;
@@ -1234,7 +1265,21 @@ int main(int argc, char** argv) {
             if (editorUIVisible) {
                 glm::vec3 selectionCenter;
                 bool hasSelection = editor.GetSelectionCenter(world, selectionCenter);
-                bool allowLook = !editor.WantsCaptureMouse() && !editor.GizmoEngaged() && !gameHasInput;
+                // allowLook must NOT be blocked by mere gizmo hover (ImGuizmo::IsOver()). RMB
+                // look, WASDQE fly, MMB pan, Alt+RMB dolly, and scroll-zoom are all driven by
+                // inputs a gizmo drag (always started with the LEFT mouse button) can never
+                // compete with, so gating them on gizmo proximity only ever cost navigation,
+                // never prevented a real conflict — and it could cost ALL of it permanently:
+                // the Rect tool's bounds handles scale with the selected object's world-space
+                // size, so stretching something large enough made IsOver() true almost
+                // everywhere in the viewport, and every control below went dead until the
+                // object was deselected (audit #79). The one genuine conflict is Alt+LMB
+                // orbit, which shares the left button with an in-progress gizmo drag — that's
+                // excluded below via gizmoDragging (GizmoUsing(): actually mid-drag, not just
+                // hovered), so orbit is blocked exactly while a handle is being dragged and
+                // nowhere else.
+                bool allowLook = !editor.WantsCaptureMouse() && !gameHasInput;
+                bool gizmoDragging = editor.GizmoUsing();
 
                 // Infinite drag: while a look (RMB), pan (MMB) or orbit (Alt+LMB) drag is held,
                 // disable the OS cursor so mouse motion is delivered as unbounded deltas instead
@@ -1245,7 +1290,7 @@ int main(int argc, char** argv) {
                 bool altHeld = Input::IsKeyDown(GLFW_KEY_LEFT_ALT) || Input::IsKeyDown(GLFW_KEY_RIGHT_ALT);
                 bool dragBtnHeld = Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)
                                 || Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_MIDDLE)
-                                || (altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT));
+                                || (altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT) && !gizmoDragging);
                 if (!camDragActive && dragBtnHeld && allowLook) {
                     camDragActive = true;
                     window.SetCursorLocked(true);
@@ -1254,7 +1299,7 @@ int main(int argc, char** argv) {
                     window.SetCursorLocked(false);
                 }
 
-                if (UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive,
+                if (UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive, gizmoDragging,
                         hasSelection ? &selectionCenter : nullptr))
                     editor.FlashFlySpeedHud(); // #236 R2 — show the transient "Fly speed: N" readout
             } else if (camDragActive) {
