@@ -68,11 +68,56 @@ std::string StripComments(const std::string& src) {
         }
         if (inString) { if (c == '"') inString = false; if (c == '\n') inString = false; out += c; continue; }
         if (c == '"') { inString = true; out += c; continue; }
-        if (c == '/' && n == '/') { inLine = true; ++i; continue; }
+        // "engine://..." / "project://..." references: a // straight after ':' is a URI, not a comment.
+        if (c == '/' && n == '/' && (i == 0 || src[i - 1] != ':')) { inLine = true; ++i; continue; }
         if (c == '/' && n == '*') { inBlock = true; ++i; continue; }
         out += c;
     }
     return out;
+}
+
+// #104 render-state keyword values. False (with the caller logging) for anything unrecognised.
+bool ParseBlendFactor(const std::string& t, unsigned& out) {
+    static const std::pair<const char*, unsigned> kFactors[] = {
+        {"One", GL_ONE}, {"Zero", GL_ZERO}, {"SrcColor", GL_SRC_COLOR}, {"SrcAlpha", GL_SRC_ALPHA},
+        {"DstColor", GL_DST_COLOR}, {"DstAlpha", GL_DST_ALPHA},
+        {"OneMinusSrcColor", GL_ONE_MINUS_SRC_COLOR}, {"OneMinusSrcAlpha", GL_ONE_MINUS_SRC_ALPHA},
+        {"OneMinusDstColor", GL_ONE_MINUS_DST_COLOR}, {"OneMinusDstAlpha", GL_ONE_MINUS_DST_ALPHA},
+    };
+    for (const auto& [name, v] : kFactors) if (t == name) { out = v; return true; }
+    return false;
+}
+
+bool ParseDepthFunc(const std::string& t, unsigned& out) {
+    static const std::pair<const char*, unsigned> kFuncs[] = {
+        {"Less", GL_LESS}, {"LEqual", GL_LEQUAL}, {"Equal", GL_EQUAL}, {"GEqual", GL_GEQUAL},
+        {"Greater", GL_GREATER}, {"NotEqual", GL_NOTEQUAL}, {"Always", GL_ALWAYS}, {"Never", GL_NEVER},
+    };
+    for (const auto& [name, v] : kFuncs) if (t == name) { out = v; return true; }
+    return false;
+}
+
+// Unity queue names map onto the engine's three queues; the number (or the name's base plus an
+// offset) is the in-queue sort index.
+bool ParseQueue(const std::string& t, int& queue, int& index) {
+    size_t split = t.find_first_of("+-");
+    const std::string name = t.substr(0, split);
+    int offset = 0;
+    if (split != std::string::npos) {
+        try { offset = std::stoi(t.substr(split)); } catch (...) { return false; }
+    }
+    if (!name.empty() && std::isdigit((unsigned char)name[0])) {
+        int n = 0;
+        try { n = std::stoi(name); } catch (...) { return false; }
+        n += offset;
+        queue = n >= 2750 ? 2 : n >= 2450 ? 1 : 0;
+        index = n;
+        return true;
+    }
+    if (name == "Background" || name == "Geometry") { queue = 0; index = (name == "Background" ? 1000 : 2000) + offset; return true; }
+    if (name == "AlphaTest")                        { queue = 1; index = 2450 + offset; return true; }
+    if (name == "Transparent" || name == "Overlay") { queue = 2; index = (name == "Overlay" ? 4000 : 3000) + offset; return true; }
+    return false;
 }
 
 enum class PropParse { NotAProperty, Ok, Error };
@@ -250,8 +295,38 @@ std::shared_ptr<ShaderAsset> ShaderAsset::ParseFile(const std::string& path) {
             sa->m_VertFile = Trim(ReadBlock(text));
         } else if (token == "Fragment") {
             sa->m_FragFile = Trim(ReadBlock(text));
+        } else if (token == "Cull" || token == "ZWrite" || token == "ZTest" || token == "Blend" || token == "Queue") {
+            // #104 — render state. A bad value is reported and ignored (the pass default stays).
+            std::string v;
+            text >> v;
+            ShaderRenderState& st = sa->m_State;
+            bool ok = true;
+            if (token == "Cull") {
+                if (v == "Back") st.Cull = ShaderRenderState::CullMode::Back;
+                else if (v == "Front") st.Cull = ShaderRenderState::CullMode::Front;
+                else if (v == "Off") st.Cull = ShaderRenderState::CullMode::Off;
+                else ok = false;
+            } else if (token == "ZWrite") {
+                if (v == "On") st.ZWrite = 1; else if (v == "Off") st.ZWrite = 0; else ok = false;
+            } else if (token == "ZTest") {
+                ok = ParseDepthFunc(v, st.ZTest);
+            } else if (token == "Blend") {
+                if (v == "Off") st.Blend = 0;
+                else {
+                    std::string dst;
+                    text >> dst;
+                    ok = ParseBlendFactor(v, st.BlendSrc) && ParseBlendFactor(dst, st.BlendDst);
+                    if (ok) st.Blend = 1;
+                    v += " " + dst;
+                }
+            } else {
+                ok = ParseQueue(v, st.Queue, st.QueueIndex);
+            }
+            if (!ok) Log::Error("ShaderAsset: '" + path + "': unrecognised " + token + " value '" + v + "' - ignored.",
+                                LogContext::Asset(path));
+        } else {
+            Log::Warn("ShaderAsset: '" + path + "': unknown token '" + token + "' ignored.", LogContext::Asset(path));
         }
-        // "Queue" and other unknown tokens are skipped
     }
     if (sa->m_VertFile.empty()) {
         Log::Error("ShaderAsset: '" + path + "' has no Vertex { file } block.", LogContext::Asset(path));

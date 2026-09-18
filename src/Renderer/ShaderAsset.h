@@ -40,6 +40,28 @@ struct ShaderProperty {
     int          PropIndex = 0;
 };
 
+// #104 — ShaderLab-style render state declared at the top level of a .shader:
+//   Cull Back|Front|Off     ZWrite On|Off     ZTest Less|LEqual|Equal|GEqual|Greater|NotEqual|Always
+//   Blend Off | Blend <src> <dst>   (One Zero SrcColor SrcAlpha DstColor DstAlpha and OneMinus*)
+//   Queue Geometry|AlphaTest|Transparent[+/-N] | <number>
+// Anything not declared keeps the pass's own default (back-face culling, depth write on for
+// opaque / off for transparent, GL_LESS, the transparent pass's alpha blend). GL enums are kept
+// as plain unsigned ints so this header stays GL-free.
+struct ShaderRenderState {
+    enum class CullMode { Unset, Back, Front, Off };
+    CullMode Cull = CullMode::Unset;
+    int ZWrite = -1;            // -1 unset, 0 off, 1 on
+    unsigned ZTest = 0;         // 0 unset, else a GL depth function
+    int Blend = -1;             // -1 unset, 0 off, 1 on with BlendSrc/BlendDst
+    unsigned BlendSrc = 0, BlendDst = 0;
+    // Queue: -1 unset, else a MaterialAsset::Queue value (0 Opaque, 1 AlphaTest, 2 Transparent)
+    // plus the in-queue sort index, used as the default for materials that don't set their own.
+    int Queue = -1;
+    int QueueIndex = 2000;
+
+    bool AffectsDraw() const { return Cull != CullMode::Unset || ZWrite >= 0 || ZTest != 0 || Blend >= 0; }
+};
+
 // Pre-computed draw-time binding for one property. TextureUnit is -1 for non-texture properties.
 struct PropertyBinding {
     ShaderPropType Type;
@@ -69,6 +91,7 @@ public:
     // shader declares is a custom keyword, switched per material (MaterialAsset::Keywords).
     static bool IsBuiltinKeyword(const std::string& keyword);
     const std::string&                 Path()       const { return m_Path; }
+    const ShaderRenderState&           RenderState() const { return m_State; }
 
 private:
     std::string m_Path;
@@ -80,6 +103,7 @@ private:
     std::vector<ShaderProperty>  m_Props;
     std::vector<PropertyBinding> m_Bindings;
     std::vector<std::string>     m_Keywords;
+    ShaderRenderState            m_State;
 
     std::unordered_map<ShaderVariantKey, std::unique_ptr<Shader>> m_Variants;
 
