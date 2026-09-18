@@ -165,6 +165,21 @@ void EditorLayer::Init(GLFWwindow* window) {
                                                               : 230.0f * m_UIScale;
         m_AssetIconSize = prefs.AssetBrowserIconSize > 0.0f ? prefs.AssetBrowserIconSize
                                                             : 96.0f * m_UIScale;
+
+        // #135 — scene-view tool state; SyncViewportPrefs() writes changes back.
+        m_ShowGrid         = prefs.ViewShowGrid;
+        m_ShowGizmos       = prefs.ViewShowGizmo;
+        m_FrameOnSelect    = prefs.ViewFrameOnSelect;
+        m_GizmoSize        = prefs.GizmoSize;
+        m_VertexPickPixels = prefs.VertexPickPixels;
+        m_GridSnapEnabled  = prefs.SnapEnabled;
+        m_SnapTranslation  = prefs.SnapTranslation;
+        m_SnapRotationDeg  = prefs.SnapRotationDeg;
+        m_SnapScale        = prefs.SnapScale;
+        m_GizmoLocalSpace  = prefs.GizmoLocalSpace;
+        m_GizmoPivotCenter = prefs.GizmoPivotCenter;
+        m_GizmoOp          = (GizmoOp)prefs.ActiveTool;
+        m_ShadingMode      = (ShadingMode)prefs.ShadingMode;
     }
 
     IMGUI_CHECKVERSION();
@@ -2105,6 +2120,31 @@ void EditorLayer::ApplyPendingViewportTabFocus() {
         }
     }
 }
+// #135 — the scene-view tool state lives in plain members that menus, hotkeys, the toolbar and
+// Preferences all edit directly. Rather than a Save() at every one of those sites, copy any
+// change into EditorSettings once per frame (Save() only marks dirty; Flush() coalesces).
+void EditorLayer::SyncViewportPrefs() {
+    EditorSettings& p = EditorSettings::Get();
+    bool changed = false;
+    auto sync = [&changed](auto& stored, auto live) {
+        if (stored != live) { stored = live; changed = true; }
+    };
+    sync(p.ViewShowGrid, m_ShowGrid);
+    sync(p.ViewShowGizmo, m_ShowGizmos);
+    sync(p.ViewFrameOnSelect, m_FrameOnSelect);
+    sync(p.GizmoSize, m_GizmoSize);
+    sync(p.VertexPickPixels, m_VertexPickPixels);
+    sync(p.SnapEnabled, m_GridSnapEnabled);
+    sync(p.SnapTranslation, m_SnapTranslation);
+    sync(p.SnapRotationDeg, m_SnapRotationDeg);
+    sync(p.SnapScale, m_SnapScale);
+    sync(p.GizmoLocalSpace, m_GizmoLocalSpace);
+    sync(p.GizmoPivotCenter, m_GizmoPivotCenter);
+    sync(p.ActiveTool, (int)m_GizmoOp);
+    sync(p.ShadingMode, (int)m_ShadingMode);
+    if (changed) EditorSettings::Save();
+}
+
 void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera, float dt) {
     m_AssetsPtr = &assets; // see the member comment - lets PushUndo() snapshot AssetLibrary
                            // state without needing every one of its call sites to pass it in
@@ -2114,6 +2154,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_ScreenshotThumbBudgetThisFrame = 8; // at most this many new Asset Browser screenshot thumbnails per frame (#176)
 
     if (m_AssetRefreshFlash > 0.0f) m_AssetRefreshFlash = std::max(0.0f, m_AssetRefreshFlash - dt); // #236 G
+    SyncViewportPrefs();
 
     // First editor frame after a crash-interrupted session: offer to restore the auto-saved
     // recovery snapshot. No-op unless Init() flagged one as newer than the scene file.
