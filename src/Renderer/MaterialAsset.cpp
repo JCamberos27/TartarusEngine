@@ -7,6 +7,7 @@
 #include "ProjectPaths.h"
 
 #include <json.hpp>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <unordered_set>
@@ -18,9 +19,67 @@ namespace {
 // Helpers for glm ↔ json (a plain array of floats, not an object).
 json Vec3ToJson(const glm::vec3& v) { return {v.x, v.y, v.z}; }
 glm::vec3 JsonToVec3(const json& j, const glm::vec3& def = {}) {
-    if (!j.is_array() || j.size() < 3) return def;
+    if (!j.is_array() || j.size() < 3 || !j[0].is_number() || !j[1].is_number() || !j[2].is_number())
+        return def;
     return { j[0].get<float>(), j[1].get<float>(), j[2].get<float>() };
 }
+// 2-4 numbers; missing components come from def (#105 — Vec2/Vec4 used to be saved as 3 floats).
+glm::vec4 JsonToVec4(const json& j, const glm::vec4& def) {
+    glm::vec4 out = def;
+    if (!j.is_array()) return def;
+    for (size_t i = 0; i < j.size() && i < 4; ++i) {
+        if (!j[i].is_number()) return def;
+        out[(int)i] = j[i].get<float>();
+    }
+    return out;
+}
+
+// #105 — type-checked reads. nlohmann's value()/get<>() throw type_error on a wrong-typed field
+// (e.g. "_Metallic": "0.5"), which escaped Load() uncaught and closed the editor. A wrong type
+// now falls back to the default with a warning naming the file and key.
+struct Reader {
+    const json& obj;
+    const std::string& path;
+    const json* Find(const char* k) const {
+        auto it = obj.find(k);
+        return it == obj.end() || it->is_null() ? nullptr : &*it;
+    }
+    void Warn(const char* k, const char* want) const {
+        Log::Warn("MaterialAsset: '" + path + "': \"" + k + "\" should be " + want + " - using the default.");
+    }
+    float Num(const char* k, float def) const {
+        const json* v = Find(k);
+        if (!v) return def;
+        if (v->is_number()) return v->get<float>();
+        Warn(k, "a number"); return def;
+    }
+    int Int(const char* k, int def) const {
+        const json* v = Find(k);
+        if (!v) return def;
+        if (v->is_number()) return (int)v->get<double>();
+        Warn(k, "a number"); return def;
+    }
+    bool Bool(const char* k, bool def) const {
+        const json* v = Find(k);
+        if (!v) return def;
+        if (v->is_boolean()) return v->get<bool>();
+        if (v->is_number()) return v->get<double>() != 0.0;
+        Warn(k, "true/false"); return def;
+    }
+    std::string Str(const char* k) const {
+        const json* v = Find(k);
+        if (!v) return {};
+        if (v->is_string()) return v->get<std::string>();
+        Warn(k, "a string"); return {};
+    }
+    glm::vec3 Vec3(const char* k, const glm::vec3& def) const {
+        const json* v = Find(k);
+        if (!v) return def;
+        if (v->is_array() && v->size() >= 3 && (*v)[0].is_number() && (*v)[1].is_number() && (*v)[2].is_number())
+            return JsonToVec3(*v, def);
+        Warn(k, "an array of 3 numbers"); return def;
+    }
+};
 
 } // namespace
 
@@ -38,6 +97,8 @@ std::shared_ptr<MaterialAsset> MissingPlaceholder(const std::string& path) {
 }
 } // namespace
 
+std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::string& path, AssetLibrary* lib);
+
 std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, AssetLibrary* lib) {
     std::ifstream f(path);
     if (!f.is_open()) return MissingPlaceholder(path);
@@ -48,83 +109,79 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
         return MissingPlaceholder(path);
     }
 
+    if (!j.is_object()) {
+        Log::Error("MaterialAsset: '" + path + "' is not a JSON object.");
+        return MissingPlaceholder(path);
+    }
+    try {
+        return LoadMaterialFromJson(j, path, lib);
+    } catch (const std::exception& e) { // #105 — belt and braces behind the typed reads
+        Log::Error("MaterialAsset: '" + path + "' is malformed: " + e.what());
+        return MissingPlaceholder(path);
+    }
+}
+
+std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::string& path, AssetLibrary* lib) {
+    using Queue = MaterialAsset::Queue;
+    const Reader top{j, path};
     auto ma = std::make_shared<MaterialAsset>();
     ma->Path = path;
-    ma->Name = j.value("name", std::filesystem::path(path).stem().string());
+    ma->Name = top.Str("name");
+    if (ma->Name.empty()) ma->Name = std::filesystem::path(path).stem().string();
 
-    int matVersion = j.value("matVersion", 1);
+    int matVersion = top.Int("matVersion", 1);
 
     auto& m = ma->Mat;
 
-    if (matVersion >= 2) {
-        // v2 format: "shader" path + "properties" object.
-        ma->ShaderPath = j.value("shader", std::string());
+    // Queue / surface fields — both formats (#105: v1 used to drop them, so a transparent or
+    // cutout v1 material reverted to opaque on reload). Opaque by default.
+    ma->RenderQueue = (Queue)std::clamp(top.Int("renderQueue", (int)Queue::Opaque), 0, 2);
+    ma->QueueIndex  = top.Int("queueIndex", 2000);
+    ma->Opacity     = std::clamp(top.Num("opacity", 1.0f), 0.0f, 1.0f);
+    // #101 — the AlphaTest queue now actually clips (it rendered exactly like Opaque).
+    m.AlphaClip   = ma->RenderQueue == Queue::AlphaTest;
+    m.AlphaCutoff = std::clamp(top.Num("alphaCutoff", 0.5f), 0.0f, 1.0f);
 
-        // Queue fields (Opaque by default — dormant on existing materials).
-        ma->RenderQueue = (Queue)j.value("renderQueue", (int)Queue::Opaque);
-        ma->QueueIndex  = j.value("queueIndex",  2000);
-        ma->Opacity     = j.value("opacity",      1.0f);
-        // #101 — the AlphaTest queue now actually clips (it rendered exactly like Opaque).
-        m.AlphaClip   = ma->RenderQueue == Queue::AlphaTest;
-        m.AlphaCutoff = j.value("alphaCutoff", 0.5f);
+    // v2 keeps everything under "properties" with shader-style names; v1 is flat with camelCase
+    // names. The advanced lobes are read in both (v1 only has them if saved by this build).
+    const bool v2 = matVersion >= 2;
+    static const json kEmpty = json::object();
+    const json& propsJson = v2 ? ((j.contains("properties") && j["properties"].is_object()) ? j["properties"] : kEmpty) : j;
+    const Reader r{propsJson, path};
+    auto key = [&](const char* v2Key, const char* v1Key) { return v2 ? v2Key : v1Key; };
 
-        // Populate Material struct from "properties" (also fills legacy path strings).
-        if (j.contains("properties") && j["properties"].is_object()) {
-            const auto& props = j["properties"];
-            auto strProp = [&](const char* k) { return props.value(k, std::string()); };
-            // Scalars / colors
-            m.BaseColor        = JsonToVec3(props.value("_BaseColor",      json::array({1,1,1})), {1,1,1});
-            m.Metallic         = props.value("_Metallic",         0.0f);
-            m.Roughness        = props.value("_Roughness",        0.5f);
-            m.EmissiveColor    = JsonToVec3(props.value("_EmissiveColor",  json::array({0,0,0})), {});
-            m.EmissiveStrength = props.value("_EmissiveStrength", 1.0f);
-            m.Triplanar        = props.value("_Triplanar",        false);
-            m.TriplanarScale   = props.value("_TriplanarScale",   1.0f);
-            // Scalars / PR10
-            m.ClearCoat          = props.value("_ClearCoat",          0.0f);
-            m.ClearCoatRoughness = props.value("_ClearCoatRoughness",  0.5f);
-            m.Anisotropy         = props.value("_Anisotropy",          0.0f);
-            m.AnisotropyRotation = props.value("_AnisotropyRotation",  0.0f);
-            // Scalars / PR11
-            m.Sheen               = JsonToVec3(props.value("_Sheen",           json::array({0,0,0})), {});
-            m.SheenRoughness      = props.value("_SheenRoughness",  0.5f);
-            m.SubsurfaceColor     = JsonToVec3(props.value("_SubsurfaceColor", json::array({1,0.8f,0.6f})), {1,0.8f,0.6f});
-            m.Thickness           = props.value("_Thickness",        0.5f);
-            // Scalars / PR12
-            m.TransmissionStrength = props.value("_TransmissionStrength", 0.0f);
-            m.IOR                  = props.value("_IOR",                  1.5f);
-            // #354: variant opt-ins with no natural "off" value (not shader Properties()).
-            m.SubsurfaceEnabled = props.value("_SubsurfaceEnabled", false);
-            m.ReflectionProbes  = props.value("_ReflectionProbes",  false);
-            // Texture paths
-            ma->AlbedoMapPath            = strProp("_AlbedoMap");
-            ma->NormalMapPath            = strProp("_NormalMap");
-            ma->MetallicRoughnessMapPath = strProp("_MetallicRoughnessMap");
-            ma->MetallicMapPath          = strProp("_MetallicMap");
-            ma->RoughnessMapPath         = strProp("_RoughnessMap");
-            ma->AOMapPath                = strProp("_AOMap");
-            ma->EmissiveMapPath          = strProp("_EmissiveMap");
-            ma->ClearCoatMapPath         = strProp("_ClearCoatMap");
-            ma->ThicknessMapPath         = strProp("_ThicknessMap");
-        }
-    } else {
-        // v1 format: flat property keys, no shader reference.
-        m.BaseColor        = JsonToVec3(j.value("baseColor",      json::array({1,1,1})), {1,1,1});
-        m.Metallic         = j.value("metallic",         0.0f);
-        m.Roughness        = j.value("roughness",        0.5f);
-        m.EmissiveColor    = JsonToVec3(j.value("emissiveColor",  json::array({0,0,0})), {});
-        m.EmissiveStrength = j.value("emissiveStrength", 1.0f);
-        m.Triplanar        = j.value("triplanar",        false);
-        m.TriplanarScale   = j.value("triplanarScale",   1.0f);
-
-        ma->AlbedoMapPath            = j.value("albedoMap",            std::string());
-        ma->NormalMapPath            = j.value("normalMap",            std::string());
-        ma->MetallicRoughnessMapPath = j.value("metallicRoughnessMap", std::string());
-        ma->MetallicMapPath          = j.value("metallicMap",          std::string());
-        ma->RoughnessMapPath         = j.value("roughnessMap",         std::string());
-        ma->AOMapPath                = j.value("aoMap",                std::string());
-        ma->EmissiveMapPath          = j.value("emissiveMap",          std::string());
-    }
+    if (v2) ma->ShaderPath = top.Str("shader");
+    m.BaseColor        = r.Vec3(key("_BaseColor", "baseColor"), {1, 1, 1});
+    m.Metallic         = r.Num(key("_Metallic", "metallic"), 0.0f);
+    m.Roughness        = r.Num(key("_Roughness", "roughness"), 0.5f);
+    m.EmissiveColor    = r.Vec3(key("_EmissiveColor", "emissiveColor"), {});
+    m.EmissiveStrength = r.Num(key("_EmissiveStrength", "emissiveStrength"), 1.0f);
+    m.Triplanar        = r.Bool(key("_Triplanar", "triplanar"), false);
+    m.TriplanarScale   = r.Num(key("_TriplanarScale", "triplanarScale"), 1.0f);
+    // PR10-12 lobes
+    m.ClearCoat            = r.Num(key("_ClearCoat", "clearCoat"), 0.0f);
+    m.ClearCoatRoughness   = r.Num(key("_ClearCoatRoughness", "clearCoatRoughness"), 0.5f);
+    m.Anisotropy           = r.Num(key("_Anisotropy", "anisotropy"), 0.0f);
+    m.AnisotropyRotation   = r.Num(key("_AnisotropyRotation", "anisotropyRotation"), 0.0f);
+    m.Sheen                = r.Vec3(key("_Sheen", "sheen"), {});
+    m.SheenRoughness       = r.Num(key("_SheenRoughness", "sheenRoughness"), 0.5f);
+    m.SubsurfaceColor      = r.Vec3(key("_SubsurfaceColor", "subsurfaceColor"), {1, 0.8f, 0.6f});
+    m.Thickness            = r.Num(key("_Thickness", "thickness"), 0.5f);
+    m.TransmissionStrength = r.Num(key("_TransmissionStrength", "transmission"), 0.0f);
+    m.IOR                  = r.Num(key("_IOR", "ior"), 1.5f);
+    // #354: variant opt-ins with no natural "off" value (not shader Properties()).
+    m.SubsurfaceEnabled = r.Bool(key("_SubsurfaceEnabled", "subsurface"), false);
+    m.ReflectionProbes  = r.Bool(key("_ReflectionProbes", "reflectionProbes"), false);
+    // Texture paths
+    ma->AlbedoMapPath            = r.Str(key("_AlbedoMap", "albedoMap"));
+    ma->NormalMapPath            = r.Str(key("_NormalMap", "normalMap"));
+    ma->MetallicRoughnessMapPath = r.Str(key("_MetallicRoughnessMap", "metallicRoughnessMap"));
+    ma->MetallicMapPath          = r.Str(key("_MetallicMap", "metallicMap"));
+    ma->RoughnessMapPath         = r.Str(key("_RoughnessMap", "roughnessMap"));
+    ma->AOMapPath                = r.Str(key("_AOMap", "aoMap"));
+    ma->EmissiveMapPath          = r.Str(key("_EmissiveMap", "emissiveMap"));
+    ma->ClearCoatMapPath         = r.Str(key("_ClearCoatMap", "clearCoatMap"));
+    ma->ThicknessMapPath         = r.Str(key("_ThicknessMap", "thicknessMap"));
 
     if (lib) {
         auto loadTex = [&](const std::string& p) -> std::shared_ptr<Texture> {
@@ -156,25 +213,25 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
             const json props = (matVersion >= 2 && j.contains("properties") && j["properties"].is_object())
                                    ? j["properties"] : json::object();
             for (const ShaderProperty& p : ma->Shader->Properties()) {
-                if (IsBuiltinProp(p.Name)) continue;
+                if (MaterialAsset::IsBuiltinProp(p.Name)) continue;
                 MaterialProp mp;
                 mp.Type = p.Type;
-                const json* v = props.contains(p.Name) ? &props.at(p.Name) : nullptr;
+                const Reader pr{props, path};
+                const json* v = pr.Find(p.Name.c_str());
                 switch (p.Type) {
                 case ShaderPropType::Float: case ShaderPropType::Int:
-                    mp.F = v ? v->get<float>() : p.DefaultFloat;
-                    mp.I = (int)mp.F;
+                    mp.F = pr.Num(p.Name.c_str(), p.DefaultFloat);
+                    mp.I = p.Type == ShaderPropType::Int ? pr.Int(p.Name.c_str(), (int)p.DefaultFloat) : (int)mp.F;
+                    if (p.Type == ShaderPropType::Int) mp.F = (float)mp.I;
                     break;
                 case ShaderPropType::Bool:
-                    mp.B = v ? v->get<bool>() : p.DefaultBool;
+                    mp.B = pr.Bool(p.Name.c_str(), p.DefaultBool);
                     break;
                 case ShaderPropType::Color: case ShaderPropType::Vec2:
-                case ShaderPropType::Vec3:  case ShaderPropType::Vec4: {
-                    glm::vec3 d = JsonToVec3(json{p.DefaultVec.x, p.DefaultVec.y, p.DefaultVec.z});
-                    glm::vec3 g = v ? JsonToVec3(*v, d) : d;
-                    mp.V = glm::vec4(g, p.DefaultVec.w);
+                case ShaderPropType::Vec3:  case ShaderPropType::Vec4:
+                    // #105 — 2..4 components; older files wrote Vec2/Vec4/Color as 3 floats.
+                    mp.V = v ? JsonToVec4(*v, p.DefaultVec) : p.DefaultVec;
                     break;
-                }
                 case ShaderPropType::Texture2D:
                     mp.TexPath = v && v->is_string() ? v->get<std::string>() : std::string();
                     mp.Tex = mp.TexPath.empty() ? nullptr : lib->LoadTexture(mp.TexPath);
@@ -197,10 +254,6 @@ bool MaterialAsset::Save() const {
         j["matVersion"]  = 2;
         j["name"]        = Name;
         j["shader"]      = ShaderPath;
-        if (RenderQueue != Queue::Opaque) j["renderQueue"] = (int)RenderQueue;
-        if (QueueIndex  != 2000)          j["queueIndex"]  = QueueIndex;
-        if (Opacity     != 1.0f)          j["opacity"]     = Opacity;
-        if (m.AlphaCutoff != 0.5f)        j["alphaCutoff"] = m.AlphaCutoff; // #101
         json& props     = j["properties"];
         props["_BaseColor"]           = Vec3ToJson(m.BaseColor);
         props["_Metallic"]            = m.Metallic;
@@ -235,10 +288,14 @@ bool MaterialAsset::Save() const {
         // Non-builtin linked-shader properties (#354).
         for (const auto& [name, p] : ExtraProps) {
             switch (p.Type) {
-            case ShaderPropType::Float: case ShaderPropType::Int:   props[name] = p.F; break;
+            // #105 — each by its declared type: Int as an integer, Vec2 as 2 numbers, Vec4/Color
+            // with w (both used to be written as 3 floats, losing w).
+            case ShaderPropType::Float:                             props[name] = p.F; break;
+            case ShaderPropType::Int:                               props[name] = p.I; break;
             case ShaderPropType::Bool:                              props[name] = p.B; break;
-            case ShaderPropType::Color: case ShaderPropType::Vec2:
-            case ShaderPropType::Vec3:  case ShaderPropType::Vec4:  props[name] = Vec3ToJson(glm::vec3(p.V)); break;
+            case ShaderPropType::Vec2:                              props[name] = {p.V.x, p.V.y}; break;
+            case ShaderPropType::Vec3:                              props[name] = Vec3ToJson(glm::vec3(p.V)); break;
+            case ShaderPropType::Color: case ShaderPropType::Vec4:  props[name] = {p.V.x, p.V.y, p.V.z, p.V.w}; break;
             case ShaderPropType::Texture2D:                         props[name] = p.TexPath; break;
             }
         }
@@ -260,7 +317,28 @@ bool MaterialAsset::Save() const {
         j["roughnessMap"]        = RoughnessMapPath;
         j["aoMap"]               = AOMapPath;
         j["emissiveMap"]         = EmissiveMapPath;
+        // #105 — v1 used to drop the lobes, so a clear-coat / sheen / transmission v1 material
+        // lost them on reload. Written only when not default.
+        if (m.ClearCoat           != 0.0f) j["clearCoat"]          = m.ClearCoat;
+        if (m.ClearCoatRoughness  != 0.5f) j["clearCoatRoughness"] = m.ClearCoatRoughness;
+        if (m.Anisotropy          != 0.0f) j["anisotropy"]         = m.Anisotropy;
+        if (m.AnisotropyRotation  != 0.0f) j["anisotropyRotation"] = m.AnisotropyRotation;
+        if (!ClearCoatMapPath.empty())      j["clearCoatMap"]       = ClearCoatMapPath;
+        if (m.Sheen != glm::vec3(0.0f))    j["sheen"]              = Vec3ToJson(m.Sheen);
+        if (m.SheenRoughness      != 0.5f) j["sheenRoughness"]     = m.SheenRoughness;
+        if (m.SubsurfaceColor != glm::vec3(1.0f, 0.8f, 0.6f)) j["subsurfaceColor"] = Vec3ToJson(m.SubsurfaceColor);
+        if (m.Thickness           != 0.5f) j["thickness"]          = m.Thickness;
+        if (!ThicknessMapPath.empty())      j["thicknessMap"]       = ThicknessMapPath;
+        if (m.TransmissionStrength != 0.0f) j["transmission"]      = m.TransmissionStrength;
+        if (m.IOR                 != 1.5f) j["ior"]                = m.IOR;
+        if (m.SubsurfaceEnabled)            j["subsurface"]         = true;
+        if (m.ReflectionProbes)             j["reflectionProbes"]   = true;
     }
+    // Queue / surface fields, both formats (#105 — v1 used to drop them).
+    if (RenderQueue != Queue::Opaque) j["renderQueue"] = (int)RenderQueue;
+    if (QueueIndex  != 2000)          j["queueIndex"]  = QueueIndex;
+    if (Opacity     != 1.0f)          j["opacity"]     = Opacity;
+    if (m.AlphaCutoff != 0.5f)        j["alphaCutoff"] = m.AlphaCutoff; // #101
 
     // Atomic write: a crash mid-save must not truncate the .mat (audit CPP-206).
     return AtomicFile::WriteJson(Path, j);
