@@ -9,6 +9,9 @@
 #include <fstream>
 #include <mutex>
 #include <random>
+#include <cctype>
+#include <sstream>
+#include <regex>
 #include <unordered_map>
 
 using json = nlohmann::json;
@@ -25,8 +28,10 @@ std::string AssetGuid::ToString() const {
 
 AssetGuid AssetGuid::FromString(const std::string& s) {
     if (s.size() != 16) return {};
+    // #131 — case-insensitive: a hand-edited or tool-written uppercase GUID used to read as
+    // invalid, so the asset got a brand-new GUID and every reference to it broke.
     for (char c : s) {
-        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return {};
+        if (!std::isxdigit((unsigned char)c)) return {};
     }
     AssetGuid g;
     g.Value = std::stoull(s, nullptr, 16);
@@ -82,6 +87,21 @@ AssetGuid ReadMetaGuid(const std::string& metaPath) {
     json j = ReadMetaFull(metaPath);
     if (!j.contains("guid") || !j["guid"].is_string()) return {};
     return AssetGuid::FromString(j["guid"].get<std::string>());
+}
+
+// #131 — last resort for a .meta that no longer parses as JSON (merge conflict markers, a
+// truncated write, a stray edit): pull the first "guid": "<16 hex>" out of the raw text, so
+// the asset keeps its identity instead of being handed a new GUID.
+AssetGuid SalvageMetaGuid(const std::string& metaPath) {
+    std::ifstream f(metaPath, std::ios::binary);
+    if (!f.is_open()) return {};
+    std::stringstream ss;
+    ss << f.rdbuf();
+    static const std::regex kGuid("\"guid\"\\s*:\\s*\"([0-9a-fA-F]{16})\"");
+    std::smatch m;
+    const std::string text = ss.str();
+    if (!std::regex_search(text, m, kGuid)) return {};
+    return AssetGuid::FromString(m[1].str());
 }
 
 // Writes a new .meta sidecar. Returns false on I/O error.
@@ -152,6 +172,23 @@ AssetGuid EnsureGuid(const std::string& path) {
 
     std::string meta = MetaPath(path);
     AssetGuid guid = ReadMetaGuid(meta);
+    std::error_code metaEc;
+    if (!guid.IsValid() && std::filesystem::exists(meta, metaEc)) {
+        // #131 — the sidecar exists but is unreadable. Never overwrite it blindly: keep a copy,
+        // try to recover its GUID, and say so loudly.
+        const std::string bak = meta + ".bak";
+        std::filesystem::copy_file(meta, bak, std::filesystem::copy_options::overwrite_existing, metaEc);
+        guid = SalvageMetaGuid(meta);
+        if (guid.IsValid()) {
+            Log::Error("AssetDatabase: '" + meta + "' is corrupt; recovered its GUID " + guid.ToString() +
+                       " and rewrote it (import settings reset; original kept as " + bak + ").");
+            if (!WriteMetaFile(meta, guid, type)) Log::Warn("AssetDatabase: failed to rewrite '" + meta + "'");
+            Register(path, guid);
+            return guid;
+        }
+        Log::Error("AssetDatabase: '" + meta + "' is corrupt and has no recoverable GUID - assigning a new "
+                   "one. References to this asset by GUID will break; the original is kept as " + bak + ".");
+    }
     if (!guid.IsValid()) {
         // #125 — never litter a folder outside the project (Downloads, another repo, read-only
         // media) with .meta sidecars. Such a file is referenced by path only; importing copies
