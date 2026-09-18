@@ -6,6 +6,11 @@ out vec4 FragColor;
 uniform samplerCube uEnvMap;
 uniform float uRoughness;
 uniform float uEnvResolution; // base face size of uEnvMap, for the mip-selection heuristic
+uniform float uEnvRotation; // #108 — HDRI Y rotation (radians), same convention as SkyHdri.frag
+vec3 RotateEnv(vec3 d) {
+    float c = cos(uEnvRotation), s = sin(uEnvRotation);
+    return vec3(c * d.x + s * d.z, d.y, -s * d.x + c * d.z);
+}
 
 const float PI = 3.14159265359;
 const uint kSampleCount = 128u;
@@ -68,7 +73,7 @@ void main() {
         float saSample = 1.0 / (float(kSampleCount) * pdf);
         float mip = uRoughness == 0.0 ? 0.0 : 0.5 * log2(saSample / saTexel);
 
-        prefiltered += textureLod(uEnvMap, L, max(mip, 0.0)).rgb * NdotL;
+        prefiltered += textureLod(uEnvMap, RotateEnv(L), max(mip, 0.0)).rgb * NdotL;
         totalWeight += NdotL;
     }
 

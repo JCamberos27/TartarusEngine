@@ -1684,10 +1684,13 @@ int main(int argc, char** argv) {
                 }
                 // NeedsBake(-1,-1,-1) is true unless BakeFromCubemap already ran this HDRI;
                 // the sentinel set by BakeFromCubemap makes the check false until we switch source.
-                if (hdriCube && iblProbe.NeedsBake(glm::vec3(-1.0f), glm::vec3(-1.0f))) {
+                // #108 — also rebake when the HDRI rotation changes, so lighting follows the sky.
+                const float skyRot = glm::radians(world.SkyRotationDegrees);
+                if (hdriCube && (iblProbe.NeedsBake(glm::vec3(-1.0f), glm::vec3(-1.0f)) ||
+                                 iblProbe.BakedRotation() != skyRot)) {
                     PROFILE_SCOPE("IBL Bake (HDRI)");
                     PROFILE_GPU_SCOPE("IBL Bake (HDRI)");
-                    iblProbe.BakeFromCubemap(hdriCube->Texture());
+                    iblProbe.BakeFromCubemap(hdriCube->Texture(), hdriCube->FaceSize(), skyRot);
                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
                     glViewport(0, 0, window.GetWidth(), window.GetHeight());
                     GLStateCache::Invalidate();
