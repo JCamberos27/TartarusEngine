@@ -664,13 +664,39 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
             std::strncmp(hdriPathBuf, world.SkyHdriPath.c_str(), sizeof(hdriPathBuf)) != 0) {
             strncpy_s(hdriPathBuf, sizeof(hdriPathBuf), world.SkyHdriPath.c_str(), _TRUNCATE);
         }
-        ImGui::SetNextItemWidth(w);
-        if (ImGui::InputText("HDRI path", hdriPathBuf, sizeof(hdriPathBuf),
+        // #136 — was a bare absolute-path text box. Now also a Browse button and a drop target
+        // (a .hdr file dragged from the Asset Browser).
+        const float browseW = ImGui::CalcTextSize("Browse...").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        ImGui::SetNextItemWidth(std::max(40.0f, w - browseW - ImGui::GetStyle().ItemSpacing.x));
+        if (ImGui::InputText("##HdriPath", hdriPathBuf, sizeof(hdriPathBuf),
                              ImGuiInputTextFlags_EnterReturnsTrue)) {
             PushUndo(world, "Set HDRI Path");
             world.SkyHdriPath = hdriPathBuf;
         }
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Absolute path to an equirectangular .hdr file.");
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Equirectangular .hdr file. Browse, drop one here from the Asset Browser,\nor paste a path and press Enter.");
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH"); pl && pl->Data) {
+                const std::string dropped((const char*)pl->Data);
+                std::string ext = std::filesystem::path(dropped).extension().string();
+                for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+                if (ext == ".hdr") {
+                    PushUndo(world, "Set HDRI Path");
+                    world.SkyHdriPath = dropped;
+                } else {
+                    Log::Warn("HDRI sky: '" + dropped + "' isn't an .hdr file.");
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Browse...")) {
+            const std::string picked = FileDialog::OpenFile("HDR images\0*.hdr\0All Files\0*.*\0", m_Window);
+            if (!picked.empty()) {
+                PushUndo(world, "Set HDRI Path");
+                world.SkyHdriPath = picked;
+            }
+        }
 
         // Rotation slider. EditorUI::SliderFloat's out-param is needed, not a bare
         // IsItemActivated(), because the widget submits a trailing number-box item after the
@@ -718,7 +744,7 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
 
     if (EditorUIPrimitives::Checkbox("SSAO", &world.SsaoEnabled)) PushUndo(world, "Toggle SSAO");
     if (ImGui::IsItemHovered())
-        EditorUI::SetTooltip("Screen-space ambient occlusion. Darkens crevices and contact shadows. Depth pre-pass + blur, scene-view only.");
+        EditorUI::SetTooltip("Screen-space ambient occlusion. Darkens crevices and contact shadows. Depth pre-pass + blur;\napplies to both the Scene and Game views.");
 
     if (EditorUIPrimitives::Checkbox("Bloom", &world.BloomEnabled)) PushUndo(world, "Toggle Bloom");
     if (ImGui::IsItemHovered())
@@ -765,9 +791,11 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
 }
 
 void EditorLayer::DrawShadowSettings(World& world, float w) {
-    if (EditorUIPrimitives::Checkbox("Cast sun shadows", &world.ShadowsEnabled)) PushUndo(world, "Toggle Sun Shadows");
+    // #136 — this switch gates every shadow (sun cascades AND spot/point maps), not just the sun.
+    if (EditorUIPrimitives::Checkbox("Shadows (all lights)", &world.ShadowsEnabled)) PushUndo(world, "Toggle Shadows");
     if (ImGui::IsItemHovered())
-        EditorUI::SetTooltip("Cascaded shadow maps for the Directional light. Point/spot shadows are a later milestone.");
+        EditorUI::SetTooltip("Master switch for all real-time shadows: the Directional light's cascades and\n"
+                             "spot / point light shadow maps. Individual lights still need Shadows enabled.");
 
     static const char* kShadowResLabels[] = { "1024", "2048", "4096" };
     static const int   kShadowResValues[] = { 1024, 2048, 4096 };
@@ -880,13 +908,13 @@ void EditorLayer::DrawLightingPanel(World& world) {
     ImGui::SeparatorText("Post-processing");
     DrawPostProcessSettings(world, w);
     ImGui::Spacing();
-    ImGui::SeparatorText("Shadows (Directional Sun)");
+    ImGui::SeparatorText("Shadows");
     DrawShadowSettings(world, w);
     ImGui::Spacing();
     ImGui::SeparatorText("Lights");
     DrawLightsSection(world, w);
     ImGui::Spacing();
-    ImGui::TextDisabled("Environment is per-scene; post-processing & shadows persist in editor_prefs.json.\n"
+    ImGui::TextDisabled("Environment, post-processing and shadows are saved with the scene.\n"
                         "Solo/Mute are session-only - they reset when a scene loads.");
     ImGui::End();
 }
@@ -1277,7 +1305,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
             EditorUI::SetTooltip("Multisample level of the HDR scene/game target. Takes effect next frame.");
 
         ImGui::Spacing();
-        ImGui::SeparatorText("Shadows (Directional Sun)");
+        ImGui::SeparatorText("Shadows");
         DrawShadowSettings(world, kw); // shared with Window ▸ Lighting
 
         ImGui::Spacing();
