@@ -967,6 +967,75 @@ void Model::Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset
     }
 }
 
+namespace {
+// #104 — per-mesh ShaderLab render state around a draw. Captures the pass's own state the first
+// time a mesh overrides something, applies the override, and puts the pass state back for the
+// next mesh without one (and at the end), so passes and meshes with no declared state never pay
+// for a glGet or a state change.
+class ShaderStateScope {
+public:
+    void Apply(const ShaderRenderState* st) {
+        const bool want = st && st->AffectsDraw();
+        if (!want) { Restore(); return; }
+        if (!m_Saved) Save();
+        Restore(); // start from the pass state, so fields this shader leaves unset aren't stale
+        if (st->Cull == ShaderRenderState::CullMode::Off) glDisable(GL_CULL_FACE);
+        else if (st->Cull != ShaderRenderState::CullMode::Unset) {
+            glEnable(GL_CULL_FACE);
+            glCullFace(st->Cull == ShaderRenderState::CullMode::Front ? GL_FRONT : GL_BACK);
+        }
+        if (st->ZWrite >= 0) glDepthMask(st->ZWrite ? GL_TRUE : GL_FALSE);
+        if (st->ZTest) glDepthFunc(st->ZTest);
+        if (st->Blend == 0) glDisable(GL_BLEND);
+        else if (st->Blend == 1) { glEnable(GL_BLEND); glBlendFunc(st->BlendSrc, st->BlendDst); }
+        m_Dirty = true;
+    }
+    // Only culling matters to a depth-only (shadow / prepass) draw.
+    void ApplyCullOnly(const ShaderRenderState* st) {
+        if (!st || st->Cull == ShaderRenderState::CullMode::Unset) { Restore(); return; }
+        ShaderRenderState cull;
+        cull.Cull = st->Cull;
+        Apply(&cull);
+    }
+    void Restore() {
+        if (!m_Dirty) return;
+        m_CullEnabled ? glEnable(GL_CULL_FACE) : glDisable(GL_CULL_FACE);
+        glCullFace((GLenum)m_CullFace);
+        glDepthMask(m_DepthMask);
+        glDepthFunc((GLenum)m_DepthFunc);
+        m_BlendEnabled ? glEnable(GL_BLEND) : glDisable(GL_BLEND);
+        glBlendFuncSeparate((GLenum)m_BlendSrcRgb, (GLenum)m_BlendDstRgb, (GLenum)m_BlendSrcA, (GLenum)m_BlendDstA);
+        m_Dirty = false;
+    }
+    ~ShaderStateScope() { Restore(); }
+private:
+    void Save() {
+        m_CullEnabled = glIsEnabled(GL_CULL_FACE) == GL_TRUE;
+        glGetIntegerv(GL_CULL_FACE_MODE, &m_CullFace);
+        GLint depthMask = GL_TRUE;
+        glGetIntegerv(GL_DEPTH_WRITEMASK, &depthMask);
+        m_DepthMask = depthMask ? GL_TRUE : GL_FALSE;
+        glGetIntegerv(GL_DEPTH_FUNC, &m_DepthFunc);
+        m_BlendEnabled = glIsEnabled(GL_BLEND) == GL_TRUE;
+        glGetIntegerv(GL_BLEND_SRC_RGB, &m_BlendSrcRgb);
+        glGetIntegerv(GL_BLEND_DST_RGB, &m_BlendDstRgb);
+        glGetIntegerv(GL_BLEND_SRC_ALPHA, &m_BlendSrcA);
+        glGetIntegerv(GL_BLEND_DST_ALPHA, &m_BlendDstA);
+        m_Saved = true;
+    }
+    bool m_Saved = false, m_Dirty = false;
+    bool m_CullEnabled = true, m_BlendEnabled = false;
+    GLint m_CullFace = GL_BACK, m_DepthFunc = GL_LESS;
+    GLboolean m_DepthMask = GL_TRUE;
+    GLint m_BlendSrcRgb = GL_ONE, m_BlendDstRgb = GL_ZERO, m_BlendSrcA = GL_ONE, m_BlendDstA = GL_ZERO;
+};
+
+const ShaderRenderState* SlotRenderState(const std::vector<std::shared_ptr<MaterialAsset>>& slots, int i) {
+    if (i >= (int)slots.size() || !slots[i] || !slots[i]->Shader) return nullptr;
+    return &slots[i]->Shader->RenderState();
+}
+} // namespace
+
 void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
                          const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                          const ProgramSelector& selectProgram, float opacity) {
@@ -974,9 +1043,11 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
 
     Shader*      lastProg = nullptr;
     MaterialLocs locs{};
+    ShaderStateScope stateScope; // #104
 
     for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
         const bool hasSlot = i < (int)slots.size() && slots[i];
+        stateScope.Apply(SlotRenderState(slots, i));
         Shader* prog = &fallback;
         if (Shader* p = selectProgram(hasSlot ? slots[i].get() : nullptr)) prog = p;
 
@@ -1009,10 +1080,12 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
     int albedoLoc = shader.Loc("uAlbedo");
     int alphaTestLoc = shader.Loc("uAlphaTest");
     int alphaCutoffLoc = shader.Loc("uAlphaCutoff");
+    ShaderStateScope stateScope; // #104 — a Cull Off (double-sided) shader casts from both sides
     for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
         bool hasSlot = i < (int)slots.size() && slots[i];
         // Transparent materials don't cast shadows — skip them in the depth-only pass.
         if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
+        stateScope.ApplyCullOnly(SlotRenderState(slots, i));
         const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
         // Only cost paid over a pure depth draw: one texture bind + two uniforms, and only for
         // CUTOUT materials with an albedo map (foliage/fences) — the shadow then follows the
