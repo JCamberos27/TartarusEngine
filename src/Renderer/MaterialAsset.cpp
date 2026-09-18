@@ -226,6 +226,13 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
         // relative "shader" value is resolved against the project root so a .mat works from any
         // working directory (fixtures under project/, #354).
         if (!ma->ShaderPath.empty()) ma->Shader = lib->LoadShader(ResolveShaderPath(ma->ShaderPath));
+        // #104 — a shader's `Queue` is the default for materials that don't choose their own.
+        if (ma->Shader && ma->Shader->RenderState().Queue >= 0 && !j.contains("renderQueue")) {
+            const ShaderRenderState& st = ma->Shader->RenderState();
+            ma->RenderQueue = (Queue)st.Queue;
+            if (!j.contains("queueIndex")) ma->QueueIndex = st.QueueIndex;
+            m.AlphaClip = ma->RenderQueue == Queue::AlphaTest;
+        }
 
         // Typed store for every linked-shader property that isn't a built-in Material field
         // (#354). Value comes from the .mat "properties" object; a missing key falls back to the
@@ -357,7 +364,10 @@ bool MaterialAsset::Save() const {
         if (m.ReflectionProbes)             j["reflectionProbes"]   = true;
     }
     // Queue / surface fields, both formats (#105 — v1 used to drop them).
-    if (RenderQueue != Queue::Opaque) j["renderQueue"] = (int)RenderQueue;
+    // Written explicitly when the shader declares a Queue, so choosing Opaque on a shader whose
+    // default is Transparent survives a reload (#104).
+    const bool shaderHasQueue = Shader && Shader->RenderState().Queue >= 0;
+    if (RenderQueue != Queue::Opaque || shaderHasQueue) j["renderQueue"] = (int)RenderQueue;
     if (QueueIndex  != 2000)          j["queueIndex"]  = QueueIndex;
     if (Opacity     != 1.0f)          j["opacity"]     = Opacity;
     if (m.AlphaCutoff != 0.5f)        j["alphaCutoff"] = m.AlphaCutoff; // #101

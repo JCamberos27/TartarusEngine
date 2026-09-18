@@ -33,6 +33,68 @@
 #define GL_LEQUAL 0x0203
 #define GL_LESS 0x0201
 #define GL_DEPTH_FUNC 0x0B74
+
+// #104 - ShaderLab render state (Cull / ZTest / Blend) and saving/restoring it around a draw.
+#ifndef GL_NEVER
+#define GL_NEVER 0x0200
+#endif
+#ifndef GL_EQUAL
+#define GL_EQUAL 0x0202
+#endif
+#ifndef GL_LEQUAL
+#define GL_LEQUAL 0x0203
+#endif
+#ifndef GL_GREATER
+#define GL_GREATER 0x0204
+#endif
+#ifndef GL_NOTEQUAL
+#define GL_NOTEQUAL 0x0205
+#endif
+#ifndef GL_GEQUAL
+#define GL_GEQUAL 0x0206
+#endif
+#ifndef GL_ALWAYS
+#define GL_ALWAYS 0x0207
+#endif
+#ifndef GL_ZERO
+#define GL_ZERO 0
+#endif
+#ifndef GL_SRC_COLOR
+#define GL_SRC_COLOR 0x0300
+#endif
+#ifndef GL_ONE_MINUS_SRC_COLOR
+#define GL_ONE_MINUS_SRC_COLOR 0x0301
+#endif
+#ifndef GL_SRC_ALPHA
+#define GL_SRC_ALPHA 0x0302
+#endif
+#ifndef GL_DST_ALPHA
+#define GL_DST_ALPHA 0x0304
+#endif
+#ifndef GL_ONE_MINUS_DST_ALPHA
+#define GL_ONE_MINUS_DST_ALPHA 0x0305
+#endif
+#ifndef GL_DST_COLOR
+#define GL_DST_COLOR 0x0306
+#endif
+#ifndef GL_ONE_MINUS_DST_COLOR
+#define GL_ONE_MINUS_DST_COLOR 0x0307
+#endif
+#ifndef GL_CULL_FACE_MODE
+#define GL_CULL_FACE_MODE 0x0B45
+#endif
+#ifndef GL_BLEND_DST_RGB
+#define GL_BLEND_DST_RGB 0x80C8
+#endif
+#ifndef GL_BLEND_SRC_RGB
+#define GL_BLEND_SRC_RGB 0x80C9
+#endif
+#ifndef GL_BLEND_DST_ALPHA
+#define GL_BLEND_DST_ALPHA 0x80CA
+#endif
+#ifndef GL_BLEND_SRC_ALPHA
+#define GL_BLEND_SRC_ALPHA 0x80CB
+#endif
 #define GL_POLYGON_OFFSET_FILL 0x8037
 #define GL_FILL 0x1B02
 #define GL_LINE 0x1B01
