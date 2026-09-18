@@ -1,6 +1,6 @@
 #include "Window.h"
 #include "Input.h"
-#include "Clock.h"
+#include "TimeService.h"
 #include "CrashHandler.h"
 #include "Shader.h"
 #include "Camera.h"
@@ -891,6 +891,7 @@ int main(int argc, char** argv) {
             if (playing) return;
             if (EditorModuleHost::ConsoleState().ClearOnPlay) Log::Clear(); // #236 A5
             editor.OnEnterPlayMode(world);
+            Time::SetTimeScale(ProjectSettings::Time().TimeScale); // #144 - each run starts from the project's scale
             errPauseSeen = Log::CountOf(LogLevel::Error); // ignore errors that predate this run
             playing = true;
             playMaximized = false;
@@ -1007,8 +1008,9 @@ int main(int argc, char** argv) {
         while (true) {
             // #143: a minimized editor has nothing to show, and a 0x0 framebuffer only risks a
             // NaN aspect ratio. Sleep on the event queue instead of rendering; a close request
-            // still falls through to the normal exit handling below. Clock's dt clamp (0.1 s)
-            // keeps the first frame after restore from lurching the simulation.
+            // still falls through to the normal exit handling below. Time's max-dt clamp
+            // (Project Settings > Time) keeps the first frame after restore from lurching the
+            // simulation.
             if (!headless && !window.ShouldClose() && glfwGetWindowAttrib(window.Handle(), GLFW_ICONIFIED)) {
                 glfwWaitEventsTimeout(0.1);
                 continue;
@@ -1152,8 +1154,13 @@ int main(int argc, char** argv) {
                     }
                 }
             }
-            Clock::Update();
-            float dt = Clock::DeltaTime();
+            // #144: `dt` is unscaled (editor camera, UI, capture polling - never slowed or frozen
+            // by the game's time scale); `gameDt` is the scaled step every Play system uses.
+            Time::SetMaximumDeltaTime(ProjectSettings::Time().MaximumDeltaTime);
+            Time::SetDebugTimeScale(EditorSettings::Get().PhysicsSimTimeScale);
+            Time::BeginFrame();
+            const float dt = Time::UnscaledDeltaTime();
+            const float gameDt = Time::DeltaTime();
             Profiler::BeginFrame();
             GLStateCache::ResetFrameStats();
 
@@ -1363,7 +1370,7 @@ int main(int argc, char** argv) {
                 // The gravity gun (#185, promoted off its old debug harness) is a normal part of
                 // Play mode, not a debug tool — always live whenever the game has input focus.
                 if (gameHasInput) {
-                    gravityGun.Update(dt, player);
+                    gravityGun.Update(gameDt, player);
                 }
                 // G = explosion shockwave at the player. A separate physics *debug/test* tool
                 // (not part of the gravity gun above) — stays behind Gizmos > Physics debug input.
@@ -1381,26 +1388,28 @@ int main(int argc, char** argv) {
                     const EditorSettings& es = EditorSettings::Get();
                     PhysicsWorld::SetDebugDrawFlags(es.PhysicsDebugDrawFlags);
                     PhysicsWorld::SetEventLogging(es.LogPhysicsEvents || smokeTestMode); // #169
-                    PhysicsWorld::SetSimTimeScale(es.PhysicsSimTimeScale);
                     PhysicsWorld::SetQueryRecording((es.PhysicsDebugDrawFlags & PhysicsWorld::PDD_Raycasts) != 0u);
                 }
                 // Step the PhysX world (#185): kinematic bodies pushed from their Transforms,
                 // then the sim, then dynamic bodies' poses written back into theirs.
-                PhysicsWorld::Step(dt, world);
-                player.Update(dt, world, window.Handle(), gameHasInput);
+                // Everything in this block runs on the time-scaled step (#169: slow-mo used to
+                // reach physics only). The game module's FixedUpdate rides the physics sub-steps.
+                PhysicsWorld::Step(gameDt, world,
+                                   [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); });
+                player.Update(gameDt, world, window.Handle(), gameHasInput);
                 // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
                 // against wherever the player is looking from, updated after the move so the
                 // listener matches the frame that's about to be rendered.
                 AudioEngine::SetListener(player.Cam.Position, player.Cam.Front(), player.Cam.Up());
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
-                UpdateAnimators(world, dt);
+                UpdateAnimators(world, gameDt);
             }
 
             // The gameplay DLL watches its freshly-built source copy even while editing, and
             // only runs game systems during Play. Rebuilding TartarusGame swaps the module
             // without closing the editor or discarding this World.
-            gameModule.Tick(world, dt, simThisFrame);
+            gameModule.Tick(world, gameDt, simThisFrame);
 
             // Animations advance whenever something is showing them: the editor viewport, or the
             // running game.
@@ -1413,7 +1422,10 @@ int main(int argc, char** argv) {
                 // of this loop building a heap-allocated std::unordered_set<Model*> every frame.
                 for (auto entity : world.Registry.view<RenderableComponent>(entt::exclude<InactiveTag>)) { // #199 - an inactive object is paused, not just hidden
                     Model* m = world.Registry.get<RenderableComponent>(entity).ModelRef.get();
-                    if (m) m->TickAnimationOnce(frameIndex, dt);
+                    // Play: the game's scaled step, frozen while paused. Edit: real time, so a
+                    // preview isn't slowed by a time scale left over from the last run.
+                    const float animDt = playing ? (simThisFrame ? gameDt : 0.0f) : dt;
+                    if (m) m->TickAnimationOnce(frameIndex, animDt);
                 }
             }
 
@@ -2344,7 +2356,7 @@ int main(int argc, char** argv) {
                 // Kept here rather than reusing EditorLayer's, which isn't updated during
                 // maximized play - exactly when this overlay is most visible.
                 static float smoothedMs = 16.6f;
-                smoothedMs = smoothedMs * 0.92f + dt * 1000.0f * 0.08f;
+                smoothedMs = smoothedMs * 0.92f + Time::RealDeltaTime() * 1000.0f * 0.08f;
                 gameViewStats.FPS = smoothedMs > 0.0001f ? (int)(1000.0f / smoothedMs + 0.5f) : 0;
                 gameViewStats.FrameMs = smoothedMs;
                 gameViewStats.DrawCalls = gvRenderStats.DrawCalls;
@@ -2604,7 +2616,7 @@ int main(int argc, char** argv) {
             const int bgCap = EditorSettings::Get().UnfocusedFpsLimit;
             if (bgCap > 0 && !playing && !headless && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED))
                 fpsCap = fpsCap > 0 ? std::min(fpsCap, bgCap) : bgCap;
-            Clock::LimitFps(fpsCap);
+            Time::LimitFps(fpsCap);
 
             // The editor has now actually presented a frame, so revealing the window shows
             // finished content rather than an unpainted framebuffer. Ordered swap -> show ->
