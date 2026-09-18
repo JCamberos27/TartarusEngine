@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -8,11 +9,10 @@
 // only ever a few new/changed ones per frame, same as today's per-frame render budget.
 //
 // Cache files live at project/Library/thumbnails/{guid}.png, keyed by AssetDatabase's GUID for
-// the source path. Staleness is tracked via the cache file's own last-write-time rather than a
-// separate metadata file: Save() stamps the cache file's mtime to the source's at write time, so
-// Load() can tell a cache is current by checking cache mtime >= source mtime. A re-import or edit
-// that bumps the source's mtime makes the existing cache file read as stale (and it's silently
-// overwritten the next time Save() runs) without needing any cleanup pass.
+// the source path. #133 — staleness used to be "cache mtime >= source mtime", which missed a
+// thumbnail's other inputs (import settings in the .meta, the textures its materials use). Now
+// each PNG has a {guid}.png.key sidecar holding a DependencyKey() hash; a cache entry is only
+// used when the caller's current key matches.
 namespace ThumbnailCache {
 
 // The cache file path for `path`'s thumbnail (registers a GUID via AssetDatabase::EnsureGuid if
@@ -20,15 +20,24 @@ namespace ThumbnailCache {
 // unresolvable one.
 std::string CacheFilePath(const std::string& path);
 
-// Loads a cached `size` x `size` RGBA8 thumbnail for `path` into `outPixels` (size*size*4 bytes).
-// Returns false — leaving outPixels untouched — on any miss: no cache file, a stale one (source
-// modified since it was written), a dimension mismatch, or a decode failure.
-bool Load(const std::string& path, int size, std::vector<unsigned char>& outPixels);
+// Hash of everything a thumbnail of `path` depends on: the source's mtime, its .meta content
+// (import settings), and each of `dependencies`' path + mtime (e.g. a model's texture files).
+// A missing file contributes a sentinel, so creating or deleting one also changes the key.
+std::uint64_t DependencyKey(const std::string& path, const std::vector<std::string>& dependencies);
 
-// Writes a `size` x `size` RGBA8 thumbnail for `path` to its cache file, stamping the cache
-// file's mtime to the source's so a later Load() can detect staleness. Best-effort: I/O failures
-// are logged, not fatal — a missing persistent cache just means the in-RAM render happens again
-// next launch, not a correctness problem.
-void Save(const std::string& path, int size, const unsigned char* pixels);
+// Loads a cached `size` x `size` RGBA8 thumbnail for `path` into `outPixels` (size*size*4 bytes).
+// Returns false — leaving outPixels untouched — on any miss: no cache file, a key mismatch
+// (something it depends on changed), a dimension mismatch, or a decode failure.
+bool Load(const std::string& path, int size, std::uint64_t key, std::vector<unsigned char>& outPixels);
+
+// Writes a `size` x `size` RGBA8 thumbnail for `path` plus its key sidecar. Best-effort: I/O
+// failures are logged, not fatal — a missing persistent cache just means the in-RAM render
+// happens again next launch, not a correctness problem.
+void Save(const std::string& path, int size, std::uint64_t key, const unsigned char* pixels);
+
+// Deletes cached thumbnails whose GUID no longer belongs to any asset (no .meta under the
+// project or the engine's shipped assets carries it) and any stray non-thumbnail files in the
+// cache folder. Call once at startup, after AssetDatabase::ScanProject().
+void PruneOrphans();
 
 } // namespace ThumbnailCache
