@@ -28,6 +28,7 @@
 #include "EditorModuleAPI.h"       // EditorConsoleState's full definition (Visible)
 #include "GLStateCache.h"
 #include "PhysicsWorld.h" // #185 — the Physics debug panel + HUD read live sim state
+#include "TimeService.h" // play banner shows the effective time scale (#144)
 #include "TextureCache.h" // Preferences > Rendering's cache size + Clear button (#159)
 #include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
 #include "ScreenBlur.h"
@@ -1623,13 +1624,28 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("PhysX simulation step size. Guards against zero/negative values\n"
                                  "turning the step loop infinite.");
-        ImGui::BeginDisabled(true);
         ImGui::SetNextItemWidth(kw);
-        ImGui::DragInt("Solver iterations (not yet applied)", &p.SolverIterations, 0.1f, 1, 64);
-        ImGui::EndDisabled();
+        ImGui::DragInt("Solver iterations", &p.SolverIterations, 0.1f, 1, 64);
+        if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
         if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Stored in project/settings.json, but not yet passed to PxScene's\n"
-                                 "solver — every body still uses PhysX's own default iteration counts.");
+            EditorUI::SetTooltip("Position iterations per rigid body (PhysX setSolverIterationCounts).\n"
+                                 "Higher = stiffer stacks and joints, at more CPU cost. Applied at the next Play.");
+
+        // #144 - Unity's Project Settings > Time.
+        ImGui::SeparatorText("Time");
+        ProjectSettings::TimeSettings& tm = ProjectSettings::MutableTime();
+        ImGui::SetNextItemWidth(kw);
+        ImGui::DragFloat("Maximum allowed timestep", &tm.MaximumDeltaTime, 0.001f, 0.01f, 1.0f, "%.3f s");
+        if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("The longest frame the game simulates in one step. A longer hitch runs the\n"
+                                 "game briefly slower instead of making physics and gameplay jump.");
+        ImGui::SetNextItemWidth(kw);
+        ImGui::DragFloat("Time scale", &tm.TimeScale, 0.01f, 0.0f, 100.0f, "%.2fx");
+        if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Game speed when Play starts (Unity's Time.timeScale). The game module can change\n"
+                                 "it while playing; the Physics panel's Slow-mo multiplies on top for testing.");
 
         // #185 hardening — Play-mode Player tuning.
         ImGui::SeparatorText("Player");
@@ -1860,7 +1876,8 @@ void EditorLayer::DrawPhysicsDebugWindow(World& world) {
             ImGui::SameLine();
             ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION);
             if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("Not 1x - physics runs faster/slower than real time this session.");
+                EditorUI::SetTooltip("Not 1x - the game (physics, Player, animators, game module) runs\n"
+                                     "faster/slower than real time this session.");
         }
         ImGui::SameLine();
         if (ImGui::SmallButton("1x")) es.PhysicsSimTimeScale = 1.0f;
@@ -3007,10 +3024,10 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // and looks identical to a performance problem or a stuck simulation until you remember
         // to check; the one place that's genuinely unmissable while Playing is this banner.
         std::string tag = "PLAY MODE \xE2\x80\x94 changes revert on Stop";
-        const float timeScale = EditorSettings::Get().PhysicsSimTimeScale;
+        const float timeScale = Time::EffectiveTimeScale(); // #144: the game's scale x the slow-mo slider
         if (std::fabs(timeScale - 1.0f) > 0.001f) {
             char scaleBuf[32];
-            std::snprintf(scaleBuf, sizeof(scaleBuf), "  \xE2\x80\xA2  Physics %.2fx", timeScale);
+            std::snprintf(scaleBuf, sizeof(scaleBuf), "  \xE2\x80\xA2  Time %.2fx", timeScale);
             tag += scaleBuf;
         }
         ImVec2 ts = ImGui::CalcTextSize(tag.c_str());

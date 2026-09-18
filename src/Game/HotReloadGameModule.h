@@ -16,6 +16,8 @@ public:
 
     void Initialize(const std::filesystem::path& sourceModule);
     void Tick(World& world, float deltaTime, bool playing);
+    // The module's FixedUpdate, if it has one (#144). PhysicsWorld::Step calls this per sub-step.
+    void FixedTick(World& world, float fixedDeltaTime);
     void Shutdown();
 
 private:
