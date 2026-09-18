@@ -1665,15 +1665,20 @@ static void KeepFloatingWindowsAboveOverlay() {
     // dockspace and don't overlap the viewport. Internal overlays/hosts all have "##" names,
     // which this skips.
     ImGuiContext& g = *ImGui::GetCurrentContext();
+    // BringWindowToDisplayFront reorders g.Windows, so work from a snapshot: iterating the live
+    // list skipped or revisited windows, and a floating panel fronted after a popup ended up
+    // above it (the Window menu opened behind a floating Physics Debug / Settings window).
+    // Floating panels go first, then popups/tooltips, so the latter always finish on top.
+    ImVector<ImGuiWindow*> floating, popups;
     for (ImGuiWindow* w : g.Windows) {
         if (!w->WasActive || w->Hidden) continue;
         // Popups, context menus and tooltips (a Combo's dropdown list, a right-click menu, a
         // hover hint) must sit above the overlay no matter which window opened them — otherwise
         // a Combo opened from Preferences renders behind this transparent fullscreen overlay and
         // looks like it never opened. They carry ImGui's "##" auto-id names and a ParentWindow,
-        // so they'd be skipped by the floating-window filters below — front them first.
+        // so they'd be skipped by the floating-window filters below.
         if (w->Flags & (ImGuiWindowFlags_Popup | ImGuiWindowFlags_Tooltip)) {
-            ImGui::BringWindowToDisplayFront(w);
+            popups.push_back(w);
             continue;
         }
         if (w->ParentWindow != nullptr) continue;                 // child of another window
@@ -1681,8 +1686,10 @@ static void KeepFloatingWindowsAboveOverlay() {
         if (w->DockNode != nullptr) continue;                     // docked — not floating over the viewport
         if (w->Name[0] == '#' && w->Name[1] == '#') continue;     // ##GizmoOverlay / ##DockHost / ...
         if (std::strcmp(w->Name, "Scene") == 0 || std::strcmp(w->Name, "Game") == 0) continue;
-        ImGui::BringWindowToDisplayFront(w);
+        floating.push_back(w);
     }
+    for (ImGuiWindow* w : floating) ImGui::BringWindowToDisplayFront(w);
+    for (ImGuiWindow* w : popups) ImGui::BringWindowToDisplayFront(w);
 }
 
 // Shared setup behind DrawGizmo() (single-object) and DrawGroupGizmo() (multi-select). See the
