@@ -281,8 +281,19 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
     // implies) entirely: just upload the decoded PNG. Still spends this frame's thumbnail
     // budget above, since a decode-and-upload at scale (1,000+ objects) is exactly the frame-time
     // cost item 9 was written to bound, not only the render.
+    // #133 — the cache key covers the model file, its .meta import settings and every texture
+    // its materials sample, so re-importing or editing any of those re-renders the thumbnail.
+    std::vector<std::string> deps;
+    for (int i = 0; i < model.MeshCount(); ++i) {
+        const Material& m = model.MeshMaterial(i);
+        for (const auto* tex : { &m.AlbedoMap, &m.NormalMap, &m.MetallicRoughnessMap, &m.MetallicMap,
+                                 &m.RoughnessMap, &m.AOMap, &m.EmissiveMap, &m.ClearCoatMap, &m.ThicknessMap })
+            if (*tex && std::find(deps.begin(), deps.end(), (*tex)->Path()) == deps.end())
+                deps.push_back((*tex)->Path());
+    }
+    const std::uint64_t cacheKey = ThumbnailCache::DependencyKey(path, deps);
     std::vector<unsigned char> cachedPixels;
-    if (ThumbnailCache::Load(path, kSize, cachedPixels)) {
+    if (ThumbnailCache::Load(path, kSize, cacheKey, cachedPixels)) {
         glGenTextures(1, &dst);
         glBindTexture(GL_TEXTURE_2D, dst);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kSize, kSize, 0, GL_RGBA, GL_UNSIGNED_BYTE, cachedPixels.data());
@@ -321,7 +332,7 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
         // attachment above — the exact same pixels glCopyTexSubImage2D just copied into `dst`.
         std::vector<unsigned char> freshPixels((size_t)kSize * kSize * 4);
         glReadPixels(0, 0, kSize, kSize, GL_RGBA, GL_UNSIGNED_BYTE, freshPixels.data());
-        ThumbnailCache::Save(path, kSize, freshPixels.data());
+        ThumbnailCache::Save(path, kSize, cacheKey, freshPixels.data());
 
         glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevRead);
