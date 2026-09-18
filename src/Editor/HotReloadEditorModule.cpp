@@ -24,7 +24,10 @@
 #include <GLFW/glfw3.h>
 #include <windows.h>
 
+#include <shellapi.h>
+
 #include "HotReloadSwap.h"
+#include "UserPaths.h"
 
 namespace fs = std::filesystem;
 
@@ -287,6 +290,38 @@ void TbRequestResetLayout() { if (g_Editor) g_Editor->RequestResetLayout(); }
 void TbOpenPreferences() { if (g_Editor) g_Editor->OpenPreferences(); }
 void TbOpenProjectSettings() { if (g_Editor) g_Editor->OpenProjectSettings(); }
 void TbOpenShortcutsReference() { if (g_Editor) g_Editor->OpenShortcutsReference(); }
+
+// --- Help menu (API v33, #184) -------------------------------------------------------------
+constexpr const wchar_t* kRepoUrl = L"https://github.com/JCamberos27/TartarusEngine";
+
+void OpenUrl(const std::wstring& url) {
+    ::ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+}
+// Explorer on the Logs folder with the current session's log selected (the folder alone if the
+// log doesn't exist yet).
+void RevealEditorLog() {
+    const fs::path logs = fs::u8path(UserPaths::Resolve("Logs"));
+    const fs::path log = logs / "Editor.log";
+    std::error_code ec;
+    if (fs::exists(log, ec)) {
+        const std::wstring args = L"/select,\"" + log.wstring() + L"\"";
+        ::ShellExecuteW(nullptr, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
+    } else {
+        ::ShellExecuteW(nullptr, L"open", logs.wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    }
+}
+void HelpOpenAbout() { if (g_Editor) g_Editor->OpenAbout(); }
+void HelpOpenDocumentation() { OpenUrl(std::wstring(kRepoUrl) + L"#readme"); }
+void HelpOpenLogFolder() { RevealEditorLog(); }
+void HelpReportBug() {
+    if (g_Editor) {
+        const std::string report = g_Editor->SystemReportText();
+        if (!report.empty()) ImGui::SetClipboardText(report.c_str());
+    }
+    RevealEditorLog();
+    OpenUrl(std::wstring(kRepoUrl) + L"/issues/new");
+    Log::Info("Report a Bug: system report copied to the clipboard; attach Logs/Editor.log to the issue.");
+}
 
 void TbDrawFileMenuBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawFileMenuBody(*g_World, *g_Assets);
@@ -570,6 +605,10 @@ EditorModuleHostAPI MakeHostAPI() {
     api.OpenPreferences = &TbOpenPreferences;
     api.OpenProjectSettings = &TbOpenProjectSettings;
     api.OpenShortcutsReference = &TbOpenShortcutsReference;
+    api.OpenAbout = &HelpOpenAbout;
+    api.OpenDocumentation = &HelpOpenDocumentation;
+    api.OpenLogFolder = &HelpOpenLogFolder;
+    api.ReportBug = &HelpReportBug;
     api.DrawFileMenuBody = &TbDrawFileMenuBody;
     api.DrawAddEntityMenuItems = &TbDrawAddEntityMenuItems;
     api.DrawViewMenuBody = &TbDrawViewMenuBody;

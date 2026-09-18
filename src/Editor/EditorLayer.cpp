@@ -565,9 +565,33 @@ void EditorLayer::Shutdown() {
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 }
-// --- Layout presets (#236 R2 toolbar tail) — named ImGui-ini snapshots in project/layouts/ ---
+// --- Layout presets (#236 R2 toolbar tail) — named ImGui-ini snapshots, per user ---
 namespace {
-std::string LayoutsDir() { return ProjectPaths::Resolve("layouts"); }
+// #184: per-user storage (%LOCALAPPDATA%\TartarusEngine\layouts), like imgui.ini itself (#137).
+// They used to live in the version-controlled project/layouts/, so every teammate's panel
+// arrangements showed up in everyone else's menu and in commits. Presets found there are copied
+// over once (the originals are left alone for the user to delete or keep).
+std::string LayoutsDir() {
+    static const std::string dir = [] {
+        const std::string userDir = UserPaths::Resolve("layouts");
+        std::error_code ec;
+        const std::filesystem::path legacy = ProjectPaths::Resolve("layouts");
+        if (!std::filesystem::exists(userDir, ec) && std::filesystem::is_directory(legacy, ec)) {
+            std::filesystem::create_directories(userDir, ec);
+            int copied = 0;
+            for (const auto& e : std::filesystem::directory_iterator(legacy, ec)) {
+                if (!e.is_regular_file() || e.path().extension() != ".ini") continue;
+                std::error_code copyEc;
+                std::filesystem::copy_file(e.path(), std::filesystem::path(userDir) / e.path().filename(), copyEc);
+                if (!copyEc) ++copied;
+            }
+            if (copied) Log::Info("Layout presets: copied " + std::to_string(copied) +
+                                  " preset(s) from project/layouts/ to your user folder.");
+        }
+        return userDir;
+    }();
+    return dir;
+}
 std::string SanitizeLayoutName(const std::string& in) {
     std::string s;
     for (char c : in) if (std::isalnum((unsigned char)c) || c == ' ' || c == '-' || c == '_') s += c;
@@ -954,19 +978,58 @@ void EditorLayer::DrawSettingsWindow(World& world) {
     const int kProjectCatCount = (int)(sizeof(kProjectCats) / sizeof(kProjectCats[0]));
     m_ProjSettingsCategory = std::clamp(m_ProjSettingsCategory, 0, kProjectCatCount - 1);
 
-    // #4 item 3 — searchable: a case-insensitive substring match against each category's label.
-    // The icon glyphs at the front of every label are UTF-8 multi-byte sequences that never
-    // collide with ASCII search text, so they're harmless to leave in the haystack.
+    // #184 — what each category contains, so a search for a setting ("fov", "vsync", "msaa")
+    // finds the category holding it, not only a category whose own name matches. Keep these in
+    // step with the category bodies below (labels plus the obvious synonyms).
+    static const char* kEditorCatKeywords[] = {
+        "tooltips ui scale display dpi zoom text size",
+        "gizmo size transform gizmo vertex pick radius snap frame camera on select field of view fov "
+        "fly speed near far clip plane game view maximize on play light gizmos opacity arrow disc "
+        "scale selected light corner monogram engine mark spin speed prism reduce motion animation",
+        "grid show grid line spacing major line every fade distance axis lines thickness opacity "
+        "snapping move snap rotate snap scale snap increment",
+        "auto-save autosave interval minutes backup recovery",
+        "vsync v-sync fps limit frame rate frame pacing background fps unfocused rendering hdr "
+        "exposure tone mapping tonemap tonemapper bloom ssao ambient occlusion msaa anti-aliasing "
+        "antialiasing shadows cascades texture cache clear cache",
+        "keyboard hotkeys key bindings keybindings shortcuts rebind",
+        "about version system report gpu driver opengl built with copy report",
+    };
+    static const char* kProjectCatKeywords[] = {
+        "gravity fixed timestep solver iterations player push strength player layer collision "
+        "matrix time maximum allowed timestep max delta time scale timescale slow motion",
+        "tags layers layer names tag",
+    };
+    static_assert(sizeof(kEditorCatKeywords) == sizeof(kEditorCats), "one keyword string per category");
+    static_assert(sizeof(kProjectCatKeywords) == sizeof(kProjectCats), "one keyword string per category");
+
+    // #4 item 3 — searchable: a case-insensitive substring match against each category's label
+    // and its keyword list. The icon glyphs at the front of every label are UTF-8 multi-byte
+    // sequences that never collide with ASCII search text, so they're harmless in the haystack.
     ImGui::SetNextItemWidth(-FLT_MIN);
     ImGui::InputTextWithHint("##SettingsSearch", ICON_FA_MAGNIFYING_GLASS "  Search settings",
                              m_SettingsSearch, sizeof(m_SettingsSearch));
-    auto matchesSearch = [this](const char* label) {
+    auto matchesSearch = [this](const char* label, const char* keywords) {
         if (m_SettingsSearch[0] == '\0') return true;
-        std::string hay(label), needle(m_SettingsSearch);
+        std::string hay = std::string(label) + " " + keywords, needle(m_SettingsSearch);
         std::transform(hay.begin(), hay.end(), hay.begin(), [](unsigned char c) { return (char)std::tolower(c); });
         std::transform(needle.begin(), needle.end(), needle.begin(), [](unsigned char c) { return (char)std::tolower(c); });
         return hay.find(needle) != std::string::npos;
     };
+    // The body shows whichever category is selected, so when a search hides the selected one,
+    // jump to the first match: typing "vsync" should land on Performance, not leave General up.
+    {
+        const bool selectedVisible = m_SettingsGroupIsProject
+            ? matchesSearch(kProjectCats[m_ProjSettingsCategory], kProjectCatKeywords[m_ProjSettingsCategory])
+            : matchesSearch(kEditorCats[m_PrefsCategory], kEditorCatKeywords[m_PrefsCategory]);
+        if (!selectedVisible) {
+            bool found = false;
+            for (int i = 0; i < kEditorCatCount && !found; ++i)
+                if (matchesSearch(kEditorCats[i], kEditorCatKeywords[i])) { m_SettingsGroupIsProject = false; m_PrefsCategory = i; found = true; }
+            for (int i = 0; i < kProjectCatCount && !found; ++i)
+                if (matchesSearch(kProjectCats[i], kProjectCatKeywords[i])) { m_SettingsGroupIsProject = true; m_ProjSettingsCategory = i; found = true; }
+        }
+    }
 
     // #4 item 3 — one searchable, dockable window instead of two: "THIS MACHINE" (the old
     // Preferences window, editor_prefs.json) and "THIS PROJECT" (the old Project Settings window,
@@ -974,7 +1037,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
     ImGui::BeginChild("##SettingsCats", ImVec2(170.0f * m_UIScale, 0), ImGuiChildFlags_Borders);
     ImGui::TextDisabled("THIS MACHINE");
     for (int i = 0; i < kEditorCatCount; ++i) {
-        if (!matchesSearch(kEditorCats[i])) continue;
+        if (!matchesSearch(kEditorCats[i], kEditorCatKeywords[i])) continue;
         if (ImGui::Selectable(kEditorCats[i], !m_SettingsGroupIsProject && m_PrefsCategory == i)) {
             m_SettingsGroupIsProject = false;
             m_PrefsCategory = i;
@@ -983,7 +1046,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
     ImGui::Spacing();
     ImGui::TextDisabled("THIS PROJECT");
     for (int i = 0; i < kProjectCatCount; ++i) {
-        if (!matchesSearch(kProjectCats[i])) continue;
+        if (!matchesSearch(kProjectCats[i], kProjectCatKeywords[i])) continue;
         if (ImGui::Selectable(kProjectCats[i], m_SettingsGroupIsProject && m_ProjSettingsCategory == i)) {
             m_SettingsGroupIsProject = true;
             m_ProjSettingsCategory = i;
@@ -1575,11 +1638,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                 ImGuiWindowFlags_HorizontalScrollbar);
             for (const std::string& line : m_SystemReport) ImGui::TextUnformatted(line.c_str());
             ImGui::EndChild();
-            if (ImGui::Button(ICON_FA_COPY "  Copy report")) {
-                std::string all;
-                for (const std::string& line : m_SystemReport) all += line + "\n";
-                ImGui::SetClipboardText(all.c_str());
-            }
+            if (ImGui::Button(ICON_FA_COPY "  Copy report")) ImGui::SetClipboardText(SystemReportText().c_str());
         }
         ImGui::Spacing();
         ImGui::SeparatorText("Built with");
@@ -1609,7 +1668,7 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
         if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("World gravity for rigid bodies (all three axes), applied when Play starts.\n"
-                                 "The Play-mode Player's own fall uses its built-in gravity, not this.");
+                                 "The Play-mode Player falls with the Y component.");
 
         // #15 — Defect #15: this section's header used to read "Simulation (reserved for
         // #185)", an internal issue number leaked straight into shipped UI. #185 has since
@@ -2568,9 +2627,11 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // selected model, but if a group is selected, every other member rides along by the same
     // delta each frame (see UpdateVertexDrag) so the whole group snaps together via that one
     // vertex instead of only the primary moving.
-    // Ctrl excluded so Ctrl+V (paste) doesn't also arm the vertex-grab mode this key normally
-    // owns on its own.
-    bool vHeld = !ImGui::GetIO().WantTextInput && !ImGui::GetIO().KeyCtrl && ImGui::IsKeyDown(ImGuiKey_V);
+    // #184: rebindable ("Vertex Snap (hold)" in Preferences > Shortcuts, default V). The binding's
+    // exact modifiers are required, so Ctrl+V (paste) never arms it; once a drag is under way it
+    // survives the cursor leaving the viewport.
+    bool vHeld = !ImGui::GetIO().WantTextInput &&
+                 Shortcuts::Held("view.vertexSnap", /*ignoreContext=*/m_VertexDragActive);
 
     if (m_VertexDragActive && (!vHeld || !ImGui::IsMouseDown(ImGuiMouseButton_Left))) {
         m_VertexDragActive = false; // dropped: releasing V or the mouse button leaves it exactly where it is
