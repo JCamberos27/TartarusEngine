@@ -48,6 +48,19 @@ struct PhysicsSettings {
 const PhysicsSettings& Physics();
 PhysicsSettings&       MutablePhysics();
 
+// #144 - Unity's Project Settings > Time. The fixed step itself stays PhysicsSettings::FixedTimestep.
+struct TimeSettings {
+    // Longest frame the game simulates in one go; a longer hitch runs slower instead of making
+    // physics / gameplay take one huge step. Unity's "Maximum Allowed Timestep" (default 1/3 s;
+    // this engine has always used 0.1 s).
+    float MaximumDeltaTime = 0.1f;
+    // Time.timeScale when Play starts (the game module can change it while playing).
+    float TimeScale = 1.0f;
+};
+
+const TimeSettings& Time();
+TimeSettings&       MutableTime();
+
 // User-managed tag vocabulary. Additive to the free-text Tag field: the Inspector's Tag
 // dropdown unions this list with whatever tags are actually in use in the open scene, so a tag
 // defined here shows up even before anything wears it. Order is preserved; duplicates and blank

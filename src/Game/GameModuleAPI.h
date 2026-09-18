@@ -10,7 +10,20 @@ class World;
 // per-frame gameplay work, so unloading it cannot invalidate editor state.
 // v8 (#187): OnLoad receives the previous module's saved state and returns false to reject a
 // build (the host then restores the previous one); SaveState added.
-constexpr std::uint32_t kGameModuleAPIVersion = 8;
+// v9 (#144): FixedUpdate, and host GetTime / SetTimeScale.
+constexpr std::uint32_t kGameModuleAPIVersion = 9;
+
+// Unity's Time, as seen by the game module (#144). Seconds throughout. POD.
+struct GameTime {
+    float DeltaTime = 0.0f;         // this frame, scaled by TimeScale (what Update receives)
+    float UnscaledDeltaTime = 0.0f; // this frame, ignoring TimeScale (pause menus, UI tweens)
+    float FixedDeltaTime = 0.0f;    // the FixedUpdate / physics step
+    float TimeScale = 1.0f;         // effective scale (the game's own x the editor's slow-mo)
+    double Time = 0.0;              // scaled seconds since startup
+    double UnscaledTime = 0.0;
+    double RealtimeSinceStartup = 0.0;
+    std::uint64_t FrameCount = 0;
+};
 
 // One raycast hit against the PhysX world (#185 PR 2). POD, no glm — the API header stays
 // dependency-free so a version mismatch is the only thing that can break the ABI. Position and
@@ -118,6 +131,12 @@ struct GameModuleHostAPI {
     // into `out` and returns the total found. The explosion-radius / area-of-effect query.
     int (*OverlapSphere)(const float center[3], float radius,
                          std::uint32_t* out, int maxEntities) = nullptr;
+
+    // --- Time (#144) ---
+    void (*GetTime)(GameTime& out) = nullptr;
+    // The game's time scale (Unity's Time.timeScale): 0 freezes physics, animators and the
+    // DeltaTime Update receives; clamped to [0, 100]. Reset to Project Settings > Time on each Play.
+    void (*SetTimeScale)(float scale) = nullptr;
 };
 
 struct GameModuleAPI {
@@ -136,6 +155,10 @@ struct GameModuleAPI {
     void (*OnUnload)() = nullptr;
     void (*Update)(const GameModuleHostAPI& host, World& world, float deltaTime) = nullptr;
     std::size_t (*SaveState)(void* buffer, std::size_t capacity) = nullptr;
+    // Optional (#144). Runs while playing, before each fixed physics sub-step, with the fixed
+    // step length - zero, one or several times a frame depending on frame rate and time scale.
+    // Forces and anything that must be frame-rate independent belong here, as in Unity.
+    void (*FixedUpdate)(const GameModuleHostAPI& host, World& world, float fixedDeltaTime) = nullptr;
 };
 
 using GetGameModuleAPIFn = const GameModuleAPI* (*)();

@@ -24,6 +24,7 @@ const GameModuleAPI kAPI{
     &OnUnload,
     &Update,
     /*SaveState=*/nullptr,
+    /*FixedUpdate=*/nullptr,
 };
 
 } // namespace

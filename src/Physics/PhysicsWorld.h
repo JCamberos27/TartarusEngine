@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 
 // PhysX 5 simulation world — created when Play mode starts, destroyed when it ends (#185).
 //
@@ -40,11 +41,13 @@ void Shutdown();
 // True between a successful Create() and the next Destroy().
 bool IsActive();
 
-// Advance the simulation by real-frame `dt` seconds, accumulated into fixed 1/60 s sub-steps
-// (at most 4 per call, so a long hitch doesn't spiral). Before stepping, kinematic bodies are
-// pushed from `world`'s TransformComponents; after, dynamic bodies' simulated poses are written
-// back into them. No-op when the world isn't active. Called once per simulated frame.
-void Step(float dt, World& world);
+// Advance the simulation by `dt` game seconds (already time-scaled, see Core/Time.h),
+// accumulated into fixed Time::FixedDeltaTime() sub-steps (at most 4 per call, so a long hitch
+// doesn't spiral). Before stepping, kinematic bodies are pushed from `world`'s
+// TransformComponents; after, dynamic bodies' simulated poses are written back into them.
+// `onFixedStep` (optional) runs before every sub-step with the fixed step length - the
+// game module's FixedUpdate (#144). No-op when the world isn't active.
+void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFixedStep = {});
 
 // Closest hit of the ray `origin` + t*`dir` (dir need not be normalised) within `maxDistance`.
 // Returns true and fills `outHit` on a hit; false (with `outHit` left at defaults) on a miss
@@ -157,8 +160,7 @@ void SetEventLogging(bool enabled);
 int CopyDebugLines(float* outXYZRGBA, int maxLines);
 
 // --- Slow-mo / step ------------------------------------------------------------------
-void  SetSimTimeScale(float scale);     // clamped [0, 2]; 0 = frozen. Persists across sessions.
-float GetSimTimeScale();
+// (The slow-mo scale is Time::DebugTimeScale now and reaches Step() through its dt, #169.)
 void  StepOneSubstep(World& world);     // run exactly one fixed substep regardless of accumulator
 
 // --- Query recorder ---------------------------------------------------------------
