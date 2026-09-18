@@ -62,4 +62,17 @@ uint64_t HashSettings(const TextureImportSettings& settings);
 // an interrupted Store are removed once they're over an hour old.
 void Prune(const std::function<std::optional<uint64_t>(const std::string& sourcePath)>& currentSettingsHash = nullptr);
 
+// Total bytes and entry count currently on disk (#159) - a directory walk, so callers showing
+// it in the UI should cache the result rather than calling it every frame.
+struct Usage {
+    uint64_t Bytes = 0;
+    int Entries = 0;
+};
+Usage DiskUsage();
+
+// Deletes every cache entry (Preferences' "Clear texture cache", #159). Textures already on the
+// GPU are unaffected; each is re-baked from its source the next time it loads. In-flight temp
+// files from another running editor instance are left alone. Returns the number of entries removed.
+int Clear();
+
 } // namespace TextureCache
