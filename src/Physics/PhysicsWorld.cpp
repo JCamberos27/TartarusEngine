@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <deque>
+#include <filesystem>
 #include <map>
 #include <set>
 #include <string>
@@ -111,12 +112,42 @@ struct PlayerHitReport : PxUserControllerHitReport {
     void onObstacleHit(const PxControllerObstacleHit&) override {}
 };
 
+// #167 - everything that doesn't depend on the scene lives for the whole editor session: the
+// foundation, PxPhysics, the CPU dispatcher, materials and the cooked-mesh cache. Before, all of
+// it was torn down on every Stop and rebuilt on every Play, so each Play re-cooked every mesh
+// collider. Created on the first Play, released by PhysicsWorld::Shutdown() at exit.
+struct PhysicsCore {
+    PxDefaultAllocator      allocator;
+    EngineErrorCallback     errorCallback;
+    PxFoundation*           foundation      = nullptr;
+    PxPhysics*              physics         = nullptr;
+    PxDefaultCpuDispatcher* dispatcher      = nullptr;
+    PxMaterial*             defaultMaterial = nullptr;
+    PxU32                   workers         = 1;
+    std::map<std::pair<int, int>, PxMaterial*>       materialCache;
+    // Keyed by CookKey (model path + file timestamp + geometry size), so a model reimported
+    // mid-session gets a fresh collider instead of the stale cooked one.
+    std::unordered_map<std::string, PxConvexMesh*>   convexCache;
+    std::unordered_map<std::string, PxTriangleMesh*> triangleCache;
+#ifdef TARTARUS_PHYSX_PVD
+    PxPvd*               pvd            = nullptr;
+    PxPvdTransport*      pvdTransport   = nullptr;
+#endif
+#ifdef TARTARUS_PHYSX_OMNIPVD
+    PxOmniPvd*           omniPvd        = nullptr; // #185 G — .ovd capture for the Omniverse PhysX inspector
+#endif
+};
+PhysicsCore* g_Core = nullptr;
+
 struct PhysicsState {
-    PxDefaultAllocator     allocator;
-    EngineErrorCallback    errorCallback;
+    explicit PhysicsState(PhysicsCore& core)
+        : foundation(core.foundation), physics(core.physics), dispatcher(core.dispatcher),
+          defaultMaterial(core.defaultMaterial), materialCache(core.materialCache),
+          convexCache(core.convexCache), triangleCache(core.triangleCache) {}
     SimEventCallback       simCb;
     PlayerHitReport        hitReport;
     PxU32                  layerMask[8] = {0xFFu,0xFFu,0xFFu,0xFFu,0xFFu,0xFFu,0xFFu,0xFFu}; // #185 PR 8 constant block
+    // Borrowed from PhysicsCore (#167) - never released here.
     PxFoundation*          foundation   = nullptr;
     PxPhysics*             physics      = nullptr;
     PxDefaultCpuDispatcher* dispatcher  = nullptr;
@@ -145,7 +176,7 @@ struct PhysicsState {
     std::vector<PxTriangleMesh*> triangleMeshes;
     // #185 PR 7 — one PxMaterial per distinct (friction, bounciness) rounded to 1/100; the
     // per-entity dynamic-body lookup for the force API; this frame's solid-contact events.
-    std::map<std::pair<int, int>, PxMaterial*>       materialCache;
+    std::map<std::pair<int, int>, PxMaterial*>&      materialCache; // PhysicsCore's (#167)
     std::unordered_map<std::uint32_t, PxRigidDynamic*> bodyByEntity;
     std::vector<ContactEvent>                        contactEvents;
     // #185 PR 11 — joints built on Play-enter, released before the scene. jointOwner maps each
@@ -158,11 +189,9 @@ struct PhysicsState {
     // contact / joint log lines (written from PhysX callbacks, no registry at hand) can name
     // entities by the stable id the Console links to.
     std::unordered_map<std::uint32_t, int> orderByEntity;
-    // #185 PR 12 — cooked meshes cached by model path so a Play->Stop->Play doesn't re-cook.
-    // These own the meshes (released in Destroy); convexMeshes/triangleMeshes above just track
-    // the non-cached (should be none now) plus keep the release loop simple.
-    std::unordered_map<std::string, PxConvexMesh*>   convexCache;
-    std::unordered_map<std::string, PxTriangleMesh*> triangleCache;
+    // #185 PR 12 / #167 — cooked meshes, cached in PhysicsCore for the whole session.
+    std::unordered_map<std::string, PxConvexMesh*>&   convexCache;
+    std::unordered_map<std::string, PxTriangleMesh*>& triangleCache;
     // #185 PR 10 — Player's kinematic ground (moving platform) + its last pose, for carry.
     PxRigidDynamic* playerGround = nullptr;
     PxVec3          playerGroundLastPos{0.0f};
@@ -182,13 +211,6 @@ struct PhysicsState {
     float           lastStepMillis = 0.0f;
     unsigned        frameIndex = 0;
     double          simClock = 0.0;
-#ifdef TARTARUS_PHYSX_PVD
-    PxPvd*               pvd            = nullptr;
-    PxPvdTransport*      pvdTransport   = nullptr;
-#endif
-#ifdef TARTARUS_PHYSX_OMNIPVD
-    PxOmniPvd*           omniPvd        = nullptr; // #185 G — .ovd capture for the Omniverse PhysX inspector
-#endif
     float                stepAccumulator = 0.0f;
 };
 
@@ -390,10 +412,17 @@ void BuildActors(PhysicsState& s, const World& world) {
                 Log::Warn("PhysX: " + EntityLogRef(world.Registry, e) +
                           " — a triangle-mesh collider can't be dynamic; using a convex hull.");
 
-            // Cook once per model path per Play session (#185 PR 12) — a cooked mesh is
-            // scale-independent (scale rides on the geometry's PxMeshScale), so the cache key
-            // is just the path.
-            const std::string key = (rc && rc->ModelRef) ? rc->ModelRef->Path() : std::string();
+            // Cook once per model for the editor session (#185 PR 12, #167). A cooked mesh is
+            // scale-independent (scale rides on the geometry's PxMeshScale), so the key is the
+            // model's identity: path, file timestamp and geometry size, which all change when
+            // the model is reimported.
+            std::string key = (rc && rc->ModelRef) ? rc->ModelRef->Path() : std::string();
+            {
+                std::error_code ec;
+                const auto stamp = std::filesystem::last_write_time(key, ec);
+                key += "|" + std::to_string(ec ? 0 : (long long)stamp.time_since_epoch().count()) +
+                       "|" + std::to_string(verts.size()) + "|" + std::to_string(idx.size());
+            }
             if (useTriangle) {
                 PxTriangleMesh*& tm = s.triangleCache[key];
                 if (!tm) tm = CookTriangle(*s.physics, verts, idx);
@@ -401,7 +430,7 @@ void BuildActors(PhysicsState& s, const World& world) {
                 make(PxTriangleMeshGeometry(tm, meshScale));
             } else {
                 PxConvexMesh*& cm = s.convexCache[key];
-                if (!cm) cm = CookConvex(*s.physics, verts);
+                if (!cm) { cm = CookConvex(*s.physics, verts); std::printf("[COOK] %s\n", key.c_str()); } else std::printf("[COOK-HIT] %s\n", key.c_str()); // TEMP
                 if (!cm) {
                     s.convexCache.erase(key);
                     // Better a rough box than no collider at all (#185 hardening).
@@ -769,34 +798,30 @@ void PlayerHitReport::onShapeHit(const PxControllerShapeHit& hit) {
                                   PxForceMode::eIMPULSE, true);
 }
 
-} // namespace
+// #167 - stand up the session-lifetime half once; later Plays reuse it.
+bool EnsureCore() {
+    if (g_Core) return true;
+    auto* c = new PhysicsCore();
 
-namespace PhysicsWorld {
-
-void Create(const World& world) {
-    if (g_State) return; // idempotent — a stray second OnEnterPlayMode must not leak a scene
-
-    auto* s = new PhysicsState();
-
-    s->foundation = PxCreateFoundation(PX_PHYSICS_VERSION, s->allocator, s->errorCallback);
-    if (!s->foundation) {
+    c->foundation = PxCreateFoundation(PX_PHYSICS_VERSION, c->allocator, c->errorCallback);
+    if (!c->foundation) {
         Log::Error("PhysX: PxCreateFoundation failed — physics disabled for this Play session.");
-        delete s;
-        return;
+        delete c;
+        return false;
     }
 
 #ifdef TARTARUS_PHYSX_PVD
     // PhysX Visual Debugger: connect if a PVD instance is listening, otherwise carry on. Debug
     // builds only (see CMakeLists) — it makes the collider/character work in PR 2-3 far easier
     // to inspect, and costs nothing when nothing is listening.
-    s->pvd = PxCreatePvd(*s->foundation);
-    s->pvdTransport = PxDefaultPvdSocketTransportCreate("127.0.0.1", 5425, 10);
-    s->pvd->connect(*s->pvdTransport, PxPvdInstrumentationFlag::eALL);
+    c->pvd = PxCreatePvd(*c->foundation);
+    c->pvdTransport = PxDefaultPvdSocketTransportCreate("127.0.0.1", 5425, 10);
+    c->pvd->connect(*c->pvdTransport, PxPvdInstrumentationFlag::eALL);
 #endif
 
     PxPvd* pvdArg = nullptr;
 #ifdef TARTARUS_PHYSX_PVD
-    pvdArg = s->pvd;
+    pvdArg = c->pvd;
 #endif
     PxOmniPvd* omniArg = nullptr;
 #ifdef TARTARUS_PHYSX_OMNIPVD
@@ -804,36 +829,36 @@ void Create(const World& world) {
     // timeline scrubbing of every actor / shape / joint / contact / query). Opt-in at build
     // time: needs PX_BUILDPVDRUNTIME=ON so PVDRuntime_64.dll gets built + harvested (see
     // CMakeLists). A missing runtime DLL just means no capture — the sim runs regardless.
-    s->omniPvd = PxCreateOmniPvd(*s->foundation);
-    if (s->omniPvd && s->omniPvd->getWriter() && s->omniPvd->getFileWriteStream()) {
-        OmniPvdFileWriteStream* fs = s->omniPvd->getFileWriteStream();
+    c->omniPvd = PxCreateOmniPvd(*c->foundation);
+    if (c->omniPvd && c->omniPvd->getWriter() && c->omniPvd->getFileWriteStream()) {
+        OmniPvdFileWriteStream* fs = c->omniPvd->getFileWriteStream();
         fs->setFileName("physx_capture.ovd");
-        s->omniPvd->getWriter()->setWriteStream(*static_cast<OmniPvdWriteStream*>(fs));
-        omniArg = s->omniPvd;
-    } else if (s->omniPvd) {
-        s->omniPvd->release();
-        s->omniPvd = nullptr;
+        c->omniPvd->getWriter()->setWriteStream(*static_cast<OmniPvdWriteStream*>(fs));
+        omniArg = c->omniPvd;
+    } else if (c->omniPvd) {
+        c->omniPvd->release();
+        c->omniPvd = nullptr;
         Log::Warn("PhysX: OmniPVD runtime unavailable (PVDRuntime_64.dll missing) — no .ovd capture.");
     }
 #endif
-    s->physics = PxCreatePhysics(PX_PHYSICS_VERSION, *s->foundation, PxTolerancesScale(),
+    c->physics = PxCreatePhysics(PX_PHYSICS_VERSION, *c->foundation, PxTolerancesScale(),
                                  /*trackOutstandingAllocations=*/true, pvdArg, omniArg);
-    if (!s->physics) {
+    if (!c->physics) {
         Log::Error("PhysX: PxCreatePhysics failed — physics disabled for this Play session.");
 #ifdef TARTARUS_PHYSX_PVD
-        if (s->pvd) s->pvd->release();
-        if (s->pvdTransport) s->pvdTransport->release();
+        if (c->pvd) c->pvd->release();
+        if (c->pvdTransport) c->pvdTransport->release();
 #endif
 #ifdef TARTARUS_PHYSX_OMNIPVD
-        if (s->omniPvd) s->omniPvd->release();
+        if (c->omniPvd) c->omniPvd->release();
 #endif
-        s->foundation->release();
-        delete s;
-        return;
+        c->foundation->release();
+        delete c;
+        return false;
     }
 #ifdef TARTARUS_PHYSX_OMNIPVD
-    if (s->omniPvd && s->physics->getOmniPvd()) {
-        s->physics->getOmniPvd()->startSampling();
+    if (c->omniPvd && c->physics->getOmniPvd()) {
+        c->physics->getOmniPvd()->startSampling();
         Log::Info("PhysX: OmniPVD capture -> physx_capture.ovd");
     }
 #endif
@@ -841,11 +866,24 @@ void Create(const World& world) {
     // Keep the worker pool modest: the engine is otherwise single-threaded, and PR 2 only has
     // static actors. hardware_concurrency() can report 0 — clamp to at least 1.
     unsigned hw = std::thread::hardware_concurrency();
-    PxU32 workers = std::max<PxU32>(1, std::min<PxU32>(hw ? hw - 1 : 1, 4));
-    s->dispatcher = PxDefaultCpuDispatcherCreate(workers);
+    c->workers = std::max<PxU32>(1, std::min<PxU32>(hw ? hw - 1 : 1, 4));
+    c->dispatcher = PxDefaultCpuDispatcherCreate(c->workers);
+    c->defaultMaterial = c->physics->createMaterial(0.6f, 0.6f, 0.0f);
 
-    s->defaultMaterial = s->physics->createMaterial(0.6f, 0.6f, 0.0f);
+    g_Core = c;
+    Log::Info("PhysX initialised (" + std::to_string(c->workers) + " worker threads).");
+    return true;
+}
 
+} // namespace
+
+namespace PhysicsWorld {
+
+void Create(const World& world) {
+    if (g_State) return; // idempotent — a stray second OnEnterPlayMode must not leak a scene
+    if (!EnsureCore()) return;
+
+    auto* s = new PhysicsState(*g_Core);
     s->simCb.owner = s;      // #185 PR 5
     s->hitReport.owner = s;  // #185 PR 10
     // #185 PR 8 — snapshot the layer collision matrix; PhysX copies it as the filter constant block.
@@ -866,17 +904,6 @@ void Create(const World& world) {
     s->scene = s->physics->createScene(desc);
     if (!s->scene) {
         Log::Error("PhysX: createScene failed — physics disabled for this Play session.");
-        s->defaultMaterial->release();
-        s->dispatcher->release();
-        s->physics->release();
-#ifdef TARTARUS_PHYSX_PVD
-        if (s->pvd) s->pvd->release();
-        if (s->pvdTransport) s->pvdTransport->release();
-#endif
-#ifdef TARTARUS_PHYSX_OMNIPVD
-        if (s->omniPvd) s->omniPvd->release();
-#endif
-        s->foundation->release();
         delete s;
         return;
     }
@@ -884,7 +911,7 @@ void Create(const World& world) {
     s->controllerMgr = PxCreateControllerManager(*s->scene);
 
     g_State = s;
-    Log::Info("PhysX world created (" + std::to_string(workers) + " worker threads).");
+    Log::Info("PhysX world created (" + std::to_string(g_Core->workers) + " worker threads).");
 
     BuildActors(*s, world);
     BuildJoints(*s, world); // #185 PR 11
@@ -895,33 +922,42 @@ void Destroy() {
     PhysicsState* s = g_State;
     g_State = nullptr; // clear first so a re-entrant Step() during teardown is a no-op
 
-    // Reverse construction order. scene->release() drops every actor/shape it owns.
+    // Reverse construction order. scene->release() drops every actor/shape it owns. The core
+    // (physics, dispatcher, materials, cooked meshes) stays up for the next Play (#167).
     for (PxJoint* j : s->joints)               if (j) j->release(); // #185 PR 11 — before the scene
     if (s->controller)      s->controller->release();
     if (s->controllerMgr)   s->controllerMgr->release();
     if (s->scene)           s->scene->release();
-    for (auto& kv : s->materialCache)          if (kv.second) kv.second->release(); // #185 PR 7
-    for (auto& kv : s->convexCache)            if (kv.second) kv.second->release(); // #185 PR 6/12 — after the scene's shapes
-    for (auto& kv : s->triangleCache)          if (kv.second) kv.second->release();
     for (PxConvexMesh* m : s->convexMeshes)   if (m) m->release(); // legacy non-cached path (now unused)
     for (PxTriangleMesh* m : s->triangleMeshes) if (m) m->release();
-    if (s->defaultMaterial) s->defaultMaterial->release();
-    if (s->dispatcher)      s->dispatcher->release();
-    if (s->physics)         s->physics->release();
-#ifdef TARTARUS_PHYSX_PVD
-    if (s->pvd) {
-        s->pvd->disconnect();
-        s->pvd->release();
-    }
-    if (s->pvdTransport) s->pvdTransport->release();
-#endif
-#ifdef TARTARUS_PHYSX_OMNIPVD
-    if (s->omniPvd) s->omniPvd->release(); // after physics->release()
-#endif
-    if (s->foundation) s->foundation->release();
 
     delete s;
     Log::Info("PhysX world destroyed.");
+}
+
+void Shutdown() {
+    Destroy();
+    if (!g_Core) return;
+    PhysicsCore* c = g_Core;
+    g_Core = nullptr;
+    for (auto& kv : c->materialCache)          if (kv.second) kv.second->release(); // #185 PR 7
+    for (auto& kv : c->convexCache)            if (kv.second) kv.second->release(); // #185 PR 6/12
+    for (auto& kv : c->triangleCache)          if (kv.second) kv.second->release();
+    if (c->defaultMaterial) c->defaultMaterial->release();
+    if (c->dispatcher)      c->dispatcher->release();
+    if (c->physics)         c->physics->release();
+#ifdef TARTARUS_PHYSX_PVD
+    if (c->pvd) {
+        c->pvd->disconnect();
+        c->pvd->release();
+    }
+    if (c->pvdTransport) c->pvdTransport->release();
+#endif
+#ifdef TARTARUS_PHYSX_OMNIPVD
+    if (c->omniPvd) c->omniPvd->release(); // after physics->release()
+#endif
+    if (c->foundation) c->foundation->release();
+    delete c;
 }
 
 bool IsActive() {
