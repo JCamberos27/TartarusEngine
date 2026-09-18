@@ -78,6 +78,10 @@ bool Triggered(const char* id);
 // Input::IsKeyPressed. Single-chord only — a sequence's prefix is ignored here.
 bool TriggeredGlfw(const char* id);
 
+// #141 — false for a chord TriggeredGlfw can never fire: a two-key sequence, or a key with no
+// GLFW equivalent. The Shortcuts editor refuses such bindings for Ctx_App actions.
+bool GlfwCanTrigger(const Chord&);
+
 // --- registry access, for the Preferences > Shortcuts editor --------------------------------
 const std::vector<Shortcut>& All();
 Shortcut*   Find(const char* id);
