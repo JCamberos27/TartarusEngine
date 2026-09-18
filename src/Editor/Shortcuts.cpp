@@ -21,6 +21,7 @@ namespace {
 
 std::vector<Shortcut> g_Table;
 std::uint64_t         g_Frame = 0;
+std::uint32_t         g_ContextMask = 0; // the mask the last BeginFrame ran with (Held())
 
 // --- half-entered chord prefix -------------------------------------------------------------
 // A single global pending prefix (key + mods), shared by every chorded binding. Set when a
@@ -164,6 +165,7 @@ void BuildDefaultTable() {
     // --- Viewport tools + framing (Viewport) ---
     Register("gameobject.quickAdd",     "Quick Create (at cursor)",  Ctx_Viewport, Sk(ImGuiKey_A));
     Register("view.frameSelection",     "Frame Selection",           Ctx_Viewport, K(ImGuiKey_F));
+    Register("view.vertexSnap",         "Vertex Snap (hold)",        Ctx_Viewport, K(ImGuiKey_V)); // #184
     Register("view.lockToSelection",    "Lock View to Selection",    Ctx_Viewport, Sk(ImGuiKey_F));
     Register("tools.hand",              "Tool: Hand",                Ctx_Viewport, K(ImGuiKey_Q));
     Register("tools.move",              "Tool: Move",                Ctx_Viewport, K(ImGuiKey_W));
@@ -413,6 +415,7 @@ void Save() {
 
 void BeginFrame(std::uint32_t contextMask) {
     ++g_Frame;
+    g_ContextMask = contextMask;
 
     if (contextMask == 0) {
         g_PrefixActive = false;
@@ -461,6 +464,14 @@ bool Triggered(const char* id) {
     if (!id) return false;
     const auto it = g_Fired.find(id);
     return it != g_Fired.end() && it->second == g_Frame;
+}
+
+bool Held(const char* id, bool ignoreContext) {
+    const Shortcut* s = Find(id);
+    if (!s || !s->Current.IsBound() || s->Current.HasPrefix()) return false;
+    if (!ignoreContext && !(g_ContextMask & s->Ctx)) return false;
+    const Chord& c = s->Current;
+    return ImGui::IsKeyDown(c.Key) && ModsMatch(ImGui::GetIO(), c.Ctrl, c.Shift, c.Alt, c.Super);
 }
 
 // --- GLFW-input path (main loop, no ImGui frame) ------------------------------------------

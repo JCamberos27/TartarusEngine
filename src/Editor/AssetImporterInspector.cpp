@@ -25,7 +25,12 @@ void Row(const char* label, const char* tooltip = nullptr) {
 void AssetImporterInspector::DrawTextureSettings(TextureImportSettings& settings, bool& isDirty) {
     ImGui::PushItemWidth(-1.0f);
 
-    Row("Texture Type", "What this texture is used for - mainly documentation today, but\nsRGB should only ever be on for Default/Sprite, never Normal Map.");
+    // #184 — the old tooltip called this "mainly documentation"; Texture::UploadFromFile has
+    // enforced it since #198, so say what each type actually does, and grey out the toggles it
+    // overrides below instead of letting them look editable.
+    Row("Texture Type", "Default: colour or data texture, every setting below applies as shown.\n"
+                        "Normal Map: always uploaded linear (sRGB forced off).\n"
+                        "Sprite / 2D: always Clamp to Edge with no mipmaps, for UI and sprite atlases.");
     const char* kTypes[] = {"Default", "Normal Map", "Sprite / 2D"};
     int typeIdx = (int)settings.TextureType;
     if (ImGui::Combo("##TexType", &typeIdx, kTypes, IM_ARRAYSIZE(kTypes))) {
@@ -36,11 +41,22 @@ void AssetImporterInspector::DrawTextureSettings(TextureImportSettings& settings
         isDirty = true;
     }
 
+    const bool isSprite = settings.TextureType == TextureImportSettings::Type::Sprite2D;
+    const bool isNormal = settings.TextureType == TextureImportSettings::Type::NormalMap;
+
     Row("Generate Mipmaps", "Builds progressively smaller versions for filtering at a\ndistance. Off saves memory/import time for UI or other never-minified textures.");
+    ImGui::BeginDisabled(isSprite);
     isDirty |= EditorUIPrimitives::Checkbox("##Mipmaps", &settings.GenerateMipmaps);
+    ImGui::EndDisabled();
+    if (isSprite && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        EditorUI::SetTooltip("Sprite / 2D textures never get mipmaps.");
 
     Row("sRGB (Color Texture)", "On for albedo/base-color textures (authored in sRGB by every\npaint/photo tool). Off for normal maps and other data maps (roughness,\nmetallic, AO, height) - those numbers ARE linear already.");
+    ImGui::BeginDisabled(isNormal);
     isDirty |= EditorUIPrimitives::Checkbox("##sRGB", &settings.IsSRGB);
+    ImGui::EndDisabled();
+    if (isNormal && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        EditorUI::SetTooltip("Normal maps are always linear.");
 
     Row("Filter Mode", "Point = blocky/pixel-art. Bilinear = smooth, no blending between\nmip levels. Trilinear = smooth with blending between mip levels too\n(best quality at oblique angles, marginally more GPU cost).");
     const char* kFilters[] = {"Point", "Bilinear", "Trilinear"};
@@ -62,10 +78,14 @@ void AssetImporterInspector::DrawTextureSettings(TextureImportSettings& settings
     Row("Wrap Mode", "Repeat tiles past 0..1 UV (most surface textures). Clamp to Edge\nsmears the edge pixel instead - for a texture that should never visibly\ntile (a decal, a UI sprite).");
     const char* kWraps[] = {"Repeat", "Clamp to Edge"};
     int wrapIdx = (int)settings.WrapMode;
+    ImGui::BeginDisabled(isSprite);
     if (ImGui::Combo("##Wrap", &wrapIdx, kWraps, IM_ARRAYSIZE(kWraps))) {
         settings.WrapMode = (TextureImportSettings::Wrap)wrapIdx;
         isDirty = true;
     }
+    ImGui::EndDisabled();
+    if (isSprite && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        EditorUI::SetTooltip("Sprite / 2D textures always clamp to edge.");
 
     Row("Max Size", "Downscales on import if the source exceeds this in either\ndimension (aspect ratio preserved). Lower this for a texture that's\nauthored much larger than it'll ever be seen at.");
     // #184 — 0 (no limit) and 8192 are valid values Texture honours; they used to be missing, and
