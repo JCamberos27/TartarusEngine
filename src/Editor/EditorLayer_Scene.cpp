@@ -1078,20 +1078,24 @@ void EditorLayer::PushNotification(NotificationLevel level, const std::string& t
     if (level == NotificationLevel::Warning || level == NotificationLevel::Error) ++m_NotificationUnreadCount;
 }
 
-// Diffs Log::Revision() once a frame instead of re-scanning the whole ring buffer — cheap even
-// with kMaxEntries=1000. A message that only repeats (Log::Push's dedup) bumps the revision
-// without adding a new entry, so m_LogEntriesSeen intentionally tracks entries.size(), not the
-// revision counter itself; a pure repeat is silently skipped (the first occurrence already
-// notified).
+// Diffs Log::Revision() once a frame instead of re-scanning the whole ring buffer. A message
+// that only repeats (Log::Push's dedup) bumps the revision without adding a new entry, so this
+// tracks the last entry Seq handled, not the revision counter itself; a pure repeat is silently
+// skipped (the first occurrence already notified). Seq, not a vector index: the log trims old
+// entries, and an index-based cursor used to reset to 0 then and re-toast every warning and
+// error still in the buffer (#182).
 void EditorLayer::PollLogNotifications() {
     const unsigned int rev = Log::Revision();
     if (rev == m_LastLogRevisionSeen) return;
     m_LastLogRevisionSeen = rev;
 
     const auto& entries = Log::Entries();
-    if (entries.size() < m_LogEntriesSeen) m_LogEntriesSeen = 0; // Log::Clear() shrank the buffer
-    for (; m_LogEntriesSeen < entries.size(); ++m_LogEntriesSeen) {
-        const LogEntry& e = entries[m_LogEntriesSeen];
+    // New entries are always at the back; walk back to the first one not yet handled.
+    size_t first = entries.size();
+    while (first > 0 && entries[first - 1].Seq > m_LastLogSeqSeen) --first;
+    if (!entries.empty()) m_LastLogSeqSeen = std::max(m_LastLogSeqSeen, entries.back().Seq);
+    for (size_t i = first; i < entries.size(); ++i) {
+        const LogEntry& e = entries[i];
         if (e.Level != LogLevel::Warning && e.Level != LogLevel::Error) continue;
         std::string title = e.Message;
         constexpr size_t kMaxTitleLen = 80;
