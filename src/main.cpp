@@ -928,6 +928,14 @@ int main(int argc, char** argv) {
         // #89 — see the matching catch after the loop. (Loop body deliberately not re-indented.)
         try {
         while (true) {
+            // #143: a minimized editor has nothing to show, and a 0x0 framebuffer only risks a
+            // NaN aspect ratio. Sleep on the event queue instead of rendering; a close request
+            // still falls through to the normal exit handling below. Clock's dt clamp (0.1 s)
+            // keeps the first frame after restore from lurching the simulation.
+            if (!headless && !window.ShouldClose() && glfwGetWindowAttrib(window.Handle(), GLFW_ICONIFIED)) {
+                glfwWaitEventsTimeout(0.1);
+                continue;
+            }
             ++frameIndex;
             // Advance the smoke test: load the next scene (or, once every scene's frame quota is
             // met, fall through and stop the whole loop below).
@@ -2493,7 +2501,12 @@ int main(int argc, char** argv) {
 
             // Software frame cap. Runs whatever the VSync mode is, but it's really for VSync Off
             // (with VSync On the driver already blocks in SwapBuffers). 0 = uncapped.
-            Clock::LimitFps(EditorSettings::Get().FpsLimit);
+            // #143: in the background and not playing, hold to the (lower) Background FPS too.
+            int fpsCap = EditorSettings::Get().FpsLimit;
+            const int bgCap = EditorSettings::Get().UnfocusedFpsLimit;
+            if (bgCap > 0 && !playing && !headless && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED))
+                fpsCap = fpsCap > 0 ? std::min(fpsCap, bgCap) : bgCap;
+            Clock::LimitFps(fpsCap);
 
             // The editor has now actually presented a frame, so revealing the window shows
             // finished content rather than an unpainted framebuffer. Ordered swap -> show ->
