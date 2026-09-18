@@ -327,6 +327,7 @@ int main(int argc, char** argv) {
         // PR13: HDRI state — non-null when an HDRI is loaded, path tracks the loaded file
         std::shared_ptr<Cubemap> hdriCube;
         std::string               hdriCubePath;
+        bool                      hdriNeedsBake = false; // #200 — set when hdriCube is (re)loaded
         bool                      prevWasHdri = false;
         // PR14: reflection probe array — rebuilt from scene each frame, bound per drawScene
         ReflectionProbeArray probeArray;
@@ -1681,13 +1682,15 @@ int main(int argc, char** argv) {
                     PROFILE_SCOPE("HDRI Load");
                     hdriCube     = Cubemap::LoadHdr(world.SkyHdriPath);
                     hdriCubePath = world.SkyHdriPath;
+                    hdriNeedsBake = true; // #200 — a new file needs its own IBL, not the last one's
                 }
                 // NeedsBake(-1,-1,-1) is true unless BakeFromCubemap already ran this HDRI;
                 // the sentinel set by BakeFromCubemap makes the check false until we switch source.
                 // #108 — also rebake when the HDRI rotation changes, so lighting follows the sky.
                 const float skyRot = glm::radians(world.SkyRotationDegrees);
-                if (hdriCube && (iblProbe.NeedsBake(glm::vec3(-1.0f), glm::vec3(-1.0f)) ||
+                if (hdriCube && (hdriNeedsBake || iblProbe.NeedsBake(glm::vec3(-1.0f), glm::vec3(-1.0f)) ||
                                  iblProbe.BakedRotation() != skyRot)) {
+                    hdriNeedsBake = false;
                     PROFILE_SCOPE("IBL Bake (HDRI)");
                     PROFILE_GPU_SCOPE("IBL Bake (HDRI)");
                     iblProbe.BakeFromCubemap(hdriCube->Texture(), hdriCube->FaceSize(), skyRot);
