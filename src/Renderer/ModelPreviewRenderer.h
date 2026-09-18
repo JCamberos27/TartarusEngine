@@ -8,7 +8,7 @@ class Shader;
 
 // Renders a Model into an offscreen texture from an orbiting camera, for the Inspector's "Model
 // Import Settings" preview — the same PBR shader/material-binding path Model::Draw() uses in the
-// real scene (see ModelShaderSource.h), so what you see here is really the imported materials
+// real scene (see shaders/ModelFragment.glsl), so what you see here is really the imported materials
 // bound and lit, not a placeholder. Lazily creates its GL resources (an FBO with color + depth
 // attachments) on first use and releases them in its destructor, matching the RAII convention
 // Texture/Grid/Sky/ChannelPreviewRenderer already follow for their own GL objects.

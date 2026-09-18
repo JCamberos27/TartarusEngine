@@ -532,6 +532,36 @@ bool ActiveToggleRow(const char* label, bool anyActive, bool mixed, bool& out, c
     return clicked;
 }
 
+// #95 — a texture dropped into a DATA slot (normal / metallic / roughness / AO / packed MR /
+// clear coat / thickness) was loaded with the default sRGB import settings, so its values were
+// gamma-decoded on sample. When the texture has no import settings of its own yet, tag it as
+// linear (and as a normal map for the normal slot) and re-import it — Unity's "Fix Now" for
+// normal maps, applied automatically. Explicit settings the user chose are left alone.
+// Emissive maps are tinted by Emissive Color (#102), so a black colour would hide the map:
+// default it to white when the first emissive map goes in.
+std::shared_ptr<Texture> LoadTextureForSlot(AssetLibrary& assets, const std::string& path,
+                                            std::shared_ptr<Texture> Material::* slot) {
+    auto tex = assets.LoadTexture(path);
+    if (!tex) return tex;
+    const bool isColor = slot == &Material::AlbedoMap || slot == &Material::EmissiveMap;
+    if (!isColor && !assets.TextureSettingsMap().count(path)) {
+        TextureImportSettings s = assets.GetTextureSettings(path);
+        if (s.IsSRGB) {
+            s.IsSRGB = false;
+            if (slot == &Material::NormalMap) s.TextureType = TextureImportSettings::Type::NormalMap;
+            assets.SetTextureSettings(path, s);
+            assets.ReimportTexture(path);
+            Log::Info("Texture: '" + path + "' is used as a data map - imported as linear (not sRGB).");
+        }
+    }
+    return tex;
+}
+
+void DefaultEmissiveTint(Material& m, std::shared_ptr<Texture> Material::* slot) {
+    if (slot == &Material::EmissiveMap && m.EmissiveMap && m.EmissiveColor == glm::vec3(0.0f))
+        m.EmissiveColor = glm::vec3(1.0f);
+}
+
 // Small eyedropper button, drawn right after a colour swatch. Arms EditorLayer's viewport
 // eyedropper on `target` (a stable pointer into a component / World member). #236 R2.
 void EyedropperButton(EditorLayer* self, World& world, glm::vec3* target) {
@@ -580,8 +610,9 @@ void EditorLayer::DrawShaderPreviewInspector(AssetLibrary& assets, const std::st
             auto shader = assets.LoadShader(key);
             if (!shader) {
                 m_ShaderPreviewError = "Failed to parse — see Console for details.";
-            } else if (!shader->Variant(0)) {
-                m_ShaderPreviewError = "Compile failed (no diagnostic returned).";
+            } else if (shader->ForgetFailedVariants(), !shader->Variant(0)) {
+                m_ShaderPreviewError = shader->LastCompileError().empty()
+                    ? "Compile failed (no diagnostic returned)." : shader->LastCompileError();
             } else {
                 m_ShaderPreviewOk = true;
             }
@@ -982,7 +1013,8 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
         {
             std::string path;
             if (TexturePickerPopup("##texPicker", assets, path)) {
-                mat.*texSlot = assets.LoadTexture(path);
+                mat.*texSlot = LoadTextureForSlot(assets, path, texSlot);
+                DefaultEmissiveTint(mat, texSlot);
                 save();
             }
         }
@@ -1048,8 +1080,18 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
                 // See scalarRow above — need the widget's own out-param, not a bare
                 // IsItemDeactivatedAfterEdit(), so a track drag also fires save().
                 bool committed = false;
-                bool changed = EditorUI::SliderFloat("##f", &edit, prop.DefaultFloat, 1.0f, "%.3f",
-                                                     0, nullptr, &committed);
+                // #106 — the property's DEFAULT used to be the slider MINIMUM (Roughness couldn't
+                // go below 0.5, Emissive Strength was stuck at 1, IOR's range was inverted). Use
+                // the shader's Range(min,max); a plain Float gets an unbounded drag field.
+                bool changed = false;
+                if (prop.HasRange) {
+                    changed = EditorUI::SliderFloat("##f", &edit, prop.RangeMin, prop.RangeMax, "%.3f",
+                                                    0, nullptr, &committed);
+                } else {
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    changed = ImGui::DragFloat("##f", &edit, 0.01f, 0.0f, 0.0f, "%.3f");
+                    committed = ImGui::IsItemDeactivatedAfterEdit();
+                }
                 if (changed && std::isfinite(edit)) MaterialAsset::SetFloat(mat, prop.Name, edit);
                 if (committed) save();
                 break;
@@ -1135,10 +1177,20 @@ bool EditorLayer::ConsumeEyedropperSample(float& outX, float& outY) {
 
 void EditorLayer::ApplyEyedropperSample(const glm::vec3& rgb) {
     if (!m_EyedropperTarget) return;
-    if (m_EyedropperWorld) PushUndo(*m_EyedropperWorld, "Eyedropper");
-    *m_EyedropperTarget = glm::clamp(rgb, glm::vec3(0.0f), glm::vec3(1.0f));
+    // Take the target first: PushUndo cancels any armed eyedropper (#93).
+    glm::vec3* target = m_EyedropperTarget;
+    World* world = m_EyedropperWorld;
     m_EyedropperTarget = nullptr;
     m_EyedropperWorld = nullptr;
+    if (world) PushUndo(*world, "Eyedropper");
+    // #93 — the sample is the displayed (gamma-encoded) pixel, but every colour field it can
+    // target is linear (lighting math, ColorEdit storage), so decode sRGB -> linear. (It is still
+    // the post-tonemap colour; an exact inverse of the tonemapper isn't attempted.)
+    auto toLinear = [](float c) {
+        c = std::clamp(c, 0.0f, 1.0f);
+        return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+    };
+    *target = glm::vec3(toLinear(rgb.r), toLinear(rgb.g), toLinear(rgb.b));
 }
 
 void EditorLayer::ToggleInspectorLock() {
@@ -3070,8 +3122,8 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 std::string path;
                 if (TexturePickerPopup("##texPicker", assets, path)) {
                     PushUndo(world, std::string("Set ") + label + " Map");
-                    auto tex = assets.LoadTexture(path);
-                    for (Material* mm : mats) mm->*texSlot = tex;
+                    auto tex = LoadTextureForSlot(assets, path, texSlot);
+                    for (Material* mm : mats) { mm->*texSlot = tex; DefaultEmissiveTint(*mm, texSlot); }
                 }
             }
             if (missing) ImGui::PopStyleColor();
@@ -3162,9 +3214,19 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 // here, not a bare IsItemActivated()/IsItemDeactivatedAfterEdit(), or dragging the
                 // track (vs. typing in its trailing number box) would silently skip the undo step.
                 bool activated = false, committed = false;
-                bool changed = EditorUI::SliderFloat("##f", &edit, prop.DefaultFloat, 1.0f,
-                                                     mixed ? "\xE2\x80\x94" : "%.3f",
-                                                     0, &activated, &committed);
+                // #106 — see the standalone .mat editor's Float case: real Range limits, or an
+                // unbounded drag field for a plain Float.
+                bool changed = false;
+                if (prop.HasRange) {
+                    changed = EditorUI::SliderFloat("##f", &edit, prop.RangeMin, prop.RangeMax,
+                                                    mixed ? "\xE2\x80\x94" : "%.3f",
+                                                    0, &activated, &committed);
+                } else {
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    changed = ImGui::DragFloat("##f", &edit, 0.01f, 0.0f, 0.0f, mixed ? "\xE2\x80\x94" : "%.3f");
+                    activated = ImGui::IsItemActivated();
+                    committed = ImGui::IsItemDeactivatedAfterEdit();
+                }
                 if (activated) StageUndo(world);
                 if (changed && std::isfinite(edit))
                     for (Material* mm : mats) MaterialAsset::SetFloat(*mm, prop.Name, edit);

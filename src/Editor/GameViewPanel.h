@@ -123,8 +123,6 @@ private:
     bool m_WindowOpen = true;
     bool m_EngageClickPending = false;
     bool m_ViewHovered = false;
-    bool m_MaximizeOnPlay = false;
-    bool m_ShowStatsOverlay = true;
 
     bool m_LastKnownOsFullscreen = false; // mirrored from RenderUI's isOsFullscreen param, for the button's label
     bool m_FullscreenRequestPending = false;

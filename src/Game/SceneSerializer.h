@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <entt/entt.hpp>
 
@@ -58,9 +59,13 @@ namespace SceneSerializer {
 
     // ADDS the fragment's entities to `world` without clearing it (unlike LoadFromString, which
     // replaces the whole scene), appending every newly created entity to outCreated. Used for
-    // paste and for stamping out a prefab instance.
+    // paste and for stamping out a prefab instance. Joints whose ConnectedOrder points at another
+    // entity inside the same fragment are repointed at that entity's copy (#119).
+    // outSourceOrder (optional): each fragment entity's saved OrderComponent value -> its new
+    // copy, so a caller can map a copy back to the entity it was made from.
     bool AppendEntitiesFromString(World& world, AssetLibrary& assets, const std::string& data,
-        std::vector<entt::entity>& outCreated);
+        std::vector<entt::entity>& outCreated,
+        std::unordered_map<int, entt::entity>* outSourceOrder = nullptr);
 
     // Prefabs: one entity (and its descendants) saved to / instantiated from a .prefab file.
     // SavePrefab writes a self-contained fragment (no nested links). InstantiatePrefab stamps a

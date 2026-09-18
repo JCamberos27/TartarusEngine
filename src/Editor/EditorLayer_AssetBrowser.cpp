@@ -1827,17 +1827,26 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
         if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS "  New Folder")) makeNewFolder();
         ImGui::Separator();
         if (ImGui::MenuItem(ICON_FA_DROPLET "  Create Material")) {
-            std::string folder = m_CurrentAssetFolder;
-            std::string base = folder.empty() ? "New Material" : (folder + "/New Material");
-            // Pick a path that doesn't already exist on disk.
-            std::string candidate = base + ".mat";
-            int n = 1;
-            while (std::filesystem::exists(candidate)) candidate = base + " (" + std::to_string(n++) + ").mat";
+            // #87 — the file used to be built from the VIRTUAL folder name with no root, so it
+            // landed relative to the process CWD (usually build/Release/, wiped by a clean
+            // build). Write it under the project's materials/ folder, then file it into the
+            // Asset Browser folder the user is looking at.
+            const std::string folder = m_CurrentAssetFolder;
+            std::error_code ec;
+            const std::filesystem::path dir = ProjectPaths::Resolve("materials");
+            std::filesystem::create_directories(dir, ec);
+            std::filesystem::path candidatePath = dir / "New Material.mat";
+            for (int n = 1; std::filesystem::exists(candidatePath, ec); ++n)
+                candidatePath = dir / ("New Material (" + std::to_string(n) + ").mat");
+            const std::string candidate = candidatePath.generic_string();
             PushUndo(world, "Create Material");
             auto mat = MaterialAsset::CreateDefault(candidate);
             if (mat) {
                 assets.LoadMaterial(candidate);
+                if (!folder.empty()) assets.SetAssetFolder(candidate, folder);
                 BeginRenameAsset(candidate, false, std::filesystem::path(candidate).stem().string());
+            } else {
+                Log::Error("Create Material: couldn't write '" + candidate + "'.");
             }
         }
         ImGui::EndPopup();

@@ -67,19 +67,23 @@ void ApplyMetaBrowserData(const json& j, const std::string& path,
 } // namespace
 
 std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
+    if (path.rfind(kPrimitivePrefix, 0) == 0) {
+        // "primitive://<kind>#<id>" — a per-instance procedural mesh, reconstructed from its
+        // path; any saved material override is reapplied separately by SceneSerializer right
+        // after this returns. #97 — NOT cached: every scene load / undo / redo / Play-Stop used
+        // to add a fresh primitive Model (VAO/VBO) to m_ModelCache that nothing ever removed,
+        // so GPU + CPU memory grew for the whole editing session. The entity that owns the
+        // returned shared_ptr is its only owner now; destroying the entity frees the mesh.
+        std::string rest = path.substr(kPrimitivePrefix.size());
+        std::string kind = rest.substr(0, rest.find('#'));
+        return Model::CreatePrimitive(kind, path);
+    }
+
     auto it = m_ModelCache.find(path);
     if (it != m_ModelCache.end()) return it->second;
 
     std::shared_ptr<Model> model;
-    bool isPrimitive = path.rfind(kPrimitivePrefix, 0) == 0;
-    if (isPrimitive) {
-        // "primitive://<kind>#<id>" — reconstruct on load (e.g. after relaunch) the same way
-        // CreatePrimitive builds it fresh; any saved material override is reapplied separately
-        // by SceneSerializer right after this returns.
-        std::string rest = path.substr(kPrimitivePrefix.size());
-        std::string kind = rest.substr(0, rest.find('#'));
-        model = Model::CreatePrimitive(kind, path);
-    } else {
+    {
         // Populate settings and browser metadata from .meta before constructing the model, so
         // that the first import uses the persisted settings rather than requiring a Reimport.
         if (m_ModelSettings.find(path) == m_ModelSettings.end()) {
@@ -97,21 +101,17 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
     }
 
     m_ModelCache[path] = model;
-    // A primitive:// entry is a per-instance procedural mesh (one per placed Add > Cube / Duplicate),
-    // not an importable asset — it's cached above so scene entities resolve their path, but it must
-    // NOT appear in the Asset Browser listing or get written into libraryModels. Scene boxes[]/
-    // models[] recreate their own primitives from their path on load, independent of that list.
-    if (!isPrimitive) {
-        m_ModelList.push_back(model);
-        AssetDatabase::EnsureGuid(path);
-    }
+    m_ModelList.push_back(model);
+    AssetDatabase::EnsureGuid(path);
     return model;
 }
 
 std::shared_ptr<Model> AssetLibrary::CreatePrimitive(const std::string& kind) {
+    // The "#N" suffix only makes each instance's path distinct (the path is also what the scene
+    // file stores); primitives aren't cached (#97), so a restart reusing an old N is harmless.
     static int counter = 0;
     std::string path = kPrimitivePrefix + kind + "#" + std::to_string(counter++);
-    return LoadModel(path); // fresh path -> guaranteed cache miss -> takes the primitive branch above
+    return Model::CreatePrimitive(kind, path);
 }
 
 std::shared_ptr<Model> AssetLibrary::CloneModel(const std::shared_ptr<Model>& original) {
@@ -129,6 +129,7 @@ std::shared_ptr<Model> AssetLibrary::CloneModel(const std::shared_ptr<Model>& or
 }
 
 std::shared_ptr<Model> AssetLibrary::InstantiateModel(const std::string& path) {
+    if (path.rfind(kPrimitivePrefix, 0) == 0) return LoadModel(path); // already a fresh instance (#97)
     return CloneModel(LoadModel(path));
 }
 

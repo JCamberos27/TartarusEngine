@@ -69,7 +69,15 @@ bool ParsePropLine(const std::string& rawLine, ShaderProperty& out) {
 
     // ("Display", Type)
     size_t lp = line.find('(', i);
-    size_t rp = (lp != std::string::npos) ? line.find(')', lp) : std::string::npos;
+    // Matching ')' (depth-counted), so a nested "Range(0, 1)" type doesn't end the group early.
+    size_t rp = std::string::npos;
+    if (lp != std::string::npos) {
+        int depth = 0;
+        for (size_t k = lp; k < line.size(); ++k) {
+            if (line[k] == '(') ++depth;
+            else if (line[k] == ')' && --depth == 0) { rp = k; break; }
+        }
+    }
     if (lp == std::string::npos || rp == std::string::npos) return false;
     std::string inner = line.substr(lp + 1, rp - lp - 1);
     size_t comma = inner.find(',');
@@ -78,7 +86,20 @@ bool ParsePropLine(const std::string& rawLine, ShaderProperty& out) {
     if (disp.size() >= 2 && disp.front() == '"' && disp.back() == '"')
         disp = disp.substr(1, disp.size() - 2);
     out.DisplayName = disp;
-    out.Type = ParseType(Trim(inner.substr(comma + 1)));
+    const std::string typeStr = Trim(inner.substr(comma + 1));
+    // #106 — Unity-style Range(min, max): a Float with slider limits for the material editor.
+    if (typeStr.rfind("Range", 0) == 0) {
+        out.Type = ShaderPropType::Float;
+        float lo = 0.0f, hi = 1.0f;
+        if (std::sscanf(typeStr.c_str(), "Range ( %f , %f )", &lo, &hi) == 2 ||
+            std::sscanf(typeStr.c_str(), "Range(%f,%f)", &lo, &hi) == 2) {
+            out.HasRange = true;
+            out.RangeMin = lo < hi ? lo : hi;
+            out.RangeMax = lo < hi ? hi : lo;
+        }
+    } else {
+        out.Type = ParseType(typeStr);
+    }
 
     // = default
     size_t eq = line.find('=', rp);
@@ -223,10 +244,33 @@ void ShaderAsset::CompileVariant(ShaderVariantKey key) {
         if (!fragSrc.empty()) inject(fragSrc);
     }
 
-    if (fragSrc.empty())
-        m_Variants[key] = std::make_unique<Shader>(vertSrc);      // compute
-    else
-        m_Variants[key] = std::make_unique<Shader>(vertSrc, fragSrc);
+    // #100 — Shader's constructors throw on a GLSL compile/link error. This runs lazily from
+    // SceneRenderer mid-draw, so an uncaught throw here (a typo in a user .shader/.glsl) used to
+    // unwind to main() and close the editor. Catch it, report it once, and cache the failure
+    // (nullptr) so it isn't recompiled every frame; SceneRenderer already falls back to the
+    // built-in program when Variant() returns null. ForgetFailedVariants() (the Inspector's
+    // shader preview calls it) retries after the file is fixed.
+    try {
+        if (fragSrc.empty())
+            m_Variants[key] = std::make_unique<Shader>(vertSrc);      // compute
+        else
+            m_Variants[key] = std::make_unique<Shader>(vertSrc, fragSrc);
+    } catch (const std::exception& e) {
+        std::string keywords;
+        for (int i = 0; i < (int)m_Keywords.size(); ++i)
+            if (key & (1u << i)) keywords += (keywords.empty() ? "" : " ") + m_Keywords[i];
+        Log::Error("ShaderAsset: '" + m_VertFile + (m_FragFile.empty() ? "" : "' / '" + m_FragFile) +
+                   "' failed to compile" + (keywords.empty() ? "" : " (variant: " + keywords + ")") +
+                   " - objects using it fall back to the default shader. " + e.what());
+        m_LastCompileError = e.what();
+        m_Variants[key] = nullptr;
+    }
+}
+
+void ShaderAsset::ForgetFailedVariants() {
+    for (auto it = m_Variants.begin(); it != m_Variants.end();)
+        it = it->second ? std::next(it) : m_Variants.erase(it);
+    m_LastCompileError.clear();
 }
 
 Shader* ShaderAsset::Variant(ShaderVariantKey key) {

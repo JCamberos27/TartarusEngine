@@ -155,6 +155,13 @@ public:
     // leaves the actual geometry floating above the ground instead of resting on it.
     float LowestVertexWorldY(const glm::mat4& modelMatrix) const;
 
+    // #116/#117 — exact ray vs. the model's bind-pose triangles, placed by modelMatrix. Ray in
+    // world space (dir need not be normalised); on a hit returns the world-space distance along
+    // normalize(dir) and the world-space face normal (facing the ray origin). Hits behind the
+    // origin, and within minT of it, are ignored.
+    bool RaycastTriangles(const glm::mat4& modelMatrix, const glm::vec3& worldOrigin, const glm::vec3& worldDir,
+                          float& outT, glm::vec3* outNormal = nullptr, float minT = 1e-4f) const;
+
 private:
     Model() = default; // used only by CreatePrimitive; file-based loading always goes through the path constructor
 
@@ -184,7 +191,9 @@ private:
     void ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& parentTransform);
     std::unique_ptr<ModelMesh> ProcessMesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& nodeTransform);
     Material ExtractMaterial(const aiScene* scene, unsigned int materialIndex);
-    std::shared_ptr<Texture> LoadCachedTexture(const std::string& fullPath);
+    // #95 — what a material slot's texture holds, which decides its colour space.
+    enum class TextureRole { Color, Normal, Data };
+    std::shared_ptr<Texture> LoadCachedTexture(const std::string& fullPath, TextureRole role);
     // Turns whatever path string a model file baked in for a texture (bare filename, path
     // relative to the model, a "..\tex\x.png" with junk separators, or an absolute path from
     // the machine the asset was authored on) into a real file on THIS disk. Tries the sensible

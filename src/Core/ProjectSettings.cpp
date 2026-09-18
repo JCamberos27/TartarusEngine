@@ -76,10 +76,20 @@ void Load() {
     if (const auto it = root.find("physics"); it != root.end() && it->is_object()) {
         const json& p = *it;
         g_Physics.Gravity          = Vec3Or(p, "gravity", g_Physics.Gravity);
-        g_Physics.FixedTimestep    = p.value("fixedTimestep", g_Physics.FixedTimestep);
-        g_Physics.SolverIterations = p.value("solverIterations", g_Physics.SolverIterations);
-        g_Physics.PlayerPushStrength = p.value("playerPushStrength", g_Physics.PlayerPushStrength);
-        g_Physics.PlayerLayer        = std::clamp(p.value("playerLayer", g_Physics.PlayerLayer), 0, 7);
+        // #152 — number-typed reads that tolerate a wrong-typed value (p.value() throws
+        // json::type_error on e.g. "fixedTimestep": "0.02", which stopped the editor starting).
+        auto num = [&p](const char* key, auto fallback) {
+            const auto f = p.find(key);
+            if (f == p.end() || !f->is_number()) {
+                if (f != p.end()) Log::Warn(std::string("ProjectSettings: ignoring non-numeric '") + key + "'.");
+                return fallback;
+            }
+            return f->get<decltype(fallback)>();
+        };
+        g_Physics.FixedTimestep      = std::clamp(num("fixedTimestep", g_Physics.FixedTimestep), 0.001f, 0.1f);
+        g_Physics.SolverIterations   = std::clamp(num("solverIterations", g_Physics.SolverIterations), 1, 64);
+        g_Physics.PlayerPushStrength = std::clamp(num("playerPushStrength", g_Physics.PlayerPushStrength), 0.0f, 50.0f);
+        g_Physics.PlayerLayer        = std::clamp(num("playerLayer", g_Physics.PlayerLayer), 0, 7);
         if (const auto m = p.find("layerCollision"); m != p.end() && m->is_array()) { // #185 PR 8
             for (int i = 0; i < 8 && i < (int)m->size(); ++i)
                 if ((*m)[i].is_number_unsigned() || (*m)[i].is_number_integer())

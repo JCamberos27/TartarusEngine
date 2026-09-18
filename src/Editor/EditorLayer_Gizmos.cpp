@@ -149,6 +149,42 @@ inline glm::vec3 EulerYXZFromMatrix(const glm::mat4& m) {
 // The gizmo drag and the Inspector's own number fields edit the same thing; give the History
 // entry the same verb either way ("Move" / "Rotate" / "Scale") instead of a generic
 // "Transform" from the gizmo path only (#19 P8).
+// #116 / #117 — the editor's surface queries (click picking, drop-to-surface, measure, surface
+// snap, Snap to Ground, drop light) all used to intersect each renderable's world-space AABB.
+// That selected big/concave objects by clicking empty space inside their box, and — with the
+// camera INSIDE a large object's box (a room, terrain) — returned t = 0 for it on every click,
+// so nothing inside could be picked; surfaces were also "found" on bounding boxes. This does an
+// AABB broadphase and then an exact test against the model's bind-pose triangles.
+struct SurfaceHit {
+    entt::entity Entity = entt::null;
+    float T = 1e30f;
+    glm::vec3 Normal{0.0f, 1.0f, 0.0f};
+};
+template <class SkipFn>
+SurfaceHit RaycastRenderables(const World& world, const glm::vec3& origin, const glm::vec3& dir, SkipFn skip,
+                              float maxT = 1e30f) {
+    SurfaceHit best;
+    best.T = maxT;
+    auto view = world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>);
+    for (auto entity : view) {
+        if (skip(entity)) continue;
+        const auto& r = view.get<const RenderableComponent>(entity);
+        if (!r.ModelRef || r.ModelRef->MeshCount() == 0) continue;
+        const glm::mat4 model = world.ComposeWorldTransform(entity);
+        const AABB wb = AABB{r.ModelRef->BoundsMin(), r.ModelRef->BoundsMax()}.Transformed(model);
+        float boxT;
+        if (!wb.RayIntersect(origin, dir, boxT) || boxT >= best.T) continue; // broadphase
+        float t;
+        glm::vec3 n;
+        if (r.ModelRef->RaycastTriangles(model, origin, dir, t, &n) && t < best.T) {
+            best.Entity = entity;
+            best.T = t;
+            best.Normal = n;
+        }
+    }
+    return best;
+}
+
 const char* GizmoOpUndoLabel(GizmoOp op) {
     switch (op) {
         case GizmoOp::Rotate:    return "Rotate";
@@ -317,21 +353,38 @@ void EditorLayer::SnapSelectionToGround(World& world) {
     if (!CanSnapSelectionToGround(world)) return;
     PushUndo(world, "Snap to Ground");
 
-    auto& renderable = world.Registry.get<RenderableComponent>(m_Selected);
-    // World matrix, not ComposeTransform(transform): for a parented entity the local matrix would
-    // put the bounds in the PARENT's frame, and subtracting that from Position drops the object to
-    // the parent's Y=0 instead of the world's. Compute the drop in world space, then convert the
-    // resulting world origin back to local before writing it. (#224)
-    glm::mat4 m = world.GetCachedWorldTransform(m_Selected);
-    float dropY;
-    if (world.Registry.all_of<LevelGeometryTag>(m_Selected)) {
-        AABB worldBounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(m);
-        dropY = worldBounds.Min.y;
-    } else {
-        dropY = renderable.ModelRef->LowestVertexWorldY(m);
+    // #117 — every selected object (not just the primary), each dropped onto the SURFACE below
+    // it (was: always world Y = 0, so on an upper floor / table / terrain it sank or jumped).
+    // Falls back to Y = 0 only when there's nothing underneath. A child of another selected
+    // object rides along with its parent instead of being moved twice.
+    std::vector<entt::entity> sel = GetSelectedItems();
+    auto isSelectedOrUnder = [&](entt::entity e) {
+        for (entt::entity c = e; c != entt::null; ) {
+            if (IsSelected(c)) return true;
+            const auto* h = world.Registry.try_get<HierarchyComponent>(c);
+            c = h ? h->Parent : entt::null;
+        }
+        return false;
+    };
+    for (entt::entity e : sel) {
+        if (!world.Registry.valid(e) || !world.Registry.all_of<RenderableComponent>(e)) continue;
+        if (HasSelectedAncestor(world, e, m_Selected, m_ExtraSelection) && e != m_Selected) continue;
+        auto& renderable = world.Registry.get<RenderableComponent>(e);
+        if (!renderable.ModelRef) continue;
+        // World matrix, not ComposeTransform(transform): the drop is computed in world space and
+        // converted back to local on write (#224).
+        const glm::mat4 m = world.ComposeWorldTransform(e);
+        const AABB worldBounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(m);
+        const float lowestY = world.Registry.all_of<LevelGeometryTag>(e)
+            ? worldBounds.Min.y : renderable.ModelRef->LowestVertexWorldY(m);
+        const glm::vec3 c = (worldBounds.Min + worldBounds.Max) * 0.5f;
+        // Cast from just above the object's lowest point, straight down, ignoring the selection.
+        const SurfaceHit hit = RaycastRenderables(world, glm::vec3(c.x, lowestY + 0.01f, c.z),
+                                                  glm::vec3(0.0f, -1.0f, 0.0f), isSelectedOrUnder);
+        const float groundY = hit.Entity != entt::null ? (lowestY + 0.01f - hit.T) : 0.0f;
+        const glm::vec3 worldOrigin = glm::vec3(m[3]);
+        SetWorldPosition(world, e, {worldOrigin.x, worldOrigin.y + (groundY - lowestY), worldOrigin.z});
     }
-    glm::vec3 worldOrigin = glm::vec3(m[3]);
-    SetWorldPosition(world, m_Selected, {worldOrigin.x, worldOrigin.y - dropY, worldOrigin.z});
 }
 
 bool EditorLayer::ComputeSceneBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) const {
@@ -361,9 +414,9 @@ void EditorLayer::ComputeViewPivot(World& world, Camera& editorCamera, glm::vec3
 
     if (GetSelectionCenter(world, outPivot)) return;
 
-    float t;
-    if (world.Raycast(editorCamera.Position, editorCamera.Front(), 1000.0f, t) != entt::null) {
-        outPivot = editorCamera.Position + editorCamera.Front() * t;
+    if (const SurfaceHit h = RaycastRenderables(world, editorCamera.Position, editorCamera.Front(),
+            [](entt::entity) { return false; }, 1000.0f); h.Entity != entt::null) {
+        outPivot = editorCamera.Position + editorCamera.Front() * h.T;
         return;
     }
 
@@ -635,18 +688,10 @@ bool EditorLayer::DropLightToSurface(World& world, entt::entity light) {
     glm::vec3 origin = glm::vec3(world.ComposeWorldTransform(light)[3]);
     const glm::vec3 down(0.0f, -1.0f, 0.0f);
 
-    float bestT = 1e30f;
-    bool hit = false;
-    for (auto ent : world.Registry.view<const RenderableComponent>()) {
-        if (ent == light) continue;
-        const auto& r = world.Registry.get<const RenderableComponent>(ent);
-        if (!r.ModelRef) continue;
-        glm::mat4 model = world.ComposeWorldTransform(ent);
-        AABB wb = AABB{r.ModelRef->BoundsMin(), r.ModelRef->BoundsMax()}.Transformed(model);
-        float t;
-        if (wb.RayIntersect(origin, down, t) && t > 1e-3f && t < bestT) { bestT = t; hit = true; }
-    }
-    if (!hit) return false;
+    // #116 — land on the real surface below, not the top of a bounding box.
+    const SurfaceHit h = RaycastRenderables(world, origin, down, [&](entt::entity ent) { return ent == light; });
+    if (h.Entity == entt::null) return false;
+    const float bestT = h.T;
 
     PushUndo(world, "Drop Light to Surface");
     glm::vec3 landing = origin + down * bestT + glm::vec3(0.0f, 0.1f, 0.0f);
@@ -673,12 +718,13 @@ glm::vec3 EditorLayer::ComputeDropRayPosition(World& world, Camera& editorCamera
     glm::vec3 origin = glm::vec3(nearP);
     glm::vec3 dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
 
-    // Landing point: the nearest existing box collider, else the Y=0 ground plane, else a fixed
-    // distance out (pointing at the sky / parallel to the ground, where neither hits).
+    // Landing point: the nearest mesh surface (#116 — was the nearest collider's axis-aligned
+    // box, so drops onto rotated geometry floated/embedded and collider-less models couldn't be
+    // dropped onto), else the Y=0 ground plane, else a fixed distance out.
     float bestT = 1e30f;
-    float boxDist;
-    if (world.Raycast(origin, dir, 500.0f, boxDist) != entt::null) {
-        bestT = boxDist;
+    if (const SurfaceHit h = RaycastRenderables(world, origin, dir, [](entt::entity) { return false; }, 500.0f);
+        h.Entity != entt::null) {
+        bestT = h.T;
     }
     if (std::abs(dir.y) > 1e-5f) {
         float groundT = -origin.y / dir.y;
@@ -900,20 +946,12 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         glm::vec3 origin = glm::vec3(nearP);
         glm::vec3 dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
 
-        float bestT = 1e30f;
-        entt::entity best = entt::null;
-        auto pickView = world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>);
-        for (auto entity : pickView) {
-            if (ViewportPickLocked(world, entity)) continue;
-            if (NotSceneSelectable(world, entity)) continue; // #236 B
-            const auto& renderable = pickView.get<const RenderableComponent>(entity);
-            glm::mat4 model = world.ComposeWorldTransform(entity);
-            AABB worldBounds = AABB{renderable.ModelRef->BoundsMin(), renderable.ModelRef->BoundsMax()}.Transformed(model);
-            float t;
-            if (worldBounds.RayIntersect(origin, dir, t) && t < bestT) {
-                bestT = t; best = entity;
-            }
-        }
+        // #116 — exact triangle picking (see RaycastRenderables).
+        const SurfaceHit pick = RaycastRenderables(world, origin, dir, [&](entt::entity entity) {
+            return ViewportPickLocked(world, entity) || NotSceneSelectable(world, entity); // #236 B
+        });
+        float bestT = pick.T;
+        entt::entity best = pick.Entity;
 
         // Mesh-less entities (lights, empties) have no geometry to hit, so they're picked by
         // proximity to their on-screen icon instead. The icon is a screen-space overlay drawn
@@ -1891,15 +1929,9 @@ bool EditorLayer::RaycastViewportSurface(World& world, Camera& cam, const glm::v
     const glm::vec3 origin = glm::vec3(nearP);
     const glm::vec3 dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
 
-    float bestT = 1e30f;
-    for (auto e : world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>)) {
-        const auto& r = world.Registry.get<const RenderableComponent>(e);
-        AABB wb = AABB{r.ModelRef->BoundsMin(), r.ModelRef->BoundsMax()}
-                     .Transformed(world.ComposeWorldTransform(e));
-        float t;
-        if (wb.RayIntersect(origin, dir, t) && t > 1e-3f && t < bestT) bestT = t;
-    }
-    outHit = origin + dir * (bestT < 1e29f ? bestT : 20.0f);
+    // #116 — measure against real surfaces, not bounding boxes.
+    const SurfaceHit surf = RaycastRenderables(world, origin, dir, [](entt::entity) { return false; });
+    outHit = origin + dir * (surf.Entity != entt::null ? surf.T : 20.0f);
     return true;
 }
 
@@ -2033,29 +2065,12 @@ void EditorLayer::ApplySurfaceSnap(World& world, Camera& editorCamera, entt::ent
         return false;
     };
 
-    float bestT = 1e30f;
-    AABB bestBounds{};
-    bool hit = false;
-    for (auto e : world.Registry.view<const RenderableComponent>(entt::exclude<InactiveTag>)) {
-        if (isSelfOrChild(e)) continue;
-        const auto& r = world.Registry.get<const RenderableComponent>(e);
-        AABB wb = AABB{r.ModelRef->BoundsMin(), r.ModelRef->BoundsMax()}
-                     .Transformed(world.ComposeWorldTransform(e));
-        float t;
-        if (wb.RayIntersect(origin, dir, t) && t > 1e-3f && t < bestT) { bestT = t; bestBounds = wb; hit = true; }
-    }
-    if (!hit) return;
-
-    const glm::vec3 p = origin + dir * bestT;
-
-    // Axis-aligned face normal: the axis on which the hit point sits at the box boundary.
-    const glm::vec3 c = (bestBounds.Min + bestBounds.Max) * 0.5f;
-    const glm::vec3 ext = glm::max((bestBounds.Max - bestBounds.Min) * 0.5f, glm::vec3(1e-5f));
-    const glm::vec3 a = glm::abs((p - c) / ext);
-    glm::vec3 n(0.0f);
-    if (a.x >= a.y && a.x >= a.z)      n.x = (p.x >= c.x) ? 1.0f : -1.0f;
-    else if (a.y >= a.z)              n.y = (p.y >= c.y) ? 1.0f : -1.0f;
-    else                             n.z = (p.z >= c.z) ? 1.0f : -1.0f;
+    // #116 — the real surface under the cursor and its real face normal (was the hit object's
+    // AABB and the nearest AABB face, so "align to normal" on a slope aligned to a box face).
+    const SurfaceHit hit = RaycastRenderables(world, origin, dir, isSelfOrChild);
+    if (hit.Entity == entt::null) return;
+    const glm::vec3 p = origin + dir * hit.T;
+    const glm::vec3 n = hit.Normal;
 
     // Lift the object so its footprint rests on the surface rather than its origin sinking to it.
     glm::vec3 dropWorld = p;

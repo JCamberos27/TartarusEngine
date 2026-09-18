@@ -160,6 +160,7 @@ void EditorLayer::PasteClipboard(World& world, AssetLibrary& assets) {
 }
 
 void EditorLayer::ClearSelection() {
+    CancelEyedropper(); // #93 — the armed field belonged to the old selection
     m_Selected = entt::null;
     m_ExtraSelection.clear();
     m_SelectionAnchor = entt::null;
@@ -175,6 +176,7 @@ bool EditorLayer::SelectEntityByRawId(World& world, unsigned int rawId) {
 }
 
 void EditorLayer::SelectItem(entt::entity entity, bool addToSelection) {
+    CancelEyedropper(); // #93 — the armed field belonged to the old selection
     // Any selection that isn't a viewport icon-click disarms the light grab handles;
     // HandleViewportPicking re-arms them right after it calls this for a light it picked.
     m_LightHandleArmedFor = entt::null;
@@ -497,7 +499,8 @@ void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets, bool in
     // correctly for Paste, so Duplicate just reuses it.
     std::string fragment = SceneSerializer::SaveEntitiesToString(world, source);
     std::vector<entt::entity> created;
-    if (fragment.empty() || !SceneSerializer::AppendEntitiesFromString(world, assets, fragment, created) || created.empty()) {
+    std::unordered_map<int, entt::entity> sourceOrder;
+    if (fragment.empty() || !SceneSerializer::AppendEntitiesFromString(world, assets, fragment, created, &sourceOrder) || created.empty()) {
         Log::Warn("Duplicate failed: selection could not be copied.");
         return;
     }
@@ -520,6 +523,9 @@ void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets, bool in
             name->Name = NextDuplicateName(existingNames, name->Name.empty() ? "Object" : name->Name);
         }
     }
+    // #119 — the fragment made every copied root a scene root; put copies of a child back under
+    // the same parent, as the original's next sibling.
+    PlaceCopiesBesideSources(world, source, sourceOrder, /*besideSource=*/true);
 
     // Select the new duplicates instead of the originals, so you can immediately drag them
     // into place without having to re-pick them from the Hierarchy.
@@ -556,7 +562,8 @@ void EditorLayer::DuplicateSelectionArray(World& world, AssetLibrary& assets,
         const glm::vec3 offset = step * glm::vec3((float)i, (float)j, (float)k);
 
         std::vector<entt::entity> created;
-        if (!SceneSerializer::AppendEntitiesFromString(world, assets, fragment, created) || created.empty())
+        std::unordered_map<int, entt::entity> sourceOrder;
+        if (!SceneSerializer::AppendEntitiesFromString(world, assets, fragment, created, &sourceOrder) || created.empty())
             continue;
         for (entt::entity e : created) {
             const auto* hier = world.Registry.try_get<HierarchyComponent>(e);
@@ -568,6 +575,7 @@ void EditorLayer::DuplicateSelectionArray(World& world, AssetLibrary& assets,
                 existingNames.insert(name->Name);
             }
         }
+        PlaceCopiesBesideSources(world, source, sourceOrder, /*besideSource=*/false); // #119
         allCreated.insert(allCreated.end(), created.begin(), created.end());
     }
 
@@ -577,6 +585,36 @@ void EditorLayer::DuplicateSelectionArray(World& world, AssetLibrary& assets,
         else m_ExtraSelection.push_back(allCreated[i]);
     }
     Log::Info("Duplicate Array: created " + std::to_string(allCreated.size()) + " object(s).");
+}
+
+void EditorLayer::PlaceCopiesBesideSources(World& world, const std::vector<entt::entity>& sources,
+                                           const std::unordered_map<int, entt::entity>& sourceOrder,
+                                           bool besideSource) {
+    const std::set<entt::entity> sourceSet(sources.begin(), sources.end());
+    auto parentOf = [&](entt::entity e) {
+        const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+        return h ? h->Parent : entt::null;
+    };
+    for (entt::entity src : sources) {
+        if (!world.Registry.valid(src)) continue;
+        // Only fragment roots: a selected entity with a selected ancestor was copied as part of
+        // that ancestor's subtree and is already parented correctly.
+        bool nested = false;
+        for (entt::entity a = parentOf(src); a != entt::null; a = parentOf(a))
+            if (sourceSet.count(a)) { nested = true; break; }
+        if (nested) continue;
+
+        const auto* order = world.Registry.try_get<OrderComponent>(src);
+        if (!order) continue;
+        auto it = sourceOrder.find(order->Value);
+        if (it == sourceOrder.end() || !world.Registry.valid(it->second)) continue;
+        const entt::entity copy = it->second;
+
+        // The fragment stored the root in world space; SetParent keeps that world pose.
+        const entt::entity parent = parentOf(src);
+        if (parent != entt::null && parentOf(copy) != parent) world.SetParent(copy, parent);
+        if (besideSource) ReorderHierarchySiblings(world, {copy}, src, /*after=*/true, /*recordUndo=*/false);
+    }
 }
 
 void EditorLayer::DrawArrayDuplicateModal(World& world, AssetLibrary& assets) {
@@ -1504,17 +1542,6 @@ void EditorLayer::CreateEmptyParentForSelection(World& world) {
         [&](entt::entity e) { return !world.Registry.valid(e); }), sel.end());
     if (sel.empty()) return;
 
-    // Nothing with a Box Collider can be re-parented yet (SetParent refuses it) — check up front
-    // so we don't create a stray "Group" empty that ends up with no children.
-    bool anyReparentable = false;
-    for (entt::entity e : sel) {
-        if (!world.Registry.all_of<ColliderComponent>(e)) { anyReparentable = true; break; }
-    }
-    if (!anyReparentable) {
-        Log::Warn("Couldn't group: objects with a Box Collider can't be re-parented yet.");
-        return;
-    }
-
     glm::vec3 center(0.0f);
     if (!GetSelectionCenter(world, center)) center = glm::vec3(0.0f);
 
@@ -1535,7 +1562,7 @@ void EditorLayer::CreateEmptyParentForSelection(World& world) {
 
     int parented = 0;
     for (entt::entity e : sel) {
-        if (world.SetParent(e, parent)) ++parented; // preserves world transform; refuses colliders
+        if (world.SetParent(e, parent)) ++parented; // preserves world transform (#114: colliders too)
     }
     SelectItem(parent, false);
     Log::Info("Grouped " + std::to_string(parented) + " object(s) under a new Empty" +
@@ -1589,7 +1616,7 @@ void EditorLayer::ApplyHierarchyDisplaySort(const World& world, std::vector<entt
 }
 
 void EditorLayer::ReorderHierarchySiblings(World& world, const std::vector<entt::entity>& movingIn,
-                                           entt::entity anchor, bool after) {
+                                           entt::entity anchor, bool after, bool recordUndo) {
     if (!world.Registry.valid(anchor)) return;
     const auto* anchorHier = world.Registry.try_get<HierarchyComponent>(anchor);
     const entt::entity newParent = anchorHier ? anchorHier->Parent : entt::null;
@@ -1609,7 +1636,7 @@ void EditorLayer::ReorderHierarchySiblings(World& world, const std::vector<entt:
     }
     if (moving.empty()) return;
 
-    StageUndo(world);
+    if (recordUndo) StageUndo(world);
 
     // Reparent any row not already under newParent (SetParent preserves world pose and keeps the
     // Children vectors consistent; a same-parent call is a no-op we skip explicitly).
@@ -1633,12 +1660,31 @@ void EditorLayer::ReorderHierarchySiblings(World& world, const std::vector<entt:
         rebuilt.push_back(e);
         if (e == anchor && after) for (entt::entity m : moving) rebuilt.push_back(m);
     }
+    // #118 — OrderComponent is also the entity's stable identity (joint ConnectedOrder, undo /
+    // Play-Stop selection restore), so it must stay unique scene-wide. The old 0..N-1 renumber
+    // collided with every other sibling group. Instead, hand this group's OWN existing values back
+    // out in the new visual order (a permutation, so still unique and still sorted), give any
+    // entity that somehow lacks one a fresh value, and repoint joints at their partner's new value.
+    std::vector<int> values;
+    values.reserve(rebuilt.size());
+    for (entt::entity e : rebuilt)
+        if (const auto* o = world.Registry.try_get<OrderComponent>(e)) values.push_back(o->Value);
+    while (values.size() < rebuilt.size()) values.push_back(world.AllocateOrder());
+    std::sort(values.begin(), values.end());
+    std::unordered_map<int, int> remap; // old value -> new value
+    for (int i = 0; i < (int)rebuilt.size(); ++i) {
+        if (const auto* o = world.Registry.try_get<OrderComponent>(rebuilt[i])) remap[o->Value] = values[i];
+    }
     for (int i = 0; i < (int)rebuilt.size(); ++i)
-        world.Registry.emplace_or_replace<OrderComponent>(rebuilt[i], i);
+        world.Registry.emplace_or_replace<OrderComponent>(rebuilt[i], values[i]);
+    for (auto [je, joint] : world.Registry.view<JointComponent>().each()) {
+        auto it = remap.find(joint.ConnectedOrder);
+        if (joint.ConnectedOrder >= 0 && it != remap.end()) joint.ConnectedOrder = it->second;
+    }
 
-    CommitStagedUndo(world, "Reorder");
+    if (recordUndo) CommitStagedUndo(world, "Reorder");
     if (anyFailed)
-        Log::Warn("Some rows couldn't be moved there — level geometry with a collider can't be parented.");
+        Log::Warn("Some rows couldn't be moved there (an object can't become a child of its own descendant).");
 }
 
 entt::entity EditorLayer::InstantiateAssetDropInHierarchy(World& world, AssetLibrary& assets,
@@ -1649,7 +1695,11 @@ entt::entity EditorLayer::InstantiateAssetDropInHierarchy(World& world, AssetLib
         PushUndo(world, "Place Model");
         auto model = assets.InstantiateModel(modelPath);
         std::string name = std::filesystem::path(modelPath).stem().string();
-        e = world.CreateModelEntity(model, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f),
+        // #119 — a drop on the root lands in front of the Scene camera (like Create > ...), not at
+        // the world origin; a drop onto a row still lands at that parent's origin (below).
+        const bool toRoot = parent == entt::null || !world.Registry.valid(parent);
+        const glm::vec3 pos = (toRoot && m_EditorCameraPtr) ? SafeSpawnInFrontOf(*m_EditorCameraPtr) : glm::vec3(0.0f);
+        e = world.CreateModelEntity(model, pos, glm::vec3(0.0f), glm::vec3(1.0f),
                                     UniqueNameFor(world, name));
     } else if (prefabPath && *prefabPath) {
         PushUndo(world, "Place Prefab Instance");

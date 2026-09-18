@@ -125,6 +125,8 @@ uniform int uDebugView;
 uniform int uApplyTonemap;
 
 uniform vec3 uBaseColor;
+uniform int uAlphaClip;      // #101 — alpha cutout (AlphaTest queue / glTF MASK)
+uniform float uAlphaCutoff;
 uniform float uMetallic;
 uniform float uRoughness;
 uniform vec3 uEmissiveColor;
@@ -678,6 +680,7 @@ void main() {
     vec3 triW = tri ? TriplanarWeights(normalize(vNormal)) : vec3(0.0);
     vec4 albedoSample = tri ? SampleTriplanar(uAlbedoMap, vWorldPos, triW, uTriplanarScale)
                              : texture(uAlbedoMap, vUV);
+    if (uAlphaClip == 1 && uHasAlbedoMap == 1 && albedoSample.a < uAlphaCutoff) discard; // #101
     vec3 albedo = (uHasAlbedoMap == 1 ? albedoSample.rgb : vec3(1.0)) * uBaseColor;
 
     float metallic = uMetallic;
@@ -724,8 +727,11 @@ void main() {
         return;
     }
 
+    // #102 — the map is TINTED by Emissive Color x Strength (uEmissiveColor carries both), the
+    // same as Unity and glTF; it used to replace them, so the colour/strength controls did
+    // nothing once a map was assigned.
     vec3 emissiveEarly = uHasEmissiveMap == 1 ? (tri ? SampleTriplanar(uEmissiveMap, vWorldPos, triW, uTriplanarScale)
-                                                      : texture(uEmissiveMap, vUV)).rgb : uEmissiveColor;
+                                                      : texture(uEmissiveMap, vUV)).rgb * uEmissiveColor : uEmissiveColor;
     if (uUnlit == 1) {
         vec3 flatColor = albedo + emissiveEarly;
         FragColor = vec4(uApplyTonemap == 1 ? pow(flatColor, vec3(1.0 / 2.2)) : flatColor, 1.0);

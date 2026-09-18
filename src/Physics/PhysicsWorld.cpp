@@ -337,7 +337,9 @@ void BuildActors(PhysicsState& s, const World& world) {
     int statics = 0, dynamic = 0, kinematic = 0, skipped = 0;
     auto view = world.Registry.view<const TransformComponent, const ColliderComponent>(entt::exclude<InactiveTag>);
     for (entt::entity e : view) {
-        const auto& t  = view.get<const TransformComponent>(e);
+        // #114 — world space: a collider on a child entity used to be built at its LOCAL
+        // offset from the world origin.
+        const TransformComponent t = world.WorldSpaceTransform(e);
         const auto& c  = view.get<const ColliderComponent>(e);
         const auto* rb = world.Registry.try_get<const RigidbodyComponent>(e); // null => static (PR 2)
 
@@ -414,14 +416,13 @@ void BuildActors(PhysicsState& s, const World& world) {
             AutoBoxWorld(world.Registry, e, t, center, half);
             if (half.x <= 0.0f || half.y <= 0.0f || half.z <= 0.0f) { ++skipped; continue; }
             make(PxBoxGeometry(ToPx(half)));
-            if (rb) {
-                // Pose at the entity origin so the simulated pose writes straight back to
-                // TransformComponent; the box's offset from that origin becomes the shape pose.
-                actorPose  = PxTransform(ToPx(t.Position), EulerToPx(t.RotationEuler));
-                shapeLocal = PxTransform(ToPx(center - t.Position));
-            } else {
-                actorPose = PxTransform(ToPx(center)); // PR 2 static: AABB centre, no rotation
-            }
+            // Pose at the entity origin (with its rotation) and the box's local offset as the
+            // shape pose — for dynamic bodies so the simulated pose writes straight back to
+            // TransformComponent, and (#115) for statics too: they used an unrotated box at the
+            // AABB centre, so a box rotated into a ramp/wall collided as an axis-aligned block
+            // that didn't match what was drawn.
+            actorPose  = PxTransform(ToPx(t.Position), EulerToPx(t.RotationEuler));
+            shapeLocal = PxTransform(ToPx(center - t.Position));
         } else {
             actorPose  = PxTransform(ToPx(t.Position), EulerToPx(t.RotationEuler));
             shapeLocal = PxTransform(ToPx(c.Center));
@@ -977,9 +978,9 @@ void Step(float dt, World& world) {
     // push this frame's authored pose into the actor before stepping so it sweeps other bodies.
     for (auto& [body, e] : g_State->kinematics) {
         if (!world.Registry.valid(e)) continue;
-        const auto* tc = world.Registry.try_get<const TransformComponent>(e);
-        if (!tc) continue;
-        body->setKinematicTarget(PxTransform(ToPx(tc->Position), EulerToPx(tc->RotationEuler)));
+        if (!world.Registry.all_of<TransformComponent>(e)) continue;
+        const TransformComponent w = world.WorldSpaceTransform(e); // #114
+        body->setKinematicTarget(PxTransform(ToPx(w.Position), EulerToPx(w.RotationEuler)));
     }
 
     // Fixed-timestep accumulator: gameplay physics must not vary with frame rate. Cap the
@@ -1013,13 +1014,15 @@ void Step(float dt, World& world) {
             body->setLinearVelocity(PxVec3(0.0f));
             body->setAngularVelocity(PxVec3(0.0f));
             body->putToSleep();
-            body->setGlobalPose(PxTransform(ToPx(tc->Position), EulerToPx(tc->RotationEuler)));
+            const TransformComponent w = world.WorldSpaceTransform(e); // #114
+            body->setGlobalPose(PxTransform(ToPx(w.Position), EulerToPx(w.RotationEuler)));
             Log::Warn("PhysX: entity " + std::to_string(entt::to_integral(e)) +
                       " produced a non-finite pose — frozen at its last good transform.");
             continue;
         }
-        tc->Position      = glm::vec3(p.p.x, p.p.y, p.p.z);
-        tc->RotationEuler = PxQuatToEulerDeg(p.q);
+        // #114 — the PhysX pose is WORLD space; convert through the parent (was written
+        // straight into the local fields, teleporting any simulated child).
+        world.SetWorldPose(e, glm::vec3(p.p.x, p.p.y, p.p.z), glm::quat(p.q.w, p.q.x, p.q.y, p.q.z));
     }
 
     // --- Trigger transitions (#185 PR 5) -----------------------------------------------
@@ -1539,8 +1542,10 @@ void StepOneSubstep(World& world) {
     g_State->contactEvents.clear();
     for (auto& [body, e] : g_State->kinematics) {
         if (!world.Registry.valid(e)) continue;
-        if (const auto* tc = world.Registry.try_get<const TransformComponent>(e))
-            body->setKinematicTarget(PxTransform(ToPx(tc->Position), EulerToPx(tc->RotationEuler)));
+        if (world.Registry.all_of<TransformComponent>(e)) {
+            const TransformComponent w = world.WorldSpaceTransform(e); // #114
+            body->setKinematicTarget(PxTransform(ToPx(w.Position), EulerToPx(w.RotationEuler)));
+        }
     }
     RunOneSubstep(*g_State, FixedStep());
     g_State->lastSubsteps = 1;
@@ -1550,8 +1555,7 @@ void StepOneSubstep(World& world) {
         if (!tc) continue;
         const PxTransform p = body->getGlobalPose();
         if (!PoseIsFinite(p)) continue;
-        tc->Position = glm::vec3(p.p.x, p.p.y, p.p.z);
-        tc->RotationEuler = PxQuatToEulerDeg(p.q);
+        world.SetWorldPose(e, glm::vec3(p.p.x, p.p.y, p.p.z), glm::quat(p.q.w, p.q.x, p.q.y, p.q.z)); // #114
     }
 }
 
