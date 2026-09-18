@@ -48,6 +48,7 @@ private:
     unsigned int m_Vao       = 0;
 
     std::vector<glm::vec3> m_Kernel;
+    unsigned int m_KernelUploadedTo = 0; // program the kernel uniforms were last set on (#160)
 
     int m_Width = 0, m_Height = 0;
     bool m_Valid = false; // all FBOs validated complete this Create() (audit #358)

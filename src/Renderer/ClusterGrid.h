@@ -64,7 +64,11 @@ public:
 
 private:
     void EnsureCreated();
-    unsigned int m_AABBs = 0;   // binding 2
+    // binding 2. #160: one AABB set per recently-used projection. With a single set, the Scene and
+    // Game views (different projections) invalidated each other and the build pass ran twice
+    // every frame; two slots cover both views, reused least-recently-used.
+    static constexpr int kBuildSlots = 2;
+    unsigned int m_AABBs[kBuildSlots] = {};
     unsigned int m_Counts = 0;  // binding 3: per-cluster {offset, count} pairs (#208)
     unsigned int m_Indices = 0; // binding 4: global compacted light-index list (#208)
     // binding 5: {globalCounter, overflowFlag} — globalCounter is the atomic append cursor into
@@ -85,10 +89,13 @@ private:
     bool m_OverflowSlotFilled[kOverflowRing] = {};   // slot has a copy+fence not yet consumed
     int m_OverflowHead = 0;                           // slot the next Cull() writes into
 
-    // Cached projection state for build-pass optimization (#205)
-    glm::mat4 m_LastProj = glm::mat4(0.0f);
-    int m_LastScreenW = -1;
-    int m_LastScreenH = -1;
-    float m_LastNearZ = -1.0f;
-    float m_LastFarZ = -1.0f;
+    // Cached projection state for build-pass optimization (#205), one per AABB slot (#160)
+    struct BuildKey {
+        glm::mat4 Proj = glm::mat4(0.0f);
+        int ScreenW = -1, ScreenH = -1;
+        float NearZ = -1.0f, FarZ = -1.0f;
+        unsigned LastUsed = 0;
+    };
+    BuildKey m_BuildKeys[kBuildSlots];
+    unsigned m_CullCounter = 0;
 };

@@ -1,4 +1,5 @@
 #include "Framebuffer.h"
+#include "GLFramebufferCheck.h"
 #include "Log.h"
 #include "gl.h"
 
@@ -37,11 +38,9 @@ void Framebuffer::Create(int width, int height) {
     glNamedFramebufferTexture(m_Fbo, GL_COLOR_ATTACHMENT0, m_ColorTexture, 0);
     glNamedFramebufferRenderbuffer(m_Fbo, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_DepthRbo);
 
-    GLenum status = glCheckNamedFramebufferStatus(m_Fbo, GL_FRAMEBUFFER);
-    if (status != GL_FRAMEBUFFER_COMPLETE) {
-        Log::Error("Framebuffer incomplete (0x" + std::to_string(status) + ") at " +
-                   std::to_string(width) + "x" + std::to_string(height));
-    }
+    // #160 - the shared check (#358) logs the status as a named enum; this used to print
+    // "0x" followed by the DECIMAL value.
+    GLFramebufferCheck::Complete("Framebuffer", m_Fbo, width, height);
 }
 
 void Framebuffer::Resize(int width, int height) {
