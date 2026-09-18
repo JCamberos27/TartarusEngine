@@ -5,6 +5,8 @@
 #include "TextureCache.h"
 #include "stb_image.h"
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -22,8 +24,29 @@ namespace {
 // dependency (a Lanczos filter would need stb_image_resize, not vendored here) — averages every
 // source texel whose footprint falls under each destination texel, which is a large quality win
 // over a point sample for the common case of a 4K source getting capped to 2048 or lower (#207).
+// sRGB <-> linear for 8-bit values, via a 256-entry table one way and a direct formula back.
+float SrgbToLinear(unsigned char v) {
+    static const std::array<float, 256> kTable = [] {
+        std::array<float, 256> t{};
+        for (int i = 0; i < 256; ++i) {
+            const float c = i / 255.0f;
+            t[i] = c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+        }
+        return t;
+    }();
+    return kTable[v];
+}
+unsigned char LinearToSrgb(float l) {
+    l = std::clamp(l, 0.0f, 1.0f);
+    const float c = l <= 0.0031308f ? l * 12.92f : 1.055f * std::pow(l, 1.0f / 2.4f) - 0.055f;
+    return (unsigned char)std::lround(c * 255.0f);
+}
+
+// #156 - averages colour in LINEAR space for an sRGB texture (averaging the encoded bytes made
+// downscaled textures too dark and banded), and weights colour by alpha when there is an alpha
+// channel so fully transparent texels don't bleed their (often black) colour into the edges.
 std::vector<unsigned char> DownsampleBox(const unsigned char* src, int srcW, int srcH, int channels,
-    int maxSize, int& outW, int& outH) {
+    int maxSize, int& outW, int& outH, bool srgb) {
     float scale = std::min((float)maxSize / srcW, (float)maxSize / srcH);
     outW = std::max(1, (int)(srcW * scale));
     outH = std::max(1, (int)(srcH * scale));
@@ -40,18 +63,29 @@ std::vector<unsigned char> DownsampleBox(const unsigned char* src, int srcW, int
             sx1 = std::min(sx1, srcW);
 
             unsigned char* d = dst.data() + ((size_t)y * outW + x) * channels;
-            int sampleCount = (sy1 - sy0) * (sx1 - sx0);
-            for (int c = 0; c < channels; ++c) {
-                uint32_t sum = 0;
-                for (int sy = sy0; sy < sy1; ++sy) {
-                    const unsigned char* row = src + ((size_t)sy * srcW + sx0) * channels;
-                    for (int sx = sx0; sx < sx1; ++sx) {
-                        sum += row[c];
-                        row += channels;
+            const int sampleCount = (sy1 - sy0) * (sx1 - sx0);
+            // Channel layout: 4 = RGBA, 2 = grey+alpha, else no alpha.
+            const int alphaCh = channels == 4 ? 3 : (channels == 2 ? 1 : -1);
+            const int colorChannels = alphaCh >= 0 ? channels - 1 : channels;
+            float colorSum[3] = {0.0f, 0.0f, 0.0f};
+            float alphaSum = 0.0f;
+            for (int sy = sy0; sy < sy1; ++sy) {
+                const unsigned char* px = src + ((size_t)sy * srcW + sx0) * channels;
+                for (int sx = sx0; sx < sx1; ++sx, px += channels) {
+                    const float a = alphaCh >= 0 ? px[alphaCh] / 255.0f : 1.0f;
+                    alphaSum += a;
+                    for (int c = 0; c < colorChannels; ++c) {
+                        const float v = srgb ? SrgbToLinear(px[c]) : px[c] / 255.0f;
+                        colorSum[c] += v * a;
                     }
                 }
-                d[c] = (unsigned char)(sum / sampleCount);
             }
+            for (int c = 0; c < colorChannels; ++c) {
+                // Alpha-weighted mean; an all-transparent footprint falls back to 0.
+                const float lin = alphaSum > 0.0f ? colorSum[c] / alphaSum : 0.0f;
+                d[c] = srgb ? LinearToSrgb(lin) : (unsigned char)std::lround(std::clamp(lin, 0.0f, 1.0f) * 255.0f);
+            }
+            if (alphaCh >= 0) d[alphaCh] = (unsigned char)std::lround(alphaSum / sampleCount * 255.0f);
         }
     }
     return dst;
@@ -141,7 +175,8 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
         uploadW = m_Width;
         uploadH = m_Height;
         if (settings.MaxTextureSize > 0 && (m_Width > settings.MaxTextureSize || m_Height > settings.MaxTextureSize)) {
-            resized = DownsampleBox(data, m_Width, m_Height, m_Channels, settings.MaxTextureSize, uploadW, uploadH);
+            resized = DownsampleBox(data, m_Width, m_Height, m_Channels, settings.MaxTextureSize, uploadW, uploadH,
+                                    effective.IsSRGB);
             uploadData = resized.data();
         }
 
@@ -266,8 +301,10 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
             GLint m = 0; glGetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &m);
             return (GLfloat)m;
         }();
-        if (s_MaxAniso >= 2.0f) {
-            GLfloat aniso = s_MaxAniso < 8.0f ? s_MaxAniso : 8.0f;
+        // #156 - per-texture Aniso Level (was a hard-coded 8x).
+        const GLfloat want = (GLfloat)std::clamp(effective.AnisoLevel, 1, 16);
+        if (s_MaxAniso >= 2.0f && want > 1.0f) {
+            GLfloat aniso = want < s_MaxAniso ? want : s_MaxAniso;
             glTextureParameterfv(m_ID, GL_TEXTURE_MAX_ANISOTROPY, &aniso);
         }
     }
@@ -283,19 +320,28 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
 }
 
 bool Texture::Reimport(const TextureImportSettings& settings) {
-    // Verify the file is still readable BEFORE tearing down the current GL texture, so a
-    // missing/corrupt file on disk leaves the existing (still-valid) texture in place rather
-    // than leaving this Texture pointing at a deleted GL name.
     int w, h, c;
     if (m_Memory.empty() && !stbi_info(m_Path.c_str(), &w, &h, &c)) {
         Log::Error("Texture: cannot reimport '" + m_Path + "' - file is missing or unreadable.");
         return false;
     }
 
-    if (m_ID) glDeleteTextures(1, &m_ID);
+    // #156 - build the new texture first and only then drop the old one. stbi_info succeeding
+    // doesn't mean the full decode will (truncated data, out of memory); deleting first left
+    // this Texture at GL name 0, rendering black, which the comment above used to promise
+    // couldn't happen.
+    const unsigned int previous = m_ID;
+    const int prevW = m_Width, prevH = m_Height, prevC = m_Channels;
     m_ID = 0;
     UploadFromFile(settings);
-    return m_ID != 0;
+    if (m_ID == 0) {
+        m_ID = previous;
+        m_Width = prevW; m_Height = prevH; m_Channels = prevC;
+        Log::Error("Texture: reimport of '" + m_Path + "' failed - kept the previous version.");
+        return false;
+    }
+    if (previous) glDeleteTextures(1, &previous);
+    return true;
 }
 
 Texture::~Texture() {
