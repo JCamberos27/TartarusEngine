@@ -447,9 +447,20 @@ public:
     // trusting ImGui to always remember, or (the old bug) yanking them back to the seed spot.
     ImGuiID GetSceneGameDockNodeId() const { return m_SceneGameDockNodeId; }
 
-    // True while the pointer is hovering or actively dragging a gizmo handle. The editor
-    // camera should ignore look input in that case so it doesn't fight the gizmo drag.
+    // True while the pointer is hovering OR actively dragging a gizmo handle. Used to suppress
+    // other LEFT-button-driven viewport gestures that would otherwise compete for the same
+    // click (box-select, the measure tool) — never for camera navigation (see GizmoUsing).
     bool GizmoEngaged() const { return m_GizmoEngaged; }
+
+    // True only while a gizmo handle is actively being dragged (ImGuizmo::IsUsing()), not just
+    // hovered. Camera navigation gates on this, not GizmoEngaged(): RMB look, WASDQE fly, MMB
+    // pan, and scroll-zoom never share an input with a gizmo drag (which is always LEFT-button),
+    // so gating them on mere hover only cost navigation — and for the Rect tool, whose bounds
+    // handles scale with the selected object, a large-enough stretch made ImGuizmo::IsOver()
+    // true across nearly the whole viewport, permanently locking out all camera input (audit
+    // #79). Only Alt+LMB orbit shares a button with a gizmo drag, so that's the one nav control
+    // that still checks this flag.
+    bool GizmoUsing() const { return m_GizmoUsing; }
 
     // Grid settings, read by main.cpp to draw the actual 3D grid (an OpenGL draw call
     // outside ImGui's frame, so EditorLayer only owns the settings, not the rendering).
@@ -1041,6 +1052,7 @@ private:
     // still overridable via Preferences > Viewport's "Gizmo size" slider (0.05-0.40).
     float m_GizmoSize = 0.15f;
     bool m_GizmoEngaged = false;
+    bool m_GizmoUsing = false; // see GizmoUsing() above — narrower than m_GizmoEngaged
     bool m_GizmoWasUsing = false;
 
     // Viewport tools (#236 E). Transient session state — not persisted.

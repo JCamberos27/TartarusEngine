@@ -107,15 +107,19 @@ glm::mat4 World::ComposeWorldTransform(entt::entity entity) const {
     // Walk up the parent chain iteratively instead of recursing. AttachChildRaw (used by scene
     // loading) doesn't reject parentId cycles, so a malformed file used to recurse straight
     // through here into a stack overflow with no diagnostic. Cap the walk exactly as
-    // RebuildWorldTransformCache does for the same reason, and log once if it trips.
+    // RebuildWorldTransformCache does for the same reason, and log once if it trips — this is
+    // called every frame for whatever's selected, so without the m_CycleWarned guard a cyclic
+    // entity floods the Console at full frame rate instead of reporting once (audit #74).
     entt::entity walk = entity;
     for (size_t depth = 0; ; ++depth) {
         const auto* hier = Registry.try_get<HierarchyComponent>(walk);
         if (!hier || hier->Parent == entt::null || !Registry.valid(hier->Parent)) break;
         if (depth >= kMaxHierarchyDepth) {
-            Log::Error("World::ComposeWorldTransform: parent chain exceeds " +
-                       std::to_string(kMaxHierarchyDepth) +
-                       " levels (cycle in parentId?); world transform truncated.");
+            if (m_CycleWarned.insert(entity).second) {
+                Log::Error("World::ComposeWorldTransform: parent chain exceeds " +
+                           std::to_string(kMaxHierarchyDepth) +
+                           " levels (cycle in parentId?); world transform truncated.");
+            }
             break;
         }
         walk = hier->Parent;
@@ -148,8 +152,18 @@ void World::RebuildWorldTransformCache() {
             entt::entity next = h ? h->Parent : entt::null;
             if (next == entt::null || !Registry.valid(next)) break;
             // SetParent rejects cycles, but AttachChildRaw (used by scene loading) doesn't
-            // validate — bail rather than spin forever on a malformed file.
-            if (chain.size() > kMaxHierarchyDepth) break;
+            // validate — bail rather than spin forever on a malformed file. Previously silent;
+            // now reported once per offending entity through the same guard
+            // ComposeWorldTransform uses, so a cycle is never invisible just because this path
+            // happened to touch it first (audit #74).
+            if (chain.size() > kMaxHierarchyDepth) {
+                if (m_CycleWarned.insert(entity).second) {
+                    Log::Error("World::RebuildWorldTransformCache: parent chain exceeds " +
+                               std::to_string(kMaxHierarchyDepth) +
+                               " levels (cycle in parentId?); world transform truncated.");
+                }
+                break;
+            }
             walk = next;
         }
 
