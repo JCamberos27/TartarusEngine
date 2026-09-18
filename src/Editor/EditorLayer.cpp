@@ -784,6 +784,17 @@ void EditorLayer::DrawShadowSettings(World& world, float w) {
 // (every other light suppresses while any Solo is active), Mute suppresses just that one. Both
 // sets are session-only (cleared on scene load, EditorLayer_Scene.cpp) rather than serialized —
 // this is a scrubbing/auditing aid, not scene data.
+int EditorLayer::LightKey(const World& world, entt::entity e) {
+    const auto* o = world.Registry.try_get<OrderComponent>(e);
+    return o ? o->Value : -1;
+}
+
+bool EditorLayer::IsLightSuppressed(const World& world, entt::entity e) const {
+    const int key = LightKey(world, e);
+    if (m_MutedLights.count(key)) return true;
+    return !m_SoloLights.empty() && !m_SoloLights.count(key);
+}
+
 void EditorLayer::DrawLightsSection(World& world, float w) {
     (void)w;
     auto view = world.Registry.view<LightComponent>();
@@ -795,18 +806,19 @@ void EditorLayer::DrawLightsSection(World& world, float w) {
         if (!world.Registry.valid(e)) continue;
         ImGui::PushID((int)entt::to_integral(e));
 
-        const bool soloed = m_SoloLights.count(e) != 0;
-        const bool muted = m_MutedLights.count(e) != 0;
-        const bool suppressed = IsLightSuppressed(e);
+        const int key = LightKey(world, e); // #182
+        const bool soloed = m_SoloLights.count(key) != 0;
+        const bool muted = m_MutedLights.count(key) != 0;
+        const bool suppressed = IsLightSuppressed(world, e);
 
         if (EditorUIPrimitives::ActionButton("S", "Solo - isolate this light, suppressing every other",
                                              &EditorInternal::ForwardHostTooltip, soloed)) {
-            if (soloed) m_SoloLights.erase(e); else m_SoloLights.insert(e);
+            if (soloed) m_SoloLights.erase(key); else m_SoloLights.insert(key);
         }
         ImGui::SameLine();
         if (EditorUIPrimitives::ActionButton("M", "Mute - suppress just this light",
                                              &EditorInternal::ForwardHostTooltip, muted)) {
-            if (muted) m_MutedLights.erase(e); else m_MutedLights.insert(e);
+            if (muted) m_MutedLights.erase(key); else m_MutedLights.insert(key);
         }
         ImGui::SameLine();
 

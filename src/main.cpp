@@ -1401,7 +1401,7 @@ int main(int argc, char** argv) {
                     const auto& lc = world.Registry.get<LightComponent>(e);
                     if (!lc.Shadow.Enabled || !world.ShadowsEnabled || lc.Kind == LightComponent::Type::Directional ||
                         lc.Intensity <= 0.0f || world.Registry.all_of<InactiveTag>(e) ||
-                        (!playing && editor.IsLightSuppressed(e)))
+                        (!playing && editor.IsLightSuppressed(world, e)))
                         continue;
                     const glm::vec3 lpos = glm::vec3(world.ComposeWorldTransform(e)[3]);
                     const float range = std::max(lc.Range, 0.2f);
@@ -1423,7 +1423,7 @@ int main(int argc, char** argv) {
                 if (lightBuffer.Count() >= LightBuffer::kMaxLights) { lightBuffer.MarkOverflowed(); break; }
                 if (world.Registry.all_of<InactiveTag>(e)) continue;
                 // Lights panel solo/mute is an editing aid only — Play renders every light (#140).
-                if (!playing && editor.IsLightSuppressed(e)) continue;
+                if (!playing && editor.IsLightSuppressed(world, e)) continue;
                 const auto& lc = world.Registry.get<LightComponent>(e);
                 glm::mat4 m = world.ComposeWorldTransform(e);
                 glm::vec3 pos = glm::vec3(m[3]);
