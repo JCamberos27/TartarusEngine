@@ -4,6 +4,8 @@
 #include <sstream>
 #include <filesystem>
 #include <chrono>
+#include <regex>
+#include <set>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -11,29 +13,83 @@ namespace ShaderLibrary {
 
 static std::filesystem::path s_Dir;
 
-static std::string ResolveIncludes(const std::string& src, const std::filesystem::path& dir, int depth) {
+// #158 - source-string numbers for #line. Stable for the process, so the same file always maps
+// to the same number whichever shader includes it.
+static std::vector<std::string> s_FileNames{"<source>"};
+
+static int FileIndex(const std::string& name) {
+    for (size_t i = 1; i < s_FileNames.size(); ++i)
+        if (s_FileNames[i] == name) return (int)i;
+    s_FileNames.push_back(name);
+    return (int)s_FileNames.size() - 1;
+}
+
+static std::string Trimmed(const std::string& line) {
+    size_t a = line.find_first_not_of(" \t\r");
+    if (a == std::string::npos) return {};
+    size_t b = line.find_last_not_of(" \t\r");
+    return line.substr(a, b - a + 1);
+}
+
+// Advances a /* ... */ state machine over one line. Returns whether the line STARTS inside a
+// block comment (the state before it), and updates `inBlock` to the state after it.
+static bool StepBlockComment(const std::string& line, bool& inBlock) {
+    const bool startedInside = inBlock;
+    for (size_t i = 0; i + 1 < line.size(); ++i) {
+        if (!inBlock && line[i] == '/' && line[i + 1] == '/') break; // rest is a line comment
+        if (!inBlock && line[i] == '/' && line[i + 1] == '*') { inBlock = true; ++i; }
+        else if (inBlock && line[i] == '*' && line[i + 1] == '/') { inBlock = false; ++i; }
+    }
+    return startedInside;
+}
+
+// #158 - `#include "x"` only counts at the start of a line (after whitespace) and outside a block
+// comment; before, "// #include" or a mention inside /* */ was expanded too. `#pragma once` is
+// honoured per top-level ReadFile. Every include is bracketed with #line directives so compile
+// errors map back to the file and line they came from.
+static std::string ResolveIncludes(const std::string& src, const std::filesystem::path& dir, int depth,
+                                   const std::string& fileName, std::set<std::string>& onceFiles) {
     if (depth > 8) {
         Log::Error("ShaderLibrary: #include nesting too deep");
         return src;
     }
+    const int fileIdx = FileIndex(fileName);
     std::istringstream ss(src);
     std::ostringstream out;
+    if (depth > 0) out << "#line 1 " << fileIdx << '\n';
     std::string line;
+    int lineNo = 0;
+    bool inBlock = false;
     while (std::getline(ss, line)) {
-        size_t inc = line.find("#include");
-        if (inc != std::string::npos) {
-            size_t q1 = line.find('"', inc + 8);
-            size_t q2 = (q1 != std::string::npos) ? line.find('"', q1 + 1) : std::string::npos;
+        ++lineNo;
+        const bool commented = StepBlockComment(line, inBlock);
+        const std::string t = commented ? std::string() : Trimmed(line);
+        if (t == "#pragma once") {
+            onceFiles.insert(fileName);
+            out << '\n'; // keep the line count
+            continue;
+        }
+        if (depth == 0 && t.rfind("#version", 0) == 0) {
+            // #line may not precede #version, so the top-level file's numbering starts after it.
+            out << line << '\n' << "#line " << (lineNo + 1) << ' ' << fileIdx << '\n';
+            continue;
+        }
+        if (t.rfind("#include", 0) == 0) {
+            size_t q1 = t.find('"', 8);
+            size_t q2 = (q1 != std::string::npos) ? t.find('"', q1 + 1) : std::string::npos;
             if (q1 != std::string::npos && q2 != std::string::npos) {
-                std::string name = line.substr(q1 + 1, q2 - q1 - 1);
+                std::string name = t.substr(q1 + 1, q2 - q1 - 1);
+                if (onceFiles.count(name)) { out << '\n'; continue; } // already included, #pragma once
                 std::ifstream f(dir / name);
                 if (!f.is_open()) {
-                    Log::Error("ShaderLibrary: cannot open include: " + (dir / name).string());
+                    Log::Error("ShaderLibrary: cannot open include: " + (dir / name).string() +
+                               " (from " + fileName + ":" + std::to_string(lineNo) + ")");
                     out << line << '\n';
                 } else {
                     std::ostringstream content;
                     content << f.rdbuf();
-                    out << ResolveIncludes(content.str(), dir, depth + 1);
+                    out << ResolveIncludes(content.str(), dir, depth + 1, name, onceFiles);
+                    out << "#line " << (lineNo + 1) << ' ' << fileIdx << '\n';
                 }
                 continue;
             }
@@ -41,6 +97,31 @@ static std::string ResolveIncludes(const std::string& src, const std::filesystem
         out << line << '\n';
     }
     return out.str();
+}
+
+std::string AnnotateLog(const std::string& log) {
+    // NVIDIA: "3(12) : error ..."; AMD / Intel / Mesa: "ERROR: 3:12: ...".
+    static const std::regex kNv(R"((^|\n)(\d+)\((\d+)\))");
+    static const std::regex kOther(R"((ERROR|WARNING): (\d+):(\d+):)");
+    auto name = [](const std::string& idx) {
+        const size_t i = (size_t)std::stoul(idx);
+        return i < s_FileNames.size() ? s_FileNames[i] : idx;
+    };
+    std::string out;
+    std::smatch m;
+    std::string rest = log;
+    while (std::regex_search(rest, m, kNv)) {
+        out += m.prefix().str() + m[1].str() + name(m[2].str()) + "(" + m[3].str() + ")";
+        rest = m.suffix().str();
+    }
+    out += rest;
+    rest = out;
+    out.clear();
+    while (std::regex_search(rest, m, kOther)) {
+        out += m.prefix().str() + m[1].str() + ": " + name(m[2].str()) + ":" + m[3].str() + ":";
+        rest = m.suffix().str();
+    }
+    return out + rest;
 }
 
 void Init(const std::string& shadersDir) {
@@ -76,7 +157,8 @@ std::string ReadFile(const std::string& filename) {
     }
     std::ostringstream ss;
     ss << f.rdbuf();
-    return ResolveIncludes(ss.str(), s_Dir, 0);
+    std::set<std::string> onceFiles;
+    return ResolveIncludes(ss.str(), s_Dir, 0, filename, onceFiles);
 }
 
 void PollForChanges(const std::function<void(const std::string& filename)>& onChanged) {
