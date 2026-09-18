@@ -26,6 +26,8 @@ const char* g_Reason = "";    // static strings only
 bool g_Interactive = true;
 wchar_t g_Dir[MAX_PATH] = {0}; // %LOCALAPPDATA%\TartarusEngine\Crashes\ (trailing slash)
 wchar_t g_DumpPath[MAX_PATH] = {0};
+CrashHandler::EmergencySaveFn volatile g_EmergencySave = nullptr;
+LONG volatile g_EmergencySaved = 0; // 1 = the callback ran and reported success
 
 void ResolveDumpDir() {
     wchar_t base[MAX_PATH] = {0};
@@ -71,6 +73,33 @@ void StderrLine(const char* text) {
     WriteFile(err, text, (DWORD)lstrlenA(text), &written, nullptr);
 }
 
+// The emergency save's own thread. SEH-guarded so a fault inside it (a corrupt heap is likely
+// after a crash) ends only this attempt; no C++ objects live in this frame, so __try is allowed.
+DWORD WINAPI EmergencySaveThread(void*) {
+    CrashHandler::EmergencySaveFn fn = g_EmergencySave;
+    if (!fn) return 0;
+    __try {
+        if (fn()) InterlockedExchange(&g_EmergencySaved, 1);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+    return 0;
+}
+
+// After the dump (so a hang here can't cost the report): give the save a bounded window. A
+// helper thread rather than the watchdog itself, so a deadlock on a lock the crashed thread
+// holds (heap, log) just times out and is abandoned when the process terminates.
+void RunEmergencySave() {
+    if (!g_EmergencySave) return;
+    HANDLE t = CreateThread(nullptr, 1024 * 1024, &EmergencySaveThread, nullptr, 0, nullptr);
+    if (!t) return;
+    const DWORD result = WaitForSingleObject(t, 10000);
+    CloseHandle(t);
+    StderrLine(result == WAIT_OBJECT_0
+        ? (g_EmergencySaved ? "[CrashHandler] unsaved scene written to its recovery snapshot\n"
+                            : "[CrashHandler] nothing to recover (or the recovery save failed)\n")
+        : "[CrashHandler] recovery save timed out; skipped\n");
+}
+
 DWORD WINAPI Watchdog(void*) {
     WaitForSingleObject(g_Request, INFINITE);
     const bool ok = WriteDump();
@@ -80,16 +109,20 @@ DWORD WINAPI Watchdog(void*) {
               g_Pointers && g_Pointers->ExceptionRecord ? g_Pointers->ExceptionRecord->ExceptionCode : 0,
               ok ? "written" : "FAILED", g_DumpPath);
     StderrLine(line);
+    RunEmergencySave();
 
     if (g_Interactive) {
         // #148 — tell the user instead of vanishing. The editor's own log (Editor.log) sits next
         // to the Crashes folder, so opening the folder shows both.
-        wchar_t msg[MAX_PATH * 2 + 256];
+        wchar_t msg[MAX_PATH * 2 + 512];
+        const wchar_t* recovered = g_EmergencySaved
+            ? L"Your unsaved scene changes were saved; you'll be offered to restore them next time.\n\n"
+            : L"";
         if (ok)
-            wsprintfW(msg, L"Tartarus Engine crashed and has to close.\n\nA crash report was saved to:\n%s\n\n"
-                           L"Open the folder? Attach the .dmp and Logs\\Editor.log to a bug report.", g_DumpPath);
+            wsprintfW(msg, L"Tartarus Engine crashed and has to close.\n\n%sA crash report was saved to:\n%s\n\n"
+                           L"Open the folder? Attach the .dmp and Logs\\Editor.log to a bug report.", recovered, g_DumpPath);
         else
-            wsprintfW(msg, L"Tartarus Engine crashed and has to close.\n\nThe crash report couldn't be written.");
+            wsprintfW(msg, L"Tartarus Engine crashed and has to close.\n\n%sThe crash report couldn't be written.", recovered);
         const int choice = MessageBoxW(nullptr, msg, L"Tartarus Engine",
                                        (ok ? MB_YESNO : MB_OK) | MB_ICONERROR | MB_TOPMOST | MB_SETFOREGROUND);
         if (ok && choice == IDYES) {
@@ -168,6 +201,7 @@ void Install() {
 }
 
 void SetInteractive(bool interactive) { g_Interactive = interactive; }
+void SetEmergencySave(EmergencySaveFn fn) { g_EmergencySave = fn; }
 } // namespace CrashHandler
 
 namespace {
@@ -202,5 +236,5 @@ void CrashForTest(const char* kind) {
 } // namespace CrashHandler
 
 #else
-namespace CrashHandler { void Install() {} void SetInteractive(bool) {} void CrashForTest(const char*) {} }
+namespace CrashHandler { void Install() {} void SetInteractive(bool) {} void SetEmergencySave(EmergencySaveFn) {} void CrashForTest(const char*) {} }
 #endif
