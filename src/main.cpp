@@ -2515,26 +2515,33 @@ int main(int argc, char** argv) {
                     editor.ConsumeCaptureRequest();
                     const std::string sceneName =
                         std::filesystem::path(editor.CurrentScenePath()).stem().string();
+                    // #153 - only the pixel read happens here (it needs the GL context); the PNG/JPG
+                    // encode runs on Screenshot's worker and is reported below via PollFinished.
                     std::string outPath; int outW = 0, outH = 0;
                     if (cap.mode == 3) {
                         Framebuffer& gv = gameView.GetFramebuffer();
                         if (gv.IsValid()) {
                             outW = gv.Width(); outH = gv.Height();
                             glBindFramebuffer(GL_READ_FRAMEBUFFER, gv.Handle());
-                            auto px = Screenshot::GrabRegion(0, 0, outW, outH);
-                            outPath = Screenshot::Save(px.data(), outW, outH, true, cap.format, sceneName);
+                            outPath = Screenshot::SaveAsync(Screenshot::GrabRegion(0, 0, outW, outH),
+                                                            outW, outH, true, cap.format, sceneName);
                         }
                     } else if (cap.mode == 1 || cap.mode == 2) {
                         outW = sceneFramebuffer.Width(); outH = sceneFramebuffer.Height();
                         glBindFramebuffer(GL_READ_FRAMEBUFFER, sceneFramebuffer.Handle());
-                        auto px = Screenshot::GrabRegion(0, 0, outW, outH);
-                        outPath = Screenshot::Save(px.data(), outW, outH, true, cap.format, sceneName);
+                        outPath = Screenshot::SaveAsync(Screenshot::GrabRegion(0, 0, outW, outH),
+                                                        outW, outH, true, cap.format, sceneName);
                     } else { // 0 = full editor window
                         outW = window.GetWidth(); outH = window.GetHeight();
-                        outPath = Screenshot::SaveBackbuffer(outW, outH, cap.format, sceneName);
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+                        outPath = Screenshot::SaveAsync(Screenshot::GrabRegion(0, 0, outW, outH),
+                                                        outW, outH, true, cap.format, sceneName);
                     }
-                    editor.OnCaptureDone(outPath, outW, outH);
+                    if (outPath.empty()) editor.OnCaptureDone({}, outW, outH); // nothing to encode
+                    else                 editor.OnCaptureTaken();
                 }
+                for (const Screenshot::Finished& f : Screenshot::PollFinished())
+                    editor.OnCaptureDone(f.Ok ? f.Path : std::string(), f.Width, f.Height);
                 editor.SetHideOverlaysThisFrame(false);
             }
 
@@ -2653,6 +2660,7 @@ int main(int argc, char** argv) {
 
         FlushFlySpeedSave(/*force=*/true); // a fly-speed trim still inside its save debounce (#142)
         editor.Shutdown();
+        Screenshot::WaitForPending(); // #153 - a capture still encoding when the editor closes
         editorModule.Shutdown();
         AudioEngine::Shutdown();
     } catch (const std::exception& e) {

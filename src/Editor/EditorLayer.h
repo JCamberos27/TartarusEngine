@@ -556,6 +556,9 @@ public:
     CaptureRequest PeekCaptureRequest() const { return m_CaptureReq; }
     void PrimeCaptureRequest() { m_CaptureReq.primed = true; }
     CaptureRequest ConsumeCaptureRequest() { CaptureRequest r = m_CaptureReq; m_CaptureReq.pending = false; m_CaptureReq.primed = false; return r; }
+    // #153 - the grab happened: flash + shutter sound right away. The file itself is encoded in
+    // the background; OnCaptureDone runs once it's on disk (or failed, with an empty path).
+    void OnCaptureTaken();
     void OnCaptureDone(const std::string& path, int w, int h);
     void DrawCaptureFeedback(float dt);          // fading white flash only; called from Draw()
     // Phase 3 item 9 (audit #5, Appendix A #8) — the capture toast used to be click-through
