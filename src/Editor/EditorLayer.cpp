@@ -69,6 +69,7 @@
 #include <glm/gtx/euler_angles.hpp> // extractEulerAngleYXZ — must match ComposeTransform's order (#108)
 
 #include <filesystem>
+#include "UserPaths.h"
 #include <memory>
 #include <algorithm>
 #include <unordered_map>
@@ -170,6 +171,18 @@ void EditorLayer::Init(GLFWwindow* window) {
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
     ImGuiIO& io = ImGui::GetIO();
+    // #137 — the dock layout used ImGui's default relative "imgui.ini", i.e. whatever the
+    // process CWD was (repo root via run-editor.cmd, build/Release/ when launched directly), so
+    // the layout was lost/forked per launch location and a per-user file ended up tracked in
+    // git. Keep it with the other per-user state instead; the first run carries over an
+    // existing CWD copy so nobody loses their layout.
+    {
+        static const std::string iniPath = UserPaths::Resolve("imgui.ini");
+        std::error_code ec;
+        if (!std::filesystem::exists(iniPath, ec) && std::filesystem::exists("imgui.ini", ec))
+            std::filesystem::copy_file("imgui.ini", iniPath, ec);
+        io.IniFilename = iniPath.c_str();
+    }
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     // Defect #33/#43 (Phase 2) — Tab traversal, arrow-key nav in lists/menus, and Enter/Space
     // activation, plus the ImGuiCol_NavCursor focus ring (already themed, see ApplyThemeStyle's
