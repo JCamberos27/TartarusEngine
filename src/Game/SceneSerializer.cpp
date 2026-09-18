@@ -1,4 +1,5 @@
 #include "SceneSerializer.h"
+#include "AtomicFile.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "ComponentRegistry.h"
@@ -893,8 +894,18 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             // pristine counterpart in the .prefab file, by prefab-local index.
             if (!pi.InstanceEntities.empty()) {
                 std::ifstream pf(pi.SourcePath);
+                json prefab;
+                bool prefabOk = false;
                 if (pf.is_open()) {
-                    json prefab; pf >> prefab;
+                    // #82 — a corrupt / merge-conflicted .prefab must not abort the whole scene
+                    // save: skip this instance's override diff (its stub still saves) and warn.
+                    try { pf >> prefab; prefabOk = true; }
+                    catch (const std::exception& ex) {
+                        Log::Warn("Scene: couldn't parse prefab '" + pi.SourcePath +
+                                  "' while saving - its per-field overrides were not re-diffed: " + ex.what());
+                    }
+                }
+                if (prefabOk) {
                     std::vector<const json*> pristineEnts = PrefabEntityObjects(prefab);
                     json overrides = json::array();
                     const std::size_t n = std::min(pi.InstanceEntities.size(), pristineEnts.size());
@@ -1497,15 +1508,25 @@ void WarnNonPortablePaths(const json& node, const std::string& pointer) {
 } // namespace
 
 bool SceneSerializer::Save(const World& world, const AssetLibrary& assets, const std::string& path) {
-    std::ofstream out(path);
-    if (!out.is_open()) {
-        Log::Error("Scene: failed to open '" + path + "' for writing.");
+    // #82 — build the whole document in memory FIRST, and only then touch the file, through
+    // AtomicFile (temp + flush + atomic replace). The old version opened a truncating ofstream
+    // before building, so any exception while building (e.g. a corrupt prefab) left the scene
+    // file empty; and it never checked the write, so a full disk / locked file still reported
+    // success.
+    std::string text;
+    try {
+        json root = BuildSceneJson(world);
+        AppendAssetLibraryJson(root, assets);
+        WarnNonPortablePaths(root, ""); // audit #364 — surface any absolute/'..' path before it's written
+        text = root.dump(2);
+    } catch (const std::exception& e) {
+        Log::Error("Scene: couldn't serialize the scene for '" + path + "' (file left untouched): " + e.what());
         return false;
     }
-    json root = BuildSceneJson(world);
-    AppendAssetLibraryJson(root, assets);
-    WarnNonPortablePaths(root, ""); // audit #364 — surface any absolute/'..' path before it's written
-    out << root.dump(2);
+    if (!AtomicFile::WriteBytes(std::filesystem::path(path), text, /*binary=*/false)) {
+        Log::Error("Scene: failed to write '" + path + "' - the previous version on disk was kept.");
+        return false;
+    }
     return true;
 }
 
@@ -1612,13 +1633,47 @@ bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const s
     // (multi-second stalls long enough to trip a GPU driver watchdog on a real project's worth
     // of assets), not just a style choice being reverted here.
     if (root.value("hasAssetLibrarySnapshot", false)) {
-        std::set<std::string> keepModels, keepTextures, keepSounds, keepPrefabs, keepFolders, keepMaterials;
-        if (root.contains("libraryModels")) for (const auto& p : root["libraryModels"]) keepModels.insert(p.get<std::string>());
-        if (root.contains("libraryTextures")) for (const auto& p : root["libraryTextures"]) keepTextures.insert(p.get<std::string>());
-        if (root.contains("librarySounds")) for (const auto& p : root["librarySounds"]) keepSounds.insert(p.get<std::string>());
-        if (root.contains("libraryPrefabs")) for (const auto& p : root["libraryPrefabs"]) keepPrefabs.insert(p.get<std::string>());
-        if (root.contains("assetFolders")) for (const auto& f : root["assetFolders"]) keepFolders.insert(f.get<std::string>());
-        if (root.contains("libraryMaterials")) for (const auto& p : root["libraryMaterials"]) keepMaterials.insert(p.get<std::string>());
+        // #81 — library entries are written through PathRef(), so each one is either a plain
+        // project-relative string or a {"path","pathGuid"} object; and the live library keys its
+        // assets by the (usually absolute) path they were loaded from. Match the two in the
+        // WRITTEN form (AssetPathForWrite, or the GUID when both sides have one) and hand
+        // PruneToKeepSet the live path, so a still-wanted asset is recognised and kept instead of
+        // the old raw get<std::string>() throwing on the first object entry (crashing Undo) or,
+        // for plain strings, never matching and re-importing the whole library every step.
+        auto keepSet = [&](const char* key, const std::vector<std::string>& livePaths) {
+            std::set<std::string> keep;
+            auto it = root.find(key);
+            if (it == root.end() || !it->is_array()) return keep;
+            std::set<std::string> storedPaths, storedGuids;
+            for (const auto& p : *it) {
+                if (p.is_string()) storedPaths.insert(p.get<std::string>());
+                else if (p.is_object()) {
+                    const auto path = p.find("path");
+                    if (path != p.end() && path->is_string()) storedPaths.insert(path->get<std::string>());
+                    const auto guid = p.find("pathGuid");
+                    if (guid != p.end() && guid->is_string()) storedGuids.insert(guid->get<std::string>());
+                }
+            }
+            for (const auto& live : livePaths) {
+                const AssetGuid g = AssetDatabase::GuidForPath(live);
+                if (storedPaths.count(AssetPathForWrite(live)) || storedPaths.count(live) ||
+                    (g.IsValid() && storedGuids.count(g.ToString())))
+                    keep.insert(live);
+            }
+            return keep;
+        };
+        std::vector<std::string> liveModels, liveTextures, liveMaterials;
+        for (const auto& m : assets.Models()) liveModels.push_back(m->Path());
+        for (const auto& t : assets.Textures()) liveTextures.push_back(t->Path());
+        for (const auto& m : assets.Materials()) liveMaterials.push_back(m->Path);
+        std::set<std::string> keepModels = keepSet("libraryModels", liveModels);
+        std::set<std::string> keepTextures = keepSet("libraryTextures", liveTextures);
+        std::set<std::string> keepSounds = keepSet("librarySounds", assets.Sounds());
+        std::set<std::string> keepPrefabs = keepSet("libraryPrefabs", assets.Prefabs());
+        std::set<std::string> keepMaterials = keepSet("libraryMaterials", liveMaterials);
+        std::set<std::string> keepFolders;
+        if (auto it = root.find("assetFolders"); it != root.end() && it->is_array())
+            for (const auto& f : *it) if (f.is_string()) keepFolders.insert(f.get<std::string>());
         assets.PruneToKeepSet(keepModels, keepTextures, keepSounds, keepPrefabs, keepFolders, keepMaterials);
         assets.ClearMetadataOnly();
         ApplyAssetLibraryJson(assets, root);
@@ -1656,16 +1711,16 @@ bool SceneSerializer::AppendEntitiesFromString(World& world, AssetLibrary& asset
 
 bool SceneSerializer::SavePrefab(const World& world, entt::entity root, const std::string& path) {
     if (!world.Registry.valid(root)) return false;
-    std::ofstream out(path);
-    if (!out.is_open()) {
-        Log::Error("Prefab: failed to open '" + path + "' for writing.");
-        return false;
-    }
     // Re-parsed and re-dumped with indentation so a prefab file is human-readable/diffable,
     // unlike the compact in-memory clipboard form the same function produces. flatten=true: a
     // .prefab asset is self-contained — if `root` (or a child) is itself a prefab instance it is
     // baked in fully here, not left as a nested link (#236 A2 — nested prefabs are stage 4).
-    out << json::parse(SaveEntitiesToString(world, {root}, /*flattenPrefabInstances=*/true)).dump(2);
+    // #82 — atomic write, and the write result is checked.
+    if (!AtomicFile::WriteJson(std::filesystem::path(path),
+            json::parse(SaveEntitiesToString(world, {root}, /*flattenPrefabInstances=*/true)))) {
+        Log::Error("Prefab: failed to write '" + path + "'.");
+        return false;
+    }
     Log::Info("Saved prefab '" + path + "'.");
     return true;
 }
@@ -1795,10 +1850,7 @@ bool SceneSerializer::ApplyPrefabField(World& world, entt::entity entity,
         (*pe)[jsonKey][field] = value;
     }
 
-    std::ofstream out(pi.SourcePath);
-    if (!out.is_open()) return false;
-    out << prefab.dump(2);
-    out.close();
+    if (!AtomicFile::WriteJson(std::filesystem::path(pi.SourcePath), prefab)) return false; // #82
 
     g_prefabPristineCache.erase(pi.SourcePath); // Inspector re-reads -> override marker clears
     Log::Info("Applied '" + std::string(component) + "." + field + "' to prefab '" + pi.SourcePath +
@@ -1864,10 +1916,7 @@ bool SceneSerializer::ApplyPrefabComponent(World& world, entt::entity entity, co
     // comment above for why (Collider/Joint's legacy lowercase JSON key).
     (*pe)[ReflectComponentKey(rcp->Meta)] = std::move(cj);
 
-    std::ofstream out(pi.SourcePath);
-    if (!out.is_open()) return false;
-    out << prefab.dump(2);
-    out.close();
+    if (!AtomicFile::WriteJson(std::filesystem::path(pi.SourcePath), prefab)) return false; // #82
 
     g_prefabPristineCache.erase(pi.SourcePath);
     Log::Info("Applied component '" + std::string(component) + "' to prefab '" + pi.SourcePath +
