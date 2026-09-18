@@ -237,8 +237,16 @@ bool World::SetParent(entt::entity child, entt::entity parent) {
     // like anything else.)
 
     // Reject if `parent` is `child` or one of its own descendants — that would create a cycle.
+    // #188 — bounded like the render / cache walks: a scene file that already contains a cycle
+    // not involving `child` (A -> B -> A) used to spin here forever and hang the editor.
+    int hops = 0;
     for (entt::entity walk = parent; walk != entt::null; ) {
         if (walk == child) return false;
+        if (++hops > 1024) {
+            Log::Error("Hierarchy: the parent chain above entity " + std::to_string((uint32_t)parent) +
+                       " loops or is deeper than 1024 - reparent refused (the scene's hierarchy is malformed).");
+            return false;
+        }
         const auto* h = Registry.try_get<HierarchyComponent>(walk);
         walk = h ? h->Parent : entt::null;
     }

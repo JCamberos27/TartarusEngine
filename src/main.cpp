@@ -327,6 +327,7 @@ int main(int argc, char** argv) {
         // PR13: HDRI state — non-null when an HDRI is loaded, path tracks the loaded file
         std::shared_ptr<Cubemap> hdriCube;
         std::string               hdriCubePath;
+        bool                      hdriNeedsBake = false; // #200 — set when hdriCube is (re)loaded
         bool                      prevWasHdri = false;
         // PR14: reflection probe array — rebuilt from scene each frame, bound per drawScene
         ReflectionProbeArray probeArray;
@@ -1321,7 +1322,7 @@ int main(int argc, char** argv) {
                 // defensively so a future shared-Model path can't tick one player N*dt (#106).
                 // Model::TickAnimationOnce() compares against its own m_LastTickedFrame instead
                 // of this loop building a heap-allocated std::unordered_set<Model*> every frame.
-                for (auto entity : world.Registry.view<RenderableComponent>()) {
+                for (auto entity : world.Registry.view<RenderableComponent>(entt::exclude<InactiveTag>)) { // #199 - an inactive object is paused, not just hidden
                     Model* m = world.Registry.get<RenderableComponent>(entity).ModelRef.get();
                     if (m) m->TickAnimationOnce(frameIndex, dt);
                 }
@@ -1400,7 +1401,7 @@ int main(int argc, char** argv) {
                     const auto& lc = world.Registry.get<LightComponent>(e);
                     if (!lc.Shadow.Enabled || !world.ShadowsEnabled || lc.Kind == LightComponent::Type::Directional ||
                         lc.Intensity <= 0.0f || world.Registry.all_of<InactiveTag>(e) ||
-                        (!playing && editor.IsLightSuppressed(e)))
+                        (!playing && editor.IsLightSuppressed(world, e)))
                         continue;
                     const glm::vec3 lpos = glm::vec3(world.ComposeWorldTransform(e)[3]);
                     const float range = std::max(lc.Range, 0.2f);
@@ -1422,7 +1423,7 @@ int main(int argc, char** argv) {
                 if (lightBuffer.Count() >= LightBuffer::kMaxLights) { lightBuffer.MarkOverflowed(); break; }
                 if (world.Registry.all_of<InactiveTag>(e)) continue;
                 // Lights panel solo/mute is an editing aid only — Play renders every light (#140).
-                if (!playing && editor.IsLightSuppressed(e)) continue;
+                if (!playing && editor.IsLightSuppressed(world, e)) continue;
                 const auto& lc = world.Registry.get<LightComponent>(e);
                 glm::mat4 m = world.ComposeWorldTransform(e);
                 glm::vec3 pos = glm::vec3(m[3]);
@@ -1681,13 +1682,18 @@ int main(int argc, char** argv) {
                     PROFILE_SCOPE("HDRI Load");
                     hdriCube     = Cubemap::LoadHdr(world.SkyHdriPath);
                     hdriCubePath = world.SkyHdriPath;
+                    hdriNeedsBake = true; // #200 — a new file needs its own IBL, not the last one's
                 }
                 // NeedsBake(-1,-1,-1) is true unless BakeFromCubemap already ran this HDRI;
                 // the sentinel set by BakeFromCubemap makes the check false until we switch source.
-                if (hdriCube && iblProbe.NeedsBake(glm::vec3(-1.0f), glm::vec3(-1.0f))) {
+                // #108 — also rebake when the HDRI rotation changes, so lighting follows the sky.
+                const float skyRot = glm::radians(world.SkyRotationDegrees);
+                if (hdriCube && (hdriNeedsBake || iblProbe.NeedsBake(glm::vec3(-1.0f), glm::vec3(-1.0f)) ||
+                                 iblProbe.BakedRotation() != skyRot)) {
+                    hdriNeedsBake = false;
                     PROFILE_SCOPE("IBL Bake (HDRI)");
                     PROFILE_GPU_SCOPE("IBL Bake (HDRI)");
-                    iblProbe.BakeFromCubemap(hdriCube->Texture());
+                    iblProbe.BakeFromCubemap(hdriCube->Texture(), hdriCube->FaceSize(), skyRot);
                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
                     glViewport(0, 0, window.GetWidth(), window.GetHeight());
                     GLStateCache::Invalidate();

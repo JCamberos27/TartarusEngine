@@ -12,9 +12,11 @@ echo Building the latest (Release)...
 cmake --build build --config Release
 if errorlevel 1 (
   echo.
-  echo *** BUILD FAILED - the editor below is the PREVIOUS build. Fix the error and rerun. ***
+  echo *** BUILD FAILED - fix the error above and rerun. ***
+  echo The previous build does NOT contain your latest changes.
   echo.
-  pause
+  choice /C YN /N /M "Launch the previous build anyway? [Y/N] "
+  if errorlevel 2 exit /b 1
 )
 
 rem The engine resolves its shipped assets from the exe's own location (EnginePaths, audit
