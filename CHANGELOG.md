@@ -7,6 +7,50 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### [Defect] Full-code review fix pass: crashes, data loss, rendering, physics, editor (#81–#185) — 2026-09-18
+
+First fix pass over the September 2026 full-code review (tracking epic #179). 37 issues fixed on
+branch `Cerberus/game-engine-review-41948c`, each verified with the Release build and
+`--smoke-test` (plus targeted temp fixtures / `--resave` round-trips where noted).
+
+**Crashes and data loss**
+- Undo/Redo no longer crashes on GUID-tracked library entries and no longer prunes/re-imports
+  the library every step (#81). Scene save builds the JSON first and writes atomically; a
+  corrupt prefab no longer empties the scene (#82). `AtomicFile` never deletes the target on a
+  failed rename and flushes to disk (#92). Wrong-typed scene JSON fails cleanly and keeps the
+  previous world; Undo/Redo roll back on a bad snapshot (#83).
+- Save failures keep the scene dirty and the recovery snapshot; exit only closes after a
+  successful save (#86); the action-bar Save icon (and any other path) is refused during Play
+  (#180); New/Open/Revert are refused during Play (#85); untitled dirty scenes prompt on exit
+  (#88); closing no longer rewrites an unchanged scene (#164); a startup scene that fails to load
+  is never overwritten by plain Save (#84); autosave skips Play mode (#90); undo is disabled in
+  Play and the pre-Play history is restored on Stop (#91); an exception escaping the main loop
+  writes a recovery snapshot first (#89).
+- Eyedropper can no longer write into freed component storage (#93); 2-channel textures no
+  longer over-read the heap and greyscale no longer renders red (#94); a GLSL error in a
+  `.shader` variant is logged and falls back instead of closing the editor (#100); wrong-typed
+  `editor_prefs.json` / project `settings.json` values no longer stop the editor starting
+  (#126, #152); level-geometry boxes keep their material slots (#120).
+
+**Rendering / materials**
+- Imported normal/metallic/roughness/AO maps load as linear (#95); emissive maps are tinted by
+  Emissive Color (#102, emissive part); skinned models get a selection outline again (#103);
+  working AlphaTest/cutout materials, and shadows only clip cutout materials (#101); vec2/vec4
+  and custom material properties bind correctly, with default textures for empty slots (#99);
+  material sliders use real `Range(min,max)` limits (#106); primitive meshes no longer leak on
+  every reload (#97); Create Material writes into `project/materials` (#87).
+
+**Physics / editor**
+- Physics, collider gizmos and editor raycasts work in world space, so colliders can be parented
+  (#114); rotated static boxes get oriented colliders (#115); picking, drop-to-surface, measure,
+  surface snap and Snap to Ground use exact triangle raycasts (#116, #117); hierarchy reorder keeps
+  order ids unique (#118); `imgui.ini` moved to per-user storage (#137); Game view prefs no longer
+  revert and its stats overlay can be toggled (#140); dead shader code removed (#161).
+
+New regression coverage: `tests/smoke-scenes/smoke_play_parented.json`,
+`tests/smoke-scenes-invalid/wrong_types.json`, and smoke-harness checks for the undo snapshot
+round-trip, simulated body positions and the triangle raycast.
+
 ### [Defect] Viewport selection permanently breaks after an imprecise Rect drag (#80) — 2026-09-17
 
 Found while verifying the #79 camera-lockout fix. `ImGuizmo::IsOver()`/`IsUsing()` — what

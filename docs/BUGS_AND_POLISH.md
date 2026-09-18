@@ -202,3 +202,16 @@ changes some other way. Confirmed live via the Scene Hierarchy's drag-delta read
 frame, force-cancel `ImGuizmo::IsUsing()` if the left button isn't actually down — rather than
 patching the one trigger path, since the leak mechanism could plausibly recur elsewhere
 (`b6b751c`, closes #80).
+
+### 2026-09-18 — session 6  (full-code review + first fix pass)
+
+Reviewed every file under `src/` and `tools/` and filed 104 issues (#81–#178, #180–#185,
+tracked by epic [#179](https://github.com/JCamberos27/TartarusEngine/issues/179)), labelled
+`review-2026-09`. First fix pass closed 37 of them, prioritising crashes and data loss:
+#81 #82 #83 #84 #85 #86 #87 #88 #89 #90 #91 #92 #93 #94 #95 #97 #99 #100 #101 #103 #106 #114
+#115 #116 #117 #118 #120 #126 #137 #140 #152 #161 #164 #180, plus the emissive part of #102.
+Verified with the Release build, `--smoke-test` (now also round-tripping each scene through the
+undo snapshot path, checking simulated body positions in a parented-rigidbody scene and the
+triangle raycast), `--resave` round-trips, and temporary fixtures for 1/2-channel textures, a
+broken `.shader`, and a malformed `editor_prefs.json` (under a redirected `LOCALAPPDATA`).
+Not yet verified interactively in the editor UI. See [`CHANGELOG.md`](../CHANGELOG.md).
