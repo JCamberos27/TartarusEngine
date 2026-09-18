@@ -154,6 +154,21 @@ void Draw(const EditorModuleHostAPI& host) {
         if (ImGui::BeginMenu(ICON_FA_CIRCLE_QUESTION " Help")) {
             if (ImGui::MenuItem(ICON_FA_KEYBOARD "  Shortcuts") && host.OpenShortcutsReference)
                 host.OpenShortcutsReference();
+            // #184 — the rest of a Help menu: docs, logs, a bug-report path, About.
+            if (ImGui::MenuItem(ICON_FA_BOOK "  Documentation") && host.OpenDocumentation)
+                host.OpenDocumentation();
+            if (ImGui::IsItemHovered()) Tooltip(host, "Open the project's documentation in your browser");
+            if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open Log Folder") && host.OpenLogFolder)
+                host.OpenLogFolder();
+            if (ImGui::IsItemHovered()) Tooltip(host, "Show Editor.log (this session) and Editor-prev.log in Explorer");
+            if (ImGui::MenuItem(ICON_FA_BUG "  Report a Bug...") && host.ReportBug)
+                host.ReportBug();
+            if (ImGui::IsItemHovered())
+                Tooltip(host, "Copies the system report to the clipboard, shows Editor.log, and opens\n"
+                              "the issue tracker - paste the report and attach the log there.");
+            ImGui::Separator();
+            if (ImGui::MenuItem(ICON_FA_CIRCLE_INFO "  About Tartarus Engine") && host.OpenAbout)
+                host.OpenAbout();
             ImGui::EndMenu();
         }
 

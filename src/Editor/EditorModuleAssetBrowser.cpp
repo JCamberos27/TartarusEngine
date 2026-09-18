@@ -334,7 +334,7 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
     // has no icon-size equivalent at all. Icon + tooltip reflect the mode you'd SWITCH TO
     // (Grid -> List -> Details -> Grid), matching the rest of the toolbar's toggle buttons.
     const float toggleWidth = ImGui::GetFrameHeight();
-    const float sliderWidth = 132.0f;
+    const float sliderWidth = 132.0f * uiScale; // #184
     const float toggleX = ImGui::GetWindowContentRegionMax().x - sliderWidth - toggleWidth - ImGui::GetStyle().ItemSpacing.x;
     if (toggleX > ImGui::GetCursorPosX()) ImGui::SameLine(toggleX);
     else ImGui::NewLine();
@@ -544,7 +544,8 @@ void Draw(const EditorModuleHostAPI& host) {
         Tooltip(host,
             "Search every asset by name, across all folders.\n"
             "Type multiple words to match all of them (AND).\n"
-            "t:Model / t:Texture / t:Sound / t:Scene / t:Prefab / t:Folder\n"
+            "t:Model / t:Texture / t:Material / t:Shader / t:Sound / t:Scene /\n"
+            "  t:Prefab / t:Screenshot / t:Folder\n"
             "  restricts by type - listing several ORs them together.\n"
             "l:label restricts by label (set in an asset's right-click\n"
             "  menu) - listing several ANDs them, requiring every one.");
@@ -560,7 +561,8 @@ void Draw(const EditorModuleHostAPI& host) {
     }
 
     bool anyFilterActive = false;
-    for (const char* t : {"t:model", "t:texture", "t:sound", "t:scene", "t:prefab", "t:folder"})
+    for (const char* t : {"t:model", "t:texture", "t:material", "t:shader", "t:sound", "t:scene",
+                          "t:prefab", "t:screenshot", "t:folder"})
         anyFilterActive |= SearchHasToken(search, t);
     for (const auto& lbl : knownLabels)
         anyFilterActive |= SearchHasToken(search, "l:" + lbl);
@@ -600,8 +602,9 @@ void Draw(const EditorModuleHostAPI& host) {
     if (ImGui::BeginPopup("##AssetFilters")) {
         ImGui::SeparatorText("Type");
         static const std::pair<const char*, const char*> kTypes[] = {
-            {"Model", "model"}, {"Texture", "texture"}, {"Sound", "sound"},
-            {"Scene", "scene"}, {"Prefab", "prefab"}, {"Folder", "folder"},
+            {"Model", "model"}, {"Texture", "texture"}, {"Material", "material"}, // #184
+            {"Shader", "shader"}, {"Sound", "sound"}, {"Scene", "scene"},
+            {"Prefab", "prefab"}, {"Screenshot", "screenshot"}, {"Folder", "folder"},
         };
         for (const auto& [label, token] : kTypes) {
             const std::string full = std::string("t:") + token;

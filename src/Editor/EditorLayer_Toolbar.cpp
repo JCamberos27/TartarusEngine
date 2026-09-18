@@ -693,7 +693,7 @@ void EditorLayer::DrawWindowMenuBody() {
             }
 
             // Layout presets (#236 R2, extended Phase 6 item 10) — named ImGui-ini snapshots in
-            // project/layouts/, plus four shipped arrangements that need no file on disk.
+            // the user's layouts folder (#184), plus four shipped arrangements that need no file.
             if (ImGui::BeginMenu(ICON_FA_TABLE_COLUMNS "  Layout Presets")) {
                 if (ImGui::BeginMenu(ICON_FA_TABLE_CELLS "  Default Layouts")) {
                     if (ImGui::MenuItem("Default")) RequestDefaultLayout(LayoutKind::Default);
@@ -752,8 +752,23 @@ void EditorLayer::DrawWindowMenuBody() {
                         }
                         if (ImGui::IsItemHovered()) EditorUI::SetTooltip(isDefault ? "Unset as startup default" : "Set as startup default (Reset Layout rebuilds to this)");
                         ImGui::SameLine();
-                        if (ImGui::SmallButton(ICON_FA_TRASH)) DeleteLayoutPreset(name);
-                        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete this preset");
+                        // #184: a preset is gone for good once deleted (no undo), so the first
+                        // click only arms the row; a second click on "Delete?" confirms. Opening
+                        // the menu again or arming another row disarms it.
+                        if (ImGui::IsWindowAppearing()) m_ConfirmDeleteLayoutPreset.clear();
+                        if (m_ConfirmDeleteLayoutPreset == name) {
+                            ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
+                            const bool confirmed = ImGui::SmallButton(ICON_FA_TRASH "  Delete?");
+                            ImGui::PopStyleColor();
+                            if (confirmed) {
+                                DeleteLayoutPreset(name);
+                                m_ConfirmDeleteLayoutPreset.clear();
+                            }
+                            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Click again to delete this preset permanently");
+                        } else {
+                            if (ImGui::SmallButton(ICON_FA_TRASH)) m_ConfirmDeleteLayoutPreset = name;
+                            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete this preset");
+                        }
                     }
                     ImGui::PopID();
                 }
