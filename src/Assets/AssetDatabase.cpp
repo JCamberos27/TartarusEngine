@@ -1,6 +1,7 @@
 #include "AssetDatabase.h"
 #include "Log.h"
 #include "ProjectPaths.h"
+#include "EnginePaths.h"
 #include "AtomicFile.h"
 #include <json.hpp>
 
@@ -106,6 +107,22 @@ void Register(const std::string& path, AssetGuid guid) {
 // Public API
 // ---------------------------------------------------------------------------
 
+namespace {
+bool IsUnderRoot(const std::string& path, const std::string& root) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const std::string r = fs::weakly_canonical(fs::absolute(root, ec), ec).generic_string();
+    const std::string p = fs::weakly_canonical(fs::absolute(path, ec), ec).generic_string();
+    if (r.empty() || p.size() <= r.size()) return false;
+#ifdef _WIN32
+    auto lower = [](std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; };
+    return lower(p).rfind(lower(r) + "/", 0) == 0;
+#else
+    return p.rfind(r + "/", 0) == 0;
+#endif
+}
+} // namespace
+
 bool IsSynthetic(const std::string& path) {
     return path.rfind("primitive://", 0) == 0;
 }
@@ -136,6 +153,11 @@ AssetGuid EnsureGuid(const std::string& path) {
     std::string meta = MetaPath(path);
     AssetGuid guid = ReadMetaGuid(meta);
     if (!guid.IsValid()) {
+        // #125 — never litter a folder outside the project (Downloads, another repo, read-only
+        // media) with .meta sidecars. Such a file is referenced by path only; importing copies
+        // it into the project first, where it gets a GUID.
+        if (!IsUnderRoot(path, ProjectPaths::Root()) && !IsUnderRoot(path, EnginePaths::Resolve("assets")))
+            return {};
         guid = AssetGuid::Generate();
         if (!WriteMetaFile(meta, guid, type)) {
             Log::Warn("AssetDatabase: failed to write .meta for '" + path + "'");

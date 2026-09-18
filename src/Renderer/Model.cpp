@@ -19,6 +19,10 @@
 #include <cmath>
 #include <algorithm>
 #include <filesystem>
+#include <json.hpp>
+#include <cctype>
+#include <fstream>
+#include <set>
 
 namespace {
 
@@ -368,7 +372,88 @@ std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath, T
     return tex;
 }
 
+std::vector<std::pair<std::string, std::string>> Model::SourceDependencies(const std::string& modelPath) {
+    namespace fs = std::filesystem;
+    std::vector<std::pair<std::string, std::string>> out;
+    std::error_code ec;
+    const fs::path model = fs::absolute(modelPath, ec).lexically_normal();
+    const fs::path dir = model.parent_path();
+    std::set<std::string> seen;
+    auto add = [&](const fs::path& file) {
+        const fs::path f = fs::absolute(file, ec).lexically_normal();
+        if (ec || f == model || !fs::is_regular_file(f, ec)) return;
+        if (!seen.insert(f.generic_string()).second) return;
+        const fs::path rel = f.lexically_relative(dir);
+        const bool inside = !rel.empty() && !rel.is_absolute() && *rel.begin() != fs::path("..");
+        out.emplace_back(f.string(), (inside ? rel : f.filename()).generic_string());
+    };
+    auto uriDecode = [](const std::string& u) {
+        std::string r;
+        for (size_t i = 0; i < u.size(); ++i) {
+            if (u[i] == '%' && i + 2 < u.size() && std::isxdigit((unsigned char)u[i + 1]) && std::isxdigit((unsigned char)u[i + 2])) {
+                r += (char)std::stoi(u.substr(i + 1, 2), nullptr, 16);
+                i += 2;
+            } else r += u[i];
+        }
+        return r;
+    };
+
+    std::string ext = model.extension().string();
+    for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+
+    if (ext == ".gltf") {
+        // Buffers (.bin) and images: without the buffers Assimp can't read the file at all.
+        std::ifstream in(model);
+        try {
+            const nlohmann::json j = nlohmann::json::parse(in);
+            for (const char* key : {"buffers", "images"}) {
+                if (!j.contains(key) || !j[key].is_array()) continue;
+                for (const auto& b : j[key]) {
+                    if (!b.is_object() || !b.contains("uri") || !b["uri"].is_string()) continue;
+                    const std::string uri = b["uri"].get<std::string>();
+                    if (uri.rfind("data:", 0) == 0) continue; // embedded base64
+                    add(dir / fs::path(uriDecode(uri)));
+                }
+            }
+        } catch (const std::exception&) {}
+    } else if (ext == ".obj") {
+        // mtllib lines; the .mtl's own map_* entries come back through Assimp's materials below.
+        std::ifstream in(model);
+        std::string line;
+        while (std::getline(in, line)) {
+            if (line.rfind("mtllib", 0) != 0) continue;
+            std::string name = line.substr(6);
+            name.erase(0, name.find_first_not_of(" \t"));
+            while (!name.empty() && (name.back() == '\r' || name.back() == ' ' || name.back() == '\t')) name.pop_back();
+            if (!name.empty()) add(dir / fs::path(name));
+        }
+    }
+
+    // Every external texture any material references (FBX / OBJ / glTF alike).
+    Assimp::Importer importer;
+    if (const aiScene* scene = importer.ReadFile(model.string(), 0)) {
+        for (unsigned int m = 0; m < scene->mNumMaterials; ++m) {
+            const aiMaterial* mat = scene->mMaterials[m];
+            for (int t = aiTextureType_NONE; t <= AI_TEXTURE_TYPE_MAX; ++t) {
+                const aiTextureType type = (aiTextureType)t;
+                for (unsigned int i = 0; i < mat->GetTextureCount(type); ++i) {
+                    aiString str;
+                    if (mat->GetTexture(type, i, &str) != AI_SUCCESS || str.length == 0) continue;
+                    if (str.C_Str()[0] == '*' || scene->GetEmbeddedTexture(str.C_Str())) continue;
+                    const std::string resolved = ResolveTexturePathIn(dir.string(), str.C_Str());
+                    if (!resolved.empty()) add(fs::path(resolved));
+                }
+            }
+        }
+    }
+    return out;
+}
+
 std::string Model::ResolveTexturePath(const std::string& raw) const {
+    return ResolveTexturePathIn(m_D->Directory, raw);
+}
+
+std::string Model::ResolveTexturePathIn(const std::string& modelDirStr, const std::string& raw) {
     namespace fs = std::filesystem;
 
     // Embedded texture ("*0", "*1", ...): the pixels live inside the model file, not on disk.
@@ -385,7 +470,7 @@ std::string Model::ResolveTexturePath(const std::string& raw) const {
     std::replace(norm.begin(), norm.end(), '\\', '/');
 
     const fs::path p(norm);
-    const fs::path modelDir(m_D->Directory);
+    const fs::path modelDir(modelDirStr);
 
     // 1. Exactly as given, when it's an absolute path that actually exists on THIS machine.
     if (p.is_absolute()) {
