@@ -287,6 +287,73 @@ void Window::Maximize() {
     glfwMaximizeWindow(m_Handle);
 }
 
+Window::Placement Window::GetPlacement() const {
+    Placement p;
+    if (!m_Handle || m_IsFullscreen) return p;
+#if defined(_WIN32)
+    HWND hwnd = glfwGetWin32Window(m_Handle);
+    WINDOWPLACEMENT wp{};
+    wp.length = sizeof(wp);
+    if (!hwnd || !GetWindowPlacement(hwnd, &wp)) return p;
+    const RECT& r = wp.rcNormalPosition;
+    p.X = r.left;
+    p.Y = r.top;
+    p.Width = r.right - r.left;
+    p.Height = r.bottom - r.top;
+    // Minimized: WPF_RESTORETOMAXIMIZED says what it comes back as.
+    p.Maximized = wp.showCmd == SW_SHOWMAXIMIZED ||
+                  (wp.showCmd == SW_SHOWMINIMIZED && (wp.flags & WPF_RESTORETOMAXIMIZED));
+#else
+    glfwGetWindowPos(m_Handle, &p.X, &p.Y);
+    glfwGetWindowSize(m_Handle, &p.Width, &p.Height);
+    p.Maximized = glfwGetWindowAttrib(m_Handle, GLFW_MAXIMIZED) == GLFW_TRUE;
+#endif
+    p.Valid = p.Width > 0 && p.Height > 0;
+    return p;
+}
+
+bool Window::ApplyPlacement(const Placement& p) {
+    if (!m_Handle || !p.Valid || p.Width < 200 || p.Height < 150) return false;
+#if defined(_WIN32)
+    HWND hwnd = glfwGetWin32Window(m_Handle);
+    if (!hwnd) return false;
+    // rcNormalPosition is in workspace coordinates; offset by the primary monitor's work-area
+    // origin to test it against the real monitor layout. Require a usable chunk of the title
+    // strip to be on some monitor, not just any overlap, so the window can always be grabbed.
+    RECT r{p.X, p.Y, p.X + p.Width, p.Y + p.Height};
+    MONITORINFO primary{};
+    primary.cbSize = sizeof(primary);
+    if (GetMonitorInfoW(MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY), &primary)) {
+        OffsetRect(&r, primary.rcWork.left - primary.rcMonitor.left, primary.rcWork.top - primary.rcMonitor.top);
+    }
+    RECT strip{r.left + 40, r.top, r.right - 40, r.top + 40};
+    if (strip.right <= strip.left) strip = RECT{r.left, r.top, r.right, r.top + 40};
+    if (!MonitorFromRect(&strip, MONITOR_DEFAULTTONULL)) return false;
+
+    WINDOWPLACEMENT wp{};
+    wp.length = sizeof(wp);
+    if (!GetWindowPlacement(hwnd, &wp)) return false;
+    wp.flags = 0;
+    wp.showCmd = SW_HIDE; // still hidden until main() calls Show() after the first frame
+    wp.rcNormalPosition = RECT{p.X, p.Y, p.X + p.Width, p.Y + p.Height};
+    if (!SetWindowPlacement(hwnd, &wp)) return false;
+#else
+    int count = 0;
+    GLFWmonitor** monitors = glfwGetMonitors(&count);
+    bool onScreen = false;
+    for (int i = 0; i < count && !onScreen; ++i) {
+        int mx, my, mw, mh;
+        glfwGetMonitorWorkarea(monitors[i], &mx, &my, &mw, &mh);
+        onScreen = p.X + 40 < mx + mw && p.X + p.Width - 40 > mx && p.Y >= my && p.Y < my + mh;
+    }
+    if (!onScreen) return false;
+    glfwSetWindowPos(m_Handle, p.X, p.Y);
+    glfwSetWindowSize(m_Handle, p.Width, p.Height);
+#endif
+    if (p.Maximized) Maximize();
+    return true;
+}
+
 void Window::Show() {
     glfwShowWindow(m_Handle);
 }
