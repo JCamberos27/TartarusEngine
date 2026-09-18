@@ -13,9 +13,8 @@
 namespace ProjectSettings {
 
 struct PhysicsSettings {
-    // Only .y is consumed today — Player's Play-mode walk collider (Player::Gravity). X/Z are
-    // stored for forward-compatibility with rigid bodies (#185) and edited in the tab, but do
-    // nothing yet.
+    // Rigid bodies use all three axes (the PhysX scene gravity, set when Play starts); the
+    // Play-mode Player's own fall uses the Y component (Player::Gravity).
     glm::vec3 Gravity{0.0f, -18.0f, 0.0f};
     // Stored + shown, not yet consumed (Player integrates on a collision-safety substep cap,
     // not a fixed sim step). Lands with the #185 physics step.

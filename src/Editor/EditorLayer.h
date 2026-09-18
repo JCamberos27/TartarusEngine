@@ -196,6 +196,7 @@ public:
     // Phase 6 item 11 — Help > Shortcuts jumps straight to the existing press-to-bind editor
     // (Preferences category 5) instead of leaving it something you only find by browsing.
     void OpenShortcutsReference() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; m_PrefsCategory = 5; }
+    void OpenAbout() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; m_PrefsCategory = 6; } // #184
 
     // Thin forwarders so the non-member host glue (HotReloadEditorModule.cpp) can invoke these;
     // the real methods stay private with their existing call sites. World/Assets/Camera are the
@@ -769,7 +770,9 @@ private:
     bool m_EyedropperSampleRequested = false;
     glm::vec2 m_EyedropperClickPos{0.0f};
 
-    // Layout presets (#236 R2 toolbar tail) — named ImGui-ini snapshots in project/layouts/.
+    // Layout presets (#236 R2 toolbar tail) — named ImGui-ini snapshots in the user's layouts
+    // folder (#184). m_ConfirmDeleteLayoutPreset: the row whose trash button is armed.
+    std::string m_ConfirmDeleteLayoutPreset;
     // A load stages the ini text here; Draw() applies it via LoadIniSettingsFromMemory before
     // the dockspace code runs, so the docked windows land where the preset put them.
     void SaveLayoutPreset(const std::string& name);
@@ -792,8 +795,10 @@ private:
     // Seed the bottom dock node showing the Asset Browser tab (not Console) whenever the default
     // layout is (re)built. Retried each frame until its dock node exists — same pattern as the
     // Scene/Game tab focus above.
-    int  m_SelectAssetBrowserTabFrames = 90;  // force the Asset Browser tab active for this many
-                                              // startup frames, outlasting ImGui's .ini dock restore
+    // Frames left to hold the bottom dock on the Asset Browser tab, outlasting ImGui's .ini dock
+    // restore. Armed only when the default layout is (re)built: a saved layout keeps whichever
+    // tab the user left selected (#184 - it used to be forced to Asset Browser every launch).
+    int  m_SelectAssetBrowserTabFrames = 0;
     ImGuiID m_SceneGameDockNodeId = 0;
     // The editor dockspace id as resolved inside "##DockHost" during Draw() — stashed so
     // KeepDockspaceAlive() (which runs with no window pushed) keeps the RIGHT node alive
@@ -1061,6 +1066,12 @@ public:
     // The launch-time system report (OS/CPU/RAM/GPU/GL/display/build), built by main.cpp.
     // Shown in Preferences > About.
     void SetSystemReport(const std::vector<std::string>& lines) { m_SystemReport = lines; }
+    // The report as one newline-joined block (Copy report, Help > Report a Bug).
+    std::string SystemReportText() const {
+        std::string all;
+        for (const std::string& line : m_SystemReport) all += line + "\n";
+        return all;
+    }
 private:
     std::vector<std::string> m_SystemReport;
 
