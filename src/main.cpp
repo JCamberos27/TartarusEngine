@@ -321,12 +321,13 @@ int main(int argc, char** argv) {
         if (!headless)
             splash.Show(EnginePaths::Resolve("assets/branding/splash.png"), 1.0f);
 
-        Window window(1280, 720, "Tartarus Engine");
-        // GL context + loader are live now. No-op unless a Debug build or TARTARUS_GL_DEBUG=1.
         // The smoke test's whole job is catching GL-level regressions, so force debug output on
         // for it regardless of build config / env (audit #356) — otherwise newGlErrors is
         // structurally always 0 in a Release run and the harness only checks "did it draw".
+        // Set before the Window exists: it decides whether to request a debug context (#157).
         if (smokeTestMode) GLDebug::ForceEnable();
+        Window window(1280, 720, "Tartarus Engine");
+        // GL context + loader are live now. No-op unless a Debug build or TARTARUS_GL_DEBUG=1.
         GLDebug::Init();
         Input::Init(window.Handle());
         window.SetCursorLocked(true);

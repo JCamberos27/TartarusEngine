@@ -117,8 +117,11 @@ namespace {
 void* LoadGLFunc(const char* name) {
     void* p = (void*)wglGetProcAddress(name);
     if (p == nullptr || p == (void*)0x1 || p == (void*)0x2 || p == (void*)0x3 || p == (void*)-1) {
-        HMODULE mod = LoadLibraryA("opengl32.dll");
-        p = (void*)GetProcAddress(mod, name);
+        // GL 1.1 entry points live in opengl32.dll itself, which a live WGL context has already
+        // loaded. Look it up once instead of LoadLibraryA per symbol, which leaked a module
+        // reference on every call (#157).
+        static const HMODULE opengl32 = GetModuleHandleW(L"opengl32.dll");
+        p = opengl32 ? (void*)GetProcAddress(opengl32, name) : nullptr;
     }
     return p;
 }
