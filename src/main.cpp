@@ -1322,7 +1322,7 @@ int main(int argc, char** argv) {
                 // defensively so a future shared-Model path can't tick one player N*dt (#106).
                 // Model::TickAnimationOnce() compares against its own m_LastTickedFrame instead
                 // of this loop building a heap-allocated std::unordered_set<Model*> every frame.
-                for (auto entity : world.Registry.view<RenderableComponent>()) {
+                for (auto entity : world.Registry.view<RenderableComponent>(entt::exclude<InactiveTag>)) { // #199 - an inactive object is paused, not just hidden
                     Model* m = world.Registry.get<RenderableComponent>(entity).ModelRef.get();
                     if (m) m->TickAnimationOnce(frameIndex, dt);
                 }
