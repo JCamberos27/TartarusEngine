@@ -223,6 +223,14 @@ struct EditorSettings {
     int   ActiveTool           = 0;
     int   ShadingMode          = 0;
 
+    // --- Main window placement (#143). Written on clean exit, applied at startup when it still
+    // lands on a connected monitor; otherwise the window opens maximized as before. The rect is
+    // the restored ("normal") one, so a window closed maximized comes back maximized and
+    // un-maximizes to where it was. Coordinates: see Window::Placement.
+    bool WindowPlacementValid = false;
+    int  WindowX = 0, WindowY = 0, WindowWidth = 0, WindowHeight = 0;
+    bool WindowMaximized = true;
+
     static EditorSettings& Get() {
         static EditorSettings instance;
         return instance;
