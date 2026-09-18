@@ -19,6 +19,11 @@ namespace GLDebug {
 // (audit #356).
 void ForceEnable();
 
+// Whether debug output will be switched on (Debug build, TARTARUS_GL_DEBUG=1, or ForceEnable()).
+// Needs no GL context, so the Window asks it before creating one: a debug context is requested
+// only when it'll be used, since some drivers run slower in one (#157).
+bool WantsDebugContext();
+
 // Call once, after the GL context and loader are ready (i.e. just after the Window is built).
 // Safe to call when disabled — it just returns.
 void Init();
