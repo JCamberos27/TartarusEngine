@@ -175,6 +175,7 @@ struct EditorSettings {
     bool     ShowPhysicsPanel      = false;  // the dockable Physics debug window
     bool     PhysicsHudOverlay     = false;  // corner stats overlay while playing
     unsigned PhysicsDebugDrawFlags = 0;      // PhysicsWorld::PhysicsDebugDrawFlag bitmask
+    bool LogPhysicsEvents = false;           // #169 - trigger / hit / joint-break lines in the Console
     // Slow-mo / freeze on the physics step [0, 2]. Phase 6 item 13 / Appendix B #39 -
     // deliberately session-only (NOT read/written by Load/Save below): a session left at 0x
     // must not silently freeze physics again the next time the editor opens.
