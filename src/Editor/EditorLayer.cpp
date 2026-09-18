@@ -1739,6 +1739,11 @@ void EditorLayer::DrawPhysicsDebugWindow(World& world) {
         chan("Velocities", PhysicsWorld::PDD_Velocity,
              "An arrow from each awake body's center of mass, length and color by speed."); // #19
         chan("Sleeping bodies", PhysicsWorld::PDD_Sleep, "A dim marker over bodies the solver has put to sleep.");
+        bool logEvents = es.LogPhysicsEvents;
+        if (EditorUIPrimitives::Checkbox("Log physics events", &logEvents)) { es.LogPhysicsEvents = logEvents; EditorSettings::Save(); }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Write trigger enter/exit, firm hits and joint breaks to the Console.\n"
+                                 "Off by default: busy scenes produce a line per event.");
 
         ImGui::Spacing();
         ImGui::SeparatorText("Simulation");

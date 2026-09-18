@@ -143,6 +143,10 @@ enum PhysicsDebugDrawFlag : unsigned {
 void     SetDebugDrawFlags(unsigned flags);
 unsigned GetDebugDrawFlags();
 
+// #169 - whether trigger enter/exit, solid hits and joint breaks are written to the Console.
+// Off by default: in physics-heavy Play they flooded the log and cost frame time.
+void SetEventLogging(bool enabled);
+
 // Fill outXYZRGBA (interleaved pos.xyz + colour.rgba — 7 floats/vertex, 2 vertices/line) with
 // this frame's debug lines; returns the line count written (capped at maxLines). Additive-blend
 // friendly: alpha carries the fade.
