@@ -1675,7 +1675,16 @@ void EditorLayer::EndFrame() {
             sub.FramebufferScale = dd->FramebufferScale;
             sub.OwnerViewport = dd->OwnerViewport;
             sub.Textures = dd->Textures;
-            sub.AddDrawList(modal->DrawList);
+            // #181 — not just modal->DrawList: its child windows, open combo lists, nested
+            // popups and tooltips each have their own draw list. CmdLists is back-to-front, and
+            // all of those sit above the modal, so everything from the modal's list onward is
+            // exactly what should stay crisp. (The dimming ImGui paints for a modal goes into the
+            // draw list behind it, so it stays under the blur as before.)
+            int first = -1;
+            for (int i = 0; i < dd->CmdLists.Size; ++i)
+                if (dd->CmdLists[i] == modal->DrawList) { first = i; break; }
+            if (first < 0) sub.AddDrawList(modal->DrawList); // not in this viewport's list; old behaviour
+            else for (int i = first; i < dd->CmdLists.Size; ++i) sub.AddDrawList(dd->CmdLists[i]);
             sub.Valid = true;
             ImGui_ImplOpenGL3_RenderDrawData(&sub);
             GLStateCache::Invalidate();
