@@ -10,6 +10,11 @@ void ReflectionProbeArray::Update(const World& world) {
     m_Probes.clear();
     auto view = world.Registry.view<const TransformComponent, const ReflectionProbeComponent>();
     for (auto [entity, tc, rp] : view.each()) {
+        // #197 — inactive probes don't shade, like inactive lights and renderables.
+        if (world.Registry.all_of<InactiveTag>(entity)) continue;
+        // #198 — zero importance means "never chosen": binding it gave a zero blend weight that
+        // replaced the environment specular with black.
+        if (!(rp.Importance > 0.0f)) continue;
         glm::mat4 wt = world.GetCachedWorldTransform(entity);
         glm::vec3 center = glm::vec3(wt[3]);
         // Size is in world units; half-extents: multiply by scale from the matrix columns
@@ -36,6 +41,7 @@ void ReflectionProbeArray::Bind(Shader& shader, const glm::vec3& viewCenter) con
     for (int i = 0; i < (int)m_Probes.size(); ++i) {
         float d2 = glm::length2(m_Probes[i].Center - viewCenter);
         float score = m_Probes[i].Importance / (1.0f + d2);
+        if (!(score > 0.0f)) continue; // #198 — never bind a probe that would blend to black
         if (found < kMaxDraw) {
             best[found++] = {i, score};
             // keep in descending order
@@ -53,6 +59,7 @@ void ReflectionProbeArray::Bind(Shader& shader, const glm::vec3& viewCenter) con
     for (int j = 0; j < found; ++j) totalScore += best[j].score;
     if (totalScore < 1e-6f) totalScore = 1.0f;
 
+    if (found == 0) { shader.SetInt("uProbeCount", 0); return; }
     shader.SetInt("uProbeCount", found);
     for (int j = 0; j < found; ++j) {
         const ProbeData& p = m_Probes[best[j].idx];
