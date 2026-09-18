@@ -57,6 +57,9 @@ uint64_t HashSettings(const TextureImportSettings& settings);
 // whose source is gone or whose version is stale. Reads only each entry's header, never the pixel
 // payload, so this is cheap regardless of cache size. Safe to call every launch, and safe to call
 // with no cache directory yet (a no-op).
+// It then enforces a size cap (#159): if the surviving entries exceed it, the least recently
+// used (Load/Store refresh an entry's timestamp) are deleted until they fit. Temp files left by
+// an interrupted Store are removed once they're over an hour old.
 void Prune(const std::function<std::optional<uint64_t>(const std::string& sourcePath)>& currentSettingsHash = nullptr);
 
 } // namespace TextureCache

@@ -2,13 +2,40 @@
 #include "AssetDatabase.h"
 #include "ProjectPaths.h"
 
+#include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <vector>
+
+#if defined(_WIN32)
+#include <process.h> // _getpid
+#define TT_GETPID _getpid
+#else
+#include <unistd.h>
+#define TT_GETPID getpid
+#endif
 
 namespace TextureCache {
 namespace {
+
+// #159: entries are raw pixels (a 4K RGBA texture is 64 MB), so the directory needs a ceiling.
+// Prune() evicts least-recently-used entries past this. Generous on purpose: evicting something
+// the next launch needs just costs one PNG decode, but a cap below a project's working set would
+// make every launch re-decode.
+constexpr uint64_t kMaxCacheBytes = 4ull * 1024 * 1024 * 1024;
+// An in-flight ".tmp" older than this was abandoned by a crash, not being written right now.
+constexpr auto kAbandonedTempAge = std::chrono::hours(1);
+
+// How the source path is written into, and compared against, an entry's header.
+std::string NormalizedSourcePath(const std::string& sourcePath) {
+    std::error_code ec;
+    std::filesystem::path abs = std::filesystem::absolute(sourcePath, ec);
+    return ec ? sourcePath : abs.lexically_normal().string();
+}
 
 constexpr char kMagic[4] = {'T', 'T', 'E', 'X'};
 // Bump to invalidate every existing entry after a format or decode-behaviour change.
@@ -33,9 +60,7 @@ std::string EntryPath(const std::string& sourcePath) {
     if (guid.IsValid()) {
         stem = guid.ToString();
     } else {
-        std::error_code ec;
-        std::filesystem::path abs = std::filesystem::absolute(sourcePath, ec);
-        std::string key = ec ? sourcePath : abs.lexically_normal().string();
+        const std::string key = NormalizedSourcePath(sourcePath);
         uint64_t h = 1469598103934665603ull;
         for (unsigned char c : key) {
             h ^= (uint64_t)c;
@@ -88,7 +113,8 @@ bool Load(const std::string& sourcePath, const TextureImportSettings& settings, 
     uint64_t srcSize = 0, srcMtime = 0;
     if (!SourceStamp(sourcePath, srcSize, srcMtime)) return false; // source gone: nothing to validate against
 
-    std::ifstream f(EntryPath(sourcePath), std::ios::binary);
+    const std::string entryPath = EntryPath(sourcePath);
+    std::ifstream f(entryPath, std::ios::binary);
     if (!f) return false;
 
     char magic[4];
@@ -101,11 +127,13 @@ bool Load(const std::string& sourcePath, const TextureImportSettings& settings, 
     if (size != srcSize || mtime != srcMtime || hash != HashSettings(settings)) return false;
 
     // The source path is stored too, so a (vanishingly unlikely) filename-hash collision is
-    // caught here and treated as a miss.
+    // caught here and treated as a miss (#159: this used to read the path but never compare it).
+    // A GUID-keyed texture that was moved also misses once, and Store() re-bakes it in place.
     uint32_t pathLen = 0;
     if (!Read(f, pathLen) || pathLen > 4096) return false;
     std::string storedPath(pathLen, '\0');
     if (pathLen && !f.read(storedPath.data(), pathLen)) return false;
+    if (storedPath != NormalizedSourcePath(sourcePath)) return false;
 
     int32_t sw = 0, sh = 0, w = 0, h = 0, ch = 0;
     if (!Read(f, sw) || !Read(f, sh) || !Read(f, w) || !Read(f, h) || !Read(f, ch)) return false;
@@ -114,6 +142,11 @@ bool Load(const std::string& sourcePath, const TextureImportSettings& settings, 
     const size_t bytes = (size_t)w * (size_t)h * (size_t)ch;
     std::vector<unsigned char> pixels(bytes);
     if (!f.read(reinterpret_cast<char*>(pixels.data()), (std::streamsize)bytes)) return false;
+    f.close();
+
+    // Mark the entry as recently used; Prune()'s size cap evicts the oldest-stamped entries first.
+    std::error_code touchEc;
+    std::filesystem::last_write_time(entryPath, std::filesystem::file_time_type::clock::now(), touchEc);
 
     out.SourceWidth = sw;
     out.SourceHeight = sh;
@@ -136,8 +169,12 @@ void Store(const std::string& sourcePath, const TextureImportSettings& settings,
 
     // Write to a temporary then rename, so a crash or a full disk mid-write can't leave a
     // truncated entry that would later be read back as a valid one.
+    // The temp name is unique per process and per call (#159): two editor instances, or two
+    // threads, baking the same entry must never share, and so truncate, one temp file.
+    static std::atomic<uint32_t> s_TempCounter{0};
     const std::string finalPath = EntryPath(sourcePath);
-    const std::string tempPath = finalPath + ".tmp";
+    const std::string tempPath = finalPath + "." + std::to_string(TT_GETPID()) + "-" +
+                                 std::to_string(s_TempCounter.fetch_add(1)) + ".tmp";
     {
         std::ofstream f(tempPath, std::ios::binary | std::ios::trunc);
         if (!f) return;
@@ -148,8 +185,7 @@ void Store(const std::string& sourcePath, const TextureImportSettings& settings,
         Write(f, srcMtime);
         Write(f, HashSettings(settings));
 
-        std::string abs = std::filesystem::absolute(sourcePath, ec).lexically_normal().string();
-        if (ec) abs = sourcePath;
+        const std::string abs = NormalizedSourcePath(sourcePath);
         Write(f, (uint32_t)abs.size());
         f.write(abs.data(), (std::streamsize)abs.size());
 
@@ -174,13 +210,29 @@ void Prune(const std::function<std::optional<uint64_t>(const std::string& source
     std::filesystem::directory_iterator dir(CacheDir(), ec);
     if (ec) return; // no cache directory yet (or can't be listed): nothing to prune
 
+    struct Survivor {
+        std::filesystem::file_time_type LastUsed;
+        uint64_t Bytes;
+        std::filesystem::path Path;
+    };
+    std::vector<Survivor> survivors; // valid entries, candidates for the size cap below
+    const auto now = std::filesystem::file_time_type::clock::now();
+
     for (const auto& entry : std::filesystem::directory_iterator(CacheDir(), ec)) {
         if (ec) break;
         std::error_code fileEc;
         if (!entry.is_regular_file(fileEc) || fileEc) continue;
 
         const std::filesystem::path path = entry.path();
-        if (path.extension() != ".ttex") continue; // ignore ".tmp" in-flight writes and stray files
+        if (path.extension() == ".tmp") {
+            // A Store() interrupted by a crash leaves its temp behind forever. Recent ones may
+            // belong to another running editor instance mid-write, so only old ones go (#159).
+            std::error_code timeEc;
+            auto written = entry.last_write_time(timeEc);
+            if (!timeEc && now - written > kAbandonedTempAge) std::filesystem::remove(path, timeEc);
+            continue;
+        }
+        if (path.extension() != ".ttex") continue; // stray files aren't ours to judge
 
         // Read the header ONLY — magic, version, source stamp, settings hash, source path — and
         // stop before the pixel payload that follows. Never decodes or even reads the pixels.
@@ -221,7 +273,28 @@ void Prune(const std::function<std::optional<uint64_t>(const std::string& source
             }
         }
 
-        if (stale) std::filesystem::remove(path, ec);
+        if (stale) {
+            std::filesystem::remove(path, ec);
+        } else {
+            std::error_code statEc;
+            auto lastUsed = entry.last_write_time(statEc);
+            auto bytes = entry.file_size(statEc);
+            if (!statEc) survivors.push_back({lastUsed, (uint64_t)bytes, path});
+        }
+    }
+
+    // Size cap (#159): evict least-recently-used entries until the directory fits. Load() and
+    // Store() both refresh an entry's timestamp, and this runs after the scene's textures have
+    // loaded, so everything the current session uses is the newest and goes last.
+    uint64_t total = 0;
+    for (const Survivor& s : survivors) total += s.Bytes;
+    if (total <= kMaxCacheBytes) return;
+    std::sort(survivors.begin(), survivors.end(),
+              [](const Survivor& a, const Survivor& b) { return a.LastUsed < b.LastUsed; });
+    for (const Survivor& s : survivors) {
+        if (total <= kMaxCacheBytes) break;
+        std::error_code rmEc;
+        if (std::filesystem::remove(s.Path, rmEc)) total -= s.Bytes;
     }
 }
 
