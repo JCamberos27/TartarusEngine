@@ -757,12 +757,16 @@ bool HotReloadEditorModule::Reload(bool initialLoad) {
         return false;
     }
 
-    if (candidateAPI->OnLoad) candidateAPI->OnLoad();
+    // The candidate is validated; only now touch the live module. Order matters (#172): the old
+    // module's OnUnload runs, and the old DLL is gone, BEFORE the new OnLoad, so the old module
+    // can never undo shared host state (ImGui context, callbacks) the new one has just set up.
     HMODULE previous = static_cast<HMODULE>(m_Handle);
     const fs::path previousCopy = m_LoadedCopy;
     if (m_API && m_API->OnUnload) m_API->OnUnload();
     if (previous) ::FreeLibrary(previous);
     if (!previousCopy.empty()) fs::remove(previousCopy, ec);
+
+    if (candidateAPI->OnLoad) candidateAPI->OnLoad();
 
     m_Handle = candidate;
     m_API = candidateAPI;
