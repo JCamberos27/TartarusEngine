@@ -13,6 +13,7 @@
 #include <sstream>
 #include <regex>
 #include <unordered_map>
+#include <vector>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -125,9 +126,24 @@ bool WriteMetaFile(const std::string& metaPath, AssetGuid guid, const std::strin
     return AtomicFile::WriteJson(metaPath, j);
 }
 
+// #132 — the path-map key: absolute, lexically normalised, '/' separators, and lower-case on
+// Windows (case-insensitive filesystem). Without it "project/a.png", "project\\a.png" and
+// "Project/A.png" were three different keys for one file, so GuidForPath missed and one asset
+// could be registered several times. Lexical only (no filesystem hit), so it stays cheap on
+// hot lookups. g_GuidToPath keeps the caller's own spelling for display/IO.
+std::string Key(const std::string& path) {
+    std::error_code ec;
+    std::string k = std::filesystem::absolute(path, ec).lexically_normal().generic_string();
+    if (ec || k.empty()) k = std::filesystem::path(path).lexically_normal().generic_string();
+#ifdef _WIN32
+    for (char& c : k) c = (char)std::tolower((unsigned char)c);
+#endif
+    return k;
+}
+
 // Registers guid ↔ path in both maps (caller holds g_Mutex).
 void Register(const std::string& path, AssetGuid guid) {
-    g_PathToGuid[path] = guid;
+    g_PathToGuid[Key(path)] = guid;
     g_GuidToPath[guid] = path;
 }
 
@@ -166,19 +182,19 @@ AssetGuid RegenerateGuid(const std::string& path) {
 AssetGuid ResolveDuplicateGuid(const std::string& path, AssetGuid guid) {
     namespace fs = std::filesystem;
     auto it = g_GuidToPath.find(guid);
-    if (it == g_GuidToPath.end() || it->second == path) return guid;
+    if (it == g_GuidToPath.end() || Key(it->second) == Key(path)) return guid;
     const std::string other = it->second;
 
     std::error_code ec;
     if (!fs::exists(other, ec) || ec || ReadMetaGuid(MetaPath(other)) != guid) {
         // The previous owner is gone or no longer claims this GUID: the file was moved or
         // renamed outside the editor. Follow it rather than treating it as a copy.
-        g_PathToGuid.erase(other);
+        g_PathToGuid.erase(Key(other));
         return guid;
     }
     if (fs::equivalent(other, path, ec) && !ec) {
         // Same file under a different spelling of its path — an alias, not a copy.
-        g_PathToGuid[path] = guid;
+        g_PathToGuid[Key(path)] = guid;
         return guid;
     }
 
@@ -236,7 +252,7 @@ AssetGuid EnsureGuid(const std::string& path) {
 
     std::lock_guard<std::mutex> lk(g_Mutex);
 
-    auto it = g_PathToGuid.find(path);
+    auto it = g_PathToGuid.find(Key(path));
     if (it != g_PathToGuid.end()) return it->second;
 
     // Determine asset type from extension (fall back to "asset").
@@ -297,7 +313,7 @@ AssetGuid EnsureGuid(const std::string& path) {
 
 AssetGuid GuidForPath(const std::string& path) {
     std::lock_guard<std::mutex> lk(g_Mutex);
-    auto it = g_PathToGuid.find(path);
+    auto it = g_PathToGuid.find(Key(path));
     return it != g_PathToGuid.end() ? it->second : AssetGuid{};
 }
 
@@ -320,20 +336,26 @@ void NotifyMoved(const std::string& oldPath, const std::string& newPath) {
 
     std::lock_guard<std::mutex> lk(g_Mutex);
 
-    auto it = g_PathToGuid.find(oldPath);
+    auto it = g_PathToGuid.find(Key(oldPath));
     if (it == g_PathToGuid.end()) return;
+    const AssetGuid guid = it->second;
 
-    AssetGuid guid = it->second;
+    // #132 — move the .meta sidecar FIRST and only re-key the maps if that worked (or there was
+    // no sidecar to move). Updating the maps regardless left the in-memory GUID at the new path
+    // while its .meta stayed behind at the old one, so the next launch minted a fresh GUID.
+    std::error_code ec;
+    const std::string oldMeta = MetaPath(oldPath);
+    if (std::filesystem::exists(oldMeta, ec)) {
+        std::filesystem::rename(oldMeta, MetaPath(newPath), ec);
+        if (ec) {
+            Log::Error("AssetDatabase: failed to move .meta from '" + oldPath + "' to '" + newPath +
+                       "' (" + ec.message() + ") - the asset keeps its GUID only until the editor restarts.");
+            return;
+        }
+    }
     g_PathToGuid.erase(it);
     g_GuidToPath.erase(guid);
     Register(newPath, guid);
-
-    // Move the .meta sidecar alongside the renamed asset.
-    std::error_code ec;
-    std::filesystem::rename(MetaPath(oldPath), MetaPath(newPath), ec);
-    if (ec) {
-        Log::Warn("AssetDatabase: failed to move .meta from '" + oldPath + "' to '" + newPath + "'");
-    }
 }
 
 void ScanProject() {
@@ -341,22 +363,37 @@ void ScanProject() {
     const std::string root = ProjectPaths::Root();
     const auto& known = KnownExtensions();
 
+    std::vector<std::string> orphanMetas;
     std::error_code ec;
     for (auto it = fs::recursive_directory_iterator(root, ec); it != fs::recursive_directory_iterator(); it.increment(ec)) {
         if (ec) { ec.clear(); continue; }
         const auto& entry = *it;
-        // #133 — Library/ holds caches (thumbnails etc.), not assets. Scanning it gave every
-        // cached thumbnail PNG its own .meta and GUID.
-        if (it.depth() == 0 && entry.is_directory(ec) && entry.path().filename() == "Library") {
-            it.disable_recursion_pending();
-            continue;
+        // #133 / #132 — Library/ holds caches (thumbnails etc.) and screenshots/ holds editor
+        // captures, not assets. Scanning them gave every cached thumbnail and every screenshot
+        // its own .meta and GUID. (A screenshot used as a texture still gets one on first use.)
+        if (it.depth() == 0 && entry.is_directory(ec)) {
+            const std::string dir = entry.path().filename().string();
+            if (dir == "Library" || dir == "screenshots") {
+                it.disable_recursion_pending();
+                continue;
+            }
         }
         if (!entry.is_regular_file(ec)) { ec.clear(); continue; }
 
         std::string path = entry.path().lexically_normal().string();
 
-        // Skip .meta files themselves and anything already scanned.
-        if (path.size() > 5 && path.substr(path.size() - 5) == ".meta") continue;
+        // .meta files aren't assets. #132 — one whose asset is gone (deleted outside the editor)
+        // is an orphan; collected here and pruned below.
+        if (path.size() > 5 && path.substr(path.size() - 5) == ".meta") {
+            const std::string assetPath = path.substr(0, path.size() - 5);
+            std::string assetExt = fs::path(assetPath).extension().string();
+            std::transform(assetExt.begin(), assetExt.end(), assetExt.begin(),
+                [](unsigned char c) { return (char)std::tolower(c); });
+            std::error_code existEc;
+            if (known.count(assetExt) && !fs::exists(assetPath, existEc) && !existEc)
+                orphanMetas.push_back(path);
+            continue;
+        }
 
         std::string ext = entry.path().extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(),
@@ -364,6 +401,13 @@ void ScanProject() {
         if (known.find(ext) == known.end()) continue;
 
         EnsureGuid(path);
+    }
+
+    // Unity deletes a .meta whose asset no longer exists; do the same, but say which ones.
+    for (const std::string& meta : orphanMetas) {
+        std::error_code rmEc;
+        if (fs::remove(meta, rmEc))
+            Log::Info("AssetDatabase: removed orphaned '" + ProjectPaths::Relativize(meta) + "' (its asset no longer exists).");
     }
 }
 
@@ -383,7 +427,7 @@ bool MergeMetaFields(const std::string& path, const std::string& fieldsJson) {
 
     std::lock_guard<std::mutex> lk(g_Mutex);
 
-    auto it = g_PathToGuid.find(path);
+    auto it = g_PathToGuid.find(Key(path));
     if (it == g_PathToGuid.end()) return false;
     AssetGuid guid = it->second;
 
