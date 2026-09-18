@@ -951,8 +951,8 @@ void EditorLayer::AssetBrowserImportViaDialog(World& world, AssetLibrary& assets
         kind == 2 ? "Audio\0*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0" :
                     "All Assets\0*.fbx;*.obj;*.gltf;*.glb;*.png;*.jpg;*.jpeg;*.tga;*.bmp;"
                     "*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0";
-    std::string p = FileDialog::OpenFile(filter, m_Window);
-    if (!p.empty() && m_EditorCameraPtr)
+    if (!m_EditorCameraPtr) return;
+    for (const std::string& p : FileDialog::OpenFiles(filter, m_Window)) // #139 — multi-select
         ImportDroppedFile(world, assets, *m_EditorCameraPtr, p, intoFolder);
 }
 
