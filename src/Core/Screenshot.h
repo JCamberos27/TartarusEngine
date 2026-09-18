@@ -23,6 +23,23 @@ namespace Screenshot {
     // Grab the whole default back buffer and Save() it (the "full editor window" mode).
     std::string SaveBackbuffer(int width, int height, int format, const std::string& sceneName);
 
+    // #153 - Save() without the hitch: reserves the file name now and returns it, then flips and
+    // encodes `pixels` (moved in) on a background thread, so a 4K / supersampled PNG no longer
+    // stalls the frame. Completion is reported through PollFinished(). "" if the input is empty.
+    std::string SaveAsync(std::vector<unsigned char> pixels, int w, int h, bool flipY,
+                          int format, const std::string& sceneName);
+
+    struct Finished {
+        std::string Path; // as returned by SaveAsync
+        int Width = 0, Height = 0;
+        bool Ok = false;  // false: the encode or the write failed (already logged)
+    };
+    // Captures whose file has been written (or failed) since the last call. Main thread, per frame.
+    std::vector<Finished> PollFinished();
+
+    // Blocks until every queued capture has been written. Call before exit so nothing is lost.
+    void WaitForPending();
+
     // Open the OS file browser with `path` selected (no-op / best effort off Windows).
     void ShowInFolder(const std::string& path);
 
