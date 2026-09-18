@@ -196,10 +196,20 @@ Window::Window(int width, int height, const std::string& title)
     // Without this, this_thread::sleep_for rounds up to the default ~15.6ms tick, which makes
     // any FPS cap wildly inaccurate. 1ms for the whole session; paired timeEndPeriod in dtor.
     timeBeginPeriod(1);
+    m_TimerPeriodRaised = true;
 #endif
 
+    // The window, its frame proc, the timer period and GLFW itself are all live now. A failure
+    // past this point must release them before throwing: the destructor won't run for a
+    // half-built Window, and a blank engine window would otherwise linger beside main()'s
+    // fatal-error dialog (#192).
+    auto fail = [this](const std::string& message) {
+        ReleaseResources();
+        throw std::runtime_error(message);
+    };
+
     if (!GLLoader_Init()) {
-        throw std::runtime_error("Failed to load OpenGL functions");
+        fail("Failed to load OpenGL functions");
     }
 
     // The loader's pointers resolve on any 3.3+ context, but every shader is `#version 460`.
@@ -210,7 +220,7 @@ Window::Window(int width, int height, const std::string& title)
         int glMinor = glfwGetWindowAttrib(m_Handle, GLFW_CONTEXT_VERSION_MINOR);
         if (glMajor < 4 || (glMajor == 4 && glMinor < 6)) {
             const char* ver = reinterpret_cast<const char*>(glGetString(GL_VERSION));
-            throw std::runtime_error(
+            fail(
                 "Tartarus needs an OpenGL 4.6 core context. This GPU/driver reports OpenGL " +
                 std::to_string(glMajor) + "." + std::to_string(glMinor) +
                 (ver ? std::string(" (\"") + ver + "\")" : std::string()) +
@@ -229,13 +239,17 @@ Window::Window(int width, int height, const std::string& title)
     glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS); // smooth filtering across point-shadow cube face edges (#119)
 }
 
-Window::~Window() {
+Window::~Window() { ReleaseResources(); }
+
+void Window::ReleaseResources() {
 #if defined(_WIN32)
-    timeEndPeriod(1);
+    if (m_TimerPeriodRaised) timeEndPeriod(1);
+    m_TimerPeriodRaised = false;
     if (m_Handle) RemoveCustomFrame(m_Handle);
 #endif
     if (m_Handle) {
         glfwDestroyWindow(m_Handle);
+        m_Handle = nullptr;
     }
     glfwTerminate();
 }
