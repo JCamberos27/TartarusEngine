@@ -1027,6 +1027,15 @@ void EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera&
 
     m_ImportQueue.Enqueue(toEnqueue);
 }
+void EditorLayer::OnCaptureTaken() {
+    const auto& s = EditorSettings::Get();
+    if (s.CaptureFlash) m_CaptureFlashT = 1.0f;
+    if (s.CaptureSound) {
+        std::string clip = Screenshot::ShutterClipPath();
+        if (!clip.empty()) AudioEngine::Play(clip, 0.6f);
+    }
+}
+
 void EditorLayer::OnCaptureDone(const std::string& path, int w, int h) {
     m_LastCapturePath = path;
     if (path.empty()) {
@@ -1034,12 +1043,6 @@ void EditorLayer::OnCaptureDone(const std::string& path, int w, int h) {
         return;
     }
     InvalidateShotsListing(); // (#175) a new file just landed under screenshots/
-    const auto& s = EditorSettings::Get();
-    if (s.CaptureFlash) m_CaptureFlashT = 1.0f;
-    if (s.CaptureSound) {
-        std::string clip = Screenshot::ShutterClipPath();
-        if (!clip.empty()) AudioEngine::Play(clip, 0.6f);
-    }
     PushCaptureNotification(path, w, h);
 }
 
