@@ -8,13 +8,80 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <future>
 
 namespace {
 
 const wchar_t* kClassName = L"TartarusSplash";
 
 LRESULT CALLBACK SplashProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    // Teardown() posts WM_CLOSE from the main thread; the window has to be destroyed by the
+    // thread that created it, and ending that thread's message loop lets it be joined.
+    if (msg == WM_CLOSE) { DestroyWindow(hwnd); return 0; }
+    if (msg == WM_DESTROY) { PostQuitMessage(0); return 0; }
     return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+// Creates the window, hands its pixels to the compositor, reports the HWND (nullptr on failure)
+// and then services the window's messages until Teardown() closes it. `bgra` is premultiplied,
+// top-down, w*h*4 bytes.
+void SplashThread(std::vector<unsigned char> bgra, int x, int y, int w, int h,
+                  std::promise<HWND> created) {
+    HWND hwnd = CreateWindowExW(
+        // TOOLWINDOW keeps it off the taskbar. TOPMOST is safe because the splash is always gone
+        // before any dialog of ours: Close() runs at the first frame, and Teardown() runs during
+        // unwinding before main()'s fatal-error MessageBox (#155).
+        WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+        kClassName, L"Tartarus Engine", WS_POPUP,
+        x, y, w, h, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+    if (!hwnd) {
+        created.set_value(nullptr);
+        return;
+    }
+
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = w;
+    bmi.bmiHeader.biHeight = -h; // negative: top-down, matching stb's row order
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    HDC screenDC = GetDC(nullptr);
+    HDC memDC = CreateCompatibleDC(screenDC);
+    void* bits = nullptr;
+    HBITMAP bitmap = CreateDIBSection(screenDC, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (bitmap && bits) {
+        memcpy(bits, bgra.data(), bgra.size());
+        HGDIOBJ previous = SelectObject(memDC, bitmap);
+
+        POINT topLeft = {x, y};
+        SIZE size = {w, h};
+        POINT origin = {0, 0};
+        BLENDFUNCTION blend = {};
+        blend.BlendOp = AC_SRC_OVER;
+        blend.SourceConstantAlpha = 255;
+        blend.AlphaFormat = AC_SRC_ALPHA;
+
+        // Hands the pixels to the compositor once; the DWM keeps drawing them from here on.
+        UpdateLayeredWindow(hwnd, screenDC, &topLeft, &size, memDC, &origin, 0, &blend, ULW_ALPHA);
+        ShowWindow(hwnd, SW_SHOWNA); // SHOWNA: don't steal focus from the launching shell
+
+        SelectObject(memDC, previous);
+    }
+    if (bitmap) DeleteObject(bitmap);
+    DeleteDC(memDC);
+    ReleaseDC(nullptr, screenDC);
+    bgra.clear();
+    bgra.shrink_to_fit();
+
+    created.set_value(hwnd);
+
+    MSG msg;
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
 }
 
 double NowSeconds() {
@@ -81,15 +148,6 @@ void SplashScreen::Show(const std::string& imagePath, float minimumSeconds) {
     const int x = (screenW - w) / 2;
     const int y = (screenH - h) / 2;
 
-    HWND hwnd = CreateWindowExW(
-        WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST, // TOOLWINDOW keeps it off the taskbar
-        kClassName, L"Tartarus Engine", WS_POPUP,
-        x, y, w, h, nullptr, nullptr, instance, nullptr);
-    if (!hwnd) {
-        stbi_image_free(pixels);
-        return;
-    }
-
     // Resample to the target size and, in the same pass, key the PNG's flat black background out
     // to transparent (the source is RGB with no alpha) so the mark floats on the desktop rather
     // than sitting in a black rectangle. Luminance below `kBlackLo` is fully cut; the ramp up to
@@ -134,42 +192,13 @@ void SplashScreen::Show(const std::string& imagePath, float minimumSeconds) {
     }
     stbi_image_free(pixels);
 
-    BITMAPINFO bmi = {};
-    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bmi.bmiHeader.biWidth = w;
-    bmi.bmiHeader.biHeight = -h; // negative: top-down, matching stb's row order
-    bmi.bmiHeader.biPlanes = 1;
-    bmi.bmiHeader.biBitCount = 32;
-    bmi.bmiHeader.biCompression = BI_RGB;
-
-    HDC screenDC = GetDC(nullptr);
-    HDC memDC = CreateCompatibleDC(screenDC);
-    void* bits = nullptr;
-    HBITMAP bitmap = CreateDIBSection(screenDC, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
-    if (bitmap && bits) {
-        memcpy(bits, bgra.data(), bgra.size());
-        HGDIOBJ previous = SelectObject(memDC, bitmap);
-
-        POINT topLeft = {x, y};
-        SIZE size = {w, h};
-        POINT origin = {0, 0};
-        BLENDFUNCTION blend = {};
-        blend.BlendOp = AC_SRC_OVER;
-        blend.SourceConstantAlpha = 255;
-        blend.AlphaFormat = AC_SRC_ALPHA;
-
-        // Hands the pixels to the compositor once. Nothing further is required from this
-        // thread, so the splash stays on screen through the entire blocking load.
-        UpdateLayeredWindow(hwnd, screenDC, &topLeft, &size, memDC, &origin, 0, &blend, ULW_ALPHA);
-        ShowWindow(hwnd, SW_SHOWNA); // SHOWNA: don't steal focus from the launching shell
-
-        SelectObject(memDC, previous);
-    }
-    if (bitmap) DeleteObject(bitmap);
-    DeleteDC(memDC);
-    ReleaseDC(nullptr, screenDC);
-
-    m_Handle = hwnd;
+    // Decoding and resampling stay on this thread (stb's flip flag is process-global and the
+    // engine's own texture loads set it); only the window and its message loop move.
+    std::promise<HWND> created;
+    std::future<HWND> handle = created.get_future();
+    m_Thread = std::thread(SplashThread, std::move(bgra), x, y, w, h, std::move(created));
+    m_Handle = handle.get(); // a few ms: until the window exists and has been shown
+    if (!m_Handle) m_Thread.join(); // creation failed and the thread has already returned
 }
 
 void SplashScreen::Close() {
@@ -179,16 +208,23 @@ void SplashScreen::Close() {
     if (elapsed < (double)m_MinimumSeconds) {
         Sleep((DWORD)(((double)m_MinimumSeconds - elapsed) * 1000.0));
     }
-    DestroyWindow((HWND)m_Handle);
+    Teardown();
+}
+
+void SplashScreen::Teardown() {
+    if (!m_Handle) return;
+    PostMessageW((HWND)m_Handle, WM_CLOSE, 0, 0);
+    if (m_Thread.joinable()) m_Thread.join();
     m_Handle = nullptr;
 }
 
-SplashScreen::~SplashScreen() { Close(); }
+SplashScreen::~SplashScreen() { Teardown(); }
 
 #else // non-Windows: no-ops, so callers need no platform guards of their own
 
 void SplashScreen::Show(const std::string&, float) {}
 void SplashScreen::Close() {}
+void SplashScreen::Teardown() {}
 SplashScreen::~SplashScreen() = default;
 
 #endif
