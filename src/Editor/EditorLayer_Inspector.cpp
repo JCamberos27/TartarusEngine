@@ -1554,8 +1554,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
 
         if (ImGui::TreeNodeEx("Selected objects", ImGuiTreeNodeFlags_SpanAvailWidth)) {
             for (entt::entity e : sel) {
-                const auto& nm = world.Registry.get<NameComponent>(e);
-                ImGui::BulletText("%s", nm.Name.empty() ? "(unnamed)" : nm.Name.c_str());
+                // #128 — not every entity carries a NameComponent (a scene saved by hand, an
+                // entity another system created); list those instead of asserting in get<>.
+                const auto* nm = world.Registry.try_get<NameComponent>(e);
+                ImGui::BulletText("%s", (!nm || nm->Name.empty()) ? "(unnamed)" : nm->Name.c_str());
             }
             ImGui::TreePop();
         }
@@ -1856,6 +1858,9 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     auto& registry = world.Registry;
     bool isLevelGeometry = registry.all_of<LevelGeometryTag>(entity);
     auto& transform = registry.get<TransformComponent>(entity);
+    // #128 — a nameless entity gets the default name the moment it's inspected (the name field
+    // edits it in place), matching what SceneSerializer writes for one ("GameObject").
+    if (!registry.all_of<NameComponent>(entity)) registry.emplace<NameComponent>(entity, NameComponent{"GameObject"});
     auto& name = registry.get<NameComponent>(entity);
     bool activated = false;
     m_LastSelectedName = name.Name; // remembered for the empty-state panel
@@ -2706,6 +2711,14 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                                               entt::entity entity, ReflectExtraPhase phase) {
     auto& registry = world.Registry;
 
+    // #128 — Unity's "needs a Collider" box: a Rigidbody with no Collider isn't added to the
+    // physics world at all, so it silently never falls or collides.
+    if (std::strcmp(componentName, "Rigidbody") == 0 && phase == ReflectExtraPhase::Top &&
+        !registry.all_of<ColliderComponent>(entity)) {
+        ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
+                           "No Collider - this Rigidbody won't simulate. Add a Collider.");
+    }
+
     if (std::strcmp(componentName, "Camera") == 0 && phase == ReflectExtraPhase::Bottom) {
         auto* cam = registry.try_get<CameraComponent>(entity);
         if (!cam) return;
@@ -2926,6 +2939,14 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
 void EditorLayer::DrawReflectedComponentExtraMulti(const char* componentName, World& world,
                                                    const std::vector<entt::entity>& sel,
                                                    ReflectExtraPhase phase) {
+    if (std::strcmp(componentName, "Rigidbody") == 0 && phase == ReflectExtraPhase::Top) { // #128
+        int missing = 0;
+        for (entt::entity e : sel) if (!world.Registry.all_of<ColliderComponent>(e)) ++missing;
+        if (missing > 0)
+            ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %d of %d have no Collider and won't simulate.",
+                               missing, (int)sel.size());
+        return;
+    }
     if (std::strcmp(componentName, "Light") != 0 || phase != ReflectExtraPhase::Top) return;
 
     const int count = (int)sel.size();
