@@ -1307,6 +1307,9 @@ int main(int argc, char** argv) {
                 EditorSettings::Save();
             }
 
+            // #154: fullscreen style + display from Preferences, applied at the moment of switching.
+            window.SetFullscreenOptions((Window::FullscreenMode)EditorSettings::Get().FullscreenMode,
+                                        EditorSettings::Get().FullscreenMonitor);
             if (Shortcuts::TriggeredGlfw("window.fullscreen")) {
                 window.ToggleFullscreen();
             }
