@@ -28,10 +28,11 @@ LRESULT CALLBACK SplashProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 void SplashThread(std::vector<unsigned char> bgra, int x, int y, int w, int h,
                   std::promise<HWND> created) {
     HWND hwnd = CreateWindowExW(
-        // TOOLWINDOW keeps it off the taskbar. TOPMOST is safe because the splash is always gone
-        // before any dialog of ours: Close() runs at the first frame, and Teardown() runs during
-        // unwinding before main()'s fatal-error MessageBox (#155).
-        WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+        // TOOLWINDOW keeps it off the taskbar. Deliberately NOT topmost (#155): shown without
+        // activation it still opens above every normal window, but it no longer sits over the
+        // apps a user switches to during a long load, or over a dialog (a GLFW / driver error
+        // box, the crash dialog) that appears before Teardown() runs.
+        WS_EX_LAYERED | WS_EX_TOOLWINDOW,
         kClassName, L"Tartarus Engine", WS_POPUP,
         x, y, w, h, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     if (!hwnd) {
@@ -108,7 +109,7 @@ void EnsureDpiAware() {
 
 } // namespace
 
-void SplashScreen::Show(const std::string& imagePath, float minimumSeconds) {
+void SplashScreen::Show(const std::string& imagePath, float minimumSeconds, const TargetRect* target) {
     m_MinimumSeconds = minimumSeconds;
     m_ShownAt = NowSeconds();
     EnsureDpiAware();
@@ -131,8 +132,24 @@ void SplashScreen::Show(const std::string& imagePath, float minimumSeconds) {
     wc.lpszClassName = kClassName;
     RegisterClassExW(&wc); // harmless if already registered
 
-    const int screenW = GetSystemMetrics(SM_CXSCREEN);
-    const int screenH = GetSystemMetrics(SM_CYSCREEN);
+    // #155: centre on the monitor the editor window will open on (its saved placement), not
+    // always the primary one. The placement is in workspace coordinates, which differ from
+    // screen coordinates only by the primary taskbar's thickness - irrelevant for choosing a
+    // monitor. A rect off every monitor (display unplugged) falls back to the primary.
+    RECT area = {0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)};
+    {
+        HMONITOR monitor = nullptr;
+        if (target && target->Width > 0 && target->Height > 0) {
+            RECT r = {target->X, target->Y, target->X + target->Width, target->Y + target->Height};
+            monitor = MonitorFromRect(&r, MONITOR_DEFAULTTONULL);
+        }
+        if (!monitor) monitor = MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
+        MONITORINFO info = {};
+        info.cbSize = sizeof(info);
+        if (monitor && GetMonitorInfoW(monitor, &info)) area = info.rcWork;
+    }
+    const int screenW = area.right - area.left;
+    const int screenH = area.bottom - area.top;
 
     // Size the splash to a fixed fraction of the monitor instead of blitting the PNG 1:1 — a
     // 720px image is a modest 19% of a 4K width but 38% of 1080p, so a raw blit visibly grows
@@ -145,8 +162,8 @@ void SplashScreen::Show(const std::string& imagePath, float minimumSeconds) {
     if (w < 1) w = 1;
     if (h < 1) h = 1;
 
-    const int x = (screenW - w) / 2;
-    const int y = (screenH - h) / 2;
+    const int x = area.left + (screenW - w) / 2;
+    const int y = area.top + (screenH - h) / 2;
 
     // Resample to the target size and, in the same pass, key the PNG's flat black background out
     // to transparent (the source is RGB with no alpha) so the mark floats on the desktop rather
@@ -222,7 +239,7 @@ SplashScreen::~SplashScreen() { Teardown(); }
 
 #else // non-Windows: no-ops, so callers need no platform guards of their own
 
-void SplashScreen::Show(const std::string&, float) {}
+void SplashScreen::Show(const std::string&, float, const TargetRect*) {}
 void SplashScreen::Close() {}
 void SplashScreen::Teardown() {}
 SplashScreen::~SplashScreen() = default;
