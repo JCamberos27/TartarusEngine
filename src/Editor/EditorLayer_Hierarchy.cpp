@@ -784,16 +784,18 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
 
     const float rowPitch = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y;
     ImGuiListClipper clipper;
+    clipper.Begin((int)flatRows.size(), rowPitch);
     // A keyboard-nav / rename-reveal target may be scrolled off-screen; force its row into this
     // frame's processed range so the SetScrollHereY() call inside DrawHierarchyRowBody still
     // fires — Step() otherwise skips indices outside both the visible window and any included
-    // range. Must be called before the first Step().
+    // range. Must be called after Begin() (which allocates the clipper's TempData that this
+    // writes into — calling it first dereferenced null and crashed the editor on Hierarchy
+    // keyboard nav) and before the first Step().
     if (m_HierarchyScrollToEntity != entt::null) {
         for (int i = 0; i < (int)flatRows.size(); ++i) {
             if (flatRows[i].Entity == m_HierarchyScrollToEntity) { clipper.IncludeItemByIndex(i); break; }
         }
     }
-    clipper.Begin((int)flatRows.size(), rowPitch);
     while (clipper.Step()) {
         for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
             const HierarchyFlatRow& row = flatRows[i];
