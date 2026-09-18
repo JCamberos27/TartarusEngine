@@ -7,7 +7,7 @@ class Shader;
 // (binding 2, compute-internal), a per-cluster (offset, count) range into the global index
 // list (binding 3), and one global compacted light-index list that every cluster's lights are
 // appended into (binding 4) — and drives the two compute passes that fill them (see
-// ClusterShaderSource.h). The model fragment shader reads bindings 3 and 4.
+// shaders/ClusterBuild.comp.glsl / ClusterCull.comp.glsl). The model fragment shader reads bindings 3 and 4.
 //
 // The grid is a fixed GRID_X x GRID_Y screen tiling by GRID_Z exponential depth slices, so a
 // fragment maps to its cluster with cheap arithmetic on gl_FragCoord + view depth.

@@ -184,7 +184,9 @@ private:
     void ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& parentTransform);
     std::unique_ptr<ModelMesh> ProcessMesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& nodeTransform);
     Material ExtractMaterial(const aiScene* scene, unsigned int materialIndex);
-    std::shared_ptr<Texture> LoadCachedTexture(const std::string& fullPath);
+    // #95 — what a material slot's texture holds, which decides its colour space.
+    enum class TextureRole { Color, Normal, Data };
+    std::shared_ptr<Texture> LoadCachedTexture(const std::string& fullPath, TextureRole role);
     // Turns whatever path string a model file baked in for a texture (bare filename, path
     // relative to the model, a "..\tex\x.png" with junk separators, or an absolute path from
     // the machine the asset was authored on) into a real file on THIS disk. Tries the sensible

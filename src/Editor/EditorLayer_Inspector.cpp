@@ -532,6 +532,36 @@ bool ActiveToggleRow(const char* label, bool anyActive, bool mixed, bool& out, c
     return clicked;
 }
 
+// #95 — a texture dropped into a DATA slot (normal / metallic / roughness / AO / packed MR /
+// clear coat / thickness) was loaded with the default sRGB import settings, so its values were
+// gamma-decoded on sample. When the texture has no import settings of its own yet, tag it as
+// linear (and as a normal map for the normal slot) and re-import it — Unity's "Fix Now" for
+// normal maps, applied automatically. Explicit settings the user chose are left alone.
+// Emissive maps are tinted by Emissive Color (#102), so a black colour would hide the map:
+// default it to white when the first emissive map goes in.
+std::shared_ptr<Texture> LoadTextureForSlot(AssetLibrary& assets, const std::string& path,
+                                            std::shared_ptr<Texture> Material::* slot) {
+    auto tex = assets.LoadTexture(path);
+    if (!tex) return tex;
+    const bool isColor = slot == &Material::AlbedoMap || slot == &Material::EmissiveMap;
+    if (!isColor && !assets.TextureSettingsMap().count(path)) {
+        TextureImportSettings s = assets.GetTextureSettings(path);
+        if (s.IsSRGB) {
+            s.IsSRGB = false;
+            if (slot == &Material::NormalMap) s.TextureType = TextureImportSettings::Type::NormalMap;
+            assets.SetTextureSettings(path, s);
+            assets.ReimportTexture(path);
+            Log::Info("Texture: '" + path + "' is used as a data map - imported as linear (not sRGB).");
+        }
+    }
+    return tex;
+}
+
+void DefaultEmissiveTint(Material& m, std::shared_ptr<Texture> Material::* slot) {
+    if (slot == &Material::EmissiveMap && m.EmissiveMap && m.EmissiveColor == glm::vec3(0.0f))
+        m.EmissiveColor = glm::vec3(1.0f);
+}
+
 // Small eyedropper button, drawn right after a colour swatch. Arms EditorLayer's viewport
 // eyedropper on `target` (a stable pointer into a component / World member). #236 R2.
 void EyedropperButton(EditorLayer* self, World& world, glm::vec3* target) {
@@ -983,7 +1013,8 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
         {
             std::string path;
             if (TexturePickerPopup("##texPicker", assets, path)) {
-                mat.*texSlot = assets.LoadTexture(path);
+                mat.*texSlot = LoadTextureForSlot(assets, path, texSlot);
+                DefaultEmissiveTint(mat, texSlot);
                 save();
             }
         }
@@ -3081,8 +3112,8 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 std::string path;
                 if (TexturePickerPopup("##texPicker", assets, path)) {
                     PushUndo(world, std::string("Set ") + label + " Map");
-                    auto tex = assets.LoadTexture(path);
-                    for (Material* mm : mats) mm->*texSlot = tex;
+                    auto tex = LoadTextureForSlot(assets, path, texSlot);
+                    for (Material* mm : mats) { mm->*texSlot = tex; DefaultEmissiveTint(*mm, texSlot); }
                 }
             }
             if (missing) ImGui::PopStyleColor();
