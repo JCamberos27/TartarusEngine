@@ -682,6 +682,9 @@ private:
     // forever. Returns `sourcePath` unchanged (no copy) when it's already inside the project, or
     // if the copy itself fails. `subfolder` is "models"/"textures"/"audio".
     std::string CopyAssetIntoProject(const std::string& sourcePath, const std::string& subfolder);
+    // #125 — File > Import: the drag-drop pipeline (copy into the project with companion files,
+    // register, file into the open Asset Browser folder).
+    void ImportFileIntoProject(World& world, AssetLibrary& assets, const std::string& path);
 
     GLFWwindow* m_Window = nullptr;
 
