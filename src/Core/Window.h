@@ -25,6 +25,22 @@ public:
     void SetTitle(const std::string& title);
     void Maximize();
 
+    // #143: the window's restored ("normal") rect plus whether it is maximized, so the editor
+    // can reopen where the user left it. Coordinates are OS workspace pixels on Windows
+    // (GetWindowPlacement's own space, so a save/restore round-trip is exact); elsewhere they
+    // are GLFW screen coordinates. Valid is false when there is nothing usable (fullscreen,
+    // minimized-only, or no native window).
+    struct Placement {
+        bool Valid = false;
+        int X = 0, Y = 0, Width = 0, Height = 0;
+        bool Maximized = false;
+    };
+    Placement GetPlacement() const;
+    // Applies a saved placement to the (still hidden) window. Returns false, leaving the window
+    // untouched, when the rect is degenerate or no longer overlaps any connected monitor (a
+    // laptop undocked from the screen it was on) - the caller then falls back to its default.
+    bool ApplyPlacement(const Placement& placement);
+
     // The OS title bar is removed (Win32 custom frame — see Window.cpp). The editor draws its
     // own min/max/close buttons on the top toolbar and reports, once per frame, whether the
     // cursor is over the toolbar's empty area — that region acts as the drag handle
