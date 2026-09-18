@@ -233,6 +233,9 @@ void BuildDefaultTable() {
     Register("play.step",         "Step One Frame",          Ctx_App, K(ImGuiKey_F3));
     Register("play.maximize",     "Maximize / Restore Game", Ctx_App, K(ImGuiKey_F4));
     Register("window.fullscreen", "Toggle Window Fullscreen", Ctx_App, K(ImGuiKey_F11));
+    // #141 — were hard-coded in main.cpp, invisible to rebinding and conflict detection.
+    Register("physics.overlay",   "Toggle Physics Debug Overlay", Ctx_App, K(ImGuiKey_F5));
+    Register("physics.panel",     "Toggle Physics Debug Panel",   Ctx_App, K(ImGuiKey_F6));
 }
 
 // --- key <-> name (small, covers everything the table + json can hold) --------------------
@@ -463,32 +466,54 @@ bool Triggered(const char* id) {
 // --- GLFW-input path (main loop, no ImGui frame) ------------------------------------------
 namespace {
 int GlfwKeyFromImGui(ImGuiKey k) {
+    // #141 — the full ImGui -> GLFW inverse of imgui_impl_glfw's key table, so a binding to
+    // punctuation, F13-F24, a keypad operator, etc. fires on this path too instead of silently
+    // never triggering.
     if (k >= ImGuiKey_A && k <= ImGuiKey_Z)  return GLFW_KEY_A + (k - ImGuiKey_A);
     if (k >= ImGuiKey_0 && k <= ImGuiKey_9)  return GLFW_KEY_0 + (k - ImGuiKey_0);
     if (k >= ImGuiKey_Keypad0 && k <= ImGuiKey_Keypad9) return GLFW_KEY_KP_0 + (k - ImGuiKey_Keypad0);
-    if (k >= ImGuiKey_F1 && k <= ImGuiKey_F12) return GLFW_KEY_F1 + (k - ImGuiKey_F1);
+    if (k >= ImGuiKey_F1 && k <= ImGuiKey_F24) return GLFW_KEY_F1 + (k - ImGuiKey_F1);
     switch (k) {
-        case ImGuiKey_Space:      return GLFW_KEY_SPACE;
-        case ImGuiKey_Enter:      return GLFW_KEY_ENTER;
-        case ImGuiKey_KeypadEnter:return GLFW_KEY_KP_ENTER;
-        case ImGuiKey_Tab:        return GLFW_KEY_TAB;
-        case ImGuiKey_Escape:     return GLFW_KEY_ESCAPE;
-        case ImGuiKey_Backspace:  return GLFW_KEY_BACKSPACE;
-        case ImGuiKey_Delete:     return GLFW_KEY_DELETE;
-        case ImGuiKey_Insert:     return GLFW_KEY_INSERT;
-        case ImGuiKey_Home:       return GLFW_KEY_HOME;
-        case ImGuiKey_End:        return GLFW_KEY_END;
-        case ImGuiKey_PageUp:     return GLFW_KEY_PAGE_UP;
-        case ImGuiKey_PageDown:   return GLFW_KEY_PAGE_DOWN;
-        case ImGuiKey_LeftArrow:  return GLFW_KEY_LEFT;
-        case ImGuiKey_RightArrow: return GLFW_KEY_RIGHT;
-        case ImGuiKey_UpArrow:    return GLFW_KEY_UP;
-        case ImGuiKey_DownArrow:  return GLFW_KEY_DOWN;
-        case ImGuiKey_Comma:      return GLFW_KEY_COMMA;
-        case ImGuiKey_Period:     return GLFW_KEY_PERIOD;
-        case ImGuiKey_Minus:      return GLFW_KEY_MINUS;
-        case ImGuiKey_Equal:      return GLFW_KEY_EQUAL;
-        default:                  return -1;
+        case ImGuiKey_Space:          return GLFW_KEY_SPACE;
+        case ImGuiKey_Enter:          return GLFW_KEY_ENTER;
+        case ImGuiKey_Tab:            return GLFW_KEY_TAB;
+        case ImGuiKey_Escape:         return GLFW_KEY_ESCAPE;
+        case ImGuiKey_Backspace:      return GLFW_KEY_BACKSPACE;
+        case ImGuiKey_Delete:         return GLFW_KEY_DELETE;
+        case ImGuiKey_Insert:         return GLFW_KEY_INSERT;
+        case ImGuiKey_Home:           return GLFW_KEY_HOME;
+        case ImGuiKey_End:            return GLFW_KEY_END;
+        case ImGuiKey_PageUp:         return GLFW_KEY_PAGE_UP;
+        case ImGuiKey_PageDown:       return GLFW_KEY_PAGE_DOWN;
+        case ImGuiKey_LeftArrow:      return GLFW_KEY_LEFT;
+        case ImGuiKey_RightArrow:     return GLFW_KEY_RIGHT;
+        case ImGuiKey_UpArrow:        return GLFW_KEY_UP;
+        case ImGuiKey_DownArrow:      return GLFW_KEY_DOWN;
+        case ImGuiKey_Apostrophe:     return GLFW_KEY_APOSTROPHE;
+        case ImGuiKey_Comma:          return GLFW_KEY_COMMA;
+        case ImGuiKey_Minus:          return GLFW_KEY_MINUS;
+        case ImGuiKey_Period:         return GLFW_KEY_PERIOD;
+        case ImGuiKey_Slash:          return GLFW_KEY_SLASH;
+        case ImGuiKey_Semicolon:      return GLFW_KEY_SEMICOLON;
+        case ImGuiKey_Equal:          return GLFW_KEY_EQUAL;
+        case ImGuiKey_LeftBracket:    return GLFW_KEY_LEFT_BRACKET;
+        case ImGuiKey_Backslash:      return GLFW_KEY_BACKSLASH;
+        case ImGuiKey_RightBracket:   return GLFW_KEY_RIGHT_BRACKET;
+        case ImGuiKey_GraveAccent:    return GLFW_KEY_GRAVE_ACCENT;
+        case ImGuiKey_CapsLock:       return GLFW_KEY_CAPS_LOCK;
+        case ImGuiKey_ScrollLock:     return GLFW_KEY_SCROLL_LOCK;
+        case ImGuiKey_NumLock:        return GLFW_KEY_NUM_LOCK;
+        case ImGuiKey_PrintScreen:    return GLFW_KEY_PRINT_SCREEN;
+        case ImGuiKey_Pause:          return GLFW_KEY_PAUSE;
+        case ImGuiKey_Menu:           return GLFW_KEY_MENU;
+        case ImGuiKey_KeypadDecimal:  return GLFW_KEY_KP_DECIMAL;
+        case ImGuiKey_KeypadDivide:   return GLFW_KEY_KP_DIVIDE;
+        case ImGuiKey_KeypadMultiply: return GLFW_KEY_KP_MULTIPLY;
+        case ImGuiKey_KeypadSubtract: return GLFW_KEY_KP_SUBTRACT;
+        case ImGuiKey_KeypadAdd:      return GLFW_KEY_KP_ADD;
+        case ImGuiKey_KeypadEnter:    return GLFW_KEY_KP_ENTER;
+        case ImGuiKey_KeypadEqual:    return GLFW_KEY_KP_EQUAL;
+        default:                      return -1;
     }
 }
 } // namespace
@@ -502,7 +527,12 @@ bool TriggeredGlfw(const char* id) {
     const bool ctrl  = Input::IsKeyDown(GLFW_KEY_LEFT_CONTROL) || Input::IsKeyDown(GLFW_KEY_RIGHT_CONTROL);
     const bool shift = Input::IsKeyDown(GLFW_KEY_LEFT_SHIFT)   || Input::IsKeyDown(GLFW_KEY_RIGHT_SHIFT);
     const bool alt   = Input::IsKeyDown(GLFW_KEY_LEFT_ALT)     || Input::IsKeyDown(GLFW_KEY_RIGHT_ALT);
-    return ctrl == c.Ctrl && shift == c.Shift && alt == c.Alt;
+    const bool super = Input::IsKeyDown(GLFW_KEY_LEFT_SUPER)   || Input::IsKeyDown(GLFW_KEY_RIGHT_SUPER); // #141
+    return ctrl == c.Ctrl && shift == c.Shift && alt == c.Alt && super == c.Super;
+}
+
+bool GlfwCanTrigger(const Chord& c) {
+    return !c.HasPrefix() && (!c.IsBound() || GlfwKeyFromImGui(c.Key) >= 0);
 }
 
 } // namespace Shortcuts
