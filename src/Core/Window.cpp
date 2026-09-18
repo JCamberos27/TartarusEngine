@@ -1,6 +1,7 @@
 #include "Window.h"
 #include "gl.h"
 #include "Log.h"
+#include "GLDebug.h"
 #include <GLFW/glfw3.h>
 #include <stdexcept>
 #include <iostream>
@@ -163,9 +164,10 @@ Window::Window(int width, int height, const std::string& title)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-    // Ask for a debug context so KHR_debug output is available (GLDebug wires the callback when
-    // a Debug build or TARTARUS_GL_DEBUG=1 turns it on). Free on a release driver when unused.
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+    // A debug context only when GLDebug will actually wire up KHR_debug output (Debug build,
+    // TARTARUS_GL_DEBUG=1, or --smoke-test). It isn't free: some drivers add validation or skip
+    // optimisations in one, so a normal Release run doesn't ask for it (#157).
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLDebug::WantsDebugContext() ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_SAMPLES, 4);
     // Report the real per-monitor content scale (e.g. 2.0 at Windows' 200% scaling, common on
     // 4K displays) so the editor can bake it into font sizes and layout instead of rendering a
