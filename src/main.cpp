@@ -1016,6 +1016,26 @@ int main(int argc, char** argv) {
                                       << modelsBefore << " models, " << texBefore << " textures, "
                                       << matsBefore << " materials)" << std::endl;
                     }
+                    // #96 regression: placed instances of one imported file share its data (one
+                    // import, one set of GPU buffers), also after the undo round-trip above.
+                    if (smokeSceneLoadOk) {
+                        std::map<std::string, const Material*> firstMat;
+                        for (auto re : world.Registry.view<RenderableComponent>()) {
+                            const auto& rc = world.Registry.get<RenderableComponent>(re);
+                            if (!rc.ModelRef || rc.ModelRef->MeshCount() == 0 ||
+                                rc.ModelRef->Path().rfind("primitive://", 0) == 0) continue;
+                            const Material* m0 = &rc.ModelRef->MeshMaterial(0);
+                            auto [it, isNew] = firstMat.emplace(rc.ModelRef->Path(), m0);
+                            if (!isNew && it->second != m0)
+                                Log::Error("[SmokeTest] two instances of '" + rc.ModelRef->Path() +
+                                           "' do not share their imported data.");
+                            const glm::vec3 bmin = rc.ModelRef->BoundsMin(), bmax = rc.ModelRef->BoundsMax();
+                            if (isNew)
+                                std::cout << "[SmokeTest]   model " << std::filesystem::path(rc.ModelRef->Path()).filename().string()
+                                          << " bounds (" << bmin.x << "," << bmin.y << "," << bmin.z << ")-("
+                                          << bmax.x << "," << bmax.y << "," << bmax.z << ")" << std::endl;
+                        }
+                    }
                     smokeFramesRendered = 0;
                     smokeSceneActive = true;
                     SceneRendererDebug::ResetVariantDrawCounts(); // #354 per-scene variant tally
