@@ -207,6 +207,8 @@ set(IMGUI_SOURCES
 # shortcut targeting it keeps showing the icon across rebuilds; nothing to re-link externally.
 if(WIN32)
   list(APPEND ENGINE_SOURCES ${CMAKE_SOURCE_DIR}/extern/branding/app_icon.rc)
+  # UTF-8 active code page + long-path awareness (#139 / #149) — see the file's comment.
+  list(APPEND ENGINE_SOURCES ${CMAKE_SOURCE_DIR}/src/TartarusEngine.manifest)
 endif()
 
 add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES})
@@ -318,7 +320,7 @@ target_include_directories(TartarusEngine PRIVATE
 target_link_libraries(TartarusEngine PRIVATE glfw glm::glm assimp EnTT::EnTT physx)
 
 if(WIN32)
-  target_link_libraries(TartarusEngine PRIVATE opengl32 comdlg32 dwmapi winmm Dbghelp)
+  target_link_libraries(TartarusEngine PRIVATE opengl32 comdlg32 dwmapi winmm Dbghelp ole32 shell32 uuid)
 endif()
 
 # PhysX Visual Debugger hookup (#185) — Debug builds only. Lets PR 2-3's colliders / character
