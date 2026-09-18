@@ -723,7 +723,7 @@ private:
     // Diffs Core/Log.h's ring buffer once a frame (Log::Revision()) and turns any new
     // Warning/Error entry into a bell notification — called from Draw().
     void PollLogNotifications();
-    size_t m_LogEntriesSeen = 0;
+    unsigned long long m_LastLogSeqSeen = 0; // LogEntry::Seq of the newest entry already handled
     unsigned int m_LastLogRevisionSeen = 0;
     int m_NotificationUnreadCount = 0;
 
