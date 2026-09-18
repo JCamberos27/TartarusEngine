@@ -1,6 +1,7 @@
 #include "Window.h"
 #include "Input.h"
 #include "TimeService.h"
+#include <limits>
 #include "CrashHandler.h"
 #include "Shader.h"
 #include "Camera.h"
@@ -1633,7 +1634,24 @@ int main(int argc, char** argv) {
                 glm::mat4 fitProj = fitCam.ProjectionMatrix(fitRegion.x / fitRegion.y);
 
                 shadowMap.Configure(world.ShadowResolution, world.ShadowCascades);
-                shadowMap.Update(fitView, fitProj, frameSunDir, world.ShadowDistance);
+                // #160 — world bounds of everything that can cast, so the cascades' near planes
+                // reach every occluder (animated models padded like the main pass's culling).
+                glm::vec3 casterMin(std::numeric_limits<float>::max()), casterMax(-std::numeric_limits<float>::max());
+                for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
+                    if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                    const auto& r = world.Registry.get<RenderableComponent>(entity);
+                    if (!r.ModelRef) continue;
+                    glm::vec3 bmin = r.ModelRef->BoundsMin(), bmax = r.ModelRef->BoundsMax();
+                    if (!(bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z)) continue;
+                    if (r.ModelRef->HasAnimations()) {
+                        const glm::vec3 c = (bmin + bmax) * 0.5f, h = (bmax - bmin) * 0.5f * 1.75f;
+                        bmin = c - h; bmax = c + h;
+                    }
+                    const AABB wb = AABB{bmin, bmax}.Transformed(world.GetCachedWorldTransform(entity));
+                    casterMin = glm::min(casterMin, wb.Min);
+                    casterMax = glm::max(casterMax, wb.Max);
+                }
+                shadowMap.Update(fitView, fitProj, frameSunDir, world.ShadowDistance, &casterMin, &casterMax);
 
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
@@ -1898,6 +1916,7 @@ int main(int argc, char** argv) {
             sceneInputs.pointShadowNormalBias = pointShadowNormalBias;
             sceneInputs.shadowsEnabled   = world.ShadowsEnabled;
             sceneInputs.ssaoEnabled      = world.SsaoEnabled;
+            sceneInputs.ssaoIntensity    = world.SsaoIntensity;
             sceneInputs.layerVisibleMask = frameSettings.LayerVisibleMask;
             auto drawScene = [&](const RenderFrameContext& ctx, EditorLayer::RenderStats* outStats) {
                 sceneRenderer.RenderScene(world, ctx, sceneInputs, outStats);
@@ -1951,7 +1970,7 @@ int main(int argc, char** argv) {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 GLStateCache::Invalidate();
 
-                target.Compute(ssaoComputeShader, proj);
+                target.Compute(ssaoComputeShader, proj, world.SsaoRadius, world.SsaoBias);
                 target.Blur(ssaoBlurShader);
                 GLStateCache::Invalidate();
             };

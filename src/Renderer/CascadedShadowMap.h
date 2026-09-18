@@ -28,8 +28,13 @@ public:
     // Recomputes cascade splits + light matrices for this frame. `lightDir` is the direction the
     // sunlight travels (normalized inside). `camView`/`camProj` are the matrices of whichever
     // view is about to be rendered; `shadowDistance` caps how far cascades reach (world units).
+    // #160: `casterMin`/`casterMax` (optional) bound every shadow caster in world space; each
+    // cascade's light-space near plane is pulled back far enough to include all of them, so a
+    // tall or distant caster outside the view still shadows into it. Without bounds, the old
+    // fixed 50 m pullback is used.
     void Update(const glm::mat4& camView, const glm::mat4& camProj,
-                const glm::vec3& lightDir, float shadowDistance);
+                const glm::vec3& lightDir, float shadowDistance,
+                const glm::vec3* casterMin = nullptr, const glm::vec3* casterMax = nullptr);
 
     // Binds the shadow FBO targeting cascade `i`'s layer, sets the viewport, clears its depth.
     // Caller then draws occluders with LightViewProj(i). Does NOT restore the previous
