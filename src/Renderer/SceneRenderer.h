@@ -56,6 +56,7 @@ struct SceneRenderInputs {
     // boundary doesn't depend on the editor). layerVisibleMask is only consulted for ctx.EditorView.
     bool     shadowsEnabled   = true;
     bool     ssaoEnabled      = false;
+    float    ssaoIntensity    = 1.0f;  // #160 — occlusion exponent (World::SsaoIntensity)
     unsigned layerVisibleMask = 0xFFFFFFFFu;
 
     // sun shadow tuning (from the active directional light this frame)
@@ -93,6 +94,7 @@ struct FrameState {
 
     bool shadowsOn = false, sunShadowsOn = false;
     bool iblOn = false, ssaoOn = false, clusterOn = false;
+    float ssaoIntensity = 1.0f; // #160
     int  spotCountForView = 0, pointCountForView = 0;
     float clusterNearZ = 0.0f, clusterFarZ = 0.0f;
     int  vp[4] = {0, 0, 0, 0};
