@@ -864,7 +864,7 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
 // Data-driven BindMaterial using ShaderAsset::Bindings() + MaterialAsset property accessors.
 // Activates when the MaterialAsset has a linked ShaderAsset (v2 .mat files referencing a .shader).
 // Built-in PBR properties read from `ma.Mat`; every other declared property reads from
-// `ma.ExtraProps` (typed store filled by MaterialAsset::Load, #354).
+// `ma.Mat.ExtraProps` (typed store filled by MaterialAsset::Load, #354).
 void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const ShaderAsset& sa) {
     const Material& mat = ma.Mat;
     // #99 — the redundant-bind skip must also see custom (non-builtin) shader properties;
@@ -872,7 +872,7 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
     // ExtraProp used to render with whichever was bound first.
     size_t hash = mat.Hash();
     auto mix = [&hash](size_t v) { hash ^= v + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2); };
-    for (const auto& [name, p] : ma.ExtraProps) {
+    for (const auto& [name, p] : mat.ExtraProps) {
         mix(std::hash<std::string>{}(name));
         mix(std::hash<float>{}(p.F));
         for (int c = 0; c < 4; ++c) mix(std::hash<float>{}(p.V[c]));
@@ -895,8 +895,8 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
         const bool builtin = MaterialAsset::IsBuiltinProp(pname);
         const MaterialProp* extra = nullptr;
         if (!builtin) {
-            auto it = ma.ExtraProps.find(pname);
-            if (it != ma.ExtraProps.end()) extra = &it->second;
+            auto it = mat.ExtraProps.find(pname);
+            if (it != mat.ExtraProps.end()) extra = &it->second;
         }
 
         switch (prop.Type) {

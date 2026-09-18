@@ -2,7 +2,7 @@
   "matVersion": 2,
   "name": "Fixture Anisotropy",
   "_comment": "#354 fixture: activates the _ANISO variant. Shares the baseline PBR of mat_baseline.mat.",
-  "shader": "shaders/Standard.shader",
+  "shader": "engine://Standard.shader",
 
   "properties": {
     "_BaseColor": [0.82, 0.82, 0.86],

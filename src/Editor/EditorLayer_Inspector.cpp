@@ -230,6 +230,35 @@ void AlignToColumn(const char* label, float columnWidth, const char* tooltip = n
 // `tooltip`, when given, shows on hovering the label text itself — this is how nearly every
 // field in the Inspector explains what it does and how to use it, without needing a value
 // permanently on screen for it. `highlighted` marks a prefab-overridden field (#6 item 7).
+// #104 / #127 — an [HDR] colour: the picker edits the hue at up to 1.0 and a separate Intensity
+// field in EV (stops) scales it, like Unity's HDR colour picker, so emissive values above 1 are
+// editable at all. `linear` is read and written in full (possibly > 1). activated / committed
+// report the start and end of an edit across either widget, for undo staging.
+bool HdrColorEdit(float linear[3], bool& activated, bool& committed) {
+    const float maxc = std::max(linear[0], std::max(linear[1], linear[2]));
+    float ev = maxc > 1.0f ? std::log2(maxc) : 0.0f;
+    const float scale = std::exp2(ev);
+    float base[3] = {linear[0] / scale, linear[1] / scale, linear[2] / scale};
+    const float evW = ImGui::GetFontSize() * 4.5f;
+    ImGui::SetNextItemWidth(-(evW + ImGui::GetStyle().ItemSpacing.x));
+    bool changed = EditorUI::ColorEditLinear("##hdr", base, ImGuiColorEditFlags_DisplayHex);
+    activated = ImGui::IsItemActivated();
+    committed = ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(evW);
+    changed |= ImGui::DragFloat("##ev", &ev, 0.05f, 0.0f, 16.0f, "%+.1f EV");
+    activated |= ImGui::IsItemActivated();
+    committed |= ImGui::IsItemDeactivatedAfterEdit();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("HDR intensity in stops: the colour is multiplied by 2^EV (0 = as picked).");
+    if (changed) {
+        ev = std::clamp(ev, 0.0f, 16.0f);
+        const float s = std::exp2(ev);
+        for (int c = 0; c < 3; ++c) linear[c] = base[c] * s;
+    }
+    return changed;
+}
+
 void PropertyLabel(const char* label, const char* tooltip = nullptr, bool highlighted = false) {
     // Sized to fit "Emissive Strength", the longest label actually used — every row sharing
     // this one constant is what makes their value widgets land in the same column regardless
@@ -995,13 +1024,7 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
     // strings (what Save() actually writes) have to be re-synced from the live texture pointers
     // before every write, since editing here mutates Mat's shared_ptr slots directly.
     auto save = [&]() {
-        ma->AlbedoMapPath            = mat.AlbedoMap            ? mat.AlbedoMap->Path()            : "";
-        ma->NormalMapPath            = mat.NormalMap            ? mat.NormalMap->Path()            : "";
-        ma->MetallicRoughnessMapPath = mat.MetallicRoughnessMap ? mat.MetallicRoughnessMap->Path() : "";
-        ma->MetallicMapPath          = mat.MetallicMap          ? mat.MetallicMap->Path()          : "";
-        ma->RoughnessMapPath         = mat.RoughnessMap         ? mat.RoughnessMap->Path()         : "";
-        ma->AOMapPath                = mat.AOMap                ? mat.AOMap->Path()                : "";
-        ma->EmissiveMapPath          = mat.EmissiveMap          ? mat.EmissiveMap->Path()          : "";
+        ma->SyncTexturePathsFromMat();
         ma->Save();
     };
 
@@ -1096,21 +1119,57 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
             if (prop.Hidden) continue;
             ImGui::PushID(prop.Name.c_str());
             const char* label = prop.DisplayName.c_str();
+            const char* tip = prop.Tooltip.empty() ? nullptr : prop.Tooltip.c_str(); // [Tooltip(...)]
+            if (!prop.Header.empty()) { ImGui::SeparatorText(prop.Header.c_str()); inTexSection = true; } // [Header(...)]
             if (prop.Type == ShaderPropType::Texture2D && !inTexSection) {
                 ImGui::SeparatorText("Texture Maps");
                 inTexSection = true;
             }
             switch (prop.Type) {
             case ShaderPropType::Color: {
-                PropertyLabel(label);
-                glm::vec3 edit = MaterialAsset::GetColor(mat, prop.Name);
-                bool changed = EditorUI::ColorEditLinear("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
+                PropertyLabel(label, tip);
+                glm::vec3 edit = MaterialAsset::GetAuthoredColor(mat, prop.Name);
+                bool changed, committed;
+                if (prop.HDR) {
+                    bool activated = false;
+                    changed = HdrColorEdit(&edit.x, activated, committed);
+                } else {
+                    changed = EditorUI::ColorEditLinear("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
+                    committed = ImGui::IsItemDeactivatedAfterEdit();
+                }
                 if (changed) MaterialAsset::SetColor(mat, prop.Name, edit);
+                if (committed) save();
+                break;
+            }
+            case ShaderPropType::Int: {
+                PropertyLabel(label, tip);
+                int edit = MaterialAsset::GetInt(mat, prop.Name);
+                if (prop.Toggle) {
+                    bool on = edit != 0;
+                    if (EditorUIPrimitives::Checkbox("##t", &on)) { MaterialAsset::SetInt(mat, prop.Name, on ? 1 : 0); save(); }
+                } else {
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    if (ImGui::DragInt("##i", &edit)) MaterialAsset::SetInt(mat, prop.Name, edit);
+                    if (ImGui::IsItemDeactivatedAfterEdit()) save();
+                }
+                break;
+            }
+            case ShaderPropType::Vec2: case ShaderPropType::Vec3: case ShaderPropType::Vec4: {
+                PropertyLabel(label, tip);
+                glm::vec4 edit = MaterialAsset::GetVec(mat, prop.Name);
+                const int n = prop.Type == ShaderPropType::Vec2 ? 2 : prop.Type == ShaderPropType::Vec3 ? 3 : 4;
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::DragScalarN("##v", ImGuiDataType_Float, &edit.x, n, 0.01f)) MaterialAsset::SetVec(mat, prop.Name, edit);
                 if (ImGui::IsItemDeactivatedAfterEdit()) save();
                 break;
             }
             case ShaderPropType::Float: {
-                PropertyLabel(label);
+                PropertyLabel(label, tip);
+                if (prop.Toggle) { // [Toggle]: 0 / 1
+                    bool on = MaterialAsset::GetFloat(mat, prop.Name) != 0.0f;
+                    if (EditorUIPrimitives::Checkbox("##t", &on)) { MaterialAsset::SetFloat(mat, prop.Name, on ? 1.0f : 0.0f); save(); }
+                    break;
+                }
                 float edit = MaterialAsset::GetFloat(mat, prop.Name);
                 // See scalarRow above — need the widget's own out-param, not a bare
                 // IsItemDeactivatedAfterEdit(), so a track drag also fires save().
@@ -1132,13 +1191,13 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
                 break;
             }
             case ShaderPropType::Bool: {
-                PropertyLabel(label);
+                PropertyLabel(label, tip);
                 bool edit = MaterialAsset::GetBool(mat, prop.Name);
                 if (EditorUIPrimitives::Checkbox("##b", &edit)) { MaterialAsset::SetBool(mat, prop.Name, edit); save(); }
                 break;
             }
             case ShaderPropType::Texture2D: {
-                PropertyLabel(label);
+                PropertyLabel(label, tip);
                 Texture* tex = MaterialAsset::GetTexture(mat, prop.Name).get();
                 std::string preview = tex ? std::filesystem::path(tex->Path()).filename().string() : std::string("(none)");
                 float clearReserve = tex ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
@@ -1170,6 +1229,21 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
                 break;
             }
             default: break;
+            }
+            ImGui::PopID();
+        }
+        // #104 — the shader's custom keywords (the Standard lobes are driven by the values above).
+        bool anyCustom = false;
+        for (const std::string& k : ma->Shader->Keywords()) {
+            if (ShaderAsset::IsBuiltinKeyword(k)) continue;
+            if (!anyCustom) { ImGui::SeparatorText("Keywords"); anyCustom = true; }
+            auto& kws = mat.ShaderKeywords;
+            bool on = std::find(kws.begin(), kws.end(), k) != kws.end();
+            PropertyLabel(k.c_str(), "A custom shader keyword: when on, this material draws with a variant compiled\nwith #define <keyword>.");
+            ImGui::PushID(k.c_str());
+            if (EditorUIPrimitives::Checkbox("##kw", &on)) {
+                if (on) kws.push_back(k); else kws.erase(std::remove(kws.begin(), kws.end(), k), kws.end());
+                save();
             }
             ImGui::PopID();
         }
@@ -3245,6 +3319,8 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             if (prop.Hidden) continue;
             ImGui::PushID(prop.Name.c_str());
             const char* label = prop.DisplayName.c_str();
+            const char* tip = prop.Tooltip.empty() ? nullptr : prop.Tooltip.c_str(); // [Tooltip(...)]
+            if (!prop.Header.empty()) { ImGui::SeparatorText(prop.Header.c_str()); inTexSection = true; } // [Header(...)]
 
             if (prop.Type == ShaderPropType::Texture2D && !inTexSection) {
                 ImGui::SeparatorText("Texture Maps");
@@ -3253,20 +3329,57 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
 
             switch (prop.Type) {
             case ShaderPropType::Color: {
-                glm::vec3 shared = MaterialAsset::GetColor(*mats[0], prop.Name);
+                glm::vec3 shared = MaterialAsset::GetAuthoredColor(*mats[0], prop.Name);
                 bool mixed = false;
                 for (Material* mm : mats) {
-                    glm::vec3 v = MaterialAsset::GetColor(*mm, prop.Name);
+                    glm::vec3 v = MaterialAsset::GetAuthoredColor(*mm, prop.Name);
                     for (int a = 0; a < 3; ++a)
                         if (std::fabs(v[a] - shared[a]) > 1.0e-4f) mixed = true;
                 }
                 glm::vec3 edit = shared;
-                PropertyLabel(label);
-                bool changed = EditorUI::ColorEditLinear("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
-                if (ImGui::IsItemActivated()) StageUndo(world);
+                PropertyLabel(label, tip);
+                bool changed, activated, committed;
+                if (prop.HDR) {
+                    changed = HdrColorEdit(&edit.x, activated, committed);
+                } else {
+                    changed = EditorUI::ColorEditLinear("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
+                    activated = ImGui::IsItemActivated();
+                    committed = ImGui::IsItemDeactivatedAfterEdit();
+                }
+                if (activated) StageUndo(world);
                 if (changed) for (Material* mm : mats) MaterialAsset::SetColor(*mm, prop.Name, edit);
-                if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
+                if (committed) CommitStagedUndo(world, "Edit Material");
                 if (mixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
+                break;
+            }
+            case ShaderPropType::Int: {
+                const int shared = MaterialAsset::GetInt(*mats[0], prop.Name);
+                PropertyLabel(label, tip);
+                if (prop.Toggle) {
+                    bool on = shared != 0;
+                    if (EditorUIPrimitives::Checkbox("##t", &on)) {
+                        PushUndo(world, std::string("Edit ") + label);
+                        for (Material* mm : mats) MaterialAsset::SetInt(*mm, prop.Name, on ? 1 : 0);
+                    }
+                } else {
+                    int edit = shared;
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    const bool changed = ImGui::DragInt("##i", &edit);
+                    if (ImGui::IsItemActivated()) StageUndo(world);
+                    if (changed) for (Material* mm : mats) MaterialAsset::SetInt(*mm, prop.Name, edit);
+                    if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
+                }
+                break;
+            }
+            case ShaderPropType::Vec2: case ShaderPropType::Vec3: case ShaderPropType::Vec4: {
+                glm::vec4 edit = MaterialAsset::GetVec(*mats[0], prop.Name);
+                const int n = prop.Type == ShaderPropType::Vec2 ? 2 : prop.Type == ShaderPropType::Vec3 ? 3 : 4;
+                PropertyLabel(label, tip);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                const bool changed = ImGui::DragScalarN("##v", ImGuiDataType_Float, &edit.x, n, 0.01f);
+                if (ImGui::IsItemActivated()) StageUndo(world);
+                if (changed) for (Material* mm : mats) MaterialAsset::SetVec(*mm, prop.Name, edit);
+                if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
                 break;
             }
             case ShaderPropType::Float: {
@@ -3275,7 +3388,15 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 for (Material* mm : mats)
                     if (std::fabs(MaterialAsset::GetFloat(*mm, prop.Name) - shared) > 1.0e-4f) mixed = true;
                 float edit = shared;
-                PropertyLabel(label);
+                PropertyLabel(label, tip);
+                if (prop.Toggle) { // [Toggle]: 0 / 1
+                    bool on = shared != 0.0f;
+                    if (EditorUIPrimitives::Checkbox(mixed ? "##t-mixed" : "##t", &on)) {
+                        PushUndo(world, std::string("Edit ") + label);
+                        for (Material* mm : mats) MaterialAsset::SetFloat(*mm, prop.Name, on ? 1.0f : 0.0f);
+                    }
+                    break;
+                }
                 // See the scalarRow lambda above: EditorUI::SliderFloat's out-params are needed
                 // here, not a bare IsItemActivated()/IsItemDeactivatedAfterEdit(), or dragging the
                 // track (vs. typing in its trailing number box) would silently skip the undo step.
@@ -3301,7 +3422,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             }
             case ShaderPropType::Bool: {
                 bool shared = MaterialAsset::GetBool(*mats[0], prop.Name);
-                PropertyLabel(label);
+                PropertyLabel(label, tip);
                 bool edit = shared;
                 if (EditorUIPrimitives::Checkbox("##b", &edit)) {
                     PushUndo(world, std::string("Edit ") + label);
@@ -3324,7 +3445,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                     : first ? (missing ? ICON_FA_TRIANGLE_EXCLAMATION "  " : std::string())
                               + std::filesystem::path(first->Path()).filename().string()
                             : std::string("(none)");
-                PropertyLabel(label);
+                PropertyLabel(label, tip);
                 float clearReserve = anySet ? (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
                 if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
                 if (ImGui::Button(preview.c_str(), ImVec2(anySet ? -clearReserve : -FLT_MIN, 0.0f))) {
@@ -3386,6 +3507,28 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 "Enable the _SUBSURFACE shader variant (wrapped diffuse + back-lit thin-surface transmission).");
         boolRow("Reflection Probes", &Material::ReflectionProbes,
                 "Enable the _REFLECTION_PROBES variant — parallax box reflections from the 2 nearest placed probes.");
+
+        // #104 — the shader's own custom keywords, switched per material.
+        for (const std::string& k : sa.Keywords()) {
+            if (ShaderAsset::IsBuiltinKeyword(k)) continue;
+            int onCount = 0;
+            for (Material* mm : mats)
+                if (std::find(mm->ShaderKeywords.begin(), mm->ShaderKeywords.end(), k) != mm->ShaderKeywords.end()) ++onCount;
+            const bool mixed = onCount != 0 && onCount != (int)mats.size();
+            bool on = onCount == (int)mats.size();
+            PropertyLabel(k.c_str(), "A custom shader keyword: when on, this material draws with a variant compiled\nwith #define <keyword>.");
+            ImGui::PushID(k.c_str());
+            if (EditorUIPrimitives::Checkbox(mixed ? "##kw-mixed" : "##kw", &on)) {
+                PushUndo(world, "Toggle " + k);
+                for (Material* mm : mats) {
+                    auto& kws = mm->ShaderKeywords;
+                    kws.erase(std::remove(kws.begin(), kws.end(), k), kws.end());
+                    if (on) kws.push_back(k);
+                }
+            }
+            if (mixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
+            ImGui::PopID();
+        }
     };
 
     // -------------------------------------------------------------------------
@@ -3469,13 +3612,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                         PushUndo(world, "Save Material as Asset");
                         slot->Path = path;
                         slot->Name = std::filesystem::path(path).stem().string();
-                        slot->AlbedoMapPath            = slot->Mat.AlbedoMap            ? slot->Mat.AlbedoMap->Path()            : "";
-                        slot->NormalMapPath            = slot->Mat.NormalMap            ? slot->Mat.NormalMap->Path()            : "";
-                        slot->MetallicRoughnessMapPath = slot->Mat.MetallicRoughnessMap ? slot->Mat.MetallicRoughnessMap->Path() : "";
-                        slot->MetallicMapPath          = slot->Mat.MetallicMap          ? slot->Mat.MetallicMap->Path()          : "";
-                        slot->RoughnessMapPath         = slot->Mat.RoughnessMap         ? slot->Mat.RoughnessMap->Path()         : "";
-                        slot->AOMapPath                = slot->Mat.AOMap                ? slot->Mat.AOMap->Path()                : "";
-                        slot->EmissiveMapPath          = slot->Mat.EmissiveMap          ? slot->Mat.EmissiveMap->Path()          : "";
+                        slot->SyncTexturePathsFromMat();
                         slot->Save();
                         assets.LoadMaterial(path); // register with the library
                     }
