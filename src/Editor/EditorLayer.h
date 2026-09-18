@@ -72,6 +72,13 @@ public:
     // mode (restoring the edit-mode scene) and writes the crash-recovery snapshot if the scene
     // has unsaved changes. Never throws.
     void EmergencyRecoverySave(World& world, AssetLibrary& assets) noexcept;
+    // #148 — the crash handler's variant (CrashHandler::SetEmergencySave): runs on another thread
+    // while the crashed one is frozen, so it touches no GL and doesn't restore the play snapshot
+    // into the world. In Play it writes the pre-Play scene (the play snapshot + asset library);
+    // otherwise the live world. True when a recovery snapshot was written.
+    bool CrashRecoverySave(const World& world, const AssetLibrary& assets) noexcept;
+    // --crash-test-in-editor: pretend there are unsaved edits, so the recovery path runs.
+    void MarkDirtyForCrashTest() { m_Dirty = true; }
     void Shutdown();
 
     // Applies the editor's style — colours and metrics (rounding / padding / borders), DPI-scaled
