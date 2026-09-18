@@ -927,11 +927,28 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
     return root;
 }
 
+// #83 — every field read below uses json::value()/get<T>(), which THROW json::type_error on a
+// wrong-typed value ("tag": 5, "name": null, a bool written as "true", ...). The wrapper turns
+// any such exception into an ordinary load failure with a logged reason instead of letting it
+// escape to main()'s outermost catch and close the editor. Callers restore the previous world
+// on failure (see SceneSerializer::Load / Undo).
+bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
+    bool clearFirst, std::vector<entt::entity>* outCreated);
+bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
+    bool clearFirst = true, std::vector<entt::entity>* outCreated = nullptr) {
+    try {
+        return ApplySceneJsonImpl(world, assets, root, clearFirst, outCreated);
+    } catch (const std::exception& e) {
+        Log::Error(std::string("Scene: the scene data is malformed and could not be loaded: ") + e.what());
+        return false;
+    }
+}
+
 // `clearFirst` false ADDS to the existing scene instead of replacing it — the difference
 // between loading a scene and pasting/instantiating a fragment into one. `outCreated`, when
 // given, collects every entity this call created so the caller can select or offset them.
-bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
-    bool clearFirst = true, std::vector<entt::entity>* outCreated = nullptr) {
+bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
+    bool clearFirst, std::vector<entt::entity>* outCreated) {
     ApplyDepthGuard depthGuard; // #236 A2 — bounds prefab-stub expansion recursion
     if (g_ApplyDepth > kMaxApplyDepth) {
         Log::Error("Scene: prefab instance nesting too deep (" + std::to_string(kMaxApplyDepth) +
@@ -1571,8 +1588,22 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
     }
 
     g_MigrationLog.clear();
-    ApplyAssetLibraryJson(assets, root); // before ApplySceneJson: harmless either order, but library assets should exist first
-    bool ok = ApplySceneJson(world, assets, root);
+    // #83 — keep the current world so a malformed file can't leave a half-loaded one behind.
+    std::string previous;
+    try { previous = SaveToString(world, assets); } catch (...) {}
+    bool ok = true;
+    try {
+        ApplyAssetLibraryJson(assets, root); // before ApplySceneJson: harmless either order, but library assets should exist first
+    } catch (const std::exception& e) {
+        Log::Error("Scene: asset library data in '" + path + "' is malformed: " + e.what());
+        ok = false;
+    }
+    if (ok) ok = ApplySceneJson(world, assets, root);
+    if (!ok) {
+        Log::Error("Scene: '" + path + "' could not be loaded; the previous scene was kept.");
+        if (!previous.empty()) LoadFromString(world, assets, previous);
+        return false;
+    }
 
     if (ok && migrating && !g_MigrationLog.empty()) {
         Log::Info((persistMigration ? "Scene: upgraded '" : "Scene: would upgrade (not persisting) '") + path +
@@ -1676,7 +1707,11 @@ bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const s
             for (const auto& f : *it) if (f.is_string()) keepFolders.insert(f.get<std::string>());
         assets.PruneToKeepSet(keepModels, keepTextures, keepSounds, keepPrefabs, keepFolders, keepMaterials);
         assets.ClearMetadataOnly();
-        ApplyAssetLibraryJson(assets, root);
+        try { ApplyAssetLibraryJson(assets, root); }
+        catch (const std::exception& e) {
+            Log::Error(std::string("Scene: snapshot asset library data is malformed: ") + e.what()); // #83
+            return false;
+        }
     }
     return ApplySceneJson(world, assets, root);
 }

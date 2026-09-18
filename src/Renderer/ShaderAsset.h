@@ -38,7 +38,10 @@ public:
 
     // Lazily compile and return the shader variant for the given keyword bitmask.
     // Bit i of `key` = keyword i (from Keywords()) is active. Throws on compile failure.
-    Shader* Variant(ShaderVariantKey key);
+    Shader* Variant(ShaderVariantKey key); // nullptr if that variant failed to compile (#100)
+    // #100 — the compile/link log of the most recent failed variant, and a way to retry them.
+    const std::string& LastCompileError() const { return m_LastCompileError; }
+    void ForgetFailedVariants();
 
     // Per-property draw bindings (texture-unit assignments). Same for all variants.
     const std::vector<PropertyBinding>& Bindings() const { return m_Bindings; }
@@ -50,6 +53,7 @@ public:
 private:
     std::string m_Path;
     std::string m_VertFile;
+    std::string m_LastCompileError;
     std::string m_FragFile;
     std::vector<ShaderProperty>  m_Props;
     std::vector<PropertyBinding> m_Bindings;
