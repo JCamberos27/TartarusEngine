@@ -2663,6 +2663,7 @@ int main(int argc, char** argv) {
             editor.Shutdown();
             editorModule.Shutdown();
             AudioEngine::Shutdown();
+            PhysicsWorld::Shutdown(); // #167 - the session-lifetime PhysX core
             return allPassed ? 0 : 1;
         }
 
@@ -2679,6 +2680,7 @@ int main(int argc, char** argv) {
         Screenshot::WaitForPending(); // #153 - a capture still encoding when the editor closes
         editorModule.Shutdown();
         AudioEngine::Shutdown();
+        PhysicsWorld::Shutdown(); // #167 - the session-lifetime PhysX core
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
         // Non-interactive runs (--smoke-test / --resave) must never block: a modal MessageBox on
