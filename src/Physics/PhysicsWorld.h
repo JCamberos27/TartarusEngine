@@ -28,10 +28,14 @@ namespace PhysicsWorld {
 // intervening Destroy() is a no-op. Called from EditorLayer::OnEnterPlayMode.
 void Create(const World& world);
 
-// Tear everything down in reverse order. Idempotent — safe to call when nothing is active,
-// which is why the exit-while-playing path (main.cpp) can call it unconditionally via
-// OnExitPlayMode. Called from EditorLayer::OnExitPlayMode.
+// Tear down the Play session's scene, actors, joints and character. Idempotent — safe to call
+// when nothing is active, which is why the exit-while-playing path (main.cpp) can call it
+// unconditionally via OnExitPlayMode. Called from EditorLayer::OnExitPlayMode. PxPhysics, the
+// dispatcher, materials and cooked meshes stay up for the next Play (#167).
 void Destroy();
+
+// Releases everything, including what Destroy() keeps for the next Play. Call once at exit.
+void Shutdown();
 
 // True between a successful Create() and the next Destroy().
 bool IsActive();
