@@ -21,6 +21,11 @@ struct ShaderProperty {
     bool         DefaultBool  = false;
     glm::vec4    DefaultVec   = {0.0f, 0.0f, 0.0f, 1.0f};
     std::string  DefaultTex;  // "white", "black", "normal"
+    // #106 — Range(min, max) Float properties: slider limits for the material editor. Plain
+    // Float properties have no range (the editor uses an unbounded drag field).
+    bool         HasRange = false;
+    float        RangeMin = 0.0f;
+    float        RangeMax = 1.0f;
     int          PropIndex = 0;
 };
 
