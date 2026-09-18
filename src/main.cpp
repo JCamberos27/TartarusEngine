@@ -1764,6 +1764,59 @@ int main(int argc, char** argv) {
                 sceneRenderer.RenderScene(world, ctx, sceneInputs, outStats);
             };
 
+            // #111 — the SSAO depth pre-pass, shared by the Scene view, the docked Game view and
+            // maximised Play (it was pasted three times). Uses the main pass's visibility rules:
+            // inactive entities, and in the editor Scene view HiddenInScene + the layer mask, are
+            // skipped (they used to leave AO "ghosts"); transparent-queue objects write no depth
+            // in the main pass so they don't here either; everything outside the view is culled.
+            auto ssaoDepthPrepass = [&](Ssao& target, int w, int h, const glm::mat4& view,
+                                        const glm::mat4& proj, bool editorView) {
+                glBindFramebuffer(GL_FRAMEBUFFER, target.DepthFbo());
+                glViewport(0, 0, w, h);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glEnable(GL_CULL_FACE);
+                glCullFace(GL_BACK);
+                glDisable(GL_BLEND);
+
+                shadowShader.Bind();
+                shadowShader.SetMat4("uLightViewProj", proj * view);
+                shadowShader.SetInt("uUseSkinning", 0);
+                const int modelLoc = shadowShader.Loc("uModel");
+                const Frustum frustum = Frustum::FromViewProj(proj * view);
+                for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
+                    if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                    if (editorView) {
+                        if (world.Registry.all_of<HiddenInSceneTag>(entity)) continue;
+                        const auto* lc = world.Registry.try_get<LayerComponent>(entity);
+                        const int layer = lc ? lc->Layer : 0;
+                        if (layer >= 0 && layer < 32 && !((sceneInputs.layerVisibleMask >> layer) & 1u)) continue;
+                    }
+                    auto& rc = world.Registry.get<RenderableComponent>(entity);
+                    if (!rc.ModelRef) continue;
+                    if (!rc.Materials.empty() && rc.Materials[0] &&
+                        rc.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
+                    const glm::mat4 model = world.GetCachedWorldTransform(entity);
+                    glm::vec3 bmin = rc.ModelRef->BoundsMin(), bmax = rc.ModelRef->BoundsMax();
+                    if (bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z) {
+                        if (rc.ModelRef->HasAnimations()) { // same inflation as the main pass
+                            const glm::vec3 c = (bmin + bmax) * 0.5f, hext = (bmax - bmin) * 0.5f * 1.75f;
+                            bmin = c - hext; bmax = c + hext;
+                        }
+                        if (!frustum.Intersects(AABB{bmin, bmax}.Transformed(model))) continue;
+                    }
+                    shadowShader.SetMat4(modelLoc, model);
+                    rc.ModelRef->DrawDepthOnly(shadowShader, rc.Materials);
+                }
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                GLStateCache::Invalidate();
+
+                target.Compute(ssaoComputeShader, proj);
+                target.Blur(ssaoBlurShader);
+                GLStateCache::Invalidate();
+            };
+
             // --- Scene tab (editor viewport) offscreen pass -----------------------------------
             // Rendered into its own framebuffer rather than straight into the backbuffer, then
             // displayed via ImGui::Image inside the "Scene" window (see
@@ -1836,34 +1889,7 @@ int main(int argc, char** argv) {
                 if (world.SsaoEnabled && !sceneUnlit && ssao.IsValid()) {
                     PROFILE_SCOPE("SSAO Depth Pre-pass");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass");
-                    glBindFramebuffer(GL_FRAMEBUFFER, ssao.DepthFbo());
-                    glViewport(0, 0, scW, scH);
-                    glClear(GL_DEPTH_BUFFER_BIT);
-                    glEnable(GL_DEPTH_TEST);
-                    glDepthMask(GL_TRUE);
-                    glEnable(GL_CULL_FACE);
-                    glCullFace(GL_BACK);
-                    glDisable(GL_BLEND);
-
-                    shadowShader.Bind();
-                    shadowShader.SetMat4("uLightViewProj", sceneProjMat * sceneViewMat);
-                    shadowShader.SetInt("uUseSkinning", 0); // static geometry only
-                    int ssaoModelLoc = shadowShader.Loc("uModel");
-                    auto ssaoRenderables = world.Registry.view<TransformComponent, RenderableComponent>();
-                    for (auto entity : ssaoRenderables) {
-                        if (world.Registry.all_of<InactiveTag>(entity)) continue;
-                        auto& rc = world.Registry.get<RenderableComponent>(entity);
-                        if (!rc.ModelRef) continue;
-                        glm::mat4 model = world.GetCachedWorldTransform(entity);
-                        shadowShader.SetMat4(ssaoModelLoc, model);
-                        rc.ModelRef->DrawDepthOnly(shadowShader, rc.Materials);
-                    }
-                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                    GLStateCache::Invalidate();
-
-                    ssao.Compute(ssaoComputeShader, sceneProjMat);
-                    ssao.Blur(ssaoBlurShader);
-                    GLStateCache::Invalidate();
+                    ssaoDepthPrepass(ssao, scW, scH, sceneViewMat, sceneProjMat, /*editorView=*/true);
 
                     // Restore HdrTarget for the main scene draw
                     sceneHdr.BindForRender();
@@ -2173,34 +2199,7 @@ int main(int argc, char** argv) {
                 if (world.SsaoEnabled && gameSsao.IsValid()) { // audit #358 — skip if any FBO incomplete
                     PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
-                    glBindFramebuffer(GL_FRAMEBUFFER, gameSsao.DepthFbo());
-                    glViewport(0, 0, gvWidth, gvHeight);
-                    glClear(GL_DEPTH_BUFFER_BIT);
-                    glEnable(GL_DEPTH_TEST);
-                    glDepthMask(GL_TRUE);
-                    glEnable(GL_CULL_FACE);
-                    glCullFace(GL_BACK);
-                    glDisable(GL_BLEND);
-
-                    shadowShader.Bind();
-                    shadowShader.SetMat4("uLightViewProj", gvProj * gvView);
-                    shadowShader.SetInt("uUseSkinning", 0);
-                    int gameSsaoModelLoc = shadowShader.Loc("uModel");
-                    auto gameSsaoRenderables = world.Registry.view<TransformComponent, RenderableComponent>();
-                    for (auto entity : gameSsaoRenderables) {
-                        if (world.Registry.all_of<InactiveTag>(entity)) continue;
-                        auto& rc = world.Registry.get<RenderableComponent>(entity);
-                        if (!rc.ModelRef) continue;
-                        glm::mat4 model = world.GetCachedWorldTransform(entity);
-                        shadowShader.SetMat4(gameSsaoModelLoc, model);
-                        rc.ModelRef->DrawDepthOnly(shadowShader, rc.Materials);
-                    }
-                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                    GLStateCache::Invalidate();
-
-                    gameSsao.Compute(ssaoComputeShader, gvProj);
-                    gameSsao.Blur(ssaoBlurShader);
-                    GLStateCache::Invalidate();
+                    ssaoDepthPrepass(gameSsao, gvWidth, gvHeight, gvView, gvProj, /*editorView=*/false);
 
                     gameHdr.BindForRender(); // restore for the main scene draw below
                 }
@@ -2350,34 +2349,7 @@ int main(int argc, char** argv) {
                 if (world.SsaoEnabled && gameSsao.IsValid()) { // audit #358
                     PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
-                    glBindFramebuffer(GL_FRAMEBUFFER, gameSsao.DepthFbo());
-                    glViewport(0, 0, mw, mh);
-                    glClear(GL_DEPTH_BUFFER_BIT);
-                    glEnable(GL_DEPTH_TEST);
-                    glDepthMask(GL_TRUE);
-                    glEnable(GL_CULL_FACE);
-                    glCullFace(GL_BACK);
-                    glDisable(GL_BLEND);
-
-                    shadowShader.Bind();
-                    shadowShader.SetMat4("uLightViewProj", proj * view);
-                    shadowShader.SetInt("uUseSkinning", 0);
-                    int gameSsaoModelLoc = shadowShader.Loc("uModel");
-                    auto gameSsaoRenderables = world.Registry.view<TransformComponent, RenderableComponent>();
-                    for (auto entity : gameSsaoRenderables) {
-                        if (world.Registry.all_of<InactiveTag>(entity)) continue;
-                        auto& rc = world.Registry.get<RenderableComponent>(entity);
-                        if (!rc.ModelRef) continue;
-                        glm::mat4 model = world.GetCachedWorldTransform(entity);
-                        shadowShader.SetMat4(gameSsaoModelLoc, model);
-                        rc.ModelRef->DrawDepthOnly(shadowShader, rc.Materials);
-                    }
-                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                    GLStateCache::Invalidate();
-
-                    gameSsao.Compute(ssaoComputeShader, proj);
-                    gameSsao.Blur(ssaoBlurShader);
-                    GLStateCache::Invalidate();
+                    ssaoDepthPrepass(gameSsao, mw, mh, view, proj, /*editorView=*/false);
 
                     gameHdr.BindForRender(); // restore for the main scene draw below
                 }
