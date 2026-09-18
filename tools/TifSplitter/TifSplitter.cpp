@@ -7,6 +7,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -76,6 +77,128 @@ void StretchContrast(std::vector<uint8_t>& channel) {
     for (uint8_t& v : channel) v = (uint8_t)std::lround((v - lo) * scale);
 }
 
+// Full-precision sample planes for a 16/32/64-bit source, one float plane per TIFF sample,
+// top-to-bottom. Empty when the source is 8-bit or a layout ReadHighPrecisionPlanes declines.
+// #185: normalising these and only then quantising avoids the terracing you get from stretching
+// data that TIFFReadRGBAImageOriented has already cut to 256 levels.
+using SamplePlanes = std::vector<std::vector<float>>;
+
+// Float counterpart of StretchContrast: maps the plane's finite min..max onto 0..255. Non-finite
+// samples (NaN / inf no-data markers in float DEMs) become 0.
+void StretchToBytes(const std::vector<float>& plane, std::vector<uint8_t>& out) {
+    float lo = INFINITY, hi = -INFINITY;
+    for (float v : plane) {
+        if (!std::isfinite(v)) continue;
+        lo = std::min(lo, v);
+        hi = std::max(hi, v);
+    }
+    out.resize(plane.size());
+    const bool flat = !(hi > lo);
+    const double scale = flat ? 0.0 : 255.0 / ((double)hi - (double)lo);
+    for (size_t i = 0; i < plane.size(); ++i) {
+        float v = plane[i];
+        if (!std::isfinite(v) || flat) { out[i] = 0; continue; }
+        out[i] = (uint8_t)std::clamp(std::lround(((double)v - lo) * scale), 0l, 255l);
+    }
+}
+
+float SampleToFloat(const uint8_t* p, uint16_t bits, uint16_t format) {
+    switch (bits) {
+    case 16:
+        if (format == SAMPLEFORMAT_INT) { int16_t v; std::memcpy(&v, p, 2); return (float)v; }
+        { uint16_t v; std::memcpy(&v, p, 2); return (float)v; }
+    case 32:
+        if (format == SAMPLEFORMAT_IEEEFP) { float v; std::memcpy(&v, p, 4); return v; }
+        if (format == SAMPLEFORMAT_INT) { int32_t v; std::memcpy(&v, p, 4); return (float)v; }
+        { uint32_t v; std::memcpy(&v, p, 4); return (float)v; }
+    default: // 64: IEEE double only (checked by the caller)
+        { double v; std::memcpy(&v, p, 8); return (float)v; }
+    }
+}
+
+// Reads every sample of a 16/32/64-bit grayscale or RGB(A) TIFF at full precision. Returns empty
+// (and the caller keeps the 8-bit RGBA decode) for anything else: 8-bit data, palette / YCbCr /
+// CMYK, a non-top-left orientation, or a read error. Handles stripped and tiled files, both
+// contiguous and separate planar layouts.
+SamplePlanes ReadHighPrecisionPlanes(TIFF* tif, uint32_t width, uint32_t height,
+                                     uint16_t bits, uint16_t spp, const std::string& name) {
+    uint16_t format = SAMPLEFORMAT_UINT, photometric = PHOTOMETRIC_MINISBLACK,
+             planar = PLANARCONFIG_CONTIG, orientation = ORIENTATION_TOPLEFT;
+    TIFFGetFieldDefaulted(tif, TIFFTAG_SAMPLEFORMAT, &format);
+    TIFFGetFieldDefaulted(tif, TIFFTAG_PLANARCONFIG, &planar);
+    TIFFGetFieldDefaulted(tif, TIFFTAG_ORIENTATION, &orientation);
+    TIFFGetField(tif, TIFFTAG_PHOTOMETRIC, &photometric);
+
+    const bool bitsOk = (bits == 16 && format != SAMPLEFORMAT_IEEEFP) || bits == 32 ||
+                        (bits == 64 && format == SAMPLEFORMAT_IEEEFP);
+    const bool photoOk = photometric == PHOTOMETRIC_MINISBLACK ||
+                         photometric == PHOTOMETRIC_MINISWHITE || photometric == PHOTOMETRIC_RGB;
+    if (!bitsOk || !photoOk || spp == 0) return {};
+    if (orientation != ORIENTATION_TOPLEFT) {
+        LogWarn("Non top-left TIFF orientation; normalising the 8-bit decode instead: " + name);
+        return {};
+    }
+
+    SamplePlanes planes;
+    try {
+        planes.assign(spp, std::vector<float>((size_t)width * height));
+    } catch (const std::bad_alloc&) {
+        LogWarn("Not enough memory for a full-precision decode; normalising the 8-bit decode instead: " + name);
+        return {};
+    }
+
+    const size_t bytesPerSample = bits / 8;
+    const bool contig = planar == PLANARCONFIG_CONTIG;
+    const uint16_t passes = contig ? 1 : spp; // separate planes are read one sample at a time
+    const size_t stride = contig ? spp * bytesPerSample : bytesPerSample; // bytes between pixels
+
+    // Copies one run of `count` pixels starting at image (x, y) out of `src`.
+    auto store = [&](const uint8_t* src, uint32_t x, uint32_t y, uint32_t count, uint16_t pass) {
+        for (uint32_t i = 0; i < count; ++i) {
+            const uint8_t* px = src + i * stride;
+            size_t dst = (size_t)y * width + x + i;
+            if (contig) {
+                for (uint16_t c = 0; c < spp; ++c)
+                    planes[c][dst] = SampleToFloat(px + c * bytesPerSample, bits, format);
+            } else {
+                planes[pass][dst] = SampleToFloat(px, bits, format);
+            }
+        }
+    };
+
+    bool ok = true;
+    if (TIFFIsTiled(tif)) {
+        uint32_t tw = 0, th = 0;
+        TIFFGetField(tif, TIFFTAG_TILEWIDTH, &tw);
+        TIFFGetField(tif, TIFFTAG_TILELENGTH, &th);
+        std::vector<uint8_t> tile(TIFFTileSize(tif));
+        const size_t tileRow = TIFFTileRowSize(tif);
+        for (uint16_t pass = 0; ok && pass < passes; ++pass)
+            for (uint32_t ty = 0; ok && ty < height; ty += th)
+                for (uint32_t tx = 0; ok && tx < width; tx += tw) {
+                    if (TIFFReadTile(tif, tile.data(), tx, ty, 0, pass) < 0) { ok = false; break; }
+                    const uint32_t w = std::min(tw, width - tx), h = std::min(th, height - ty);
+                    for (uint32_t r = 0; r < h; ++r) store(tile.data() + r * tileRow, tx, ty + r, w, pass);
+                }
+    } else {
+        std::vector<uint8_t> line(TIFFScanlineSize(tif));
+        for (uint16_t pass = 0; ok && pass < passes; ++pass)
+            for (uint32_t y = 0; y < height; ++y) {
+                if (TIFFReadScanline(tif, line.data(), y, pass) < 0) { ok = false; break; }
+                store(line.data(), 0, y, width, pass);
+            }
+    }
+    if (!ok) {
+        LogWarn("Full-precision read failed; normalising the 8-bit decode instead: " + name);
+        return {};
+    }
+
+    if (photometric == PHOTOMETRIC_MINISWHITE) {
+        for (float& v : planes[0]) v = -v; // 0 is white: invert so the stretch maps high -> bright
+    }
+    return planes;
+}
+
 unsigned int WorkerCount() {
     unsigned int n = std::thread::hardware_concurrency();
     return n == 0 ? 4u : n;
@@ -109,7 +232,16 @@ bool RunBounded(size_t count, size_t workers, const std::function<bool(size_t)>&
     return allOk;
 }
 
-bool ExtractChannels(const PixelBuffer& rgba, const TifSplitterOptions& options,
+// Which full-precision sample feeds output channel c (R/G/B/A), or -1 for none. Mirrors how
+// TIFFReadRGBAImageOriented expands the source: gray fills R/G/B, a second sample is alpha.
+int SourceSampleFor(int c, size_t spp) {
+    if (spp == 0) return -1;
+    if (spp < 3) return c < 3 ? 0 : (spp == 2 ? 1 : -1);
+    if (c < 3) return c;
+    return spp >= 4 ? 3 : -1;
+}
+
+bool ExtractChannels(const PixelBuffer& rgba, const SamplePlanes& planes, const TifSplitterOptions& options,
     const std::string& outDir, const std::string& stem, bool parallel) {
     static const char* kNames[4] = {"R", "G", "B", "A"};
     size_t pixelCount = (size_t)rgba.Width * rgba.Height;
@@ -119,10 +251,17 @@ bool ExtractChannels(const PixelBuffer& rgba, const TifSplitterOptions& options,
         channel.Width = rgba.Width;
         channel.Height = rgba.Height;
         channel.Channels = 1;
-        channel.Data.resize(pixelCount);
-        for (size_t p = 0; p < pixelCount; ++p) channel.Data[p] = rgba.Data[p * 4 + c];
-
-        if (options.NormalizeHeightmaps) StretchContrast(channel.Data);
+        const int src = SourceSampleFor((int)c, planes.size());
+        if (options.NormalizeHeightmaps && src >= 0) {
+            StretchToBytes(planes[src], channel.Data); // #185: stretch first, quantise last
+            // Same result as the 8-bit path's flip-then-stretch: stretching 255-v swaps min/max.
+            if (options.FlipNormalY && c == 1)
+                for (uint8_t& v : channel.Data) v = (uint8_t)(255 - v);
+        } else {
+            channel.Data.resize(pixelCount);
+            for (size_t p = 0; p < pixelCount; ++p) channel.Data[p] = rgba.Data[p * 4 + c];
+            if (options.NormalizeHeightmaps) StretchContrast(channel.Data);
+        }
 
         std::string outPath = outDir + "/" + stem + "_" + kNames[c] + ".png";
         bool wrote = WritePng(outPath, channel);
@@ -208,22 +347,52 @@ bool DecodeAndExport(const TifSplitterOptions& options, bool parallelSubtasks) {
         return false;
     }
 
-    // See the header comment for why this (rather than hand-decoded scanlines) is the right
-    // call here, not a shortcut: it's the one libtiff entry point that correctly normalizes
-    // every source layout to 8-bit RGBA, which is also all the engine's own loader can use.
-    int decoded = TIFFReadRGBAImageOriented(tif, width, height, raster.data(), ORIENTATION_TOPLEFT, 0);
-    TIFFClose(tif);
-    if (!decoded) {
-        LogError("libtiff failed to decode pixel data for: " + options.InputFilePath);
-        return false;
+    // Split, normalised channels of a high-bit-depth source are built from full-precision
+    // samples (#185); read those before the RGBA decode below moves libtiff's read position.
+    // Float samples are read this way whatever the options: TIFFReadRGBAImageOriented rejects
+    // them, so these planes are the only decode a float DEM gets.
+    uint16_t sampleFormat = SAMPLEFORMAT_UINT;
+    TIFFGetFieldDefaulted(tif, TIFFTAG_SAMPLEFORMAT, &sampleFormat);
+    const bool isFloat = sampleFormat == SAMPLEFORMAT_IEEEFP;
+    SamplePlanes planes;
+    if (bitsPerSample > 8 &&
+        ((options.ExtractIndividualChannels && options.NormalizeHeightmaps) || isFloat)) {
+        planes = ReadHighPrecisionPlanes(tif, width, height, bitsPerSample, samplesPerPixel,
+                                         options.InputFilePath);
+        if (!planes.empty()) LogInfo("Read full " + std::to_string(bitsPerSample)
+                                     + "-bit precision samples: " + options.InputFilePath);
     }
+
+    // Everything else (combined image, tiles, un-normalised channels) goes through the one
+    // libtiff entry point that correctly converts every source layout to 8-bit RGBA, which is
+    // also all the engine's own loader reads.
+    // Float data has no fixed range for it to map from, so it's expected to fail here; the
+    // planes above stand in (#185).
+    int decoded = isFloat ? 0 : TIFFReadRGBAImageOriented(tif, width, height, raster.data(), ORIENTATION_TOPLEFT, 0);
+    TIFFClose(tif);
 
     PixelBuffer rgba;
     rgba.Width = (int)width;
     rgba.Height = (int)height;
     rgba.Channels = 4;
     rgba.Data.resize((size_t)width * height * 4);
-    for (size_t i = 0; i < raster.size(); ++i) {
+    if (!decoded) {
+        if (planes.empty()) {
+            LogError("libtiff failed to decode pixel data for: " + options.InputFilePath);
+            return false;
+        }
+        // Each channel stretched over its own min..max: the only meaningful 8-bit view of samples
+        // with no inherent range. Alpha is opaque unless the file carries one.
+        LogInfo("Mapping each channel's value range to 0..255 for 8-bit output: " + options.InputFilePath);
+        std::vector<uint8_t> bytes;
+        for (int c = 0; c < 4; ++c) {
+            const int src = SourceSampleFor(c, planes.size());
+            if (src >= 0) StretchToBytes(planes[src], bytes);
+            for (size_t p = 0, n = (size_t)width * height; p < n; ++p)
+                rgba.Data[p * 4 + c] = src >= 0 ? bytes[p] : 255;
+        }
+    }
+    for (size_t i = 0; decoded && i < raster.size(); ++i) {
         uint32_t px = raster[i];
         rgba.Data[i * 4 + 0] = (uint8_t)TIFFGetR(px);
         rgba.Data[i * 4 + 1] = (uint8_t)TIFFGetG(px);
@@ -251,7 +420,7 @@ bool DecodeAndExport(const TifSplitterOptions& options, bool parallelSubtasks) {
     bool ok = true;
 
     if (options.ExtractIndividualChannels) {
-        ok = ExtractChannels(rgba, options, options.OutputDirectory, stem, parallelSubtasks) && ok;
+        ok = ExtractChannels(rgba, planes, options, options.OutputDirectory, stem, parallelSubtasks) && ok;
     }
     if (options.TileSize > 0) {
         ok = TileAndWrite(rgba, options, options.OutputDirectory, stem, parallelSubtasks) && ok;
