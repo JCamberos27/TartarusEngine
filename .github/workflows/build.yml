@@ -1,7 +1,7 @@
 name: Build
 
 # Compiles TartarusEngine on Windows (the only platform it targets — MSVC via the
-# Visual Studio generator, same as the README's local build instructions) on every push and
+# Visual Studio generator) on every push and
 # pull request, for both Debug and Release. This is intentionally a COMPILE gate first and
 # foremost: it exists to catch the class of bug a human never gets to see locally until they
 # pull a branch and build it themselves.
