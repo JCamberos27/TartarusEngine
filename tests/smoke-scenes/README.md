@@ -18,6 +18,10 @@ Every scene is also round-tripped through the undo snapshot path (`SaveToString`
 `LoadFromString`) right after loading; it must not throw or change the entity count or the
 asset library (#81).
 
+- `smoke_play_parented` — a rigidbody under a rotated, offset parent plus a rotated static ramp;
+  runs Play -> Stop twice and the harness prints each simulated body's world position (#114/#115).
+- `smoke_min` also checks the exact triangle raycast used by editor picking (#116).
+
 `../smoke-scenes-invalid/` holds deliberately broken fixtures that are **not** staged next to
 the exe; run them explicitly to confirm the harness reports failure and exits nonzero:
 
