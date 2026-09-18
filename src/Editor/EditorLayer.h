@@ -903,7 +903,7 @@ private:
     void DeleteSelection(World& world);
     // inPlace = true (the Ctrl+D shortcut, #236 F) skips the (1,0,1) nudge given to duplicated
     // roots, so the copy lands exactly on the original; the menu items keep the nudge.
-    void DuplicateSelection(World& world, AssetLibrary& assets, bool inPlace = false);
+    void DuplicateSelection(World& world, AssetLibrary& assets, bool inPlace = true); // #119: Unity duplicates in place
 
     // Array / grid duplicate (#236 R2): counts per axis, step in world units per axis. The
     // (0,0,0) cell is the existing selection, so counts {3,1,1} makes 2 new copies.
@@ -1736,7 +1736,12 @@ private:
     // they weren't already siblings. Rewrites the affected group's OrderComponent values to a
     // clean 0..N-1 run — the number the Hierarchy sorts siblings by. One undo entry.
     void ReorderHierarchySiblings(World& world, const std::vector<entt::entity>& moving,
-                                  entt::entity anchor, bool after);
+                                  entt::entity anchor, bool after, bool recordUndo = true);
+    // #119 — puts each duplicated root back under its source's parent, right after the source in
+    // the Hierarchy (Unity). `sourceOrder` is AppendEntitiesFromString's order -> copy map.
+    void PlaceCopiesBesideSources(World& world, const std::vector<entt::entity>& sources,
+                                  const std::unordered_map<int, entt::entity>& sourceOrder,
+                                  bool besideSource);
     // Children of `parent` (or the scene roots when `parent == entt::null`) in Hierarchy display
     // order: OrderComponent ascending, entity handle as the stable tiebreak.
     std::vector<entt::entity> HierarchySiblingsInOrder(const World& world, entt::entity parent) const;
