@@ -26,7 +26,8 @@ public:
 
     // SSAO compute pass — reads DepthTex() and the noise texture, writes raw R8 occlusion.
     // proj is the same projection matrix used for the depth pre-pass.
-    void Compute(Shader& ssaoShader, const glm::mat4& proj);
+    // #160: radius (view-space units) and depth bias used to be hard-coded 0.5 / 0.025.
+    void Compute(Shader& ssaoShader, const glm::mat4& proj, float radius = 0.5f, float bias = 0.025f);
 
     // 4x4 box blur pass — reads raw occlusion, writes final blurred occlusion.
     void Blur(Shader& blurShader);

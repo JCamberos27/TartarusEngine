@@ -191,6 +191,7 @@ uniform float     uIOR;                 // index of refraction
 // PR15 — Screen-space ambient occlusion. uSSAOEnabled == 0 (the GL default) = no occlusion.
 uniform sampler2D uSSAOMap;   // blurred R8 occlusion (unit 15); only read when uSSAOEnabled == 1
 uniform int       uSSAOEnabled;
+uniform float     uSSAOIntensity; // #160 — exponent on the occlusion; <= 0 (unset) means 1
 
 const float PI = 3.14159265359;
 
@@ -838,7 +839,7 @@ void main() {
     // PR15 — SSAO: sample the blurred occlusion map at this fragment's screen position.
     // ssaoFactor == 1.0 when SSAO is off (uSSAOEnabled == 0, the GL default) — no change.
     float ssaoFactor = uSSAOEnabled == 1
-        ? texture(uSSAOMap, gl_FragCoord.xy / uScreenSize).r
+        ? pow(texture(uSSAOMap, gl_FragCoord.xy / uScreenSize).r, uSSAOIntensity > 0.0 ? uSSAOIntensity : 1.0)
         : 1.0;
 
     // Ambient. With IBL probes bound (#196) this is the standard split-sum approximation:
