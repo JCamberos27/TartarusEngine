@@ -123,11 +123,17 @@ void EditorLayer::ClearRecoverySnapshot() {
 }
 
 bool EditorLayer::DoSaveAs(World& world, AssetLibrary& assets) {
+    // #180 — the one choke point every save path goes through (menu, Ctrl+Shift+S, module API).
+    if (m_InPlayMode) {
+        Log::Warn("Save is disabled while Playing - changes made in Play mode revert on Stop.");
+        return false;
+    }
     std::string path = FileDialog::SaveFile("Scene Files\0*.json\0All Files\0*.*\0", "json", m_Window);
     if (path.empty()) return false; // user cancelled
     if (!SceneSerializer::Save(world, assets, path)) return false;
     ClearRecoverySnapshot();       // clears the snapshot for the PREVIOUS path (still current here)
     m_CurrentScenePath = path;
+    m_LoadFailedScenePath.clear(); // #84
     EditorSettings::Get().LastScenePath = path; // reopen this one next launch (#95)
     EditorSettings::Save();
     m_Dirty = false;
@@ -137,16 +143,55 @@ bool EditorLayer::DoSaveAs(World& world, AssetLibrary& assets) {
     return true;
 }
 
-void EditorLayer::DoSave(World& world, AssetLibrary& assets) {
-    if (m_CurrentScenePath.empty()) {   // untitled -> must choose a location
-        DoSaveAs(world, assets);
-        return;
+bool EditorLayer::DoSave(World& world, AssetLibrary& assets) {
+    // #180 — the action bar's Save icon and the module's document strip reached this with no
+    // Play-mode check (only the File menu and Ctrl+S had one), writing the live play state
+    // over the scene file. Guarding here covers every entry point.
+    if (m_InPlayMode) {
+        Log::Warn("Save is disabled while Playing - changes made in Play mode revert on Stop.");
+        return false;
     }
-    SceneSerializer::Save(world, assets, m_CurrentScenePath);
+    if (m_CurrentScenePath.empty()) {   // untitled -> must choose a location
+        return DoSaveAs(world, assets);
+    }
+    if (!m_LoadFailedScenePath.empty() && m_CurrentScenePath == m_LoadFailedScenePath) {
+        // #84 — never silently replace a scene that failed to load with whatever is in the
+        // world now (usually nothing). Ask for a new location instead.
+        Log::Warn("'" + m_CurrentScenePath + "' failed to load at startup, so it won't be overwritten - "
+                  "choose where to save instead (fix or restore the original file separately).");
+        return DoSaveAs(world, assets);
+    }
+    // #86 — a failed save (read-only file, disk full, file locked by sync/AV) must leave the
+    // scene dirty and keep the recovery snapshot; the error is logged, which also raises a toast.
+    if (!SceneSerializer::Save(world, assets, m_CurrentScenePath)) {
+        Log::Error("Save failed - '" + m_CurrentScenePath + "' was NOT updated. Your changes are still "
+                   "unsaved; try File > Save As.");
+        return false;
+    }
     m_Dirty = false;
     m_SavedUndoDepth = m_ContentDepth; // this history position now matches disk
     m_AutoSaveTimer = 0.0f;
     ClearRecoverySnapshot();            // the real file is now current — the snapshot is stale
+    return true;
+}
+
+void EditorLayer::OnStartupSceneLoadFailed(const std::string& path) {
+    m_LoadFailedScenePath = path;
+    Log::Error("Scene: '" + path + "' exists but could not be loaded (see the error above). The editor "
+               "started with an empty scene; the file on disk has been left untouched and Save will "
+               "ask for a new location instead of overwriting it.");
+}
+
+void EditorLayer::EmergencyRecoverySave(World& world, AssetLibrary& assets) noexcept {
+    try {
+        if (m_InPlayMode) OnExitPlayMode(world, assets);
+        if (m_Dirty && !m_CurrentScenePath.empty()) {
+            WriteRecoverySnapshot(world, assets);
+            Log::Error("Unexpected error - wrote a recovery snapshot of the unsaved scene.");
+        }
+    } catch (...) {
+        // The world may be what's broken; nothing more can be done safely here.
+    }
 }
 
 void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
@@ -166,6 +211,7 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
                 ClearSelection();
                 ClearUndoHistory();
                 m_Dirty = true; // recovered content isn't in the real scene file yet
+                m_LoadFailedScenePath.clear(); // #84 — the user chose this content for the path
                 m_SavedUndoDepth = -1;
                 Log::Info("Restored unsaved changes from the recovery snapshot.");
             } else {
@@ -231,6 +277,7 @@ void EditorLayer::DrawExitPrompt() {
         ImGui::SameLine();
         if (PrimaryButton("Don't Save", ImVec2(110.0f * m_UIScale, 0.0f))) {
             m_ExitDecision = ExitDecision::DiscardAndExit;
+            m_ExitDiscardChosen = true; // Shutdown() may drop the recovery snapshot (#86)
             m_ExitPromptPending = false;
             ImGui::CloseCurrentPopup();
         }
@@ -245,6 +292,13 @@ void EditorLayer::DrawExitPrompt() {
 }
 
 void EditorLayer::RequestNewScene(World& world, AssetLibrary& assets) {
+    // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
+    // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
+    // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
+    if (m_InPlayMode) {
+        Log::Warn("Stop Play mode before creating a new scene.");
+        return;
+    }
     if (m_Dirty) {
         m_PendingSceneSwitch = PendingSceneSwitch::New;
         m_PendingScenePath.clear();
@@ -255,6 +309,13 @@ void EditorLayer::RequestNewScene(World& world, AssetLibrary& assets) {
 }
 
 void EditorLayer::RequestOpenScene(World& world, AssetLibrary& assets, const std::string& path) {
+    // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
+    // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
+    // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
+    if (m_InPlayMode) {
+        Log::Warn("Stop Play mode before opening another scene.");
+        return;
+    }
     if (path.empty()) return; // dialog cancelled, or an empty drag payload
     if (m_Dirty) {
         m_PendingSceneSwitch = PendingSceneSwitch::Open;
@@ -266,6 +327,13 @@ void EditorLayer::RequestOpenScene(World& world, AssetLibrary& assets, const std
 }
 
 void EditorLayer::RequestRevertScene(World& world, AssetLibrary& assets) {
+    // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
+    // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
+    // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
+    if (m_InPlayMode) {
+        Log::Warn("Stop Play mode before reverting the scene.");
+        return;
+    }
     if (m_CurrentScenePath.empty()) return; // Untitled — nothing on disk to revert to
     std::error_code ec;
     if (!std::filesystem::exists(m_CurrentScenePath, ec) || ec) {
@@ -321,9 +389,9 @@ void EditorLayer::DrawSceneSwitchPrompt(World& world, AssetLibrary& assets) {
         if (PrimaryButton("Save", ImVec2(110.0f * m_UIScale, 0.0f))) {
             // DoSaveAs returns false if the user cancels the file dialog — in that case the
             // switch stays pending and the prompt stays open, same as a fresh Cancel would.
-            bool saved = true;
-            if (m_CurrentScenePath.empty()) saved = DoSaveAs(world, assets);
-            else DoSave(world, assets);
+            // #86 — DoSave now also reports a failed write, so a scene that couldn't be saved
+            // isn't silently switched away from (it would lose the unsaved changes).
+            const bool saved = DoSave(world, assets);
             if (saved) {
                 runPendingSwitch();
                 m_ScenePromptPending = false;
@@ -392,6 +460,7 @@ void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& 
 
 void EditorLayer::PushUndo(const World& world, const std::string& label, bool selectionOnly,
                            const std::vector<int>* selectedOrdersOverride) {
+    CancelEyedropper(); // #93
     const std::string sceneJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                               : SceneSerializer::SaveToString(world);
     UndoEntry entry;
@@ -444,6 +513,7 @@ std::string EditorLayer::SelectionUndoLabel(const World& world) const {
 }
 
 void EditorLayer::StageUndo(const World& world) {
+    CancelEyedropper(); // #93
     if (m_HasStagedUndo) return; // keep the FIRST (true pre-edit) snapshot of this interaction
     m_StagedUndoJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                    : SceneSerializer::SaveToString(world);
@@ -495,7 +565,12 @@ void EditorLayer::CommitStagedUndo(const World& world, const std::string& label)
 }
 
 void EditorLayer::Undo(World& world, AssetLibrary& assets) {
+    CancelEyedropper(); // #93 — the registry is about to be rebuilt
     if (m_UndoStack.empty()) return;
+    // #91 — Undo reloads the whole registry from a snapshot, which under a live PhysicsWorld
+    // (actors keyed by entity id) scrambles the simulation; and anything done in Play reverts on
+    // Stop anyway.
+    if (m_InPlayMode) { Log::Info("Undo is disabled while Playing - Stop reverts Play-mode changes."); return; }
 
     const std::string currentJson = SceneSerializer::SaveToString(world, assets);
     UndoEntry redoEntry;
@@ -509,14 +584,20 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     std::string targetJson;
     if (!PopHistoryEntry(m_UndoStack, m_UndoBaseJson, entry, targetJson)) return;
     if (!entry.SelectionOnly) m_ContentDepth--; // Q6 — a real-edit entry just left the live stack
-    SceneSerializer::LoadFromString(world, assets, targetJson);
+    if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
+        // #83 — a snapshot that can't be applied must not leave a half-loaded world.
+        Log::Error("Undo failed - the scene was left as it was.");
+        SceneSerializer::LoadFromString(world, assets, currentJson);
+    }
     RestoreSelectionByOrder(world, entry.SelectedOrders);
     InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
 }
 
 void EditorLayer::Redo(World& world, AssetLibrary& assets) {
+    CancelEyedropper(); // #93
     if (m_RedoStack.empty()) return;
+    if (m_InPlayMode) { Log::Info("Redo is disabled while Playing - Stop reverts Play-mode changes."); return; } // #91
 
     const std::string currentJson = SceneSerializer::SaveToString(world, assets);
     UndoEntry undoEntry;
@@ -530,7 +611,10 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     UndoEntry entry;
     std::string targetJson;
     if (!PopHistoryEntry(m_RedoStack, m_RedoBaseJson, entry, targetJson)) return;
-    SceneSerializer::LoadFromString(world, assets, targetJson);
+    if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
+        Log::Error("Redo failed - the scene was left as it was."); // #83
+        SceneSerializer::LoadFromString(world, assets, currentJson);
+    }
     RestoreSelectionByOrder(world, entry.SelectedOrders);
     InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
@@ -550,8 +634,11 @@ void EditorLayer::JumpToRedoEntry(World& world, AssetLibrary& assets, size_t red
 }
 
 void EditorLayer::OnEnterPlayMode(const World& world) {
+    CancelEyedropper(); // #93
     m_InPlayMode = true;
     m_PlayModeSnapshot = SceneSerializer::SaveToString(world);
+    m_PrePlayHistory = { m_UndoStack, m_RedoStack, m_UndoBaseJson, m_RedoBaseJson,
+                         m_ContentDepth, m_SavedUndoDepth, true }; // #91
     // Remember what's selected by OrderComponent value, not entt id: Stop rebuilds the whole
     // registry and entt recycles ids, so a retained handle can pass valid() yet denote a
     // different object afterward (#110).
@@ -588,6 +675,7 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
 }
 
 void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
+    CancelEyedropper(); // #93
     m_InPlayMode = false;
 
     // Always tear the PhysX world down, even on the snapshot-empty early-out below — Create()
@@ -603,6 +691,22 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
 
     SceneSerializer::LoadFromString(world, assets, m_PlayModeSnapshot);
     m_PlayModeSnapshot.clear();
+
+    // #91 — drop every history entry recorded during Play (their snapshots are play state; an
+    // Undo after Stop used to load one straight into the edit scene) by restoring the pre-Play
+    // history wholesale.
+    if (m_PrePlayHistory.Valid) {
+        m_UndoStack = std::move(m_PrePlayHistory.Undo);
+        m_RedoStack = std::move(m_PrePlayHistory.Redo);
+        m_UndoBaseJson = std::move(m_PrePlayHistory.UndoBase);
+        m_RedoBaseJson = std::move(m_PrePlayHistory.RedoBase);
+        m_ContentDepth = m_PrePlayHistory.ContentDepth;
+        m_SavedUndoDepth = m_PrePlayHistory.SavedDepth;
+        m_PrePlayHistory = {};
+        m_HasStagedUndo = false;
+        m_StagedUndoJson.clear();
+        RefreshDirtyFromHistory();
+    }
 
     // Drop every retained handle before it can rebind to a recycled id (#110).
     ClearSelection();
@@ -628,6 +732,14 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     Log::Info("Exited play mode - scene state restored.");
 }
 void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
+    CancelEyedropper(); // #93
+    // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
+    // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
+    // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
+    if (m_InPlayMode) {
+        Log::Warn("Stop Play mode before creating a new scene.");
+        return;
+    }
     world = World();
     InvalidateModelThumbnail();
     ClearSelection();
@@ -657,6 +769,7 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
         // so a failed write below leaves that snapshot in place as the way back.
         ClearRecoverySnapshot();
         m_CurrentScenePath = pathStr;
+        m_LoadFailedScenePath.clear(); // #84
         m_Dirty = false;                       // matches disk
         m_SavedUndoDepth = m_ContentDepth;
         EditorSettings::Get().LastScenePath = pathStr;
@@ -675,7 +788,16 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
 }
 
 void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::string& path) {
+    CancelEyedropper(); // #93
+    // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
+    // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
+    // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
+    if (m_InPlayMode) {
+        Log::Warn("Stop Play mode before opening another scene.");
+        return;
+    }
     if (path.empty() || !SceneSerializer::Load(world, assets, path)) return;
+    m_LoadFailedScenePath.clear(); // #84 — a real scene is loaded now
     InvalidateModelThumbnail();
     ClearRecoverySnapshot(); // drop the outgoing scene's snapshot before switching away from it
     m_CurrentScenePath = path;

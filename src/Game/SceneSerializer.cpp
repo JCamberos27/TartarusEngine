@@ -1,4 +1,5 @@
 #include "SceneSerializer.h"
+#include "AtomicFile.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "ComponentRegistry.h"
@@ -215,6 +216,113 @@ std::shared_ptr<Texture> LoadIfPresent(AssetLibrary& assets, const json& obj, co
     std::string path = ResolveAssetRef(obj[key]);
     if (path.empty()) return nullptr;
     return assets.LoadTexture(path);
+}
+
+// Material slots of a RenderableComponent <-> JSON. Shared by boxes and models: #120 — boxes
+// used to write only their colour, so a .mat or an embedded PBR material assigned to a
+// level-geometry box was silently dropped on save, on every undo/redo and on Play -> Stop.
+json MaterialSlotsToJson(const std::vector<std::shared_ptr<MaterialAsset>>& matSlots) {
+    if (matSlots.empty()) return nullptr;
+    json arr = json::array();
+    for (const auto& slot : matSlots) {
+        if (!slot) { arr.push_back(nullptr); continue; }
+        if (!slot->Path.empty()) {
+            json entry;
+            AssetGuid g = AssetDatabase::GuidForPath(slot->Path);
+            if (g.IsValid()) entry["guid"] = g.ToString();
+            entry["path"] = AssetPathForWrite(slot->Path); // audit #364
+            arr.push_back(entry);
+        } else {
+            const auto& smat = slot->Mat;
+            json em = {
+                {"baseColor", Vec3ToJson(smat.BaseColor)},
+                {"metallic", smat.Metallic},
+                {"roughness", smat.Roughness},
+                {"emissiveColor", Vec3ToJson(smat.EmissiveColor)},
+                {"emissiveStrength", smat.EmissiveStrength},
+                {"triplanar", smat.Triplanar},
+                {"triplanarScale", smat.TriplanarScale},
+                {"albedoMap",            PathRef(PathOrEmpty(smat.AlbedoMap))},
+                {"normalMap",            PathRef(PathOrEmpty(smat.NormalMap))},
+                {"metallicRoughnessMap", PathRef(PathOrEmpty(smat.MetallicRoughnessMap))},
+                {"metallicMap",          PathRef(PathOrEmpty(smat.MetallicMap))},
+                {"roughnessMap",         PathRef(PathOrEmpty(smat.RoughnessMap))},
+                {"aoMap",                PathRef(PathOrEmpty(smat.AOMap))},
+                {"emissiveMap",          PathRef(PathOrEmpty(smat.EmissiveMap))},
+            };
+            // #120 — the advanced lobes and surface settings were not persisted for embedded
+            // materials either. Written only when not default, to keep scene diffs small.
+            if (smat.ClearCoat != 0.0f)            em["clearCoat"] = smat.ClearCoat;
+            if (smat.ClearCoatRoughness != 0.5f)   em["clearCoatRoughness"] = smat.ClearCoatRoughness;
+            if (smat.Anisotropy != 0.0f)           em["anisotropy"] = smat.Anisotropy;
+            if (smat.AnisotropyRotation != 0.0f)   em["anisotropyRotation"] = smat.AnisotropyRotation;
+            if (smat.Sheen != glm::vec3(0.0f))     em["sheen"] = Vec3ToJson(smat.Sheen);
+            if (smat.SheenRoughness != 0.5f)       em["sheenRoughness"] = smat.SheenRoughness;
+            if (smat.SubsurfaceEnabled)            em["subsurface"] = true;
+            if (smat.SubsurfaceColor != glm::vec3(1.0f, 0.8f, 0.6f)) em["subsurfaceColor"] = Vec3ToJson(smat.SubsurfaceColor);
+            if (smat.Thickness != 0.5f)            em["thickness"] = smat.Thickness;
+            if (smat.TransmissionStrength != 0.0f) em["transmission"] = smat.TransmissionStrength;
+            if (smat.IOR != 1.5f)                  em["ior"] = smat.IOR;
+            if (smat.ReflectionProbes)             em["reflectionProbes"] = true;
+            if (smat.AlphaCutoff != 0.5f)          em["alphaCutoff"] = smat.AlphaCutoff;
+            if (slot->RenderQueue != MaterialAsset::Queue::Opaque) em["renderQueue"] = (int)slot->RenderQueue;
+            if (slot->Opacity != 1.0f)             em["opacity"] = slot->Opacity;
+            arr.push_back({{"embedded", std::move(em)}});
+        }
+    }
+    return arr;
+}
+
+std::shared_ptr<MaterialAsset> ReadEmbeddedMat(AssetLibrary& assets, const json& mj) {
+    auto ma = std::make_shared<MaterialAsset>();
+    ma->Mat.BaseColor       = JsonToVec3(mj.value("baseColor", json::array({1, 1, 1})), glm::vec3(1.0f));
+    ma->Mat.Metallic        = mj.value("metallic", 0.0f);
+    ma->Mat.Roughness       = mj.value("roughness", 0.5f);
+    ma->Mat.EmissiveColor   = JsonToVec3(mj.value("emissiveColor", json::array({0, 0, 0})));
+    ma->Mat.EmissiveStrength= mj.value("emissiveStrength", 1.0f);
+    ma->Mat.Triplanar       = mj.value("triplanar", false);
+    ma->Mat.TriplanarScale  = mj.value("triplanarScale", 1.0f);
+    ma->Mat.AlbedoMap            = LoadIfPresent(assets, mj, "albedoMap");
+    ma->Mat.NormalMap            = LoadIfPresent(assets, mj, "normalMap");
+    ma->Mat.MetallicRoughnessMap = LoadIfPresent(assets, mj, "metallicRoughnessMap");
+    ma->Mat.MetallicMap          = LoadIfPresent(assets, mj, "metallicMap");
+    ma->Mat.RoughnessMap         = LoadIfPresent(assets, mj, "roughnessMap");
+    ma->Mat.AOMap                = LoadIfPresent(assets, mj, "aoMap");
+    ma->Mat.EmissiveMap          = LoadIfPresent(assets, mj, "emissiveMap");
+    ma->Mat.ClearCoat            = mj.value("clearCoat", 0.0f);
+    ma->Mat.ClearCoatRoughness   = mj.value("clearCoatRoughness", 0.5f);
+    ma->Mat.Anisotropy           = mj.value("anisotropy", 0.0f);
+    ma->Mat.AnisotropyRotation   = mj.value("anisotropyRotation", 0.0f);
+    ma->Mat.Sheen                = JsonToVec3(mj.value("sheen", json::array({0, 0, 0})));
+    ma->Mat.SheenRoughness       = mj.value("sheenRoughness", 0.5f);
+    ma->Mat.SubsurfaceEnabled    = mj.value("subsurface", false);
+    ma->Mat.SubsurfaceColor      = JsonToVec3(mj.value("subsurfaceColor", json::array({1.0, 0.8, 0.6})), glm::vec3(1.0f, 0.8f, 0.6f));
+    ma->Mat.Thickness            = mj.value("thickness", 0.5f);
+    ma->Mat.TransmissionStrength = mj.value("transmission", 0.0f);
+    ma->Mat.IOR                  = mj.value("ior", 1.5f);
+    ma->Mat.ReflectionProbes     = mj.value("reflectionProbes", false);
+    ma->Mat.AlphaCutoff          = mj.value("alphaCutoff", 0.5f);
+    ma->RenderQueue              = (MaterialAsset::Queue)std::clamp(mj.value("renderQueue", 0), 0, 2);
+    ma->Mat.AlphaClip            = ma->RenderQueue == MaterialAsset::Queue::AlphaTest;
+    ma->Opacity                  = mj.value("opacity", 1.0f);
+    return ma;
+}
+
+void ReadMaterialSlots(AssetLibrary& assets, const json& obj, RenderableComponent& rc) {
+    if (obj.contains("materials") && obj["materials"].is_array()) {
+        for (const auto& slot_j : obj["materials"]) {
+            if (slot_j.is_null()) { rc.Materials.push_back(nullptr); continue; }
+            if (slot_j.contains("embedded")) {
+                rc.Materials.push_back(ReadEmbeddedMat(assets, slot_j["embedded"]));
+            } else {
+                std::string path = ResolveAssetRef(slot_j);
+                rc.Materials.push_back(path.empty() ? nullptr : assets.LoadMaterial(path));
+            }
+        }
+    } else if (obj.contains("material")) {
+        // Legacy pre-PR5 format: single embedded Material -> slot 0
+        rc.Materials.assign(1, ReadEmbeddedMat(assets, obj["material"]));
+    }
 }
 
 // --- One reflected field <-> JSON, in one place -------------------------------------------
@@ -776,6 +884,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             {"id", idOf[entity]},
             {"parentId", parentIdOf(entity)},
         };
+        if (json slots = MaterialSlotsToJson(renderable.Materials); !slots.is_null()) b["materials"] = std::move(slots); // #120
         WriteCommonComponents(b, world, entity);
         boxes.push_back(b);
     }
@@ -824,39 +933,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         m["id"] = idOf[entity];
         m["parentId"] = parentIdOf(entity);
 
-        const auto& matSlots = renderable.Materials;
-        if (!matSlots.empty()) {
-            json arr = json::array();
-            for (const auto& slot : matSlots) {
-                if (!slot) { arr.push_back(nullptr); continue; }
-                if (!slot->Path.empty()) {
-                    json entry;
-                    AssetGuid g = AssetDatabase::GuidForPath(slot->Path);
-                    if (g.IsValid()) entry["guid"] = g.ToString();
-                    entry["path"] = AssetPathForWrite(slot->Path); // audit #364
-                    arr.push_back(entry);
-                } else {
-                    const auto& smat = slot->Mat;
-                    arr.push_back({{"embedded", {
-                        {"baseColor", Vec3ToJson(smat.BaseColor)},
-                        {"metallic", smat.Metallic},
-                        {"roughness", smat.Roughness},
-                        {"emissiveColor", Vec3ToJson(smat.EmissiveColor)},
-                        {"emissiveStrength", smat.EmissiveStrength},
-                        {"triplanar", smat.Triplanar},
-                        {"triplanarScale", smat.TriplanarScale},
-                        {"albedoMap",            PathRef(PathOrEmpty(smat.AlbedoMap))},
-                        {"normalMap",            PathRef(PathOrEmpty(smat.NormalMap))},
-                        {"metallicRoughnessMap", PathRef(PathOrEmpty(smat.MetallicRoughnessMap))},
-                        {"metallicMap",          PathRef(PathOrEmpty(smat.MetallicMap))},
-                        {"roughnessMap",         PathRef(PathOrEmpty(smat.RoughnessMap))},
-                        {"aoMap",                PathRef(PathOrEmpty(smat.AOMap))},
-                        {"emissiveMap",          PathRef(PathOrEmpty(smat.EmissiveMap))},
-                    }}});
-                }
-            }
-            m["materials"] = arr;
-        }
+        if (json slots = MaterialSlotsToJson(renderable.Materials); !slots.is_null()) m["materials"] = std::move(slots);
         WriteCommonComponents(m, world, entity);
         models.push_back(m);
     }
@@ -893,8 +970,18 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             // pristine counterpart in the .prefab file, by prefab-local index.
             if (!pi.InstanceEntities.empty()) {
                 std::ifstream pf(pi.SourcePath);
+                json prefab;
+                bool prefabOk = false;
                 if (pf.is_open()) {
-                    json prefab; pf >> prefab;
+                    // #82 — a corrupt / merge-conflicted .prefab must not abort the whole scene
+                    // save: skip this instance's override diff (its stub still saves) and warn.
+                    try { pf >> prefab; prefabOk = true; }
+                    catch (const std::exception& ex) {
+                        Log::Warn("Scene: couldn't parse prefab '" + pi.SourcePath +
+                                  "' while saving - its per-field overrides were not re-diffed: " + ex.what());
+                    }
+                }
+                if (prefabOk) {
                     std::vector<const json*> pristineEnts = PrefabEntityObjects(prefab);
                     json overrides = json::array();
                     const std::size_t n = std::min(pi.InstanceEntities.size(), pristineEnts.size());
@@ -916,11 +1003,31 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
     return root;
 }
 
+// #83 — every field read below uses json::value()/get<T>(), which THROW json::type_error on a
+// wrong-typed value ("tag": 5, "name": null, a bool written as "true", ...). The wrapper turns
+// any such exception into an ordinary load failure with a logged reason instead of letting it
+// escape to main()'s outermost catch and close the editor. Callers restore the previous world
+// on failure (see SceneSerializer::Load / Undo).
+bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
+    bool clearFirst, std::vector<entt::entity>* outCreated,
+    std::unordered_map<int, entt::entity>* outSourceOrder);
+bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
+    bool clearFirst = true, std::vector<entt::entity>* outCreated = nullptr,
+    std::unordered_map<int, entt::entity>* outSourceOrder = nullptr) {
+    try {
+        return ApplySceneJsonImpl(world, assets, root, clearFirst, outCreated, outSourceOrder);
+    } catch (const std::exception& e) {
+        Log::Error(std::string("Scene: the scene data is malformed and could not be loaded: ") + e.what());
+        return false;
+    }
+}
+
 // `clearFirst` false ADDS to the existing scene instead of replacing it — the difference
 // between loading a scene and pasting/instantiating a fragment into one. `outCreated`, when
 // given, collects every entity this call created so the caller can select or offset them.
-bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
-    bool clearFirst = true, std::vector<entt::entity>* outCreated = nullptr) {
+bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
+    bool clearFirst, std::vector<entt::entity>* outCreated,
+    std::unordered_map<int, entt::entity>* outSourceOrder) {
     ApplyDepthGuard depthGuard; // #236 A2 — bounds prefab-stub expansion recursion
     if (g_ApplyDepth > kMaxApplyDepth) {
         Log::Error("Scene: prefab instance nesting too deep (" + std::to_string(kMaxApplyDepth) +
@@ -1008,8 +1115,15 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
     // get sequential file-order values here, matching the old boxes->models->empties behaviour.
     int fallbackOrder = 0;
     int maxLoadedOrder = -1;
+    // #119 — append mode: the fragment's own order values -> the new copies, used below to
+    // repoint intra-fragment joint references and handed back to the caller.
+    std::unordered_map<int, entt::entity> sourceOrder;
     auto applyOrder = [&](entt::entity e, const json& j) {
-        if (!clearFirst) return;
+        if (!clearFirst) {
+            if (auto it = j.find("order"); it != j.end() && it->is_number_integer())
+                sourceOrder[it->get<int>()] = e;
+            return;
+        }
         int order = j.value("order", fallbackOrder);
         fallbackOrder = std::max(fallbackOrder, order) + 1;
         maxLoadedOrder = std::max(maxLoadedOrder, order);
@@ -1030,6 +1144,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             glm::vec3 rotation = JsonToVec3(b.value("rotation", json::array({0, 0, 0})));
             std::string name = b.value("name", std::string());
             entt::entity e = world.CreateBox(center, size, color, rotation, name);
+            ReadMaterialSlots(assets, b, world.Registry.get<RenderableComponent>(e)); // #120
             ReadCommonComponents(b, world, assets, e);
             applyOrder(e, b);
             created(e);
@@ -1056,39 +1171,7 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
             entt::entity e = world.CreateModelEntity(model, position, rotation, scale, name);
             auto& rc = world.Registry.get<RenderableComponent>(e);
 
-            auto ReadEmbeddedMat = [&](const json& mj) -> std::shared_ptr<MaterialAsset> {
-                auto ma = std::make_shared<MaterialAsset>();
-                ma->Mat.BaseColor       = JsonToVec3(mj.value("baseColor", json::array({1, 1, 1})), glm::vec3(1.0f));
-                ma->Mat.Metallic        = mj.value("metallic", 0.0f);
-                ma->Mat.Roughness       = mj.value("roughness", 0.5f);
-                ma->Mat.EmissiveColor   = JsonToVec3(mj.value("emissiveColor", json::array({0, 0, 0})));
-                ma->Mat.EmissiveStrength= mj.value("emissiveStrength", 1.0f);
-                ma->Mat.Triplanar       = mj.value("triplanar", false);
-                ma->Mat.TriplanarScale  = mj.value("triplanarScale", 1.0f);
-                ma->Mat.AlbedoMap            = LoadIfPresent(assets, mj, "albedoMap");
-                ma->Mat.NormalMap            = LoadIfPresent(assets, mj, "normalMap");
-                ma->Mat.MetallicRoughnessMap = LoadIfPresent(assets, mj, "metallicRoughnessMap");
-                ma->Mat.MetallicMap          = LoadIfPresent(assets, mj, "metallicMap");
-                ma->Mat.RoughnessMap         = LoadIfPresent(assets, mj, "roughnessMap");
-                ma->Mat.AOMap                = LoadIfPresent(assets, mj, "aoMap");
-                ma->Mat.EmissiveMap          = LoadIfPresent(assets, mj, "emissiveMap");
-                return ma;
-            };
-
-            if (m.contains("materials") && m["materials"].is_array()) {
-                for (const auto& slot_j : m["materials"]) {
-                    if (slot_j.is_null()) { rc.Materials.push_back(nullptr); continue; }
-                    if (slot_j.contains("embedded")) {
-                        rc.Materials.push_back(ReadEmbeddedMat(slot_j["embedded"]));
-                    } else {
-                        std::string path = ResolveAssetRef(slot_j);
-                        rc.Materials.push_back(path.empty() ? nullptr : assets.LoadMaterial(path));
-                    }
-                }
-            } else if (m.contains("material")) {
-                // Legacy pre-PR5 format: single embedded Material → slot 0
-                rc.Materials.assign(1, ReadEmbeddedMat(m["material"]));
-            }
+            ReadMaterialSlots(assets, m, rc);
             ReadCommonComponents(m, world, assets, e); // handles the "Audio Source" block + the legacy "sound*" shim
             applyOrder(e, m);
             created(e);
@@ -1207,6 +1290,20 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
     for (const auto& [child, parentId] : pendingParents) {
         auto it = idToEntity.find(parentId);
         if (it != idToEntity.end()) world.AttachChildRaw(child, it->second);
+    }
+
+    // #119 — a copied joint whose partner was copied with it must connect to the partner's copy,
+    // not the original (a partner outside the fragment keeps the original reference).
+    if (!clearFirst) {
+        for (const auto& [oldOrder, e] : sourceOrder) {
+            auto* joint = world.Registry.try_get<JointComponent>(e);
+            if (!joint || joint->ConnectedOrder < 0) continue;
+            auto partner = sourceOrder.find(joint->ConnectedOrder);
+            if (partner == sourceOrder.end()) continue;
+            if (const auto* o = world.Registry.try_get<OrderComponent>(partner->second))
+                joint->ConnectedOrder = o->Value;
+        }
+        if (outSourceOrder) *outSourceOrder = std::move(sourceOrder);
     }
 
     return true;
@@ -1497,15 +1594,25 @@ void WarnNonPortablePaths(const json& node, const std::string& pointer) {
 } // namespace
 
 bool SceneSerializer::Save(const World& world, const AssetLibrary& assets, const std::string& path) {
-    std::ofstream out(path);
-    if (!out.is_open()) {
-        Log::Error("Scene: failed to open '" + path + "' for writing.");
+    // #82 — build the whole document in memory FIRST, and only then touch the file, through
+    // AtomicFile (temp + flush + atomic replace). The old version opened a truncating ofstream
+    // before building, so any exception while building (e.g. a corrupt prefab) left the scene
+    // file empty; and it never checked the write, so a full disk / locked file still reported
+    // success.
+    std::string text;
+    try {
+        json root = BuildSceneJson(world);
+        AppendAssetLibraryJson(root, assets);
+        WarnNonPortablePaths(root, ""); // audit #364 — surface any absolute/'..' path before it's written
+        text = root.dump(2);
+    } catch (const std::exception& e) {
+        Log::Error("Scene: couldn't serialize the scene for '" + path + "' (file left untouched): " + e.what());
         return false;
     }
-    json root = BuildSceneJson(world);
-    AppendAssetLibraryJson(root, assets);
-    WarnNonPortablePaths(root, ""); // audit #364 — surface any absolute/'..' path before it's written
-    out << root.dump(2);
+    if (!AtomicFile::WriteBytes(std::filesystem::path(path), text, /*binary=*/false)) {
+        Log::Error("Scene: failed to write '" + path + "' - the previous version on disk was kept.");
+        return false;
+    }
     return true;
 }
 
@@ -1550,8 +1657,22 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
     }
 
     g_MigrationLog.clear();
-    ApplyAssetLibraryJson(assets, root); // before ApplySceneJson: harmless either order, but library assets should exist first
-    bool ok = ApplySceneJson(world, assets, root);
+    // #83 — keep the current world so a malformed file can't leave a half-loaded one behind.
+    std::string previous;
+    try { previous = SaveToString(world, assets); } catch (...) {}
+    bool ok = true;
+    try {
+        ApplyAssetLibraryJson(assets, root); // before ApplySceneJson: harmless either order, but library assets should exist first
+    } catch (const std::exception& e) {
+        Log::Error("Scene: asset library data in '" + path + "' is malformed: " + e.what());
+        ok = false;
+    }
+    if (ok) ok = ApplySceneJson(world, assets, root);
+    if (!ok) {
+        Log::Error("Scene: '" + path + "' could not be loaded; the previous scene was kept.");
+        if (!previous.empty()) LoadFromString(world, assets, previous);
+        return false;
+    }
 
     if (ok && migrating && !g_MigrationLog.empty()) {
         Log::Info((persistMigration ? "Scene: upgraded '" : "Scene: would upgrade (not persisting) '") + path +
@@ -1612,16 +1733,54 @@ bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const s
     // (multi-second stalls long enough to trip a GPU driver watchdog on a real project's worth
     // of assets), not just a style choice being reverted here.
     if (root.value("hasAssetLibrarySnapshot", false)) {
-        std::set<std::string> keepModels, keepTextures, keepSounds, keepPrefabs, keepFolders, keepMaterials;
-        if (root.contains("libraryModels")) for (const auto& p : root["libraryModels"]) keepModels.insert(p.get<std::string>());
-        if (root.contains("libraryTextures")) for (const auto& p : root["libraryTextures"]) keepTextures.insert(p.get<std::string>());
-        if (root.contains("librarySounds")) for (const auto& p : root["librarySounds"]) keepSounds.insert(p.get<std::string>());
-        if (root.contains("libraryPrefabs")) for (const auto& p : root["libraryPrefabs"]) keepPrefabs.insert(p.get<std::string>());
-        if (root.contains("assetFolders")) for (const auto& f : root["assetFolders"]) keepFolders.insert(f.get<std::string>());
-        if (root.contains("libraryMaterials")) for (const auto& p : root["libraryMaterials"]) keepMaterials.insert(p.get<std::string>());
+        // #81 — library entries are written through PathRef(), so each one is either a plain
+        // project-relative string or a {"path","pathGuid"} object; and the live library keys its
+        // assets by the (usually absolute) path they were loaded from. Match the two in the
+        // WRITTEN form (AssetPathForWrite, or the GUID when both sides have one) and hand
+        // PruneToKeepSet the live path, so a still-wanted asset is recognised and kept instead of
+        // the old raw get<std::string>() throwing on the first object entry (crashing Undo) or,
+        // for plain strings, never matching and re-importing the whole library every step.
+        auto keepSet = [&](const char* key, const std::vector<std::string>& livePaths) {
+            std::set<std::string> keep;
+            auto it = root.find(key);
+            if (it == root.end() || !it->is_array()) return keep;
+            std::set<std::string> storedPaths, storedGuids;
+            for (const auto& p : *it) {
+                if (p.is_string()) storedPaths.insert(p.get<std::string>());
+                else if (p.is_object()) {
+                    const auto path = p.find("path");
+                    if (path != p.end() && path->is_string()) storedPaths.insert(path->get<std::string>());
+                    const auto guid = p.find("pathGuid");
+                    if (guid != p.end() && guid->is_string()) storedGuids.insert(guid->get<std::string>());
+                }
+            }
+            for (const auto& live : livePaths) {
+                const AssetGuid g = AssetDatabase::GuidForPath(live);
+                if (storedPaths.count(AssetPathForWrite(live)) || storedPaths.count(live) ||
+                    (g.IsValid() && storedGuids.count(g.ToString())))
+                    keep.insert(live);
+            }
+            return keep;
+        };
+        std::vector<std::string> liveModels, liveTextures, liveMaterials;
+        for (const auto& m : assets.Models()) liveModels.push_back(m->Path());
+        for (const auto& t : assets.Textures()) liveTextures.push_back(t->Path());
+        for (const auto& m : assets.Materials()) liveMaterials.push_back(m->Path);
+        std::set<std::string> keepModels = keepSet("libraryModels", liveModels);
+        std::set<std::string> keepTextures = keepSet("libraryTextures", liveTextures);
+        std::set<std::string> keepSounds = keepSet("librarySounds", assets.Sounds());
+        std::set<std::string> keepPrefabs = keepSet("libraryPrefabs", assets.Prefabs());
+        std::set<std::string> keepMaterials = keepSet("libraryMaterials", liveMaterials);
+        std::set<std::string> keepFolders;
+        if (auto it = root.find("assetFolders"); it != root.end() && it->is_array())
+            for (const auto& f : *it) if (f.is_string()) keepFolders.insert(f.get<std::string>());
         assets.PruneToKeepSet(keepModels, keepTextures, keepSounds, keepPrefabs, keepFolders, keepMaterials);
         assets.ClearMetadataOnly();
-        ApplyAssetLibraryJson(assets, root);
+        try { ApplyAssetLibraryJson(assets, root); }
+        catch (const std::exception& e) {
+            Log::Error(std::string("Scene: snapshot asset library data is malformed: ") + e.what()); // #83
+            return false;
+        }
     }
     return ApplySceneJson(world, assets, root);
 }
@@ -1643,7 +1802,8 @@ std::string SceneSerializer::SaveEntitiesToString(const World& world,
 }
 
 bool SceneSerializer::AppendEntitiesFromString(World& world, AssetLibrary& assets,
-    const std::string& data, std::vector<entt::entity>& outCreated) {
+    const std::string& data, std::vector<entt::entity>& outCreated,
+    std::unordered_map<int, entt::entity>* outSourceOrder) {
     json root;
     try {
         root = json::parse(data);
@@ -1651,21 +1811,21 @@ bool SceneSerializer::AppendEntitiesFromString(World& world, AssetLibrary& asset
         Log::Error(std::string("Scene: failed to parse entity fragment: ") + e.what());
         return false;
     }
-    return ApplySceneJson(world, assets, root, /*clearFirst=*/false, &outCreated);
+    return ApplySceneJson(world, assets, root, /*clearFirst=*/false, &outCreated, outSourceOrder);
 }
 
 bool SceneSerializer::SavePrefab(const World& world, entt::entity root, const std::string& path) {
     if (!world.Registry.valid(root)) return false;
-    std::ofstream out(path);
-    if (!out.is_open()) {
-        Log::Error("Prefab: failed to open '" + path + "' for writing.");
-        return false;
-    }
     // Re-parsed and re-dumped with indentation so a prefab file is human-readable/diffable,
     // unlike the compact in-memory clipboard form the same function produces. flatten=true: a
     // .prefab asset is self-contained — if `root` (or a child) is itself a prefab instance it is
     // baked in fully here, not left as a nested link (#236 A2 — nested prefabs are stage 4).
-    out << json::parse(SaveEntitiesToString(world, {root}, /*flattenPrefabInstances=*/true)).dump(2);
+    // #82 — atomic write, and the write result is checked.
+    if (!AtomicFile::WriteJson(std::filesystem::path(path),
+            json::parse(SaveEntitiesToString(world, {root}, /*flattenPrefabInstances=*/true)))) {
+        Log::Error("Prefab: failed to write '" + path + "'.");
+        return false;
+    }
     Log::Info("Saved prefab '" + path + "'.");
     return true;
 }
@@ -1795,10 +1955,7 @@ bool SceneSerializer::ApplyPrefabField(World& world, entt::entity entity,
         (*pe)[jsonKey][field] = value;
     }
 
-    std::ofstream out(pi.SourcePath);
-    if (!out.is_open()) return false;
-    out << prefab.dump(2);
-    out.close();
+    if (!AtomicFile::WriteJson(std::filesystem::path(pi.SourcePath), prefab)) return false; // #82
 
     g_prefabPristineCache.erase(pi.SourcePath); // Inspector re-reads -> override marker clears
     Log::Info("Applied '" + std::string(component) + "." + field + "' to prefab '" + pi.SourcePath +
@@ -1864,10 +2021,7 @@ bool SceneSerializer::ApplyPrefabComponent(World& world, entt::entity entity, co
     // comment above for why (Collider/Joint's legacy lowercase JSON key).
     (*pe)[ReflectComponentKey(rcp->Meta)] = std::move(cj);
 
-    std::ofstream out(pi.SourcePath);
-    if (!out.is_open()) return false;
-    out << prefab.dump(2);
-    out.close();
+    if (!AtomicFile::WriteJson(std::filesystem::path(pi.SourcePath), prefab)) return false; // #82
 
     g_prefabPristineCache.erase(pi.SourcePath);
     Log::Info("Applied component '" + std::string(component) + "' to prefab '" + pi.SourcePath +
