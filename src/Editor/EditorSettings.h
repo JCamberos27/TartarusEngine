@@ -205,6 +205,24 @@ struct EditorSettings {
     bool CaptureFlash  = true;
     bool CaptureSound  = true;
 
+    // --- Scene-view tool state (#135). EditorLayer owns the live copies (m_ShowGrid,
+    // m_SnapTranslation, ...), which dozens of menus/hotkeys/toolbar buttons edit directly;
+    // Init() seeds them from here and SyncViewportPrefs() writes them back each frame when any
+    // changed. ActiveTool is a GizmoOp, ShadingMode an EditorLayer::ShadingMode.
+    bool  ViewShowGrid         = true;
+    bool  ViewShowGizmo        = true;
+    bool  ViewFrameOnSelect    = false;
+    float GizmoSize            = 0.15f;
+    float VertexPickPixels     = 35.0f;
+    bool  SnapEnabled          = true;
+    float SnapTranslation      = 1.0f;
+    float SnapRotationDeg      = 15.0f;
+    float SnapScale            = 0.1f;
+    bool  GizmoLocalSpace      = false;
+    bool  GizmoPivotCenter     = false;
+    int   ActiveTool           = 0;
+    int   ShadingMode          = 0;
+
     static EditorSettings& Get() {
         static EditorSettings instance;
         return instance;

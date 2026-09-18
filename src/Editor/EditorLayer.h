@@ -1099,6 +1099,8 @@ private:
     glm::vec2 m_BoxSelectStart{0.0f, 0.0f};
     void AddToSelectionIfAbsent(entt::entity entity); // additive-only: never toggles an already-selected item off
 
+    void SyncViewportPrefs(); // #135 — persist the members below that EditorSettings mirrors
+
     bool m_ShowGrid = true;
     bool m_ShowGizmos = true; // View menu toggle for the viewport transform gizmo (audit #60)
     bool m_GizmosMasterVisible = true; // #236 "Gizmos" dropdown master switch — hides every viewport gizmo/icon at once

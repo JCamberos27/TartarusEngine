@@ -145,6 +145,19 @@ void EditorSettings::Load() {
     s.CaptureFormat = SafeValue(root, "captureFormat", s.CaptureFormat);
     s.CaptureFlash = SafeValue(root, "captureFlash", s.CaptureFlash);
     s.CaptureSound = SafeValue(root, "captureSound", s.CaptureSound);
+    s.ViewShowGrid = SafeValue(root, "viewShowGrid", s.ViewShowGrid);
+    s.ViewShowGizmo = SafeValue(root, "viewShowGizmo", s.ViewShowGizmo);
+    s.ViewFrameOnSelect = SafeValue(root, "viewFrameOnSelect", s.ViewFrameOnSelect);
+    s.GizmoSize = SafeValue(root, "gizmoSize", s.GizmoSize);
+    s.VertexPickPixels = SafeValue(root, "vertexPickPixels", s.VertexPickPixels);
+    s.SnapEnabled = SafeValue(root, "snapEnabled", s.SnapEnabled);
+    s.SnapTranslation = SafeValue(root, "snapTranslation", s.SnapTranslation);
+    s.SnapRotationDeg = SafeValue(root, "snapRotationDeg", s.SnapRotationDeg);
+    s.SnapScale = SafeValue(root, "snapScale", s.SnapScale);
+    s.GizmoLocalSpace = SafeValue(root, "gizmoLocalSpace", s.GizmoLocalSpace);
+    s.GizmoPivotCenter = SafeValue(root, "gizmoPivotCenter", s.GizmoPivotCenter);
+    s.ActiveTool = SafeValue(root, "activeTool", s.ActiveTool);
+    s.ShadingMode = SafeValue(root, "shadingMode", s.ShadingMode);
 
     // #126 — values that are the right type but nonsensical (0 / negative / NaN from a hand
     // edit or an older build) would otherwise produce NaN projections, a zero-size grid, a
@@ -175,6 +188,14 @@ void EditorSettings::Load() {
     s.CaptureMode = std::clamp(s.CaptureMode, 0, 3);
     s.CaptureScale = std::clamp(s.CaptureScale, 1, 4);
     s.CaptureFormat = std::clamp(s.CaptureFormat, 0, 1);
+    // #135 — same ranges as the Preferences / toolbar sliders.
+    clampF(s.GizmoSize, 0.05f, 0.40f, 0.15f);
+    clampF(s.VertexPickPixels, 5.0f, 150.0f, 35.0f);
+    clampF(s.SnapTranslation, 0.001f, 100.0f, 1.0f);
+    clampF(s.SnapRotationDeg, 0.1f, 180.0f, 15.0f);
+    clampF(s.SnapScale, 0.001f, 10.0f, 0.1f);
+    s.ActiveTool = std::clamp(s.ActiveTool, 0, 4);   // GizmoOp::Translate..Universal
+    s.ShadingMode = std::clamp(s.ShadingMode, 0, 5); // EditorLayer::ShadingMode::Shaded..Mip
 }
 
 void EditorSettings::Save() {
@@ -252,6 +273,19 @@ void EditorSettings::Flush() {
     root["captureFormat"] = Get().CaptureFormat;
     root["captureFlash"] = Get().CaptureFlash;
     root["captureSound"] = Get().CaptureSound;
+    root["viewShowGrid"] = Get().ViewShowGrid;
+    root["viewShowGizmo"] = Get().ViewShowGizmo;
+    root["viewFrameOnSelect"] = Get().ViewFrameOnSelect;
+    root["gizmoSize"] = Get().GizmoSize;
+    root["vertexPickPixels"] = Get().VertexPickPixels;
+    root["snapEnabled"] = Get().SnapEnabled;
+    root["snapTranslation"] = Get().SnapTranslation;
+    root["snapRotationDeg"] = Get().SnapRotationDeg;
+    root["snapScale"] = Get().SnapScale;
+    root["gizmoLocalSpace"] = Get().GizmoLocalSpace;
+    root["gizmoPivotCenter"] = Get().GizmoPivotCenter;
+    root["activeTool"] = Get().ActiveTool;
+    root["shadingMode"] = Get().ShadingMode;
 
     // Atomic: a crash mid-write (a toggle spree can still trigger one write) must leave the
     // previous editor_prefs.json intact, not truncated (audit CPP-206). Lives under UserPaths
