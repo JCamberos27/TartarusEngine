@@ -75,6 +75,13 @@ public:
     // (AssetLibrary) is responsible for making that path unique per placed instance.
     static std::shared_ptr<Model> CreatePrimitive(const std::string& kind, const std::string& path);
 
+    // #124 — the files a model file needs next to it to import completely: glTF buffers and
+    // images, OBJ .mtl libraries, and every external texture the materials reference (resolved
+    // the same way an import resolves them). Each entry is {absolute source file, path to copy it
+    // to relative to the model's new folder} — the original relative layout when the file sits
+    // under the model's directory, else just its filename (where the import also looks).
+    static std::vector<std::pair<std::string, std::string>> SourceDependencies(const std::string& modelPath);
+
     // Backward-compat: no material slots → uses every submesh's imported Material.
     void Draw(Shader& shader) { Draw(shader, {}); }
 
@@ -220,6 +227,7 @@ private:
     // ("*0") reference is returned unchanged for the caller to handle. See Model.cpp for the
     // full resolution order.
     std::string ResolveTexturePath(const std::string& raw) const;
+    static std::string ResolveTexturePathIn(const std::string& modelDir, const std::string& raw);
     void ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh);
     void ReadHierarchy(AssimpNodeData& out, const aiNode* node);
     void ReadAnimations(const aiScene* scene);
