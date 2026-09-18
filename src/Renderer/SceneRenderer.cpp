@@ -60,6 +60,7 @@ FrameState SceneRenderer::GatherFrameState(World& world, const RenderFrameContex
     fs.sunShadowsOn = fs.shadowsOn && in.sunShadowsReady;
     fs.iblOn        = in.iblProbe->IsValid() && !ctx.Unlit;
     fs.ssaoOn       = in.ssaoEnabled && ctx.SsaoSrc && ctx.SsaoSrc->IsValid() && !ctx.Unlit;
+    fs.ssaoIntensity = in.ssaoIntensity;
     fs.spotCountForView  = fs.shadowsOn ? in.spotShadowCount  : 0;
     fs.pointCountForView = fs.shadowsOn ? in.pointShadowCount : 0;
 
@@ -189,6 +190,7 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         glActiveTexture(GL_TEXTURE0);
     }
     program.SetInt("uSSAOEnabled", fs.ssaoOn ? 1 : 0);
+    program.SetFloat("uSSAOIntensity", fs.ssaoIntensity);
 
     // The light SSBO (binding 0) is built once per frame by main.cpp — just (re)bind it.
     in.lightBuffer->Bind(0);

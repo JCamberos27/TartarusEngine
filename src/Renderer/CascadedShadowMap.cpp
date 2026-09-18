@@ -49,7 +49,8 @@ void CascadedShadowMap::Configure(int resolution, int count) {
 }
 
 void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camProj,
-                               const glm::vec3& lightDir, float shadowDistance) {
+                               const glm::vec3& lightDir, float shadowDistance,
+                               const glm::vec3* casterMin, const glm::vec3* casterMax) {
     glm::vec3 L = glm::length(lightDir) > 1e-6f ? glm::normalize(lightDir) : glm::vec3(0, -1, 0);
 
     // Full camera frustum corners in world space, from the inverse view-projection.
@@ -101,7 +102,19 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
         m_TexelWorld[c] = (2.0f * radius) / float(std::max(m_Resolution, 1)); // world units / texel (#117)
 
         glm::vec3 up = std::abs(L.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
-        float pullback = radius + 50.0f; // capture occluders behind the slice along the light axis
+        // Capture occluders behind the slice along the light axis. #160: far enough back to take
+        // in every caster (the furthest AABB corner toward the light), not a fixed 50 m that
+        // clipped tall/distant casters; capped so a stray far-off object can't wreck depth precision.
+        float pullback = radius + 50.0f;
+        if (casterMin && casterMax && casterMin->x <= casterMax->x) {
+            float reach = 0.0f;
+            for (int k = 0; k < 8; ++k) {
+                const glm::vec3 p((k & 1) ? casterMax->x : casterMin->x, (k & 2) ? casterMax->y : casterMin->y,
+                                  (k & 4) ? casterMax->z : casterMin->z);
+                reach = std::max(reach, glm::dot(p - center, -L));
+            }
+            pullback = std::clamp(reach + 1.0f, radius + 1.0f, radius + 2000.0f);
+        }
         glm::mat4 lightView = glm::lookAt(center - L * pullback, center, up);
         glm::mat4 lightProj = glm::ortho(-radius, radius, -radius, radius, 0.0f, pullback + radius);
 

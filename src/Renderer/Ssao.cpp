@@ -123,7 +123,7 @@ void Ssao::Resize(int width, int height) {
     Create(width, height);
 }
 
-void Ssao::Compute(Shader& ssaoShader, const glm::mat4& proj) {
+void Ssao::Compute(Shader& ssaoShader, const glm::mat4& proj, float radius, float bias) {
     GLStateScope restore; // #160 - put depth/blend/cull back as the caller had them
     glBindFramebuffer(GL_FRAMEBUFFER, m_SsaoFbo);
     glViewport(0, 0, m_Width, m_Height);
@@ -143,8 +143,8 @@ void Ssao::Compute(Shader& ssaoShader, const glm::mat4& proj) {
     ssaoShader.SetMat4("uProjection",    proj);
     ssaoShader.SetMat4("uInvProjection", glm::inverse(proj));
     ssaoShader.SetVec2("uScreenSize",    glm::vec2((float)m_Width, (float)m_Height));
-    ssaoShader.SetFloat("uRadius",       0.5f);
-    ssaoShader.SetFloat("uBias",         0.025f);
+    ssaoShader.SetFloat("uRadius",       radius);
+    ssaoShader.SetFloat("uBias",         bias);
     // #160 - the kernel never changes, so upload it once per program (again only if the program
     // is recreated) instead of 32 string-built uniform names every frame.
     if (m_KernelUploadedTo != ssaoShader.Program()) {
