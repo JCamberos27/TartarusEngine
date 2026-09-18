@@ -47,6 +47,11 @@ namespace SceneSerializer {
     std::string SaveToString(const World& world, const AssetLibrary& assets);
     bool LoadFromString(World& world, AssetLibrary& assets, const std::string& data);
 
+    // #148 — writes an entity-only snapshot (the play-mode one from SaveToString(world)) plus the
+    // current AssetLibrary state as a complete scene file. The crash handler's recovery save
+    // uses it to save the pre-Play scene without touching the live (playing) world.
+    bool SaveSnapshotToFile(const std::string& entitySnapshot, const AssetLibrary& assets, const std::string& path);
+
     // --- Entity subsets (clipboard + prefabs) ---------------------------------------------
     // The same JSON schema as a full scene, restricted to `entities` (plus, implicitly, all of
     // their descendants — copying a parent always brings its children). Sky settings and the
