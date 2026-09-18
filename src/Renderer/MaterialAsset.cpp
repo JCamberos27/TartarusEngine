@@ -2,6 +2,7 @@
 #include "ShaderAsset.h"
 #include "AssetLibrary.h"
 #include "Texture.h"
+#include "ShaderLibrary.h" // engine:// shader references (#104)
 #include "Log.h"
 #include "AtomicFile.h"
 #include "ProjectPaths.h"
@@ -121,6 +122,24 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
     }
 }
 
+// #104 / #208 — a .mat's "shader" reference: "engine://Standard.shader" is the engine's copy,
+// "project://..." or a plain relative path is project-relative (resolved against the project
+// root, so a .mat works from any working directory, #354). A project-relative reference to a
+// file the project doesn't have, whose name IS a built-in engine shader, uses the engine one:
+// that's every material written while a copy of Standard.shader lived in project/shaders/.
+std::string ResolveShaderPath(const std::string& ref) {
+    if (ref.rfind("engine://", 0) == 0) return ShaderLibrary::ResolveRef(ref, {});
+    std::string rel = ref.rfind("project://", 0) == 0 ? ref.substr(10) : ref;
+    std::filesystem::path p(rel);
+    std::string resolved = p.is_relative() ? ProjectPaths::Resolve(rel) : rel;
+    std::error_code ec;
+    if (!std::filesystem::exists(resolved, ec)) {
+        const std::string engine = ShaderLibrary::ResolveRef("engine://" + p.filename().string(), {});
+        if (std::filesystem::exists(engine, ec)) return engine;
+    }
+    return resolved;
+}
+
 std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::string& path, AssetLibrary* lib) {
     using Queue = MaterialAsset::Queue;
     const Reader top{j, path};
@@ -132,6 +151,12 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
     int matVersion = top.Int("matVersion", 1);
 
     auto& m = ma->Mat;
+    // #104 — custom shader keywords switched on for this material (strings only; duplicates dropped).
+    if (auto kw = j.find("keywords"); kw != j.end() && kw->is_array()) {
+        for (const auto& k : *kw)
+            if (k.is_string() && std::find(m.ShaderKeywords.begin(), m.ShaderKeywords.end(), k.get<std::string>()) == m.ShaderKeywords.end())
+                m.ShaderKeywords.push_back(k.get<std::string>());
+    }
 
     // Queue / surface fields — both formats (#105: v1 used to drop them, so a transparent or
     // cutout v1 material reverted to opaque on reload). Opaque by default.
@@ -200,11 +225,7 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
         // Resolve shader asset when path is set (AssetLibrary handles caching). A project-
         // relative "shader" value is resolved against the project root so a .mat works from any
         // working directory (fixtures under project/, #354).
-        if (!ma->ShaderPath.empty()) {
-            std::string sp = ma->ShaderPath;
-            if (std::filesystem::path(sp).is_relative()) sp = ProjectPaths::Resolve(sp);
-            ma->Shader = lib->LoadShader(sp);
-        }
+        if (!ma->ShaderPath.empty()) ma->Shader = lib->LoadShader(ResolveShaderPath(ma->ShaderPath));
 
         // Typed store for every linked-shader property that isn't a built-in Material field
         // (#354). Value comes from the .mat "properties" object; a missing key falls back to the
@@ -237,7 +258,7 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
                     mp.Tex = mp.TexPath.empty() ? nullptr : lib->LoadTexture(mp.TexPath);
                     break;
                 }
-                ma->ExtraProps.emplace(p.Name, std::move(mp));
+                ma->Mat.ExtraProps.emplace(p.Name, std::move(mp));
             }
         }
     }
@@ -254,6 +275,7 @@ bool MaterialAsset::Save() const {
         j["matVersion"]  = 2;
         j["name"]        = Name;
         j["shader"]      = ShaderPath;
+        if (!m.ShaderKeywords.empty()) j["keywords"] = m.ShaderKeywords; // #104 custom keywords
         json& props     = j["properties"];
         props["_BaseColor"]           = Vec3ToJson(m.BaseColor);
         props["_Metallic"]            = m.Metallic;
@@ -286,7 +308,7 @@ bool MaterialAsset::Save() const {
         if (m.ReflectionProbes)                     props["_ReflectionProbes"]       = true;
 
         // Non-builtin linked-shader properties (#354).
-        for (const auto& [name, p] : ExtraProps) {
+        for (const auto& [name, p] : m.ExtraProps) {
             switch (p.Type) {
             // #105 — each by its declared type: Int as an integer, Vec2 as 2 numbers, Vec4/Color
             // with w (both used to be written as 3 floats, losing w).
@@ -370,7 +392,8 @@ const std::shared_ptr<Texture>& MaterialAsset::GetTexture(const Material& m, con
     if (n == "_EmissiveMap")          return m.EmissiveMap;
     if (n == "_ClearCoatMap")         return m.ClearCoatMap;
     if (n == "_ThicknessMap")         return m.ThicknessMap;
-    return sNull;
+    auto it = m.ExtraProps.find(n);
+    return it != m.ExtraProps.end() ? it->second.Tex : sNull;
 }
 
 glm::vec3 MaterialAsset::GetColor(const Material& m, const std::string& n) {
@@ -378,7 +401,48 @@ glm::vec3 MaterialAsset::GetColor(const Material& m, const std::string& n) {
     if (n == "_EmissiveColor")  return m.EmissiveColor * m.EmissiveStrength; // pre-multiply
     if (n == "_Sheen")          return m.Sheen;
     if (n == "_SubsurfaceColor")return m.SubsurfaceColor;
-    return {};
+    auto it = m.ExtraProps.find(n);
+    return it != m.ExtraProps.end() ? glm::vec3(it->second.V) : glm::vec3(0.0f);
+}
+
+glm::vec3 MaterialAsset::GetAuthoredColor(const Material& m, const std::string& n) {
+    if (n == "_EmissiveColor") return m.EmissiveColor;
+    return GetColor(m, n);
+}
+
+int MaterialAsset::GetInt(const Material& m, const std::string& n) {
+    auto it = m.ExtraProps.find(n);
+    return it != m.ExtraProps.end() ? it->second.I : 0;
+}
+
+glm::vec4 MaterialAsset::GetVec(const Material& m, const std::string& n) {
+    auto it = m.ExtraProps.find(n);
+    return it != m.ExtraProps.end() ? it->second.V : glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+void MaterialAsset::SetInt(Material& m, const std::string& n, int v) {
+    auto it = m.ExtraProps.find(n);
+    if (it != m.ExtraProps.end()) { it->second.I = v; it->second.F = (float)v; }
+}
+
+void MaterialAsset::SetVec(Material& m, const std::string& n, const glm::vec4& v) {
+    auto it = m.ExtraProps.find(n);
+    if (it != m.ExtraProps.end()) it->second.V = v;
+}
+
+void MaterialAsset::SyncTexturePathsFromMat() {
+    auto pathOf = [](const std::shared_ptr<Texture>& t) { return t ? t->Path() : std::string(); };
+    AlbedoMapPath            = pathOf(Mat.AlbedoMap);
+    NormalMapPath            = pathOf(Mat.NormalMap);
+    MetallicRoughnessMapPath = pathOf(Mat.MetallicRoughnessMap);
+    MetallicMapPath          = pathOf(Mat.MetallicMap);
+    RoughnessMapPath         = pathOf(Mat.RoughnessMap);
+    AOMapPath                = pathOf(Mat.AOMap);
+    EmissiveMapPath          = pathOf(Mat.EmissiveMap);
+    ClearCoatMapPath         = pathOf(Mat.ClearCoatMap);  // #104 — these two were never synced by
+    ThicknessMapPath         = pathOf(Mat.ThicknessMap);  // the Inspector, so edits didn't save
+    for (auto& [name, p] : Mat.ExtraProps)
+        if (p.Type == ShaderPropType::Texture2D) p.TexPath = pathOf(p.Tex);
 }
 
 float MaterialAsset::GetFloat(const Material& m, const std::string& n) {
@@ -394,12 +458,14 @@ float MaterialAsset::GetFloat(const Material& m, const std::string& n) {
     if (n == "_Thickness")               return m.Thickness;
     if (n == "_TransmissionStrength")    return m.TransmissionStrength;
     if (n == "_IOR")                     return m.IOR;
-    return 0.0f;
+    auto it = m.ExtraProps.find(n);
+    return it != m.ExtraProps.end() ? it->second.F : 0.0f;
 }
 
 bool MaterialAsset::GetBool(const Material& m, const std::string& n) {
     if (n == "_Triplanar") return m.Triplanar;
-    return false;
+    auto it = m.ExtraProps.find(n);
+    return it != m.ExtraProps.end() && it->second.B;
 }
 
 void MaterialAsset::SetTexture(Material& m, const std::string& n, const std::shared_ptr<Texture>& tex) {
@@ -412,6 +478,8 @@ void MaterialAsset::SetTexture(Material& m, const std::string& n, const std::sha
     if (n == "_EmissiveMap")          { m.EmissiveMap = tex; return; }
     if (n == "_ClearCoatMap")         { m.ClearCoatMap = tex; return; }
     if (n == "_ThicknessMap")         { m.ThicknessMap = tex; return; }
+    auto it = m.ExtraProps.find(n);
+    if (it != m.ExtraProps.end()) { it->second.Tex = tex; it->second.TexPath = tex ? tex->Path() : std::string(); }
 }
 
 void MaterialAsset::SetColor(Material& m, const std::string& n, const glm::vec3& v) {
@@ -419,6 +487,8 @@ void MaterialAsset::SetColor(Material& m, const std::string& n, const glm::vec3&
     if (n == "_EmissiveColor")   { m.EmissiveColor = v; return; }
     if (n == "_Sheen")           { m.Sheen = v; return; }
     if (n == "_SubsurfaceColor") { m.SubsurfaceColor = v; return; }
+    auto it = m.ExtraProps.find(n);
+    if (it != m.ExtraProps.end()) it->second.V = glm::vec4(v, it->second.V.w);
 }
 
 void MaterialAsset::SetFloat(Material& m, const std::string& n, float v) {
@@ -434,10 +504,14 @@ void MaterialAsset::SetFloat(Material& m, const std::string& n, float v) {
     if (n == "_Thickness")               { m.Thickness = v; return; }
     if (n == "_TransmissionStrength")    { m.TransmissionStrength = v; return; }
     if (n == "_IOR")                     { m.IOR = v; return; }
+    auto it = m.ExtraProps.find(n);
+    if (it != m.ExtraProps.end()) { it->second.F = v; it->second.I = (int)v; }
 }
 
 void MaterialAsset::SetBool(Material& m, const std::string& n, bool v) {
-    if (n == "_Triplanar") m.Triplanar = v;
+    if (n == "_Triplanar") { m.Triplanar = v; return; }
+    auto it = m.ExtraProps.find(n);
+    if (it != m.ExtraProps.end()) it->second.B = v;
 }
 
 std::shared_ptr<MaterialAsset> MaterialAsset::CreateDefault(const std::string& path) {
@@ -445,12 +519,12 @@ std::shared_ptr<MaterialAsset> MaterialAsset::CreateDefault(const std::string& p
     ma->Path = path;
     ma->Name = std::filesystem::path(path).stem().string();
     // Mat defaults are already correct: white, 0 metallic, 0.5 roughness.
-    // #87 — new materials are v2, linked to the project's Standard shader (when present) like
-    // every other authored material, instead of the legacy shader-less v1 format that doesn't
-    // persist transparency or the advanced lobes.
+    // #87 — new materials are v2, linked to the Standard shader like every other authored
+    // material, instead of the legacy shader-less v1 format that doesn't persist transparency or
+    // the advanced lobes. #104: the engine's own copy, the one Standard.shader.
     std::error_code ec;
-    if (std::filesystem::exists(ProjectPaths::Resolve("shaders/Standard.shader"), ec))
-        ma->ShaderPath = "shaders/Standard.shader";
+    if (std::filesystem::exists(ShaderLibrary::ResolveRef("engine://Standard.shader", {}), ec))
+        ma->ShaderPath = "engine://Standard.shader";
     if (!ma->Save()) return nullptr;
     return ma;
 }

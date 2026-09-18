@@ -1,5 +1,6 @@
 #include "ShaderLibrary.h"
 #include "Log.h"
+#include "ProjectPaths.h"
 #include <fstream>
 #include <sstream>
 #include <filesystem>
@@ -80,15 +81,22 @@ static std::string ResolveIncludes(const std::string& src, const std::filesystem
             if (q1 != std::string::npos && q2 != std::string::npos) {
                 std::string name = t.substr(q1 + 1, q2 - q1 - 1);
                 if (onceFiles.count(name)) { out << '\n'; continue; } // already included, #pragma once
-                std::ifstream f(dir / name);
+                // #208 — next to the including file first (a project shader's own includes),
+                // then the engine shader directory (its shared Lighting.glsl etc.).
+                std::filesystem::path incPath = dir / name;
+                std::error_code existsEc;
+                if (!std::filesystem::exists(incPath, existsEc) && !s_Dir.empty() && dir != s_Dir)
+                    incPath = s_Dir / name;
+                std::ifstream f(incPath);
                 if (!f.is_open()) {
-                    Log::Error("ShaderLibrary: cannot open include: " + (dir / name).string() +
-                               " (from " + fileName + ":" + std::to_string(lineNo) + ")");
+                    Log::Error("ShaderLibrary: cannot open include \"" + name + "\" (looked in " + dir.string() +
+                               (dir != s_Dir ? " and " + s_Dir.string() : std::string()) +
+                               ") from " + fileName + ":" + std::to_string(lineNo));
                     out << line << '\n';
                 } else {
                     std::ostringstream content;
                     content << f.rdbuf();
-                    out << ResolveIncludes(content.str(), dir, depth + 1, name, onceFiles);
+                    out << ResolveIncludes(content.str(), incPath.parent_path(), depth + 1, name, onceFiles);
                     out << "#line " << (lineNo + 1) << ' ' << fileIdx << '\n';
                 }
                 continue;
@@ -159,6 +167,38 @@ std::string ReadFile(const std::string& filename) {
     ss << f.rdbuf();
     std::set<std::string> onceFiles;
     return ResolveIncludes(ss.str(), s_Dir, 0, filename, onceFiles);
+}
+
+std::string ReadFileAt(const std::string& pathStr, const std::string& referencedBy) {
+    const std::filesystem::path path(pathStr);
+    std::ifstream f(path);
+    if (!f.is_open()) {
+        Log::Error("ShaderLibrary: cannot open shader: " + path.string() +
+                   (referencedBy.empty() ? std::string() : " (referenced by " + referencedBy + ")"),
+                   LogContext::Asset(referencedBy.empty() ? pathStr : referencedBy));
+        return "";
+    }
+    std::ostringstream ss;
+    ss << f.rdbuf();
+    std::set<std::string> onceFiles;
+    return ResolveIncludes(ss.str(), path.parent_path(), 0, path.filename().string(), onceFiles);
+}
+
+std::string ResolveRef(const std::string& ref, const std::string& baseDir) {
+    auto startsWith = [&](const char* prefix) { return ref.rfind(prefix, 0) == 0; };
+    if (startsWith("engine://")) return (s_Dir / ref.substr(9)).string();
+    if (startsWith("project://")) return ProjectPaths::Resolve(ref.substr(10));
+    const std::filesystem::path p(ref);
+    if (p.is_absolute()) return p.string();
+    std::error_code ec;
+    if (!baseDir.empty()) {
+        const std::filesystem::path local = std::filesystem::path(baseDir) / p;
+        if (std::filesystem::exists(local, ec)) return local.string();
+    }
+    const std::filesystem::path engine = s_Dir / p;
+    if (std::filesystem::exists(engine, ec)) return engine.string();
+    // Neither exists: report the descriptor-relative location, the one the author meant.
+    return baseDir.empty() ? engine.string() : (std::filesystem::path(baseDir) / p).string();
 }
 
 void PollForChanges(const std::function<void(const std::string& filename)>& onChanged) {

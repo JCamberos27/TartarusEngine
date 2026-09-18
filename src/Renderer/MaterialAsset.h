@@ -7,19 +7,6 @@
 
 class AssetLibrary;
 
-// One value for a shader property that is NOT one of the built-in PBR fields on Material (audit
-// #354). Only the union member matching Type is meaningful. Texture props keep both the resolved
-// pointer (for binding) and the path (for round-tripping / lib-less loads).
-struct MaterialProp {
-    ShaderPropType Type = ShaderPropType::Float;
-    float                    F = 0.0f;
-    glm::vec4                V{0.0f, 0.0f, 0.0f, 1.0f};
-    bool                     B = false;
-    int                      I = 0;
-    std::string              TexPath;
-    std::shared_ptr<Texture> Tex;
-};
-
 // A named, file-backed material (.mat JSON, version 1). Wraps a Material struct with a path so
 // it can be browsed in the Asset Browser, drag-dropped onto renderers, and referenced from scene
 // files as a first-class asset. PR 4 introduces the asset layer only — the scene draw loop
@@ -53,11 +40,12 @@ struct MaterialAsset {
     // they remain null when loaded without a library (e.g. Save checks texture paths only).
     Material Mat;
 
-    // Values for linked-shader properties that don't map to a Material field — keyed by the
-    // property's internal name ("_Foo"). Populated by Load() from the .mat "properties" object
-    // against ShaderAsset::Properties() (needs a non-null lib to resolve the shader), written
-    // back by Save(), and pushed as `u<Foo>` uniforms by BindMaterialDataDriven (#354).
-    std::unordered_map<std::string, MaterialProp> ExtraProps;
+    // Linked-shader properties that don't map to a Material field live in Mat.ExtraProps
+    // (populated by Load() from the .mat "properties" object, written back by Save(), #354).
+
+    // Copies every texture slot's current file path (built-in *MapPath fields and each custom
+    // texture property's TexPath) from the textures now set on Mat, before a Save().
+    void SyncTexturePathsFromMat();
 
     // True if `name` is one of the built-in PBR property names handled by Get*/Set* below (and
     // therefore stored on Mat, not in ExtraProps).
@@ -94,8 +82,17 @@ struct MaterialAsset {
     static glm::vec3 GetColor(const Material& m, const std::string& name);
     static float     GetFloat(const Material& m, const std::string& name);
     static bool      GetBool (const Material& m, const std::string& name);
+    // #104 — Int / Vec2-4 / Color-with-alpha values, for custom properties (ExtraProps).
+    static int       GetInt  (const Material& m, const std::string& name);
+    static glm::vec4 GetVec  (const Material& m, const std::string& name);
+    // The colour as authored, for editing. GetColor pre-multiplies _EmissiveColor by
+    // _EmissiveStrength (what the renderer uploads); editing that value and writing it back
+    // multiplied the strength in twice.
+    static glm::vec3 GetAuthoredColor(const Material& m, const std::string& name);
     static void SetTexture(Material& m, const std::string& name, const std::shared_ptr<Texture>& tex);
     static void SetColor  (Material& m, const std::string& name, const glm::vec3& v);
     static void SetFloat  (Material& m, const std::string& name, float v);
+    static void SetInt    (Material& m, const std::string& name, int v);
+    static void SetVec    (Material& m, const std::string& name, const glm::vec4& v);
     static void SetBool   (Material& m, const std::string& name, bool v);
 };
