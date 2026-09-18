@@ -428,6 +428,15 @@ void EditorLayer::ApplyThemeStyle() {
 // accent split: `cyan`/`cyanHi` (selection highlight) and `blue` (active/pressed/focus) are kept
 // as the variable names from the theme's history, now holding Unity's actual highlight/link blue
 // instead of a hand-picked cyan or a grayscale stand-in. Geometry is set by ApplyThemeStyle. #234.
+// Accent roles — fixed; don't mix them:
+//   cyan  #2C5D87 (Unity "Highlight Background")  selection / "you are here": Header, CheckMark,
+//         SliderGrab, Separator hover/active, TabSelectedOverline, NavCursor, DockingPreview,
+//         TextSelectedBg, ResizeGripHovered
+//   blue  #4C7EFF (Unity "Link Text" / focus)      active / pressed / in progress: HeaderActive,
+//         SliderGrabActive, ResizeGripActive
+//   status colours (EditorUIPrimitives::WarningColor / DangerColor / SuccessColor / InfoColor) are
+//   fixed, not palette-derived, so they always mean the same thing.
+// Colour pairs with a WCAG contrast floor are checked in ApplyThemeStyle via AssertContrastFloor.
 static void ApplyBentoPalette(ImGuiStyle& style) {
     auto rgb = [](int r, int g, int b, float a = 1.0f) {
         return ImVec4(r / 255.0f, g / 255.0f, b / 255.0f, a);

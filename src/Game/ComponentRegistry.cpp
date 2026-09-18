@@ -6,6 +6,29 @@
 
 #include <cstring>
 
+// ---------------------------------------------------------------------------------------------
+// House rule: ship components and controls fully wired, or not visible (#215)
+//
+//  1. A component or import setting is not shown in the editor until its runtime behaviour is
+//     implemented. If the field must exist for serialization, keep it in the struct and the
+//     serializer but leave it out of the Inspector.
+//  2. A component that ships with runtime behaviour ships with an Inspector section and an Add
+//     Component entry in the same change, not a follow-up.
+//  3. If something must be visible before it works, show it disabled, labelled
+//     "(not implemented)", with a tooltip naming the tracking issue.
+//
+// Registering a component here generates its serialization, Inspector section and Add Component
+// entry together, so both failure modes are impossible by construction. Prefer it. Every struct
+// in Components.h must be registered here or listed in tools/component_registration_allowlist.txt
+// with a reason; tools/check_component_registration.py enforces that in CI.
+//
+// Opt-outs: ReflectComponent::GenericSerialize / GenericInspector (both default true) let a
+// registered component keep a hand-written JSON block and/or Inspector section for state that
+// isn't plain reflected fields. Use sparingly. Current users: Mesh Renderer (both — see its
+// registration below), Collider and Joint (GenericSerialize only; their bespoke fields are
+// EditorHidden and drawn by DrawReflectedComponentExtra).
+// ---------------------------------------------------------------------------------------------
+
 namespace ComponentRegistry {
 
 namespace {
@@ -34,8 +57,8 @@ void RegisterEngineComponents() {
 
     // Migrated from hand-coded serialization/Inspector code onto reflection (#184). Previously
     // this component had runtime behaviour (TransformControllerSystem, in TartarusGame.dll) but
-    // no Inspector section or Add Component entry at all — a rule-2 violation of
-    // docs/CONVENTIONS.md, invisible until now because nothing else in the editor referenced it.
+    // no Inspector section or Add Component entry at all — a violation of rule 2 at the top of
+    // this file, invisible until now because nothing else in the editor referenced it.
     // Runtime-only scratch fields (Initialized, Base*, Elapsed) are deliberately not reflected:
     // Play -> Stop reloads the authored scene snapshot, same as before.
     Register<TransformControllerComponent>({
@@ -372,8 +395,8 @@ void RegisterEngineComponents() {
     // the level-geometry Color row) stays hand-coded in EditorLayer_Inspector.cpp, permanently —
     // settled #6 item 3, not a deferred follow-up: ModelRef is a live shared_ptr<Model>, not an
     // AssetRef-shaped path, so genericising it would mean rewriting RenderableComponent's storage,
-    // not just its Inspector widget. See docs/CONVENTIONS.md's "Current applications" for the
-    // full reasoning.
+    // not just its Inspector widget. (ComponentRegistry can't depend on src/Editor's AssetLibrary
+    // either, so a new reflected field type for it would carry no drawable metadata anyway.)
     {
         ReflectComponent m;
         m.Name = "Mesh Renderer"; m.Icon = ICON_FA_DRAW_POLYGON; m.Category = "Rendering";

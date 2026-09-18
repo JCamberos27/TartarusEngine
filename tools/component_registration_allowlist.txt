@@ -2,7 +2,7 @@
 # ComponentRegistry (src/Game/ComponentRegistry.cpp). Every struct in Components.h whose name
 # ends in "Component" or "Tag" must be either registered there or listed here with a reason —
 # check_component_registration.py (run in CI and locally) fails otherwise. This is the
-# structural half of docs/CONVENTIONS.md's "ship components fully wired, or not visible" rule:
+# structural half of the "ship components fully wired, or not visible" rule (top of ComponentRegistry.cpp):
 # a new component can't be added without a conscious decision about how the editor surfaces it.
 #
 # Format: one "Name = reason" per line. Blank lines and #-comments ignored.
