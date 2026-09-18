@@ -1635,8 +1635,27 @@ void EditorLayer::ReorderHierarchySiblings(World& world, const std::vector<entt:
         rebuilt.push_back(e);
         if (e == anchor && after) for (entt::entity m : moving) rebuilt.push_back(m);
     }
+    // #118 — OrderComponent is also the entity's stable identity (joint ConnectedOrder, undo /
+    // Play-Stop selection restore), so it must stay unique scene-wide. The old 0..N-1 renumber
+    // collided with every other sibling group. Instead, hand this group's OWN existing values back
+    // out in the new visual order (a permutation, so still unique and still sorted), give any
+    // entity that somehow lacks one a fresh value, and repoint joints at their partner's new value.
+    std::vector<int> values;
+    values.reserve(rebuilt.size());
+    for (entt::entity e : rebuilt)
+        if (const auto* o = world.Registry.try_get<OrderComponent>(e)) values.push_back(o->Value);
+    while (values.size() < rebuilt.size()) values.push_back(world.AllocateOrder());
+    std::sort(values.begin(), values.end());
+    std::unordered_map<int, int> remap; // old value -> new value
+    for (int i = 0; i < (int)rebuilt.size(); ++i) {
+        if (const auto* o = world.Registry.try_get<OrderComponent>(rebuilt[i])) remap[o->Value] = values[i];
+    }
     for (int i = 0; i < (int)rebuilt.size(); ++i)
-        world.Registry.emplace_or_replace<OrderComponent>(rebuilt[i], i);
+        world.Registry.emplace_or_replace<OrderComponent>(rebuilt[i], values[i]);
+    for (auto [je, joint] : world.Registry.view<JointComponent>().each()) {
+        auto it = remap.find(joint.ConnectedOrder);
+        if (joint.ConnectedOrder >= 0 && it != remap.end()) joint.ConnectedOrder = it->second;
+    }
 
     CommitStagedUndo(world, "Reorder");
     if (anyFailed)
