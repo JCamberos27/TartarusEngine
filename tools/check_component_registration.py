@@ -8,8 +8,8 @@ Every struct in src/Game/Components.h whose name ends in "Component" or "Tag" mu
   * listed in tools/component_registration_allowlist.txt with a reason.
 
 Fails (exit 1) on: a component in neither; a stale allow-list entry that is now registered; an
-allow-list entry for a struct that no longer exists. This is the structural enforcement of
-docs/CONVENTIONS.md's "ship components fully wired, or not visible".
+allow-list entry for a struct that no longer exists. This is the structural enforcement of the
+"ship components fully wired, or not visible" rule at the top of src/Game/ComponentRegistry.cpp.
 
 Run locally:  python tools/check_component_registration.py
 """
