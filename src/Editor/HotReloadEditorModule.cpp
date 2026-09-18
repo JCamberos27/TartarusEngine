@@ -13,6 +13,7 @@
 #include "AssetLibrary.h"
 #include "Camera.h"
 
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <iterator>
@@ -22,6 +23,8 @@
 #include <imgui.h>
 #include <GLFW/glfw3.h>
 #include <windows.h>
+
+#include "HotReloadSwap.h"
 
 namespace fs = std::filesystem;
 
@@ -497,155 +500,194 @@ void HierSetSort(int packed) {
 // --- Asset Browser Details view (API v26, Phase 5 item 4) --------------------------------
 int  AbGetViewMode()                { return g_Editor ? g_Editor->GetAssetViewMode() : 0; }
 
-const EditorModuleHostAPI kHostAPI{
-    kEditorModuleAPIVersion,
-    &DrawStatusPanel,
-    &GetImGuiContextPtr,
-    &GetImGuiAllocators,
-    &LogRevisionFn,
-    &LogEntryCountFn,
-    &LogGetEntryFn,
-    &LogCountOfFn,
-    &LogClearFn,
-    &LogInfoFn,
-    &LogErrorFn,
-    &SelectEntityByOrderFn,
-    &PingAssetPathFn,
-    &GetNotificationUnreadCountFn,
-    &MarkNotificationsReadFn,
-    &DrawNotificationsPopupBodyFn,
-    &SetTooltipFn,
-    &SaveFileDialogFn,
-    &ConsoleStateFn,
-    &StatsGetViewportRectFn,
-    &StatsGetRenderStatsFn,
-    &StatsGetProfilerSamplesFn,
-    &StatsGetGLFrameStatsFn,
-    &StatsGetSceneEntityCountsFn,
-    &StatsGetSmoothedFrameMsFn,
-    &StatsGetFrameTimeHistoryFn,
-    &GetMonoFontFn,
-    &StatsSetHideEngineMarkFn,
-    // --- Toolbar / menus (API v4) — order must match EditorModuleHostAPI exactly ---
-    &TbGetToolbarMetrics,
-    // TbGetEditorTheme removed at API v18 (Phase 1 item 9) — see EditorModuleAPI.h.
-    &TbSetTitleBarDragHovered,
-    &TbWindowMinimize,
-    &TbWindowToggleMaximize,
-    &TbWindowClose,
-    &TbWindowIsMaximized,
-    &TbGetGizmoOp,            &TbSetGizmoOp,
-    &TbGetShadingMode,        &TbSetShadingMode,
-    &TbGetGizmoLocalSpace,    &TbSetGizmoLocalSpace,
-    &TbGetGizmoPivotCenter,   &TbSetGizmoPivotCenter,
-    &TbGetShowGrid,           &TbSetShowGrid,
-    &TbGetGridSnapEnabled,    &TbSetGridSnapEnabled,
-    &TbGetShowHistory,        &TbSetShowHistory,
-    &TbGetShowStats,          &TbSetShowStats,
-    &TbGetShowLightGizmos,    &TbSetShowLightGizmos,
-    &TbIsOrthographic,        &TbToggleOrthographic,
-    &TbUndo,
-    &TbRedo,
-    &TbCanSnapSelectionToGround,
-    &TbSnapSelectionToGround,
-    &TbRequestResetLayout,
-    &TbOpenPreferences,
-    &TbOpenProjectSettings,
-    &TbOpenShortcutsReference,
-    &TbDrawFileMenuBody,
-    &TbDrawAddEntityMenuItems,
-    &TbDrawViewMenuBody,
-    &TbDrawWindowMenuBody,
-    &TbDrawCaptureOptionsPopupBody,
-    &TbRequestCapture,
-    &TbGetCaptureButtonTooltip,
-    // --- Asset Browser, thin slice (API v5) — order must match EditorModuleHostAPI exactly ---
-    &AbGetShow,                 &AbSetShow,
-    &AbGetSearch,               &AbSetSearch,
-    &AbGetLabelMenuFilter,      &AbSetLabelMenuFilter,
-    &AbGetCurrentFolder,
-    &AbSetCurrentFolder,
-    &AbGetTreeWidth,
-    &AbSetTreeWidth,
-    &AbConsumeSearchFocus,
-    &AbSetFocused,
-    &AbIsFolderExpanded,
-    &AbSetFolderExpanded,
-    &AbTreeFrameSetup,
-    &AbGetFolderCount,
-    &AbGetFolder,
-    &AbGetKnownLabelCount,
-    &AbGetKnownLabel,
-    &AbCreateFolder,
-    &AbRenameFolder,
-    &AbMoveAsset,
-    &AbBeginRenameFolder,
-    &AbImportViaDialog,
-    // --- Asset grid layout slice (API v6) — order must match EditorModuleHostAPI exactly ---
-    &AbGridFrameBegin,
-    &AbGridCellCount,
-    &AbGetGridMetrics,
-    &AbDrawCell,
-    &AbHandleGridBackground,
-    &AbGetSelectionSummary,
-    &AbGetIconSize,
-    &AbSetIconSize,
-    &AbGridFrameEnd,
-    // --- Scene Hierarchy, thin slice (API v7) — order must match EditorModuleHostAPI exactly ---
-    &HierGetShow,  &HierSetShow,
-    &HierGetFilter,
-    &HierSetFilter,
-    &HierExpandAll,
-    &HierDrawTreeBody,
-    // --- Inspector, frame only (API v8) — order must match EditorModuleHostAPI exactly ---
-    &InspGetShow,  &InspSetShow,
-    &InspDrawBody,
-    // --- Grid & Snap popover (API v9) — order must match EditorModuleHostAPI exactly ---
-    &TbDrawGridSnapPopupBody,
-    // --- Gizmos dropdown (API v10) — order must match EditorModuleHostAPI exactly ---
-    &TbDrawGizmosPopupBody,
-    // --- Gizmos master toggle button (API v11) — order must match EditorModuleHostAPI exactly ---
-    &TbGetGizmosMasterVisible,  &TbSetGizmosMasterVisible,
-    &TbGetHandTool,             &TbSetHandTool,
-    &TbGetLockViewToSelection,  &TbSetLockViewToSelection,
-    &TbGetAssetSort,            &TbSetAssetSort,
-    &TbRefreshAssetBrowser,
-    &TbGetAssetRefreshFlash,
-    &TbGetMeasureTool,          &TbSetMeasureTool,
-    &TbRequestDuplicateArray,
-    &TbGetInspectorLocked,      &TbToggleInspectorLock,
-    &TbGetAssetSearchGlobal,    &TbSetAssetSearchGlobal,
-    &TbGetAssetFavoritesOnly,   &TbSetAssetFavoritesOnly,
-    // --- History HUD, frame only (API v15) — order must match EditorModuleHostAPI exactly ---
-    &HistGetHudFrame,
-    &HistDrawListBody,
-    // --- Reflection probes (API v16 / PR14) -----------------------------------------------
-    // probeArray.Update() runs every frame in main.cpp; this request is informational for now —
-    // future per-probe scene-capture baking will consume the flag from main.cpp.
-    +[]() { /* probe bake: main.cpp's probeArray.Update() already runs every frame */ },
-    // --- Document strip (API v20) — order must match EditorModuleHostAPI exactly ---
-    &TbGetSceneDisplayName,
-    &TbGetSceneDirty,
-    &TbDoSaveScene,
-    // --- Play controls, Zone B (API v21) — order must match EditorModuleHostAPI exactly ---
-    &TbDrawPlayControlsBody,
-    // --- Play-mode panel tint (API v22) — order must match EditorModuleHostAPI exactly ---
-    &TbGetInPlayMode,
-    // --- Asset Browser folder history (API v23) — order must match EditorModuleHostAPI exactly ---
-    &AbFolderHistoryBack,
-    &AbFolderHistoryForward,
-    &AbCanFolderHistoryBack,
-    &AbCanFolderHistoryForward,
-    // --- Asset Browser view-mode toggle (API v24) — order must match EditorModuleHostAPI exactly ---
-    &AbToggleAssetViewMode,
-    // --- Hierarchy type filter + sort (API v25) — order must match EditorModuleHostAPI exactly ---
-    &HierGetTypeFilter,
-    &HierSetTypeFilter,
-    &HierGetSort,
-    &HierSetSort,
-    // --- Asset Browser Details view (API v26) — order must match EditorModuleHostAPI exactly ---
-    &AbGetViewMode,
-};
+// Built field-by-field, by name (#172 follow-up): the old positional aggregate initializer
+// compiled cleanly with any two same-signature entries swapped (e.g. GetShowGrid <->
+// GetGridSnapEnabled) and silently cross-wired the toolbar. Assigning by name makes an
+// out-of-order or misnamed entry impossible; a field nobody assigns stays nullptr, which
+// every module call site already treats as "not provided", and CountUnassignedHostSlots
+// reports it at startup.
+EditorModuleHostAPI MakeHostAPI() {
+    EditorModuleHostAPI api;
+    api.Version = kEditorModuleAPIVersion;
+    api.DrawStatusPanel = &DrawStatusPanel;
+    api.GetImGuiContext = &GetImGuiContextPtr;
+    api.GetImGuiAllocators = &GetImGuiAllocators;
+    api.LogRevision = &LogRevisionFn;
+    api.LogEntryCount = &LogEntryCountFn;
+    api.LogGetEntry = &LogGetEntryFn;
+    api.LogCountOf = &LogCountOfFn;
+    api.LogClear = &LogClearFn;
+    api.LogInfo = &LogInfoFn;
+    api.LogError = &LogErrorFn;
+    api.SelectEntityByOrder = &SelectEntityByOrderFn;
+    api.PingAssetPath = &PingAssetPathFn;
+    api.GetNotificationUnreadCount = &GetNotificationUnreadCountFn;
+    api.MarkNotificationsRead = &MarkNotificationsReadFn;
+    api.DrawNotificationsPopupBody = &DrawNotificationsPopupBodyFn;
+    api.SetTooltip = &SetTooltipFn;
+    api.SaveFileDialog = &SaveFileDialogFn;
+    api.ConsoleState = &ConsoleStateFn;
+    api.GetViewportRect = &StatsGetViewportRectFn;
+    api.GetRenderStats = &StatsGetRenderStatsFn;
+    api.GetProfilerSamples = &StatsGetProfilerSamplesFn;
+    api.GetGLFrameStats = &StatsGetGLFrameStatsFn;
+    api.GetSceneEntityCounts = &StatsGetSceneEntityCountsFn;
+    api.GetSmoothedFrameMs = &StatsGetSmoothedFrameMsFn;
+    api.GetFrameTimeHistory = &StatsGetFrameTimeHistoryFn;
+    api.GetMonoFont = &GetMonoFontFn;
+    api.SetHideEngineMark = &StatsSetHideEngineMarkFn;
+    api.GetToolbarMetrics = &TbGetToolbarMetrics;
+    api.SetTitleBarDragHovered = &TbSetTitleBarDragHovered;
+    api.WindowMinimize = &TbWindowMinimize;
+    api.WindowToggleMaximize = &TbWindowToggleMaximize;
+    api.WindowClose = &TbWindowClose;
+    api.WindowIsMaximized = &TbWindowIsMaximized;
+    api.GetGizmoOp = &TbGetGizmoOp;
+    api.SetGizmoOp = &TbSetGizmoOp;
+    api.GetShadingMode = &TbGetShadingMode;
+    api.SetShadingMode = &TbSetShadingMode;
+    api.GetGizmoLocalSpace = &TbGetGizmoLocalSpace;
+    api.SetGizmoLocalSpace = &TbSetGizmoLocalSpace;
+    api.GetGizmoPivotCenter = &TbGetGizmoPivotCenter;
+    api.SetGizmoPivotCenter = &TbSetGizmoPivotCenter;
+    api.GetShowGrid = &TbGetShowGrid;
+    api.SetShowGrid = &TbSetShowGrid;
+    api.GetGridSnapEnabled = &TbGetGridSnapEnabled;
+    api.SetGridSnapEnabled = &TbSetGridSnapEnabled;
+    api.GetShowHistory = &TbGetShowHistory;
+    api.SetShowHistory = &TbSetShowHistory;
+    api.GetShowStats = &TbGetShowStats;
+    api.SetShowStats = &TbSetShowStats;
+    api.GetShowLightGizmos = &TbGetShowLightGizmos;
+    api.SetShowLightGizmos = &TbSetShowLightGizmos;
+    api.IsOrthographic = &TbIsOrthographic;
+    api.ToggleOrthographic = &TbToggleOrthographic;
+    api.ToolbarUndo = &TbUndo;
+    api.ToolbarRedo = &TbRedo;
+    api.CanSnapSelectionToGround = &TbCanSnapSelectionToGround;
+    api.SnapSelectionToGround = &TbSnapSelectionToGround;
+    api.RequestResetLayout = &TbRequestResetLayout;
+    api.OpenPreferences = &TbOpenPreferences;
+    api.OpenProjectSettings = &TbOpenProjectSettings;
+    api.OpenShortcutsReference = &TbOpenShortcutsReference;
+    api.DrawFileMenuBody = &TbDrawFileMenuBody;
+    api.DrawAddEntityMenuItems = &TbDrawAddEntityMenuItems;
+    api.DrawViewMenuBody = &TbDrawViewMenuBody;
+    api.DrawWindowMenuBody = &TbDrawWindowMenuBody;
+    api.DrawCaptureOptionsPopupBody = &TbDrawCaptureOptionsPopupBody;
+    api.RequestCapture = &TbRequestCapture;
+    api.GetCaptureButtonTooltip = &TbGetCaptureButtonTooltip;
+    api.GetShowAssetBrowser = &AbGetShow;
+    api.SetShowAssetBrowser = &AbSetShow;
+    api.GetAssetSearch = &AbGetSearch;
+    api.SetAssetSearch = &AbSetSearch;
+    api.GetAssetLabelMenuFilter = &AbGetLabelMenuFilter;
+    api.SetAssetLabelMenuFilter = &AbSetLabelMenuFilter;
+    api.GetCurrentAssetFolder = &AbGetCurrentFolder;
+    api.SetCurrentAssetFolder = &AbSetCurrentFolder;
+    api.GetAssetTreeWidth = &AbGetTreeWidth;
+    api.SetAssetTreeWidth = &AbSetTreeWidth;
+    api.ConsumeAssetSearchFocus = &AbConsumeSearchFocus;
+    api.SetAssetBrowserFocused = &AbSetFocused;
+    api.IsAssetFolderExpanded = &AbIsFolderExpanded;
+    api.SetAssetFolderExpanded = &AbSetFolderExpanded;
+    api.AssetTreeFrameSetup = &AbTreeFrameSetup;
+    api.GetFolderCount = &AbGetFolderCount;
+    api.GetFolder = &AbGetFolder;
+    api.GetKnownLabelCount = &AbGetKnownLabelCount;
+    api.GetKnownLabel = &AbGetKnownLabel;
+    api.CreateFolderUndoable = &AbCreateFolder;
+    api.RenameFolderUndoable = &AbRenameFolder;
+    api.MoveAssetToFolderUndoable = &AbMoveAsset;
+    api.BeginRenameFolder = &AbBeginRenameFolder;
+    api.ImportAssetViaDialog = &AbImportViaDialog;
+    api.AssetGridFrameBegin = &AbGridFrameBegin;
+    api.AssetGridCellCount = &AbGridCellCount;
+    api.GetAssetGridMetrics = &AbGetGridMetrics;
+    api.DrawAssetCell = &AbDrawCell;
+    api.HandleAssetGridBackground = &AbHandleGridBackground;
+    api.GetAssetSelectionSummary = &AbGetSelectionSummary;
+    api.GetAssetIconSize = &AbGetIconSize;
+    api.SetAssetIconSize = &AbSetIconSize;
+    api.AssetGridFrameEnd = &AbGridFrameEnd;
+    api.GetShowHierarchy = &HierGetShow;
+    api.SetShowHierarchy = &HierSetShow;
+    api.GetHierarchyFilter = &HierGetFilter;
+    api.SetHierarchyFilter = &HierSetFilter;
+    api.HierarchyExpandAll = &HierExpandAll;
+    api.DrawHierarchyTreeBody = &HierDrawTreeBody;
+    api.GetShowInspector = &InspGetShow;
+    api.SetShowInspector = &InspSetShow;
+    api.DrawInspectorBody = &InspDrawBody;
+    api.DrawGridSnapPopupBody = &TbDrawGridSnapPopupBody;
+    api.DrawGizmosPopupBody = &TbDrawGizmosPopupBody;
+    api.GetGizmosMasterVisible = &TbGetGizmosMasterVisible;
+    api.SetGizmosMasterVisible = &TbSetGizmosMasterVisible;
+    api.GetHandTool = &TbGetHandTool;
+    api.SetHandTool = &TbSetHandTool;
+    api.GetLockViewToSelection = &TbGetLockViewToSelection;
+    api.SetLockViewToSelection = &TbSetLockViewToSelection;
+    api.GetAssetSort = &TbGetAssetSort;
+    api.SetAssetSort = &TbSetAssetSort;
+    api.RefreshAssetBrowser = &TbRefreshAssetBrowser;
+    api.GetAssetRefreshFlash = &TbGetAssetRefreshFlash;
+    api.GetMeasureTool = &TbGetMeasureTool;
+    api.SetMeasureTool = &TbSetMeasureTool;
+    api.RequestDuplicateArray = &TbRequestDuplicateArray;
+    api.GetInspectorLocked = &TbGetInspectorLocked;
+    api.ToggleInspectorLock = &TbToggleInspectorLock;
+    api.GetAssetSearchGlobal = &TbGetAssetSearchGlobal;
+    api.SetAssetSearchGlobal = &TbSetAssetSearchGlobal;
+    api.GetAssetFavoritesOnly = &TbGetAssetFavoritesOnly;
+    api.SetAssetFavoritesOnly = &TbSetAssetFavoritesOnly;
+    api.GetHistoryHudFrame = &HistGetHudFrame;
+    api.DrawHistoryListBody = &HistDrawListBody;
+    api.RequestBakeReflectionProbes = +[]() { /* probe bake: main.cpp's probeArray.Update() already runs every frame */ };
+    api.GetSceneDisplayName = &TbGetSceneDisplayName;
+    api.GetSceneDirty = &TbGetSceneDirty;
+    api.DoSaveScene = &TbDoSaveScene;
+    api.DrawPlayControlsBody = &TbDrawPlayControlsBody;
+    api.GetInPlayMode = &TbGetInPlayMode;
+    api.AssetFolderHistoryBack = &AbFolderHistoryBack;
+    api.AssetFolderHistoryForward = &AbFolderHistoryForward;
+    api.CanAssetFolderHistoryBack = &AbCanFolderHistoryBack;
+    api.CanAssetFolderHistoryForward = &AbCanFolderHistoryForward;
+    api.ToggleAssetViewMode = &AbToggleAssetViewMode;
+    api.GetHierarchyTypeFilter = &HierGetTypeFilter;
+    api.SetHierarchyTypeFilter = &HierSetTypeFilter;
+    api.GetHierarchySort = &HierGetSort;
+    api.SetHierarchySort = &HierSetSort;
+    api.GetAssetViewMode = &AbGetViewMode;
+    return api;
+}
+
+const EditorModuleHostAPI kHostAPI = MakeHostAPI();
+
+// Every EditorModuleHostAPI member after Version is a function pointer; count the ones
+// MakeHostAPI left null so a field added to the struct but never wired up is reported at startup
+// instead of silently disabling a panel feature.
+int CountUnassignedHostSlots(const EditorModuleHostAPI& api) {
+    static_assert(sizeof(void (*)()) == sizeof(void*), "function pointers are assumed pointer-sized");
+    static_assert(offsetof(EditorModuleHostAPI, DrawStatusPanel) == sizeof(void*),
+                  "Version is expected to be followed directly by the function-pointer slots");
+    static_assert(sizeof(EditorModuleHostAPI) % sizeof(void*) == 0, "unexpected EditorModuleHostAPI layout");
+    constexpr std::size_t slots = sizeof(EditorModuleHostAPI) / sizeof(void*) - 1;
+    const auto* bytes = reinterpret_cast<const unsigned char*>(&api) + sizeof(void*);
+    int unassigned = 0;
+    for (std::size_t i = 0; i < slots; ++i) {
+        void* slot = nullptr;
+        std::memcpy(&slot, bytes + i * sizeof(void*), sizeof(void*));
+        if (!slot) ++unassigned;
+    }
+    return unassigned;
+}
+
+// The candidate / rollback validation: exported entry point, matching API version, a Draw.
+const EditorModuleAPI* ResolveAPI(HMODULE module) {
+    const auto getAPI = reinterpret_cast<GetEditorModuleAPIFn>(::GetProcAddress(module, "TartarusGetEditorModuleAPI"));
+    const EditorModuleAPI* api = getAPI ? getAPI() : nullptr;
+    return (api && api->Version == kEditorModuleAPIVersion && api->Draw) ? api : nullptr;
+}
 
 } // namespace
 
@@ -673,6 +715,9 @@ void HotReloadEditorModule::Initialize(const fs::path& sourceModule, void* paren
     g_ParentWindow = static_cast<GLFWwindow*>(parentWindow);
     m_SourceModule = sourceModule;
     m_PollElapsed = 0.0f;
+    if (const int missing = CountUnassignedHostSlots(kHostAPI))
+        Log::Warn("Editor hot reload: " + std::to_string(missing) +
+                  " EditorModuleHostAPI callback(s) are not wired up in MakeHostAPI.");
     Reload(true);
 }
 
@@ -747,9 +792,8 @@ bool HotReloadEditorModule::Reload(bool initialLoad) {
         return false;
     }
 
-    const auto getAPI = reinterpret_cast<GetEditorModuleAPIFn>(::GetProcAddress(candidate, "TartarusGetEditorModuleAPI"));
-    const EditorModuleAPI* candidateAPI = getAPI ? getAPI() : nullptr;
-    if (!candidateAPI || candidateAPI->Version != kEditorModuleAPIVersion || !candidateAPI->Draw) {
+    const EditorModuleAPI* candidateAPI = ResolveAPI(candidate);
+    if (!candidateAPI) {
         Log::Error("Editor hot reload: TartarusEditor.dll has an incompatible module API.");
         ::FreeLibrary(candidate);
         fs::remove(copyPath, ec);
@@ -757,20 +801,21 @@ bool HotReloadEditorModule::Reload(bool initialLoad) {
         return false;
     }
 
-    // The candidate is validated; only now touch the live module. Order matters (#172): the old
-    // module's OnUnload runs, and the old DLL is gone, BEFORE the new OnLoad, so the old module
-    // can never undo shared host state (ImGui context, callbacks) the new one has just set up.
-    HMODULE previous = static_cast<HMODULE>(m_Handle);
-    const fs::path previousCopy = m_LoadedCopy;
-    if (m_API && m_API->OnUnload) m_API->OnUnload();
-    if (previous) ::FreeLibrary(previous);
-    if (!previousCopy.empty()) fs::remove(previousCopy, ec);
+    // The candidate is validated; only now touch the live module. HotReloadSwap owns the order
+    // (#172): old SaveState -> old OnUnload + free -> new OnLoad(state), so the old module can
+    // never undo shared host state (ImGui context, callbacks) the new one has just set up, with a
+    // rollback to the previous build if the new OnLoad rejects itself.
+    HotReloadSwap::Slot<EditorModuleAPI> live{static_cast<HMODULE>(m_Handle), m_API, m_LoadedCopy};
+    const HotReloadSwap::Result result = HotReloadSwap::Swap<EditorModuleAPI>(
+        live, {candidate, candidateAPI, copyPath}, &ResolveAPI, "Editor hot reload");
+    m_Handle = live.Handle;
+    m_API = live.Api;
+    m_LoadedCopy = live.Copy;
 
-    if (candidateAPI->OnLoad) candidateAPI->OnLoad();
-
-    m_Handle = candidate;
-    m_API = candidateAPI;
-    m_LoadedCopy = copyPath;
+    if (result != HotReloadSwap::Result::Committed) {
+        m_LastFailedSourceWrite = sourceWrite; // this build rejected itself; wait for the next one
+        return false;
+    }
     m_LastSourceWrite = sourceWrite;
     m_LastFailedSourceWrite = {};
     Log::Info(initialLoad ? "Editor hot reload: TartarusEditor module loaded."
@@ -779,11 +824,8 @@ bool HotReloadEditorModule::Reload(bool initialLoad) {
 }
 
 void HotReloadEditorModule::Shutdown() {
-    if (m_API && m_API->OnUnload) m_API->OnUnload();
-    if (m_Handle) ::FreeLibrary(static_cast<HMODULE>(m_Handle));
-
-    std::error_code ec;
-    if (!m_LoadedCopy.empty()) fs::remove(m_LoadedCopy, ec);
+    HotReloadSwap::Slot<EditorModuleAPI> live{static_cast<HMODULE>(m_Handle), m_API, m_LoadedCopy};
+    HotReloadSwap::Unload(live);
     m_Handle = nullptr;
     m_API = nullptr;
     m_LoadedCopy.clear();

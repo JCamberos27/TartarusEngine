@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 class World;
@@ -7,7 +8,9 @@ class World;
 // Deliberately small and versioned: the host keeps ownership of the World, renderer, editor,
 // and every long-lived resource. A hot-reloaded module only receives a non-owning view for its
 // per-frame gameplay work, so unloading it cannot invalidate editor state.
-constexpr std::uint32_t kGameModuleAPIVersion = 7;
+// v8 (#187): OnLoad receives the previous module's saved state and returns false to reject a
+// build (the host then restores the previous one); SaveState added.
+constexpr std::uint32_t kGameModuleAPIVersion = 8;
 
 // One raycast hit against the PhysX world (#185 PR 2). POD, no glm — the API header stays
 // dependency-free so a version mismatch is the only thing that can break the ABI. Position and
@@ -119,11 +122,20 @@ struct GameModuleHostAPI {
 
 struct GameModuleAPI {
     std::uint32_t Version = kGameModuleAPIVersion;
-    // Reload contract (#172/#187): the host validates a rebuilt DLL, calls the OLD module's
-    // OnUnload and frees it, and only then calls the NEW module's OnLoad. The two never overlap.
-    void (*OnLoad)() = nullptr;
+    // Reload contract (#172/#187, shared with the editor module; see Core/HotReloadSwap.h): the
+    // host validates a rebuilt DLL, asks the OLD module to SaveState, calls its OnUnload and frees
+    // it, and only then calls the NEW module's OnLoad with that state. The two never overlap.
+    //   OnLoad: `state` is whatever the previous module's SaveState wrote (nullptr/0 on the first
+    //     load or when it saved nothing). Return false to reject the build: undo anything this
+    //     call set up first (the host won't call OnUnload), and the host reloads the previous
+    //     build and hands it the same state. Every member may be null except Update.
+    //   SaveState: called with (nullptr, 0) to ask how many bytes are needed, then with a buffer
+    //     of that size; return the bytes written. The format is the module's own business, so
+    //     version it if a later build must read an older build's state.
+    bool (*OnLoad)(const void* state, std::size_t stateSize) = nullptr;
     void (*OnUnload)() = nullptr;
     void (*Update)(const GameModuleHostAPI& host, World& world, float deltaTime) = nullptr;
+    std::size_t (*SaveState)(void* buffer, std::size_t capacity) = nullptr;
 };
 
 using GetGameModuleAPIFn = const GameModuleAPI* (*)();
