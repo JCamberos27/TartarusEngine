@@ -319,6 +319,16 @@ int main(int argc, char** argv) {
             if (std::string(argv[j]) == "--crash-dialog") CrashHandler::SetInteractive(true);
         CrashHandler::CrashForTest(argv[i + 1]);
     }
+    // #148: `--crash-test-in-editor <kind>` crashes the same way, but a few seconds into a normal
+    // editor session with the scene marked dirty, to exercise the crash-time recovery save.
+    std::string crashTestInEditor;
+    for (int i = 1; i + 1 < argc; ++i)
+        if (std::string(argv[i]) == "--crash-test-in-editor") crashTestInEditor = argv[i + 1];
+    if (!crashTestInEditor.empty()) {
+        CrashHandler::SetInteractive(false);
+        for (int j = 1; j < argc; ++j)
+            if (std::string(argv[j]) == "--crash-dialog") CrashHandler::SetInteractive(true);
+    }
 
     // Resolve shipped engine assets (shaders, fonts, branding) relative to the executable, not
     // the working directory, so a launch from the repo root or an unrelated CWD still finds
@@ -632,6 +642,24 @@ int main(int argc, char** argv) {
 
         EditorLayer editor;
         editor.Init(window.Handle());
+        // #148: a hard crash (access violation, stack overflow, abort...) never reaches the
+        // exception-path EmergencyRecoverySave, so the crash handler gets its own hook. Pointers
+        // live in statics because the handler takes a plain function; the guard below clears the
+        // hook before `editor` (declared first, destroyed last) goes away, on every exit path.
+        static EditorLayer* s_CrashEditor = nullptr;
+        static World* s_CrashWorld = nullptr;
+        static AssetLibrary* s_CrashAssets = nullptr;
+        s_CrashEditor = &editor;
+        s_CrashWorld = &world;
+        s_CrashAssets = &assets;
+        if (!headless) {
+            CrashHandler::SetEmergencySave([]() -> bool {
+                return s_CrashEditor && s_CrashEditor->CrashRecoverySave(*s_CrashWorld, *s_CrashAssets);
+            });
+        }
+        struct EmergencySaveGuard {
+            ~EmergencySaveGuard() { CrashHandler::SetEmergencySave(nullptr); s_CrashEditor = nullptr; }
+        } emergencySaveGuard;
         {
             std::error_code existsEc;
             if (!sceneLoaded && std::filesystem::exists(scenePath, existsEc))
@@ -1016,6 +1044,10 @@ int main(int argc, char** argv) {
                 continue;
             }
             ++frameIndex;
+            if (!crashTestInEditor.empty() && frameIndex == 120) {
+                editor.MarkDirtyForCrashTest();
+                CrashHandler::CrashForTest(crashTestInEditor.c_str());
+            }
             // Advance the smoke test: load the next scene (or, once every scene's frame quota is
             // met, fall through and stop the whole loop below).
             if (smokeTestMode) {
