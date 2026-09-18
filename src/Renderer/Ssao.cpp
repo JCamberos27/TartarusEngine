@@ -1,4 +1,5 @@
 #include "Ssao.h"
+#include "GLStateScope.h"
 #include "GLFramebufferCheck.h"
 #include "Shader.h"
 #include "gl.h"
@@ -123,6 +124,7 @@ void Ssao::Resize(int width, int height) {
 }
 
 void Ssao::Compute(Shader& ssaoShader, const glm::mat4& proj) {
+    GLStateScope restore; // #160 - put depth/blend/cull back as the caller had them
     glBindFramebuffer(GL_FRAMEBUFFER, m_SsaoFbo);
     glViewport(0, 0, m_Width, m_Height);
     glDisable(GL_DEPTH_TEST);
@@ -143,20 +145,23 @@ void Ssao::Compute(Shader& ssaoShader, const glm::mat4& proj) {
     ssaoShader.SetVec2("uScreenSize",    glm::vec2((float)m_Width, (float)m_Height));
     ssaoShader.SetFloat("uRadius",       0.5f);
     ssaoShader.SetFloat("uBias",         0.025f);
-    for (int i = 0; i < (int)m_Kernel.size(); ++i)
-        ssaoShader.SetVec3("uKernel[" + std::to_string(i) + "]", m_Kernel[i]);
+    // #160 - the kernel never changes, so upload it once per program (again only if the program
+    // is recreated) instead of 32 string-built uniform names every frame.
+    if (m_KernelUploadedTo != ssaoShader.Program()) {
+        for (int i = 0; i < (int)m_Kernel.size(); ++i)
+            ssaoShader.SetVec3("uKernel[" + std::to_string(i) + "]", m_Kernel[i]);
+        m_KernelUploadedTo = ssaoShader.Program();
+    }
 
     glBindVertexArray(m_Vao);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     glBindVertexArray(0);
 
     glActiveTexture(GL_TEXTURE0);
-    glDepthMask(GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
 }
 
 void Ssao::Blur(Shader& blurShader) {
+    GLStateScope restore; // #160
     glBindFramebuffer(GL_FRAMEBUFFER, m_BlurFbo);
     glViewport(0, 0, m_Width, m_Height);
     glDisable(GL_DEPTH_TEST);
@@ -174,7 +179,4 @@ void Ssao::Blur(Shader& blurShader) {
     glBindVertexArray(0);
 
     glActiveTexture(GL_TEXTURE0);
-    glDepthMask(GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
 }
