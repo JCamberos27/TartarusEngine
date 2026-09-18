@@ -601,7 +601,19 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
 // `ma.ExtraProps` (typed store filled by MaterialAsset::Load, #354).
 void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const ShaderAsset& sa) {
     const Material& mat = ma.Mat;
-    if (GLStateCache::MaterialAlreadyBound(mat.Hash(), shader.Program())) return;
+    // #99 — the redundant-bind skip must also see custom (non-builtin) shader properties;
+    // Material::Hash() only covers the built-in fields, so two materials differing only in an
+    // ExtraProp used to render with whichever was bound first.
+    size_t hash = mat.Hash();
+    auto mix = [&hash](size_t v) { hash ^= v + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2); };
+    for (const auto& [name, p] : ma.ExtraProps) {
+        mix(std::hash<std::string>{}(name));
+        mix(std::hash<float>{}(p.F));
+        for (int c = 0; c < 4; ++c) mix(std::hash<float>{}(p.V[c]));
+        mix((size_t)p.B); mix((size_t)p.I);
+        mix(std::hash<const void*>{}(p.Tex.get()));
+    }
+    if (GLStateCache::MaterialAlreadyBound(hash, shader.Program())) return;
 
     const auto& props    = sa.Properties();
     const auto& bindings = sa.Bindings();
@@ -625,20 +637,33 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
                         : (extra ? extra->Tex : MaterialAsset::GetTexture(mat, pname) /*null*/);
             if (tex && tex->IsValid()) {
                 tex->Bind(b.TextureUnit);
-                shader.SetInt(uname,   b.TextureUnit);
                 shader.SetInt(hasName, 1);
             } else {
+                // #99 — an absent map still binds its declared default ("white"/"black"/
+                // "normal"), like the built-in path does, so the sampler never sees texture 0
+                // (KHR 131204) or a stale texture left on that unit by a previous draw.
+                const unsigned int fallback = prop.DefaultTex == "normal" ? DefaultTextures::FlatNormal()
+                                            : prop.DefaultTex == "black"  ? DefaultTextures::Black()
+                                                                          : DefaultTextures::White();
+                GLStateCache::BindTexture2D(b.TextureUnit, fallback);
                 shader.SetInt(hasName, 0);
             }
+            shader.SetInt(uname, b.TextureUnit);
             break;
         }
         case ShaderPropType::Color:
-        case ShaderPropType::Vec2:
         case ShaderPropType::Vec3:
-        case ShaderPropType::Vec4:
             shader.SetVec3(uname, builtin ? MaterialAsset::GetColor(mat, pname)
                                           : (extra ? glm::vec3(extra->V)
                                                    : glm::vec3(prop.DefaultVec)));
+            break;
+        // #99 — vec2/vec4 uniforms need the matching setter; glUniform3f on them is
+        // GL_INVALID_OPERATION and the value was silently never set.
+        case ShaderPropType::Vec2:
+            shader.SetVec2(uname, glm::vec2(extra ? extra->V : prop.DefaultVec));
+            break;
+        case ShaderPropType::Vec4:
+            shader.SetVec4(uname, extra ? extra->V : prop.DefaultVec);
             break;
         case ShaderPropType::Float:
             shader.SetFloat(uname, builtin ? MaterialAsset::GetFloat(mat, pname)
