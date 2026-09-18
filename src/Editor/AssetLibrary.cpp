@@ -121,11 +121,12 @@ std::shared_ptr<Model> AssetLibrary::CloneModel(const std::shared_ptr<Model>& or
         std::string kind = rest.substr(0, rest.find('#'));
         return CreatePrimitive(kind); // already fresh + independent + uniquely pathed
     }
-    // Re-import a standalone instance rather than returning the cached one LoadModel would —
-    // deliberately NOT added to m_ModelCache/m_ModelList, so it doesn't show up as a second
-    // "same file" entry in the Asset Browser and doesn't get reused by a later LoadModel(path).
-    // Uses the asset's own import settings so the copy matches the library entry's geometry.
-    return std::make_shared<Model>(path, GetModelSettings(path));
+    // #96 — a lightweight instance sharing the library entry's imported data (meshes, GPU
+    // buffers, textures, skeleton, clips) with its own animation state. Used to be a full Assimp
+    // re-import per placed object, on every load / undo / Play-Stop / duplicate. Not added to
+    // m_ModelCache/m_ModelList, so the Asset Browser still lists the file once; a Reimport of
+    // the library entry reaches every instance because they share its data.
+    return original->CreateInstance();
 }
 
 std::shared_ptr<Model> AssetLibrary::InstantiateModel(const std::string& path) {
