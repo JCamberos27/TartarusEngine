@@ -82,7 +82,10 @@ def main() -> int:
         print(f"\ncheck_asset_meta: {len(errors)} error(s) found.", file=sys.stderr)
         return 1
 
-    print(f"check_asset_meta: OK — {len(guid_to_path)} asset(s) checked, all have valid .meta files.")
+    # Plain hyphen, not an em-dash (audit #78): this prints fine over UTF-8, but a default
+    # Windows console codepage (cp1252/cp437) can't encode U+2014 and mojibakes it. Matches
+    # check_component_registration.py / check_button_styling.py's plain-ASCII "OK" style.
+    print(f"check_asset_meta: OK - {len(guid_to_path)} asset(s) checked, all have valid .meta files.")
     return 0
 
 

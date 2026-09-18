@@ -1710,6 +1710,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
 
     if (m_Selected == entt::null || !world.Registry.valid(m_Selected)) {
         m_GizmoEngaged = false;
+        m_GizmoUsing = false;
         return;
     }
 
@@ -1770,6 +1771,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(proj), op, gizmoMode,
         glm::value_ptr(matrix), nullptr, snapActive ? snapValues : nullptr, boundsPtr);
     m_GizmoEngaged = ImGuizmo::IsOver() || ImGuizmo::IsUsing();
+    m_GizmoUsing = ImGuizmo::IsUsing();
 
     bool isUsingNow = ImGuizmo::IsUsing();
     if (isUsingNow && !m_GizmoWasUsing) {
@@ -2193,7 +2195,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     };
     addRef(m_Selected);
     for (entt::entity e : m_ExtraSelection) addRef(e);
-    if (refs.empty()) { m_GizmoEngaged = false; return; }
+    if (refs.empty()) { m_GizmoEngaged = false; m_GizmoUsing = false; return; }
 
     // Same fullscreen-overlay approach as the single-object gizmo (see BeginGizmoOverlay) — needed
     // so ImGuizmo's hit-testing has a real window to test hover/click against.
@@ -2231,6 +2233,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(proj), op, gizmoMode,
         glm::value_ptr(m_GroupGizmoMatrix), nullptr, snapActive ? snapValues : nullptr);
     m_GizmoEngaged = ImGuizmo::IsOver() || ImGuizmo::IsUsing();
+    m_GizmoUsing = ImGuizmo::IsUsing();
 
     bool isUsingNow = ImGuizmo::IsUsing();
     if (isUsingNow && !m_GizmoWasUsing) {

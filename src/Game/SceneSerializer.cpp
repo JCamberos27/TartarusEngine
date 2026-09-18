@@ -1515,7 +1515,7 @@ std::string SceneSerializer::TakeLoadWarning() {
     return warning;
 }
 
-bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string& path) {
+bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string& path, bool persistMigration) {
     std::ifstream in(path);
     if (!in.is_open()) return false;
 
@@ -1526,12 +1526,24 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
         Log::Error("Scene: failed to parse '" + path + "': " + e.what());
         return false;
     }
+    // Valid JSON but the wrong shape (e.g. a bare `[]` or a number) parses fine above but throws
+    // a json::type_error the moment anything below calls .value()/.contains() on it, since those
+    // require an object. Reject it here as a load failure — same contract as a parse error —
+    // instead of letting that exception escape uncaught all the way to main()'s outermost catch
+    // and take down the whole process/--smoke-test batch over one bad scene (audit #76).
+    if (!root.is_object()) {
+        Log::Error("Scene: '" + path + "' is valid JSON but not a scene object (top-level type is " +
+                   std::string(root.type_name()) + ").");
+        return false;
+    }
 
     // #9, Phase M item 1: one .bak of the whole file before a pre-v3 load mutates anything in
     // memory, per the review's Q13 "one backup" requirement. .json.bak is already in .gitignore.
+    // Skipped when the caller won't persist the migration either (audit #77) — no write-back
+    // coming means there's nothing for the backup to protect against.
     const int formatVersion = root.value("formatVersion", 0);
     const bool migrating = formatVersion < kSceneFormatVersion;
-    if (migrating) {
+    if (migrating && persistMigration) {
         std::error_code ec;
         std::filesystem::copy_file(path, path + ".bak", std::filesystem::copy_options::overwrite_existing, ec);
         if (ec) Log::Warn("Scene: couldn't write a backup of '" + path + "' before migrating it: " + ec.message());
@@ -1542,11 +1554,16 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
     bool ok = ApplySceneJson(world, assets, root);
 
     if (ok && migrating && !g_MigrationLog.empty()) {
-        Log::Info("Scene: upgraded '" + path + "' to format v" + std::to_string(kSceneFormatVersion) + ":");
+        Log::Info((persistMigration ? "Scene: upgraded '" : "Scene: would upgrade (not persisting) '") + path +
+                   "' to format v" + std::to_string(kSceneFormatVersion) + ":");
         for (const auto& line : g_MigrationLog) Log::Info("  - " + line);
-        // Write the upgrade back immediately (review §7 Q13: "one build upgrade" moves the
-        // project in one pass) so a second load doesn't re-read the now-stale prefs values.
-        Save(world, assets, path);
+        if (persistMigration) {
+            // Write the upgrade back immediately (review §7 Q13: "one build upgrade" moves the
+            // project in one pass) so a second load doesn't re-read the now-stale prefs values.
+            Save(world, assets, path);
+        }
+        // persistMigration == false: the migrated data lives only in `world`/`assets` for this
+        // run (a --smoke-test scene, a --resave input) — `path` on disk is never touched.
     }
     return ok;
 }
@@ -1571,6 +1588,13 @@ bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const s
         root = json::parse(data);
     } catch (const std::exception& e) {
         Log::Error(std::string("Scene: failed to parse snapshot: ") + e.what());
+        return false;
+    }
+    // Same guard as Load() (audit #76): valid-but-non-object JSON parses fine but throws on the
+    // first .value()/.contains() call below, which would otherwise escape uncaught.
+    if (!root.is_object()) {
+        Log::Error(std::string("Scene: snapshot is valid JSON but not a scene object (top-level type is ") +
+                   root.type_name() + ").");
         return false;
     }
     // Only a snapshot built via the AssetLibrary-aware SaveToString() overload (undo/redo)

@@ -2,6 +2,7 @@
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <glm/glm.hpp>
 #include <entt/entt.hpp>
@@ -137,6 +138,14 @@ public:
 
 private:
     std::unordered_map<entt::entity, glm::mat4> m_WorldTransformCache;
+    // Entities ComposeWorldTransform/RebuildWorldTransformCache have already logged a
+    // parentId-cycle warning for (audit #74) — each one gets exactly one Console line, ever, not
+    // one per frame. Never explicitly cleared on scene load: it only ever holds ids that were
+    // once genuinely cyclic, so the sole cost of staleness across a load is a vanishingly
+    // unlikely false negative (a brand-new entity reusing an old numeric id that also happens to
+    // be cyclic again) — not worth wiring a clear-on-load hook for. Mutable because the compose
+    // side of this is logically read-only (const).
+    mutable std::unordered_set<entt::entity> m_CycleWarned;
     int m_NextPrimitiveId = 0;
     int m_NextOrder = 0;
     // Level-geometry entities own an unshared cube Model (never looked up by path elsewhere,
