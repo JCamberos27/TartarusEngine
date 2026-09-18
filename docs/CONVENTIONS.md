@@ -67,47 +67,17 @@ component should never touch them.
   a bespoke widget (Joint's per-type `Axis`/`UseLimit`/limit fields, Collider's `HalfExtents`)
   marked `EditorHidden` and drawn by `DrawReflectedComponentExtra` instead.
 
-## Editor themes (#92, #234)
+## Editor theme
 
-`EditorSettings::EditorTheme` is an int; `EditorLayer::ApplyThemeStyle()` is the single entry
-point that applies the active theme — **both** its `style.Colors[]` (via `ApplyEditorTheme()`) and
-its style *metrics* (rounding / padding / borders) — then DPI-scales once. Call `ApplyThemeStyle()`,
-not `ApplyEditorTheme()`, on any theme change so metrics switch too.
+There is one theme, Dark (the Light theme and the theme picker were removed, Defect #41).
+`EditorLayer::ApplyThemeStyle()` (`EditorLayer.cpp`) is the single entry point: it resets to a
+baseline (`ImGui::StyleColorsDark` + `SetSharedMetrics`), sets the rounded "Bento" geometry,
+applies `ApplyBentoPalette()`'s colours, then DPI-scales once. Colour pairs with a WCAG contrast
+floor are checked there by `EditorUIPrimitives::AssertContrastFloor` — a miss logs, it doesn't
+crash. The viewport HUDs (Stats, History, status bar) draw a fixed opaque plate behind fixed light
+text (Defect #54), since they sit over arbitrary scene content, not the editor chrome.
 
-Current lineup (Phase 1 item 9, collapsed from three themes down from #234's Bento/Prism/Windows
-XP): **0 = Dark** (default; `ApplyBentoPalette()` — the fall-through case in `ApplyEditorTheme()`,
-still named for its #234 "Bento" origin), **1 = Light** (`ApplyLightPalette()` — same role
-structure and geometry, independently re-solved for a light background; see its function comment
-in `EditorLayer.cpp` for why its FrameBg/Border land where they do). `EditorSettings::Load` clamps
-an out-of-range value to 0. Every colour pair that carries a WCAG contrast floor (Text,
-TextDisabled, FrameBg, Border/Separator composited) is checked automatically at every theme
-switch by `EditorLayer::ApplyThemeStyle()`'s startup contrast assert
-(`EditorUIPrimitives::AssertContrastFloor`) — a floor miss logs, it doesn't crash, but it should
-never happen silently again the way #34's invisible checkboxes did.
-
-**Layer-3 layout treatment.** The hairline-card / tight-row look (#234 layer 3) applies to both
-current themes (`EditorLayer::UseBentoLayout()` / `host.GetEditorTheme() <= 1` in a reloadable
-module — kept as a named call, always true today, in case a future flat-chrome theme needs the
-old alternative back). The viewport HUDs (Stats, History, status bar) draw a fixed opaque plate
-behind fixed light text in every theme (Defect #54) — not theme-adaptive, since a HUD only ever
-needs to be legible over arbitrary scene content, not over the editor chrome.
-
-**Adding a theme:**
-
-1. New `int` value. Add a branch `if (EditorTheme == N) { … return; }` in `ApplyEditorTheme()`
-   (`EditorLayer.cpp`) that sets `style.Colors[]` only. (Dark is the fall-through, so it needs no
-   branch; a new theme does.) Compute Text/TextDisabled/FrameBg/Border against ITS OWN background
-   via `EditorUIPrimitives::ContrastRatio`/`CompositeOver` — don't derive them from another
-   theme's palette by inversion; `ApplyLightPalette`'s function comment walks through why that
-   matters (the gamma-space-compositing correction Border/Separator needed).
-2. If it needs non-default geometry, add an `EditorTheme == N` branch to `ApplyThemeStyle()`'s
-   metric block. `ApplyThemeStyle()` resets to the shared baseline (`SetSharedMetrics`) first, so
-   you only set what differs, and `ScaleAllSizes` runs after — use raw 96-DPI values.
-3. Add the label to `kThemeLabels[]` and a line to the theme combo's tooltip (both in
-   `EditorLayer.cpp`, Preferences ▸ General).
-4. Extend the `EditorTheme` comment in `EditorSettings.h`; bump the `Load` clamp if you add a slot.
-
-**Accent discipline (Dark, Light, and any future multi-accent theme):** the cyan / blue / yellow
+**Accent discipline:** the cyan / blue / yellow
 triad has a fixed semantic split — do not mix roles:
 
 | Colour | Role | Where |
@@ -115,6 +85,3 @@ triad has a fixed semantic split — do not mix roles:
 | **"cyan"** `#2C5D87` — Unity's "Highlight Background" | selection / "you are here" | `Header`, `CheckMark`, `SliderGrab`, `Separator{Hovered,Active}`, `TabSelectedOverline`, `NavCursor`, `DockingPreview`, `TextSelectedBg`, `ResizeGripHovered` |
 | **"blue"** `#4C7EFF` — Unity's "Link Text" / focus blue | active / pressed / in-progress | `HeaderActive`, `SliderGrabActive`, `ResizeGripActive` |
 | **yellow / warning** | warning / one data highlight | `EditorUIPrimitives::WarningColor()` (Phase 1 item 2) — a fixed, non-theme-derived accessor alongside `DangerColor()`/`SuccessColor()`/`InfoColor()`; a status colour has to mean the same thing regardless of which theme is active, unlike the selection/active accents above |
-
-Light's accent hues are independently WCAG-checked against its own background, not derived from
-Dark's by inversion — see `ApplyLightPalette()`'s function comment in `EditorLayer.cpp`.
