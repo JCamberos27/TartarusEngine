@@ -143,19 +143,19 @@ std::string DeriveCategory(const std::string& message) {
 // live entity / an existing file), and messages were never written with this in mind, so there's
 // no delimiter convention to lean on beyond what already reads naturally to a human.
 
-// Matches PhysX/Scene log lines' own "entity 1234" phrasing (see e.g. PhysicsWorld.cpp,
-// EditorLayer_Gizmos.cpp's "Joint broke on entity %d.").
-bool ParseEntityRef(const std::string& msg, unsigned int& outId) {
-    size_t pos = msg.find("entity ");
-    while (pos != std::string::npos) {
-        size_t start = pos + 7; // strlen("entity ")
+// Matches "entity #12", the stable form every engine log line uses (EntityLogRef, World.h):
+// 12 is the entity's OrderComponent value, which survives undo / Play-Stop / reload (#182).
+// The old raw "entity 1234" form is deliberately NOT matched: raw entt ids are recycled, so an
+// old line would select whichever entity happens to hold that id now.
+bool ParseEntityRef(const std::string& msg, int& outOrder) {
+    for (size_t pos = msg.find("entity #"); pos != std::string::npos; pos = msg.find("entity #", pos + 1)) {
+        size_t start = pos + 8; // strlen("entity #")
         size_t end = start;
         while (end < msg.size() && msg[end] >= '0' && msg[end] <= '9') ++end;
-        if (end > start) {
-            outId = (unsigned int)std::strtoul(msg.substr(start, end - start).c_str(), nullptr, 10);
+        if (end > start && end - start < 10) {
+            outOrder = (int)std::strtol(msg.substr(start, end - start).c_str(), nullptr, 10);
             return true;
         }
-        pos = msg.find("entity ", pos + 1);
     }
     return false;
 }
@@ -416,13 +416,13 @@ void Draw(const EditorModuleHostAPI& host) {
                 // Phase 6 item 4 — click-to-navigate. An entity reference wins over an asset one
                 // when a message happens to parse as both (hasn't come up in practice, but PhysX
                 // lines already quote asset-ish text around an entity id in a couple of cases).
-                unsigned int entityRef = 0;
+                int entityRef = 0;
                 std::string assetRef;
-                const bool hasEntityRef = host.SelectEntityRaw && ParseEntityRef(entry.Message, entityRef);
+                const bool hasEntityRef = host.SelectEntityByOrder && ParseEntityRef(entry.Message, entityRef);
                 const bool hasAssetRef = !hasEntityRef && host.PingAssetPath && ParsePathRef(entry.Message, assetRef);
 
                 if (rowClicked && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                    if (hasEntityRef) host.SelectEntityRaw(entityRef);
+                    if (hasEntityRef) host.SelectEntityByOrder(entityRef);
                     else if (hasAssetRef) host.PingAssetPath(assetRef.c_str());
                 }
 
@@ -436,7 +436,7 @@ void Draw(const EditorModuleHostAPI& host) {
                         ImGui::Separator();
                         if (hasEntityRef) {
                             std::string label = ICON_FA_LOCATION_CROSSHAIRS "  Select entity #" + std::to_string(entityRef);
-                            if (ImGui::MenuItem(label.c_str())) host.SelectEntityRaw(entityRef);
+                            if (ImGui::MenuItem(label.c_str())) host.SelectEntityByOrder(entityRef);
                         }
                         if (hasAssetRef) {
                             std::string label = ICON_FA_MAGNIFYING_GLASS_LOCATION "  Show in Asset Browser";

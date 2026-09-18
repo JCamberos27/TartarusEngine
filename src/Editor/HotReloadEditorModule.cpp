@@ -104,8 +104,8 @@ void LogInfoFn(const char* message) { Log::Info(message ? message : ""); }
 void LogErrorFn(const char* message) { Log::Error(message ? message : ""); }
 
 // --- Console click-to-navigate (API v27) ------------------------------------------------------
-bool SelectEntityRawFn(unsigned int rawEntityId) {
-    return g_Editor && g_World && g_Editor->SelectEntityByRawId(*g_World, rawEntityId);
+bool SelectEntityByOrderFn(int orderValue) {
+    return g_Editor && g_World && g_Editor->SelectEntityByOrder(*g_World, orderValue);
 }
 bool PingAssetPathFn(const char* path) {
     return g_Editor && g_Assets && path && g_Editor->PingAssetPath(*g_Assets, path);
@@ -509,7 +509,7 @@ const EditorModuleHostAPI kHostAPI{
     &LogClearFn,
     &LogInfoFn,
     &LogErrorFn,
-    &SelectEntityRawFn,
+    &SelectEntityByOrderFn,
     &PingAssetPathFn,
     &GetNotificationUnreadCountFn,
     &MarkNotificationsReadFn,

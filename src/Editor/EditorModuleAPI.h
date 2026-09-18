@@ -116,7 +116,10 @@
 //        editor (Preferences category 5) instead of leaving it something you only find browsing.
 //   30 - Phase 6 item 5: Statistics panel rebuild. GetFrameTimeHistory reads the host's 120-frame
 //        raw (unsmoothed) ring buffer for the panel's sparkline.
-constexpr std::uint32_t kEditorModuleAPIVersion = 30;
+//   31 - #182: SelectEntityRaw -> SelectEntityByOrder. Log lines now name entities by their
+//        stable OrderComponent value ("entity #12"), because raw entt ids are recycled on every
+//        undo/redo, Play->Stop and scene reload, so an old Console link selected the wrong one.
+constexpr std::uint32_t kEditorModuleAPIVersion = 31;
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -233,7 +236,7 @@ struct EditorModuleHostAPI {
     // Resolves a reference parsed out of a log message's text and jumps the editor to it.
     // Both return false (no-op) when the reference doesn't resolve to anything live/present —
     // the caller uses that to decide whether a row's context-menu item should even appear.
-    bool (*SelectEntityRaw)(unsigned int rawEntityId) = nullptr;
+    bool (*SelectEntityByOrder)(int orderValue) = nullptr; // "entity #N" -> OrderComponent N (v31)
     bool (*PingAssetPath)(const char* path) = nullptr;
 
     // --- Notification bell (API v28) ---------------------------------------------------------

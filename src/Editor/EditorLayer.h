@@ -254,7 +254,9 @@ public:
     // and selects it (SelectItem below). False if the id no longer names a valid entity — the
     // entity may have been deleted since the message was logged. Public for the same reason as
     // PingAssetPath above: HotReloadEditorModule.cpp's free-function glue isn't a member.
-    bool SelectEntityByRawId(World& world, unsigned int rawId);
+    // #182 - selects the entity whose OrderComponent is `orderValue` (the stable id log lines
+    // print as "entity #N"). False if none exists any more.
+    bool SelectEntityByOrder(World& world, int orderValue);
     void AssetFolderHistoryBack() {
         if (!CanAssetFolderHistoryBack()) return;
         m_CurrentAssetFolder = m_AssetFolderHistory[--m_AssetFolderHistoryPos];

@@ -1,6 +1,7 @@
 #include "World.h"
 #include "Model.h"
 #include "Log.h"
+#include <string>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -243,7 +244,7 @@ bool World::SetParent(entt::entity child, entt::entity parent) {
     for (entt::entity walk = parent; walk != entt::null; ) {
         if (walk == child) return false;
         if (++hops > 1024) {
-            Log::Error("Hierarchy: the parent chain above entity " + std::to_string((uint32_t)parent) +
+            Log::Error("Hierarchy: the parent chain above " + EntityLogRef(Registry, parent) +
                        " loops or is deeper than 1024 - reparent refused (the scene's hierarchy is malformed).");
             return false;
         }
@@ -317,4 +318,11 @@ glm::mat4 ComposeTransform(const glm::vec3& position, const glm::vec3& rotationE
     m = glm::rotate(m, glm::radians(rotationEulerDegrees.z), glm::vec3(0, 0, 1));
     m = glm::scale(m, scale);
     return m;
+}
+
+std::string EntityLogRef(const entt::registry& registry, entt::entity e) {
+    if (registry.valid(e))
+        if (const auto* order = registry.try_get<OrderComponent>(e))
+            return "entity #" + std::to_string(order->Value);
+    return "entity id " + std::to_string(entt::to_integral(e));
 }
