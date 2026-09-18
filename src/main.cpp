@@ -962,6 +962,31 @@ int main(int argc, char** argv) {
                             Log::Error("[SmokeTest] triangle raycast expected t=8, got " + std::to_string(bestT));
                         else
                             std::cout << "[SmokeTest]   triangle raycast OK (t=" << bestT << ")" << std::endl;
+
+                        // #119 regression: copying a jointed pair (the Duplicate / Paste path) must
+                        // connect the copied joint to the copied partner, not the original.
+                        entt::entity a = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "SmokeJointA");
+                        entt::entity b = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "SmokeJointB");
+                        world.Registry.emplace_or_replace<JointComponent>(a).ConnectedOrder =
+                            world.Registry.get<OrderComponent>(b).Value;
+                        std::vector<entt::entity> copies;
+                        std::unordered_map<int, entt::entity> srcOrder;
+                        const bool appended = SceneSerializer::AppendEntitiesFromString(world, assets,
+                            SceneSerializer::SaveEntitiesToString(world, {a, b}), copies, &srcOrder);
+                        auto copyOf = [&](entt::entity e) {
+                            auto it = srcOrder.find(world.Registry.get<OrderComponent>(e).Value);
+                            return it == srcOrder.end() ? entt::null : it->second;
+                        };
+                        const entt::entity ca = appended ? copyOf(a) : entt::null;
+                        const entt::entity cb = appended ? copyOf(b) : entt::null;
+                        const auto* cj = ca != entt::null ? world.Registry.try_get<JointComponent>(ca) : nullptr;
+                        if (!cj || cb == entt::null || cj->ConnectedOrder != world.Registry.get<OrderComponent>(cb).Value)
+                            Log::Error("[SmokeTest] copied joint was not repointed at the copied partner.");
+                        else
+                            std::cout << "[SmokeTest]   joint copy remap OK" << std::endl;
+                        for (entt::entity e : copies) if (world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
+                        world.DestroyEntityAndChildren(a);
+                        world.DestroyEntityAndChildren(b);
                     }
                     // #81 regression: the undo/redo path round-trips the scene + asset library
                     // through SaveToString/LoadFromString. It must neither throw (GUID PathRef

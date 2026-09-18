@@ -1009,11 +1009,13 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
 // escape to main()'s outermost catch and close the editor. Callers restore the previous world
 // on failure (see SceneSerializer::Load / Undo).
 bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
-    bool clearFirst, std::vector<entt::entity>* outCreated);
+    bool clearFirst, std::vector<entt::entity>* outCreated,
+    std::unordered_map<int, entt::entity>* outSourceOrder);
 bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
-    bool clearFirst = true, std::vector<entt::entity>* outCreated = nullptr) {
+    bool clearFirst = true, std::vector<entt::entity>* outCreated = nullptr,
+    std::unordered_map<int, entt::entity>* outSourceOrder = nullptr) {
     try {
-        return ApplySceneJsonImpl(world, assets, root, clearFirst, outCreated);
+        return ApplySceneJsonImpl(world, assets, root, clearFirst, outCreated, outSourceOrder);
     } catch (const std::exception& e) {
         Log::Error(std::string("Scene: the scene data is malformed and could not be loaded: ") + e.what());
         return false;
@@ -1024,7 +1026,8 @@ bool ApplySceneJson(World& world, AssetLibrary& assets, const json& root,
 // between loading a scene and pasting/instantiating a fragment into one. `outCreated`, when
 // given, collects every entity this call created so the caller can select or offset them.
 bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
-    bool clearFirst, std::vector<entt::entity>* outCreated) {
+    bool clearFirst, std::vector<entt::entity>* outCreated,
+    std::unordered_map<int, entt::entity>* outSourceOrder) {
     ApplyDepthGuard depthGuard; // #236 A2 — bounds prefab-stub expansion recursion
     if (g_ApplyDepth > kMaxApplyDepth) {
         Log::Error("Scene: prefab instance nesting too deep (" + std::to_string(kMaxApplyDepth) +
@@ -1112,8 +1115,15 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     // get sequential file-order values here, matching the old boxes->models->empties behaviour.
     int fallbackOrder = 0;
     int maxLoadedOrder = -1;
+    // #119 — append mode: the fragment's own order values -> the new copies, used below to
+    // repoint intra-fragment joint references and handed back to the caller.
+    std::unordered_map<int, entt::entity> sourceOrder;
     auto applyOrder = [&](entt::entity e, const json& j) {
-        if (!clearFirst) return;
+        if (!clearFirst) {
+            if (auto it = j.find("order"); it != j.end() && it->is_number_integer())
+                sourceOrder[it->get<int>()] = e;
+            return;
+        }
         int order = j.value("order", fallbackOrder);
         fallbackOrder = std::max(fallbackOrder, order) + 1;
         maxLoadedOrder = std::max(maxLoadedOrder, order);
@@ -1280,6 +1290,20 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     for (const auto& [child, parentId] : pendingParents) {
         auto it = idToEntity.find(parentId);
         if (it != idToEntity.end()) world.AttachChildRaw(child, it->second);
+    }
+
+    // #119 — a copied joint whose partner was copied with it must connect to the partner's copy,
+    // not the original (a partner outside the fragment keeps the original reference).
+    if (!clearFirst) {
+        for (const auto& [oldOrder, e] : sourceOrder) {
+            auto* joint = world.Registry.try_get<JointComponent>(e);
+            if (!joint || joint->ConnectedOrder < 0) continue;
+            auto partner = sourceOrder.find(joint->ConnectedOrder);
+            if (partner == sourceOrder.end()) continue;
+            if (const auto* o = world.Registry.try_get<OrderComponent>(partner->second))
+                joint->ConnectedOrder = o->Value;
+        }
+        if (outSourceOrder) *outSourceOrder = std::move(sourceOrder);
     }
 
     return true;
@@ -1778,7 +1802,8 @@ std::string SceneSerializer::SaveEntitiesToString(const World& world,
 }
 
 bool SceneSerializer::AppendEntitiesFromString(World& world, AssetLibrary& assets,
-    const std::string& data, std::vector<entt::entity>& outCreated) {
+    const std::string& data, std::vector<entt::entity>& outCreated,
+    std::unordered_map<int, entt::entity>* outSourceOrder) {
     json root;
     try {
         root = json::parse(data);
@@ -1786,7 +1811,7 @@ bool SceneSerializer::AppendEntitiesFromString(World& world, AssetLibrary& asset
         Log::Error(std::string("Scene: failed to parse entity fragment: ") + e.what());
         return false;
     }
-    return ApplySceneJson(world, assets, root, /*clearFirst=*/false, &outCreated);
+    return ApplySceneJson(world, assets, root, /*clearFirst=*/false, &outCreated, outSourceOrder);
 }
 
 bool SceneSerializer::SavePrefab(const World& world, entt::entity root, const std::string& path) {
