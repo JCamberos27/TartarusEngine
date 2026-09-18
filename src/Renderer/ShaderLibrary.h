@@ -3,12 +3,16 @@
 #include <vector>
 #include <functional>
 
+class Shader;
+
 // Reads GLSL source files from the shaders directory (set once at startup via Init) and
 // resolves #include "filename" directives recursively before returning the source string.
 // Callers pass the returned string directly to Shader's constructor.
 namespace ShaderLibrary {
     void Init(const std::string& shadersDir);
-    std::string ReadFile(const std::string& filename);
+    // `deps` (optional) receives every file read - the file itself and each #include - as
+    // DependencyKey()s, for hot reload (#158).
+    std::string ReadFile(const std::string& filename, std::vector<std::string>* deps = nullptr);
 
     // Like ReadFile, but throws std::runtime_error naming the full resolved path and the fact
     // that it is a required engine shader when the file is missing or empty — so a wrong-CWD
@@ -23,7 +27,12 @@ namespace ShaderLibrary {
     // #includes resolve next to the including file first, then in the engine shader directory,
     // so a project shader can ship its own includes and still use the engine's (Lighting.glsl).
     // Returns "" (and logs, naming `referencedBy`) when the file can't be read.
-    std::string ReadFileAt(const std::string& path, const std::string& referencedBy = {});
+    std::string ReadFileAt(const std::string& path, const std::string& referencedBy = {},
+                           std::vector<std::string>* deps = nullptr);
+
+    // #158 — the canonical spelling of a shader file path used for dependency matching
+    // (normalised, forward slashes, lower-case on Windows).
+    std::string DependencyKey(const std::string& path);
 
     // #208 — resolves a shader file reference to an absolute path:
     //   "engine://Name.glsl"   the engine shader directory
@@ -40,9 +49,19 @@ namespace ShaderLibrary {
     // come through ReadFile.
     std::string AnnotateLog(const std::string& log);
 
-    // Call once per frame (typically in the editor update loop). Polls file modification times
-    // at ~4 Hz, invoking `onChanged(filename)` for each .glsl file that changed on disk since
-    // the last poll. Does nothing and returns immediately in release/non-editor builds when no
-    // listeners are registered. The callback is responsible for hot-reloading (e.g. Shader::Reload).
-    void PollForChanges(const std::function<void(const std::string& filename)>& onChanged);
+    // #158 — shader hot reload, editor only (main.cpp never calls it for headless runs).
+    // Call once per frame; at most ~4 times a second it scans the engine shader directory and
+    // `extraRoots` (project/shaders) RECURSIVELY for .glsl/.vert/.frag/.comp/.shader files and
+    // returns the DependencyKey()s of the ones whose modification time changed since the last
+    // scan (a file's first sighting is not a change). Usually empty.
+    std::vector<std::string> PollChangedFiles(const std::vector<std::string>& extraRoots);
+
+    // Engine programs built from ReadFile names (main.cpp's modelShader etc.) register here;
+    // ReloadChanged recompiles every registered program that read any of `changed` (directly or
+    // through an #include), keeping the old program if the new source fails to compile, and
+    // returns how many it reloaded. Unregister before the Shader is destroyed.
+    void RegisterForHotReload(Shader& shader, const std::string& vertFile, const std::string& fragFile);
+    void UnregisterForHotReload(Shader& shader);
+    void ClearHotReload(); // drops every registration (shutdown / scope exit of the programs)
+    int  ReloadChanged(const std::vector<std::string>& changed);
 }

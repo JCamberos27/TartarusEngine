@@ -249,6 +249,13 @@ std::shared_ptr<ShaderAsset> AssetLibrary::LoadShader(const std::string& path) {
     return sa;
 }
 
+int AssetLibrary::HotReloadShaders(const std::vector<std::string>& changedKeys) {
+    int reloaded = 0;
+    for (auto& [path, sa] : m_ShaderCache)
+        if (sa && sa->DependsOnAny(changedKeys) && sa->ReloadFromDisk()) ++reloaded;
+    return reloaded;
+}
+
 void AssetLibrary::RemoveMaterial(const std::shared_ptr<MaterialAsset>& mat) {
     if (!mat) return;
     m_MaterialCache.erase(mat->Path);
