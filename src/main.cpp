@@ -1196,7 +1196,7 @@ int main(int argc, char** argv) {
 
             // F6 toggles the Physics debug panel from anywhere — the Window menu that also does it
             // is hidden during maximized play (#185).
-            if (Input::IsKeyPressed(GLFW_KEY_F6)) {
+            if (Shortcuts::TriggeredGlfw("physics.panel")) {
                 EditorSettings::Get().ShowPhysicsPanel = !EditorSettings::Get().ShowPhysicsPanel;
                 EditorSettings::Save();
             }
@@ -1204,7 +1204,7 @@ int main(int argc, char** argv) {
             // where the Scene-viewport overlay isn't drawn). Turning it on with nothing selected
             // enables a sensible default set so there's immediately something to see (#185).
             // (F3 is Step One Frame; F6 is the Physics panel.)
-            if (Input::IsKeyPressed(GLFW_KEY_F5)) {
+            if (Shortcuts::TriggeredGlfw("physics.overlay")) {
                 EditorSettings& es = EditorSettings::Get();
                 es.PlayDebugOverlay = !es.PlayDebugOverlay;
                 if (es.PlayDebugOverlay) {
