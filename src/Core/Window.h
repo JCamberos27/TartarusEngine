@@ -63,7 +63,12 @@ public:
     void SetDropCallback(std::function<void(const std::vector<std::string>&)> callback);
 
 private:
+    // Undoes everything the constructor acquired. Shared by the destructor and the constructor's
+    // own failure path, since a destructor never runs for an object whose constructor threw (#192).
+    void ReleaseResources();
+
     GLFWwindow* m_Handle = nullptr;
+    bool m_TimerPeriodRaised = false; // timeBeginPeriod(1) is active and needs its timeEndPeriod
     int m_Width, m_Height;
     bool m_CursorLocked = false;
     bool m_TitleBarDragActive = false; // updated per-frame by the editor; read by the Win32 WndProc
