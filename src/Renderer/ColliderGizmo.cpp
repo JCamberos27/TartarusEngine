@@ -101,7 +101,9 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
     auto vw = world.Registry.view<const TransformComponent, const ColliderComponent>(entt::exclude<InactiveTag>);
     for (entt::entity e : vw) {
       if (!drawShapes) break;
-        const auto& t = vw.get<const TransformComponent>(e);
+        // #114 — draw in world space; a child entity's collider used to be drawn at its local
+        // offset from the world origin.
+        const TransformComponent t = world.WorldSpaceTransform(e);
         const auto& c = vw.get<const ColliderComponent>(e);
 
         col = !c.IsTrigger ? kSolidColor
