@@ -1,6 +1,6 @@
 {
   "formatVersion": 2,
-  "_comment": "Engine-owned smoke/regression scene (audit TEST-101 / #354). One primitive sphere per Standard.shader variant: baseline (zero-keyword) plus _CLEARCOAT, _ANISO, _SHEEN, _SUBSURFACE, _TRANSMISSION, _REFLECTION_PROBES. Proves the ShaderAsset variant selector compiles + binds each distinct program with no GL errors; the --smoke-test summary reports the variant keys that drew. A Reflection Probe entity gives the probe fixture uProbeCount > 0. Needs project/shaders/Standard.shader + project/materials/*.mat (resolved against the project root). Engine primitives only.",
+  "_comment": "Engine-owned smoke/regression scene (audit TEST-101 / #354). One primitive sphere per Standard.shader variant: baseline (zero-keyword) plus _CLEARCOAT, _ANISO, _SHEEN, _SUBSURFACE, _TRANSMISSION, _REFLECTION_PROBES. Proves the ShaderAsset variant selector compiles + binds each distinct program with no GL errors; the --smoke-test summary reports the variant keys that drew. A Reflection Probe entity gives the probe fixture uProbeCount > 0. Needs project/materials/*.mat (resolved against the project root), which reference the engine's engine://Standard.shader. Engine primitives only.",
   "skyHorizonColor": [0.42, 0.50, 0.62],
   "skyZenithColor": [0.12, 0.24, 0.52],
   "skyAmbientIntensity": 1.0,
