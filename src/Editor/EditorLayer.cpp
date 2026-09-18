@@ -1,6 +1,7 @@
 #include "EditorLayer.h"
 #include "EditorIcons.h"
 #include "FileDialog.h"
+#include "SystemFonts.h"
 #include "AssetLibrary.h"
 #include "World.h"
 #include "Camera.h"
@@ -99,11 +100,9 @@ EditorLayer::~EditorLayer() {
 void EditorLayer::Init(GLFWwindow* window) {
     m_Window = window;
 
-    // Editor preferences (currently just the tooltip toggle) are independent of any scene, so
-    // they're loaded once here rather than as part of scene load/save.
-    EditorSettings::Load();
-    LayerRegistry::Load(); // slot names for LayerComponent (#236 A1); project/layers.json
-    ProjectSettings::Load(); // physics + tag vocabulary (#236 A4); project/settings.json
+    // EditorSettings / LayerRegistry / ProjectSettings are loaded once by main() before the
+    // startup scene. #134 — they used to be re-loaded here too: wasted work, and it clobbered
+    // anything changed in between (e.g. by that scene load).
     Shortcuts::Init(); // builtin key table + project/shortcuts.json overrides (#236 F)
     LoadAssetFavorites(); // project/asset_favorites.json (#236 G)
 
@@ -247,7 +246,10 @@ void EditorLayer::Init(GLFWwindow* window) {
     const float baseFontPx = 16.0f * m_UIScale;
     ImFontConfig baseFontConfig;
     baseFontConfig.SizePixels = baseFontPx;
-    ImFont* uiFont = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", baseFontPx, &baseFontConfig);
+    // #134 — resolved via the known-folder API, not a hard-coded C:\Windows\Fonts.
+    const std::string segoePath = SystemFonts::Path("segoeui.ttf");
+    ImFont* uiFont = segoePath.empty() ? nullptr
+                                       : io.Fonts->AddFontFromFileTTF(segoePath.c_str(), baseFontPx, &baseFontConfig);
     if (!uiFont) {
         // #48 — this used to fall back to ImGui's built-in bitmap font at a DIFFERENT size
         // (15px vs. the 16px baseFontPx every layout constant in this file assumes), so a
@@ -274,20 +276,23 @@ void EditorLayer::Init(GLFWwindow* window) {
     io.Fonts->AddFontFromFileTTF(EnginePaths::Resolve("assets/fonts/fa-solid-900.ttf").c_str(), baseFontPx, &iconConfig, iconRanges);
 
     // CJK fallback: Segoe UI has no CJK glyphs, so entity names with Chinese/Japanese/Korean
-    // text rendered as tofu boxes in the Hierarchy and Inspector (#50 P33). Merge a system CJK
-    // face over the Japanese range (Kana + ~2000 common Kanji, which also covers most everyday
-    // Simplified Chinese). Loaded from the Windows font dir like Segoe UI above; silently skipped
-    // if absent (Wine / stripped install), so this never hard-fails.
+    // text rendered as tofu boxes in the Hierarchy and Inspector (#50 P33). #134 — this used to
+    // merge only the FIRST face found, restricted to the Japanese range, so Hangul and most
+    // Chinese still showed as tofu. The dynamic font atlas (ImGui 1.92+, RendererHasTextures)
+    // rasterises glyphs on demand, so merging every available face with its full coverage costs
+    // nothing up front: a missing glyph falls through YaHei -> Gothic -> Malgun in order. Each is
+    // silently skipped if absent (Wine / stripped install), so this never hard-fails.
     ImFontConfig cjkConfig;
     cjkConfig.MergeMode = true;
     cjkConfig.PixelSnapH = true;
     const char* kCjkFonts[] = {
-        "C:\\Windows\\Fonts\\msyh.ttc",     // Microsoft YaHei (Simplified Chinese)
-        "C:\\Windows\\Fonts\\msgothic.ttc", // MS Gothic (Japanese)
-        "C:\\Windows\\Fonts\\malgun.ttf",   // Malgun Gothic (Korean)
+        "msyh.ttc",     // Microsoft YaHei (Simplified Chinese)
+        "msgothic.ttc", // MS Gothic (Japanese)
+        "malgun.ttf",   // Malgun Gothic (Korean)
     };
-    for (const char* path : kCjkFonts) {
-        if (io.Fonts->AddFontFromFileTTF(path, baseFontPx, &cjkConfig, io.Fonts->GetGlyphRangesJapanese())) break;
+    for (const char* file : kCjkFonts) {
+        const std::string path = SystemFonts::Path(file);
+        if (!path.empty()) io.Fonts->AddFontFromFileTTF(path.c_str(), baseFontPx, &cjkConfig);
     }
     // NB: colour emoji (Segoe UI Emoji is COLR/CPAL) needs the FreeType backend with colour
     // glyphs enabled, which this build doesn't compile in — emoji in names still render as tofu.
