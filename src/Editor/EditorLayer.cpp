@@ -28,7 +28,8 @@
 #include "EditorModuleAPI.h"       // EditorConsoleState's full definition (Visible)
 #include "GLStateCache.h"
 #include "PhysicsWorld.h" // #185 — the Physics debug panel + HUD read live sim state
-#include "TimeService.h" // play banner shows the effective time scale (#144)
+#include "TimeService.h"
+#include "Window.h" // Preferences > Display: connected monitors for fullscreen (#154) // play banner shows the effective time scale (#144)
 #include "TextureCache.h" // Preferences > Rendering's cache size + Clear button (#159)
 #include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
 #include "ScreenBlur.h"
@@ -997,7 +998,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
     // finds the category holding it, not only a category whose own name matches. Keep these in
     // step with the category bodies below (labels plus the obvious synonyms).
     static const char* kEditorCatKeywords[] = {
-        "tooltips ui scale display dpi zoom text size",
+        "tooltips ui scale display dpi zoom text size fullscreen borderless exclusive monitor",
         "gizmo size transform gizmo vertex pick radius snap frame camera on select field of view fov "
         "fly speed near far clip plane game view maximize on play light gizmos opacity arrow disc "
         "scale selected light corner monogram engine mark spin speed prism reduce motion animation",
@@ -1116,6 +1117,34 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         if (prefs.UiScaleOverride != m_UIScaleOverrideAtStartup) {
             ImGui::TextColored(EditorUIPrimitives::WarningColor(),
                                ICON_FA_TRIANGLE_EXCLAMATION "  Restart the editor to apply the new UI scale.");
+        }
+
+        // #154 — how F11 / the Game view's Fullscreen button go fullscreen.
+        {
+            static const char* kModes[] = {"Borderless window", "Exclusive"};
+            ImGui::SetNextItemWidth(kw);
+            if (ImGui::Combo("Fullscreen mode", &prefs.FullscreenMode, kModes, IM_ARRAYSIZE(kModes))) EditorSettings::Save();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Borderless window: covers the display, instant Alt+Tab, other displays keep working.\n"
+                                     "Exclusive: takes over the display's video mode (can be marginally faster, slow to Alt+Tab).\n"
+                                     "Applies the next time you go fullscreen (F11).");
+            const std::vector<std::string> monitors = Window::MonitorNames();
+            std::string current = prefs.FullscreenMonitor < 0 || prefs.FullscreenMonitor >= (int)monitors.size()
+                ? std::string("Display the window is on")
+                : std::to_string(prefs.FullscreenMonitor + 1) + ": " + monitors[prefs.FullscreenMonitor];
+            ImGui::SetNextItemWidth(kw);
+            if (ImGui::BeginCombo("Fullscreen display", current.c_str())) {
+                if (ImGui::Selectable("Display the window is on", prefs.FullscreenMonitor < 0)) {
+                    prefs.FullscreenMonitor = -1; EditorSettings::Save();
+                }
+                for (int i = 0; i < (int)monitors.size(); ++i) {
+                    const std::string label = std::to_string(i + 1) + ": " + monitors[i];
+                    if (ImGui::Selectable(label.c_str(), prefs.FullscreenMonitor == i)) {
+                        prefs.FullscreenMonitor = i; EditorSettings::Save();
+                    }
+                }
+                ImGui::EndCombo();
+            }
         }
         break;
     }
