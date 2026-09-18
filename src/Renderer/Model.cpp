@@ -296,8 +296,18 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
 
     std::vector<unsigned int> indices;
     indices.reserve(mesh->mNumFaces * 3);
+    // #113 — a mirrored node transform (negative determinant, e.g. a -1 scale for the other
+    // side of a symmetric prop) baked into the vertices flips every triangle's winding, so the
+    // mesh renders inside-out under back-face culling. Swap two indices per triangle to undo it.
+    const bool flipWinding = !skinned && glm::determinant(glm::mat3(nodeTransform)) < 0.0f;
     for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
         const aiFace& face = mesh->mFaces[i];
+        if (flipWinding && face.mNumIndices == 3) {
+            indices.push_back(face.mIndices[0]);
+            indices.push_back(face.mIndices[2]);
+            indices.push_back(face.mIndices[1]);
+            continue;
+        }
         for (unsigned int j = 0; j < face.mNumIndices; ++j) {
             indices.push_back(face.mIndices[j]);
         }
@@ -413,9 +423,48 @@ std::string Model::ResolveTexturePath(const std::string& raw) const {
     return (modelDir / p).lexically_normal().string();
 }
 
+
+namespace {
+bool IsGltfPath(const std::string& p) {
+    std::string ext = std::filesystem::path(p).extension().string();
+    for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+    return ext == ".gltf" || ext == ".glb";
+}
+} // namespace
+
+std::shared_ptr<Texture> Model::LoadEmbeddedTexture(const aiTexture* tex, const std::string& ref, TextureRole role) {
+    const std::string key = "*embedded:" + ref + (role == TextureRole::Color ? "|srgb" : role == TextureRole::Normal ? "|normal" : "|linear");
+    auto it = m_D->TextureCache.find(key);
+    if (it != m_D->TextureCache.end()) return it->second;
+
+    std::vector<unsigned char> bytes;
+    int rawW = 0, rawH = 0;
+    if (tex->mHeight == 0) {
+        // Compressed (PNG/JPG/...): mWidth is the byte count.
+        const auto* b = reinterpret_cast<const unsigned char*>(tex->pcData);
+        bytes.assign(b, b + tex->mWidth);
+    } else {
+        // Raw aiTexel (BGRA) -> RGBA8.
+        rawW = (int)tex->mWidth; rawH = (int)tex->mHeight;
+        bytes.resize((size_t)rawW * rawH * 4);
+        for (size_t i = 0; i < (size_t)rawW * rawH; ++i) {
+            const aiTexel& t = tex->pcData[i];
+            bytes[i * 4 + 0] = t.r; bytes[i * 4 + 1] = t.g; bytes[i * 4 + 2] = t.b; bytes[i * 4 + 3] = t.a;
+        }
+    }
+    TextureImportSettings settings;
+    settings.IsSRGB = role == TextureRole::Color;
+    if (role == TextureRole::Normal) settings.TextureType = TextureImportSettings::Type::NormalMap;
+    auto out = std::make_shared<Texture>(m_Path + "#" + ref, std::move(bytes), rawW, rawH, settings);
+    if (!out->IsValid()) return nullptr;
+    m_D->TextureCache[key] = out;
+    return out;
+}
+
 Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex) {
     Material mat;
     aiMaterial* material = scene->mMaterials[materialIndex];
+    aiString str_unused;
 
     auto loadSlot = [&](aiTextureType type, TextureRole role) -> std::shared_ptr<Texture> {
         if (material->GetTextureCount(type) == 0) return nullptr;
@@ -423,12 +472,14 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
         material->GetTexture(type, 0, &str);
         if (str.length == 0) return nullptr;
 
+        // #113 — embedded media (.glb, FBX with embedded textures): "*N" or a name matching an
+        // aiTexture's filename. Decoded from memory instead of leaving the slot blank.
+        if (const aiTexture* emb = scene->GetEmbeddedTexture(str.C_Str()))
+            return LoadEmbeddedTexture(emb, str.C_Str(), role);
         std::string resolved = ResolveTexturePath(str.C_Str());
         if (!resolved.empty() && resolved[0] == '*') {
-            // Embedded texture — not supported by the disk-only Texture loader yet. Log once,
-            // clearly, instead of failing on a bogus "*0" filename.
-            Log::Warn("Model: '" + m_Path + "' uses an embedded texture (" + resolved +
-                      ") which isn't supported yet - that map slot will be blank.");
+            Log::Warn("Model: '" + m_Path + "' references embedded texture " + resolved +
+                      " which the file doesn't contain - that map slot will be blank.");
             return nullptr;
         }
         return LoadCachedTexture(resolved, role);
@@ -437,13 +488,20 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
     mat.AlbedoMap = loadSlot(aiTextureType_DIFFUSE, TextureRole::Color);
     if (!mat.AlbedoMap) mat.AlbedoMap = loadSlot(aiTextureType_BASE_COLOR, TextureRole::Color); // glTF2 alt slot
     mat.NormalMap = loadSlot(aiTextureType_NORMALS, TextureRole::Normal);
-    mat.MetallicRoughnessMap = loadSlot(aiTextureType_UNKNOWN, TextureRole::Data); // assimp puts glTF2 packed metal-rough here
+    // assimp puts glTF2's packed metal-rough map in UNKNOWN (and, in newer versions, also in
+    // GLTF_METALLIC_ROUGHNESS). FBX uses UNKNOWN for arbitrary unmapped slots, which must not be
+    // read as metal-rough (#113) — only trust it for glTF materials.
+    const bool isGltf = material->Get(AI_MATKEY_GLTF_ALPHAMODE, str_unused) == AI_SUCCESS ||
+                        IsGltfPath(m_Path);
+    if (isGltf) mat.MetallicRoughnessMap = loadSlot(aiTextureType_UNKNOWN, TextureRole::Data);
     // Standalone maps — NOT the packed slot above, which is a different (G=rough, B=metal)
     // texture layout that a plain grayscale roughness/metalness map would be misread against.
     mat.RoughnessMap = loadSlot(aiTextureType_DIFFUSE_ROUGHNESS, TextureRole::Data);
     mat.MetallicMap = loadSlot(aiTextureType_METALNESS, TextureRole::Data);
-    mat.AOMap = loadSlot(aiTextureType_LIGHTMAP, TextureRole::Data);
-    if (!mat.AOMap) mat.AOMap = loadSlot(aiTextureType_AMBIENT_OCCLUSION, TextureRole::Data);
+    // #113 — the real AO slot first; glTF occlusion arrives as LIGHTMAP in assimp, so that stays
+    // a fallback (a true FBX lightmap is baked lighting, not occlusion, but is rarely shipped).
+    mat.AOMap = loadSlot(aiTextureType_AMBIENT_OCCLUSION, TextureRole::Data);
+    if (!mat.AOMap) mat.AOMap = loadSlot(aiTextureType_LIGHTMAP, TextureRole::Data);
     mat.EmissiveMap = loadSlot(aiTextureType_EMISSIVE, TextureRole::Color);
 
     aiColor4D color;

@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <vector>
 
 TextureLoadStats& TextureLoadStats::Get() {
@@ -64,6 +66,12 @@ Texture::Texture(const std::string& path, const TextureImportSettings& settings)
     UploadFromFile(settings);
 }
 
+Texture::Texture(const std::string& name, std::vector<unsigned char> bytes, int rawWidth, int rawHeight,
+                 const TextureImportSettings& settings)
+    : m_Memory(std::move(bytes)), m_MemRawW(rawWidth), m_MemRawH(rawHeight), m_Path(name), m_Settings(settings) {
+    UploadFromFile(settings);
+}
+
 void Texture::UploadFromFile(const TextureImportSettings& settings) {
     // TextureType now actually drives behavior (#198), authoritative regardless of the individual
     // toggles — so a texture typed NormalMap can never upload as sRGB (the Inspector already
@@ -89,7 +97,8 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     // scene-load time (measured ~4.6s of a ~5.6s cold boot on a 22-texture library), so skipping
     // it is the single biggest startup win available. See TextureCache.h.
     TextureCache::Image cached;
-    bool fromCache = TextureCache::Load(m_Path, settings, cached);
+    const bool fromMemory = !m_Memory.empty(); // #113 — embedded: no file, no disk cache
+    bool fromCache = !fromMemory && TextureCache::Load(m_Path, settings, cached);
 
     // Owns the decoded pixels only on a cache miss; `uploadData` points into either this, the
     // cache entry, or stb's buffer.
@@ -111,7 +120,18 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
         // own UVs. Flipping the image here too double-corrects it, leaving UV islands sampling
         // the wrong region of the texture (mirrored vertically relative to where they should be).
         stbi_set_flip_vertically_on_load(false);
-        data = stbi_load(m_Path.c_str(), &m_Width, &m_Height, &m_Channels, 0);
+        if (fromMemory && m_MemRawW > 0) {
+            // Raw RGBA8 from the model file. malloc'd so the stbi_image_free below owns it too.
+            const size_t n = (size_t)m_MemRawW * m_MemRawH * 4;
+            if (m_Memory.size() >= n && (data = (unsigned char*)malloc(n)) != nullptr) {
+                std::memcpy(data, m_Memory.data(), n);
+                m_Width = m_MemRawW; m_Height = m_MemRawH; m_Channels = 4;
+            }
+        } else if (fromMemory) {
+            data = stbi_load_from_memory(m_Memory.data(), (int)m_Memory.size(), &m_Width, &m_Height, &m_Channels, 0);
+        } else {
+            data = stbi_load(m_Path.c_str(), &m_Width, &m_Height, &m_Channels, 0);
+        }
         if (!data) {
             Log::Error("Texture: failed to load '" + m_Path + "'.");
             return;
@@ -134,7 +154,7 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
         entry.Height = uploadH;
         entry.Channels = m_Channels;
         entry.Pixels.assign(uploadData, uploadData + (size_t)uploadW * uploadH * m_Channels);
-        TextureCache::Store(m_Path, settings, entry);
+        if (!fromMemory) TextureCache::Store(m_Path, settings, entry);
     }
 
     const auto uploadStart = std::chrono::steady_clock::now();
@@ -267,7 +287,7 @@ bool Texture::Reimport(const TextureImportSettings& settings) {
     // missing/corrupt file on disk leaves the existing (still-valid) texture in place rather
     // than leaving this Texture pointing at a deleted GL name.
     int w, h, c;
-    if (!stbi_info(m_Path.c_str(), &w, &h, &c)) {
+    if (m_Memory.empty() && !stbi_info(m_Path.c_str(), &w, &h, &c)) {
         Log::Error("Texture: cannot reimport '" + m_Path + "' - file is missing or unreadable.");
         return false;
     }

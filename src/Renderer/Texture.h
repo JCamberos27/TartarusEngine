@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 
 // Mirrors the knobs a Unity-style Texture Importer would expose. Stored per-asset-path in
 // AssetLibrary (see AssetLibrary::TextureSettings/SetTextureSettings) and applied whenever a
@@ -45,6 +46,12 @@ class Texture {
 public:
     explicit Texture(const std::string& path);
     Texture(const std::string& path, const TextureImportSettings& settings);
+    // #113 — a texture embedded in a model file (.glb / FBX embedded media). `bytes` is either an
+    // encoded image (PNG/JPG..., rawWidth == 0) or raw RGBA8 pixels of rawWidth x rawHeight.
+    // `name` is only an identity for logs and Path(); nothing is read from disk, and the texture
+    // cache (keyed by file path) is bypassed.
+    Texture(const std::string& name, std::vector<unsigned char> bytes, int rawWidth, int rawHeight,
+            const TextureImportSettings& settings);
     ~Texture();
 
     void Bind(unsigned int unit = 0) const;
@@ -66,6 +73,9 @@ public:
 
 private:
     void UploadFromFile(const TextureImportSettings& settings);
+
+    std::vector<unsigned char> m_Memory; // #113 — embedded source, empty for file textures
+    int m_MemRawW = 0, m_MemRawH = 0;
 
     unsigned int m_ID = 0;
     int m_Width = 0, m_Height = 0, m_Channels = 0;

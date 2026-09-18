@@ -17,6 +17,7 @@ struct aiScene;
 struct aiNode;
 struct aiMesh;
 struct aiMaterial;
+struct aiTexture;
 
 struct BoneInfo {
     int ID;
@@ -210,6 +211,7 @@ private:
     // #95 — what a material slot's texture holds, which decides its colour space.
     enum class TextureRole { Color, Normal, Data };
     std::shared_ptr<Texture> LoadCachedTexture(const std::string& fullPath, TextureRole role);
+    std::shared_ptr<Texture> LoadEmbeddedTexture(const aiTexture* tex, const std::string& ref, TextureRole role); // #113
     // Turns whatever path string a model file baked in for a texture (bare filename, path
     // relative to the model, a "..\tex\x.png" with junk separators, or an absolute path from
     // the machine the asset was authored on) into a real file on THIS disk. Tries the sensible

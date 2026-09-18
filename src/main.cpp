@@ -1033,7 +1033,8 @@ int main(int argc, char** argv) {
                             if (isNew)
                                 std::cout << "[SmokeTest]   model " << std::filesystem::path(rc.ModelRef->Path()).filename().string()
                                           << " bounds (" << bmin.x << "," << bmin.y << "," << bmin.z << ")-("
-                                          << bmax.x << "," << bmax.y << "," << bmax.z << ")" << std::endl;
+                                          << bmax.x << "," << bmax.y << "," << bmax.z << ") albedoMap="
+                                          << (rc.ModelRef->MeshMaterial(0).AlbedoMap ? "yes" : "no") << std::endl;
                         }
                     }
                     smokeFramesRendered = 0;
