@@ -6,7 +6,7 @@
 #include <glm/geometric.hpp>
 
 void UpdateSpinners(World& world, float dt) {
-    auto view = world.Registry.view<SpinComponent, TransformComponent>();
+    auto view = world.Registry.view<SpinComponent, TransformComponent>(entt::exclude<InactiveTag>); // #199 - an inactive object is paused, not just hidden
     for (auto entity : view) {
         const auto& spin = view.get<SpinComponent>(entity);
         float len = glm::length(spin.Axis);

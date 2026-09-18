@@ -37,7 +37,7 @@ void PerpBasis(const glm::vec3& axis, glm::vec3& u, glm::vec3& v) {
 } // namespace
 
 void UpdateAnimators(World& world, float dt) {
-    auto view = world.Registry.view<AnimatorComponent, TransformComponent>();
+    auto view = world.Registry.view<AnimatorComponent, TransformComponent>(entt::exclude<InactiveTag>); // #199 - an inactive object is paused, not just hidden
     for (auto entity : view) {
         auto& anim = view.get<AnimatorComponent>(entity);
         auto& transform = view.get<TransformComponent>(entity);

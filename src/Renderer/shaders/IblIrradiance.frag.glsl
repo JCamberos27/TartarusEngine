@@ -4,6 +4,11 @@ in vec2 vUV;
 out vec4 FragColor;
 
 uniform samplerCube uEnvMap;
+uniform float uEnvRotation; // #108 — HDRI Y rotation (radians), same convention as SkyHdri.frag
+vec3 RotateEnv(vec3 d) {
+    float c = cos(uEnvRotation), s = sin(uEnvRotation);
+    return vec3(c * d.x + s * d.z, d.y, -s * d.x + c * d.z);
+}
 
 const float PI = 3.14159265359;
 
@@ -21,7 +26,7 @@ void main() {
         for (float theta = 0.0; theta < 0.5 * PI; theta += kStep) {
             vec3 tangentSample = vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
             vec3 dir = tangentSample.x * right + tangentSample.y * up + tangentSample.z * N;
-            irradiance += texture(uEnvMap, dir).rgb * cos(theta) * sin(theta);
+            irradiance += texture(uEnvMap, RotateEnv(dir)).rgb * cos(theta) * sin(theta);
             sampleCount += 1.0;
         }
     }

@@ -1,6 +1,7 @@
 #ifdef _MSC_VER
 #pragma warning(disable: 4996) // sscanf: use sscanf_s
 #endif
+#include "gl.h"
 #include "ShaderAsset.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
@@ -203,11 +204,18 @@ std::shared_ptr<ShaderAsset> ShaderAsset::ParseFile(const std::string& path) {
 
 void ShaderAsset::BuildBindings() {
     m_Bindings.clear();
-    // Material texture units are 1..7. 0 is the depth-prepass albedo, 8/9/10 the shadow maps,
-    // 11-13 IBL, 14 the opaque-colour copy, 15 SSAO (see SceneRenderer::ApplyFrameState). A
-    // .shader that declares more than 7 Texture2D properties can't fit — the overflow ones get
-    // no unit and never bind. Enforced in Debug and Release (#354).
-    static constexpr int kMaxMaterialTexUnit = 7;
+    // Material texture units: 1..7, then 16 and up. 0 is the depth-prepass albedo, 8/9/10 the
+    // shadow maps, 11-13 IBL, 14 the opaque-colour copy, 15 SSAO (see
+    // SceneRenderer::ApplyFrameState). #207 — the budget used to stop at 7, which left the
+    // Standard shader's clear-coat / thickness maps (#206) with nowhere to go; units from 16 up
+    // to the driver's GL_MAX_TEXTURE_IMAGE_UNITS (capped at 32) are now used too. Anything past
+    // that still gets no unit and a warning (#354).
+    static int s_MaxUnits = 0;
+    if (s_MaxUnits == 0) {
+        GLint n = 16;
+        glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &n);
+        s_MaxUnits = std::clamp((int)n, 16, 32);
+    }
     int unit = 1;
     for (int i = 0; i < (int)m_Props.size(); ++i) {
         PropertyBinding b;
@@ -215,9 +223,11 @@ void ShaderAsset::BuildBindings() {
         b.PropIndex = i;
         b.TextureUnit = -1;
         if (m_Props[i].Type == ShaderPropType::Texture2D) {
-            if (unit > kMaxMaterialTexUnit) {
+            if (unit == 8) unit = 16; // skip the engine's reserved 8..15
+            if (unit >= s_MaxUnits) {
                 Log::Warn("ShaderAsset: '" + m_Path + "' texture property '" + m_Props[i].Name +
-                          "' exceeds the 7 material texture-unit budget; left unbound.");
+                          "' exceeds the material texture-unit budget (" + std::to_string(7 + s_MaxUnits - 16) +
+                          " on this GPU); left unbound.");
             } else {
                 b.TextureUnit = unit++;
             }

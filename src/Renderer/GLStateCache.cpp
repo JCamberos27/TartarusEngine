@@ -18,9 +18,9 @@ bool g_ProgramValid = false;
 unsigned int g_CurrentVAO = 0;
 bool g_VAOValid = false;
 
-// GL core guarantees at least 16 combined texture units (4.6 mandates more) - this engine's own material
-// binding (Model.cpp's BindMaterial) never uses more than 7, so 16 is comfortable headroom.
-constexpr int kMaxCachedTextureUnits = 16;
+// Material textures use units 1..7 and 16+ (#207), frame state 8..15; 32 covers every unit the
+// engine binds. Units past this fall back to an uncached bind below.
+constexpr int kMaxCachedTextureUnits = 32;
 std::array<unsigned int, kMaxCachedTextureUnits> g_BoundTextures{};
 std::array<bool, kMaxCachedTextureUnits> g_TextureValid{};
 

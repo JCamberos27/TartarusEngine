@@ -161,15 +161,27 @@ bool ParseEntityRef(const std::string& msg, unsigned int& outId) {
 }
 
 // Most path-bearing messages quote the path in single quotes ("failed to load sound '...'",
-// "failed to open '...'"). Takes the first quoted run; PingAssetPath's existence check is what
-// actually decides whether it was a real path.
+// "failed to open '...'"). PingAssetPath's existence check is what actually decides whether it
+// was a real path. #182 — an apostrophe inside a word ("couldn't load '...'") is not a quote:
+// a quoted run must open after a non-word character and close before one, and among those the
+// last one that looks like a path (has a separator or an extension) wins.
 bool ParsePathRef(const std::string& msg, std::string& outPath) {
-    size_t start = msg.find('\'');
-    if (start == std::string::npos) return false;
-    size_t end = msg.find('\'', start + 1);
-    if (end == std::string::npos || end <= start + 1) return false;
-    outPath = msg.substr(start + 1, end - start - 1);
-    return true;
+    auto isWord = [](char c) { return std::isalnum((unsigned char)c) != 0; };
+    bool found = false;
+    for (size_t start = msg.find('\''); start != std::string::npos; start = msg.find('\'', start + 1)) {
+        if (start > 0 && isWord(msg[start - 1])) continue;         // "couldn't" - not an opening quote
+        size_t end = start + 1;
+        for (; (end = msg.find('\'', end)) != std::string::npos; ++end)
+            if (end + 1 >= msg.size() || !isWord(msg[end + 1])) break; // closing quote
+        if (end == std::string::npos) break;
+        const std::string cand = msg.substr(start + 1, end - start - 1);
+        if (!cand.empty() && cand.find_first_of("/\\.") != std::string::npos) {
+            outPath = cand;
+            found = true;
+        }
+        start = end;
+    }
+    return found;
 }
 
 bool LevelVisible(const EditorConsoleState& state, int level) {

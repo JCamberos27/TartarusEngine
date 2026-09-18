@@ -146,6 +146,21 @@ inline KelvinBarResult KelvinBar(const char* id, float& k, bool mixed = false) {
     return r;
 }
 
+// #128 — InputText bound to a std::string that resizes as you type (ImGui's CallbackResize
+// protocol), instead of a fixed char buffer.
+bool InputTextString(const char* label, const char* hint, std::string& str) {
+    auto cb = [](ImGuiInputTextCallbackData* data) -> int {
+        if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
+            auto* s = static_cast<std::string*>(data->UserData);
+            s->resize((size_t)data->BufTextLen);
+            data->Buf = s->data();
+        }
+        return 0;
+    };
+    return ImGui::InputTextWithHint(label, hint, str.data(), str.capacity() + 1,
+                                    ImGuiInputTextFlags_CallbackResize, cb, &str);
+}
+
 // Editable name field bound to a std::string, without depending on imgui_stdlib.h — copies
 // into a fixed local buffer, writes back only on edit. Returns true the moment editing starts
 // (for undo-snapshot timing), via activatedOut, same convention as DrawVec3Row below.
@@ -1307,13 +1322,12 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
                 if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
             });
             PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip);
-            char buf[256];
-            snprintf(buf, sizeof(buf), "%s", mixed ? "" : shared.c_str());
-            bool changed = mixed
-                ? ImGui::InputTextWithHint("##v", "(multiple values)", buf, sizeof(buf))
-                : ImGui::InputText("##v", buf, sizeof(buf));
+            // #128 — grows with the text (was a 256-byte buffer that cut long values, possibly
+            // mid UTF-8 sequence).
+            std::string text = mixed ? std::string() : shared;
+            bool changed = InputTextString("##v", mixed ? "(multiple values)" : "", text);
             if (ImGui::IsItemActivated()) StageUndo(world);
-            if (changed) forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e)) = buf; });
+            if (changed) forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e)) = text; });
             if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
             break;
         }
@@ -2072,8 +2086,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             "Rotation in degrees around each axis.", {this, &world, entity, "Transform", "rotation"});
         if (rowActive) StageUndo(world);
         if (rowCommitted) CommitStagedUndo(world, "Rotate");
-        DrawVec3Row("Scale", transform.Scale, isLevelGeometry ? 0.1f : 0.05f, 0.01f, 100.0f, rowActive, rowCommitted,
-            "Size multiplier per axis - 1 is the original imported/created size.",
+        // #128 — unclamped (was [0.01, 100]): negative mirrors, and large values match what the
+        // Rect / Scale tools can already produce.
+        DrawVec3Row("Scale", transform.Scale, isLevelGeometry ? 0.1f : 0.05f, 0.0f, 0.0f, rowActive, rowCommitted,
+            "Size multiplier per axis - 1 is the original imported/created size.\nNegative mirrors the object.",
             {this, &world, entity, "Transform", "scale"});
         if (rowActive) StageUndo(world);
         if (rowCommitted) CommitStagedUndo(world, "Scale");
@@ -2246,6 +2262,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 if (ImGui::Selectable(ICON_FA_SHAPES "  Cylinder")) pick("cylinder");
                 if (ImGui::Selectable(ICON_FA_SHAPES "  Cone")) pick("cone");
                 if (ImGui::Selectable(ICON_FA_SHAPES "  Plane")) pick("plane");
+                // #128 — the rest of the primitives Model::CreatePrimitive builds
+                if (ImGui::Selectable(ICON_FA_SHAPES "  Pyramid")) pick("pyramid");
+                if (ImGui::Selectable(ICON_FA_SHAPES "  Donut")) pick("donut");
+                if (ImGui::Selectable(ICON_FA_SHAPES "  Capsule")) pick("capsule");
                 ImGui::EndPopup();
             }
 

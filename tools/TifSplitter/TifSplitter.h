@@ -112,5 +112,7 @@ public:
     // [Info]/[Success]/[Error] line per stage (thread-safe — concurrent workers' output never
     // interleaves mid-line) and a final summary (counts, elapsed time, and every failure with
     // its reason) when done.
-    static void ProcessBatch(const BatchTifOptions& options, BatchProgressCallback progressCB = nullptr);
+    // Returns the final tally once every worker has joined (#193/#194 — callers read the result
+    // here instead of racing on the per-file callback). TotalFiles == 0 means nothing was found.
+    static BatchProgress ProcessBatch(const BatchTifOptions& options, BatchProgressCallback progressCB = nullptr);
 };

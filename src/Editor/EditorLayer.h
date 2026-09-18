@@ -620,10 +620,11 @@ public:
     // Lights panel solo/mute (#140 phase 4). main.cpp's per-frame light gather skips a light
     // this returns true for, but only while editing (Play mode always renders every light).
     // Muted lights are always suppressed; if ANY light is soloed, every non-soloed one is too.
-    bool IsLightSuppressed(entt::entity e) const {
-        if (m_MutedLights.count(e)) return true;
-        return !m_SoloLights.empty() && !m_SoloLights.count(e);
-    }
+    // #182 — keyed by the light's OrderComponent value (stable across undo / Play-Stop / reload,
+    // unique since #118), not its entt::entity id, which is recycled whenever the registry is
+    // rebuilt and used to move Mute / Solo onto other entities.
+    static int LightKey(const World& world, entt::entity e);
+    bool IsLightSuppressed(const World& world, entt::entity e) const;
 
     // World-space center of the current selection's bounding box (single object or group) —
     // main.cpp reads this to know what to orbit the editor camera around while Alt+Left-drag
@@ -1238,8 +1239,8 @@ private:
 
     // Per-light solo / mute — editor-only, never serialized, cleared by NewScene/OpenScene.
     // See IsLightSuppressed(); consumed by main.cpp's per-frame light gather.
-    std::unordered_set<entt::entity> m_SoloLights;
-    std::unordered_set<entt::entity> m_MutedLights;
+    std::unordered_set<int> m_SoloLights;  // OrderComponent values (#182)
+    std::unordered_set<int> m_MutedLights;
 
     // The three "core" docked panels. Always started visible; the Window menu (and each
     // window's own close button) can hide them, Reset Layout brings them all back.

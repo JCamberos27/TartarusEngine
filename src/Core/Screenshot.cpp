@@ -86,7 +86,16 @@ std::string Save(const unsigned char* pixels, int w, int h, bool flipY,
                   SanitizeName(sceneName).c_str(),
                   tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                   tm.tm_hour, tm.tm_min, tm.tm_sec, jpg ? "jpg" : "png");
-    const std::string path = (std::filesystem::path(Dir()) / name).generic_string();
+    // #153 — second-resolution names: a second capture in the same second used to silently
+    // overwrite the first. Suffix _2, _3... on collision instead.
+    std::string path = (std::filesystem::path(Dir()) / name).generic_string();
+    {
+        std::error_code ec;
+        const std::filesystem::path base(name);
+        for (int n = 2; std::filesystem::exists(path, ec) && n < 1000; ++n)
+            path = (std::filesystem::path(Dir()) / (base.stem().string() + "_" + std::to_string(n) +
+                                                    base.extension().string())).generic_string();
+    }
 
     int ok;
     if (jpg) {
