@@ -292,6 +292,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     static std::vector<DrawItem> transparentList;
     drawList.clear();
     transparentList.clear();
+    bool anyTransmission = false; // #112 — refraction capture only when something samples it
 
     for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
         if (world.Registry.all_of<InactiveTag>(entity)) continue; // Hierarchy eye toggle / GameObject active
@@ -341,23 +342,34 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             q  = slots[0]->RenderQueue;
             qi = slots[0]->QueueIndex;
         }
+        // #112 — depth from the world-space bounds centre, not the entity origin (a large mesh
+        // whose pivot sits at one end sorted as if it were all at that end).
+        const glm::vec3 centre = validBounds ? glm::vec3(model * glm::vec4((boundsMin + boundsMax) * 0.5f, 1.0f))
+                                             : glm::vec3(model[3]);
+        viewDepth = -(ctx.View * glm::vec4(centre, 1.0f)).z;
         if (q == MaterialAsset::Queue::Transparent) {
-            glm::vec3 centre = glm::vec3(model[3]);
-            viewDepth = -(ctx.View * glm::vec4(centre, 1.0f)).z;
+            if (!anyTransmission) {
+                for (int i = 0; i < m->MeshCount() && !anyTransmission; ++i) {
+                    const bool hasSlot = i < (int)slots.size() && slots[i];
+                    const Material& mm = hasSlot ? slots[i]->Mat : m->MeshMaterial(i);
+                    anyTransmission = mm.TransmissionStrength > 0.0f;
+                }
+            }
             transparentList.push_back({ model, m, &slots, matKey,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 q, qi, viewDepth });
         } else {
             drawList.push_back({ model, m, &slots, matKey,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
-                q, qi, 0.0f });
+                q, qi, viewDepth });
         }
     }
 
-    // --- Opaque pass: sort by material key then Model* (unchanged from PR8) --------
+    // --- Opaque pass: sort by material key, then front-to-back within a material (#112 —
+    // cheaper overdraw: nearer surfaces fill depth first and hide what is behind them).
     std::sort(drawList.begin(), drawList.end(), [](const DrawItem& a, const DrawItem& b) {
         if (a.MatKey != b.MatKey) return a.MatKey < b.MatKey;
-        return reinterpret_cast<std::uintptr_t>(a.Ref) < reinterpret_cast<std::uintptr_t>(b.Ref);
+        return a.ViewDepth < b.ViewDepth;
     });
 
     passAlphaBlend = 0;
@@ -379,7 +391,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
 
         // PR12: resolve MSAA opaque color and copy into mipped texture for refraction. Bind the
         // capture on unit 14 for every program that may run the _TRANSMISSION branch.
-        if (ctx.TxHdr && ctx.TxCapture) {
+        // #112 — only when a visible transparent material uses transmission; this resolve + mip
+        // copy used to run for any transparent object at all, per viewport per frame.
+        if (anyTransmission && ctx.TxHdr && ctx.TxCapture) {
             ctx.TxHdr->ResolveTo();
             ctx.TxCapture->CopyFrom(ctx.TxHdr->ResolvedColorTexture(), fs.vp[2], fs.vp[3]);
             ctx.TxHdr->BindForRender(); // rebind MSAA FBO for the transparent draw pass
