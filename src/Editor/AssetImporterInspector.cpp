@@ -2,6 +2,7 @@
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
 #include <imgui.h>
+#include <string>
 
 namespace {
 
@@ -58,13 +59,21 @@ void AssetImporterInspector::DrawTextureSettings(TextureImportSettings& settings
     }
 
     Row("Max Size", "Downscales on import if the source exceeds this in either\ndimension (aspect ratio preserved). Lower this for a texture that's\nauthored much larger than it'll ever be seen at.");
-    const int kSizes[] = {512, 1024, 2048, 4096};
-    const char* kSizeLabels[] = {"512", "1024", "2048", "4096"};
-    int sizeIdx = 2;
+    // #184 — 0 (no limit) and 8192 are valid values Texture honours; they used to be missing, and
+    // any value outside the list displayed as "2048". An off-list value now shows as itself.
+    const int kSizes[] = {256, 512, 1024, 2048, 4096, 8192, 0};
+    const char* kSizeLabels[] = {"256", "512", "1024", "2048", "4096", "8192", "No limit"};
+    int sizeIdx = -1;
     for (int i = 0; i < IM_ARRAYSIZE(kSizes); ++i) if (kSizes[i] == settings.MaxTextureSize) sizeIdx = i;
-    if (ImGui::Combo("##MaxSize", &sizeIdx, kSizeLabels, IM_ARRAYSIZE(kSizeLabels))) {
-        settings.MaxTextureSize = kSizes[sizeIdx];
-        isDirty = true;
+    const std::string customLabel = std::to_string(settings.MaxTextureSize);
+    if (ImGui::BeginCombo("##MaxSize", sizeIdx >= 0 ? kSizeLabels[sizeIdx] : customLabel.c_str())) {
+        for (int i = 0; i < IM_ARRAYSIZE(kSizes); ++i) {
+            if (ImGui::Selectable(kSizeLabels[i], i == sizeIdx) && i != sizeIdx) {
+                settings.MaxTextureSize = kSizes[i];
+                isDirty = true;
+            }
+        }
+        ImGui::EndCombo();
     }
 
     ImGui::PopItemWidth();
