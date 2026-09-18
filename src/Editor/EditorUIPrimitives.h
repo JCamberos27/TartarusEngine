@@ -38,8 +38,8 @@ using TooltipFn = void (*)(const char*);
 
 // The accent colour every "on" toggle state reads in — the same ImGui role (ImGuiCol_SliderGrab)
 // the styled sliders use — kept as one named accessor rather than a raw ImGuiCol_* index
-// sprinkled at every call site. Matches docs/CONVENTIONS.md's accent-discipline table: cyan =
-// selection / "you are here".
+// sprinkled at every call site. Cyan = selection / "you are here" (accent roles are listed above
+// ApplyBentoPalette in EditorLayer.cpp).
 inline ImVec4 AccentColor() { return ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab); }
 
 // The brighter of the theme's two accents (Unity's "Link Text" / focus blue, vs. AccentColor's
@@ -63,8 +63,7 @@ inline ImVec4 WarningColor() { return ImVec4(0xF4 / 255.0f, 0xBC / 255.0f, 0x02 
 inline ImVec4 SuccessColor() { return ImVec4(0.45f, 0.85f, 0.55f, 1.0f); } // ~10.9:1
 inline ImVec4 InfoColor()    { return ImVec4(0.55f, 0.75f, 1.00f, 1.0f); } // ~9.9:1
 
-// Two — and only two — button treatments across the whole editor (#160; see
-// docs/CONVENTIONS.md). ActionButton: flat, no body at rest, faint wash on hover; `active` gives
+// Two — and only two — button treatments across the whole editor (#160). ActionButton: flat, no body at rest, faint wash on hover; `active` gives
 // an accent-tinted body + a 2px bottom keyline for toggles that are "on". This is every toolbar
 // tool, every panel toggle, every low-frequency icon action.
 inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn tooltipFn,
