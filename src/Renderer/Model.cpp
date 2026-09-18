@@ -129,6 +129,59 @@ void Model::CollisionGeometry(std::vector<glm::vec3>& outVertices,
     }
 }
 
+bool Model::RaycastTriangles(const glm::mat4& modelMatrix, const glm::vec3& worldOrigin, const glm::vec3& worldDir,
+                             float& outT, glm::vec3* outNormal, float minT) const {
+    const float dirLen = glm::length(worldDir);
+    if (dirLen < 1e-12f) return false;
+    const glm::vec3 wd = worldDir / dirLen;
+    // Test in LOCAL space (no per-vertex transform), then measure the hit back in world space so
+    // a non-uniformly scaled model still reports a correct world distance.
+    const glm::mat4 inv = glm::inverse(modelMatrix);
+    const glm::vec3 lo = glm::vec3(inv * glm::vec4(worldOrigin, 1.0f));
+    const glm::vec3 ld = glm::vec3(inv * glm::vec4(wd, 0.0f));
+    float bestWorldT = 1e30f;
+    glm::vec3 bestLocalN(0.0f);
+    bool hit = false;
+    for (const auto& mesh : m_Meshes) {
+        const auto& pos = mesh->LocalPositions();
+        const auto& idx = mesh->LocalIndices();
+        for (size_t i = 0; i + 2 < idx.size(); i += 3) {
+            if (idx[i] >= pos.size() || idx[i + 1] >= pos.size() || idx[i + 2] >= pos.size()) continue;
+            const glm::vec3& a = pos[idx[i]];
+            const glm::vec3& b = pos[idx[i + 1]];
+            const glm::vec3& c = pos[idx[i + 2]];
+            // Moller-Trumbore, two-sided.
+            const glm::vec3 e1 = b - a, e2 = c - a;
+            const glm::vec3 p = glm::cross(ld, e2);
+            const float det = glm::dot(e1, p);
+            if (std::fabs(det) < 1e-12f) continue;
+            const float invDet = 1.0f / det;
+            const glm::vec3 tv = lo - a;
+            const float u = glm::dot(tv, p) * invDet;
+            if (u < 0.0f || u > 1.0f) continue;
+            const glm::vec3 q = glm::cross(tv, e1);
+            const float v = glm::dot(ld, q) * invDet;
+            if (v < 0.0f || u + v > 1.0f) continue;
+            const float tl = glm::dot(e2, q) * invDet;
+            if (tl <= 0.0f) continue;
+            const glm::vec3 worldHit = glm::vec3(modelMatrix * glm::vec4(lo + ld * tl, 1.0f));
+            const float tw = glm::dot(worldHit - worldOrigin, wd);
+            if (tw < minT || tw >= bestWorldT) continue;
+            bestWorldT = tw;
+            bestLocalN = glm::cross(e1, e2);
+            hit = true;
+        }
+    }
+    if (!hit) return false;
+    outT = bestWorldT;
+    if (outNormal) {
+        glm::vec3 n = glm::normalize(glm::transpose(glm::inverse(glm::mat3(modelMatrix))) * bestLocalN);
+        if (glm::dot(n, wd) > 0.0f) n = -n; // face the ray origin
+        *outNormal = n;
+    }
+    return true;
+}
+
 std::shared_ptr<Model> Model::CreatePrimitive(const std::string& kind, const std::string& path) {
     std::shared_ptr<Model> model(new Model());
     model->m_Path = path;
