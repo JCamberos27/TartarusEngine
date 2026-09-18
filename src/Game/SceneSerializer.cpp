@@ -1646,6 +1646,9 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
         Log::Error("Scene: failed to parse '" + path + "': " + e.what());
         return false;
     }
+    // Release the file now: the migration write-back below replaces `path` atomically, and on
+    // Windows that fails with "Access is denied" while this stream still holds it open.
+    in.close();
     // Valid JSON but the wrong shape (e.g. a bare `[]` or a number) parses fine above but throws
     // a json::type_error the moment anything below calls .value()/.contains() on it, since those
     // require an object. Reject it here as a load failure — same contract as a parse error —
