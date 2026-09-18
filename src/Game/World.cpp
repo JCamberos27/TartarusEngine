@@ -5,6 +5,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <algorithm>
+#include <glm/gtc/quaternion.hpp>
 
 namespace {
 // Cycle guard for the world-transform cache's parent-chain walk: no legitimate scene nests this
@@ -86,9 +87,9 @@ entt::entity World::Raycast(const glm::vec3& origin, const glm::vec3& dir, float
     float bestT = maxDist;
     auto view = Registry.view<const TransformComponent, const ColliderComponent>(entt::exclude<InactiveTag>);
     for (auto entity : view) {
-        const auto& [transform, collider] = view.get<const TransformComponent, const ColliderComponent>(entity);
+        const auto& collider = view.get<const ColliderComponent>(entity);
         if (collider.IsTrigger) continue;
-        AABB b = ColliderWorldBounds(Registry, entity, transform);
+        AABB b = ColliderWorldBounds(Registry, entity, WorldSpaceTransform(entity)); // #114
         float t;
         if (b.RayIntersect(origin, dir, t) && t < bestT) {
             bestT = t;
@@ -177,6 +178,50 @@ void World::RebuildWorldTransformCache() {
     }
 }
 
+namespace {
+// Rotation-only part of an affine matrix (columns normalised; a mirrored basis is flipped so the
+// result is a proper rotation) as YXZ Euler degrees — the order ComposeTransform builds with.
+glm::vec3 EulerDegreesYXZ(const glm::mat4& m) {
+    glm::mat3 b(m);
+    for (int c = 0; c < 3; ++c) {
+        const float len = glm::length(b[c]);
+        if (len > 1e-8f) b[c] /= len;
+    }
+    if (glm::determinant(b) < 0.0f) b[0] = -b[0];
+    float ey, ex, ez;
+    glm::extractEulerAngleYXZ(glm::mat4(b), ey, ex, ez);
+    return glm::degrees(glm::vec3(ex, ey, ez));
+}
+} // namespace
+
+TransformComponent World::WorldSpaceTransform(entt::entity entity) const {
+    const auto* local = Registry.try_get<TransformComponent>(entity);
+    if (!local) return TransformComponent{};
+    const auto* hier = Registry.try_get<HierarchyComponent>(entity);
+    if (!hier || hier->Parent == entt::null) return *local;
+    const glm::mat4 m = ComposeWorldTransform(entity);
+    TransformComponent out = *local;
+    out.Position = glm::vec3(m[3]);
+    out.Scale = glm::vec3(glm::length(glm::vec3(m[0])), glm::length(glm::vec3(m[1])), glm::length(glm::vec3(m[2])));
+    out.RotationEuler = EulerDegreesYXZ(m);
+    return out;
+}
+
+void World::SetWorldPose(entt::entity entity, const glm::vec3& worldPosition, const glm::quat& worldRotation) {
+    auto* tc = Registry.try_get<TransformComponent>(entity);
+    if (!tc) return;
+    const auto* hier = Registry.try_get<HierarchyComponent>(entity);
+    if (!hier || hier->Parent == entt::null) {
+        tc->Position = worldPosition;
+        tc->RotationEuler = EulerDegreesYXZ(glm::mat4_cast(worldRotation));
+        return;
+    }
+    const glm::mat4 world = glm::translate(glm::mat4(1.0f), worldPosition) * glm::mat4_cast(worldRotation);
+    const glm::mat4 local = glm::inverse(ComposeWorldTransform(hier->Parent)) * world;
+    tc->Position = glm::vec3(local[3]);
+    tc->RotationEuler = EulerDegreesYXZ(local);
+}
+
 glm::mat4 World::GetCachedWorldTransform(entt::entity entity) const {
     auto it = m_WorldTransformCache.find(entity);
     if (it != m_WorldTransformCache.end()) return it->second;
@@ -186,10 +231,10 @@ glm::mat4 World::GetCachedWorldTransform(entt::entity entity) const {
 bool World::SetParent(entt::entity child, entt::entity parent) {
     if (!Registry.valid(child) || child == parent) return false;
     if (parent != entt::null && !Registry.valid(parent)) return false;
-    // ColliderComponent-bearing entities (all current level geometry) collide/raycast against
-    // TransformComponent read directly as world space — parenting one would silently break
-    // physics for it, so refuse rather than produce a subtly-wrong collider.
-    if (parent != entt::null && Registry.all_of<ColliderComponent>(child)) return false;
+    // (#114/#114-W1: entities with a ColliderComponent used to be refused here, because physics,
+    // the collider gizmo and the editor raycast read TransformComponent as world space. They
+    // now work in world space (World::WorldSpaceTransform / SetWorldPose), so colliders parent
+    // like anything else.)
 
     // Reject if `parent` is `child` or one of its own descendants — that would create a cycle.
     for (entt::entity walk = parent; walk != entt::null; ) {

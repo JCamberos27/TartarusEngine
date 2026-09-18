@@ -1,0 +1,23 @@
+{
+  "formatVersion": 2,
+  "_comment": "Regression scene for #114/#115 (runs Play -> Stop twice: filename contains 'smoke_play'). A dynamic box parented under a rotated, offset empty must be simulated from its WORLD pose and fall onto the ground (the harness prints each body's world position before Stop); a static box rotated 30 deg must get an oriented collider. Engine primitives only.",
+  "skyHorizonColor": [0.40, 0.48, 0.60],
+  "skyZenithColor": [0.12, 0.24, 0.52],
+  "skyAmbientIntensity": 1.0,
+  "assetFolders": ["Scenes"],
+  "assetMeta": [],
+  "boxes": [
+    { "center": [0, -0.1, 0], "size": [24, 0.2, 24], "color": [0.34, 0.34, 0.37], "rotation": [0, 0, 0], "name": "Ground", "id": 0, "parentId": -1, "order": 0 },
+    { "center": [-4, 0.6, 0], "size": [4, 0.3, 2], "color": [0.5, 0.5, 0.3], "rotation": [0, 0, 30], "name": "Ramp", "id": 1, "parentId": -1, "order": 1 },
+    { "center": [0, 2, 0], "size": [1, 1, 1], "color": [0.8, 0.3, 0.24], "rotation": [0, 0, 0], "name": "Child Body", "id": 21, "parentId": 20, "order": 21,
+      "Rigidbody": {} }
+  ],
+  "empties": [
+    { "name": "Parent", "id": 20, "parentId": -1, "order": 20,
+      "position": [5, 3, 0], "rotation": [0, 90, 0], "scale": [1, 1, 1] },
+    { "name": "Sun", "id": 10, "parentId": -1, "order": 10,
+      "position": [6, 10, 6], "rotation": [52, -36, 0], "scale": [1, 1, 1],
+      "light": { "kind": "directional", "color": [1.0, 0.96, 0.9], "intensity": 4.0, "range": 30.0 } }
+  ],
+  "models": []
+}
