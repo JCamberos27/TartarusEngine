@@ -85,6 +85,7 @@ void EditorSettings::Load() {
     s.AutoSaveIntervalMinutes = SafeValue(root, "autoSaveIntervalMinutes", s.AutoSaveIntervalMinutes);
     s.VSyncMode = SafeValue(root, "vsyncMode", s.VSyncMode);
     s.FpsLimit = SafeValue(root, "fpsLimit", s.FpsLimit);
+    s.UnfocusedFpsLimit = SafeValue(root, "unfocusedFpsLimit", s.UnfocusedFpsLimit);
     // exposureEV/tonemapOperator/msaaSamples/ssaoEnabled/bloom*/shadow* intentionally no longer
     // read here (#9, Phase M item 1) — moved to World/scene data. A pre-v3 scene's values are
     // migrated forward by SceneSerializer reading this file's legacy keys directly (see
@@ -156,6 +157,7 @@ void EditorSettings::Load() {
     s.VSyncMode = std::clamp(s.VSyncMode, 0, 2);
     if (s.FpsLimit < 0) s.FpsLimit = 0;
     s.FpsLimit = std::min(s.FpsLimit, 1000);
+    s.UnfocusedFpsLimit = std::clamp(s.UnfocusedFpsLimit, 0, 1000);
     clampF(s.GridOpacity, 0.0f, 1.0f, 0.6f);
     clampF(s.GridMinorSpacing, 0.05f, 50.0f, 1.0f);
     s.GridMajorEvery = std::clamp(s.GridMajorEvery, 2, 100);
@@ -192,6 +194,7 @@ void EditorSettings::Flush() {
     root["autoSaveIntervalMinutes"] = Get().AutoSaveIntervalMinutes;
     root["vsyncMode"] = Get().VSyncMode;
     root["fpsLimit"] = Get().FpsLimit;
+    root["unfocusedFpsLimit"] = Get().UnfocusedFpsLimit;
     // exposureEV/tonemapOperator/msaaSamples/ssaoEnabled/bloom*/shadow* intentionally no longer
     // written here — see the matching comment in Load(). Once every project has been opened at
     // least once under formatVersion 3+, an old prefs file's stray legacy keys simply age out.
