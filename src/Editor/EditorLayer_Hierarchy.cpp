@@ -1470,11 +1470,13 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     if (hasEntity && world.Registry.all_of<CameraComponent>(entity)) {
         if (ImGui::MenuItem(ICON_FA_VIDEO "  Align With View") && m_EditorCameraPtr) {
             PushUndo(world, "Align Camera to View");
-            auto& t = world.Registry.get<TransformComponent>(entity);
-            t.Position = m_EditorCameraPtr->Position;
             glm::vec3 d = glm::normalize(m_EditorCameraPtr->Front());
-            t.RotationEuler = glm::vec3(glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
-                                        glm::degrees(std::atan2(-d.x, -d.z)), 0.0f);
+            const float pitch = std::asin(glm::clamp(d.y, -1.0f, 1.0f));
+            const float yaw = std::atan2(-d.x, -d.z);
+            // #128 — the view pose is world space; SetWorldPose re-expresses it in the parent's
+            // frame, so a parented camera lines up too (it used to get world values as local).
+            world.SetWorldPose(entity, m_EditorCameraPtr->Position,
+                               glm::quat_cast(glm::eulerAngleYXZ(yaw, pitch, 0.0f)));
             world.Registry.get<CameraComponent>(entity).FovDegrees = m_EditorCameraPtr->Fov;
         }
     }
