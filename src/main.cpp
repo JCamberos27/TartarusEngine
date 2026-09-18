@@ -1356,6 +1356,7 @@ int main(int argc, char** argv) {
                 {
                     const EditorSettings& es = EditorSettings::Get();
                     PhysicsWorld::SetDebugDrawFlags(es.PhysicsDebugDrawFlags);
+                    PhysicsWorld::SetEventLogging(es.LogPhysicsEvents || smokeTestMode); // #169
                     PhysicsWorld::SetSimTimeScale(es.PhysicsSimTimeScale);
                     PhysicsWorld::SetQueryRecording((es.PhysicsDebugDrawFlags & PhysicsWorld::PDD_Raycasts) != 0u);
                 }
