@@ -41,6 +41,19 @@ struct TifSplitterOptions {
     // this size (the edge tiles are shorter/narrower where the source doesn't divide evenly)
     // named Input_X{col}_Y{row}.png — for terrain heightmaps too large to load as one texture.
     int TileSize = 0;
+
+    // #185: write split channels as 16-bit grayscale PNGs instead of 8-bit, keeping the full
+    // precision of a 16/32/64-bit source (terrain heightmaps: 65536 height levels instead of 256,
+    // so no terracing). Only affects ExtractIndividualChannels output of a >8-bit grayscale/RGB
+    // source; anything else (8-bit sources, the combined image, tiles) stays 8-bit. With
+    // NormalizeHeightmaps the channel is stretched over 0..65535; without it a 16-bit unsigned
+    // source keeps its raw values and other formats are still mapped from their min..max (they
+    // have no inherent 16-bit range). The engine's own texture loader reads these as 8-bit.
+    bool Output16Bit = false;
+
+    // Base name for every output file. Empty = the input file's stem. The batch runner sets it
+    // when two inputs would otherwise write the same names (a.tif and a.tiff in one folder).
+    std::string OutputStem;
 };
 
 // Input/output/threading configuration for a whole batch run — one or more TIFFs converted in
@@ -63,6 +76,7 @@ struct BatchTifOptions {
     bool FlipNormalY = true;
     bool NormalizeHeightmaps = true;
     int TileSize = 0;
+    bool Output16Bit = false;
 
     // Caps how many files convert concurrently. 0 = std::thread::hardware_concurrency() (or 4
     // if the platform can't report it). Each file's own internal work (channel/tile export)
@@ -102,7 +116,9 @@ public:
     // files, so a second layer of per-file parallelism would only oversubscribe the machine
     // rather than finish any faster. Safe to call directly (outside ProcessBatch) for a single
     // file that still needs output-mirroring math, but ProcessTif is simpler for that case.
-    static bool ProcessFile(const std::filesystem::path& file, const BatchTifOptions& options);
+    // `outputStem` overrides the output base name (see TifSplitterOptions::OutputStem).
+    static bool ProcessFile(const std::filesystem::path& file, const BatchTifOptions& options,
+                            const std::string& outputStem = {});
 
     // Collects the input set (InputFiles plus a directory scan, if InputDirectory is set),
     // then converts every file using up to MaxThreads (or hardware_concurrency()) concurrent

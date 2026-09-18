@@ -3,15 +3,23 @@
 #include <tiffio.h>
 #include <stb_image_write.h>
 
+// Defined in stb_image_write's implementation section (extern/stb_image_write_impl.cpp) but only
+// declared there, not in the header's API part; WritePng16 below uses it to deflate its rows.
+// Its buffer is released with free(), stb's default STBIW_FREE.
+extern "C" unsigned char* stbi_zlib_compress(unsigned char* data, int data_len, int* out_len, int quality);
+
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <functional>
+#include <map>
 #include <future>
 #include <iomanip>
 #include <iostream>
@@ -63,6 +71,69 @@ bool WritePng(const std::string& path, const PixelBuffer& buf) {
     return stbi_write_png(path.c_str(), buf.Width, buf.Height, buf.Channels, buf.Data.data(), strideBytes) != 0;
 }
 
+uint32_t Crc32(const uint8_t* data, size_t len) {
+    static const auto table = [] {
+        std::array<uint32_t, 256> t{};
+        for (uint32_t n = 0; n < 256; ++n) {
+            uint32_t c = n;
+            for (int k = 0; k < 8; ++k) c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+            t[n] = c;
+        }
+        return t;
+    }();
+    uint32_t crc = 0xFFFFFFFFu;
+    for (size_t i = 0; i < len; ++i) crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >> 8);
+    return ~crc;
+}
+
+void PutBE32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back((uint8_t)(v >> 24)); out.push_back((uint8_t)(v >> 16));
+    out.push_back((uint8_t)(v >> 8));  out.push_back((uint8_t)v);
+}
+
+// #185: 16-bit grayscale PNG. stbi_write_png only writes 8-bit, but its zlib compressor is
+// public, so this assembles the chunks around it: PNG stores 16-bit samples big-endian, one
+// filter-type byte per row (Sub, which compresses smooth height data well).
+bool WritePng16(const std::string& path, int width, int height, const std::vector<uint16_t>& gray) {
+    const size_t rowBytes = (size_t)width * 2 + 1;
+    const size_t rawSize = rowBytes * (size_t)height;
+    if (rawSize > (size_t)INT32_MAX) return false; // stbi_zlib_compress takes an int length
+    std::vector<uint8_t> raw(rawSize);
+    for (int y = 0; y < height; ++y) {
+        uint8_t* row = &raw[(size_t)y * rowBytes];
+        row[0] = 1; // filter: Sub (byte-wise difference from the byte 2 to the left)
+        const uint16_t* src = &gray[(size_t)y * width];
+        for (int x = 0; x < width; ++x) {
+            const uint16_t cur = src[x], left = x > 0 ? src[x - 1] : 0;
+            row[1 + x * 2]     = (uint8_t)((cur >> 8) - (left >> 8));
+            row[1 + x * 2 + 1] = (uint8_t)((cur & 0xFF) - (left & 0xFF));
+        }
+    }
+    int zlen = 0;
+    unsigned char* z = stbi_zlib_compress(raw.data(), (int)raw.size(), &zlen, 8);
+    if (!z) return false;
+
+    std::vector<uint8_t> png = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
+    auto chunk = [&](const char* type, const uint8_t* data, size_t len) {
+        PutBE32(png, (uint32_t)len);
+        const size_t typeAt = png.size();
+        png.insert(png.end(), type, type + 4);
+        if (len) png.insert(png.end(), data, data + len);
+        PutBE32(png, Crc32(&png[typeAt], len + 4));
+    };
+    std::vector<uint8_t> ihdr;
+    PutBE32(ihdr, (uint32_t)width);
+    PutBE32(ihdr, (uint32_t)height);
+    ihdr.insert(ihdr.end(), {16, 0, 0, 0, 0}); // 16-bit, grayscale, deflate, adaptive filter, no interlace
+    chunk("IHDR", ihdr.data(), ihdr.size());
+    chunk("IDAT", z, (size_t)zlen);
+    chunk("IEND", nullptr, 0);
+    std::free(z);
+
+    std::ofstream f(std::filesystem::path(path), std::ios::binary);
+    return f.write((const char*)png.data(), (std::streamsize)png.size()) && f.flush();
+}
+
 // In-place min..max -> 0..255 stretch. A flat (single-value) channel is left untouched rather
 // than divide by zero.
 void StretchContrast(std::vector<uint8_t>& channel) {
@@ -99,6 +170,29 @@ void StretchToBytes(const std::vector<float>& plane, std::vector<uint8_t>& out) 
         float v = plane[i];
         if (!std::isfinite(v) || flat) { out[i] = 0; continue; }
         out[i] = (uint8_t)std::clamp(std::lround(((double)v - lo) * scale), 0l, 255l);
+    }
+}
+
+// 16-bit counterpart of StretchToBytes (#185). `stretch` false keeps values as they are (only
+// sensible for a 16-bit unsigned source, whose samples already are 0..65535).
+void ToWords(const std::vector<float>& plane, bool stretch, std::vector<uint16_t>& out) {
+    out.resize(plane.size());
+    if (!stretch) {
+        for (size_t i = 0; i < plane.size(); ++i)
+            out[i] = std::isfinite(plane[i]) ? (uint16_t)std::clamp(std::lround(plane[i]), 0l, 65535l) : 0;
+        return;
+    }
+    float lo = INFINITY, hi = -INFINITY;
+    for (float v : plane) {
+        if (!std::isfinite(v)) continue;
+        lo = std::min(lo, v);
+        hi = std::max(hi, v);
+    }
+    const bool flat = !(hi > lo);
+    const double scale = flat ? 0.0 : 65535.0 / ((double)hi - (double)lo);
+    for (size_t i = 0; i < plane.size(); ++i) {
+        float v = plane[i];
+        out[i] = (!std::isfinite(v) || flat) ? 0 : (uint16_t)std::clamp(std::lround(((double)v - lo) * scale), 0l, 65535l);
     }
 }
 
@@ -241,12 +335,26 @@ int SourceSampleFor(int c, size_t spp) {
     return spp >= 4 ? 3 : -1;
 }
 
-bool ExtractChannels(const PixelBuffer& rgba, const SamplePlanes& planes, const TifSplitterOptions& options,
-    const std::string& outDir, const std::string& stem, bool parallel) {
+bool ExtractChannels(const PixelBuffer& rgba, const SamplePlanes& planes, bool rawIs16Bit,
+    const TifSplitterOptions& options, const std::string& outDir, const std::string& stem, bool parallel) {
     static const char* kNames[4] = {"R", "G", "B", "A"};
     size_t pixelCount = (size_t)rgba.Width * rgba.Height;
 
     return RunBounded(4, parallel ? WorkerCount() : 1, [&](size_t c) {
+        const int src16 = SourceSampleFor((int)c, planes.size());
+        if (options.Output16Bit && src16 >= 0) {
+            // #185: full-precision channel straight to a 16-bit PNG.
+            std::vector<uint16_t> words;
+            ToWords(planes[src16], options.NormalizeHeightmaps || !rawIs16Bit, words);
+            if (options.FlipNormalY && c == 1)
+                for (uint16_t& v : words) v = (uint16_t)(65535 - v);
+            std::string outPath = outDir + "/" + stem + "_" + kNames[c] + ".png";
+            bool wrote = WritePng16(outPath, rgba.Width, rgba.Height, words);
+            if (wrote) LogSuccess("Wrote 16-bit channel " + std::string(kNames[c]) + " -> " + outPath);
+            else LogError("Failed to write '" + outPath + "'.");
+            return wrote;
+        }
+
         PixelBuffer channel;
         channel.Width = rgba.Width;
         channel.Height = rgba.Height;
@@ -356,7 +464,7 @@ bool DecodeAndExport(const TifSplitterOptions& options, bool parallelSubtasks) {
     const bool isFloat = sampleFormat == SAMPLEFORMAT_IEEEFP;
     SamplePlanes planes;
     if (bitsPerSample > 8 &&
-        ((options.ExtractIndividualChannels && options.NormalizeHeightmaps) || isFloat)) {
+        ((options.ExtractIndividualChannels && (options.NormalizeHeightmaps || options.Output16Bit)) || isFloat)) {
         planes = ReadHighPrecisionPlanes(tif, width, height, bitsPerSample, samplesPerPixel,
                                          options.InputFilePath);
         if (!planes.empty()) LogInfo("Read full " + std::to_string(bitsPerSample)
@@ -416,11 +524,17 @@ bool DecodeAndExport(const TifSplitterOptions& options, bool parallelSubtasks) {
         return false;
     }
 
-    std::string stem = std::filesystem::path(options.InputFilePath).stem().string();
+    std::string stem = options.OutputStem.empty()
+        ? std::filesystem::path(options.InputFilePath).stem().string() : options.OutputStem;
     bool ok = true;
 
+    if (options.Output16Bit && options.ExtractIndividualChannels && planes.empty()) {
+        LogWarn("16-bit output needs a 16/32/64-bit grayscale or RGB source; writing 8-bit channels for: "
+                + options.InputFilePath);
+    }
     if (options.ExtractIndividualChannels) {
-        ok = ExtractChannels(rgba, planes, options, options.OutputDirectory, stem, parallelSubtasks) && ok;
+        const bool rawIs16Bit = bitsPerSample == 16 && sampleFormat == SAMPLEFORMAT_UINT;
+        ok = ExtractChannels(rgba, planes, rawIs16Bit, options, options.OutputDirectory, stem, parallelSubtasks) && ok;
     }
     if (options.TileSize > 0) {
         ok = TileAndWrite(rgba, options, options.OutputDirectory, stem, parallelSubtasks) && ok;
@@ -517,8 +631,11 @@ bool TifConverter::ProcessTif(const TifSplitterOptions& options) {
     return DecodeAndExport(options, /*parallelSubtasks=*/true);
 }
 
-bool TifConverter::ProcessFile(const std::filesystem::path& file, const BatchTifOptions& options) {
+bool TifConverter::ProcessFile(const std::filesystem::path& file, const BatchTifOptions& options,
+                               const std::string& outputStem) {
     TifSplitterOptions perFile;
+    perFile.OutputStem = outputStem;
+    perFile.Output16Bit = options.Output16Bit;
     perFile.InputFilePath = file.string();
     perFile.OutputDirectory = ComputeMirroredOutputDir(file, options).string();
     perFile.ExtractIndividualChannels = options.ExtractIndividualChannels;
@@ -535,6 +652,36 @@ BatchProgress TifConverter::ProcessBatch(const BatchTifOptions& options, BatchPr
     if (files.empty()) {
         LogWarn("No .tif/.tiff files found to process.");
         return {};
+    }
+
+    // #185: a.tif and a.tiff (or A.tif and a.tif - Windows paths are case-insensitive) landing in
+    // the same output folder would write the same a.png / a_R.png ... and silently overwrite
+    // each other. Every member of such a group keeps its extension in the name: a_tif, a_tiff.
+    std::vector<std::string> outputStems(files.size());
+    {
+        auto lower = [](std::string s) {
+            std::transform(s.begin(), s.end(), s.begin(), [](unsigned char ch) { return (char)std::tolower(ch); });
+            return s;
+        };
+        std::map<std::string, std::vector<size_t>> byTarget;
+        for (size_t i = 0; i < files.size(); ++i) {
+            const std::string key = lower((ComputeMirroredOutputDir(files[i], options) / files[i].stem()).generic_string());
+            byTarget[key].push_back(i);
+        }
+        for (const auto& [key, members] : byTarget) {
+            if (members.size() < 2) continue;
+            std::map<std::string, int> seen; // A.tif + a.tif: same name even with the extension
+            for (size_t i : members) {
+                const std::filesystem::path& f = files[i];
+                std::string ext = f.extension().string();
+                if (!ext.empty() && ext[0] == '.') ext.erase(0, 1);
+                outputStems[i] = f.stem().string() + "_" + ext;
+                const int n = seen[lower(outputStems[i])]++;
+                if (n > 0) outputStems[i] += "_" + std::to_string(n + 1);
+                LogWarn("'" + f.string() + "' shares its output name with another input; writing it as "
+                        + outputStems[i] + "*.png");
+            }
+        }
     }
 
     unsigned int workerCount = options.MaxThreads > 0 ? (unsigned int)options.MaxThreads : WorkerCount();
@@ -565,7 +712,7 @@ BatchProgress TifConverter::ProcessBatch(const BatchTifOptions& options, BatchPr
             bool ok = false;
             std::string errorReason;
             try {
-                ok = ProcessFile(file, options);
+                ok = ProcessFile(file, options, outputStems[index]);
                 if (!ok) errorReason = "conversion failed - see [Error] log line(s) above for detail";
             } catch (const std::exception& e) {
                 errorReason = e.what();
