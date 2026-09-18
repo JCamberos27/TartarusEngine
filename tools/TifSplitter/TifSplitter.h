@@ -10,10 +10,10 @@
 // Decoding goes through libtiff's TIFFReadRGBAImageOriented rather than hand-rolling
 // per-bit-depth/per-sample-format scanline decoding: it already correctly handles every source
 // layout libtiff supports (8/16/32-bit integer or float samples, tiled or stripped, palette,
-// YCbCr, CMYK...) and hands back a plain top-to-bottom 8-bit RGBA buffer. Since the engine's own
-// Texture loader (stb_image) only ever reads 8-bit-per-channel PNGs anyway, decoding further
-// than that would produce precision this tool's own output format can't carry — see the
-// "why 8-bit" note in TifSplitter.cpp for the full reasoning.
+// YCbCr, CMYK...) and hands back a plain top-to-bottom 8-bit RGBA buffer, and the engine's own
+// Texture loader (stb_image) only reads 8-bit-per-channel PNGs anyway. The exception (#185) is
+// normalised split channels of a 16/32/64-bit grayscale or RGB source: those are read at full
+// precision, stretched, and only then quantised, so a narrow-range heightmap doesn't terrace.
 struct TifSplitterOptions {
     std::string InputFilePath;
     std::string OutputDirectory = "./Output";
