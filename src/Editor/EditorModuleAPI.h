@@ -564,6 +564,8 @@ struct EditorModuleHostAPI {
 
 struct EditorModuleAPI {
     std::uint32_t Version = kEditorModuleAPIVersion;
+    // Reload contract (#172/#187): the host validates a rebuilt DLL, calls the OLD module's
+    // OnUnload and frees it, and only then calls the NEW module's OnLoad. The two never overlap.
     void (*OnLoad)() = nullptr;
     void (*OnUnload)() = nullptr;
     void (*Draw)(const EditorModuleHostAPI& host) = nullptr;
