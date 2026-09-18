@@ -5,7 +5,7 @@
 #include <cmath>
 
 void UpdateTransformControllers(World& world, float dt) {
-    auto view = world.Registry.view<TransformControllerComponent, TransformComponent>();
+    auto view = world.Registry.view<TransformControllerComponent, TransformComponent>(entt::exclude<InactiveTag>); // #199 - an inactive object is paused, not just hidden
     for (auto entity : view) {
         auto& controller = view.get<TransformControllerComponent>(entity);
         auto& transform = view.get<TransformComponent>(entity);

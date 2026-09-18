@@ -359,13 +359,13 @@ bool TifConverter::ProcessFile(const std::filesystem::path& file, const BatchTif
     return DecodeAndExport(perFile, /*parallelSubtasks=*/false);
 }
 
-void TifConverter::ProcessBatch(const BatchTifOptions& options, BatchProgressCallback progressCB) {
+BatchProgress TifConverter::ProcessBatch(const BatchTifOptions& options, BatchProgressCallback progressCB) {
     auto startTime = std::chrono::steady_clock::now();
 
     std::vector<std::filesystem::path> files = CollectBatchFiles(options);
     if (files.empty()) {
         LogWarn("No .tif/.tiff files found to process.");
-        return;
+        return {};
     }
 
     unsigned int workerCount = options.MaxThreads > 0 ? (unsigned int)options.MaxThreads : WorkerCount();
@@ -441,4 +441,5 @@ void TifConverter::ProcessBatch(const BatchTifOptions& options, BatchProgressCal
         for (const auto& f : failures) std::cout << "  - " << f.FileName << ": " << f.Reason << "\n";
     }
     std::cout << "==========================\n";
+    return progress; // every worker has joined, so this is the final, race-free tally
 }

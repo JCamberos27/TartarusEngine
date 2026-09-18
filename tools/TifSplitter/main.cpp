@@ -166,9 +166,8 @@ int main(int argc, char** argv) {
         options.TileSize = tileSize;
         options.MaxThreads = maxThreads;
 
-        size_t lastFailedCount = 0;
-        TifConverter::ProcessBatch(options, [&](const BatchProgress& p) {
-            lastFailedCount = p.FailedFiles;
+        // #194 — the callback runs on worker threads; the exit code comes from the joined result.
+        const BatchProgress result = TifConverter::ProcessBatch(options, [&](const BatchProgress& p) {
             std::cout << "[Progress] " << p.CompletedFiles << "/" << p.TotalFiles
                        << " (failed: " << p.FailedFiles << ") - finished: " << p.CurrentFileName << "\n";
         });
@@ -177,7 +176,9 @@ int main(int argc, char** argv) {
             std::cout << "\nPress Enter to exit...";
             std::cin.get();
         }
-        return lastFailedCount == 0 ? 0 : 1;
+        // #193 — converting nothing is a failure (exit 2), not success.
+        if (result.TotalFiles == 0) return 2;
+        return result.FailedFiles == 0 ? 0 : 1;
     }
 
     // Single-file mode.
