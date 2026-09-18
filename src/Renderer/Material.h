@@ -2,9 +2,26 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 #include <glm/glm.hpp>
+#include "ShaderPropType.h"
 
 class Texture;
+
+// One value for a linked-shader property that is NOT one of the built-in PBR fields below
+// (audit #354). Only the member matching Type is meaningful. Texture props keep both the resolved
+// pointer (for binding) and the path (for saving).
+struct MaterialProp {
+    ShaderPropType Type = ShaderPropType::Float;
+    float                    F = 0.0f;
+    glm::vec4                V{0.0f, 0.0f, 0.0f, 1.0f};
+    bool                     B = false;
+    int                      I = 0;
+    std::string              TexPath;
+    std::shared_ptr<Texture> Tex;
+};
 
 // PBR (metallic-roughness workflow) material. Maps are optional; when absent the
 // corresponding scalar factor is used uniformly across the surface.
@@ -62,6 +79,14 @@ struct Material {
     // default: an opaque material's albedo alpha is NOT treated as coverage.
     bool  AlphaClip   = false;
     float AlphaCutoff = 0.5f;
+
+    // Values of a linked shader's custom (non-built-in) properties, keyed by property name
+    // ("_Foo"), pushed as `u<Foo>` uniforms by BindMaterialDataDriven. Lives here rather than on
+    // MaterialAsset (#104) so the Inspector's Material-level Get*/Set* reach them too.
+    std::unordered_map<std::string, MaterialProp> ExtraProps;
+    // #104 — the linked shader's custom keywords switched on for this material (anything in its
+    // Keywords{} block that the engine doesn't drive itself; see ShaderAsset::IsBuiltinKeyword).
+    std::vector<std::string> ShaderKeywords;
 
     // #192: a value hash of everything BindMaterial (Model.cpp) uploads — the scalar/vector
     // factors plus the identity of each bound texture. The draw loop sorts by this and

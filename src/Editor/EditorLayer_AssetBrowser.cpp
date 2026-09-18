@@ -13,6 +13,7 @@
 #include "Material.h"
 #include "AudioEngine.h"
 #include "Screenshot.h"
+#include "ShaderLibrary.h" // built-in shaders in the Shaders folder (#104)
 #include "SceneSerializer.h"
 #include "AABB.h"
 #include "Log.h"
@@ -434,7 +435,24 @@ void EditorLayer::RequestDeleteAsset(World& world, AssetLibrary& assets, const s
     RequestDeleteAssets(world, assets, { AssetKeyRef{key, isFolder} }, skipDialog);
 }
 
-void EditorLayer::RequestDeleteAssets(World& world, AssetLibrary& assets, const std::vector<AssetKeyRef>& items, bool skipDialog) {
+namespace {
+// #104 — the engine's own shaders are listed in the Shaders folder (read-only, for preview and
+// as material targets) but are part of the install, never deletable from a project.
+bool IsBuiltinShaderPath(const std::string& key) {
+    const std::string dir = std::filesystem::path(ShaderLibrary::Dir()).generic_string();
+    return !dir.empty() && std::filesystem::path(key).generic_string().rfind(dir, 0) == 0;
+}
+} // namespace
+
+void EditorLayer::RequestDeleteAssets(World& world, AssetLibrary& assets, const std::vector<AssetKeyRef>& requested, bool skipDialog) {
+    std::vector<AssetKeyRef> items;
+    for (const auto& item : requested) {
+        if (!item.IsFolder && IsBuiltinShaderPath(item.Key)) {
+            Log::Warn("Built-in shaders are part of the engine and can't be deleted: " + item.Key);
+            continue;
+        }
+        items.push_back(item);
+    }
     if (items.empty()) return;
     if (skipDialog) {
         m_DeleteError.clear();
@@ -931,6 +949,13 @@ void EditorLayer::RefreshShadersListingIfNeeded() {
         if (!entry.is_regular_file() || entry.path().extension() != ".shader") continue;
         m_ShadersListingCache.paths.push_back(entry.path().generic_string());
     }
+    // #104 — plus the engine's built-in descriptors (Standard.shader), which materials reference
+    // as engine://Name.shader; listed after the project's own, read-only.
+    std::error_code engineEc;
+    for (const auto& entry : std::filesystem::directory_iterator(ShaderLibrary::Dir(), engineEc)) {
+        if (!entry.is_regular_file() || entry.path().extension() != ".shader") continue;
+        m_ShadersListingCache.paths.push_back(entry.path().generic_string());
+    }
     m_ShadersListingCache.valid = true;
 }
 
@@ -1107,6 +1132,7 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         for (const auto& path : m_ShadersListingCache.paths) {
             std::string name = std::filesystem::path(path).stem().string();
             if (!MatchesAssetSearch(parsedSearch, name, "shader", {})) continue;
+            if (IsBuiltinShaderPath(path)) name += " (built-in)";
             cells.push_back({Cell::Kind::Shader, path, name, nullptr, nullptr});
         }
     }
@@ -1693,11 +1719,13 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 shadersForAction.push_back({m_SelectedAssetKey, false});
                 for (const auto& e : m_ExtraAssetSelection) shadersForAction.push_back(e);
                 const bool multi = shadersForAction.size() > 1;
-                ImGui::Separator();
-                ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
-                if (ImGui::MenuItem(multi ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete"))
-                    RequestDeleteAssets(world, assets, shadersForAction, /*skipDialog=*/false);
-                ImGui::PopStyleColor();
+                if (!IsBuiltinShaderPath(cell.key) || multi) {
+                    ImGui::Separator();
+                    ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
+                    if (ImGui::MenuItem(multi ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete"))
+                        RequestDeleteAssets(world, assets, shadersForAction, /*skipDialog=*/false);
+                    ImGui::PopStyleColor();
+                }
                 ImGui::EndPopup();
             }
         } else if (ImGui::BeginPopupContextItem()) {
