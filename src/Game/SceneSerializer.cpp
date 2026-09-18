@@ -1709,6 +1709,20 @@ std::string SceneSerializer::SaveToString(const World& world) {
     return BuildSceneJson(world).dump();
 }
 
+bool SceneSerializer::SaveSnapshotToFile(const std::string& entitySnapshot, const AssetLibrary& assets,
+                                         const std::string& path) {
+    std::string text;
+    try {
+        json root = json::parse(entitySnapshot);
+        if (!root.is_object()) return false;
+        AppendAssetLibraryJson(root, assets);
+        text = root.dump(2);
+    } catch (const std::exception&) {
+        return false;
+    }
+    return AtomicFile::WriteBytes(std::filesystem::path(path), text, /*binary=*/false);
+}
+
 std::string SceneSerializer::SaveToString(const World& world, const AssetLibrary& assets) {
     json root = BuildSceneJson(world);
     // Marks this snapshot as carrying real AssetLibrary state, so LoadFromString below knows to

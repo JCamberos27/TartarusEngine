@@ -194,6 +194,18 @@ void EditorLayer::EmergencyRecoverySave(World& world, AssetLibrary& assets) noex
     }
 }
 
+bool EditorLayer::CrashRecoverySave(const World& world, const AssetLibrary& assets) noexcept {
+    try {
+        if (!m_Dirty || m_CurrentScenePath.empty()) return false;
+        const std::string path = RecoveryPathFor(m_CurrentScenePath);
+        if (m_InPlayMode)
+            return !m_PlayModeSnapshot.empty() && SceneSerializer::SaveSnapshotToFile(m_PlayModeSnapshot, assets, path);
+        return SceneSerializer::Save(world, assets, path);
+    } catch (...) {
+        return false;
+    }
+}
+
 void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
     if (!m_RecoveryPromptPending) return;
 
