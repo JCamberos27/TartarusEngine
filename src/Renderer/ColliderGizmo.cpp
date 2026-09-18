@@ -162,8 +162,8 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
         const glm::vec3 s = glm::abs(t.Scale);
 
         if (c.HalfExtents == glm::vec3(0.0f)) {
-            // Auto-fit box. A simulated body (has a Rigidbody) is built as an ORIENTED box in
-            // PhysX and rotates with the actor; a lone static collider is a plain world AABB.
+            // Auto-fit box: an ORIENTED box that rotates with the entity, for simulated bodies and
+            // (#115) statics alike — matches BuildActors.
             glm::vec3 halfL, offL(0.0f);
             if (const auto* rr = world.Registry.try_get<const RenderableComponent>(e); rr && rr->ModelRef) {
                 const glm::vec3 lo = rr->ModelRef->BoundsMin() * t.Scale;
@@ -174,13 +174,7 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
                 halfL = 0.5f * s;
             }
             if (halfL.x > 0.0f && halfL.y > 0.0f && halfL.z > 0.0f) {
-                if (world.Registry.all_of<RigidbodyComponent>(e)) {
-                    box(t.Position + R * offL, halfL, R);
-                } else {
-                    glm::vec3 center, half;
-                    AutoBoxWorld(world.Registry, e, t, center, half);
-                    box(center, half, glm::mat3(1.0f));
-                }
+                box(t.Position + R * offL, halfL, R);
             }
             continue;
         }
