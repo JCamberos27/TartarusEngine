@@ -6,9 +6,9 @@
 // Frame profiler: named scoped timers collected once per frame, read by the editor's Stats
 // overlay (EditorLayer::DrawStatsPanel). CPU timing (ScopeTimer / PROFILE_SCOPE) answers "where
 // does a frame's CPU time go"; GPU timing (GpuScopeTimer / PROFILE_GPU_SCOPE, #197) answers the
-// same question for GPU time via GL_TIME_ELAPSED queries, which the CPU timers structurally
-// cannot see. GPU results land several frames late due to pipelining — each named scope keeps
-// its own small ring of query objects so reading them back never stalls waiting on the GPU.
+// same question for GPU time via GL_TIMESTAMP query pairs, which the CPU timers structurally
+// cannot see. GPU results land several frames late due to pipelining — a small ring of per-frame
+// query pools means reading them back never stalls waiting on the GPU.
 class Profiler {
 public:
     struct Entry {
@@ -42,24 +42,24 @@ public:
         std::chrono::steady_clock::time_point m_Start;
     };
 
-    // GPU timings, from whichever named ring's query most recently completed - the GPU
-    // equivalent of GetLastFrame(), just further behind by however many frames the driver's
-    // pipeline is deep (typically 1-3), not exactly one.
+    // GPU timings of the most recent frame the GPU has finished - the GPU equivalent of
+    // GetLastFrame(), just further behind by however many frames the driver's pipeline is deep
+    // (typically 1-3). A scope that ran more than once that frame (e.g. "Scene Draw" for both
+    // the Scene and Game views) is reported once, as the sum (#147).
     static const std::vector<Entry>& GetLastFrameGpu();
 
-    // Constructed at the top of a scope, issues a GL_TIME_ELAPSED query under `name` that ends
-    // when the scope exits. Use via PROFILE_GPU_SCOPE(name). Must be constructed on the GL
+    // Constructed at the top of a scope, brackets it with a pair of GL_TIMESTAMP queries under
+    // `name` (a string literal: it's stored, not copied). Scopes may nest (#147). Use via PROFILE_GPU_SCOPE(name). Must be constructed on the GL
     // thread with a current context, after GLLoader_Init() - same requirement as any other GL
     // call in this codebase.
     class GpuScopeTimer {
     public:
-        explicit GpuScopeTimer(std::string name);
+        explicit GpuScopeTimer(const char* name);
         ~GpuScopeTimer();
         GpuScopeTimer(const GpuScopeTimer&) = delete;
         GpuScopeTimer& operator=(const GpuScopeTimer&) = delete;
     private:
-        std::string m_Name;
-        int m_Slot = -1; // which ring slot this instance's query landed in; -1 = skipped (ring busy)
+        int m_Record = -1; // index of this scope in the current frame's records; -1 = not timed
     };
 };
 

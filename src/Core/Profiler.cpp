@@ -1,48 +1,86 @@
 #include "Profiler.h"
 #include "gl.h"
-#include <unordered_map>
+#include <algorithm>
 
 namespace {
 std::vector<Profiler::Entry> g_CurrentFrame;
 std::vector<Profiler::Entry> g_LastFrame;
 
-// One small ring of query objects per named GPU scope. `Next` is both the slot the next
-// GpuScopeTimer for this name will use AND the oldest still-outstanding query - exactly the one
-// BeginFrame() should poll before anything reuses it. kRingSize=4 covers ordinary 1-3 frame
-// pipeline latency with room to spare, including scopes issued more than once per frame (e.g.
-// "Scene Draw", run once for the Scene tab and once for the Game tab).
-constexpr int kGpuRingSize = 4;
-struct GpuRing {
-    GLuint Queries[kGpuRingSize] = {};
-    bool Pending[kGpuRingSize] = {};
-    int Next = 0;
-    bool Created = false;
+// #147 - GPU scopes are timed with GL_TIMESTAMP pairs, not GL_TIME_ELAPSED: elapsed-time queries
+// can't nest (a nested scope made the outer one's glBeginQuery an error), timestamps can. Each
+// frame in a small ring owns a pool of query objects; a scope takes two (begin/end) from the
+// current frame's pool. The old design kept one ring per scope NAME and read back one result per
+// ring per frame, so a scope that runs twice a frame (Scene view + Game view) dropped half its
+// samples and reported whichever view happened to be read.
+constexpr int kGpuFrames = 4; // 1-3 frames of driver latency, plus the frame being recorded
+struct GpuScopeRecord {
+    const char* Name;
+    int Begin, End; // indices into GpuFrame::Pool
 };
-std::unordered_map<std::string, GpuRing> g_GpuRings;
+struct GpuFrame {
+    std::vector<GLuint> Pool;
+    int Used = 0;
+    std::vector<GpuScopeRecord> Scopes;
+    bool Pending = false; // recorded, results not read back yet
+};
+GpuFrame g_GpuFrames[kGpuFrames];
+int g_GpuCurrent = 0;
 std::vector<Profiler::Entry> g_GpuLastFrame;
+
+int TakeQuery(GpuFrame& f) {
+    if (f.Used == (int)f.Pool.size()) {
+        const size_t old = f.Pool.size();
+        f.Pool.resize(old + 16);
+        glGenQueries(16, f.Pool.data() + old);
+    }
+    return f.Used++;
+}
+
+// Reads every scope of `f` if the GPU has finished it (queries complete in submission order,
+// so the last one being available means all are). Repeated scopes are summed per name, in
+// first-seen order: "Scene Draw" is the frame's total across both views.
+bool TryReadBack(GpuFrame& f) {
+    if (!f.Pending || f.Scopes.empty()) return false;
+    int last = -1;
+    for (const GpuScopeRecord& r : f.Scopes) last = std::max(last, r.End);
+    if (last < 0) { f.Pending = false; return false; }
+    GLint available = 0;
+    glGetQueryObjectiv(f.Pool[last], GL_QUERY_RESULT_AVAILABLE, &available);
+    if (!available) return false;
+    std::vector<Profiler::Entry> out;
+    for (const GpuScopeRecord& r : f.Scopes) {
+        if (r.End < 0) continue; // never closed (shouldn't happen)
+        GLuint64 t0 = 0, t1 = 0;
+        glGetQueryObjectui64v(f.Pool[r.Begin], GL_QUERY_RESULT, &t0);
+        glGetQueryObjectui64v(f.Pool[r.End], GL_QUERY_RESULT, &t1);
+        const float ms = t1 > t0 ? (float)((double)(t1 - t0) / 1000000.0) : 0.0f;
+        auto it = std::find_if(out.begin(), out.end(), [&](const Profiler::Entry& e) { return e.Name == r.Name; });
+        if (it != out.end()) it->Milliseconds += ms;
+        else out.push_back({r.Name, ms});
+    }
+    g_GpuLastFrame = std::move(out);
+    f.Pending = false;
+    return true;
+}
 }
 
 void Profiler::BeginFrame() {
     g_LastFrame = std::move(g_CurrentFrame);
     g_CurrentFrame.clear();
 
-    // Poll every ring's oldest outstanding query before any GpuScopeTimer for this frame can
-    // reuse that slot. A slot whose result isn't available yet just contributes nothing this
-    // frame rather than stalling - the same "several frames late" latency the header describes.
-    g_GpuLastFrame.clear();
-    if (glGetQueryObjectiv && glGetQueryObjectui64v) {
-        for (auto& [name, ring] : g_GpuRings) {
-            int slot = ring.Next;
-            if (!ring.Pending[slot]) continue;
-            GLint available = 0;
-            glGetQueryObjectiv(ring.Queries[slot], GL_QUERY_RESULT_AVAILABLE, &available);
-            if (!available) continue;
-            GLuint64 ns = 0;
-            glGetQueryObjectui64v(ring.Queries[slot], GL_QUERY_RESULT, &ns);
-            ring.Pending[slot] = false;
-            g_GpuLastFrame.push_back({name, (float)((double)ns / 1000000.0)});
-        }
-    }
+    if (!glQueryCounter || !glGetQueryObjectiv || !glGetQueryObjectui64v) return;
+    // Close the frame just recorded, then read back every finished frame oldest-first (so the
+    // newest finished one is what GetLastFrameGpu shows). Never waits on the GPU.
+    g_GpuFrames[g_GpuCurrent].Pending = !g_GpuFrames[g_GpuCurrent].Scopes.empty();
+    for (int i = 1; i <= kGpuFrames; ++i) TryReadBack(g_GpuFrames[(g_GpuCurrent + i) % kGpuFrames]);
+
+    // Recycle the next slot. If its results still aren't in, the GPU is more than kGpuFrames-1
+    // frames behind; drop them rather than stall.
+    g_GpuCurrent = (g_GpuCurrent + 1) % kGpuFrames;
+    GpuFrame& next = g_GpuFrames[g_GpuCurrent];
+    next.Used = 0;
+    next.Scopes.clear();
+    next.Pending = false;
 }
 
 void Profiler::PushSample(const std::string& name, float milliseconds) {
@@ -66,27 +104,20 @@ const std::vector<Profiler::Entry>& Profiler::GetLastFrameGpu() {
     return g_GpuLastFrame;
 }
 
-Profiler::GpuScopeTimer::GpuScopeTimer(std::string name) : m_Name(std::move(name)) {
-    if (!glGenQueries || !glBeginQuery) return; // loader didn't resolve these entry points
-
-    GpuRing& ring = g_GpuRings[m_Name];
-    if (!ring.Created) {
-        glGenQueries(kGpuRingSize, ring.Queries);
-        ring.Created = true;
-    }
-    // Never re-begin over a query whose result hasn't been retrieved yet - that would silently
-    // discard it. This only happens if the ring is too small for the current pipeline depth;
-    // skipping the sample for one frame is harmless and self-corrects once BeginFrame catches up.
-    if (ring.Pending[ring.Next]) return;
-
-    glBeginQuery(GL_TIME_ELAPSED, ring.Queries[ring.Next]);
-    m_Slot = ring.Next;
+Profiler::GpuScopeTimer::GpuScopeTimer(const char* name) {
+    if (!glGenQueries || !glQueryCounter) return; // loader didn't resolve these entry points
+    GpuFrame& f = g_GpuFrames[g_GpuCurrent];
+    const int begin = TakeQuery(f);
+    glQueryCounter(f.Pool[begin], GL_TIMESTAMP);
+    m_Record = (int)f.Scopes.size();
+    f.Scopes.push_back({name, begin, -1});
 }
 
 Profiler::GpuScopeTimer::~GpuScopeTimer() {
-    if (m_Slot < 0) return;
-    glEndQuery(GL_TIME_ELAPSED);
-    GpuRing& ring = g_GpuRings[m_Name];
-    ring.Pending[m_Slot] = true;
-    ring.Next = (ring.Next + 1) % kGpuRingSize;
+    if (m_Record < 0) return;
+    GpuFrame& f = g_GpuFrames[g_GpuCurrent];
+    if (m_Record >= (int)f.Scopes.size()) return; // frame rolled over mid-scope (BeginFrame inside it)
+    const int end = TakeQuery(f);
+    glQueryCounter(f.Pool[end], GL_TIMESTAMP);
+    f.Scopes[m_Record].End = end;
 }
