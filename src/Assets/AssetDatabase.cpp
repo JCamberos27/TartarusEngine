@@ -342,8 +342,15 @@ void ScanProject() {
     const auto& known = KnownExtensions();
 
     std::error_code ec;
-    for (auto& entry : fs::recursive_directory_iterator(root, ec)) {
+    for (auto it = fs::recursive_directory_iterator(root, ec); it != fs::recursive_directory_iterator(); it.increment(ec)) {
         if (ec) { ec.clear(); continue; }
+        const auto& entry = *it;
+        // #133 — Library/ holds caches (thumbnails etc.), not assets. Scanning it gave every
+        // cached thumbnail PNG its own .meta and GUID.
+        if (it.depth() == 0 && entry.is_directory(ec) && entry.path().filename() == "Library") {
+            it.disable_recursion_pending();
+            continue;
+        }
         if (!entry.is_regular_file(ec)) { ec.clear(); continue; }
 
         std::string path = entry.path().lexically_normal().string();
