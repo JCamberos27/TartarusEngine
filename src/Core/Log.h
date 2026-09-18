@@ -20,11 +20,20 @@ struct LogEntry {
     int Count = 1;
 };
 
+// Thread safety (#146): Info/Warn/Error may be called from any thread. Messages from other
+// threads are echoed to the terminal and log file at once but reach Entries() only when the main
+// thread next reads the log, so Entries(), CountOf(), Revision() and Clear() are main-thread only.
 class Log {
 public:
     static void Info(const std::string& message);
     static void Warn(const std::string& message);
     static void Error(const std::string& message);
+
+    // Starts mirroring every message into %LOCALAPPDATA%\TartarusEngine\Logs\<fileName> (#146),
+    // moving the previous run's file to "<stem>-prev.log" first, and writes out whatever was
+    // logged before this call. Written unbuffered so it survives a crash. Returns the full path,
+    // or "" if the file couldn't be opened (logging carries on without it).
+    static std::string OpenFile(const std::string& fileName);
 
     static const std::vector<LogEntry>& Entries();
     static void Clear();
