@@ -414,14 +414,13 @@ void BuildActors(PhysicsState& s, const World& world) {
             AutoBoxWorld(world.Registry, e, t, center, half);
             if (half.x <= 0.0f || half.y <= 0.0f || half.z <= 0.0f) { ++skipped; continue; }
             make(PxBoxGeometry(ToPx(half)));
-            if (rb) {
-                // Pose at the entity origin so the simulated pose writes straight back to
-                // TransformComponent; the box's offset from that origin becomes the shape pose.
-                actorPose  = PxTransform(ToPx(t.Position), EulerToPx(t.RotationEuler));
-                shapeLocal = PxTransform(ToPx(center - t.Position));
-            } else {
-                actorPose = PxTransform(ToPx(center)); // PR 2 static: AABB centre, no rotation
-            }
+            // Pose at the entity origin (with its rotation) and the box's local offset as the
+            // shape pose — for dynamic bodies so the simulated pose writes straight back to
+            // TransformComponent, and (#115) for statics too: they used an unrotated box at the
+            // AABB centre, so a box rotated into a ramp/wall collided as an axis-aligned block
+            // that didn't match what was drawn.
+            actorPose  = PxTransform(ToPx(t.Position), EulerToPx(t.RotationEuler));
+            shapeLocal = PxTransform(ToPx(center - t.Position));
         } else {
             actorPose  = PxTransform(ToPx(t.Position), EulerToPx(t.RotationEuler));
             shapeLocal = PxTransform(ToPx(c.Center));
