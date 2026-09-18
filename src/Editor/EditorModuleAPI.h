@@ -119,7 +119,10 @@
 //   31 - #182: SelectEntityRaw -> SelectEntityByOrder. Log lines now name entities by their
 //        stable OrderComponent value ("entity #12"), because raw entt ids are recycled on every
 //        undo/redo, Play->Stop and scene reload, so an old Console link selected the wrong one.
-constexpr std::uint32_t kEditorModuleAPIVersion = 31;
+//   32 - #172 / #187: OnLoad(state, size) -> bool and SaveState, the reload contract shared with
+//        the game module (Core/HotReloadSwap.h): a build whose OnLoad fails is rolled back to the
+//        previous one, and module-held UI state can be carried across a reload.
+constexpr std::uint32_t kEditorModuleAPIVersion = 32;
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -567,11 +570,21 @@ struct EditorModuleHostAPI {
 
 struct EditorModuleAPI {
     std::uint32_t Version = kEditorModuleAPIVersion;
-    // Reload contract (#172/#187): the host validates a rebuilt DLL, calls the OLD module's
-    // OnUnload and frees it, and only then calls the NEW module's OnLoad. The two never overlap.
-    void (*OnLoad)() = nullptr;
+    // Reload contract (#172/#187, shared with the game module; see Core/HotReloadSwap.h): the
+    // host validates a rebuilt DLL, asks the OLD module to SaveState, calls its OnUnload and frees
+    // it, and only then calls the NEW module's OnLoad with that state. The two never overlap.
+    //   OnLoad: `state` is whatever the previous module's SaveState wrote (nullptr/0 on the first
+    //     load or when it saved nothing). Return false to reject the build: undo anything this
+    //     call set up first (the host won't call OnUnload), and the host reloads the previous
+    //     build and hands it the same state. Every member may be null except Draw.
+    //   SaveState: called with (nullptr, 0) to ask how many bytes are needed, then with a buffer
+    //     of that size; return the bytes written. Panel state that must survive a reload goes
+    //     either here or, better, in host-owned state (EditorConsoleState, the ImGui context's
+    //     window settings), which survives reloads and doesn't need a format.
+    bool (*OnLoad)(const void* state, std::size_t stateSize) = nullptr;
     void (*OnUnload)() = nullptr;
     void (*Draw)(const EditorModuleHostAPI& host) = nullptr;
+    std::size_t (*SaveState)(void* buffer, std::size_t capacity) = nullptr;
 };
 
 using GetEditorModuleAPIFn = const EditorModuleAPI* (*)();
