@@ -19,6 +19,21 @@ namespace ShaderLibrary {
     // The directory Init() resolved to (absolute once main() passes an EnginePaths result).
     std::string Dir();
 
+    // #208 — reads a shader source at an explicit path (a project shader's stage file). Its
+    // #includes resolve next to the including file first, then in the engine shader directory,
+    // so a project shader can ship its own includes and still use the engine's (Lighting.glsl).
+    // Returns "" (and logs, naming `referencedBy`) when the file can't be read.
+    std::string ReadFileAt(const std::string& path, const std::string& referencedBy = {});
+
+    // #208 — resolves a shader file reference to an absolute path:
+    //   "engine://Name.glsl"   the engine shader directory
+    //   "project://dir/x.glsl" the project root
+    //   absolute path          itself
+    //   "Name.glsl" (relative) next to `baseDir` (the referencing descriptor) when it exists
+    //                          there, otherwise the engine shader directory - which keeps every
+    //                          descriptor written before namespaces existed working.
+    std::string ResolveRef(const std::string& ref, const std::string& baseDir);
+
     // #158 - ReadFile emits `#line N <fileIndex>` around every #include (and after #version), so
     // a driver error's "<fileIndex>(<line>)" / "<fileIndex>:<line>" points into the right file.
     // AnnotateLog rewrites those prefixes to "File.glsl(line)". Index 0 is any source that didn't
