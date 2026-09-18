@@ -495,6 +495,26 @@ MultiEditResult MultiEditFloatRow(const char* label, float& value, bool mixed, f
 // With a PrefabMultiRef the label moves into the shared property column (tinted + right-click
 // Revert/Apply when any selected entity overrides it), matching the Int/Float multi rows;
 // without one the label stays on the checkbox as before.
+// #183 — StaticTag is declarative only: nothing batches, bakes or locks on it yet. Say so
+// wherever the checkbox is drawn rather than let a Unity user assume it does something.
+const char* kStaticTooltip =
+    "Marks this object as never moving at runtime.\n"
+    "Informational only for now: nothing batches, bakes or locks Static objects yet.\n"
+    "It's saved with the scene so those optimizations can use it once they exist.";
+
+// A Static object that a dynamic Rigidbody pushes around contradicts itself.
+bool IsStaticButSimulated(const entt::registry& reg, entt::entity e) {
+    if (!reg.all_of<StaticTag>(e)) return false;
+    const auto* rb = reg.try_get<RigidbodyComponent>(e);
+    return rb && !rb->IsKinematic;
+}
+
+void DrawStaticRigidbodyWarning(int count) {
+    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
+        count == 1 ? "Static, but has a non-kinematic Rigidbody - physics will still move it."
+                   : "Some Static objects have a non-kinematic Rigidbody - physics will still move them.");
+}
+
 bool MultiEditCheckbox(const char* label, bool anyOn, bool mixed, bool& out, PrefabMultiRef pf = {}) {
     bool value = anyOn;
     const bool pfRow = pf.self && pf.field && pf.sel;
@@ -1661,6 +1681,12 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 else        world.Registry.remove<StaticTag>(e);
             });
         }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip(kStaticTooltip);
+        {
+            int nMovingStatic = 0;
+            forEach([&](entt::entity e) { if (IsStaticButSimulated(world.Registry, e)) nMovingStatic++; });
+            if (nMovingStatic > 0) DrawStaticRigidbodyWarning(nMovingStatic);
+        }
 
         {
             std::set<std::string> tagChoices{"Untagged"};
@@ -2030,9 +2056,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             if (isStatic) registry.emplace<StaticTag>(entity);
             else registry.remove<StaticTag>(entity);
         }
-        if (ImGui::IsItemHovered()) {
-            EditorUI::SetTooltip("Marks this object as never moving at runtime.\nDoesn't change behavior yet - just records the intent for later optimizations.");
-        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip(kStaticTooltip);
+        if (IsStaticButSimulated(registry, entity)) DrawStaticRigidbodyWarning(1);
     }
 
     // --- Layer (#236 A1) — a small named slot; slot 0 ("Default") stores no component.
