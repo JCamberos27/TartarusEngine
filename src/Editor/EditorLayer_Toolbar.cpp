@@ -561,20 +561,22 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
                     std::string path = FileDialog::OpenFile(
                         "3D Models\0*.fbx;*.obj;*.gltf;*.glb\0All Files\0*.*\0", m_Window);
                     // Imports into the library only — doesn't place an instance in the scene.
-                    // Drag it from the Asset Browser into the Viewport to place one.
-                    if (!path.empty()) assets.LoadModel(path);
+                    // Drag it from the Asset Browser into the Viewport to place one. #125 — same
+                    // pipeline as drag-drop: copied into the project (with its companion files)
+                    // and filed into the open Asset Browser folder.
+                    if (!path.empty()) ImportFileIntoProject(world, assets, path);
                 }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("FBX / OBJ / glTF - added to the asset library");
                 if (ImGui::MenuItem(ICON_FA_IMAGE "  Texture...")) {
                     std::string path = FileDialog::OpenFile(
                         "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
-                    if (!path.empty()) assets.LoadTexture(path);
+                    if (!path.empty()) ImportFileIntoProject(world, assets, path); // #125
                 }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("PNG / JPG / TGA / BMP");
                 if (ImGui::MenuItem(ICON_FA_MUSIC "  Sound...")) {
                     std::string path = FileDialog::OpenFile(
                         "Audio\0*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0", m_Window);
-                    if (!path.empty() && AudioEngine::Load(path)) assets.RegisterSound(path);
+                    if (!path.empty()) ImportFileIntoProject(world, assets, path); // #125
                 }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("WAV / MP3 / OGG / FLAC");
                 ImGui::EndMenu();

@@ -847,6 +847,38 @@ std::string EditorLayer::CopyAssetIntoProject(const std::string& sourcePath, con
     // elsewhere in the Asset Browser.
     const std::string stem = abs.stem().string();
     const std::string ext = abs.extension().string();
+
+    // #124 — a model that needs companion files (glTF .bin / images, OBJ .mtl, external
+    // textures) gets its own folder, assets/models/<name>/, with those files copied alongside in
+    // their original relative layout. Copying the model file alone left glTF unimportable and
+    // OBJ / FBX untextured.
+    std::vector<std::pair<std::string, std::string>> deps;
+    if (subfolder == "models") deps = Model::SourceDependencies(abs.string());
+    if (!deps.empty()) {
+        fs::path folder = fs::path(destDir) / stem;
+        for (int n = 2; fs::exists(folder, ec); ++n) folder = fs::path(destDir) / (stem + " (" + std::to_string(n) + ")");
+        fs::create_directories(folder, ec);
+        const fs::path dest = folder / abs.filename();
+        if (!ec) fs::copy_file(abs, dest, ec);
+        if (ec) {
+            Log::Error("Couldn't copy '" + sourcePath + "' into the project (" + ec.message() +
+                       ") - importing from its original location instead.");
+            return sourcePath;
+        }
+        int copied = 0;
+        for (const auto& [src, rel] : deps) {
+            const fs::path to = (folder / fs::path(rel)).lexically_normal();
+            std::error_code dec;
+            fs::create_directories(to.parent_path(), dec);
+            if (!dec && !fs::exists(to, dec)) fs::copy_file(src, to, dec);
+            if (dec) Log::Warn("Import: couldn't copy '" + src + "' (" + dec.message() + ").");
+            else ++copied;
+        }
+        Log::Info("Copied '" + abs.filename().string() + "' and " + std::to_string(copied) +
+                  " companion file(s) into '" + folder.generic_string() + "'.");
+        return dest.generic_string();
+    }
+
     fs::path dest = fs::path(destDir) / abs.filename();
     for (int n = 2; fs::exists(dest, ec); ++n) {
         dest = fs::path(destDir) / (stem + " (" + std::to_string(n) + ")" + ext);
@@ -859,6 +891,11 @@ std::string EditorLayer::CopyAssetIntoProject(const std::string& sourcePath, con
         return sourcePath;
     }
     return dest.generic_string();
+}
+
+void EditorLayer::ImportFileIntoProject(World& world, AssetLibrary& assets, const std::string& path) {
+    Camera unusedCamera; // ImportDroppedFile keeps a Camera& only for signature symmetry
+    ImportDroppedFile(world, assets, m_EditorCameraPtr ? *m_EditorCameraPtr : unusedCamera, path, m_CurrentAssetFolder);
 }
 
 void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& editorCamera,

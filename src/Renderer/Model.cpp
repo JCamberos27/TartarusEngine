@@ -19,6 +19,10 @@
 #include <cmath>
 #include <algorithm>
 #include <filesystem>
+#include <json.hpp>
+#include <cctype>
+#include <fstream>
+#include <set>
 
 namespace {
 
@@ -44,8 +48,17 @@ std::string DirectoryOf(const std::string& path) {
 Model::Model(const std::string& path) : Model(path, ModelImportSettings{}) {}
 
 Model::Model(const std::string& path, const ModelImportSettings& settings)
-    : m_Path(path), m_Directory(DirectoryOf(path)) {
+    : m_Path(path) {
+    m_D->Directory = DirectoryOf(path);
     ImportFromFile(settings);
+}
+
+std::shared_ptr<Model> Model::CreateInstance() const {
+    std::shared_ptr<Model> inst(new Model());
+    inst->m_D = m_D;       // #96 — shared import: no Assimp, no new GPU buffers or textures
+    inst->m_Path = m_Path;
+    inst->m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+    return inst;
 }
 
 void Model::ImportFromFile(const ModelImportSettings& settings) {
@@ -69,35 +82,47 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
 
     if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
         Log::Error("Model: import failed for '" + m_Path + "': " + importer.GetErrorString());
-        // A failed import leaves m_Meshes empty; collapse the bounds to a finite point too, so
-        // anything that folds this model into a wider AABB (scene framing, focus) can't inherit
-        // the inverted 1e30 sentinel and blow the result up to inf/NaN.
-        m_BoundsMin = glm::vec3(0.0f);
-        m_BoundsMax = glm::vec3(0.0f);
+        // A failed import leaves an empty model's bounds collapsed to a finite point, so anything
+        // that folds this model into a wider AABB (scene framing, focus) can't inherit the
+        // inverted 1e30 sentinel and blow the result up to inf/NaN. A failed REimport keeps the
+        // previous import untouched.
+        if (m_D->Meshes.empty()) {
+            m_D->BoundsMin = glm::vec3(0.0f);
+            m_D->BoundsMax = glm::vec3(0.0f);
+        }
+        if (m_FinalBoneMatrices.empty()) m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
         return;
     }
 
-    // Reset every field an import populates, so re-running this on an already-imported Model
-    // (Reimport) starts from a clean slate instead of appending to/leaking the previous import's
-    // state. Deliberately NOT touched: m_Path, m_Directory (set by callers, not the import).
-    m_Meshes.clear();
-    m_TextureCache.clear();
-    m_BoneInfoMap.clear();
-    m_BoneCounter = 0;
-    m_Animations.clear();
-    m_CurrentAnimation = -1;
-    m_CurrentTimeTicks = 0.0f;
-    m_BoundsMin = glm::vec3(1e30f);
-    m_BoundsMax = glm::vec3(-1e30f);
-    m_Settings = settings;
+    // #96 — import into a fresh SharedData, then move it into the object every instance of this
+    // asset shares, so a Reimport reaches placed instances too and starts from a clean slate.
+    const std::shared_ptr<SharedData> target = m_D;
+    m_D = std::make_shared<SharedData>();
+    m_D->Directory = target->Directory;
+    m_D->Settings = settings;
 
-    m_GlobalInverseTransform = glm::inverse(AiToGlm(scene->mRootNode->mTransformation));
+    m_D->GlobalInverseTransform = glm::inverse(AiToGlm(scene->mRootNode->mTransformation));
+    m_D->BindPoseBones.assign(MAX_BONES, glm::mat4(1.0f));
+    m_ImportNodeGlobals.clear();
+    CollectNodeGlobals(scene->mRootNode, glm::mat4(1.0f));
 
     ProcessNode(scene->mRootNode, scene, glm::mat4(1.0f));
-    ReadHierarchy(m_RootNode, scene->mRootNode);
+    ReadHierarchy(m_D->RootNode, scene->mRootNode);
     if (settings.ImportAnimations) ReadAnimations(scene);
+    m_ImportNodeGlobals.clear();
 
+    *target = std::move(*m_D);
+    m_D = target;
+
+    m_CurrentAnimation = -1;
+    m_CurrentTimeTicks = 0.0f;
     m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+}
+
+void Model::CollectNodeGlobals(const aiNode* node, const glm::mat4& parentTransform) {
+    const glm::mat4 global = parentTransform * AiToGlm(node->mTransformation);
+    m_ImportNodeGlobals.emplace(node->mName.C_Str(), global);
+    for (unsigned int i = 0; i < node->mNumChildren; ++i) CollectNodeGlobals(node->mChildren[i], global);
 }
 
 bool Model::Reimport(const ModelImportSettings& settings) {
@@ -110,7 +135,7 @@ bool Model::Reimport(const ModelImportSettings& settings) {
         return false;
     }
     ImportFromFile(settings);
-    return !m_Meshes.empty();
+    return !m_D->Meshes.empty();
 }
 
 Model::~Model() = default;
@@ -119,7 +144,7 @@ void Model::CollisionGeometry(std::vector<glm::vec3>& outVertices,
                               std::vector<unsigned int>& outIndices) const {
     outVertices.clear();
     outIndices.clear();
-    for (const auto& mesh : m_Meshes) {
+    for (const auto& mesh : m_D->Meshes) {
         const auto& pos = mesh->LocalPositions();
         const auto& idx = mesh->LocalIndices();
         const unsigned int base = (unsigned int)outVertices.size();
@@ -142,7 +167,7 @@ bool Model::RaycastTriangles(const glm::mat4& modelMatrix, const glm::vec3& worl
     float bestWorldT = 1e30f;
     glm::vec3 bestLocalN(0.0f);
     bool hit = false;
-    for (const auto& mesh : m_Meshes) {
+    for (const auto& mesh : m_D->Meshes) {
         const auto& pos = mesh->LocalPositions();
         const auto& idx = mesh->LocalIndices();
         for (size_t i = 0; i + 2 < idx.size(); i += 3) {
@@ -185,7 +210,7 @@ bool Model::RaycastTriangles(const glm::mat4& modelMatrix, const glm::vec3& worl
 std::shared_ptr<Model> Model::CreatePrimitive(const std::string& kind, const std::string& path) {
     std::shared_ptr<Model> model(new Model());
     model->m_Path = path;
-    model->m_GlobalInverseTransform = glm::mat4(1.0f);
+    model->m_D->GlobalInverseTransform = glm::mat4(1.0f);
 
     std::vector<ModelVertex> verts;
     std::vector<unsigned int> indices;
@@ -199,13 +224,13 @@ std::shared_ptr<Model> Model::CreatePrimitive(const std::string& kind, const std
     else PrimitiveMeshes::GenerateCube(verts, indices); // default/"cube"
 
     for (const auto& v : verts) {
-        model->m_BoundsMin = glm::min(model->m_BoundsMin, v.Position);
-        model->m_BoundsMax = glm::max(model->m_BoundsMax, v.Position);
+        model->m_D->BoundsMin = glm::min(model->m_D->BoundsMin, v.Position);
+        model->m_D->BoundsMax = glm::max(model->m_D->BoundsMax, v.Position);
     }
 
     auto mesh = std::make_unique<ModelMesh>(verts, indices);
     mesh->Mat.BaseColor = glm::vec3(0.75f); // neutral default; override via the Inspector's PBR Material section
-    model->m_Meshes.push_back(std::move(mesh));
+    model->m_D->Meshes.push_back(std::move(mesh));
 
     model->m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
     return model;
@@ -220,7 +245,7 @@ void Model::ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& par
 
     for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
         aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-        m_Meshes.push_back(ProcessMesh(mesh, scene, nodeTransform));
+        m_D->Meshes.push_back(ProcessMesh(mesh, scene, nodeTransform));
     }
     for (unsigned int i = 0; i < node->mNumChildren; ++i) {
         ProcessNode(node->mChildren[i], scene, nodeTransform);
@@ -233,11 +258,11 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     // Skinned meshes are positioned entirely by their bone matrices (computed by walking
     // the full node hierarchy in CalculateBoneTransform), so baking the mesh's own node
     // transform into the raw vertex data here would double-apply it once skinning runs.
-    // Gated on m_Settings.ImportSkeleton too: with skeleton import off, ExtractBoneWeights below
+    // Gated on m_D->Settings.ImportSkeleton too: with skeleton import off, ExtractBoneWeights below
     // never runs, so treating this as "skinned" would leave every vertex's bone weights at their
     // default (unset) values instead of the identity-pose vertex position baked in here - the
     // mesh would render collapsed to the origin rather than as a static copy of its bind pose.
-    bool skinned = m_Settings.ImportSkeleton && mesh->mNumBones > 0;
+    bool skinned = m_D->Settings.ImportSkeleton && mesh->mNumBones > 0;
     glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(nodeTransform)));
 
     for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
@@ -267,27 +292,60 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
 
         vertices[i] = v;
 
-        m_BoundsMin = glm::min(m_BoundsMin, v.Position);
-        m_BoundsMax = glm::max(m_BoundsMax, v.Position);
+        if (!skinned) {
+            m_D->BoundsMin = glm::min(m_D->BoundsMin, v.Position);
+            m_D->BoundsMax = glm::max(m_D->BoundsMax, v.Position);
+        }
     }
 
     std::vector<unsigned int> indices;
     indices.reserve(mesh->mNumFaces * 3);
+    // #113 — a mirrored node transform (negative determinant, e.g. a -1 scale for the other
+    // side of a symmetric prop) baked into the vertices flips every triangle's winding, so the
+    // mesh renders inside-out under back-face culling. Swap two indices per triangle to undo it.
+    const bool flipWinding = !skinned && glm::determinant(glm::mat3(nodeTransform)) < 0.0f;
     for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
         const aiFace& face = mesh->mFaces[i];
+        if (flipWinding && face.mNumIndices == 3) {
+            indices.push_back(face.mIndices[0]);
+            indices.push_back(face.mIndices[2]);
+            indices.push_back(face.mIndices[1]);
+            continue;
+        }
         for (unsigned int j = 0; j < face.mNumIndices; ++j) {
             indices.push_back(face.mIndices[j]);
         }
     }
 
-    if (m_Settings.ImportSkeleton) ExtractBoneWeights(vertices, mesh);
+    if (m_D->Settings.ImportSkeleton) ExtractBoneWeights(vertices, mesh);
 
     auto gpuMesh = std::make_unique<ModelMesh>(vertices, indices);
-    if (m_Settings.MaterialImportMode == ModelImportSettings::MaterialMode::ImportEmbedded) {
+    if (skinned) {
+        // #98 — the GPU copy stays in mesh space for the skinning shader; bounds, picking,
+        // snapping and collider cooking use the bind pose (same blend as the vertex shader).
+        std::vector<glm::vec3> posed;
+        posed.reserve(vertices.size());
+        for (const ModelVertex& v : vertices) {
+            glm::mat4 skin(0.0f);
+            float total = 0.0f;
+            for (int k = 0; k < MAX_BONE_INFLUENCE; ++k) {
+                if (v.BoneIDs[k] < 0) continue;
+                skin += m_D->BindPoseBones[std::clamp(v.BoneIDs[k], 0, MAX_BONES - 1)] * v.Weights[k];
+                total += v.Weights[k];
+            }
+            if (total <= 0.0001f) skin = glm::mat4(1.0f);
+            const glm::vec3 p = glm::vec3(skin * glm::vec4(v.Position, 1.0f));
+            posed.push_back(p);
+            m_D->BoundsMin = glm::min(m_D->BoundsMin, p);
+            m_D->BoundsMax = glm::max(m_D->BoundsMax, p);
+        }
+        gpuMesh->SetLocalPositions(std::move(posed));
+    }
+    if (m_D->Settings.MaterialImportMode == ModelImportSettings::MaterialMode::ImportEmbedded) {
         if (mesh->mMaterialIndex < scene->mNumMaterials) {
             gpuMesh->Mat = ExtractMaterial(scene, mesh->mMaterialIndex);
         }
-    } else if (m_Settings.MaterialImportMode == ModelImportSettings::MaterialMode::CreateSynthetic) {
+    } else if (m_D->Settings.MaterialImportMode == ModelImportSettings::MaterialMode::CreateSynthetic) {
         // Ignore the file's own materials/textures entirely - same neutral look CreatePrimitive
         // assigns, left for the Inspector's PBR Material section to author from scratch.
         gpuMesh->Mat.BaseColor = glm::vec3(0.75f);
@@ -302,19 +360,100 @@ std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath, T
     // bent normals and wrong roughness on essentially every imported model. Only albedo and
     // emissive are colour data. Keyed by path + role, in case one file feeds both kinds of slot.
     const std::string key = fullPath + (role == TextureRole::Color ? "|srgb" : role == TextureRole::Normal ? "|normal" : "|linear");
-    auto it = m_TextureCache.find(key);
-    if (it != m_TextureCache.end()) return it->second;
+    auto it = m_D->TextureCache.find(key);
+    if (it != m_D->TextureCache.end()) return it->second;
 
     TextureImportSettings settings;
     settings.IsSRGB = role == TextureRole::Color;
     if (role == TextureRole::Normal) settings.TextureType = TextureImportSettings::Type::NormalMap;
     auto tex = std::make_shared<Texture>(fullPath, settings);
     if (!tex->IsValid()) return nullptr;
-    m_TextureCache[key] = tex;
+    m_D->TextureCache[key] = tex;
     return tex;
 }
 
+std::vector<std::pair<std::string, std::string>> Model::SourceDependencies(const std::string& modelPath) {
+    namespace fs = std::filesystem;
+    std::vector<std::pair<std::string, std::string>> out;
+    std::error_code ec;
+    const fs::path model = fs::absolute(modelPath, ec).lexically_normal();
+    const fs::path dir = model.parent_path();
+    std::set<std::string> seen;
+    auto add = [&](const fs::path& file) {
+        const fs::path f = fs::absolute(file, ec).lexically_normal();
+        if (ec || f == model || !fs::is_regular_file(f, ec)) return;
+        if (!seen.insert(f.generic_string()).second) return;
+        const fs::path rel = f.lexically_relative(dir);
+        const bool inside = !rel.empty() && !rel.is_absolute() && *rel.begin() != fs::path("..");
+        out.emplace_back(f.string(), (inside ? rel : f.filename()).generic_string());
+    };
+    auto uriDecode = [](const std::string& u) {
+        std::string r;
+        for (size_t i = 0; i < u.size(); ++i) {
+            if (u[i] == '%' && i + 2 < u.size() && std::isxdigit((unsigned char)u[i + 1]) && std::isxdigit((unsigned char)u[i + 2])) {
+                r += (char)std::stoi(u.substr(i + 1, 2), nullptr, 16);
+                i += 2;
+            } else r += u[i];
+        }
+        return r;
+    };
+
+    std::string ext = model.extension().string();
+    for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+
+    if (ext == ".gltf") {
+        // Buffers (.bin) and images: without the buffers Assimp can't read the file at all.
+        std::ifstream in(model);
+        try {
+            const nlohmann::json j = nlohmann::json::parse(in);
+            for (const char* key : {"buffers", "images"}) {
+                if (!j.contains(key) || !j[key].is_array()) continue;
+                for (const auto& b : j[key]) {
+                    if (!b.is_object() || !b.contains("uri") || !b["uri"].is_string()) continue;
+                    const std::string uri = b["uri"].get<std::string>();
+                    if (uri.rfind("data:", 0) == 0) continue; // embedded base64
+                    add(dir / fs::path(uriDecode(uri)));
+                }
+            }
+        } catch (const std::exception&) {}
+    } else if (ext == ".obj") {
+        // mtllib lines; the .mtl's own map_* entries come back through Assimp's materials below.
+        std::ifstream in(model);
+        std::string line;
+        while (std::getline(in, line)) {
+            if (line.rfind("mtllib", 0) != 0) continue;
+            std::string name = line.substr(6);
+            name.erase(0, name.find_first_not_of(" \t"));
+            while (!name.empty() && (name.back() == '\r' || name.back() == ' ' || name.back() == '\t')) name.pop_back();
+            if (!name.empty()) add(dir / fs::path(name));
+        }
+    }
+
+    // Every external texture any material references (FBX / OBJ / glTF alike).
+    Assimp::Importer importer;
+    if (const aiScene* scene = importer.ReadFile(model.string(), 0)) {
+        for (unsigned int m = 0; m < scene->mNumMaterials; ++m) {
+            const aiMaterial* mat = scene->mMaterials[m];
+            for (int t = aiTextureType_NONE; t <= AI_TEXTURE_TYPE_MAX; ++t) {
+                const aiTextureType type = (aiTextureType)t;
+                for (unsigned int i = 0; i < mat->GetTextureCount(type); ++i) {
+                    aiString str;
+                    if (mat->GetTexture(type, i, &str) != AI_SUCCESS || str.length == 0) continue;
+                    if (str.C_Str()[0] == '*' || scene->GetEmbeddedTexture(str.C_Str())) continue;
+                    const std::string resolved = ResolveTexturePathIn(dir.string(), str.C_Str());
+                    if (!resolved.empty()) add(fs::path(resolved));
+                }
+            }
+        }
+    }
+    return out;
+}
+
 std::string Model::ResolveTexturePath(const std::string& raw) const {
+    return ResolveTexturePathIn(m_D->Directory, raw);
+}
+
+std::string Model::ResolveTexturePathIn(const std::string& modelDirStr, const std::string& raw) {
     namespace fs = std::filesystem;
 
     // Embedded texture ("*0", "*1", ...): the pixels live inside the model file, not on disk.
@@ -331,7 +470,7 @@ std::string Model::ResolveTexturePath(const std::string& raw) const {
     std::replace(norm.begin(), norm.end(), '\\', '/');
 
     const fs::path p(norm);
-    const fs::path modelDir(m_Directory);
+    const fs::path modelDir(modelDirStr);
 
     // 1. Exactly as given, when it's an absolute path that actually exists on THIS machine.
     if (p.is_absolute()) {
@@ -369,9 +508,48 @@ std::string Model::ResolveTexturePath(const std::string& raw) const {
     return (modelDir / p).lexically_normal().string();
 }
 
+
+namespace {
+bool IsGltfPath(const std::string& p) {
+    std::string ext = std::filesystem::path(p).extension().string();
+    for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+    return ext == ".gltf" || ext == ".glb";
+}
+} // namespace
+
+std::shared_ptr<Texture> Model::LoadEmbeddedTexture(const aiTexture* tex, const std::string& ref, TextureRole role) {
+    const std::string key = "*embedded:" + ref + (role == TextureRole::Color ? "|srgb" : role == TextureRole::Normal ? "|normal" : "|linear");
+    auto it = m_D->TextureCache.find(key);
+    if (it != m_D->TextureCache.end()) return it->second;
+
+    std::vector<unsigned char> bytes;
+    int rawW = 0, rawH = 0;
+    if (tex->mHeight == 0) {
+        // Compressed (PNG/JPG/...): mWidth is the byte count.
+        const auto* b = reinterpret_cast<const unsigned char*>(tex->pcData);
+        bytes.assign(b, b + tex->mWidth);
+    } else {
+        // Raw aiTexel (BGRA) -> RGBA8.
+        rawW = (int)tex->mWidth; rawH = (int)tex->mHeight;
+        bytes.resize((size_t)rawW * rawH * 4);
+        for (size_t i = 0; i < (size_t)rawW * rawH; ++i) {
+            const aiTexel& t = tex->pcData[i];
+            bytes[i * 4 + 0] = t.r; bytes[i * 4 + 1] = t.g; bytes[i * 4 + 2] = t.b; bytes[i * 4 + 3] = t.a;
+        }
+    }
+    TextureImportSettings settings;
+    settings.IsSRGB = role == TextureRole::Color;
+    if (role == TextureRole::Normal) settings.TextureType = TextureImportSettings::Type::NormalMap;
+    auto out = std::make_shared<Texture>(m_Path + "#" + ref, std::move(bytes), rawW, rawH, settings);
+    if (!out->IsValid()) return nullptr;
+    m_D->TextureCache[key] = out;
+    return out;
+}
+
 Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex) {
     Material mat;
     aiMaterial* material = scene->mMaterials[materialIndex];
+    aiString str_unused;
 
     auto loadSlot = [&](aiTextureType type, TextureRole role) -> std::shared_ptr<Texture> {
         if (material->GetTextureCount(type) == 0) return nullptr;
@@ -379,12 +557,14 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
         material->GetTexture(type, 0, &str);
         if (str.length == 0) return nullptr;
 
+        // #113 — embedded media (.glb, FBX with embedded textures): "*N" or a name matching an
+        // aiTexture's filename. Decoded from memory instead of leaving the slot blank.
+        if (const aiTexture* emb = scene->GetEmbeddedTexture(str.C_Str()))
+            return LoadEmbeddedTexture(emb, str.C_Str(), role);
         std::string resolved = ResolveTexturePath(str.C_Str());
         if (!resolved.empty() && resolved[0] == '*') {
-            // Embedded texture — not supported by the disk-only Texture loader yet. Log once,
-            // clearly, instead of failing on a bogus "*0" filename.
-            Log::Warn("Model: '" + m_Path + "' uses an embedded texture (" + resolved +
-                      ") which isn't supported yet - that map slot will be blank.");
+            Log::Warn("Model: '" + m_Path + "' references embedded texture " + resolved +
+                      " which the file doesn't contain - that map slot will be blank.");
             return nullptr;
         }
         return LoadCachedTexture(resolved, role);
@@ -393,13 +573,20 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
     mat.AlbedoMap = loadSlot(aiTextureType_DIFFUSE, TextureRole::Color);
     if (!mat.AlbedoMap) mat.AlbedoMap = loadSlot(aiTextureType_BASE_COLOR, TextureRole::Color); // glTF2 alt slot
     mat.NormalMap = loadSlot(aiTextureType_NORMALS, TextureRole::Normal);
-    mat.MetallicRoughnessMap = loadSlot(aiTextureType_UNKNOWN, TextureRole::Data); // assimp puts glTF2 packed metal-rough here
+    // assimp puts glTF2's packed metal-rough map in UNKNOWN (and, in newer versions, also in
+    // GLTF_METALLIC_ROUGHNESS). FBX uses UNKNOWN for arbitrary unmapped slots, which must not be
+    // read as metal-rough (#113) — only trust it for glTF materials.
+    const bool isGltf = material->Get(AI_MATKEY_GLTF_ALPHAMODE, str_unused) == AI_SUCCESS ||
+                        IsGltfPath(m_Path);
+    if (isGltf) mat.MetallicRoughnessMap = loadSlot(aiTextureType_UNKNOWN, TextureRole::Data);
     // Standalone maps — NOT the packed slot above, which is a different (G=rough, B=metal)
     // texture layout that a plain grayscale roughness/metalness map would be misread against.
     mat.RoughnessMap = loadSlot(aiTextureType_DIFFUSE_ROUGHNESS, TextureRole::Data);
     mat.MetallicMap = loadSlot(aiTextureType_METALNESS, TextureRole::Data);
-    mat.AOMap = loadSlot(aiTextureType_LIGHTMAP, TextureRole::Data);
-    if (!mat.AOMap) mat.AOMap = loadSlot(aiTextureType_AMBIENT_OCCLUSION, TextureRole::Data);
+    // #113 — the real AO slot first; glTF occlusion arrives as LIGHTMAP in assimp, so that stays
+    // a fallback (a true FBX lightmap is baked lighting, not occlusion, but is rarely shipped).
+    mat.AOMap = loadSlot(aiTextureType_AMBIENT_OCCLUSION, TextureRole::Data);
+    if (!mat.AOMap) mat.AOMap = loadSlot(aiTextureType_LIGHTMAP, TextureRole::Data);
     mat.EmissiveMap = loadSlot(aiTextureType_EMISSIVE, TextureRole::Color);
 
     aiColor4D color;
@@ -438,12 +625,12 @@ void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh)
         std::string boneName = bone->mName.C_Str();
 
         int boneID;
-        auto it = m_BoneInfoMap.find(boneName);
-        if (it == m_BoneInfoMap.end()) {
+        auto it = m_D->BoneInfoMap.find(boneName);
+        if (it == m_D->BoneInfoMap.end()) {
             // uBones[] is a fixed mat4[MAX_BONES] in the shader; a rig with more unique bones
             // would index it out of bounds (undefined in GLSL, TDR/black on many drivers).
             // Drop the extra bone's influences rather than let that reach the GPU (#98).
-            if (m_BoneCounter >= MAX_BONES) {
+            if (m_D->BoneCounter >= MAX_BONES) {
                 if (!overflowWarned) {
                     Log::Warn("Model '" + m_Path + "' has more than " + std::to_string(MAX_BONES) +
                               " bones - influences past that are dropped (skinning will be wrong).");
@@ -451,9 +638,11 @@ void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh)
                 }
                 continue;
             }
-            BoneInfo info{m_BoneCounter, AiToGlm(bone->mOffsetMatrix)};
-            m_BoneInfoMap[boneName] = info;
-            boneID = m_BoneCounter++;
+            BoneInfo info{m_D->BoneCounter, AiToGlm(bone->mOffsetMatrix)};
+            m_D->BoneInfoMap[boneName] = info;
+            if (auto g = m_ImportNodeGlobals.find(boneName); g != m_ImportNodeGlobals.end())
+                m_D->BindPoseBones[info.ID] = m_D->GlobalInverseTransform * g->second * info.OffsetMatrix; // #98
+            boneID = m_D->BoneCounter++;
         } else {
             boneID = it->second.ID;
         }
@@ -508,12 +697,12 @@ void Model::ReadAnimations(const aiScene* scene) {
             }
             clip.Channels[bac.BoneName] = bac;
         }
-        m_Animations.push_back(std::move(clip));
+        m_D->Animations.push_back(std::move(clip));
     }
 }
 
 void Model::PlayAnimation(int index) {
-    if (index < 0 || index >= (int)m_Animations.size()) {
+    if (index < 0 || index >= (int)m_D->Animations.size()) {
         m_CurrentAnimation = -1;
         return;
     }
@@ -522,20 +711,21 @@ void Model::PlayAnimation(int index) {
 }
 
 void Model::UpdateAnimation(float dt) {
+    if (m_CurrentAnimation >= (int)m_D->Animations.size()) m_CurrentAnimation = -1; // #96 — reimported
     if (m_CurrentAnimation < 0) return;
-    const AnimationClip& clip = m_Animations[m_CurrentAnimation];
+    const AnimationClip& clip = m_D->Animations[m_CurrentAnimation];
     m_CurrentTimeTicks += dt * clip.TicksPerSecond;
     if (clip.DurationTicks > 0.0f) {
         m_CurrentTimeTicks = std::fmod(m_CurrentTimeTicks, clip.DurationTicks);
     }
-    CalculateBoneTransform(m_RootNode, glm::mat4(1.0f));
+    CalculateBoneTransform(m_D->RootNode, glm::mat4(1.0f));
 }
 
 void Model::CalculateBoneTransform(const AssimpNodeData& node, const glm::mat4& parentTransform) {
     glm::mat4 nodeTransform = node.Transform;
 
     if (m_CurrentAnimation >= 0) {
-        const AnimationClip& clip = m_Animations[m_CurrentAnimation];
+        const AnimationClip& clip = m_D->Animations[m_CurrentAnimation];
         auto it = clip.Channels.find(node.Name);
         if (it != clip.Channels.end()) {
             nodeTransform = it->second.Interpolate(m_CurrentTimeTicks);
@@ -544,11 +734,11 @@ void Model::CalculateBoneTransform(const AssimpNodeData& node, const glm::mat4& 
 
     glm::mat4 globalTransform = parentTransform * nodeTransform;
 
-    auto boneIt = m_BoneInfoMap.find(node.Name);
-    if (boneIt != m_BoneInfoMap.end()) {
+    auto boneIt = m_D->BoneInfoMap.find(node.Name);
+    if (boneIt != m_D->BoneInfoMap.end()) {
         int idx = boneIt->second.ID;
         if (idx < MAX_BONES) {
-            m_FinalBoneMatrices[idx] = m_GlobalInverseTransform * globalTransform * boneIt->second.OffsetMatrix;
+            m_FinalBoneMatrices[idx] = m_D->GlobalInverseTransform * globalTransform * boneIt->second.OffsetMatrix;
         }
     }
 
@@ -570,13 +760,18 @@ void EnsureBoneSsbo() {
 } // namespace
 
 void Model::UploadBoneMatrices(Shader& shader) const {
-    bool skinning = m_CurrentAnimation >= 0;
+    // #98 — skin whenever there are bones: the clip's pose while playing, else the bind pose.
+    const bool skinning = m_D->BoneCounter > 0;
     shader.SetInt("uUseSkinning", skinning ? 1 : 0);
 
     EnsureBoneSsbo();
-    if (skinning)
-        glNamedBufferSubData(g_BoneSsbo, 0, MAX_BONES * (GLsizeiptr)sizeof(glm::mat4),
-                             m_FinalBoneMatrices.data());
+    if (skinning) {
+        const bool playing = m_CurrentAnimation >= 0 && m_CurrentAnimation < (int)m_D->Animations.size() &&
+                             m_FinalBoneMatrices.size() >= (size_t)MAX_BONES;
+        const std::vector<glm::mat4>& palette = playing ? m_FinalBoneMatrices : m_D->BindPoseBones;
+        if (palette.size() >= (size_t)MAX_BONES)
+            glNamedBufferSubData(g_BoneSsbo, 0, MAX_BONES * (GLsizeiptr)sizeof(glm::mat4), palette.data());
+    }
     // Bind even when not skinning: the vertex shader still declares the block, and leaving
     // binding 1 dangling from a previous model is asking for trouble on stricter drivers.
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, g_BoneSsbo);
@@ -761,14 +956,14 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
 void Model::Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
     UploadBoneMatrices(shader);
     MaterialLocs locs = ResolveMaterialLocs(shader);
-    for (int i = 0; i < (int)m_Meshes.size(); ++i) {
+    for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
         bool hasSlot = i < (int)slots.size() && slots[i];
-        const Material& mat = hasSlot ? slots[i]->Mat : m_Meshes[i]->Mat;
+        const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
         if (hasSlot && slots[i]->Shader)
             BindMaterialDataDriven(shader, *slots[i], *slots[i]->Shader);
         else
             BindMaterial(shader, mat, locs);
-        m_Meshes[i]->Draw();
+        m_D->Meshes[i]->Draw();
     }
 }
 
@@ -780,7 +975,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
     Shader*      lastProg = nullptr;
     MaterialLocs locs{};
 
-    for (int i = 0; i < (int)m_Meshes.size(); ++i) {
+    for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
         const bool hasSlot = i < (int)slots.size() && slots[i];
         Shader* prog = &fallback;
         if (Shader* p = selectProgram(hasSlot ? slots[i].get() : nullptr)) prog = p;
@@ -800,12 +995,12 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
         // (uOpacity is only read when uAlphaBlend == 1; an absent uniform is loc -1).
         prog->SetFloat("uOpacity", opacity);
 
-        const Material& mat = hasSlot ? slots[i]->Mat : m_Meshes[i]->Mat;
+        const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
         if (hasSlot && slots[i]->Shader)
             BindMaterialDataDriven(*prog, *slots[i], *slots[i]->Shader);
         else
             BindMaterial(*prog, mat, locs);
-        m_Meshes[i]->Draw();
+        m_D->Meshes[i]->Draw();
     }
 }
 
@@ -814,11 +1009,11 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
     int albedoLoc = shader.Loc("uAlbedo");
     int alphaTestLoc = shader.Loc("uAlphaTest");
     int alphaCutoffLoc = shader.Loc("uAlphaCutoff");
-    for (int i = 0; i < (int)m_Meshes.size(); ++i) {
+    for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
         bool hasSlot = i < (int)slots.size() && slots[i];
         // Transparent materials don't cast shadows — skip them in the depth-only pass.
         if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
-        const Material& mat = hasSlot ? slots[i]->Mat : m_Meshes[i]->Mat;
+        const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
         // Only cost paid over a pure depth draw: one texture bind + two uniforms, and only for
         // CUTOUT materials with an albedo map (foliage/fences) — the shadow then follows the
         // cutout instead of a solid silhouette (#116). #101: it used to do this for every
@@ -841,25 +1036,25 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
             }
             shader.SetInt(albedoLoc, 0);
         }
-        m_Meshes[i]->Draw();
+        m_D->Meshes[i]->Draw();
     }
 }
 
 unsigned int Model::TriangleCount() const {
     unsigned int total = 0;
-    for (const auto& mesh : m_Meshes) total += mesh->IndexCount() / 3;
+    for (const auto& mesh : m_D->Meshes) total += mesh->IndexCount() / 3;
     return total;
 }
 
 unsigned int Model::VertexCount() const {
     unsigned int total = 0;
-    for (const auto& mesh : m_Meshes) total += mesh->VertexCount();
+    for (const auto& mesh : m_D->Meshes) total += mesh->VertexCount();
     return total;
 }
 
 float Model::LowestVertexWorldY(const glm::mat4& modelMatrix) const {
     float lowest = 1e30f;
-    for (const auto& mesh : m_Meshes) {
+    for (const auto& mesh : m_D->Meshes) {
         for (const glm::vec3& local : mesh->LocalPositions()) {
             float worldY = (modelMatrix * glm::vec4(local, 1.0f)).y;
             lowest = std::min(lowest, worldY);
@@ -874,7 +1069,7 @@ bool Model::FindNearestVertexToScreenPoint(const glm::mat4& modelMatrix, const g
     bool found = false;
     glm::mat4 mvp = viewProj * modelMatrix;
 
-    for (const auto& mesh : m_Meshes) {
+    for (const auto& mesh : m_D->Meshes) {
         for (const glm::vec3& local : mesh->LocalPositions()) {
             glm::vec4 clip = mvp * glm::vec4(local, 1.0f);
             if (clip.w <= 0.0001f) continue; // behind the camera

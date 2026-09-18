@@ -17,6 +17,7 @@ struct aiScene;
 struct aiNode;
 struct aiMesh;
 struct aiMaterial;
+struct aiTexture;
 
 struct BoneInfo {
     int ID;
@@ -54,19 +55,32 @@ public:
     Model(const std::string& path, const ModelImportSettings& settings);
     ~Model();
 
-    // Re-runs the Assimp import from disk with new settings, replacing this Model's meshes/
-    // bones/animations in place — every existing shared_ptr<Model> (placed instances included)
-    // sees the update, since it's the same object. MaterialOverride (an editor-set look that
+    // Re-runs the Assimp import from disk with new settings, replacing the shared imported data
+    // in place — every instance made by CreateInstance() (placed scene objects) sees the update,
+    // since they all share it (#96). MaterialOverride (an editor-set look that
     // deliberately replaces whatever the file specifies) is left untouched. Returns false (and
     // leaves the previous import in place) if the file can't be re-read.
     bool Reimport(const ModelImportSettings& settings);
-    const ModelImportSettings& ImportSettings() const { return m_Settings; }
+    const ModelImportSettings& ImportSettings() const { return m_D->Settings; }
+
+    // #96 — a new placed instance of this model: shares the imported meshes, GPU buffers,
+    // textures, skeleton and clips (no Assimp import, no extra VRAM), with its own animation
+    // state. Imported mesh materials are shared too; per-object looks go through MaterialAsset
+    // slots on the RenderableComponent.
+    std::shared_ptr<Model> CreateInstance() const;
 
     // Builds a procedural primitive (kind: "cube"/"sphere"/"cylinder"/"cone"/"plane") instead
     // of importing a file. `path` is stored as this Model's Path() so the editor's usual
     // per-path asset cache and scene-save/load round-trip both work unmodified — the caller
     // (AssetLibrary) is responsible for making that path unique per placed instance.
     static std::shared_ptr<Model> CreatePrimitive(const std::string& kind, const std::string& path);
+
+    // #124 — the files a model file needs next to it to import completely: glTF buffers and
+    // images, OBJ .mtl libraries, and every external texture the materials reference (resolved
+    // the same way an import resolves them). Each entry is {absolute source file, path to copy it
+    // to relative to the model's new folder} — the original relative layout when the file sits
+    // under the model's directory, else just its filename (where the import also looks).
+    static std::vector<std::pair<std::string, std::string>> SourceDependencies(const std::string& modelPath);
 
     // Backward-compat: no material slots → uses every submesh's imported Material.
     void Draw(Shader& shader) { Draw(shader, {}); }
@@ -76,9 +90,9 @@ public:
     // slots: per-submesh MaterialAsset overrides; empty/short → imported mesh material.
     void DrawDepthOnly(Shader& shader) { DrawDepthOnly(shader, {}); }
 
-    bool HasAnimations() const { return !m_Animations.empty(); }
-    int AnimationCount() const { return (int)m_Animations.size(); }
-    const std::string& AnimationName(int index) const { return m_Animations[index].Name; }
+    bool HasAnimations() const { return !m_D->Animations.empty(); }
+    int AnimationCount() const { return (int)m_D->Animations.size(); }
+    const std::string& AnimationName(int index) const { return m_D->Animations[index].Name; }
 
     void PlayAnimation(int index);
     void UpdateAnimation(float dt);
@@ -95,12 +109,14 @@ public:
         UpdateAnimation(dt);
     }
 
+    // Skins whenever the model has bones: the current clip's pose while one plays, otherwise the
+    // bind pose (#98 — a rig with no clip playing used to render in raw mesh space).
     void UploadBoneMatrices(Shader& shader) const;
     bool IsPlayingAnimation() const { return m_CurrentAnimation >= 0; }
 
     const std::string& Path() const { return m_Path; }
-    glm::vec3 BoundsMin() const { return m_BoundsMin; }
-    glm::vec3 BoundsMax() const { return m_BoundsMax; }
+    glm::vec3 BoundsMin() const { return m_D->BoundsMin; }
+    glm::vec3 BoundsMax() const { return m_D->BoundsMax; }
 
     // Draw with per-submesh MaterialAsset slots (PR5). slot[i] non-null overrides submesh i's
     // imported material. Empty or short slots fall back to the imported mesh material.
@@ -115,12 +131,12 @@ public:
     void DrawSelected(Shader& fallback, const glm::mat4& xform,
                       const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                       const ProgramSelector& selectProgram, float opacity = 1.0f);
-    int MeshCount() const { return (int)m_Meshes.size(); }
-    Material& MeshMaterial(int index) { return m_Meshes[index]->Mat; }
-    const Material& MeshMaterial(int index) const { return m_Meshes[index]->Mat; }
+    int MeshCount() const { return (int)m_D->Meshes.size(); }
+    Material& MeshMaterial(int index) { return m_D->Meshes[index]->Mat; }
+    const Material& MeshMaterial(int index) const { return m_D->Meshes[index]->Mat; }
     // Editor sub-asset list (#236 G): per-mesh geometry counts.
-    unsigned int MeshTriangleCount(int index) const { return m_Meshes[index]->IndexCount() / 3u; }
-    unsigned int MeshVertexCount(int index) const { return m_Meshes[index]->VertexCount(); }
+    unsigned int MeshTriangleCount(int index) const { return m_D->Meshes[index]->IndexCount() / 3u; }
+    unsigned int MeshVertexCount(int index) const { return m_D->Meshes[index]->VertexCount(); }
 
     // Flatten every sub-mesh's bind-pose geometry into one vertex list + one triangle-index
     // list (indices rebased per sub-mesh) for PhysX mesh / convex collider cooking (#185 PR 6).
@@ -134,7 +150,7 @@ public:
     // Per-model fallback sort key (first mesh). Callers that have a RenderableComponent
     // should prefer RenderableMaterialSortKey() which accounts for Materials slots.
     std::uint64_t MaterialSortKey() const {
-        return m_Meshes.empty() ? 0 : m_Meshes[0]->Mat.Hash();
+        return m_D->Meshes.empty() ? 0 : m_D->Meshes[0]->Mat.Hash();
     }
 
     // Summed across every sub-mesh, for the editor's statistics overlay.
@@ -165,17 +181,25 @@ public:
 private:
     Model() = default; // used only by CreatePrimitive; file-based loading always goes through the path constructor
 
+    // #96 — everything an import produces, shared by every instance of the same asset.
+    struct SharedData {
+        std::string Directory;
+        std::vector<std::unique_ptr<ModelMesh>> Meshes;
+        std::map<std::string, std::shared_ptr<Texture>> TextureCache;
+        std::map<std::string, BoneInfo> BoneInfoMap;
+        int BoneCounter = 0;
+        glm::mat4 GlobalInverseTransform{1.0f};
+        AssimpNodeData RootNode;
+        std::vector<AnimationClip> Animations;
+        std::vector<glm::mat4> BindPoseBones; // #98 — palette with no clip playing
+        glm::vec3 BoundsMin{1e30f}, BoundsMax{-1e30f};
+        ModelImportSettings Settings;
+    };
+    std::shared_ptr<SharedData> m_D = std::make_shared<SharedData>();
+
     std::string m_Path;
-    std::string m_Directory;
-    std::vector<std::unique_ptr<ModelMesh>> m_Meshes;
-    std::map<std::string, std::shared_ptr<Texture>> m_TextureCache;
 
-    std::map<std::string, BoneInfo> m_BoneInfoMap;
-    int m_BoneCounter = 0;
-    glm::mat4 m_GlobalInverseTransform{1.0f};
-    AssimpNodeData m_RootNode;
-
-    std::vector<AnimationClip> m_Animations;
+    // Per-instance animation state.
     int m_CurrentAnimation = -1;
     float m_CurrentTimeTicks = 0.0f;
     std::vector<glm::mat4> m_FinalBoneMatrices;
@@ -184,8 +208,8 @@ private:
     // impossible sentinel (uint64_t max) so frame index 0 doesn't look "already ticked".
     uint64_t m_LastTickedFrame = ~0ull;
 
-    glm::vec3 m_BoundsMin{1e30f}, m_BoundsMax{-1e30f};
-    ModelImportSettings m_Settings;
+    // Import-time only: each node's model-space bind transform, for the bind-pose palette (#98).
+    std::map<std::string, glm::mat4> m_ImportNodeGlobals;
 
     void ImportFromFile(const ModelImportSettings& settings);
     void ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& parentTransform);
@@ -194,6 +218,7 @@ private:
     // #95 — what a material slot's texture holds, which decides its colour space.
     enum class TextureRole { Color, Normal, Data };
     std::shared_ptr<Texture> LoadCachedTexture(const std::string& fullPath, TextureRole role);
+    std::shared_ptr<Texture> LoadEmbeddedTexture(const aiTexture* tex, const std::string& ref, TextureRole role); // #113
     // Turns whatever path string a model file baked in for a texture (bare filename, path
     // relative to the model, a "..\tex\x.png" with junk separators, or an absolute path from
     // the machine the asset was authored on) into a real file on THIS disk. Tries the sensible
@@ -202,8 +227,10 @@ private:
     // ("*0") reference is returned unchanged for the caller to handle. See Model.cpp for the
     // full resolution order.
     std::string ResolveTexturePath(const std::string& raw) const;
+    static std::string ResolveTexturePathIn(const std::string& modelDir, const std::string& raw);
     void ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh);
     void ReadHierarchy(AssimpNodeData& out, const aiNode* node);
     void ReadAnimations(const aiScene* scene);
     void CalculateBoneTransform(const AssimpNodeData& node, const glm::mat4& parentTransform);
+    void CollectNodeGlobals(const aiNode* node, const glm::mat4& parentTransform);
 };
