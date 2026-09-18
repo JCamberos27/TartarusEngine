@@ -929,14 +929,23 @@ void CollectPlayerTriggers(std::set<std::uint32_t>& out) {
     const PxTransform pose(PxVec3((float)c.x, (float)c.y, (float)c.z),
                            PxQuat(PxHalfPi, PxVec3(0, 0, 1))); // capsule axis X -> up
 
-    PxOverlapHit hits[16];
-    PxOverlapBuffer buf(hits, 16);
+    // #191 — the touch buffer grows until PhysX reports every overlap (it used to be a fixed 16,
+    // silently dropping Enter / Stay / Exit for any trigger past the 16th).
     PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::eNO_BLOCK);
-    if (!g_State->scene->overlap(geom, pose, buf, fd)) return;
-    for (PxU32 i = 0; i < buf.getNbTouches(); ++i) {
-        const PxShape* sh = buf.getTouch(i).shape;
-        if (sh && (sh->getFlags() & PxShapeFlag::eTRIGGER_SHAPE) && buf.getTouch(i).actor)
-            out.insert(UserDataToEntity(buf.getTouch(i).actor->userData));
+    static std::vector<PxOverlapHit> hits(64);
+    for (;;) {
+        PxOverlapBuffer buf(hits.data(), (PxU32)hits.size());
+        if (!g_State->scene->overlap(geom, pose, buf, fd)) return;
+        if (buf.getNbTouches() >= (PxU32)hits.size() && hits.size() < 4096) {
+            hits.resize(hits.size() * 2); // possibly truncated — retry with room to spare
+            continue;
+        }
+        for (PxU32 i = 0; i < buf.getNbTouches(); ++i) {
+            const PxShape* sh = buf.getTouch(i).shape;
+            if (sh && (sh->getFlags() & PxShapeFlag::eTRIGGER_SHAPE) && buf.getTouch(i).actor)
+                out.insert(UserDataToEntity(buf.getTouch(i).actor->userData));
+        }
+        return;
     }
 }
 
