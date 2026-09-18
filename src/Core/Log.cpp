@@ -40,7 +40,12 @@ unsigned int g_Revision = 0;
 const std::thread::id g_MainThread = std::this_thread::get_id();
 
 std::mutex g_PendingMutex;
-std::vector<std::pair<LogLevel, std::string>> g_Pending;
+struct PendingEntry {
+    LogLevel Level;
+    std::string Message;
+    LogContext Context;
+};
+std::vector<PendingEntry> g_Pending;
 std::atomic<bool> g_HasPending{false};
 
 // Guards the terminal mirror and the log file, which any thread writes immediately (so a
@@ -91,12 +96,13 @@ void Sink(LogLevel level, const std::string& message) {
     WriteFileLine(NowHMS(), level, message);
 }
 
-void AddEntry(LogLevel level, std::string message) {
+void AddEntry(LogLevel level, std::string message, LogContext context) {
     auto& entries = Storage();
-    if (!entries.empty() && entries.back().Level == level && entries.back().Message == message) {
+    if (!entries.empty() && entries.back().Level == level && entries.back().Message == message &&
+        entries.back().Context == context) {
         entries.back().Count++;
     } else {
-        entries.push_back({level, std::move(message), NowHMS(), 1, g_NextSeq++});
+        entries.push_back({level, std::move(message), NowHMS(), 1, g_NextSeq++, std::move(context)});
         const size_t li = (size_t)level;
         if (++g_LevelCounts[li] > kMaxPerLevel[li] + kTrimSlack) {
             // Drop this level's oldest entries back down to its cap; other levels are untouched
@@ -119,24 +125,24 @@ bool OnMainThread() { return std::this_thread::get_id() == g_MainThread; }
 // Main thread only: moves messages other threads logged into the Console's storage.
 void DrainPending() {
     if (!g_HasPending.load(std::memory_order_acquire)) return;
-    std::vector<std::pair<LogLevel, std::string>> batch;
+    std::vector<PendingEntry> batch;
     {
         std::lock_guard<std::mutex> lock(g_PendingMutex);
         batch.swap(g_Pending);
         g_HasPending.store(false, std::memory_order_release);
     }
-    for (auto& [level, message] : batch) AddEntry(level, std::move(message));
+    for (auto& p : batch) AddEntry(p.Level, std::move(p.Message), std::move(p.Context));
 }
 
-void Push(LogLevel level, const std::string& rawMessage) {
+void Push(LogLevel level, const std::string& rawMessage, LogContext context = {}) {
     std::string message = NormalizeSeparators(rawMessage);
     Sink(level, message);
     if (OnMainThread()) {
         DrainPending();
-        AddEntry(level, std::move(message));
+        AddEntry(level, std::move(message), std::move(context));
     } else {
         std::lock_guard<std::mutex> lock(g_PendingMutex);
-        g_Pending.emplace_back(level, std::move(message));
+        g_Pending.push_back({level, std::move(message), std::move(context)});
         g_HasPending.store(true, std::memory_order_release);
     }
 }
@@ -146,6 +152,9 @@ void Push(LogLevel level, const std::string& rawMessage) {
 void Log::Info(const std::string& message) { Push(LogLevel::Info, message); }
 void Log::Warn(const std::string& message) { Push(LogLevel::Warning, message); }
 void Log::Error(const std::string& message) { Push(LogLevel::Error, message); }
+void Log::Info(const std::string& message, const LogContext& context) { Push(LogLevel::Info, message, context); }
+void Log::Warn(const std::string& message, const LogContext& context) { Push(LogLevel::Warning, message, context); }
+void Log::Error(const std::string& message, const LogContext& context) { Push(LogLevel::Error, message, context); }
 
 const std::vector<LogEntry>& Log::Entries() {
     if (OnMainThread()) DrainPending();
