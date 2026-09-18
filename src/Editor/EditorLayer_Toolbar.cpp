@@ -558,25 +558,25 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
             ImGui::Separator();
             if (ImGui::BeginMenu(ICON_FA_FILE_IMPORT "  Import")) {
                 if (ImGui::MenuItem(ICON_FA_CUBE "  Model...")) {
-                    std::string path = FileDialog::OpenFile(
+                    const std::vector<std::string> paths = FileDialog::OpenFiles( // #139 multi-select
                         "3D Models\0*.fbx;*.obj;*.gltf;*.glb\0All Files\0*.*\0", m_Window);
                     // Imports into the library only — doesn't place an instance in the scene.
                     // Drag it from the Asset Browser into the Viewport to place one. #125 — same
                     // pipeline as drag-drop: copied into the project (with its companion files)
                     // and filed into the open Asset Browser folder.
-                    if (!path.empty()) ImportFileIntoProject(world, assets, path);
+                    for (const std::string& path : paths) ImportFileIntoProject(world, assets, path);
                 }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("FBX / OBJ / glTF - added to the asset library");
                 if (ImGui::MenuItem(ICON_FA_IMAGE "  Texture...")) {
-                    std::string path = FileDialog::OpenFile(
+                    const std::vector<std::string> paths = FileDialog::OpenFiles( // #139 multi-select
                         "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
-                    if (!path.empty()) ImportFileIntoProject(world, assets, path); // #125
+                    for (const std::string& path : paths) ImportFileIntoProject(world, assets, path); // #125
                 }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("PNG / JPG / TGA / BMP");
                 if (ImGui::MenuItem(ICON_FA_MUSIC "  Sound...")) {
-                    std::string path = FileDialog::OpenFile(
+                    const std::vector<std::string> paths = FileDialog::OpenFiles( // #139 multi-select
                         "Audio\0*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0", m_Window);
-                    if (!path.empty()) ImportFileIntoProject(world, assets, path); // #125
+                    for (const std::string& path : paths) ImportFileIntoProject(world, assets, path); // #125
                 }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("WAV / MP3 / OGG / FLAC");
                 ImGui::EndMenu();

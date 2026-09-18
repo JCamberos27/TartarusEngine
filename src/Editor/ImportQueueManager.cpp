@@ -64,9 +64,12 @@ void ImportQueueManager::DrawProgressUI() {
     if (!IsActive()) return;
 
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImVec2 size(360.0f, 0.0f);
-    ImVec2 pos(viewport->WorkPos.x + viewport->WorkSize.x - size.x - 12.0f,
-        viewport->WorkPos.y + viewport->WorkSize.y - 90.0f);
+    // #139 — sized from the font (which bakes in the UI scale) instead of fixed pixels, so the
+    // window isn't cramped at 150% / 200% scaling. 360 px at the editor's 16 px base font.
+    const float scale = ImGui::GetFontSize() / 16.0f;
+    ImVec2 size(360.0f * scale, 0.0f);
+    ImVec2 pos(viewport->WorkPos.x + viewport->WorkSize.x - size.x - 12.0f * scale,
+        viewport->WorkPos.y + viewport->WorkSize.y - 90.0f * scale);
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
     ImGui::SetNextWindowSize(size, ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.92f);
