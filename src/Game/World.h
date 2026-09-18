@@ -16,6 +16,13 @@ class Model;
 // plan) for why: the old split between a flat-shaded, collidable "WorldBox" and a PBR-textured,
 // non-collidable "PlacedModel" made level geometry unable to have real materials and placed
 // models unable to block the player or take hits. One entity representation fixes both.
+// #182 - how a log line names an entity: "entity #<OrderComponent value>". The Order value
+// survives undo/redo, Play->Stop and scene reload (raw entt ids are recycled by all three), so
+// the Console's double-click can still find the right entity later. An entity without one
+// (shouldn't happen for scene entities) prints "entity id <raw>", which the Console
+// deliberately doesn't link.
+std::string EntityLogRef(const entt::registry& registry, entt::entity e);
+
 class World {
 public:
     World();

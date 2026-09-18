@@ -168,11 +168,13 @@ void EditorLayer::ClearSelection() {
     m_LightHandleArmedFor = entt::null;
 }
 
-bool EditorLayer::SelectEntityByRawId(World& world, unsigned int rawId) {
-    entt::entity entity = (entt::entity)rawId;
-    if (!world.Registry.valid(entity)) return false;
-    SelectItem(entity, false);
-    return true;
+bool EditorLayer::SelectEntityByOrder(World& world, int orderValue) {
+    for (auto [entity, order] : world.Registry.view<const OrderComponent>().each()) {
+        if (order.Value != orderValue) continue;
+        SelectItem(entity, false);
+        return true;
+    }
+    return false;
 }
 
 void EditorLayer::SelectItem(entt::entity entity, bool addToSelection) {

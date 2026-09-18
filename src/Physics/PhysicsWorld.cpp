@@ -154,6 +154,10 @@ struct PhysicsState {
     std::vector<PxJoint*> joints;
     std::unordered_map<PxJoint*, std::uint32_t>       jointOwner;
     std::unordered_map<std::uint32_t, PxRigidStatic*> staticByEntity;
+    // #182 - raw entity id -> OrderComponent value, captured when actors are built, so trigger /
+    // contact / joint log lines (written from PhysX callbacks, no registry at hand) can name
+    // entities by the stable id the Console links to.
+    std::unordered_map<std::uint32_t, int> orderByEntity;
     // #185 PR 12 — cooked meshes cached by model path so a Play->Stop->Play doesn't re-cook.
     // These own the meshes (released in Destroy); convexMeshes/triangleMeshes above just track
     // the non-cached (should be none now) plus keep the release loop simple.
@@ -335,6 +339,9 @@ PxMaterial* GetMaterial(PhysicsState& s, float friction, float bounciness) {
 
 void BuildActors(PhysicsState& s, const World& world) {
     int statics = 0, dynamic = 0, kinematic = 0, skipped = 0;
+    s.orderByEntity.clear();
+    for (auto [e, order] : world.Registry.view<const OrderComponent>().each())
+        s.orderByEntity[entt::to_integral(e)] = order.Value;
     auto view = world.Registry.view<const TransformComponent, const ColliderComponent>(entt::exclude<InactiveTag>);
     for (entt::entity e : view) {
         // #114 — world space: a collider on a child entity used to be built at its LOCAL
@@ -366,7 +373,7 @@ void BuildActors(PhysicsState& s, const World& world) {
             std::vector<unsigned int> idx;
             if (rc && rc->ModelRef) rc->ModelRef->CollisionGeometry(verts, idx);
             if (verts.size() < 4) {
-                Log::Warn("PhysX: entity " + std::to_string(entt::to_integral(e)) +
+                Log::Warn("PhysX: " + EntityLogRef(world.Registry, e) +
                           " has a mesh collider but no usable mesh — skipped.");
                 ++skipped;
                 continue;
@@ -380,7 +387,7 @@ void BuildActors(PhysicsState& s, const World& world) {
             const bool dynamicNonKin = rb && !rb->IsKinematic;
             const bool useTriangle = (c.Kind == ColliderComponent::Shape::Mesh) && !dynamicNonKin;
             if (c.Kind == ColliderComponent::Shape::Mesh && dynamicNonKin)
-                Log::Warn("PhysX: entity " + std::to_string(entt::to_integral(e)) +
+                Log::Warn("PhysX: " + EntityLogRef(world.Registry, e) +
                           " — a triangle-mesh collider can't be dynamic; using a convex hull.");
 
             // Cook once per model path per Play session (#185 PR 12) — a cooked mesh is
@@ -401,7 +408,7 @@ void BuildActors(PhysicsState& s, const World& world) {
                     glm::vec3 center, half;
                     AutoBoxWorld(world.Registry, e, t, center, half);
                     if (half.x <= 0.0f || half.y <= 0.0f || half.z <= 0.0f) { ++skipped; continue; }
-                    Log::Warn("PhysX: entity " + std::to_string(entt::to_integral(e)) +
+                    Log::Warn("PhysX: " + EntityLogRef(world.Registry, e) +
                               " — convex cook failed (mesh too dense) — using a bounds box.");
                     actorPose  = PxTransform(ToPx(t.Position), EulerToPx(t.RotationEuler));
                     shapeLocal = PxTransform(ToPx(center - t.Position));
@@ -566,7 +573,7 @@ void BuildJoints(PhysicsState& s, const World& world) {
     int made = 0, skipped = 0;
     for (entt::entity e : jointView) {
         const auto& j = jointView.get<const JointComponent>(e);
-        const std::string tag = "entity " + std::to_string(entt::to_integral(e));
+        const std::string tag = EntityLogRef(world.Registry, e);
 
         auto self = s.bodyByEntity.find(entt::to_integral(e));
         if (self == s.bodyByEntity.end()) {
@@ -611,9 +618,11 @@ void BuildJoints(PhysicsState& s, const World& world) {
 
 // --- Triggers (#185 PR 5) --------------------------------------------------------------
 
-const char* EntityLabel(std::uint32_t e, char buf[24]) {
+const char* EntityLabel(const PhysicsState& s, std::uint32_t e, char buf[24]) {
     if (e == kPlayerEntity) return "Player";
-    std::snprintf(buf, 24, "entity %u", e);
+    auto it = s.orderByEntity.find(e);
+    if (it != s.orderByEntity.end()) std::snprintf(buf, 24, "entity #%d", it->second); // #182
+    else                             std::snprintf(buf, 24, "entity id %u", e);
     return buf;
 }
 
@@ -624,8 +633,8 @@ void PushTriggerEvent(PhysicsState& s, std::uint32_t kind, std::uint32_t trig, s
     if (kind == TriggerEvent::Enter || kind == TriggerEvent::Exit) {
         char a[24], b[24];
         Log::Info(std::string("Trigger ") + (kind == TriggerEvent::Enter ? "enter: " : "exit:  ") +
-                  EntityLabel(other, a) + (kind == TriggerEvent::Enter ? " -> " : " <- ") +
-                  EntityLabel(trig, b));
+                  EntityLabel(s, other, a) + (kind == TriggerEvent::Enter ? " -> " : " <- ") +
+                  EntityLabel(s, trig, b));
     }
 }
 
@@ -707,7 +716,7 @@ void SimEventCallback::onContact(const PxContactPairHeader& header, const PxCont
             char la[24], lb[24];
             char imp[32]; std::snprintf(imp, sizeof(imp), " (impulse %.1f)", sumImpulse);
             Log::Info(std::string("Contact ") + (kind == ContactEvent::Enter ? "hit:  " : "end:  ") +
-                      EntityLabel(a, la) + " <-> " + EntityLabel(b, lb) +
+                      EntityLabel(*owner, a, la) + " <-> " + EntityLabel(*owner, b, lb) +
                       (kind == ContactEvent::Enter ? imp : ""));
         }
     }
@@ -721,7 +730,8 @@ void SimEventCallback::onConstraintBreak(PxConstraintInfo* constraints, PxU32 co
         if (typeID != PxConstraintExtIDs::eJOINT || !ext) continue;
         auto it = owner->jointOwner.find(static_cast<PxJoint*>(ext));
         const std::uint32_t owE = it != owner->jointOwner.end() ? it->second : 0xFFFFFFFFu;
-        Log::Info("Joint broke on entity " + std::to_string(owE) + ".");
+        char label[24];
+        Log::Info(std::string("Joint broke on ") + EntityLabel(*owner, owE, label) + ".");
     }
 }
 
@@ -1025,7 +1035,7 @@ void Step(float dt, World& world) {
             body->putToSleep();
             const TransformComponent w = world.WorldSpaceTransform(e); // #114
             body->setGlobalPose(PxTransform(ToPx(w.Position), EulerToPx(w.RotationEuler)));
-            Log::Warn("PhysX: entity " + std::to_string(entt::to_integral(e)) +
+            Log::Warn("PhysX: " + EntityLogRef(world.Registry, e) +
                       " produced a non-finite pose — frozen at its last good transform.");
             continue;
         }
