@@ -480,6 +480,8 @@ void BuildActors(PhysicsState& s, const World& world) {
 
         PxRigidDynamic* b = s.physics->createRigidDynamic(actorPose);
         b->attachShape(*shape);
+        // #169 - ProjectSettings' Solver Iterations was stored and shown but never applied.
+        b->setSolverIterationCounts((PxU32)std::clamp(ProjectSettings::Physics().SolverIterations, 1, 255));
         b->userData = EntityToUserData(e);
         shape->release();
         if (!c.IsTrigger) // setMassAndUpdateInertia needs a simulation shape
@@ -626,11 +628,13 @@ const char* EntityLabel(const PhysicsState& s, std::uint32_t e, char buf[24]) {
     return buf;
 }
 
+bool g_LogEvents = false; // #169 - SetEventLogging
+
 void PushTriggerEvent(PhysicsState& s, std::uint32_t kind, std::uint32_t trig, std::uint32_t other) {
     TriggerEvent ev;
     ev.Kind = kind; ev.Trigger = trig; ev.Other = other;
     s.triggerEvents.push_back(ev);
-    if (kind == TriggerEvent::Enter || kind == TriggerEvent::Exit) {
+    if (g_LogEvents && (kind == TriggerEvent::Enter || kind == TriggerEvent::Exit)) {
         char a[24], b[24];
         Log::Info(std::string("Trigger ") + (kind == TriggerEvent::Enter ? "enter: " : "exit:  ") +
                   EntityLabel(s, other, a) + (kind == TriggerEvent::Enter ? " -> " : " <- ") +
@@ -712,7 +716,7 @@ void SimEventCallback::onContact(const PxContactPairHeader& header, const PxCont
         if (kind == ContactEvent::Enter && n > 0)
             PushContactViz(p0, nrm, sumImpulse, sumImpulse > 1.5f);
 
-        if (kind != ContactEvent::Stay && sumImpulse > 0.75f) {
+        if (g_LogEvents && kind != ContactEvent::Stay && sumImpulse > 0.75f) {
             char la[24], lb[24];
             char imp[32]; std::snprintf(imp, sizeof(imp), " (impulse %.1f)", sumImpulse);
             Log::Info(std::string("Contact ") + (kind == ContactEvent::Enter ? "hit:  " : "end:  ") +
@@ -731,7 +735,7 @@ void SimEventCallback::onConstraintBreak(PxConstraintInfo* constraints, PxU32 co
         auto it = owner->jointOwner.find(static_cast<PxJoint*>(ext));
         const std::uint32_t owE = it != owner->jointOwner.end() ? it->second : 0xFFFFFFFFu;
         char label[24];
-        Log::Info(std::string("Joint broke on ") + EntityLabel(*owner, owE, label) + ".");
+        if (g_LogEvents) Log::Info(std::string("Joint broke on ") + EntityLabel(*owner, owE, label) + ".");
     }
 }
 
@@ -1208,7 +1212,23 @@ unsigned MoveCharacter(const float disp[3], float dt) {
         g_State->playerGroundLastRot = gp.q;
     }
 
-    PxControllerFilters filters;
+    // #169 - the collision matrix used to apply to simulation pairs only; the CCT's own sweep
+    // (default filters) still hit every layer, so the Player collided with layers set not to.
+    struct LayerFilter : PxQueryFilterCallback {
+        PxU32 Mask = 0xFFu;
+        PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor*,
+                                       PxHitFlags&) override {
+            const PxU32 layer = shape->getSimulationFilterData().word1 & 7u;
+            return ((Mask >> layer) & 1u) ? PxQueryHitType::eBLOCK : PxQueryHitType::eNONE;
+        }
+        PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*,
+                                        const PxRigidActor*) override {
+            return PxQueryHitType::eBLOCK;
+        }
+    } layerFilter;
+    const int playerLayer = std::clamp(ProjectSettings::Physics().PlayerLayer, 0, 7);
+    layerFilter.Mask = ProjectSettings::Physics().LayerCollisionMask[playerLayer];
+    PxControllerFilters filters(nullptr, &layerFilter, nullptr); // prefilter is on by default
     PxControllerCollisionFlags f =
         g_State->controller->move(d, /*minDist=*/0.001f, dt, filters); // onShapeHit fires in here
 
@@ -1423,6 +1443,8 @@ PhysicsDebugStats GetDebugStats() {
     s.FrameIndex = g_State->frameIndex;
     return s;
 }
+
+void SetEventLogging(bool enabled) { g_LogEvents = enabled; }
 
 void     SetDebugDrawFlags(unsigned flags) { g_DebugDrawFlags = flags; }
 unsigned GetDebugDrawFlags()               { return g_DebugDrawFlags; }

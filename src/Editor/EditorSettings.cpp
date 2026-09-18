@@ -132,6 +132,7 @@ void EditorSettings::Load() {
     s.ShowPhysicsPanel = SafeValue(root, "showPhysicsPanel", s.ShowPhysicsPanel);
     s.PhysicsHudOverlay = SafeValue(root, "physicsHudOverlay", s.PhysicsHudOverlay);
     s.PhysicsDebugDrawFlags = SafeValue(root, "physicsDebugDrawFlags", s.PhysicsDebugDrawFlags);
+    s.LogPhysicsEvents = SafeValue(root, "logPhysicsEvents", s.LogPhysicsEvents);
     // PhysicsSimTimeScale (Phase 6 item 13 / Appendix B #39) is deliberately NOT loaded - it stays
     // session-only (see the struct field's comment), so a session left slowed/frozen can't leave
     // physics silently frozen the next time the editor opens.
@@ -240,6 +241,7 @@ void EditorSettings::Flush() {
     root["showPhysicsPanel"] = Get().ShowPhysicsPanel;
     root["physicsHudOverlay"] = Get().PhysicsHudOverlay;
     root["physicsDebugDrawFlags"] = Get().PhysicsDebugDrawFlags;
+    root["logPhysicsEvents"] = Get().LogPhysicsEvents;
     // PhysicsSimTimeScale is session-only - see the matching comment in Load().
     root["playDebugOverlay"] = Get().PlayDebugOverlay;
     root["layerVisibleMask"] = Get().LayerVisibleMask;
