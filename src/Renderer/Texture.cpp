@@ -167,7 +167,7 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
             data = stbi_load(m_Path.c_str(), &m_Width, &m_Height, &m_Channels, 0);
         }
         if (!data) {
-            Log::Error("Texture: failed to load '" + m_Path + "'.");
+            Log::Error("Texture: failed to load '" + m_Path + "'.", LogContext::Asset(m_Path));
             return;
         }
 
@@ -322,7 +322,7 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
 bool Texture::Reimport(const TextureImportSettings& settings) {
     int w, h, c;
     if (m_Memory.empty() && !stbi_info(m_Path.c_str(), &w, &h, &c)) {
-        Log::Error("Texture: cannot reimport '" + m_Path + "' - file is missing or unreadable.");
+        Log::Error("Texture: cannot reimport '" + m_Path + "' - file is missing or unreadable.", LogContext::Asset(m_Path));
         return false;
     }
 
@@ -337,7 +337,7 @@ bool Texture::Reimport(const TextureImportSettings& settings) {
     if (m_ID == 0) {
         m_ID = previous;
         m_Width = prevW; m_Height = prevH; m_Channels = prevC;
-        Log::Error("Texture: reimport of '" + m_Path + "' failed - kept the previous version.");
+        Log::Error("Texture: reimport of '" + m_Path + "' failed - kept the previous version.", LogContext::Asset(m_Path));
         return false;
     }
     if (previous) glDeleteTextures(1, &previous);

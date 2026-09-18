@@ -1,4 +1,5 @@
 #pragma once
+#include "Log.h" // LogContext
 #include <string>
 #include <memory>
 #include <unordered_map>
@@ -22,6 +23,9 @@ class Model;
 // (shouldn't happen for scene entities) prints "entity id <raw>", which the Console
 // deliberately doesn't link.
 std::string EntityLogRef(const entt::registry& registry, entt::entity e);
+// #146 — the structured counterpart of EntityLogRef, for Log::Warn(msg, ctx): lets the Console
+// select the entity without parsing the text. No entity link when it has no OrderComponent.
+LogContext EntityLogContext(const entt::registry& registry, entt::entity e);
 
 class World {
 public:
