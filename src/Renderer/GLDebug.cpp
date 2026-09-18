@@ -85,6 +85,8 @@ bool Enabled() {
 
 void GLDebug::ForceEnable() { gForceEnable = true; }
 
+bool GLDebug::WantsDebugContext() { return Enabled(); }
+
 void GLDebug::Init() {
     if (!Enabled()) return;
 
