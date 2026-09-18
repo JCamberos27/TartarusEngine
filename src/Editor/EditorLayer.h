@@ -68,6 +68,10 @@ public:
     // error, merge-conflict markers, wrong shape). The editor is then showing an EMPTY world under
     // that path; a plain Save must not overwrite the broken-but-recoverable file with it.
     void OnStartupSceneLoadFailed(const std::string& path);
+    // #89 — last-chance save when an exception is about to take the editor down: leaves Play
+    // mode (restoring the edit-mode scene) and writes the crash-recovery snapshot if the scene
+    // has unsaved changes. Never throws.
+    void EmergencyRecoverySave(World& world, AssetLibrary& assets) noexcept;
     void Shutdown();
 
     // Applies the editor's style — colours and metrics (rounding / padding / borders), DPI-scaled
@@ -147,6 +151,10 @@ public:
     // Eyedropper colour pick (#236 R2 Inspector tail). A colour field arms it with a pointer
     // to its glm::vec3; the next viewport click samples the displayed Scene pixel there and
     // writes it. main.cpp does the actual glReadPixels off the tonemapped scene FBO.
+    // #93 — that pointer points INTO registry / material storage, so it is only valid while
+    // nothing structural happens: every path that can reallocate or free that storage (any
+    // PushUndo/StageUndo before an edit, Undo/Redo, scene load, Play/Stop, selection change)
+    // cancels the eyedropper first.
     void ArmEyedropper(World* world, glm::vec3* target)
         { m_EyedropperWorld = world; m_EyedropperTarget = target; m_EyedropperSampleRequested = false; }
     void CancelEyedropper() { m_EyedropperTarget = nullptr; m_EyedropperSampleRequested = false; }

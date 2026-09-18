@@ -72,6 +72,26 @@
 #define GL_RGBA8 0x8058
 #define GL_RED 0x1903
 #define GL_R8 0x8229
+// #94 — two-channel textures + channel swizzles (guarded: GL 1.1 names may already come from
+// the system <GL/gl.h> that GLFW pulls in).
+#ifndef GL_ONE
+#define GL_ONE 1
+#endif
+#ifndef GL_GREEN
+#define GL_GREEN 0x1904
+#endif
+#ifndef GL_BLUE
+#define GL_BLUE 0x1905
+#endif
+#ifndef GL_ALPHA
+#define GL_ALPHA 0x1906
+#endif
+#define GL_RG 0x8227
+#define GL_RG8 0x822B
+#define GL_TEXTURE_SWIZZLE_R 0x8E42
+#define GL_TEXTURE_SWIZZLE_G 0x8E43
+#define GL_TEXTURE_SWIZZLE_B 0x8E44
+#define GL_TEXTURE_SWIZZLE_A 0x8E45
 #define GL_CLAMP_TO_EDGE 0x812F
 #define GL_NEAREST 0x2600
 #define GL_VIEWPORT 0x0BA2
