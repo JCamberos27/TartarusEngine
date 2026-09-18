@@ -22,9 +22,13 @@ struct TextureImportSettings {
     bool IsSRGB = true;
     Filter FilterMode = Filter::Bilinear;
     Wrap WrapMode = Wrap::Repeat;
-    // Downscales on import (nearest-neighbor) if the source exceeds this in either dimension,
-    // preserving aspect ratio. 0 or negative = no limit.
+    // Downscales on import (box filter; in linear space for sRGB textures) if the source exceeds
+    // this in either dimension, preserving aspect ratio. 0 or negative = no limit.
     int MaxTextureSize = 2048;
+    // #156 - Unity's Aniso Level: max anisotropic filtering samples (1 = off). Clamped to what the
+    // driver supports; only applies with mipmaps and a non-Point filter. Sampler state only, so
+    // it isn't part of TextureCache's pixel hash.
+    int AnisoLevel = 8;
 };
 
 // Cumulative timing across every Texture::UploadFromFile call this process has made (audit
