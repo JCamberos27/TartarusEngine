@@ -1506,17 +1506,6 @@ void EditorLayer::CreateEmptyParentForSelection(World& world) {
         [&](entt::entity e) { return !world.Registry.valid(e); }), sel.end());
     if (sel.empty()) return;
 
-    // Nothing with a Box Collider can be re-parented yet (SetParent refuses it) — check up front
-    // so we don't create a stray "Group" empty that ends up with no children.
-    bool anyReparentable = false;
-    for (entt::entity e : sel) {
-        if (!world.Registry.all_of<ColliderComponent>(e)) { anyReparentable = true; break; }
-    }
-    if (!anyReparentable) {
-        Log::Warn("Couldn't group: objects with a Box Collider can't be re-parented yet.");
-        return;
-    }
-
     glm::vec3 center(0.0f);
     if (!GetSelectionCenter(world, center)) center = glm::vec3(0.0f);
 
@@ -1537,7 +1526,7 @@ void EditorLayer::CreateEmptyParentForSelection(World& world) {
 
     int parented = 0;
     for (entt::entity e : sel) {
-        if (world.SetParent(e, parent)) ++parented; // preserves world transform; refuses colliders
+        if (world.SetParent(e, parent)) ++parented; // preserves world transform (#114: colliders too)
     }
     SelectItem(parent, false);
     Log::Info("Grouped " + std::to_string(parented) + " object(s) under a new Empty" +
@@ -1659,7 +1648,7 @@ void EditorLayer::ReorderHierarchySiblings(World& world, const std::vector<entt:
 
     CommitStagedUndo(world, "Reorder");
     if (anyFailed)
-        Log::Warn("Some rows couldn't be moved there — level geometry with a collider can't be parented.");
+        Log::Warn("Some rows couldn't be moved there (an object can't become a child of its own descendant).");
 }
 
 entt::entity EditorLayer::InstantiateAssetDropInHierarchy(World& world, AssetLibrary& assets,

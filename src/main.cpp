@@ -987,7 +987,20 @@ int main(int argc, char** argv) {
                 if (smokeSceneActive && smokePlayScene) {
                     const int f = smokeFramesRendered;
                     if ((f == 20 || f == 55) && !playing) { std::cout << "[SmokeTest]   -> Play\n";  togglePlay(); }
-                    if ((f == 40 || f == 75) &&  playing) { std::cout << "[SmokeTest]   -> Stop\n";  togglePlay(); ++smokePlayCycles; }
+                    if ((f == 40 || f == 75) &&  playing) {
+                        // #114 regression: every simulated body must still be somewhere sane
+                        // (finite, near the scene) — a parented body used to be teleported by
+                        // writing its world pose into its local transform.
+                        for (entt::entity rbE : world.Registry.view<RigidbodyComponent, TransformComponent>()) {
+                            const glm::vec3 p = world.WorldSpaceTransform(rbE).Position;
+                            const bool sane = std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z) &&
+                                              glm::length(p) < 1000.0f;
+                            std::cout << "[SmokeTest]   body " << entt::to_integral(rbE) << " at world (" << p.x
+                                      << ", " << p.y << ", " << p.z << ")" << std::endl;
+                            if (!sane) Log::Error("[SmokeTest] simulated body ended up at a non-finite / far-away position.");
+                        }
+                        std::cout << "[SmokeTest]   -> Stop\n";  togglePlay(); ++smokePlayCycles;
+                    }
                 }
             }
             Clock::Update();

@@ -110,6 +110,15 @@ public:
     // correct, never merely fast.
     glm::mat4 GetCachedWorldTransform(entt::entity entity) const;
 
+    // #114 — the entity's transform expressed in WORLD space (position / YXZ Euler degrees /
+    // absolute scale decomposed from ComposeWorldTransform). Identical to its TransformComponent
+    // when it has no parent. For systems that must work in world space (physics actors, collider
+    // gizmos, editor raycasts) — reading TransformComponent directly misplaces any child entity.
+    TransformComponent WorldSpaceTransform(entt::entity entity) const;
+    // #114 — the inverse: write a WORLD-space position + rotation into the entity's (local)
+    // TransformComponent, converting through its parent's world matrix. Scale is left untouched.
+    void SetWorldPose(entt::entity entity, const glm::vec3& worldPosition, const glm::quat& worldRotation);
+
     // Re-parents `child` under `parent` (or detaches it if `parent` is entt::null), converting
     // TransformComponent in place so the entity doesn't visually jump: its world-space transform
     // is preserved, only the frame it's expressed in changes. Fails (returns false, no change)
