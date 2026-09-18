@@ -396,7 +396,7 @@ void BuildActors(PhysicsState& s, const World& world) {
             if (rc && rc->ModelRef) rc->ModelRef->CollisionGeometry(verts, idx);
             if (verts.size() < 4) {
                 Log::Warn("PhysX: " + EntityLogRef(world.Registry, e) +
-                          " has a mesh collider but no usable mesh — skipped.");
+                          " has a mesh collider but no usable mesh — skipped.", EntityLogContext(world.Registry, e));
                 ++skipped;
                 continue;
             }
@@ -410,7 +410,7 @@ void BuildActors(PhysicsState& s, const World& world) {
             const bool useTriangle = (c.Kind == ColliderComponent::Shape::Mesh) && !dynamicNonKin;
             if (c.Kind == ColliderComponent::Shape::Mesh && dynamicNonKin)
                 Log::Warn("PhysX: " + EntityLogRef(world.Registry, e) +
-                          " — a triangle-mesh collider can't be dynamic; using a convex hull.");
+                          " — a triangle-mesh collider can't be dynamic; using a convex hull.", EntityLogContext(world.Registry, e));
 
             // Cook once per model for the editor session (#185 PR 12, #167). A cooked mesh is
             // scale-independent (scale rides on the geometry's PxMeshScale), so the key is the
@@ -438,7 +438,7 @@ void BuildActors(PhysicsState& s, const World& world) {
                     AutoBoxWorld(world.Registry, e, t, center, half);
                     if (half.x <= 0.0f || half.y <= 0.0f || half.z <= 0.0f) { ++skipped; continue; }
                     Log::Warn("PhysX: " + EntityLogRef(world.Registry, e) +
-                              " — convex cook failed (mesh too dense) — using a bounds box.");
+                              " — convex cook failed (mesh too dense) — using a bounds box.", EntityLogContext(world.Registry, e));
                     actorPose  = PxTransform(ToPx(t.Position), EulerToPx(t.RotationEuler));
                     shapeLocal = PxTransform(ToPx(center - t.Position));
                     make(PxBoxGeometry(ToPx(half)));
@@ -608,7 +608,7 @@ void BuildJoints(PhysicsState& s, const World& world) {
 
         auto self = s.bodyByEntity.find(entt::to_integral(e));
         if (self == s.bodyByEntity.end()) {
-            Log::Warn("PhysX: " + tag + " has a Joint but no Rigidbody — skipped."); ++skipped; continue;
+            Log::Warn("PhysX: " + tag + " has a Joint but no Rigidbody — skipped.", EntityLogContext(world.Registry, e)); ++skipped; continue;
         }
         PxRigidActor* a0 = self->second;
         PxRigidActor* a1 = nullptr;
@@ -1078,7 +1078,7 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
             const TransformComponent w = world.WorldSpaceTransform(e); // #114
             body->setGlobalPose(PxTransform(ToPx(w.Position), EulerToPx(w.RotationEuler)));
             Log::Warn("PhysX: " + EntityLogRef(world.Registry, e) +
-                      " produced a non-finite pose — frozen at its last good transform.");
+                      " produced a non-finite pose — frozen at its last good transform.", EntityLogContext(world.Registry, e));
             continue;
         }
         // #114 — the PhysX pose is WORLD space; convert through the parent (was written

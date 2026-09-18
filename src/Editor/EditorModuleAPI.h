@@ -123,7 +123,8 @@
 //        the game module (Core/HotReloadSwap.h): a build whose OnLoad fails is rolled back to the
 //        previous one, and module-held UI state can be carried across a reload.
 //   33 - #184: Help menu actions - OpenAbout, OpenDocumentation, OpenLogFolder, ReportBug.
-constexpr std::uint32_t kEditorModuleAPIVersion = 33;
+//   34 - #146: LogGetEntryContext, the structured entity / asset link of a log entry.
+constexpr std::uint32_t kEditorModuleAPIVersion = 34;
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -567,6 +568,12 @@ struct EditorModuleHostAPI {
     // 0 Grid, 1 List, 2 Details. Drives whether the module forces single-column rows (List and
     // Details both do) and whether it draws the Name/Type/Size/Modified header row.
     int (*GetAssetViewMode)() = nullptr;
+
+    // --- Structured log context (API v34, #146) ---
+    // The entity (OrderComponent value, -1 = none) and asset path ("" = none) a log entry was
+    // tagged with by the code that logged it (Log::Warn(msg, LogContext)). `outAssetPath`
+    // points at host storage with the same lifetime rule as LogGetEntry's strings.
+    bool (*LogGetEntryContext)(int index, int* outEntityOrder, const char** outAssetPath) = nullptr;
 
     // --- Help menu (API v33, #184) ---
     void (*OpenAbout)() = nullptr;         // Settings > About (version + system report)
