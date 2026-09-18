@@ -56,6 +56,9 @@ public:
     // Loads a .shader asset and caches it by path (no-op if already loaded). Returns nullptr
     // on parse failure. Cached indefinitely; hot-reload via ShaderAsset::Variant(key).
     std::shared_ptr<ShaderAsset> LoadShader(const std::string& path);
+    // #158 — hot reload: reloads every cached ShaderAsset that depends on one of `changedKeys`
+    // (ShaderLibrary::DependencyKey spellings). Returns how many were reloaded.
+    int HotReloadShaders(const std::vector<std::string>& changedKeys);
     // Removes a material from the library without touching the .mat file on disk.
     void RemoveMaterial(const std::shared_ptr<MaterialAsset>& mat);
     // All currently registered materials. Stable order (registration order).

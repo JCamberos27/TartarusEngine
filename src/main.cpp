@@ -406,6 +406,15 @@ int main(int argc, char** argv) {
         ReflectionProbeArray probeArray;
         // PR15: SSAO — depth pre-pass FBO + compute + blur shaders (all scene-view only)
         Ssao ssao;
+        // #158: every vertex+fragment program above and below re-compiles itself when one of its
+        // source files (or an #include) changes on disk - editor only, see the main loop. The
+        // guard drops the raw pointers before these locals are destroyed.
+        struct ShaderHotReloadGuard { ~ShaderHotReloadGuard() { ShaderLibrary::ClearHotReload(); } } shaderHotReloadGuard;
+        ShaderLibrary::RegisterForHotReload(modelShader, "ModelVertex.glsl", "ModelFragment.glsl");
+        ShaderLibrary::RegisterForHotReload(outlineModelShader, "OutlineModel.vert.glsl", "Outline.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(outlineDilateShader, "OutlineDilate.vert.glsl", "OutlineDilate.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(shadowShader, "ShadowDepth.vert.glsl", "ShadowDepth.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(localShadowShader, "ShadowDepth.vert.glsl", "ShadowDepthLocal.frag.glsl");
         Shader ssaoComputeShader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
                                  ShaderLibrary::ReadFile("Ssao.frag.glsl"));
         Shader ssaoBlurShader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
@@ -422,6 +431,11 @@ int main(int argc, char** argv) {
                                      ShaderLibrary::ReadFile("BloomDownsample.frag.glsl"));
         Shader bloomUpsampleShader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
                                    ShaderLibrary::ReadFile("BloomUpsample.frag.glsl"));
+        ShaderLibrary::RegisterForHotReload(ssaoComputeShader, "Tonemapper.vert.glsl", "Ssao.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(ssaoBlurShader, "Tonemapper.vert.glsl", "SsaoBlur.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(bloomThreshShader, "Tonemapper.vert.glsl", "BloomThreshold.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(bloomDownsampleShader, "Tonemapper.vert.glsl", "BloomDownsample.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(bloomUpsampleShader, "Tonemapper.vert.glsl", "BloomUpsample.frag.glsl");
         // Same reasoning as gameBloom above — SSAO needs its own depth pre-pass FBO per viewport.
         Ssao gameSsao;
 
@@ -1194,6 +1208,18 @@ int main(int argc, char** argv) {
             Time::BeginFrame();
             const float dt = Time::UnscaledDeltaTime();
             const float gameDt = Time::DeltaTime();
+
+            // #158 — shader hot reload (editor only; the scan itself runs at ~4 Hz). Engine
+            // programs and material shaders recompile when any file they were built from changes;
+            // a failed compile keeps the previous program and logs the error.
+            if (!headless) {
+                const std::vector<std::string> changedShaders =
+                    ShaderLibrary::PollChangedFiles({ProjectPaths::Resolve("shaders")});
+                if (!changedShaders.empty()) {
+                    const int n = ShaderLibrary::ReloadChanged(changedShaders) + assets.HotReloadShaders(changedShaders);
+                    if (n > 0) GLStateCache::Invalidate(); // program names may be recycled
+                }
+            }
             Profiler::BeginFrame();
             GLStateCache::ResetFrameStats();
 

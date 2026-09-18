@@ -81,6 +81,14 @@ public:
     const std::string& LastCompileError() const { return m_LastCompileError; }
     void ForgetFailedVariants();
 
+    // #158 — hot reload. True when this descriptor, or any stage / #include a compiled variant
+    // read, is among `changedKeys` (ShaderLibrary::DependencyKey spellings).
+    bool DependsOnAny(const std::vector<std::string>& changedKeys) const;
+    // Re-reads the descriptor (properties, keywords, render state, stage references) and drops
+    // every compiled variant so each recompiles from the new source on next use. On a parse
+    // error the current definition is kept. Returns whether anything was reloaded.
+    bool ReloadFromDisk();
+
     // Per-property draw bindings (texture-unit assignments). Same for all variants.
     const std::vector<PropertyBinding>& Bindings() const { return m_Bindings; }
 
@@ -104,6 +112,7 @@ private:
     std::vector<PropertyBinding> m_Bindings;
     std::vector<std::string>     m_Keywords;
     ShaderRenderState            m_State;
+    std::vector<std::string>     m_Deps; // #158: descriptor + every file compiled variants read
 
     std::unordered_map<ShaderVariantKey, std::unique_ptr<Shader>> m_Variants;
 
