@@ -5,7 +5,7 @@
 #include <cmath>
 
 ClusterGrid::~ClusterGrid() {
-    if (m_AABBs) glDeleteBuffers(1, &m_AABBs);
+    if (m_AABBs[0]) glDeleteBuffers(kBuildSlots, m_AABBs);
     if (m_Counts) glDeleteBuffers(1, &m_Counts);
     if (m_Indices) glDeleteBuffers(1, &m_Indices);
     if (m_Overflow) glDeleteBuffers(1, &m_Overflow);
@@ -16,9 +16,10 @@ ClusterGrid::~ClusterGrid() {
 }
 
 void ClusterGrid::EnsureCreated() {
-    if (m_AABBs) return;
-    glCreateBuffers(1, &m_AABBs);
-    glNamedBufferStorage(m_AABBs, (GLsizeiptr)CLUSTERS * 2 * (GLsizeiptr)sizeof(glm::vec4), nullptr, 0);
+    if (m_AABBs[0]) return;
+    glCreateBuffers(kBuildSlots, m_AABBs);
+    for (unsigned int buf : m_AABBs)
+        glNamedBufferStorage(buf, (GLsizeiptr)CLUSTERS * 2 * (GLsizeiptr)sizeof(glm::vec4), nullptr, 0);
     glCreateBuffers(1, &m_Counts);
     // Per-cluster {offset, count} pair (#208) instead of a bare count at a fixed slot.
     glNamedBufferStorage(m_Counts, (GLsizeiptr)CLUSTERS * 2 * (GLsizeiptr)sizeof(unsigned int), nullptr, 0);
@@ -50,7 +51,6 @@ void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4&
     const unsigned int zero2[2] = {0, 0};
     glNamedBufferSubData(m_Overflow, 0, sizeof(zero2), zero2);
 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, m_AABBs);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, m_Counts);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_Indices);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, m_Overflow);
@@ -59,8 +59,25 @@ void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4&
     // The build pass computes all 3,456 froxel AABBs from uInvProj, uScreenSize, uZNear, uZFar,
     // which only change on resize/FOV/near-far edit. Cache comparison avoids ~6,912 dispatches
     // per typical gameplay frame (build runs once per view, view runs 2x: shadows+main).
-    bool buildNeeded = (proj != m_LastProj || screenW != m_LastScreenW || screenH != m_LastScreenH ||
-                        nearZ != m_LastNearZ || farZ != m_LastFarZ);
+    // #160: look for a slot already built for this projection; otherwise rebuild the least
+    // recently used one.
+    ++m_CullCounter;
+    int slot = -1;
+    for (int i = 0; i < kBuildSlots; ++i) {
+        const BuildKey& k = m_BuildKeys[i];
+        if (k.Proj == proj && k.ScreenW == screenW && k.ScreenH == screenH && k.NearZ == nearZ && k.FarZ == farZ) {
+            slot = i;
+            break;
+        }
+    }
+    const bool buildNeeded = slot < 0;
+    if (buildNeeded) {
+        slot = 0;
+        for (int i = 1; i < kBuildSlots; ++i)
+            if (m_BuildKeys[i].LastUsed < m_BuildKeys[slot].LastUsed) slot = i;
+    }
+    m_BuildKeys[slot].LastUsed = m_CullCounter;
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, m_AABBs[slot]);
 
     if (buildNeeded) {
         buildShader.Bind();
@@ -71,11 +88,12 @@ void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4&
         buildShader.DispatchCompute(groups, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-        m_LastProj = proj;
-        m_LastScreenW = screenW;
-        m_LastScreenH = screenH;
-        m_LastNearZ = nearZ;
-        m_LastFarZ = farZ;
+        BuildKey& k = m_BuildKeys[slot];
+        k.Proj = proj;
+        k.ScreenW = screenW;
+        k.ScreenH = screenH;
+        k.NearZ = nearZ;
+        k.FarZ = farZ;
     }
 
     cullShader.Bind();
