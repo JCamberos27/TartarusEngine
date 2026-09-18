@@ -56,20 +56,25 @@ FetchContent_MakeAvailable(entt)
 # On the "docking" branch (not a numbered release) specifically for real dock-node based
 # panel layout: resizing one docked panel resizes its neighbors, independent of whether
 # panels are locked from being moved/rearranged.
+# Pinned to a commit on "docking", never the moving branch name: the host and TartarusEditor.dll
+# each compile their own ImGui while sharing one ImGuiContext, so both must build from identical
+# source for every clone. To upgrade, pick a newer docking commit, replace the SHA and note the
+# date; CI's dependency cache is keyed on this file, so the bump invalidates it.
 FetchContent_Declare(
   imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
-  GIT_TAG docking
+  GIT_TAG 545d1a884ab7be89bbab4600a649a206c8667773 # docking, 2026-09-16
 )
 FetchContent_MakeAvailable(imgui)
 
 # --- ImGuizmo (editor viewport translate/rotate/scale gizmos) ---
 # Its own CMakeLists.txt builds a standalone library we don't want (it doesn't know
 # about our ImGui include path), so populate the source only and compile it ourselves.
+# Pinned to a commit on "master" (no tagged releases track current ImGui); upgrade alongside ImGui.
 FetchContent_Declare(
   imguizmo
   GIT_REPOSITORY https://github.com/CedricGuillemet/ImGuizmo.git
-  GIT_TAG master
+  GIT_TAG 18cef5e031d8c6973d80284c67f60549fafd78c1 # master, 2026-08-08
 )
 FetchContent_GetProperties(imguizmo)
 if(NOT imguizmo_POPULATED)
