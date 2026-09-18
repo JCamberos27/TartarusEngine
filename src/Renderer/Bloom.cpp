@@ -1,4 +1,5 @@
 #include "Bloom.h"
+#include "GLStateScope.h"
 #include "GLFramebufferCheck.h"
 #include "Shader.h"
 #include "gl.h"
@@ -61,6 +62,7 @@ void Bloom::Resize(int width, int height) {
 
 void Bloom::Compute(Shader& threshShader, Shader& downsampleShader, Shader& upsampleShader,
                     unsigned int hdrTex, float threshold, float knee) {
+    GLStateScope restore; // #160 - put depth/blend/cull back as the caller had them
     glDisable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
     glDisable(GL_BLEND);
@@ -106,8 +108,5 @@ void Bloom::Compute(Shader& threshShader, Shader& downsampleShader, Shader& upsa
 
     glBindVertexArray(0);
     glActiveTexture(GL_TEXTURE0);
-    glDepthMask(GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
