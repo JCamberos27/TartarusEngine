@@ -130,7 +130,8 @@ std::string UsageTooltip(const std::vector<std::string>& users) {
 // Type/Label filter dropdown buttons - both just edit this same text.
 struct ParsedAssetSearch {
     std::vector<std::string> nameTerms;
-    std::vector<std::string> typeTerms;  // lowercased kind names: "model","texture","sound","scene","prefab","folder"
+    std::vector<std::string> typeTerms;  // lowercased kind names: "model","texture","material","shader",
+                                         // "sound","scene","prefab","screenshot","folder"
     std::vector<std::string> labelTerms; // lowercased
 };
 
@@ -1120,7 +1121,9 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         std::set<std::string> seen;
         for (const auto& path : m_ShotsListingCache.paths) {
             std::string name = std::filesystem::path(path).stem().string();
-            if (!MatchesAssetSearch(parsedSearch, name, "texture", {})) continue;
+            // A screenshot is an image: both t:Screenshot and t:Texture find it (#184).
+            if (!MatchesAssetSearch(parsedSearch, name, "screenshot", {}) &&
+                !MatchesAssetSearch(parsedSearch, name, "texture", {})) continue;
             seen.insert(path);
             auto it = m_ShotThumbs.find(path);
             std::shared_ptr<Texture> thumb;

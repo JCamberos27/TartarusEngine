@@ -90,13 +90,8 @@ inline bool IsVertexDraggable(World& world, entt::entity entity) {
     // get<RenderableComponent>(), which is undefined behavior (a crash) on an entity that
     // doesn't have one.
     if (!world.Registry.all_of<RenderableComponent>(entity)) return false;
-    // Vertex-drag math below works entirely in local space (matching TransformComponent for an
-    // unparented entity); a parented entity's TransformComponent is local-relative-to-parent, so
-    // mixing it with the world-space grab point would move the object to the wrong place. Not
-    // supported for now.
-    if (const auto* hier = world.Registry.try_get<HierarchyComponent>(entity)) {
-        if (hier->Parent != entt::null) return false;
-    }
+    // Parented objects are fine (#184): the grab, drag plane and snap targets are all world
+    // space, and UpdateVertexDrag converts the result into the parent's frame (#224).
     return true;
 }
 

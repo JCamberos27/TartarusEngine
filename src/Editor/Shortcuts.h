@@ -73,6 +73,12 @@ void BeginFrame(std::uint32_t contextMask);
 // True once, on the frame the (possibly two-key) chord completes while its context is active.
 bool Triggered(const char* id);
 
+// #184 — for press-and-hold modes (vertex snap: hold V). True every frame the binding's key is
+// down with exactly its modifiers, while its context was active at the last BeginFrame. A
+// two-key sequence never counts as held. `ignoreContext` keeps an already-started hold alive
+// when the context lapses mid-gesture (the cursor dragging out of the viewport).
+bool Held(const char* id, bool ignoreContext = false);
+
 // GLFW-input variant for Ctx_App shortcuts the main loop evaluates before an ImGui frame
 // exists (F1-F4 play controls, F11 fullscreen). Polls Input:: directly; edge-triggered via
 // Input::IsKeyPressed. Single-chord only — a sequence's prefix is ignored here.

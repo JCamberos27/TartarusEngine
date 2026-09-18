@@ -122,7 +122,8 @@
 //   32 - #172 / #187: OnLoad(state, size) -> bool and SaveState, the reload contract shared with
 //        the game module (Core/HotReloadSwap.h): a build whose OnLoad fails is rolled back to the
 //        previous one, and module-held UI state can be carried across a reload.
-constexpr std::uint32_t kEditorModuleAPIVersion = 32;
+//   33 - #184: Help menu actions - OpenAbout, OpenDocumentation, OpenLogFolder, ReportBug.
+constexpr std::uint32_t kEditorModuleAPIVersion = 33;
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -566,6 +567,14 @@ struct EditorModuleHostAPI {
     // 0 Grid, 1 List, 2 Details. Drives whether the module forces single-column rows (List and
     // Details both do) and whether it draws the Name/Type/Size/Modified header row.
     int (*GetAssetViewMode)() = nullptr;
+
+    // --- Help menu (API v33, #184) ---
+    void (*OpenAbout)() = nullptr;         // Settings > About (version + system report)
+    void (*OpenDocumentation)() = nullptr; // the project's documentation page in the browser
+    void (*OpenLogFolder)() = nullptr;     // Explorer on the Logs folder, Editor.log selected
+    // Copies the system report to the clipboard, reveals Editor.log, and opens the issue
+    // tracker's new-issue page, so a report can include both without the host sending anything.
+    void (*ReportBug)() = nullptr;
 };
 
 struct EditorModuleAPI {

@@ -82,9 +82,12 @@ void StatRow(const char* label, int value, bool dim = false) {
 void ProfilerRow(const EditorModuleProfilerSample& s, float maxMs) {
     ImGui::PushID(s.Name);
     ImGui::TextUnformatted(s.Name);
-    ImGui::SameLine(120.0f);
+    // #184 — sized off the font (which is baked at the editor's UI scale) rather than fixed
+    // pixels, so the name column and bar keep their proportions at 150%/200% scaling.
+    const float em = ImGui::GetFontSize();
+    ImGui::SameLine(em * 9.0f);
 
-    const float barW = 110.0f, barH = ImGui::GetTextLineHeight() * 0.6f;
+    const float barW = em * 8.5f, barH = ImGui::GetTextLineHeight() * 0.6f;
     const ImVec2 p = ImGui::GetCursorScreenPos();
     const float frac = maxMs > 0.0001f ? std::clamp(s.Milliseconds / maxMs, 0.0f, 1.0f) : 0.0f;
     ImDrawList* dl = ImGui::GetWindowDrawList();
