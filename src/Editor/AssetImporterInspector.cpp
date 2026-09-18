@@ -49,6 +49,15 @@ void AssetImporterInspector::DrawTextureSettings(TextureImportSettings& settings
         isDirty = true;
     }
 
+    Row("Aniso Level", "Anisotropic filtering: keeps a texture sharp when seen at a grazing\nangle (floors, roads, walls receding into the distance). 1 = off. Needs\nmipmaps and a Bilinear/Trilinear filter; capped at what the GPU supports.");
+    {
+        int aniso = settings.AnisoLevel;
+        if (ImGui::SliderInt("##Aniso", &aniso, 1, 16)) {
+            settings.AnisoLevel = aniso;
+            isDirty = true;
+        }
+    }
+
     Row("Wrap Mode", "Repeat tiles past 0..1 UV (most surface textures). Clamp to Edge\nsmears the edge pixel instead - for a texture that should never visibly\ntile (a decal, a UI sprite).");
     const char* kWraps[] = {"Repeat", "Clamp to Edge"};
     int wrapIdx = (int)settings.WrapMode;
