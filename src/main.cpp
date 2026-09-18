@@ -2604,8 +2604,8 @@ int main(int argc, char** argv) {
         // clean scene already matches disk, so rewriting it only churned mtimes/git and could
         // overwrite a scene that failed to load with the empty world that replaced it.
 
-        Screenshot::WaitForPending(); // #153 - a capture still encoding when the editor closes
         editor.Shutdown();
+        Screenshot::WaitForPending(); // #153 - a capture still encoding when the editor closes
         editorModule.Shutdown();
         AudioEngine::Shutdown();
     } catch (const std::exception& e) {
