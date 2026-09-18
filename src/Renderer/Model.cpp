@@ -13,6 +13,7 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <assimp/config.h>
+#include <assimp/GltfMaterial.h>
 
 #include <iostream>
 #include <cmath>
@@ -126,6 +127,59 @@ void Model::CollisionGeometry(std::vector<glm::vec3>& outVertices,
         outIndices.reserve(outIndices.size() + idx.size());
         for (unsigned int i : idx) outIndices.push_back(base + i);
     }
+}
+
+bool Model::RaycastTriangles(const glm::mat4& modelMatrix, const glm::vec3& worldOrigin, const glm::vec3& worldDir,
+                             float& outT, glm::vec3* outNormal, float minT) const {
+    const float dirLen = glm::length(worldDir);
+    if (dirLen < 1e-12f) return false;
+    const glm::vec3 wd = worldDir / dirLen;
+    // Test in LOCAL space (no per-vertex transform), then measure the hit back in world space so
+    // a non-uniformly scaled model still reports a correct world distance.
+    const glm::mat4 inv = glm::inverse(modelMatrix);
+    const glm::vec3 lo = glm::vec3(inv * glm::vec4(worldOrigin, 1.0f));
+    const glm::vec3 ld = glm::vec3(inv * glm::vec4(wd, 0.0f));
+    float bestWorldT = 1e30f;
+    glm::vec3 bestLocalN(0.0f);
+    bool hit = false;
+    for (const auto& mesh : m_Meshes) {
+        const auto& pos = mesh->LocalPositions();
+        const auto& idx = mesh->LocalIndices();
+        for (size_t i = 0; i + 2 < idx.size(); i += 3) {
+            if (idx[i] >= pos.size() || idx[i + 1] >= pos.size() || idx[i + 2] >= pos.size()) continue;
+            const glm::vec3& a = pos[idx[i]];
+            const glm::vec3& b = pos[idx[i + 1]];
+            const glm::vec3& c = pos[idx[i + 2]];
+            // Moller-Trumbore, two-sided.
+            const glm::vec3 e1 = b - a, e2 = c - a;
+            const glm::vec3 p = glm::cross(ld, e2);
+            const float det = glm::dot(e1, p);
+            if (std::fabs(det) < 1e-12f) continue;
+            const float invDet = 1.0f / det;
+            const glm::vec3 tv = lo - a;
+            const float u = glm::dot(tv, p) * invDet;
+            if (u < 0.0f || u > 1.0f) continue;
+            const glm::vec3 q = glm::cross(tv, e1);
+            const float v = glm::dot(ld, q) * invDet;
+            if (v < 0.0f || u + v > 1.0f) continue;
+            const float tl = glm::dot(e2, q) * invDet;
+            if (tl <= 0.0f) continue;
+            const glm::vec3 worldHit = glm::vec3(modelMatrix * glm::vec4(lo + ld * tl, 1.0f));
+            const float tw = glm::dot(worldHit - worldOrigin, wd);
+            if (tw < minT || tw >= bestWorldT) continue;
+            bestWorldT = tw;
+            bestLocalN = glm::cross(e1, e2);
+            hit = true;
+        }
+    }
+    if (!hit) return false;
+    outT = bestWorldT;
+    if (outNormal) {
+        glm::vec3 n = glm::normalize(glm::transpose(glm::inverse(glm::mat3(modelMatrix))) * bestLocalN);
+        if (glm::dot(n, wd) > 0.0f) n = -n; // face the ray origin
+        *outNormal = n;
+    }
+    return true;
 }
 
 std::shared_ptr<Model> Model::CreatePrimitive(const std::string& kind, const std::string& path) {
@@ -242,13 +296,21 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     return gpuMesh;
 }
 
-std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath) {
-    auto it = m_TextureCache.find(fullPath);
+std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath, TextureRole role) {
+    // #95 — the role decides the colour space. Every map used to be loaded with the default
+    // (sRGB) settings, so normal / metallic / roughness / AO maps were gamma-decoded on sample:
+    // bent normals and wrong roughness on essentially every imported model. Only albedo and
+    // emissive are colour data. Keyed by path + role, in case one file feeds both kinds of slot.
+    const std::string key = fullPath + (role == TextureRole::Color ? "|srgb" : role == TextureRole::Normal ? "|normal" : "|linear");
+    auto it = m_TextureCache.find(key);
     if (it != m_TextureCache.end()) return it->second;
 
-    auto tex = std::make_shared<Texture>(fullPath);
+    TextureImportSettings settings;
+    settings.IsSRGB = role == TextureRole::Color;
+    if (role == TextureRole::Normal) settings.TextureType = TextureImportSettings::Type::NormalMap;
+    auto tex = std::make_shared<Texture>(fullPath, settings);
     if (!tex->IsValid()) return nullptr;
-    m_TextureCache[fullPath] = tex;
+    m_TextureCache[key] = tex;
     return tex;
 }
 
@@ -311,7 +373,7 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
     Material mat;
     aiMaterial* material = scene->mMaterials[materialIndex];
 
-    auto loadSlot = [&](aiTextureType type) -> std::shared_ptr<Texture> {
+    auto loadSlot = [&](aiTextureType type, TextureRole role) -> std::shared_ptr<Texture> {
         if (material->GetTextureCount(type) == 0) return nullptr;
         aiString str;
         material->GetTexture(type, 0, &str);
@@ -325,20 +387,20 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
                       ") which isn't supported yet - that map slot will be blank.");
             return nullptr;
         }
-        return LoadCachedTexture(resolved);
+        return LoadCachedTexture(resolved, role);
     };
 
-    mat.AlbedoMap = loadSlot(aiTextureType_DIFFUSE);
-    if (!mat.AlbedoMap) mat.AlbedoMap = loadSlot(aiTextureType_BASE_COLOR); // glTF2 alt slot
-    mat.NormalMap = loadSlot(aiTextureType_NORMALS);
-    mat.MetallicRoughnessMap = loadSlot(aiTextureType_UNKNOWN); // assimp puts glTF2 packed metal-rough here
+    mat.AlbedoMap = loadSlot(aiTextureType_DIFFUSE, TextureRole::Color);
+    if (!mat.AlbedoMap) mat.AlbedoMap = loadSlot(aiTextureType_BASE_COLOR, TextureRole::Color); // glTF2 alt slot
+    mat.NormalMap = loadSlot(aiTextureType_NORMALS, TextureRole::Normal);
+    mat.MetallicRoughnessMap = loadSlot(aiTextureType_UNKNOWN, TextureRole::Data); // assimp puts glTF2 packed metal-rough here
     // Standalone maps — NOT the packed slot above, which is a different (G=rough, B=metal)
     // texture layout that a plain grayscale roughness/metalness map would be misread against.
-    mat.RoughnessMap = loadSlot(aiTextureType_DIFFUSE_ROUGHNESS);
-    mat.MetallicMap = loadSlot(aiTextureType_METALNESS);
-    mat.AOMap = loadSlot(aiTextureType_LIGHTMAP);
-    if (!mat.AOMap) mat.AOMap = loadSlot(aiTextureType_AMBIENT_OCCLUSION);
-    mat.EmissiveMap = loadSlot(aiTextureType_EMISSIVE);
+    mat.RoughnessMap = loadSlot(aiTextureType_DIFFUSE_ROUGHNESS, TextureRole::Data);
+    mat.MetallicMap = loadSlot(aiTextureType_METALNESS, TextureRole::Data);
+    mat.AOMap = loadSlot(aiTextureType_LIGHTMAP, TextureRole::Data);
+    if (!mat.AOMap) mat.AOMap = loadSlot(aiTextureType_AMBIENT_OCCLUSION, TextureRole::Data);
+    mat.EmissiveMap = loadSlot(aiTextureType_EMISSIVE, TextureRole::Color);
 
     aiColor4D color;
     if (material->Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS) {
@@ -347,6 +409,21 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
     if (material->Get(AI_MATKEY_COLOR_EMISSIVE, color) == AI_SUCCESS) {
         mat.EmissiveColor = {color.r, color.g, color.b};
     }
+    // #102 — the emissive map is now tinted by EmissiveColor; files that ship an emissive map
+    // with no (or a black) emissive factor mean "the map as-is".
+    if (mat.EmissiveMap && mat.EmissiveColor == glm::vec3(0.0f)) mat.EmissiveColor = glm::vec3(1.0f);
+    // #101 — alpha cutout. glTF says so explicitly (alphaMode MASK + alphaCutoff); formats with
+    // no alpha mode (FBX/OBJ) keep the old behaviour of treating an albedo map that carries an
+    // alpha channel as cutout, which is what foliage/fence assets in those formats rely on.
+    aiString alphaMode;
+    if (material->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
+        mat.AlphaClip = std::string(alphaMode.C_Str()) == "MASK";
+        float cutoff = 0.5f;
+        if (material->Get(AI_MATKEY_GLTF_ALPHACUTOFF, cutoff) == AI_SUCCESS) mat.AlphaCutoff = cutoff;
+    } else if (mat.AlbedoMap && (mat.AlbedoMap->SourceChannels() == 4 || mat.AlbedoMap->SourceChannels() == 2)) {
+        mat.AlphaClip = true;
+    }
+
     float scalar;
     if (material->Get(AI_MATKEY_METALLIC_FACTOR, scalar) == AI_SUCCESS) mat.Metallic = scalar;
     if (material->Get(AI_MATKEY_ROUGHNESS_FACTOR, scalar) == AI_SUCCESS) mat.Roughness = scalar;
@@ -517,11 +594,14 @@ struct MaterialLocs {
     int hasRoughness, roughnessMap;
     int hasAO, aoMap;
     int hasEmissive, emissiveMap;
+    int alphaClip, alphaCutoff; // #101
 };
 
 MaterialLocs ResolveMaterialLocs(Shader& shader) {
     MaterialLocs L;
     L.baseColor = shader.Loc("uBaseColor");
+    L.alphaClip = shader.Loc("uAlphaClip");
+    L.alphaCutoff = shader.Loc("uAlphaCutoff");
     L.metallic = shader.Loc("uMetallic");
     L.roughness = shader.Loc("uRoughness");
     L.emissiveColor = shader.Loc("uEmissiveColor");
@@ -557,6 +637,8 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
     shader.SetVec3(locs.emissiveColor, mat.EmissiveColor * mat.EmissiveStrength);
     shader.SetInt(locs.triplanar, mat.Triplanar ? 1 : 0);
     shader.SetFloat(locs.triplanarScale, mat.TriplanarScale);
+    shader.SetInt(locs.alphaClip, mat.AlphaClip ? 1 : 0);       // #101
+    shader.SetFloat(locs.alphaCutoff, mat.AlphaCutoff);
 
     // Each map gets a FIXED unit (1..7). An absent map still binds a 1x1 default there, so the
     // driver never sees texture 0 on a sampler unit the program declares (audit GL-101 / #366:
@@ -590,7 +672,23 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
 // `ma.ExtraProps` (typed store filled by MaterialAsset::Load, #354).
 void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const ShaderAsset& sa) {
     const Material& mat = ma.Mat;
-    if (GLStateCache::MaterialAlreadyBound(mat.Hash(), shader.Program())) return;
+    // #99 — the redundant-bind skip must also see custom (non-builtin) shader properties;
+    // Material::Hash() only covers the built-in fields, so two materials differing only in an
+    // ExtraProp used to render with whichever was bound first.
+    size_t hash = mat.Hash();
+    auto mix = [&hash](size_t v) { hash ^= v + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2); };
+    for (const auto& [name, p] : ma.ExtraProps) {
+        mix(std::hash<std::string>{}(name));
+        mix(std::hash<float>{}(p.F));
+        for (int c = 0; c < 4; ++c) mix(std::hash<float>{}(p.V[c]));
+        mix((size_t)p.B); mix((size_t)p.I);
+        mix(std::hash<const void*>{}(p.Tex.get()));
+    }
+    mix((size_t)ma.RenderQueue);
+    if (GLStateCache::MaterialAlreadyBound(hash, shader.Program())) return;
+    // #101 — cutout for the AlphaTest queue (Standard.shader includes ModelFragment's uAlphaClip).
+    shader.SetInt("uAlphaClip", (mat.AlphaClip || ma.RenderQueue == MaterialAsset::Queue::AlphaTest) ? 1 : 0);
+    shader.SetFloat("uAlphaCutoff", mat.AlphaCutoff);
 
     const auto& props    = sa.Properties();
     const auto& bindings = sa.Bindings();
@@ -614,20 +712,33 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
                         : (extra ? extra->Tex : MaterialAsset::GetTexture(mat, pname) /*null*/);
             if (tex && tex->IsValid()) {
                 tex->Bind(b.TextureUnit);
-                shader.SetInt(uname,   b.TextureUnit);
                 shader.SetInt(hasName, 1);
             } else {
+                // #99 — an absent map still binds its declared default ("white"/"black"/
+                // "normal"), like the built-in path does, so the sampler never sees texture 0
+                // (KHR 131204) or a stale texture left on that unit by a previous draw.
+                const unsigned int fallback = prop.DefaultTex == "normal" ? DefaultTextures::FlatNormal()
+                                            : prop.DefaultTex == "black"  ? DefaultTextures::Black()
+                                                                          : DefaultTextures::White();
+                GLStateCache::BindTexture2D(b.TextureUnit, fallback);
                 shader.SetInt(hasName, 0);
             }
+            shader.SetInt(uname, b.TextureUnit);
             break;
         }
         case ShaderPropType::Color:
-        case ShaderPropType::Vec2:
         case ShaderPropType::Vec3:
-        case ShaderPropType::Vec4:
             shader.SetVec3(uname, builtin ? MaterialAsset::GetColor(mat, pname)
                                           : (extra ? glm::vec3(extra->V)
                                                    : glm::vec3(prop.DefaultVec)));
+            break;
+        // #99 — vec2/vec4 uniforms need the matching setter; glUniform3f on them is
+        // GL_INVALID_OPERATION and the value was silently never set.
+        case ShaderPropType::Vec2:
+            shader.SetVec2(uname, glm::vec2(extra ? extra->V : prop.DefaultVec));
+            break;
+        case ShaderPropType::Vec4:
+            shader.SetVec4(uname, extra ? extra->V : prop.DefaultVec);
             break;
         case ShaderPropType::Float:
             shader.SetFloat(uname, builtin ? MaterialAsset::GetFloat(mat, pname)
@@ -702,19 +813,24 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
     UploadBoneMatrices(shader);
     int albedoLoc = shader.Loc("uAlbedo");
     int alphaTestLoc = shader.Loc("uAlphaTest");
+    int alphaCutoffLoc = shader.Loc("uAlphaCutoff");
     for (int i = 0; i < (int)m_Meshes.size(); ++i) {
         bool hasSlot = i < (int)slots.size() && slots[i];
         // Transparent materials don't cast shadows — skip them in the depth-only pass.
         if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
         const Material& mat = hasSlot ? slots[i]->Mat : m_Meshes[i]->Mat;
         // Only cost paid over a pure depth draw: one texture bind + two uniforms, and only for
-        // meshes that actually have an albedo map (cutout foliage/fences) — the shadow then
-        // follows the cutout instead of a solid silhouette (#116). #192: skip even that when the
-        // previous mesh in this pass drew with the same material.
-        if (!GLStateCache::MaterialAlreadyBound(mat.Hash(), shader.Program())) {
-            if (mat.AlbedoMap && mat.AlbedoMap->IsValid()) {
+        // CUTOUT materials with an albedo map (foliage/fences) — the shadow then follows the
+        // cutout instead of a solid silhouette (#116). #101: it used to do this for every
+        // albedo-mapped mesh, so an opaque material whose albedo alpha means something else
+        // (smoothness, a mask) cast holey shadows. #192: skip even that when the previous mesh
+        // in this pass drew with the same material.
+        const bool clip = mat.AlphaClip || (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::AlphaTest);
+        if (!GLStateCache::MaterialAlreadyBound(mat.Hash() ^ (clip ? 0x5bd1e995ull : 0ull), shader.Program())) {
+            if (clip && mat.AlbedoMap && mat.AlbedoMap->IsValid()) {
                 mat.AlbedoMap->Bind(0);
                 shader.SetInt(alphaTestLoc, 1);
+                shader.SetFloat(alphaCutoffLoc, mat.AlphaCutoff);
             } else {
                 // uAlphaTest = 0 means the sampler result is never read, but the ShadowDepth
                 // program still declares `sampler2D uAlbedo`, so unit 0 must hold a real texture

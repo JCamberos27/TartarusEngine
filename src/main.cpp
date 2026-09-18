@@ -97,169 +97,8 @@ extern "C" {
     __declspec(dllexport) int   AmdPowerXpressRequestHighPerformance = 1;
 }
 
-// Selection outline (editor-only): the classic "inverted hull" technique — draw the object
-// again, offset a little along its normal, with front-face culling so only the silhouette
-// peeking out from behind the normal draw survives. One flat fragment shader shared by both
-// variants below; only the vertex stage differs, matching each mesh's own attribute layout.
-// Depth-only pass for cascaded shadow maps. Mirrors kModelVertexSrc's skinning so animated
-// occluders cast a deforming shadow; writes nothing but depth.
-static const char* kShadowDepthVertexSrc = R"(
-#version 460 core
-layout (location = 0) in vec3 aPos;
-layout (location = 2) in vec2 aUV;
-layout (location = 4) in ivec4 aBoneIDs;
-layout (location = 5) in vec4 aWeights;
-uniform mat4 uModel;
-uniform mat4 uLightViewProj;
-uniform int uUseSkinning;
-layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; }; // shared with the model VS (#104)
-out vec2 vUV;
-out vec3 vWorldPos; // used by the local-light (spot/point) depth FS; the sun FS ignores it
-void main() {
-    vec4 localPos = vec4(aPos, 1.0);
-    if (uUseSkinning == 1) {
-        mat4 skinMat = mat4(0.0);
-        float tw = 0.0;
-        for (int i = 0; i < 4; ++i) {
-            if (aBoneIDs[i] >= 0) { skinMat += uBones[clamp(aBoneIDs[i], 0, 99)] * aWeights[i]; tw += aWeights[i]; }
-        }
-        if (tw <= 0.0001) skinMat = mat4(1.0);
-        localPos = skinMat * localPos;
-    }
-    vUV = aUV;
-    vec4 worldPos = uModel * localPos;
-    vWorldPos = worldPos.xyz;
-    gl_Position = uLightViewProj * worldPos;
-}
-)";
-// Alpha-tested casters (foliage, chain-link, decals): when a mesh has an albedo map its alpha
-// is sampled and cut below 0.5 so the shadow follows the cutout, not a solid quad (#116). Opaque
-// meshes leave uAlphaTest 0 and this is a no-op. Plain hardware depth (keeps early-Z) — used
-// for the cascaded SUN shadow, whose ortho projection is already linear.
-static const char* kShadowDepthFragmentSrc = R"(
-#version 460 core
-in vec2 vUV;
-uniform int uAlphaTest;
-uniform sampler2D uAlbedo;
-void main() {
-    if (uAlphaTest == 1 && texture(uAlbedo, vUV).a < 0.5) discard;
-}
-)";
-// Spot / point-light depth: store LINEAR distance-to-light / far rather than the perspective
-// projection's non-linear depth. A constant compare bias is then uniform in world space, so a
-// shadow reaches the full light Range instead of the far part of the frustum losing depth
-// precision (and the shadow with it). Writing gl_FragDepth forfeits early-Z — acceptable here.
-static const char* kLocalShadowDepthFragmentSrc = R"(
-#version 460 core
-in vec2 vUV;
-in vec3 vWorldPos;
-uniform int uAlphaTest;
-uniform sampler2D uAlbedo;
-uniform vec3 uShadowLightPos;
-uniform float uShadowFar;
-void main() {
-    if (uAlphaTest == 1 && texture(uAlbedo, vUV).a < 0.5) discard;
-    gl_FragDepth = clamp(distance(vWorldPos, uShadowLightPos) / max(uShadowFar, 1e-3), 0.0, 1.0);
-}
-)";
-
-// Selection outline (editor-only): the classic "inverted hull" technique — draw the object
-// again, offset a little along its normal, with front-face culling so only the silhouette
-// peeking out from behind the normal draw survives. One flat fragment shader shared by both
-// variants below; only the vertex stage differs, matching each mesh's own attribute layout.
-static const char* kOutlineFragmentSrc = R"(
-#version 460 core
-out vec4 FragColor;
-uniform vec3 uOutlineColor;
-void main() {
-    FragColor = vec4(uOutlineColor, 1.0);
-}
-)";
-
-// Mirrors kModelVertexSrc's skinning block so an animated model's outline deforms with it,
-// then offsets along the (skinned) normal instead of computing UV/TBN — outline doesn't need them.
-static const char* kOutlineModelVertexSrc = R"(
-#version 460 core
-layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec3 aNormal;
-layout (location = 2) in vec2 aUV;
-layout (location = 3) in vec3 aTangent;
-layout (location = 4) in ivec4 aBoneIDs;
-layout (location = 5) in vec4 aWeights;
-layout (location = 6) in float aTangentSign;
-
-uniform mat4 uModel;
-uniform mat4 uView;
-uniform mat4 uProj;
-uniform int uUseSkinning;
-uniform mat4 uBones[100];
-uniform float uThickness;
-
-void main() {
-    vec4 localPos = vec4(aPos, 1.0);
-    vec3 localNormal = aNormal;
-
-    if (uUseSkinning == 1) {
-        mat4 skinMat = mat4(0.0);
-        float totalWeight = 0.0;
-        for (int i = 0; i < 4; ++i) {
-            if (aBoneIDs[i] >= 0) {
-                skinMat += uBones[aBoneIDs[i]] * aWeights[i];
-                totalWeight += aWeights[i];
-            }
-        }
-        if (totalWeight <= 0.0001) skinMat = mat4(1.0);
-        localPos = skinMat * localPos;
-        localNormal = mat3(skinMat) * aNormal;
-    }
-
-    vec4 world = uModel * localPos;
-    vec3 worldNormal = normalize(mat3(transpose(inverse(uModel))) * localNormal);
-    world.xyz += worldNormal * uThickness;
-    gl_Position = uProj * uView * world;
-}
-)";
-
-// Screen-space selection outline: a fullscreen pass that reads a 1-bit "is this pixel part of
-// the selection" mask (rendered by the outline shader above into its own target) and paints a
-// uniform-width ring in the gap just outside the silhouette. Works for any shape/orientation —
-// unlike an inverted-hull, which can't widen a flat mesh's screen silhouette at all (audit #51).
-static const char* kOutlineDilateVertSrc = R"(
-#version 460 core
-out vec2 vUV;
-const vec2 kQuad[6] = vec2[](
-    vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(1.0, 1.0),
-    vec2(-1.0, -1.0), vec2(1.0, 1.0), vec2(-1.0, 1.0)
-);
-void main() {
-    vec2 p = kQuad[gl_VertexID];
-    vUV = p * 0.5 + 0.5;
-    gl_Position = vec4(p, 0.0, 1.0);
-}
-)";
-
-static const char* kOutlineDilateFragSrc = R"(
-#version 460 core
-in vec2 vUV;
-out vec4 FragColor;
-uniform sampler2D uMask;
-uniform vec3 uTexel;     // xy = 1.0 / mask size, in texels
-uniform vec3 uColor;
-uniform int uRadius;     // outline half-width, in pixels
-void main() {
-    float here = texture(uMask, vUV).r;
-    if (here > 0.5) discard;                 // inside the selection: leave the surface alone
-    float adj = 0.0;
-    for (int y = -uRadius; y <= uRadius; ++y) {
-        for (int x = -uRadius; x <= uRadius; ++x) {
-            if (x * x + y * y > uRadius * uRadius) continue; // round brush
-            adj = max(adj, texture(uMask, vUV + vec2(float(x), float(y)) * uTexel.xy).r);
-        }
-    }
-    if (adj < 0.5) discard;                  // not adjacent to the selection
-    FragColor = vec4(uColor, 1.0);
-}
-)";
+// (#161: the embedded GLSL copies that used to live here were dead — the real shaders load from
+// src/Renderer/shaders/*.glsl via ShaderLibrary.)
 
 // Simple fly-camera controls used only while the editor overlay is open. `orbitPivot`, when
 // non-null, is the current selection's world-space center (see EditorLayer::GetSelectionCenter)
@@ -715,6 +554,11 @@ int main(int argc, char** argv) {
 
         EditorLayer editor;
         editor.Init(window.Handle());
+        {
+            std::error_code existsEc;
+            if (!sceneLoaded && std::filesystem::exists(scenePath, existsEc))
+                editor.OnStartupSceneLoadFailed(scenePath); // #84
+        }
         // Headless runs (--smoke-test / --resave / the benches) must not write imgui.ini either
         // — same "read-only unless explicitly told otherwise" contract as the scene-file fix
         // above (audit #77). ImGui's own periodic autosave (every io.IniSavingRate seconds,
@@ -1014,10 +858,10 @@ int main(int argc, char** argv) {
         };
 
         // On-exit "Save changes?" flow (audit #56). When the window-close request arrives with a
-        // dirty, titled scene, swallow it and let the editor raise a modal; `exitApproved` is set
-        // once the user has chosen Save or Don't Save so the next close request goes through.
+        // dirty scene, swallow it and let the editor raise a modal; `exitApproved` is set once
+        // the user has chosen Don't Save, or Save and the save succeeded, so the next close
+        // request goes through.
         bool exitApproved = false;
-        bool exitSkipFinalSave = false;
 
         // Monotonically increasing per-frame counter, used by Model::TickAnimationOnce() to
         // dedupe animation updates for models shared by more than one entity (#106) without a
@@ -1080,6 +924,8 @@ int main(int argc, char** argv) {
             }
         }
 
+        // #89 — see the matching catch after the loop. (Loop body deliberately not re-indented.)
+        try {
         while (true) {
             ++frameIndex;
             // Advance the smoke test: load the next scene (or, once every scene's frame quota is
@@ -1100,6 +946,76 @@ int main(int argc, char** argv) {
                     smokeSceneLoadOk = SceneSerializer::Load(world, assets, path, /*persistMigration=*/false);
                     std::cout << "[SmokeTest] Loading " << path
                               << (smokeSceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
+                    // #116 regression: the exact triangle raycast behind editor picking / surface
+                    // snapping. smoke_min's cube is centred at y=1 with size 2 (top face y=2), rotated
+                    // 20 deg about Y, so a ray straight down from y=10 must hit it 8 units out.
+                    if (smokeSceneLoadOk && path.find("smoke_min") != std::string::npos) {
+                        float bestT = 1e30f;
+                        for (auto re : world.Registry.view<RenderableComponent>()) {
+                            const auto& rc = world.Registry.get<RenderableComponent>(re);
+                            float t;
+                            if (rc.ModelRef && rc.ModelRef->RaycastTriangles(world.ComposeWorldTransform(re),
+                                    glm::vec3(0.0f, 10.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), t))
+                                bestT = std::min(bestT, t);
+                        }
+                        if (std::abs(bestT - 8.0f) > 0.01f)
+                            Log::Error("[SmokeTest] triangle raycast expected t=8, got " + std::to_string(bestT));
+                        else
+                            std::cout << "[SmokeTest]   triangle raycast OK (t=" << bestT << ")" << std::endl;
+
+                        // #119 regression: copying a jointed pair (the Duplicate / Paste path) must
+                        // connect the copied joint to the copied partner, not the original.
+                        entt::entity a = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "SmokeJointA");
+                        entt::entity b = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "SmokeJointB");
+                        world.Registry.emplace_or_replace<JointComponent>(a).ConnectedOrder =
+                            world.Registry.get<OrderComponent>(b).Value;
+                        std::vector<entt::entity> copies;
+                        std::unordered_map<int, entt::entity> srcOrder;
+                        const bool appended = SceneSerializer::AppendEntitiesFromString(world, assets,
+                            SceneSerializer::SaveEntitiesToString(world, {a, b}), copies, &srcOrder);
+                        auto copyOf = [&](entt::entity e) {
+                            auto it = srcOrder.find(world.Registry.get<OrderComponent>(e).Value);
+                            return it == srcOrder.end() ? entt::null : it->second;
+                        };
+                        const entt::entity ca = appended ? copyOf(a) : entt::null;
+                        const entt::entity cb = appended ? copyOf(b) : entt::null;
+                        const auto* cj = ca != entt::null ? world.Registry.try_get<JointComponent>(ca) : nullptr;
+                        if (!cj || cb == entt::null || cj->ConnectedOrder != world.Registry.get<OrderComponent>(cb).Value)
+                            Log::Error("[SmokeTest] copied joint was not repointed at the copied partner.");
+                        else
+                            std::cout << "[SmokeTest]   joint copy remap OK" << std::endl;
+                        for (entt::entity e : copies) if (world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
+                        world.DestroyEntityAndChildren(a);
+                        world.DestroyEntityAndChildren(b);
+                    }
+                    // #81 regression: the undo/redo path round-trips the scene + asset library
+                    // through SaveToString/LoadFromString. It must neither throw (GUID PathRef
+                    // entries used to crash it) nor drop/re-import library assets.
+                    if (smokeSceneLoadOk) {
+                        auto countEntities = [&]() {
+                            std::size_t n = 0;
+                            world.Registry.view<TransformComponent>().each([&](auto...) { ++n; });
+                            return n;
+                        };
+                        const std::size_t entsBefore = countEntities();
+                        const std::size_t modelsBefore = assets.Models().size();
+                        const std::size_t texBefore = assets.Textures().size();
+                        const std::size_t matsBefore = assets.Materials().size();
+                        bool rtOk = false;
+                        try {
+                            const std::string snap = SceneSerializer::SaveToString(world, assets);
+                            rtOk = SceneSerializer::LoadFromString(world, assets, snap);
+                        } catch (const std::exception& e) {
+                            Log::Error(std::string("[SmokeTest] undo snapshot round-trip threw: ") + e.what());
+                        }
+                        if (!rtOk || countEntities() != entsBefore || assets.Models().size() != modelsBefore ||
+                            assets.Textures().size() != texBefore || assets.Materials().size() != matsBefore)
+                            Log::Error("[SmokeTest] undo snapshot round-trip changed the scene or asset library.");
+                        else
+                            std::cout << "[SmokeTest]   undo round-trip OK (" << entsBefore << " entities, "
+                                      << modelsBefore << " models, " << texBefore << " textures, "
+                                      << matsBefore << " materials)" << std::endl;
+                    }
                     smokeFramesRendered = 0;
                     smokeSceneActive = true;
                     SceneRendererDebug::ResetVariantDrawCounts(); // #354 per-scene variant tally
@@ -1113,7 +1029,20 @@ int main(int argc, char** argv) {
                 if (smokeSceneActive && smokePlayScene) {
                     const int f = smokeFramesRendered;
                     if ((f == 20 || f == 55) && !playing) { std::cout << "[SmokeTest]   -> Play\n";  togglePlay(); }
-                    if ((f == 40 || f == 75) &&  playing) { std::cout << "[SmokeTest]   -> Stop\n";  togglePlay(); ++smokePlayCycles; }
+                    if ((f == 40 || f == 75) &&  playing) {
+                        // #114 regression: every simulated body must still be somewhere sane
+                        // (finite, near the scene) — a parented body used to be teleported by
+                        // writing its world pose into its local transform.
+                        for (entt::entity rbE : world.Registry.view<RigidbodyComponent, TransformComponent>()) {
+                            const glm::vec3 p = world.WorldSpaceTransform(rbE).Position;
+                            const bool sane = std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z) &&
+                                              glm::length(p) < 1000.0f;
+                            std::cout << "[SmokeTest]   body " << entt::to_integral(rbE) << " at world (" << p.x
+                                      << ", " << p.y << ", " << p.z << ")" << std::endl;
+                            if (!sane) Log::Error("[SmokeTest] simulated body ended up at a non-finite / far-away position.");
+                        }
+                        std::cout << "[SmokeTest]   -> Stop\n";  togglePlay(); ++smokePlayCycles;
+                    }
                 }
             }
             Clock::Update();
@@ -1132,8 +1061,9 @@ int main(int argc, char** argv) {
             Input::Update();
 
             if (window.ShouldClose()) {
-                bool dirtyTitled = editor.IsDirty() && !editor.CurrentScenePath().empty();
-                if (exitApproved || !dirtyTitled) break;
+                // #88 — prompt for ANY unsaved scene, titled or not (Save on an untitled one
+                // routes through Save As).
+                if (exitApproved || !editor.IsDirty()) break;
                 window.SetShouldClose(false);          // veto this close; ask first
                 if (!editor.ExitPromptActive()) editor.OpenExitPrompt();
             }
@@ -2451,15 +2381,19 @@ int main(int argc, char** argv) {
             // Act on the "Save changes?" modal's outcome (see the exit-flow comment above).
             switch (editor.TakeExitDecision()) {
                 case EditorLayer::ExitDecision::SaveAndExit:
-                    if (!editor.CurrentScenePath().empty())
-                        SceneSerializer::Save(world, assets, editor.CurrentScenePath());
-                    exitApproved = true;
-                    exitSkipFinalSave = true;
-                    window.SetShouldClose(true);
+                    // Saving is refused mid-Play (the live world is play state) — revert to the
+                    // edit-mode snapshot first, exactly like pressing Stop.
+                    if (playing) stopPlay();
+                    // #86 / #88 — only close once the save actually landed. A failed write (or a
+                    // cancelled Save As for an untitled scene) keeps the editor open with the
+                    // changes still dirty; the failure is logged and toasted by DoSave.
+                    if (editor.SaveScene(world, assets)) {
+                        exitApproved = true;
+                        window.SetShouldClose(true);
+                    }
                     break;
                 case EditorLayer::ExitDecision::DiscardAndExit:
                     exitApproved = true;
-                    exitSkipFinalSave = true; // user explicitly chose not to save
                     window.SetShouldClose(true);
                     break;
                 case EditorLayer::ExitDecision::None:
@@ -2587,6 +2521,15 @@ int main(int argc, char** argv) {
                 }
             }
         }
+        } catch (...) {
+            // #89 — an exception escaping the frame used to unwind straight to main()'s outer
+            // catch, destroying the editor and world on the way, so the only copy of unsaved
+            // work was gone. Catch it here while they still exist: revert Play mode and write a
+            // recovery snapshot (offered on next launch), then let the error continue to the
+            // outer handler.
+            if (!headless) editor.EmergencyRecoverySave(world, assets);
+            throw;
+        }
 
         if (smokeTestMode) {
             // Deliberately skip the normal exit path entirely (no play-mode revert, no
@@ -2618,12 +2561,10 @@ int main(int argc, char** argv) {
         // Closing mid-play would otherwise auto-save the transient play state — revert to the
         // snapshot first, same as pressing Stop.
         if (playing) editor.OnExitPlayMode(world, assets);
-        // An untitled scene (File > New Scene, never Saved As) has no path — do NOT write it
-        // anywhere on exit, or it would overwrite whatever scene.json last held. The user has to
-        // explicitly Save As to give it a home.
-        if (!exitSkipFinalSave && !editor.CurrentScenePath().empty()) {
-            SceneSerializer::Save(world, assets, editor.CurrentScenePath());
-        }
+        // #164 / #84 — no unconditional save on exit any more. A dirty scene can only get here
+        // through the "Save changes?" prompt (Save already wrote it, Don't Save means don't); a
+        // clean scene already matches disk, so rewriting it only churned mtimes/git and could
+        // overwrite a scene that failed to load with the empty world that replaced it.
 
         editor.Shutdown();
         editorModule.Shutdown();
@@ -2637,7 +2578,11 @@ int main(int argc, char** argv) {
             // Release builds use the GUI subsystem (see CMakeLists), so there's no console for
             // the message above to land in — without this, a failure to start would just look
             // like the engine silently doing nothing.
-            Window::ShowFatalErrorDialog(std::string("Tartarus Engine failed to start.\n\n") + e.what());
+            // #89 — this also catches errors long after startup; say so, and point at the recovery
+            // snapshot the main loop's handler just tried to write.
+            Window::ShowFatalErrorDialog(std::string("Tartarus Engine hit an unexpected error and has to close.\n\n") +
+                e.what() + "\n\nIf the scene had unsaved changes, a recovery snapshot was written; "
+                "you'll be offered to restore it the next time the editor starts.");
         }
         return 1;
     }

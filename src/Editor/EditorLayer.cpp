@@ -69,6 +69,7 @@
 #include <glm/gtx/euler_angles.hpp> // extractEulerAngleYXZ — must match ComposeTransform's order (#108)
 
 #include <filesystem>
+#include "UserPaths.h"
 #include <memory>
 #include <algorithm>
 #include <unordered_map>
@@ -170,6 +171,18 @@ void EditorLayer::Init(GLFWwindow* window) {
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
     ImGuiIO& io = ImGui::GetIO();
+    // #137 — the dock layout used ImGui's default relative "imgui.ini", i.e. whatever the
+    // process CWD was (repo root via run-editor.cmd, build/Release/ when launched directly), so
+    // the layout was lost/forked per launch location and a per-user file ended up tracked in
+    // git. Keep it with the other per-user state instead; the first run carries over an
+    // existing CWD copy so nobody loses their layout.
+    {
+        static const std::string iniPath = UserPaths::Resolve("imgui.ini");
+        std::error_code ec;
+        if (!std::filesystem::exists(iniPath, ec) && std::filesystem::exists("imgui.ini", ec))
+            std::filesystem::copy_file("imgui.ini", iniPath, ec);
+        io.IniFilename = iniPath.c_str();
+    }
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     // Defect #33/#43 (Phase 2) — Tab traversal, arrow-key nav in lists/menus, and Enter/Space
     // activation, plus the ImGuiCol_NavCursor focus ring (already themed, see ApplyThemeStyle's
@@ -503,11 +516,12 @@ void EditorLayer::Shutdown() {
     if (m_ShutdownDone) return;
     m_ShutdownDone = true;
 
-    // main.cpp saves the real scene file just before calling this, so any recovery snapshot is
-    // now stale and would otherwise trigger a spurious "restore unsaved changes?" prompt on the
-    // next launch. Clean-exit path only — never on the ~EditorLayer exception-unwind path, where
-    // the snapshot is exactly what a post-crash relaunch needs.
-    ClearRecoverySnapshot();
+    // A clean scene already matches disk (or the user chose "Don't Save"), so any recovery
+    // snapshot is stale and would otherwise trigger a spurious "restore unsaved changes?" prompt
+    // on the next launch. If the scene is still dirty for any other reason (e.g. the exit save
+    // failed), the snapshot is the only copy of that work — keep it (#86). Clean-exit path only
+    // — never on the ~EditorLayer exception-unwind path.
+    if (!m_Dirty || m_ExitDiscardChosen) ClearRecoverySnapshot();
 
     FreeGpuResources();
 
@@ -2056,8 +2070,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawPhysicsHud();             // #185 D
     DrawScreenshotPreview(world, assets);
 
-    // Auto-save: only ticks here (Draw() is editor-mode-only, per main.cpp) so it never fires
-    // mid-Play - the same reason OnExitPlayMode's revert-to-snapshot exists, autosaving
+    // Auto-save: skipped while Playing (Draw() DOES run during in-panel Play — #90) - the same reason OnExitPlayMode's revert-to-snapshot exists, autosaving
     // transient gameplay state would be wrong. Skipped entirely when nothing's actually unsaved,
     // so a session where you're just looking around never writes anything.
     //
@@ -2071,7 +2084,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         float intervalSeconds = std::max(1.0f, prefsForAutoSave.AutoSaveIntervalMinutes * 60.0f);
         if (m_AutoSaveTimer >= intervalSeconds) {
             m_AutoSaveTimer = 0.0f;
-            if (m_Dirty) WriteRecoverySnapshot(world, assets);
+            // #90 — Draw() also runs during in-panel Play, when the world holds transient play
+            // state; the recovery file must only ever hold edit-mode content.
+            if (m_Dirty && !m_InPlayMode) WriteRecoverySnapshot(world, assets);
         }
     } else {
         m_AutoSaveTimer = 0.0f; // don't let it silently accumulate while disabled

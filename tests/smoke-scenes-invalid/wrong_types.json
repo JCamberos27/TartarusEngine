@@ -1,0 +1,9 @@
+{
+  "formatVersion": 2,
+  "_comment": "Deliberately broken fixture (#83). Valid JSON whose fields have the wrong types (name is a number, tag is a number, center is a string). Load must fail cleanly with a logged error instead of throwing json::type_error out to main() and closing the editor.",
+  "boxes": [
+    { "center": "not a vector", "size": [2, 2, 2], "color": [0.8, 0.2, 0.2], "rotation": [0, 0, 0], "name": 42, "tag": 5, "id": 0, "parentId": -1, "order": 0 }
+  ],
+  "empties": [],
+  "models": []
+}

@@ -108,6 +108,22 @@ void GameViewPanel::DrawAspectControl() {
             m_ShowCustomModal = true;
         ImGui::EndPopup();
     }
+    // #140 — the Game view's own stats overlay had no toggle anywhere (the toolbar Stats button
+    // drives the Scene-side Statistics panel), so it could never be turned off.
+    ImGui::SameLine(0.0f, 6.0f);
+    {
+        bool showStats = EditorSettings::Get().GameViewShowStats;
+        ImGui::PushStyleColor(ImGuiCol_Button, EditorUIPrimitives::kHudPlateColor);
+        ImGui::PushStyleColor(ImGuiCol_Text, showStats ? EditorUIPrimitives::kHudTextColor
+                                                        : ImGui::GetColorU32(ImGuiCol_TextDisabled));
+        if (ImGui::Button(ICON_FA_CHART_SIMPLE "##gvstats", ImVec2(h, h))) {
+            EditorSettings::Get().GameViewShowStats = !showStats;
+            EditorSettings::Save();
+        }
+        ImGui::PopStyleColor(2);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip(showStats ? "Hide the Game view stats overlay"
+                                                                   : "Show the Game view stats overlay");
+    }
     // Fullscreen dropped from here — it's in the viewport transport overlay and on F11.
     // "Maximize on Play" -> Preferences > Viewport; Stats overlay -> the main toolbar Stats button.
 }
@@ -230,7 +246,7 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         // (The persistent "Esc to release the cursor" banner was removed — that binding now
         // lives in Preferences ▸ Shortcuts like every other key.)
 
-        if (m_ShowStatsOverlay && stats) {
+        if (EditorSettings::Get().GameViewShowStats && stats) {
             ImVec2 statsPos(imagePos.x + 8.0f, imagePos.y + 8.0f);
             char buf[192];
             snprintf(buf, sizeof(buf), "%d FPS (%.2f ms)\n%d draw calls\n%d tris / %d verts",
@@ -253,8 +269,6 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
 
 void GameViewPanel::LoadSettings() {
     const EditorSettings& settings = EditorSettings::Get();
-    m_MaximizeOnPlay = settings.GameViewMaximizeOnPlay;
-    m_ShowStatsOverlay = settings.GameViewShowStats;
 
     for (const auto& preset : ResolutionManager::BuiltInPresets()) {
         if (preset.Label == settings.GameViewPresetLabel) { m_CurrentPreset = preset; return; }
@@ -275,8 +289,9 @@ void GameViewPanel::LoadSettings() {
 
 void GameViewPanel::SaveSettings() const {
     EditorSettings& settings = EditorSettings::Get();
-    settings.GameViewMaximizeOnPlay = m_MaximizeOnPlay;
-    settings.GameViewShowStats = m_ShowStatsOverlay;
+    // #140 — Maximize on Play / Game stats used to be written back from copies cached at
+    // startup, so changing the aspect preset silently reverted a preference changed since in
+    // Preferences. Both are read live from EditorSettings now and only written where edited.
     settings.GameViewPresetLabel = m_CurrentPreset.Label;
     settings.GameViewPresetWidth = m_CurrentPreset.Mode == AspectRatioMode::FixedResolution ? m_CurrentPreset.Width : 0;
     settings.GameViewPresetHeight = m_CurrentPreset.Mode == AspectRatioMode::FixedResolution ? m_CurrentPreset.Height : 0;

@@ -64,6 +64,14 @@ public:
     ~EditorLayer();
 
     void Init(GLFWwindow* window);
+    // #84 — main.cpp calls this when the startup scene exists on disk but failed to load (parse
+    // error, merge-conflict markers, wrong shape). The editor is then showing an EMPTY world under
+    // that path; a plain Save must not overwrite the broken-but-recoverable file with it.
+    void OnStartupSceneLoadFailed(const std::string& path);
+    // #89 — last-chance save when an exception is about to take the editor down: leaves Play
+    // mode (restoring the edit-mode scene) and writes the crash-recovery snapshot if the scene
+    // has unsaved changes. Never throws.
+    void EmergencyRecoverySave(World& world, AssetLibrary& assets) noexcept;
     void Shutdown();
 
     // Applies the editor's style — colours and metrics (rounding / padding / borders), DPI-scaled
@@ -143,6 +151,10 @@ public:
     // Eyedropper colour pick (#236 R2 Inspector tail). A colour field arms it with a pointer
     // to its glm::vec3; the next viewport click samples the displayed Scene pixel there and
     // writes it. main.cpp does the actual glReadPixels off the tonemapped scene FBO.
+    // #93 — that pointer points INTO registry / material storage, so it is only valid while
+    // nothing structural happens: every path that can reallocate or free that storage (any
+    // PushUndo/StageUndo before an edit, Undo/Redo, scene load, Play/Stop, selection change)
+    // cancels the eyedropper first.
     void ArmEyedropper(World* world, glm::vec3* target)
         { m_EyedropperWorld = world; m_EyedropperTarget = target; m_EyedropperSampleRequested = false; }
     void CancelEyedropper() { m_EyedropperTarget = nullptr; m_EyedropperSampleRequested = false; }
@@ -577,7 +589,7 @@ public:
     bool IsDirty() const { return m_Dirty; }
     // Public entry point for the toolbar's document-strip Save button (API v20) — DoSave() itself
     // is private since File > Save already reaches it through DrawFileMenuBody.
-    void SaveScene(World& world, AssetLibrary& assets) { DoSave(world, assets); }
+    bool SaveScene(World& world, AssetLibrary& assets) { return DoSave(world, assets); }
     // API v22, Q12 (Phase 4 / #6) — lets a module (Inspector, Hierarchy) tint its own panel while
     // Playing, the same live flag the host's own amber viewport banner already reads.
     bool InPlayMode() const { return m_InPlayMode; }
@@ -590,6 +602,10 @@ public:
     enum class ExitDecision { None, SaveAndExit, DiscardAndExit };
     void OpenExitPrompt() { m_ExitPromptPending = true; m_ExitDecision = ExitDecision::None; }
     bool ExitPromptActive() const { return m_ExitPromptPending; }
+    // #84 — path of a scene that failed to load at startup; Save to exactly this path is
+    // redirected to Save As until another scene is opened/created or a recovery is restored.
+    std::string m_LoadFailedScenePath;
+    bool m_ExitDiscardChosen = false; // user picked "Don't Save" on exit — recovery snapshot may go
     ExitDecision TakeExitDecision() { ExitDecision d = m_ExitDecision; m_ExitDecision = ExitDecision::None; return d; }
 
     // The full selection (primary + any Ctrl+Click extras) as entity handles, for main.cpp's
@@ -887,7 +903,7 @@ private:
     void DeleteSelection(World& world);
     // inPlace = true (the Ctrl+D shortcut, #236 F) skips the (1,0,1) nudge given to duplicated
     // roots, so the copy lands exactly on the original; the menu items keep the nudge.
-    void DuplicateSelection(World& world, AssetLibrary& assets, bool inPlace = false);
+    void DuplicateSelection(World& world, AssetLibrary& assets, bool inPlace = true); // #119: Unity duplicates in place
 
     // Array / grid duplicate (#236 R2): counts per axis, step in world units per axis. The
     // (0,0,0) cell is the existing selection, so counts {3,1,1} makes 2 new copies.
@@ -1043,7 +1059,7 @@ private:
     // no file to overwrite, so main.cpp skips the save-on-exit and DoSave() must prompt for a
     // location. DoSaveAs() always prompts. Both reset dirty/timer and clear the stale recovery
     // snapshot on success.
-    void DoSave(World& world, AssetLibrary& assets);
+    bool DoSave(World& world, AssetLibrary& assets); // false = not saved (Play mode, cancelled, or write failed)
     bool DoSaveAs(World& world, AssetLibrary& assets);
 
     GizmoOp m_GizmoOp = GizmoOp::Translate;
@@ -1599,6 +1615,16 @@ private:
     // same snapshot format undo/redo already uses. Empty when not in (or never entered) play.
     bool m_InPlayMode = false; // set by OnEnter/OnExitPlayMode — lets edit-mode-only shortcuts (F2 rename) yield to Play-mode ones
     std::string m_PlayModeSnapshot;
+    // #91 — the whole undo/redo history as it stood when Play started. Edits made while playing
+    // still record normally (so the History panel works mid-Play), but Stop reverts the scene,
+    // so their entries — whose snapshots hold transient play state — are thrown away by
+    // restoring this.
+    struct SavedHistory {
+        std::vector<UndoEntry> Undo, Redo;
+        std::string UndoBase, RedoBase;
+        int ContentDepth = 0, SavedDepth = 0;
+        bool Valid = false;
+    } m_PrePlayHistory;
     // Selection captured by stable OrderComponent value on Play, re-resolved to fresh entity
     // ids on Stop — the registry is rebuilt in between and entt recycles ids (#110).
     std::vector<int> m_PlaySelectionOrders;
@@ -1710,7 +1736,12 @@ private:
     // they weren't already siblings. Rewrites the affected group's OrderComponent values to a
     // clean 0..N-1 run — the number the Hierarchy sorts siblings by. One undo entry.
     void ReorderHierarchySiblings(World& world, const std::vector<entt::entity>& moving,
-                                  entt::entity anchor, bool after);
+                                  entt::entity anchor, bool after, bool recordUndo = true);
+    // #119 — puts each duplicated root back under its source's parent, right after the source in
+    // the Hierarchy (Unity). `sourceOrder` is AppendEntitiesFromString's order -> copy map.
+    void PlaceCopiesBesideSources(World& world, const std::vector<entt::entity>& sources,
+                                  const std::unordered_map<int, entt::entity>& sourceOrder,
+                                  bool besideSource);
     // Children of `parent` (or the scene roots when `parent == entt::null`) in Hierarchy display
     // order: OrderComponent ascending, entity handle as the stable tiebreak.
     std::vector<entt::entity> HierarchySiblingsInOrder(const World& world, entt::entity parent) const;
