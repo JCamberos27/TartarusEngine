@@ -1010,7 +1010,7 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
         ImGui::PushID(label);
         ImGui::SetNextItemWidth(-(ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x));
         glm::vec3 edit = mat.*field;
-        bool changed = ImGui::ColorEdit3("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
+        bool changed = EditorUI::ColorEditLinear("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
         if (changed) mat.*field = edit;
         if (ImGui::IsItemDeactivatedAfterEdit()) save();
         EyedropperButton(this, world, &(mat.*field));
@@ -1104,7 +1104,7 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
             case ShaderPropType::Color: {
                 PropertyLabel(label);
                 glm::vec3 edit = MaterialAsset::GetColor(mat, prop.Name);
-                bool changed = ImGui::ColorEdit3("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
+                bool changed = EditorUI::ColorEditLinear("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
                 if (changed) MaterialAsset::SetColor(mat, prop.Name, edit);
                 if (ImGui::IsItemDeactivatedAfterEdit()) save();
                 break;
@@ -1431,7 +1431,7 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
             });
             PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip);
             glm::vec3 edit = shared;
-            bool changed = ImGui::ColorEdit3("##v", &edit.x, ImGuiColorEditFlags_DisplayHex);
+            bool changed = EditorUI::ColorEditLinear("##v", &edit.x, ImGuiColorEditFlags_DisplayHex);
             if (ImGui::IsItemActivated()) StageUndo(world);
             if (changed) forEach([&](entt::entity e) { *reinterpret_cast<glm::vec3*>(fieldPtr(e)) = edit; });
             if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
@@ -2213,7 +2213,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             if (isLevelGeometry) {
                 PropertyLabel("Color", "Solid tint for this box's surface. Click the swatch\nfor the full color picker, or type a hex value.");
                 ImGui::SetNextItemWidth(-(ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x));
-                ImGui::ColorEdit3("##Color", &renderable->ModelRef->MeshMaterial(0).BaseColor.x, ImGuiColorEditFlags_DisplayHex);
+                EditorUI::ColorEditLinear("##Color", &renderable->ModelRef->MeshMaterial(0).BaseColor.x, ImGuiColorEditFlags_DisplayHex);
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Color");
                 EyedropperButton(this, world, &renderable->ModelRef->MeshMaterial(0).BaseColor);
             }
@@ -2782,7 +2782,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                 const float eyedropX = kBtnX - lcStyle.ItemSpacing.x - eyedropW;
                 const float colorEditRight = eyedropX - 4.0f; // EyedropperButton's own SameLine gap
                 ImGui::SetNextItemWidth(colorEditRight - ImGui::GetCursorPosX());
-                ImGui::ColorEdit3("##LightColor", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
+                EditorUI::ColorEditLinear("##LightColor", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
                 EyedropperButton(this, world, &light->Color);
                 ImGui::SameLine(kBtnX);
@@ -2960,7 +2960,7 @@ void EditorLayer::DrawReflectedComponentExtraMulti(const char* componentName, Wo
             for (int a = 0; a < 3; ++a) if (std::fabs(c[a] - col[a]) > 1.0e-4f) colMixed = true;
         });
         glm::vec3 colEdit = col;
-        bool colChanged = ImGui::ColorEdit3("##mlcol", &colEdit.x, ImGuiColorEditFlags_NoInputs);
+        bool colChanged = EditorUI::ColorEditLinear("##mlcol", &colEdit.x, ImGuiColorEditFlags_NoInputs);
         if (ImGui::IsItemActivated()) StageUndo(world);
         if (colChanged) forEach([&](entt::entity e) { L(e).Color = colEdit; });
         if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Set Light Color");
@@ -3101,7 +3101,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             ImGui::PushID(label);
             if (!mixed && mats.size() == 1)
                 ImGui::SetNextItemWidth(-(ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x));
-            bool changed = ImGui::ColorEdit3("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
+            bool changed = EditorUI::ColorEditLinear("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
             if (ImGui::IsItemActivated()) StageUndo(world);
             if (changed) for (Material* mm : mats) mm->*field = edit;
             if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");
@@ -3241,7 +3241,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 }
                 glm::vec3 edit = shared;
                 PropertyLabel(label);
-                bool changed = ImGui::ColorEdit3("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
+                bool changed = EditorUI::ColorEditLinear("##c", &edit.x, ImGuiColorEditFlags_DisplayHex);
                 if (ImGui::IsItemActivated()) StageUndo(world);
                 if (changed) for (Material* mm : mats) MaterialAsset::SetColor(*mm, prop.Name, edit);
                 if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, "Edit Material");

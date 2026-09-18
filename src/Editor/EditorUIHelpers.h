@@ -1,5 +1,6 @@
 #pragma once
 #include <imgui.h>
+#include <cmath>
 
 // Thin wrappers around ImGui's own tooltip calls that additionally respect
 // EditorSettings::Get().ShowTooltips — the single choke point every panel (Inspector,
@@ -19,6 +20,33 @@ namespace EditorUI {
     // (not even the glyph) when tooltips are globally disabled, rather than leaving an inert
     // icon on screen that no longer does anything if hovered.
     void HelpMarker(const char* desc);
+
+    // #127 — ColorEdit3 for a colour stored in LINEAR space (every render colour: base/emissive,
+    // light, sky, reflected Color fields). The swatch, hex and 0-255 inputs show sRGB, like
+    // Unity's picker and every art tool, so "#808080" means display mid-grey; the value written
+    // back is linear. Values above 1 (HDR emission / light colours) aren't clamped. Only writes
+    // `linear` on an actual edit, so an untouched field never drifts through the round trip.
+    inline float LinearToSrgbChannel(float c) {
+        if (c <= 0.0f) return 0.0f;
+        return c <= 0.0031308f ? c * 12.92f : 1.055f * std::pow(c, 1.0f / 2.4f) - 0.055f;
+    }
+    inline float SrgbToLinearChannel(float c) {
+        if (c <= 0.0f) return 0.0f;
+        return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+    }
+    inline bool ColorEditLinear(const char* label, float linear[3],
+                                ImGuiColorEditFlags flags = ImGuiColorEditFlags_DisplayHex) {
+        float srgb[3];
+        bool hdr = false;
+        for (int i = 0; i < 3; ++i) {
+            srgb[i] = LinearToSrgbChannel(linear[i]);
+            hdr |= linear[i] > 1.0f;
+        }
+        if (hdr) flags |= ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float;
+        if (!ImGui::ColorEdit3(label, srgb, flags)) return false;
+        for (int i = 0; i < 3; ++i) linear[i] = SrgbToLinearChannel(srgb[i]);
+        return true;
+    }
 
     // A vertical rule for separating clusters of controls on a single horizontal row (toolbar
     // strips, the Console header, the Asset Browser toolbar). Replaces the hand-rolled

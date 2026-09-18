@@ -685,10 +685,10 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
         }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Y-axis rotation of the HDRI environment in degrees.");
     } else {
-        ImGui::ColorEdit3("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
+        EditorUI::ColorEditLinear("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
         if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky color at the horizon."); // #19
-        ImGui::ColorEdit3("Zenith color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
+        EditorUI::ColorEditLinear("Zenith color", &world.SkyZenithColor.x, ImGuiColorEditFlags_DisplayHex);
         if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky color straight up."); // #19
     }
