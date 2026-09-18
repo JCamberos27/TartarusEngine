@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- #139 / #149 — merged into TartarusEngine.exe's embedded manifest by CMake (MSVC mt).
+     activeCodePage=UTF-8: every narrow-string Win32 / CRT / std::filesystem call in the engine
+     treats std::string paths as UTF-8, so non-ASCII folders (C:\Users\José, CJK names) work
+     end to end instead of being mangled through the ANSI code page (Windows 10 1903+).
+     longPathAware: paths beyond MAX_PATH work where Windows long-path support is enabled. -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </windowsSettings>
+  </application>
+</assembly>
