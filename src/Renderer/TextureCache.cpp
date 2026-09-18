@@ -43,7 +43,8 @@ constexpr char kMagic[4] = {'T', 'T', 'E', 'X'};
 // with the old point-sample must be discarded and re-baked.
 // v3 (#333 PR3): entry filename changed from FNV(absolutePath) to GUID, so old path-keyed
 // entries are unreachable and treated as stale by Prune (version mismatch).
-constexpr uint32_t kVersion = 3;
+// v4 (#156): the Max Size downsample now averages sRGB textures in linear space, alpha-weighted.
+constexpr uint32_t kVersion = 4;
 
 std::string CacheDir() {
     static const std::string dir = ProjectPaths::Resolve("Library/Textures");
@@ -106,6 +107,7 @@ uint64_t HashSettings(const TextureImportSettings& s) {
     };
     mix((uint64_t)s.MaxTextureSize);
     mix(s.IsSRGB ? 1u : 0u); // affects the GL internal format chosen for these pixels
+    mix((uint64_t)s.TextureType); // #156: Normal Map forces linear, which changes the downsample
     return h;
 }
 
