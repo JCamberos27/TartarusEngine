@@ -104,15 +104,40 @@ extern "C" {
 // non-null, is the current selection's world-space center (see EditorLayer::GetSelectionCenter)
 // — Alt+Left-drag orbits around it instead of the plain free-look that Right-drag still does.
 // Returns true on any frame the fly speed was changed by scroll (so the caller can flash the
-// on-screen "Fly speed: N" readout — #236 R2).
-static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, bool gizmoDragging, const glm::vec3* orbitPivot) {
+// on-screen "Fly speed: N" readout — #236 R2). `viewportHeightPx` is the Scene view's height,
+// which scales middle-drag pan so the point under the cursor stays under it (#142).
+//
+// A fly-speed change is saved once scrolling has paused for kFlySpeedSaveDelay rather than on
+// every notch (#142: each notch used to be a synchronous settings write).
+constexpr double kFlySpeedSaveDelay = 0.75;
+static double s_FlySpeedDirtySince = -1.0; // glfwGetTime() of the last unsaved change, or -1
+
+static void FlushFlySpeedSave(bool force) {
+    if (s_FlySpeedDirtySince < 0.0) return;
+    if (!force && glfwGetTime() - s_FlySpeedDirtySince < kFlySpeedSaveDelay) return;
+    EditorSettings::Save();
+    s_FlySpeedDirtySince = -1.0;
+}
+
+static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, bool gizmoDragging, const glm::vec3* orbitPivot,
+                               float viewportHeightPx) {
     bool flySpeedChanged = false;
     auto trimFlySpeed = [&](double notches) {
         float& fs = EditorSettings::Get().SceneCameraFlySpeed;
         fs = std::clamp(fs * std::pow(1.15f, (float)notches), 0.5f, 200.0f);
-        EditorSettings::Save();
+        s_FlySpeedDirtySince = glfwGetTime();
         flySpeedChanged = true;
     };
+    FlushFlySpeedSave(/*force=*/false);
+
+    // Zoom, dolly and pan all scale with how far the camera is from what it's looking at, like
+    // Unity's Scene view (#142); fixed steps crawl on a terrain and overshoot a small prop. The
+    // distance is to the selection when there is one; otherwise the last one used is kept, so
+    // zooming with nothing selected still accelerates and decelerates smoothly.
+    static float s_FocusDistance = 10.0f;
+    constexpr float kMinFocusDistance = 0.05f, kMaxFocusDistance = 100000.0f;
+    if (orbitPivot)
+        s_FocusDistance = std::clamp(glm::length(cam.Position - *orbitPivot), kMinFocusDistance, kMaxFocusDistance);
     const bool ctrlHeld = Input::IsKeyDown(GLFW_KEY_LEFT_CONTROL) || Input::IsKeyDown(GLFW_KEY_RIGHT_CONTROL);
     // WASD/QE flythrough only while Right-drag is held — matches Unity's convention exactly,
     // and is required now that W/E/R/T also double as gizmo-tool shortcuts (EditorLayer::Draw):
@@ -156,8 +181,11 @@ static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, bool gizmo
             const float kDollyZoomFactor = 0.01f;
             cam.OrthoHalfHeight = std::clamp(cam.OrthoHalfHeight * (1.0f - dollyAmount * kDollyZoomFactor), 0.25f, 250.0f);
         } else {
-            const float kDollySpeed = 0.02f;
-            cam.Position += cam.Front() * (dollyAmount * kDollySpeed);
+            // 0.5% of the focus distance per pixel: ~200px of drag covers the whole way in.
+            const float step = std::min(dollyAmount * 0.005f * s_FocusDistance,
+                                        s_FocusDistance - kMinFocusDistance); // never through the pivot
+            cam.Position += cam.Front() * step;
+            s_FocusDistance = std::clamp(s_FocusDistance - step, kMinFocusDistance, kMaxFocusDistance);
         }
     }
 
@@ -191,8 +219,12 @@ static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, bool gizmo
                 cam.OrthoHalfHeight = std::clamp(
                     cam.OrthoHalfHeight * powf(kScrollZoomFactor, (float)scroll), 0.25f, 250.0f);
             } else {
-                const float kScrollZoomSpeed = 1.0f;
-                cam.Position += cam.Front() * (float)(scroll * kScrollZoomSpeed);
+                // Same 0.9-per-notch rate as orthographic: each notch closes 10% of the distance,
+                // so the camera approaches the focus point without ever passing it.
+                const float target = std::clamp(s_FocusDistance * powf(0.9f, (float)scroll),
+                                                kMinFocusDistance, kMaxFocusDistance);
+                cam.Position += cam.Front() * (s_FocusDistance - target);
+                s_FocusDistance = target;
             }
         }
     }
@@ -201,10 +233,15 @@ static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, bool gizmo
     // dragging the nav gizmo's pan button, but usable from anywhere by holding the scroll
     // wheel down, matching the Blender/Maya/Unity convention.
     if (allowLook && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_MIDDLE)) {
-        const float kPanSpeed = 0.01f;
+        // World units per pixel at the focus distance (#142): the visible height there is
+        // 2 * d * tan(fov/2) (or 2 * OrthoHalfHeight), spread over the viewport's pixel rows.
+        const float visibleHeight = cam.Orthographic
+            ? 2.0f * cam.OrthoHalfHeight
+            : 2.0f * s_FocusDistance * std::tan(glm::radians(cam.Fov) * 0.5f);
+        const float panPerPixel = visibleHeight / std::max(viewportHeightPx, 1.0f);
         float dx = (float)Input::GetMouseDeltaX();
         float dy = (float)Input::GetMouseDeltaY(); // inverted: up is positive
-        cam.Position -= (cam.Right() * dx + cam.Up() * dy) * kPanSpeed;
+        cam.Position -= (cam.Right() * dx + cam.Up() * dy) * panPerPixel;
     }
     return flySpeedChanged;
 }
@@ -1252,7 +1289,7 @@ int main(int argc, char** argv) {
                 }
 
                 if (UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive, gizmoDragging,
-                        hasSelection ? &selectionCenter : nullptr))
+                        hasSelection ? &selectionCenter : nullptr, editor.ViewportSize().y))
                     editor.FlashFlySpeedHud(); // #236 R2 — show the transient "Fly speed: N" readout
             } else if (camDragActive) {
                 camDragActive = false; // dropped into maximized play mid-drag; it owns the cursor now
@@ -2597,6 +2634,7 @@ int main(int argc, char** argv) {
         // clean scene already matches disk, so rewriting it only churned mtimes/git and could
         // overwrite a scene that failed to load with the empty world that replaced it.
 
+        FlushFlySpeedSave(/*force=*/true); // a fly-speed trim still inside its save debounce (#142)
         editor.Shutdown();
         editorModule.Shutdown();
         AudioEngine::Shutdown();
