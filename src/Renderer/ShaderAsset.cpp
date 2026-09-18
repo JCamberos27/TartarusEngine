@@ -334,7 +334,33 @@ std::shared_ptr<ShaderAsset> ShaderAsset::ParseFile(const std::string& path) {
     }
 
     sa->BuildBindings();
+    sa->m_Deps.push_back(ShaderLibrary::DependencyKey(path)); // #158
     return sa;
+}
+
+bool ShaderAsset::DependsOnAny(const std::vector<std::string>& changed) const {
+    for (const std::string& d : m_Deps)
+        if (std::find(changed.begin(), changed.end(), d) != changed.end()) return true;
+    return false;
+}
+
+bool ShaderAsset::ReloadFromDisk() {
+    std::shared_ptr<ShaderAsset> fresh = ParseFile(m_Path);
+    if (!fresh) {
+        Log::Error("Shader hot reload: '" + m_Path + "' failed to parse - kept the previous version.", LogContext::Asset(m_Path));
+        return false;
+    }
+    m_Props = std::move(fresh->m_Props);
+    m_Bindings = std::move(fresh->m_Bindings);
+    m_Keywords = std::move(fresh->m_Keywords);
+    m_State = fresh->m_State;
+    m_VertFile = std::move(fresh->m_VertFile);
+    m_FragFile = std::move(fresh->m_FragFile);
+    m_Deps = std::move(fresh->m_Deps);
+    m_Variants.clear(); // recompiled lazily from the new sources
+    m_LastCompileError.clear();
+    Log::Info("Shader hot reload: reloaded '" + m_Path + "'.", LogContext::Asset(m_Path));
+    return true;
 }
 
 void ShaderAsset::BuildBindings() {
@@ -381,8 +407,11 @@ void ShaderAsset::CompileVariant(ShaderVariantKey key) {
     const std::string baseDir = std::filesystem::path(m_Path).parent_path().string();
     const std::string vertPath = ShaderLibrary::ResolveRef(m_VertFile, baseDir);
     const std::string fragPath = m_FragFile.empty() ? std::string() : ShaderLibrary::ResolveRef(m_FragFile, baseDir);
-    std::string vertSrc = ShaderLibrary::ReadFileAt(vertPath, m_Path);
-    std::string fragSrc = m_FragFile.empty() ? "" : ShaderLibrary::ReadFileAt(fragPath, m_Path);
+    std::vector<std::string> deps;
+    std::string vertSrc = ShaderLibrary::ReadFileAt(vertPath, m_Path, &deps);
+    std::string fragSrc = m_FragFile.empty() ? "" : ShaderLibrary::ReadFileAt(fragPath, m_Path, &deps);
+    for (std::string& d : deps) // #158: remember what this variant was built from
+        if (std::find(m_Deps.begin(), m_Deps.end(), d) == m_Deps.end()) m_Deps.push_back(std::move(d));
     // A missing stage is an asset error, never a reason to compile the vertex file alone as a
     // compute shader (which is what an empty fragment source used to mean below).
     if (vertSrc.empty() || (!m_FragFile.empty() && fragSrc.empty())) {
