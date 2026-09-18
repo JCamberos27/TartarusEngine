@@ -64,6 +64,9 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
         ma->RenderQueue = (Queue)j.value("renderQueue", (int)Queue::Opaque);
         ma->QueueIndex  = j.value("queueIndex",  2000);
         ma->Opacity     = j.value("opacity",      1.0f);
+        // #101 — the AlphaTest queue now actually clips (it rendered exactly like Opaque).
+        m.AlphaClip   = ma->RenderQueue == Queue::AlphaTest;
+        m.AlphaCutoff = j.value("alphaCutoff", 0.5f);
 
         // Populate Material struct from "properties" (also fills legacy path strings).
         if (j.contains("properties") && j["properties"].is_object()) {
@@ -197,6 +200,7 @@ bool MaterialAsset::Save() const {
         if (RenderQueue != Queue::Opaque) j["renderQueue"] = (int)RenderQueue;
         if (QueueIndex  != 2000)          j["queueIndex"]  = QueueIndex;
         if (Opacity     != 1.0f)          j["opacity"]     = Opacity;
+        if (m.AlphaCutoff != 0.5f)        j["alphaCutoff"] = m.AlphaCutoff; // #101
         json& props     = j["properties"];
         props["_BaseColor"]           = Vec3ToJson(m.BaseColor);
         props["_Metallic"]            = m.Metallic;

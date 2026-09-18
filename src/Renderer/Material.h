@@ -57,6 +57,12 @@ struct Material {
     bool SubsurfaceEnabled = false; // -> _SUBSURFACE variant
     bool ReflectionProbes  = false; // -> _REFLECTION_PROBES variant (parallax box reflections)
 
+    // #101 — alpha cutout (Unity "Cutout" / glTF alphaMode MASK): fragments whose albedo-map
+    // alpha is below AlphaCutoff are discarded, in the main pass AND the shadow passes. Off by
+    // default: an opaque material's albedo alpha is NOT treated as coverage.
+    bool  AlphaClip   = false;
+    float AlphaCutoff = 0.5f;
+
     // #192: a value hash of everything BindMaterial (Model.cpp) uploads — the scalar/vector
     // factors plus the identity of each bound texture. The draw loop sorts by this and
     // GLStateCache skips BindMaterial when it matches the last-bound one, so value-identical
@@ -76,12 +82,13 @@ struct Material {
             ClearCoat, ClearCoatRoughness, Anisotropy, AnisotropyRotation,
             Sheen.x, Sheen.y, Sheen.z, SheenRoughness,
             SubsurfaceColor.x, SubsurfaceColor.y, SubsurfaceColor.z, Thickness,
-            TransmissionStrength, IOR,
+            TransmissionStrength, IOR, AlphaCutoff,
         };
         mix(scalars, sizeof(scalars));
         const std::uint32_t flags = (Triplanar ? 1u : 0u)
                                   | (SubsurfaceEnabled ? 2u : 0u)
-                                  | (ReflectionProbes ? 4u : 0u);
+                                  | (ReflectionProbes ? 4u : 0u)
+                                  | (AlphaClip ? 8u : 0u);
         mix(&flags, sizeof(flags));
         const Texture* const texs[] = {
             AlbedoMap.get(), NormalMap.get(), MetallicRoughnessMap.get(), MetallicMap.get(),

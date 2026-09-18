@@ -13,6 +13,7 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <assimp/config.h>
+#include <assimp/GltfMaterial.h>
 
 #include <iostream>
 #include <cmath>
@@ -358,6 +359,18 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
     // #102 — the emissive map is now tinted by EmissiveColor; files that ship an emissive map
     // with no (or a black) emissive factor mean "the map as-is".
     if (mat.EmissiveMap && mat.EmissiveColor == glm::vec3(0.0f)) mat.EmissiveColor = glm::vec3(1.0f);
+    // #101 — alpha cutout. glTF says so explicitly (alphaMode MASK + alphaCutoff); formats with
+    // no alpha mode (FBX/OBJ) keep the old behaviour of treating an albedo map that carries an
+    // alpha channel as cutout, which is what foliage/fence assets in those formats rely on.
+    aiString alphaMode;
+    if (material->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
+        mat.AlphaClip = std::string(alphaMode.C_Str()) == "MASK";
+        float cutoff = 0.5f;
+        if (material->Get(AI_MATKEY_GLTF_ALPHACUTOFF, cutoff) == AI_SUCCESS) mat.AlphaCutoff = cutoff;
+    } else if (mat.AlbedoMap && (mat.AlbedoMap->SourceChannels() == 4 || mat.AlbedoMap->SourceChannels() == 2)) {
+        mat.AlphaClip = true;
+    }
+
     float scalar;
     if (material->Get(AI_MATKEY_METALLIC_FACTOR, scalar) == AI_SUCCESS) mat.Metallic = scalar;
     if (material->Get(AI_MATKEY_ROUGHNESS_FACTOR, scalar) == AI_SUCCESS) mat.Roughness = scalar;
@@ -528,11 +541,14 @@ struct MaterialLocs {
     int hasRoughness, roughnessMap;
     int hasAO, aoMap;
     int hasEmissive, emissiveMap;
+    int alphaClip, alphaCutoff; // #101
 };
 
 MaterialLocs ResolveMaterialLocs(Shader& shader) {
     MaterialLocs L;
     L.baseColor = shader.Loc("uBaseColor");
+    L.alphaClip = shader.Loc("uAlphaClip");
+    L.alphaCutoff = shader.Loc("uAlphaCutoff");
     L.metallic = shader.Loc("uMetallic");
     L.roughness = shader.Loc("uRoughness");
     L.emissiveColor = shader.Loc("uEmissiveColor");
@@ -568,6 +584,8 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
     shader.SetVec3(locs.emissiveColor, mat.EmissiveColor * mat.EmissiveStrength);
     shader.SetInt(locs.triplanar, mat.Triplanar ? 1 : 0);
     shader.SetFloat(locs.triplanarScale, mat.TriplanarScale);
+    shader.SetInt(locs.alphaClip, mat.AlphaClip ? 1 : 0);       // #101
+    shader.SetFloat(locs.alphaCutoff, mat.AlphaCutoff);
 
     // Each map gets a FIXED unit (1..7). An absent map still binds a 1x1 default there, so the
     // driver never sees texture 0 on a sampler unit the program declares (audit GL-101 / #366:
@@ -613,7 +631,11 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
         mix((size_t)p.B); mix((size_t)p.I);
         mix(std::hash<const void*>{}(p.Tex.get()));
     }
+    mix((size_t)ma.RenderQueue);
     if (GLStateCache::MaterialAlreadyBound(hash, shader.Program())) return;
+    // #101 — cutout for the AlphaTest queue (Standard.shader includes ModelFragment's uAlphaClip).
+    shader.SetInt("uAlphaClip", (mat.AlphaClip || ma.RenderQueue == MaterialAsset::Queue::AlphaTest) ? 1 : 0);
+    shader.SetFloat("uAlphaCutoff", mat.AlphaCutoff);
 
     const auto& props    = sa.Properties();
     const auto& bindings = sa.Bindings();
@@ -738,19 +760,24 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
     UploadBoneMatrices(shader);
     int albedoLoc = shader.Loc("uAlbedo");
     int alphaTestLoc = shader.Loc("uAlphaTest");
+    int alphaCutoffLoc = shader.Loc("uAlphaCutoff");
     for (int i = 0; i < (int)m_Meshes.size(); ++i) {
         bool hasSlot = i < (int)slots.size() && slots[i];
         // Transparent materials don't cast shadows — skip them in the depth-only pass.
         if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
         const Material& mat = hasSlot ? slots[i]->Mat : m_Meshes[i]->Mat;
         // Only cost paid over a pure depth draw: one texture bind + two uniforms, and only for
-        // meshes that actually have an albedo map (cutout foliage/fences) — the shadow then
-        // follows the cutout instead of a solid silhouette (#116). #192: skip even that when the
-        // previous mesh in this pass drew with the same material.
-        if (!GLStateCache::MaterialAlreadyBound(mat.Hash(), shader.Program())) {
-            if (mat.AlbedoMap && mat.AlbedoMap->IsValid()) {
+        // CUTOUT materials with an albedo map (foliage/fences) — the shadow then follows the
+        // cutout instead of a solid silhouette (#116). #101: it used to do this for every
+        // albedo-mapped mesh, so an opaque material whose albedo alpha means something else
+        // (smoothness, a mask) cast holey shadows. #192: skip even that when the previous mesh
+        // in this pass drew with the same material.
+        const bool clip = mat.AlphaClip || (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::AlphaTest);
+        if (!GLStateCache::MaterialAlreadyBound(mat.Hash() ^ (clip ? 0x5bd1e995ull : 0ull), shader.Program())) {
+            if (clip && mat.AlbedoMap && mat.AlbedoMap->IsValid()) {
                 mat.AlbedoMap->Bind(0);
                 shader.SetInt(alphaTestLoc, 1);
+                shader.SetFloat(alphaCutoffLoc, mat.AlphaCutoff);
             } else {
                 // uAlphaTest = 0 means the sampler result is never read, but the ShadowDepth
                 // program still declares `sampler2D uAlbedo`, so unit 0 must hold a real texture
