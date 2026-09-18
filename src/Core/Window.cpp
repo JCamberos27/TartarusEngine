@@ -89,6 +89,8 @@ LRESULT CALLBACK TartarusWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         const LRESULT def = CallWindowProcW(g_OrigWndProc, hwnd, msg, wParam, lParam);
         if (def != HTCLIENT && def != HTNOWHERE && def != HTCAPTION)
             return def;
+        // Borderless fullscreen (#154): no resize edges and no caption drag.
+        if (g_FramedWindow && g_FramedWindow->IsFullscreen()) return HTCLIENT;
         if (!IsZoomed(hwnd)) {
             const POINT pt{ GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
             RECT wr; GetWindowRect(hwnd, &wr);
@@ -168,7 +170,10 @@ Window::Window(int width, int height, const std::string& title)
     // TARTARUS_GL_DEBUG=1, or --smoke-test). It isn't free: some drivers add validation or skip
     // optimisations in one, so a normal Release run doesn't ask for it (#157).
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLDebug::WantsDebugContext() ? GLFW_TRUE : GLFW_FALSE);
-    glfwWindowHint(GLFW_SAMPLES, 4);
+    // #154 — no MSAA on the default framebuffer: the scene renders into its own multisampled HDR
+    // targets and this buffer only receives ImGui and resolved blits, so 4x samples were pure
+    // VRAM/bandwidth waste (and made blitting the Game view into it an invalid operation).
+    glfwWindowHint(GLFW_SAMPLES, 0);
     // Report the real per-monitor content scale (e.g. 2.0 at Windows' 200% scaling, common on
     // 4K displays) so the editor can bake it into font sizes and layout instead of rendering a
     // tiny fixed-pixel UI.
@@ -289,7 +294,8 @@ void Window::Maximize() {
 
 Window::Placement Window::GetPlacement() const {
     Placement p;
-    if (!m_Handle || m_IsFullscreen) return p;
+    if (!m_Handle) return p;
+    if (m_IsFullscreen) return m_PreFullscreen; // the windowed state underneath
 #if defined(_WIN32)
     HWND hwnd = glfwGetWin32Window(m_Handle);
     WINDOWPLACEMENT wp{};
@@ -334,7 +340,9 @@ bool Window::ApplyPlacement(const Placement& p) {
     wp.length = sizeof(wp);
     if (!GetWindowPlacement(hwnd, &wp)) return false;
     wp.flags = 0;
-    wp.showCmd = SW_HIDE; // still hidden until main() calls Show() after the first frame
+    // Hidden at startup (main() calls Show() after the first frame); a visible window (leaving
+    // borderless fullscreen) keeps showing - its maximized state is re-applied by the caller.
+    wp.showCmd = IsWindowVisible(hwnd) ? SW_SHOWNORMAL : SW_HIDE;
     wp.rcNormalPosition = RECT{p.X, p.Y, p.X + p.Width, p.Y + p.Height};
     if (!SetWindowPlacement(hwnd, &wp)) return false;
 #else
@@ -366,20 +374,79 @@ void Window::ShowFatalErrorDialog(const std::string& message) {
 #endif
 }
 
+std::vector<std::string> Window::MonitorNames() {
+    std::vector<std::string> names;
+    int count = 0;
+    GLFWmonitor** monitors = glfwGetMonitors(&count);
+    for (int i = 0; i < count; ++i) {
+        const char* n = glfwGetMonitorName(monitors[i]);
+        names.emplace_back(n ? n : "Display");
+    }
+    return names;
+}
+
+namespace {
+// The chosen monitor, or (index -1 / out of range) the one containing the window's centre.
+GLFWmonitor* PickMonitor(GLFWwindow* window, int index) {
+    int count = 0;
+    GLFWmonitor** monitors = glfwGetMonitors(&count);
+    if (count <= 0) return glfwGetPrimaryMonitor();
+    if (index >= 0 && index < count) return monitors[index];
+    int wx, wy, ww, wh;
+    glfwGetWindowPos(window, &wx, &wy);
+    glfwGetWindowSize(window, &ww, &wh);
+    const int cx = wx + ww / 2, cy = wy + wh / 2;
+    for (int i = 0; i < count; ++i) {
+        int mx, my;
+        glfwGetMonitorPos(monitors[i], &mx, &my);
+        const GLFWvidmode* mode = glfwGetVideoMode(monitors[i]);
+        if (mode && cx >= mx && cx < mx + mode->width && cy >= my && cy < my + mode->height) return monitors[i];
+    }
+    return glfwGetPrimaryMonitor();
+}
+} // namespace
+
 void Window::SetFullscreen(bool fullscreen) {
     if (fullscreen == m_IsFullscreen) return;
+    GLFWmonitor* monitor = PickMonitor(m_Handle, m_FsMonitor);
+    const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
+    if (fullscreen && !mode) return;
 
     if (fullscreen) {
-        // Remember the windowed rect so toggling back doesn't strand the window at (0,0)
-        // or the monitor's resolution.
+        m_ActiveFsMode = m_FsMode;
+        // Remember the windowed state so toggling back doesn't strand the window at (0,0) or
+        // at the monitor's resolution.
         glfwGetWindowPos(m_Handle, &m_WindowedX, &m_WindowedY);
         glfwGetWindowSize(m_Handle, &m_WindowedW, &m_WindowedH);
-
-        GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-        const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-        glfwSetWindowMonitor(m_Handle, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+        m_PreFullscreen = GetPlacement();
+        if (m_ActiveFsMode == FullscreenMode::Exclusive) {
+            glfwSetWindowMonitor(m_Handle, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+        } else {
+            int mx = 0, my = 0;
+            glfwGetMonitorPos(monitor, &mx, &my);
+#if defined(_WIN32)
+            // Un-maximize first: a zoomed window gets its client rect inset (WM_NCCALCSIZE) and
+            // clamped to the work area (WM_GETMINMAXINFO). m_IsFullscreen is set first so the
+            // hit-test already treats the whole window as client.
+            m_IsFullscreen = true;
+            HWND hwnd = glfwGetWin32Window(m_Handle);
+            if (IsZoomed(hwnd)) ShowWindow(hwnd, SW_RESTORE);
+            SetWindowPos(hwnd, HWND_TOP, mx, my, mode->width, mode->height, SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+#else
+            glfwSetWindowMonitor(m_Handle, nullptr, mx, my, mode->width, mode->height, 0);
+#endif
+        }
     } else {
-        glfwSetWindowMonitor(m_Handle, nullptr, m_WindowedX, m_WindowedY, m_WindowedW, m_WindowedH, 0);
+        if (m_ActiveFsMode == FullscreenMode::Exclusive) {
+            glfwSetWindowMonitor(m_Handle, nullptr, m_WindowedX, m_WindowedY, m_WindowedW, m_WindowedH, 0);
+        } else {
+            m_IsFullscreen = false;
+            if (!ApplyPlacement(m_PreFullscreen))
+                glfwSetWindowMonitor(m_Handle, nullptr, m_WindowedX, m_WindowedY, m_WindowedW, m_WindowedH, 0);
+#if defined(_WIN32)
+            ShowWindow(glfwGetWin32Window(m_Handle), m_PreFullscreen.Maximized ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL);
+#endif
+        }
     }
     m_IsFullscreen = fullscreen;
 }
