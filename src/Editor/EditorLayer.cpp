@@ -776,6 +776,21 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
     if (EditorUIPrimitives::Checkbox("SSAO", &world.SsaoEnabled)) PushUndo(world, "Toggle SSAO");
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Screen-space ambient occlusion. Darkens crevices and contact shadows. Depth pre-pass + blur;\napplies to both the Scene and Game views.");
+    if (world.SsaoEnabled) { // #160 — were hard-coded
+        auto ssaoSlider = [&](const char* label, float* v, float lo, float hi, const char* fmt, const char* undo, const char* tip) {
+            ImGui::SetNextItemWidth(w);
+            bool activated = false;
+            EditorUI::SliderFloat(label, v, lo, hi, fmt, 0, &activated);
+            if (activated) PushUndo(world, undo);
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+        };
+        ssaoSlider("SSAO radius", &world.SsaoRadius, 0.05f, 5.0f, "%.2f m", "Edit SSAO Radius",
+                   "How far around each point to look for occluders. Small = fine crevices, large = broad contact shadows.");
+        ssaoSlider("SSAO intensity", &world.SsaoIntensity, 0.1f, 4.0f, "%.2f", "Edit SSAO Intensity",
+                   "Darkens (above 1) or lightens (below 1) the occlusion.");
+        ssaoSlider("SSAO bias", &world.SsaoBias, 0.0f, 0.2f, "%.3f", "Edit SSAO Bias",
+                   "Depth tolerance against self-occlusion. Raise it if flat surfaces show blotchy darkening.");
+    }
 
     if (EditorUIPrimitives::Checkbox("Bloom", &world.BloomEnabled)) PushUndo(world, "Toggle Bloom");
     if (ImGui::IsItemHovered())

@@ -62,6 +62,11 @@ public:
     int   MsaaSamples{4};          // 1 / 2 / 4 / 8 for the HDR target
 
     bool  SsaoEnabled{false};
+    // #160 — SSAO tuning (were hard-coded): sample radius in view-space units, depth bias against
+    // self-occlusion, and an exponent on the result (1 = as computed, 2 = darker contact shadows).
+    float SsaoRadius{0.5f};
+    float SsaoBias{0.025f};
+    float SsaoIntensity{1.0f};
 
     bool  BloomEnabled{false};
     float BloomThreshold{1.0f};
