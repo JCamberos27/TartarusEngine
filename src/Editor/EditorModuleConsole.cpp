@@ -87,6 +87,8 @@ struct Entry {
     std::string Message;
     std::string Time;
     int Count = 1;
+    int EntityOrder = -1;  // #146 structured context; -1 / "" when the entry wasn't tagged
+    std::string AssetPath;
 };
 
 bool FetchEntry(const EditorModuleHostAPI& host, int index, Entry& out) {
@@ -95,6 +97,10 @@ bool FetchEntry(const EditorModuleHostAPI& host, int index, Entry& out) {
     if (!host.LogGetEntry || !host.LogGetEntry(index, &out.Level, &message, &time, &out.Count)) return false;
     out.Message = message ? message : "";
     out.Time = time ? time : "";
+    const char* assetPath = nullptr;
+    out.EntityOrder = -1;
+    if (host.LogGetEntryContext) host.LogGetEntryContext(index, &out.EntityOrder, &assetPath);
+    out.AssetPath = assetPath ? assetPath : "";
     return true;
 }
 
@@ -416,10 +422,14 @@ void Draw(const EditorModuleHostAPI& host) {
                 // Phase 6 item 4 — click-to-navigate. An entity reference wins over an asset one
                 // when a message happens to parse as both (hasn't come up in practice, but PhysX
                 // lines already quote asset-ish text around an entity id in a couple of cases).
-                int entityRef = 0;
-                std::string assetRef;
-                const bool hasEntityRef = host.SelectEntityByOrder && ParseEntityRef(entry.Message, entityRef);
-                const bool hasAssetRef = !hasEntityRef && host.PingAssetPath && ParsePathRef(entry.Message, assetRef);
+                // #146: the logger's structured context first; parsing the text is the fallback
+                // for the many call sites that don't tag their messages.
+                int entityRef = entry.EntityOrder;
+                std::string assetRef = entry.AssetPath;
+                const bool hasEntityRef = host.SelectEntityByOrder &&
+                    (entityRef >= 0 || ParseEntityRef(entry.Message, entityRef));
+                const bool hasAssetRef = !hasEntityRef && host.PingAssetPath &&
+                    (!assetRef.empty() || ParsePathRef(entry.Message, assetRef));
 
                 if (rowClicked && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                     if (hasEntityRef) host.SelectEntityByOrder(entityRef);

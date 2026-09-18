@@ -245,7 +245,7 @@ bool World::SetParent(entt::entity child, entt::entity parent) {
         if (walk == child) return false;
         if (++hops > 1024) {
             Log::Error("Hierarchy: the parent chain above " + EntityLogRef(Registry, parent) +
-                       " loops or is deeper than 1024 - reparent refused (the scene's hierarchy is malformed).");
+                       " loops or is deeper than 1024 - reparent refused (the scene's hierarchy is malformed).", EntityLogContext(Registry, parent));
             return false;
         }
         const auto* h = Registry.try_get<HierarchyComponent>(walk);
@@ -318,6 +318,12 @@ glm::mat4 ComposeTransform(const glm::vec3& position, const glm::vec3& rotationE
     m = glm::rotate(m, glm::radians(rotationEulerDegrees.z), glm::vec3(0, 0, 1));
     m = glm::scale(m, scale);
     return m;
+}
+
+LogContext EntityLogContext(const entt::registry& registry, entt::entity e) {
+    if (registry.valid(e))
+        if (const auto* order = registry.try_get<OrderComponent>(e)) return LogContext::Entity(order->Value);
+    return {};
 }
 
 std::string EntityLogRef(const entt::registry& registry, entt::entity e) {

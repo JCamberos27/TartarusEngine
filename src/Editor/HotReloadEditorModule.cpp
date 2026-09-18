@@ -93,6 +93,15 @@ void GetImGuiAllocators(EditorModuleImGuiAllocFn* outAlloc, EditorModuleImGuiFre
 unsigned int LogRevisionFn() { return Log::Revision(); }
 int LogEntryCountFn() { return (int)Log::Entries().size(); }
 
+bool LogGetEntryContextFn(int index, int* outEntityOrder, const char** outAssetPath) {
+    const std::vector<LogEntry>& entries = Log::Entries();
+    if (index < 0 || (size_t)index >= entries.size()) return false;
+    const LogContext& c = entries[(size_t)index].Context;
+    if (outEntityOrder) *outEntityOrder = c.EntityOrder;
+    if (outAssetPath)   *outAssetPath = c.AssetPath.c_str();
+    return true;
+}
+
 bool LogGetEntryFn(int index, int* outLevel, const char** outMessage, const char** outTime, int* outCount) {
     const std::vector<LogEntry>& entries = Log::Entries();
     if (index < 0 || (size_t)index >= entries.size()) return false;
@@ -605,6 +614,7 @@ EditorModuleHostAPI MakeHostAPI() {
     api.OpenPreferences = &TbOpenPreferences;
     api.OpenProjectSettings = &TbOpenProjectSettings;
     api.OpenShortcutsReference = &TbOpenShortcutsReference;
+    api.LogGetEntryContext = &LogGetEntryContextFn;
     api.OpenAbout = &HelpOpenAbout;
     api.OpenDocumentation = &HelpOpenDocumentation;
     api.OpenLogFolder = &HelpOpenLogFolder;
