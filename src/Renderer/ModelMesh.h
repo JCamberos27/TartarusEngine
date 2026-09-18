@@ -19,6 +19,10 @@ public:
     // per animation frame — snapping / static colliders target the rest pose, which is what
     // you want for static props anyway.
     const std::vector<glm::vec3>& LocalPositions() const { return m_LocalPositions; }
+    // #98 — a skinned mesh's GPU vertices stay in mesh space (the bone palette places them), so
+    // Model replaces this CPU copy with the bind-pose positions used for bounds, picking,
+    // snapping and collider cooking.
+    void SetLocalPositions(std::vector<glm::vec3> positions) { m_LocalPositions = std::move(positions); }
 
     // The triangle index list (matches LocalPositions()), kept for triangle-mesh collider
     // cooking (#185 PR 6). size() == IndexCount().
