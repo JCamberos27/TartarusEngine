@@ -261,8 +261,8 @@ static entt::entity FindActiveSceneCamera(const World& world) {
 }
 
 int main(int argc, char** argv) {
-    // Before anything else: on an unhandled fault, drop a minidump next to the exe instead of
-    // vanishing with a bare exit 139.
+    // Before anything else: on a crash, write a minidump to %LOCALAPPDATA%\TartarusEngine\Crashes
+    // and tell the user, instead of vanishing with a bare exit 139 (#148).
     CrashHandler::Install();
 
     // --smoke-test: headless-as-possible CI/manual smoke check (audit #187). Loads every scene
@@ -307,6 +307,17 @@ int main(int argc, char** argv) {
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
     // (audit BUG-102).
     const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode;
+    CrashHandler::SetInteractive(!headless); // #148: no crash dialog on an unattended run
+
+    // #148: `--crash-test <kind>` deliberately crashes through one path so the handler (dump,
+    // stderr line, dialog) can be checked: av | overflow | abort | purecall | invalidparam | terminate.
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (std::string(argv[i]) != "--crash-test") continue;
+        CrashHandler::SetInteractive(false);
+        for (int j = 1; j < argc; ++j)
+            if (std::string(argv[j]) == "--crash-dialog") CrashHandler::SetInteractive(true);
+        CrashHandler::CrashForTest(argv[i + 1]);
+    }
 
     // Resolve shipped engine assets (shaders, fonts, branding) relative to the executable, not
     // the working directory, so a launch from the repo root or an unrelated CWD still finds
