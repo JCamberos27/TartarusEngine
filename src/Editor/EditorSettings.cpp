@@ -86,6 +86,14 @@ void EditorSettings::Load() {
     s.VSyncMode = SafeValue(root, "vsyncMode", s.VSyncMode);
     s.FpsLimit = SafeValue(root, "fpsLimit", s.FpsLimit);
     s.UnfocusedFpsLimit = SafeValue(root, "unfocusedFpsLimit", s.UnfocusedFpsLimit);
+    if (auto wp = root.find("windowPlacement"); wp != root.end() && wp->is_object()) {
+        s.WindowX = SafeValue(*wp, "x", 0);
+        s.WindowY = SafeValue(*wp, "y", 0);
+        s.WindowWidth = SafeValue(*wp, "width", 0);
+        s.WindowHeight = SafeValue(*wp, "height", 0);
+        s.WindowMaximized = SafeValue(*wp, "maximized", true);
+        s.WindowPlacementValid = s.WindowWidth > 0 && s.WindowHeight > 0;
+    }
     // exposureEV/tonemapOperator/msaaSamples/ssaoEnabled/bloom*/shadow* intentionally no longer
     // read here (#9, Phase M item 1) — moved to World/scene data. A pre-v3 scene's values are
     // migrated forward by SceneSerializer reading this file's legacy keys directly (see
@@ -217,6 +225,11 @@ void EditorSettings::Flush() {
     root["vsyncMode"] = Get().VSyncMode;
     root["fpsLimit"] = Get().FpsLimit;
     root["unfocusedFpsLimit"] = Get().UnfocusedFpsLimit;
+    if (Get().WindowPlacementValid) {
+        root["windowPlacement"] = {{"x", Get().WindowX}, {"y", Get().WindowY},
+                                   {"width", Get().WindowWidth}, {"height", Get().WindowHeight},
+                                   {"maximized", Get().WindowMaximized}};
+    }
     // exposureEV/tonemapOperator/msaaSamples/ssaoEnabled/bloom*/shadow* intentionally no longer
     // written here — see the matching comment in Load(). Once every project has been opened at
     // least once under formatVersion 3+, an old prefs file's stray legacy keys simply age out.

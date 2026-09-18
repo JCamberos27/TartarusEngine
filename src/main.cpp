@@ -347,7 +347,8 @@ int main(int argc, char** argv) {
         GLDebug::Init();
         Input::Init(window.Handle());
         window.SetCursorLocked(true);
-        window.Maximize(); // opens maximized (not true fullscreen, no monitor video-mode switch); F11 still enters fullscreen
+        // Placement (last session's rect, or maximized) is applied once EditorSettings has
+        // loaded, below - the window stays hidden until the first frame either way (#143).
 
         AudioEngine::Init();
 
@@ -461,6 +462,20 @@ int main(int argc, char** argv) {
         // build/, where it was gitignored and a clean rebuild would delete it. Prefer the scene
         // that was open when the editor last closed, if it still exists (#95).
         EditorSettings::Load();
+        {
+            // #143: reopen where the user left the window. Falls back to maximized (not true
+            // fullscreen, no monitor video-mode switch; F11 still enters fullscreen) on first
+            // run, for headless runs, or when the saved rect is off every connected monitor.
+            const EditorSettings& es = EditorSettings::Get();
+            Window::Placement placement;
+            placement.Valid = es.WindowPlacementValid && !headless;
+            placement.X = es.WindowX;
+            placement.Y = es.WindowY;
+            placement.Width = es.WindowWidth;
+            placement.Height = es.WindowHeight;
+            placement.Maximized = es.WindowMaximized;
+            if (!window.ApplyPlacement(placement)) window.Maximize();
+        }
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
         ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
         AssetDatabase::ScanProject(); // create .meta sidecars for existing assets (#333 PR 1)
@@ -2317,8 +2332,14 @@ int main(int argc, char** argv) {
                 }
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
 
-                gameViewStats.FPS = dt > 0.0f ? (int)(1.0f / dt) : 0;
-                gameViewStats.FrameMs = dt * 1000.0f;
+                // #143: exponentially smoothed (same 0.92/0.08 blend as the Scene view's status
+                // bar) so the readout is legible instead of jittering with every frame's 1/dt.
+                // Kept here rather than reusing EditorLayer's, which isn't updated during
+                // maximized play - exactly when this overlay is most visible.
+                static float smoothedMs = 16.6f;
+                smoothedMs = smoothedMs * 0.92f + dt * 1000.0f * 0.08f;
+                gameViewStats.FPS = smoothedMs > 0.0001f ? (int)(1000.0f / smoothedMs + 0.5f) : 0;
+                gameViewStats.FrameMs = smoothedMs;
                 gameViewStats.DrawCalls = gvRenderStats.DrawCalls;
                 gameViewStats.Triangles = gvRenderStats.Triangles;
                 gameViewStats.Vertices = gvRenderStats.Vertices;
@@ -2512,8 +2533,12 @@ int main(int argc, char** argv) {
                 if (shotPollAccum >= 0.25f) {
                     shotPollAccum = 0.0f;
                     std::error_code shotEc;
-                    sentinel = std::filesystem::exists(".shot", shotEc);
-                    if (sentinel) std::filesystem::remove(".shot", shotEc);
+                    // Next to the exe as documented, not the CWD - the shortcut and run-editor.cmd
+                    // don't guarantee any particular working directory (#143).
+                    static const std::filesystem::path shotPath =
+                        std::filesystem::path(EnginePaths::ExeDir()) / ".shot";
+                    sentinel = std::filesystem::exists(shotPath, shotEc);
+                    if (sentinel) std::filesystem::remove(shotPath, shotEc);
                 }
                 if (ps || sentinel) editor.RequestCapture();
             }
@@ -2678,6 +2703,21 @@ int main(int argc, char** argv) {
         // overwrite a scene that failed to load with the empty world that replaced it.
 
         FlushFlySpeedSave(/*force=*/true); // a fly-speed trim still inside its save debounce (#142)
+        {
+            // #143: remember the window placement for next launch (editor.Shutdown() flushes).
+            // Skipped while fullscreen - the windowed placement from last time stays.
+            Window::Placement placement = window.GetPlacement();
+            if (placement.Valid) {
+                EditorSettings& es = EditorSettings::Get();
+                es.WindowPlacementValid = true;
+                es.WindowX = placement.X;
+                es.WindowY = placement.Y;
+                es.WindowWidth = placement.Width;
+                es.WindowHeight = placement.Height;
+                es.WindowMaximized = placement.Maximized;
+                EditorSettings::Save();
+            }
+        }
         editor.Shutdown();
         Screenshot::WaitForPending(); // #153 - a capture still encoding when the editor closes
         editorModule.Shutdown();
