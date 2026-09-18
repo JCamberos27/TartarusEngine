@@ -191,3 +191,14 @@ including across 15 rapid consecutive runs and a full `imgui.ini`/scene-file dif
 `--resave` round-trips leave the input untouched and are idempotent; `--asset-load-bench` shows
 a real ~2x cached-decode speedup; and #79's repro (an object scaled to 400x) leaves scroll-zoom
 fully responsive. See [`CHANGELOG.md`](../CHANGELOG.md) for the consolidated entry.
+
+While verifying #79, found and fixed a seventh, related bug:
+[#80](https://github.com/JCamberos27/TartarusEngine/issues/80) — an imprecise Rect-handle drag
+(missing the handle by a few pixels, so box-select commits a different selection instead of
+ImGuizmo actually grabbing it) leaks ImGuizmo's own "still dragging" state, permanently
+blocking every left-button viewport interaction (picking, box-select) until the selection
+changes some other way. Confirmed live via the Scene Hierarchy's drag-delta readout
+(`T +x +y +z`) persisting with no mouse button held. Fixed with a self-healing check — once per
+frame, force-cancel `ImGuizmo::IsUsing()` if the left button isn't actually down — rather than
+patching the one trigger path, since the leak mechanism could plausibly recur elsewhere
+(`b6b751c`, closes #80).

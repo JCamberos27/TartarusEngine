@@ -7,6 +7,27 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### [Defect] Viewport selection permanently breaks after an imprecise Rect drag (#80) — 2026-09-17
+
+Found while verifying the #79 camera-lockout fix. `ImGuizmo::IsOver()`/`IsUsing()` — what
+`EditorLayer::GizmoEngaged()`/`GizmoUsing()` are derived from — can leak a "still dragging"
+state when the object being bounds-dragged stops being the sole selection mid-drag: a mouse-down
+that misses the real handle by a few pixels lets the ordinary box-select path commit a different
+selection on release instead, and the gizmo call that would have observed ImGuizmo's own
+button-up transition for that interaction never runs again. Every left-button-driven viewport
+interaction (picking, box-select, the #79 fix's own Alt+LMB orbit check) gates on those flags, so
+once this leaks, clicking anywhere in the viewport — a different object, empty ground, anything
+— silently does nothing, forever, until the selection changes some other way (the Hierarchy
+panel doesn't gate on this). Confirmed live via the Scene Hierarchy's drag-delta status readout
+(`T +x +y +z`) still showing indefinitely with no mouse button held.
+
+Fixed with a self-healing check rather than a narrow patch to one trigger path: once per frame,
+if `ImGuizmo::IsUsing()` claims an active drag but the left mouse button isn't physically down,
+that state is definitionally stale, so it's force-cancelled via `ImGuizmo::Enable(false)`/
+`Enable(true)`. Live-verified: reproduced the lockout, applied the fix, then confirmed repeated
+drag/click cycles — including ones reproducing the same imprecise-drag pattern — leave picking
+fully responsive with no stuck readout (`b6b751c`, closes #80).
+
 ### [Defect] Headless QA sweep fixes: scene-write, crash, log-spam, bench, camera-lockout (#74-#79) — 2026-09-17
 
 Six findings from a headless (`--smoke-test`/`--resave`/bench) QA sweep, plus one interactive
