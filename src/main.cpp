@@ -52,6 +52,7 @@
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
 #include "AssetDatabase.h"
+#include "ThumbnailCache.h"
 #include "SplashScreen.h"
 #include "GLDebug.h"
 #include "Log.h"
@@ -463,6 +464,7 @@ int main(int argc, char** argv) {
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
         ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
         AssetDatabase::ScanProject(); // create .meta sidecars for existing assets (#333 PR 1)
+        ThumbnailCache::PruneOrphans(); // #133 — drop cached thumbnails of deleted assets
         std::string scenePath = ProjectPaths::Resolve("scenes/Showcase.json");
         {
             const std::string& last = EditorSettings::Get().LastScenePath;
