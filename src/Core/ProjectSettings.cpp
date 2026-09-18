@@ -15,6 +15,7 @@ namespace ProjectSettings {
 namespace {
 
 PhysicsSettings g_Physics;
+TimeSettings g_Time;
 std::vector<std::string> g_Tags;
 
 const std::string& SettingsPath() {
@@ -44,6 +45,8 @@ glm::vec3 Vec3Or(const json& j, const char* key, const glm::vec3& fallback) {
 
 const PhysicsSettings& Physics()       { return g_Physics; }
 PhysicsSettings&       MutablePhysics() { return g_Physics; }
+const TimeSettings&    Time()           { return g_Time; }
+TimeSettings&          MutableTime()    { return g_Time; }
 
 const std::vector<std::string>& Tags() { return g_Tags; }
 
@@ -97,6 +100,19 @@ void Load() {
         }
     }
 
+    if (const auto it = root.find("time"); it != root.end() && it->is_object()) { // #144
+        auto num = [&it](const char* key, float fallback) {
+            const auto f = it->find(key);
+            if (f == it->end() || !f->is_number()) {
+                if (f != it->end()) Log::Warn(std::string("ProjectSettings: ignoring non-numeric time '") + key + "'.");
+                return fallback;
+            }
+            return f->get<float>();
+        };
+        g_Time.MaximumDeltaTime = std::clamp(num("maximumDeltaTime", g_Time.MaximumDeltaTime), 0.01f, 1.0f);
+        g_Time.TimeScale        = std::clamp(num("timeScale", g_Time.TimeScale), 0.0f, 100.0f);
+    }
+
     if (const auto it = root.find("tags"); it != root.end() && it->is_array()) {
         for (const auto& t : *it) {
             if (t.is_string()) AddTag(t.get<std::string>());
@@ -116,6 +132,10 @@ void Save() {
                                         g_Physics.LayerCollisionMask[2], g_Physics.LayerCollisionMask[3],
                                         g_Physics.LayerCollisionMask[4], g_Physics.LayerCollisionMask[5],
                                         g_Physics.LayerCollisionMask[6], g_Physics.LayerCollisionMask[7]})},
+    };
+    root["time"] = {
+        {"maximumDeltaTime", g_Time.MaximumDeltaTime},
+        {"timeScale", g_Time.TimeScale},
     };
     root["tags"] = g_Tags;
 

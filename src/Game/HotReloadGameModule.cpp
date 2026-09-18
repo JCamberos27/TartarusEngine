@@ -5,6 +5,7 @@
 #include "World.h"
 #include "PhysicsWorld.h" // #185 PR 2 — Raycast is backed by the host-side PhysX world
 #include "HotReloadSwap.h"
+#include "TimeService.h"
 
 #include <string>
 #include <windows.h>
@@ -17,7 +18,27 @@ namespace {
 // thin forwards to the PhysX world and all no-op (miss / 0 events) whenever it isn't live, so
 // a module calling them outside Play just gets nothing back. #185 PR 2 added Raycast, PR 5
 // GetTriggerEvents.
-const GameModuleHostAPI kHostAPI{
+void GetTimeFn(GameTime& out) {
+    out.DeltaTime = Time::DeltaTime();
+    out.UnscaledDeltaTime = Time::UnscaledDeltaTime();
+    out.FixedDeltaTime = Time::FixedDeltaTime();
+    out.TimeScale = Time::EffectiveTimeScale();
+    out.Time = Time::TimeSinceStartup();
+    out.UnscaledTime = Time::UnscaledTimeSinceStartup();
+    out.RealtimeSinceStartup = Time::RealtimeSinceStartup();
+    out.FrameCount = Time::FrameCount();
+}
+
+GameModuleHostAPI MakeHostAPI();
+const GameModuleHostAPI kHostAPI = MakeHostAPI();
+
+GameModuleHostAPI MakeHostAPI() {
+    // Assigned by name, like the editor host's table: same-signature slots can't be swapped.
+    GameModuleHostAPI api;
+    api.Version = kGameModuleAPIVersion;
+    api.GetTime = &GetTimeFn;
+    api.SetTimeScale = [](float scale) { Time::SetTimeScale(scale); };
+    const GameModuleHostAPI physics{
     kGameModuleAPIVersion,
     /*Raycast=*/[](const float origin[3], const float dir[3], float maxDistance, RaycastHit& outHit) {
         return PhysicsWorld::Raycast(origin, dir, maxDistance, outHit);
@@ -44,7 +65,20 @@ const GameModuleHostAPI kHostAPI{
     /*OverlapSphere=*/[](const float c[3], float r, std::uint32_t* out, int maxE) {
         return PhysicsWorld::OverlapSphere(c, r, out, maxE);
     },
-};
+    };
+    api.Raycast = physics.Raycast;
+    api.GetTriggerEvents = physics.GetTriggerEvents;
+    api.AddForce = physics.AddForce;
+    api.AddTorque = physics.AddTorque;
+    api.AddForceAtPosition = physics.AddForceAtPosition;
+    api.AddExplosionForce = physics.AddExplosionForce;
+    api.SetLinearVelocity = physics.SetLinearVelocity;
+    api.GetBodyState = physics.GetBodyState;
+    api.GetContactEvents = physics.GetContactEvents;
+    api.SphereCast = physics.SphereCast;
+    api.OverlapSphere = physics.OverlapSphere;
+    return api;
+}
 
 // The candidate / rollback validation: exported entry point, matching API version, an Update.
 const GameModuleAPI* ResolveAPI(HMODULE module) {
@@ -77,6 +111,10 @@ void HotReloadGameModule::Tick(World& world, float deltaTime, bool playing) {
     }
 
     if (playing && m_API && m_API->Update) m_API->Update(kHostAPI, world, deltaTime);
+}
+
+void HotReloadGameModule::FixedTick(World& world, float fixedDeltaTime) {
+    if (m_API && m_API->FixedUpdate) m_API->FixedUpdate(kHostAPI, world, fixedDeltaTime);
 }
 
 bool HotReloadGameModule::Reload(bool initialLoad) {
