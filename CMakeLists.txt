@@ -464,6 +464,9 @@ if(BUILD_TIF_SPLITTER)
   )
   if(WIN32)
     list(APPEND TIF_SPLITTER_SOURCES ${CMAKE_SOURCE_DIR}/extern/branding/tifsplitter_icon.rc)
+    # Same UTF-8 active code page / long-path manifest as the engine (#185 / #149): non-ASCII
+    # input and output paths work through argv, libtiff and stb's fopen alike.
+    list(APPEND TIF_SPLITTER_SOURCES ${CMAKE_SOURCE_DIR}/src/TartarusEngine.manifest)
   endif()
   add_executable(TifSplitter ${TIF_SPLITTER_SOURCES})
   target_include_directories(TifSplitter PRIVATE

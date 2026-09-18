@@ -1,11 +1,30 @@
 #include "TifSplitter.h"
 
+#include <charconv>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <io.h>
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 
 namespace {
+
+// #185: std::atoi turned garbage ("--tile-size big") into 0 silently. Whole-string parse with
+// a range check; exits with a message instead.
+int ParseIntArg(const std::string& flag, const std::string& value, int minValue, int maxValue) {
+    int result = 0;
+    const char* first = value.data();
+    const char* last = first + value.size();
+    auto [ptr, ec] = std::from_chars(first, last, result);
+    if (ec != std::errc() || ptr != last || result < minValue || result > maxValue) {
+        std::cerr << "[Error] " << flag << " expects a whole number from " << minValue << " to "
+                  << maxValue << ", got '" << value << "'.\n";
+        std::exit(1);
+    }
+    return result;
+}
 
 void PrintUsage(const char* exeName) {
     std::cout <<
@@ -36,6 +55,9 @@ void PrintUsage(const char* exeName) {
         "  --no-normalize          Don't contrast-stretch split channels to fill\n"
         "                          0..255 (on by default, since heightmap data\n"
         "                          rarely uses its full source bit range)\n"
+        "  --16bit                 Write split channels of a 16/32/64-bit source as\n"
+        "                          16-bit PNGs (full heightmap precision, no\n"
+        "                          terracing). Needs --split-channels\n"
         "  --pause                 Wait for Enter before exiting (default: only on a\n"
         "                          bare drag-and-drop launch, never for an explicit CLI run)\n"
         "  -h, --help              Show this message\n\n"
@@ -51,10 +73,16 @@ void PrintUsage(const char* exeName) {
 } // namespace
 
 int main(int argc, char** argv) {
+#if defined(_WIN32)
+    // The embedded manifest sets the process code page to UTF-8 (#185 / #149), so argv, libtiff
+    // and every std::string path are UTF-8; make the console print them that way too.
+    SetConsoleOutputCP(CP_UTF8);
+#endif
     // Shared flags - apply to whichever mode (single-file or batch) ends up running.
     bool extractChannels = false;
     bool flipY = false;
     bool normalize = true;
+    bool output16 = false;
     int tileSize = 0;
     std::string outputDir;
     bool outputExplicit = false;
@@ -100,15 +128,17 @@ int main(int argc, char** argv) {
         } else if (arg == "--split-channels") {
             extractChannels = true;
         } else if (arg == "--tile-size") {
-            tileSize = std::atoi(nextArg(arg.c_str()).c_str());
+            tileSize = ParseIntArg(arg, nextArg(arg.c_str()), 0, 1 << 20);
         } else if (arg == "--flip-y") {
             flipY = true;
         } else if (arg == "--no-normalize") {
             normalize = false;
+        } else if (arg == "--16bit") {
+            output16 = true;
         } else if (arg == "--pause") {
             pauseExplicit = true;
         } else if (arg == "--threads") {
-            maxThreads = std::atoi(nextArg(arg.c_str()).c_str());
+            maxThreads = ParseIntArg(arg, nextArg(arg.c_str()), 0, 1024);
         } else if (arg == "-h" || arg == "--help") {
             showHelp = true;
         } else if (!arg.empty() && arg[0] != '-') {
@@ -126,6 +156,9 @@ int main(int argc, char** argv) {
     if (showHelp) {
         PrintUsage(argv[0]);
         return 0;
+    }
+    if (output16 && !extractChannels) {
+        std::cerr << "[Warn] --16bit only applies to --split-channels output; ignoring it.\n";
     }
 
     // "Press Enter to exit" is only useful when the window would otherwise vanish before the
@@ -164,6 +197,7 @@ int main(int argc, char** argv) {
         options.FlipNormalY = flipY;
         options.NormalizeHeightmaps = normalize;
         options.TileSize = tileSize;
+        options.Output16Bit = output16;
         options.MaxThreads = maxThreads;
 
         // #194 — the callback runs on worker threads; the exit code comes from the joined result.
@@ -190,6 +224,7 @@ int main(int argc, char** argv) {
     options.FlipNormalY = flipY;
     options.NormalizeHeightmaps = normalize;
     options.TileSize = tileSize;
+    options.Output16Bit = output16;
 
     if (outputExplicit) {
         options.OutputDirectory = outputDir;
