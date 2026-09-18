@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 
 struct GLFWwindow;
 
@@ -11,8 +12,11 @@ namespace FileDialog {
 
     // Opens the native Windows "Open File" dialog. `filter` uses the Win32 format,
     // e.g. "Model Files\0*.fbx;*.obj;*.gltf;*.glb\0All Files\0*.*\0".
-    // Returns the selected path, or an empty string if the user canceled.
+    // Returns the selected path (UTF-8, any length), or an empty string if the user canceled.
     std::string OpenFile(const char* filter, GLFWwindow* owner);
+
+    // Same, with multi-select (#139): every picked path, or an empty list if cancelled.
+    std::vector<std::string> OpenFiles(const char* filter, GLFWwindow* owner);
 
     // Opens the native Windows "Save File" dialog. `defaultExt` (no leading dot, e.g. "json")
     // is appended automatically if the typed filename doesn't already have an extension.
