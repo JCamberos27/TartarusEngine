@@ -18,6 +18,10 @@ struct LogEntry {
     // the panel — a per-frame error would otherwise push everything else out of the ring buffer
     // within a second.
     int Count = 1;
+    // Monotonic id assigned when the entry is created (1, 2, 3...; never reused, survives the
+    // ring buffer trimming older entries). Lets a consumer remember "the last entry I handled"
+    // without relying on vector indices, which shift whenever old entries are dropped.
+    unsigned long long Seq = 0;
 };
 
 // Thread safety (#146): Info/Warn/Error may be called from any thread. Messages from other

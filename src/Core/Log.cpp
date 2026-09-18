@@ -1,5 +1,6 @@
 #include "Log.h"
 #include "UserPaths.h"
+#include <algorithm>
 #include <atomic>
 #include <cstdio>
 #include <ctime>
@@ -11,11 +12,19 @@
 
 namespace {
 
-// Ring-buffer cap: old entries drop off the front once exceeded. High enough that a normal
-// session never loses anything, low enough that a runaway per-frame log can't grow unbounded.
-constexpr size_t kMaxEntries = 1000;
-// #146: trimmed in batches of this many, not one front-erase (an O(n) shift) per message.
+// Ring-buffer caps, per level (#182): the oldest entries of a level drop off once that level
+// exceeds its cap. Separate budgets so a flood of Info (physics trigger spam, import chatter)
+// can never evict the warnings and errors the user actually needs to see - they only compete
+// with their own kind. High enough that a normal session never loses anything, low enough that
+// a runaway per-frame log can't grow unbounded.
+constexpr size_t kMaxPerLevel[3] = {1000, 500, 500}; // Info, Warning, Error
+// #146: trimmed in batches of this many past the cap, not one erase (an O(n) shift) per message.
 constexpr size_t kTrimSlack = 200;
+
+// Live per-level entry counts (collapsed duplicates count once), kept in step with Storage() so
+// CountOf is O(1) and the trim check doesn't rescan the buffer.
+size_t g_LevelCounts[3] = {0, 0, 0};
+unsigned long long g_NextSeq = 1;
 
 // Only ever touched on the main thread: the Console iterates the vector Entries() returns
 // without a lock, so other threads must never push into it directly (#146). They queue into
@@ -87,9 +96,20 @@ void AddEntry(LogLevel level, std::string message) {
     if (!entries.empty() && entries.back().Level == level && entries.back().Message == message) {
         entries.back().Count++;
     } else {
-        entries.push_back({level, std::move(message), NowHMS(), 1});
-        if (entries.size() > kMaxEntries + kTrimSlack)
-            entries.erase(entries.begin(), entries.begin() + (entries.size() - kMaxEntries));
+        entries.push_back({level, std::move(message), NowHMS(), 1, g_NextSeq++});
+        const size_t li = (size_t)level;
+        if (++g_LevelCounts[li] > kMaxPerLevel[li] + kTrimSlack) {
+            // Drop this level's oldest entries back down to its cap; other levels are untouched
+            // and relative order is preserved.
+            size_t toDrop = g_LevelCounts[li] - kMaxPerLevel[li];
+            g_LevelCounts[li] -= toDrop;
+            auto newEnd = std::remove_if(entries.begin(), entries.end(), [&](const LogEntry& e) {
+                if (toDrop == 0 || e.Level != level) return false;
+                --toDrop;
+                return true;
+            });
+            entries.erase(newEnd, entries.end());
+        }
     }
     g_Revision++;
 }
@@ -135,16 +155,14 @@ const std::vector<LogEntry>& Log::Entries() {
 void Log::Clear() {
     if (OnMainThread()) DrainPending();
     Storage().clear();
+    for (size_t& c : g_LevelCounts) c = 0;
     g_Revision++;
 }
 
 int Log::CountOf(LogLevel level) {
     if (OnMainThread()) DrainPending();
-    int count = 0;
-    for (const auto& e : Storage()) {
-        if (e.Level == level) count++;
-    }
-    return count;
+    const size_t li = (size_t)level;
+    return li < 3 ? (int)g_LevelCounts[li] : 0;
 }
 
 unsigned int Log::Revision() {
