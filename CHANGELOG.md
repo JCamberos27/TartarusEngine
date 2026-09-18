@@ -7,6 +7,35 @@ Dates are `YYYY-MM-DD`. Each entry links the commit(s) that landed it.
 
 ## Unreleased
 
+### [Defect] Headless QA sweep fixes: scene-write, crash, log-spam, bench, camera-lockout (#74-#79) — 2026-09-17
+
+Six findings from a headless (`--smoke-test`/`--resave`/bench) QA sweep, plus one interactive
+gizmo-driven freeze report, all fixed and live-verified in the same pass.
+
+Most severe: `SceneSerializer::Load` no longer silently rewrites a scene file to disk on a
+v2→v3 format migration unless the caller opts in — headless tooling was mutating the committed
+`tests/smoke-scenes-invalid/` fixtures and `project/scenes/Showcase.json` on every single run,
+including a plain `--smoke-test` with zero flags (closes #77). Stretching an object large enough
+with the Rect gizmo used to permanently lock out all camera navigation, including scroll-zoom —
+mere gizmo hover (`ImGuizmo::IsOver()`) was gating controls that never actually share an input
+with a gizmo drag; only Alt+LMB orbit does, and now that's the only one still gated, on
+`IsUsing()` (closes #79). A scene file that's valid JSON but not an object (a bare `[]`) used to
+throw an uncaught exception that took down the whole process instead of failing just that one
+scene's load (closes #76). A `parentId` cycle used to flood the Console at full frame rate
+instead of logging once (closes #74). `--asset-load-bench`'s "cached" pass root-caused properly
+rather than patched around: `AssetLibrary::LoadTexture` registered a texture's GUID *after*
+decoding it, so the first decode's cache entry and every later lookup used different keys —
+moved the registration earlier instead of touching the bench's (intentionally) fresh-per-pass
+design (closes #75). `check_asset_meta.py`'s em-dash mojibakes on a default Windows console
+codepage — swapped for a hyphen (closes #78).
+
+Live-verified: the full `--smoke-test` suite (5 scenes, all pass) and `smoke-scenes-invalid/`
+(fails gracefully) both now produce zero working-tree mutation, including across 15 rapid
+consecutive runs; `--resave` round-trips leave the input untouched and are idempotent;
+`--asset-load-bench` shows a real ~2x cached-decode speedup; and the #79 repro (an object
+scaled to 400x, its bounds gizmo covering nearly the whole viewport) leaves scroll-zoom fully
+responsive (`a45050b`, closes #74, #75, #76, #77, #78, #79).
+
 ### [Defect #29] Game view toolbar (#39) — 2026-09-16
 
 The aspect-ratio/resolution control moves from a bottom-left overlay floating on top of the
