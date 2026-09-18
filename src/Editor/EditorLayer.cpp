@@ -28,6 +28,7 @@
 #include "EditorModuleAPI.h"       // EditorConsoleState's full definition (Visible)
 #include "GLStateCache.h"
 #include "PhysicsWorld.h" // #185 — the Physics debug panel + HUD read live sim state
+#include "TextureCache.h" // Preferences > Rendering's cache size + Clear button (#159)
 #include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
 #include "ScreenBlur.h"
 #include "Framebuffer.h"
@@ -1312,6 +1313,38 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         ImGui::Spacing();
         ImGui::SeparatorText("Shadows");
         DrawShadowSettings(world, kw); // shared with Window ▸ Lighting
+
+        ImGui::Spacing();
+        ImGui::SeparatorText("Texture cache");
+        {
+            // #159: Library/Textures holds decoded texture pixels so scenes open fast. It
+            // self-invalidates and is size-capped, but this is the explicit escape hatch (and
+            // tells the user what it costs). The size is a directory walk, so refresh it at most
+            // every couple of seconds while this tab is open, not every frame.
+            static TextureCache::Usage s_Usage;
+            static double s_UsageTime = -1.0;
+            const double nowT = ImGui::GetTime();
+            if (s_UsageTime < 0.0 || nowT - s_UsageTime > 2.0) {
+                s_Usage = TextureCache::DiskUsage();
+                s_UsageTime = nowT;
+            }
+            ImGui::Text("%d entr%s, %.1f MB", s_Usage.Entries, s_Usage.Entries == 1 ? "y" : "ies",
+                        (double)s_Usage.Bytes / (1024.0 * 1024.0));
+            ImGui::SameLine();
+            ImGui::BeginDisabled(s_Usage.Entries == 0);
+            if (ImGui::SmallButton(ICON_FA_TRASH "  Clear texture cache")) {
+                const int removed = TextureCache::Clear();
+                Log::Info("Texture cache cleared (" + std::to_string(removed) + " entries). Textures re-bake from source on next load.");
+                s_UsageTime = -1.0;
+            }
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                EditorUI::SetTooltip("Deletes the decoded-texture cache in project/Library/Textures.\n"
+                                     "Nothing is lost: textures already loaded stay as they are, and each one\n"
+                                     "is re-decoded from its source file (and re-cached) the next time it loads,\n"
+                                     "so the next scene open is slower. The cache is capped at 4 GB and\n"
+                                     "cleans up stale entries on its own at startup.");
+        }
 
         ImGui::Spacing();
         ImGui::TextDisabled("Changes apply immediately and are saved with the scene.");
