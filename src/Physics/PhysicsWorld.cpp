@@ -430,7 +430,7 @@ void BuildActors(PhysicsState& s, const World& world) {
                 make(PxTriangleMeshGeometry(tm, meshScale));
             } else {
                 PxConvexMesh*& cm = s.convexCache[key];
-                if (!cm) { cm = CookConvex(*s.physics, verts); std::printf("[COOK] %s\n", key.c_str()); } else std::printf("[COOK-HIT] %s\n", key.c_str()); // TEMP
+                if (!cm) cm = CookConvex(*s.physics, verts); // TEMP
                 if (!cm) {
                     s.convexCache.erase(key);
                     // Better a rough box than no collider at all (#185 hardening).
