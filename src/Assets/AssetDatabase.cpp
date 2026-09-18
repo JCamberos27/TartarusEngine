@@ -14,6 +14,16 @@
 #include <regex>
 #include <unordered_map>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 using json = nlohmann::json;
 
 // ---------------------------------------------------------------------------
@@ -121,6 +131,80 @@ void Register(const std::string& path, AssetGuid guid) {
     g_GuidToPath[guid] = path;
 }
 
+// File creation time as a comparable tick count, or 0 if unknown. A copy made in Explorer
+// keeps the source's modified time but gets a fresh creation time, so this is what tells
+// the original from the copy (#130).
+unsigned long long CreationTime(const std::string& path) {
+#ifdef _WIN32
+    WIN32_FILE_ATTRIBUTE_DATA data{};
+    if (!GetFileAttributesExW(std::filesystem::path(path).wstring().c_str(), GetFileExInfoStandard, &data))
+        return 0;
+    return ((unsigned long long)data.ftCreationTime.dwHighDateTime << 32) | data.ftCreationTime.dwLowDateTime;
+#else
+    (void)path;
+    return 0;
+#endif
+}
+
+// Gives `path` a brand-new GUID and rewrites its .meta, keeping every other field (import
+// settings etc.). Returns the new GUID, or an invalid one on I/O failure.
+AssetGuid RegenerateGuid(const std::string& path) {
+    const std::string meta = MetaPath(path);
+    json j = ReadMetaFull(meta);
+    AssetGuid guid;
+    do { guid = AssetGuid::Generate(); } while (g_GuidToPath.count(guid));
+    j["guid"] = guid.ToString();
+    if (!j.contains("metaVersion")) j["metaVersion"] = 1;
+    if (!AtomicFile::WriteJson(meta, j)) return {};
+    return guid;
+}
+
+// #130 — `path`'s .meta holds `guid`, which may already belong to another registered file
+// (an asset copied together with its .meta). Resolves the clash the way Unity does: the
+// original keeps the GUID and the copy is re-issued a new one, with a warning. Returns the
+// GUID `path` should be registered under (caller holds g_Mutex).
+AssetGuid ResolveDuplicateGuid(const std::string& path, AssetGuid guid) {
+    namespace fs = std::filesystem;
+    auto it = g_GuidToPath.find(guid);
+    if (it == g_GuidToPath.end() || it->second == path) return guid;
+    const std::string other = it->second;
+
+    std::error_code ec;
+    if (!fs::exists(other, ec) || ec || ReadMetaGuid(MetaPath(other)) != guid) {
+        // The previous owner is gone or no longer claims this GUID: the file was moved or
+        // renamed outside the editor. Follow it rather than treating it as a copy.
+        g_PathToGuid.erase(other);
+        return guid;
+    }
+    if (fs::equivalent(other, path, ec) && !ec) {
+        // Same file under a different spelling of its path — an alias, not a copy.
+        g_PathToGuid[path] = guid;
+        return guid;
+    }
+
+    // A real duplicate. The file created first is the original; if creation times are
+    // unavailable or equal, the one already registered keeps the GUID.
+    const unsigned long long tPath = CreationTime(path), tOther = CreationTime(other);
+    const bool pathIsOriginal = tPath && tOther && tPath < tOther;
+    const std::string& copy = pathIsOriginal ? other : path;
+    const std::string& original = pathIsOriginal ? path : other;
+
+    const AssetGuid fresh = RegenerateGuid(copy);
+    if (!fresh.IsValid()) {
+        Log::Error("AssetDatabase: '" + copy + "' has the same GUID " + guid.ToString() + " as '" + original +
+                   "' and its .meta could not be rewritten. References by GUID may resolve to the wrong asset.");
+        return pathIsOriginal ? guid : AssetGuid{};
+    }
+    Log::Warn("AssetDatabase: '" + copy + "' had the same GUID as '" + original +
+              "' (copied together with its .meta?). Assigned it a new GUID " + fresh.ToString() +
+              "; '" + original + "' keeps " + guid.ToString() + ".");
+
+    if (!pathIsOriginal) return fresh;
+    // The already-registered file turned out to be the copy: move it to its new GUID.
+    Register(other, fresh);
+    return guid;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -183,6 +267,8 @@ AssetGuid EnsureGuid(const std::string& path) {
             Log::Error("AssetDatabase: '" + meta + "' is corrupt; recovered its GUID " + guid.ToString() +
                        " and rewrote it (import settings reset; original kept as " + bak + ").");
             if (!WriteMetaFile(meta, guid, type)) Log::Warn("AssetDatabase: failed to rewrite '" + meta + "'");
+            guid = ResolveDuplicateGuid(path, guid);
+            if (!guid.IsValid()) return {};
             Register(path, guid);
             return guid;
         }
@@ -200,6 +286,9 @@ AssetGuid EnsureGuid(const std::string& path) {
             Log::Warn("AssetDatabase: failed to write .meta for '" + path + "'");
             return {};
         }
+    } else {
+        guid = ResolveDuplicateGuid(path, guid);
+        if (!guid.IsValid()) return {};
     }
 
     Register(path, guid);
