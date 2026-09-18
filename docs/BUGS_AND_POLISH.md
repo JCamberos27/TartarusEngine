@@ -161,3 +161,33 @@ CI runner):
 **Not covered this session** (needs GUI/keyboard access): all mouse- and keyboard-driven
 editor interaction, Play-mode input, gizmos, panels, dialogs — i.e. everything the 2026-08-29
 sweep exercised. Worth a follow-up pass once interactive access is available.
+
+### 2026-09-17 — session 5  (GUI access granted; live repro + fix pass)
+
+Interactive access came through this session, live-reproducing a project-owner-reported bug:
+manipulating an object with the Rect gizmo made the viewport stop responding to all camera
+navigation. Root-caused it (not a real hang — the render loop and Win32 message pump stayed
+fully live the whole time, confirmed via `Get-Process ... Responding`/CPU delta, and no crash
+dump was ever written) and filed [#79](https://github.com/JCamberos27/TartarusEngine/issues/79).
+Also found and filed [#78](https://github.com/JCamberos27/TartarusEngine/issues/78), a minor
+console-encoding polish item in `check_asset_meta.py`.
+
+Then fixed all six open issues from this pass (#74-#79) properly rather than patching symptoms
+— in particular, #75's actual root cause (a GUID-registration ordering bug in
+`AssetLibrary::LoadTexture` causing a cache-key mismatch between the first decode and every
+later lookup) turned out to be different from what the issue itself originally proposed, and
+#79's fix required distinguishing "gizmo merely hovered" from "gizmo actively being dragged"
+(`EditorLayer::GizmoUsing()`) rather than just disabling the hover gate outright, since Alt+LMB
+orbit genuinely does share an input with a gizmo drag. While verifying the #77 fix, also caught
+and fixed a regression introduced by the fix itself: unconditionally disabling `imgui.ini` for
+headless runs changed which viewport ended up sized/visible, which silently broke
+`--smoke-test`'s own `DrawCalls` stat (every scene after the first two reported an identical,
+wrong value) — the working fix loads whatever layout is already on disk once, then blocks only
+the autosave.
+
+All six closed with live-verified fixes, one commit (`a45050b`): full `--smoke-test` suite (all
+pass) and `smoke-scenes-invalid/` (fails gracefully) both produce zero working-tree mutation now,
+including across 15 rapid consecutive runs and a full `imgui.ini`/scene-file diff check;
+`--resave` round-trips leave the input untouched and are idempotent; `--asset-load-bench` shows
+a real ~2x cached-decode speedup; and #79's repro (an object scaled to 400x) leaves scroll-zoom
+fully responsive. See [`CHANGELOG.md`](../CHANGELOG.md) for the consolidated entry.
