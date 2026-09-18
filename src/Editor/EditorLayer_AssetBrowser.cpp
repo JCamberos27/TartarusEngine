@@ -1525,6 +1525,11 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     PushUndo(world, "Move Asset to Folder");
                     assets.SetAssetFolder((const char*)p->Data, cell.key);
                 }
+                // #184 — materials are foldered by AssetFolder like the kinds above but weren't accepted.
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MATERIAL_PATH")) {
+                    PushUndo(world, "Move Asset to Folder");
+                    assets.SetAssetFolder((const char*)p->Data, cell.key);
+                }
                 if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FOLDER_PATH")) {
                     std::string src((const char*)p->Data);
                     if (src != cell.key && cell.key.rfind(src + "/", 0) != 0) {
