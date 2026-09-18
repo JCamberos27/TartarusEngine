@@ -64,6 +64,10 @@ public:
     ~EditorLayer();
 
     void Init(GLFWwindow* window);
+    // #84 — main.cpp calls this when the startup scene exists on disk but failed to load (parse
+    // error, merge-conflict markers, wrong shape). The editor is then showing an EMPTY world under
+    // that path; a plain Save must not overwrite the broken-but-recoverable file with it.
+    void OnStartupSceneLoadFailed(const std::string& path);
     void Shutdown();
 
     // Applies the editor's style — colours and metrics (rounding / padding / borders), DPI-scaled
@@ -577,7 +581,7 @@ public:
     bool IsDirty() const { return m_Dirty; }
     // Public entry point for the toolbar's document-strip Save button (API v20) — DoSave() itself
     // is private since File > Save already reaches it through DrawFileMenuBody.
-    void SaveScene(World& world, AssetLibrary& assets) { DoSave(world, assets); }
+    bool SaveScene(World& world, AssetLibrary& assets) { return DoSave(world, assets); }
     // API v22, Q12 (Phase 4 / #6) — lets a module (Inspector, Hierarchy) tint its own panel while
     // Playing, the same live flag the host's own amber viewport banner already reads.
     bool InPlayMode() const { return m_InPlayMode; }
@@ -590,6 +594,10 @@ public:
     enum class ExitDecision { None, SaveAndExit, DiscardAndExit };
     void OpenExitPrompt() { m_ExitPromptPending = true; m_ExitDecision = ExitDecision::None; }
     bool ExitPromptActive() const { return m_ExitPromptPending; }
+    // #84 — path of a scene that failed to load at startup; Save to exactly this path is
+    // redirected to Save As until another scene is opened/created or a recovery is restored.
+    std::string m_LoadFailedScenePath;
+    bool m_ExitDiscardChosen = false; // user picked "Don't Save" on exit — recovery snapshot may go
     ExitDecision TakeExitDecision() { ExitDecision d = m_ExitDecision; m_ExitDecision = ExitDecision::None; return d; }
 
     // The full selection (primary + any Ctrl+Click extras) as entity handles, for main.cpp's
@@ -1043,7 +1051,7 @@ private:
     // no file to overwrite, so main.cpp skips the save-on-exit and DoSave() must prompt for a
     // location. DoSaveAs() always prompts. Both reset dirty/timer and clear the stale recovery
     // snapshot on success.
-    void DoSave(World& world, AssetLibrary& assets);
+    bool DoSave(World& world, AssetLibrary& assets); // false = not saved (Play mode, cancelled, or write failed)
     bool DoSaveAs(World& world, AssetLibrary& assets);
 
     GizmoOp m_GizmoOp = GizmoOp::Translate;
@@ -1599,6 +1607,16 @@ private:
     // same snapshot format undo/redo already uses. Empty when not in (or never entered) play.
     bool m_InPlayMode = false; // set by OnEnter/OnExitPlayMode — lets edit-mode-only shortcuts (F2 rename) yield to Play-mode ones
     std::string m_PlayModeSnapshot;
+    // #91 — the whole undo/redo history as it stood when Play started. Edits made while playing
+    // still record normally (so the History panel works mid-Play), but Stop reverts the scene,
+    // so their entries — whose snapshots hold transient play state — are thrown away by
+    // restoring this.
+    struct SavedHistory {
+        std::vector<UndoEntry> Undo, Redo;
+        std::string UndoBase, RedoBase;
+        int ContentDepth = 0, SavedDepth = 0;
+        bool Valid = false;
+    } m_PrePlayHistory;
     // Selection captured by stable OrderComponent value on Play, re-resolved to fresh entity
     // ids on Stop — the registry is rebuilt in between and entt recycles ids (#110).
     std::vector<int> m_PlaySelectionOrders;

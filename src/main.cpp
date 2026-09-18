@@ -715,6 +715,11 @@ int main(int argc, char** argv) {
 
         EditorLayer editor;
         editor.Init(window.Handle());
+        {
+            std::error_code existsEc;
+            if (!sceneLoaded && std::filesystem::exists(scenePath, existsEc))
+                editor.OnStartupSceneLoadFailed(scenePath); // #84
+        }
         // Headless runs (--smoke-test / --resave / the benches) must not write imgui.ini either
         // — same "read-only unless explicitly told otherwise" contract as the scene-file fix
         // above (audit #77). ImGui's own periodic autosave (every io.IniSavingRate seconds,
@@ -1014,10 +1019,10 @@ int main(int argc, char** argv) {
         };
 
         // On-exit "Save changes?" flow (audit #56). When the window-close request arrives with a
-        // dirty, titled scene, swallow it and let the editor raise a modal; `exitApproved` is set
-        // once the user has chosen Save or Don't Save so the next close request goes through.
+        // dirty scene, swallow it and let the editor raise a modal; `exitApproved` is set once
+        // the user has chosen Don't Save, or Save and the save succeeded, so the next close
+        // request goes through.
         bool exitApproved = false;
-        bool exitSkipFinalSave = false;
 
         // Monotonically increasing per-frame counter, used by Model::TickAnimationOnce() to
         // dedupe animation updates for models shared by more than one entity (#106) without a
@@ -1100,6 +1105,34 @@ int main(int argc, char** argv) {
                     smokeSceneLoadOk = SceneSerializer::Load(world, assets, path, /*persistMigration=*/false);
                     std::cout << "[SmokeTest] Loading " << path
                               << (smokeSceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
+                    // #81 regression: the undo/redo path round-trips the scene + asset library
+                    // through SaveToString/LoadFromString. It must neither throw (GUID PathRef
+                    // entries used to crash it) nor drop/re-import library assets.
+                    if (smokeSceneLoadOk) {
+                        auto countEntities = [&]() {
+                            std::size_t n = 0;
+                            world.Registry.view<TransformComponent>().each([&](auto...) { ++n; });
+                            return n;
+                        };
+                        const std::size_t entsBefore = countEntities();
+                        const std::size_t modelsBefore = assets.Models().size();
+                        const std::size_t texBefore = assets.Textures().size();
+                        const std::size_t matsBefore = assets.Materials().size();
+                        bool rtOk = false;
+                        try {
+                            const std::string snap = SceneSerializer::SaveToString(world, assets);
+                            rtOk = SceneSerializer::LoadFromString(world, assets, snap);
+                        } catch (const std::exception& e) {
+                            Log::Error(std::string("[SmokeTest] undo snapshot round-trip threw: ") + e.what());
+                        }
+                        if (!rtOk || countEntities() != entsBefore || assets.Models().size() != modelsBefore ||
+                            assets.Textures().size() != texBefore || assets.Materials().size() != matsBefore)
+                            Log::Error("[SmokeTest] undo snapshot round-trip changed the scene or asset library.");
+                        else
+                            std::cout << "[SmokeTest]   undo round-trip OK (" << entsBefore << " entities, "
+                                      << modelsBefore << " models, " << texBefore << " textures, "
+                                      << matsBefore << " materials)" << std::endl;
+                    }
                     smokeFramesRendered = 0;
                     smokeSceneActive = true;
                     SceneRendererDebug::ResetVariantDrawCounts(); // #354 per-scene variant tally
@@ -1132,8 +1165,9 @@ int main(int argc, char** argv) {
             Input::Update();
 
             if (window.ShouldClose()) {
-                bool dirtyTitled = editor.IsDirty() && !editor.CurrentScenePath().empty();
-                if (exitApproved || !dirtyTitled) break;
+                // #88 — prompt for ANY unsaved scene, titled or not (Save on an untitled one
+                // routes through Save As).
+                if (exitApproved || !editor.IsDirty()) break;
                 window.SetShouldClose(false);          // veto this close; ask first
                 if (!editor.ExitPromptActive()) editor.OpenExitPrompt();
             }
@@ -2451,15 +2485,19 @@ int main(int argc, char** argv) {
             // Act on the "Save changes?" modal's outcome (see the exit-flow comment above).
             switch (editor.TakeExitDecision()) {
                 case EditorLayer::ExitDecision::SaveAndExit:
-                    if (!editor.CurrentScenePath().empty())
-                        SceneSerializer::Save(world, assets, editor.CurrentScenePath());
-                    exitApproved = true;
-                    exitSkipFinalSave = true;
-                    window.SetShouldClose(true);
+                    // Saving is refused mid-Play (the live world is play state) — revert to the
+                    // edit-mode snapshot first, exactly like pressing Stop.
+                    if (playing) stopPlay();
+                    // #86 / #88 — only close once the save actually landed. A failed write (or a
+                    // cancelled Save As for an untitled scene) keeps the editor open with the
+                    // changes still dirty; the failure is logged and toasted by DoSave.
+                    if (editor.SaveScene(world, assets)) {
+                        exitApproved = true;
+                        window.SetShouldClose(true);
+                    }
                     break;
                 case EditorLayer::ExitDecision::DiscardAndExit:
                     exitApproved = true;
-                    exitSkipFinalSave = true; // user explicitly chose not to save
                     window.SetShouldClose(true);
                     break;
                 case EditorLayer::ExitDecision::None:
@@ -2618,12 +2656,10 @@ int main(int argc, char** argv) {
         // Closing mid-play would otherwise auto-save the transient play state — revert to the
         // snapshot first, same as pressing Stop.
         if (playing) editor.OnExitPlayMode(world, assets);
-        // An untitled scene (File > New Scene, never Saved As) has no path — do NOT write it
-        // anywhere on exit, or it would overwrite whatever scene.json last held. The user has to
-        // explicitly Save As to give it a home.
-        if (!exitSkipFinalSave && !editor.CurrentScenePath().empty()) {
-            SceneSerializer::Save(world, assets, editor.CurrentScenePath());
-        }
+        // #164 / #84 — no unconditional save on exit any more. A dirty scene can only get here
+        // through the "Save changes?" prompt (Save already wrote it, Don't Save means don't); a
+        // clean scene already matches disk, so rewriting it only churned mtimes/git and could
+        // overwrite a scene that failed to load with the empty world that replaced it.
 
         editor.Shutdown();
         editorModule.Shutdown();
