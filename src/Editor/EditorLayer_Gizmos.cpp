@@ -1214,7 +1214,16 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
     // Mesh-less entities would otherwise be invisible in the viewport — a light you can't see
     // is a light you can't select or aim.
     auto view = world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent>);
+    const unsigned layerVisible = EditorSettings::Get().LayerVisibleMask;
     for (auto entity : view) {
+        // #184 — an entity hidden in the Scene view (SceneVis, or its layer switched off) gets no
+        // icon either; picking already skipped it, so the icon was unclickable.
+        if (world.Registry.all_of<HiddenInSceneTag>(entity)) continue;
+        {
+            const auto* lc = world.Registry.try_get<LayerComponent>(entity);
+            const int layer = lc ? lc->Layer : 0; // same rule as SceneRenderer's layer cull
+            if (layer >= 0 && layer < 32 && !((layerVisible >> layer) & 1u)) continue;
+        }
         glm::mat4 model = world.ComposeWorldTransform(entity);
         glm::vec4 clip = viewProj * glm::vec4(glm::vec3(model[3]), 1.0f);
         if (clip.w <= 0.0001f) continue; // behind the camera
