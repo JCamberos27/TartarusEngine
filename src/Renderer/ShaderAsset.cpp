@@ -69,7 +69,15 @@ bool ParsePropLine(const std::string& rawLine, ShaderProperty& out) {
 
     // ("Display", Type)
     size_t lp = line.find('(', i);
-    size_t rp = (lp != std::string::npos) ? line.find(')', lp) : std::string::npos;
+    // Matching ')' (depth-counted), so a nested "Range(0, 1)" type doesn't end the group early.
+    size_t rp = std::string::npos;
+    if (lp != std::string::npos) {
+        int depth = 0;
+        for (size_t k = lp; k < line.size(); ++k) {
+            if (line[k] == '(') ++depth;
+            else if (line[k] == ')' && --depth == 0) { rp = k; break; }
+        }
+    }
     if (lp == std::string::npos || rp == std::string::npos) return false;
     std::string inner = line.substr(lp + 1, rp - lp - 1);
     size_t comma = inner.find(',');
@@ -78,7 +86,20 @@ bool ParsePropLine(const std::string& rawLine, ShaderProperty& out) {
     if (disp.size() >= 2 && disp.front() == '"' && disp.back() == '"')
         disp = disp.substr(1, disp.size() - 2);
     out.DisplayName = disp;
-    out.Type = ParseType(Trim(inner.substr(comma + 1)));
+    const std::string typeStr = Trim(inner.substr(comma + 1));
+    // #106 — Unity-style Range(min, max): a Float with slider limits for the material editor.
+    if (typeStr.rfind("Range", 0) == 0) {
+        out.Type = ShaderPropType::Float;
+        float lo = 0.0f, hi = 1.0f;
+        if (std::sscanf(typeStr.c_str(), "Range ( %f , %f )", &lo, &hi) == 2 ||
+            std::sscanf(typeStr.c_str(), "Range(%f,%f)", &lo, &hi) == 2) {
+            out.HasRange = true;
+            out.RangeMin = lo < hi ? lo : hi;
+            out.RangeMax = lo < hi ? hi : lo;
+        }
+    } else {
+        out.Type = ParseType(typeStr);
+    }
 
     // = default
     size_t eq = line.find('=', rp);
