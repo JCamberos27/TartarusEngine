@@ -9,13 +9,24 @@ class Shader;
 
 using ShaderVariantKey = uint32_t;
 
-enum class ShaderPropType { Float, Color, Texture2D, Bool, Vec2, Vec3, Vec4, Int };
+#include "ShaderPropType.h"
 
 struct ShaderProperty {
     std::string Name;        // internal name, e.g. "_AlbedoMap"
     std::string DisplayName; // shown in inspector, e.g. "Albedo"
     ShaderPropType Type = ShaderPropType::Float;
     bool Hidden = false;     // in shader GLSL but not shown in inspector
+    // #104 — Unity ShaderLab property attributes, written before the name: [HDR] (Color: an
+    // intensity above 1 is allowed, shown as colour x 2^EV), [Toggle] (Float/Int shown as a
+    // checkbox, 0/1), [Normal] (Texture2D expects a normal map), [NoScaleOffset] (no tiling UI;
+    // informational until per-texture tiling exists), [Header(text)] (a section title above the
+    // property), [Tooltip(text)] (inspector hover text).
+    bool HDR = false;
+    bool Toggle = false;
+    bool NormalMap = false;
+    bool NoScaleOffset = false;
+    std::string Header;
+    std::string Tooltip;
 
     float        DefaultFloat = 0.0f;
     bool         DefaultBool  = false;
@@ -53,10 +64,16 @@ public:
 
     const std::vector<ShaderProperty>& Properties() const { return m_Props; }
     const std::vector<std::string>&    Keywords()   const { return m_Keywords; }
+    // #104 — whether a keyword is driven by the engine from the material's own settings (the
+    // Standard lobes: _CLEARCOAT, _ANISO, ...) rather than toggled by the user. Anything else a
+    // shader declares is a custom keyword, switched per material (MaterialAsset::Keywords).
+    static bool IsBuiltinKeyword(const std::string& keyword);
     const std::string&                 Path()       const { return m_Path; }
 
 private:
     std::string m_Path;
+    // Stage references as written in the descriptor, resolved at compile time through
+    // ShaderLibrary::ResolveRef against the descriptor's own folder (#208).
     std::string m_VertFile;
     std::string m_LastCompileError;
     std::string m_FragFile;

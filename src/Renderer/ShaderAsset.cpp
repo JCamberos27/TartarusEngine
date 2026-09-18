@@ -13,6 +13,7 @@
 #include <cassert>
 #include <cstdio>
 #include <algorithm>
+#include <filesystem>
 
 namespace {
 
@@ -37,31 +38,76 @@ std::string ReadBlock(std::istream& in) {
     return body;
 }
 
-ShaderPropType ParseType(const std::string& t) {
-    if (t == "Float")     return ShaderPropType::Float;
-    if (t == "Color")     return ShaderPropType::Color;
-    if (t == "Texture2D") return ShaderPropType::Texture2D;
-    if (t == "Bool")      return ShaderPropType::Bool;
-    if (t == "Vec2")      return ShaderPropType::Vec2;
-    if (t == "Vec3")      return ShaderPropType::Vec3;
-    if (t == "Vec4")      return ShaderPropType::Vec4;
-    if (t == "Int")       return ShaderPropType::Int;
-    return ShaderPropType::Float;
+// #104 — false for an unknown type name; it used to become Float silently.
+bool ParseType(const std::string& t, ShaderPropType& out) {
+    if (t == "Float")     { out = ShaderPropType::Float;     return true; }
+    if (t == "Color")     { out = ShaderPropType::Color;     return true; }
+    if (t == "Texture2D" || t == "2D") { out = ShaderPropType::Texture2D; return true; } // "2D": Unity's spelling
+    if (t == "Bool")      { out = ShaderPropType::Bool;      return true; }
+    if (t == "Vec2")      { out = ShaderPropType::Vec2;      return true; }
+    if (t == "Vec3")      { out = ShaderPropType::Vec3;      return true; }
+    if (t == "Vec4" || t == "Vector") { out = ShaderPropType::Vec4; return true; }
+    if (t == "Int" || t == "Integer") { out = ShaderPropType::Int;  return true; }
+    return false;
 }
 
-// Parse one property line (with optional leading [Hidden]):
-//   [Hidden] _Name ("Display", Type) = default
-bool ParsePropLine(const std::string& rawLine, ShaderProperty& out) {
+// #104 — removes // and /* */ comments (outside "..." strings) before anything is tokenised, so a
+// comment mentioning "Vertex", "Properties" or a brace can no longer start or end a block.
+// Newlines are kept, so line structure (one property per line) survives.
+std::string StripComments(const std::string& src) {
+    std::string out;
+    out.reserve(src.size());
+    bool inString = false, inLine = false, inBlock = false;
+    for (size_t i = 0; i < src.size(); ++i) {
+        const char c = src[i], n = i + 1 < src.size() ? src[i + 1] : '\0';
+        if (inLine) { if (c == '\n') { inLine = false; out += c; } continue; }
+        if (inBlock) {
+            if (c == '*' && n == '/') { inBlock = false; ++i; }
+            else if (c == '\n') out += c;
+            continue;
+        }
+        if (inString) { if (c == '"') inString = false; if (c == '\n') inString = false; out += c; continue; }
+        if (c == '"') { inString = true; out += c; continue; }
+        if (c == '/' && n == '/') { inLine = true; ++i; continue; }
+        if (c == '/' && n == '*') { inBlock = true; ++i; continue; }
+        out += c;
+    }
+    return out;
+}
+
+enum class PropParse { NotAProperty, Ok, Error };
+
+// Parse one property line, with optional leading attributes:
+//   [Header(Surface)] [HDR] _Name ("Display", Type) = default
+PropParse ParsePropLine(const std::string& rawLine, ShaderProperty& out, std::string& error) {
     std::string line = Trim(rawLine);
-    if (line.empty()) return false;
+    if (line.empty()) return PropParse::NotAProperty;
 
     out.Hidden = false;
-    if (line.rfind("[Hidden]", 0) == 0) {
-        out.Hidden = true;
-        line = Trim(line.substr(8));
+    while (!line.empty() && line[0] == '[') {
+        const size_t close = line.find(']');
+        if (close == std::string::npos) { error = "unterminated [attribute]"; return PropParse::Error; }
+        const std::string attr = Trim(line.substr(1, close - 1));
+        line = Trim(line.substr(close + 1));
+        // Header(...) / Tooltip(...) take free text; quotes around it are optional.
+        auto argOf = [&](const char* name) -> std::string {
+            const size_t lp = attr.find('('), rp = attr.rfind(')');
+            if (attr.rfind(name, 0) != 0 || lp == std::string::npos || rp == std::string::npos || rp < lp) return {};
+            std::string a = Trim(attr.substr(lp + 1, rp - lp - 1));
+            if (a.size() >= 2 && a.front() == '"' && a.back() == '"') a = a.substr(1, a.size() - 2);
+            return a;
+        };
+        if (attr == "Hidden" || attr == "HideInInspector") out.Hidden = true;
+        else if (attr == "HDR") out.HDR = true;
+        else if (attr == "Toggle" || attr.rfind("Toggle(", 0) == 0) out.Toggle = true;
+        else if (attr == "Normal") out.NormalMap = true;
+        else if (attr == "NoScaleOffset") out.NoScaleOffset = true;
+        else if (attr.rfind("Header", 0) == 0) out.Header = argOf("Header");
+        else if (attr.rfind("Tooltip", 0) == 0) out.Tooltip = argOf("Tooltip");
+        else Log::Warn("ShaderAsset: unknown property attribute [" + attr + "] ignored.");
     }
 
-    if (line.empty() || line[0] != '_') return false;
+    if (line.empty() || line[0] != '_') return PropParse::NotAProperty;
 
     // Property name: up to '(' or whitespace
     size_t i = 0;
@@ -79,10 +125,10 @@ bool ParsePropLine(const std::string& rawLine, ShaderProperty& out) {
             else if (line[k] == ')' && --depth == 0) { rp = k; break; }
         }
     }
-    if (lp == std::string::npos || rp == std::string::npos) return false;
+    if (lp == std::string::npos || rp == std::string::npos) { error = "expected (\"Display Name\", Type)"; return PropParse::Error; }
     std::string inner = line.substr(lp + 1, rp - lp - 1);
     size_t comma = inner.find(',');
-    if (comma == std::string::npos) return false;
+    if (comma == std::string::npos) { error = "expected (\"Display Name\", Type)"; return PropParse::Error; }
     std::string disp = Trim(inner.substr(0, comma));
     if (disp.size() >= 2 && disp.front() == '"' && disp.back() == '"')
         disp = disp.substr(1, disp.size() - 2);
@@ -98,9 +144,14 @@ bool ParsePropLine(const std::string& rawLine, ShaderProperty& out) {
             out.RangeMin = lo < hi ? lo : hi;
             out.RangeMax = lo < hi ? hi : lo;
         }
-    } else {
-        out.Type = ParseType(typeStr);
+    } else if (!ParseType(typeStr, out.Type)) {
+        error = "unknown property type '" + typeStr + "' (Float, Range(min, max), Color, Texture2D, Bool, Int, Vec2, Vec3, Vec4)";
+        return PropParse::Error;
     }
+    if (out.Toggle && out.Type != ShaderPropType::Float && out.Type != ShaderPropType::Int && out.Type != ShaderPropType::Bool)
+        out.Toggle = false; // [Toggle] only means something on a number
+    if (out.HDR && out.Type != ShaderPropType::Color) out.HDR = false;
+    if (out.NormalMap && out.Type != ShaderPropType::Texture2D) out.NormalMap = false;
 
     // = default
     size_t eq = line.find('=', rp);
@@ -141,7 +192,8 @@ bool ParsePropLine(const std::string& rawLine, ShaderProperty& out) {
             break;
         }
     }
-    return true;
+    if (out.NormalMap && out.DefaultTex.empty()) out.DefaultTex = "normal";
+    return PropParse::Ok;
 }
 
 } // namespace
@@ -156,32 +208,36 @@ std::shared_ptr<ShaderAsset> ShaderAsset::ParseFile(const std::string& path) {
     auto sa = std::make_shared<ShaderAsset>();
     sa->m_Path = path;
 
+    std::ostringstream raw;
+    raw << f.rdbuf();
+    std::istringstream text(StripComments(raw.str())); // #104
     std::string token;
-    while (f >> token) {
+    while (text >> token) {
         if (token == "Properties") {
-            std::string block = ReadBlock(f);
+            std::string block = ReadBlock(text);
             std::istringstream ss(block);
             std::string line;
+            int lineNo = 0;
             while (std::getline(ss, line)) {
+                ++lineNo;
                 line = Trim(line);
-                // Strip C++ style line comments
-                size_t cmt = line.find("//");
-                if (cmt != std::string::npos) line = Trim(line.substr(0, cmt));
                 if (line.empty()) continue;
                 ShaderProperty prop;
-                if (ParsePropLine(line, prop)) {
+                std::string error;
+                const PropParse r = ParsePropLine(line, prop, error);
+                if (r == PropParse::Ok) {
                     prop.PropIndex = (int)sa->m_Props.size();
                     sa->m_Props.push_back(prop);
+                } else if (r == PropParse::Error) {
+                    Log::Error("ShaderAsset: '" + path + "' Properties line " + std::to_string(lineNo) + ": " +
+                               error + " - property skipped.", LogContext::Asset(path));
                 }
             }
         } else if (token == "Keywords") {
-            std::string block = ReadBlock(f);
+            std::string block = ReadBlock(text);
             std::istringstream ss(block);
             std::string kw;
-            while (ss >> kw) {
-                if (!kw.empty() && kw[0] != '/')
-                    sa->m_Keywords.push_back(kw);
-            }
+            while (ss >> kw) sa->m_Keywords.push_back(kw);
             // The variant key is a 32-bit mask (ShaderVariantKey), so bit 32+ can never be
             // selected. Enforced in Debug and Release (#354).
             if (sa->m_Keywords.size() > 32) {
@@ -191,11 +247,15 @@ std::shared_ptr<ShaderAsset> ShaderAsset::ParseFile(const std::string& path) {
                 sa->m_Keywords.resize(32);
             }
         } else if (token == "Vertex") {
-            sa->m_VertFile = Trim(ReadBlock(f));
+            sa->m_VertFile = Trim(ReadBlock(text));
         } else if (token == "Fragment") {
-            sa->m_FragFile = Trim(ReadBlock(f));
+            sa->m_FragFile = Trim(ReadBlock(text));
         }
-        // "Queue", "//"-comments and other unknown tokens are skipped
+        // "Queue" and other unknown tokens are skipped
+    }
+    if (sa->m_VertFile.empty()) {
+        Log::Error("ShaderAsset: '" + path + "' has no Vertex { file } block.", LogContext::Asset(path));
+        return nullptr;
     }
 
     sa->BuildBindings();
@@ -236,9 +296,28 @@ void ShaderAsset::BuildBindings() {
     }
 }
 
+bool ShaderAsset::IsBuiltinKeyword(const std::string& k) {
+    return k == "_CLEARCOAT" || k == "_ANISO" || k == "_SHEEN" || k == "_SUBSURFACE" ||
+           k == "_TRANSMISSION" || k == "_REFLECTION_PROBES";
+}
+
 void ShaderAsset::CompileVariant(ShaderVariantKey key) {
-    std::string vertSrc = ShaderLibrary::ReadFile(m_VertFile);
-    std::string fragSrc = m_FragFile.empty() ? "" : ShaderLibrary::ReadFile(m_FragFile);
+    // #208 — stages resolve against this descriptor's folder (engine:// / project:// explicit).
+    const std::string baseDir = std::filesystem::path(m_Path).parent_path().string();
+    const std::string vertPath = ShaderLibrary::ResolveRef(m_VertFile, baseDir);
+    const std::string fragPath = m_FragFile.empty() ? std::string() : ShaderLibrary::ResolveRef(m_FragFile, baseDir);
+    std::string vertSrc = ShaderLibrary::ReadFileAt(vertPath, m_Path);
+    std::string fragSrc = m_FragFile.empty() ? "" : ShaderLibrary::ReadFileAt(fragPath, m_Path);
+    // A missing stage is an asset error, never a reason to compile the vertex file alone as a
+    // compute shader (which is what an empty fragment source used to mean below).
+    if (vertSrc.empty() || (!m_FragFile.empty() && fragSrc.empty())) {
+        m_LastCompileError = "Stage source not found: " + (vertSrc.empty() ? vertPath : fragPath) +
+                             " (referenced by " + m_Path + ")";
+        Log::Error("ShaderAsset: " + m_LastCompileError + " - objects using it fall back to the default shader.",
+                   LogContext::Asset(m_Path));
+        m_Variants[key] = nullptr;
+        return;
+    }
 
     if (key != 0) {
         auto inject = [&](std::string& src) {
@@ -246,9 +325,24 @@ void ShaderAsset::CompileVariant(ShaderVariantKey key) {
             for (int i = 0; i < (int)m_Keywords.size(); ++i)
                 if (key & (1u << i))
                     defines += "#define " + m_Keywords[i] + "\n";
-            size_t nl = src.find('\n');
-            if (nl != std::string::npos) src.insert(nl + 1, defines);
-            else src = defines + src;
+            // #104 — after the #version line (GLSL requires it first, and a file may open with
+            // comments), not blindly after line 1. No #version: prepend.
+            size_t at = std::string::npos;
+            for (size_t pos = 0; pos < src.size();) {
+                const size_t eol = src.find('\n', pos);
+                const size_t first = src.find_first_not_of(" \t", pos);
+                if (first != std::string::npos && src.compare(first, 8, "#version") == 0 && (eol == std::string::npos || first < eol)) {
+                    at = eol == std::string::npos ? src.size() : eol + 1;
+                    break;
+                }
+                if (eol == std::string::npos) break;
+                pos = eol + 1;
+            }
+            if (at == std::string::npos) src = defines + src;
+            else {
+                if (at == src.size() && (src.empty() || src.back() != '\n')) src += '\n', at = src.size();
+                src.insert(at, defines);
+            }
         };
         inject(vertSrc);
         if (!fragSrc.empty()) inject(fragSrc);
