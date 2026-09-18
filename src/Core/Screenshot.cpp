@@ -21,6 +21,11 @@
 #include <cstdint>
 #include <cmath>
 #include <algorithm>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <set>
+#include <thread>
 #include <vector>
 
 #if defined(_WIN32)
@@ -60,19 +65,13 @@ static std::string SanitizeName(std::string s) {
     return s;
 }
 
-std::string Save(const unsigned char* pixels, int w, int h, bool flipY,
-                 int format, const std::string& sceneName) {
-    if (!pixels || w <= 0 || h <= 0) return {};
+// Names handed out by SaveAsync whose file isn't on disk yet. ReservePath treats them as taken,
+// so two captures in the same second can't be given the same name before either is written.
+std::mutex g_ReservedMutex;
+std::set<std::string> g_Reserved;
 
-    const size_t stride = (size_t)w * 4;
-    std::vector<unsigned char> img((size_t)w * h * 4);
-    if (flipY) {
-        for (int row = 0; row < h; ++row)
-            std::memcpy(&img[(size_t)(h - 1 - row) * stride], &pixels[(size_t)row * stride], stride);
-    } else {
-        std::memcpy(img.data(), pixels, img.size());
-    }
-
+// Picks the output path for a capture taken now.
+static std::string ReservePath(int format, const std::string& sceneName) {
     std::time_t now = std::time(nullptr);
     std::tm tm{};
 #if defined(_WIN32)
@@ -88,31 +87,149 @@ std::string Save(const unsigned char* pixels, int w, int h, bool flipY,
                   tm.tm_hour, tm.tm_min, tm.tm_sec, jpg ? "jpg" : "png");
     // #153 — second-resolution names: a second capture in the same second used to silently
     // overwrite the first. Suffix _2, _3... on collision instead.
+    std::lock_guard<std::mutex> lock(g_ReservedMutex);
     std::string path = (std::filesystem::path(Dir()) / name).generic_string();
     {
         std::error_code ec;
         const std::filesystem::path base(name);
-        for (int n = 2; std::filesystem::exists(path, ec) && n < 1000; ++n)
+        for (int n = 2; (std::filesystem::exists(path, ec) || g_Reserved.count(path)) && n < 1000; ++n)
             path = (std::filesystem::path(Dir()) / (base.stem().string() + "_" + std::to_string(n) +
                                                     base.extension().string())).generic_string();
     }
+    g_Reserved.insert(path);
+    return path;
+}
 
+// Flips (if asked) and writes one image. Safe off the main thread: touches no GL and no editor state.
+static bool Encode(const std::string& path, const unsigned char* pixels, int w, int h, bool flipY, int format) {
+    const size_t stride = (size_t)w * 4;
+    std::vector<unsigned char> img((size_t)w * h * 4);
+    if (flipY) {
+        for (int row = 0; row < h; ++row)
+            std::memcpy(&img[(size_t)(h - 1 - row) * stride], &pixels[(size_t)row * stride], stride);
+    } else {
+        std::memcpy(img.data(), pixels, img.size());
+    }
+    const bool jpg = (format == 1);
     int ok;
     if (jpg) {
         ok = stbi_write_jpg(path.c_str(), w, h, 4, img.data(), 92);
     } else {
-        stbi_write_png_compression_level = 6;
+        // stbi_write_png_compression_level is a process global, set once on the main thread
+        // (SaveAsync / Save) rather than here, so a worker never writes it concurrently.
         ok = stbi_write_png(path.c_str(), w, h, 4, img.data(), w * 4);
     }
+    {
+        std::lock_guard<std::mutex> lock(g_ReservedMutex);
+        g_Reserved.erase(path); // on disk now (or failed): the filesystem check takes over
+    }
+    return ok != 0;
+}
+
+// Main thread only: Log isn't thread-safe (#146), so the worker never logs; PollFinished does.
+static void LogResult(const std::string& path, int w, int h, bool ok) {
     if (ok) {
         // #18 — log the project-relative form; `path` itself (returned below, and what actually
         // got written to disk) stays the real absolute path callers need.
         Log::Info("Screenshot -> " + ProjectPaths::Relativize(path) + "  (" +
                   std::to_string(w) + "x" + std::to_string(h) + ")");
-        return path;
+    } else {
+        Log::Error("Screenshot: couldn't write " + ProjectPaths::Relativize(path));
     }
-    Log::Error("Screenshot: couldn't write " + ProjectPaths::Relativize(path));
-    return {};
+}
+
+std::string Save(const unsigned char* pixels, int w, int h, bool flipY,
+                 int format, const std::string& sceneName) {
+    if (!pixels || w <= 0 || h <= 0) return {};
+    stbi_write_png_compression_level = 6;
+    const std::string path = ReservePath(format, sceneName);
+    const bool ok = Encode(path, pixels, w, h, flipY, format);
+    LogResult(path, w, h, ok);
+    return ok ? path : std::string();
+}
+
+// --- Background encoder (#153) ---------------------------------------------------------------
+// One worker thread, FIFO, started on the first SaveAsync. Captures are rare and a queue keeps
+// them in order; a single thread is plenty and bounds how much encode work can pile up at once.
+namespace {
+struct Job {
+    std::string Path;
+    std::vector<unsigned char> Pixels;
+    int W = 0, H = 0, Format = 0;
+    bool FlipY = true;
+};
+
+struct Encoder {
+    std::mutex Mutex;
+    std::condition_variable Wake, Idle;
+    std::deque<Job> Queue;
+    std::vector<Finished> Done;
+    bool Busy = false, Quit = false;
+    std::thread Thread;
+
+    void Run() {
+        std::unique_lock<std::mutex> lock(Mutex);
+        for (;;) {
+            Wake.wait(lock, [&] { return Quit || !Queue.empty(); });
+            if (Queue.empty()) return; // Quit with nothing left to write
+            Job job = std::move(Queue.front());
+            Queue.pop_front();
+            Busy = true;
+            lock.unlock();
+            const bool ok = Encode(job.Path, job.Pixels.data(), job.W, job.H, job.FlipY, job.Format);
+            lock.lock();
+            Busy = false;
+            Done.push_back({job.Path, job.W, job.H, ok});
+            if (Queue.empty()) Idle.notify_all();
+        }
+    }
+
+    // Static-lifetime owner: drains the queue and joins at process exit, so a capture taken
+    // right before closing still lands on disk even if WaitForPending() was never called.
+    ~Encoder() {
+        {
+            std::lock_guard<std::mutex> lock(Mutex);
+            Quit = true;
+        }
+        Wake.notify_all();
+        if (Thread.joinable()) Thread.join();
+    }
+};
+
+Encoder& TheEncoder() {
+    static Encoder e;
+    return e;
+}
+} // namespace
+
+std::string SaveAsync(std::vector<unsigned char> pixels, int w, int h, bool flipY,
+                      int format, const std::string& sceneName) {
+    if (w <= 0 || h <= 0 || pixels.size() < (size_t)w * h * 4) return {};
+    stbi_write_png_compression_level = 6;
+    const std::string path = ReservePath(format, sceneName);
+    Encoder& e = TheEncoder();
+    {
+        std::lock_guard<std::mutex> lock(e.Mutex);
+        e.Queue.push_back({path, std::move(pixels), w, h, format, flipY});
+        if (!e.Thread.joinable()) e.Thread = std::thread([&e] { e.Run(); });
+    }
+    e.Wake.notify_one();
+    return path;
+}
+
+std::vector<Finished> PollFinished() {
+    Encoder& e = TheEncoder();
+    std::lock_guard<std::mutex> lock(e.Mutex);
+    std::vector<Finished> out;
+    out.swap(e.Done);
+    for (const Finished& f : out) LogResult(f.Path, f.Width, f.Height, f.Ok);
+    return out;
+}
+
+void WaitForPending() {
+    Encoder& e = TheEncoder();
+    std::unique_lock<std::mutex> lock(e.Mutex);
+    e.Idle.wait(lock, [&] { return e.Queue.empty() && !e.Busy; });
 }
 
 std::string SaveBackbuffer(int width, int height, int format, const std::string& sceneName) {
