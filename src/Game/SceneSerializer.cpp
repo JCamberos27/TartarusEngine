@@ -819,14 +819,21 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
     };
 
     json boxes = json::array();
-    auto boxView = world.Registry.view<const TransformComponent, const NameComponent,
+    // #122 — NameComponent is not required: an entity without one (created by code, or a future
+    // component-only path) used to be silently dropped from every save. It is written as
+    // "GameObject" instead.
+    auto nameOf = [&](entt::entity e) -> std::string {
+        const auto* nc = world.Registry.try_get<NameComponent>(e);
+        return nc ? nc->Name : std::string("GameObject");
+    };
+    auto boxView = world.Registry.view<const TransformComponent,
         const RenderableComponent, const LevelGeometryTag>();
-    auto modelViewForIds = world.Registry.view<const TransformComponent, const NameComponent,
+    auto modelViewForIds = world.Registry.view<const TransformComponent,
         const RenderableComponent>(entt::exclude<LevelGeometryTag>);
     // Entities with no mesh at all — lights and plain empties used as grouping pivots. They
     // live in their own array rather than "models" because every "models" entry needs a `path`
     // to reload geometry from, and these have none.
-    auto emptyViewForIds = world.Registry.view<const TransformComponent, const NameComponent>(
+    auto emptyViewForIds = world.Registry.view<const TransformComponent>(
         entt::exclude<RenderableComponent>);
 
     std::vector<entt::entity> boxEntities = InCreationOrder(world.Registry, boxView);
@@ -873,14 +880,14 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
     for (auto entity : boxEntities) {
         if (skipWrite(entity) || isPrefabRoot(entity)) continue; // #236 A2
         TransformComponent transform = effectiveTransform(entity);
-        const auto& name = boxView.get<const NameComponent>(entity);
+        const std::string name = nameOf(entity);
         const auto& renderable = boxView.get<const RenderableComponent>(entity);
         json b = {
             {"center", Vec3ToJson(transform.Position)},
             {"size", Vec3ToJson(transform.Scale)},
             {"color", Vec3ToJson(renderable.ModelRef->MeshMaterial(0).BaseColor)},
             {"rotation", Vec3ToJson(transform.RotationEuler)},
-            {"name", name.Name},
+            {"name", name},
             {"id", idOf[entity]},
             {"parentId", parentIdOf(entity)},
         };
@@ -894,9 +901,8 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
     for (auto entity : emptyEntities) {
         if (skipWrite(entity) || isPrefabRoot(entity)) continue; // #236 A2
         TransformComponent transform = effectiveTransform(entity);
-        const auto& name = emptyViewForIds.get<const NameComponent>(entity);
         json e = {
-            {"name", name.Name},
+            {"name", nameOf(entity)},
             {"position", Vec3ToJson(transform.Position)},
             {"rotation", Vec3ToJson(transform.RotationEuler)},
             {"scale", Vec3ToJson(transform.Scale)},
@@ -909,12 +915,11 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
     root["empties"] = empties;
 
     json models = json::array();
-    auto modelView = world.Registry.view<const TransformComponent, const NameComponent,
+    auto modelView = world.Registry.view<const TransformComponent,
         const RenderableComponent>(entt::exclude<LevelGeometryTag>);
     for (auto entity : modelEntities) {
         if (skipWrite(entity) || isPrefabRoot(entity)) continue; // #236 A2
         TransformComponent transform = effectiveTransform(entity);
-        const auto& name = modelView.get<const NameComponent>(entity);
         const auto& renderable = modelView.get<const RenderableComponent>(entity);
 
         json m;
@@ -923,7 +928,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             AssetGuid g = AssetDatabase::GuidForPath(renderable.ModelRef->Path());
             if (g.IsValid()) m["pathGuid"] = g.ToString();
         }
-        m["name"] = name.Name;
+        m["name"] = nameOf(entity);
         m["position"] = Vec3ToJson(transform.Position);
         m["rotation"] = Vec3ToJson(transform.RotationEuler);
         m["scale"] = Vec3ToJson(transform.Scale);
@@ -953,7 +958,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
                 AssetGuid g = AssetDatabase::GuidForPath(pi.SourcePath);
                 if (g.IsValid()) s["sourceGuid"] = g.ToString();
             }
-            s["name"]     = world.Registry.get<NameComponent>(e).Name;
+            s["name"]     = nameOf(e);
             s["position"] = Vec3ToJson(t.Position);
             s["rotation"] = Vec3ToJson(t.RotationEuler);
             s["scale"]    = Vec3ToJson(t.Scale);
@@ -965,6 +970,10 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             if (const auto* lc = world.Registry.try_get<LayerComponent>(e); lc && lc->Layer != 0)
                 s["layer"] = lc->Layer;
             if (const auto* tag = world.Registry.try_get<TagComponent>(e)) s["tag"] = tag->Tag;
+            // #122 — the root's editor visibility / lock (non-stub entities get these through
+            // WriteCommonComponents).
+            if (world.Registry.all_of<HiddenInSceneTag>(e)) s["sceneHidden"] = true;
+            if (world.Registry.all_of<SceneLockedTag>(e)) s["sceneLocked"] = true;
 
             // #302 Part B — per-field overrides: diff each live instance entity against its
             // pristine counterpart in the .prefab file, by prefab-local index.
@@ -1078,7 +1087,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     if (clearFirst) {
         world.SkyAmbientIntensity    = root.value("skyAmbientIntensity",    1.0f);
         // PR13: HDRI sky source fields (absent in old scenes → Procedural defaults)
-        world.SkySourceMode          = (World::SkySource)root.value("skySource",          0);
+        world.SkySourceMode          = (World::SkySource)std::clamp(root.value("skySource", 0), 0, 1); // #122
         world.SkyHdriPath            = AssetPathForRead(root.value("skyHdriPath", std::string())); // audit #364
         world.SkyRotationDegrees     = root.value("skyRotationDegrees",     0.0f);
 
@@ -1242,6 +1251,8 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
                 world.Registry.emplace_or_replace<LayerComponent>(rootE, LayerComponent{layer});
             if (s.contains("tag"))
                 world.Registry.emplace_or_replace<TagComponent>(rootE, s["tag"].get<std::string>());
+            if (s.value("sceneHidden", false)) world.Registry.emplace_or_replace<HiddenInSceneTag>(rootE); // #122
+            if (s.value("sceneLocked", false)) world.Registry.emplace_or_replace<SceneLockedTag>(rootE);
 
             // #302 Part B — overrides: replay onto the freshly rebuilt subtree, by prefab-local
             // index into instCreated (== the .prefab file's entity order). Two passes so a field
@@ -1416,8 +1427,8 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
                     ? (TextureImportSettings::Type)rawType : TextureImportSettings::Type::Default;
                 s.GenerateMipmaps = t.value("generateMipmaps", true);
                 s.IsSRGB = t.value("isSRGB", true);
-                s.FilterMode = (TextureImportSettings::Filter)t.value("filterMode", 1);
-                s.WrapMode = (TextureImportSettings::Wrap)t.value("wrapMode", 0);
+                s.FilterMode = (TextureImportSettings::Filter)std::clamp(t.value("filterMode", 1), 0, 2); // #122
+                s.WrapMode = (TextureImportSettings::Wrap)std::clamp(t.value("wrapMode", 0), 0, 1);
                 s.MaxTextureSize = t.value("maxTextureSize", 2048);
                 assets.SetTextureSettings(path, s);
             }
@@ -1429,7 +1440,7 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
                 s.ImportAnimations = m.value("importAnimations", true);
                 s.ImportSkeleton = m.value("importSkeleton", true);
                 s.OptimizeGraph = m.value("optimizeGraph", true);
-                s.MaterialImportMode = (ModelImportSettings::MaterialMode)m.value("materialImportMode", 0);
+                s.MaterialImportMode = (ModelImportSettings::MaterialMode)std::clamp(m.value("materialImportMode", 0), 0, 2); // #122
                 assets.SetModelSettings(path, s);
             }
         }
