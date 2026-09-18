@@ -19,10 +19,17 @@ class SplashScreen {
 public:
     ~SplashScreen();
 
-    // Decodes `imagePath` and shows it centred on the primary monitor. `minimumSeconds` is the
-    // shortest time the splash will remain up — Close() waits out the remainder, so a fast
-    // (warm-cache) start shows a deliberate splash rather than a flicker.
-    void Show(const std::string& imagePath, float minimumSeconds = 1.0f);
+    // Where the editor window is about to open, in the same coordinates Window::Placement uses.
+    struct TargetRect {
+        int X = 0, Y = 0, Width = 0, Height = 0;
+    };
+
+    // Decodes `imagePath` and shows it centred on the monitor that contains `target` (the saved
+    // editor window placement, #155), or on the primary monitor when `target` is null or off
+    // every monitor. `minimumSeconds` is the shortest time the splash will remain up — Close()
+    // waits out the remainder, so a fast (warm-cache) start shows a deliberate splash rather
+    // than a flicker.
+    void Show(const std::string& imagePath, float minimumSeconds = 1.0f, const TargetRect* target = nullptr);
 
     // Honours the minimum display time, then tears the window down. Safe to call when Show()
     // failed or was never called.
@@ -31,7 +38,7 @@ public:
 private:
     // Destroys the window and joins its thread immediately. The destructor uses this rather than
     // Close(): during exception unwinding the fatal-error dialog in main() must appear at once,
-    // and only after this TOPMOST window is gone, never behind it (#155).
+    // with no splash still sitting over it (#155).
     void Teardown();
 
     void* m_Handle = nullptr; // HWND, kept opaque so windows.h stays out of this header
