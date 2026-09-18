@@ -132,7 +132,7 @@ bool AudioEngine::Load(const std::string& path) {
     ma_uint64 frameCount = 0;
     void* pFrames = nullptr;
     if (ma_decode_file(path.c_str(), &config, &frameCount, &pFrames) != MA_SUCCESS) {
-        Log::Error("Audio: failed to preload '" + path + "'.");
+        Log::Error("Audio: failed to preload '" + path + "'.", LogContext::Asset(path));
         return false;
     }
 
@@ -175,18 +175,18 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
         ma_audio_buffer_config config = ma_audio_buffer_config_init(
             clip.Format, clip.Channels, clip.FrameCount, clip.Data.data(), nullptr);
         if (ma_audio_buffer_init_copy(&config, buffer.get()) != MA_SUCCESS) {
-            Log::Error("Audio: failed to instantiate preloaded '" + path + "'.");
+            Log::Error("Audio: failed to instantiate preloaded '" + path + "'.", LogContext::Asset(path));
             return InvalidHandle;
         }
         if (ma_sound_init_from_data_source(&s_Engine, (ma_data_source*)buffer.get(), 0, nullptr,
                                            sound.get()) != MA_SUCCESS) {
-            Log::Error("Audio: failed to play preloaded '" + path + "'.");
+            Log::Error("Audio: failed to play preloaded '" + path + "'.", LogContext::Asset(path));
             ma_audio_buffer_uninit(buffer.get());
             return InvalidHandle;
         }
     } else if (ma_sound_init_from_file(&s_Engine, path.c_str(), MA_SOUND_FLAG_STREAM, nullptr, nullptr,
                                        sound.get()) != MA_SUCCESS) {
-        Log::Error("Audio: failed to load sound '" + path + "'.");
+        Log::Error("Audio: failed to load sound '" + path + "'.", LogContext::Asset(path));
         return InvalidHandle;
     }
 
@@ -196,7 +196,7 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
     // origin and get attenuated against the listener, which is wrong for UI and preview sounds.
     ma_sound_set_spatialization_enabled(sound.get(), MA_FALSE);
     if (ma_sound_start(sound.get()) != MA_SUCCESS) {
-        Log::Error("Audio: failed to start sound '" + path + "'.");
+        Log::Error("Audio: failed to start sound '" + path + "'.", LogContext::Asset(path));
         ma_sound_uninit(sound.get());
         if (buffer) ma_audio_buffer_uninit(buffer.get());
         return InvalidHandle;
@@ -210,7 +210,7 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
         // Slot indices have to fit in kIndexBits. Hitting this means ~65k simultaneous voices,
         // which is a bug elsewhere; drop the sound rather than hand out an aliasing handle.
         if (s_Voices.size() > kIndexMask) {
-            Log::Error("Audio: voice limit reached; dropping '" + path + "'.");
+            Log::Error("Audio: voice limit reached; dropping '" + path + "'.", LogContext::Asset(path));
             ma_sound_uninit(sound.get());
             return InvalidHandle;
         }
@@ -317,7 +317,7 @@ void AudioEngine::PlayPreview(const std::string& path) {
 
     auto sound = std::make_unique<ma_sound>();
     if (ma_sound_init_from_file(&s_Engine, path.c_str(), MA_SOUND_FLAG_STREAM, nullptr, nullptr, sound.get()) != MA_SUCCESS) {
-        Log::Error("Audio: failed to load sound '" + path + "'.");
+        Log::Error("Audio: failed to load sound '" + path + "'.", LogContext::Asset(path));
         return;
     }
     ma_sound_set_spatialization_enabled(sound.get(), MA_FALSE);

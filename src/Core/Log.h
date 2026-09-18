@@ -8,6 +8,17 @@
 // open — messages are still mirrored to the real stderr/stdout for headless/attached runs.
 enum class LogLevel { Info, Warning, Error };
 
+// #146 — what a message is about, carried beside the text so the Console can link to it without
+// parsing the message ("entity #12", a quoted path). Both optional.
+struct LogContext {
+    int EntityOrder = -1;  // OrderComponent value of the entity concerned; -1 = none
+    std::string AssetPath; // asset file concerned; empty = none
+
+    static LogContext Entity(int order) { LogContext c; c.EntityOrder = order; return c; }
+    static LogContext Asset(const std::string& path) { LogContext c; c.AssetPath = path; return c; }
+    bool operator==(const LogContext& o) const { return EntityOrder == o.EntityOrder && AssetPath == o.AssetPath; }
+};
+
 struct LogEntry {
     LogLevel Level = LogLevel::Info;
     std::string Message;
@@ -22,6 +33,7 @@ struct LogEntry {
     // ring buffer trimming older entries). Lets a consumer remember "the last entry I handled"
     // without relying on vector indices, which shift whenever old entries are dropped.
     unsigned long long Seq = 0;
+    LogContext Context;
 };
 
 // Thread safety (#146): Info/Warn/Error may be called from any thread. Messages from other
@@ -32,6 +44,11 @@ public:
     static void Info(const std::string& message);
     static void Warn(const std::string& message);
     static void Error(const std::string& message);
+    // With structured context (#146). Identical text with a different context is a separate
+    // entry, so a repeated "missing collider" warning for two entities isn't collapsed into one.
+    static void Info(const std::string& message, const LogContext& context);
+    static void Warn(const std::string& message, const LogContext& context);
+    static void Error(const std::string& message, const LogContext& context);
 
     // Starts mirroring every message into %LOCALAPPDATA%\TartarusEngine\Logs\<fileName> (#146),
     // moving the previous run's file to "<stem>-prev.log" first, and writes out whatever was
