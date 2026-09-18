@@ -7,6 +7,8 @@
 #include <json.hpp>
 #include <fstream>
 #include <filesystem>
+#include <algorithm>
+#include <cmath>
 
 using json = nlohmann::json;
 
@@ -38,6 +40,23 @@ void MigrateLegacyPrefsIfNeeded() {
 // call, Save() just raises this flag and Flush() (once per frame from the editor loop, and on
 // shutdown) does the one real write (audit CPP-206 / PERF-211).
 bool g_PrefsDirty = false;
+
+// #126 — root.value(key, default) THROWS json::type_error when the key exists with the wrong
+// type (a hand edit, an older/newer build), and nothing caught it, so one bad key in
+// editor_prefs.json stopped the editor from starting on every launch. This reads the key if it
+// has a usable type and otherwise keeps the default, with a warning.
+template <class T>
+T SafeValue(const json& root, const char* key, const T& fallback) {
+    auto it = root.find(key);
+    if (it == root.end() || it->is_null()) return fallback;
+    try {
+        return it->get<T>();
+    } catch (const std::exception&) {
+        Log::Warn(std::string("EditorSettings: ignoring '") + key + "' (unexpected type " +
+                  it->type_name() + ") - using the default.");
+        return fallback;
+    }
+}
 }
 
 const std::string& EditorSettings::PrefsFilePath() {
@@ -60,70 +79,99 @@ void EditorSettings::Load() {
     EditorSettings& s = Get();
     // editorTheme (int) is intentionally no longer read: the theme picker was removed and the
     // editor now has one style. An old prefs file's stray "editorTheme" key is simply ignored.
-    s.ShowTooltips = root.value("showTooltips", s.ShowTooltips);
-    s.UiScaleOverride = root.value("uiScaleOverride", s.UiScaleOverride);
-    s.AutoSaveEnabled = root.value("autoSaveEnabled", s.AutoSaveEnabled);
-    s.AutoSaveIntervalMinutes = root.value("autoSaveIntervalMinutes", s.AutoSaveIntervalMinutes);
-    s.VSyncMode = root.value("vsyncMode", s.VSyncMode);
-    s.FpsLimit = root.value("fpsLimit", s.FpsLimit);
+    s.ShowTooltips = SafeValue(root, "showTooltips", s.ShowTooltips);
+    s.UiScaleOverride = SafeValue(root, "uiScaleOverride", s.UiScaleOverride);
+    s.AutoSaveEnabled = SafeValue(root, "autoSaveEnabled", s.AutoSaveEnabled);
+    s.AutoSaveIntervalMinutes = SafeValue(root, "autoSaveIntervalMinutes", s.AutoSaveIntervalMinutes);
+    s.VSyncMode = SafeValue(root, "vsyncMode", s.VSyncMode);
+    s.FpsLimit = SafeValue(root, "fpsLimit", s.FpsLimit);
     // exposureEV/tonemapOperator/msaaSamples/ssaoEnabled/bloom*/shadow* intentionally no longer
     // read here (#9, Phase M item 1) — moved to World/scene data. A pre-v3 scene's values are
     // migrated forward by SceneSerializer reading this file's legacy keys directly (see
     // EditorSettings::PrefsFilePath()); an old prefs file's stray keys are simply ignored here.
-    s.GridOpacity = root.value("gridOpacity", s.GridOpacity);
-    s.GridMinorSpacing = root.value("gridMinorSpacing", s.GridMinorSpacing);
-    s.GridMajorEvery = root.value("gridMajorEvery", s.GridMajorEvery);
-    s.GridFadeDistance = root.value("gridFadeDistance", s.GridFadeDistance);
-    s.GridShowAxisLines = root.value("gridShowAxisLines", s.GridShowAxisLines);
-    s.GridAxisThickness = root.value("gridAxisThickness", s.GridAxisThickness);
-    s.LastScenePath = root.value("lastScenePath", s.LastScenePath);
-    s.GameViewMaximizeOnPlay = root.value("gameViewMaximizeOnPlay", s.GameViewMaximizeOnPlay);
-    s.GameViewShowStats = root.value("gameViewShowStats", s.GameViewShowStats);
-    s.SceneShowStats = root.value("sceneShowStats", s.SceneShowStats);
-    s.SceneCameraFov = root.value("sceneCameraFov", s.SceneCameraFov);
-    s.SceneCameraFlySpeed = root.value("sceneCameraFlySpeed", s.SceneCameraFlySpeed);
-    s.SceneCameraNear = root.value("sceneCameraNear", s.SceneCameraNear);
-    s.SceneCameraFar = root.value("sceneCameraFar", s.SceneCameraFar);
-    s.AudioMuted = root.value("audioMuted", s.AudioMuted);
-    s.AssetSearchGlobal = root.value("assetSearchGlobal", s.AssetSearchGlobal);
-    s.GameViewPresetLabel = root.value("gameViewPresetLabel", s.GameViewPresetLabel);
-    s.GameViewPresetWidth = root.value("gameViewPresetWidth", s.GameViewPresetWidth);
-    s.GameViewPresetHeight = root.value("gameViewPresetHeight", s.GameViewPresetHeight);
-    s.AssetBrowserTreeWidth = root.value("assetBrowserTreeWidth", s.AssetBrowserTreeWidth);
-    s.AssetBrowserIconSize = root.value("assetBrowserIconSize", s.AssetBrowserIconSize);
-    s.AssetSortMode = root.value("assetSortMode", s.AssetSortMode);
-    s.AssetSortDesc = root.value("assetSortDesc", s.AssetSortDesc);
-    s.AssetDetailsMode = root.value("assetDetailsMode", s.AssetDetailsMode);
-    s.HierarchySortMode = root.value("hierarchySortMode", s.HierarchySortMode);
-    s.HierarchySortDesc = root.value("hierarchySortDesc", s.HierarchySortDesc);
-    s.HierarchyTypeFilterMask = root.value("hierarchyTypeFilterMask", s.HierarchyTypeFilterMask);
-    s.EngineMarkEnabled = root.value("engineMarkEnabled", s.EngineMarkEnabled);
-    s.EngineMarkSpinSpeed = root.value("engineMarkSpinSpeed", s.EngineMarkSpinSpeed);
-    s.EngineMarkPrism = root.value("engineMarkPrism", s.EngineMarkPrism);
-    s.ReduceMotion = root.value("reduceMotion", s.ReduceMotion);
-    s.DefaultLayoutPreset = root.value("defaultLayoutPreset", s.DefaultLayoutPreset);
-    s.ShowLightGizmos = root.value("showLightGizmos", s.ShowLightGizmos);
-    s.LightGizmoSelectedOnly = root.value("lightGizmoSelectedOnly", s.LightGizmoSelectedOnly);
-    s.LightGizmoOpacity = root.value("lightGizmoOpacity", s.LightGizmoOpacity);
-    s.LightGizmoScale = root.value("lightGizmoScale", s.LightGizmoScale);
-    s.ShowColliders = root.value("showColliders", s.ShowColliders);
-    s.ToolPaletteCollapsed = root.value("toolPaletteCollapsed", s.ToolPaletteCollapsed);
-    s.PhysicsDebugInput = root.value("physicsDebugInput", s.PhysicsDebugInput);
-    s.ShowPhysicsPanel = root.value("showPhysicsPanel", s.ShowPhysicsPanel);
-    s.PhysicsHudOverlay = root.value("physicsHudOverlay", s.PhysicsHudOverlay);
-    s.PhysicsDebugDrawFlags = root.value("physicsDebugDrawFlags", s.PhysicsDebugDrawFlags);
+    s.GridOpacity = SafeValue(root, "gridOpacity", s.GridOpacity);
+    s.GridMinorSpacing = SafeValue(root, "gridMinorSpacing", s.GridMinorSpacing);
+    s.GridMajorEvery = SafeValue(root, "gridMajorEvery", s.GridMajorEvery);
+    s.GridFadeDistance = SafeValue(root, "gridFadeDistance", s.GridFadeDistance);
+    s.GridShowAxisLines = SafeValue(root, "gridShowAxisLines", s.GridShowAxisLines);
+    s.GridAxisThickness = SafeValue(root, "gridAxisThickness", s.GridAxisThickness);
+    s.LastScenePath = SafeValue(root, "lastScenePath", s.LastScenePath);
+    s.GameViewMaximizeOnPlay = SafeValue(root, "gameViewMaximizeOnPlay", s.GameViewMaximizeOnPlay);
+    s.GameViewShowStats = SafeValue(root, "gameViewShowStats", s.GameViewShowStats);
+    s.SceneShowStats = SafeValue(root, "sceneShowStats", s.SceneShowStats);
+    s.SceneCameraFov = SafeValue(root, "sceneCameraFov", s.SceneCameraFov);
+    s.SceneCameraFlySpeed = SafeValue(root, "sceneCameraFlySpeed", s.SceneCameraFlySpeed);
+    s.SceneCameraNear = SafeValue(root, "sceneCameraNear", s.SceneCameraNear);
+    s.SceneCameraFar = SafeValue(root, "sceneCameraFar", s.SceneCameraFar);
+    s.AudioMuted = SafeValue(root, "audioMuted", s.AudioMuted);
+    s.AssetSearchGlobal = SafeValue(root, "assetSearchGlobal", s.AssetSearchGlobal);
+    s.GameViewPresetLabel = SafeValue(root, "gameViewPresetLabel", s.GameViewPresetLabel);
+    s.GameViewPresetWidth = SafeValue(root, "gameViewPresetWidth", s.GameViewPresetWidth);
+    s.GameViewPresetHeight = SafeValue(root, "gameViewPresetHeight", s.GameViewPresetHeight);
+    s.AssetBrowserTreeWidth = SafeValue(root, "assetBrowserTreeWidth", s.AssetBrowserTreeWidth);
+    s.AssetBrowserIconSize = SafeValue(root, "assetBrowserIconSize", s.AssetBrowserIconSize);
+    s.AssetSortMode = SafeValue(root, "assetSortMode", s.AssetSortMode);
+    s.AssetSortDesc = SafeValue(root, "assetSortDesc", s.AssetSortDesc);
+    s.AssetDetailsMode = SafeValue(root, "assetDetailsMode", s.AssetDetailsMode);
+    s.HierarchySortMode = SafeValue(root, "hierarchySortMode", s.HierarchySortMode);
+    s.HierarchySortDesc = SafeValue(root, "hierarchySortDesc", s.HierarchySortDesc);
+    s.HierarchyTypeFilterMask = SafeValue(root, "hierarchyTypeFilterMask", s.HierarchyTypeFilterMask);
+    s.EngineMarkEnabled = SafeValue(root, "engineMarkEnabled", s.EngineMarkEnabled);
+    s.EngineMarkSpinSpeed = SafeValue(root, "engineMarkSpinSpeed", s.EngineMarkSpinSpeed);
+    s.EngineMarkPrism = SafeValue(root, "engineMarkPrism", s.EngineMarkPrism);
+    s.ReduceMotion = SafeValue(root, "reduceMotion", s.ReduceMotion);
+    s.DefaultLayoutPreset = SafeValue(root, "defaultLayoutPreset", s.DefaultLayoutPreset);
+    s.ShowLightGizmos = SafeValue(root, "showLightGizmos", s.ShowLightGizmos);
+    s.LightGizmoSelectedOnly = SafeValue(root, "lightGizmoSelectedOnly", s.LightGizmoSelectedOnly);
+    s.LightGizmoOpacity = SafeValue(root, "lightGizmoOpacity", s.LightGizmoOpacity);
+    s.LightGizmoScale = SafeValue(root, "lightGizmoScale", s.LightGizmoScale);
+    s.ShowColliders = SafeValue(root, "showColliders", s.ShowColliders);
+    s.ToolPaletteCollapsed = SafeValue(root, "toolPaletteCollapsed", s.ToolPaletteCollapsed);
+    s.PhysicsDebugInput = SafeValue(root, "physicsDebugInput", s.PhysicsDebugInput);
+    s.ShowPhysicsPanel = SafeValue(root, "showPhysicsPanel", s.ShowPhysicsPanel);
+    s.PhysicsHudOverlay = SafeValue(root, "physicsHudOverlay", s.PhysicsHudOverlay);
+    s.PhysicsDebugDrawFlags = SafeValue(root, "physicsDebugDrawFlags", s.PhysicsDebugDrawFlags);
     // PhysicsSimTimeScale (Phase 6 item 13 / Appendix B #39) is deliberately NOT loaded - it stays
     // session-only (see the struct field's comment), so a session left slowed/frozen can't leave
     // physics silently frozen the next time the editor opens.
-    s.PlayDebugOverlay = root.value("playDebugOverlay", s.PlayDebugOverlay);
-    s.LayerVisibleMask = root.value("layerVisibleMask", s.LayerVisibleMask);
-    s.LayerPickLockMask = root.value("layerPickLockMask", s.LayerPickLockMask);
-    s.CaptureMode = root.value("captureMode", s.CaptureMode);
-    s.CaptureScale = root.value("captureScale", s.CaptureScale);
-    s.CaptureResPreset = root.value("captureResPreset", s.CaptureResPreset);
-    s.CaptureFormat = root.value("captureFormat", s.CaptureFormat);
-    s.CaptureFlash = root.value("captureFlash", s.CaptureFlash);
-    s.CaptureSound = root.value("captureSound", s.CaptureSound);
+    s.PlayDebugOverlay = SafeValue(root, "playDebugOverlay", s.PlayDebugOverlay);
+    s.LayerVisibleMask = SafeValue(root, "layerVisibleMask", s.LayerVisibleMask);
+    s.LayerPickLockMask = SafeValue(root, "layerPickLockMask", s.LayerPickLockMask);
+    s.CaptureMode = SafeValue(root, "captureMode", s.CaptureMode);
+    s.CaptureScale = SafeValue(root, "captureScale", s.CaptureScale);
+    s.CaptureResPreset = SafeValue(root, "captureResPreset", s.CaptureResPreset);
+    s.CaptureFormat = SafeValue(root, "captureFormat", s.CaptureFormat);
+    s.CaptureFlash = SafeValue(root, "captureFlash", s.CaptureFlash);
+    s.CaptureSound = SafeValue(root, "captureSound", s.CaptureSound);
+
+    // #126 — values that are the right type but nonsensical (0 / negative / NaN from a hand
+    // edit or an older build) would otherwise produce NaN projections, a zero-size grid, a
+    // zero-interval autosave, etc. Clamp them into the ranges the Preferences UI allows.
+    auto clampF = [](float& v, float lo, float hi, float fallback) {
+        if (!std::isfinite(v)) v = fallback;
+        v = std::clamp(v, lo, hi);
+    };
+    if (s.UiScaleOverride != 0.0f) clampF(s.UiScaleOverride, 0.75f, 2.5f, 0.0f);
+    clampF(s.AutoSaveIntervalMinutes, 1.0f, 60.0f, 5.0f);
+    s.VSyncMode = std::clamp(s.VSyncMode, 0, 2);
+    if (s.FpsLimit < 0) s.FpsLimit = 0;
+    s.FpsLimit = std::min(s.FpsLimit, 1000);
+    clampF(s.GridOpacity, 0.0f, 1.0f, 0.6f);
+    clampF(s.GridMinorSpacing, 0.05f, 50.0f, 1.0f);
+    s.GridMajorEvery = std::clamp(s.GridMajorEvery, 2, 100);
+    clampF(s.GridFadeDistance, 10.0f, 1000.0f, 80.0f);
+    clampF(s.GridAxisThickness, 0.5f, 4.0f, 0.5f);
+    clampF(s.SceneCameraFov, 30.0f, 110.0f, 75.0f);
+    clampF(s.SceneCameraFlySpeed, 0.5f, 200.0f, 8.0f);
+    clampF(s.SceneCameraNear, 0.001f, 10.0f, 0.05f);
+    clampF(s.SceneCameraFar, 1.0f, 10000.0f, 500.0f);
+    if (s.SceneCameraFar <= s.SceneCameraNear) s.SceneCameraFar = s.SceneCameraNear + 1.0f;
+    clampF(s.LightGizmoOpacity, 0.0f, 1.0f, 0.5f);
+    clampF(s.LightGizmoScale, 0.25f, 3.0f, 1.0f);
+    clampF(s.EngineMarkSpinSpeed, 0.0f, 4.0f, 0.52f);
+    s.CaptureMode = std::clamp(s.CaptureMode, 0, 3);
+    s.CaptureScale = std::clamp(s.CaptureScale, 1, 4);
+    s.CaptureFormat = std::clamp(s.CaptureFormat, 0, 1);
 }
 
 void EditorSettings::Save() {
