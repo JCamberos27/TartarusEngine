@@ -11,7 +11,10 @@ uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProj;
 uniform int uUseSkinning;
-uniform mat4 uBones[100];
+// #103 — bones live in the binding-1 SSBO (#104) that Model::UploadBoneMatrices fills and binds
+// on every Draw(); this used to declare the old never-uploaded uniform array, so a skinned model
+// with a clip playing collapsed to a point and got no selection outline.
+layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; };
 uniform float uThickness;
 
 void main() {
@@ -23,7 +26,7 @@ void main() {
         float totalWeight = 0.0;
         for (int i = 0; i < 4; ++i) {
             if (aBoneIDs[i] >= 0) {
-                skinMat += uBones[aBoneIDs[i]] * aWeights[i];
+                skinMat += uBones[clamp(aBoneIDs[i], 0, 99)] * aWeights[i]; // clamp as ModelVertex (#98)
                 totalWeight += aWeights[i];
             }
         }
