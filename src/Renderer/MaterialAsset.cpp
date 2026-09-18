@@ -363,6 +363,12 @@ std::shared_ptr<MaterialAsset> MaterialAsset::CreateDefault(const std::string& p
     ma->Path = path;
     ma->Name = std::filesystem::path(path).stem().string();
     // Mat defaults are already correct: white, 0 metallic, 0.5 roughness.
+    // #87 — new materials are v2, linked to the project's Standard shader (when present) like
+    // every other authored material, instead of the legacy shader-less v1 format that doesn't
+    // persist transparency or the advanced lobes.
+    std::error_code ec;
+    if (std::filesystem::exists(ProjectPaths::Resolve("shaders/Standard.shader"), ec))
+        ma->ShaderPath = "shaders/Standard.shader";
     if (!ma->Save()) return nullptr;
     return ma;
 }

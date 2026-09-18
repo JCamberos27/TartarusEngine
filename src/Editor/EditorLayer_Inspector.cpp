@@ -580,8 +580,9 @@ void EditorLayer::DrawShaderPreviewInspector(AssetLibrary& assets, const std::st
             auto shader = assets.LoadShader(key);
             if (!shader) {
                 m_ShaderPreviewError = "Failed to parse — see Console for details.";
-            } else if (!shader->Variant(0)) {
-                m_ShaderPreviewError = "Compile failed (no diagnostic returned).";
+            } else if (shader->ForgetFailedVariants(), !shader->Variant(0)) {
+                m_ShaderPreviewError = shader->LastCompileError().empty()
+                    ? "Compile failed (no diagnostic returned)." : shader->LastCompileError();
             } else {
                 m_ShaderPreviewOk = true;
             }
@@ -1135,10 +1136,20 @@ bool EditorLayer::ConsumeEyedropperSample(float& outX, float& outY) {
 
 void EditorLayer::ApplyEyedropperSample(const glm::vec3& rgb) {
     if (!m_EyedropperTarget) return;
-    if (m_EyedropperWorld) PushUndo(*m_EyedropperWorld, "Eyedropper");
-    *m_EyedropperTarget = glm::clamp(rgb, glm::vec3(0.0f), glm::vec3(1.0f));
+    // Take the target first: PushUndo cancels any armed eyedropper (#93).
+    glm::vec3* target = m_EyedropperTarget;
+    World* world = m_EyedropperWorld;
     m_EyedropperTarget = nullptr;
     m_EyedropperWorld = nullptr;
+    if (world) PushUndo(*world, "Eyedropper");
+    // #93 — the sample is the displayed (gamma-encoded) pixel, but every colour field it can
+    // target is linear (lighting math, ColorEdit storage), so decode sRGB -> linear. (It is still
+    // the post-tonemap colour; an exact inverse of the tonemapper isn't attempted.)
+    auto toLinear = [](float c) {
+        c = std::clamp(c, 0.0f, 1.0f);
+        return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+    };
+    *target = glm::vec3(toLinear(rgb.r), toLinear(rgb.g), toLinear(rgb.b));
 }
 
 void EditorLayer::ToggleInspectorLock() {

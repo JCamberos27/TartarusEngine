@@ -144,9 +144,38 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     // and blocking immutable-storage attachment.
     GLenum format = GL_RGB;
     GLint internalFormat = GL_RGB8;
-    if (m_Channels == 1) {
+    // #94 — grey (1-channel) and grey+alpha (2-channel) images. 2-channel used to fall through
+    // to GL_RGB, so glTextureSubImage2D read w*h*3 bytes out of a w*h*2 buffer (heap over-read,
+    // garbled texture); 1-channel uploaded as plain GL_R8 and a greyscale albedo rendered RED.
+    // Colour (sRGB) ones are expanded to RGBA so they get sRGB decoding like any other colour
+    // texture (core GL has no 1/2-channel sRGB formats); data ones stay compact and are
+    // swizzled so every channel a shader reads sees the grey value (and G as alpha).
+    std::vector<unsigned char> expanded;
+    GLint swizzle[4] = {GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA};
+    bool useSwizzle = false;
+    if ((m_Channels == 1 || m_Channels == 2) && effective.IsSRGB) {
+        const size_t px = (size_t)uploadW * uploadH;
+        expanded.resize(px * 4);
+        for (size_t i = 0; i < px; ++i) {
+            const unsigned char g = uploadData[i * m_Channels];
+            expanded[i * 4 + 0] = g;
+            expanded[i * 4 + 1] = g;
+            expanded[i * 4 + 2] = g;
+            expanded[i * 4 + 3] = m_Channels == 2 ? uploadData[i * 2 + 1] : 255;
+        }
+        uploadData = expanded.data();
+        format = GL_RGBA;
+        internalFormat = GL_SRGB8_ALPHA8;
+    } else if (m_Channels == 1) {
         format = GL_RED;
-        internalFormat = GL_R8; // no single-channel sRGB format in core GL - not a color texture anyway
+        internalFormat = GL_R8;
+        swizzle[1] = swizzle[2] = GL_RED; swizzle[3] = GL_ONE;
+        useSwizzle = true;
+    } else if (m_Channels == 2) {
+        format = GL_RG;
+        internalFormat = GL_RG8;
+        swizzle[1] = swizzle[2] = GL_RED; swizzle[3] = GL_GREEN;
+        useSwizzle = true;
     } else if (m_Channels == 3) {
         format = GL_RGB;
         internalFormat = effective.IsSRGB ? GL_SRGB8 : GL_RGB8;
@@ -174,6 +203,13 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTextureSubImage2D(m_ID, 0, 0, 0, uploadW, uploadH, format, GL_UNSIGNED_BYTE, uploadData);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+    if (useSwizzle) { // #94
+        glTextureParameteri(m_ID, GL_TEXTURE_SWIZZLE_R, swizzle[0]);
+        glTextureParameteri(m_ID, GL_TEXTURE_SWIZZLE_G, swizzle[1]);
+        glTextureParameteri(m_ID, GL_TEXTURE_SWIZZLE_B, swizzle[2]);
+        glTextureParameteri(m_ID, GL_TEXTURE_SWIZZLE_A, swizzle[3]);
+    }
 
     if (effective.GenerateMipmaps) glGenerateTextureMipmap(m_ID);
 

@@ -160,6 +160,7 @@ void EditorLayer::PasteClipboard(World& world, AssetLibrary& assets) {
 }
 
 void EditorLayer::ClearSelection() {
+    CancelEyedropper(); // #93 — the armed field belonged to the old selection
     m_Selected = entt::null;
     m_ExtraSelection.clear();
     m_SelectionAnchor = entt::null;
@@ -175,6 +176,7 @@ bool EditorLayer::SelectEntityByRawId(World& world, unsigned int rawId) {
 }
 
 void EditorLayer::SelectItem(entt::entity entity, bool addToSelection) {
+    CancelEyedropper(); // #93 — the armed field belonged to the old selection
     // Any selection that isn't a viewport icon-click disarms the light grab handles;
     // HandleViewportPicking re-arms them right after it calls this for a light it picked.
     m_LightHandleArmedFor = entt::null;

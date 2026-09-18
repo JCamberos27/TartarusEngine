@@ -182,6 +182,18 @@ void EditorLayer::OnStartupSceneLoadFailed(const std::string& path) {
                "ask for a new location instead of overwriting it.");
 }
 
+void EditorLayer::EmergencyRecoverySave(World& world, AssetLibrary& assets) noexcept {
+    try {
+        if (m_InPlayMode) OnExitPlayMode(world, assets);
+        if (m_Dirty && !m_CurrentScenePath.empty()) {
+            WriteRecoverySnapshot(world, assets);
+            Log::Error("Unexpected error - wrote a recovery snapshot of the unsaved scene.");
+        }
+    } catch (...) {
+        // The world may be what's broken; nothing more can be done safely here.
+    }
+}
+
 void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
     if (!m_RecoveryPromptPending) return;
 
@@ -448,6 +460,7 @@ void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& 
 
 void EditorLayer::PushUndo(const World& world, const std::string& label, bool selectionOnly,
                            const std::vector<int>* selectedOrdersOverride) {
+    CancelEyedropper(); // #93
     const std::string sceneJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                               : SceneSerializer::SaveToString(world);
     UndoEntry entry;
@@ -500,6 +513,7 @@ std::string EditorLayer::SelectionUndoLabel(const World& world) const {
 }
 
 void EditorLayer::StageUndo(const World& world) {
+    CancelEyedropper(); // #93
     if (m_HasStagedUndo) return; // keep the FIRST (true pre-edit) snapshot of this interaction
     m_StagedUndoJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                    : SceneSerializer::SaveToString(world);
@@ -551,6 +565,7 @@ void EditorLayer::CommitStagedUndo(const World& world, const std::string& label)
 }
 
 void EditorLayer::Undo(World& world, AssetLibrary& assets) {
+    CancelEyedropper(); // #93 — the registry is about to be rebuilt
     if (m_UndoStack.empty()) return;
     // #91 — Undo reloads the whole registry from a snapshot, which under a live PhysicsWorld
     // (actors keyed by entity id) scrambles the simulation; and anything done in Play reverts on
@@ -569,13 +584,18 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     std::string targetJson;
     if (!PopHistoryEntry(m_UndoStack, m_UndoBaseJson, entry, targetJson)) return;
     if (!entry.SelectionOnly) m_ContentDepth--; // Q6 — a real-edit entry just left the live stack
-    SceneSerializer::LoadFromString(world, assets, targetJson);
+    if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
+        // #83 — a snapshot that can't be applied must not leave a half-loaded world.
+        Log::Error("Undo failed - the scene was left as it was.");
+        SceneSerializer::LoadFromString(world, assets, currentJson);
+    }
     RestoreSelectionByOrder(world, entry.SelectedOrders);
     InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
 }
 
 void EditorLayer::Redo(World& world, AssetLibrary& assets) {
+    CancelEyedropper(); // #93
     if (m_RedoStack.empty()) return;
     if (m_InPlayMode) { Log::Info("Redo is disabled while Playing - Stop reverts Play-mode changes."); return; } // #91
 
@@ -591,7 +611,10 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     UndoEntry entry;
     std::string targetJson;
     if (!PopHistoryEntry(m_RedoStack, m_RedoBaseJson, entry, targetJson)) return;
-    SceneSerializer::LoadFromString(world, assets, targetJson);
+    if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
+        Log::Error("Redo failed - the scene was left as it was."); // #83
+        SceneSerializer::LoadFromString(world, assets, currentJson);
+    }
     RestoreSelectionByOrder(world, entry.SelectedOrders);
     InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
@@ -611,6 +634,7 @@ void EditorLayer::JumpToRedoEntry(World& world, AssetLibrary& assets, size_t red
 }
 
 void EditorLayer::OnEnterPlayMode(const World& world) {
+    CancelEyedropper(); // #93
     m_InPlayMode = true;
     m_PlayModeSnapshot = SceneSerializer::SaveToString(world);
     m_PrePlayHistory = { m_UndoStack, m_RedoStack, m_UndoBaseJson, m_RedoBaseJson,
@@ -651,6 +675,7 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
 }
 
 void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
+    CancelEyedropper(); // #93
     m_InPlayMode = false;
 
     // Always tear the PhysX world down, even on the snapshot-empty early-out below — Create()
@@ -707,6 +732,7 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     Log::Info("Exited play mode - scene state restored.");
 }
 void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
+    CancelEyedropper(); // #93
     // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
     // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
     // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
@@ -762,6 +788,7 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
 }
 
 void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::string& path) {
+    CancelEyedropper(); // #93
     // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
     // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
     // scene's recycled entity ids), so the next save wrote scene A's content into B's file.

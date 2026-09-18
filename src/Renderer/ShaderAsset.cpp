@@ -223,10 +223,33 @@ void ShaderAsset::CompileVariant(ShaderVariantKey key) {
         if (!fragSrc.empty()) inject(fragSrc);
     }
 
-    if (fragSrc.empty())
-        m_Variants[key] = std::make_unique<Shader>(vertSrc);      // compute
-    else
-        m_Variants[key] = std::make_unique<Shader>(vertSrc, fragSrc);
+    // #100 — Shader's constructors throw on a GLSL compile/link error. This runs lazily from
+    // SceneRenderer mid-draw, so an uncaught throw here (a typo in a user .shader/.glsl) used to
+    // unwind to main() and close the editor. Catch it, report it once, and cache the failure
+    // (nullptr) so it isn't recompiled every frame; SceneRenderer already falls back to the
+    // built-in program when Variant() returns null. ForgetFailedVariants() (the Inspector's
+    // shader preview calls it) retries after the file is fixed.
+    try {
+        if (fragSrc.empty())
+            m_Variants[key] = std::make_unique<Shader>(vertSrc);      // compute
+        else
+            m_Variants[key] = std::make_unique<Shader>(vertSrc, fragSrc);
+    } catch (const std::exception& e) {
+        std::string keywords;
+        for (int i = 0; i < (int)m_Keywords.size(); ++i)
+            if (key & (1u << i)) keywords += (keywords.empty() ? "" : " ") + m_Keywords[i];
+        Log::Error("ShaderAsset: '" + m_VertFile + (m_FragFile.empty() ? "" : "' / '" + m_FragFile) +
+                   "' failed to compile" + (keywords.empty() ? "" : " (variant: " + keywords + ")") +
+                   " - objects using it fall back to the default shader. " + e.what());
+        m_LastCompileError = e.what();
+        m_Variants[key] = nullptr;
+    }
+}
+
+void ShaderAsset::ForgetFailedVariants() {
+    for (auto it = m_Variants.begin(); it != m_Variants.end();)
+        it = it->second ? std::next(it) : m_Variants.erase(it);
+    m_LastCompileError.clear();
 }
 
 Shader* ShaderAsset::Variant(ShaderVariantKey key) {

@@ -1085,6 +1085,8 @@ int main(int argc, char** argv) {
             }
         }
 
+        // #89 — see the matching catch after the loop. (Loop body deliberately not re-indented.)
+        try {
         while (true) {
             ++frameIndex;
             // Advance the smoke test: load the next scene (or, once every scene's frame quota is
@@ -2625,6 +2627,15 @@ int main(int argc, char** argv) {
                 }
             }
         }
+        } catch (...) {
+            // #89 — an exception escaping the frame used to unwind straight to main()'s outer
+            // catch, destroying the editor and world on the way, so the only copy of unsaved
+            // work was gone. Catch it here while they still exist: revert Play mode and write a
+            // recovery snapshot (offered on next launch), then let the error continue to the
+            // outer handler.
+            if (!headless) editor.EmergencyRecoverySave(world, assets);
+            throw;
+        }
 
         if (smokeTestMode) {
             // Deliberately skip the normal exit path entirely (no play-mode revert, no
@@ -2673,7 +2684,11 @@ int main(int argc, char** argv) {
             // Release builds use the GUI subsystem (see CMakeLists), so there's no console for
             // the message above to land in — without this, a failure to start would just look
             // like the engine silently doing nothing.
-            Window::ShowFatalErrorDialog(std::string("Tartarus Engine failed to start.\n\n") + e.what());
+            // #89 — this also catches errors long after startup; say so, and point at the recovery
+            // snapshot the main loop's handler just tried to write.
+            Window::ShowFatalErrorDialog(std::string("Tartarus Engine hit an unexpected error and has to close.\n\n") +
+                e.what() + "\n\nIf the scene had unsaved changes, a recovery snapshot was written; "
+                "you'll be offered to restore it the next time the editor starts.");
         }
         return 1;
     }
