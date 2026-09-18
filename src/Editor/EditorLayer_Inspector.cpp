@@ -1080,8 +1080,18 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
                 // See scalarRow above — need the widget's own out-param, not a bare
                 // IsItemDeactivatedAfterEdit(), so a track drag also fires save().
                 bool committed = false;
-                bool changed = EditorUI::SliderFloat("##f", &edit, prop.DefaultFloat, 1.0f, "%.3f",
-                                                     0, nullptr, &committed);
+                // #106 — the property's DEFAULT used to be the slider MINIMUM (Roughness couldn't
+                // go below 0.5, Emissive Strength was stuck at 1, IOR's range was inverted). Use
+                // the shader's Range(min,max); a plain Float gets an unbounded drag field.
+                bool changed = false;
+                if (prop.HasRange) {
+                    changed = EditorUI::SliderFloat("##f", &edit, prop.RangeMin, prop.RangeMax, "%.3f",
+                                                    0, nullptr, &committed);
+                } else {
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    changed = ImGui::DragFloat("##f", &edit, 0.01f, 0.0f, 0.0f, "%.3f");
+                    committed = ImGui::IsItemDeactivatedAfterEdit();
+                }
                 if (changed && std::isfinite(edit)) MaterialAsset::SetFloat(mat, prop.Name, edit);
                 if (committed) save();
                 break;
@@ -3204,9 +3214,19 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 // here, not a bare IsItemActivated()/IsItemDeactivatedAfterEdit(), or dragging the
                 // track (vs. typing in its trailing number box) would silently skip the undo step.
                 bool activated = false, committed = false;
-                bool changed = EditorUI::SliderFloat("##f", &edit, prop.DefaultFloat, 1.0f,
-                                                     mixed ? "\xE2\x80\x94" : "%.3f",
-                                                     0, &activated, &committed);
+                // #106 — see the standalone .mat editor's Float case: real Range limits, or an
+                // unbounded drag field for a plain Float.
+                bool changed = false;
+                if (prop.HasRange) {
+                    changed = EditorUI::SliderFloat("##f", &edit, prop.RangeMin, prop.RangeMax,
+                                                    mixed ? "\xE2\x80\x94" : "%.3f",
+                                                    0, &activated, &committed);
+                } else {
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    changed = ImGui::DragFloat("##f", &edit, 0.01f, 0.0f, 0.0f, mixed ? "\xE2\x80\x94" : "%.3f");
+                    activated = ImGui::IsItemActivated();
+                    committed = ImGui::IsItemDeactivatedAfterEdit();
+                }
                 if (activated) StageUndo(world);
                 if (changed && std::isfinite(edit))
                     for (Material* mm : mats) MaterialAsset::SetFloat(*mm, prop.Name, edit);
