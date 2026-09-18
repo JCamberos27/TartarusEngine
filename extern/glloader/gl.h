@@ -165,6 +165,7 @@
 
 // GPU timer queries — Profiler's GPU-side timing (#197).
 #define GL_TIME_ELAPSED 0x88BF
+#define GL_TIMESTAMP 0x8E28
 #define GL_QUERY_RESULT 0x8866
 #define GL_QUERY_RESULT_AVAILABLE 0x8867
 
@@ -435,6 +436,9 @@ extern PFNGLBEGINQUERYPROC glBeginQuery;
 extern PFNGLENDQUERYPROC glEndQuery;
 extern PFNGLGETQUERYOBJECTIVPROC glGetQueryObjectiv;
 extern PFNGLGETQUERYOBJECTUI64VPROC glGetQueryObjectui64v;
+// Timestamp queries nest, unlike GL_TIME_ELAPSED (#147 GPU profiler).
+typedef void (__stdcall* PFNGLQUERYCOUNTERPROC)(GLuint, GLenum);
+extern PFNGLQUERYCOUNTERPROC glQueryCounter;
 
 // Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
 typedef void* (__stdcall* PFNGLMAPNAMEDBUFFERPROC)(GLuint, GLenum);
