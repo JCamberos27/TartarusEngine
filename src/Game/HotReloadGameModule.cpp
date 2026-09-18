@@ -4,6 +4,7 @@
 #include "Log.h"
 #include "World.h"
 #include "PhysicsWorld.h" // #185 PR 2 — Raycast is backed by the host-side PhysX world
+#include "HotReloadSwap.h"
 
 #include <string>
 #include <windows.h>
@@ -44,6 +45,13 @@ const GameModuleHostAPI kHostAPI{
         return PhysicsWorld::OverlapSphere(c, r, out, maxE);
     },
 };
+
+// The candidate / rollback validation: exported entry point, matching API version, an Update.
+const GameModuleAPI* ResolveAPI(HMODULE module) {
+    const auto getAPI = reinterpret_cast<GetGameModuleAPIFn>(::GetProcAddress(module, "TartarusGetGameModuleAPI"));
+    const GameModuleAPI* api = getAPI ? getAPI() : nullptr;
+    return (api && api->Version == kGameModuleAPIVersion && api->Update) ? api : nullptr;
+}
 
 } // namespace
 
@@ -119,9 +127,8 @@ bool HotReloadGameModule::Reload(bool initialLoad) {
         return false;
     }
 
-    const auto getAPI = reinterpret_cast<GetGameModuleAPIFn>(::GetProcAddress(candidate, "TartarusGetGameModuleAPI"));
-    const GameModuleAPI* candidateAPI = getAPI ? getAPI() : nullptr;
-    if (!candidateAPI || candidateAPI->Version != kGameModuleAPIVersion || !candidateAPI->Update) {
+    const GameModuleAPI* candidateAPI = ResolveAPI(candidate);
+    if (!candidateAPI) {
         Log::Error("Hot reload: TartarusGame.dll has an incompatible module API.");
         ::FreeLibrary(candidate);
         fs::remove(copyPath, ec);
@@ -129,20 +136,20 @@ bool HotReloadGameModule::Reload(bool initialLoad) {
         return false;
     }
 
-    // The candidate is validated; only now touch the live module. Order matters (#187): the old
-    // module's OnUnload runs, and the old DLL is gone, BEFORE the new OnLoad, so the old module
-    // can never tear down shared state the new one has just set up.
-    HMODULE previous = static_cast<HMODULE>(m_Handle);
-    const fs::path previousCopy = m_LoadedCopy;
-    if (m_API && m_API->OnUnload) m_API->OnUnload();
-    if (previous) ::FreeLibrary(previous);
-    if (!previousCopy.empty()) fs::remove(previousCopy, ec);
+    // The candidate is validated; only now touch the live module. HotReloadSwap owns the order
+    // (#187): old SaveState -> old OnUnload + free -> new OnLoad(state), with a rollback to the
+    // previous build if the new OnLoad rejects itself.
+    HotReloadSwap::Slot<GameModuleAPI> live{static_cast<HMODULE>(m_Handle), m_API, m_LoadedCopy};
+    const HotReloadSwap::Result result = HotReloadSwap::Swap<GameModuleAPI>(
+        live, {candidate, candidateAPI, copyPath}, &ResolveAPI, "Hot reload");
+    m_Handle = live.Handle;
+    m_API = live.Api;
+    m_LoadedCopy = live.Copy;
 
-    if (candidateAPI->OnLoad) candidateAPI->OnLoad();
-
-    m_Handle = candidate;
-    m_API = candidateAPI;
-    m_LoadedCopy = copyPath;
+    if (result != HotReloadSwap::Result::Committed) {
+        m_LastFailedSourceWrite = sourceWrite; // this build rejected itself; wait for the next one
+        return false;
+    }
     m_LastSourceWrite = sourceWrite;
     m_LastFailedSourceWrite = {};
     Log::Info(initialLoad ? "Hot reload: TartarusGame module loaded." : "Hot reload: TartarusGame module reloaded.");
@@ -150,11 +157,8 @@ bool HotReloadGameModule::Reload(bool initialLoad) {
 }
 
 void HotReloadGameModule::Shutdown() {
-    if (m_API && m_API->OnUnload) m_API->OnUnload();
-    if (m_Handle) ::FreeLibrary(static_cast<HMODULE>(m_Handle));
-
-    std::error_code ec;
-    if (!m_LoadedCopy.empty()) fs::remove(m_LoadedCopy, ec);
+    HotReloadSwap::Slot<GameModuleAPI> live{static_cast<HMODULE>(m_Handle), m_API, m_LoadedCopy};
+    HotReloadSwap::Unload(live);
     m_Handle = nullptr;
     m_API = nullptr;
     m_LoadedCopy.clear();

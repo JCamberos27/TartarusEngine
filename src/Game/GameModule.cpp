@@ -4,7 +4,9 @@
 
 namespace {
 
-void OnLoad() {}
+// Nothing to set up or carry across a reload yet: the systems below keep their state in World
+// components. See GameModuleAPI for the OnLoad / SaveState contract when that changes.
+bool OnLoad(const void* /*state*/, std::size_t /*stateSize*/) { return true; }
 void OnUnload() {}
 
 // The Transform Controller is the first gameplay system hosted in the reloadable module. Edit
@@ -21,6 +23,7 @@ const GameModuleAPI kAPI{
     &OnLoad,
     &OnUnload,
     &Update,
+    /*SaveState=*/nullptr,
 };
 
 } // namespace

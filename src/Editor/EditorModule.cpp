@@ -26,7 +26,10 @@ namespace EditorModuleHistory {
 
 namespace {
 
-void OnLoad() {}
+// Every panel keeps its lasting state host-side (EditorConsoleState, EditorLayer, the ImGui
+// context), so there's nothing to set up or carry across a reload; the Console's filter cache
+// simply rebuilds on the first frame. See EditorModuleAPI for the OnLoad / SaveState contract.
+bool OnLoad(const void* /*state*/, std::size_t /*stateSize*/) { return true; }
 void OnUnload() {}
 
 // This DLL compiles its own ImGui translation units, so before touching ImGui it has to be pointed
@@ -66,6 +69,7 @@ const EditorModuleAPI kAPI{
     &OnLoad,
     &OnUnload,
     &Draw,
+    /*SaveState=*/nullptr,
 };
 
 } // namespace
