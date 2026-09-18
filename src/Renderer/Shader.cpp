@@ -6,6 +6,8 @@
 #include "GLStateCache.h"
 #include <GLFW/glfw3.h>
 #include <glm/gtc/type_ptr.hpp>
+#include <algorithm>
+#include <cstring>
 #include <stdexcept>
 #include <vector>
 #include <iostream>
@@ -23,6 +25,24 @@ void TagProgram(unsigned int program, const char* debugName) {
         objectLabel(kProgramObject, program, -1, debugName);
     if (GLDebug::IsEnabled())
         Log::Info(std::string("[GL] program ") + std::to_string(program) + " = " + debugName);
+}
+// #158 - full info logs (they used to be cut at 1024 chars, losing every error after the first
+// few), with source-string numbers mapped back to file names.
+std::string ProgramLog(unsigned int program) {
+    GLint len = 0;
+    glGetProgramiv(program, GL_INFO_LOG_LENGTH, &len);
+    std::string log((size_t)std::max(len, 1), '\0');
+    glGetProgramInfoLog(program, (GLsizei)log.size(), nullptr, log.data());
+    log.resize(std::strlen(log.c_str()));
+    return ShaderLibrary::AnnotateLog(log);
+}
+std::string ShaderLog(unsigned int shader) {
+    GLint len = 0;
+    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
+    std::string log((size_t)std::max(len, 1), '\0');
+    glGetShaderInfoLog(shader, (GLsizei)log.size(), nullptr, log.data());
+    log.resize(std::strlen(log.c_str()));
+    return ShaderLibrary::AnnotateLog(log);
 }
 } // namespace
 
@@ -48,8 +68,7 @@ Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc, con
     int success;
     glGetProgramiv(m_Program, GL_LINK_STATUS, &success);
     if (!success) {
-        char log[1024];
-        glGetProgramInfoLog(m_Program, 1024, nullptr, log);
+        const std::string log = ProgramLog(m_Program);
         glDeleteProgram(m_Program);
         m_Program = 0;
         throw std::runtime_error(std::string("Shader link error: ") + log);
@@ -68,8 +87,7 @@ Shader::Shader(const std::string& computeSrc, const char* debugName) {
     int success;
     glGetProgramiv(m_Program, GL_LINK_STATUS, &success);
     if (!success) {
-        char log[1024];
-        glGetProgramInfoLog(m_Program, 1024, nullptr, log);
+        const std::string log = ProgramLog(m_Program);
         glDeleteProgram(m_Program);
         m_Program = 0;
         throw std::runtime_error(std::string("Compute shader link error: ") + log);
@@ -104,8 +122,7 @@ void Shader::Reload(const std::string& vertFile, const std::string& fragFile) {
     int success;
     glGetProgramiv(newProg, GL_LINK_STATUS, &success);
     if (!success) {
-        char log[1024];
-        glGetProgramInfoLog(newProg, 1024, nullptr, log);
+        const std::string log = ProgramLog(newProg);
         glDeleteProgram(newProg);
         throw std::runtime_error(std::string("Shader link error: ") + log);
     }
@@ -129,8 +146,7 @@ unsigned int Shader::Compile(unsigned int type, const std::string& src) {
     int success;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success) {
-        char log[1024];
-        glGetShaderInfoLog(shader, 1024, nullptr, log);
+        const std::string log = ShaderLog(shader);
         glDeleteShader(shader);
         throw std::runtime_error(std::string("Shader compile error: ") + log);
     }

@@ -19,6 +19,12 @@ namespace ShaderLibrary {
     // The directory Init() resolved to (absolute once main() passes an EnginePaths result).
     std::string Dir();
 
+    // #158 - ReadFile emits `#line N <fileIndex>` around every #include (and after #version), so
+    // a driver error's "<fileIndex>(<line>)" / "<fileIndex>:<line>" points into the right file.
+    // AnnotateLog rewrites those prefixes to "File.glsl(line)". Index 0 is any source that didn't
+    // come through ReadFile.
+    std::string AnnotateLog(const std::string& log);
+
     // Call once per frame (typically in the editor update loop). Polls file modification times
     // at ~4 Hz, invoking `onChanged(filename)` for each .glsl file that changed on disk since
     // the last poll. Does nothing and returns immediately in release/non-editor builds when no
