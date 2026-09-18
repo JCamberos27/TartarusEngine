@@ -1163,12 +1163,14 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         ImGui::SeparatorText("Snapping");
         // #4 item 4 — one vocabulary for these three everywhere they appear (this page and the
         // toolbar's Grid & Snap popover both edit the same m_SnapTranslation/RotationDeg/Scale).
+        // #184 — same ranges as the popover (EditorLayer_Toolbar.cpp): these sliders clamp, so a
+        // narrower range here silently changed a value set there just by touching it.
         ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Move snap", &m_SnapTranslation, 0.01f, 50.0f, "%.2f m", ImGuiSliderFlags_Logarithmic);
+        EditorUI::SliderFloat("Move snap", &m_SnapTranslation, 0.001f, 100.0f, "%.3f m", ImGuiSliderFlags_Logarithmic);
         ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Rotate snap", &m_SnapRotationDeg, 1.0f, 180.0f, "%.1f deg");
+        EditorUI::SliderFloat("Rotate snap", &m_SnapRotationDeg, 0.1f, 180.0f, "%.1f deg");
         ImGui::SetNextItemWidth(kw);
-        EditorUI::SliderFloat("Scale snap", &m_SnapScale, 0.01f, 5.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+        EditorUI::SliderFloat("Scale snap", &m_SnapScale, 0.001f, 10.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
         ImGui::TextDisabled("The grid + snap on/off toggles are on the toolbar.");
         break;
 
@@ -1514,8 +1516,8 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
         ImGui::DragFloat3("m/s\xC2\xB2##grav", &p.Gravity.x, 0.1f, -200.0f, 200.0f, "%.2f");
         if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
         if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("World gravity. Only the Y component is applied today — it drives the\n"
-                                 "Play-mode walk collider. X/Z are stored for rigid bodies (#185).");
+            EditorUI::SetTooltip("World gravity for rigid bodies (all three axes), applied when Play starts.\n"
+                                 "The Play-mode Player's own fall uses its built-in gravity, not this.");
 
         // #15 — Defect #15: this section's header used to read "Simulation (reserved for
         // #185)", an internal issue number leaked straight into shipped UI. #185 has since
@@ -1777,10 +1779,14 @@ void EditorLayer::DrawPhysicsDebugWindow(World& world) {
         ImGui::BeginDisabled(!m_InPlayMode);
         if (ImGui::Button("Step", ImVec2(-FLT_MIN, 0.0f))) PhysicsWorld::StepOneSubstep(world);
         ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            // #184 — the substep is Project Settings' Fixed Timestep, not always 1/60 s.
+            const float step = ProjectSettings::Physics().FixedTimestep > 0.0f ? ProjectSettings::Physics().FixedTimestep : 1.0f / 60.0f;
             EditorUI::SetTooltip(m_InPlayMode
-                ? "Advance one fixed 1/60 s substep (works while paused)."
-                : "Advance one fixed 1/60 s substep - only while Playing.");
+                ? "Advance one fixed %.4g s substep (Project Settings > Physics > Fixed Timestep). Works while paused."
+                : "Advance one fixed %.4g s substep (Project Settings > Physics > Fixed Timestep). Only while Playing.",
+                step);
+        }
     }
 
     ImGui::End();
