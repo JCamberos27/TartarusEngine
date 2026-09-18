@@ -1338,7 +1338,17 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                 commitCapture(m_PrefsCapturePrefix);
             } else {
                 Shortcuts::Chord got;
-                if (Shortcuts::CaptureChord(got)) {
+                // #141 — App (play-mode) shortcuts are polled from the main loop, which can't see
+                // sequences or keys GLFW has no code for: bind them on the first key, and refuse
+                // an unusable key instead of saving a binding that silently never fires.
+                const Shortcuts::Shortcut* capSc = Shortcuts::Find(m_PrefsCapturingId.c_str());
+                const bool appCtx = capSc && capSc->Ctx == Shortcuts::Ctx_App;
+                const bool captured = Shortcuts::CaptureChord(got);
+                if (captured && appCtx) {
+                    if (Shortcuts::GlfwCanTrigger(got)) commitCapture(got);
+                    else Log::Warn("Shortcuts: " + Shortcuts::ToString(got) +
+                                   " can't be used for a play-mode shortcut - pick another key.");
+                } else if (captured) {
                     if (m_PrefsCaptureStage == 0) {
                         m_PrefsCapturePrefix = got;   // provisional single-combo binding
                         m_PrefsCaptureStage = 1;
