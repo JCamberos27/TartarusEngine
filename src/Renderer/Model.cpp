@@ -81,7 +81,7 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
     const aiScene* scene = importer.ReadFile(m_Path, flags);
 
     if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
-        Log::Error("Model: import failed for '" + m_Path + "': " + importer.GetErrorString());
+        Log::Error("Model: import failed for '" + m_Path + "': " + importer.GetErrorString(), LogContext::Asset(m_Path));
         // A failed import leaves an empty model's bounds collapsed to a finite point, so anything
         // that folds this model into a wider AABB (scene framing, focus) can't inherit the
         // inverted 1e30 sentinel and blow the result up to inf/NaN. A failed REimport keeps the
@@ -131,7 +131,7 @@ bool Model::Reimport(const ModelImportSettings& settings) {
     // (and fail) to open that synthetic path via Assimp, so reimporting a primitive is a no-op.
     if (m_Path.rfind("primitive://", 0) == 0) return false;
     if (!std::filesystem::exists(m_Path, ec) || ec) {
-        Log::Error("Model: cannot reimport '" + m_Path + "' - file is missing.");
+        Log::Error("Model: cannot reimport '" + m_Path + "' - file is missing.", LogContext::Asset(m_Path));
         return false;
     }
     ImportFromFile(settings);
@@ -564,7 +564,7 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
         std::string resolved = ResolveTexturePath(str.C_Str());
         if (!resolved.empty() && resolved[0] == '*') {
             Log::Warn("Model: '" + m_Path + "' references embedded texture " + resolved +
-                      " which the file doesn't contain - that map slot will be blank.");
+                      " which the file doesn't contain - that map slot will be blank.", LogContext::Asset(m_Path));
             return nullptr;
         }
         return LoadCachedTexture(resolved, role);
@@ -633,7 +633,7 @@ void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh)
             if (m_D->BoneCounter >= MAX_BONES) {
                 if (!overflowWarned) {
                     Log::Warn("Model '" + m_Path + "' has more than " + std::to_string(MAX_BONES) +
-                              " bones - influences past that are dropped (skinning will be wrong).");
+                              " bones - influences past that are dropped (skinning will be wrong).", LogContext::Asset(m_Path));
                     overflowWarned = true;
                 }
                 continue;

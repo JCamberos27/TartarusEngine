@@ -45,7 +45,7 @@ struct Reader {
         return it == obj.end() || it->is_null() ? nullptr : &*it;
     }
     void Warn(const char* k, const char* want) const {
-        Log::Warn("MaterialAsset: '" + path + "': \"" + k + "\" should be " + want + " - using the default.");
+        Log::Warn("MaterialAsset: '" + path + "': \"" + k + "\" should be " + want + " - using the default.", LogContext::Asset(path));
     }
     float Num(const char* k, float def) const {
         const json* v = Find(k);
@@ -105,18 +105,18 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
 
     json j;
     try { j = json::parse(f); } catch (...) {
-        Log::Error("MaterialAsset: JSON parse error in '" + path + "'");
+        Log::Error("MaterialAsset: JSON parse error in '" + path + "'", LogContext::Asset(path));
         return MissingPlaceholder(path);
     }
 
     if (!j.is_object()) {
-        Log::Error("MaterialAsset: '" + path + "' is not a JSON object.");
+        Log::Error("MaterialAsset: '" + path + "' is not a JSON object.", LogContext::Asset(path));
         return MissingPlaceholder(path);
     }
     try {
         return LoadMaterialFromJson(j, path, lib);
     } catch (const std::exception& e) { // #105 — belt and braces behind the typed reads
-        Log::Error("MaterialAsset: '" + path + "' is malformed: " + e.what());
+        Log::Error("MaterialAsset: '" + path + "' is malformed: " + e.what(), LogContext::Asset(path));
         return MissingPlaceholder(path);
     }
 }
