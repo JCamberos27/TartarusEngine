@@ -2405,6 +2405,22 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // left tool palette (DrawToolPalette, called elsewhere) instead.
     if (!m_HideOverlaysThisFrame) DrawViewGizmo(world, editorCamera);
 
+    // Self-heal a leaked ImGuizmo drag (audit #80). ImGuizmo::IsUsing() claiming a drag is still
+    // in progress requires the left mouse button to still be physically held — if it isn't, that
+    // state is stale, not real. It leaks when the object being bounds-dragged stops being the
+    // sole selection mid-drag (e.g. a box-select commits a different selection on the same mouse
+    // release ImGuizmo itself never got to see) — the gizmo call that started the drag then
+    // never runs again to observe the button coming up, so ImGuizmo's internal mbUsing/
+    // mbUsingBounds never clears. Left alone, GizmoEngaged()/GizmoUsing() (both derived from
+    // IsUsing()) stay permanently true and every LEFT-button-driven viewport interaction —
+    // picking, box-select — is silently swallowed forever, which reads exactly like "I can't
+    // select anything in the viewport anymore." Force-cancelling the instant the inconsistency
+    // is detected costs at most one frame.
+    if (ImGuizmo::IsUsing() && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        ImGuizmo::Enable(false);
+        ImGuizmo::Enable(true);
+    }
+
     if (!vHeld) {
         if (m_HandTool) {
             HandleHandToolPan(editorCamera); // Q — LMB-drag pans; no picking or gizmo (#236 E)
