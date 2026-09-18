@@ -300,4 +300,34 @@ void Prune(const std::function<std::optional<uint64_t>(const std::string& source
     }
 }
 
+Usage DiskUsage() {
+    Usage usage;
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator(CacheDir(), ec)) {
+        if (ec) break;
+        std::error_code fileEc;
+        if (entry.path().extension() != ".ttex" || !entry.is_regular_file(fileEc)) continue;
+        const auto bytes = entry.file_size(fileEc);
+        if (fileEc) continue;
+        usage.Bytes += (uint64_t)bytes;
+        ++usage.Entries;
+    }
+    return usage;
+}
+
+int Clear() {
+    std::vector<std::filesystem::path> victims;
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator(CacheDir(), ec)) {
+        if (ec) break;
+        if (entry.path().extension() == ".ttex") victims.push_back(entry.path());
+    }
+    int removed = 0;
+    for (const auto& path : victims) {
+        std::error_code rmEc;
+        if (std::filesystem::remove(path, rmEc)) ++removed;
+    }
+    return removed;
+}
+
 } // namespace TextureCache
