@@ -125,6 +125,8 @@ uniform int uDebugView;
 uniform int uApplyTonemap;
 
 uniform vec3 uBaseColor;
+uniform int uAlphaClip;      // #101 — alpha cutout (AlphaTest queue / glTF MASK)
+uniform float uAlphaCutoff;
 uniform float uMetallic;
 uniform float uRoughness;
 uniform vec3 uEmissiveColor;
@@ -678,6 +680,7 @@ void main() {
     vec3 triW = tri ? TriplanarWeights(normalize(vNormal)) : vec3(0.0);
     vec4 albedoSample = tri ? SampleTriplanar(uAlbedoMap, vWorldPos, triW, uTriplanarScale)
                              : texture(uAlbedoMap, vUV);
+    if (uAlphaClip == 1 && uHasAlbedoMap == 1 && albedoSample.a < uAlphaCutoff) discard; // #101
     vec3 albedo = (uHasAlbedoMap == 1 ? albedoSample.rgb : vec3(1.0)) * uBaseColor;
 
     float metallic = uMetallic;
