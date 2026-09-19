@@ -471,6 +471,10 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
             cj["center"] = {collider->Center.x, collider->Center.y, collider->Center.z};
         if (collider->Bounciness != 0.0f) cj["bounciness"] = collider->Bounciness; // #185 PR 7
         if (collider->Friction != 0.6f)   cj["friction"]   = collider->Friction;
+        // #170 / #204 - only when they differ from the pre-existing single-friction behaviour.
+        if (collider->StaticFriction != collider->Friction) cj["staticFriction"] = collider->StaticFriction;
+        if (collider->FrictionCombine != 0) cj["frictionCombine"] = collider->FrictionCombine;
+        if (collider->BounceCombine != 0)   cj["bounceCombine"]   = collider->BounceCombine;
         j["collider"] = cj;
     }
     // Joint (#185 PR 11) — hand-serialised (its "other end" isn't a plain reflectable field).
@@ -571,6 +575,15 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
             collider.Center = JsonToVec3(c["center"], glm::vec3(0.0f));
         collider.Bounciness = c.value("bounciness", 0.0f); // #185 PR 7
         collider.Friction   = c.value("friction", 0.6f);
+        // Absent (every scene before #170's physics materials) = the same as Friction.
+        collider.StaticFriction = c.contains("staticFriction") && c["staticFriction"].is_number()
+                                      ? c["staticFriction"].get<float>() : collider.Friction;
+        auto combine = [&c](const char* key) {
+            const int v = (c.contains(key) && c[key].is_number_integer()) ? c[key].get<int>() : 0;
+            return (v >= 0 && v <= 3) ? v : 0;
+        };
+        collider.FrictionCombine = combine("frictionCombine");
+        collider.BounceCombine   = combine("bounceCombine");
         world.Registry.emplace_or_replace<ColliderComponent>(entity, collider);
     }
     if (j.contains("joint")) { // #185 PR 11
