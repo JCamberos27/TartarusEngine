@@ -941,6 +941,7 @@ void EditorLayer::DrawGizmosPopupBody() {
     if (ImGui::CollapsingHeader("Layers")) {
         EditorSettings& s = EditorSettings::Get();
         for (int i = 0; i < LayerRegistry::kCount; ++i) {
+            if (!LayerRegistry::IsListed(i)) continue; // #150: 32 slots; show Default + named ones
             ImGui::PushID(i);
             const unsigned bit = 1u << i;
 
