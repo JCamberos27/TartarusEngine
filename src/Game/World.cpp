@@ -131,7 +131,34 @@ glm::mat4 World::ComposeWorldTransform(entt::entity entity) const {
     return world;
 }
 
+void World::SyncActiveInHierarchy() {
+    std::vector<entt::entity> activate, deactivate;
+    auto consider = [&](entt::entity e, bool inactive) {
+        const bool has = Registry.all_of<InactiveTag>(e);
+        if (inactive && !has) deactivate.push_back(e);
+        else if (!inactive && has) activate.push_back(e);
+    };
+    for (entt::entity e : Registry.view<TransformComponent>()) {
+        bool inactive = false;
+        int depth = 0;
+        for (entt::entity walk = e; walk != entt::null && Registry.valid(walk) && depth <= kMaxHierarchyDepth; ++depth) {
+            if (Registry.all_of<DeactivatedTag>(walk)) { inactive = true; break; }
+            const auto* h = Registry.try_get<HierarchyComponent>(walk);
+            walk = h ? h->Parent : entt::null;
+        }
+        consider(e, inactive);
+    }
+    // Entities without a transform have no hierarchy: only their own checkbox counts.
+    for (entt::entity e : Registry.view<InactiveTag>(entt::exclude<TransformComponent>))
+        consider(e, Registry.all_of<DeactivatedTag>(e));
+    for (entt::entity e : Registry.view<DeactivatedTag>(entt::exclude<TransformComponent>))
+        consider(e, true);
+    for (entt::entity e : deactivate) Registry.emplace_or_replace<InactiveTag>(e);
+    for (entt::entity e : activate) Registry.remove<InactiveTag>(e);
+}
+
 void World::RebuildWorldTransformCache() {
+    SyncActiveInHierarchy();
     m_WorldTransformCache.clear();
     auto view = Registry.view<TransformComponent>();
     m_WorldTransformCache.reserve(view.size());

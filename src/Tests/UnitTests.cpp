@@ -23,6 +23,7 @@
 #include "ProjectWatcher.h"
 #include "TextureCache.h"
 #include "UndoDeltaChain.h"
+#include "World.h"
 
 #include <json.hpp>
 
@@ -88,6 +89,31 @@ void TestCameraRoll() {
     bool same = true;
     for (int c = 0; c < 4; ++c) same &= near(glm::vec3(level[c]), glm::vec3(back[c]));
     CHECK(same);
+}
+
+// --- Active in hierarchy (#201) -------------------------------------------------------------
+void TestActiveInHierarchy() {
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity parent = world.CreateEmptyEntity(zero, zero, one, "Parent");
+    const entt::entity child = world.CreateEmptyEntity(zero, zero, one, "Child");
+    const entt::entity grandchild = world.CreateEmptyEntity(zero, zero, one, "Grandchild");
+    CHECK(world.SetParent(child, parent));
+    CHECK(world.SetParent(grandchild, child));
+    auto inactive = [&](entt::entity e) { return world.Registry.all_of<InactiveTag>(e); };
+
+    world.Registry.emplace<DeactivatedTag>(parent);
+    world.SyncActiveInHierarchy();
+    CHECK(inactive(parent) && inactive(child) && inactive(grandchild)); // whole subtree hides
+
+    world.Registry.emplace<DeactivatedTag>(child);
+    world.Registry.remove<DeactivatedTag>(parent);
+    world.SyncActiveInHierarchy();
+    CHECK(!inactive(parent) && inactive(child) && inactive(grandchild));
+
+    world.Registry.remove<DeactivatedTag>(child);
+    world.SyncActiveInHierarchy();
+    CHECK(!inactive(parent) && !inactive(child) && !inactive(grandchild)); // nothing left behind
 }
 
 // --- AssetGuid ------------------------------------------------------------------------------
@@ -457,6 +483,7 @@ int RunUnitTests() {
         {"AnimatorController", TestAnimatorController},
         {"AssetIdentity", TestAssetIdentity},
         {"ProjectWatcher", TestProjectWatcher},
+        {"ActiveInHierarchy", TestActiveInHierarchy},
         {"CameraRoll", TestCameraRoll},
     };
     for (const auto& [name, fn] : tests) {
