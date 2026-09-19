@@ -6,6 +6,7 @@ layout (location = 3) in vec3 aTangent;
 layout (location = 4) in ivec4 aBoneIDs;
 layout (location = 5) in vec4 aWeights;
 layout (location = 6) in float aTangentSign;
+layout (location = 7) in vec4 aColor; // #113 vertex colour (white when the mesh has none)
 
 uniform mat4 uModel;
 uniform mat4 uNormalMatrix; // mat3 inverse-transpose of uModel in a mat4 (loader has no mat3fv)
@@ -20,6 +21,7 @@ out vec3 vWorldPos;
 out vec3 vNormal;
 out vec2 vUV;
 out mat3 vTBN;
+out vec4 vColor;
 
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
@@ -57,5 +59,6 @@ void main() {
     vTBN = mat3(T, B, vNormal);
 
     vUV = aUV;
+    vColor = aColor;
     gl_Position = uProj * uView * world;
 }

@@ -80,6 +80,13 @@ struct Reader {
             return JsonToVec3(*v, def);
         Warn(k, "an array of 3 numbers"); return def;
     }
+    glm::vec2 Vec2(const char* k, const glm::vec2& def) const {
+        const json* v = Find(k);
+        if (!v) return def;
+        if (v->is_array() && v->size() >= 2 && (*v)[0].is_number() && (*v)[1].is_number())
+            return {(*v)[0].get<float>(), (*v)[1].get<float>()};
+        Warn(k, "an array of 2 numbers"); return def;
+    }
 };
 
 } // namespace
@@ -207,6 +214,18 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
     ma->EmissiveMapPath          = r.Str(key("_EmissiveMap", "emissiveMap"));
     ma->ClearCoatMapPath         = r.Str(key("_ClearCoatMap", "clearCoatMap"));
     ma->ThicknessMapPath         = r.Str(key("_ThicknessMap", "thicknessMap"));
+    // #102 / #113 — surface options.
+    ma->HeightMapPath            = r.Str(key("_HeightMap", "heightMap"));
+    ma->DetailAlbedoMapPath      = r.Str(key("_DetailAlbedoMap", "detailAlbedoMap"));
+    ma->DetailNormalMapPath      = r.Str(key("_DetailNormalMap", "detailNormalMap"));
+    m.UVTiling     = r.Vec2(key("_UVTiling", "uvTiling"), {1, 1});
+    m.UVOffset     = r.Vec2(key("_UVOffset", "uvOffset"), {0, 0});
+    m.DetailTiling = r.Vec2(key("_DetailTiling", "detailTiling"), {4, 4});
+    m.NormalStrength = r.Num(key("_NormalStrength", "normalStrength"), 1.0f);
+    m.NormalFlipY    = r.Bool(key("_NormalFlipY", "normalFlipY"), false);
+    m.DoubleSided    = r.Bool(key("_DoubleSided", "doubleSided"), false);
+    m.UseVertexColor = r.Bool(key("_VertexColors", "vertexColors"), false);
+    m.ParallaxScale  = r.Num(key("_ParallaxScale", "parallaxScale"), 0.02f);
 
     if (lib) {
         auto loadTex = [&](const std::string& p) -> std::shared_ptr<Texture> {
@@ -222,6 +241,9 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
     MaterialAsset::UpgradeLegacyMapFactors(m, top.Bool("factorsScaleMaps", false)); // #102
         m.ClearCoatMap         = loadTex(ma->ClearCoatMapPath);
         m.ThicknessMap         = loadTex(ma->ThicknessMapPath);
+        m.HeightMap            = loadTex(ma->HeightMapPath);
+        m.DetailAlbedoMap      = loadTex(ma->DetailAlbedoMapPath);
+        m.DetailNormalMap      = loadTex(ma->DetailNormalMapPath);
 
         // Resolve shader asset when path is set (AssetLibrary handles caching). A project-
         // relative "shader" value is resolved against the project root so a .mat works from any
@@ -311,6 +333,18 @@ bool MaterialAsset::Save() const {
         if (m.SubsurfaceColor != defSSS)   props["_SubsurfaceColor"]     = Vec3ToJson(m.SubsurfaceColor);
         if (m.Thickness       != 0.5f)     props["_Thickness"]           = m.Thickness;
         if (!ThicknessMapPath.empty())              props["_ThicknessMap"]            = ThicknessMapPath;
+        // #102 / #113 surface options (non-defaults only)
+        if (m.UVTiling != glm::vec2(1.0f))          props["_UVTiling"]       = {m.UVTiling.x, m.UVTiling.y};
+        if (m.UVOffset != glm::vec2(0.0f))          props["_UVOffset"]       = {m.UVOffset.x, m.UVOffset.y};
+        if (m.NormalStrength != 1.0f)               props["_NormalStrength"] = m.NormalStrength;
+        if (m.NormalFlipY)                          props["_NormalFlipY"]    = true;
+        if (m.DoubleSided)                          props["_DoubleSided"]    = true;
+        if (m.UseVertexColor)                       props["_VertexColors"]   = true;
+        if (!HeightMapPath.empty())                 props["_HeightMap"]      = HeightMapPath;
+        if (m.ParallaxScale != 0.02f)               props["_ParallaxScale"]  = m.ParallaxScale;
+        if (!DetailAlbedoMapPath.empty())           props["_DetailAlbedoMap"] = DetailAlbedoMapPath;
+        if (!DetailNormalMapPath.empty())           props["_DetailNormalMap"] = DetailNormalMapPath;
+        if (m.DetailTiling != glm::vec2(4.0f))      props["_DetailTiling"]   = {m.DetailTiling.x, m.DetailTiling.y};
         if (m.TransmissionStrength != 0.0f)         props["_TransmissionStrength"]    = m.TransmissionStrength;
         if (m.IOR                  != 1.5f)         props["_IOR"]                     = m.IOR;
         if (m.SubsurfaceEnabled)                    props["_SubsurfaceEnabled"]      = true;
@@ -360,6 +394,17 @@ bool MaterialAsset::Save() const {
         if (m.SubsurfaceColor != glm::vec3(1.0f, 0.8f, 0.6f)) j["subsurfaceColor"] = Vec3ToJson(m.SubsurfaceColor);
         if (m.Thickness           != 0.5f) j["thickness"]          = m.Thickness;
         if (!ThicknessMapPath.empty())      j["thicknessMap"]       = ThicknessMapPath;
+        if (m.UVTiling != glm::vec2(1.0f))  j["uvTiling"]           = {m.UVTiling.x, m.UVTiling.y};
+        if (m.UVOffset != glm::vec2(0.0f))  j["uvOffset"]           = {m.UVOffset.x, m.UVOffset.y};
+        if (m.NormalStrength != 1.0f)       j["normalStrength"]     = m.NormalStrength;
+        if (m.NormalFlipY)                  j["normalFlipY"]        = true;
+        if (m.DoubleSided)                  j["doubleSided"]        = true;
+        if (m.UseVertexColor)               j["vertexColors"]       = true;
+        if (!HeightMapPath.empty())         j["heightMap"]          = HeightMapPath;
+        if (m.ParallaxScale != 0.02f)       j["parallaxScale"]      = m.ParallaxScale;
+        if (!DetailAlbedoMapPath.empty())   j["detailAlbedoMap"]    = DetailAlbedoMapPath;
+        if (!DetailNormalMapPath.empty())   j["detailNormalMap"]    = DetailNormalMapPath;
+        if (m.DetailTiling != glm::vec2(4.0f)) j["detailTiling"]    = {m.DetailTiling.x, m.DetailTiling.y};
         if (m.TransmissionStrength != 0.0f) j["transmission"]      = m.TransmissionStrength;
         if (m.IOR                 != 1.5f) j["ior"]                = m.IOR;
         if (m.SubsurfaceEnabled)            j["subsurface"]         = true;
@@ -401,6 +446,8 @@ bool MaterialAsset::IsBuiltinProp(const std::string& n) {
         "_TransmissionStrength", "_IOR",
         "_AlbedoMap", "_NormalMap", "_MetallicRoughnessMap", "_MetallicMap", "_RoughnessMap",
         "_AOMap", "_EmissiveMap", "_ClearCoatMap", "_ThicknessMap",
+        "_UVTiling", "_UVOffset", "_NormalStrength", "_NormalFlipY", "_DoubleSided", "_VertexColors",
+        "_HeightMap", "_ParallaxScale", "_DetailAlbedoMap", "_DetailNormalMap", "_DetailTiling",
     };
     return kBuiltin.count(n) != 0;
 }
@@ -416,6 +463,9 @@ const std::shared_ptr<Texture>& MaterialAsset::GetTexture(const Material& m, con
     if (n == "_EmissiveMap")          return m.EmissiveMap;
     if (n == "_ClearCoatMap")         return m.ClearCoatMap;
     if (n == "_ThicknessMap")         return m.ThicknessMap;
+    if (n == "_HeightMap")            return m.HeightMap;
+    if (n == "_DetailAlbedoMap")      return m.DetailAlbedoMap;
+    if (n == "_DetailNormalMap")      return m.DetailNormalMap;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? it->second.Tex : sNull;
 }
@@ -440,6 +490,9 @@ int MaterialAsset::GetInt(const Material& m, const std::string& n) {
 }
 
 glm::vec4 MaterialAsset::GetVec(const Material& m, const std::string& n) {
+    if (n == "_UVTiling")     return glm::vec4(m.UVTiling, 0.0f, 0.0f);
+    if (n == "_UVOffset")     return glm::vec4(m.UVOffset, 0.0f, 0.0f);
+    if (n == "_DetailTiling") return glm::vec4(m.DetailTiling, 0.0f, 0.0f);
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? it->second.V : glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 }
@@ -450,6 +503,9 @@ void MaterialAsset::SetInt(Material& m, const std::string& n, int v) {
 }
 
 void MaterialAsset::SetVec(Material& m, const std::string& n, const glm::vec4& v) {
+    if (n == "_UVTiling")     { m.UVTiling = glm::vec2(v); return; }
+    if (n == "_UVOffset")     { m.UVOffset = glm::vec2(v); return; }
+    if (n == "_DetailTiling") { m.DetailTiling = glm::vec2(v); return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) it->second.V = v;
 }
@@ -465,6 +521,9 @@ void MaterialAsset::SyncTexturePathsFromMat() {
     EmissiveMapPath          = pathOf(Mat.EmissiveMap);
     ClearCoatMapPath         = pathOf(Mat.ClearCoatMap);  // #104 — these two were never synced by
     ThicknessMapPath         = pathOf(Mat.ThicknessMap);  // the Inspector, so edits didn't save
+    HeightMapPath            = pathOf(Mat.HeightMap);
+    DetailAlbedoMapPath      = pathOf(Mat.DetailAlbedoMap);
+    DetailNormalMapPath      = pathOf(Mat.DetailNormalMap);
     for (auto& [name, p] : Mat.ExtraProps)
         if (p.Type == ShaderPropType::Texture2D) p.TexPath = pathOf(p.Tex);
 }
@@ -482,12 +541,17 @@ float MaterialAsset::GetFloat(const Material& m, const std::string& n) {
     if (n == "_Thickness")               return m.Thickness;
     if (n == "_TransmissionStrength")    return m.TransmissionStrength;
     if (n == "_IOR")                     return m.IOR;
+    if (n == "_NormalStrength")          return m.NormalStrength;
+    if (n == "_ParallaxScale")           return m.ParallaxScale;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? it->second.F : 0.0f;
 }
 
 bool MaterialAsset::GetBool(const Material& m, const std::string& n) {
     if (n == "_Triplanar") return m.Triplanar;
+    if (n == "_NormalFlipY") return m.NormalFlipY;
+    if (n == "_DoubleSided") return m.DoubleSided;
+    if (n == "_VertexColors") return m.UseVertexColor;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() && it->second.B;
 }
@@ -502,6 +566,9 @@ void MaterialAsset::SetTexture(Material& m, const std::string& n, const std::sha
     if (n == "_EmissiveMap")          { m.EmissiveMap = tex; return; }
     if (n == "_ClearCoatMap")         { m.ClearCoatMap = tex; return; }
     if (n == "_ThicknessMap")         { m.ThicknessMap = tex; return; }
+    if (n == "_HeightMap")            { m.HeightMap = tex; return; }
+    if (n == "_DetailAlbedoMap")      { m.DetailAlbedoMap = tex; return; }
+    if (n == "_DetailNormalMap")      { m.DetailNormalMap = tex; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) { it->second.Tex = tex; it->second.TexPath = tex ? tex->Path() : std::string(); }
 }
@@ -528,12 +595,17 @@ void MaterialAsset::SetFloat(Material& m, const std::string& n, float v) {
     if (n == "_Thickness")               { m.Thickness = v; return; }
     if (n == "_TransmissionStrength")    { m.TransmissionStrength = v; return; }
     if (n == "_IOR")                     { m.IOR = v; return; }
+    if (n == "_NormalStrength")          { m.NormalStrength = v; return; }
+    if (n == "_ParallaxScale")           { m.ParallaxScale = v; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) { it->second.F = v; it->second.I = (int)v; }
 }
 
 void MaterialAsset::SetBool(Material& m, const std::string& n, bool v) {
     if (n == "_Triplanar") { m.Triplanar = v; return; }
+    if (n == "_NormalFlipY") { m.NormalFlipY = v; return; }
+    if (n == "_DoubleSided") { m.DoubleSided = v; return; }
+    if (n == "_VertexColors") { m.UseVertexColor = v; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) it->second.B = v;
 }
