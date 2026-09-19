@@ -1,7 +1,7 @@
 {
   "matVersion": 2,
   "name": "Net",
-  "_comment": "Nylon cord: sheen for the fuzz.",
+  "_comment": "Nylon cord.",
   "shader": "engine://Standard.shader",
   "properties": {
     "_BaseColor": [
@@ -10,12 +10,6 @@
       0.93
     ],
     "_Metallic": 0.0,
-    "_Roughness": 0.9,
-    "_Sheen": [
-      0.5,
-      0.5,
-      0.5
-    ],
-    "_SheenRoughness": 0.4
+    "_Roughness": 0.9
   }
 }

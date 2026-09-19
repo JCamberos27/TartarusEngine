@@ -2,7 +2,7 @@
   "matVersion": 2,
   "name": "Gallery Car Paint",
   "_comment": "Clear coat over a metallic base.",
-  "shader": "engine://Standard.shader",
+  "shader": "engine://StandardAdvanced.shader",
   "properties": {
     "_BaseColor": [
       0.62,
