@@ -1,3 +1,4 @@
+#include "PhysicMaterialAsset.h"
 #include "PhysicsWorld.h"
 
 #include "Log.h"
@@ -406,7 +407,7 @@ void BuildActors(PhysicsState& s, const World& world) {
         PxTransform actorPose(PxIdentity);
         PxTransform shapeLocal(PxIdentity);
         PxShape* shape = nullptr;
-        PxMaterial* mat = GetMaterial(s, c); // #185 PR 7, #170 combine modes
+        PxMaterial* mat = GetMaterial(s, ResolvePhysicMaterial(c)); // #185 PR 7, #170 combine modes + Physic Material asset
         auto make = [&](const PxGeometry& g) {
             shape = s.physics->createShape(g, *mat, /*isExclusive=*/true, flags);
         };
