@@ -1,6 +1,9 @@
 {
  "formatVersion": 3,
  "_comment": "Tartarus Sandbox - the default testing scene. Centre: animated Mixamo Y Bots (idle/walk/run/strafe/jump, assets in project/assets/characters/ybot, not in git). East: physics playground (crate pyramid, brick wall, ball ramp, domino run). North: ball pit. West: movement course (stairs, 10/20/30 degree ramps, step-height blocks). Late-afternoon sun + sky ambient, warm plaza lamps, reflection probes.",
+ "skySource": 1,
+ "skyHdriPath": "assets/sky/kloofendal_48d_partly_cloudy_puresky_4k.hdr",
+ "skyRotationDegrees": 90.7,
  "skyHorizonColor": [
   0.7,
   0.76,
@@ -17931,7 +17934,7 @@
     0
    ],
    "rotation": [
-    -42,
+    -47.9,
     -35,
     0
    ],
