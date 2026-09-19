@@ -250,6 +250,24 @@ static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, bool gizmo
 
 // The first active in-scene Camera entity (creation order), or entt::null. The Game view
 // previews through it while editing so a shot can be framed without walking there (#36 B10).
+// #162 - the scene's post settings for the final tonemap pass.
+static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float bloomIntensity) {
+    PostSettings p;
+    p.ExposureEV = world.ExposureEV;
+    p.Operator = world.TonemapOperator;
+    p.BloomTexture = bloomTex;
+    p.BloomIntensity = bloomIntensity;
+    p.Temperature = world.GradeTemperature;
+    p.Tint = world.GradeTint;
+    p.Contrast = world.GradeContrast;
+    p.Saturation = world.GradeSaturation;
+    for (int i = 0; i < 3; ++i) p.ColorFilter[i] = world.GradeColorFilter[i];
+    p.VignetteIntensity = world.VignetteIntensity;
+    p.VignetteSmoothness = world.VignetteSmoothness;
+    p.Fxaa = world.FxaaEnabled;
+    return p;
+}
+
 static entt::entity FindActiveSceneCamera(const World& world) {
     entt::entity best = entt::null;
     int bestOrder = 0x7fffffff;
@@ -2292,9 +2310,7 @@ int main(int argc, char** argv) {
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(sceneHdr.ResolvedColorTexture(), sceneFramebuffer.Handle(), scW, scH,
-                                 world.ExposureEV,
-                                 (Tonemapper::Operator)world.TonemapOperator,
-                                 bloomGlowTex, bloomIntensity);
+                                 MakePostSettings(world, bloomGlowTex, bloomIntensity));
                 }
 
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
@@ -2469,9 +2485,8 @@ int main(int argc, char** argv) {
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameView.GetFramebuffer().Handle(),
-                                 gvWidth, gvHeight, world.ExposureEV,
-                                 (Tonemapper::Operator)world.TonemapOperator,
-                                 gvBloomGlowTex, gvBloomIntensity);
+                                 gvWidth, gvHeight,
+                                 MakePostSettings(world, gvBloomGlowTex, gvBloomIntensity));
                 }
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
 
@@ -2631,9 +2646,7 @@ int main(int argc, char** argv) {
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh,
-                                 world.ExposureEV,
-                                 (Tonemapper::Operator)world.TonemapOperator,
-                                 mwBloomGlowTex, mwBloomIntensity);
+                                 MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity));
                 }
             }
 

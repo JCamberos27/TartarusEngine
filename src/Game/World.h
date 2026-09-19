@@ -80,6 +80,26 @@ public:
     float BloomKnee{0.5f};
     float BloomIntensity{0.25f};
 
+    // #162 - anti-aliasing and colour grading, applied in the final tonemap pass.
+    bool  FxaaEnabled{false};
+    float GradeTemperature{0.0f};  // -100..100, 0 = neutral (Unity's White Balance)
+    float GradeTint{0.0f};
+    float GradeContrast{0.0f};
+    float GradeSaturation{0.0f};
+    glm::vec3 GradeColorFilter{1.0f};
+    float VignetteIntensity{0.0f}; // 0 = off
+    float VignetteSmoothness{0.4f};
+
+    // #162 - distance fog (Unity's Lighting > Other Settings > Fog).
+    bool  FogEnabled{false};
+    int   FogMode{2};               // 1 Linear, 2 Exponential, 3 Exponential Squared
+    glm::vec3 FogColor{0.55f, 0.62f, 0.72f}; // linear
+    float FogDensity{0.01f};        // Exponential modes
+    float FogStart{10.0f};          // Linear mode, metres from the camera
+    float FogEnd{300.0f};
+    float FogHeightFalloff{0.0f};   // Exponential modes: 0 = uniform, higher = hugs the ground
+    float FogBaseHeight{0.0f};      // world Y where height fog is at full density
+
     bool  ShadowsEnabled{true};
     int   ShadowResolution{4096};
     int   ShadowCascades{4};
