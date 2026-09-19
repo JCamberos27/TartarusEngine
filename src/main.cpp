@@ -2747,6 +2747,22 @@ int main(int argc, char** argv) {
                           &sceneStats);
 
                 editor.SetRenderStats(sceneStats);
+
+                // #178 - Search in Scene: while the Hierarchy search is active, wash every visible
+                // object that doesn't match it in flat grey, so the matches stand out (Unity).
+                if (editor.SceneSearchActive() && !editor.OverlaysHidden()) {
+                    if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+                    for (auto e : world.Registry.view<const TransformComponent, const RenderableComponent>()) {
+                        if (world.Registry.any_of<InactiveTag, LodCulledTag, HiddenInSceneTag>(e)) continue;
+                        if (editor.MatchesSceneSearch(world, e)) continue;
+                        const auto& r = world.Registry.get<const RenderableComponent>(e);
+                        if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
+                        tintOverlay.Render(*r.ModelRef, world.GetCachedWorldTransform(e), sceneViewMat, sceneProjMat,
+                                           glm::vec3(0.18f), 0.85f);
+                    }
+                    if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                    GLStateCache::Invalidate();
+                }
                 // NB: in Wireframe mode the polygon mode stays GL_LINE through the selection
                 // passes below, so the inverted-hull "outline" draws as an enlarged orange
                 // wireframe over the object rather than a filled orange silhouette that buries
