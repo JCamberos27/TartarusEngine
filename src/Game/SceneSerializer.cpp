@@ -814,6 +814,15 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         root["bloomThreshold"] = world.BloomThreshold;
         root["bloomKnee"] = world.BloomKnee;
         root["bloomIntensity"] = world.BloomIntensity;
+        // #162
+        root["fxaa"] = world.FxaaEnabled;
+        root["gradeTemperature"] = world.GradeTemperature;
+        root["gradeTint"] = world.GradeTint;
+        root["gradeContrast"] = world.GradeContrast;
+        root["gradeSaturation"] = world.GradeSaturation;
+        root["gradeColorFilter"] = {world.GradeColorFilter.r, world.GradeColorFilter.g, world.GradeColorFilter.b};
+        root["vignetteIntensity"] = world.VignetteIntensity;
+        root["vignetteSmoothness"] = world.VignetteSmoothness;
         root["shadowsEnabled"] = world.ShadowsEnabled;
         root["shadowResolution"] = world.ShadowResolution;
         root["shadowCascades"] = world.ShadowCascades;
@@ -1152,6 +1161,19 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             world.BloomThreshold   = root.value("bloomThreshold", 1.0f);
             world.BloomKnee        = root.value("bloomKnee", 0.5f);
             world.BloomIntensity   = root.value("bloomIntensity", 0.25f);
+            // #162 - absent in older scenes: neutral.
+            world.FxaaEnabled        = root.value("fxaa", false);
+            world.GradeTemperature   = std::clamp(root.value("gradeTemperature", 0.0f), -100.0f, 100.0f);
+            world.GradeTint          = std::clamp(root.value("gradeTint", 0.0f), -100.0f, 100.0f);
+            world.GradeContrast      = std::clamp(root.value("gradeContrast", 0.0f), -100.0f, 100.0f);
+            world.GradeSaturation    = std::clamp(root.value("gradeSaturation", 0.0f), -100.0f, 100.0f);
+            world.GradeColorFilter   = glm::vec3(1.0f);
+            if (root.contains("gradeColorFilter") && root["gradeColorFilter"].is_array() && root["gradeColorFilter"].size() == 3)
+                for (int i = 0; i < 3; ++i)
+                    if (root["gradeColorFilter"][i].is_number())
+                        world.GradeColorFilter[i] = std::max(0.0f, root["gradeColorFilter"][i].get<float>());
+            world.VignetteIntensity  = std::clamp(root.value("vignetteIntensity", 0.0f), 0.0f, 1.0f);
+            world.VignetteSmoothness = std::clamp(root.value("vignetteSmoothness", 0.4f), 0.01f, 1.0f);
             world.ShadowsEnabled   = root.value("shadowsEnabled", true);
             world.ShadowResolution = root.value("shadowResolution", 4096);
             world.ShadowCascades   = root.value("shadowCascades", 4);
