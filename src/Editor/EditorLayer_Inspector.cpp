@@ -1251,6 +1251,37 @@ void EditorLayer::DrawMaterialPreview(const std::shared_ptr<MaterialAsset>& ma, 
     ImGui::PopID();
 }
 
+// The advanced lobes a material has switched on that `sa` doesn't show (Standard.shader hides
+// them all), e.g. "Clear Coat, Sheen". They still render - the variant follows the values - so the
+// Inspector says so rather than leaving an unexplained gloss nobody can find the slider for.
+static std::string HiddenActiveLobes(const Material& m, const ShaderAsset& sa) {
+    auto hidden = [&](const char* name) {
+        for (const ShaderProperty& p : sa.Properties())
+            if (p.Name == name) return p.Hidden;
+        return true;
+    };
+    std::string out;
+    auto add = [&](bool on, const char* prop, const char* label) {
+        if (on && hidden(prop)) out += (out.empty() ? "" : ", ") + std::string(label);
+    };
+    add(m.ClearCoat > 0.0f, "_ClearCoat", "Clear Coat");
+    add(m.Anisotropy != 0.0f, "_Anisotropy", "Anisotropy");
+    add(m.Sheen.x > 0.0f || m.Sheen.y > 0.0f || m.Sheen.z > 0.0f, "_Sheen", "Sheen");
+    add(m.SubsurfaceEnabled, "_SubsurfaceColor", "Subsurface");
+    add(m.TransmissionStrength > 0.0f, "_TransmissionStrength", "Transmission");
+    return out;
+}
+
+static void DrawHiddenLobesNote(const Material& m, const ShaderAsset& sa) {
+    const std::string lobes = HiddenActiveLobes(m, sa);
+    if (lobes.empty()) return;
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::WarningColor());
+    ImGui::TextWrapped(ICON_FA_CIRCLE_INFO "  Also uses %s, which this shader doesn't show. "
+                       "Switch Shader to StandardAdvanced to edit it.", lobes.c_str());
+    ImGui::PopStyleColor();
+}
+
 void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, const std::shared_ptr<MaterialAsset>& ma,
                                           const std::string& matPath) {
     Material& mat = ma->Mat;
@@ -1279,16 +1310,18 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
         EyedropperButton(this, world, &(mat.*field));
         ImGui::PopID();
     };
-    auto scalarRow = [&](const char* label, float Material::* field, float lo, float hi, const char* tip) {
+    // invert: shown as lo + hi - value (Smoothness over the stored Roughness).
+    auto scalarRow = [&](const char* label, float Material::* field, float lo, float hi, const char* tip,
+                         bool invert = false) {
         PropertyLabel(label, tip);
         ImGui::PushID(label);
-        float edit = mat.*field;
+        float edit = invert ? lo + hi - mat.*field : mat.*field;
         // EditorUI::SliderFloat's out-param is needed here — a bare IsItemDeactivatedAfterEdit()
         // called after the widget only ever sees its trailing number box, so a track drag never
         // fires save().
         bool committed = false;
         bool changed = EditorUI::SliderFloat("##ms", &edit, lo, hi, "%.3f", 0, nullptr, &committed);
-        if (changed && std::isfinite(edit)) mat.*field = edit;
+        if (changed && std::isfinite(edit)) mat.*field = invert ? lo + hi - edit : edit;
         if (committed) save();
         ImGui::PopID();
     };
@@ -1419,8 +1452,11 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
                 // the shader's Range(min,max); a plain Float gets an unbounded drag field.
                 bool changed = false;
                 if (prop.HasRange) {
+                    const bool inv = prop.Invert; // [Invert]: e.g. _Roughness shown as Smoothness
+                    if (inv) edit = prop.RangeMin + prop.RangeMax - edit;
                     changed = EditorUI::SliderFloat("##f", &edit, prop.RangeMin, prop.RangeMax, "%.3f",
                                                     0, nullptr, &committed);
+                    if (inv) edit = prop.RangeMin + prop.RangeMax - edit;
                 } else {
                     ImGui::SetNextItemWidth(-FLT_MIN);
                     changed = ImGui::DragFloat("##f", &edit, 0.01f, 0.0f, 0.0f, "%.3f");
@@ -1472,6 +1508,7 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
             }
             ImGui::PopID();
         }
+        DrawHiddenLobesNote(mat, *ma->Shader);
         // #104 — the shader's custom keywords (the Standard lobes are driven by the values above).
         bool anyCustom = false;
         for (const std::string& k : ma->Shader->Keywords()) {
@@ -1494,8 +1531,9 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
              "Surface tint, multiplied with the Albedo map.");
     scalarRow("Metallic", &Material::Metallic, 0.0f, 1.0f,
               "0 = non-metal, 1 = pure metal. With a Metallic map, scales it (1 = the map as-is).");
-    scalarRow("Roughness", &Material::Roughness, 0.04f, 1.0f,
-              "0 = mirror-smooth, 1 = fully matte. With a Roughness map, scales it (1 = the map as-is).");
+    scalarRow("Smoothness", &Material::Roughness, 0.0f, 0.96f,
+              "0 = rough and matte, 1 = mirror-smooth (Unity's Smoothness; stored as Roughness = 1 - Smoothness).\n"
+              "With a Roughness map, the map is scaled by 1 - Smoothness.", /*invert=*/true);
     colorRow("Emissive Color", &Material::EmissiveColor,
              "Color this surface glows, independent of scene lighting.");
     scalarRow("Emissive Strength", &Material::EmissiveStrength, 0.0f, 10.0f,
@@ -1505,7 +1543,7 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
     mapRow("Albedo",    &Material::AlbedoMap,    "The base color texture (diffuse / base color map).");
     mapRow("Normal",    &Material::NormalMap,    "Fine surface detail (bumps, grooves) without extra geometry.");
     mapRow("Metallic",  &Material::MetallicMap,  "Grayscale: white = metal. Multiplied by the Metallic value above.");
-    mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = matte. Multiplied by the Roughness value above.");
+    mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = rough, black = smooth. Scaled by 1 - Smoothness.");
     mapRow("AO",        &Material::AOMap,        "Ambient occlusion - darkens crevices and contact points.");
     mapRow("Emissive",  &Material::EmissiveMap,  "Texture for glowing areas, tinted by Emissive Color.");
     mapRow("Height",    &Material::HeightMap,    "Grayscale height (white = high) for parallax occlusion mapping."); // #102
@@ -3611,9 +3649,11 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             else if (mats.size() == 1) EyedropperButton(this, world, &(mats[0]->*field));
             ImGui::PopID();
         };
-        auto scalarRow = [&](const char* label, float Material::* field, float lo, float hi, const char* tip) {
+        // invert: shown as lo + hi - value (Smoothness over the stored Roughness).
+        auto scalarRow = [&](const char* label, float Material::* field, float lo, float hi, const char* tip,
+                             bool invert = false) {
             float shared; bool mixed = floatShared(field, shared);
-            float edit = shared;
+            float edit = invert ? lo + hi - shared : shared;
             PropertyLabel(label, tip);
             ImGui::PushID(label);
             // EditorUI::SliderFloat's out-params combine the track's and the number box's own
@@ -3623,7 +3663,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             bool changed = EditorUI::SliderFloat("##ms", &edit, lo, hi, mixed ? "\xE2\x80\x94" : "%.3f",
                                                  0, &activated, &committed);
             if (activated) StageUndo(world);
-            if (changed && std::isfinite(edit)) for (Material* mm : mats) mm->*field = edit;
+            if (changed && std::isfinite(edit)) for (Material* mm : mats) mm->*field = invert ? lo + hi - edit : edit;
             if (committed) CommitStagedUndo(world, "Edit Material");
             ImGui::PopID();
         };
@@ -3632,8 +3672,9 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                  "Surface tint, multiplied with the Albedo map. Applied to every selected material.");
         scalarRow("Metallic", &Material::Metallic, 0.0f, 1.0f,
                   "0 = non-metal, 1 = pure metal. With a Metallic map, scales it (1 = the map as-is).");
-        scalarRow("Roughness", &Material::Roughness, 0.04f, 1.0f,
-                  "0 = mirror-smooth, 1 = fully matte. With a Roughness map, scales it (1 = the map as-is).");
+        scalarRow("Smoothness", &Material::Roughness, 0.0f, 0.96f,
+                  "0 = rough and matte, 1 = mirror-smooth (Unity's Smoothness; stored as Roughness = 1 - Smoothness).\n"
+                  "With a Roughness map, the map is scaled by 1 - Smoothness.", /*invert=*/true);
         colorRow("Emissive Color", &Material::EmissiveColor,
                  "Color this surface glows, independent of scene lighting.");
         scalarRow("Emissive Strength", &Material::EmissiveStrength, 0.0f, 10.0f,
@@ -3711,7 +3752,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         mapRow("Albedo",    &Material::AlbedoMap,   "The base color texture (diffuse / base color map).");
         mapRow("Normal",    &Material::NormalMap,    "Fine surface detail (bumps, grooves) without extra geometry.");
         mapRow("Metallic",  &Material::MetallicMap,  "Grayscale: white = metal. Multiplied by the Metallic value above.");
-        mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = matte. Multiplied by the Roughness value above.");
+        mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = rough, black = smooth. Scaled by 1 - Smoothness.");
         mapRow("AO",        &Material::AOMap,        "Ambient occlusion - darkens crevices and contact points.");
         mapRow("Emissive",  &Material::EmissiveMap,  "Texture for glowing areas, tinted by Emissive Color.");
         mapRow("Height",    &Material::HeightMap,    "Grayscale height (white = high) for parallax occlusion mapping."); // #102
@@ -3820,9 +3861,12 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 // unbounded drag field for a plain Float.
                 bool changed = false;
                 if (prop.HasRange) {
+                    const bool inv = prop.Invert; // [Invert]: e.g. _Roughness shown as Smoothness
+                    if (inv) edit = prop.RangeMin + prop.RangeMax - edit;
                     changed = EditorUI::SliderFloat("##f", &edit, prop.RangeMin, prop.RangeMax,
                                                     mixed ? "\xE2\x80\x94" : "%.3f",
                                                     0, &activated, &committed);
+                    if (inv) edit = prop.RangeMin + prop.RangeMax - edit;
                 } else {
                     ImGui::SetNextItemWidth(-FLT_MIN);
                     changed = ImGui::DragFloat("##f", &edit, 0.01f, 0.0f, 0.0f, mixed ? "\xE2\x80\x94" : "%.3f");
@@ -3903,9 +3947,12 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             ImGui::PopID();
         }
 
+        DrawHiddenLobesNote(*mats[0], sa);
         // #354: two variant opt-ins that aren't shader Properties() — subsurface and reflection
         // probes have no natural "off" scalar, so a bool drives their keyword.
         ImGui::SeparatorText("Variant Options");
+        const bool showsSubsurface = std::any_of(props.begin(), props.end(), [](const ShaderProperty& p) {
+            return p.Name == "_SubsurfaceColor" && !p.Hidden; }); // StandardAdvanced, not Standard
         auto boolRow = [&](const char* label, bool Material::* field, const char* tip) {
             bool shared = mats[0]->*field, mixed = false;
             for (Material* mm : mats) if ((mm->*field) != shared) mixed = true;
@@ -3918,8 +3965,9 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             if (mixed) { ImGui::SameLine(); ImGui::TextDisabled("(mixed)"); }
             if (tip && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
         };
-        boolRow("Subsurface", &Material::SubsurfaceEnabled,
-                "Enable the _SUBSURFACE shader variant (wrapped diffuse + back-lit thin-surface transmission).");
+        if (showsSubsurface)
+            boolRow("Subsurface", &Material::SubsurfaceEnabled,
+                    "Enable the _SUBSURFACE shader variant (wrapped diffuse + back-lit thin-surface transmission).");
         boolRow("Reflection Probes", &Material::ReflectionProbes,
                 "Enable the _REFLECTION_PROBES variant — parallax box reflections from the 2 nearest placed probes.");
 

@@ -10,8 +10,6 @@
       0.04
     ],
     "_Metallic": 0.2,
-    "_Roughness": 0.35,
-    "_ClearCoat": 0.6,
-    "_ClearCoatRoughness": 0.1
+    "_Roughness": 0.5
   }
 }

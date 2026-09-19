@@ -1,8 +1,10 @@
 # Generates the Sandbox scene's own assets: the basketball court (floor texture + wood detail
 # maps, backboard glass), the basketball (albedo + pebble normal map, 64x32 sphere mesh), rim and
-# net meshes, the showcase materials (.mat, on engine://Standard.shader so clear coat / sheen /
-# transmission / anisotropy / subsurface render), synthesized sounds, and the Y Bot animator
-# controller. Everything is procedural (PIL + the standard library only), so it can be re-run.
+# net meshes, the materials (.mat: the court on engine://Standard.shader, Unity's Standard layout;
+# the material gallery on engine://StandardAdvanced.shader for clear coat / sheen / transmission /
+# anisotropy / subsurface), synthesized sounds (not used by the Sandbox itself; the
+# smoke_play_basketball smoke scene plays them), and the Y Bot animator controller. Everything is
+# procedural (PIL + the standard library only), so it can be re-run.
 # Usage: python tools/gen_sandbox_assets.py <repo root>
 import json, math, os, random, struct, sys, wave
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageChops, ImageOps
@@ -391,10 +393,10 @@ def build_net_obj():
               'Basketball net: diamond mesh, 12 loops x 6 rows, 0.44 m long. Origin at the rim centre.')
 
 # =============================================================================== materials
-def mat(name, file, props, queue=None, comment=None, opacity=None):
+def mat(name, file, props, queue=None, comment=None, opacity=None, advanced=False):
     m = {'matVersion': 2, 'name': name}
     if comment: m['_comment'] = comment
-    m['shader'] = 'engine://Standard.shader'
+    m['shader'] = 'engine://StandardAdvanced.shader' if advanced else 'engine://Standard.shader'
     if queue is not None: m['renderQueue'] = queue
     if opacity is not None: m['opacity'] = opacity
     m['properties'] = props
@@ -403,18 +405,20 @@ def mat(name, file, props, queue=None, comment=None, opacity=None):
 
 def build_materials():
     T = 'textures/basketball/'
+    # The scene lays this floor out at COURT_SCALE x the regulation size (gen_sandbox_scene.py's
+    # COURT_S); the detail maps tile per 0.8 m of the scaled floor.
+    COURT_SCALE = 1.5
     mat('Court Floor', 'court_floor.mat', {
-        '_BaseColor': [1, 1, 1], '_Metallic': 0.0, '_Roughness': 0.4,
+        '_BaseColor': [1, 1, 1], '_Metallic': 0.0, '_Roughness': 0.62,
         '_AlbedoMap': T + 'court_floor.jpg',
         '_DetailAlbedoMap': T + 'wood_detail.png', '_DetailNormalMap': T + 'wood_seams_normal.png',
-        '_DetailTiling': [FLOOR_L / 0.8, FLOOR_W / 0.8],
-        '_ClearCoat': 0.9, '_ClearCoatRoughness': 0.06, '_ReflectionProbes': True},
-        comment='Varnished maple: base court texture, x2 detail grain + board seams, glossy clear coat.')
+        '_DetailTiling': [FLOOR_L * COURT_SCALE / 0.8, FLOOR_W * COURT_SCALE / 0.8], '_ReflectionProbes': True},
+        comment='Satin-finished maple: base court texture, x2 detail grain + board seams.')
     mat('Basketball', 'basketball.mat', {
-        '_BaseColor': [1, 1, 1], '_Metallic': 0.0, '_Roughness': 0.62,
+        '_BaseColor': [1, 1, 1], '_Metallic': 0.0, '_Roughness': 0.85,
         '_AlbedoMap': T + 'basketball_albedo.png', '_NormalMap': T + 'basketball_normal.png',
-        '_NormalStrength': 1.4, '_Sheen': [0.12, 0.06, 0.03], '_SheenRoughness': 0.6},
-        comment='Pebbled composite leather: albedo with black seams, pebble normal map, a little sheen.')
+        '_NormalStrength': 1.2},
+        comment='Pebbled composite leather: albedo with black seams, pebble normal map, matte.')
     mat('Backboard Glass', 'backboard_glass.mat', {
         '_BaseColor': [1, 1, 1], '_Metallic': 0.0, '_Roughness': 0.04, '_AlbedoMap': T + 'backboard.png'},
         queue=2, comment='Tempered glass with painted border and target square (alpha in the texture).')
@@ -422,28 +426,26 @@ def build_materials():
         '_BaseColor': [0.78, 0.9, 0.95], '_Metallic': 0.0, '_Roughness': 0.03},
         queue=2, opacity=0.13, comment='The arena walls and roof: clear, faintly blue-green glass.')
     mat('Rim Orange', 'rim.mat', {
-        '_BaseColor': [0.9, 0.28, 0.04], '_Metallic': 0.2, '_Roughness': 0.35,
-        '_ClearCoat': 0.6, '_ClearCoatRoughness': 0.1}, comment='Powder-coated steel.')
+        '_BaseColor': [0.9, 0.28, 0.04], '_Metallic': 0.2, '_Roughness': 0.5}, comment='Powder-coated steel.')
     mat('Net', 'net.mat', {
-        '_BaseColor': [0.95, 0.95, 0.93], '_Metallic': 0.0, '_Roughness': 0.9,
-        '_Sheen': [0.5, 0.5, 0.5], '_SheenRoughness': 0.4}, comment='Nylon cord: sheen for the fuzz.')
-    # Material gallery
+        '_BaseColor': [0.95, 0.95, 0.93], '_Metallic': 0.0, '_Roughness': 0.9}, comment='Nylon cord.')
+    # Material gallery: chrome and gold are plain Standard; the rest show the advanced lobes.
     mat('Gallery Chrome', 'gallery_chrome.mat', {'_BaseColor': [0.95, 0.95, 0.96], '_Metallic': 1.0, '_Roughness': 0.05})
     mat('Gallery Gold', 'gallery_gold.mat', {'_BaseColor': [1.0, 0.77, 0.34], '_Metallic': 1.0, '_Roughness': 0.22})
     mat('Gallery Brushed Steel', 'gallery_brushed.mat', {'_BaseColor': [0.8, 0.8, 0.82], '_Metallic': 1.0,
-        '_Roughness': 0.35, '_Anisotropy': 0.85, '_AnisotropyRotation': 0.0}, comment='Anisotropic highlight.')
+        '_Roughness': 0.35, '_Anisotropy': 0.85, '_AnisotropyRotation': 0.0}, comment='Anisotropic highlight.', advanced=True)
     mat('Gallery Car Paint', 'gallery_carpaint.mat', {'_BaseColor': [0.62, 0.03, 0.05], '_Metallic': 0.35,
-        '_Roughness': 0.45, '_ClearCoat': 1.0, '_ClearCoatRoughness': 0.03}, comment='Clear coat over a metallic base.')
+        '_Roughness': 0.45, '_ClearCoat': 1.0, '_ClearCoatRoughness': 0.03}, comment='Clear coat over a metallic base.', advanced=True)
     mat('Gallery Velvet', 'gallery_velvet.mat', {'_BaseColor': [0.24, 0.05, 0.3], '_Metallic': 0.0, '_Roughness': 0.85,
-        '_Sheen': [0.85, 0.55, 0.95], '_SheenRoughness': 0.3}, comment='Sheen lobe.')
+        '_Sheen': [0.85, 0.55, 0.95], '_SheenRoughness': 0.3}, comment='Sheen lobe.', advanced=True)
     mat('Gallery Jade', 'gallery_jade.mat', {'_BaseColor': [0.3, 0.72, 0.45], '_Metallic': 0.0, '_Roughness': 0.25,
-        '_SubsurfaceEnabled': True, '_SubsurfaceColor': [0.4, 0.95, 0.6], '_Thickness': 0.25}, comment='Subsurface.')
+        '_SubsurfaceEnabled': True, '_SubsurfaceColor': [0.4, 0.95, 0.6], '_Thickness': 0.25}, comment='Subsurface.', advanced=True)
     mat('Gallery Glass', 'gallery_glass.mat', {'_BaseColor': [0.92, 0.97, 1.0], '_Metallic': 0.0, '_Roughness': 0.02,
-        '_TransmissionStrength': 1.0, '_IOR': 1.5}, queue=2, comment='Transmission: refracts what is behind it.')
+        '_TransmissionStrength': 1.0, '_IOR': 1.5}, queue=2, comment='Transmission: refracts what is behind it.', advanced=True)
     mat('Gallery Neon', 'gallery_neon.mat', {'_BaseColor': [0.05, 0.3, 0.35], '_Metallic': 0.0, '_Roughness': 0.4,
-        '_EmissiveColor': [0.2, 0.95, 1.0], '_EmissiveStrength': 6.0}, comment='Emissive: glows through Bloom.')
+        '_EmissiveColor': [0.2, 0.95, 1.0], '_EmissiveStrength': 6.0}, comment='Emissive: glows through Bloom.', advanced=True)
     mat('Fountain Water', 'water.mat', {'_BaseColor': [0.55, 0.78, 0.85], '_Metallic': 0.0, '_Roughness': 0.03,
-        '_TransmissionStrength': 0.75, '_IOR': 1.33}, queue=2, opacity=0.7, comment='Refracts the basin floor.')
+        '_TransmissionStrength': 0.75, '_IOR': 1.33}, queue=2, opacity=0.7, comment='Refracts the basin floor.', advanced=True)
 
 # =============================================================================== sounds
 SR = 44100

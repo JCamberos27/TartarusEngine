@@ -1,14 +1,8 @@
-// Standard PBR shader: the engine's default surface shader, laid out like Unity's Standard shader
-// (Albedo, Metallic, Smoothness, Normal Map, Height Map, Occlusion, Emission, Tiling / Offset,
-// Secondary Maps). Properties{} declarations drive the material inspector and data-driven
-// BindMaterial; the order here is the order the Inspector shows them in.
-//
-// The advanced lobes (clear coat, anisotropy, sheen, subsurface, transmission) are [Hidden] here -
-// Unity's Standard shader has none of them. StandardAdvanced.shader is the same GLSL with those
-// shown; switch a material's Shader to it to use them. A hidden lobe a material already has set
-// still renders (the variant is picked from the values, ShaderVariantKeyFor).
-// The only copy (#104): materials reference it as engine://Standard.shader, and a project shader
-// can use these stages the same way (Vertex { engine://ModelVertex.glsl }).
+// Standard (Advanced): the same GLSL as Standard.shader with its extra lobes shown - clear coat,
+// anisotropy, sheen, subsurface and transmission. Unity's built-in Standard shader has none of these
+// (HDRP's Lit / StackLit do). Use it for car paint, brushed metal, velvet, skin / wax / jade, glass
+// and water; everything else is simpler on Standard. Switching a material between the two keeps
+// every value.
 
 Properties {
     [Header(Main Maps)] [Tooltip(The base colour texture, tinted by Color.)] _AlbedoMap ("Albedo", Texture2D) = "white"
@@ -33,23 +27,23 @@ Properties {
     [Header(Advanced Options)] [Tooltip(Draw and light both sides: foliage, cloth, thin planes.)] _DoubleSided ("Double Sided", Bool) = 0
     [Tooltip(Multiply the colour and alpha by the mesh's vertex colours.)] _VertexColors ("Vertex Colors", Bool) = 0
     [Tooltip(For normal maps authored for DirectX, where green points down, e.g. from Unreal or Substance DX presets.)] _NormalFlipY ("Normal Map Is DirectX", Bool) = 0
+    [Header(Clear Coat)] [Tooltip(A thin glossy varnish layer over the base: car paint, lacquered wood. 0 = none.)] _ClearCoat ("Clear Coat", Range(0, 1)) = 0
+    [Tooltip(Roughness of the varnish layer: 0 = mirror, 1 = matte.)] _ClearCoatRoughness ("Clear Coat Roughness", Range(0, 1)) = 0.5
+    [Tooltip(Masks Clear Coat by its red channel.)] _ClearCoatMap ("Clear Coat Map", Texture2D) = "white"
+    [Header(Anisotropy)] [Tooltip(Stretches highlights along one direction: brushed metal, hair, satin. 0 = none.)] _Anisotropy ("Anisotropy", Range(-1, 1)) = 0
+    [Tooltip(Turns the stretch direction around the surface normal, 0..1 = 0..180 degrees.)] _AnisotropyRotation ("Anisotropy Rotation", Range(0, 1)) = 0
+    [Header(Sheen)] [Tooltip(Soft rim glow of fabric fibres: velvet, felt, cloth. Black = none.)] _Sheen ("Sheen", Color) = (0, 0, 0)
+    [Tooltip(How wide the sheen glow spreads.)] _SheenRoughness ("Sheen Roughness", Range(0, 1)) = 0.5
+    [Header(Subsurface)] [Tooltip(The colour light takes on passing through the surface, used when Subsurface is ticked below.)] _SubsurfaceColor ("Subsurface Color", Color) = (1, 0.8, 0.6)
+    [Tooltip(How thick the object is: thin lets more light through.)] _Thickness ("Thickness", Range(0, 1)) = 0.5
+    [Tooltip(Scales Thickness by its red channel.)] _ThicknessMap ("Thickness Map", Texture2D) = "white"
+    [Header(Transmission)] [Tooltip(How much of what is behind shows through, refracted: glass, water. Use the Transparent render mode.)] _TransmissionStrength ("Transmission", Range(0, 1)) = 0
+    [Tooltip(Index of refraction: 1.33 water, 1.5 glass, 2.4 diamond.)] _IOR ("IOR", Range(1, 3)) = 1.5
 
-    // Engine-internal and advanced lobes: bound and saved as before, not shown.
+    // Engine-internal: bound and saved as before, not shown.
     [Hidden] _Triplanar      ("Triplanar",        Bool)      = 0
     [Hidden] _TriplanarScale ("Triplanar Scale",  Float)     = 1
     [Hidden] _MetallicRoughnessMap ("Metallic Roughness", Texture2D) = "white"
-    [Hidden] _ClearCoat           ("Clear Coat",           Range(0, 1))     = 0
-    [Hidden] _ClearCoatRoughness  ("Clear Coat Roughness",  Range(0, 1))     = 0.5
-    [Hidden] _ClearCoatMap        ("Clear Coat Map",        Texture2D) = "white"
-    [Hidden] _Anisotropy          ("Anisotropy",            Range(-1, 1))     = 0
-    [Hidden] _AnisotropyRotation  ("Anisotropy Rotation",   Range(0, 1))     = 0
-    [Hidden] _Sheen               ("Sheen",                 Color)     = (0, 0, 0)
-    [Hidden] _SheenRoughness      ("Sheen Roughness",        Range(0, 1))     = 0.5
-    [Hidden] _SubsurfaceColor     ("Subsurface Color",       Color)     = (1, 0.8, 0.6)
-    [Hidden] _Thickness           ("Thickness",              Range(0, 1))     = 0.5
-    [Hidden] _ThicknessMap        ("Thickness Map",          Texture2D) = "white"
-    [Hidden] _TransmissionStrength ("Transmission",          Range(0, 1))     = 0
-    [Hidden] _IOR                  ("IOR",                   Range(1, 3))     = 1.5
 }
 
 Keywords {

@@ -1,6 +1,6 @@
 {
  "formatVersion": 3,
- "_comment": "Tartarus Sandbox - the default testing scene. Centre: animated Mixamo Y Bots (idle/walk/run/strafe/jump + one on an Animator Controller; assets in project/assets/characters/ybot, not in git). South: glass-walled basketball arena (NBA court, hoops with goal triggers, scoreboard, sounds) - Play spawns you at its door; right mouse grabs a ball, hold left mouse to charge a shot. Between: fountain (particles + looping audio). North: material gallery, then the ball pit. East: physics playground (crate pyramid, brick wall + wrecking ball on a chain of joints, ball ramp, domino run). West: movement course (stairs, ramps, step blocks, lift, turntable). Late-afternoon sun, sky ambient, light fog, colour grading. Regenerate with tools/gen_sandbox_assets.py then tools/gen_sandbox_scene.py.",
+ "_comment": "Tartarus Sandbox - the default testing scene. Centre: animated Mixamo Y Bots (idle/walk/run/strafe/jump + one on an Animator Controller; assets in project/assets/characters/ybot, not in git). South: glass-walled basketball arena (an NBA court at 1.5x with 2x hoops and balls, goal triggers, scoreboard) - Play spawns you at its door; right mouse grabs a ball, hold left mouse to charge a shot. Between: fountain (particles). North: material gallery, then the ball pit. East: physics playground (crate pyramid, brick wall + wrecking ball on a chain of joints, ball ramp, domino run). West: movement course (stairs, ramps, step blocks, lift, turntable). Late-afternoon sun, sky ambient, light fog, colour grading. Regenerate with tools/gen_sandbox_assets.py then tools/gen_sandbox_scene.py.",
  "skySource": 1,
  "skyHdriPath": "assets/sky/kloofendal_48d_partly_cloudy_puresky_4k.hdr",
  "skyRotationDegrees": 90.7,
@@ -1230,13 +1230,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -1309,13 +1302,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -1388,13 +1374,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -1467,13 +1446,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -1546,13 +1518,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -1625,13 +1590,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -1704,13 +1662,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -1783,13 +1734,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -1862,13 +1806,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -1941,13 +1878,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -2020,13 +1950,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -2099,13 +2022,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -2178,13 +2094,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -2257,13 +2166,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -2336,13 +2238,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -2415,13 +2310,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -2494,13 +2382,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -2573,13 +2454,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -2652,13 +2526,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -2731,13 +2598,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -2810,13 +2670,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.8,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.12
    }
   },
   {
@@ -2889,13 +2742,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -2968,13 +2814,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -3047,13 +2886,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -3126,13 +2958,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -3205,13 +3030,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -3284,13 +3102,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -3363,13 +3174,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -3442,13 +3246,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -3521,13 +3318,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -3600,13 +3390,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -3679,13 +3462,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -3758,13 +3534,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -3837,13 +3606,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -3916,13 +3678,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -3995,13 +3750,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -4074,13 +3822,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -4153,13 +3894,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -4232,13 +3966,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -4311,13 +4038,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -4390,13 +4110,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -4469,13 +4182,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -4548,13 +4254,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -4627,13 +4326,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -4706,13 +4398,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -4785,13 +4470,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -4864,13 +4542,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -4943,13 +4614,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -5022,13 +4686,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -5101,13 +4758,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -5180,13 +4830,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -5259,13 +4902,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -5338,13 +4974,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -5417,13 +5046,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -5496,13 +5118,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -5575,13 +5190,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -5654,13 +5262,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -5733,13 +5334,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -5812,13 +5406,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -5891,13 +5478,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -5970,13 +5550,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -6049,13 +5622,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -6128,13 +5694,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -6207,13 +5766,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -6286,13 +5838,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -6365,13 +5910,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.55,
-    "Min Speed": 1.0,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.2
    }
   },
   {
@@ -6550,13 +6088,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -6629,13 +6160,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -6708,13 +6232,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -6787,13 +6304,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -6866,13 +6376,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -6945,13 +6448,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -7024,13 +6520,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -7103,13 +6592,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -7182,13 +6664,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -7261,13 +6736,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -7340,13 +6808,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -7419,13 +6880,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -7498,13 +6952,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -7577,13 +7024,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -7656,13 +7096,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -7735,13 +7168,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -7814,13 +7240,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -7893,13 +7312,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/wood_knock.wav",
-    "Volume": 0.35,
-    "Min Speed": 0.3,
-    "Max Speed": 3.0,
-    "Pitch Variation": 0.1
    }
   },
   {
@@ -9483,12 +8895,12 @@
    "center": [
     0,
     0.06,
-    32.0
+    36.81
    ],
    "size": [
-    32.65,
+    48.975,
     0.12,
-    19.24
+    28.86
    ],
    "color": [
     1,
@@ -9518,14 +8930,14 @@
    "parentId": 284,
    "order": 285,
    "center": [
-    -17.325,
-    6.0,
-    32.0
+    -25.4875,
+    7.5,
+    36.81
    ],
    "size": [
     0.06,
-    12.0,
-    21.24
+    15.0,
+    30.86
    ],
    "color": [
     1,
@@ -9554,14 +8966,14 @@
    "parentId": 284,
    "order": 286,
    "center": [
-    17.325,
-    6.0,
-    32.0
+    25.4875,
+    7.5,
+    36.81
    ],
    "size": [
     0.06,
-    12.0,
-    21.24
+    15.0,
+    30.86
    ],
    "color": [
     1,
@@ -9591,12 +9003,12 @@
    "order": 287,
    "center": [
     0,
-    6.0,
-    42.62
+    7.5,
+    52.24
    ],
    "size": [
-    34.65,
-    12.0,
+    50.975,
+    15.0,
     0.06
    ],
    "color": [
@@ -9626,13 +9038,13 @@
    "parentId": 284,
    "order": 288,
    "center": [
-    -9.3125,
-    6.0,
+    -13.3937,
+    7.5,
     21.38
    ],
    "size": [
-    16.025,
-    12.0,
+    24.1875,
+    15.0,
     0.06
    ],
    "color": [
@@ -9662,13 +9074,13 @@
    "parentId": 284,
    "order": 289,
    "center": [
-    9.3125,
-    6.0,
+    13.3937,
+    7.5,
     21.38
    ],
    "size": [
-    16.025,
-    12.0,
+    24.1875,
+    15.0,
     0.06
    ],
    "color": [
@@ -9699,12 +9111,12 @@
    "order": 290,
    "center": [
     0,
-    7.5,
+    9.0,
     21.38
    ],
    "size": [
     2.6,
-    9.0,
+    12.0,
     0.06
    ],
    "color": [
@@ -9735,13 +9147,13 @@
    "order": 291,
    "center": [
     0,
-    12.03,
-    32.0
+    15.03,
+    36.81
    ],
    "size": [
-    34.71,
+    51.035,
     0.06,
-    21.3
+    30.92
    ],
    "color": [
     1,
@@ -9859,12 +9271,12 @@
    "order": 294,
    "center": [
     -1.3,
-    6.0,
+    7.5,
     21.38
    ],
    "size": [
     0.14,
-    12.0,
+    15.0,
     0.14
    ],
    "color": [
@@ -9963,12 +9375,12 @@
    "order": 296,
    "center": [
     1.3,
-    6.0,
+    7.5,
     21.38
    ],
    "size": [
     0.14,
-    12.0,
+    15.0,
     0.14
    ],
    "color": [
@@ -10066,13 +9478,13 @@
    "parentId": 284,
    "order": 298,
    "center": [
-    -17.325,
-    6.0,
+    -25.4875,
+    7.5,
     21.38
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10118,13 +9530,13 @@
    "parentId": 284,
    "order": 299,
    "center": [
-    -17.325,
-    6.0,
-    42.62
+    -25.4875,
+    7.5,
+    52.24
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10170,13 +9582,13 @@
    "parentId": 284,
    "order": 300,
    "center": [
-    -12.9937,
-    6.0,
+    -20.39,
+    7.5,
     21.38
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10222,13 +9634,13 @@
    "parentId": 284,
    "order": 301,
    "center": [
-    -12.9937,
-    6.0,
-    42.62
+    -20.39,
+    7.5,
+    52.24
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10274,13 +9686,13 @@
    "parentId": 284,
    "order": 302,
    "center": [
-    -8.6625,
-    6.0,
+    -15.2925,
+    7.5,
     21.38
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10326,13 +9738,13 @@
    "parentId": 284,
    "order": 303,
    "center": [
-    -8.6625,
-    6.0,
-    42.62
+    -15.2925,
+    7.5,
+    52.24
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10378,13 +9790,13 @@
    "parentId": 284,
    "order": 304,
    "center": [
-    -4.3313,
-    6.0,
+    -10.195,
+    7.5,
     21.38
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10430,13 +9842,65 @@
    "parentId": 284,
    "order": 305,
    "center": [
-    -4.3313,
-    6.0,
-    42.62
+    -10.195,
+    7.5,
+    52.24
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
+    0.12
+   ],
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "collider": {
+    "isTrigger": false,
+    "friction": 0.6,
+    "bounciness": 0.0
+   },
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.16,
+       0.17,
+       0.19
+      ],
+      "metallic": 0.85,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0,
+       0,
+       0
+      ],
+      "emissiveStrength": 1.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "Mullion N4",
+   "id": 306,
+   "parentId": 284,
+   "order": 306,
+   "center": [
+    -5.0975,
+    7.5,
+    21.38
+   ],
+   "size": [
+    0.12,
+    15.0,
     0.12
    ],
    "color": [
@@ -10478,69 +9942,17 @@
   },
   {
    "name": "Mullion S4",
-   "id": 306,
-   "parentId": 284,
-   "order": 306,
-   "center": [
-    0.0,
-    6.0,
-    42.62
-   ],
-   "size": [
-    0.12,
-    12.0,
-    0.12
-   ],
-   "color": [
-    1,
-    1,
-    1
-   ],
-   "rotation": [
-    0,
-    0,
-    0
-   ],
-   "collider": {
-    "isTrigger": false,
-    "friction": 0.6,
-    "bounciness": 0.0
-   },
-   "materials": [
-    {
-     "embedded": {
-      "baseColor": [
-       0.16,
-       0.17,
-       0.19
-      ],
-      "metallic": 0.85,
-      "roughness": 0.4,
-      "emissiveColor": [
-       0,
-       0,
-       0
-      ],
-      "emissiveStrength": 1.0,
-      "triplanar": false,
-      "triplanarScale": 1.0
-     }
-    }
-   ]
-  },
-  {
-   "name": "Mullion N5",
    "id": 307,
    "parentId": 284,
    "order": 307,
    "center": [
-    4.3313,
-    6.0,
-    21.38
+    -5.0975,
+    7.5,
+    52.24
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10586,13 +9998,13 @@
    "parentId": 284,
    "order": 308,
    "center": [
-    4.3313,
-    6.0,
-    42.62
+    0.0,
+    7.5,
+    52.24
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10638,13 +10050,13 @@
    "parentId": 284,
    "order": 309,
    "center": [
-    8.6625,
-    6.0,
+    5.0975,
+    7.5,
     21.38
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10690,13 +10102,13 @@
    "parentId": 284,
    "order": 310,
    "center": [
-    8.6625,
-    6.0,
-    42.62
+    5.0975,
+    7.5,
+    52.24
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10742,13 +10154,13 @@
    "parentId": 284,
    "order": 311,
    "center": [
-    12.9937,
-    6.0,
+    10.195,
+    7.5,
     21.38
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10794,13 +10206,13 @@
    "parentId": 284,
    "order": 312,
    "center": [
-    12.9937,
-    6.0,
-    42.62
+    10.195,
+    7.5,
+    52.24
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10846,13 +10258,13 @@
    "parentId": 284,
    "order": 313,
    "center": [
-    17.325,
-    6.0,
+    15.2925,
+    7.5,
     21.38
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10898,13 +10310,221 @@
    "parentId": 284,
    "order": 314,
    "center": [
-    17.325,
-    6.0,
-    42.62
+    15.2925,
+    7.5,
+    52.24
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
+    0.12
+   ],
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "collider": {
+    "isTrigger": false,
+    "friction": 0.6,
+    "bounciness": 0.0
+   },
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.16,
+       0.17,
+       0.19
+      ],
+      "metallic": 0.85,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0,
+       0,
+       0
+      ],
+      "emissiveStrength": 1.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "Mullion N9",
+   "id": 315,
+   "parentId": 284,
+   "order": 315,
+   "center": [
+    20.39,
+    7.5,
+    21.38
+   ],
+   "size": [
+    0.12,
+    15.0,
+    0.12
+   ],
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "collider": {
+    "isTrigger": false,
+    "friction": 0.6,
+    "bounciness": 0.0
+   },
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.16,
+       0.17,
+       0.19
+      ],
+      "metallic": 0.85,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0,
+       0,
+       0
+      ],
+      "emissiveStrength": 1.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "Mullion S9",
+   "id": 316,
+   "parentId": 284,
+   "order": 316,
+   "center": [
+    20.39,
+    7.5,
+    52.24
+   ],
+   "size": [
+    0.12,
+    15.0,
+    0.12
+   ],
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "collider": {
+    "isTrigger": false,
+    "friction": 0.6,
+    "bounciness": 0.0
+   },
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.16,
+       0.17,
+       0.19
+      ],
+      "metallic": 0.85,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0,
+       0,
+       0
+      ],
+      "emissiveStrength": 1.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "Mullion N10",
+   "id": 317,
+   "parentId": 284,
+   "order": 317,
+   "center": [
+    25.4875,
+    7.5,
+    21.38
+   ],
+   "size": [
+    0.12,
+    15.0,
+    0.12
+   ],
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "collider": {
+    "isTrigger": false,
+    "friction": 0.6,
+    "bounciness": 0.0
+   },
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.16,
+       0.17,
+       0.19
+      ],
+      "metallic": 0.85,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0,
+       0,
+       0
+      ],
+      "emissiveStrength": 1.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "Mullion S10",
+   "id": 318,
+   "parentId": 284,
+   "order": 318,
+   "center": [
+    25.4875,
+    7.5,
+    52.24
+   ],
+   "size": [
+    0.12,
+    15.0,
     0.12
    ],
    "color": [
@@ -10946,17 +10566,17 @@
   },
   {
    "name": "Mullion W1",
-   "id": 315,
+   "id": 319,
    "parentId": 284,
-   "order": 315,
+   "order": 319,
    "center": [
-    -17.325,
-    6.0,
-    25.628
+    -25.4875,
+    7.5,
+    26.5233
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -10998,17 +10618,17 @@
   },
   {
    "name": "Mullion E1",
-   "id": 316,
+   "id": 320,
    "parentId": 284,
-   "order": 316,
+   "order": 320,
    "center": [
-    17.325,
-    6.0,
-    25.628
+    25.4875,
+    7.5,
+    26.5233
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -11050,17 +10670,17 @@
   },
   {
    "name": "Mullion W2",
-   "id": 317,
+   "id": 321,
    "parentId": 284,
-   "order": 317,
+   "order": 321,
    "center": [
-    -17.325,
-    6.0,
-    29.876
+    -25.4875,
+    7.5,
+    31.6667
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -11102,17 +10722,17 @@
   },
   {
    "name": "Mullion E2",
-   "id": 318,
+   "id": 322,
    "parentId": 284,
-   "order": 318,
+   "order": 322,
    "center": [
-    17.325,
-    6.0,
-    29.876
+    25.4875,
+    7.5,
+    31.6667
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -11154,17 +10774,17 @@
   },
   {
    "name": "Mullion W3",
-   "id": 319,
+   "id": 323,
    "parentId": 284,
-   "order": 319,
+   "order": 323,
    "center": [
-    -17.325,
-    6.0,
-    34.124
+    -25.4875,
+    7.5,
+    36.81
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -11206,17 +10826,17 @@
   },
   {
    "name": "Mullion E3",
-   "id": 320,
+   "id": 324,
    "parentId": 284,
-   "order": 320,
+   "order": 324,
    "center": [
-    17.325,
-    6.0,
-    34.124
+    25.4875,
+    7.5,
+    36.81
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -11258,17 +10878,17 @@
   },
   {
    "name": "Mullion W4",
-   "id": 321,
+   "id": 325,
    "parentId": 284,
-   "order": 321,
+   "order": 325,
    "center": [
-    -17.325,
-    6.0,
-    38.372
+    -25.4875,
+    7.5,
+    41.9533
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
     0.12
    ],
    "color": [
@@ -11310,17 +10930,121 @@
   },
   {
    "name": "Mullion E4",
-   "id": 322,
+   "id": 326,
    "parentId": 284,
-   "order": 322,
+   "order": 326,
    "center": [
-    17.325,
-    6.0,
-    38.372
+    25.4875,
+    7.5,
+    41.9533
    ],
    "size": [
     0.12,
-    12.0,
+    15.0,
+    0.12
+   ],
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "collider": {
+    "isTrigger": false,
+    "friction": 0.6,
+    "bounciness": 0.0
+   },
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.16,
+       0.17,
+       0.19
+      ],
+      "metallic": 0.85,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0,
+       0,
+       0
+      ],
+      "emissiveStrength": 1.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "Mullion W5",
+   "id": 327,
+   "parentId": 284,
+   "order": 327,
+   "center": [
+    -25.4875,
+    7.5,
+    47.0967
+   ],
+   "size": [
+    0.12,
+    15.0,
+    0.12
+   ],
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "collider": {
+    "isTrigger": false,
+    "friction": 0.6,
+    "bounciness": 0.0
+   },
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.16,
+       0.17,
+       0.19
+      ],
+      "metallic": 0.85,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0,
+       0,
+       0
+      ],
+      "emissiveStrength": 1.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "Mullion E5",
+   "id": 328,
+   "parentId": 284,
+   "order": 328,
+   "center": [
+    25.4875,
+    7.5,
+    47.0967
+   ],
+   "size": [
+    0.12,
+    15.0,
     0.12
    ],
    "color": [
@@ -11362,18 +11086,18 @@
   },
   {
    "name": "Ring Beam West",
-   "id": 323,
+   "id": 329,
    "parentId": 284,
-   "order": 323,
+   "order": 329,
    "center": [
-    -17.325,
-    11.85,
-    32.0
+    -25.4875,
+    14.85,
+    36.81
    ],
    "size": [
     0.3,
     0.3,
-    21.54
+    31.16
    ],
    "color": [
     1,
@@ -11414,18 +11138,18 @@
   },
   {
    "name": "Ring Beam East",
-   "id": 324,
+   "id": 330,
    "parentId": 284,
-   "order": 324,
+   "order": 330,
    "center": [
-    17.325,
-    11.85,
-    32.0
+    25.4875,
+    14.85,
+    36.81
    ],
    "size": [
     0.3,
     0.3,
-    21.54
+    31.16
    ],
    "color": [
     1,
@@ -11466,16 +11190,16 @@
   },
   {
    "name": "Ring Beam North",
-   "id": 325,
+   "id": 331,
    "parentId": 284,
-   "order": 325,
+   "order": 331,
    "center": [
     0,
-    11.85,
+    14.85,
     21.38
    ],
    "size": [
-    34.95,
+    51.275,
     0.3,
     0.3
    ],
@@ -11518,16 +11242,16 @@
   },
   {
    "name": "Ring Beam South",
-   "id": 326,
+   "id": 332,
    "parentId": 284,
-   "order": 326,
+   "order": 332,
    "center": [
     0,
-    11.85,
-    42.62
+    14.85,
+    52.24
    ],
    "size": [
-    34.95,
+    51.275,
     0.3,
     0.3
    ],
@@ -11570,18 +11294,18 @@
   },
   {
    "name": "Roof Truss 1",
-   "id": 327,
+   "id": 333,
    "parentId": 284,
-   "order": 327,
+   "order": 333,
    "center": [
-    -12.9937,
-    11.65,
-    32.0
+    -20.39,
+    14.65,
+    36.81
    ],
    "size": [
     0.22,
     0.5,
-    21.24
+    30.86
    ],
    "color": [
     1,
@@ -11622,18 +11346,18 @@
   },
   {
    "name": "Roof Truss 2",
-   "id": 328,
+   "id": 334,
    "parentId": 284,
-   "order": 328,
+   "order": 334,
    "center": [
-    -8.6625,
-    11.65,
-    32.0
+    -15.2925,
+    14.65,
+    36.81
    ],
    "size": [
     0.22,
     0.5,
-    21.24
+    30.86
    ],
    "color": [
     1,
@@ -11674,18 +11398,18 @@
   },
   {
    "name": "Roof Truss 3",
-   "id": 329,
+   "id": 335,
    "parentId": 284,
-   "order": 329,
+   "order": 335,
    "center": [
-    -4.3313,
-    11.65,
-    32.0
+    -10.195,
+    14.65,
+    36.81
    ],
    "size": [
     0.22,
     0.5,
-    21.24
+    30.86
    ],
    "color": [
     1,
@@ -11726,18 +11450,18 @@
   },
   {
    "name": "Roof Truss 4",
-   "id": 330,
+   "id": 336,
    "parentId": 284,
-   "order": 330,
+   "order": 336,
    "center": [
-    0.0,
-    11.65,
-    32.0
+    -5.0975,
+    14.65,
+    36.81
    ],
    "size": [
     0.22,
     0.5,
-    21.24
+    30.86
    ],
    "color": [
     1,
@@ -11778,18 +11502,18 @@
   },
   {
    "name": "Roof Truss 5",
-   "id": 331,
+   "id": 337,
    "parentId": 284,
-   "order": 331,
+   "order": 337,
    "center": [
-    4.3313,
-    11.65,
-    32.0
+    0.0,
+    14.65,
+    36.81
    ],
    "size": [
     0.22,
     0.5,
-    21.24
+    30.86
    ],
    "color": [
     1,
@@ -11830,18 +11554,18 @@
   },
   {
    "name": "Roof Truss 6",
-   "id": 332,
+   "id": 338,
    "parentId": 284,
-   "order": 332,
+   "order": 338,
    "center": [
-    8.6625,
-    11.65,
-    32.0
+    5.0975,
+    14.65,
+    36.81
    ],
    "size": [
     0.22,
     0.5,
-    21.24
+    30.86
    ],
    "color": [
     1,
@@ -11882,18 +11606,122 @@
   },
   {
    "name": "Roof Truss 7",
-   "id": 333,
+   "id": 339,
    "parentId": 284,
-   "order": 333,
+   "order": 339,
    "center": [
-    12.9937,
-    11.65,
-    32.0
+    10.195,
+    14.65,
+    36.81
    ],
    "size": [
     0.22,
     0.5,
-    21.24
+    30.86
+   ],
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "collider": {
+    "isTrigger": false,
+    "friction": 0.6,
+    "bounciness": 0.0
+   },
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.16,
+       0.17,
+       0.19
+      ],
+      "metallic": 0.85,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0,
+       0,
+       0
+      ],
+      "emissiveStrength": 1.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "Roof Truss 8",
+   "id": 340,
+   "parentId": 284,
+   "order": 340,
+   "center": [
+    15.2925,
+    14.65,
+    36.81
+   ],
+   "size": [
+    0.22,
+    0.5,
+    30.86
+   ],
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "collider": {
+    "isTrigger": false,
+    "friction": 0.6,
+    "bounciness": 0.0
+   },
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.16,
+       0.17,
+       0.19
+      ],
+      "metallic": 0.85,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0,
+       0,
+       0
+      ],
+      "emissiveStrength": 1.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "Roof Truss 9",
+   "id": 341,
+   "parentId": 284,
+   "order": 341,
+   "center": [
+    20.39,
+    14.65,
+    36.81
+   ],
+   "size": [
+    0.22,
+    0.5,
+    30.86
    ],
    "color": [
     1,
@@ -11934,18 +11762,18 @@
   },
   {
    "name": "Kerb West",
-   "id": 334,
+   "id": 342,
    "parentId": 284,
-   "order": 334,
+   "order": 342,
    "center": [
-    -17.525,
+    -25.6875,
     0.15,
-    32.0
+    36.81
    ],
    "size": [
     0.4,
     0.3,
-    22.04
+    31.66
    ],
    "color": [
     1,
@@ -11986,18 +11814,18 @@
   },
   {
    "name": "Kerb East",
-   "id": 335,
+   "id": 343,
    "parentId": 284,
-   "order": 335,
+   "order": 343,
    "center": [
-    17.525,
+    25.6875,
     0.15,
-    32.0
+    36.81
    ],
    "size": [
     0.4,
     0.3,
-    22.04
+    31.66
    ],
    "color": [
     1,
@@ -12038,16 +11866,16 @@
   },
   {
    "name": "Kerb South",
-   "id": 336,
+   "id": 344,
    "parentId": 284,
-   "order": 336,
+   "order": 344,
    "center": [
     0,
     0.15,
-    42.82
+    52.44
    ],
    "size": [
-    34.65,
+    50.975,
     0.3,
     0.4
    ],
@@ -12090,16 +11918,16 @@
   },
   {
    "name": "Kerb North West",
-   "id": 337,
+   "id": 345,
    "parentId": 284,
-   "order": 337,
+   "order": 345,
    "center": [
-    -9.3125,
+    -13.3937,
     0.15,
     21.18
    ],
    "size": [
-    16.025,
+    24.1875,
     0.3,
     0.4
    ],
@@ -12142,16 +11970,16 @@
   },
   {
    "name": "Kerb North East",
-   "id": 338,
+   "id": 346,
    "parentId": 284,
-   "order": 338,
+   "order": 346,
    "center": [
-    9.3125,
+    13.3937,
     0.15,
     21.18
    ],
    "size": [
-    16.025,
+    24.1875,
     0.3,
     0.4
    ],
@@ -12194,18 +12022,18 @@
   },
   {
    "name": "Backboard West",
-   "id": 340,
-   "parentId": 339,
-   "order": 340,
+   "id": 348,
+   "parentId": 347,
+   "order": 348,
    "center": [
-    -13.12,
-    3.555,
-    32.0
+    -19.6725,
+    3.94,
+    36.81
    ],
    "size": [
     0.03,
-    1.07,
-    1.83
+    2.14,
+    3.66
    ],
    "color": [
     1,
@@ -12226,29 +12054,22 @@
     {
      "path": "materials/sandbox/backboard_glass.mat"
     }
-   ],
-   "Impact Sound": {
-    "Clip": "sounds/backboard_thud.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.8,
-    "Max Speed": 9.0,
-    "Pitch Variation": 0.06
-   }
+   ]
   },
   {
    "name": "Backboard Frame Top West",
-   "id": 341,
-   "parentId": 339,
-   "order": 341,
+   "id": 349,
+   "parentId": 347,
+   "order": 349,
    "center": [
-    -13.15,
-    4.09,
-    32.0
+    -19.7025,
+    5.03,
+    36.81
    ],
    "size": [
-    0.04,
-    0.04,
-    1.87
+    0.05,
+    0.05,
+    3.71
    ],
    "color": [
     1,
@@ -12289,18 +12110,18 @@
   },
   {
    "name": "Backboard Frame Left West",
-   "id": 342,
-   "parentId": 339,
-   "order": 342,
+   "id": 350,
+   "parentId": 347,
+   "order": 350,
    "center": [
-    -13.15,
-    3.555,
-    31.065
+    -19.7025,
+    3.94,
+    34.96
    ],
    "size": [
-    0.04,
-    1.11,
-    0.04
+    0.05,
+    2.18,
+    0.05
    ],
    "color": [
     1,
@@ -12341,18 +12162,18 @@
   },
   {
    "name": "Backboard Frame Right West",
-   "id": 343,
-   "parentId": 339,
-   "order": 343,
+   "id": 351,
+   "parentId": 347,
+   "order": 351,
    "center": [
-    -13.15,
-    3.555,
-    32.935
+    -19.7025,
+    3.94,
+    38.66
    ],
    "size": [
-    0.04,
-    1.11,
-    0.04
+    0.05,
+    2.18,
+    0.05
    ],
    "color": [
     1,
@@ -12393,18 +12214,18 @@
   },
   {
    "name": "Backboard Pad West",
-   "id": 344,
-   "parentId": 339,
-   "order": 344,
+   "id": 352,
+   "parentId": 347,
+   "order": 352,
    "center": [
-    -13.12,
-    2.98,
-    32.0
+    -19.6725,
+    2.83,
+    36.81
    ],
    "size": [
-    0.07,
-    0.09,
-    1.87
+    0.08,
+    0.12,
+    3.71
    ],
    "color": [
     1,
@@ -12450,18 +12271,18 @@
   },
   {
    "name": "Rim Bracket West",
-   "id": 346,
-   "parentId": 339,
-   "order": 346,
+   "id": 354,
+   "parentId": 347,
+   "order": 354,
    "center": [
-    -13.0338,
-    3.15,
-    32.0
+    -19.6101,
+    3.14,
+    36.81
    ],
    "size": [
-    0.1524,
-    0.05,
-    0.2
+    0.1148,
+    0.08,
+    0.3
    ],
    "color": [
     1,
@@ -12486,13 +12307,13 @@
   },
   {
    "name": "Stanchion Base West",
-   "id": 348,
-   "parentId": 339,
-   "order": 348,
+   "id": 356,
+   "parentId": 347,
+   "order": 356,
    "center": [
-    -15.875,
+    -23.0375,
     0.62,
-    32.0
+    36.81
    ],
    "size": [
     1.1,
@@ -12543,17 +12364,17 @@
   },
   {
    "name": "Stanchion Post West",
-   "id": 349,
-   "parentId": 339,
-   "order": 349,
+   "id": 357,
+   "parentId": 347,
+   "order": 357,
    "center": [
-    -15.675,
-    2.32,
-    32.0
+    -22.8375,
+    2.08,
+    36.81
    ],
    "size": [
     0.22,
-    2.4,
+    3.92,
     0.22
    ],
    "color": [
@@ -12595,13 +12416,13 @@
   },
   {
    "name": "Stanchion Post Pad West",
-   "id": 350,
-   "parentId": 339,
-   "order": 350,
+   "id": 358,
+   "parentId": 347,
+   "order": 358,
    "center": [
-    -15.675,
+    -22.8375,
     1.72,
-    32.0
+    36.81
    ],
    "size": [
     0.34,
@@ -12652,16 +12473,16 @@
   },
   {
    "name": "Stanchion Arm West",
-   "id": 351,
-   "parentId": 339,
-   "order": 351,
+   "id": 359,
+   "parentId": 347,
+   "order": 359,
    "center": [
-    -14.4125,
-    3.55,
-    32.0
+    -21.27,
+    3.94,
+    36.81
    ],
    "size": [
-    2.525,
+    3.135,
     0.14,
     0.14
    ],
@@ -12704,16 +12525,16 @@
   },
   {
    "name": "Stanchion Brace West",
-   "id": 352,
-   "parentId": 339,
-   "order": 352,
+   "id": 360,
+   "parentId": 347,
+   "order": 360,
    "center": [
-    -14.9175,
-    3.05,
-    32.0
+    -21.897,
+    3.44,
+    36.81
    ],
    "size": [
-    1.8153,
+    2.1303,
     0.1,
     0.1
    ],
@@ -12725,7 +12546,7 @@
    "rotation": [
     0,
     0,
-    33.4274
+    27.9965
    ],
    "collider": {
     "isTrigger": false,
@@ -12756,18 +12577,18 @@
   },
   {
    "name": "Backboard East",
-   "id": 358,
-   "parentId": 357,
-   "order": 358,
+   "id": 366,
+   "parentId": 365,
+   "order": 366,
    "center": [
-    13.12,
-    3.555,
-    32.0
+    19.6725,
+    3.94,
+    36.81
    ],
    "size": [
     0.03,
-    1.07,
-    1.83
+    2.14,
+    3.66
    ],
    "color": [
     1,
@@ -12788,29 +12609,22 @@
     {
      "path": "materials/sandbox/backboard_glass.mat"
     }
-   ],
-   "Impact Sound": {
-    "Clip": "sounds/backboard_thud.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.8,
-    "Max Speed": 9.0,
-    "Pitch Variation": 0.06
-   }
+   ]
   },
   {
    "name": "Backboard Frame Top East",
-   "id": 359,
-   "parentId": 357,
-   "order": 359,
+   "id": 367,
+   "parentId": 365,
+   "order": 367,
    "center": [
-    13.15,
-    4.09,
-    32.0
+    19.7025,
+    5.03,
+    36.81
    ],
    "size": [
-    0.04,
-    0.04,
-    1.87
+    0.05,
+    0.05,
+    3.71
    ],
    "color": [
     1,
@@ -12851,18 +12665,18 @@
   },
   {
    "name": "Backboard Frame Left East",
-   "id": 360,
-   "parentId": 357,
-   "order": 360,
+   "id": 368,
+   "parentId": 365,
+   "order": 368,
    "center": [
-    13.15,
-    3.555,
-    31.065
+    19.7025,
+    3.94,
+    34.96
    ],
    "size": [
-    0.04,
-    1.11,
-    0.04
+    0.05,
+    2.18,
+    0.05
    ],
    "color": [
     1,
@@ -12903,18 +12717,18 @@
   },
   {
    "name": "Backboard Frame Right East",
-   "id": 361,
-   "parentId": 357,
-   "order": 361,
+   "id": 369,
+   "parentId": 365,
+   "order": 369,
    "center": [
-    13.15,
-    3.555,
-    32.935
+    19.7025,
+    3.94,
+    38.66
    ],
    "size": [
-    0.04,
-    1.11,
-    0.04
+    0.05,
+    2.18,
+    0.05
    ],
    "color": [
     1,
@@ -12955,18 +12769,18 @@
   },
   {
    "name": "Backboard Pad East",
-   "id": 362,
-   "parentId": 357,
-   "order": 362,
+   "id": 370,
+   "parentId": 365,
+   "order": 370,
    "center": [
-    13.12,
-    2.98,
-    32.0
+    19.6725,
+    2.83,
+    36.81
    ],
    "size": [
-    0.07,
-    0.09,
-    1.87
+    0.08,
+    0.12,
+    3.71
    ],
    "color": [
     1,
@@ -13012,18 +12826,18 @@
   },
   {
    "name": "Rim Bracket East",
-   "id": 364,
-   "parentId": 357,
-   "order": 364,
+   "id": 372,
+   "parentId": 365,
+   "order": 372,
    "center": [
-    13.0338,
-    3.15,
-    32.0
+    19.6101,
+    3.14,
+    36.81
    ],
    "size": [
-    0.1524,
-    0.05,
-    0.2
+    0.1148,
+    0.08,
+    0.3
    ],
    "color": [
     1,
@@ -13048,13 +12862,13 @@
   },
   {
    "name": "Stanchion Base East",
-   "id": 366,
-   "parentId": 357,
-   "order": 366,
+   "id": 374,
+   "parentId": 365,
+   "order": 374,
    "center": [
-    15.875,
+    23.0375,
     0.62,
-    32.0
+    36.81
    ],
    "size": [
     1.1,
@@ -13105,17 +12919,17 @@
   },
   {
    "name": "Stanchion Post East",
-   "id": 367,
-   "parentId": 357,
-   "order": 367,
+   "id": 375,
+   "parentId": 365,
+   "order": 375,
    "center": [
-    15.675,
-    2.32,
-    32.0
+    22.8375,
+    2.08,
+    36.81
    ],
    "size": [
     0.22,
-    2.4,
+    3.92,
     0.22
    ],
    "color": [
@@ -13157,13 +12971,13 @@
   },
   {
    "name": "Stanchion Post Pad East",
-   "id": 368,
-   "parentId": 357,
-   "order": 368,
+   "id": 376,
+   "parentId": 365,
+   "order": 376,
    "center": [
-    15.675,
+    22.8375,
     1.72,
-    32.0
+    36.81
    ],
    "size": [
     0.34,
@@ -13214,16 +13028,16 @@
   },
   {
    "name": "Stanchion Arm East",
-   "id": 369,
-   "parentId": 357,
-   "order": 369,
+   "id": 377,
+   "parentId": 365,
+   "order": 377,
    "center": [
-    14.4125,
-    3.55,
-    32.0
+    21.27,
+    3.94,
+    36.81
    ],
    "size": [
-    2.525,
+    3.135,
     0.14,
     0.14
    ],
@@ -13266,16 +13080,16 @@
   },
   {
    "name": "Stanchion Brace East",
-   "id": 370,
-   "parentId": 357,
-   "order": 370,
+   "id": 378,
+   "parentId": 365,
+   "order": 378,
    "center": [
-    14.9175,
-    3.05,
-    32.0
+    21.897,
+    3.44,
+    36.81
    ],
    "size": [
-    1.8153,
+    2.1303,
     0.1,
     0.1
    ],
@@ -13287,7 +13101,7 @@
    "rotation": [
     0,
     0,
-    -33.4274
+    -27.9965
    ],
    "collider": {
     "isTrigger": false,
@@ -13318,13 +13132,13 @@
   },
   {
    "name": "Scoreboard Body",
-   "id": 377,
-   "parentId": 375,
-   "order": 377,
+   "id": 385,
+   "parentId": 383,
+   "order": 385,
    "center": [
     0,
-    8.6,
-    32.0
+    10.6,
+    36.81
    ],
    "size": [
     3.4,
@@ -13370,13 +13184,13 @@
   },
   {
    "name": "Scoreboard Rim Top",
-   "id": 378,
-   "parentId": 375,
-   "order": 378,
+   "id": 386,
+   "parentId": 383,
+   "order": 386,
    "center": [
     0,
-    9.65,
-    32.0
+    11.65,
+    36.81
    ],
    "size": [
     3.5,
@@ -13422,13 +13236,13 @@
   },
   {
    "name": "Scoreboard Rim Bottom",
-   "id": 379,
-   "parentId": 375,
-   "order": 379,
+   "id": 387,
+   "parentId": 383,
+   "order": 387,
    "center": [
     0,
-    7.55,
-    32.0
+    9.55,
+    36.81
    ],
    "size": [
     3.5,
@@ -13474,17 +13288,17 @@
   },
   {
    "name": "Scoreboard Cable -1-1",
-   "id": 380,
-   "parentId": 375,
-   "order": 380,
+   "id": 388,
+   "parentId": 383,
+   "order": 388,
    "center": [
     -1.5,
-    10.55,
-    30.5
+    13.05,
+    35.31
    ],
    "size": [
     0.03,
-    1.7,
+    2.7,
     0.03
    ],
    "color": [
@@ -13526,17 +13340,17 @@
   },
   {
    "name": "Scoreboard Cable -11",
-   "id": 381,
-   "parentId": 375,
-   "order": 381,
+   "id": 389,
+   "parentId": 383,
+   "order": 389,
    "center": [
     -1.5,
-    10.55,
-    33.5
+    13.05,
+    38.31
    ],
    "size": [
     0.03,
-    1.7,
+    2.7,
     0.03
    ],
    "color": [
@@ -13578,17 +13392,17 @@
   },
   {
    "name": "Scoreboard Cable 1-1",
-   "id": 382,
-   "parentId": 375,
-   "order": 382,
+   "id": 390,
+   "parentId": 383,
+   "order": 390,
    "center": [
     1.5,
-    10.55,
-    30.5
+    13.05,
+    35.31
    ],
    "size": [
     0.03,
-    1.7,
+    2.7,
     0.03
    ],
    "color": [
@@ -13630,17 +13444,17 @@
   },
   {
    "name": "Scoreboard Cable 11",
-   "id": 383,
-   "parentId": 375,
-   "order": 383,
+   "id": 391,
+   "parentId": 383,
+   "order": 391,
    "center": [
     1.5,
-    10.55,
-    33.5
+    13.05,
+    38.31
    ],
    "size": [
     0.03,
-    1.7,
+    2.7,
     0.03
    ],
    "color": [
@@ -13682,13 +13496,13 @@
   },
   {
    "name": "Scoreboard Team Bar Home N",
-   "id": 400,
-   "parentId": 375,
-   "order": 400,
+   "id": 408,
+   "parentId": 383,
+   "order": 408,
    "center": [
     -0.9,
-    7.98,
-    30.28
+    9.98,
+    35.09
    ],
    "size": [
     1.2,
@@ -13734,13 +13548,13 @@
   },
   {
    "name": "Scoreboard Team Bar Away N",
-   "id": 417,
-   "parentId": 375,
-   "order": 417,
+   "id": 425,
+   "parentId": 383,
+   "order": 425,
    "center": [
     0.9,
-    7.98,
-    30.28
+    9.98,
+    35.09
    ],
    "size": [
     1.2,
@@ -13786,13 +13600,13 @@
   },
   {
    "name": "Scoreboard Team Bar Home S",
-   "id": 434,
-   "parentId": 375,
-   "order": 434,
+   "id": 442,
+   "parentId": 383,
+   "order": 442,
    "center": [
     -0.9,
-    7.98,
-    33.72
+    9.98,
+    38.53
    ],
    "size": [
     1.2,
@@ -13838,13 +13652,13 @@
   },
   {
    "name": "Scoreboard Team Bar Away S",
-   "id": 451,
-   "parentId": 375,
-   "order": 451,
+   "id": 459,
+   "parentId": 383,
+   "order": 459,
    "center": [
     0.9,
-    7.98,
-    33.72
+    9.98,
+    38.53
    ],
    "size": [
     1.2,
@@ -13890,18 +13704,18 @@
   },
   {
    "name": "Ball Rack Frame L",
-   "id": 453,
-   "parentId": 452,
-   "order": 453,
+   "id": 461,
+   "parentId": 460,
+   "order": 461,
    "center": [
-    4.7,
-    0.55,
-    23.28
+    7.557,
+    0.6486,
+    23.88
    ],
    "size": [
     0.05,
-    1.1,
-    0.5
+    1.2972,
+    0.5772
    ],
    "color": [
     1,
@@ -13942,18 +13756,18 @@
   },
   {
    "name": "Ball Rack Frame R",
-   "id": 454,
-   "parentId": 452,
-   "order": 454,
+   "id": 462,
+   "parentId": 460,
+   "order": 462,
    "center": [
-    7.3,
-    0.55,
-    23.28
+    10.443,
+    0.6486,
+    23.88
    ],
    "size": [
     0.05,
-    1.1,
-    0.5
+    1.2972,
+    0.5772
    ],
    "color": [
     1,
@@ -13994,18 +13808,18 @@
   },
   {
    "name": "Ball Rack Shelf 1",
-   "id": 455,
-   "parentId": 452,
-   "order": 455,
+   "id": 463,
+   "parentId": 460,
+   "order": 463,
    "center": [
-    6.0,
+    9.0,
     0.42,
-    23.28
+    23.88
    ],
    "size": [
-    2.6,
+    2.886,
     0.04,
-    0.44
+    0.5772
    ],
    "color": [
     1,
@@ -14046,16 +13860,16 @@
   },
   {
    "name": "Ball Rack Lip Front 1",
-   "id": 456,
-   "parentId": 452,
-   "order": 456,
+   "id": 464,
+   "parentId": 460,
+   "order": 464,
    "center": [
-    6.0,
+    9.0,
     0.47,
-    23.08
+    23.5914
    ],
    "size": [
-    2.6,
+    2.886,
     0.06,
     0.02
    ],
@@ -14098,16 +13912,16 @@
   },
   {
    "name": "Ball Rack Lip Back 1",
-   "id": 457,
-   "parentId": 452,
-   "order": 457,
+   "id": 465,
+   "parentId": 460,
+   "order": 465,
    "center": [
-    6.0,
+    9.0,
     0.47,
-    23.48
+    24.1686
    ],
    "size": [
-    2.6,
+    2.886,
     0.06,
     0.02
    ],
@@ -14150,18 +13964,18 @@
   },
   {
    "name": "Ball Rack Shelf 2",
-   "id": 463,
-   "parentId": 452,
-   "order": 463,
+   "id": 471,
+   "parentId": 460,
+   "order": 471,
    "center": [
-    6.0,
-    0.95,
-    23.28
+    9.0,
+    1.0972,
+    23.88
    ],
    "size": [
-    2.6,
+    2.886,
     0.04,
-    0.44
+    0.5772
    ],
    "color": [
     1,
@@ -14202,16 +14016,16 @@
   },
   {
    "name": "Ball Rack Lip Front 2",
-   "id": 464,
-   "parentId": 452,
-   "order": 464,
+   "id": 472,
+   "parentId": 460,
+   "order": 472,
    "center": [
-    6.0,
-    1.0,
-    23.08
+    9.0,
+    1.1472,
+    23.5914
    ],
    "size": [
-    2.6,
+    2.886,
     0.06,
     0.02
    ],
@@ -14254,16 +14068,16 @@
   },
   {
    "name": "Ball Rack Lip Back 2",
-   "id": 465,
-   "parentId": 452,
-   "order": 465,
+   "id": 473,
+   "parentId": 460,
+   "order": 473,
    "center": [
-    6.0,
-    1.0,
-    23.48
+    9.0,
+    1.1472,
+    24.1686
    ],
    "size": [
-    2.6,
+    2.886,
     0.06,
     0.02
    ],
@@ -14306,13 +14120,13 @@
   },
   {
    "name": "Arena Fixture 1",
-   "id": 476,
-   "parentId": 474,
-   "order": 476,
+   "id": 484,
+   "parentId": 482,
+   "order": 484,
    "center": [
-    -7.2,
-    11.25,
-    28.4
+    -10.8,
+    14.25,
+    31.41
    ],
    "size": [
     0.9,
@@ -14358,13 +14172,13 @@
   },
   {
    "name": "Arena Fixture 2",
-   "id": 478,
-   "parentId": 474,
-   "order": 478,
+   "id": 486,
+   "parentId": 482,
+   "order": 486,
    "center": [
-    7.2,
-    11.25,
-    28.4
+    10.8,
+    14.25,
+    31.41
    ],
    "size": [
     0.9,
@@ -14410,13 +14224,13 @@
   },
   {
    "name": "Arena Fixture 3",
-   "id": 480,
-   "parentId": 474,
-   "order": 480,
+   "id": 488,
+   "parentId": 482,
+   "order": 488,
    "center": [
-    -7.2,
-    11.25,
-    35.6
+    -10.8,
+    14.25,
+    42.21
    ],
    "size": [
     0.9,
@@ -14462,13 +14276,13 @@
   },
   {
    "name": "Arena Fixture 4",
-   "id": 482,
-   "parentId": 474,
-   "order": 482,
+   "id": 490,
+   "parentId": 482,
+   "order": 490,
    "center": [
-    7.2,
-    11.25,
-    35.6
+    10.8,
+    14.25,
+    42.21
    ],
    "size": [
     0.9,
@@ -14514,9 +14328,9 @@
   },
   {
    "name": "Fountain Wall 1",
-   "id": 488,
-   "parentId": 486,
-   "order": 488,
+   "id": 496,
+   "parentId": 494,
+   "order": 496,
    "center": [
     2.3,
     0.3,
@@ -14566,9 +14380,9 @@
   },
   {
    "name": "Fountain Wall 2",
-   "id": 489,
-   "parentId": 486,
-   "order": 489,
+   "id": 497,
+   "parentId": 494,
+   "order": 497,
    "center": [
     2.1249,
     0.3,
@@ -14618,9 +14432,9 @@
   },
   {
    "name": "Fountain Wall 3",
-   "id": 490,
-   "parentId": 486,
-   "order": 490,
+   "id": 498,
+   "parentId": 494,
+   "order": 498,
    "center": [
     1.6263,
     0.3,
@@ -14670,9 +14484,9 @@
   },
   {
    "name": "Fountain Wall 4",
-   "id": 491,
-   "parentId": 486,
-   "order": 491,
+   "id": 499,
+   "parentId": 494,
+   "order": 499,
    "center": [
     0.8802,
     0.3,
@@ -14722,9 +14536,9 @@
   },
   {
    "name": "Fountain Wall 5",
-   "id": 492,
-   "parentId": 486,
-   "order": 492,
+   "id": 500,
+   "parentId": 494,
+   "order": 500,
    "center": [
     0.0,
     0.3,
@@ -14774,9 +14588,9 @@
   },
   {
    "name": "Fountain Wall 6",
-   "id": 493,
-   "parentId": 486,
-   "order": 493,
+   "id": 501,
+   "parentId": 494,
+   "order": 501,
    "center": [
     -0.8802,
     0.3,
@@ -14826,9 +14640,9 @@
   },
   {
    "name": "Fountain Wall 7",
-   "id": 494,
-   "parentId": 486,
-   "order": 494,
+   "id": 502,
+   "parentId": 494,
+   "order": 502,
    "center": [
     -1.6263,
     0.3,
@@ -14878,9 +14692,9 @@
   },
   {
    "name": "Fountain Wall 8",
-   "id": 495,
-   "parentId": 486,
-   "order": 495,
+   "id": 503,
+   "parentId": 494,
+   "order": 503,
    "center": [
     -2.1249,
     0.3,
@@ -14930,9 +14744,9 @@
   },
   {
    "name": "Fountain Wall 9",
-   "id": 496,
-   "parentId": 486,
-   "order": 496,
+   "id": 504,
+   "parentId": 494,
+   "order": 504,
    "center": [
     -2.3,
     0.3,
@@ -14982,9 +14796,9 @@
   },
   {
    "name": "Fountain Wall 10",
-   "id": 497,
-   "parentId": 486,
-   "order": 497,
+   "id": 505,
+   "parentId": 494,
+   "order": 505,
    "center": [
     -2.1249,
     0.3,
@@ -15034,9 +14848,9 @@
   },
   {
    "name": "Fountain Wall 11",
-   "id": 498,
-   "parentId": 486,
-   "order": 498,
+   "id": 506,
+   "parentId": 494,
+   "order": 506,
    "center": [
     -1.6263,
     0.3,
@@ -15086,9 +14900,9 @@
   },
   {
    "name": "Fountain Wall 12",
-   "id": 499,
-   "parentId": 486,
-   "order": 499,
+   "id": 507,
+   "parentId": 494,
+   "order": 507,
    "center": [
     -0.8802,
     0.3,
@@ -15138,9 +14952,9 @@
   },
   {
    "name": "Fountain Wall 13",
-   "id": 500,
-   "parentId": 486,
-   "order": 500,
+   "id": 508,
+   "parentId": 494,
+   "order": 508,
    "center": [
     -0.0,
     0.3,
@@ -15190,9 +15004,9 @@
   },
   {
    "name": "Fountain Wall 14",
-   "id": 501,
-   "parentId": 486,
-   "order": 501,
+   "id": 509,
+   "parentId": 494,
+   "order": 509,
    "center": [
     0.8802,
     0.3,
@@ -15242,9 +15056,9 @@
   },
   {
    "name": "Fountain Wall 15",
-   "id": 502,
-   "parentId": 486,
-   "order": 502,
+   "id": 510,
+   "parentId": 494,
+   "order": 510,
    "center": [
     1.6263,
     0.3,
@@ -15294,9 +15108,9 @@
   },
   {
    "name": "Fountain Wall 16",
-   "id": 503,
-   "parentId": 486,
-   "order": 503,
+   "id": 511,
+   "parentId": 494,
+   "order": 511,
    "center": [
     2.1249,
     0.3,
@@ -15346,9 +15160,9 @@
   },
   {
    "name": "Gallery Plinth",
-   "id": 536,
-   "parentId": 511,
-   "order": 536,
+   "id": 544,
+   "parentId": 519,
+   "order": 544,
    "center": [
     0,
     0.05,
@@ -15398,9 +15212,9 @@
   },
   {
    "name": "Gantry Post West",
-   "id": 538,
-   "parentId": 537,
-   "order": 538,
+   "id": 546,
+   "parentId": 545,
+   "order": 546,
    "center": [
     25.5,
     4.4,
@@ -15450,9 +15264,9 @@
   },
   {
    "name": "Gantry Post East",
-   "id": 539,
-   "parentId": 537,
-   "order": 539,
+   "id": 547,
+   "parentId": 545,
+   "order": 547,
    "center": [
     28.9,
     4.4,
@@ -15502,9 +15316,9 @@
   },
   {
    "name": "Gantry Beam",
-   "id": 540,
-   "parentId": 537,
-   "order": 540,
+   "id": 548,
+   "parentId": 545,
+   "order": 548,
    "center": [
     27.2,
     8.75,
@@ -15554,9 +15368,9 @@
   },
   {
    "name": "Lift Platform",
-   "id": 549,
+   "id": 557,
    "parentId": 256,
-   "order": 549,
+   "order": 557,
    "center": [
     -19.8,
     1.2,
@@ -16059,13 +15873,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.6,
-    "Min Speed": 0.8,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.08
    }
   },
   {
@@ -16140,13 +15947,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.6,
-    "Min Speed": 0.8,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.08
    }
   },
   {
@@ -16221,13 +16021,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.6,
-    "Min Speed": 0.8,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.08
    }
   },
   {
@@ -16302,13 +16095,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.6,
-    "Min Speed": 0.8,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.08
    }
   },
   {
@@ -16383,13 +16169,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.6,
-    "Min Speed": 0.8,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.08
    }
   },
   {
@@ -16464,13 +16243,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.6,
-    "Min Speed": 0.8,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.08
    }
   },
   {
@@ -16545,13 +16317,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.6,
-    "Min Speed": 0.8,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.08
    }
   },
   {
@@ -16626,13 +16391,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.6,
-    "Min Speed": 0.8,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.08
    }
   },
   {
@@ -16707,13 +16465,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.6,
-    "Min Speed": 0.8,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.08
    }
   },
   {
@@ -16788,13 +16539,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.6,
-    "Min Speed": 0.8,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.08
    }
   },
   {
@@ -16869,13 +16613,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.6,
-    "Min Speed": 0.8,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.08
    }
   },
   {
@@ -16950,13 +16687,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.6,
-    "Min Speed": 0.8,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.08
    }
   },
   {
@@ -17031,13 +16761,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.6,
-    "Min Speed": 0.8,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.08
    }
   },
   {
@@ -17112,13 +16835,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -17193,13 +16909,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -17274,13 +16983,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -17355,13 +17057,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -17436,13 +17131,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -17517,13 +17205,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -17598,13 +17279,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -17679,13 +17353,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -17760,13 +17427,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -17841,13 +17501,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -17922,13 +17575,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -18003,13 +17649,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -18084,13 +17723,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -18165,13 +17797,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -18246,13 +17871,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -18327,13 +17945,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -18408,13 +18019,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -18489,13 +18093,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -18570,13 +18167,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -18651,13 +18241,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -18732,13 +18315,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -18813,13 +18389,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -18894,13 +18463,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -18975,13 +18537,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -19056,13 +18611,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -19137,13 +18685,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -19218,13 +18759,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -19299,13 +18833,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -19380,13 +18907,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -19461,13 +18981,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -19542,13 +19055,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -19623,13 +19129,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -19704,13 +19203,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -19785,13 +19277,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -19866,13 +19351,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -19947,13 +19425,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -20028,13 +19499,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -20109,13 +19573,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -20190,13 +19647,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -20271,13 +19721,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -20352,13 +19795,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -20433,13 +19869,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -20514,13 +19943,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -20595,13 +20017,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -20676,13 +20091,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -20757,13 +20165,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -20838,13 +20239,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -20919,13 +20313,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -21000,13 +20387,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -21081,13 +20461,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -21162,13 +20535,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -21243,13 +20609,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -21324,13 +20683,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -21405,13 +20757,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -21486,13 +20831,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -21567,13 +20905,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -21648,13 +20979,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -21729,13 +21053,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -21810,13 +21127,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -21891,13 +21201,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -21972,13 +21275,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -22053,13 +21349,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -22134,13 +21423,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -22215,13 +21497,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -22296,13 +21571,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -22377,13 +21645,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -22458,13 +21719,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -22539,13 +21793,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -22620,13 +21867,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -22701,13 +21941,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -22782,13 +22015,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -22863,13 +22089,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -22944,13 +22163,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -23025,13 +22237,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -23106,13 +22311,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -23187,13 +22385,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -23268,13 +22459,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -23349,13 +22533,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -23430,13 +22607,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -23511,13 +22681,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -23592,13 +22755,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -23673,13 +22829,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -23754,13 +22903,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -23835,13 +22977,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -23916,13 +23051,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -23997,13 +23125,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -24078,13 +23199,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -24159,13 +23273,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -24240,13 +23347,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -24321,13 +23421,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -24402,13 +23495,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -24483,13 +23569,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -24564,13 +23643,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -24645,13 +23717,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -24726,13 +23791,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -24807,13 +23865,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -24888,13 +23939,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -24969,13 +24013,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -25050,13 +24087,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -25131,13 +24161,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -25212,13 +24235,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -25293,13 +24309,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -25374,13 +24383,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -25455,13 +24457,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -25536,13 +24531,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -25617,13 +24605,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -25698,13 +24679,6 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
@@ -25779,25 +24753,18 @@
     "Freeze Rotation Y": false,
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rubber_ball.wav",
-    "Volume": 0.18,
-    "Min Speed": 1.5,
-    "Max Speed": 6.0,
-    "Pitch Variation": 0.15
    }
   },
   {
    "path": "models/basketball/rim.obj",
    "name": "Rim West",
-   "id": 345,
-   "parentId": 339,
-   "order": 345,
+   "id": 353,
+   "parentId": 347,
+   "order": 353,
    "position": [
-    -12.725,
+    -19.0875,
     3.17,
-    32.0
+    36.81
    ],
    "rotation": [
     0,
@@ -25805,9 +24772,9 @@
     0
    ],
    "scale": [
-    1,
-    1,
-    1
+    2.0,
+    2.0,
+    2.0
    ],
    "materials": [
     {
@@ -25819,25 +24786,18 @@
     "shape": 4,
     "friction": 0.5,
     "bounciness": 0.35
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rim_clang.wav",
-    "Volume": 0.75,
-    "Min Speed": 0.7,
-    "Max Speed": 8.0,
-    "Pitch Variation": 0.05
    }
   },
   {
    "path": "models/basketball/net.obj",
    "name": "Net West",
-   "id": 347,
-   "parentId": 339,
-   "order": 347,
+   "id": 355,
+   "parentId": 347,
+   "order": 355,
    "position": [
-    -12.725,
+    -19.0875,
     3.17,
-    32.0
+    36.81
    ],
    "rotation": [
     0,
@@ -25845,9 +24805,9 @@
     0
    ],
    "scale": [
-    1,
-    1,
-    1
+    2.0,
+    2.0,
+    2.0
    ],
    "materials": [
     {
@@ -25858,13 +24818,13 @@
   {
    "path": "models/basketball/rim.obj",
    "name": "Rim East",
-   "id": 363,
-   "parentId": 357,
-   "order": 363,
+   "id": 371,
+   "parentId": 365,
+   "order": 371,
    "position": [
-    12.725,
+    19.0875,
     3.17,
-    32.0
+    36.81
    ],
    "rotation": [
     0,
@@ -25872,9 +24832,9 @@
     0
    ],
    "scale": [
-    1,
-    1,
-    1
+    2.0,
+    2.0,
+    2.0
    ],
    "materials": [
     {
@@ -25886,25 +24846,18 @@
     "shape": 4,
     "friction": 0.5,
     "bounciness": 0.35
-   },
-   "Impact Sound": {
-    "Clip": "sounds/rim_clang.wav",
-    "Volume": 0.75,
-    "Min Speed": 0.7,
-    "Max Speed": 8.0,
-    "Pitch Variation": 0.05
    }
   },
   {
    "path": "models/basketball/net.obj",
    "name": "Net East",
-   "id": 365,
-   "parentId": 357,
-   "order": 365,
+   "id": 373,
+   "parentId": 365,
+   "order": 373,
    "position": [
-    12.725,
+    19.0875,
     3.17,
-    32.0
+    36.81
    ],
    "rotation": [
     0,
@@ -25912,314 +24865,13 @@
     0
    ],
    "scale": [
-    1,
-    1,
-    1
+    2.0,
+    2.0,
+    2.0
    ],
    "materials": [
     {
      "path": "materials/sandbox/net.mat"
-    }
-   ]
-  },
-  {
-   "path": "primitive://cube#p385",
-   "name": "Seg A",
-   "id": 385,
-   "parentId": 384,
-   "order": 385,
-   "position": [
-    0.0,
-    0.4,
-    0
-   ],
-   "rotation": [
-    0,
-    0,
-    0
-   ],
-   "scale": [
-    0.34,
-    0.075,
-    0.03
-   ],
-   "materials": [
-    {
-     "embedded": {
-      "baseColor": [
-       0.08,
-       0.05,
-       0.04
-      ],
-      "metallic": 0.0,
-      "roughness": 0.4,
-      "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
-      ],
-      "emissiveStrength": 0.05,
-      "triplanar": false,
-      "triplanarScale": 1.0
-     }
-    }
-   ]
-  },
-  {
-   "path": "primitive://cube#p386",
-   "name": "Seg B",
-   "id": 386,
-   "parentId": 384,
-   "order": 386,
-   "position": [
-    0.21,
-    0.2,
-    0
-   ],
-   "rotation": [
-    0,
-    0,
-    0
-   ],
-   "scale": [
-    0.075,
-    0.34,
-    0.03
-   ],
-   "materials": [
-    {
-     "embedded": {
-      "baseColor": [
-       0.08,
-       0.05,
-       0.04
-      ],
-      "metallic": 0.0,
-      "roughness": 0.4,
-      "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
-      ],
-      "emissiveStrength": 0.05,
-      "triplanar": false,
-      "triplanarScale": 1.0
-     }
-    }
-   ]
-  },
-  {
-   "path": "primitive://cube#p387",
-   "name": "Seg C",
-   "id": 387,
-   "parentId": 384,
-   "order": 387,
-   "position": [
-    0.21,
-    -0.2,
-    0
-   ],
-   "rotation": [
-    0,
-    0,
-    0
-   ],
-   "scale": [
-    0.075,
-    0.34,
-    0.03
-   ],
-   "materials": [
-    {
-     "embedded": {
-      "baseColor": [
-       0.08,
-       0.05,
-       0.04
-      ],
-      "metallic": 0.0,
-      "roughness": 0.4,
-      "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
-      ],
-      "emissiveStrength": 0.05,
-      "triplanar": false,
-      "triplanarScale": 1.0
-     }
-    }
-   ]
-  },
-  {
-   "path": "primitive://cube#p388",
-   "name": "Seg D",
-   "id": 388,
-   "parentId": 384,
-   "order": 388,
-   "position": [
-    0.0,
-    -0.4,
-    0
-   ],
-   "rotation": [
-    0,
-    0,
-    0
-   ],
-   "scale": [
-    0.34,
-    0.075,
-    0.03
-   ],
-   "materials": [
-    {
-     "embedded": {
-      "baseColor": [
-       0.08,
-       0.05,
-       0.04
-      ],
-      "metallic": 0.0,
-      "roughness": 0.4,
-      "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
-      ],
-      "emissiveStrength": 0.05,
-      "triplanar": false,
-      "triplanarScale": 1.0
-     }
-    }
-   ]
-  },
-  {
-   "path": "primitive://cube#p389",
-   "name": "Seg E",
-   "id": 389,
-   "parentId": 384,
-   "order": 389,
-   "position": [
-    -0.21,
-    -0.2,
-    0
-   ],
-   "rotation": [
-    0,
-    0,
-    0
-   ],
-   "scale": [
-    0.075,
-    0.34,
-    0.03
-   ],
-   "materials": [
-    {
-     "embedded": {
-      "baseColor": [
-       0.08,
-       0.05,
-       0.04
-      ],
-      "metallic": 0.0,
-      "roughness": 0.4,
-      "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
-      ],
-      "emissiveStrength": 0.05,
-      "triplanar": false,
-      "triplanarScale": 1.0
-     }
-    }
-   ]
-  },
-  {
-   "path": "primitive://cube#p390",
-   "name": "Seg F",
-   "id": 390,
-   "parentId": 384,
-   "order": 390,
-   "position": [
-    -0.21,
-    0.2,
-    0
-   ],
-   "rotation": [
-    0,
-    0,
-    0
-   ],
-   "scale": [
-    0.075,
-    0.34,
-    0.03
-   ],
-   "materials": [
-    {
-     "embedded": {
-      "baseColor": [
-       0.08,
-       0.05,
-       0.04
-      ],
-      "metallic": 0.0,
-      "roughness": 0.4,
-      "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
-      ],
-      "emissiveStrength": 0.05,
-      "triplanar": false,
-      "triplanarScale": 1.0
-     }
-    }
-   ]
-  },
-  {
-   "path": "primitive://cube#p391",
-   "name": "Seg G",
-   "id": 391,
-   "parentId": 384,
-   "order": 391,
-   "position": [
-    0.0,
-    0.0,
-    0
-   ],
-   "rotation": [
-    0,
-    0,
-    0
-   ],
-   "scale": [
-    0.34,
-    0.075,
-    0.03
-   ],
-   "materials": [
-    {
-     "embedded": {
-      "baseColor": [
-       0.08,
-       0.05,
-       0.04
-      ],
-      "metallic": 0.0,
-      "roughness": 0.4,
-      "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
-      ],
-      "emissiveStrength": 0.05,
-      "triplanar": false,
-      "triplanarScale": 1.0
-     }
     }
    ]
   },
@@ -26259,7 +24911,7 @@
        0.45,
        0.1
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26302,7 +24954,7 @@
        0.45,
        0.1
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26345,7 +24997,7 @@
        0.45,
        0.1
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26388,7 +25040,7 @@
        0.45,
        0.1
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26431,7 +25083,7 @@
        0.45,
        0.1
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26474,7 +25126,7 @@
        0.45,
        0.1
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26525,11 +25177,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p402",
+   "path": "primitive://cube#p401",
    "name": "Seg A",
-   "id": 402,
-   "parentId": 401,
-   "order": 402,
+   "id": 401,
+   "parentId": 400,
+   "order": 401,
    "position": [
     0.0,
     0.4,
@@ -26556,11 +25208,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26568,11 +25220,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p403",
+   "path": "primitive://cube#p402",
    "name": "Seg B",
-   "id": 403,
-   "parentId": 401,
-   "order": 403,
+   "id": 402,
+   "parentId": 400,
+   "order": 402,
    "position": [
     0.21,
     0.2,
@@ -26599,11 +25251,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26611,11 +25263,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p404",
+   "path": "primitive://cube#p403",
    "name": "Seg C",
-   "id": 404,
-   "parentId": 401,
-   "order": 404,
+   "id": 403,
+   "parentId": 400,
+   "order": 403,
    "position": [
     0.21,
     -0.2,
@@ -26642,11 +25294,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26654,11 +25306,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p405",
+   "path": "primitive://cube#p404",
    "name": "Seg D",
-   "id": 405,
-   "parentId": 401,
-   "order": 405,
+   "id": 404,
+   "parentId": 400,
+   "order": 404,
    "position": [
     0.0,
     -0.4,
@@ -26685,11 +25337,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26697,11 +25349,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p406",
+   "path": "primitive://cube#p405",
    "name": "Seg E",
-   "id": 406,
-   "parentId": 401,
-   "order": 406,
+   "id": 405,
+   "parentId": 400,
+   "order": 405,
    "position": [
     -0.21,
     -0.2,
@@ -26728,11 +25380,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26740,11 +25392,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p407",
+   "path": "primitive://cube#p406",
    "name": "Seg F",
-   "id": 407,
-   "parentId": 401,
-   "order": 407,
+   "id": 406,
+   "parentId": 400,
+   "order": 406,
    "position": [
     -0.21,
     0.2,
@@ -26771,11 +25423,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26783,11 +25435,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p408",
+   "path": "primitive://cube#p407",
    "name": "Seg G",
-   "id": 408,
-   "parentId": 401,
-   "order": 408,
+   "id": 407,
+   "parentId": 400,
+   "order": 407,
    "position": [
     0.0,
     0.0,
@@ -26814,9 +25466,9 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
       "emissiveStrength": 0.05,
       "triplanar": false,
@@ -26861,7 +25513,7 @@
        0.75,
        1.0
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26904,7 +25556,7 @@
        0.75,
        1.0
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26947,7 +25599,7 @@
        0.75,
        1.0
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -26990,7 +25642,7 @@
        0.75,
        1.0
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27033,7 +25685,7 @@
        0.75,
        1.0
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27076,7 +25728,7 @@
        0.75,
        1.0
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27127,13 +25779,13 @@
    ]
   },
   {
-   "path": "primitive://cube#p419",
+   "path": "primitive://cube#p418",
    "name": "Seg A",
-   "id": 419,
-   "parentId": 418,
-   "order": 419,
+   "id": 418,
+   "parentId": 417,
+   "order": 418,
    "position": [
-    -0.0,
+    0.0,
     0.4,
     0
    ],
@@ -27158,11 +25810,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
+       0.2,
+       0.75,
+       1.0
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27170,13 +25822,13 @@
    ]
   },
   {
-   "path": "primitive://cube#p420",
+   "path": "primitive://cube#p419",
    "name": "Seg B",
-   "id": 420,
-   "parentId": 418,
-   "order": 420,
+   "id": 419,
+   "parentId": 417,
+   "order": 419,
    "position": [
-    -0.21,
+    0.21,
     0.2,
     0
    ],
@@ -27201,11 +25853,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
+       0.2,
+       0.75,
+       1.0
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27213,13 +25865,13 @@
    ]
   },
   {
-   "path": "primitive://cube#p421",
+   "path": "primitive://cube#p420",
    "name": "Seg C",
-   "id": 421,
-   "parentId": 418,
-   "order": 421,
+   "id": 420,
+   "parentId": 417,
+   "order": 420,
    "position": [
-    -0.21,
+    0.21,
     -0.2,
     0
    ],
@@ -27244,11 +25896,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
+       0.2,
+       0.75,
+       1.0
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27256,13 +25908,13 @@
    ]
   },
   {
-   "path": "primitive://cube#p422",
+   "path": "primitive://cube#p421",
    "name": "Seg D",
-   "id": 422,
-   "parentId": 418,
-   "order": 422,
+   "id": 421,
+   "parentId": 417,
+   "order": 421,
    "position": [
-    -0.0,
+    0.0,
     -0.4,
     0
    ],
@@ -27287,11 +25939,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
+       0.2,
+       0.75,
+       1.0
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27299,13 +25951,13 @@
    ]
   },
   {
-   "path": "primitive://cube#p423",
+   "path": "primitive://cube#p422",
    "name": "Seg E",
-   "id": 423,
-   "parentId": 418,
-   "order": 423,
+   "id": 422,
+   "parentId": 417,
+   "order": 422,
    "position": [
-    0.21,
+    -0.21,
     -0.2,
     0
    ],
@@ -27330,11 +25982,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
+       0.2,
+       0.75,
+       1.0
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27342,13 +25994,13 @@
    ]
   },
   {
-   "path": "primitive://cube#p424",
+   "path": "primitive://cube#p423",
    "name": "Seg F",
-   "id": 424,
-   "parentId": 418,
-   "order": 424,
+   "id": 423,
+   "parentId": 417,
+   "order": 423,
    "position": [
-    0.21,
+    -0.21,
     0.2,
     0
    ],
@@ -27373,11 +26025,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
+       0.2,
+       0.75,
+       1.0
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27385,13 +26037,13 @@
    ]
   },
   {
-   "path": "primitive://cube#p425",
+   "path": "primitive://cube#p424",
    "name": "Seg G",
-   "id": 425,
-   "parentId": 418,
-   "order": 425,
+   "id": 424,
+   "parentId": 417,
+   "order": 424,
    "position": [
-    -0.0,
+    0.0,
     0.0,
     0
    ],
@@ -27416,9 +26068,9 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       1.0,
-       0.45,
-       0.1
+       0.2,
+       0.75,
+       1.0
       ],
       "emissiveStrength": 0.05,
       "triplanar": false,
@@ -27463,7 +26115,7 @@
        0.45,
        0.1
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27506,7 +26158,7 @@
        0.45,
        0.1
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27549,7 +26201,7 @@
        0.45,
        0.1
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27592,7 +26244,7 @@
        0.45,
        0.1
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27635,7 +26287,7 @@
        0.45,
        0.1
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27678,7 +26330,7 @@
        0.45,
        0.1
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27729,11 +26381,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p436",
+   "path": "primitive://cube#p435",
    "name": "Seg A",
-   "id": 436,
-   "parentId": 435,
-   "order": 436,
+   "id": 435,
+   "parentId": 434,
+   "order": 435,
    "position": [
     -0.0,
     0.4,
@@ -27760,11 +26412,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27772,11 +26424,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p437",
+   "path": "primitive://cube#p436",
    "name": "Seg B",
-   "id": 437,
-   "parentId": 435,
-   "order": 437,
+   "id": 436,
+   "parentId": 434,
+   "order": 436,
    "position": [
     -0.21,
     0.2,
@@ -27803,11 +26455,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27815,11 +26467,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p438",
+   "path": "primitive://cube#p437",
    "name": "Seg C",
-   "id": 438,
-   "parentId": 435,
-   "order": 438,
+   "id": 437,
+   "parentId": 434,
+   "order": 437,
    "position": [
     -0.21,
     -0.2,
@@ -27846,11 +26498,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27858,11 +26510,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p439",
+   "path": "primitive://cube#p438",
    "name": "Seg D",
-   "id": 439,
-   "parentId": 435,
-   "order": 439,
+   "id": 438,
+   "parentId": 434,
+   "order": 438,
    "position": [
     -0.0,
     -0.4,
@@ -27889,11 +26541,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27901,11 +26553,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p440",
+   "path": "primitive://cube#p439",
    "name": "Seg E",
-   "id": 440,
-   "parentId": 435,
-   "order": 440,
+   "id": 439,
+   "parentId": 434,
+   "order": 439,
    "position": [
     0.21,
     -0.2,
@@ -27932,11 +26584,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27944,11 +26596,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p441",
+   "path": "primitive://cube#p440",
    "name": "Seg F",
-   "id": 441,
-   "parentId": 435,
-   "order": 441,
+   "id": 440,
+   "parentId": 434,
+   "order": 440,
    "position": [
     0.21,
     0.2,
@@ -27975,11 +26627,11 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
-      "emissiveStrength": 0.05,
+      "emissiveStrength": 7.0,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -27987,11 +26639,11 @@
    ]
   },
   {
-   "path": "primitive://cube#p442",
+   "path": "primitive://cube#p441",
    "name": "Seg G",
-   "id": 442,
-   "parentId": 435,
-   "order": 442,
+   "id": 441,
+   "parentId": 434,
+   "order": 441,
    "position": [
     -0.0,
     0.0,
@@ -28018,9 +26670,9 @@
       "metallic": 0.0,
       "roughness": 0.4,
       "emissiveColor": [
-       0.2,
-       0.75,
-       1.0
+       1.0,
+       0.45,
+       0.1
       ],
       "emissiveStrength": 0.05,
       "triplanar": false,
@@ -28065,7 +26717,7 @@
        0.75,
        1.0
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -28108,7 +26760,7 @@
        0.75,
        1.0
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -28151,7 +26803,7 @@
        0.75,
        1.0
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -28194,7 +26846,7 @@
        0.75,
        1.0
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -28237,7 +26889,7 @@
        0.75,
        1.0
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -28280,7 +26932,7 @@
        0.75,
        1.0
       ],
-      "emissiveStrength": 7.0,
+      "emissiveStrength": 0.05,
       "triplanar": false,
       "triplanarScale": 1.0
      }
@@ -28331,15 +26983,316 @@
    ]
   },
   {
-   "path": "models/basketball/basketball.obj",
-   "name": "Basketball 1",
+   "path": "primitive://cube#p452",
+   "name": "Seg A",
+   "id": 452,
+   "parentId": 451,
+   "order": 452,
+   "position": [
+    -0.0,
+    0.4,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    0.34,
+    0.075,
+    0.03
+   ],
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.08,
+       0.05,
+       0.04
+      ],
+      "metallic": 0.0,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0.2,
+       0.75,
+       1.0
+      ],
+      "emissiveStrength": 7.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "path": "primitive://cube#p453",
+   "name": "Seg B",
+   "id": 453,
+   "parentId": 451,
+   "order": 453,
+   "position": [
+    -0.21,
+    0.2,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    0.075,
+    0.34,
+    0.03
+   ],
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.08,
+       0.05,
+       0.04
+      ],
+      "metallic": 0.0,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0.2,
+       0.75,
+       1.0
+      ],
+      "emissiveStrength": 7.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "path": "primitive://cube#p454",
+   "name": "Seg C",
+   "id": 454,
+   "parentId": 451,
+   "order": 454,
+   "position": [
+    -0.21,
+    -0.2,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    0.075,
+    0.34,
+    0.03
+   ],
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.08,
+       0.05,
+       0.04
+      ],
+      "metallic": 0.0,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0.2,
+       0.75,
+       1.0
+      ],
+      "emissiveStrength": 7.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "path": "primitive://cube#p455",
+   "name": "Seg D",
+   "id": 455,
+   "parentId": 451,
+   "order": 455,
+   "position": [
+    -0.0,
+    -0.4,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    0.34,
+    0.075,
+    0.03
+   ],
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.08,
+       0.05,
+       0.04
+      ],
+      "metallic": 0.0,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0.2,
+       0.75,
+       1.0
+      ],
+      "emissiveStrength": 7.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "path": "primitive://cube#p456",
+   "name": "Seg E",
+   "id": 456,
+   "parentId": 451,
+   "order": 456,
+   "position": [
+    0.21,
+    -0.2,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    0.075,
+    0.34,
+    0.03
+   ],
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.08,
+       0.05,
+       0.04
+      ],
+      "metallic": 0.0,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0.2,
+       0.75,
+       1.0
+      ],
+      "emissiveStrength": 7.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "path": "primitive://cube#p457",
+   "name": "Seg F",
+   "id": 457,
+   "parentId": 451,
+   "order": 457,
+   "position": [
+    0.21,
+    0.2,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    0.075,
+    0.34,
+    0.03
+   ],
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.08,
+       0.05,
+       0.04
+      ],
+      "metallic": 0.0,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0.2,
+       0.75,
+       1.0
+      ],
+      "emissiveStrength": 7.0,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "path": "primitive://cube#p458",
+   "name": "Seg G",
    "id": 458,
-   "parentId": 452,
+   "parentId": 451,
    "order": 458,
    "position": [
-    5.0,
-    0.5603,
-    23.28
+    -0.0,
+    0.0,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    0.34,
+    0.075,
+    0.03
+   ],
+   "materials": [
+    {
+     "embedded": {
+      "baseColor": [
+       0.08,
+       0.05,
+       0.04
+      ],
+      "metallic": 0.0,
+      "roughness": 0.4,
+      "emissiveColor": [
+       0.2,
+       0.75,
+       1.0
+      ],
+      "emissiveStrength": 0.05,
+      "triplanar": false,
+      "triplanarScale": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "path": "models/basketball/basketball.obj",
+   "name": "Basketball 1",
+   "id": 466,
+   "parentId": 460,
+   "order": 466,
+   "position": [
+    7.8856,
+    0.6796,
+    23.88
    ],
    "rotation": [
     33.1898,
@@ -28347,9 +27300,9 @@
     0
    ],
    "scale": [
-    0.2386,
-    0.2386,
-    0.2386
+    0.4772,
+    0.4772,
+    0.4772
    ],
    "materials": [
     {
@@ -28388,25 +27341,18 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "tag": "Basketball",
-   "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
-   }
+   "tag": "Basketball"
   },
   {
    "path": "models/basketball/basketball.obj",
    "name": "Basketball 2",
-   "id": 459,
-   "parentId": 452,
-   "order": 459,
+   "id": 467,
+   "parentId": 460,
+   "order": 467,
    "position": [
-    5.5,
-    0.5603,
-    23.28
+    8.4428,
+    0.6796,
+    23.88
    ],
    "rotation": [
     121.6727,
@@ -28414,9 +27360,9 @@
     0
    ],
    "scale": [
-    0.2386,
-    0.2386,
-    0.2386
+    0.4772,
+    0.4772,
+    0.4772
    ],
    "materials": [
     {
@@ -28455,25 +27401,18 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "tag": "Basketball",
-   "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
-   }
+   "tag": "Basketball"
   },
   {
    "path": "models/basketball/basketball.obj",
    "name": "Basketball 3",
-   "id": 460,
-   "parentId": 452,
-   "order": 460,
+   "id": 468,
+   "parentId": 460,
+   "order": 468,
    "position": [
-    6.0,
-    0.5603,
-    23.28
+    9.0,
+    0.6796,
+    23.88
    ],
    "rotation": [
     253.1345,
@@ -28481,9 +27420,9 @@
     0
    ],
    "scale": [
-    0.2386,
-    0.2386,
-    0.2386
+    0.4772,
+    0.4772,
+    0.4772
    ],
    "materials": [
     {
@@ -28522,25 +27461,18 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "tag": "Basketball",
-   "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
-   }
+   "tag": "Basketball"
   },
   {
    "path": "models/basketball/basketball.obj",
    "name": "Basketball 4",
-   "id": 461,
-   "parentId": 452,
-   "order": 461,
+   "id": 469,
+   "parentId": 460,
+   "order": 469,
    "position": [
-    6.5,
-    0.5603,
-    23.28
+    9.5572,
+    0.6796,
+    23.88
    ],
    "rotation": [
     186.2762,
@@ -28548,9 +27480,9 @@
     0
    ],
    "scale": [
-    0.2386,
-    0.2386,
-    0.2386
+    0.4772,
+    0.4772,
+    0.4772
    ],
    "materials": [
     {
@@ -28589,25 +27521,18 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "tag": "Basketball",
-   "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
-   }
+   "tag": "Basketball"
   },
   {
    "path": "models/basketball/basketball.obj",
    "name": "Basketball 5",
-   "id": 462,
-   "parentId": 452,
-   "order": 462,
+   "id": 470,
+   "parentId": 460,
+   "order": 470,
    "position": [
-    7.0,
-    0.5603,
-    23.28
+    10.1144,
+    0.6796,
+    23.88
    ],
    "rotation": [
     345.8789,
@@ -28615,9 +27540,9 @@
     0
    ],
    "scale": [
-    0.2386,
-    0.2386,
-    0.2386
+    0.4772,
+    0.4772,
+    0.4772
    ],
    "materials": [
     {
@@ -28656,25 +27581,18 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "tag": "Basketball",
-   "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
-   }
+   "tag": "Basketball"
   },
   {
    "path": "models/basketball/basketball.obj",
    "name": "Basketball 6",
-   "id": 466,
-   "parentId": 452,
-   "order": 466,
+   "id": 474,
+   "parentId": 460,
+   "order": 474,
    "position": [
-    5.0,
-    1.0903,
-    23.28
+    7.8856,
+    1.3568,
+    23.88
    ],
    "rotation": [
     330.6773,
@@ -28682,9 +27600,9 @@
     0
    ],
    "scale": [
-    0.2386,
-    0.2386,
-    0.2386
+    0.4772,
+    0.4772,
+    0.4772
    ],
    "materials": [
     {
@@ -28723,25 +27641,18 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "tag": "Basketball",
-   "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
-   }
+   "tag": "Basketball"
   },
   {
    "path": "models/basketball/basketball.obj",
    "name": "Basketball 7",
-   "id": 467,
-   "parentId": 452,
-   "order": 467,
+   "id": 475,
+   "parentId": 460,
+   "order": 475,
    "position": [
-    5.5,
-    1.0903,
-    23.28
+    8.4428,
+    1.3568,
+    23.88
    ],
    "rotation": [
     315.5012,
@@ -28749,9 +27660,9 @@
     0
    ],
    "scale": [
-    0.2386,
-    0.2386,
-    0.2386
+    0.4772,
+    0.4772,
+    0.4772
    ],
    "materials": [
     {
@@ -28790,25 +27701,18 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "tag": "Basketball",
-   "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
-   }
+   "tag": "Basketball"
   },
   {
    "path": "models/basketball/basketball.obj",
    "name": "Basketball 8",
-   "id": 468,
-   "parentId": 452,
-   "order": 468,
+   "id": 476,
+   "parentId": 460,
+   "order": 476,
    "position": [
-    6.0,
-    1.0903,
-    23.28
+    9.0,
+    1.3568,
+    23.88
    ],
    "rotation": [
     97.8914,
@@ -28816,9 +27720,9 @@
     0
    ],
    "scale": [
-    0.2386,
-    0.2386,
-    0.2386
+    0.4772,
+    0.4772,
+    0.4772
    ],
    "materials": [
     {
@@ -28857,25 +27761,18 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "tag": "Basketball",
-   "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
-   }
+   "tag": "Basketball"
   },
   {
    "path": "models/basketball/basketball.obj",
    "name": "Basketball 9",
-   "id": 469,
-   "parentId": 452,
-   "order": 469,
+   "id": 477,
+   "parentId": 460,
+   "order": 477,
    "position": [
-    6.5,
-    1.0903,
-    23.28
+    9.5572,
+    1.3568,
+    23.88
    ],
    "rotation": [
     65.3585,
@@ -28883,9 +27780,9 @@
     0
    ],
    "scale": [
-    0.2386,
-    0.2386,
-    0.2386
+    0.4772,
+    0.4772,
+    0.4772
    ],
    "materials": [
     {
@@ -28924,25 +27821,18 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "tag": "Basketball",
-   "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
-   }
+   "tag": "Basketball"
   },
   {
    "path": "models/basketball/basketball.obj",
    "name": "Basketball 10",
-   "id": 470,
-   "parentId": 452,
-   "order": 470,
+   "id": 478,
+   "parentId": 460,
+   "order": 478,
    "position": [
-    7.0,
-    1.0903,
-    23.28
+    10.1144,
+    1.3568,
+    23.88
    ],
    "rotation": [
     295.1198,
@@ -28950,9 +27840,9 @@
     0
    ],
    "scale": [
-    0.2386,
-    0.2386,
-    0.2386
+    0.4772,
+    0.4772,
+    0.4772
    ],
    "materials": [
     {
@@ -28991,25 +27881,18 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "tag": "Basketball",
-   "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
-   }
+   "tag": "Basketball"
   },
   {
    "path": "models/basketball/basketball.obj",
    "name": "Basketball Centre Court",
-   "id": 471,
-   "parentId": 452,
-   "order": 471,
+   "id": 479,
+   "parentId": 460,
+   "order": 479,
    "position": [
     0,
-    0.2403,
-    32.0
+    0.3596,
+    36.81
    ],
    "rotation": [
     243.3505,
@@ -29017,9 +27900,9 @@
     0
    ],
    "scale": [
-    0.2386,
-    0.2386,
-    0.2386
+    0.4772,
+    0.4772,
+    0.4772
    ],
    "materials": [
     {
@@ -29058,25 +27941,18 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "tag": "Basketball",
-   "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
-   }
+   "tag": "Basketball"
   },
   {
    "path": "models/basketball/basketball.obj",
    "name": "Basketball Free Throw West",
-   "id": 472,
-   "parentId": 452,
-   "order": 472,
+   "id": 480,
+   "parentId": 460,
+   "order": 480,
    "position": [
-    -8.235,
-    0.2403,
-    32.4
+    -12.5025,
+    0.3596,
+    37.41
    ],
    "rotation": [
     146.1412,
@@ -29084,9 +27960,9 @@
     0
    ],
    "scale": [
-    0.2386,
-    0.2386,
-    0.2386
+    0.4772,
+    0.4772,
+    0.4772
    ],
    "materials": [
     {
@@ -29125,25 +28001,18 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "tag": "Basketball",
-   "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
-   }
+   "tag": "Basketball"
   },
   {
    "path": "models/basketball/basketball.obj",
    "name": "Basketball Free Throw East",
-   "id": 473,
-   "parentId": 452,
-   "order": 473,
+   "id": 481,
+   "parentId": 460,
+   "order": 481,
    "position": [
-    8.235,
-    0.2403,
-    32.4
+    12.5025,
+    0.3596,
+    37.41
    ],
    "rotation": [
     185.3217,
@@ -29151,9 +28020,9 @@
     0
    ],
    "scale": [
-    0.2386,
-    0.2386,
-    0.2386
+    0.4772,
+    0.4772,
+    0.4772
    ],
    "materials": [
     {
@@ -29192,21 +28061,14 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "tag": "Basketball",
-   "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
-   }
+   "tag": "Basketball"
   },
   {
-   "path": "primitive://cylinder#p487",
+   "path": "primitive://cylinder#p495",
    "name": "Fountain Basin Floor",
-   "id": 487,
-   "parentId": 486,
-   "order": 487,
+   "id": 495,
+   "parentId": 494,
+   "order": 495,
    "position": [
     0,
     0.06,
@@ -29251,11 +28113,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p504",
+   "path": "primitive://cylinder#p512",
    "name": "Fountain Water",
-   "id": 504,
-   "parentId": 486,
-   "order": 504,
+   "id": 512,
+   "parentId": 494,
+   "order": 512,
    "position": [
     0,
     0.42,
@@ -29278,11 +28140,11 @@
    ]
   },
   {
-   "path": "primitive://cylinder#p505",
+   "path": "primitive://cylinder#p513",
    "name": "Fountain Column",
-   "id": 505,
-   "parentId": 486,
-   "order": 505,
+   "id": 513,
+   "parentId": 494,
+   "order": 513,
    "position": [
     0,
     0.75,
@@ -29327,11 +28189,11 @@
    }
   },
   {
-   "path": "primitive://donut#p506",
+   "path": "primitive://donut#p514",
    "name": "Fountain Bowl",
-   "id": 506,
-   "parentId": 486,
-   "order": 506,
+   "id": 514,
+   "parentId": 494,
+   "order": 514,
    "position": [
     0,
     1.5,
@@ -29370,11 +28232,11 @@
    ]
   },
   {
-   "path": "primitive://cylinder#p507",
+   "path": "primitive://cylinder#p515",
    "name": "Fountain Spout",
-   "id": 507,
-   "parentId": 486,
-   "order": 507,
+   "id": 515,
+   "parentId": 494,
+   "order": 515,
    "position": [
     0,
     1.6,
@@ -29413,11 +28275,11 @@
    ]
   },
   {
-   "path": "primitive://cylinder#p512",
+   "path": "primitive://cylinder#p520",
    "name": "Pedestal Chrome",
-   "id": 512,
-   "parentId": 511,
-   "order": 512,
+   "id": 520,
+   "parentId": 519,
+   "order": 520,
    "position": [
     -7.0,
     0.5,
@@ -29462,11 +28324,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p513",
+   "path": "primitive://cylinder#p521",
    "name": "Pedestal Cap Chrome",
-   "id": 513,
-   "parentId": 511,
-   "order": 513,
+   "id": 521,
+   "parentId": 519,
+   "order": 521,
    "position": [
     -7.0,
     1.02,
@@ -29505,11 +28367,11 @@
    ]
   },
   {
-   "path": "primitive://sphere#s514",
+   "path": "primitive://sphere#s522",
    "name": "Gallery Chrome",
-   "id": 514,
-   "parentId": 511,
-   "order": 514,
+   "id": 522,
+   "parentId": 519,
+   "order": 522,
    "position": [
     -7.0,
     1.5,
@@ -29543,11 +28405,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p515",
+   "path": "primitive://cylinder#p523",
    "name": "Pedestal Gold",
-   "id": 515,
-   "parentId": 511,
-   "order": 515,
+   "id": 523,
+   "parentId": 519,
+   "order": 523,
    "position": [
     -5.0,
     0.5,
@@ -29592,11 +28454,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p516",
+   "path": "primitive://cylinder#p524",
    "name": "Pedestal Cap Gold",
-   "id": 516,
-   "parentId": 511,
-   "order": 516,
+   "id": 524,
+   "parentId": 519,
+   "order": 524,
    "position": [
     -5.0,
     1.02,
@@ -29635,11 +28497,11 @@
    ]
   },
   {
-   "path": "primitive://sphere#s517",
+   "path": "primitive://sphere#s525",
    "name": "Gallery Gold",
-   "id": 517,
-   "parentId": 511,
-   "order": 517,
+   "id": 525,
+   "parentId": 519,
+   "order": 525,
    "position": [
     -5.0,
     1.5,
@@ -29673,11 +28535,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p518",
+   "path": "primitive://cylinder#p526",
    "name": "Pedestal Brushed Steel",
-   "id": 518,
-   "parentId": 511,
-   "order": 518,
+   "id": 526,
+   "parentId": 519,
+   "order": 526,
    "position": [
     -3.0,
     0.5,
@@ -29722,11 +28584,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p519",
+   "path": "primitive://cylinder#p527",
    "name": "Pedestal Cap Brushed Steel",
-   "id": 519,
-   "parentId": 511,
-   "order": 519,
+   "id": 527,
+   "parentId": 519,
+   "order": 527,
    "position": [
     -3.0,
     1.02,
@@ -29765,11 +28627,11 @@
    ]
   },
   {
-   "path": "primitive://sphere#s520",
+   "path": "primitive://sphere#s528",
    "name": "Gallery Brushed Steel",
-   "id": 520,
-   "parentId": 511,
-   "order": 520,
+   "id": 528,
+   "parentId": 519,
+   "order": 528,
    "position": [
     -3.0,
     1.5,
@@ -29803,11 +28665,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p521",
+   "path": "primitive://cylinder#p529",
    "name": "Pedestal Car Paint",
-   "id": 521,
-   "parentId": 511,
-   "order": 521,
+   "id": 529,
+   "parentId": 519,
+   "order": 529,
    "position": [
     -1.0,
     0.5,
@@ -29852,11 +28714,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p522",
+   "path": "primitive://cylinder#p530",
    "name": "Pedestal Cap Car Paint",
-   "id": 522,
-   "parentId": 511,
-   "order": 522,
+   "id": 530,
+   "parentId": 519,
+   "order": 530,
    "position": [
     -1.0,
     1.02,
@@ -29895,11 +28757,11 @@
    ]
   },
   {
-   "path": "primitive://sphere#s523",
+   "path": "primitive://sphere#s531",
    "name": "Gallery Car Paint",
-   "id": 523,
-   "parentId": 511,
-   "order": 523,
+   "id": 531,
+   "parentId": 519,
+   "order": 531,
    "position": [
     -1.0,
     1.5,
@@ -29933,11 +28795,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p524",
+   "path": "primitive://cylinder#p532",
    "name": "Pedestal Velvet",
-   "id": 524,
-   "parentId": 511,
-   "order": 524,
+   "id": 532,
+   "parentId": 519,
+   "order": 532,
    "position": [
     1.0,
     0.5,
@@ -29982,11 +28844,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p525",
+   "path": "primitive://cylinder#p533",
    "name": "Pedestal Cap Velvet",
-   "id": 525,
-   "parentId": 511,
-   "order": 525,
+   "id": 533,
+   "parentId": 519,
+   "order": 533,
    "position": [
     1.0,
     1.02,
@@ -30025,11 +28887,11 @@
    ]
   },
   {
-   "path": "primitive://sphere#s526",
+   "path": "primitive://sphere#s534",
    "name": "Gallery Velvet",
-   "id": 526,
-   "parentId": 511,
-   "order": 526,
+   "id": 534,
+   "parentId": 519,
+   "order": 534,
    "position": [
     1.0,
     1.5,
@@ -30063,11 +28925,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p527",
+   "path": "primitive://cylinder#p535",
    "name": "Pedestal Jade",
-   "id": 527,
-   "parentId": 511,
-   "order": 527,
+   "id": 535,
+   "parentId": 519,
+   "order": 535,
    "position": [
     3.0,
     0.5,
@@ -30112,11 +28974,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p528",
+   "path": "primitive://cylinder#p536",
    "name": "Pedestal Cap Jade",
-   "id": 528,
-   "parentId": 511,
-   "order": 528,
+   "id": 536,
+   "parentId": 519,
+   "order": 536,
    "position": [
     3.0,
     1.02,
@@ -30155,11 +29017,11 @@
    ]
   },
   {
-   "path": "primitive://sphere#s529",
+   "path": "primitive://sphere#s537",
    "name": "Gallery Jade",
-   "id": 529,
-   "parentId": 511,
-   "order": 529,
+   "id": 537,
+   "parentId": 519,
+   "order": 537,
    "position": [
     3.0,
     1.5,
@@ -30193,11 +29055,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p530",
+   "path": "primitive://cylinder#p538",
    "name": "Pedestal Glass",
-   "id": 530,
-   "parentId": 511,
-   "order": 530,
+   "id": 538,
+   "parentId": 519,
+   "order": 538,
    "position": [
     5.0,
     0.5,
@@ -30242,11 +29104,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p531",
+   "path": "primitive://cylinder#p539",
    "name": "Pedestal Cap Glass",
-   "id": 531,
-   "parentId": 511,
-   "order": 531,
+   "id": 539,
+   "parentId": 519,
+   "order": 539,
    "position": [
     5.0,
     1.02,
@@ -30285,11 +29147,11 @@
    ]
   },
   {
-   "path": "primitive://sphere#s532",
+   "path": "primitive://sphere#s540",
    "name": "Gallery Glass",
-   "id": 532,
-   "parentId": 511,
-   "order": 532,
+   "id": 540,
+   "parentId": 519,
+   "order": 540,
    "position": [
     5.0,
     1.5,
@@ -30323,11 +29185,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p533",
+   "path": "primitive://cylinder#p541",
    "name": "Pedestal Neon",
-   "id": 533,
-   "parentId": 511,
-   "order": 533,
+   "id": 541,
+   "parentId": 519,
+   "order": 541,
    "position": [
     7.0,
     0.5,
@@ -30372,11 +29234,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p534",
+   "path": "primitive://cylinder#p542",
    "name": "Pedestal Cap Neon",
-   "id": 534,
-   "parentId": 511,
-   "order": 534,
+   "id": 542,
+   "parentId": 519,
+   "order": 542,
    "position": [
     7.0,
     1.02,
@@ -30415,11 +29277,11 @@
    ]
   },
   {
-   "path": "primitive://sphere#s535",
+   "path": "primitive://sphere#s543",
    "name": "Gallery Neon",
-   "id": 535,
-   "parentId": 511,
-   "order": 535,
+   "id": 543,
+   "parentId": 519,
+   "order": 543,
    "position": [
     7.0,
     1.5,
@@ -30453,11 +29315,11 @@
    }
   },
   {
-   "path": "primitive://capsule#p541",
+   "path": "primitive://capsule#p549",
    "name": "Chain Link 1",
-   "id": 541,
-   "parentId": 537,
-   "order": 541,
+   "id": 549,
+   "parentId": 545,
+   "order": 549,
    "position": [
     27.2,
     8.3706,
@@ -30506,7 +29368,7 @@
     "bounciness": 0.0
    },
    "Rigidbody": {
-    "Mass": 6,
+    "Mass": 25,
     "Use Gravity": true,
     "Is Kinematic": false,
     "Initial Velocity": [
@@ -30514,8 +29376,8 @@
      0,
      0
     ],
-    "Linear Damping": 0.05,
-    "Angular Damping": 0.3,
+    "Linear Damping": 0.15,
+    "Angular Damping": 0.8,
     "Continuous Collision": false,
     "Freeze Position X": false,
     "Freeze Position Y": false,
@@ -30546,11 +29408,11 @@
    }
   },
   {
-   "path": "primitive://capsule#p542",
+   "path": "primitive://capsule#p550",
    "name": "Chain Link 2",
-   "id": 542,
-   "parentId": 537,
-   "order": 542,
+   "id": 550,
+   "parentId": 545,
+   "order": 550,
    "position": [
     27.2,
     7.9117,
@@ -30599,7 +29461,7 @@
     "bounciness": 0.0
    },
    "Rigidbody": {
-    "Mass": 6,
+    "Mass": 25,
     "Use Gravity": true,
     "Is Kinematic": false,
     "Initial Velocity": [
@@ -30607,8 +29469,8 @@
      0,
      0
     ],
-    "Linear Damping": 0.05,
-    "Angular Damping": 0.3,
+    "Linear Damping": 0.15,
+    "Angular Damping": 0.8,
     "Continuous Collision": false,
     "Freeze Position X": false,
     "Freeze Position Y": false,
@@ -30620,7 +29482,7 @@
    },
    "joint": {
     "type": 2,
-    "connectedOrder": 541,
+    "connectedOrder": 549,
     "anchor": [
      0,
      -0.4,
@@ -30639,11 +29501,11 @@
    }
   },
   {
-   "path": "primitive://capsule#p543",
+   "path": "primitive://capsule#p551",
    "name": "Chain Link 3",
-   "id": 543,
-   "parentId": 537,
-   "order": 543,
+   "id": 551,
+   "parentId": 545,
+   "order": 551,
    "position": [
     27.2,
     7.4528,
@@ -30692,7 +29554,7 @@
     "bounciness": 0.0
    },
    "Rigidbody": {
-    "Mass": 6,
+    "Mass": 25,
     "Use Gravity": true,
     "Is Kinematic": false,
     "Initial Velocity": [
@@ -30700,8 +29562,8 @@
      0,
      0
     ],
-    "Linear Damping": 0.05,
-    "Angular Damping": 0.3,
+    "Linear Damping": 0.15,
+    "Angular Damping": 0.8,
     "Continuous Collision": false,
     "Freeze Position X": false,
     "Freeze Position Y": false,
@@ -30713,7 +29575,7 @@
    },
    "joint": {
     "type": 2,
-    "connectedOrder": 542,
+    "connectedOrder": 550,
     "anchor": [
      0,
      -0.4,
@@ -30732,11 +29594,11 @@
    }
   },
   {
-   "path": "primitive://capsule#p544",
+   "path": "primitive://capsule#p552",
    "name": "Chain Link 4",
-   "id": 544,
-   "parentId": 537,
-   "order": 544,
+   "id": 552,
+   "parentId": 545,
+   "order": 552,
    "position": [
     27.2,
     6.994,
@@ -30785,7 +29647,7 @@
     "bounciness": 0.0
    },
    "Rigidbody": {
-    "Mass": 6,
+    "Mass": 25,
     "Use Gravity": true,
     "Is Kinematic": false,
     "Initial Velocity": [
@@ -30793,8 +29655,8 @@
      0,
      0
     ],
-    "Linear Damping": 0.05,
-    "Angular Damping": 0.3,
+    "Linear Damping": 0.15,
+    "Angular Damping": 0.8,
     "Continuous Collision": false,
     "Freeze Position X": false,
     "Freeze Position Y": false,
@@ -30806,7 +29668,7 @@
    },
    "joint": {
     "type": 2,
-    "connectedOrder": 543,
+    "connectedOrder": 551,
     "anchor": [
      0,
      -0.4,
@@ -30825,11 +29687,11 @@
    }
   },
   {
-   "path": "primitive://capsule#p545",
+   "path": "primitive://capsule#p553",
    "name": "Chain Link 5",
-   "id": 545,
-   "parentId": 537,
-   "order": 545,
+   "id": 553,
+   "parentId": 545,
+   "order": 553,
    "position": [
     27.2,
     6.5351,
@@ -30878,7 +29740,7 @@
     "bounciness": 0.0
    },
    "Rigidbody": {
-    "Mass": 6,
+    "Mass": 25,
     "Use Gravity": true,
     "Is Kinematic": false,
     "Initial Velocity": [
@@ -30886,8 +29748,8 @@
      0,
      0
     ],
-    "Linear Damping": 0.05,
-    "Angular Damping": 0.3,
+    "Linear Damping": 0.15,
+    "Angular Damping": 0.8,
     "Continuous Collision": false,
     "Freeze Position X": false,
     "Freeze Position Y": false,
@@ -30899,7 +29761,7 @@
    },
    "joint": {
     "type": 2,
-    "connectedOrder": 544,
+    "connectedOrder": 552,
     "anchor": [
      0,
      -0.4,
@@ -30918,11 +29780,11 @@
    }
   },
   {
-   "path": "primitive://capsule#p546",
+   "path": "primitive://capsule#p554",
    "name": "Chain Link 6",
-   "id": 546,
-   "parentId": 537,
-   "order": 546,
+   "id": 554,
+   "parentId": 545,
+   "order": 554,
    "position": [
     27.2,
     6.0763,
@@ -30971,7 +29833,7 @@
     "bounciness": 0.0
    },
    "Rigidbody": {
-    "Mass": 6,
+    "Mass": 25,
     "Use Gravity": true,
     "Is Kinematic": false,
     "Initial Velocity": [
@@ -30979,8 +29841,8 @@
      0,
      0
     ],
-    "Linear Damping": 0.05,
-    "Angular Damping": 0.3,
+    "Linear Damping": 0.15,
+    "Angular Damping": 0.8,
     "Continuous Collision": false,
     "Freeze Position X": false,
     "Freeze Position Y": false,
@@ -30992,7 +29854,7 @@
    },
    "joint": {
     "type": 2,
-    "connectedOrder": 545,
+    "connectedOrder": 553,
     "anchor": [
      0,
      -0.4,
@@ -31011,11 +29873,11 @@
    }
   },
   {
-   "path": "primitive://capsule#p547",
+   "path": "primitive://capsule#p555",
    "name": "Chain Link 7",
-   "id": 547,
-   "parentId": 537,
-   "order": 547,
+   "id": 555,
+   "parentId": 545,
+   "order": 555,
    "position": [
     27.2,
     5.6174,
@@ -31064,7 +29926,7 @@
     "bounciness": 0.0
    },
    "Rigidbody": {
-    "Mass": 6,
+    "Mass": 25,
     "Use Gravity": true,
     "Is Kinematic": false,
     "Initial Velocity": [
@@ -31072,8 +29934,8 @@
      0,
      0
     ],
-    "Linear Damping": 0.05,
-    "Angular Damping": 0.3,
+    "Linear Damping": 0.15,
+    "Angular Damping": 0.8,
     "Continuous Collision": false,
     "Freeze Position X": false,
     "Freeze Position Y": false,
@@ -31085,7 +29947,7 @@
    },
    "joint": {
     "type": 2,
-    "connectedOrder": 546,
+    "connectedOrder": 554,
     "anchor": [
      0,
      -0.4,
@@ -31104,11 +29966,11 @@
    }
   },
   {
-   "path": "primitive://sphere#s548",
+   "path": "primitive://sphere#s556",
    "name": "Wrecking Ball",
-   "id": 548,
-   "parentId": 537,
-   "order": 548,
+   "id": 556,
+   "parentId": 545,
+   "order": 556,
    "position": [
     27.2,
     5.0438,
@@ -31157,7 +30019,7 @@
     "bounciness": 0.1
    },
    "Rigidbody": {
-    "Mass": 150,
+    "Mass": 120,
     "Use Gravity": true,
     "Is Kinematic": false,
     "Initial Velocity": [
@@ -31165,8 +30027,8 @@
      0,
      0
     ],
-    "Linear Damping": 0.02,
-    "Angular Damping": 0.1,
+    "Linear Damping": 0.05,
+    "Angular Damping": 0.3,
     "Continuous Collision": true,
     "Freeze Position X": false,
     "Freeze Position Y": false,
@@ -31176,16 +30038,9 @@
     "Freeze Rotation Z": false,
     "Interpolate": "Interpolate"
    },
-   "Impact Sound": {
-    "Clip": "sounds/metal_clank.wav",
-    "Volume": 1.0,
-    "Min Speed": 1.2,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.05
-   },
    "joint": {
     "type": 2,
-    "connectedOrder": 547,
+    "connectedOrder": 555,
     "anchor": [
      -0.0,
      0.3441458618106276,
@@ -31204,11 +30059,11 @@
    }
   },
   {
-   "path": "primitive://cylinder#p550",
+   "path": "primitive://cylinder#p558",
    "name": "Turntable",
-   "id": 550,
+   "id": 558,
    "parentId": 256,
-   "order": 550,
+   "order": 558,
    "position": [
     -19.0,
     0.25,
@@ -31690,9 +30545,9 @@
   },
   {
    "name": "Hoop West",
-   "id": 339,
+   "id": 347,
    "parentId": 282,
-   "order": 339,
+   "order": 347,
    "position": [
     0,
     0,
@@ -31711,13 +30566,13 @@
   },
   {
    "name": "Goal West",
-   "id": 353,
-   "parentId": 339,
-   "order": 353,
+   "id": 361,
+   "parentId": 347,
+   "order": 361,
    "position": [
-    -12.725,
-    2.89,
-    32.0
+    -19.0875,
+    2.61,
+    36.81
    ],
    "rotation": [
     0,
@@ -31732,9 +30587,9 @@
    "collider": {
     "isTrigger": true,
     "halfExtents": [
+     0.24,
      0.12,
-     0.06,
-     0.12
+     0.24
     ],
     "friction": 0.6,
     "bounciness": 0.0
@@ -31744,20 +30599,19 @@
     "Team": "Home",
     "Points": 2,
     "Three Points": 3,
-    "Three Point Distance": 6.9,
+    "Three Point Distance": 10.35,
     "Require Downward": true,
-    "Score Sound": "sounds/basket_score.wav",
     "Flash Intensity": 45.0
    }
   },
   {
    "name": "Goal Sparks West",
-   "id": 354,
-   "parentId": 353,
-   "order": 354,
+   "id": 362,
+   "parentId": 361,
+   "order": 362,
    "position": [
     0,
-    0.33,
+    0.61,
     0
    ],
    "rotation": [
@@ -31798,12 +30652,12 @@
   },
   {
    "name": "Goal Confetti West",
-   "id": 355,
-   "parentId": 353,
-   "order": 355,
+   "id": 363,
+   "parentId": 361,
+   "order": 363,
    "position": [
     0,
-    0.38,
+    0.66,
     0
    ],
    "rotation": [
@@ -31844,12 +30698,12 @@
   },
   {
    "name": "Goal Flash West",
-   "id": 356,
-   "parentId": 353,
-   "order": 356,
+   "id": 364,
+   "parentId": 361,
+   "order": 364,
    "position": [
     0,
-    1.08,
+    1.36,
     0
    ],
    "rotation": [
@@ -31876,9 +30730,9 @@
   },
   {
    "name": "Hoop East",
-   "id": 357,
+   "id": 365,
    "parentId": 282,
-   "order": 357,
+   "order": 365,
    "position": [
     0,
     0,
@@ -31897,13 +30751,13 @@
   },
   {
    "name": "Goal East",
-   "id": 371,
-   "parentId": 357,
-   "order": 371,
+   "id": 379,
+   "parentId": 365,
+   "order": 379,
    "position": [
-    12.725,
-    2.89,
-    32.0
+    19.0875,
+    2.61,
+    36.81
    ],
    "rotation": [
     0,
@@ -31918,9 +30772,9 @@
    "collider": {
     "isTrigger": true,
     "halfExtents": [
+     0.24,
      0.12,
-     0.06,
-     0.12
+     0.24
     ],
     "friction": 0.6,
     "bounciness": 0.0
@@ -31930,20 +30784,19 @@
     "Team": "Away",
     "Points": 2,
     "Three Points": 3,
-    "Three Point Distance": 6.9,
+    "Three Point Distance": 10.35,
     "Require Downward": true,
-    "Score Sound": "sounds/basket_score.wav",
     "Flash Intensity": 45.0
    }
   },
   {
    "name": "Goal Sparks East",
-   "id": 372,
-   "parentId": 371,
-   "order": 372,
+   "id": 380,
+   "parentId": 379,
+   "order": 380,
    "position": [
     0,
-    0.33,
+    0.61,
     0
    ],
    "rotation": [
@@ -31984,12 +30837,12 @@
   },
   {
    "name": "Goal Confetti East",
-   "id": 373,
-   "parentId": 371,
-   "order": 373,
+   "id": 381,
+   "parentId": 379,
+   "order": 381,
    "position": [
     0,
-    0.38,
+    0.66,
     0
    ],
    "rotation": [
@@ -32030,12 +30883,12 @@
   },
   {
    "name": "Goal Flash East",
-   "id": 374,
-   "parentId": 371,
-   "order": 374,
+   "id": 382,
+   "parentId": 379,
+   "order": 382,
    "position": [
     0,
-    1.08,
+    1.36,
     0
    ],
    "rotation": [
@@ -32062,9 +30915,9 @@
   },
   {
    "name": "Scoreboard",
-   "id": 375,
+   "id": 383,
    "parentId": 282,
-   "order": 375,
+   "order": 383,
    "position": [
     0,
     0,
@@ -32083,13 +30936,13 @@
   },
   {
    "name": "Score",
-   "id": 376,
-   "parentId": 375,
-   "order": 376,
+   "id": 384,
+   "parentId": 383,
+   "order": 384,
    "position": [
     0,
-    8.6,
-    32.0
+    10.6,
+    36.81
    ],
    "rotation": [
     0,
@@ -32108,13 +30961,13 @@
   },
   {
    "name": "Score Digit Home Tens N",
-   "id": 384,
-   "parentId": 375,
-   "order": 384,
+   "id": 392,
+   "parentId": 383,
+   "order": 392,
    "position": [
     -1.2,
-    8.75,
-    30.28
+    10.75,
+    35.09
    ],
    "rotation": [
     0,
@@ -32135,13 +30988,13 @@
   },
   {
    "name": "Score Digit Home Ones N",
-   "id": 392,
-   "parentId": 375,
-   "order": 392,
+   "id": 400,
+   "parentId": 383,
+   "order": 400,
    "position": [
     -0.6,
-    8.75,
-    30.28
+    10.75,
+    35.09
    ],
    "rotation": [
     0,
@@ -32162,13 +31015,13 @@
   },
   {
    "name": "Score Digit Away Tens N",
-   "id": 401,
-   "parentId": 375,
-   "order": 401,
+   "id": 409,
+   "parentId": 383,
+   "order": 409,
    "position": [
     0.6,
-    8.75,
-    30.28
+    10.75,
+    35.09
    ],
    "rotation": [
     0,
@@ -32189,13 +31042,13 @@
   },
   {
    "name": "Score Digit Away Ones N",
-   "id": 409,
-   "parentId": 375,
-   "order": 409,
+   "id": 417,
+   "parentId": 383,
+   "order": 417,
    "position": [
     1.2,
-    8.75,
-    30.28
+    10.75,
+    35.09
    ],
    "rotation": [
     0,
@@ -32216,13 +31069,13 @@
   },
   {
    "name": "Score Digit Home Tens S",
-   "id": 418,
-   "parentId": 375,
-   "order": 418,
+   "id": 426,
+   "parentId": 383,
+   "order": 426,
    "position": [
     -0.6,
-    8.75,
-    33.72
+    10.75,
+    38.53
    ],
    "rotation": [
     0,
@@ -32243,13 +31096,13 @@
   },
   {
    "name": "Score Digit Home Ones S",
-   "id": 426,
-   "parentId": 375,
-   "order": 426,
+   "id": 434,
+   "parentId": 383,
+   "order": 434,
    "position": [
     -1.2,
-    8.75,
-    33.72
+    10.75,
+    38.53
    ],
    "rotation": [
     0,
@@ -32270,13 +31123,13 @@
   },
   {
    "name": "Score Digit Away Tens S",
-   "id": 435,
-   "parentId": 375,
-   "order": 435,
+   "id": 443,
+   "parentId": 383,
+   "order": 443,
    "position": [
     1.2,
-    8.75,
-    33.72
+    10.75,
+    38.53
    ],
    "rotation": [
     0,
@@ -32297,13 +31150,13 @@
   },
   {
    "name": "Score Digit Away Ones S",
-   "id": 443,
-   "parentId": 375,
-   "order": 443,
+   "id": 451,
+   "parentId": 383,
+   "order": 451,
    "position": [
     0.6,
-    8.75,
-    33.72
+    10.75,
+    38.53
    ],
    "rotation": [
     0,
@@ -32324,9 +31177,9 @@
   },
   {
    "name": "Basketballs",
-   "id": 452,
+   "id": 460,
    "parentId": 282,
-   "order": 452,
+   "order": 460,
    "position": [
     0,
     0,
@@ -32345,9 +31198,9 @@
   },
   {
    "name": "Arena Lighting",
-   "id": 474,
+   "id": 482,
    "parentId": 282,
-   "order": 474,
+   "order": 482,
    "position": [
     0,
     0,
@@ -32366,13 +31219,13 @@
   },
   {
    "name": "Arena Spot 1",
-   "id": 475,
-   "parentId": 474,
-   "order": 475,
+   "id": 483,
+   "parentId": 482,
+   "order": 483,
    "position": [
-    -7.2,
-    11.1,
-    28.4
+    -10.8,
+    14.1,
+    31.410000000000004
    ],
    "rotation": [
     -90,
@@ -32391,8 +31244,8 @@
      0.96,
      0.9
     ],
-    "intensity": 30.0,
-    "range": 16,
+    "intensity": 45.0,
+    "range": 20.0,
     "castShadows": true,
     "spotAngle": 42,
     "shadow": {
@@ -32408,13 +31261,13 @@
   },
   {
    "name": "Arena Spot 2",
-   "id": 477,
-   "parentId": 474,
-   "order": 477,
+   "id": 485,
+   "parentId": 482,
+   "order": 485,
    "position": [
-    7.2,
-    11.1,
-    28.4
+    10.8,
+    14.1,
+    31.410000000000004
    ],
    "rotation": [
     -90,
@@ -32433,8 +31286,8 @@
      0.96,
      0.9
     ],
-    "intensity": 30.0,
-    "range": 16,
+    "intensity": 45.0,
+    "range": 20.0,
     "castShadows": true,
     "spotAngle": 42,
     "shadow": {
@@ -32450,13 +31303,13 @@
   },
   {
    "name": "Arena Spot 3",
-   "id": 479,
-   "parentId": 474,
-   "order": 479,
+   "id": 487,
+   "parentId": 482,
+   "order": 487,
    "position": [
-    -7.2,
-    11.1,
-    35.6
+    -10.8,
+    14.1,
+    42.21
    ],
    "rotation": [
     -90,
@@ -32475,8 +31328,8 @@
      0.96,
      0.9
     ],
-    "intensity": 30.0,
-    "range": 16,
+    "intensity": 45.0,
+    "range": 20.0,
     "castShadows": true,
     "spotAngle": 42,
     "shadow": {
@@ -32492,13 +31345,13 @@
   },
   {
    "name": "Arena Spot 4",
-   "id": 481,
-   "parentId": 474,
-   "order": 481,
+   "id": 489,
+   "parentId": 482,
+   "order": 489,
    "position": [
-    7.2,
-    11.1,
-    35.6
+    10.8,
+    14.1,
+    42.21
    ],
    "rotation": [
     -90,
@@ -32517,8 +31370,8 @@
      0.96,
      0.9
     ],
-    "intensity": 30.0,
-    "range": 16,
+    "intensity": 45.0,
+    "range": 20.0,
     "castShadows": true,
     "spotAngle": 42,
     "shadow": {
@@ -32534,13 +31387,13 @@
   },
   {
    "name": "Arena Reflection Probe",
-   "id": 483,
-   "parentId": 474,
-   "order": 483,
+   "id": 491,
+   "parentId": 482,
+   "order": 491,
    "position": [
     0,
     4.0,
-    32.0
+    36.81
    ],
    "rotation": [
     0,
@@ -32554,18 +31407,18 @@
    ],
    "Reflection Probe": {
     "Size": [
-     34.65,
+     50.974999999999994,
      8.0,
-     21.240000000000002
+     30.86
     ],
     "Importance": 2.0
    }
   },
   {
    "name": "Player Spawn",
-   "id": 484,
+   "id": 492,
    "parentId": -1,
-   "order": 484,
+   "order": 492,
    "position": [
     0,
     0.02,
@@ -32602,16 +31455,16 @@
   },
   {
    "name": "Arena Camera",
-   "id": 485,
+   "id": 493,
    "parentId": -1,
-   "order": 485,
+   "order": 493,
    "position": [
-    -15.0,
-    7.2,
-    23.8
+    -22.5,
+    10.8,
+    24.51
    ],
    "rotation": [
-    -16.9188,
+    -18.9412,
     -118.664,
     0
    ],
@@ -32628,9 +31481,9 @@
   },
   {
    "name": "Fountain",
-   "id": 486,
+   "id": 494,
    "parentId": -1,
-   "order": 486,
+   "order": 494,
    "position": [
     0,
     0,
@@ -32649,9 +31502,9 @@
   },
   {
    "name": "Fountain Jet",
-   "id": 508,
-   "parentId": 486,
-   "order": 508,
+   "id": 516,
+   "parentId": 494,
+   "order": 516,
    "position": [
     0,
     1.75,
@@ -32691,20 +31544,13 @@
     "Intensity": 1.3,
     "Gravity Modifier": 1.0,
     "Blend Mode": "Alpha Blended"
-   },
-   "Audio Source": {
-    "Clip": "sounds/fountain_loop.wav",
-    "Volume": 0.55,
-    "Loop": true,
-    "Play On Start": true,
-    "Output": "Ambient"
    }
   },
   {
    "name": "Fountain Mist",
-   "id": 509,
-   "parentId": 486,
-   "order": 509,
+   "id": 517,
+   "parentId": 494,
+   "order": 517,
    "position": [
     0,
     0.5,
@@ -32748,9 +31594,9 @@
   },
   {
    "name": "Fountain Light",
-   "id": 510,
-   "parentId": 486,
-   "order": 510,
+   "id": 518,
+   "parentId": 494,
+   "order": 518,
    "position": [
     0,
     0.6,
@@ -32780,9 +31626,9 @@
   },
   {
    "name": "Material Gallery",
-   "id": 511,
+   "id": 519,
    "parentId": -1,
-   "order": 511,
+   "order": 519,
    "position": [
     0,
     0,
@@ -32801,9 +31647,9 @@
   },
   {
    "name": "Wrecking Ball",
-   "id": 537,
+   "id": 545,
    "parentId": 41,
-   "order": 537,
+   "order": 545,
    "position": [
     0,
     0,

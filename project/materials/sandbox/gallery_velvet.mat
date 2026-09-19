@@ -2,7 +2,7 @@
   "matVersion": 2,
   "name": "Gallery Velvet",
   "_comment": "Sheen lobe.",
-  "shader": "engine://Standard.shader",
+  "shader": "engine://StandardAdvanced.shader",
   "properties": {
     "_BaseColor": [
       0.24,

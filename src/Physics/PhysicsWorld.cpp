@@ -9,6 +9,7 @@
 #include "GameModuleAPI.h" // RaycastHit / TriggerEvent / ContactEvent / BodyState / ForceMode, kPlayerEntity
 
 #include <PxPhysicsAPI.h>
+#include <unordered_set>
 #ifdef TARTARUS_PHYSX_OMNIPVD
 #include <omnipvd/PxOmniPvd.h>
 #include <OmniPvdWriter.h>            // from physx/pvdruntime/include — add that dir in CMakeLists
@@ -189,6 +190,8 @@ struct PhysicsState {
     std::vector<PxJoint*> joints;
     std::unordered_map<PxJoint*, std::uint32_t>       jointOwner;
     std::unordered_map<std::uint32_t, PxRigidStatic*> staticByEntity;
+    // Dynamic bodies with at least one joint: solved with more iterations, and grabbed gently.
+    std::unordered_set<const PxRigidActor*> jointed;
     // #182 - raw entity id -> OrderComponent value, captured when actors are built, so trigger /
     // contact / joint log lines (written from PhysX callbacks, no registry at hand) can name
     // entities by the stable id the Console links to.
@@ -652,6 +655,18 @@ void BuildJoints(PhysicsState& s, const World& world) {
             joint->setBreakForce(j.BreakForce, j.BreakTorque > 0.0f ? j.BreakTorque : PX_MAX_F32);
         s.joints.push_back(joint);
         s.jointOwner[joint] = entt::to_integral(e);
+        // Chains and ragdolls: the project's solver iteration count (8 by default) leaves a
+        // chain of joints visibly stretching and jittering - worst with a heavy body on light
+        // links, like the Sandbox wrecking ball. Joined bodies get at least 32 position / 4
+        // velocity iterations; unjointed bodies keep the project setting.
+        for (PxRigidActor* a : {a0, a1}) {
+            PxRigidDynamic* d = a ? a->is<PxRigidDynamic>() : nullptr;
+            if (!d) continue;
+            PxU32 pos = 0, vel = 0;
+            d->getSolverIterationCounts(pos, vel);
+            d->setSolverIterationCounts(std::max<PxU32>(pos, 32), std::max<PxU32>(vel, 4));
+            s.jointed.insert(d);
+        }
         ++made;
     }
     if (made || skipped)
@@ -1916,6 +1931,15 @@ void UpdateGrab(const float target[3]) {
     PxVec3 v = to * 12.0f; // proportional pull toward the hold point
     const float maxSpeed = 30.0f; // cap so a distant grab doesn't tunnel through geometry
     if (v.magnitude() > maxSpeed) v = v.getNormalized() * maxSpeed;
+    if (g_State->jointed.count(b)) {
+        // A body on joints: overwriting its velocity every frame fights the joints with infinite
+        // force, and the chain snaps and whips (worse on release). Ease toward the pull instead,
+        // with a lower speed cap, and let the joints keep its spin.
+        const float jointedMax = 8.0f;
+        if (v.magnitude() > jointedMax) v = v.getNormalized() * jointedMax;
+        b->setLinearVelocity(b->getLinearVelocity() + (v - b->getLinearVelocity()) * 0.25f);
+        return;
+    }
     b->setLinearVelocity(v);
     b->setAngularVelocity(PxVec3(0.0f));
 }
