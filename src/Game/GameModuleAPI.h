@@ -11,7 +11,7 @@ class World;
 // v8 (#187): OnLoad receives the previous module's saved state and returns false to reject a
 // build (the host then restores the previous one); SaveState added.
 // v9 (#144): FixedUpdate, and host GetTime / SetTimeScale.
-constexpr std::uint32_t kGameModuleAPIVersion = 9;
+constexpr std::uint32_t kGameModuleAPIVersion = 10; // v10: filtered queries (#170)
 
 // Unity's Time, as seen by the game module (#144). Seconds throughout. POD.
 struct GameTime {
@@ -35,6 +35,14 @@ struct RaycastHit {
     float         Point[3] = {0.0f, 0.0f, 0.0f};
     float         Normal[3] = {0.0f, 0.0f, 0.0f};
     std::uint32_t Entity = 0xFFFFFFFFu; // entt::null
+};
+
+// #170 - Unity's layerMask + QueryTriggerInteraction for the filtered queries below. LayerMask
+// bit N = hit colliders on layer N (Project Settings layers); HitTriggers 0 = ignore trigger
+// colliders, 1 = hit them (Unity's default). The Play-mode Player capsule is never hit.
+struct QueryFilter {
+    std::uint32_t LayerMask = 0xFFFFFFFFu;
+    std::uint32_t HitTriggers = 1;
 };
 
 // One trigger overlap transition this frame (#185 PR 5). `Trigger` is the entity whose collider
@@ -137,6 +145,26 @@ struct GameModuleHostAPI {
     // The game's time scale (Unity's Time.timeScale): 0 freezes physics, animators and the
     // DeltaTime Update receives; clamped to [0, 100]. Reset to Project Settings > Time on each Play.
     void (*SetTimeScale)(float scale) = nullptr;
+
+    // --- Filtered queries (#170) --- same as Raycast / SphereCast / OverlapSphere above, plus
+    // a QueryFilter. Rotations are quaternions (x, y, z, w); a null rotation = identity.
+    bool (*RaycastFiltered)(const float origin[3], const float dir[3], float maxDistance,
+                            const QueryFilter& filter, RaycastHit& outHit) = nullptr;
+    // Every hit along the ray, nearest first. Writes up to `maxHits`, returns the total found.
+    int (*RaycastAll)(const float origin[3], const float dir[3], float maxDistance,
+                      const QueryFilter& filter, RaycastHit* out, int maxHits) = nullptr;
+    bool (*SphereCastFiltered)(const float origin[3], const float dir[3], float radius, float maxDistance,
+                               const QueryFilter& filter, RaycastHit& outHit) = nullptr;
+    // Sweep a box (centre, half extents, rotation) along `dir`.
+    bool (*BoxCast)(const float center[3], const float halfExtents[3], const float rotation[4],
+                    const float dir[3], float maxDistance, const QueryFilter& filter, RaycastHit& outHit) = nullptr;
+    // Sweep a capsule whose sphere centres are `point1` and `point2` (Unity's CapsuleCast).
+    bool (*CapsuleCast)(const float point1[3], const float point2[3], float radius, const float dir[3],
+                        float maxDistance, const QueryFilter& filter, RaycastHit& outHit) = nullptr;
+    int (*OverlapSphereFiltered)(const float center[3], float radius, const QueryFilter& filter,
+                                 std::uint32_t* out, int maxEntities) = nullptr;
+    int (*OverlapBox)(const float center[3], const float halfExtents[3], const float rotation[4],
+                      const QueryFilter& filter, std::uint32_t* out, int maxEntities) = nullptr;
 };
 
 struct GameModuleAPI {

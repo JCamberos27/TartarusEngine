@@ -18,6 +18,7 @@
 
 class World;
 struct RaycastHit;   // GameModuleAPI.h — POD, shared with the gameplay-module ABI
+struct QueryFilter;  // GameModuleAPI.h (#170)
 struct TriggerEvent; // GameModuleAPI.h — POD, shared with the gameplay-module ABI
 struct ContactEvent; // GameModuleAPI.h — POD, shared with the gameplay-module ABI
 struct BodyState;    // GameModuleAPI.h — POD, shared with the gameplay-module ABI
@@ -111,6 +112,22 @@ int GetContactEvents(ContactEvent* out, int maxEvents);
 bool SphereCast(const float origin[3], const float dir[3], float radius, float maxDistance,
                 RaycastHit& outHit);
 int  OverlapSphere(const float center[3], float radius, unsigned* out, int maxEntities);
+
+// #170 - layer-masked / trigger-aware versions and the remaining Unity shapes. See
+// GameModuleHostAPI for the parameter conventions (rotation = quaternion xyzw, null = identity).
+bool RaycastFiltered(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f,
+                     RaycastHit& outHit);
+int  RaycastAll(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f,
+                RaycastHit* out, int maxHits);
+bool SphereCastFiltered(const float origin[3], const float dir[3], float radius, float maxDistance,
+                        const QueryFilter& f, RaycastHit& outHit);
+bool BoxCast(const float center[3], const float halfExtents[3], const float rotation[4], const float dir[3],
+             float maxDistance, const QueryFilter& f, RaycastHit& outHit);
+bool CapsuleCast(const float point1[3], const float point2[3], float radius, const float dir[3],
+                 float maxDistance, const QueryFilter& f, RaycastHit& outHit);
+int  OverlapSphereFiltered(const float center[3], float radius, const QueryFilter& f, unsigned* out, int maxEntities);
+int  OverlapBox(const float center[3], const float halfExtents[3], const float rotation[4], const QueryFilter& f,
+                unsigned* out, int maxEntities);
 
 // (#185 PR 10: pushing dynamic bodies and riding moving platforms is handled inside
 // MoveCharacter via the CCT hit report.) Yaw the ground platform turned through this frame,
