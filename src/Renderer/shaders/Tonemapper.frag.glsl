@@ -5,6 +5,8 @@ out vec4 FragColor;
 uniform sampler2D uHdr;
 uniform float uExposure;      // linear multiplier (already 2^EV on the CPU)
 uniform int uOperator;        // 0 Reinhard, 1 ACES, 2 AgX
+uniform int uAutoExposure;    // #162 - 1 = also divide by the adapted scene EV below
+uniform sampler2D uAdaptedEv; // 1x1 R32F from AutoExposureAdapt
 
 // PR16 — bloom: blurred half-res glow added to linear HDR before the tone curve.
 uniform sampler2D uBloom;
@@ -90,9 +92,11 @@ vec3 TonemapAgX(vec3 val) {
 }
 
 void main() {
-    vec3 hdr = texture(uHdr, vUV).rgb * uExposure;
+    float exposure = uExposure;
+    if (uAutoExposure != 0) exposure *= exp2(-texelFetch(uAdaptedEv, ivec2(0), 0).r);
+    vec3 hdr = texture(uHdr, vUV).rgb * exposure;
     if (uBloomEnabled != 0)
-        hdr += texture(uBloom, vUV).rgb * uBloomIntensity;
+        hdr += texture(uBloom, vUV).rgb * uBloomIntensity * (exposure / uExposure);
 
     hdr = Grade(hdr);
 

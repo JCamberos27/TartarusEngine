@@ -8,11 +8,26 @@
 #include <algorithm>
 #include <cmath>
 
+#ifndef GL_R32F
+#define GL_R32F 0x822E
+#endif
+#ifndef GL_R16F
+#define GL_R16F 0x822D
+#endif
+
 Tonemapper::~Tonemapper() {
     delete m_Shader;
     delete m_Fxaa;
     delete m_Ldr;
+    delete m_LumShader;
+    delete m_AdaptShader;
     if (m_Vao) glDeleteVertexArrays(1, &m_Vao);
+    if (m_LumTex) glDeleteTextures(1, &m_LumTex);
+    if (m_LumFbo) glDeleteFramebuffers(1, &m_LumFbo);
+    for (int s = 0; s < kExposureSlots; ++s) {
+        if (m_EvTex[s][0]) glDeleteTextures(2, m_EvTex[s]);
+        if (m_EvFbo[s][0]) glDeleteFramebuffers(2, m_EvFbo[s]);
+    }
 }
 
 void Tonemapper::EnsureCreated() {
@@ -50,7 +65,74 @@ void WhiteBalanceGains(float temperature, float tint, float out[3]) {
     for (int i = 0; i < 3; ++i) out[i] = w1[i] / w2[i];
 }
 
+constexpr int kLumSize = 64;   // metering resolution; its mip chain ends at 1x1
+constexpr int kLumTopMip = 6;  // log2(kLumSize)
+
+unsigned int MakeColorTarget(unsigned int& fbo, int size, GLenum internalFormat, bool mips) {
+    unsigned int tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, size, size, 0, GL_RED, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mips ? GL_LINEAR_MIPMAP_NEAREST : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mips ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    if (mips) glGenerateMipmap(GL_TEXTURE_2D); // allocate the chain once
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+    return tex;
+}
+
 } // namespace
+
+unsigned int Tonemapper::UpdateAutoExposure(unsigned int srcHdrTexture, const PostSettings& post) {
+    const int slot = std::clamp(post.ExposureSlot, 0, kExposureSlots - 1);
+    if (!m_LumShader) {
+        m_LumShader = new Shader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+                                 ShaderLibrary::ReadFile("AutoExposureLum.frag.glsl"));
+        m_AdaptShader = new Shader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+                                   ShaderLibrary::ReadFile("AutoExposureAdapt.frag.glsl"));
+        m_LumTex = MakeColorTarget(m_LumFbo, kLumSize, GL_R16F, true);
+        for (int s = 0; s < kExposureSlots; ++s)
+            for (int i = 0; i < 2; ++i) m_EvTex[s][i] = MakeColorTarget(m_EvFbo[s][i], 1, GL_R32F, false);
+        GLStateCache::Invalidate(); // MakeColorTarget bound textures behind the cache's back
+    }
+    glBindVertexArray(m_Vao);
+
+    // 1) log2 luminance into 64x64, then let the mip chain average it down to 1x1.
+    glBindFramebuffer(GL_FRAMEBUFFER, m_LumFbo);
+    glViewport(0, 0, kLumSize, kLumSize);
+    m_LumShader->Bind();
+    GLStateCache::BindTexture2D(0, srcHdrTexture);
+    m_LumShader->SetInt("uHdr", 0);
+    m_LumShader->SetVec2("uTexel", glm::vec2(1.0f / kLumSize));
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glGenerateTextureMipmap(m_LumTex);
+
+    // 2) Ease this view's EV toward the metered target (ping-pong between two 1x1 texels).
+    const int prev = m_EvCur[slot], next = 1 - prev;
+    glBindFramebuffer(GL_FRAMEBUFFER, m_EvFbo[slot][next]);
+    glViewport(0, 0, 1, 1);
+    m_AdaptShader->Bind();
+    GLStateCache::BindTexture2D(0, m_LumTex);
+    GLStateCache::BindTexture2D(1, m_EvTex[slot][prev]);
+    m_AdaptShader->SetInt("uLum", 0);
+    m_AdaptShader->SetFloat("uTopMip", (float)kLumTopMip);
+    m_AdaptShader->SetInt("uPrev", 1);
+    m_AdaptShader->SetInt("uReset", (!m_EvValid[slot] || post.DeltaTime <= 0.0f) ? 1 : 0);
+    const float lo = std::min(post.AutoExposureMinEV, post.AutoExposureMaxEV);
+    const float hi = std::max(post.AutoExposureMinEV, post.AutoExposureMaxEV);
+    m_AdaptShader->SetFloat("uMinEv", lo);
+    m_AdaptShader->SetFloat("uMaxEv", hi);
+    m_AdaptShader->SetFloat("uSpeedUp", std::max(post.AutoExposureSpeedUp, 0.0f));
+    m_AdaptShader->SetFloat("uSpeedDown", std::max(post.AutoExposureSpeedDown, 0.0f));
+    m_AdaptShader->SetFloat("uDt", std::min(post.DeltaTime, 0.25f)); // a hitch shouldn't pop exposure
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    m_EvCur[slot] = next;
+    m_EvValid[slot] = true;
+    return m_EvTex[slot][next];
+}
 
 void Tonemapper::Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW, int dstH, const PostSettings& post) {
     EnsureCreated();
@@ -62,6 +144,10 @@ void Tonemapper::Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW
 
     // #162 - with FXAA the tone-mapped image goes to an intermediate first, then FXAA resolves
     // it into the real destination.
+    unsigned int adaptedEv = 0;
+    if (post.AutoExposure) adaptedEv = UpdateAutoExposure(srcHdrTexture, post);
+    else m_EvValid[std::clamp(post.ExposureSlot, 0, kExposureSlots - 1)] = false; // re-enabling snaps
+
     const bool fxaa = post.Fxaa && dstW > 0 && dstH > 0;
     if (fxaa) m_Ldr->Resize(dstW, dstH);
     glBindFramebuffer(GL_FRAMEBUFFER, fxaa ? m_Ldr->Handle() : dstFbo);
@@ -72,6 +158,9 @@ void Tonemapper::Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW
     m_Shader->SetInt("uHdr", 0);
     m_Shader->SetFloat("uExposure", std::pow(2.0f, post.ExposureEV));
     m_Shader->SetInt("uOperator", std::clamp(post.Operator, 0, 2));
+    m_Shader->SetInt("uAutoExposure", adaptedEv ? 1 : 0);
+    if (adaptedEv) GLStateCache::BindTexture2D(2, adaptedEv);
+    m_Shader->SetInt("uAdaptedEv", 2);
 
     // PR16 — bloom: bind glow texture on unit 1; shader adds it before the tone curve.
     const bool bloomOn = post.BloomTexture != 0 && post.BloomIntensity > 0.0f;
