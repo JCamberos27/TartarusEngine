@@ -231,6 +231,10 @@ struct LightComponent {
     // the raw swatch until you hit "Custom RGB", which zeroes this again.
     float ColorTempK = 0.0f;
 
+    // #203 - Unity's Culling Mask: bit N set = objects on layer N (Layer component) receive this
+    // light. -1 (all bits) = everything, the default. Shadows are unaffected.
+    int CullingMask = -1;
+
     // Per-light shadow tuning. Always present (not a separate ECS component) so every light can be
     // authored with shadow settings recorded even when it isn't currently casting. `Enabled`
     // replaces the old `CastShadows` bool; the legacy `"castShadows"` scene key still loads into
