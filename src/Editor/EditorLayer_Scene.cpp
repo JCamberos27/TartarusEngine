@@ -114,6 +114,10 @@ std::string EditorLayer::RecoveryPathFor(const std::string& scenePath) {
 void EditorLayer::WriteRecoverySnapshot(const World& world, const AssetLibrary& assets) {
     if (m_CurrentScenePath.empty()) return; // untitled scene (New Scene) has no sidecar location
     const std::string path = RecoveryPathFor(m_CurrentScenePath);
+    if (InPrefabMode()) { // #176 - the world holds the prefab; the scene is the snapshot
+        if (m_PrefabModeSceneDirty) SceneSerializer::SaveSnapshotToFile(m_PrefabModeSceneSnapshot, assets, path);
+        return;
+    }
     if (SceneSerializer::Save(world, assets, path)) {
         Log::Info("Auto-save: wrote recovery snapshot (unsaved changes are safe if the editor closes unexpectedly).");
     }
@@ -127,6 +131,10 @@ void EditorLayer::ClearRecoverySnapshot() {
 
 bool EditorLayer::DoSaveAs(World& world, AssetLibrary& assets) {
     // #180 — the one choke point every save path goes through (menu, Ctrl+Shift+S, module API).
+    if (InPrefabMode()) { // #176
+        Log::Warn("Save As isn't available in Prefab Mode - Save writes the prefab; go Back to Scene to save the scene.");
+        return false;
+    }
     if (m_InPlayMode) {
         Log::Warn("Save is disabled while Playing - changes made in Play mode revert on Stop.");
         return false;
@@ -154,6 +162,7 @@ bool EditorLayer::DoSave(World& world, AssetLibrary& assets) {
         Log::Warn("Save is disabled while Playing - changes made in Play mode revert on Stop.");
         return false;
     }
+    if (InPrefabMode()) return SavePrefabMode(world); // #176 - Ctrl+S / Save icon save the open prefab
     if (m_CurrentScenePath.empty()) {   // untitled -> must choose a location
         return DoSaveAs(world, assets);
     }
@@ -188,6 +197,7 @@ void EditorLayer::OnStartupSceneLoadFailed(const std::string& path) {
 void EditorLayer::EmergencyRecoverySave(World& world, AssetLibrary& assets) noexcept {
     try {
         if (m_InPlayMode) OnExitPlayMode(world, assets);
+        if (InPrefabMode()) ExitPrefabMode(world, assets, /*save=*/false); // #176 - back to the real scene
         if (m_Dirty && !m_CurrentScenePath.empty()) {
             WriteRecoverySnapshot(world, assets);
             Log::Error("Unexpected error - wrote a recovery snapshot of the unsaved scene.");
@@ -199,6 +209,10 @@ void EditorLayer::EmergencyRecoverySave(World& world, AssetLibrary& assets) noex
 
 bool EditorLayer::CrashRecoverySave(const World& world, const AssetLibrary& assets) noexcept {
     try {
+        if (InPrefabMode()) { // #176 - the scene is the snapshot taken on entering Prefab Mode
+            return m_PrefabModeSceneDirty && !m_CurrentScenePath.empty() &&
+                   SceneSerializer::SaveSnapshotToFile(m_PrefabModeSceneSnapshot, assets, RecoveryPathFor(m_CurrentScenePath));
+        }
         if (!m_Dirty || m_CurrentScenePath.empty()) return false;
         const std::string path = RecoveryPathFor(m_CurrentScenePath);
         if (m_InPlayMode)
@@ -307,6 +321,7 @@ void EditorLayer::DrawExitPrompt() {
 }
 
 void EditorLayer::RequestNewScene(World& world, AssetLibrary& assets) {
+    if (InPrefabMode()) ExitPrefabMode(world, assets); // #176
     // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
     // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
     // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
@@ -324,6 +339,7 @@ void EditorLayer::RequestNewScene(World& world, AssetLibrary& assets) {
 }
 
 void EditorLayer::RequestOpenScene(World& world, AssetLibrary& assets, const std::string& path) {
+    if (InPrefabMode() && !path.empty()) ExitPrefabMode(world, assets); // #176
     // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
     // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
     // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
@@ -342,6 +358,7 @@ void EditorLayer::RequestOpenScene(World& world, AssetLibrary& assets, const std
 }
 
 void EditorLayer::RequestRevertScene(World& world, AssetLibrary& assets) {
+    if (InPrefabMode()) ExitPrefabMode(world, assets); // #176
     // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
     // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
     // scene's recycled entity ids), so the next save wrote scene A's content into B's file.

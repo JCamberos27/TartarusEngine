@@ -1045,6 +1045,7 @@ int main(int argc, char** argv) {
         int errPauseSeen = 0; // #236 A5 — error count baseline for "Error Pause", re-armed each Play
         auto startPlay = [&]() {
             if (playing) return;
+            if (editor.InPrefabMode()) editor.ExitPrefabMode(world, assets); // #176 - Play runs the scene
             if (EditorModuleHost::ConsoleState().ClearOnPlay) Log::Clear(); // #236 A5
             editor.OnEnterPlayMode(world);
             Time::SetTimeScale(ProjectSettings::Time().TimeScale); // #144 - each run starts from the project's scale
@@ -1336,6 +1337,58 @@ int main(int argc, char** argv) {
                     smokePlayCycles = 0;
                 }
 
+                // #176 - a smoke_prefab* scene round-trips Prefab Mode: save a box as a temp
+                // prefab, place two instances, open the prefab, add a child, go back to the
+                // scene, and check both instances picked the child up and the scene's own
+                // objects came back.
+                if (smokeSceneActive && smokeFramesRendered == 15 &&
+                    smokeScenePaths[smokeSceneIndex].find("smoke_prefab") != std::string::npos) {
+                    std::error_code pe;
+                    const std::filesystem::path dir = std::filesystem::temp_directory_path(pe) / "TartarusSmokePrefab";
+                    std::filesystem::create_directories(dir, pe);
+                    const std::string prefabPath = (dir / "crate.prefab").string();
+                    const size_t sceneEntities = world.Registry.storage<entt::entity>().in_use();
+                    entt::entity src = world.CreateBox(glm::vec3(0.0f, 0.5f, 0.0f), glm::vec3(1.0f), glm::vec3(0.8f, 0.5f, 0.2f),
+                                                       glm::vec3(0.0f), "Crate");
+                    SceneSerializer::SavePrefab(world, src, prefabPath);
+                    world.DestroyEntityAndChildren(src);
+                    auto countChildren = [&](entt::entity e) {
+                        int n = 0;
+                        for (auto [c, h] : world.Registry.view<HierarchyComponent>().each()) if (h.Parent == e) ++n;
+                        return n;
+                    };
+                    for (float x : {-2.0f, 2.0f}) {
+                        entt::entity inst = SceneSerializer::InstantiatePrefab(world, assets, prefabPath);
+                        world.Registry.get<TransformComponent>(inst).Position.x = x;
+                    }
+                    editor.EnterPrefabMode(world, assets, prefabPath);
+                    const bool entered = editor.InPrefabMode();
+                    int rootsInPrefab = 0;
+                    entt::entity proot = entt::null;
+                    for (auto [e, t] : world.Registry.view<TransformComponent>().each()) {
+                        const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+                        if (!h || h->Parent == entt::null) { ++rootsInPrefab; proot = e; }
+                    }
+                    if (proot != entt::null) {
+                        entt::entity child = world.CreateEmptyEntity(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Lid");
+                        world.SetParent(child, proot);
+                    }
+                    const bool saved = editor.SavePrefabMode(world);
+                    editor.ExitPrefabMode(world, assets);
+                    int instances = 0, withChild = 0;
+                    for (auto [e, pi] : world.Registry.view<PrefabInstanceComponent>().each()) {
+                        ++instances;
+                        if (countChildren(e) == 1) ++withChild;
+                    }
+                    const size_t after = world.Registry.storage<entt::entity>().in_use();
+                    std::cout << "[SmokeTest]   prefab mode entered=" << entered << " rootsInPrefab=" << rootsInPrefab
+                              << " saved=" << saved << " exited=" << !editor.InPrefabMode() << " instances=" << instances
+                              << " withChild=" << withChild << " sceneEntities=" << sceneEntities << "->" << after << "\n";
+                    if (!entered || !saved || editor.InPrefabMode() || instances != 2 || withChild != 2)
+                        Log::Error("[SmokeTest] Prefab Mode round trip failed.");
+                    std::filesystem::remove_all(dir, pe);
+                }
+
                 // Play-mode cycles for a smoke_play* scene: enter at 20 / 55, stop at 40 / 75,
                 // within the kSmokeTestFrames budget. togglePlay() is the same entry the F1 key
                 // and the toolbar button use.
@@ -1442,6 +1495,7 @@ int main(int argc, char** argv) {
 
             if (window.ShouldClose()) {
                 if (playerMode) break; // #174 - a game just quits; there is no scene to save
+                if (editor.InPrefabMode()) editor.ExitPrefabMode(world, assets); // #176 - saves the prefab, back to the scene
                 // #88 — prompt for ANY unsaved scene, titled or not (Save on an untitled one
                 // routes through Save As).
                 if (exitApproved || !editor.IsDirty()) break;
