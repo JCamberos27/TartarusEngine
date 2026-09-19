@@ -315,6 +315,18 @@ void AudioEngine::SetSpatial(SoundHandle handle, bool spatial) {
     ma_sound_set_spatialization_enabled(sound, spatial ? MA_TRUE : MA_FALSE);
 }
 
+void AudioEngine::SetDopplerLevel(SoundHandle handle, float level) {
+    if (ma_sound* sound = Resolve(handle)) ma_sound_set_doppler_factor(sound, level < 0.0f ? 0.0f : level);
+}
+
+void AudioEngine::SetVelocity(SoundHandle handle, const glm::vec3& v) {
+    if (ma_sound* sound = Resolve(handle)) ma_sound_set_velocity(sound, v.x, v.y, v.z);
+}
+
+void AudioEngine::SetListenerVelocity(const glm::vec3& v) {
+    if (s_Initialized) ma_engine_listener_set_velocity(&s_Engine, 0, v.x, v.y, v.z);
+}
+
 void AudioEngine::SetListener(const glm::vec3& position, const glm::vec3& forward,
                               const glm::vec3& up) {
     if (!s_Initialized) return;

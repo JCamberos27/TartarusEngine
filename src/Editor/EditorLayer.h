@@ -23,6 +23,7 @@
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
 #include "MaterialPreviewRenderer.h"
+#include <optional>
 #include "AudioEngine.h" // AudioEngine::SoundHandle - m_PlayModeAudioHandles
 
 struct GLFWwindow;
@@ -679,7 +680,7 @@ public:
     void OnExitPlayMode(World& world, AssetLibrary& assets);
     // #171 - each frame in Play: moves every Play On Start voice to its entity's current world
     // position, so a sound on a moving object travels with it. Reaps finished one-shots.
-    void UpdatePlayModeAudio(const World& world);
+    void UpdatePlayModeAudio(const World& world, float dt, const glm::vec3& listenerPos);
 
     // Scene-view shading, chosen in the toolbar. main.cpp reads it to set the GL polygon mode
     // for the main draw pass (Wireframe) or skip the lighting/texture work entirely (Unlit).
@@ -1767,6 +1768,8 @@ private:
     // Play stops exactly these voices and leaves an unrelated editor preview sound (Inspector
     // Preview button, Asset Browser) started mid-Play alone. Cleared on both enter and exit.
     std::unordered_map<entt::entity, AudioEngine::SoundHandle> m_PlayModeAudioHandles;
+    std::unordered_map<entt::entity, glm::vec3> m_PlayModeAudioPrevPos; // #171 - Doppler velocity
+    std::optional<glm::vec3> m_PlayModeListenerPrevPos;
 
     // --- Console ------------------------------------------------------------------------
     // The panel itself now lives in TartarusEditor.dll (src/Editor/EditorModuleConsole.cpp) so
