@@ -81,6 +81,11 @@ const std::unordered_map<std::string, std::string>& KnownExtensions() {
         // #132 — HDRI skies: referenced by GUID from scenes (skyHdriGuid) so a rename or move
         // doesn't lose the sky.
         {".hdr",   "hdri"},    {".exr",  "hdri"},
+        // #208 - shader descriptors (materials reference them by GUID too) and their stage /
+        // include sources, so a rename or move keeps materials linked.
+        {".shader", "shader"},
+        {".glsl",  "shadersource"}, {".vert", "shadersource"}, {".frag", "shadersource"},
+        {".comp",  "shadersource"},
     };
     return kExts;
 }

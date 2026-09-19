@@ -6,6 +6,7 @@
 #include "Log.h"
 #include "AtomicFile.h"
 #include "ProjectPaths.h"
+#include "AssetDatabase.h" // #208 - shaderGuid
 
 #include <json.hpp>
 #include <algorithm>
@@ -182,7 +183,22 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
     const Reader r{propsJson, path};
     auto key = [&](const char* v2Key, const char* v1Key) { return v2 ? v2Key : v1Key; };
 
-    if (v2) ma->ShaderPath = top.Str("shader");
+    if (v2) {
+        ma->ShaderPath = top.Str("shader");
+        // #208 - a project shader reference also carries the descriptor's GUID: if the .shader
+        // was renamed or moved, follow it instead of falling back to the default shader.
+        if (ma->ShaderPath.rfind("engine://", 0) != 0) {
+            const auto gj = j.find("shaderGuid");
+            const AssetGuid g = (gj != j.end() && gj->is_string()) ? AssetGuid::FromString(gj->get<std::string>()) : AssetGuid{};
+            const std::string moved = g.IsValid() ? AssetDatabase::PathForGuid(g) : std::string();
+            std::error_code ec;
+            if (!moved.empty() && std::filesystem::exists(moved, ec) &&
+                !std::filesystem::exists(ResolveShaderPath(ma->ShaderPath), ec)) {
+                Log::Info("Material '" + path + "': shader moved to " + ProjectPaths::Relativize(moved) + ".");
+                ma->ShaderPath = ProjectPaths::Relativize(moved);
+            }
+        }
+    }
     m.BaseColor        = r.Vec3(key("_BaseColor", "baseColor"), {1, 1, 1});
     m.Metallic         = r.Num(key("_Metallic", "metallic"), 0.0f);
     m.Roughness        = r.Num(key("_Roughness", "roughness"), 0.5f);
@@ -306,6 +322,15 @@ bool MaterialAsset::Save() const {
         j["matVersion"]  = 2;
         j["name"]        = Name;
         j["shader"]      = ShaderPath;
+        if (ShaderPath.rfind("engine://", 0) != 0) { // #208 - see LoadMaterialFromJson
+            const std::string resolved = ResolveShaderPath(ShaderPath);
+            std::error_code ec;
+            if (std::filesystem::exists(resolved, ec) &&
+                !std::filesystem::path(ProjectPaths::Relativize(resolved)).is_absolute()) { // a project file, not the engine fallback
+                const AssetGuid g = AssetDatabase::EnsureGuid(resolved);
+                if (g.IsValid()) j["shaderGuid"] = g.ToString();
+            }
+        }
         if (!m.ShaderKeywords.empty()) j["keywords"] = m.ShaderKeywords; // #104 custom keywords
         json& props     = j["properties"];
         props["_BaseColor"]           = Vec3ToJson(m.BaseColor);
