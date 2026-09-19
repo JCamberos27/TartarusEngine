@@ -162,7 +162,8 @@ public:
     using ProgramSelector = std::function<Shader*(const MaterialAsset*)>;
     void DrawSelected(Shader& fallback, const glm::mat4& xform,
                       const std::vector<std::shared_ptr<MaterialAsset>>& slots,
-                      const ProgramSelector& selectProgram, float opacity = 1.0f);
+                      const ProgramSelector& selectProgram, float opacity = 1.0f,
+                      const std::function<void(Shader&)>& onProgramBound = {});
     int MeshCount() const { return (int)m_D->Meshes.size(); }
     Material& MeshMaterial(int index) { return m_D->Meshes[index]->Mat; }
     const Material& MeshMaterial(int index) const { return m_D->Meshes[index]->Mat; }
