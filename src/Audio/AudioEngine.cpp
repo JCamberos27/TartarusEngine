@@ -39,6 +39,17 @@ struct Voice {
 };
 
 std::vector<Voice> s_Voices;
+
+// #171 - mixer buses: every voice plays through one sound group, whose volume is the bus
+// volume. Master is the engine volume (times the editor's Mute).
+ma_sound_group s_Buses[AudioEngine::kBusCount];
+bool s_BusesReady = false;
+float s_BusVolume[AudioEngine::kBusCount] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+float s_MasterVolume = 1.0f;
+bool s_MutedFlag = false;
+void ApplyMasterVolume(ma_engine& engine) {
+    ma_engine_set_volume(&engine, s_MutedFlag ? 0.0f : s_MasterVolume);
+}
 std::vector<uint32_t> s_FreeSlots;
 bool s_Paused = false;
 
@@ -90,6 +101,17 @@ void AudioEngine::Init() {
         return;
     }
     s_Initialized = true;
+    s_BusesReady = true;
+    for (int b = 0; b < kBusCount; ++b) {
+        if (ma_sound_group_init(&s_Engine, 0, nullptr, &s_Buses[b]) != MA_SUCCESS) {
+            Log::Error("Audio: failed to create mixer bus " + std::to_string(b) + "; playing without buses.");
+            for (int k = 0; k < b; ++k) ma_sound_group_uninit(&s_Buses[k]);
+            s_BusesReady = false;
+            break;
+        }
+        ma_sound_group_set_volume(&s_Buses[b], s_BusVolume[b]);
+    }
+    ApplyMasterVolume(s_Engine);
 }
 
 void AudioEngine::Shutdown() {
@@ -100,6 +122,8 @@ void AudioEngine::Shutdown() {
     s_FreeSlots.clear();
     UnloadAll();
     s_Paused = false;
+    if (s_BusesReady) for (int b = 0; b < kBusCount; ++b) ma_sound_group_uninit(&s_Buses[b]);
+    s_BusesReady = false;
     ma_engine_uninit(&s_Engine);
     s_Initialized = false;
 }
@@ -166,8 +190,10 @@ void AudioEngine::UnloadAll() {
     s_Preloaded.clear();
 }
 
-AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume, bool loop) {
+AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume, bool loop, Bus bus) {
     if (!s_Initialized) return InvalidHandle;
+    const int busIndex = std::clamp((int)bus, 0, kBusCount - 1);
+    ma_sound_group* group = s_BusesReady ? &s_Buses[busIndex] : nullptr;
 
     auto sound = std::make_unique<ma_sound>();
     std::unique_ptr<ma_audio_buffer> buffer;
@@ -188,13 +214,13 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
             Log::Error("Audio: failed to instantiate preloaded '" + path + "'.", LogContext::Asset(path));
             return InvalidHandle;
         }
-        if (ma_sound_init_from_data_source(&s_Engine, (ma_data_source*)buffer.get(), 0, nullptr,
+        if (ma_sound_init_from_data_source(&s_Engine, (ma_data_source*)buffer.get(), 0, group,
                                            sound.get()) != MA_SUCCESS) {
             Log::Error("Audio: failed to play preloaded '" + path + "'.", LogContext::Asset(path));
             ma_audio_buffer_uninit(buffer.get());
             return InvalidHandle;
         }
-    } else if (ma_sound_init_from_file(&s_Engine, path.c_str(), MA_SOUND_FLAG_STREAM, nullptr, nullptr,
+    } else if (ma_sound_init_from_file(&s_Engine, path.c_str(), MA_SOUND_FLAG_STREAM, group, nullptr,
                                        sound.get()) != MA_SUCCESS) {
         Log::Error("Audio: failed to load sound '" + path + "'.", LogContext::Asset(path));
         return InvalidHandle;
@@ -303,12 +329,24 @@ void AudioEngine::SetPaused(bool paused) {
 }
 bool AudioEngine::IsPaused() { return s_Paused; }
 
-static bool s_Muted = false;
 void AudioEngine::SetMuted(bool muted) {
-    s_Muted = muted;
-    if (s_Initialized) ma_engine_set_volume(&s_Engine, muted ? 0.0f : 1.0f);
+    s_MutedFlag = muted;
+    if (s_Initialized) ApplyMasterVolume(s_Engine);
 }
-bool AudioEngine::IsMuted() { return s_Muted; }
+bool AudioEngine::IsMuted() { return s_MutedFlag; }
+
+void AudioEngine::SetMasterVolume(float volume) {
+    s_MasterVolume = std::clamp(volume, 0.0f, 1.0f);
+    if (s_Initialized) ApplyMasterVolume(s_Engine);
+}
+float AudioEngine::MasterVolume() { return s_MasterVolume; }
+
+void AudioEngine::SetBusVolume(Bus bus, float volume) {
+    const int b = std::clamp((int)bus, 0, kBusCount - 1);
+    s_BusVolume[b] = std::clamp(volume, 0.0f, 1.0f);
+    if (s_BusesReady) ma_sound_group_set_volume(&s_Buses[b], s_BusVolume[b]);
+}
+float AudioEngine::BusVolume(Bus bus) { return s_BusVolume[std::clamp((int)bus, 0, kBusCount - 1)]; }
 
 bool AudioEngine::WaveformPeaks(const std::string& path, int buckets, std::vector<float>& outPeaks) {
     outPeaks.clear();
