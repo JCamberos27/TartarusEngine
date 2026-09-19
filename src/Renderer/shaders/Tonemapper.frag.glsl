@@ -22,6 +22,10 @@ uniform float uVignette;       // 0 = off
 uniform float uVignetteSmoothness;
 uniform float uAspect;         // width / height, so the vignette is round
 uniform int   uDither;         // 1 = add +-0.5 LSB noise before 8-bit quantization
+uniform float uChromatic;      // #162 - chromatic aberration, 0 = off
+uniform float uGrain;          // #162 - film grain, 0 = off
+uniform float uGrainResponse;  // 0..1: how much bright areas are spared
+uniform float uGrainSeed;      // changes every frame so the grain animates
 
 // Unity's white-balance matrices (linear sRGB <-> LMS), row-major lists: `v * mat3(list)` = M v.
 const mat3 kLinToLms = mat3(3.90405e-1, 5.49941e-1, 8.92632e-3,
@@ -94,7 +98,16 @@ vec3 TonemapAgX(vec3 val) {
 void main() {
     float exposure = uExposure;
     if (uAutoExposure != 0) exposure *= exp2(-texelFetch(uAdaptedEv, ivec2(0), 0).r);
-    vec3 hdr = texture(uHdr, vUV).rgb * exposure;
+    vec3 hdr;
+    if (uChromatic > 0.0) {
+        // Lateral chromatic aberration: red and blue sampled radially outward/inward from the
+        // green, growing toward the edges (no shift at the centre).
+        vec2 shift = (vUV - 0.5) * uChromatic * 0.02;
+        hdr = vec3(texture(uHdr, vUV + shift).r, texture(uHdr, vUV).g, texture(uHdr, vUV - shift).b);
+    } else {
+        hdr = texture(uHdr, vUV).rgb;
+    }
+    hdr *= exposure;
     if (uBloomEnabled != 0)
         hdr += texture(uBloom, vUV).rgb * uBloomIntensity * (exposure / uExposure);
 
@@ -108,6 +121,14 @@ void main() {
     if (uVignette > 0.0) {
         vec2 d = (vUV - 0.5) * vec2(uAspect, 1.0) * 2.0 * uVignette / max(uAspect, 1.0);
         mapped *= pow(clamp(1.0 - dot(d, d), 0.0, 1.0), max(uVignetteSmoothness * 5.0, 0.01));
+    }
+
+    if (uGrain > 0.0) {
+        // Film grain: zero-mean noise, strongest in the shadows (Response spares highlights).
+        float luma = dot(mapped, vec3(0.2126, 0.7152, 0.0722));
+        float n = Ign(gl_FragCoord.xy + uGrainSeed * vec2(47.0, 17.0)) - 0.5;
+        float weight = mix(1.0, 1.0 - sqrt(clamp(luma, 0.0, 1.0)), uGrainResponse);
+        mapped = max(mapped + n * uGrain * 0.35 * weight, vec3(0.0));
     }
 
     vec3 display = LinearToSrgb(mapped);
