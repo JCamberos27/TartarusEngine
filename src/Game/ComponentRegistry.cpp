@@ -271,7 +271,7 @@ void RegisterEngineComponents() {
             { "Sprint Multiplier", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SprintMultiplier), 0.01f,
               "Speed multiplier while Shift is held.", 1.0f, 10.0f },
             { "Jump Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, JumpSpeed), 0.05f,
-              "Upward launch speed. Jump height is about Jump Speed^2 / (2 x gravity).", 0.0f, 50.0f },
+              "Upward launch speed. Jump height is about Jump Speed^2 / (2 x Gravity).", 0.0f, 50.0f },
             { "Eye Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, EyeHeight), 0.01f,
               "Camera height above the feet.", 0.1f, 10.0f },
             { "Capsule Radius", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CapsuleRadius), 0.01f,
@@ -286,6 +286,10 @@ void RegisterEngineComponents() {
               "Vertical field of view, in degrees.", 20.0f, 150.0f },
             { "Kill Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, KillY), 0.5f,
               "Falling below this world height respawns the player at this object.", -100000.0f, 100000.0f },
+            { "Gravity", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, Gravity), 0.1f,
+              "How hard the player falls, m/s\xC2\xB2. Separate from the physics world's gravity (Project\n"
+              "Settings > Physics, Earth's 9.81 by default): most games give the player a heavier,\n"
+              "snappier fall than real life. Jump height is about Jump Speed\xC2\xB2 / (2 x Gravity).", 0.0f, 200.0f },
             { "Gravity Gun", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, GravityGun), 0.0f,
               "The built-in tool: right mouse picks up a rigidbody, left mouse throws it." },
             { "Min Throw Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, MinThrowSpeed), 0.1f,
