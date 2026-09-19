@@ -939,6 +939,8 @@ void SetSurfaceOptions(Shader& shader, const Material& mat) {
     shader.SetInt("uNormalFlipY", mat.NormalFlipY ? 1 : 0);
     shader.SetInt("uDoubleSided", mat.DoubleSided ? 1 : 0);
     shader.SetInt("uUseVertexColor", mat.UseVertexColor ? 1 : 0);
+    shader.SetInt("uNoSpecularHighlights", mat.SpecularHighlights ? 0 : 1);
+    shader.SetInt("uNoGlossyReflections", mat.GlossyReflections ? 0 : 1);
     shader.SetFloat("uParallaxScale", mat.ParallaxScale);
     shader.SetVec2("uDetailTiling", mat.DetailTiling);
 }

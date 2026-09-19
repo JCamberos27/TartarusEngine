@@ -35,8 +35,7 @@ void GravityGun::Reset() {
     m_Charging = false;
     m_Charge = 0.0f;
     m_HaveHoldPoint = false;
-    m_Trajectory.clear();
-    m_TrajectoryHitNormal = glm::vec3(0.0f);
+    m_Prediction.Clear();
 }
 
 // The crosshair ray first; if it misses anything grabbable, the dynamic body nearest the aim
@@ -85,10 +84,12 @@ unsigned GravityGun::FindGrabTarget(const glm::vec3& eye, const glm::vec3& fwd) 
 }
 
 // The held body's flight if released now at `speed` along `fwd`: the same fixed-step integration
-// PhysX does (gravity, then linear damping), stopped at the first solid thing it would hit.
+// PhysX does (gravity, then linear damping), sweeping the body's own shape along each step. At a
+// hit the velocity bounces the way PhysX's contact will (restitution above its 2 m/s bounce
+// threshold, Coulomb friction on the tangential part); the prediction stops after the second
+// bounce, once the bounce is too weak to leave the surface, or after 5 s.
 void GravityGun::PredictThrow(const glm::vec3& fwd, float speed) {
-    m_Trajectory.clear();
-    m_TrajectoryHitNormal = glm::vec3(0.0f);
+    m_Prediction.Clear();
     const unsigned held = PhysicsWorld::GrabbedEntity();
     float p0[3];
     if (held == kNoEntity || !PhysicsWorld::GetActorPosition(held, p0)) return;
@@ -97,30 +98,46 @@ void GravityGun::PredictThrow(const glm::vec3& fwd, float speed) {
     const glm::vec3 g = phys.Gravity;
     const float step = std::clamp(phys.FixedTimestep, 1.0f / 240.0f, 1.0f / 30.0f);
     const float damping = PhysicsWorld::GetLinearDamping(held);
-    QueryFilter solid;
-    solid.HitTriggers = 0;
+    constexpr int kMaxBounces = 2;
+    constexpr float kBounceThreshold = 2.0f; // PhysX's default bounceThresholdVelocity
+    m_Prediction.BodyRadius = PhysicsWorld::BodyRadius(held);
 
     glm::vec3 p = Vec(p0), v = fwd * speed;
-    m_Trajectory.push_back(p);
-    RaycastHit hits[8];
-    for (float t = 0.0f; t < 4.0f; t += step) {
+    m_Prediction.Legs.push_back({p});
+    int bounces = 0;
+    for (float t = 0.0f; t < 5.0f; t += step) {
         v += g * step;
         v *= std::max(0.0f, 1.0f - damping * step);
-        const glm::vec3 next = p + v * step;
-        const glm::vec3 seg = next - p;
+        const glm::vec3 seg = v * step;
         const float len = glm::length(seg);
-        if (len > 1e-5f) {
-            const float o[3] = {p.x, p.y, p.z}, d[3] = {seg.x / len, seg.y / len, seg.z / len};
-            const int n = PhysicsWorld::RaycastAll(o, d, len, solid, hits, 8);
-            for (int i = 0; i < n; ++i) {
-                if (hits[i].Entity == held || hits[i].Entity == kPlayerEntity) continue;
-                m_Trajectory.push_back(Vec(hits[i].Point));
-                m_TrajectoryHitNormal = Vec(hits[i].Normal);
-                return;
-            }
+        if (len < 1e-6f) break;
+        const glm::vec3 dir = seg / len;
+        const float o[3] = {p.x, p.y, p.z}, d[3] = {dir.x, dir.y, dir.z};
+        RaycastHit hit;
+        float bounciness = 0.0f, friction = 0.0f;
+        if (!PhysicsWorld::SweepBody(held, o, d, len, hit, bounciness, friction)) {
+            p += seg;
+            m_Prediction.Legs.back().push_back(p);
+            continue;
         }
-        p = next;
-        m_Trajectory.push_back(p);
+        // Contact: finish this leg where the body touches, mark the spot, then bounce.
+        const glm::vec3 n = glm::normalize(Vec(hit.Normal));
+        p += dir * hit.Distance;
+        m_Prediction.Legs.back().push_back(p);
+        m_Prediction.ContactPoints.push_back(Vec(hit.Point));
+        m_Prediction.ContactNormals.push_back(n);
+        const float vn = glm::dot(v, n);
+        if (bounces == kMaxBounces || vn >= 0.0f) return;
+        const float e = -vn > kBounceThreshold ? bounciness : 0.0f;
+        const glm::vec3 vN = vn * n;
+        glm::vec3 vT = v - vN;
+        const float vtLen = glm::length(vT);
+        if (vtLen > 1e-4f) vT *= std::max(0.0f, 1.0f - friction * (1.0f + e) * -vn / vtLen);
+        v = vT - e * vN;
+        if (e * -vn < 1.0f) return; // it won't leave the surface: it rolls or slides from here
+        ++bounces;
+        p += n * 0.002f;
+        m_Prediction.Legs.push_back({p});
     }
 }
 
@@ -130,8 +147,7 @@ void GravityGun::Update(float dt, const Player& player) {
     const bool lmb = Input::IsMouseButtonDown(0);
     const bool rmb = Input::IsMouseButtonDown(1);
     const float yaw = glm::radians(player.Cam.Yaw);
-    m_Trajectory.clear();
-    m_TrajectoryHitNormal = glm::vec3(0.0f);
+    m_Prediction.Clear();
 
     if (rmb && !m_RmbPrev && !PhysicsWorld::IsGrabbing()) {
         const unsigned target = FindGrabTarget(eye, fwd);
@@ -174,14 +190,16 @@ void GravityGun::Update(float dt, const Player& player) {
         // The hold point and how fast it's moving (walking, turning), which PhysicsWorld feeds
         // forward so the body keeps up instead of trailing behind.
         const glm::vec3 t = eye + fwd * m_HoldDistance;
-        glm::vec3 vel(0.0f);
+        if (!m_HaveHoldPoint) m_HoldVelocity = glm::vec3(0.0f);
         if (m_HaveHoldPoint && dt > 1e-4f) {
-            vel = (t - m_PrevHoldPoint) / dt;
-            const float speed = glm::length(vel);
-            if (speed > 40.0f) vel *= 40.0f / speed; // a teleport / respawn, not motion
+            glm::vec3 raw = (t - m_PrevHoldPoint) / dt;
+            const float speed = glm::length(raw);
+            if (speed > 40.0f) raw *= 40.0f / speed; // a teleport / respawn, not motion
+            m_HoldVelocity += (raw - m_HoldVelocity) * (1.0f - std::exp(-dt * 25.0f)); // ~40 ms smoothing
         }
         m_PrevHoldPoint = t;
         m_HaveHoldPoint = true;
+        const glm::vec3 vel = m_HoldVelocity;
         const float tf[3] = {t.x, t.y, t.z}, vf[3] = {vel.x, vel.y, vel.z};
         const float qf[4] = {m_HoldRotation.x, m_HoldRotation.y, m_HoldRotation.z, m_HoldRotation.w};
         PhysicsWorld::UpdateGrab(tf, vf, qf);

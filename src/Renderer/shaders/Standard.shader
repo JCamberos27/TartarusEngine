@@ -33,6 +33,8 @@ Properties {
     [Header(Advanced Options)] [Tooltip(Draw and light both sides: foliage, cloth, thin planes.)] _DoubleSided ("Double Sided", Bool) = 0
     [Tooltip(Multiply the colour and alpha by the mesh's vertex colours.)] _VertexColors ("Vertex Colors", Bool) = 0
     [Tooltip(For normal maps authored for DirectX, where green points down, e.g. from Unreal or Substance DX presets.)] _NormalFlipY ("Normal Map Is DirectX", Bool) = 0
+    [Header(Forward Rendering Options)] [Tooltip(The shiny highlight lights leave on the surface. Off = fully matte under lights.)] _SpecularHighlights ("Specular Highlights", Bool) = 1
+    [Tooltip(Reflections of the sky and reflection probes. Off = no reflections, whatever the Smoothness.)] _GlossyReflections ("Reflections", Bool) = 1
 
     // Engine-internal and advanced lobes: bound and saved as before, not shown.
     [Hidden] _Triplanar      ("Triplanar",        Bool)      = 0

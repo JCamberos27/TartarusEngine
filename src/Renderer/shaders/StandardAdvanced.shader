@@ -27,6 +27,8 @@ Properties {
     [Header(Advanced Options)] [Tooltip(Draw and light both sides: foliage, cloth, thin planes.)] _DoubleSided ("Double Sided", Bool) = 0
     [Tooltip(Multiply the colour and alpha by the mesh's vertex colours.)] _VertexColors ("Vertex Colors", Bool) = 0
     [Tooltip(For normal maps authored for DirectX, where green points down, e.g. from Unreal or Substance DX presets.)] _NormalFlipY ("Normal Map Is DirectX", Bool) = 0
+    [Header(Forward Rendering Options)] [Tooltip(The shiny highlight lights leave on the surface. Off = fully matte under lights.)] _SpecularHighlights ("Specular Highlights", Bool) = 1
+    [Tooltip(Reflections of the sky and reflection probes. Off = no reflections, whatever the Smoothness.)] _GlossyReflections ("Reflections", Bool) = 1
     [Header(Clear Coat)] [Tooltip(A thin glossy varnish layer over the base: car paint, lacquered wood. 0 = none.)] _ClearCoat ("Clear Coat", Range(0, 1)) = 0
     [Tooltip(Roughness of the varnish layer: 0 = mirror, 1 = matte.)] _ClearCoatRoughness ("Clear Coat Roughness", Range(0, 1)) = 0.5
     [Tooltip(Masks Clear Coat by its red channel.)] _ClearCoatMap ("Clear Coat Map", Texture2D) = "white"
