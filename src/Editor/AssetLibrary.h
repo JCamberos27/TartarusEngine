@@ -1,4 +1,5 @@
 #pragma once
+#include <filesystem>
 #include <string>
 #include <vector>
 #include <memory>
@@ -149,6 +150,10 @@ public:
     // settings are currently stored for it — call SetTexture/ModelSettings first, then this.
     // Returns false if the asset isn't loaded yet or the reimport itself fails.
     bool ReimportTexture(const std::string& path);
+    // #132 - Unity's "reimport on focus": re-imports every loaded texture whose file changed on
+    // disk since it was loaded (edited in Photoshop, replaced in Explorer, pulled from git).
+    // main.cpp calls it when the editor window regains focus. Returns how many were reimported.
+    int ReimportChangedOnDisk();
     bool ReimportModel(const std::string& path);
 
     // For SceneSerializer, same pattern as AssetFolders()/DisplayNames() above.
@@ -164,6 +169,7 @@ private:
     std::vector<std::shared_ptr<Model>> m_ModelList;
     std::vector<std::shared_ptr<Texture>> m_TextureList;
     std::vector<std::string> m_TexturePaths;    // parallel to m_TextureList, kept in sync
+    std::map<std::string, std::filesystem::file_time_type> m_TextureWriteTime; // #132 - at load/reimport
     std::vector<std::shared_ptr<MaterialAsset>> m_MaterialList;
     std::vector<std::string> m_MaterialPaths;   // parallel to m_MaterialList, kept in sync
     std::vector<std::string> m_Sounds;

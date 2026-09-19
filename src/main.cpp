@@ -1048,6 +1048,7 @@ int main(int argc, char** argv) {
         }
 
         // #89 — see the matching catch after the loop. (Loop body deliberately not re-indented.)
+        bool wasFocused = true; // #132 - reimport-on-focus edge detector
         try {
         while (true) {
             // #143: a minimized editor has nothing to show, and a 0x0 framebuffer only risks a
@@ -1060,6 +1061,16 @@ int main(int argc, char** argv) {
                 continue;
             }
             ++frameIndex;
+            // #132 - coming back to the editor (alt-tab from Photoshop, a git pull) picks up
+            // textures that changed on disk, like Unity's reimport on focus.
+            if (!headless) {
+                const bool focused = glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED) != 0;
+                if (focused && !wasFocused) {
+                    if (const int n = assets.ReimportChangedOnDisk())
+                        Log::Info("Reimported " + std::to_string(n) + " texture(s) changed on disk.");
+                }
+                wasFocused = focused;
+            }
             if (!crashTestInEditor.empty() && frameIndex == 120) {
                 editor.MarkDirtyForCrashTest();
                 CrashHandler::CrashForTest(crashTestInEditor.c_str());
