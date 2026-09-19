@@ -1433,6 +1433,8 @@ int main(int argc, char** argv) {
             // look (see Player::Update's readInput).
             // Reap voices that have finished so repeated Play/Stop cycles don't accumulate
             // ma_sound objects and open file handles (#200).
+            // #171 - game audio follows the editor's Pause / Error Pause (resumes mid-clip).
+            AudioEngine::SetPaused(playing && paused);
             AudioEngine::Update();
 
             // Whether gameplay actually advances this frame: playing and not paused, or a
