@@ -341,6 +341,19 @@ std::shared_ptr<MaterialAsset> ReadEmbeddedMat(AssetLibrary& assets, const json&
     return ma;
 }
 
+// #163 - Cast/Receive Shadows. Written only when not the default, so untouched scenes don't change.
+void WriteRendererFlags(json& obj, const RenderableComponent& rc) {
+    if (rc.CastShadows != RenderableComponent::ShadowCasting::On) obj["castShadows"] = (int)rc.CastShadows;
+    if (!rc.ReceiveShadows) obj["receiveShadows"] = false;
+}
+void ReadRendererFlags(const json& obj, RenderableComponent& rc) {
+    const auto it = obj.find("castShadows");
+    rc.CastShadows = (it != obj.end() && it->is_number_integer())
+        ? (RenderableComponent::ShadowCasting)std::clamp(it->get<int>(), 0, 3)
+        : RenderableComponent::ShadowCasting::On;
+    rc.ReceiveShadows = obj.value("receiveShadows", true);
+}
+
 void ReadMaterialSlots(AssetLibrary& assets, const json& obj, RenderableComponent& rc) {
     if (obj.contains("materials") && obj["materials"].is_array()) {
         for (const auto& slot_j : obj["materials"]) {
@@ -953,6 +966,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             {"parentId", parentIdOf(entity)},
         };
         if (json slots = MaterialSlotsToJson(renderable.Materials); !slots.is_null()) b["materials"] = std::move(slots); // #120
+        WriteRendererFlags(b, renderable); // #163
         WriteCommonComponents(b, world, entity);
         boxes.push_back(b);
     }
@@ -1000,6 +1014,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         m["parentId"] = parentIdOf(entity);
 
         if (json slots = MaterialSlotsToJson(renderable.Materials); !slots.is_null()) m["materials"] = std::move(slots);
+        WriteRendererFlags(m, renderable); // #163
         WriteCommonComponents(m, world, entity);
         models.push_back(m);
     }
@@ -1245,6 +1260,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             std::string name = b.value("name", std::string());
             entt::entity e = world.CreateBox(center, size, color, rotation, name);
             ReadMaterialSlots(assets, b, world.Registry.get<RenderableComponent>(e)); // #120
+            ReadRendererFlags(b, world.Registry.get<RenderableComponent>(e)); // #163
             ReadCommonComponents(b, world, assets, e);
             applyOrder(e, b);
             created(e);
@@ -1272,6 +1288,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             auto& rc = world.Registry.get<RenderableComponent>(e);
 
             ReadMaterialSlots(assets, m, rc);
+            ReadRendererFlags(m, rc); // #163
             ReadCommonComponents(m, world, assets, e); // handles the "Audio Source" block + the legacy "sound*" shim
             applyOrder(e, m);
             created(e);

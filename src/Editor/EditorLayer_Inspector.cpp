@@ -2523,6 +2523,31 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 ImGui::EndPopup();
             }
 
+            // #163 - Unity's Mesh Renderer > Lighting.
+            ImGui::SeparatorText("Lighting");
+            PropertyLabel("Cast Shadows", "On: casts shadows from the side facing the light.\n"
+                                          "Off: casts no shadows.\n"
+                                          "Two Sided: casts from both sides - for planes, leaves and other\n"
+                                          "open meshes that otherwise let light leak through.\n"
+                                          "Shadows Only: invisible to cameras, but still casts shadows.");
+            {
+                static const char* kCastModes[] = {"Off", "On", "Two Sided", "Shadows Only"};
+                int cast = std::clamp((int)renderable->CastShadows, 0, 3);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::Combo("##CastShadows", &cast, kCastModes, IM_ARRAYSIZE(kCastModes))) {
+                    PushUndo(world, "Edit Cast Shadows");
+                    renderable->CastShadows = (RenderableComponent::ShadowCasting)cast;
+                }
+            }
+            PropertyLabel("Receive Shadows", "Whether shadows from other objects (and itself) darken this surface.");
+            {
+                bool receive = renderable->ReceiveShadows;
+                if (EditorUIPrimitives::Checkbox("##ReceiveShadows", &receive)) {
+                    PushUndo(world, "Edit Receive Shadows");
+                    renderable->ReceiveShadows = receive;
+                }
+            }
+
             EndComponentSection();
         }
         if (removed) {

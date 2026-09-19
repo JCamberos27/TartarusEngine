@@ -1764,6 +1764,9 @@ int main(int argc, char** argv) {
                     for (auto entity : casters) {
                         if (world.Registry.all_of<InactiveTag>(entity)) continue;
                         auto& renderable = world.Registry.get<RenderableComponent>(entity);
+                        // #163 - Cast Shadows: Off skips; Two Sided draws without back-face culling.
+                        if (renderable.CastShadows == RenderableComponent::ShadowCasting::Off) continue;
+                        const bool twoSided = renderable.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
                         glm::mat4 model = world.GetCachedWorldTransform(entity);
                         glm::vec3 bmin = renderable.ModelRef->BoundsMin();
                         glm::vec3 bmax = renderable.ModelRef->BoundsMax();
@@ -1775,7 +1778,10 @@ int main(int argc, char** argv) {
                             !cascadeFrustum.Intersects(AABB{bmin, bmax}.Transformed(model)))
                             continue;
                         shadowShader.SetMat4(shadowModelLoc, model);
+                        const bool cullWasOn = twoSided && glIsEnabled(GL_CULL_FACE);
+                        if (cullWasOn) glDisable(GL_CULL_FACE);
                         renderable.ModelRef->DrawDepthOnly(shadowShader, renderable.Materials);
+                        if (cullWasOn) glEnable(GL_CULL_FACE);
                     }
                 }
 
@@ -1822,6 +1828,8 @@ int main(int argc, char** argv) {
                     for (auto entity : casters) {
                         if (world.Registry.all_of<InactiveTag>(entity)) continue;
                         auto& r = world.Registry.get<RenderableComponent>(entity);
+                        if (r.CastShadows == RenderableComponent::ShadowCasting::Off) continue; // #163
+                        const bool twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
                         glm::mat4 model = world.GetCachedWorldTransform(entity);
                         glm::vec3 bmin = r.ModelRef->BoundsMin();
                         glm::vec3 bmax = r.ModelRef->BoundsMax();
@@ -1830,7 +1838,10 @@ int main(int argc, char** argv) {
                             !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
                             continue;
                         localShadowShader.SetMat4(localModelLoc, model);
+                        const bool cullWasOn = twoSided && glIsEnabled(GL_CULL_FACE);
+                        if (cullWasOn) glDisable(GL_CULL_FACE);
                         r.ModelRef->DrawDepthOnly(localShadowShader, r.Materials);
+                        if (cullWasOn) glEnable(GL_CULL_FACE);
                     }
                 }
 
@@ -1884,6 +1895,8 @@ int main(int argc, char** argv) {
                         for (auto entity : casters) {
                             if (world.Registry.all_of<InactiveTag>(entity)) continue;
                             auto& r = world.Registry.get<RenderableComponent>(entity);
+                            if (r.CastShadows == RenderableComponent::ShadowCasting::Off) continue; // #163
+                            const bool twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
                             glm::mat4 model = world.GetCachedWorldTransform(entity);
                             glm::vec3 bmin = r.ModelRef->BoundsMin();
                             glm::vec3 bmax = r.ModelRef->BoundsMax();
@@ -1892,7 +1905,10 @@ int main(int argc, char** argv) {
                                 !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
                                 continue;
                             localShadowShader.SetMat4(cubeModelLoc, model);
+                            const bool cullWasOn = twoSided && glIsEnabled(GL_CULL_FACE);
+                            if (cullWasOn) glDisable(GL_CULL_FACE);
                             r.ModelRef->DrawDepthOnly(localShadowShader, r.Materials);
+                            if (cullWasOn) glEnable(GL_CULL_FACE);
                         }
                     }
                 }
@@ -2046,6 +2062,7 @@ int main(int argc, char** argv) {
                     if (!rc.ModelRef) continue;
                     if (!rc.Materials.empty() && rc.Materials[0] &&
                         rc.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
+                    if (rc.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue; // #163: not in view
                     const glm::mat4 model = world.GetCachedWorldTransform(entity);
                     glm::vec3 bmin = rc.ModelRef->BoundsMin(), bmax = rc.ModelRef->BoundsMax();
                     if (bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z) {
