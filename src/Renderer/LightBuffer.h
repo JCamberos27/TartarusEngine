@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -41,12 +42,15 @@ public:
     // caller can warn (#204).
     // `sampleSunShadow`: this is the directional light the cascaded shadow map was rendered for
     // (#102 — only that one samples it; any other directional is unshadowed).
+    // `excludedLayers` (#203): bit N set = objects on layer N don't receive this light (the
+    // complement of the light's Culling Mask; 0 = lights everything, so defaults stay correct).
     void AddDirectional(const glm::vec3& dirWorld, const glm::vec3& colorLinear, float intensity,
-                        bool sampleSunShadow = true);
+                        bool sampleSunShadow = true, std::uint32_t excludedLayers = 0);
     void AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLinear, float intensity, float range,
-                  int shadowSlot = -1);
+                  int shadowSlot = -1, std::uint32_t excludedLayers = 0);
     void AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, const glm::vec3& colorLinear,
-                 float intensity, float range, float cosOuter, float cosInner, int shadowSlot = -1);
+                 float intensity, float range, float cosOuter, float cosInner, int shadowSlot = -1,
+                 std::uint32_t excludedLayers = 0);
 
     // (Lazily creates the SSBO on first call.) Uploads the current list.
     void Upload();
@@ -66,7 +70,8 @@ private:
         glm::vec4 PositionType; // xyz = world pos (point/spot); w = Type
         glm::vec4 ColorRange;   // rgb = colour * intensity; a = range (metres; unused for directional)
         glm::vec4 DirCutoff;    // xyz = normalized aim dir (spot/directional); w = spot outer-cone cos (-1 = none)
-        glm::vec4 Params;       // x = spot inner-cone cos; y = shadow slot (-1 none, set later); zw spare
+        glm::vec4 Params;       // x = spot inner-cone cos; y = shadow slot (-1 none, set later);
+                                // z = excluded-layer bits (#203, reinterpreted as uint); w spare
     };
 
     std::vector<GpuLight> m_Lights;
