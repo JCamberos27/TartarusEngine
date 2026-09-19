@@ -46,13 +46,20 @@ struct Light {
     vec4 PositionType; // xyz = world pos (point/spot); w = type: 0 directional, 1 point, 2 spot
     vec4 ColorRange;   // rgb = colour * intensity; a = range in metres (point/spot)
     vec4 DirCutoff;    // xyz = normalized aim direction (spot/directional); w = spot outer-cone cos (-1 = none)
-    vec4 Params;       // x = spot inner-cone cos; yzw reserved (shadow slot, etc.)
+    vec4 Params;       // x = spot inner-cone cos; y = shadow slot; z = excluded-layer bits (#203); w reserved
 };
 layout(std430, binding = 0) readonly buffer LightBuffer {
     uint uLightCount;
     uint uDirectionalCount; // directional lights are packed at the front of uLights[] (#188)
     Light uLights[];
 };
+
+// #203 - lighting layers. uObjectLayerBit is 1 << this object's layer (0 = unfiltered, for
+// draws that never set it); a light skips objects whose bit is in its excluded-layer set.
+uniform int uObjectLayerBit;
+bool LightAffects(uint i) {
+    return (floatBitsToUint(uLights[i].Params.z) & uint(uObjectLayerBit)) == 0u;
+}
 
 // Clustered-forward light culling (#120). The view frustum is diced into a fixed
 // 16 x 9 x 24 grid of froxels; a per-frame compute pass (ClusterGrid) fills, for each
@@ -872,6 +879,7 @@ void main() {
     // Packed at the front of uLights[] (#188), so this loops exactly uDirectionalCount entries
     // instead of scanning the whole buffer and skipping non-directional ones by type.
     for (uint i = 0u; i < uDirectionalCount; ++i) {
+        if (!LightAffects(i)) continue; // #203
         vec3 L = normalize(-uLights[i].DirCutoff.xyz); // DirCutoff.xyz travels forward; L points back
         // #102 — only the directional light that owns the cascade map samples it (Params.y 0);
         // any other directional used to be shadowed by the primary sun's map.
@@ -903,6 +911,7 @@ void main() {
         uint count = uClusterRange[cl].count;
         for (uint j = 0u; j < count; ++j) {
             uint li = uClusterLightIndices[offset + j];
+            if (!LightAffects(li)) continue; // #203
 #ifdef _ANISO
             Lo += ShadePointSpotAniso(li, N, V, albedo, F0, metallic, roughness, anisoT, anisoB);
 #else
@@ -920,7 +929,7 @@ void main() {
         }
     } else {
         for (uint i = 0u; i < uLightCount; ++i) {
-            if (int(uLights[i].PositionType.w) == 0) continue;
+            if (int(uLights[i].PositionType.w) == 0 || !LightAffects(i)) continue;
 #ifdef _ANISO
             Lo += ShadePointSpotAniso(i, N, V, albedo, F0, metallic, roughness, anisoT, anisoB);
 #else

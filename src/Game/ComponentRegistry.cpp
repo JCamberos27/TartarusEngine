@@ -303,6 +303,9 @@ void RegisterEngineComponents() {
               "Per-light shadow-map size (applies after per-light shadow maps)." },
             { "Shadow Update Mode", T::Enum, TARTARUS_REFLECT_FIELD(LightComponent, Shadow.UpdateMode), 0.0f,
               "Dynamic re-renders every frame; Static bakes once (applies after per-light shadow maps)." },
+            // #203 - drawn as a layer checklist by DrawReflectedComponentExtra("Light").
+            { "Culling Mask", T::Int, TARTARUS_REFLECT_FIELD(LightComponent, CullingMask), 0.0f,
+              "Which layers this light illuminates." },
         };
         auto F = [&](const char* name) -> ReflectField& {
             for (auto& f : m.Fields) if (std::strcmp(f.Name, name) == 0) return f;
@@ -335,6 +338,7 @@ void RegisterEngineComponents() {
         F("Shadow Resolution").EnumCount = 5;
         F("Shadow Update Mode").EnumLabels = "Dynamic\0" "Static (bake once)\0" "Off\0";
         F("Shadow Update Mode").EnumCount = 3;
+        F("Culling Mask").EditorHidden = true;
         Register<LightComponent>(std::move(m));
     }
 

@@ -3088,6 +3088,38 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                                      spot ? "spot" : "point");
         }
 
+        // #203 - Unity's Culling Mask: which layers this light reaches, as a layer checklist.
+        if (phase == ReflectExtraPhase::Bottom) {
+            const std::uint32_t mask = (std::uint32_t)light->CullingMask;
+            int on = 0, lastOn = -1;
+            for (int i = 0; i < LayerRegistry::kCount; ++i)
+                if (mask & (1u << i)) { ++on; lastOn = i; }
+            std::string preview = on == LayerRegistry::kCount ? std::string("Everything")
+                                : on == 0 ? std::string("Nothing")
+                                : on == 1 ? LayerRegistry::DisplayName(lastOn)
+                                          : std::string("Mixed...");
+            PropertyLabel("Culling Mask", "Which layers this light illuminates. Objects on other layers (the Layer\n"
+                                          "dropdown at the top of the Inspector) don't receive it. Shadows are unaffected.");
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::BeginCombo("##LightCullingMask", preview.c_str())) {
+                auto setMask = [&](std::uint32_t m) {
+                    PushUndo(world, "Edit Light Culling Mask");
+                    light->CullingMask = (int)m;
+                };
+                if (ImGui::Selectable("Everything", on == LayerRegistry::kCount, ImGuiSelectableFlags_DontClosePopups)) setMask(0xFFFFFFFFu);
+                if (ImGui::Selectable("Nothing", on == 0, ImGuiSelectableFlags_DontClosePopups)) setMask(0u);
+                ImGui::Separator();
+                for (int i = 0; i < LayerRegistry::kCount; ++i) {
+                    if (!LayerRegistry::IsListed(i)) continue; // named layers only, like Unity; unnamed bits keep their value
+                    bool bit = (mask & (1u << i)) != 0;
+                    const std::string label = LayerRegistry::DisplayName(i) + "##cm" + std::to_string(i);
+                    if (EditorUIPrimitives::Checkbox(label.c_str(), &bit))
+                        setMask(bit ? (mask | (1u << i)) : (mask & ~(1u << i)));
+                }
+                ImGui::EndCombo();
+            }
+        }
+
         if (phase == ReflectExtraPhase::Top) {
             // Colour: a raw swatch (+ eyedropper), or a Kelvin bar when ColorTempK > 0 (the
             // swatch is then driven, not authored). The K / RGB button flips between the two.

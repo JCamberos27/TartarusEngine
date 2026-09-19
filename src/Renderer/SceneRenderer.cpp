@@ -307,6 +307,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         glm::vec3 Centre; // world-space bounds centre — picks this object's reflection probes (#108)
         Model::MeshPass Pass; // #112 — which of the model's submeshes this item draws
         bool ReceiveShadows;  // #163
+        int  LayerBit;        // #203 - 1 << Layer, tested against each light's excluded layers
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -359,6 +360,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // PR9 / #112: classify per submesh — a model whose slot 1 is transparent used to draw
         // entirely opaque because only slot 0's queue was checked (and vice versa). A model
         // with both kinds is queued in both passes, each drawing only its own submeshes.
+        const auto* layerComp = world.Registry.try_get<LayerComponent>(entity); // #203 lighting layers
+        const int layerBit = (int)(1u << (layerComp ? std::clamp(layerComp->Layer, 0, 31) : 0));
         bool anyOpaque = false, anyTransparent = false;
         int qi = 2000; // QueueIndex of the first transparent slot
         for (int i = 0; i < m->MeshCount(); ++i) {
@@ -388,13 +391,13 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             transparentList.push_back({ model, m, &slots, matKey,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
-                renderable.ReceiveShadows });
+                renderable.ReceiveShadows, layerBit });
         }
         if (anyOpaque) {
             drawList.push_back({ model, m, &slots, matKey,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass,
-                renderable.ReceiveShadows });
+                renderable.ReceiveShadows, layerBit });
         }
     }
 
@@ -414,6 +417,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     const std::function<void(Shader&)> perDraw = [&](Shader& prog) {
         if (anyProbes) in.probeArray->Bind(prog, probeItem->Centre);
         prog.SetInt("uNoReceiveShadows", probeItem->ReceiveShadows ? 0 : 1);
+        prog.SetInt("uObjectLayerBit", probeItem->LayerBit); // #203
     };
 
     passAlphaBlend = 0;
