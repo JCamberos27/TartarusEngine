@@ -39,6 +39,16 @@ std::shared_ptr<Cubemap> Cubemap::LoadHdr(const std::string& path, int faceSize,
         return nullptr;
     }
 
+    // The textures below are half-float (max 65504). A real sky HDRI with the sun in it goes far
+    // past that - Poly Haven's pure-sky sets peak around 70k+ - and an out-of-range value becomes
+    // +Inf on upload, then NaN through the irradiance / prefilter convolutions, which turned every
+    // surface lit by the sky black. Clamp to the representable range (NaN -> 0) first.
+    constexpr float kHalfMax = 65000.0f;
+    for (size_t i = 0, n = (size_t)w * (size_t)h * 3; i < n; ++i) {
+        const float v = data[i];
+        data[i] = (v == v) ? (v < kHalfMax ? (v > 0.0f ? v : 0.0f) : kHalfMax) : 0.0f;
+    }
+
     // Upload equirectangular map as a plain 2D texture.
     unsigned int equiTex = 0;
     glCreateTextures(GL_TEXTURE_2D, 1, &equiTex);
