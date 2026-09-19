@@ -1788,6 +1788,51 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
             }
 
+            // #178 - Unity's Find References In Scene: selects every object in the open scene that
+            // uses this asset (as its mesh, a material slot, a texture in any of its materials,
+            // its sound, or its prefab source).
+            if (!isFolder && m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS "  Find References in Scene")) {
+                auto same = [](const std::string& a, const std::string& b) {
+                    if (a.empty() || b.empty()) return false;
+                    std::error_code ec;
+                    const auto na = std::filesystem::weakly_canonical(std::filesystem::path(a), ec);
+                    const auto nb = std::filesystem::weakly_canonical(std::filesystem::path(b), ec);
+                    std::string sa = na.generic_string(), sb = nb.generic_string();
+                    std::transform(sa.begin(), sa.end(), sa.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+                    std::transform(sb.begin(), sb.end(), sb.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+                    return sa == sb;
+                };
+                auto usesTexture = [&](const Material& m) {
+                    for (const auto* t : {&m.AlbedoMap, &m.NormalMap, &m.MetallicRoughnessMap, &m.MetallicMap,
+                                          &m.RoughnessMap, &m.AOMap, &m.EmissiveMap, &m.ClearCoatMap,
+                                          &m.ThicknessMap, &m.HeightMap, &m.DetailAlbedoMap, &m.DetailNormalMap})
+                        if (*t && same((*t)->Path(), cell.key)) return true;
+                    for (const auto& [name, prop] : m.ExtraProps)
+                        if ((prop.Tex && same(prop.Tex->Path(), cell.key)) || same(prop.TexPath, cell.key)) return true;
+                    return false;
+                };
+                std::vector<entt::entity> hits;
+                for (auto [e, name] : world.Registry.view<const NameComponent>().each()) {
+                    (void)name;
+                    bool uses = false;
+                    if (const auto* rc = world.Registry.try_get<RenderableComponent>(e); rc && rc->ModelRef) {
+                        uses = same(rc->ModelRef->Path(), cell.key);
+                        for (int i = 0; !uses && i < rc->ModelRef->MeshCount(); ++i) {
+                            const bool hasSlot = i < (int)rc->Materials.size() && rc->Materials[i];
+                            if (hasSlot && same(rc->Materials[i]->Path, cell.key)) uses = true;
+                            else uses = usesTexture(hasSlot ? rc->Materials[i]->Mat : rc->ModelRef->MeshMaterial(i));
+                        }
+                    }
+                    if (!uses) if (const auto* a = world.Registry.try_get<AudioSourceComponent>(e)) uses = same(a->SoundPath, cell.key);
+                    if (!uses) if (const auto* p = world.Registry.try_get<PrefabInstanceComponent>(e)) uses = same(p->SourcePath, cell.key);
+                    if (uses) hits.push_back(e);
+                }
+                ClearSelection();
+                for (entt::entity e : hits) AddToSelectionIfAbsent(e);
+                if (hits.empty()) Log::Info("No objects in this scene use '" + cell.display + "'.");
+                else Log::Info("Selected " + std::to_string(hits.size()) + " object(s) using '" + cell.display + "'.");
+            }
+
             // Reimport straight from the context menu instead of only via Import Settings >
             // Apply (#28 P17). Single selection, real imported assets only.
             if (!isFolder && m_ExtraAssetSelection.empty() &&
