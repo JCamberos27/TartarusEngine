@@ -367,6 +367,15 @@ int main(int argc, char** argv) {
             buildMode = true;
             if (i + 1 < argc && argv[i + 1][0] != '-') buildOutArg = argv[++i];
         }
+        // #151 - open a specific project folder instead of the one found next to the exe.
+        else if (a == "--project" && i + 1 < argc) {
+            std::error_code ec;
+            const std::filesystem::path dir = std::filesystem::absolute(argv[++i], ec);
+            if (!ec && std::filesystem::is_directory(dir, ec))
+                ProjectPaths::SetRootOverride(dir.lexically_normal().string());
+            else
+                std::cerr << "--project: '" << argv[i] << "' is not a folder; ignoring it." << std::endl;
+        }
     }
     // #173 - `--unit-tests`: pure C++ tests, run before any window / GL / audio / PhysX exists
     // so they work on a GPU-less CI runner. Exit code = failed checks (0 = pass).
