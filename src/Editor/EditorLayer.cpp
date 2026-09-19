@@ -219,7 +219,6 @@ void EditorLayer::Init(GLFWwindow* window) {
     // Light both use the rounded-card metrics (Phase 1 item 9). ApplyThemeStyle owns that and
     // the one-time ScaleAllSizes; re-run it live from Preferences on a theme change. (#92, #234)
     ApplyThemeStyle();
-    ImGuiStyle& style = ImGui::GetStyle();
 
     // ImGuizmo palette. Its stock plane-drag squares are the R/G/B axis colours at 38% alpha,
     // so PLANE_X reads as an off-palette pink/salmon over the dark viewport (audit #84). Give
@@ -3064,12 +3063,12 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         const ImVec2 mp = ImGui::GetIO().MousePos;
         ImDrawList* dl = ImGui::GetForegroundDrawList();
         dl->AddCircle(mp, 9.0f, IM_COL32(120, 220, 255, 235), 0, 2.0f);
-        const char* h = ICON_FA_EYE_DROPPER "  Click a color  (Esc cancels)"; // #19
-        ImVec2 ts = ImGui::CalcTextSize(h);
+        const char* hint = ICON_FA_EYE_DROPPER "  Click a color  (Esc cancels)"; // #19
+        ImVec2 ts = ImGui::CalcTextSize(hint);
         ImVec2 p(mp.x + 16.0f, mp.y + 14.0f);
         dl->AddRectFilled(ImVec2(p.x - 5.0f, p.y - 3.0f), ImVec2(p.x + ts.x + 5.0f, p.y + ts.y + 3.0f),
                           IM_COL32(15, 20, 28, 225), 3.0f);
-        dl->AddText(p, IM_COL32(235, 245, 255, 255), h);
+        dl->AddText(p, IM_COL32(235, 245, 255, 255), hint);
     }
 
     // Anchored to the actual viewport's top-center (a pivot, not a fixed-width guess) so it
