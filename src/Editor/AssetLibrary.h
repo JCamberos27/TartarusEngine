@@ -156,6 +156,22 @@ public:
     int ReimportChangedOnDisk();
     bool ReimportModel(const std::string& path);
 
+    // --- #132: files changed outside the editor (ProjectWatcher -> EditorLayer::SyncProjectChanges)
+    // Paths compare by AssetDatabase::PathKey, so any spelling of the same file matches.
+    // The library's own spelling of `path` if it lists that file (any asset kind), else "".
+    std::string FindListed(const std::string& path) const;
+    // Re-keys every list, cache, setting, label and folder entry from `oldPath` to `newPath`
+    // and points the loaded Model / Texture / MaterialAsset objects at the new file, so nothing
+    // has to reload. Materials whose textures moved get their stored map paths refreshed.
+    // Returns whether the library knew the file.
+    bool RenamePath(const std::string& oldPath, const std::string& newPath);
+    // Drops every entry for `path`, or for anything under it when it was a folder. Loaded
+    // objects stay alive in whatever still uses them. Returns how many entries went.
+    int ForgetRemoved(const std::string& path);
+    // Re-reads a .mat edited outside the editor into the SAME MaterialAsset object, so every
+    // renderer using it picks the change up. False if it isn't loaded or can't be read.
+    bool ReloadMaterial(const std::string& path);
+
     // For SceneSerializer, same pattern as AssetFolders()/DisplayNames() above.
     const std::map<std::string, TextureImportSettings>& TextureSettingsMap() const { return m_TextureSettings; }
     const std::map<std::string, ModelImportSettings>& ModelSettingsMap() const { return m_ModelSettings; }

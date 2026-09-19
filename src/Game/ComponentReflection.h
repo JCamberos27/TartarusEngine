@@ -103,6 +103,12 @@ struct ReflectField {
     // Only consulted on load; never written.
     const char* const* LegacyNames = nullptr;
     int LegacyNameCount = 0;
+
+    // #132 - a String field holding a project-relative asset path (optionally "path#name", like
+    // an animation clip reference). Saved as {"path", "pathGuid"} when the file has a GUID, and
+    // on load a path that no longer exists follows the GUID to the file's new location. A plain
+    // string (older scenes, or a value that isn't a file, e.g. an own clip name) still loads.
+    bool AssetPath = false;
 };
 
 // The field's stable JSON key — Key when set, else Name (see ReflectField::Key). Every
