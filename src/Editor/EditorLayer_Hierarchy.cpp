@@ -663,6 +663,30 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
         auto model = assets.CreatePrimitive(kind);
         glm::vec3 position = SafeSpawnInFrontOf(editorCamera);
         entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), UniqueNameFor(world, displayName));
+        // Unity parity: GameObject > 3D Object primitives come with a matching collider. Without
+        // one a freshly created floor Plane let the Play-mode player fall straight through it.
+        ColliderComponent col;
+        const glm::vec3 half = model ? (model->BoundsMax() - model->BoundsMin()) * 0.5f : glm::vec3(0.5f);
+        const std::string k = kind;
+        if (k == "cube") {
+            col.Kind = ColliderComponent::Shape::Box; // zero extents = fit the render bounds
+        } else if (k == "sphere") {
+            col.Kind = ColliderComponent::Shape::Sphere;
+            col.HalfExtents = glm::vec3(std::max({half.x, half.y, half.z}), 0.0f, 0.0f);
+        } else if (k == "capsule") {
+            col.Kind = ColliderComponent::Shape::Capsule;
+            const float r = std::max(half.x, half.z);
+            col.HalfExtents = glm::vec3(r, std::max(half.y - r, 0.0f), 0.0f);
+        } else if (k == "plane" || k == "donut") {
+            col.Kind = ColliderComponent::Shape::Mesh;       // Unity: MeshCollider
+        } else {
+            col.Kind = ColliderComponent::Shape::ConvexHull; // cylinder / cone / pyramid
+        }
+        if (model) col.Center = (model->BoundsMax() + model->BoundsMin()) * 0.5f;
+        if (col.Kind == ColliderComponent::Shape::Box || col.Kind == ColliderComponent::Shape::ConvexHull ||
+            col.Kind == ColliderComponent::Shape::Mesh)
+            col.Center = glm::vec3(0.0f); // auto-fit / mesh shapes place themselves
+        world.Registry.emplace<ColliderComponent>(e, col);
         SelectItem(e, false);
         Log::Info(std::string("Added ") + displayName + ".");
     };
