@@ -1748,6 +1748,10 @@ private:
     void RestorePrePrefabHistory();
     // #132 - one change each (EditorLayer_ProjectSync.cpp).
     void OnExternalMove(World& world, AssetLibrary& assets, const std::string& oldPath, const std::string& newPath);
+    int  ApplyAssetMove(World& world, AssetLibrary& assets, const std::string& oldPath, const std::string& newPath, bool& listed);
+    bool RenameAssetFile(World& world, AssetLibrary& assets, const std::string& oldKey, const std::string& newKey,
+                         std::string& error); // #129
+    std::vector<std::pair<std::string, std::string>> m_SelfMoves; // #129 - our own renames, to skip the watcher's echo
     void OnExternalAdd(World& world, AssetLibrary& assets, const std::string& path);
     void OnExternalRemove(World& world, AssetLibrary& assets, const std::string& path);
     void OnExternalModify(World& world, AssetLibrary& assets, const std::string& path);
