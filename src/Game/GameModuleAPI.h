@@ -11,7 +11,7 @@ class World;
 // v8 (#187): OnLoad receives the previous module's saved state and returns false to reject a
 // build (the host then restores the previous one); SaveState added.
 // v9 (#144): FixedUpdate, and host GetTime / SetTimeScale.
-constexpr std::uint32_t kGameModuleAPIVersion = 10; // v10: filtered queries (#170)
+constexpr std::uint32_t kGameModuleAPIVersion = 11; // v11: PlaySoundAt, GetGrabbedEntity, GetActorPosition
 
 // Unity's Time, as seen by the game module (#144). Seconds throughout. POD.
 struct GameTime {
@@ -165,6 +165,14 @@ struct GameModuleHostAPI {
                                  std::uint32_t* out, int maxEntities) = nullptr;
     int (*OverlapBox)(const float center[3], const float halfExtents[3], const float rotation[4],
                       const QueryFilter& filter, std::uint32_t* out, int maxEntities) = nullptr;
+    // v11. A one-shot 3D sound at `position` (world space) on the SFX bus. `path` is a sound file,
+    // absolute or project-relative (as a component's sound field stores it); it's loaded on first
+    // use. `pitch` 1 = as recorded.
+    void (*PlaySoundAt)(const char* path, const float position[3], float volume, float pitch) = nullptr;
+    // v11. The entity the player's gravity gun is holding, or 0xFFFFFFFF.
+    std::uint32_t (*GetGrabbedEntity)() = nullptr;
+    // v11. World position of an entity's physics actor (any collider, triggers included).
+    bool (*GetActorPosition)(std::uint32_t entity, float out[3]) = nullptr;
 };
 
 struct GameModuleAPI {

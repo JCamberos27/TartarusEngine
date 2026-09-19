@@ -1,0 +1,17 @@
+{
+  "matVersion": 2,
+  "name": "Arena Glass",
+  "_comment": "The arena walls and roof: clear, faintly blue-green glass.",
+  "shader": "engine://Standard.shader",
+  "renderQueue": 2,
+  "opacity": 0.13,
+  "properties": {
+    "_BaseColor": [
+      0.78,
+      0.9,
+      0.95
+    ],
+    "_Metallic": 0.0,
+    "_Roughness": 0.03
+  }
+}
