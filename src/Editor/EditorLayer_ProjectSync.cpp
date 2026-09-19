@@ -104,6 +104,9 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
 }
 
 void EditorLayer::OnExternalMove(World& world, AssetLibrary& assets, const std::string& oldPath, const std::string& newPath) {
+    // #129 - the editor's own Rename already handled this move; drop the watcher's echo of it.
+    for (auto it = m_SelfMoves.begin(); it != m_SelfMoves.end(); ++it)
+        if (SameFile(it->first, oldPath) && SameFile(it->second, newPath)) { m_SelfMoves.erase(it); return; }
     const std::string type = AssetDatabase::AssetType(newPath);
     const std::string oldType = AssetDatabase::AssetType(oldPath);
     if (type.empty() && oldType.empty()) return; // not an asset (a .txt, settings.json, ...)
@@ -121,7 +124,19 @@ void EditorLayer::OnExternalMove(World& world, AssetLibrary& assets, const std::
         AssetDatabase::EnsureGuid(newPath);
     }
 
-    const bool listed = assets.RenamePath(oldPath, newPath);
+    bool listed = false;
+    const int refs = ApplyAssetMove(world, assets, oldPath, newPath, listed);
+    Log::Info("'" + ProjectPaths::Relativize(oldPath) + "' was moved to '" + ProjectPaths::Relativize(newPath) +
+              "' outside the editor" + (listed || refs ? " - " + std::to_string(refs) + " reference(s) in the scene updated." : "."));
+}
+
+// Everything that follows a file moving from oldPath to newPath once its GUID / .meta are
+// sorted: the library entry, the open scene's references, the current / last / build scene
+// paths. Returns how many scene references changed; `listed` = the library had it.
+int EditorLayer::ApplyAssetMove(World& world, AssetLibrary& assets, const std::string& oldPath,
+                                const std::string& newPath, bool& listed) {
+    const std::string type = AssetDatabase::AssetType(newPath);
+    listed = assets.RenamePath(oldPath, newPath);
     const int refs = RetargetSceneReferences(world, oldPath, newPath);
 
     if (type == "scene") {
@@ -141,9 +156,39 @@ void EditorLayer::OnExternalMove(World& world, AssetLibrary& assets, const std::
         m_SavedUndoDepth = -1;
         m_Dirty = true;
     }
+    return refs;
+}
 
-    Log::Info("'" + ProjectPaths::Relativize(oldPath) + "' was moved to '" + ProjectPaths::Relativize(newPath) +
-              "' outside the editor" + (listed || refs ? " - " + std::to_string(refs) + " reference(s) in the scene updated." : "."));
+// #129 - Rename in the Asset Browser renames the real file (and its .meta, keeping the GUID),
+// like Unity, instead of only setting a display name. Keys may be project-relative or absolute;
+// newKey is in the same style as oldKey. Not undoable (Unity's isn't either).
+bool EditorLayer::RenameAssetFile(World& world, AssetLibrary& assets, const std::string& oldKey,
+                                  const std::string& newKey, std::string& error) {
+    const std::string oldAbs = AbsoluteOf(oldKey), newAbs = AbsoluteOf(newKey);
+    std::error_code ec;
+    if (fs::exists(newAbs, ec) && !SameFile(oldAbs, newAbs)) { error = "a file with that name already exists"; return false; }
+    fs::rename(oldAbs, newAbs, ec);
+    if (ec) { error = ec.message(); return false; }
+    if (AssetDatabase::GuidForPath(oldAbs).IsValid()) {
+        AssetDatabase::NotifyMoved(oldAbs, newAbs); // moves the .meta, GUID unchanged
+    } else if (fs::exists(oldAbs + ".meta", ec)) {
+        fs::rename(oldAbs + ".meta", newAbs + ".meta", ec);
+        AssetDatabase::EnsureGuid(newAbs);
+    }
+    m_SelfMoves.emplace_back(oldAbs, newAbs);
+    if (m_SelfMoves.size() > 64) m_SelfMoves.erase(m_SelfMoves.begin()); // watcher off: don't grow forever
+
+    // The library keys by the stored style, the scene fixups by absolute path.
+    assets.RenamePath(oldKey, newKey);
+    bool listed = false;
+    const int refs = ApplyAssetMove(world, assets, oldAbs, newAbs, listed);
+    if (m_AssetFavorites.erase(oldKey)) { m_AssetFavorites.insert(newKey); SaveAssetFavorites(); }
+    m_ShotThumbs.erase(oldKey);
+    InvalidateScenesListing();
+    InvalidateShotsListing();
+    Log::Info("Renamed '" + fs::path(oldAbs).filename().string() + "' to '" + fs::path(newAbs).filename().string() + "'" +
+              (refs ? " - " + std::to_string(refs) + " reference(s) in the scene updated." : "."));
+    return true;
 }
 
 void EditorLayer::OnExternalAdd(World& world, AssetLibrary& assets, const std::string& path) {
