@@ -789,8 +789,12 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         // PR13: HDRI sky source (defaults omitted for backwards compatibility)
         if (world.SkySourceMode != World::SkySource::Procedural)
             root["skySource"] = (int)world.SkySourceMode;
-        if (!world.SkyHdriPath.empty())
+        if (!world.SkyHdriPath.empty()) {
             root["skyHdriPath"] = AssetPathForWrite(world.SkyHdriPath); // audit #364 — was stored absolute
+            // #132 — and by GUID, so renaming/moving the .hdr doesn't break the sky.
+            AssetGuid g = AssetDatabase::GuidForPath(world.SkyHdriPath); // registered by ScanProject
+            if (g.IsValid()) root["skyHdriGuid"] = g.ToString();
+        }
         if (world.SkyRotationDegrees != 0.0f)
             root["skyRotationDegrees"] = world.SkyRotationDegrees;
         if (world.SkyHdriSun != World::HdriSunMode::Auto)
@@ -1128,7 +1132,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
         world.SkyAmbientIntensity    = root.value("skyAmbientIntensity",    1.0f);
         // PR13: HDRI sky source fields (absent in old scenes → Procedural defaults)
         world.SkySourceMode          = (World::SkySource)std::clamp(root.value("skySource", 0), 0, 1); // #122
-        world.SkyHdriPath            = AssetPathForRead(root.value("skyHdriPath", std::string())); // audit #364
+        world.SkyHdriPath            = ResolveAssetRef(root, "skyHdriPath", "skyHdriGuid"); // audit #364, #132
         world.SkyRotationDegrees     = root.value("skyRotationDegrees",     0.0f);
         world.SkyHdriSun             = (World::HdriSunMode)std::clamp(root.value("skyHdriSun", 0), 0, 2); // #277
         world.SkyHdriSunThreshold    = std::max(1.0f, root.value("skyHdriSunThreshold", 50.0f));
