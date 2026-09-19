@@ -101,6 +101,9 @@ struct ColliderComponent {
     float StaticFriction = 0.6f;
     int   FrictionCombine = 0;
     int   BounceCombine = 0;
+    // #170 - a shared .physicmaterial asset (project-relative). When set and readable, its values
+    // replace the five surface fields above for the PhysX shape.
+    std::string Material;
 };
 
 // Makes a collider entity a *dynamic* PhysX body while playing (#185 PR 4) instead of the

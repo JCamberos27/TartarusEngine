@@ -2,6 +2,7 @@
 // are built from, the asset import inspector, and the material editors. Split out of
 // EditorLayer.cpp for build time (#179).
 
+#include "PhysicMaterialAsset.h" // #170
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
 #include "FileDialog.h"
@@ -3343,6 +3344,106 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
     // Friction come from the generic fields above. HalfExtents means something different per
     // Shape (see ComponentRegistry.cpp's registration comment), so it stays hand-coded here,
     // same escape hatch Light's Kelvin bar uses.
+    // #170 - Physic Material asset: pick / create a shared .physicmaterial and edit it in place
+    // (saved straight to the file, like an Animator Controller). Its values replace this
+    // collider's own surface fields below when the PhysX shape is built.
+    if (std::strcmp(componentName, "Collider") == 0 && phase == ReflectExtraPhase::Top) {
+        auto* col = registry.try_get<ColliderComponent>(entity);
+        if (!col) return;
+        ImGui::TextUnformatted("Material");
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x * 0.35f);
+        const float newW = ImGui::CalcTextSize(ICON_FA_PLUS " New").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - newW - ImGui::GetStyle().ItemSpacing.x);
+        if (ImGui::BeginCombo("##physmat", col->Material.empty() ? "(none - values below)" : col->Material.c_str())) {
+            if (ImGui::Selectable("(none - values below)", col->Material.empty())) {
+                PushUndo(world, "Set Physic Material");
+                col->Material.clear();
+            }
+            for (const std::string& path : FindPhysicMaterials())
+                if (ImGui::Selectable(path.c_str(), path == col->Material)) {
+                    PushUndo(world, "Set Physic Material");
+                    col->Material = path;
+                }
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("A shared Physic Material asset (.physicmaterial). When set, its friction and\n"
+                                 "bounciness replace this collider's own values below, for every collider using it.");
+        ImGui::SameLine();
+        if (ActionButton(ICON_FA_PLUS " New", "Create a Physic Material from this collider's current values and use it")) {
+            const auto* nc = registry.try_get<NameComponent>(entity);
+            std::string base = nc && !nc->Name.empty() ? nc->Name : std::string("Physic Material");
+            for (char& ch : base) if (std::strchr("<>:\"/\\|?*", ch)) ch = '_';
+            std::error_code ec;
+            std::filesystem::create_directories(std::filesystem::u8path(ProjectPaths::Resolve("physics")), ec);
+            std::string rel = "physics/" + base + ".physicmaterial";
+            for (int n = 2; std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve(rel)), ec); ++n)
+                rel = "physics/" + base + " " + std::to_string(n) + ".physicmaterial";
+            PhysicMaterialAsset pm;
+            pm.DynamicFriction = col->Friction;
+            pm.StaticFriction = col->StaticFriction;
+            pm.Bounciness = col->Bounciness;
+            pm.FrictionCombine = col->FrictionCombine;
+            pm.BounceCombine = col->BounceCombine;
+            if (pm.SaveFile(ProjectPaths::Resolve(rel))) {
+                PushUndo(world, "New Physic Material");
+                col->Material = rel;
+                Log::Info("Created Physic Material " + rel + ".");
+            } else {
+                Log::Error("Couldn't write " + rel + ".");
+            }
+        }
+        if (col->Material.empty()) return;
+
+        // Working copy, re-read when the file changes on disk (another collider's Inspector, a
+        // text editor, a VCS update).
+        static std::string s_PmPath;
+        static std::filesystem::file_time_type s_PmStamp;
+        static PhysicMaterialAsset s_Pm;
+        const std::string abs = ProjectPaths::Resolve(col->Material);
+        std::error_code ec;
+        const auto stamp = std::filesystem::last_write_time(std::filesystem::u8path(abs), ec);
+        if (ec) {
+            ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
+                               "The material file is missing - this collider's own values are used.");
+            return;
+        }
+        if (s_PmPath != abs || s_PmStamp != stamp) {
+            std::string err;
+            PhysicMaterialAsset loaded;
+            if (!PhysicMaterialAsset::LoadFile(abs, loaded, &err)) {
+                ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  Can't read it: %s", err.c_str());
+                return;
+            }
+            s_Pm = loaded;
+            s_PmPath = abs;
+            s_PmStamp = stamp;
+        }
+        bool save = false;
+        ImGui::Indent();
+        auto slider = [&](const char* label, float* v, float hi, const char* tip) {
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+            ImGui::SliderFloat(label, v, 0.0f, hi, "%.2f");
+            if (ImGui::IsItemDeactivatedAfterEdit()) save = true;
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+        };
+        slider("Dynamic Friction", &s_Pm.DynamicFriction, 2.0f, "How much a sliding contact is slowed. 0 = ice.");
+        slider("Static Friction", &s_Pm.StaticFriction, 2.0f, "How hard it is to start sliding.");
+        slider("Bounciness", &s_Pm.Bounciness, 1.0f, "0 stops dead, 1 loses no energy on a bounce.");
+        static const char* kCombine = "Average\0Minimum\0Multiply\0Maximum\0";
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+        if (ImGui::Combo("Friction Combine", &s_Pm.FrictionCombine, kCombine)) save = true;
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+        if (ImGui::Combo("Bounce Combine", &s_Pm.BounceCombine, kCombine)) save = true;
+        ImGui::TextDisabled("Saved to %s - shared by every collider using it. Replaces the values below.",
+                            col->Material.c_str());
+        ImGui::Unindent();
+        if (save) {
+            if (s_Pm.SaveFile(abs)) s_PmStamp = std::filesystem::last_write_time(std::filesystem::u8path(abs), ec);
+            else Log::Error("Couldn't save " + col->Material + ".");
+        }
+        return;
+    }
     if (std::strcmp(componentName, "Collider") == 0 && phase == ReflectExtraPhase::Bottom) {
         auto* collider = registry.try_get<ColliderComponent>(entity);
         if (!collider) return;
