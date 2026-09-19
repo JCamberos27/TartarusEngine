@@ -21,6 +21,7 @@
 #include "ComponentReflection.h"
 #include "ComponentRegistry.h"
 #include "MaterialAsset.h"
+#include "PhysicMaterialAsset.h"
 #include "ProjectPaths.h"
 #include "ProjectWatcher.h"
 #include "TextureCache.h"
@@ -174,6 +175,30 @@ void TestNearestEuler() {
     CHECK(sameRotation(alt, glm::vec3(25.0f, 40.0f, -60.0f)));
     const glm::vec3 back = NearestEquivalentEuler(alt, glm::vec3(20.0f, 45.0f, -55.0f));
     CHECK(glm::length(back - glm::vec3(25.0f, 40.0f, -60.0f)) < 1e-3f);
+}
+
+// #170 - a Physic Material asset round-trips through its file and overrides the collider's own
+// surface values; a missing file leaves them alone.
+void TestPhysicMaterial() {
+    const std::string path = (std::filesystem::temp_directory_path() / "tartarus_ut.physicmaterial").string();
+    PhysicMaterialAsset m;
+    m.DynamicFriction = 0.05f; m.StaticFriction = 0.1f; m.Bounciness = 0.9f; m.FrictionCombine = 1; m.BounceCombine = 3;
+    CHECK(m.SaveFile(path));
+    PhysicMaterialAsset back;
+    CHECK(PhysicMaterialAsset::LoadFile(path, back));
+    CHECK(back.DynamicFriction == 0.05f && back.StaticFriction == 0.1f && back.Bounciness == 0.9f &&
+          back.FrictionCombine == 1 && back.BounceCombine == 3);
+    ColliderComponent c;
+    c.Material = path;
+    const ColliderComponent r = ResolvePhysicMaterial(c);
+    CHECK(r.Friction == 0.05f && r.Bounciness == 0.9f && r.BounceCombine == 3);
+    { std::ofstream(path) << R"({"dynamicFriction": "x", "bounciness": 7, "frictionCombine": 9})"; }
+    CHECK(PhysicMaterialAsset::LoadFile(path, back));
+    CHECK(back.DynamicFriction == 0.6f && back.Bounciness == 1.0f && back.FrictionCombine == 0);
+    std::filesystem::remove(path);
+    c.Material = path;
+    CHECK(ResolvePhysicMaterial(c).Friction == c.Friction);
+    CHECK(!PhysicMaterialAsset::LoadFile(path, back));
 }
 
 void TestLodGroup() {
@@ -599,6 +624,7 @@ int RunUnitTests() {
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},
         {"NearestEuler", TestNearestEuler},
+        {"PhysicMaterial", TestPhysicMaterial},
         {"DopplerVelocity", TestDopplerVelocity},
         {"InputMap", TestInputMap},
         {"ActiveInHierarchy", TestActiveInHierarchy},

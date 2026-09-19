@@ -520,6 +520,7 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
         if (collider->StaticFriction != collider->Friction) cj["staticFriction"] = collider->StaticFriction;
         if (collider->FrictionCombine != 0) cj["frictionCombine"] = collider->FrictionCombine;
         if (collider->BounceCombine != 0)   cj["bounceCombine"]   = collider->BounceCombine;
+        if (!collider->Material.empty())    cj["material"]        = collider->Material; // #170
         j["collider"] = cj;
     }
     // Joint (#185 PR 11) — hand-serialised (its "other end" isn't a plain reflectable field).
@@ -629,6 +630,7 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
         };
         collider.FrictionCombine = combine("frictionCombine");
         collider.BounceCombine   = combine("bounceCombine");
+        if (c.contains("material") && c["material"].is_string()) collider.Material = c["material"].get<std::string>();
         world.Registry.emplace_or_replace<ColliderComponent>(entity, collider);
     }
     if (j.contains("joint")) { // #185 PR 11
