@@ -174,6 +174,20 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         program.SetFloat("uIBLSpecularMaxLod", (float)(IblProbe::kSpecularMips - 1));
     }
     program.SetInt("uIBLEnabled", fs.iblOn ? 1 : 0);
+
+    // #162 - fog.
+    program.SetInt("uFogMode", fs.world && fs.world->FogEnabled ? std::clamp(fs.world->FogMode, 1, 3) : 0);
+    if (fs.world && fs.world->FogEnabled) {
+        const World& w = *fs.world;
+        {
+            program.SetVec3("uFogColor", glm::max(w.FogColor, glm::vec3(0.0f)));
+            program.SetFloat("uFogDensity", std::max(w.FogDensity, 0.0f));
+            program.SetFloat("uFogStart", w.FogStart);
+            program.SetFloat("uFogEnd", w.FogEnd);
+            program.SetFloat("uFogHeightFalloff", std::max(w.FogHeightFalloff, 0.0f));
+            program.SetFloat("uFogBaseHeight", w.FogBaseHeight);
+        }
+    }
     glActiveTexture(GL_TEXTURE0);
 
     // PR14: nearest 2 reflection probes for parallax box projection — no-op (uProbeCount=0 or the

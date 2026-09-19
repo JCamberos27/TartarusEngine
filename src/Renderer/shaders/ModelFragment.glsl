@@ -8,6 +8,37 @@ out vec4 FragColor;
 
 uniform vec3 uViewPos;
 
+// #162 - distance fog (Unity's Lighting > Fog), applied to lit surfaces in linear HDR. The sky
+// isn't fogged (same as Unity), so pick a fog colour close to the horizon.
+uniform int   uFogMode;          // 0 off, 1 linear, 2 exponential, 3 exponential squared
+uniform vec3  uFogColor;         // linear
+uniform float uFogDensity;
+uniform float uFogStart;
+uniform float uFogEnd;
+uniform float uFogHeightFalloff; // 0 = uniform; >0 = thins out above uFogBaseHeight
+uniform float uFogBaseHeight;
+
+vec3 ApplyFog(vec3 c) {
+    if (uFogMode == 0) return c;
+    vec3 ray = vWorldPos - uViewPos;
+    float dist = length(ray);
+    float fog;
+    if (uFogMode == 1) {
+        fog = clamp((dist - uFogStart) / max(uFogEnd - uFogStart, 1e-3), 0.0, 1.0);
+    } else {
+        float optical = uFogDensity * dist;
+        if (uFogHeightFalloff > 0.0) {
+            // Exponential height fog: density * exp(-k (y - base)) integrated along the ray.
+            float k = uFogHeightFalloff;
+            float t = k * ray.y;
+            float along = abs(t) > 1e-4 ? (1.0 - exp(-t)) / t : 1.0;
+            optical *= exp(-k * (uViewPos.y - uFogBaseHeight)) * along;
+        }
+        fog = uFogMode == 2 ? 1.0 - exp(-optical) : 1.0 - exp(-optical * optical);
+    }
+    return mix(c, uFogColor, clamp(fog, 0.0, 1.0));
+}
+
 // Every scene light (directional sun, point, spot) in one std430 SSBO — filled by LightBuffer
 // on the CPU, bound at binding = 0. This is the layout the clustered-forward cull pass will
 // consume later, so it doesn't change again when that lands.
@@ -1007,6 +1038,8 @@ void main() {
         color = mix(color, refrColor, uTransmissionStrength * (1.0 - metallic));
     }
 #endif
+    color = ApplyFog(color); // #162
+
     if (uApplyTonemap == 1) {
         color = color / (color + vec3(1.0)); // Reinhard tonemap
         color = pow(color, vec3(1.0 / 2.2)); // gamma correct

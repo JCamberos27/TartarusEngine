@@ -863,6 +863,83 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Curve that maps linear HDR to display. ACES = punchy filmic; AgX = gentler, less hue shift.");
+
+    // #162 - anti-aliasing, colour grading and vignette (all in the final tonemap pass).
+    if (EditorUIPrimitives::Checkbox("FXAA", &world.FxaaEnabled)) PushUndo(world, "Toggle FXAA");
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Fast approximate anti-aliasing on the final image. Smooths what MSAA misses:\n"
+                             "shiny highlights, alpha-cutout edges, thin lines. Slightly softens texture detail.");
+
+    auto postSlider = [&](const char* label, float* v, float lo, float hi, const char* fmt, const char* undo,
+                          const char* tip) {
+        ImGui::SetNextItemWidth(w);
+        bool activated = false;
+        EditorUI::SliderFloat(label, v, lo, hi, fmt, 0, &activated);
+        if (activated) PushUndo(world, undo);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+    };
+    ImGui::SeparatorText("Color Grading");
+    postSlider("Temperature", &world.GradeTemperature, -100.0f, 100.0f, "%.0f", "Edit Temperature",
+               "White balance: negative = cooler (bluer), positive = warmer (yellower).");
+    postSlider("Tint", &world.GradeTint, -100.0f, 100.0f, "%.0f", "Edit Tint",
+               "White balance: negative = greener, positive = more magenta.");
+    postSlider("Contrast", &world.GradeContrast, -100.0f, 100.0f, "%.0f", "Edit Contrast",
+               "Spreads tones away from (positive) or toward (negative) mid grey.");
+    postSlider("Saturation", &world.GradeSaturation, -100.0f, 100.0f, "%.0f", "Edit Saturation",
+               "-100 = greyscale, 0 = unchanged, 100 = double colour intensity.");
+    {
+        EditorUI::ColorEditLinear("Color filter", &world.GradeColorFilter.x, ImGuiColorEditFlags_DisplayHex);
+        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Color Filter");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Multiplies the whole image by this colour. White = no change.");
+    }
+    if (ImGui::SmallButton("Reset grading")) {
+        PushUndo(world, "Reset Color Grading");
+        world.GradeTemperature = world.GradeTint = world.GradeContrast = world.GradeSaturation = 0.0f;
+        world.GradeColorFilter = glm::vec3(1.0f);
+    }
+
+    ImGui::SeparatorText("Vignette");
+    postSlider("Vignette intensity", &world.VignetteIntensity, 0.0f, 1.0f, "%.2f", "Edit Vignette",
+               "Darkens the corners of the image. 0 = off.");
+    if (world.VignetteIntensity > 0.0f)
+        postSlider("Vignette smoothness", &world.VignetteSmoothness, 0.01f, 1.0f, "%.2f", "Edit Vignette",
+                   "How gradually the darkening fades in from the centre.");
+
+    ImGui::SeparatorText("Fog");
+    if (EditorUIPrimitives::Checkbox("Fog", &world.FogEnabled)) PushUndo(world, "Toggle Fog");
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Fades surfaces toward the fog colour with distance from the camera.\n"
+                             "The sky itself isn't fogged, so pick a colour close to the horizon.");
+    if (world.FogEnabled) {
+        static const char* kFogModes[] = {"Linear", "Exponential", "Exponential Squared"};
+        int mode = std::clamp(world.FogMode, 1, 3) - 1;
+        ImGui::SetNextItemWidth(w);
+        if (ImGui::Combo("Fog mode", &mode, kFogModes, IM_ARRAYSIZE(kFogModes))) {
+            PushUndo(world, "Change Fog Mode");
+            world.FogMode = mode + 1;
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Linear: none before Start, full at End.\n"
+                                 "Exponential: thickens steadily with distance (Density).\n"
+                                 "Exponential Squared: clear up close, then thickens quickly.");
+        EditorUI::ColorEditLinear("Fog color", &world.FogColor.x, ImGuiColorEditFlags_DisplayHex);
+        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Fog Color");
+        if (world.FogMode == 1) {
+            postSlider("Fog start", &world.FogStart, 0.0f, 500.0f, "%.1f m", "Edit Fog",
+                       "Distance where fog begins.");
+            postSlider("Fog end", &world.FogEnd, 1.0f, 2000.0f, "%.1f m", "Edit Fog",
+                       "Distance where surfaces are fully fog-coloured.");
+        } else {
+            postSlider("Fog density", &world.FogDensity, 0.0f, 0.2f, "%.4f", "Edit Fog",
+                       "How quickly fog thickens with distance.");
+            postSlider("Height falloff", &world.FogHeightFalloff, 0.0f, 1.0f, "%.3f", "Edit Fog",
+                       "0 = same density at every height. Higher = fog settles near the ground\n"
+                       "(below Fog base height) and thins out above it.");
+            if (world.FogHeightFalloff > 0.0f)
+                postSlider("Fog base height", &world.FogBaseHeight, -100.0f, 100.0f, "%.1f m", "Edit Fog",
+                           "World height where the fog is at its full Density.");
+        }
+    }
 }
 
 void EditorLayer::DrawShadowSettings(World& world, float w) {
