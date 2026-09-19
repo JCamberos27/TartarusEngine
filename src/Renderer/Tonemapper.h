@@ -20,6 +20,14 @@ struct PostSettings {
 
     bool Fxaa = false;
     bool Dither = true;
+
+    // #162 - auto exposure (Unity's Exposure > Automatic). The meter eases toward the scene's
+    // average luminance; Min/Max bound the correction in EV around 18% grey.
+    bool  AutoExposure = false;
+    float AutoExposureMinEV = -4.0f, AutoExposureMaxEV = 4.0f;
+    float AutoExposureSpeedUp = 2.0f, AutoExposureSpeedDown = 1.0f;
+    float DeltaTime = 0.0f;  // seconds since this view's last frame; <= 0 snaps instantly
+    int   ExposureSlot = 0;  // which adaptation history to use: each view adapts on its own
 };
 
 // Fullscreen HDR -> LDR resolve. Samples a linear RGBA16F texture (the resolved HdrTarget),
@@ -46,8 +54,18 @@ public:
 
 private:
     void EnsureCreated();
+    // #162 - meters srcHdrTexture and updates the slot's adapted EV; returns that 1x1 texture.
+    unsigned int UpdateAutoExposure(unsigned int srcHdrTexture, const PostSettings& post);
+    static constexpr int kExposureSlots = 2;
     Shader* m_Shader = nullptr;       // owned; raw ptr to keep this header free of <memory>
     Shader* m_Fxaa = nullptr;         // #162
     Framebuffer* m_Ldr = nullptr;     // #162 - tonemapped image FXAA reads from
     unsigned int m_Vao = 0;
+
+    Shader* m_LumShader = nullptr;    // #162 - auto exposure
+    Shader* m_AdaptShader = nullptr;
+    unsigned int m_LumTex = 0, m_LumFbo = 0;
+    unsigned int m_EvTex[kExposureSlots][2] = {}, m_EvFbo[kExposureSlots][2] = {};
+    int  m_EvCur[kExposureSlots] = {};
+    bool m_EvValid[kExposureSlots] = {};
 };
