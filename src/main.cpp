@@ -1,5 +1,6 @@
 #include "Window.h"
 #include "Input.h"
+#include "InputMap.h"
 #include "TimeService.h"
 #include <limits>
 #include "CrashHandler.h"
@@ -1944,6 +1945,7 @@ int main(int argc, char** argv) {
             // "Does the running game own the mouse/keyboard this frame?" — the cursor-lock state
             // while maximized, the click-to-focus latch while in a panel.
             bool gameHasInput = playing && (playMaximized ? window.IsCursorLocked() : gameInputEngaged);
+            InputMap::SetEnabled(gameHasInput); // #145 - actions read nothing unless the game has input
 
             // The editor camera keeps updating even during in-panel play (the Scene tab stays
             // usable) — but not while the game has grabbed the mouse, or that drag would move

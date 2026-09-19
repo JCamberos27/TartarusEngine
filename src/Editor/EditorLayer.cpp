@@ -23,6 +23,9 @@
 #include "EnginePaths.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
+#include "Input.h"    // #145 - Project Settings > Input binding capture
+#include "InputMap.h"
+#include <GLFW/glfw3.h>
 #include "BuildPipeline.h" // #174 - m_LastBuildReport
 #include "Shortcuts.h"
 #include "HotReloadEditorModule.h" // EditorModuleHost::ConsoleState() — console.toggle shortcut
@@ -1928,6 +1931,108 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
             }
         }
 
+        // #145 - Unity's Input Manager: named actions the Player and the game module read by name.
+        ImGui::SeparatorText("Input");
+        {
+            auto& actions = InputMap::Actions();
+            static int s_CaptureAction = -1, s_CaptureSlot = -1, s_CaptureFrame = 0;
+            bool changed = false;
+            // While a binding slot is listening, the next key or mouse button pressed becomes its
+            // binding. Escape cancels. Starts a frame late so the click that armed it isn't caught.
+            if (s_CaptureAction >= 0 && ImGui::GetFrameCount() > s_CaptureFrame) {
+                int got = InputMap::kNone - 1;
+                if (Input::IsKeyPressed(GLFW_KEY_ESCAPE)) got = InputMap::kNone - 2;
+                for (int k = GLFW_KEY_SPACE; k <= GLFW_KEY_LAST && got == InputMap::kNone - 1; ++k)
+                    if (k != GLFW_KEY_ESCAPE && Input::IsKeyPressed(k)) got = k;
+                for (int b = 0; b < InputMap::kMouseButtons && got == InputMap::kNone - 1; ++b)
+                    if (Input::IsMouseButtonPressed(b)) got = InputMap::kMouseBase + b;
+                if (got >= 0 && s_CaptureAction < (int)actions.size()) {
+                    auto& a = actions[s_CaptureAction];
+                    int* slots[] = {&a.Positive, &a.Negative, &a.AltPositive, &a.AltNegative};
+                    *slots[s_CaptureSlot] = got;
+                    changed = true;
+                }
+                if (got != InputMap::kNone - 1) s_CaptureAction = s_CaptureSlot = -1;
+            }
+            ImGui::TextDisabled("The Player and scripts read these by name (GetAxis / GetButton).");
+            int removeAt = -1;
+            for (int i = 0; i < (int)actions.size(); ++i) {
+                auto& a = actions[i];
+                ImGui::PushID(i);
+                const bool open = ImGui::TreeNodeEx("##action", ImGuiTreeNodeFlags_SpanAvailWidth, "%s", a.Name.c_str());
+                if (ImGui::BeginPopupContextItem("##actionCtx")) {
+                    if (ImGui::MenuItem(ICON_FA_XMARK "  Remove Action")) removeAt = i;
+                    ImGui::EndPopup();
+                }
+                if (open) {
+                    char name[64];
+                    std::snprintf(name, sizeof(name), "%s", a.Name.c_str());
+                    ImGui::SetNextItemWidth(kw);
+                    if (ImGui::InputText("Name", name, sizeof(name)) && name[0]) a.Name = name;
+                    if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
+                    static const char* kSlotLabels[] = {"Positive", "Negative", "Alt Positive", "Alt Negative"};
+                    int* slots[] = {&a.Positive, &a.Negative, &a.AltPositive, &a.AltNegative};
+                    for (int s = 0; s < 4; ++s) {
+                        ImGui::PushID(s);
+                        const bool listening = s_CaptureAction == i && s_CaptureSlot == s;
+                        const std::string text = listening ? std::string("Press a key...") : InputMap::BindingName(*slots[s]);
+                        if (ImGui::Button(text.c_str(), ImVec2(kw, 0.0f))) {
+                            s_CaptureAction = i; s_CaptureSlot = s; s_CaptureFrame = ImGui::GetFrameCount();
+                        }
+                        if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+                            *slots[s] = InputMap::kNone;
+                            if (listening) s_CaptureAction = s_CaptureSlot = -1;
+                            changed = true;
+                        }
+                        if (ImGui::IsItemHovered())
+                            EditorUI::SetTooltip("Click, then press a key or mouse button (Esc cancels).\nRight-click to clear.");
+                        ImGui::SameLine();
+                        ImGui::TextUnformatted(kSlotLabels[s]);
+                        ImGui::PopID();
+                    }
+                    ImGui::SetNextItemWidth(kw);
+                    if (ImGui::BeginCombo("Gamepad button", InputMap::GamepadButtonName(a.GamepadButton))) {
+                        for (int b = InputMap::kNone; b < InputMap::kGamepadButtonCount; ++b)
+                            if (ImGui::Selectable(InputMap::GamepadButtonName(b), a.GamepadButton == b)) {
+                                a.GamepadButton = b;
+                                changed = true;
+                            }
+                        ImGui::EndCombo();
+                    }
+                    ImGui::SetNextItemWidth(kw);
+                    if (ImGui::BeginCombo("Gamepad axis", InputMap::GamepadAxisName(a.GamepadAxis))) {
+                        for (int ax = InputMap::kNone; ax < InputMap::kGamepadAxisCount; ++ax)
+                            if (ImGui::Selectable(InputMap::GamepadAxisName(ax), a.GamepadAxis == ax)) {
+                                a.GamepadAxis = ax;
+                                changed = true;
+                            }
+                        ImGui::EndCombo();
+                    }
+                    if (a.GamepadAxis != InputMap::kNone && ImGui::Checkbox("Invert gamepad axis", &a.InvertGamepadAxis))
+                        changed = true;
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+            if (removeAt >= 0) {
+                actions.erase(actions.begin() + removeAt);
+                s_CaptureAction = s_CaptureSlot = -1;
+                changed = true;
+            }
+            if (ActionButton(ICON_FA_PLUS "  Add Action", "Add a new named input action")) {
+                InputMap::Action a;
+                a.Name = "New Action " + std::to_string(actions.size() + 1);
+                actions.push_back(a);
+                changed = true;
+            }
+            ImGui::SameLine();
+            if (ActionButton(ICON_FA_ROTATE_LEFT "  Reset to Defaults", "Replace every action with the built-in set")) {
+                actions = InputMap::Defaults();
+                s_CaptureAction = s_CaptureSlot = -1;
+                changed = true;
+            }
+            if (changed) ProjectSettings::Save();
+        }
         // #185 hardening — Play-mode Player tuning.
         ImGui::SeparatorText("Player");
         ImGui::SetNextItemWidth(kw);

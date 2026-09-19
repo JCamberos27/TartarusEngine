@@ -11,7 +11,7 @@ class World;
 // v8 (#187): OnLoad receives the previous module's saved state and returns false to reject a
 // build (the host then restores the previous one); SaveState added.
 // v9 (#144): FixedUpdate, and host GetTime / SetTimeScale.
-constexpr std::uint32_t kGameModuleAPIVersion = 11; // v11: PlaySoundAt, GetGrabbedEntity, GetActorPosition
+constexpr std::uint32_t kGameModuleAPIVersion = 12; // v12: Input Manager (GetAxis, GetButton*, GetKey*, GetMouseDelta)
 
 // Unity's Time, as seen by the game module (#144). Seconds throughout. POD.
 struct GameTime {
@@ -173,6 +173,19 @@ struct GameModuleHostAPI {
     std::uint32_t (*GetGrabbedEntity)() = nullptr;
     // v11. World position of an entity's physics actor (any collider, triggers included).
     bool (*GetActorPosition)(std::uint32_t entity, float out[3]) = nullptr;
+    // --- Input (#145, v12) --- Unity's Input Manager. Actions are named in Project Settings > Input
+    // (defaults: Horizontal, Vertical, Jump, Sprint, Fire1, Fire2, Interact, Cancel). Everything
+    // reads 0 / false unless the game has input (playing, with the Game view holding the cursor).
+    float (*GetAxis)(const char* action) = nullptr;       // -1..1, keys full tilt, sticks analog
+    bool  (*GetButton)(const char* action) = nullptr;     // positive side held
+    bool  (*GetButtonDown)(const char* action) = nullptr; // the frame it went down
+    bool  (*GetButtonUp)(const char* action) = nullptr;   // the frame it was released
+    // Raw bindings: a GLFW_KEY_* code, or 1000 + N for mouse button N.
+    bool  (*GetKey)(int code) = nullptr;
+    bool  (*GetKeyDown)(int code) = nullptr;
+    bool  (*GetKeyUp)(int code) = nullptr;
+    // Mouse movement this frame in pixels (x right, y up); 0 without input.
+    void  (*GetMouseDelta)(float out[2]) = nullptr;
 };
 
 struct GameModuleAPI {
