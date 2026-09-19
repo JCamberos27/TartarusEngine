@@ -1214,7 +1214,8 @@ const ShaderRenderState* EffectiveRenderState(const std::vector<std::shared_ptr<
 
 void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
                          const std::vector<std::shared_ptr<MaterialAsset>>& slots,
-                         const ProgramSelector& selectProgram, float opacity) {
+                         const ProgramSelector& selectProgram, float opacity,
+                         const std::function<void(Shader&)>& onProgramBound) {
     const glm::mat4 nrm = glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform))));
 
     Shader*      lastProg = nullptr;
@@ -1236,6 +1237,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
             locs = ResolveMaterialLocs(*prog);
             prog->SetMat4(prog->Loc("uModel"), xform);
             prog->SetMat4(prog->Loc("uNormalMatrix"), nrm);
+            if (onProgramBound) onProgramBound(*prog); // per-draw uniforms, e.g. probes (#108)
             lastProg = prog;
         }
         // Per-draw: the transparent pass varies opacity per entity. No-op on opaque programs
