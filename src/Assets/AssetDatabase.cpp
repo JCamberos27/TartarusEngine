@@ -78,6 +78,9 @@ const std::unordered_map<std::string, std::string>& KnownExtensions() {
         {".ogg",   "audio"},   {".flac", "audio"},
         {".prefab","prefab"},
         {".mat",   "material"},
+        // #132 — HDRI skies: referenced by GUID from scenes (skyHdriGuid) so a rename or move
+        // doesn't lose the sky.
+        {".hdr",   "hdri"},    {".exr",  "hdri"},
     };
     return kExts;
 }
