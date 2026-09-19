@@ -2,6 +2,9 @@
 // mode enter/exit, dropped-file import, and screenshot capture. Split out of
 // EditorLayer.cpp for build time (#179).
 
+#include <iterator>
+#include "MaterialAsset.h"
+#include "AtomicFile.h"
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
 #include "FileDialog.h"
@@ -503,7 +506,7 @@ void EditorLayer::PushUndo(const World& world, const std::string& label, bool se
     if (m_UndoStack.size() > kMaxHistory) {
         // Safe with the delta chain as-is: entry 0's patch only ever rebuilt entry 0 from
         // entry 1, so dropping it leaves every remaining link intact (#174 stage 2).
-        const bool evictedWasContent = !m_UndoStack.front().SelectionOnly;
+        const bool evictedWasContent = m_UndoStack.front().CountsAsSceneEdit();
         m_UndoStack.erase(m_UndoStack.begin());
         if (evictedWasContent) {
             if (m_SavedUndoDepth > 0) m_SavedUndoDepth--; // the whole stack shifted down by one
@@ -513,6 +516,49 @@ void EditorLayer::PushUndo(const World& world, const std::string& label, bool se
     ClearRedoHistory(); // a fresh edit invalidates whatever redo history existed
     RefreshDirtyFromHistory();
     if (!selectionOnly) m_EditPushedThisFrame = true; // tells RecordSelectionHistory not to ALSO push a Select entry
+}
+
+void EditorLayer::PushAssetUndo(const World& world, const std::string& matPath, std::string before,
+                                const std::string& label) {
+    CancelEyedropper(); // #93
+    const std::string sceneJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
+                                              : SceneSerializer::SaveToString(world);
+    UndoEntry entry;
+    entry.Hash = HashSceneJson(sceneJson);
+    entry.SelectedOrders = CaptureSelectedOrders(world);
+    entry.Label = label;
+    entry.AssetPath = matPath;
+    entry.AssetJson = std::move(before);
+    PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(entry), sceneJson);
+    if (m_UndoStack.size() > kMaxHistory) {
+        const bool evictedWasContent = m_UndoStack.front().CountsAsSceneEdit();
+        m_UndoStack.erase(m_UndoStack.begin());
+        if (evictedWasContent) {
+            if (m_SavedUndoDepth > 0) m_SavedUndoDepth--;
+            m_ContentDepth--;
+        }
+    }
+    ClearRedoHistory();
+    RefreshDirtyFromHistory();
+    m_EditPushedThisFrame = true; // not also a "Select" entry
+}
+
+std::string EditorLayer::ReadTextFile(const std::string& path) {
+    std::ifstream f(std::filesystem::path(path), std::ios::binary);
+    if (!f) return {};
+    return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+}
+
+void EditorLayer::RestoreMaterialFile(AssetLibrary& assets, const std::string& path, const std::string& json) {
+    if (!AtomicFile::WriteBytes(path, json, /*binary=*/true)) {
+        Log::Error("Undo: couldn't write '" + path + "'.");
+        return;
+    }
+    // Reload in place: renderers and the Inspector hold this same shared_ptr.
+    if (auto fresh = MaterialAsset::Load(path, &assets)) {
+        std::shared_ptr<MaterialAsset> live = assets.LoadMaterial(path);
+        if (live && live != fresh) *live = *fresh;
+    }
 }
 
 // Phase 6 item 6 / Q6 helper — see the header's comment on SelectionUndoLabel.
@@ -563,7 +609,7 @@ void EditorLayer::CommitStagedUndo(const World& world, const std::string& label)
     PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(entry), stagedJson);
     m_ContentDepth++; // Q6 — a staged edit is always a real edit, never SelectionOnly
     if (m_UndoStack.size() > kMaxHistory) {
-        const bool evictedWasContent = !m_UndoStack.front().SelectionOnly;
+        const bool evictedWasContent = m_UndoStack.front().CountsAsSceneEdit();
         m_UndoStack.erase(m_UndoStack.begin());
         if (evictedWasContent) {
             if (m_SavedUndoDepth > 0) m_SavedUndoDepth--;
@@ -590,16 +636,23 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     redoEntry.SelectedOrders = CaptureSelectedOrders(world);
     redoEntry.Label = m_UndoStack.back().Label; // the action Redo would re-apply from here
     redoEntry.SelectionOnly = m_UndoStack.back().SelectionOnly; // Q6 — carry the flag across stacks
+    // #107 — an asset entry's redo side holds the file as it is NOW, before we roll it back.
+    redoEntry.AssetPath = m_UndoStack.back().AssetPath;
+    if (!redoEntry.AssetPath.empty()) redoEntry.AssetJson = ReadTextFile(redoEntry.AssetPath);
     PushHistoryEntry(m_RedoStack, m_RedoBaseJson, std::move(redoEntry), currentJson);
 
     UndoEntry entry;
     std::string targetJson;
     if (!PopHistoryEntry(m_UndoStack, m_UndoBaseJson, entry, targetJson)) return;
-    if (!entry.SelectionOnly) m_ContentDepth--; // Q6 — a real-edit entry just left the live stack
-    if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
-        // #83 — a snapshot that can't be applied must not leave a half-loaded world.
-        Log::Error("Undo failed - the scene was left as it was.");
-        SceneSerializer::LoadFromString(world, assets, currentJson);
+    if (entry.CountsAsSceneEdit()) m_ContentDepth--; // Q6 — a real-edit entry just left the live stack
+    if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
+    // An asset-only step leaves the scene as it is — skip the full registry rebuild.
+    if (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash) {
+        if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
+            // #83 — a snapshot that can't be applied must not leave a half-loaded world.
+            Log::Error("Undo failed - the scene was left as it was.");
+            SceneSerializer::LoadFromString(world, assets, currentJson);
+        }
     }
     RestoreSelectionByOrder(world, entry.SelectedOrders);
     InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
@@ -617,15 +670,20 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     undoEntry.SelectedOrders = CaptureSelectedOrders(world);
     undoEntry.Label = m_RedoStack.back().Label;
     undoEntry.SelectionOnly = m_RedoStack.back().SelectionOnly; // Q6 — carry the flag across stacks
-    if (!undoEntry.SelectionOnly) m_ContentDepth++; // Q6 — a real-edit entry is returning to the live stack
+    undoEntry.AssetPath = m_RedoStack.back().AssetPath; // #107 — see Undo()
+    if (!undoEntry.AssetPath.empty()) undoEntry.AssetJson = ReadTextFile(undoEntry.AssetPath);
+    if (undoEntry.CountsAsSceneEdit()) m_ContentDepth++; // Q6 — a real-edit entry is returning to the live stack
     PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(undoEntry), currentJson);
 
     UndoEntry entry;
     std::string targetJson;
     if (!PopHistoryEntry(m_RedoStack, m_RedoBaseJson, entry, targetJson)) return;
-    if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
-        Log::Error("Redo failed - the scene was left as it was."); // #83
-        SceneSerializer::LoadFromString(world, assets, currentJson);
+    if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
+    if (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash) {
+        if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
+            Log::Error("Redo failed - the scene was left as it was."); // #83
+            SceneSerializer::LoadFromString(world, assets, currentJson);
+        }
     }
     RestoreSelectionByOrder(world, entry.SelectedOrders);
     InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
