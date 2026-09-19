@@ -24,7 +24,9 @@ struct BoneInfo {
     glm::mat4 OffsetMatrix;
 };
 
-constexpr int MAX_BONES = 100;
+// #113 — bones live in an SSBO (#104), so the old 100-entry uniform-array cap is gone; 512 covers
+// production character rigs. Only the rig's own bone count is uploaded per draw.
+constexpr int MAX_BONES = 512;
 
 // Mirrors the knobs a Unity-style Model Importer would expose. Stored per-asset-path in
 // AssetLibrary and applied whenever a Model is constructed or re-imported — see Model::Reimport.
@@ -90,11 +92,34 @@ public:
     // slots: per-submesh MaterialAsset overrides; empty/short → imported mesh material.
     void DrawDepthOnly(Shader& shader) { DrawDepthOnly(shader, {}); }
 
-    bool HasAnimations() const { return !m_D->Animations.empty(); }
-    int AnimationCount() const { return (int)m_D->Animations.size(); }
-    const std::string& AnimationName(int index) const { return m_D->Animations[index].Name; }
+    // Clips: this model's own (0..OwnAnimationCount-1), then any attached from other files
+    // (AttachClip, #175 — e.g. Mixamo animation-only FBXs played on the character).
+    bool HasAnimations() const { return AnimationCount() > 0; }
+    int OwnAnimationCount() const { return (int)m_D->Animations.size(); }
+    int AnimationCount() const { return (int)m_D->Animations.size() + (int)m_ExternalClips.size(); }
+    const std::string& AnimationName(int index) const;
+    // A model file that is nothing but animation (no meshes) - an animation clip asset.
+    bool IsAnimationOnly() const { return m_D->Meshes.empty() && !m_D->Animations.empty(); }
 
-    void PlayAnimation(int index);
+    // #175 — plays `source`'s clip `sourceIndex` on this model, matching animated nodes by name
+    // (a shared skeleton, e.g. every Mixamo export). `ref` is the stable reference it's found by
+    // again (FindClipByRef), `displayName` what pickers show. Returns the clip's index here, or -1
+    // when the source animates none of this model's nodes. Attaching the same ref twice returns
+    // the existing index. Per instance: other instances of this model don't see it.
+    int AttachClip(const Model& source, int sourceIndex, const std::string& ref, const std::string& displayName);
+    int FindClipByRef(const std::string& ref) const;
+
+    // #113 / #175 — playback. `fadeSeconds` > 0 crossfades from whatever is playing (or the bind
+    // pose) instead of snapping. Index -1 stops. Speed may be negative (plays backwards).
+    void PlayAnimation(int index, float fadeSeconds = 0.0f,
+                       AnimationWrapMode wrap = AnimationWrapMode::Loop, float speed = 1.0f);
+    void StopAnimation() { PlayAnimation(-1); }
+    void SetAnimationSpeed(float speed) { m_Anim.Speed = speed; }
+    void SetAnimationWrapMode(AnimationWrapMode wrap) { m_Anim.Wrap = wrap; }
+    int  CurrentAnimation() const { return m_Anim.Clip; }
+    int  FindAnimation(const std::string& name) const; // -1 if no clip has that name
+    float AnimationLength(int index) const;            // seconds
+    float AnimationTime() const { return m_Anim.Time; } // seconds since the current clip started
     void UpdateAnimation(float dt);
 
     // Advances this model's animation at most once per engine frame. Scene entities each get
@@ -112,7 +137,14 @@ public:
     // Skins whenever the model has bones: the current clip's pose while one plays, otherwise the
     // bind pose (#98 — a rig with no clip playing used to render in raw mesh space).
     void UploadBoneMatrices(Shader& shader) const;
-    bool IsPlayingAnimation() const { return m_CurrentAnimation >= 0; }
+    bool IsPlayingAnimation() const { return m_Anim.Clip >= 0; }
+    int  BoneCount() const { return m_D->BoneCounter; }
+    // The current skinning matrix of bone `i` (bind pose when nothing plays). For tests / tools.
+    glm::mat4 FinalBoneMatrix(int i) const {
+        if (i < 0 || i >= m_D->BoneCounter) return glm::mat4(1.0f);
+        const bool posed = m_Anim.Clip >= 0 || m_FadeDuration > 0.0f;
+        return posed && i < (int)m_FinalBoneMatrices.size() ? m_FinalBoneMatrices[i] : m_D->BindPoseBones[i];
+    }
 
     const std::string& Path() const { return m_Path; }
     glm::vec3 BoundsMin() const { return m_D->BoundsMin; }
@@ -189,7 +221,7 @@ private:
         std::map<std::string, BoneInfo> BoneInfoMap;
         int BoneCounter = 0;
         glm::mat4 GlobalInverseTransform{1.0f};
-        AssimpNodeData RootNode;
+        std::vector<AnimNode> Nodes; // flattened hierarchy, parents first (#113)
         std::vector<AnimationClip> Animations;
         std::vector<glm::mat4> BindPoseBones; // #98 — palette with no clip playing
         glm::vec3 BoundsMin{1e30f}, BoundsMax{-1e30f};
@@ -200,9 +232,31 @@ private:
     std::string m_Path;
 
     // Per-instance animation state.
-    int m_CurrentAnimation = -1;
-    float m_CurrentTimeTicks = 0.0f;
+    struct PlaybackState {
+        int Clip = -1;                                   // index into Animations, -1 = none
+        float Time = 0.0f;                               // seconds since it started
+        float Speed = 1.0f;
+        AnimationWrapMode Wrap = AnimationWrapMode::Loop;
+    };
+    PlaybackState m_Anim;          // what's playing
+    PlaybackState m_AnimFrom;      // what's being faded out (Clip -1 = the bind pose)
+    float m_FadeElapsed = 0.0f, m_FadeDuration = 0.0f; // crossfade progress; duration 0 = none
+    bool m_PosePending = false;    // a fade to "stopped" still needs final matrices this frame
     std::vector<glm::mat4> m_FinalBoneMatrices;
+    std::vector<glm::mat4> m_NodeGlobals; // scratch, one per AnimNode
+
+    // #175 — clips borrowed from other model files, retargeted by node name.
+    struct ExternalClip {
+        std::shared_ptr<SharedData> Source; // the source model's (shared) import data
+        int SourceIndex = -1;           // its clip index there (an index, not a pointer: a reimport
+        size_t SourceChannels = 0;      // of the source rebuilds its clip list; a changed channel
+                                        // count then drops the clip instead of reading stale data)
+        std::vector<int> NodeChannel;   // per node of THIS model -> channel in Clip, or -1
+        std::string Ref, DisplayName;
+    };
+    std::vector<ExternalClip> m_ExternalClips;
+    // The clip at combined index `i` and its node->channel map for this model (nullptr if none).
+    const AnimationClip* ClipAt(int i, const std::vector<int>** nodeChannel) const;
 
     // Last engine frame index on which TickAnimationOnce() actually advanced this model; an
     // impossible sentinel (uint64_t max) so frame index 0 doesn't look "already ticked".
@@ -229,8 +283,8 @@ private:
     std::string ResolveTexturePath(const std::string& raw) const;
     static std::string ResolveTexturePathIn(const std::string& modelDir, const std::string& raw);
     void ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh);
-    void ReadHierarchy(AssimpNodeData& out, const aiNode* node);
+    void ReadHierarchy(const aiNode* node, int parent);
     void ReadAnimations(const aiScene* scene);
-    void CalculateBoneTransform(const AssimpNodeData& node, const glm::mat4& parentTransform);
+    void EvaluatePose(); // current (and fading-out) clip -> m_FinalBoneMatrices
     void CollectNodeGlobals(const aiNode* node, const glm::mat4& parentTransform);
 };

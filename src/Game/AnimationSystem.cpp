@@ -1,4 +1,10 @@
 #include "AnimationSystem.h"
+#include "Model.h"
+#include "AssetLibrary.h"
+#include "ProjectPaths.h"
+#include <filesystem>
+#include <algorithm>
+#include <cctype>
 #include "World.h"
 #include "Components.h"
 
@@ -81,6 +87,81 @@ void UpdateAnimators(World& world, float dt) {
             float brightness = glm::max(glm::max(anim.BaseColor.r, anim.BaseColor.g),
                                        glm::max(anim.BaseColor.b, 0.35f));
             light->Color = HsvToRgb(anim.ColorCycleHzPerSec * t, 0.85f, brightness);
+        }
+    }
+}
+
+std::string AnimationClipRef(const Model& source, int sourceClip) {
+    std::string ref = ProjectPaths::Relativize(source.Path());
+    if (source.OwnAnimationCount() > 1) ref += "#" + source.AnimationName(sourceClip);
+    return ref;
+}
+
+std::string AnimationClipLabel(const Model& source, int sourceClip) {
+    std::string label = std::filesystem::u8path(source.Path()).stem().u8string();
+    if (source.OwnAnimationCount() > 1) label += " / " + source.AnimationName(sourceClip);
+    return label;
+}
+
+int ResolveAnimationClip(Model& model, const std::string& clipRef, AssetLibrary& assets) {
+    if (clipRef.empty()) return model.AnimationCount() > 0 ? 0 : -1;
+    if (int i = model.FindAnimation(clipRef); i >= 0) return i; // own clip name, or already attached
+    // "path[#clip]" naming a model file.
+    const size_t hash = clipRef.find('#');
+    const std::string path = clipRef.substr(0, hash);
+    const std::string clipName = hash == std::string::npos ? std::string() : clipRef.substr(hash + 1);
+    std::string ext = std::filesystem::u8path(path).extension().u8string();
+    for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+    if (ext != ".fbx" && ext != ".gltf" && ext != ".glb" && ext != ".dae" && ext != ".obj") return -1;
+    const std::string abs = std::filesystem::u8path(path).is_absolute() ? path : ProjectPaths::Resolve(path);
+    std::error_code ec;
+    if (!std::filesystem::exists(std::filesystem::u8path(abs), ec)) return -1;
+    std::shared_ptr<Model> src = assets.LoadModel(abs);
+    if (!src || src.get() == &model || src->OwnAnimationCount() == 0) return -1;
+    int srcClip = 0;
+    if (!clipName.empty()) {
+        srcClip = -1;
+        for (int i = 0; i < src->OwnAnimationCount(); ++i)
+            if (src->AnimationName(i) == clipName) { srcClip = i; break; }
+        if (srcClip < 0) return -1;
+    }
+    return model.AttachClip(*src, srcClip, clipRef, AnimationClipLabel(*src, srcClip));
+}
+
+void UpdateSkeletalAnimations(World& world, AssetLibrary& assets) {
+    auto view = world.Registry.view<SkeletalAnimationComponent, RenderableComponent>(entt::exclude<InactiveTag>);
+    for (auto e : view) {
+        auto& anim = view.get<SkeletalAnimationComponent>(e);
+        Model* model = view.get<RenderableComponent>(e).ModelRef.get();
+        if (!model) continue;
+
+        const AnimationWrapMode wrap = (AnimationWrapMode)std::clamp(anim.WrapMode, 0, 3);
+        if (!anim.Started) {
+            anim.Started = true;
+            anim.IsPlaying = anim.PlayAutomatically;
+            anim.PlayingClip.clear();
+            if (!anim.IsPlaying) model->StopAnimation();
+        }
+        int want = ResolveAnimationClip(*model, anim.Clip, assets);
+        if (want < 0) want = model->OwnAnimationCount() > 0 ? 0 : -1; // missing clip -> the first one
+        if (want < 0) continue; // nothing this model can play
+
+        if (!anim.IsPlaying) {
+            if (model->IsPlayingAnimation() && !anim.PlayingClip.empty()) model->PlayAnimation(-1, anim.CrossFade);
+            anim.PlayingClip.clear();
+            continue;
+        }
+        const std::string& wantName = model->AnimationName(want);
+        if (anim.PlayingClip != wantName) {
+            // First start snaps; a change while already playing crossfades.
+            model->PlayAnimation(want, anim.PlayingClip.empty() ? 0.0f : anim.CrossFade, wrap, anim.Speed);
+            anim.PlayingClip = wantName;
+        } else if (!model->IsPlayingAnimation()) {
+            anim.IsPlaying = false; // a Once clip ran out
+            anim.PlayingClip.clear();
+        } else {
+            model->SetAnimationSpeed(anim.Speed); // live edits / game code
+            model->SetAnimationWrapMode(wrap);
         }
     }
 }
