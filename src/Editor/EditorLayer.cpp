@@ -945,6 +945,20 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
         postSlider("Grain response", &world.FilmGrainResponse, 0.0f, 1.0f, "%.2f", "Edit Film Grain",
                    "How much bright areas are spared: 0 = grain everywhere, 1 = mostly in the shadows.");
 
+    ImGui::SeparatorText("Depth of Field");
+    if (EditorUIPrimitives::Checkbox("Depth of field", &world.DepthOfField)) PushUndo(world, "Toggle Depth of Field");
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Blurs what's nearer or farther than the focus distance, like a camera lens.\n"
+                             "Game view and built player only - the Scene view stays sharp for editing.");
+    if (world.DepthOfField) {
+        postSlider("Focus distance", &world.FocusDistance, 0.1f, 200.0f, "%.1f m", "Edit Depth of Field",
+                   "Distance from the camera that is perfectly sharp.");
+        postSlider("Focus range", &world.FocusRange, 0.1f, 100.0f, "%.1f m", "Edit Depth of Field",
+                   "Depth of the sharp band around the focus distance. Blur reaches full strength\n"
+                   "one more range beyond it (in front and behind).");
+        postSlider("Max blur", &world.DofMaxBlur, 0.0f, 32.0f, "%.1f px", "Edit Depth of Field",
+                   "Blur radius at full strength, in pixels at 1080p (scaled with resolution).");
+    }
     ImGui::SeparatorText("Fog");
     if (EditorUIPrimitives::Checkbox("Fog", &world.FogEnabled)) PushUndo(world, "Toggle Fog");
     if (ImGui::IsItemHovered())

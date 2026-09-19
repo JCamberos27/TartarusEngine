@@ -267,6 +267,18 @@ static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, bool gizmo
 // The first active in-scene Camera entity (creation order), or entt::null. The Game view
 // previews through it while editing so a shot can be framed without walking there (#36 B10).
 // #162 - the scene's post settings for the final tonemap pass.
+// #162 - depth of field reads the view's resolved depth (requested only when DOF is on, so the
+// depth resolve stays off otherwise, #206) and its projection. Game views only: blurring the
+// Scene view would just get in the way of editing.
+static PostSettings WithDepthOfField(PostSettings p, const World& world, const HdrTarget& hdr, const glm::mat4& proj) {
+    if (!world.DepthOfField) return p;
+    p.DepthOfField = true;
+    p.DepthTexture = hdr.ResolvedDepthTexture();
+    p.ProjA = proj[2][2];
+    p.ProjB = proj[3][2];
+    p.Ortho = proj[2][3] == 0.0f;
+    return p;
+}
 static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float bloomIntensity,
                                      float dt, int exposureSlot) {
     PostSettings p;
@@ -284,6 +296,9 @@ static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, 
     p.ChromaticAberration = world.ChromaticAberration;
     p.FilmGrain = world.FilmGrain;
     p.FilmGrainResponse = world.FilmGrainResponse;
+    p.FocusDistance = world.FocusDistance;
+    p.FocusRange = world.FocusRange;
+    p.MaxBlur = world.DofMaxBlur;
     p.Fxaa = world.FxaaEnabled;
     p.AutoExposure = world.AutoExposure;
     p.AutoExposureMinEV = world.AutoExposureMinEV;
@@ -3105,7 +3120,7 @@ int main(int argc, char** argv) {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameView.GetFramebuffer().Handle(),
                                  gvWidth, gvHeight,
-                                 MakePostSettings(world, gvBloomGlowTex, gvBloomIntensity, dt, 1));
+                                 WithDepthOfField(MakePostSettings(world, gvBloomGlowTex, gvBloomIntensity, dt, 1), world, gameHdr, gvProj));
                 }
                 if (playing && playUsesPlayer)
                     crosshair.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
@@ -3271,7 +3286,7 @@ int main(int argc, char** argv) {
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh,
-                                 MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity, dt, 1));
+                                 WithDepthOfField(MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity, dt, 1), world, gameHdr, proj));
                 }
                 if (playing && playUsesPlayer)
                     crosshair.Draw(0, mw, mh, playGravityGun && gravityGun.IsHolding(),
