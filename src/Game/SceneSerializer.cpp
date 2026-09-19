@@ -236,6 +236,7 @@ json MaterialSlotsToJson(const std::vector<std::shared_ptr<MaterialAsset>>& matS
         } else {
             const auto& smat = slot->Mat;
             json em = {
+                {"factorsScaleMaps", true}, // #102 — see ReadEmbeddedMat
                 {"baseColor", Vec3ToJson(smat.BaseColor)},
                 {"metallic", smat.Metallic},
                 {"roughness", smat.Roughness},
@@ -290,6 +291,7 @@ std::shared_ptr<MaterialAsset> ReadEmbeddedMat(AssetLibrary& assets, const json&
     ma->Mat.RoughnessMap         = LoadIfPresent(assets, mj, "roughnessMap");
     ma->Mat.AOMap                = LoadIfPresent(assets, mj, "aoMap");
     ma->Mat.EmissiveMap          = LoadIfPresent(assets, mj, "emissiveMap");
+    MaterialAsset::UpgradeLegacyMapFactors(ma->Mat, mj.value("factorsScaleMaps", false));
     ma->Mat.ClearCoat            = mj.value("clearCoat", 0.0f);
     ma->Mat.ClearCoatRoughness   = mj.value("clearCoatRoughness", 0.5f);
     ma->Mat.Anisotropy           = mj.value("anisotropy", 0.0f);
