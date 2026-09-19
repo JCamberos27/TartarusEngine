@@ -248,9 +248,11 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
 
         if (EditorSettings::Get().GameViewShowStats && stats) {
             ImVec2 statsPos(imagePos.x + 8.0f, imagePos.y + 8.0f);
-            char buf[192];
-            snprintf(buf, sizeof(buf), "%d FPS (%.2f ms)\n%d draw calls\n%d tris / %d verts",
-                stats->FPS, stats->FrameMs, stats->DrawCalls, stats->Triangles, stats->Vertices);
+            char buf[320];
+            snprintf(buf, sizeof(buf), "%d FPS (%.2f ms)\n%d draw calls\n%d tris / %d verts\n"
+                     "cam (%.2f, %.2f, %.2f)\nyaw %.1f  pitch %.1f",
+                stats->FPS, stats->FrameMs, stats->DrawCalls, stats->Triangles, stats->Vertices,
+                stats->CamPos[0], stats->CamPos[1], stats->CamPos[2], stats->CamYaw, stats->CamPitch);
             ImVec2 textSize = ImGui::CalcTextSize(buf);
             EditorUIPrimitives::DrawHudPlate(dl, statsPos,
                 ImVec2(statsPos.x + textSize.x + 12.0f, statsPos.y + textSize.y + 8.0f), 3.0f);
