@@ -1452,6 +1452,21 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     if (ImGui::MenuItem(ICON_FA_OBJECT_UNGROUP "  Select All", "Ctrl+A", false, anyEntities)) SelectAllEntities(world);
     if (ImGui::MenuItem(ICON_FA_BAN "  Deselect All", "Ctrl+Shift+A", false, HasAnySelection())) ClearSelection();
     if (ImGui::MenuItem(ICON_FA_RIGHT_LEFT "  Invert Selection", "Ctrl+I", false, anyEntities)) InvertSelection(world);
+    // #178 - Unity's Select Children: adds every descendant of the selected objects.
+    bool selectionHasChildren = false;
+    for (entt::entity e : GetSelectedItems())
+        if (const auto* h = world.Registry.try_get<HierarchyComponent>(e); h && !h->Children.empty()) selectionHasChildren = true;
+    if (ImGui::MenuItem(ICON_FA_SITEMAP "  Select Children", nullptr, false, selectionHasChildren)) {
+        std::vector<entt::entity> stack = GetSelectedItems();
+        while (!stack.empty()) {
+            const entt::entity e = stack.back();
+            stack.pop_back();
+            if (!world.Registry.valid(e)) continue;
+            AddToSelectionIfAbsent(e);
+            if (const auto* h = world.Registry.try_get<HierarchyComponent>(e))
+                stack.insert(stack.end(), h->Children.begin(), h->Children.end());
+        }
+    }
     if (ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS_PLUS "  Frame Selected", "F", false, HasAnySelection()) && m_EditorCameraPtr) {
         FocusOnSelection(world, *m_EditorCameraPtr);
     }
