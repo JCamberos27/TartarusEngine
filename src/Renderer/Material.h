@@ -80,6 +80,19 @@ struct Material {
     bool  AlphaClip   = false;
     float AlphaCutoff = 0.5f;
 
+    // #102 / #113 — surface options (Unity Standard / glTF equivalents). Defaults are identity.
+    glm::vec2 UVTiling{1.0f};          // applied to every map (not triplanar)
+    glm::vec2 UVOffset{0.0f};
+    float NormalStrength = 1.0f;       // scales the normal map's slope
+    bool  NormalFlipY    = false;      // DirectX-style normal map (green channel points down)
+    bool  DoubleSided    = false;      // no back-face culling; back faces lit with a flipped normal
+    bool  UseVertexColor = false;      // albedo (and alpha) x the mesh's vertex colour
+    std::shared_ptr<Texture> HeightMap;   // parallax occlusion mapping (white = high)
+    float ParallaxScale  = 0.02f;
+    std::shared_ptr<Texture> DetailAlbedoMap; // x2 detail: 50% grey leaves the colour unchanged
+    std::shared_ptr<Texture> DetailNormalMap;
+    glm::vec2 DetailTiling{4.0f};         // detail maps' UV tiling (on the mesh UVs)
+
     // Values of a linked shader's custom (non-built-in) properties, keyed by property name
     // ("_Foo"), pushed as `u<Foo>` uniforms by BindMaterialDataDriven. Lives here rather than on
     // MaterialAsset (#104) so the Inspector's Material-level Get*/Set* reach them too.
@@ -108,17 +121,23 @@ struct Material {
             Sheen.x, Sheen.y, Sheen.z, SheenRoughness,
             SubsurfaceColor.x, SubsurfaceColor.y, SubsurfaceColor.z, Thickness,
             TransmissionStrength, IOR, AlphaCutoff,
+            UVTiling.x, UVTiling.y, UVOffset.x, UVOffset.y, NormalStrength, ParallaxScale,
+            DetailTiling.x, DetailTiling.y,
         };
         mix(scalars, sizeof(scalars));
         const std::uint32_t flags = (Triplanar ? 1u : 0u)
                                   | (SubsurfaceEnabled ? 2u : 0u)
                                   | (ReflectionProbes ? 4u : 0u)
-                                  | (AlphaClip ? 8u : 0u);
+                                  | (AlphaClip ? 8u : 0u)
+                                  | (NormalFlipY ? 16u : 0u)
+                                  | (DoubleSided ? 32u : 0u)
+                                  | (UseVertexColor ? 64u : 0u);
         mix(&flags, sizeof(flags));
         const Texture* const texs[] = {
             AlbedoMap.get(), NormalMap.get(), MetallicRoughnessMap.get(), MetallicMap.get(),
             RoughnessMap.get(), AOMap.get(), EmissiveMap.get(),
             ClearCoatMap.get(), ThicknessMap.get(),
+            HeightMap.get(), DetailAlbedoMap.get(), DetailNormalMap.get(),
         };
         mix(texs, sizeof(texs));
         return h;

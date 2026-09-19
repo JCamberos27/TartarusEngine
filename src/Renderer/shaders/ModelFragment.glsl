@@ -3,6 +3,7 @@ in vec3 vWorldPos;
 in vec3 vNormal;
 in vec2 vUV;
 in mat3 vTBN;
+in vec4 vColor; // #113
 out vec4 FragColor;
 
 uniform vec3 uViewPos;
@@ -149,6 +150,20 @@ uniform int uHasMetallicMap;           uniform sampler2D uMetallicMap;
 uniform int uHasRoughnessMap;          uniform sampler2D uRoughnessMap;
 uniform int uHasAOMap;                 uniform sampler2D uAOMap;
 uniform int uHasEmissiveMap;           uniform sampler2D uEmissiveMap;
+
+// #102 / #113 — surface options shared by the built-in and Standard.shader paths. A program
+// that never gets them set reads 0s, which every use below treats as "off / identity".
+uniform vec2  uUVTiling;       // (0,0) = unset -> (1,1)
+uniform vec2  uUVOffset;
+uniform float uNormalStrength; // 0 = unset -> 1
+uniform int   uNormalFlipY;    // 1: DirectX-style normal map (green down)
+uniform int   uDoubleSided;    // 1: back faces are lit as front faces (culling is off for them)
+uniform int   uUseVertexColor; // 1: albedo (and alpha) x the mesh's vertex colour
+uniform int uHasHeightMap;             uniform sampler2D uHeightMap;        // parallax
+uniform float uParallaxScale;
+uniform int uHasDetailAlbedoMap;       uniform sampler2D uDetailAlbedoMap;  // x2 detail (neutral at 50% grey)
+uniform int uHasDetailNormalMap;       uniform sampler2D uDetailNormalMap;
+uniform vec2  uDetailTiling;   // (0,0) = unset -> (1,1)
 
 // PR10 — Clear Coat (#ifdef _CLEARCOAT; zero-keyword variant: dead code, bit-identical to PR9)
 #ifdef _CLEARCOAT
@@ -681,13 +696,43 @@ void main() {
     // Triplanar mode skips the mesh's own UVs entirely (they're what's stretching), sampling
     // every map from world position/normal instead. Normal maps are the one exception - proper
     // triplanar normal blending needs a whiteout-blend reconstruction per plane, which no
-    // material here currently needs, so uHasNormalMap still just uses vUV.
+    // material here currently needs, so uHasNormalMap still just uses the mesh UVs.
     bool tri = uTriplanar == 1;
     vec3 triW = tri ? TriplanarWeights(normalize(vNormal)) : vec3(0.0);
+    // #102 — per-material UV tiling / offset, then parallax offset from a height map.
+    vec2 uv = vUV * (uUVTiling == vec2(0.0) ? vec2(1.0) : uUVTiling) + uUVOffset;
+    bool backFace = uDoubleSided == 1 && !gl_FrontFacing;
+    if (uHasHeightMap == 1 && !tri && uParallaxScale > 0.0) {
+        // Parallax occlusion mapping: march the view ray through the height field in tangent
+        // space (more layers at grazing angles), then interpolate between the last two samples.
+        vec3 Vt = normalize(transpose(vTBN) * (uViewPos - vWorldPos));
+        if (backFace) Vt.z = -Vt.z;
+        float layers = mix(24.0, 8.0, clamp(Vt.z, 0.0, 1.0));
+        float layerStep = 1.0 / layers;
+        vec2 delta = Vt.xy / max(Vt.z, 0.1) * uParallaxScale * layerStep;
+        float layerDepth = 0.0;
+        float depthHere = 1.0 - texture(uHeightMap, uv).r;
+        vec2 cur = uv;
+        for (int k = 0; k < 32 && layerDepth < depthHere; ++k) {
+            cur -= delta;
+            depthHere = 1.0 - texture(uHeightMap, cur).r;
+            layerDepth += layerStep;
+        }
+        vec2 prev = cur + delta;
+        float after = depthHere - layerDepth;
+        float before = (1.0 - texture(uHeightMap, prev).r) - layerDepth + layerStep;
+        float w = after / (after - before + 1e-5);
+        uv = mix(cur, prev, clamp(w, 0.0, 1.0));
+    }
     vec4 albedoSample = tri ? SampleTriplanar(uAlbedoMap, vWorldPos, triW, uTriplanarScale)
-                             : texture(uAlbedoMap, vUV);
+                             : texture(uAlbedoMap, uv);
+    if (uUseVertexColor == 1) albedoSample.a *= vColor.a; // #113
     if (uAlphaClip == 1 && uHasAlbedoMap == 1 && albedoSample.a < uAlphaCutoff) discard; // #101
     vec3 albedo = (uHasAlbedoMap == 1 ? albedoSample.rgb : vec3(1.0)) * uBaseColor;
+    if (uUseVertexColor == 1) albedo *= vColor.rgb; // #113
+    vec2 detailUV = vUV * (uDetailTiling == vec2(0.0) ? vec2(1.0) : uDetailTiling);
+    // Detail albedo, Unity-style "x2" in linear space: 50% grey (0.2159 linear) leaves the colour unchanged.
+    if (uHasDetailAlbedoMap == 1) albedo *= texture(uDetailAlbedoMap, detailUV).rgb * 4.6317;
 
     // #102 — glTF / Unity semantics: a map is SCALED by its factor (factor * texture), it no
     // longer replaces it. Materials saved before this carry factor 1 where a map is set (see
@@ -696,22 +741,35 @@ void main() {
     float roughness = uRoughness;
     if (uHasMetallicRoughnessMap == 1) {
         vec3 mr = (tri ? SampleTriplanar(uMetallicRoughnessMap, vWorldPos, triW, uTriplanarScale)
-                       : texture(uMetallicRoughnessMap, vUV)).rgb;
+                       : texture(uMetallicRoughnessMap, uv)).rgb;
         roughness *= mr.g;
         metallic *= mr.b;
     } else {
         if (uHasRoughnessMap == 1) roughness *= (tri ? SampleTriplanar(uRoughnessMap, vWorldPos, triW, uTriplanarScale)
-                                                      : texture(uRoughnessMap, vUV)).r;
+                                                      : texture(uRoughnessMap, uv)).r;
         if (uHasMetallicMap == 1) metallic *= (tri ? SampleTriplanar(uMetallicMap, vWorldPos, triW, uTriplanarScale)
-                                                    : texture(uMetallicMap, vUV)).r;
+                                                    : texture(uMetallicMap, uv)).r;
     }
     float ao = uHasAOMap == 1 ? (tri ? SampleTriplanar(uAOMap, vWorldPos, triW, uTriplanarScale)
-                                      : texture(uAOMap, vUV)).r : 1.0;
+                                      : texture(uAOMap, uv)).r : 1.0;
 
     vec3 N = normalize(vNormal);
-    if (uHasNormalMap == 1) {
-        vec3 tangentNormal = texture(uNormalMap, vUV).rgb * 2.0 - 1.0;
-        N = normalize(vTBN * tangentNormal);
+    if (uHasNormalMap == 1 || uHasDetailNormalMap == 1) {
+        // #102 — strength (scales the tangent-space slope), DirectX green flip, and a detail
+        // normal map combined with whiteout blending.
+        vec3 tn = uHasNormalMap == 1 ? texture(uNormalMap, uv).rgb * 2.0 - 1.0 : vec3(0.0, 0.0, 1.0);
+        if (uNormalFlipY == 1) tn.y = -tn.y;
+        if (uHasDetailNormalMap == 1) {
+            vec3 dn = texture(uDetailNormalMap, detailUV).rgb * 2.0 - 1.0;
+            if (uNormalFlipY == 1) dn.y = -dn.y;
+            tn = vec3(tn.xy + dn.xy, tn.z * dn.z);
+        }
+        tn.xy *= uNormalStrength > 0.0 ? uNormalStrength : 1.0;
+        mat3 tbn = vTBN;
+        if (backFace) tbn[2] = -tbn[2];
+        N = normalize(tbn * tn);
+    } else if (backFace) {
+        N = -N;
     }
 
     // --- Scene-view debug draw modes (#236 R2) ---
@@ -729,7 +787,7 @@ void main() {
                                  vec3(0.4,0.6,1.0),    vec3(1.0,0.95,0.4));
             FragColor = vec4(mix(albedo, cc[ci], 0.55), 1.0);
         } else {                          // 3 = Mip / texel density
-            float lod = uHasAlbedoMap == 1 ? textureQueryLod(uAlbedoMap, vUV).x : 0.0;
+            float lod = uHasAlbedoMap == 1 ? textureQueryLod(uAlbedoMap, uv).x : 0.0;
             float t = clamp(lod / 6.0, 0.0, 1.0);
             FragColor = vec4(mix(vec3(0.15,0.5,1.0), vec3(1.0,0.25,0.15), t), 1.0);
         }
@@ -740,7 +798,7 @@ void main() {
     // same as Unity and glTF; it used to replace them, so the colour/strength controls did
     // nothing once a map was assigned.
     vec3 emissiveEarly = uHasEmissiveMap == 1 ? (tri ? SampleTriplanar(uEmissiveMap, vWorldPos, triW, uTriplanarScale)
-                                                      : texture(uEmissiveMap, vUV)).rgb * uEmissiveColor : uEmissiveColor;
+                                                      : texture(uEmissiveMap, uv)).rgb * uEmissiveColor : uEmissiveColor;
     if (uUnlit == 1) {
         vec3 flatColor = albedo + emissiveEarly;
         FragColor = vec4(uApplyTonemap == 1 ? pow(flatColor, vec3(1.0 / 2.2)) : flatColor, 1.0);
@@ -759,7 +817,7 @@ void main() {
 #ifdef _CLEARCOAT
     vec3 LoCc = vec3(0.0);
     float ccStrength = uClearCoat;
-    if (uHasClearCoatMap == 1) ccStrength *= texture(uClearCoatMap, vUV).r;
+    if (uHasClearCoatMap == 1) ccStrength *= texture(uClearCoatMap, uv).r;
     float ccRough = max(uClearCoatRoughness * uClearCoatRoughness, 0.001);
     float Fc = ClearCoatFresnel(max(dot(N, V), 0.0), ccStrength);
 #endif
@@ -771,7 +829,7 @@ void main() {
 #ifdef _SUBSURFACE
     vec3 LoSSS = vec3(0.0);
     float sssThickness = uThickness;
-    if (uHasThicknessMap == 1) sssThickness *= texture(uThicknessMap, vUV).r;
+    if (uHasThicknessMap == 1) sssThickness *= texture(uThicknessMap, uv).r;
 #endif
 
     vec3 Lo = vec3(0.0);

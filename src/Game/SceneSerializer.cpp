@@ -266,6 +266,18 @@ json MaterialSlotsToJson(const std::vector<std::shared_ptr<MaterialAsset>>& matS
             if (smat.TransmissionStrength != 0.0f) em["transmission"] = smat.TransmissionStrength;
             if (smat.IOR != 1.5f)                  em["ior"] = smat.IOR;
             if (smat.ReflectionProbes)             em["reflectionProbes"] = true;
+            // #102 / #113 surface options
+            if (smat.UVTiling != glm::vec2(1.0f))  em["uvTiling"] = {smat.UVTiling.x, smat.UVTiling.y};
+            if (smat.UVOffset != glm::vec2(0.0f))  em["uvOffset"] = {smat.UVOffset.x, smat.UVOffset.y};
+            if (smat.NormalStrength != 1.0f)       em["normalStrength"] = smat.NormalStrength;
+            if (smat.NormalFlipY)                  em["normalFlipY"] = true;
+            if (smat.DoubleSided)                  em["doubleSided"] = true;
+            if (smat.UseVertexColor)               em["vertexColors"] = true;
+            if (smat.HeightMap)                    em["heightMap"] = PathRef(PathOrEmpty(smat.HeightMap));
+            if (smat.ParallaxScale != 0.02f)       em["parallaxScale"] = smat.ParallaxScale;
+            if (smat.DetailAlbedoMap)              em["detailAlbedoMap"] = PathRef(PathOrEmpty(smat.DetailAlbedoMap));
+            if (smat.DetailNormalMap)              em["detailNormalMap"] = PathRef(PathOrEmpty(smat.DetailNormalMap));
+            if (smat.DetailTiling != glm::vec2(4.0f)) em["detailTiling"] = {smat.DetailTiling.x, smat.DetailTiling.y};
             if (smat.AlphaCutoff != 0.5f)          em["alphaCutoff"] = smat.AlphaCutoff;
             if (slot->RenderQueue != MaterialAsset::Queue::Opaque) em["renderQueue"] = (int)slot->RenderQueue;
             if (slot->Opacity != 1.0f)             em["opacity"] = slot->Opacity;
@@ -304,6 +316,24 @@ std::shared_ptr<MaterialAsset> ReadEmbeddedMat(AssetLibrary& assets, const json&
     ma->Mat.TransmissionStrength = mj.value("transmission", 0.0f);
     ma->Mat.IOR                  = mj.value("ior", 1.5f);
     ma->Mat.ReflectionProbes     = mj.value("reflectionProbes", false);
+    { // #102 / #113 surface options
+        auto vec2Or = [&](const char* k, glm::vec2 def) {
+            const auto it = mj.find(k);
+            if (it == mj.end() || !it->is_array() || it->size() < 2 || !(*it)[0].is_number() || !(*it)[1].is_number()) return def;
+            return glm::vec2((*it)[0].get<float>(), (*it)[1].get<float>());
+        };
+        ma->Mat.UVTiling       = vec2Or("uvTiling", glm::vec2(1.0f));
+        ma->Mat.UVOffset       = vec2Or("uvOffset", glm::vec2(0.0f));
+        ma->Mat.DetailTiling   = vec2Or("detailTiling", glm::vec2(4.0f));
+        ma->Mat.NormalStrength = mj.value("normalStrength", 1.0f);
+        ma->Mat.NormalFlipY    = mj.value("normalFlipY", false);
+        ma->Mat.DoubleSided    = mj.value("doubleSided", false);
+        ma->Mat.UseVertexColor = mj.value("vertexColors", false);
+        ma->Mat.ParallaxScale  = mj.value("parallaxScale", 0.02f);
+        ma->Mat.HeightMap       = LoadIfPresent(assets, mj, "heightMap");
+        ma->Mat.DetailAlbedoMap = LoadIfPresent(assets, mj, "detailAlbedoMap");
+        ma->Mat.DetailNormalMap = LoadIfPresent(assets, mj, "detailNormalMap");
+    }
     ma->Mat.AlphaCutoff          = mj.value("alphaCutoff", 0.5f);
     ma->RenderQueue              = (MaterialAsset::Queue)std::clamp(mj.value("renderQueue", 0), 0, 2);
     ma->Mat.AlphaClip            = ma->RenderQueue == MaterialAsset::Queue::AlphaTest;
