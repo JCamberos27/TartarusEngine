@@ -320,6 +320,25 @@ glm::mat4 ComposeTransform(const glm::vec3& position, const glm::vec3& rotationE
     return m;
 }
 
+bool World::CompareTag(entt::entity e, const std::string& tag) const {
+    if (!Registry.valid(e)) return false;
+    const auto* t = Registry.try_get<TagComponent>(e);
+    return (t ? t->Tag : std::string("Untagged")) == tag;
+}
+
+entt::entity World::FindWithTag(const std::string& tag) const {
+    for (auto e : Registry.view<const TagComponent>(entt::exclude<InactiveTag>))
+        if (Registry.get<const TagComponent>(e).Tag == tag) return e;
+    return entt::null;
+}
+
+std::vector<entt::entity> World::FindAllWithTag(const std::string& tag) const {
+    std::vector<entt::entity> out;
+    for (auto e : Registry.view<const TagComponent>(entt::exclude<InactiveTag>))
+        if (Registry.get<const TagComponent>(e).Tag == tag) out.push_back(e);
+    return out;
+}
+
 LogContext EntityLogContext(const entt::registry& registry, entt::entity e) {
     if (registry.valid(e))
         if (const auto* order = registry.try_get<OrderComponent>(e)) return LogContext::Entity(order->Value);
