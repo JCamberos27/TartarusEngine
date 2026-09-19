@@ -605,6 +605,14 @@ public:
     // True once any edit has happened since the last Save/Save As/Open/New — main.cpp reads
     // this to show an unsaved-changes indicator in the window title.
     bool IsDirty() const { return m_Dirty; }
+
+    // #176 - Prefab Mode (EditorLayer_PrefabMode.cpp): edit a .prefab in isolation. Leaving
+    // saves unsaved prefab edits and restores the scene (and its undo history) as it was.
+    bool InPrefabMode() const { return !m_PrefabModePath.empty(); }
+    const std::string& PrefabModePath() const { return m_PrefabModePath; }
+    void EnterPrefabMode(World& world, AssetLibrary& assets, const std::string& path);
+    void ExitPrefabMode(World& world, AssetLibrary& assets, bool save = true);
+    bool SavePrefabMode(World& world);
     // Public entry point for the toolbar's document-strip Save button (API v20) — DoSave() itself
     // is private since File > Save already reaches it through DrawFileMenuBody.
     bool SaveScene(World& world, AssetLibrary& assets) { return DoSave(world, assets); }
@@ -1683,6 +1691,13 @@ private:
         int ContentDepth = 0, SavedDepth = 0;
         bool Valid = false;
     } m_PrePlayHistory;
+    // #176 - Prefab Mode state: the scene to return to, its history and dirty flag.
+    std::string m_PrefabModePath;
+    std::string m_PrefabModeSceneSnapshot;
+    SavedHistory m_PrePrefabHistory;
+    bool m_PrefabModeSceneDirty = false;
+    void RestorePrePrefabHistory();
+    void DrawPrefabModeBar(World& world, AssetLibrary& assets);
     // Selection captured by stable OrderComponent value on Play, re-resolved to fresh entity
     // ids on Stop — the registry is rebuilt in between and entt recycles ids (#110).
     std::vector<int> m_PlaySelectionOrders;

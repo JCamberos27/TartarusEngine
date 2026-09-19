@@ -1533,13 +1533,10 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         if (cell.kind == Cell::Kind::Shader && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             Screenshot::OpenFile(cell.key); // item 15: browsable + externally-openable, no in-editor text editor
         }
+        // #176 - double-click opens the prefab in Prefab Mode, like Unity (drag it into the scene,
+        // or right-click > Place Instance, to place one).
         if (cell.kind == Cell::Kind::Prefab && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            PushUndo(world, "Place Prefab Instance");
-            entt::entity spawned = SceneSerializer::InstantiatePrefab(world, assets, cell.key);
-            if (spawned != entt::null) {
-                UniquifyName(world, spawned);
-                SelectItem(spawned, false);
-            }
+            EnterPrefabMode(world, assets, cell.key);
         }
 
         if (isFolder) {
@@ -1869,6 +1866,9 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 }
                 ImGui::PopStyleColor();
             } else {
+                if (cell.kind == Cell::Kind::Prefab && selectionForAction.size() == 1 && ImGui::MenuItem(ICON_FA_PEN_TO_SQUARE "  Open Prefab")) {
+                    EnterPrefabMode(world, assets, cell.key); // #176
+                }
                 if (cell.kind == Cell::Kind::Prefab && selectionForAction.size() == 1 && ImGui::MenuItem(ICON_FA_PLUS "  Place Instance")) {
                     PushUndo(world, "Place Prefab Instance");
                     entt::entity spawned = SceneSerializer::InstantiatePrefab(world, assets, cell.key);
