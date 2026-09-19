@@ -312,6 +312,8 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
     m.NormalFlipY    = r.Bool(key("_NormalFlipY", "normalFlipY"), false);
     m.DoubleSided    = r.Bool(key("_DoubleSided", "doubleSided"), false);
     m.UseVertexColor = r.Bool(key("_VertexColors", "vertexColors"), false);
+    m.SpecularHighlights = r.Bool(key("_SpecularHighlights", "specularHighlights"), true);
+    m.GlossyReflections  = r.Bool(key("_GlossyReflections", "glossyReflections"), true);
     m.ParallaxScale  = r.Num(key("_ParallaxScale", "parallaxScale"), 0.02f);
 
     if (lib) {
@@ -438,6 +440,8 @@ bool MaterialAsset::Save() const {
         if (m.NormalFlipY)                          props["_NormalFlipY"]    = true;
         if (m.DoubleSided)                          props["_DoubleSided"]    = true;
         if (m.UseVertexColor)                       props["_VertexColors"]   = true;
+        if (!m.SpecularHighlights)                  props["_SpecularHighlights"] = false;
+        if (!m.GlossyReflections)                   props["_GlossyReflections"]  = false;
         if (!HeightMapPath.empty())                 props["_HeightMap"]      = HeightMapPath;
         if (m.ParallaxScale != 0.02f)               props["_ParallaxScale"]  = m.ParallaxScale;
         if (!DetailAlbedoMapPath.empty())           props["_DetailAlbedoMap"] = DetailAlbedoMapPath;
@@ -498,6 +502,8 @@ bool MaterialAsset::Save() const {
         if (m.NormalFlipY)                  j["normalFlipY"]        = true;
         if (m.DoubleSided)                  j["doubleSided"]        = true;
         if (m.UseVertexColor)               j["vertexColors"]       = true;
+        if (!m.SpecularHighlights)          j["specularHighlights"] = false;
+        if (!m.GlossyReflections)           j["glossyReflections"]  = false;
         if (!HeightMapPath.empty())         j["heightMap"]          = HeightMapPath;
         if (m.ParallaxScale != 0.02f)       j["parallaxScale"]      = m.ParallaxScale;
         if (!DetailAlbedoMapPath.empty())   j["detailAlbedoMap"]    = DetailAlbedoMapPath;
@@ -547,6 +553,7 @@ bool MaterialAsset::IsBuiltinProp(const std::string& n) {
         "_AlbedoMap", "_NormalMap", "_MetallicRoughnessMap", "_MetallicMap", "_RoughnessMap",
         "_AOMap", "_EmissiveMap", "_ClearCoatMap", "_ThicknessMap",
         "_UVTiling", "_UVOffset", "_NormalStrength", "_NormalFlipY", "_DoubleSided", "_VertexColors",
+        "_SpecularHighlights", "_GlossyReflections",
         "_HeightMap", "_ParallaxScale", "_DetailAlbedoMap", "_DetailNormalMap", "_DetailTiling",
     };
     return kBuiltin.count(n) != 0;
@@ -652,6 +659,8 @@ bool MaterialAsset::GetBool(const Material& m, const std::string& n) {
     if (n == "_NormalFlipY") return m.NormalFlipY;
     if (n == "_DoubleSided") return m.DoubleSided;
     if (n == "_VertexColors") return m.UseVertexColor;
+    if (n == "_SpecularHighlights") return m.SpecularHighlights;
+    if (n == "_GlossyReflections") return m.GlossyReflections;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() && it->second.B;
 }
@@ -706,6 +715,8 @@ void MaterialAsset::SetBool(Material& m, const std::string& n, bool v) {
     if (n == "_NormalFlipY") { m.NormalFlipY = v; return; }
     if (n == "_DoubleSided") { m.DoubleSided = v; return; }
     if (n == "_VertexColors") { m.UseVertexColor = v; return; }
+    if (n == "_SpecularHighlights") { m.SpecularHighlights = v; return; }
+    if (n == "_GlossyReflections") { m.GlossyReflections = v; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) it->second.B = v;
 }

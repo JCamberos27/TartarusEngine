@@ -193,12 +193,15 @@ bool GetQueryRecording();
 void SetActorPose(unsigned entity, const float posXYZ[3], const float rotEulerDeg[3], bool zeroVelocity);
 
 // --- Gravity gun (#185 hardening) ---------------------------------------------------
-// Drives the physics-playground grab/throw harness in main.cpp. GrabBody latches a dynamic
-// body and suspends its gravity; UpdateGrab servos it toward `target` (world space) each
-// frame and kills its spin; ReleaseBody restores it, applying `impulse` as a velocity change
-// when `launch` is true. All no-ops outside Play or on a non-dynamic entity.
+// Drives the gravity gun (GravityGun.cpp). GrabBody latches a dynamic body and suspends its
+// gravity; UpdateGrab sets the hold point (world space), how fast that point is moving (the
+// player walking / turning - fed forward so the body doesn't trail behind) and optionally the
+// orientation to hold it at (quaternion xyzw; null = no spin). The body is servoed toward them
+// every physics substep, so it moves smoothly whatever the frame rate. ReleaseBody restores it,
+// applying `impulse` as a velocity change when `launch` is true. All no-ops outside Play or on a
+// non-dynamic entity.
 void GrabBody(unsigned entity);
-void UpdateGrab(const float target[3]);
+void UpdateGrab(const float target[3], const float targetVelocity[3], const float targetRotation[4]);
 // `backspinRadPerSec` > 0 also spins a round (sphere-collider) body backwards about the axis
 // across the throw, the way a shot basketball leaves the hand.
 void ReleaseBody(bool launch, const float impulse[3], float backspinRadPerSec = 0.0f);
@@ -208,6 +211,19 @@ unsigned GrabbedEntity();
 // World position of the PhysX actor built for `entity` (dynamic, kinematic or static, triggers
 // included). False outside Play or for an entity without one.
 bool GetActorPosition(unsigned entity, float out[3]);
+// World rotation (quaternion xyzw) of the same actor; false outside Play / unknown entity.
+bool GetActorRotation(unsigned entity, float outXYZW[4]);
+// A dynamic body's linear damping (0 when it has none / isn't dynamic) - for throw prediction.
+float GetLinearDamping(unsigned entity);
+// Sweeps `entity`'s own collision shape (at its current rotation) from `from` along `dir` for
+// `distance`, ignoring the body itself, triggers and the Player. On a hit, fills outHit (Point,
+// Normal, Distance = how far the body's origin travelled) and the bounciness / dynamic friction
+// PhysX would use for that contact (both materials combined by their combine modes). For the
+// gravity gun's throw prediction.
+bool SweepBody(unsigned entity, const float from[3], const float dir[3], float distance, RaycastHit& outHit,
+               float& outBounciness, float& outFriction);
+// The bounding radius of `entity`'s collision shape about its origin (0 if unknown).
+float BodyRadius(unsigned entity);
 
 // --- Debug (#185 PR 12) -------------------------------------------------------------
 // Copy up to `maxPoints` world-space contact points from this frame's events (3 floats each)
