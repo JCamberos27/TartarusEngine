@@ -87,6 +87,34 @@ void RegisterEngineComponents() {
     // so this is a pure move with no functional loss besides the sub-heading grouping the old
     // hand-written section had (see the field-naming note on AnimatorComponent in Components.h).
     // Runtime-only scratch fields (Initialized, Base*, BaseColor, Elapsed) are not reflected.
+    // #175 / #113 — skeletal clip playback. Clip is drawn by a custom combo (the model's clip
+    // names) in DrawReflectedComponentExtra, so it's EditorHidden here but still serialized.
+    {
+        static const char* kWrapLabels = "Once\0Loop\0Ping Pong\0Clamp Forever\0";
+        ReflectComponent m;
+        m.Name = "Animation"; m.Icon = ICON_FA_FILM; m.Category = "Rendering";
+        m.Tooltip = "Plays one of this object's model animation clips in Play mode. Game code can switch the clip "
+                    "(it crossfades) or stop / start it.";
+        m.Key = "animation";
+        m.Fields = {
+            { "Clip", T::String, TARTARUS_REFLECT_FIELD(SkeletalAnimationComponent, Clip), 0.0f,
+              "Which clip to play (empty = the model's first clip)." },
+            { "Play Automatically", T::Bool, TARTARUS_REFLECT_FIELD(SkeletalAnimationComponent, PlayAutomatically), 0.0f,
+              "Start playing as soon as Play mode begins." },
+            { "Wrap Mode", T::Enum, TARTARUS_REFLECT_FIELD(SkeletalAnimationComponent, WrapMode), 0.0f,
+              "Once: play to the end, then stop. Loop: repeat. Ping Pong: forwards then backwards.\n"
+              "Clamp Forever: play to the end and hold the last frame." },
+            { "Speed", T::Float, TARTARUS_REFLECT_FIELD(SkeletalAnimationComponent, Speed), 0.01f,
+              "Playback rate (1 = authored speed; negative plays backwards).", -10.0f, 10.0f },
+            { "Cross Fade", T::Float, TARTARUS_REFLECT_FIELD(SkeletalAnimationComponent, CrossFade), 0.01f,
+              "Seconds to blend when the clip changes while playing.", 0.0f, 5.0f },
+        };
+        m.Fields[0].EditorHidden = true;
+        m.Fields[2].EnumLabels = kWrapLabels;
+        m.Fields[2].EnumCount = 4;
+        Register<SkeletalAnimationComponent>(std::move(m));
+    }
+
     Register<AnimatorComponent>({
         "Animator", ICON_FA_PERSON_RUNNING,
         "Procedural motion driven every frame in Play mode - continuous spin, orbit around an "
