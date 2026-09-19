@@ -937,6 +937,10 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     // ImGui::End() for the "Scene Hierarchy" window is the module's — it owns Begin() now.
 }
 
+bool EditorLayer::SceneSearchActive() const {
+    return !m_HierarchyFilter.empty() || EditorSettings::Get().HierarchyTypeFilterMask != 0;
+}
+
 bool EditorLayer::MatchesHierarchyFilter(const World& world, entt::entity entity) const {
     // Phase 5 item 6 — the type-filter chips apply first and independently of the text filter
     // below; a row must satisfy both to show.
