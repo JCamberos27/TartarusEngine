@@ -95,6 +95,7 @@ const std::unordered_map<std::string, std::string>& KnownExtensions() {
         // #132 / #175 - Animator Controllers and gameplay scripts are referenced from scenes too.
         {".controller", "animatorcontroller"},
         {".tescript", "script"},
+        {".physicmaterial", "physicmaterial"}, // #170
     };
     return kExts;
 }
