@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <memory>
+#include <cstdint>
 #include <vector>
 #include <glm/glm.hpp>
 #include <entt/entt.hpp>
@@ -252,6 +253,33 @@ struct CameraComponent {
     float FovDegrees = 60.0f;
     float NearPlane = 0.1f;
     float FarPlane = 1000.0f;
+};
+
+// #177 - a basic Unity-style Particle System: emits camera-facing soft sprites from the entity's
+// origin in a cone around its local +Y, fading/shrinking over their lifetime. Simulated every
+// frame (edit mode too, so you can tune it without pressing Play); drawn after transparent
+// geometry. Everything below `Live` is runtime state, never serialized.
+struct ParticleSystemComponent {
+    bool  Emitting = true;
+    float Rate = 20.0f;           // particles per second
+    int   MaxParticles = 500;
+    float Lifetime = 2.0f;        // seconds
+    float StartSpeed = 3.0f;      // metres per second
+    float Spread = 25.0f;         // cone half-angle around local +Y, degrees (0 = a straight jet)
+    float StartSize = 0.25f;      // metres
+    float EndSize = 0.05f;
+    glm::vec3 StartColor{1.0f, 0.75f, 0.3f};
+    glm::vec3 EndColor{1.0f, 0.2f, 0.05f};
+    float StartAlpha = 1.0f;
+    float EndAlpha = 0.0f;
+    float Intensity = 1.0f;       // HDR brightness multiplier (above 1 feeds Bloom)
+    float GravityModifier = 0.0f; // x project gravity (1 = falls like a rigidbody)
+    int   BlendMode = 1;          // 0 Alpha Blended, 1 Additive
+
+    struct Particle { glm::vec3 Pos{0.0f}, Vel{0.0f}; float Age = 0.0f, Life = 1.0f; };
+    std::vector<Particle> Live;
+    float EmitAccumulator = 0.0f;
+    std::uint32_t Rng = 0x9E3779B9u;
 };
 
 // #165 - the built-in first-person player, as a component. In Play the player spawns at this

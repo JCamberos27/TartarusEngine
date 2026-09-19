@@ -21,6 +21,7 @@
 #include "ShaderVariant.h"
 #include "DefaultTextures.h"
 #include "Frustum.h"
+#include "ParticleRenderer.h"
 #include "gl.h"
 #include "Core/Profiler.h"
 
@@ -476,6 +477,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
         for (Shader* p : appliedPrograms) { p->Bind(); p->SetInt("uAlphaBlend", 0); } // restore for next frame's opaque pass
+    }
+
+    // #177 - particles last: depth-tested against everything above, blended, no depth write.
+    {
+        // Deliberately leaked: a function-local static would run its GL deletes at exit, after
+        // the context is gone. The OS reclaims the handful of GL objects with the process.
+        static ParticleRenderer* particles = new ParticleRenderer();
+        if (particles->Draw(world, ctx) > 0) ++localStats.DrawCalls;
     }
     } // end "Scene Draw" profile scope
     if (outStats) *outStats = localStats;

@@ -21,6 +21,7 @@
 #include "Model.h"
 #include "SceneSerializer.h"
 #include "AnimationSystem.h"
+#include "ParticleSystem.h"
 #include "Grid.h"
 #include "ColliderGizmo.h" // #185 PR 2 — collider wireframe overlay
 #include "Sky.h"
@@ -1331,6 +1332,13 @@ int main(int argc, char** argv) {
                                       << " capsule=" << capHit << (capHit ? "@" + std::to_string(cap.Distance) : std::string())
                                       << " maskNone=" << maskedHit << " overlapBox=" << overlaps << "\n";
                         }
+                        for (auto [pe, ps] : world.Registry.view<const ParticleSystemComponent>().each()) { // #177
+                            glm::vec3 lo(1e9f), hi(-1e9f);
+                            for (const auto& pt : ps.Live) { lo = glm::min(lo, pt.Pos); hi = glm::max(hi, pt.Pos); }
+                            std::cout << "[SmokeTest]   particles " << entt::to_integral(pe) << " live=" << ps.Live.size();
+                            if (!ps.Live.empty()) std::cout << " y=[" << lo.y << ", " << hi.y << "]";
+                            std::cout << "\n";
+                        }
                         std::cout << "[SmokeTest]   -> Stop\n";  togglePlay(); ++smokePlayCycles;
                     }
                 }
@@ -1643,6 +1651,13 @@ int main(int argc, char** argv) {
             // only runs game systems during Play. Rebuilding TartarusGame swaps the module
             // without closing the editor or discarding this World.
             gameModule.Tick(world, gameDt, simThisFrame);
+
+            // #177 - particles run while editing too (real time) so an emitter can be tuned live;
+            // in Play they follow the game clock and freeze while paused.
+            {
+                PROFILE_SCOPE("Particles");
+                UpdateParticleSystems(world, playing ? (simThisFrame ? gameDt : 0.0f) : dt);
+            }
 
             // Animations advance whenever something is showing them: the editor viewport, or the
             // running game.
