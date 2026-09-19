@@ -12,6 +12,7 @@
 
 #include "AnimatorController.h"
 #include "AudioEngine.h"
+#include "InputMap.h"
 #include "AssetDatabase.h"
 #include "AssetGuid.h"
 #include "Components.h"
@@ -102,6 +103,52 @@ void TestDopplerVelocity() {
     CHECK(std::abs(v.x - 10.0f) < 1e-4f && v.y == 0.0f && v.z == 0.0f);
     CHECK(AudioEngine::FrameVelocity(glm::vec3(0.0f), glm::vec3(1.0f), 0.0f) == glm::vec3(0.0f));
     CHECK(AudioEngine::FrameVelocity(glm::vec3(0.0f), glm::vec3(50.0f, 0.0f, 0.0f), 0.1f) == glm::vec3(0.0f));
+}
+
+// #145 - Input Manager actions: keys give full tilt, the stick adds its analog value, Alt keys
+// count like primaries, and the JSON round trip keeps bindings while dropping malformed entries.
+void TestInputMap() {
+    InputMap::Action a;
+    a.Name = "Vertical";
+    a.Positive = 87; a.Negative = 83; a.AltPositive = 265; a.GamepadAxis = 1; a.InvertGamepadAxis = true;
+    std::set<int> down;
+    float stick = 0.0f;
+    InputMap::Source src{
+        [&](int code) { return down.count(code) > 0; },
+        [](int) { return false; },
+        [&](int) { return stick; },
+    };
+    CHECK(InputMap::Evaluate(a, src) == 0.0f);
+    down = {87};
+    CHECK(InputMap::Evaluate(a, src) == 1.0f && InputMap::EvaluateButton(a, src));
+    down = {83};
+    CHECK(InputMap::Evaluate(a, src) == -1.0f && !InputMap::EvaluateButton(a, src));
+    down = {87, 83};
+    CHECK(InputMap::Evaluate(a, src) == 0.0f);
+    down = {265};
+    CHECK(InputMap::Evaluate(a, src) == 1.0f);
+    down.clear();
+    stick = -0.5f; // stick pushed up halfway (GLFW: up is negative), inverted
+    CHECK(std::abs(InputMap::Evaluate(a, src) - 0.5f) < 1e-6f);
+    down = {87};
+    CHECK(InputMap::Evaluate(a, src) == 1.0f); // clamped
+
+    nlohmann::json j = InputMap::ToJson({a});
+    j.push_back({{"name", 5}});                        // wrong type: dropped
+    j.push_back({{"name", "Bad"}, {"positive", "x"}}); // wrong-typed binding: kept, unbound
+    const auto back = InputMap::FromJson(j);
+    CHECK(back.size() == 2);
+    if (back.size() == 2) {
+        CHECK(back[0].Name == "Vertical" && back[0].Positive == 87 && back[0].Negative == 83 &&
+              back[0].AltPositive == 265 && back[0].GamepadAxis == 1 && back[0].InvertGamepadAxis);
+        CHECK(back[1].Name == "Bad" && back[1].Positive == InputMap::kNone);
+    }
+    CHECK(InputMap::FromJson(nlohmann::json::object()).empty());
+    CHECK(InputMap::BindingName(InputMap::kMouseBase + 1) == "Mouse 1" && InputMap::BindingName(87) == "W");
+
+    // Disabled (no game input): everything reads zero, including unknown names (no crash).
+    InputMap::SetEnabled(false);
+    CHECK(InputMap::GetAxis("Horizontal") == 0.0f && !InputMap::GetButton("Jump"));
 }
 
 void TestLodGroup() {
@@ -527,6 +574,7 @@ int RunUnitTests() {
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},
         {"DopplerVelocity", TestDopplerVelocity},
+        {"InputMap", TestInputMap},
         {"ActiveInHierarchy", TestActiveInHierarchy},
         {"CameraRoll", TestCameraRoll},
     };

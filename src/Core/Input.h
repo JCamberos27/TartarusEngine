@@ -37,6 +37,7 @@ public:
     static bool   IsGamepadConnected();
     static bool   IsGamepadButtonDown(int button);
     static bool   IsGamepadButtonPressed(int button); // frame the button went down
+    static bool   IsGamepadButtonReleased(int button); // frame the button went up
     static float  GetGamepadAxis(int axis);
 
 private:

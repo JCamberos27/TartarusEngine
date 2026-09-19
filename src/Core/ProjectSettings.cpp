@@ -1,4 +1,5 @@
 #include "ProjectSettings.h"
+#include "InputMap.h"
 #include "Log.h"
 #include "ProjectPaths.h"
 #include "AtomicFile.h"
@@ -135,6 +136,13 @@ void Load() {
                 if ((*b)[i].is_number()) g_Audio.BusVolume[i] = std::clamp((*b)[i].get<float>(), 0.0f, 1.0f);
     }
 
+    // #145 - Input Manager actions. A missing or empty list means the defaults.
+    {
+        std::vector<InputMap::Action> actions;
+        if (const auto it = root.find("input"); it != root.end()) actions = InputMap::FromJson(*it);
+        InputMap::Actions() = actions.empty() ? InputMap::Defaults() : std::move(actions);
+    }
+
     if (const auto it = root.find("build"); it != root.end() && it->is_object()) { // #174
         const json& b = *it;
         auto str = [&b](const char* key, const std::string& fallback) {
@@ -200,6 +208,7 @@ void Save() {
         {"maximumDeltaTime", g_Time.MaximumDeltaTime},
         {"timeScale", g_Time.TimeScale},
     };
+    root["input"] = InputMap::ToJson(InputMap::Actions()); // #145
     root["audio"] = {
         {"masterVolume", g_Audio.MasterVolume},
         {"busVolumes", std::vector<float>(std::begin(g_Audio.BusVolume), std::end(g_Audio.BusVolume))},
