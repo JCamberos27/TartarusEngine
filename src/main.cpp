@@ -747,6 +747,11 @@ int main(int argc, char** argv) {
             io.IniFilename = nullptr;
         }
         AudioEngine::SetMuted(EditorSettings::Get().AudioMuted); // #236 R2 — restore the View ▸ Mute Audio choice
+        { // #171 - project mixer volumes
+            const ProjectSettings::AudioSettings& au = ProjectSettings::Audio();
+            AudioEngine::SetMasterVolume(au.MasterVolume);
+            for (int b = 0; b < AudioEngine::kBusCount; ++b) AudioEngine::SetBusVolume((AudioEngine::Bus)b, au.BusVolume[b]);
+        }
 
         // One-shot rig dump: OS, CPU, RAM, GPU, driver, display, build. Collected into a block
         // for Preferences > About — no longer spammed line-by-line to the Console (it lives in
@@ -1582,7 +1587,26 @@ int main(int argc, char** argv) {
                 // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
                 // against wherever the player is looking from, updated after the move so the
                 // listener matches the frame that's about to be rendered.
-                AudioEngine::SetListener(gameCam->Position, gameCam->Front(), gameCam->Up());
+                // #171 - or from an Audio Listener entity, when the scene has one.
+                {
+                    entt::entity listener = entt::null;
+                    int bestOrder = 0x7fffffff;
+                    for (auto e : world.Registry.view<const AudioListenerComponent, const TransformComponent>()) {
+                        if (!world.Registry.get<AudioListenerComponent>(e).Enabled || world.Registry.all_of<InactiveTag>(e)) continue;
+                        const auto* ord = world.Registry.try_get<OrderComponent>(e);
+                        const int o = ord ? ord->Value : 0;
+                        if (o < bestOrder) { bestOrder = o; listener = e; }
+                    }
+                    if (listener != entt::null) {
+                        const glm::mat4 lm = world.ComposeWorldTransform(listener);
+                        const glm::vec3 fwd = -glm::vec3(lm[2]), up = glm::vec3(lm[1]);
+                        AudioEngine::SetListener(glm::vec3(lm[3]),
+                                                 glm::length(fwd) > 1e-6f ? glm::normalize(fwd) : glm::vec3(0, 0, -1),
+                                                 glm::length(up) > 1e-6f ? glm::normalize(up) : glm::vec3(0, 1, 0));
+                    } else {
+                        AudioEngine::SetListener(gameCam->Position, gameCam->Front(), gameCam->Up());
+                    }
+                }
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
                 UpdateAnimators(world, gameDt);

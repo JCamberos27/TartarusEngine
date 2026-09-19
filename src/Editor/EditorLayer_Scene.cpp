@@ -729,7 +729,8 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
         if (world.Registry.all_of<InactiveTag>(e)) continue;
         const auto& audio = audioView.get<const AudioSourceComponent>(e);
         if (!audio.PlayOnStart || audio.SoundPath.empty()) continue;
-        AudioEngine::SoundHandle handle = AudioEngine::Play(audio.SoundPath, audio.Volume, audio.Loop);
+        AudioEngine::SoundHandle handle = AudioEngine::Play(audio.SoundPath, audio.Volume, audio.Loop,
+                                                            (AudioEngine::Bus)std::clamp(audio.Output, 0, AudioEngine::kBusCount - 1));
         if (handle == AudioEngine::InvalidHandle) continue;
         glm::vec3 worldPos = glm::vec3(world.GetCachedWorldTransform(e)[3]);
         AudioEngine::SetPosition(handle, worldPos);

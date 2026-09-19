@@ -63,6 +63,15 @@ struct TimeSettings {
 const TimeSettings& Time();
 TimeSettings&       MutableTime();
 
+// #171 - Unity's Audio Mixer, as a fixed set of buses (AudioEngine::Bus order: SFX, Music,
+// Ambient, UI, Voice) plus a master volume. Pushed into AudioEngine by ApplyAudio().
+struct AudioSettings {
+    float MasterVolume = 1.0f;
+    float BusVolume[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+};
+const AudioSettings& Audio();
+AudioSettings&       MutableAudio();
+
 // User-managed tag vocabulary. Additive to the free-text Tag field: the Inspector's Tag
 // dropdown unions this list with whatever tags are actually in use in the open scene, so a tag
 // defined here shows up even before anything wears it. Order is preserved; duplicates and blank
