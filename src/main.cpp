@@ -483,11 +483,12 @@ int main(int argc, char** argv) {
         }
         Player player;
         GravityGun gravityGun;
-        // Default spawn/editor-camera start: in the showcase's central Hub, facing north through
-        // the open doorway toward the Lighting & Materials Gallery.
-        player.Cam.Position = glm::vec3(0.0f, 2.0f, 4.0f);
-        player.Cam.Yaw = -90.0f;  // faces -Z, toward the Gallery doorway
-        player.Cam.Pitch = 5.0f;
+        // Default spawn/editor-camera start: south of the Sandbox's Character Plaza, looking north
+        // over the animated Y Bots with the physics playground (east) and movement course (west)
+        // in view either side.
+        player.Cam.Position = glm::vec3(0.0f, 3.0f, 13.0f);
+        player.Cam.Yaw = -90.0f;  // faces -Z, toward the plaza
+        player.Cam.Pitch = -8.0f;
 
         // Resolved under the project folder (see ProjectPaths.h) rather than the working
         // directory, so the scene being edited lives alongside the source instead of inside
@@ -512,7 +513,7 @@ int main(int argc, char** argv) {
         ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
         AssetDatabase::ScanProject(); // create .meta sidecars for existing assets (#333 PR 1)
         ThumbnailCache::PruneOrphans(); // #133 — drop cached thumbnails of deleted assets
-        std::string scenePath = ProjectPaths::Resolve("scenes/Showcase.json");
+        std::string scenePath = ProjectPaths::Resolve("scenes/Sandbox.json");
         {
             const std::string& last = EditorSettings::Get().LastScenePath;
             std::error_code sceneEc;

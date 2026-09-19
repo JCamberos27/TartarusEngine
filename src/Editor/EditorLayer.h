@@ -971,9 +971,9 @@ private:
     bool CanSnapSelectionToGround(World& world) const;
     void SnapSelectionToGround(World& world);
 
-    // Set in Init() to ProjectPaths::Resolve("scenes/Showcase.json") — the project folder, not the
+    // Set in Init() to ProjectPaths::Resolve("scenes/Sandbox.json") — the project folder, not the
     // working directory. Left as a bare filename here only as a harmless pre-Init default.
-    std::string m_CurrentScenePath = "scenes/Showcase.json";
+    std::string m_CurrentScenePath = "scenes/Sandbox.json";
     bool m_Dirty = false;
     // Count of real-edit (non-SelectionOnly) entries currently on m_UndoStack — NOT the same as
     // m_UndoStack.size() since Phase 6 item 6 / Q6, which also pushes a SelectionOnly entry for
