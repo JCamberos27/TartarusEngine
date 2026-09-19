@@ -12,6 +12,12 @@ vec3 RotateEnv(vec3 d) {
     return vec3(c * d.x + s * d.z, d.y, -s * d.x + c * d.z);
 }
 
+uniform float uRadianceClamp; // #277 — >0: cap the brightest channel (keeps hue); removes an HDRI's sun
+vec3 ClampRadiance(vec3 c) {
+    float m = max(c.r, max(c.g, c.b));
+    return (uRadianceClamp > 0.0 && m > uRadianceClamp) ? c * (uRadianceClamp / m) : c;
+}
+
 const float PI = 3.14159265359;
 const uint kSampleCount = 128u;
 
@@ -73,7 +79,7 @@ void main() {
         float saSample = 1.0 / (float(kSampleCount) * pdf);
         float mip = uRoughness == 0.0 ? 0.0 : 0.5 * log2(saSample / saTexel);
 
-        prefiltered += textureLod(uEnvMap, RotateEnv(L), max(mip, 0.0)).rgb * NdotL;
+        prefiltered += ClampRadiance(textureLod(uEnvMap, RotateEnv(L), max(mip, 0.0)).rgb) * NdotL;
         totalWeight += NdotL;
     }
 
