@@ -365,6 +365,117 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
     return dst;
 }
 
+void EditorLayer::CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut) {
+    if (!dst) {
+        glGenTextures(1, &dst);
+        glBindTexture(GL_TEXTURE_2D, dst);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    }
+    GLint prevRead = 0, prevDraw = 0;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevDraw);
+    if (!m_ThumbnailBlitFbo) glGenFramebuffers(1, &m_ThumbnailBlitFbo);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, m_ThumbnailBlitFbo);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, src, 0);
+    glBindTexture(GL_TEXTURE_2D, dst);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, size, size);
+    if (pixelsOut) {
+        pixelsOut->resize((size_t)size * size * 4);
+        glReadPixels(0, 0, size, size, GL_RGBA, GL_UNSIGNED_BYTE, pixelsOut->data());
+    }
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevRead);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (unsigned int)prevDraw);
+    GLStateCache::Invalidate(); // raw texture binds above
+}
+
+// #107 - see MaterialThumb in EditorLayer.h.
+unsigned int EditorLayer::MaterialThumbnail(const std::shared_ptr<MaterialAsset>& ma) {
+    if (!ma || ma->Missing || ma->Path.empty()) return 0;
+    const std::string& path = ma->Path;
+    const int kSize = 128;
+    const std::uint64_t contentKey = MaterialPreviewRenderer::ContentKey(*ma);
+
+    auto it = m_MaterialThumbs.find(path);
+    if (it != m_MaterialThumbs.end()) {
+        m_MaterialThumbLRU.erase(it->second.Lru);
+        m_MaterialThumbLRU.push_front(path);
+        it->second.Lru = m_MaterialThumbLRU.begin();
+        if (it->second.ContentKey == contentKey || m_ThumbnailBudgetThisFrame <= 0)
+            return it->second.Tex; // current, or stale for a frame until there's budget
+    } else if (m_ThumbnailBudgetThisFrame <= 0) {
+        return 0;
+    }
+    m_ThumbnailBudgetThisFrame--;
+
+    // The persistent cache is keyed by the .mat file and every texture file it uses.
+    std::vector<std::string> deps;
+    const Material& m = ma->Mat;
+    for (const auto* tex : { &m.AlbedoMap, &m.NormalMap, &m.MetallicRoughnessMap, &m.MetallicMap, &m.RoughnessMap,
+                             &m.AOMap, &m.EmissiveMap, &m.ClearCoatMap, &m.ThicknessMap, &m.HeightMap,
+                             &m.DetailAlbedoMap, &m.DetailNormalMap })
+        if (*tex && std::find(deps.begin(), deps.end(), (*tex)->Path()) == deps.end()) deps.push_back((*tex)->Path());
+    for (const auto& [name, prop] : m.ExtraProps)
+        if (prop.Tex && std::find(deps.begin(), deps.end(), prop.Tex->Path()) == deps.end()) deps.push_back(prop.Tex->Path());
+    if (ma->Shader && !ma->ShaderPath.empty()) deps.push_back(ma->ShaderPath);
+    const std::uint64_t diskKey = ThumbnailCache::DependencyKey(path, deps);
+
+    const bool fresh = it == m_MaterialThumbs.end();
+    MaterialThumb entry = fresh ? MaterialThumb{} : it->second;
+    std::vector<unsigned char> pixels;
+    // First sight this session: a cached PNG whose dependencies are unchanged is the same image.
+    if (fresh && ThumbnailCache::Load(path, kSize, diskKey, pixels)) {
+        glGenTextures(1, &entry.Tex);
+        glBindTexture(GL_TEXTURE_2D, entry.Tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kSize, kSize, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        GLStateCache::Invalidate();
+        entry.DiskKey = diskKey;
+    } else {
+        const unsigned int src = m_MaterialThumbPreview.Render(ma, MaterialPreviewRenderer::Shape::Sphere,
+                                                               0.5f, 0.3f, kSize, kSize);
+        if (!src) return entry.Tex;
+        // Persist only when the files changed; a live slider drag re-renders in memory without
+        // rewriting the PNG every frame.
+        const bool persist = diskKey != entry.DiskKey;
+        CopyPreviewTexture(src, entry.Tex, kSize, persist ? &pixels : nullptr);
+        if (persist) {
+            ThumbnailCache::Save(path, kSize, diskKey, pixels.data());
+            entry.DiskKey = diskKey;
+        }
+    }
+    entry.ContentKey = contentKey;
+
+    if (fresh) {
+        m_MaterialThumbLRU.push_front(path);
+        entry.Lru = m_MaterialThumbLRU.begin();
+    }
+    m_MaterialThumbs[path] = entry;
+    if (m_MaterialThumbs.size() > kMaxModelThumbnails) {
+        const std::string evict = m_MaterialThumbLRU.back();
+        m_MaterialThumbLRU.pop_back();
+        auto e = m_MaterialThumbs.find(evict);
+        if (e != m_MaterialThumbs.end()) {
+            if (e->second.Tex) glDeleteTextures(1, &e->second.Tex);
+            m_MaterialThumbs.erase(e);
+        }
+    }
+    return entry.Tex;
+}
+
+void EditorLayer::ClearMaterialThumbnails() {
+    for (auto& [p, t] : m_MaterialThumbs) { (void)p; if (t.Tex) glDeleteTextures(1, &t.Tex); }
+    m_MaterialThumbs.clear();
+    m_MaterialThumbLRU.clear();
+}
+
 void EditorLayer::InvalidateModelThumbnail(const std::string& path) {
     if (path.empty()) { // clear all — a reimport can rebuild any model in place
         for (auto& [p, entry] : m_ModelThumbnails) { (void)p; if (entry.first) glDeleteTextures(1, &entry.first); }
@@ -1346,7 +1457,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
 
             ImDrawList* dl = ImGui::GetWindowDrawList();
             ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
-            unsigned int modelThumb = (cell.kind == Cell::Kind::Model) ? ModelThumbnail(*cell.model) : 0u;
+            unsigned int modelThumb = (cell.kind == Cell::Kind::Model) ? ModelThumbnail(*cell.model)
+                                    : (cell.kind == Cell::Kind::Material) ? MaterialThumbnail(cell.material) : 0u; // #107
             if (cell.texture && (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Screenshot)) {
                 float aspect = cell.texture->Height() > 0 ? (float)cell.texture->Width() / (float)cell.texture->Height() : 1.0f;
                 ImVec2 imgSize = aspect >= 1.0f ? ImVec2(m_AssetIconSize, m_AssetIconSize / aspect) : ImVec2(m_AssetIconSize * aspect, m_AssetIconSize);
@@ -1355,7 +1467,9 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             } else if (modelThumb) {
                 ImVec2 imgSize(m_AssetIconSize, m_AssetIconSize);
                 ImVec2 imgPos(tileMin.x + (cellWidth - imgSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f);
-                dl->AddImage((ImTextureID)(intptr_t)modelThumb, imgPos, ImVec2(imgPos.x + imgSize.x, imgPos.y + imgSize.y));
+                // GL render targets are bottom-up: flip V so the preview is upright.
+                dl->AddImage((ImTextureID)(intptr_t)modelThumb, imgPos, ImVec2(imgPos.x + imgSize.x, imgPos.y + imgSize.y),
+                             ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
             } else if (cell.kind == Cell::Kind::Sound && !SoundWaveform(cell.key).empty()) {
                 // Waveform envelope in the icon square (#236 G), with a small play/stop glyph
                 // bottom-right so it still reads as a clickable sound.
@@ -1421,11 +1535,12 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             // List mode: little icon (real thumbnail for textures, a Font Awesome glyph
             // otherwise) followed by the name, mirroring how the Scene Hierarchy lists rows.
             float rowIconSize = ImGui::GetTextLineHeight();
-            unsigned int rowModelThumb = (cell.kind == Cell::Kind::Model) ? ModelThumbnail(*cell.model) : 0u;
+            unsigned int rowModelThumb = (cell.kind == Cell::Kind::Model) ? ModelThumbnail(*cell.model)
+                                       : (cell.kind == Cell::Kind::Material) ? MaterialThumbnail(cell.material) : 0u; // #107
             if (cell.texture && (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Screenshot)) {
                 ImGui::Image((ImTextureID)(intptr_t)cell.texture->GLHandle(), ImVec2(rowIconSize, rowIconSize));
             } else if (rowModelThumb) {
-                ImGui::Image((ImTextureID)(intptr_t)rowModelThumb, ImVec2(rowIconSize, rowIconSize));
+                ImGui::Image((ImTextureID)(intptr_t)rowModelThumb, ImVec2(rowIconSize, rowIconSize), ImVec2(0, 1), ImVec2(1, 0));
             } else {
                 ImGui::TextUnformatted(icon);
             }

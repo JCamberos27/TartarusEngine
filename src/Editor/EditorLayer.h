@@ -22,6 +22,7 @@
 #include "ImportQueueManager.h"
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
+#include "MaterialPreviewRenderer.h"
 #include "AudioEngine.h" // AudioEngine::SoundHandle - m_PlayModeAudioHandles
 
 struct GLFWwindow;
@@ -1481,6 +1482,24 @@ private:
     // be authored before it's ever assigned to an object. Edits save straight to the .mat file —
     // asset edits aren't part of scene Undo/Redo, same as a rename or a texture re-import.
     void DrawMaterialAssetEditor(World& world, AssetLibrary& assets, const std::string& matPath);
+    void DrawMaterialAssetFields(World& world, AssetLibrary& assets, const std::shared_ptr<MaterialAsset>& ma,
+                                 const std::string& matPath);
+
+    // #107 - Unity's material preview: the material on a sphere (or cube / cylinder / torus /
+    // plane) at the bottom of the Inspector, drag to orbit. Re-rendered only when the material,
+    // shape, view or size changes. Shared by the .mat asset editor and the object's material slots.
+    // slotCount > 1 adds a slot picker (m_MaterialPreviewSlot) for a multi-material object.
+    void DrawMaterialPreview(const std::shared_ptr<MaterialAsset>& ma, int slotCount = 0);
+    int m_MaterialPreviewSlot = 0;
+    std::shared_ptr<MaterialAsset> m_ImportedPreviewMat; // stand-in asset for a slot showing its imported material
+    MaterialPreviewRenderer m_MaterialPreview;
+    MaterialPreviewRenderer::Shape m_MaterialPreviewShape = MaterialPreviewRenderer::Shape::Sphere;
+    float m_MaterialPreviewYaw = 0.5f;
+    float m_MaterialPreviewPitch = 0.3f;
+    bool m_MaterialPreviewDragging = false;
+    bool m_MaterialPreviewOpen = true;
+    std::uint64_t m_MaterialPreviewRenderedKey = 0; // content key + view of what's in the texture
+    unsigned int m_MaterialPreviewTex = 0;
 
     // R/G/B/A channel-isolation toggle on the texture preview above — -1 shows the texture
     // combined/normal. Rendered lazily: m_ChannelPreviewRenderedKey/Channel track what's
@@ -1518,6 +1537,26 @@ private:
     unsigned int m_ThumbnailBlitFbo = 0;
     int m_ThumbnailBudgetThisFrame = 0;
     unsigned int ModelThumbnail(Model& model); // cached GL texture, or 0 while over this frame's budget
+
+    // #107 - Asset Browser material thumbnails: the material on a sphere, from the same
+    // MaterialPreviewRenderer as the Inspector. Each entry remembers the ContentKey it was
+    // rendered from, so any change (Inspector edit, undo, a texture reimport, a .mat edited
+    // outside the editor) re-renders it on the next frame with budget. Persisted through
+    // ThumbnailCache like model thumbnails. Same LRU bound.
+    struct MaterialThumb {
+        unsigned int Tex = 0;
+        std::uint64_t ContentKey = 0;
+        std::uint64_t DiskKey = 0; // ThumbnailCache key the persisted PNG was saved with
+        std::list<std::string>::iterator Lru;
+    };
+    MaterialPreviewRenderer m_MaterialThumbPreview;
+    std::list<std::string> m_MaterialThumbLRU;
+    std::unordered_map<std::string, MaterialThumb> m_MaterialThumbs;
+    unsigned int MaterialThumbnail(const std::shared_ptr<MaterialAsset>& ma); // 0 = none yet (use the glyph)
+    void ClearMaterialThumbnails();
+    // Copies a `size`-square preview render into `dst` (allocated here when 0) through the
+    // thumbnail blit FBO, optionally reading the pixels back for the persistent cache.
+    void CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut);
     void InvalidateModelThumbnail(const std::string& path = ""); // empty = clear all (e.g. a freed Model could be reallocated at the same address)
 
     // Thumbnails for the Asset Browser's "Screenshots" folder — keyed by file path, kept in sync

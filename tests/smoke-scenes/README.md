@@ -21,6 +21,10 @@ asset library (#81).
 - `smoke_play_parented` — a rigidbody under a rotated, offset parent plus a rotated static ramp;
   runs Play -> Stop twice and the harness prints each simulated body's world position (#114/#115).
 - `smoke_min` also checks the exact triangle raycast used by editor picking (#116).
+- `smoke_materials` also renders each of its materials, plus a chrome, a red plastic and a
+  see-through one, through the Inspector's material preview (#107): each must differ from the
+  backdrop and be lit from above, and the preview's change key must follow edits. The PNGs are
+  written to `%TEMP%/TartarusSmokeMaterialPreview/` for a visual check.
 
 `../smoke-scenes-invalid/` holds deliberately broken fixtures that are **not** staged next to
 the exe; run them explicitly to confirm the harness reports failure and exits nonzero:
