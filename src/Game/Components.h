@@ -162,6 +162,13 @@ struct AudioSourceComponent {
     // press Play unless you opt in.
     bool PlayOnStart = false;
     int Output = 0; // #171 - mixer bus (AudioEngine::Bus): 0 SFX, 1 Music, 2 Ambient, 3 UI, 4 Voice
+    // #171 - Unity's 3D Sound Settings. Spatial = heard from this entity's position (panned and
+    // attenuated); off = plain 2D, same volume everywhere (music, UI). Rolloff: 0 Logarithmic
+    // (Unity's default, inverse-distance), 1 Linear (silent at Max Distance).
+    bool  Spatial = true;
+    int   Rolloff = 0;
+    float MinDistance = 1.0f;
+    float MaxDistance = 500.0f;
 };
 
 // #171 - Unity's Audio Listener: in Play, 3D sounds are heard from this entity (position and

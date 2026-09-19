@@ -453,11 +453,23 @@ void RegisterEngineComponents() {
             { "Output", T::Enum, TARTARUS_REFLECT_FIELD(AudioSourceComponent, Output), 0.0f,
               "Mixer bus this source plays through. Each bus has its own volume in\n"
               "Project Settings > Audio (on top of the Master volume)." },
+            { "3D Sound", T::Bool, TARTARUS_REFLECT_FIELD(AudioSourceComponent, Spatial), 0.0f,
+              "On: heard from this object's position - panned left/right and quieter with distance.\n"
+              "Off: plain 2D, the same everywhere (music, UI sounds)." },
+            { "Volume Rolloff", T::Enum, TARTARUS_REFLECT_FIELD(AudioSourceComponent, Rolloff), 0.0f,
+              "How volume falls off with distance.\nLogarithmic: realistic, loud up close, long quiet tail.\n"
+              "Linear: fades evenly and is silent at Max Distance." },
+            { "Min Distance", T::Float, TARTARUS_REFLECT_FIELD(AudioSourceComponent, MinDistance), 0.05f,
+              "Within this many metres the sound plays at full volume.", 0.01f, 10000.0f },
+            { "Max Distance", T::Float, TARTARUS_REFLECT_FIELD(AudioSourceComponent, MaxDistance), 0.5f,
+              "Beyond this the volume stops dropping (Logarithmic) or is silent (Linear).", 0.02f, 10000.0f },
         };
         m.Fields[0].AssetKind = ReflectAssetKind::Sound;
         m.Fields[1].Slider = true; m.Fields[1].Format = "%.2f";
         m.Fields[4].EnumLabels = "SFX\0Music\0Ambient\0UI\0Voice\0"; // #171 - AudioEngine::Bus order
         m.Fields[4].EnumCount = 5;
+        m.Fields[6].EnumLabels = "Logarithmic\0Linear\0";
+        m.Fields[6].EnumCount = 2;
         Register<AudioSourceComponent>(std::move(m));
     }
 
