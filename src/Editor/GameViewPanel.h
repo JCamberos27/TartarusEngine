@@ -13,6 +13,11 @@ struct GameViewStats {
     int DrawCalls = 0;
     int Triangles = 0;
     int Vertices = 0;
+    // Where the frame was rendered from — so a screenshot says exactly where the camera was and
+    // what it was looking at (yaw/pitch in degrees, same convention as Camera: yaw -90 = -Z).
+    float CamPos[3] = {0.0f, 0.0f, 0.0f};
+    float CamYaw = 0.0f;
+    float CamPitch = 0.0f;
 };
 
 // Unity-style Game View: a dockable panel showing the scene rendered at a locked aspect

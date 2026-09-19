@@ -2462,6 +2462,13 @@ int main(int argc, char** argv) {
                 gameViewStats.DrawCalls = gvRenderStats.DrawCalls;
                 gameViewStats.Triangles = gvRenderStats.Triangles;
                 gameViewStats.Vertices = gvRenderStats.Vertices;
+                {
+                    // Camera readout for the overlay: position + yaw/pitch of the view actually rendered.
+                    const glm::vec3 f = -glm::vec3(glm::inverse(gvView)[2]);
+                    gameViewStats.CamPos[0] = gvEye.x; gameViewStats.CamPos[1] = gvEye.y; gameViewStats.CamPos[2] = gvEye.z;
+                    gameViewStats.CamYaw = glm::degrees(std::atan2(f.z, f.x));
+                    gameViewStats.CamPitch = glm::degrees(std::asin(glm::clamp(f.y, -1.0f, 1.0f)));
+                }
             }
             // Drawn only while the editor UI is up — maximized play has no docked panels (see
             // editor.Draw() above), and its FBO pass already rendered this frame's real output.
