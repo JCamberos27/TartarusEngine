@@ -1482,6 +1482,197 @@ int OverlapSphere(const float center[3], float radius, unsigned* out, int maxEnt
 }
 
 // ==================================================================================
+// #170 — filtered queries: layer mask + trigger interaction, RaycastAll, box / capsule shapes
+// ==================================================================================
+
+namespace {
+
+// Rejects the Player capsule, trigger shapes (unless asked for) and shapes whose layer bit
+// (simulation filter word0, stamped at build time) isn't in the mask. `touchMode` turns every
+// accepted hit into a touch, for the "all hits" queries.
+struct LayerQueryFilter : PxQueryFilterCallback {
+    const PxRigidActor* skip = nullptr;
+    PxU32 mask = 0xFFFFFFFFu;
+    bool triggers = true;
+    bool touchMode = false;
+    PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor,
+                                   PxHitFlags&) override {
+        if (actor && actor == skip) return PxQueryHitType::eNONE;
+        if (shape) {
+            if (!triggers && (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
+            const PxU32 layerBit = shape->getSimulationFilterData().word0;
+            if (layerBit && !(layerBit & mask)) return PxQueryHitType::eNONE;
+        }
+        return touchMode ? PxQueryHitType::eTOUCH : PxQueryHitType::eBLOCK;
+    }
+    PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*,
+                                    const PxRigidActor*) override {
+        return touchMode ? PxQueryHitType::eTOUCH : PxQueryHitType::eBLOCK;
+    }
+};
+
+LayerQueryFilter MakeFilter(const QueryFilter& f, bool touchMode = false) {
+    LayerQueryFilter lf;
+    lf.skip = PlayerActor();
+    lf.mask = f.LayerMask;
+    lf.triggers = f.HitTriggers != 0;
+    lf.touchMode = touchMode;
+    return lf;
+}
+
+bool NormalizedDir(const float dir[3], PxVec3& out) {
+    out = PxVec3(dir[0], dir[1], dir[2]);
+    const float len = out.magnitude();
+    if (len < 1e-8f) return false;
+    out *= 1.0f / len;
+    return true;
+}
+
+PxQuat ToQuat(const float rotation[4]) {
+    if (!rotation) return PxQuat(PxIdentity);
+    PxQuat q(rotation[0], rotation[1], rotation[2], rotation[3]);
+    return q.magnitudeSquared() > 1e-12f ? q.getNormalized() : PxQuat(PxIdentity);
+}
+
+template <typename HitT>
+void FillHit(const HitT& b, RaycastHit& outHit) {
+    outHit.Hit = true;
+    outHit.Distance = b.distance;
+    outHit.Point[0]  = b.position.x; outHit.Point[1]  = b.position.y; outHit.Point[2]  = b.position.z;
+    outHit.Normal[0] = b.normal.x;   outHit.Normal[1] = b.normal.y;   outHit.Normal[2] = b.normal.z;
+    outHit.Entity = b.actor ? UserDataToEntity(b.actor->userData) : outHit.Entity;
+}
+
+bool SweepFiltered(const PxGeometry& geom, const PxTransform& pose, const float dir[3], float maxDistance,
+                   const QueryFilter& f, RaycastHit& outHit) {
+    outHit = RaycastHit{};
+    PxVec3 d;
+    if (!g_State || !g_State->scene || maxDistance <= 0.0f || !NormalizedDir(dir, d)) return false;
+    LayerQueryFilter lf = MakeFilter(f);
+    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER);
+    PxSweepBuffer buf;
+    if (!g_State->scene->sweep(geom, pose, d, maxDistance, buf, PxHitFlag::eDEFAULT, fd, &lf) || !buf.hasBlock)
+        return false;
+    FillHit(buf.block, outHit);
+    return true;
+}
+
+int OverlapFiltered(const PxGeometry& geom, const PxTransform& pose, const QueryFilter& f,
+                    unsigned* out, int maxEntities) {
+    if (!g_State || !g_State->scene) return 0;
+    PxOverlapHit hits[256];
+    PxOverlapBuffer buf(hits, 256);
+    LayerQueryFilter lf = MakeFilter(f, /*touchMode=*/true);
+    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER |
+                         PxQueryFlag::eNO_BLOCK);
+    if (!g_State->scene->overlap(geom, pose, buf, fd, &lf)) return 0;
+    int count = 0;
+    std::vector<unsigned> seen;
+    for (PxU32 i = 0; i < buf.getNbTouches(); ++i) {
+        const PxOverlapHit& h = buf.getTouch(i);
+        if (!h.actor) continue;
+        const unsigned id = UserDataToEntity(h.actor->userData);
+        if (std::find(seen.begin(), seen.end(), id) != seen.end()) continue; // one entry per entity
+        seen.push_back(id);
+        if (out && count < maxEntities) out[count] = id;
+        ++count;
+    }
+    return count;
+}
+
+} // namespace
+
+bool RaycastFiltered(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f,
+                     RaycastHit& outHit) {
+    outHit = RaycastHit{};
+    PxVec3 d;
+    if (!g_State || !g_State->scene || maxDistance <= 0.0f || !NormalizedDir(dir, d)) return false;
+    LayerQueryFilter lf = MakeFilter(f);
+    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER);
+    PxRaycastBuffer buf;
+    const PxVec3 o(origin[0], origin[1], origin[2]);
+    QueryRecord qr; qr.kind = 0; qr.origin = o; qr.dir = d; qr.dist = maxDistance;
+    if (!g_State->scene->raycast(o, d, maxDistance, buf, PxHitFlag::eDEFAULT, fd, &lf) || !buf.hasBlock) {
+        RecordQuery(qr);
+        return false;
+    }
+    FillHit(buf.block, outHit);
+    qr.hit = true; qr.dist = buf.block.distance; qr.hitPoint = buf.block.position; qr.hitNormal = buf.block.normal;
+    RecordQuery(qr);
+    return true;
+}
+
+int RaycastAll(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f,
+               RaycastHit* out, int maxHits) {
+    PxVec3 d;
+    if (!g_State || !g_State->scene || maxDistance <= 0.0f || !NormalizedDir(dir, d)) return 0;
+    PxRaycastHit hits[256];
+    PxRaycastBuffer buf(hits, 256);
+    LayerQueryFilter lf = MakeFilter(f, /*touchMode=*/true);
+    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER |
+                         PxQueryFlag::eNO_BLOCK);
+    g_State->scene->raycast(PxVec3(origin[0], origin[1], origin[2]), d, maxDistance, buf,
+                            PxHitFlag::eDEFAULT, fd, &lf);
+    const PxU32 n = buf.getNbTouches();
+    std::vector<const PxRaycastHit*> sorted;
+    sorted.reserve(n);
+    for (PxU32 i = 0; i < n; ++i) sorted.push_back(&buf.getTouch(i));
+    std::sort(sorted.begin(), sorted.end(), [](const PxRaycastHit* a, const PxRaycastHit* b) { return a->distance < b->distance; });
+    for (int i = 0; out && i < (int)sorted.size() && i < maxHits; ++i) {
+        out[i] = RaycastHit{};
+        FillHit(*sorted[(size_t)i], out[i]);
+    }
+    return (int)n;
+}
+
+bool SphereCastFiltered(const float origin[3], const float dir[3], float radius, float maxDistance,
+                        const QueryFilter& f, RaycastHit& outHit) {
+    outHit = RaycastHit{};
+    if (radius <= 0.0f) return false;
+    return SweepFiltered(PxSphereGeometry(radius), PxTransform(PxVec3(origin[0], origin[1], origin[2])),
+                         dir, maxDistance, f, outHit);
+}
+
+bool BoxCast(const float center[3], const float halfExtents[3], const float rotation[4], const float dir[3],
+             float maxDistance, const QueryFilter& f, RaycastHit& outHit) {
+    outHit = RaycastHit{};
+    const PxVec3 he(std::max(halfExtents[0], 1e-4f), std::max(halfExtents[1], 1e-4f), std::max(halfExtents[2], 1e-4f));
+    return SweepFiltered(PxBoxGeometry(he), PxTransform(PxVec3(center[0], center[1], center[2]), ToQuat(rotation)),
+                         dir, maxDistance, f, outHit);
+}
+
+bool CapsuleCast(const float point1[3], const float point2[3], float radius, const float dir[3],
+                 float maxDistance, const QueryFilter& f, RaycastHit& outHit) {
+    outHit = RaycastHit{};
+    if (radius <= 0.0f) return false;
+    const PxVec3 a(point1[0], point1[1], point1[2]), b(point2[0], point2[1], point2[2]);
+    PxVec3 axis = b - a;
+    const float len = axis.magnitude();
+    if (len < 1e-5f) return SphereCastFiltered(point1, dir, radius, maxDistance, f, outHit); // degenerate
+    axis *= 1.0f / len;
+    // PhysX capsules lie along local +X: rotate X onto the segment.
+    const PxVec3 x(1.0f, 0.0f, 0.0f);
+    const PxVec3 c = x.cross(axis);
+    const float w = 1.0f + x.dot(axis);
+    PxQuat q = w < 1e-6f ? PxQuat(PxPi, PxVec3(0.0f, 1.0f, 0.0f)) : PxQuat(c.x, c.y, c.z, w).getNormalized();
+    return SweepFiltered(PxCapsuleGeometry(radius, len * 0.5f), PxTransform((a + b) * 0.5f, q),
+                         dir, maxDistance, f, outHit);
+}
+
+int OverlapSphereFiltered(const float center[3], float radius, const QueryFilter& f, unsigned* out, int maxEntities) {
+    if (radius <= 0.0f) return 0;
+    return OverlapFiltered(PxSphereGeometry(radius), PxTransform(PxVec3(center[0], center[1], center[2])),
+                           f, out, maxEntities);
+}
+
+int OverlapBox(const float center[3], const float halfExtents[3], const float rotation[4], const QueryFilter& f,
+               unsigned* out, int maxEntities) {
+    const PxVec3 he(std::max(halfExtents[0], 1e-4f), std::max(halfExtents[1], 1e-4f), std::max(halfExtents[2], 1e-4f));
+    return OverlapFiltered(PxBoxGeometry(he), PxTransform(PxVec3(center[0], center[1], center[2]), ToQuat(rotation)),
+                           f, out, maxEntities);
+}
+
+// ==================================================================================
 // #185 debug tooling — a small, general-use visual debugger
 // ==================================================================================
 
