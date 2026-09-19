@@ -33,8 +33,8 @@ public:
     // exist or can't be decoded.
     static bool Load(const std::string& path);
     // Frees one path's preloaded PCM data (or all of them). Safe to call while a Play()'d
-    // instance of that sound is still audible — each Play() takes its own private copy of the
-    // decoded data up front, so an in-flight voice never depends on the cache after it starts.
+    // instance of that sound is still audible — voices share the decoded data by reference
+    // (#171), so the PCM lives until the last voice playing it is reaped.
     static bool Unload(const std::string& path);
     static void UnloadAll();
 
@@ -62,6 +62,12 @@ public:
                             const glm::vec3& up = glm::vec3(0.0f, 1.0f, 0.0f));
 
     static void StopAll();
+
+    // Editor Pause / Error Pause (#171): stops every audible voice in place and resumes them
+    // from the same position on SetPaused(false). Paused voices aren't reaped by Update(). The
+    // Asset Browser preview is unaffected. Idempotent, so it can be driven every frame.
+    static void SetPaused(bool paused);
+    static bool IsPaused();
 
     // Master mute — silences the whole engine output without stopping any voice (they keep
     // their playback position, so unmuting resumes mid-clip). Used by the editor's
