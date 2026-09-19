@@ -70,6 +70,19 @@ public:
     static void SetRolloff(SoundHandle handle, Rolloff mode, float minDistance, float maxDistance);
     // Turns positional audio off (2D: no panning, no distance falloff) or back on.
     static void SetSpatial(SoundHandle handle, bool spatial);
+    // #171 - Doppler. Unity's Doppler Level (0 = off, 1 = physical): scales the pitch shift from
+    // the voice's and the listener's velocities (metres per second, set every frame by the caller).
+    static void SetDopplerLevel(SoundHandle handle, float level);
+    static void SetVelocity(SoundHandle handle, const glm::vec3& velocity);
+    static void SetListenerVelocity(const glm::vec3& velocity);
+    // Velocity from two frame positions: zero on the first frame (dt <= 0) and for anything faster
+    // than kMaxDopplerSpeed, which is a teleport, not motion, and would otherwise shriek.
+    static constexpr float kMaxDopplerSpeed = 100.0f;
+    static glm::vec3 FrameVelocity(const glm::vec3& prev, const glm::vec3& cur, float dt) {
+        if (dt <= 1e-6f) return glm::vec3(0.0f);
+        const glm::vec3 v = (cur - prev) / dt;
+        return glm::dot(v, v) > kMaxDopplerSpeed * kMaxDopplerSpeed ? glm::vec3(0.0f) : v;
+    }
 
     // Drives the 3D listener. Called once per frame from the Play-mode camera; while not
     // playing, the listener simply stays wherever it was last put.

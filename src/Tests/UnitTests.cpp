@@ -11,6 +11,7 @@
 #include "UnitTests.h"
 
 #include "AnimatorController.h"
+#include "AudioEngine.h"
 #include "AssetDatabase.h"
 #include "AssetGuid.h"
 #include "Components.h"
@@ -94,6 +95,15 @@ void TestCameraRoll() {
 }
 
 // --- LOD Group (#163) ---------------------------------------------------------------------
+// #171 - Doppler velocities: metres per second between frames, zero when there's no previous
+// frame and for teleports.
+void TestDopplerVelocity() {
+    const glm::vec3 v = AudioEngine::FrameVelocity(glm::vec3(0.0f), glm::vec3(1.0f, 0.0f, 0.0f), 0.1f);
+    CHECK(std::abs(v.x - 10.0f) < 1e-4f && v.y == 0.0f && v.z == 0.0f);
+    CHECK(AudioEngine::FrameVelocity(glm::vec3(0.0f), glm::vec3(1.0f), 0.0f) == glm::vec3(0.0f));
+    CHECK(AudioEngine::FrameVelocity(glm::vec3(0.0f), glm::vec3(50.0f, 0.0f, 0.0f), 0.1f) == glm::vec3(0.0f));
+}
+
 void TestLodGroup() {
     World world;
     const glm::vec3 zero(0.0f), one(1.0f);
@@ -516,6 +526,7 @@ int RunUnitTests() {
         {"AssetIdentity", TestAssetIdentity},
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},
+        {"DopplerVelocity", TestDopplerVelocity},
         {"ActiveInHierarchy", TestActiveInHierarchy},
         {"CameraRoll", TestCameraRoll},
     };
