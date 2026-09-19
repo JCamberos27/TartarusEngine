@@ -40,6 +40,13 @@ struct OrderComponent {
 struct RenderableComponent {
     std::shared_ptr<Model> ModelRef;
     std::vector<std::shared_ptr<MaterialAsset>> Materials;
+
+    // #163 - Unity's Mesh Renderer lighting flags. Values are serialized by index.
+    // On: casts from the light-facing side. TwoSided: both sides (thin/open meshes like planes and
+    // leaves that otherwise leak light). ShadowsOnly: invisible, but still casts.
+    enum class ShadowCasting { Off = 0, On = 1, TwoSided = 2, ShadowsOnly = 3 };
+    ShadowCasting CastShadows = ShadowCasting::On;
+    bool ReceiveShadows = true;
 };
 
 // Holds the mesh that was on a RenderableComponent when the user removed "Mesh Renderer" from

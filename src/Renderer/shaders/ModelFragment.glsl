@@ -414,8 +414,11 @@ float SampleCascade(int c, vec2 uv, float ref, float radiusTexels, float rot) {
 // Sun visibility at this fragment from the cascaded shadow maps: 1 = lit, 0 = fully shadowed.
 // Soft Poisson PCF whose radius comes from the sun's angular size, plus a smooth blend across
 // the cascade seam so there's no hard step where the resolution changes.
+// #163 - the object's Mesh Renderer has Receive Shadows off (0 = default, receives).
+uniform int uNoReceiveShadows;
+
 float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
-    if (uShadowEnabled == 0) return 1.0;
+    if (uShadowEnabled == 0 || uNoReceiveShadows == 1) return 1.0;
 
     float viewDepth = abs((uView * vec4(worldPos, 1.0)).z);
     int c = uShadowCascadeCount - 1;
@@ -472,7 +475,7 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
 // distance-to-light / far, so the compare reference is distance(fragment, light) / far and a
 // constant bias is uniform in world space — the shadow reaches the whole light Range. 4-tap PCF.
 float SpotShadow(int slot, vec3 worldPos, vec3 N) {
-    if (slot < 0 || slot >= uSpotShadowCount) return 1.0;
+    if (slot < 0 || slot >= uSpotShadowCount || uNoReceiveShadows == 1) return 1.0;
     // The depth pass stores the light-facing surface (back-face cull), so a caster's own lit side
     // CAN self-shadow — the bias below has to cover one shadow-texel of slope error, but no more,
     // or the contact shadow peter-panning returns.
@@ -509,7 +512,7 @@ float SpotShadow(int slot, vec3 worldPos, vec3 N) {
 // Visibility from a point light's depth cube. 1 = lit, 0 = shadowed. Cube stores linear
 // distance / far, so this is a direct distance compare — no dominant-axis NDC reconstruction.
 float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N) {
-    if (slot < 0 || slot >= uPointShadowCount) return 1.0;
+    if (slot < 0 || slot >= uPointShadowCount || uNoReceiveShadows == 1) return 1.0;
     float far = max(uPointShadowFar[slot], 1e-3);
     // Same as SpotShadow: the cube pass stores the light-facing surface (back-face cull), so the
     // bias covers ~one shadow texel of slope error and nothing more.
