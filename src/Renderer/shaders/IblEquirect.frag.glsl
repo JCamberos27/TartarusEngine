@@ -14,5 +14,6 @@ void main() {
     vec3 dir = normalize(FaceDirection(vUV));
     vec2 uv  = vec2(atan(dir.z, dir.x), asin(clamp(dir.y, -1.0, 1.0)));
     uv = uv * kInvAtan + 0.5;
-    FragColor = vec4(texture(uEquirect, uv).rgb * uExposure, 1.0);
+    // Clamped: the target cubemap is RGB16F, and exposure can push a clamped sun back past 65504.
+    FragColor = vec4(min(texture(uEquirect, uv).rgb * uExposure, vec3(65000.0)), 1.0);
 }
