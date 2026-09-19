@@ -92,11 +92,17 @@ void Load() {
         g_Physics.FixedTimestep      = std::clamp(num("fixedTimestep", g_Physics.FixedTimestep), 0.001f, 0.1f);
         g_Physics.SolverIterations   = std::clamp(num("solverIterations", g_Physics.SolverIterations), 1, 64);
         g_Physics.PlayerPushStrength = std::clamp(num("playerPushStrength", g_Physics.PlayerPushStrength), 0.0f, 50.0f);
-        g_Physics.PlayerLayer        = std::clamp(num("playerLayer", g_Physics.PlayerLayer), 0, 7);
+        g_Physics.PlayerLayer        = std::clamp(num("playerLayer", g_Physics.PlayerLayer), 0, LayerRegistry::kCount - 1);
         if (const auto m = p.find("layerCollision"); m != p.end() && m->is_array()) { // #185 PR 8
-            for (int i = 0; i < 8 && i < (int)m->size(); ++i)
-                if ((*m)[i].is_number_unsigned() || (*m)[i].is_number_integer())
-                    g_Physics.LayerCollisionMask[i] = (*m)[i].get<unsigned>() & 0xFFu;
+            // #150: a file from the 8-layer era stores 8-bit rows; the layers it never knew about
+            // (8..31) collide with everything, as new layers do by default.
+            const bool legacy8 = m->size() <= 8;
+            for (int i = 0; i < LayerRegistry::kCount && i < (int)m->size(); ++i)
+                if ((*m)[i].is_number_unsigned() || (*m)[i].is_number_integer()) {
+                    unsigned row = (*m)[i].get<unsigned>();
+                    if (legacy8) row = (row & 0xFFu) | 0xFFFFFF00u;
+                    g_Physics.LayerCollisionMask[i] = row;
+                }
         }
     }
 
@@ -128,10 +134,7 @@ void Save() {
         {"solverIterations", g_Physics.SolverIterations},
         {"playerPushStrength", g_Physics.PlayerPushStrength},
         {"playerLayer", g_Physics.PlayerLayer},
-        {"layerCollision", json::array({g_Physics.LayerCollisionMask[0], g_Physics.LayerCollisionMask[1],
-                                        g_Physics.LayerCollisionMask[2], g_Physics.LayerCollisionMask[3],
-                                        g_Physics.LayerCollisionMask[4], g_Physics.LayerCollisionMask[5],
-                                        g_Physics.LayerCollisionMask[6], g_Physics.LayerCollisionMask[7]})},
+        {"layerCollision", std::vector<unsigned>(std::begin(g_Physics.LayerCollisionMask), std::end(g_Physics.LayerCollisionMask))},
     };
     root["time"] = {
         {"maximumDeltaTime", g_Time.MaximumDeltaTime},

@@ -1,3 +1,4 @@
+#include "LayerRegistry.h"
 #include "SceneSerializer.h"
 #include "AtomicFile.h"
 #include "World.h"
@@ -470,7 +471,7 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
     if (j.contains("tag")) world.Registry.emplace_or_replace<TagComponent>(entity, j["tag"].get<std::string>());
     if (!j.value("active", true)) world.Registry.emplace_or_replace<InactiveTag>(entity);
     if (j.value("static", false)) world.Registry.emplace_or_replace<StaticTag>(entity);
-    if (const int layer = j.value("layer", 0); layer != 0)
+    if (const int layer = j.value("layer", 0); layer > 0 && layer < LayerRegistry::kCount) // #150: range-checked
         world.Registry.emplace_or_replace<LayerComponent>(entity, LayerComponent{layer});
     if (j.value("sceneHidden", false)) world.Registry.emplace_or_replace<HiddenInSceneTag>(entity); // #236 B
     if (j.value("sceneLocked", false)) world.Registry.emplace_or_replace<SceneLockedTag>(entity);
@@ -1253,7 +1254,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             if (!s.value("active", true)) world.Registry.emplace_or_replace<InactiveTag>(rootE);
             else                          world.Registry.remove<InactiveTag>(rootE);
             if (s.value("static", false)) world.Registry.emplace_or_replace<StaticTag>(rootE);
-            if (const int layer = s.value("layer", 0); layer != 0)
+            if (const int layer = s.value("layer", 0); layer > 0 && layer < LayerRegistry::kCount)
                 world.Registry.emplace_or_replace<LayerComponent>(rootE, LayerComponent{layer});
             if (s.contains("tag"))
                 world.Registry.emplace_or_replace<TagComponent>(rootE, s["tag"].get<std::string>());
