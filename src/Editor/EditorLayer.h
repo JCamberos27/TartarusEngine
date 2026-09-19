@@ -1191,6 +1191,13 @@ private:
         // flag (see m_ContentDepth) count only real edits, so merely clicking around the scene
         // never marks it as needing a save.
         bool SelectionOnly = false;
+        // #107 — a .mat asset edit. The scene is unchanged; popping this entry writes AssetJson
+        // (the file's contents at that point in history) back to AssetPath and reloads the
+        // material. Like SelectionOnly, it doesn't count toward the scene's dirty flag — the
+        // .mat file is already saved.
+        std::string AssetPath;
+        std::string AssetJson;
+        bool CountsAsSceneEdit() const { return !SelectionOnly && AssetPath.empty(); }
     };
     std::vector<UndoEntry> m_UndoStack;
     std::vector<UndoEntry> m_RedoStack;
@@ -1227,6 +1234,13 @@ private:
     // non-null, is stored as the entry's SelectedOrders instead of the live selection — needed for
     // that same selection-only push, since by the time it's called the live selection is already
     // the NEW one, not the pre-change snapshot every UndoEntry is supposed to hold.
+    // #107 — records a .mat asset edit: `before` is the file's contents before the save that
+    // just happened. Undo/Redo swap the file back and reload the material in place.
+    void PushAssetUndo(const World& world, const std::string& matPath, std::string before, const std::string& label);
+    // Writes `json` to the .mat at `path` and reloads the library's MaterialAsset in place, so
+    // every renderer sharing it updates.
+    void RestoreMaterialFile(AssetLibrary& assets, const std::string& path, const std::string& json);
+    static std::string ReadTextFile(const std::string& path); // whole file, binary-exact; "" if unreadable
     void PushUndo(const World& world, const std::string& label = "Edit", bool selectionOnly = false,
                   const std::vector<int>* selectedOrdersOverride = nullptr);
     void Undo(World& world, AssetLibrary& assets);
