@@ -30,3 +30,10 @@ project/assets/characters/
 # HDRI skies (Poly Haven, CC0) used by the Sandbox scene - too big for git; download into
 # project/assets/sky/ (see project/scenes/Sandbox.json skyHdriPath).
 project/assets/sky/
+
+# Editor screenshots (#153): captures land in project/screenshots/ so the Asset Browser's
+# Screenshots folder can show them, but they're per-user output, not project content. The
+# folder itself (and its shutter sound) stays tracked.
+project/screenshots/*
+!project/screenshots/.shutter.wav
+!project/screenshots/.shutter.wav.meta
