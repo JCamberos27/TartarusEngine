@@ -41,7 +41,16 @@ public:
     // Starts a voice and returns its handle (InvalidHandle if the engine is down or the file
     // failed to load). Voices start unspatialized — full volume regardless of listener position,
     // which is what UI/one-shot sounds want. Call SetPosition() to turn a voice into a 3D source.
-    static SoundHandle Play(const std::string& path, float volume = 1.0f, bool loop = false);
+    // #171 - mixer buses (Unity's Audio Mixer groups, fixed set). Every voice plays through one;
+    // its volume scales everything on that bus. Values are serialized by index.
+    enum class Bus { SFX = 0, Music = 1, Ambient = 2, UI = 3, Voice = 4 };
+    static constexpr int kBusCount = 5;
+    static void SetBusVolume(Bus bus, float volume);  // 0..1
+    static float BusVolume(Bus bus);
+    static void SetMasterVolume(float volume);        // 0..1, applied on top of every bus
+    static float MasterVolume();
+
+    static SoundHandle Play(const std::string& path, float volume = 1.0f, bool loop = false, Bus bus = Bus::SFX);
 
     // All no-ops / false for a stale or invalid handle.
     static void Stop(SoundHandle handle);

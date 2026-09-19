@@ -290,11 +290,28 @@ void RegisterEngineComponents() {
               "Restart the clip automatically when it finishes." },
             { "Play On Start", T::Bool, TARTARUS_REFLECT_FIELD(AudioSourceComponent, PlayOnStart), 0.0f,
               "Plays this clip automatically the instant Play mode is entered." },
+            { "Output", T::Enum, TARTARUS_REFLECT_FIELD(AudioSourceComponent, Output), 0.0f,
+              "Mixer bus this source plays through. Each bus has its own volume in\n"
+              "Project Settings > Audio (on top of the Master volume)." },
         };
         m.Fields[0].AssetKind = ReflectAssetKind::Sound;
         m.Fields[1].Slider = true; m.Fields[1].Format = "%.2f";
+        m.Fields[4].EnumLabels = "SFX\0Music\0Ambient\0UI\0Voice\0"; // #171 - AudioEngine::Bus order
+        m.Fields[4].EnumCount = 5;
         Register<AudioSourceComponent>(std::move(m));
     }
+
+    // #171 - Unity's Audio Listener.
+    Register<AudioListenerComponent>({
+        "Audio Listener", ICON_FA_HEADPHONES,
+        "In Play, 3D sounds are heard from this object (its position and facing) instead of from "
+        "the game camera - e.g. put it on the player's head in a third-person game.",
+        "Audio",
+        {
+            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(AudioListenerComponent, Enabled), 0.0f,
+              "When off, the game camera is the listener again." },
+        },
+    });
 
     // #185 PR 4 — Rigidbody. Plain reflected fields; the shape comes from the sibling
     // ColliderComponent (hand-written, PR 2) and PhysicsWorld reads both on Play-enter.
