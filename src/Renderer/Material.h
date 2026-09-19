@@ -87,6 +87,10 @@ struct Material {
     bool  NormalFlipY    = false;      // DirectX-style normal map (green channel points down)
     bool  DoubleSided    = false;      // no back-face culling; back faces lit with a flipped normal
     bool  UseVertexColor = false;      // albedo (and alpha) x the mesh's vertex colour
+    // Unity Standard's Forward Rendering Options: off = no highlight from lights / no sky or probe
+    // reflection, for a fully matte surface whatever the roughness.
+    bool  SpecularHighlights = true;
+    bool  GlossyReflections  = true;
     std::shared_ptr<Texture> HeightMap;   // parallax occlusion mapping (white = high)
     float ParallaxScale  = 0.02f;
     std::shared_ptr<Texture> DetailAlbedoMap; // x2 detail: 50% grey leaves the colour unchanged
@@ -131,7 +135,9 @@ struct Material {
                                   | (AlphaClip ? 8u : 0u)
                                   | (NormalFlipY ? 16u : 0u)
                                   | (DoubleSided ? 32u : 0u)
-                                  | (UseVertexColor ? 64u : 0u);
+                                  | (UseVertexColor ? 64u : 0u)
+                                  | (SpecularHighlights ? 0u : 128u)
+                                  | (GlossyReflections ? 0u : 256u);
         mix(&flags, sizeof(flags));
         const Texture* const texs[] = {
             AlbedoMap.get(), NormalMap.get(), MetallicRoughnessMap.get(), MetallicMap.get(),
