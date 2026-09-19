@@ -1,0 +1,21 @@
+{
+  "formatVersion": 2,
+  "_comment": "Regression scene for #165 (runs Play -> Stop twice: filename contains 'smoke_play'). Play must spawn the first-person player at the First Person Controller entity (feet at (3, 0, -2), facing +X = yaw 0) with its settings (eye height 1.2, FOV 90), not at the editor camera. The harness prints the play camera before each Stop. Engine primitives only.",
+  "skyHorizonColor": [0.40, 0.48, 0.60],
+  "skyZenithColor": [0.12, 0.24, 0.52],
+  "skyAmbientIntensity": 1.0,
+  "assetFolders": ["Scenes"],
+  "assetMeta": [],
+  "boxes": [
+    { "center": [0, -0.1, 0], "size": [24, 0.2, 24], "color": [0.34, 0.34, 0.37], "rotation": [0, 0, 0], "name": "Ground", "id": 0, "parentId": -1, "order": 0 }
+  ],
+  "empties": [
+    { "name": "Player Spawn", "id": 20, "parentId": -1, "order": 20,
+      "position": [3, 0, -2], "rotation": [0, -90, 0], "scale": [1, 1, 1],
+      "First Person Controller": { "Eye Height": 1.2, "Field of View": 90.0 } },
+    { "name": "Sun", "id": 10, "parentId": -1, "order": 10,
+      "position": [6, 10, 6], "rotation": [52, -36, 0], "scale": [1, 1, 1],
+      "light": { "kind": "directional", "color": [1.0, 0.96, 0.9], "intensity": 4.0, "range": 30.0 } }
+  ],
+  "models": []
+}
