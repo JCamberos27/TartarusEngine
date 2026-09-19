@@ -118,6 +118,11 @@ struct RigidbodyComponent {
     // position Y to pin a body to a horizontal plane. Ignored while Kinematic.
     bool  FreezePositionX = false, FreezePositionY = false, FreezePositionZ = false;
     bool  FreezeRotationX = false, FreezeRotationY = false, FreezeRotationZ = false;
+    // #168 - how the rendered pose follows the fixed-rate simulation between physics steps:
+    // 0 None (snaps to the last step - judders above the physics rate), 1 Interpolate (blends
+    // the last two steps, one step behind, smooth), 2 Extrapolate (predicts from velocity, no
+    // lag, can overshoot on impact).
+    int   Interpolation = 1;
 };
 
 // A PhysX joint constraining this entity's body to another (or to a fixed world frame) while

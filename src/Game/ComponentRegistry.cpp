@@ -333,6 +333,10 @@ void RegisterEngineComponents() {
               "Lock rotation about world Y." },
             { "Freeze Rotation Z", T::Bool, TARTARUS_REFLECT_FIELD(RigidbodyComponent, FreezeRotationZ), 0.0f,
               "Lock rotation about world Z." },
+            { "Interpolate", T::Enum, TARTARUS_REFLECT_FIELD(RigidbodyComponent, Interpolation), 0.0f,
+              "Physics steps at a fixed rate (60 Hz by default); this smooths motion between steps on\n"
+              "faster displays. Interpolate: smooth, one step behind. Extrapolate: predicted from\n"
+              "velocity, no lag but can overshoot. None: snaps to each step (judders above 60 FPS)." },
         };
         auto F = [&](const char* name) -> ReflectField& {
             for (auto& f : m.Fields) if (std::strcmp(f.Name, name) == 0) return f;
@@ -341,6 +345,8 @@ void RegisterEngineComponents() {
         for (const char* g : { "Freeze Position X", "Freeze Position Y", "Freeze Position Z",
                                "Freeze Rotation X", "Freeze Rotation Y", "Freeze Rotation Z" })
             F(g).Group = "Constraints";
+        F("Interpolate").EnumLabels = "None\0Interpolate\0Extrapolate\0"; // #168
+        F("Interpolate").EnumCount = 3;
         Register<RigidbodyComponent>(std::move(m));
     }
 

@@ -161,6 +161,9 @@ struct PhysicsState {
     // TransformComponent, before it. Actors themselves are owned by the scene.
     std::vector<std::pair<PxRigidDynamic*, entt::entity>> dynamics;
     std::vector<std::pair<PxRigidDynamic*, entt::entity>> kinematics;
+    // #168 - each dynamic body's pose before the most recent substep, so the rendered pose can
+    // be interpolated between it and the current one. Rebuilt every substep (never stale).
+    std::unordered_map<PxRigidDynamic*, PxTransform> prevPose;
     // #185 PR 5 — trigger state. triggerOverlaps: rigidbody pairs currently inside a trigger
     // (maintained by onTrigger). playerTriggers: trigger entities the Player capsule is inside
     // (maintained by a per-frame overlap query). triggerEvents: this frame's transitions,
@@ -1004,7 +1007,11 @@ void CollectPlayerTriggers(std::set<std::uint32_t>& out) {
 // Shared by Step() and StepOneSubstep().
 void RunOneSubstep(PhysicsState& s, float fixedStep) {
     s.preStepVel.clear();
-    for (auto& [body, e] : s.dynamics) s.preStepVel[body] = body->getLinearVelocity();
+    s.prevPose.clear();
+    for (auto& [body, e] : s.dynamics) {
+        s.preStepVel[body] = body->getLinearVelocity();
+        s.prevPose[body] = body->getGlobalPose(); // #168
+    }
     s.scene->simulate(fixedStep);
     s.scene->fetchResults(/*block=*/true);
     ++s.frameIndex;
@@ -1067,6 +1074,10 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
     // Write each force-driven body's simulated pose back to its TransformComponent so the
     // renderer, gizmos and world-transform cache all see it move. Play -> Stop reloads the
     // authored scene, so this is never persisted.
+    // #168 - `alpha` is how far this frame sits between the last substep and the next one; the
+    // written pose is blended (or predicted) by it per the body's Interpolate mode, so motion
+    // stays smooth when frames outnumber physics steps.
+    const float alpha = std::clamp(g_State->stepAccumulator / fixedStep, 0.0f, 1.0f);
     for (auto& [body, e] : g_State->dynamics) {
         if (!world.Registry.valid(e)) continue;
         auto* tc = world.Registry.try_get<TransformComponent>(e);
@@ -1078,13 +1089,33 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
             body->putToSleep();
             const TransformComponent w = world.WorldSpaceTransform(e); // #114
             body->setGlobalPose(PxTransform(ToPx(w.Position), EulerToPx(w.RotationEuler)));
+            g_State->prevPose.erase(body); // #168 - don't blend from the blown-up pose
             Log::Warn("PhysX: " + EntityLogRef(world.Registry, e) +
                       " produced a non-finite pose — frozen at its last good transform.", EntityLogContext(world.Registry, e));
             continue;
         }
         // #114 — the PhysX pose is WORLD space; convert through the parent (was written
         // straight into the local fields, teleporting any simulated child).
-        world.SetWorldPose(e, glm::vec3(p.p.x, p.p.y, p.p.z), glm::quat(p.q.w, p.q.x, p.q.y, p.q.z));
+        PxTransform shown = p;
+        const auto* rb = world.Registry.try_get<RigidbodyComponent>(e);
+        const int mode = rb ? rb->Interpolation : 1;
+        if (mode == 1) {
+            if (auto it = g_State->prevPose.find(body); it != g_State->prevPose.end() && PoseIsFinite(it->second)) {
+                const PxTransform& a = it->second;
+                shown.p = a.p + (p.p - a.p) * alpha;
+                const glm::quat qa(a.q.w, a.q.x, a.q.y, a.q.z), qb(p.q.w, p.q.x, p.q.y, p.q.z);
+                const glm::quat q = glm::slerp(qa, qb, alpha);
+                shown.q = PxQuat(q.x, q.y, q.z, q.w);
+            }
+        } else if (mode == 2 && !body->isSleeping()) {
+            const float ahead = alpha * fixedStep;
+            shown.p = p.p + body->getLinearVelocity() * ahead;
+            const PxVec3 w = body->getAngularVelocity();
+            const PxQuat spin(w.x * ahead * 0.5f, w.y * ahead * 0.5f, w.z * ahead * 0.5f, 0.0f);
+            shown.q = (p.q + spin * p.q).getNormalized();
+        }
+        world.SetWorldPose(e, glm::vec3(shown.p.x, shown.p.y, shown.p.z),
+                           glm::quat(shown.q.w, shown.q.x, shown.q.y, shown.q.z));
     }
 
     // --- Trigger transitions (#185 PR 5) -----------------------------------------------
