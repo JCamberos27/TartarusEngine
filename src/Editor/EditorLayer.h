@@ -677,6 +677,9 @@ public:
     // editorMode flip, since it (not EditorLayer) owns that switch.
     void OnEnterPlayMode(const World& world);
     void OnExitPlayMode(World& world, AssetLibrary& assets);
+    // #171 - each frame in Play: moves every Play On Start voice to its entity's current world
+    // position, so a sound on a moving object travels with it. Reaps finished one-shots.
+    void UpdatePlayModeAudio(const World& world);
 
     // Scene-view shading, chosen in the toolbar. main.cpp reads it to set the GL polygon mode
     // for the main draw pass (Wireframe) or skip the lighting/texture work entirely (Unlit).
