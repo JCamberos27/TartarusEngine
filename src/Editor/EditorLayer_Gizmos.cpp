@@ -1856,7 +1856,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         glm::vec3 newPos{nt[0], nt[1], nt[2]};
         glm::vec3 newScale{ns[0], ns[1], ns[2]};
         // Rotation via the ComposeTransform-matching order, NOT ImGuizmo's decompose (#108).
-        glm::vec3 newRot = EulerYXZFromMatrix(newLocal);
+        glm::vec3 newRot = NearestEquivalentEuler(EulerYXZFromMatrix(newLocal), transform.RotationEuler); // #123
 
         // Write back only the channel this gizmo actually drives — ImGuizmo's decompose leaks
         // float noise into the other two, and a pure translate drag was nudging Rotation
@@ -2290,7 +2290,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
             ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(newLocal), nt, nr, ns);
             auto& transform = world.Registry.get<TransformComponent>(r.entity);
             transform.Position = {nt[0], nt[1], nt[2]};
-            transform.RotationEuler = EulerYXZFromMatrix(newLocal); // ComposeTransform order, not ImGuizmo's (#108)
+            transform.RotationEuler = NearestEquivalentEuler(EulerYXZFromMatrix(newLocal), transform.RotationEuler); // #108, #123
             transform.Scale = {ns[0], ns[1], ns[2]};
             PushGizmoEditToPhysics(r.entity, newWorld); // #185
         }
