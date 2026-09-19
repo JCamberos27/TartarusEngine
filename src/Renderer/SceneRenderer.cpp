@@ -322,7 +322,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     bool anyTransmission = false; // #112 — refraction capture only when something samples it
 
     for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-        if (world.Registry.all_of<InactiveTag>(entity)) continue; // Hierarchy eye toggle / GameObject active
+        if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue; // GameObject active / LOD level (#163)
 
         // Editor Scene viewport only: per-entity SceneVis hide (#236 B) + per-layer visibility
         // mask (#236 A1). The scene, saves and Game view are unaffected.
