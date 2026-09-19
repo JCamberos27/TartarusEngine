@@ -26,6 +26,7 @@ bool ParseTextureImporter(const json& j, TextureImportSettings& s) {
     s.WrapMode       = (TextureImportSettings::Wrap)imp.value("wrapMode",      (int)TextureImportSettings::Wrap::Repeat);
     s.MaxTextureSize = imp.value("maxTextureSize",   2048);
     s.AnisoLevel     = imp.value("anisoLevel",       8);
+    s.CompressionMode= (TextureImportSettings::Compression)std::clamp(imp.value("compression", 0), 0, 2); // #156
     return true;
 }
 
@@ -460,6 +461,7 @@ void AssetLibrary::SetTextureSettings(const std::string& path, const TextureImpo
     imp["wrapMode"]       = (int)settings.WrapMode;
     imp["maxTextureSize"] = settings.MaxTextureSize;
     imp["anisoLevel"]     = settings.AnisoLevel;
+    imp["compression"]    = (int)settings.CompressionMode;
     AssetDatabase::MergeMetaFields(path, json{{"importer", imp}}.dump());
 }
 

@@ -44,7 +44,8 @@ constexpr char kMagic[4] = {'T', 'T', 'E', 'X'};
 // v3 (#333 PR3): entry filename changed from FNV(absolutePath) to GUID, so old path-keyed
 // entries are unreachable and treated as stale by Prune (version mismatch).
 // v4 (#156): the Max Size downsample now averages sRGB textures in linear space, alpha-weighted.
-constexpr uint32_t kVersion = 4;
+// v5 (#156): header gains the compressed format + mip level sizes (BCn entries).
+constexpr uint32_t kVersion = 5;
 
 std::string CacheDir() {
     static const std::string dir = ProjectPaths::Resolve("Library/Textures");
@@ -108,6 +109,10 @@ uint64_t HashSettings(const TextureImportSettings& s) {
     mix((uint64_t)s.MaxTextureSize);
     mix(s.IsSRGB ? 1u : 0u); // affects the GL internal format chosen for these pixels
     mix((uint64_t)s.TextureType); // #156: Normal Map forces linear, which changes the downsample
+    // #156: compressed entries hold the encoded blocks of every mip level, so the mode and
+    // whether there's a mip chain at all both change what's stored.
+    mix((uint64_t)s.CompressionMode + 17);
+    if (s.CompressionMode != TextureImportSettings::Compression::None) mix(s.GenerateMipmaps ? 3u : 5u);
     return h;
 }
 
@@ -141,7 +146,16 @@ bool Load(const std::string& sourcePath, const TextureImportSettings& settings, 
     if (!Read(f, sw) || !Read(f, sh) || !Read(f, w) || !Read(f, h) || !Read(f, ch)) return false;
     if (w <= 0 || h <= 0 || ch < 1 || ch > 4) return false;
 
-    const size_t bytes = (size_t)w * (size_t)h * (size_t)ch;
+    uint32_t glFormat = 0, levelCount = 0;
+    if (!Read(f, glFormat) || !Read(f, levelCount) || levelCount > 32) return false;
+    std::vector<uint32_t> levelSizes(levelCount);
+    size_t bytes = 0;
+    for (uint32_t& s : levelSizes) {
+        if (!Read(f, s)) return false;
+        bytes += s;
+    }
+    if (glFormat == 0) bytes = (size_t)w * (size_t)h * (size_t)ch;
+    else if (levelCount == 0 || bytes > (size_t)w * h * 4 * 2) return false; // corrupt header
     std::vector<unsigned char> pixels(bytes);
     if (!f.read(reinterpret_cast<char*>(pixels.data()), (std::streamsize)bytes)) return false;
     f.close();
@@ -156,6 +170,8 @@ bool Load(const std::string& sourcePath, const TextureImportSettings& settings, 
     out.Height = h;
     out.Channels = ch;
     out.Pixels = std::move(pixels);
+    out.GLFormat = glFormat;
+    out.LevelSizes = std::move(levelSizes);
     return true;
 }
 
@@ -196,6 +212,9 @@ void Store(const std::string& sourcePath, const TextureImportSettings& settings,
         Write(f, (int32_t)img.Width);
         Write(f, (int32_t)img.Height);
         Write(f, (int32_t)img.Channels);
+        Write(f, (uint32_t)img.GLFormat);
+        Write(f, (uint32_t)img.LevelSizes.size());
+        for (uint32_t s : img.LevelSizes) Write(f, s);
         f.write(reinterpret_cast<const char*>(img.Pixels.data()), (std::streamsize)img.Pixels.size());
         if (!f) {
             f.close();

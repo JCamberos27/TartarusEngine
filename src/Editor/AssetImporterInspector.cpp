@@ -105,6 +105,18 @@ void AssetImporterInspector::DrawTextureSettings(TextureImportSettings& settings
         ImGui::EndCombo();
     }
 
+    Row("Compression", "GPU block compression (BCn), encoded once on import and cached.\n"
+                       "None: raw 8-bit, largest.\n"
+                       "Normal: BC1 (opaque colour, 8x smaller than RGBA8) or BC3 (with alpha, 4x);\n"
+                       "BC4 / BC5 for one- and two-channel data maps.\n"
+                       "High Quality: same formats, slower encode with fewer colour artifacts.");
+    const char* kCompression[] = {"None", "Normal", "High Quality"};
+    int compIdx = (int)settings.CompressionMode;
+    if (ImGui::Combo("##Compression", &compIdx, kCompression, IM_ARRAYSIZE(kCompression))) {
+        settings.CompressionMode = (TextureImportSettings::Compression)compIdx;
+        isDirty = true;
+    }
+
     ImGui::PopItemWidth();
 }
 
