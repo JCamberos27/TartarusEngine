@@ -18,6 +18,7 @@
 #include "SceneSerializer.h"
 #include "AABB.h"
 #include "Log.h"
+#include "AnimationSystem.h" // Animation component clip references (#175)
 #include "EditorSettings.h"
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
@@ -2860,6 +2861,68 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
         !registry.all_of<ColliderComponent>(entity)) {
         ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
                            "No Collider - this Rigidbody won't simulate. Add a Collider.");
+    }
+
+    // #175 — the Animation component's clip picker (the model's clip names) and an edit-mode
+    // preview; the preview is the Mesh Renderer's old runtime-only Play button, now saved as a
+    // component that also plays in Play mode.
+    if (std::strcmp(componentName, "Animation") == 0 && phase == ReflectExtraPhase::Top) {
+        auto* anim = registry.try_get<SkeletalAnimationComponent>(entity);
+        const auto* rc = registry.try_get<RenderableComponent>(entity);
+        Model* model = rc ? rc->ModelRef.get() : nullptr;
+        if (!anim || !m_AssetsPtr) return;
+        AssetLibrary& assets = *m_AssetsPtr;
+        if (!model) {
+            ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
+                               "Needs a Mesh Renderer with a rigged model.");
+            return;
+        }
+        PropertyLabel("Clip", "Which clip to play: one of this model's own, or a clip from another model file\n"
+                              "with the same skeleton (e.g. a Mixamo animation exported without skin).\n"
+                              "Empty = the model's first clip.");
+        const int resolved = ResolveAnimationClip(*model, anim->Clip, assets);
+        const std::string preview = anim->Clip.empty()
+            ? (model->OwnAnimationCount() > 0 ? model->AnimationName(0) + " (first)" : std::string("(none)"))
+            : (resolved >= 0 ? model->AnimationName(resolved) : anim->Clip);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo("##animclip", preview.c_str())) {
+            auto pick = [&](const std::string& ref, const std::string& label, float seconds) {
+                char text[256];
+                std::snprintf(text, sizeof(text), "%s  (%.2fs)", label.c_str(), seconds);
+                if (ImGui::Selectable(text, ref == anim->Clip)) {
+                    PushUndo(world, "Set Animation Clip");
+                    anim->Clip = ref;
+                }
+            };
+            for (int i = 0; i < model->OwnAnimationCount(); ++i)
+                pick(model->AnimationName(i), model->AnimationName(i), model->AnimationLength(i));
+            // Clips in other model files of the project that animate this skeleton (#175).
+            bool header = false;
+            for (const auto& src : assets.Models()) {
+                if (!src || src->Path() == model->Path() || src->OwnAnimationCount() == 0) continue;
+                for (int j = 0; j < src->OwnAnimationCount(); ++j) {
+                    const std::string ref = AnimationClipRef(*src, j);
+                    const int idx = ResolveAnimationClip(*model, ref, assets); // attaches if compatible
+                    if (idx < 0) continue;
+                    if (!header) { ImGui::SeparatorText("From other files"); header = true; }
+                    pick(ref, model->AnimationName(idx), model->AnimationLength(idx));
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (resolved < 0 && !anim->Clip.empty())
+            ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  '%s' isn't a clip this model can play; the first clip plays.", anim->Clip.c_str());
+        if (!m_InPlayMode) {
+            PropertyLabel("Preview", "Plays the clip in the Scene view while editing (not saved).");
+            const bool previewing = model->IsPlayingAnimation();
+            if (ImGui::Button(previewing ? ICON_FA_STOP "  Stop" : ICON_FA_PLAY "  Play")) {
+                if (previewing) model->StopAnimation();
+                else {
+                    model->PlayAnimation(resolved < 0 ? 0 : resolved, 0.0f, (AnimationWrapMode)std::clamp(anim->WrapMode, 0, 3), anim->Speed);
+                }
+            }
+        }
+        return;
     }
 
     if (std::strcmp(componentName, "Camera") == 0 && phase == ReflectExtraPhase::Bottom) {

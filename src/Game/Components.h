@@ -246,6 +246,22 @@ struct CameraComponent {
 // reflected Inspector list loses the old section's "Spin"/"Orbit"/"Bob"/"Light Color Cycle"
 // sub-headers, so field names below are qualified (e.g. "Orbit Speed", not "Speed") to stay
 // unambiguous without them.
+// #175 / #113 — Unity's (legacy) Animation component: plays one of the entity's model clips in
+// Play mode. Serialized fields are the authored setup; game code drives it at runtime by
+// changing Clip (crossfades to it) or IsPlaying. SkeletalAnimationSystem applies it each frame.
+struct SkeletalAnimationComponent {
+    std::string Clip;                // clip name; empty = the model's first clip
+    bool PlayAutomatically = true;   // start when Play begins
+    int  WrapMode = 1;               // AnimationWrapMode: 0 Once, 1 Loop, 2 PingPong, 3 ClampForever
+    float Speed = 1.0f;              // playback rate; negative plays backwards
+    float CrossFade = 0.25f;         // seconds to blend when the clip changes
+
+    // --- runtime (not serialized) ---
+    bool Started = false;            // PlayAutomatically has been applied this run
+    bool IsPlaying = false;          // set by the system at start; game code may set it
+    std::string PlayingClip;         // what the system last asked the model for
+};
+
 struct AnimatorComponent {
     glm::vec3 SpinDegPerSec{0.0f};   // continuous local rotation, degrees/second per axis
 
