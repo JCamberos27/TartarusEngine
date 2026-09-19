@@ -568,6 +568,19 @@ void RegisterEngineComponents() {
         m.GenericInspector = false;
         Register<RenderableComponent>(std::move(m));
     }
+
+    // #132 - String fields that hold asset paths: tracked by GUID so renaming or moving the file
+    // outside the editor keeps the reference (see ReflectField::AssetPath).
+    const std::pair<const char*, const char*> kAssetPathFields[] = {
+        {"Animation", "Clip"},
+        {"Animator Controller", "Controller"},
+        {"Transform Controller", "Script Path"},
+    };
+    for (const auto& [component, field] : kAssetPathFields)
+        for (RegisteredComponent& rc : Storage())
+            if (std::strcmp(rc.Meta.Name, component) == 0)
+                for (ReflectField& f : rc.Meta.Fields)
+                    if (std::strcmp(f.Name, field) == 0) f.AssetPath = true;
 }
 
 // Runs once, before main(). It only appends to All()'s function-local static, so there is no

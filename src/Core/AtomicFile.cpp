@@ -1,4 +1,7 @@
 #include "AtomicFile.h"
+#include <cctype>
+#include <unordered_map>
+#include <mutex>
 #include "Log.h"
 
 #include <algorithm>
@@ -84,7 +87,38 @@ bool WriteTempDurable(const std::filesystem::path& temp, std::string_view bytes,
 
 } // namespace
 
+namespace {
+std::mutex g_SelfWritesMutex;
+std::unordered_map<std::string, std::chrono::steady_clock::time_point> g_SelfWrites;
+
+std::string SelfWriteKey(const std::filesystem::path& p) {
+    std::error_code ec;
+    std::string k = std::filesystem::absolute(p, ec).lexically_normal().generic_string();
+#ifdef _WIN32
+    for (char& c : k) c = (char)std::tolower((unsigned char)c);
+#endif
+    return k;
+}
+
+void NoteSelfWrite(const std::filesystem::path& p) {
+    const auto now = std::chrono::steady_clock::now();
+    std::lock_guard<std::mutex> lk(g_SelfWritesMutex);
+    g_SelfWrites[SelfWriteKey(p)] = now;
+    if (g_SelfWrites.size() > 512) // prune old entries now and then
+        for (auto it = g_SelfWrites.begin(); it != g_SelfWrites.end();)
+            it = now - it->second > std::chrono::seconds(30) ? g_SelfWrites.erase(it) : std::next(it);
+}
+} // namespace
+
+bool WrittenBySelfRecently(const std::filesystem::path& path, int withinMs) {
+    std::lock_guard<std::mutex> lk(g_SelfWritesMutex);
+    const auto it = g_SelfWrites.find(SelfWriteKey(path));
+    return it != g_SelfWrites.end() &&
+           std::chrono::steady_clock::now() - it->second <= std::chrono::milliseconds(withinMs);
+}
+
 bool WriteBytes(const std::filesystem::path& path, std::string_view bytes, bool binary) {
+    NoteSelfWrite(path); // before the rename, so the watcher's event always finds it
     std::error_code ec;
     if (path.has_parent_path()) {
         std::filesystem::create_directories(path.parent_path(), ec);
