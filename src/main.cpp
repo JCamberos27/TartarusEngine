@@ -62,6 +62,7 @@
 #include "AssetDatabase.h"
 #include "ProjectWatcher.h" // #132
 #include "ThumbnailCache.h"
+#include "MaterialPreviewRenderer.h"
 #include "SplashScreen.h"
 #include "GLDebug.h"
 #include "Log.h"
@@ -1418,6 +1419,90 @@ int main(int argc, char** argv) {
                         Log::Error("[SmokeTest] project sync check failed.");
                     fs::remove_all(dir, se);
                     pump([] { return false; }); // let the clean-up events drain before the next scene
+                }
+
+                // #107 - a smoke_materials* scene renders every loaded material, plus a chrome, a
+                // see-through and a glass one, through the material preview. Each must draw
+                // something distinct from the backdrop, lit from above (so the Inspector's flipped
+                // UVs are right), and ContentKey must follow edits. PNGs land in %TEMP% for a look.
+                if (smokeSceneActive && smokeFramesRendered == 15 &&
+                    smokeScenePaths[smokeSceneIndex].find("smoke_materials") != std::string::npos) {
+                    namespace fs = std::filesystem;
+                    std::error_code pe;
+                    const fs::path outDir = fs::temp_directory_path(pe) / "TartarusSmokeMaterialPreview";
+                    fs::create_directories(outDir, pe);
+                    std::vector<std::shared_ptr<MaterialAsset>> mats(assets.Materials().begin(), assets.Materials().end());
+                    auto extra = [&](const char* name, auto setup) {
+                        auto m = std::make_shared<MaterialAsset>();
+                        m->Name = name;
+                        setup(*m);
+                        mats.push_back(m);
+                    };
+                    extra("chrome", [](MaterialAsset& m) { m.Mat.BaseColor = glm::vec3(0.95f); m.Mat.Metallic = 1.0f; m.Mat.Roughness = 0.08f; });
+                    extra("red_plastic", [](MaterialAsset& m) { m.Mat.BaseColor = glm::vec3(0.8f, 0.05f, 0.05f); m.Mat.Roughness = 0.45f; });
+                    extra("see_through", [](MaterialAsset& m) { m.Mat.BaseColor = glm::vec3(0.1f, 0.3f, 0.9f);
+                                                                m.RenderQueue = MaterialAsset::Queue::Transparent; m.Opacity = 0.35f; });
+                    MaterialPreviewRenderer preview;
+                    const int kPx = 128;
+                    unsigned int readFbo = 0;
+                    glGenFramebuffers(1, &readFbo);
+                    int bad = 0, drawn = 0;
+                    std::string names;
+                    for (const auto& m : mats) {
+                        if (!m || m->Missing) continue;
+                        const unsigned int tex = preview.Render(m, MaterialPreviewRenderer::Shape::Sphere, 0.5f, 0.3f, kPx, kPx);
+                        std::vector<unsigned char> px((size_t)kPx * kPx * 4);
+                        GLint prevRead = 0;
+                        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, readFbo);
+                        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+                        if (tex) glReadPixels(0, 0, kPx, kPx, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+                        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevRead);
+                        auto at = [&](int x, int y) { const unsigned char* p = &px[((size_t)y * kPx + x) * 4]; return glm::vec3(p[0], p[1], p[2]); };
+                        // Average over a band: GL rows run bottom-up, so y > kPx/2 is the top of the image.
+                        auto band = [&](int y0, int y1) {
+                            glm::vec3 sum(0.0f); int n = 0;
+                            for (int y = y0; y < y1; ++y) for (int x = kPx * 3 / 8; x < kPx * 5 / 8; ++x) { sum += at(x, y); ++n; }
+                            return sum / (float)std::max(n, 1);
+                        };
+                        const glm::vec3 corner = at(2, 2), centre = band(kPx * 7 / 16, kPx * 9 / 16);
+                        const glm::vec3 top = band(kPx * 5 / 8, kPx * 3 / 4), bottom = band(kPx / 4, kPx * 3 / 8);
+                        const float lum = [](glm::vec3 c) { return c.r * 0.3f + c.g * 0.59f + c.b * 0.11f; }(top);
+                        const float lumB = bottom.r * 0.3f + bottom.g * 0.59f + bottom.b * 0.11f;
+                        const bool distinct = glm::length(centre - corner) > 12.0f;
+                        const bool opaque = m->RenderQueue == MaterialAsset::Queue::Opaque && m->Mat.TransmissionStrength <= 0.0f;
+                        const bool litFromAbove = !opaque || lum >= lumB - 2.0f; // not meaningful through glass
+                        ++drawn;
+                        const std::string name = m->Name.empty() ? fs::path(m->Path).stem().string() : m->Name;
+                        names += " " + name;
+                        if (!tex || !distinct || !litFromAbove) {
+                            ++bad;
+                            Log::Error("[SmokeTest] material preview '" + name + "' tex=" + std::to_string(tex) +
+                                       " distinct=" + std::to_string(distinct) + " litFromAbove=" + std::to_string(litFromAbove));
+                        }
+                        // Flip to top-down rows for the PNG.
+                        std::vector<unsigned char> flipped(px.size());
+                        for (int y = 0; y < kPx; ++y)
+                            std::memcpy(&flipped[(size_t)y * kPx * 4], &px[(size_t)(kPx - 1 - y) * kPx * 4], (size_t)kPx * 4);
+                        stbi_write_png((outDir / (name + ".png")).string().c_str(), kPx, kPx, 4, flipped.data(), kPx * 4);
+                    }
+                    glDeleteFramebuffers(1, &readFbo);
+                    // ContentKey: stable, and follows a value edit and a queue change.
+                    bool keyOk = !mats.empty();
+                    if (keyOk) {
+                        MaterialAsset& m = *mats.back();
+                        const std::uint64_t k0 = MaterialPreviewRenderer::ContentKey(m);
+                        keyOk = k0 == MaterialPreviewRenderer::ContentKey(m);
+                        m.Mat.BaseColor.r += 0.1f;
+                        const std::uint64_t k1 = MaterialPreviewRenderer::ContentKey(m);
+                        m.RenderQueue = MaterialAsset::Queue::Opaque;
+                        const std::uint64_t k2 = MaterialPreviewRenderer::ContentKey(m);
+                        keyOk = keyOk && k1 != k0 && k2 != k1;
+                    }
+                    std::cout << "[SmokeTest]   material previews drawn=" << drawn << " bad=" << bad << " keyOk=" << keyOk
+                              << " (" << outDir.string() << ":" << names << ")" << std::endl;
+                    if (bad || !keyOk || drawn < 4) Log::Error("[SmokeTest] material preview check failed.");
                 }
 
                 // #176 - a smoke_prefab* scene round-trips Prefab Mode: save a box as a temp

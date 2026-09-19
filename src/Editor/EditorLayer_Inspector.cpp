@@ -954,7 +954,7 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
             ImVec2 previewDims(previewSize, previewSize);
             unsigned int handle = m_ModelPreview.Render(*model, m_ModelPreviewYaw, m_ModelPreviewPitch,
                 m_ModelPreviewDistance, (int)previewDims.x * 2, (int)previewDims.y * 2);
-            ImGui::Image((ImTextureID)(intptr_t)handle, previewDims);
+            ImGui::Image((ImTextureID)(intptr_t)handle, previewDims, ImVec2(0, 1), ImVec2(1, 0)); // bottom-up FBO
 
             // Left-drag to orbit, scroll to zoom - the same mouse language as the main viewport's
             // own camera controls. ImGui::Image is a plain draw, not a clickable widget, so it
@@ -1111,12 +1111,28 @@ bool EditorLayer::MaterialPickerPopup(const char* popupId, AssetLibrary& assets,
             if (!needle.empty() && lname.find(needle) == std::string::npos) continue;
 
             ImGui::PushID(path.c_str());
-            if (ImGui::Selectable(name.c_str())) {
+            // #107 - each row leads with the material's thumbnail (the type glyph until it renders).
+            const float rowH = ImGui::GetTextLineHeight() * 1.7f;
+            const ImVec2 rowPos = ImGui::GetCursorScreenPos();
+            if (ImGui::Selectable("##pick", false, ImGuiSelectableFlags_None, ImVec2(0.0f, rowH))) {
                 outPath = path;
                 picked = true;
                 ImGui::CloseCurrentPopup();
             }
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", path.c_str());
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const unsigned int thumb = MaterialThumbnail(assets.LoadMaterial(path));
+            if (thumb) {
+                dl->AddImage((ImTextureID)(intptr_t)thumb, rowPos, ImVec2(rowPos.x + rowH, rowPos.y + rowH),
+                             ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f)); // bottom-up render target
+            } else {
+                const ImVec2 g = ImGui::CalcTextSize(ICON_FA_DROPLET);
+                dl->AddText(ImVec2(rowPos.x + (rowH - g.x) * 0.5f, rowPos.y + (rowH - g.y) * 0.5f),
+                            ImGui::GetColorU32(ImGuiCol_TextDisabled), ICON_FA_DROPLET);
+            }
+            dl->AddText(ImVec2(rowPos.x + rowH + ImGui::GetStyle().ItemSpacing.x,
+                               rowPos.y + (rowH - ImGui::GetTextLineHeight()) * 0.5f),
+                        ImGui::GetColorU32(ImGuiCol_Text), name.c_str());
             ImGui::PopID();
         }
         ImGui::EndChild();
@@ -1153,6 +1169,90 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
     ImGui::TextDisabled("%s", matPath.c_str());
     ImGui::Spacing();
 
+    DrawMaterialAssetFields(world, assets, ma, matPath);
+    DrawMaterialPreview(ma); // #107
+}
+
+// #107 - the material preview section. The render is cached in m_MaterialPreviewTex and redone
+// only when the material's content, the shape, the orbit or the size changes, so an idle
+// Inspector costs nothing.
+void EditorLayer::DrawMaterialPreview(const std::shared_ptr<MaterialAsset>& ma, int slotCount) {
+    if (!ma) return;
+    ImGui::Spacing();
+    ImGui::SetNextItemOpen(m_MaterialPreviewOpen, ImGuiCond_Always);
+    m_MaterialPreviewOpen = ImGui::CollapsingHeader("Preview##materialPreview");
+    if (!m_MaterialPreviewOpen) { m_MaterialPreviewDragging = false; return; }
+
+    using Shape = MaterialPreviewRenderer::Shape;
+    ImGui::PushID("materialPreview");
+    if (slotCount > 1) { // which of the object's material slots to show
+        char label[24];
+        snprintf(label, sizeof(label), "Slot %d", m_MaterialPreviewSlot);
+        ImGui::SetNextItemWidth(ImGui::CalcTextSize("Slot 000").x + ImGui::GetFrameHeight() * 2.0f);
+        if (ImGui::BeginCombo("##previewSlot", label)) {
+            for (int i = 0; i < slotCount; ++i) {
+                snprintf(label, sizeof(label), "Slot %d", i);
+                if (ImGui::Selectable(label, i == m_MaterialPreviewSlot)) m_MaterialPreviewSlot = i;
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SameLine();
+    }
+    for (int i = 0; i < (int)Shape::Count; ++i) {
+        if (i > 0) ImGui::SameLine(0.0f, 2.0f);
+        const bool active = (int)m_MaterialPreviewShape == i;
+        if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        if (ImGui::SmallButton(MaterialPreviewRenderer::ShapeName((Shape)i))) m_MaterialPreviewShape = (Shape)i;
+        if (active) ImGui::PopStyleColor();
+    }
+
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const float side = std::floor(std::clamp(avail, 64.0f, 320.0f * m_UIScale));
+    const int px = std::max(64, (int)(side * 2.0f)); // 2x for a crisp image
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, (avail - side) * 0.5f));
+
+    std::uint64_t key = MaterialPreviewRenderer::ContentKey(*ma);
+    auto mix = [&key](const void* p, std::size_t n) {
+        const unsigned char* b = static_cast<const unsigned char*>(p);
+        for (std::size_t i = 0; i < n; ++i) { key ^= b[i]; key *= 1099511628211ull; }
+    };
+    const int shape = (int)m_MaterialPreviewShape;
+    const void* who = ma.get();
+    mix(&shape, sizeof(shape));
+    mix(&m_MaterialPreviewYaw, sizeof(float));
+    mix(&m_MaterialPreviewPitch, sizeof(float));
+    mix(&px, sizeof(px));
+    mix(&who, sizeof(who));
+    if (key != m_MaterialPreviewRenderedKey || !m_MaterialPreviewTex) {
+        m_MaterialPreviewTex = m_MaterialPreview.Render(ma, m_MaterialPreviewShape,
+            m_MaterialPreviewYaw, m_MaterialPreviewPitch, px, px);
+        m_MaterialPreviewRenderedKey = key;
+    }
+    if (m_MaterialPreviewTex) {
+        ImGui::Image((ImTextureID)(intptr_t)m_MaterialPreviewTex, ImVec2(side, side), ImVec2(0, 1), ImVec2(1, 0));
+        // Same press/drag tracking as the model preview: an Image never goes "active".
+        const bool hovered = ImGui::IsItemHovered();
+        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) m_MaterialPreviewDragging = true;
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) m_MaterialPreviewDragging = false;
+        if (m_MaterialPreviewDragging) {
+            const ImVec2 d = ImGui::GetIO().MouseDelta;
+            m_MaterialPreviewYaw += d.x * 0.01f; // same feel as the model preview
+            m_MaterialPreviewPitch = std::clamp(m_MaterialPreviewPitch - d.y * 0.01f, -1.45f, 1.45f);
+        }
+        if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+            m_MaterialPreviewYaw = 0.5f;
+            m_MaterialPreviewPitch = 0.3f;
+        }
+        if (hovered && !m_MaterialPreviewDragging) EditorUI::SetTooltip("Drag to orbit, double-click to reset the view");
+    } else {
+        ImGui::TextDisabled("Preview unavailable - see Console.");
+    }
+    ImGui::Spacing(); // breathing room under the image at the bottom of the scroll range
+    ImGui::PopID();
+}
+
+void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, const std::shared_ptr<MaterialAsset>& ma,
+                                          const std::string& matPath) {
     Material& mat = ma->Mat;
 
     // Mirrors the embedded -> file-backed "Save" button in DrawMaterialEditor: the parallel path
@@ -3985,6 +4085,18 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             ImGui::PopID();
         }
 
+        // #107 - preview of one slot's material; the imported one when the slot has no override.
+        if (meshCount > 0) {
+            m_MaterialPreviewSlot = std::clamp(m_MaterialPreviewSlot, 0, meshCount - 1);
+            const int s = m_MaterialPreviewSlot;
+            std::shared_ptr<MaterialAsset> pm = s < (int)rc->Materials.size() ? rc->Materials[s] : nullptr;
+            if (!pm || pm->Missing) {
+                if (!m_ImportedPreviewMat) m_ImportedPreviewMat = std::make_shared<MaterialAsset>();
+                m_ImportedPreviewMat->Mat = rc->ModelRef->MeshMaterial(s);
+                pm = m_ImportedPreviewMat;
+            }
+            DrawMaterialPreview(pm, meshCount);
+        }
         return;
     }
 
