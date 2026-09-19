@@ -21,6 +21,16 @@ struct PostSettings {
     float FilmGrain = 0.0f;           // 0..1, animated luminance noise
     float FilmGrainResponse = 0.8f;   // 0..1, how much bright areas are spared
 
+    // #162 - depth of field. Needs DepthTexture (this view's resolved depth) and the view's
+    // projection terms (proj[2][2], proj[3][2]) to turn it back into distance.
+    bool  DepthOfField = false;
+    float FocusDistance = 10.0f; // metres
+    float FocusRange = 3.0f;     // width of the sharp band
+    float MaxBlur = 8.0f;        // blur radius in pixels at 1080p
+    unsigned int DepthTexture = 0;
+    float ProjA = 0.0f, ProjB = 0.0f;
+    bool  Ortho = false;
+
     bool Fxaa = false;
     bool Dither = true;
 
@@ -59,6 +69,11 @@ private:
     void EnsureCreated();
     // #162 - meters srcHdrTexture and updates the slot's adapted EV; returns that 1x1 texture.
     unsigned int UpdateAutoExposure(unsigned int srcHdrTexture, const PostSettings& post);
+    // #162 - blurs srcHdrTexture by depth into m_DofTex (w x h) and returns it.
+    unsigned int ApplyDepthOfField(unsigned int srcHdrTexture, int w, int h, const PostSettings& post);
+    Shader* m_DofShader = nullptr;
+    unsigned int m_DofTex = 0, m_DofFbo = 0;
+    int m_DofW = 0, m_DofH = 0;
     static constexpr int kExposureSlots = 2;
     Shader* m_Shader = nullptr;       // owned; raw ptr to keep this header free of <memory>
     Shader* m_Fxaa = nullptr;         // #162
