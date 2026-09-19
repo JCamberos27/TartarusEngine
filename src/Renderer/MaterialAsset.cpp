@@ -108,6 +108,63 @@ std::shared_ptr<MaterialAsset> MissingPlaceholder(const std::string& path) {
 
 std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::string& path, AssetLibrary* lib);
 
+namespace {
+
+// #132 - a .mat's texture references are paths (in "properties" for v2, at the top level for
+// v1) plus, since #132, a "textureGuids" object keyed the same way. A texture file is found
+// by its absolute path, or project-relative.
+std::string AbsoluteAssetPath(const std::string& p) {
+    if (p.empty() || std::filesystem::path(p).is_absolute()) return p;
+    return ProjectPaths::Resolve(p);
+}
+
+bool IsTextureAsset(const std::string& absPath) {
+    const std::string type = AssetDatabase::AssetType(absPath);
+    return type == "texture" || type == "hdri";
+}
+
+// Save side: record the GUID of every texture the material references.
+void WriteTextureGuids(json& j) {
+    const bool v2 = j.contains("properties") && j["properties"].is_object();
+    const json& props = v2 ? j["properties"] : j;
+    json guids = json::object();
+    for (const auto& [key, value] : props.items()) {
+        if (!value.is_string() || key == "name" || key == "shader") continue;
+        const std::string abs = AbsoluteAssetPath(value.get<std::string>());
+        std::error_code ec;
+        if (abs.empty() || !IsTextureAsset(abs) || !std::filesystem::exists(abs, ec)) continue;
+        const AssetGuid g = AssetDatabase::EnsureGuid(abs);
+        if (g.IsValid()) guids[key] = g.ToString();
+    }
+    if (!guids.empty()) j["textureGuids"] = std::move(guids);
+}
+
+// Load side: a texture whose stored path is gone but whose GUID now lives elsewhere (renamed or
+// moved) is re-pointed at its new location, so the material keeps its maps.
+json FollowMovedTextures(const json& in, const std::string& matPath) {
+    const auto guids = in.find("textureGuids");
+    if (guids == in.end() || !guids->is_object()) return in;
+    json j = in;
+    const bool v2 = j.contains("properties") && j["properties"].is_object();
+    json& props = v2 ? j["properties"] : j;
+    for (const auto& [key, gv] : guids->items()) {
+        if (!gv.is_string()) continue;
+        const auto it = props.find(key);
+        if (it == props.end() || !it->is_string()) continue;
+        std::error_code ec;
+        const std::string stored = it->get<std::string>();
+        if (!stored.empty() && std::filesystem::exists(AbsoluteAssetPath(stored), ec)) continue;
+        const std::string moved = AssetDatabase::PathForGuid(AssetGuid::FromString(gv.get<std::string>()));
+        if (moved.empty() || !std::filesystem::exists(moved, ec)) continue;
+        Log::Info("Material '" + ProjectPaths::Relativize(matPath) + "': " + key + " moved to " +
+                  ProjectPaths::Relativize(moved) + ".", LogContext::Asset(matPath));
+        *it = moved;
+    }
+    return j;
+}
+
+} // namespace
+
 std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, AssetLibrary* lib) {
     std::ifstream f(path);
     if (!f.is_open()) return MissingPlaceholder(path);
@@ -123,7 +180,7 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Load(const std::string& path, Asse
         return MissingPlaceholder(path);
     }
     try {
-        return LoadMaterialFromJson(j, path, lib);
+        return LoadMaterialFromJson(FollowMovedTextures(j, path), path, lib); // #132
     } catch (const std::exception& e) { // #105 — belt and braces behind the typed reads
         Log::Error("MaterialAsset: '" + path + "' is malformed: " + e.what(), LogContext::Asset(path));
         return MissingPlaceholder(path);
@@ -445,6 +502,7 @@ bool MaterialAsset::Save() const {
     if (m.AlphaCutoff != 0.5f)        j["alphaCutoff"] = m.AlphaCutoff; // #101
 
     // Atomic write: a crash mid-save must not truncate the .mat (audit CPP-206).
+    WriteTextureGuids(j); // #132
     return AtomicFile::WriteJson(Path, j);
 }
 

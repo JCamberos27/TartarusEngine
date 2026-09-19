@@ -68,6 +68,39 @@ void ApplyMetaBrowserData(const json& j, const std::string& path,
 
 } // namespace
 
+// --- #132: path matching shared by the loaders and the project-sync entry points ----------------
+namespace {
+bool SamePath(const std::string& a, const std::string& b) {
+    return !a.empty() && !b.empty() && AssetDatabase::PathKey(a) == AssetDatabase::PathKey(b);
+}
+bool UnderPath(const std::string& path, const std::string& dir) {
+    const std::string p = AssetDatabase::PathKey(path), d = AssetDatabase::PathKey(dir);
+    return p.size() > d.size() && p.compare(0, d.size(), d) == 0 && p[d.size()] == '/';
+}
+template <typename Map>
+void RekeyMap(Map& m, const std::string& oldPath, const std::string& newPath) {
+    for (auto it = m.begin(); it != m.end(); ++it) {
+        if (!SamePath(it->first, oldPath)) continue;
+        auto value = std::move(it->second);
+        m.erase(it);
+        m[newPath] = std::move(value);
+        return;
+    }
+}
+void RenameInList(std::vector<std::string>& v, const std::string& oldPath, const std::string& newPath) {
+    for (std::string& s : v) if (SamePath(s, oldPath)) s = newPath;
+}
+} // namespace
+
+// The entry of `cache` for `path` under any spelling of it (slashes, case), or end().
+template <typename Map>
+typename Map::iterator FindAnySpelling(Map& cache, const std::string& path) {
+    auto it = cache.find(path);
+    if (it != cache.end()) return it;
+    for (it = cache.begin(); it != cache.end(); ++it) if (SamePath(it->first, path)) return it;
+    return cache.end();
+}
+
 std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
     if (path.rfind(kPrimitivePrefix, 0) == 0) {
         // "primitive://<kind>#<id>" — a per-instance procedural mesh, reconstructed from its
@@ -81,7 +114,9 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
         return Model::CreatePrimitive(kind, path);
     }
 
-    auto it = m_ModelCache.find(path);
+    // #132 - any spelling of the same file ("a/b.fbx", "a\b.fbx", different case) is one entry;
+    // a second spelling used to import the file a second time.
+    auto it = FindAnySpelling(m_ModelCache, path);
     if (it != m_ModelCache.end()) return it->second;
 
     std::shared_ptr<Model> model;
@@ -137,7 +172,7 @@ std::shared_ptr<Model> AssetLibrary::InstantiateModel(const std::string& path) {
 }
 
 std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path) {
-    auto it = m_TextureCache.find(path);
+    auto it = FindAnySpelling(m_TextureCache, path); // #132 - see LoadModel
     if (it != m_TextureCache.end()) return it->second;
 
     // Populate settings and browser metadata from .meta before constructing the texture, so
@@ -179,7 +214,7 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path) {
 }
 
 void AssetLibrary::RegisterSound(const std::string& path) {
-    if (std::find(m_Sounds.begin(), m_Sounds.end(), path) == m_Sounds.end()) {
+    if (std::none_of(m_Sounds.begin(), m_Sounds.end(), [&](const std::string& s) { return SamePath(s, path); })) { // #132
         m_Sounds.push_back(path);
         AssetDatabase::EnsureGuid(path);
         std::string metaStr = AssetDatabase::ReadMetaFields(path);
@@ -225,7 +260,7 @@ void AssetLibrary::RemoveSound(const std::string& path) {
 }
 
 std::shared_ptr<MaterialAsset> AssetLibrary::LoadMaterial(const std::string& path) {
-    auto it = m_MaterialCache.find(path);
+    auto it = FindAnySpelling(m_MaterialCache, path); // #132 - see LoadModel
     if (it != m_MaterialCache.end()) return it->second;
 
     auto ma = MaterialAsset::Load(path, this);
@@ -273,7 +308,7 @@ void AssetLibrary::RemoveMaterial(const std::shared_ptr<MaterialAsset>& mat) {
 }
 
 void AssetLibrary::RegisterPrefab(const std::string& path) {
-    if (std::find(m_Prefabs.begin(), m_Prefabs.end(), path) == m_Prefabs.end()) {
+    if (std::none_of(m_Prefabs.begin(), m_Prefabs.end(), [&](const std::string& s) { return SamePath(s, path); })) { // #132
         m_Prefabs.push_back(path);
         AssetDatabase::EnsureGuid(path);
         std::string metaStr = AssetDatabase::ReadMetaFields(path);
@@ -485,6 +520,10 @@ void AssetLibrary::SetModelSettings(const std::string& path, const ModelImportSe
 bool AssetLibrary::ReimportTexture(const std::string& path) {
     auto it = m_TextureCache.find(path);
     if (it == m_TextureCache.end()) return false;
+    // #132 - remember the file time this import saw, so reimport-on-focus doesn't redo it.
+    std::error_code ec;
+    const auto written = std::filesystem::last_write_time(path, ec);
+    if (!ec) m_TextureWriteTime[path] = written;
     return it->second->Reimport(GetTextureSettings(path));
 }
 
@@ -503,6 +542,76 @@ int AssetLibrary::ReimportChangedOnDisk() {
         if (tex->Reimport(GetTextureSettings(path))) ++count;
     }
     return count;
+}
+
+// --- #132: keeping the library in step with the project folder ---------------------------------
+
+
+std::string AssetLibrary::FindListed(const std::string& path) const {
+    for (const auto& [k, v] : m_ModelCache) if (SamePath(k, path)) return k;
+    for (const auto& [k, v] : m_TextureCache) if (SamePath(k, path)) return k;
+    for (const auto& [k, v] : m_MaterialCache) if (SamePath(k, path)) return k;
+    for (const std::string& s : m_Sounds) if (SamePath(s, path)) return s;
+    for (const std::string& s : m_Prefabs) if (SamePath(s, path)) return s;
+    return {};
+}
+
+bool AssetLibrary::RenamePath(const std::string& oldPath, const std::string& newPath) {
+    const std::string listed = FindListed(oldPath);
+    for (auto& [k, model] : m_ModelCache) if (SamePath(k, oldPath) && model) model->SetPath(newPath);
+    bool textureMoved = false;
+    for (auto& [k, tex] : m_TextureCache)
+        if (SamePath(k, oldPath) && tex) { tex->SetPath(newPath); textureMoved = true; }
+    for (auto& [k, mat] : m_MaterialCache) if (SamePath(k, oldPath) && mat) mat->Path = newPath;
+
+    RekeyMap(m_ModelCache, oldPath, newPath);
+    RekeyMap(m_TextureCache, oldPath, newPath);
+    RekeyMap(m_TextureWriteTime, oldPath, newPath);
+    RekeyMap(m_MaterialCache, oldPath, newPath);
+    RekeyMap(m_ShaderCache, oldPath, newPath);
+    RekeyMap(m_AssetFolder, oldPath, newPath);
+    RekeyMap(m_DisplayNames, oldPath, newPath);
+    RekeyMap(m_TextureSettings, oldPath, newPath);
+    RekeyMap(m_ModelSettings, oldPath, newPath);
+    RekeyMap(m_Labels, oldPath, newPath);
+    RenameInList(m_TexturePaths, oldPath, newPath);
+    RenameInList(m_MaterialPaths, oldPath, newPath);
+    RenameInList(m_Sounds, oldPath, newPath);
+    RenameInList(m_Prefabs, oldPath, newPath);
+    // A material's stored map paths come from its Texture objects, which now carry the new path.
+    if (textureMoved)
+        for (auto& mat : m_MaterialList) if (mat) mat->SyncTexturePathsFromMat();
+    m_AllLabelsDirty = true;
+    return !listed.empty();
+}
+
+int AssetLibrary::ForgetRemoved(const std::string& path) {
+    auto gone = [&](const std::string& p) { return SamePath(p, path) || UnderPath(p, path); };
+    int count = 0;
+    std::vector<std::shared_ptr<Model>> models;
+    for (auto& [k, m] : m_ModelCache) if (gone(k)) models.push_back(m);
+    for (auto& m : models) { RemoveModel(m); ++count; }
+    std::vector<std::shared_ptr<Texture>> textures;
+    for (auto& [k, t] : m_TextureCache) if (gone(k)) textures.push_back(t);
+    for (auto& t : textures) { RemoveTexture(t); ++count; }
+    std::vector<std::shared_ptr<MaterialAsset>> mats;
+    for (auto& [k, m] : m_MaterialCache) if (gone(k)) mats.push_back(m);
+    for (auto& m : mats) { RemoveMaterial(m); ++count; }
+    for (const std::string& s : std::vector<std::string>(m_Sounds)) if (gone(s)) { RemoveSound(s); ++count; }
+    for (const std::string& s : std::vector<std::string>(m_Prefabs)) if (gone(s)) { RemovePrefab(s); ++count; }
+    for (auto it = m_ShaderCache.begin(); it != m_ShaderCache.end();) it = gone(it->first) ? m_ShaderCache.erase(it) : std::next(it);
+    return count;
+}
+
+bool AssetLibrary::ReloadMaterial(const std::string& path) {
+    for (auto& [k, mat] : m_MaterialCache) {
+        if (!SamePath(k, path) || !mat) continue;
+        auto fresh = MaterialAsset::Load(k, this);
+        if (!fresh || fresh->Missing) return false;
+        *mat = *fresh; // same object: every renderer slot holding it sees the new values
+        return true;
+    }
+    return false;
 }
 
 bool AssetLibrary::ReimportModel(const std::string& path) {

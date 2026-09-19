@@ -2,11 +2,13 @@
 #include "Log.h"
 #include "ProjectPaths.h"
 #include "AtomicFile.h"
+#include "AssetDatabase.h" // #132 - build scenes by GUID
 
 #include <json.hpp>
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <fstream>
 
 using json = nlohmann::json;
@@ -156,9 +158,25 @@ void Load() {
         g_Build.Fullscreen  = boolean("fullscreen", g_Build.Fullscreen);
         g_Build.VSync       = boolean("vsync", g_Build.VSync);
         g_Build.DevelopmentBuild = boolean("developmentBuild", g_Build.DevelopmentBuild);
+        const auto guids = b.find("sceneGuids"); // #132 - parallel to "scenes"
         if (const auto s = b.find("scenes"); s != b.end() && s->is_array())
-            for (const auto& sc : *s)
-                if (sc.is_string() && !sc.get<std::string>().empty()) g_Build.Scenes.push_back(sc.get<std::string>());
+            for (size_t i = 0; i < s->size(); ++i) {
+                const json& sc = (*s)[i];
+                if (!sc.is_string() || sc.get<std::string>().empty()) continue;
+                std::string rel = sc.get<std::string>();
+                // A scene renamed or moved since: follow its GUID (looked up only when the path is gone).
+                std::error_code ec;
+                if (guids != b.end() && guids->is_array() && i < guids->size() && (*guids)[i].is_string() &&
+                    !std::filesystem::exists(ProjectPaths::Resolve(rel), ec)) {
+                    const std::string moved = AssetDatabase::PathForGuid(AssetGuid::FromString((*guids)[i].get<std::string>()));
+                    if (!moved.empty() && std::filesystem::exists(moved, ec)) {
+                        const std::string movedRel = ProjectPaths::Relativize(moved);
+                        Log::Info("Build Settings: scene '" + rel + "' moved to '" + movedRel + "'.");
+                        rel = movedRel;
+                    }
+                }
+                g_Build.Scenes.push_back(rel);
+            }
     }
 
     if (const auto it = root.find("tags"); it != root.end() && it->is_array()) {
@@ -192,6 +210,14 @@ void Save() {
         {"version", g_Build.Version},
         {"outputDir", g_Build.OutputDir},
         {"scenes", g_Build.Scenes},
+        {"sceneGuids", [] {
+            json a = json::array();
+            for (const std::string& sc : g_Build.Scenes) {
+                const AssetGuid g = AssetDatabase::GuidForPath(ProjectPaths::Resolve(sc));
+                a.push_back(g.IsValid() ? g.ToString() : std::string());
+            }
+            return a;
+        }()},
         {"width", g_Build.Width},
         {"height", g_Build.Height},
         {"fullscreen", g_Build.Fullscreen},

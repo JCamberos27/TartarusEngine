@@ -2,8 +2,9 @@
 //
 // Runs before any window, GL context, audio device or PhysX world exists, so it works on a CI
 // runner with no GPU (unlike --smoke-test). Only pure C++ code is exercised here: undo deltas,
-// GUIDs, atomic file writes, texture-cache keys, material JSON robustness and the component
-// registry. Each CHECK prints on failure; the run returns the number of failed checks (0 = pass).
+// GUIDs, atomic file writes, texture-cache keys, material JSON robustness, the component
+// registry, the Animator Controller, asset identity / GUID-following references and the project
+// file watcher (#132). Each CHECK prints on failure; the run returns the number of failed checks (0 = pass).
 //
 // Deliberately no test framework dependency: a CHECK macro and a list of functions is all this
 // needs, and it keeps the engine's third-party surface unchanged.
@@ -17,11 +18,15 @@
 #include "ComponentReflection.h"
 #include "ComponentRegistry.h"
 #include "MaterialAsset.h"
+#include "ProjectPaths.h"
+#include "ProjectWatcher.h"
 #include "TextureCache.h"
 #include "UndoDeltaChain.h"
 
 #include <json.hpp>
 
+#include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -30,6 +35,7 @@
 #include <iterator>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 using json = nlohmann::json;
@@ -290,6 +296,132 @@ void TestAnimatorController() {
     CHECK(comp.GetFloat("Jump") == 0.0f && comp.GetFloat("Missing") == 0.0f);
 }
 
+// --- #132: asset identity - path keys, asset types, GUID-following references ------------------
+void TestAssetIdentity() {
+    namespace fs = std::filesystem;
+    // One file, three spellings, one key.
+    const fs::path dir = TempDir() / "identity";
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir / "Sub", ec);
+    const std::string a = (dir / "Sub" / "Tex.png").string();
+    CHECK(AssetDatabase::PathKey(a) == AssetDatabase::PathKey((dir / "sub" / "tex.png").generic_string()));
+    CHECK(AssetDatabase::PathKey(a) == AssetDatabase::PathKey((dir / "Sub" / "." / "Tex.png").string()));
+    CHECK(AssetDatabase::PathKey(a) != AssetDatabase::PathKey((dir / "Sub" / "Tex2.png").string()));
+
+    // Asset types by extension; .json only under project/scenes, never the editor's safety copies.
+    CHECK(AssetDatabase::AssetType("x/a.PNG") == "texture");
+    CHECK(AssetDatabase::AssetType("x/a.controller") == "animatorcontroller");
+    CHECK(AssetDatabase::AssetType("x/a.tescript") == "script");
+    CHECK(AssetDatabase::AssetType("x/a.shader") == "shader");
+    CHECK(AssetDatabase::AssetType("x/a.txt").empty());
+    CHECK(AssetDatabase::AssetType("x/settings.json").empty());
+    CHECK(AssetDatabase::AssetType(ProjectPaths::Resolve("scenes/Level.json")) == "scene");
+    CHECK(AssetDatabase::AssetType(ProjectPaths::Resolve("scenes/Level.recovery.json")).empty());
+    CHECK(AssetDatabase::AssetType(ProjectPaths::Resolve("settings.json")).empty());
+
+    // A reference ("file#clip") follows its file to a new name by GUID; the suffix survives.
+    const std::string model = (dir / "Hero.fbx").string(), moved = (dir / "Sub" / "HeroRig.fbx").string();
+    CHECK(AtomicFile::WriteBytes(model, "not really an fbx", true));
+    const AssetGuid g = AssetGuid::Generate();
+    CHECK(AtomicFile::WriteBytes(model + ".meta", json({{"guid", g.ToString()}, {"type", "model"}}).dump(), true));
+    const std::string ref = model + "#Run";
+    const std::string refGuid = AssetDatabase::RefGuid(ref);
+    CHECK(refGuid == g.ToString());
+    CHECK(AssetDatabase::FollowRef(ref, refGuid) == ref);      // still there: unchanged
+    fs::rename(model, moved, ec);
+    AssetDatabase::NotifyMoved(model, moved);                    // moves the .meta too
+    CHECK(fs::exists(moved + ".meta", ec) && !fs::exists(model + ".meta", ec));
+    const std::string followed = AssetDatabase::FollowRef(ref, refGuid);
+    CHECK(AssetDatabase::PathKey(followed.substr(0, followed.find('#'))) == AssetDatabase::PathKey(moved));
+    CHECK(followed.size() > 4 && followed.compare(followed.size() - 4, 4, "#Run") == 0);
+    CHECK(AssetDatabase::FollowRef("Run", "") == "Run");        // an own clip name: not a file
+    CHECK(AssetDatabase::FollowRef(ref, "0000000000000001") == ref); // unknown GUID: unchanged
+    CHECK(AssetDatabase::RefGuid("primitive://cube#3").empty());
+
+    // A material follows a renamed texture by the GUID it saved.
+    const std::string tex = (dir / "Albedo.png").string(), tex2 = (dir / "Sub" / "Albedo2.png").string();
+    CHECK(AtomicFile::WriteBytes(tex, "png", true));
+    const AssetGuid tg = AssetGuid::Generate();
+    CHECK(AtomicFile::WriteBytes(tex + ".meta", json({{"guid", tg.ToString()}, {"type", "texture"}}).dump(), true));
+    CHECK(AssetDatabase::EnsureGuid(tex) == tg);
+    MaterialAsset ma;
+    ma.Path = (dir / "m.mat").string();
+    ma.AlbedoMapPath = tex;
+    CHECK(ma.Save());
+    CHECK(ReadAll(ma.Path).find(tg.ToString()) != std::string::npos); // "textureGuids" written
+    fs::rename(tex, tex2, ec);
+    AssetDatabase::NotifyMoved(tex, tex2);
+    auto back = MaterialAsset::Load(ma.Path, nullptr);
+    CHECK(back && AssetDatabase::PathKey(back->AlbedoMapPath) == AssetDatabase::PathKey(tex2));
+    fs::remove_all(dir, ec);
+}
+
+// --- #132: the project watcher reports adds, renames, moves, edits and deletes ----------------
+void TestProjectWatcher() {
+    namespace fs = std::filesystem;
+    using K = ProjectWatcher::Change::Kind;
+    const fs::path dir = TempDir() / "watch";
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir / "Library", ec);
+    fs::create_directories(dir / "sub", ec);
+    CHECK(ProjectWatcher::Start(dir.string()));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    auto settle = [&] {
+        std::vector<ProjectWatcher::Change> all;
+        bool overflow = false;
+        for (int i = 0; i < 80; ++i) { // up to 4 s (slow CI runners)
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            auto got = ProjectWatcher::Drain(150, overflow);
+            all.insert(all.end(), got.begin(), got.end());
+            if (!all.empty() && got.empty()) break;
+        }
+        return all;
+    };
+    auto has = [](const std::vector<ProjectWatcher::Change>& v, K kind, const fs::path& p, const fs::path& old = {}) {
+        for (const auto& c : v)
+            if (c.Type == kind && AssetDatabase::PathKey(c.Path) == AssetDatabase::PathKey(p.string()) &&
+                (old.empty() || AssetDatabase::PathKey(c.OldPath) == AssetDatabase::PathKey(old.string())))
+                return true;
+        return false;
+    };
+
+    const fs::path a = dir / "a.png";
+    CHECK(AtomicFile::WriteBytes(a, "1", true));
+    std::ofstream(dir / "Library" / "cache.bin") << "x"; // ignored folder
+    auto c1 = settle();
+    CHECK(has(c1, K::Added, a) || has(c1, K::Modified, a));
+    CHECK(std::none_of(c1.begin(), c1.end(), [](const auto& c) { return c.Path.find("Library") != std::string::npos; }));
+    CHECK(std::none_of(c1.begin(), c1.end(), [](const auto& c) { return c.Path.find(".tmp-") != std::string::npos; }));
+
+    const fs::path b = dir / "b.png";
+    fs::rename(a, b, ec);
+    auto c2 = settle();
+    CHECK(has(c2, K::Renamed, b, a));
+
+    const fs::path moved = dir / "sub" / "b.png";
+    fs::rename(b, moved, ec);                       // across folders: Removed + Added, paired
+    auto c3 = settle();
+    CHECK(has(c3, K::Renamed, moved, b));
+
+    std::ofstream(moved, std::ios::app) << "more";
+    auto c4 = settle();
+    CHECK(has(c4, K::Modified, moved));
+
+    const fs::path t = dir / "temp.png";              // created and deleted before it settles
+    std::ofstream(t) << "x";
+    fs::remove(t, ec);
+    fs::remove(moved, ec);
+    auto c5 = settle();
+    CHECK(has(c5, K::Removed, moved));
+    CHECK(!has(c5, K::Added, t) && !has(c5, K::Removed, t));
+
+    ProjectWatcher::Stop();
+    CHECK(!ProjectWatcher::IsRunning());
+    fs::remove_all(dir, ec);
+}
+
 } // namespace
 
 int RunUnitTests() {
@@ -301,6 +433,8 @@ int RunUnitTests() {
         {"MaterialRobustness", TestMaterialRobustness},
         {"ComponentRegistry", TestComponentRegistry},
         {"AnimatorController", TestAnimatorController},
+        {"AssetIdentity", TestAssetIdentity},
+        {"ProjectWatcher", TestProjectWatcher},
     };
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;

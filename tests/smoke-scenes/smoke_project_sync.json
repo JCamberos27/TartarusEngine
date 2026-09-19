@@ -1,0 +1,122 @@
+{
+  "formatVersion": 2,
+  "_comment": "Regression scene for #132: at frame 15 the smoke harness writes a PNG and a material into project/__smoke_sync, then moves the PNG (leaving its .meta behind) and deletes it, checking after each step that the project watcher kept the library, GUIDs, .meta files and references in step. Engine primitives only; the folder is removed afterwards.",
+  "skyHorizonColor": [
+    0.45,
+    0.55,
+    0.68
+  ],
+  "skyZenithColor": [
+    0.15,
+    0.3,
+    0.6
+  ],
+  "skyAmbientIntensity": 1.0,
+  "assetFolders": [
+    "Scenes"
+  ],
+  "assetMeta": [],
+  "boxes": [
+    {
+      "center": [
+        0,
+        -0.1,
+        0
+      ],
+      "size": [
+        24,
+        0.2,
+        24
+      ],
+      "color": [
+        0.35,
+        0.35,
+        0.38
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "name": "Ground",
+      "id": 0,
+      "parentId": -1,
+      "order": 0
+    },
+    {
+      "center": [
+        0,
+        1.0,
+        0
+      ],
+      "size": [
+        2,
+        2,
+        2
+      ],
+      "color": [
+        0.8,
+        0.25,
+        0.2
+      ],
+      "rotation": [
+        0,
+        20,
+        0
+      ],
+      "name": "Cube",
+      "id": 1,
+      "parentId": -1,
+      "order": 1
+    }
+  ],
+  "empties": [
+    {
+      "name": "Sun",
+      "id": 2,
+      "parentId": -1,
+      "order": 2,
+      "position": [
+        6,
+        10,
+        6
+      ],
+      "rotation": [
+        50,
+        -35,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "light": {
+        "kind": "directional",
+        "color": [
+          1.0,
+          0.96,
+          0.9
+        ],
+        "intensity": 5.0,
+        "range": 30.0,
+        "angularSize": 1.0,
+        "castShadows": true,
+        "shadow": {
+          "enabled": true,
+          "bias": 1.0,
+          "normalBias": 1.0,
+          "softness": 0.3,
+          "nearPlane": 0.05,
+          "resolution": 0,
+          "updateMode": 0
+        }
+      }
+    }
+  ],
+  "models": [],
+  "libraryModels": [],
+  "libraryTextures": [],
+  "librarySounds": [],
+  "libraryPrefabs": []
+}

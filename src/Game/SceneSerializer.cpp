@@ -387,6 +387,23 @@ void ReadMaterialSlots(AssetLibrary& assets, const json& obj, RenderableComponen
 // The generic component write/read (WriteCommonComponents / ReadCommonComponents), and the
 // prefab per-field override diff/replay (#302 Part B), all encode a reflected field the same
 // way. `fp` is the field address from ReflectField::Address.
+// #132 - ReflectField::AssetPath strings. The file part is what gets a GUID; a "#name" suffix
+// (an animation clip inside a model file) rides along unchanged.
+json AssetPathStringToJson(const std::string& value) {
+    const std::string g = AssetDatabase::RefGuid(value);
+    if (g.empty()) return value;
+    return json{{"path", value}, {"pathGuid", g}};
+}
+
+std::string AssetPathStringFromJson(const json& v) {
+    if (v.is_string()) return v.get<std::string>();
+    if (!v.is_object()) return {};
+    const auto pit = v.find("path");
+    const auto git = v.find("pathGuid");
+    return AssetDatabase::FollowRef((pit != v.end() && pit->is_string()) ? pit->get<std::string>() : std::string(),
+                                    (git != v.end() && git->is_string()) ? git->get<std::string>() : std::string());
+}
+
 json ReflectFieldToJson(const ReflectField& f, const void* fp) {
     switch (f.Type) {
         case ReflectFieldType::Bool:   return *static_cast<const bool*>(fp);
@@ -394,7 +411,9 @@ json ReflectFieldToJson(const ReflectField& f, const void* fp) {
         case ReflectFieldType::Float:  return *static_cast<const float*>(fp);
         case ReflectFieldType::Vec3:
         case ReflectFieldType::Color:  return Vec3ToJson(*static_cast<const glm::vec3*>(fp));
-        case ReflectFieldType::String: return *static_cast<const std::string*>(fp);
+        case ReflectFieldType::String:
+            if (f.AssetPath) return AssetPathStringToJson(*static_cast<const std::string*>(fp)); // #132
+            return *static_cast<const std::string*>(fp);
         case ReflectFieldType::AssetRef: return PathRef(*static_cast<const std::string*>(fp));
         case ReflectFieldType::Enum: {
             const int v = *static_cast<const int*>(fp);
@@ -414,7 +433,9 @@ void ReflectFieldFromJson(const ReflectField& f, void* fp, const json& v, AssetL
         case ReflectFieldType::Float:  *static_cast<float*>(fp) = v.get<float>(); break;
         case ReflectFieldType::Vec3:
         case ReflectFieldType::Color:  *static_cast<glm::vec3*>(fp) = JsonToVec3(v); break;
-        case ReflectFieldType::String: *static_cast<std::string*>(fp) = v.get<std::string>(); break;
+        case ReflectFieldType::String:
+            *static_cast<std::string*>(fp) = f.AssetPath ? AssetPathStringFromJson(v) : v.get<std::string>(); // #132
+            break;
         case ReflectFieldType::AssetRef: {
             auto& path = *static_cast<std::string*>(fp);
             path = ResolveAssetRef(v);  // handles both v1 plain string and v2 {path,pathGuid}
@@ -444,6 +465,16 @@ bool ReflectJsonNearlyEqual(ReflectFieldType t, const json& a, const json& b) {
                 if (!a[i].is_number() || !b[i].is_number() || !close(a[i].get<double>(), b[i].get<double>()))
                     return false;
             return true;
+        case ReflectFieldType::String:
+        case ReflectFieldType::AssetRef: {
+            // #132 - a path may be stored as a plain string (older files) or {"path","pathGuid"}:
+            // the same path either way is the same value, not a prefab override.
+            auto pathOf = [](const json& v) -> json {
+                if (v.is_object()) { const auto it = v.find("path"); return it != v.end() ? *it : json(); }
+                return v;
+            };
+            return pathOf(a) == pathOf(b);
+        }
         default:
             return a == b;
     }
