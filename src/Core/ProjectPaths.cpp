@@ -32,12 +32,16 @@ std::string FindRoot() {
     return ec ? std::string(".") : cwd.string();
 }
 
+std::string& Override() { static std::string s; return s; }
+
 } // namespace
+
+void SetRootOverride(const std::string& root) { Override() = root; }
 
 const std::string& Root() {
     // Resolved once: the working directory doesn't change during a run, and every call site
     // (scene load/save, preferences) would otherwise redo the same directory walk.
-    static const std::string root = FindRoot();
+    static const std::string root = Override().empty() ? FindRoot() : Override();
     return root;
 }
 

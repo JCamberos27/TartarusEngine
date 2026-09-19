@@ -72,6 +72,21 @@ struct AudioSettings {
 const AudioSettings& Audio();
 AudioSettings&       MutableAudio();
 
+// #174 - Build Settings + the Player settings a build bakes into player.json.
+struct BuildSettings {
+    std::string ProductName = "My Game";
+    std::string CompanyName;
+    std::string Version = "1.0";
+    std::string OutputDir;           // empty = <folder above the project>/Builds/<ProductName>
+    std::vector<std::string> Scenes; // project-relative; index 0 is the startup scene
+    int  Width = 1280, Height = 720; // windowed size
+    bool Fullscreen = true;
+    bool VSync = true;
+    bool DevelopmentBuild = false;   // keep the stats overlay + physics debug keys in the player
+};
+const BuildSettings& Build();
+BuildSettings&       MutableBuild();
+
 // User-managed tag vocabulary. Additive to the free-text Tag field: the Inspector's Tag
 // dropdown unions this list with whatever tags are actually in use in the open scene, so a tag
 // defined here shows up even before anything wears it. Order is preserved; duplicates and blank

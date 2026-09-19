@@ -6,6 +6,8 @@
 namespace UserPaths {
 namespace {
 
+std::string& AppName() { static std::string s = "TartarusEngine"; return s; }
+
 std::string FindRoot() {
     namespace fs = std::filesystem;
 
@@ -29,13 +31,15 @@ std::string FindRoot() {
         return ec ? std::string(".") : cwd.string();
     }
 
-    fs::path dir = fs::path(base) / "TartarusEngine";
+    fs::path dir = fs::path(base) / AppName();
     std::error_code ec;
     fs::create_directories(dir, ec); // best-effort; Save()/Load() below tolerate it not existing
     return dir.lexically_normal().string();
 }
 
 } // namespace
+
+void SetAppName(const std::string& name) { if (!name.empty()) AppName() = name; }
 
 const std::string& Root() {
     // Resolved once: the environment doesn't change during a run, and every call site
