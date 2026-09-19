@@ -594,7 +594,18 @@ int main(int argc, char** argv) {
         GravityGun gravityGun;
         CrosshairOverlay crosshair; // Play-mode crosshair + gravity gun hold / throw-charge indicator
         TrajectoryRibbon throwArc;  // red predicted path while the gravity gun charges a throw
-        const glm::vec4 kThrowArcColor(1.6f, 0.08f, 0.05f, 0.9f); // linear HDR red, a touch of bloom
+        // The predicted flight in linear HDR red (a touch of bloom): the arc to the first contact
+        // bright, each bounce after it fainter, a ring at every contact the size of the body.
+        auto drawThrowArc = [&](const glm::mat4& v, const glm::mat4& p, const glm::vec3& eye) {
+            const ThrowPrediction& pr = gravityGun.Prediction();
+            for (size_t i = 0; i < pr.Legs.size(); ++i)
+                throwArc.AddPath(pr.Legs[i], glm::vec4(1.6f, 0.08f, 0.05f, i == 0 ? 0.9f : 0.55f), i == 0 ? 4 : 0);
+            const float ring = std::max(pr.BodyRadius, 0.12f);
+            for (size_t i = 0; i < pr.ContactPoints.size(); ++i)
+                throwArc.AddRing(pr.ContactPoints[i], pr.ContactNormals[i], ring,
+                                 glm::vec4(1.6f, 0.08f, 0.05f, i == 0 ? 0.9f : 0.55f));
+            throwArc.Draw(v, p, eye);
+        };
         // #165 - what Play renders through: the first-person player (playUsesPlayer), or the
         // scene's Camera entity, mirrored each frame into playSceneCam.
         bool playUsesPlayer = true;
@@ -3007,8 +3018,7 @@ int main(int argc, char** argv) {
                     glDepthMask(GL_TRUE);
                 }
                 if (playing && playUsesPlayer && playGravityGun && gravityGun.IsCharging())
-                    throwArc.Draw(gvView, gvProj, gvEye, gravityGun.Trajectory(), kThrowArcColor,
-                                  gravityGun.TrajectoryHitNormal());
+                    drawThrowArc(gvView, gvProj, gvEye);
 
                 gameHdr.ResolveTo();
 
@@ -3176,8 +3186,7 @@ int main(int argc, char** argv) {
                     glDepthMask(GL_TRUE);
                 }
                 if (playing && playUsesPlayer && playGravityGun && gravityGun.IsCharging())
-                    throwArc.Draw(view, proj, gameCam->Position, gravityGun.Trajectory(), kThrowArcColor,
-                                  gravityGun.TrajectoryHitNormal());
+                    drawThrowArc(view, proj, gameCam->Position);
                 gameHdr.ResolveTo();
 
                 // PR16: Bloom — same gameBloom instance the docked Game view uses.

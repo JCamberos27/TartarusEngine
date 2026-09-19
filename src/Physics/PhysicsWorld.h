@@ -215,6 +215,15 @@ bool GetActorPosition(unsigned entity, float out[3]);
 bool GetActorRotation(unsigned entity, float outXYZW[4]);
 // A dynamic body's linear damping (0 when it has none / isn't dynamic) - for throw prediction.
 float GetLinearDamping(unsigned entity);
+// Sweeps `entity`'s own collision shape (at its current rotation) from `from` along `dir` for
+// `distance`, ignoring the body itself, triggers and the Player. On a hit, fills outHit (Point,
+// Normal, Distance = how far the body's origin travelled) and the bounciness / dynamic friction
+// PhysX would use for that contact (both materials combined by their combine modes). For the
+// gravity gun's throw prediction.
+bool SweepBody(unsigned entity, const float from[3], const float dir[3], float distance, RaycastHit& outHit,
+               float& outBounciness, float& outFriction);
+// The bounding radius of `entity`'s collision shape about its origin (0 if unknown).
+float BodyRadius(unsigned entity);
 
 // --- Debug (#185 PR 12) -------------------------------------------------------------
 // Copy up to `maxPoints` world-space contact points from this frame's events (3 floats each)

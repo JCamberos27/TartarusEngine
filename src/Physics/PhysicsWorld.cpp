@@ -1168,7 +1168,10 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
         // straight into the local fields, teleporting any simulated child).
         PxTransform shown = p;
         const auto* rb = world.Registry.try_get<RigidbodyComponent>(e);
-        const int mode = rb ? rb->Interpolation : 1;
+        // The gravity gun's held body is always extrapolated: it's servoed to a point in front
+        // of a camera that moves every rendered frame, and drawing it a physics step behind
+        // (Interpolate) made it judder against the view whenever the player moved.
+        const int mode = body == g_State->grabbed ? 2 : (rb ? rb->Interpolation : 1);
         if (mode == 1) {
             if (auto it = g_State->prevPose.find(body); it != g_State->prevPose.end() && PoseIsFinite(it->second)) {
                 const PxTransform& a = it->second;
@@ -2028,6 +2031,88 @@ bool GetActorRotation(unsigned entity, float out[4]) {
     const PxQuat q = a->getGlobalPose().q;
     out[0] = q.x; out[1] = q.y; out[2] = q.z; out[3] = q.w;
     return true;
+}
+
+namespace {
+// PhysX combines two materials' values with the higher-priority of their two combine modes
+// (eAVERAGE < eMIN < eMULTIPLY < eMAX).
+float CombineMaterialValue(float a, float b, PxCombineMode::Enum ma, PxCombineMode::Enum mb) {
+    switch (std::max(ma, mb)) {
+        case PxCombineMode::eMIN:      return std::min(a, b);
+        case PxCombineMode::eMULTIPLY: return a * b;
+        case PxCombineMode::eMAX:      return std::max(a, b);
+        default:                       return 0.5f * (a + b);
+    }
+}
+
+struct IgnoreSelfFilter : PxQueryFilterCallback {
+    const PxRigidActor* self = nullptr;
+    const PxRigidActor* player = nullptr;
+    PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor,
+                                   PxHitFlags&) override {
+        if (actor == self || actor == player) return PxQueryHitType::eNONE;
+        if (shape && (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
+        return PxQueryHitType::eBLOCK;
+    }
+    PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*, const PxRigidActor*) override {
+        return PxQueryHitType::eBLOCK;
+    }
+};
+} // namespace
+
+bool SweepBody(unsigned entity, const float from[3], const float dir[3], float distance, RaycastHit& outHit,
+               float& outBounciness, float& outFriction) {
+    outHit = RaycastHit{};
+    if (!g_State || !g_State->scene || distance <= 0.0f) return false;
+    PxRigidDynamic* b = DynamicFor(entity);
+    PxShape* shape = nullptr;
+    if (!b || b->getNbShapes() < 1 || b->getShapes(&shape, 1) != 1 || !shape) return false;
+    PxVec3 d(dir[0], dir[1], dir[2]);
+    if (d.magnitudeSquared() < 1e-12f) return false;
+    d.normalize();
+
+    const PxTransform actorPose(PxVec3(from[0], from[1], from[2]), b->getGlobalPose().q);
+    const PxTransform shapePose = actorPose * shape->getLocalPose();
+    IgnoreSelfFilter filter;
+    filter.self = b;
+    filter.player = g_State->controller ? g_State->controller->getActor() : nullptr;
+    PxQueryFilterData fd;
+    fd.flags = PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER;
+    PxSweepBuffer buf;
+    // Assume no initial overlap: the body starts where it's held, possibly touching something.
+    const PxHitFlags hitFlags = PxHitFlag::eDEFAULT | PxHitFlag::eASSUME_NO_INITIAL_OVERLAP;
+    if (!g_State->scene->sweep(shape->getGeometry(), shapePose, d, distance, buf, hitFlags, fd, &filter) ||
+        !buf.hasBlock)
+        return false;
+    const PxSweepHit& h = buf.block;
+    outHit.Hit = true;
+    outHit.Distance = h.distance;
+    outHit.Point[0] = h.position.x; outHit.Point[1] = h.position.y; outHit.Point[2] = h.position.z;
+    outHit.Normal[0] = h.normal.x;  outHit.Normal[1] = h.normal.y;  outHit.Normal[2] = h.normal.z;
+    outHit.Entity = h.actor ? UserDataToEntity(h.actor->userData) : 0xFFFFFFFFu;
+
+    PxMaterial* ma = nullptr;
+    PxMaterial* mb = nullptr;
+    shape->getMaterials(&ma, 1);
+    if (h.shape) h.shape->getMaterials(&mb, 1);
+    if (ma && mb) {
+        outBounciness = CombineMaterialValue(ma->getRestitution(), mb->getRestitution(),
+                                             ma->getRestitutionCombineMode(), mb->getRestitutionCombineMode());
+        outFriction = CombineMaterialValue(ma->getDynamicFriction(), mb->getDynamicFriction(),
+                                           ma->getFrictionCombineMode(), mb->getFrictionCombineMode());
+    } else {
+        outBounciness = 0.0f;
+        outFriction = 0.6f;
+    }
+    return true;
+}
+
+float BodyRadius(unsigned entity) {
+    PxRigidDynamic* b = g_State ? DynamicFor(entity) : nullptr;
+    PxShape* shape = nullptr;
+    if (!b || b->getNbShapes() < 1 || b->getShapes(&shape, 1) != 1 || !shape) return 0.0f;
+    const PxBounds3 bounds = PxShapeExt::getWorldBounds(*shape, *b);
+    return 0.5f * bounds.getDimensions().maxElement();
 }
 
 float GetLinearDamping(unsigned entity) {
