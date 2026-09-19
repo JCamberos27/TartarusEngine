@@ -154,6 +154,13 @@ struct AudioSourceComponent {
     // exit; false by default so placing a source in a scene doesn't start blaring the moment you
     // press Play unless you opt in.
     bool PlayOnStart = false;
+    int Output = 0; // #171 - mixer bus (AudioEngine::Bus): 0 SFX, 1 Music, 2 Ambient, 3 UI, 4 Voice
+};
+
+// #171 - Unity's Audio Listener: in Play, 3D sounds are heard from this entity (position and
+// facing) instead of from the game camera. The first active one wins.
+struct AudioListenerComponent {
+    bool Enabled = true;
 };
 
 // Tag only: which Hierarchy section an entity lists under ("Level Geometry" vs "Models") and

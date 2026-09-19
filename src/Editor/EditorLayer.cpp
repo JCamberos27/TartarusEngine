@@ -1855,6 +1855,26 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
             EditorUI::SetTooltip("Game speed when Play starts (Unity's Time.timeScale). The game module can change\n"
                                  "it while playing; the Physics panel's Slow-mo multiplies on top for testing.");
 
+        // #171 - Unity's Audio Mixer: master + one volume per bus (Audio Source > Output).
+        ImGui::SeparatorText("Audio");
+        {
+            ProjectSettings::AudioSettings& au = ProjectSettings::MutableAudio();
+            ImGui::SetNextItemWidth(kw);
+            if (ImGui::SliderFloat("Master volume", &au.MasterVolume, 0.0f, 1.0f, "%.2f"))
+                AudioEngine::SetMasterVolume(au.MasterVolume);
+            if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Scales every sound. View > Mute Audio still silences everything.");
+            static const char* kBusNames[] = {"SFX volume", "Music volume", "Ambient volume", "UI volume", "Voice volume"};
+            for (int b = 0; b < AudioEngine::kBusCount; ++b) {
+                ImGui::SetNextItemWidth(kw);
+                if (ImGui::SliderFloat(kBusNames[b], &au.BusVolume[b], 0.0f, 1.0f, "%.2f"))
+                    AudioEngine::SetBusVolume((AudioEngine::Bus)b, au.BusVolume[b]);
+                if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
+                if (ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("Volume of every Audio Source whose Output is this bus. Applies live.");
+            }
+        }
+
         // #185 hardening — Play-mode Player tuning.
         ImGui::SeparatorText("Player");
         ImGui::SetNextItemWidth(kw);
