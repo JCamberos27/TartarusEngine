@@ -280,6 +280,20 @@ void World::RebuildWorldTransformCache() {
     }
 }
 
+glm::vec3 NearestEquivalentEuler(const glm::vec3& eulerDeg, const glm::vec3& hintDeg) {
+    auto wrapNear = [](float v, float hint) { return v + 360.0f * std::round((hint - v) / 360.0f); };
+    glm::vec3 best(0.0f);
+    float bestCost = 1e30f;
+    const glm::vec3 candidates[2] = {eulerDeg, glm::vec3(180.0f - eulerDeg.x, eulerDeg.y + 180.0f, eulerDeg.z + 180.0f)};
+    for (const glm::vec3& c : candidates) {
+        const glm::vec3 w(wrapNear(c.x, hintDeg.x), wrapNear(c.y, hintDeg.y), wrapNear(c.z, hintDeg.z));
+        const glm::vec3 d = glm::abs(w - hintDeg);
+        const float cost = d.x + d.y + d.z;
+        if (cost < bestCost - 1e-3f) { bestCost = cost; best = w; }
+    }
+    return best;
+}
+
 namespace {
 // Rotation-only part of an affine matrix (columns normalised; a mirrored basis is flipped so the
 // result is a proper rotation) as YXZ Euler degrees — the order ComposeTransform builds with.
@@ -315,13 +329,13 @@ void World::SetWorldPose(entt::entity entity, const glm::vec3& worldPosition, co
     const auto* hier = Registry.try_get<HierarchyComponent>(entity);
     if (!hier || hier->Parent == entt::null) {
         tc->Position = worldPosition;
-        tc->RotationEuler = EulerDegreesYXZ(glm::mat4_cast(worldRotation));
+        tc->RotationEuler = NearestEquivalentEuler(EulerDegreesYXZ(glm::mat4_cast(worldRotation)), tc->RotationEuler);
         return;
     }
     const glm::mat4 world = glm::translate(glm::mat4(1.0f), worldPosition) * glm::mat4_cast(worldRotation);
     const glm::mat4 local = glm::inverse(ComposeWorldTransform(hier->Parent)) * world;
     tc->Position = glm::vec3(local[3]);
-    tc->RotationEuler = EulerDegreesYXZ(local);
+    tc->RotationEuler = NearestEquivalentEuler(EulerDegreesYXZ(local), tc->RotationEuler);
 }
 
 glm::mat4 World::GetCachedWorldTransform(entt::entity entity) const {
@@ -384,7 +398,7 @@ bool World::SetParent(entt::entity child, entt::entity parent) {
     auto& t = Registry.get<TransformComponent>(child);
     t.Position = pos;
     t.Scale = scale;
-    t.RotationEuler = glm::degrees(glm::vec3(ex, ey, ez));
+    t.RotationEuler = NearestEquivalentEuler(glm::degrees(glm::vec3(ex, ey, ez)), t.RotationEuler);
     return true;
 }
 
