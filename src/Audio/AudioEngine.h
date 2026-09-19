@@ -64,6 +64,12 @@ public:
     // past maxDistance, rolloff shaping the curve between them (miniaudio's inverse model).
     static void SetAttenuation(SoundHandle handle, float minDistance, float maxDistance,
                                float rolloff = 1.0f);
+    // #171 - Unity's rolloff modes. Logarithmic = the inverse model above; Linear fades to
+    // silence exactly at maxDistance.
+    enum class Rolloff { Logarithmic = 0, Linear = 1 };
+    static void SetRolloff(SoundHandle handle, Rolloff mode, float minDistance, float maxDistance);
+    // Turns positional audio off (2D: no panning, no distance falloff) or back on.
+    static void SetSpatial(SoundHandle handle, bool spatial);
 
     // Drives the 3D listener. Called once per frame from the Play-mode camera; while not
     // playing, the listener simply stays wherever it was last put.

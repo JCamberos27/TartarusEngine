@@ -758,8 +758,13 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
         AudioEngine::SoundHandle handle = AudioEngine::Play(audio.SoundPath, audio.Volume, audio.Loop,
                                                             (AudioEngine::Bus)std::clamp(audio.Output, 0, AudioEngine::kBusCount - 1));
         if (handle == AudioEngine::InvalidHandle) continue;
-        glm::vec3 worldPos = glm::vec3(world.GetCachedWorldTransform(e)[3]);
-        AudioEngine::SetPosition(handle, worldPos);
+        if (audio.Spatial) {
+            AudioEngine::SetPosition(handle, glm::vec3(world.GetCachedWorldTransform(e)[3]));
+            AudioEngine::SetRolloff(handle, (AudioEngine::Rolloff)std::clamp(audio.Rolloff, 0, 1),
+                                    audio.MinDistance, audio.MaxDistance);
+        } else {
+            AudioEngine::SetSpatial(handle, false);
+        }
         m_PlayModeAudioHandles[e] = handle;
     }
 
@@ -769,6 +774,17 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
     PhysicsWorld::Create(world);
 
     Log::Info("Entered play mode - scene state saved, changes will be reverted on exit.");
+}
+
+void EditorLayer::UpdatePlayModeAudio(const World& world) {
+    for (auto it = m_PlayModeAudioHandles.begin(); it != m_PlayModeAudioHandles.end();) {
+        const auto [e, handle] = *it;
+        if (!world.Registry.valid(e) || !AudioEngine::IsPlaying(handle)) { it = m_PlayModeAudioHandles.erase(it); continue; }
+        const auto* audio = world.Registry.try_get<AudioSourceComponent>(e);
+        if (audio && audio->Spatial)
+            AudioEngine::SetPosition(handle, glm::vec3(world.ComposeWorldTransform(e)[3]));
+        ++it;
+    }
 }
 
 void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
