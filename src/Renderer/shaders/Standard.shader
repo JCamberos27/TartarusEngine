@@ -39,6 +39,18 @@ Properties {
     // PR12: Transmission + refraction
     _TransmissionStrength ("Transmission",          Range(0, 1))     = 0
     _IOR                  ("IOR",                   Range(1, 3))     = 1.5
+    // #102 / #113 — surface options
+    [Header(Surface Options)] [Tooltip(Repeats every map this many times across the mesh UVs.)] _UVTiling ("Tiling", Vec2) = (1, 1)
+    _UVOffset             ("Offset",                Vec2)            = (0, 0)
+    [Tooltip(Scales the normal map's bumpiness. 0 = flat.)] _NormalStrength ("Normal Strength", Range(0, 2)) = 1
+    [Tooltip(For normal maps authored for DirectX (green channel points down), e.g. from Unreal or Substance DX presets.)] _NormalFlipY ("Normal Map Is DirectX", Bool) = 0
+    [Tooltip(Draw and light both sides (foliage, cloth, thin planes).)] _DoubleSided ("Double Sided", Bool) = 0
+    [Tooltip(Multiply the colour (and alpha) by the mesh's vertex colours.)] _VertexColors ("Vertex Colors", Bool) = 0
+    [Tooltip(Grayscale height (white = high) for parallax occlusion mapping.)] _HeightMap ("Height", Texture2D) = "white"
+    _ParallaxScale        ("Parallax Scale",        Range(0, 0.1))   = 0.02
+    [Header(Detail Maps)] [Tooltip(x2 detail: 50% grey leaves the colour unchanged, lighter brightens, darker darkens.)] _DetailAlbedoMap ("Detail Albedo", Texture2D) = "white"
+    _DetailNormalMap      ("Detail Normal",         Texture2D)       = "normal"
+    _DetailTiling         ("Detail Tiling",         Vec2)            = (4, 4)
 }
 
 Keywords {

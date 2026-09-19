@@ -272,6 +272,10 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
         if (mesh->mTextureCoords[0]) {
             v.UV = {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y};
         }
+        if (mesh->HasVertexColors(0)) { // #113
+            const aiColor4D& c = mesh->mColors[0][i];
+            v.Color = {c.r, c.g, c.b, c.a};
+        }
         if (mesh->HasTangentsAndBitangents()) {
             v.Tangent = AiToGlm(mesh->mTangents[i]);
             glm::vec3 bitangent = AiToGlm(mesh->mBitangents[i]);
@@ -344,6 +348,8 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     if (m_D->Settings.MaterialImportMode == ModelImportSettings::MaterialMode::ImportEmbedded) {
         if (mesh->mMaterialIndex < scene->mNumMaterials) {
             gpuMesh->Mat = ExtractMaterial(scene, mesh->mMaterialIndex);
+            // #113 — a mesh that ships vertex colours gets them (glTF COLOR_0 always tints).
+            if (mesh->HasVertexColors(0)) gpuMesh->Mat.UseVertexColor = true;
         }
     } else if (m_D->Settings.MaterialImportMode == ModelImportSettings::MaterialMode::CreateSynthetic) {
         // Ignore the file's own materials/textures entirely - same neutral look CreatePrimitive
@@ -613,6 +619,10 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
 
     // #102 — factors now scale their maps, so a file that has a map but no factor (FBX, OBJ)
     // means factor 1 (the glTF default), not the engine's scalar-only defaults of 0 / 0.5.
+    // #113 — double-sided materials (glTF doubleSided, FBX/OBJ two-sided flag).
+    int twoSided = 0;
+    if (material->Get(AI_MATKEY_TWOSIDED, twoSided) == AI_SUCCESS && twoSided) mat.DoubleSided = true;
+
     float scalar;
     const bool hasMetalFactor = material->Get(AI_MATKEY_METALLIC_FACTOR, scalar) == AI_SUCCESS;
     if (hasMetalFactor) mat.Metallic = scalar;
@@ -796,7 +806,21 @@ struct MaterialLocs {
     int hasAO, aoMap;
     int hasEmissive, emissiveMap;
     int alphaClip, alphaCutoff; // #101
+    int hasHeight, heightMap, hasDetailAlbedo, detailAlbedoMap, hasDetailNormal, detailNormalMap; // #102
 };
+
+// #102 / #113 — the surface-option uniforms, set for BOTH the built-in and the data-driven
+// (Standard.shader) paths so a shader that declares them gets them either way.
+void SetSurfaceOptions(Shader& shader, const Material& mat) {
+    shader.SetVec2("uUVTiling", mat.UVTiling);
+    shader.SetVec2("uUVOffset", mat.UVOffset);
+    shader.SetFloat("uNormalStrength", mat.NormalStrength);
+    shader.SetInt("uNormalFlipY", mat.NormalFlipY ? 1 : 0);
+    shader.SetInt("uDoubleSided", mat.DoubleSided ? 1 : 0);
+    shader.SetInt("uUseVertexColor", mat.UseVertexColor ? 1 : 0);
+    shader.SetFloat("uParallaxScale", mat.ParallaxScale);
+    shader.SetVec2("uDetailTiling", mat.DetailTiling);
+}
 
 MaterialLocs ResolveMaterialLocs(Shader& shader) {
     MaterialLocs L;
@@ -822,6 +846,12 @@ MaterialLocs ResolveMaterialLocs(Shader& shader) {
     L.aoMap = shader.Loc("uAOMap");
     L.hasEmissive = shader.Loc("uHasEmissiveMap");
     L.emissiveMap = shader.Loc("uEmissiveMap");
+    L.hasHeight = shader.Loc("uHasHeightMap");
+    L.heightMap = shader.Loc("uHeightMap");
+    L.hasDetailAlbedo = shader.Loc("uHasDetailAlbedoMap");
+    L.detailAlbedoMap = shader.Loc("uDetailAlbedoMap");
+    L.hasDetailNormal = shader.Loc("uHasDetailNormalMap");
+    L.detailNormalMap = shader.Loc("uDetailNormalMap");
     return L;
 }
 
@@ -866,6 +896,11 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
     bindSlot(5, mat.RoughnessMap, locs.hasRoughness, locs.roughnessMap, DefaultTextures::White());
     bindSlot(6, mat.AOMap, locs.hasAO, locs.aoMap, DefaultTextures::White());
     bindSlot(7, mat.EmissiveMap, locs.hasEmissive, locs.emissiveMap, DefaultTextures::Black());
+    // #102 — units 16+ (8..15 are the engine's shadow / IBL / SSAO units).
+    bindSlot(16, mat.HeightMap, locs.hasHeight, locs.heightMap, DefaultTextures::White());
+    bindSlot(17, mat.DetailAlbedoMap, locs.hasDetailAlbedo, locs.detailAlbedoMap, DefaultTextures::White());
+    bindSlot(18, mat.DetailNormalMap, locs.hasDetailNormal, locs.detailNormalMap, DefaultTextures::FlatNormal());
+    SetSurfaceOptions(shader, mat);
 }
 // Data-driven BindMaterial using ShaderAsset::Bindings() + MaterialAsset property accessors.
 // Activates when the MaterialAsset has a linked ShaderAsset (v2 .mat files referencing a .shader).
@@ -889,6 +924,7 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
     if (GLStateCache::MaterialAlreadyBound(hash, shader.Program())) return;
     // #101 — cutout for the AlphaTest queue (Standard.shader includes ModelFragment's uAlphaClip).
     shader.SetInt("uAlphaClip", (mat.AlphaClip || ma.RenderQueue == MaterialAsset::Queue::AlphaTest) ? 1 : 0);
+    SetSurfaceOptions(shader, mat); // #102
     shader.SetFloat("uAlphaCutoff", mat.AlphaCutoff);
 
     const auto& props    = sa.Properties();
@@ -936,7 +972,8 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
         // #99 — vec2/vec4 uniforms need the matching setter; glUniform3f on them is
         // GL_INVALID_OPERATION and the value was silently never set.
         case ShaderPropType::Vec2:
-            shader.SetVec2(uname, glm::vec2(extra ? extra->V : prop.DefaultVec));
+            shader.SetVec2(uname, builtin ? glm::vec2(MaterialAsset::GetVec(mat, pname))
+                                          : glm::vec2(extra ? extra->V : prop.DefaultVec));
             break;
         case ShaderPropType::Vec4:
             shader.SetVec4(uname, extra ? extra->V : prop.DefaultVec);
@@ -1040,6 +1077,18 @@ const ShaderRenderState* SlotRenderState(const std::vector<std::shared_ptr<Mater
     if (i >= (int)slots.size() || !slots[i] || !slots[i]->Shader) return nullptr;
     return &slots[i]->Shader->RenderState();
 }
+
+// The shader's state plus the material's Double Sided (#113): culling off unless the shader
+// itself says otherwise. Returns a pointer to a per-call scratch copy when it needs one.
+const ShaderRenderState* EffectiveRenderState(const std::vector<std::shared_ptr<MaterialAsset>>& slots, int i,
+                                              const Material& mat) {
+    const ShaderRenderState* st = SlotRenderState(slots, i);
+    if (!mat.DoubleSided || (st && st->Cull != ShaderRenderState::CullMode::Unset)) return st;
+    static thread_local ShaderRenderState scratch;
+    scratch = st ? *st : ShaderRenderState{};
+    scratch.Cull = ShaderRenderState::CullMode::Off;
+    return &scratch;
+}
 } // namespace
 
 void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
@@ -1053,7 +1102,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
 
     for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
         const bool hasSlot = i < (int)slots.size() && slots[i];
-        stateScope.Apply(SlotRenderState(slots, i));
+        stateScope.Apply(EffectiveRenderState(slots, i, hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat));
         Shader* prog = &fallback;
         if (Shader* p = selectProgram(hasSlot ? slots[i].get() : nullptr)) prog = p;
 
@@ -1091,7 +1140,7 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
         bool hasSlot = i < (int)slots.size() && slots[i];
         // Transparent materials don't cast shadows — skip them in the depth-only pass.
         if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
-        stateScope.ApplyCullOnly(SlotRenderState(slots, i));
+        stateScope.ApplyCullOnly(EffectiveRenderState(slots, i, hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat));
         const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
         // Only cost paid over a pure depth draw: one texture bind + two uniforms, and only for
         // CUTOUT materials with an albedo map (foliage/fences) — the shadow then follows the
@@ -1101,6 +1150,8 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
         // in this pass drew with the same material.
         const bool clip = mat.AlphaClip || (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::AlphaTest);
         if (!GLStateCache::MaterialAlreadyBound(mat.Hash() ^ (clip ? 0x5bd1e995ull : 0ull), shader.Program())) {
+            shader.SetVec2("uUVTiling", mat.UVTiling); // #102 — the cutout follows the material's tiling
+            shader.SetVec2("uUVOffset", mat.UVOffset);
             if (clip && mat.AlbedoMap && mat.AlbedoMap->IsValid()) {
                 mat.AlbedoMap->Bind(0);
                 shader.SetInt(alphaTestLoc, 1);

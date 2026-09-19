@@ -259,7 +259,64 @@ bool HdrColorEdit(float linear[3], bool& activated, bool& committed) {
     return changed;
 }
 
-void PropertyLabel(const char* label, const char* tooltip = nullptr, bool highlighted = false) {
+void PropertyLabel(const char* label, const char* tooltip = nullptr, bool highlighted = false);
+
+// #102 / #113 — the non-texture surface options for shader-less materials (the Standard.shader
+// path shows the same fields from its Properties{}). Edits every material in `mats`; reports the
+// start / end of an edit for the caller's undo or save, like HdrColorEdit.
+struct SurfaceEdit { bool activated = false, committed = false; };
+SurfaceEdit DrawSurfaceOptionRows(const std::vector<Material*>& mats) {
+    SurfaceEdit ev;
+    if (mats.empty()) return ev;
+    Material& first = *mats[0];
+    auto note = [&]() {
+        ev.activated |= ImGui::IsItemActivated();
+        ev.committed |= ImGui::IsItemDeactivatedAfterEdit();
+    };
+    auto vec2Row = [&](const char* label, glm::vec2 Material::* field, float speed, const char* tip) {
+        PropertyLabel(label, tip);
+        ImGui::PushID(label);
+        glm::vec2 v = first.*field;
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::DragFloat2("##v2", &v.x, speed)) for (Material* m : mats) m->*field = v;
+        note();
+        ImGui::PopID();
+    };
+    auto floatRow = [&](const char* label, float Material::* field, float lo, float hi, const char* tip) {
+        PropertyLabel(label, tip);
+        ImGui::PushID(label);
+        float v = first.*field;
+        bool activated = false, committed = false;
+        if (EditorUI::SliderFloat("##f", &v, lo, hi, "%.3f", 0, &activated, &committed) && std::isfinite(v))
+            for (Material* m : mats) m->*field = v;
+        ev.activated |= activated;
+        ev.committed |= committed;
+        ImGui::PopID();
+    };
+    auto boolRow = [&](const char* label, bool Material::* field, const char* tip) {
+        PropertyLabel(label, tip);
+        ImGui::PushID(label);
+        bool v = first.*field;
+        if (EditorUIPrimitives::Checkbox("##b", &v)) {
+            for (Material* m : mats) m->*field = v;
+            ev.activated = ev.committed = true;
+        }
+        ImGui::PopID();
+    };
+    ImGui::SeparatorText("Surface Options");
+    vec2Row("Tiling", &Material::UVTiling, 0.01f, "Repeats every map this many times across the mesh UVs.");
+    vec2Row("Offset", &Material::UVOffset, 0.005f, "Shifts every map across the mesh UVs.");
+    floatRow("Normal Strength", &Material::NormalStrength, 0.0f, 2.0f, "Scales the normal map's bumpiness. 0 = flat.");
+    boolRow("Normal Map Is DirectX", &Material::NormalFlipY,
+            "For normal maps authored for DirectX (green channel points down), e.g. from Unreal or Substance DX presets.");
+    boolRow("Double Sided", &Material::DoubleSided, "Draw and light both sides (foliage, cloth, thin planes).");
+    boolRow("Vertex Colors", &Material::UseVertexColor, "Multiply the colour (and alpha) by the mesh's vertex colours.");
+    floatRow("Parallax Scale", &Material::ParallaxScale, 0.0f, 0.1f, "Depth of the Height map's parallax effect.");
+    vec2Row("Detail Tiling", &Material::DetailTiling, 0.05f, "UV tiling of the Detail Albedo / Detail Normal maps.");
+    return ev;
+}
+
+void PropertyLabel(const char* label, const char* tooltip, bool highlighted) {
     // Sized to fit "Emissive Strength", the longest label actually used — every row sharing
     // this one constant is what makes their value widgets land in the same column regardless
     // of how long that particular row's own label is. Computed once (the UI font is fixed).
@@ -607,12 +664,14 @@ std::shared_ptr<Texture> LoadTextureForSlot(AssetLibrary& assets, const std::str
                                             std::shared_ptr<Texture> Material::* slot) {
     auto tex = assets.LoadTexture(path);
     if (!tex) return tex;
-    const bool isColor = slot == &Material::AlbedoMap || slot == &Material::EmissiveMap;
+    const bool isColor = slot == &Material::AlbedoMap || slot == &Material::EmissiveMap ||
+                         slot == &Material::DetailAlbedoMap;
+    const bool isNormal = slot == &Material::NormalMap || slot == &Material::DetailNormalMap;
     if (!isColor && !assets.TextureSettingsMap().count(path)) {
         TextureImportSettings s = assets.GetTextureSettings(path);
         if (s.IsSRGB) {
             s.IsSRGB = false;
-            if (slot == &Material::NormalMap) s.TextureType = TextureImportSettings::Type::NormalMap;
+            if (isNormal) s.TextureType = TextureImportSettings::Type::NormalMap;
             assets.SetTextureSettings(path, s);
             assets.ReimportTexture(path);
             Log::Info("Texture: '" + path + "' is used as a data map - imported as linear (not sRGB).");
@@ -1272,6 +1331,10 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
     mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = matte. Multiplied by the Roughness value above.");
     mapRow("AO",        &Material::AOMap,        "Ambient occlusion - darkens crevices and contact points.");
     mapRow("Emissive",  &Material::EmissiveMap,  "Texture for glowing areas, tinted by Emissive Color.");
+    mapRow("Height",    &Material::HeightMap,    "Grayscale height (white = high) for parallax occlusion mapping."); // #102
+    mapRow("Detail Albedo", &Material::DetailAlbedoMap, "x2 detail: 50% grey leaves the colour unchanged.");
+    mapRow("Detail Normal", &Material::DetailNormalMap, "Fine surface detail blended on top of the Normal map.");
+    if (DrawSurfaceOptionRows({&mat}).committed) save();
 }
 
 // The Inspector's body — everything inside the panel window. The module
@@ -3313,6 +3376,12 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = matte. Multiplied by the Roughness value above.");
         mapRow("AO",        &Material::AOMap,        "Ambient occlusion - darkens crevices and contact points.");
         mapRow("Emissive",  &Material::EmissiveMap,  "Texture for glowing areas, tinted by Emissive Color.");
+        mapRow("Height",    &Material::HeightMap,    "Grayscale height (white = high) for parallax occlusion mapping."); // #102
+        mapRow("Detail Albedo", &Material::DetailAlbedoMap, "x2 detail: 50% grey leaves the colour unchanged.");
+        mapRow("Detail Normal", &Material::DetailNormalMap, "Fine surface detail blended on top of the Normal map.");
+        const SurfaceEdit se = DrawSurfaceOptionRows(mats);
+        if (se.activated) StageUndo(world);
+        if (se.committed) CommitStagedUndo(world, "Edit Material");
     };
 
     // Data-driven inspector for materials that have a linked ShaderAsset.
