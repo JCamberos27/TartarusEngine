@@ -82,6 +82,11 @@ public:
 
     // #162 - anti-aliasing and colour grading, applied in the final tonemap pass.
     bool  FxaaEnabled{false};
+    bool  AutoExposure{false};          // meter the scene and ease exposure toward mid grey
+    float AutoExposureMinEV{-4.0f};     // how far it may brighten (negative) / darken (positive)
+    float AutoExposureMaxEV{4.0f};
+    float AutoExposureSpeedUp{2.0f};    // adapting to a brighter scene, per second
+    float AutoExposureSpeedDown{1.0f};  // adapting to a darker scene
     float GradeTemperature{0.0f};  // -100..100, 0 = neutral (Unity's White Balance)
     float GradeTint{0.0f};
     float GradeContrast{0.0f};

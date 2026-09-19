@@ -904,6 +904,11 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         root["bloomIntensity"] = world.BloomIntensity;
         // #162
         root["fxaa"] = world.FxaaEnabled;
+        root["autoExposure"] = world.AutoExposure;
+        root["autoExposureMinEV"] = world.AutoExposureMinEV;
+        root["autoExposureMaxEV"] = world.AutoExposureMaxEV;
+        root["autoExposureSpeedUp"] = world.AutoExposureSpeedUp;
+        root["autoExposureSpeedDown"] = world.AutoExposureSpeedDown;
         root["gradeTemperature"] = world.GradeTemperature;
         root["gradeTint"] = world.GradeTint;
         root["gradeContrast"] = world.GradeContrast;
@@ -1266,6 +1271,11 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             world.BloomIntensity   = root.value("bloomIntensity", 0.25f);
             // #162 - absent in older scenes: neutral.
             world.FxaaEnabled        = root.value("fxaa", false);
+            world.AutoExposure       = root.value("autoExposure", false);
+            world.AutoExposureMinEV  = std::clamp(root.value("autoExposureMinEV", -4.0f), -12.0f, 12.0f);
+            world.AutoExposureMaxEV  = std::clamp(root.value("autoExposureMaxEV", 4.0f), -12.0f, 12.0f);
+            world.AutoExposureSpeedUp   = std::clamp(root.value("autoExposureSpeedUp", 2.0f), 0.0f, 20.0f);
+            world.AutoExposureSpeedDown = std::clamp(root.value("autoExposureSpeedDown", 1.0f), 0.0f, 20.0f);
             world.GradeTemperature   = std::clamp(root.value("gradeTemperature", 0.0f), -100.0f, 100.0f);
             world.GradeTint          = std::clamp(root.value("gradeTint", 0.0f), -100.0f, 100.0f);
             world.GradeContrast      = std::clamp(root.value("gradeContrast", 0.0f), -100.0f, 100.0f);
