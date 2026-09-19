@@ -22,6 +22,8 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "AssetDatabase.h"
+#include "UserPaths.h"
 #include "AtomicFile.h"
 #include "ThumbnailCache.h"
 #include "EditorModuleAPI.h" // kAssetDetails*ColW, shared with EditorModuleAssetBrowser.cpp's header row
@@ -213,10 +215,13 @@ bool SearchHasToken(const std::string& filter, const std::string& token) {
 } // namespace
 
 
-// --- Asset favourites (#236 G) — project/asset_favorites.json --------------------------------
+// --- Asset favourites (#236 G) --------------------------------------------------------------
+// #129 - per-user, so they live in UserPaths (%LOCALAPPDATA%), not the version-controlled
+// project folder; an older project/asset_favorites.json is still read until the first save.
 void EditorLayer::LoadAssetFavorites() {
     m_AssetFavorites.clear();
-    std::ifstream in(ProjectPaths::Resolve("asset_favorites.json"));
+    std::ifstream in(UserPaths::Resolve("asset_favorites.json"));
+    if (!in.is_open()) in.open(ProjectPaths::Resolve("asset_favorites.json"));
     if (!in.is_open()) return;
     try {
         nlohmann::json root; in >> root;
@@ -231,7 +236,7 @@ void EditorLayer::SaveAssetFavorites() const {
     nlohmann::json root = nlohmann::json::array();
     for (const auto& k : m_AssetFavorites) root.push_back(k);
     // Atomic: a crash mid-write must not truncate the favourites list (audit CPP-206).
-    AtomicFile::WriteJson(ProjectPaths::Resolve("asset_favorites.json"), root);
+    AtomicFile::WriteJson(UserPaths::Resolve("asset_favorites.json"), root);
 }
 
 void EditorLayer::ToggleAssetFavorite(const std::string& key) {
@@ -808,6 +813,17 @@ void EditorLayer::DuplicateSelectedAsset(World& world, AssetLibrary& assets) {
         std::string newPath = candidate.generic_string();
         std::string folder = assets.AssetFolder(key);
 
+        // #129 - carry the import settings / labels over in a fresh .meta (new GUID: it's a new
+        // asset), before registering, so the copy imports exactly like the original.
+        if (!AssetDatabase::IsSynthetic(key)) {
+            nlohmann::json fields = nlohmann::json::parse(AssetDatabase::ReadMetaFields(key), nullptr, false);
+            AssetDatabase::EnsureGuid(newPath);
+            if (fields.is_object()) {
+                for (const char* k : {"guid", "type", "metaVersion", "displayName"}) fields.erase(k);
+                if (!fields.empty()) AssetDatabase::MergeMetaFields(newPath, fields.dump());
+            }
+        }
+
         bool registered = false;
         for (const auto& model : assets.Models()) {
             if (model->Path() == key) { assets.LoadModel(newPath); registered = true; break; }
@@ -820,6 +836,9 @@ void EditorLayer::DuplicateSelectedAsset(World& world, AssetLibrary& assets) {
         }
         if (!registered) for (const auto& prefab : assets.Prefabs()) {
             if (prefab == key) { assets.RegisterPrefab(newPath); registered = true; break; }
+        }
+        if (!registered) for (const auto& mat : assets.Materials()) { // #129 - .mat copies were never registered
+            if (mat->Path == key) { registered = assets.LoadMaterial(newPath) != nullptr; break; }
         }
 
         Log::Info("Duplicated '" + srcPath.filename().string() + "' -> '" + candidate.filename().string() + "'.");
@@ -875,8 +894,29 @@ void EditorLayer::CommitRename(World& world, AssetLibrary& assets) {
         for (std::string& histPath : m_AssetFolderHistory) patchRenamedPath(histPath);
         if (m_SelectedAssetKey == m_RenamingAssetKey) m_SelectedAssetKey = newPath;
     } else {
-        PushUndo(world, "Rename Asset");
-        assets.SetDisplayName(m_RenamingAssetKey, newName);
+        // #129 - a real file is renamed on disk (keeping its extension, .meta and GUID); only
+        // things with no file of their own (built-in primitives) fall back to a display name.
+        const std::filesystem::path oldP(m_RenamingAssetKey);
+        std::error_code ec;
+        const std::string oldAbs = oldP.is_absolute() ? m_RenamingAssetKey : ProjectPaths::Resolve(m_RenamingAssetKey);
+        if (!AssetDatabase::IsSynthetic(m_RenamingAssetKey) && std::filesystem::is_regular_file(oldAbs, ec)) {
+            const std::string newKey = (oldP.parent_path() / (newName + oldP.extension().string())).generic_string();
+            if (newKey != oldP.generic_string()) {
+                std::string why;
+                if (!RenameAssetFile(world, assets, m_RenamingAssetKey, newKey, why)) {
+                    Log::Error("Couldn't rename '" + oldP.filename().string() + "': " + why + ".");
+                    m_RenameRejectedFlash = 1.6f;
+                    return;
+                }
+                if (m_SelectedAssetKey == m_RenamingAssetKey) m_SelectedAssetKey = newKey;
+                for (auto& e : m_ExtraAssetSelection) if (e.Key == m_RenamingAssetKey) e.Key = newKey;
+                m_RenamingAssetKey = newKey;
+            }
+            assets.SetDisplayName(m_RenamingAssetKey, ""); // the file name is the name now
+        } else {
+            PushUndo(world, "Rename Asset");
+            assets.SetDisplayName(m_RenamingAssetKey, newName);
+        }
     }
     m_RenamingAssetKey.clear();
     m_RenameRejectedFlash = 0.0f;
