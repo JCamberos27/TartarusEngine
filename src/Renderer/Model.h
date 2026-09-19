@@ -147,6 +147,8 @@ public:
     }
 
     const std::string& Path() const { return m_Path; }
+    // #132 - the file was renamed or moved outside the editor; the loaded data stays valid.
+    void SetPath(const std::string& path) { m_Path = path; }
     glm::vec3 BoundsMin() const { return m_D->BoundsMin; }
     glm::vec3 BoundsMax() const { return m_D->BoundsMax; }
 

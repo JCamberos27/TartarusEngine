@@ -23,4 +23,8 @@ bool WriteBytes(const std::filesystem::path& path, std::string_view bytes, bool 
 // atomically via WriteBytes.
 bool WriteJson(const std::filesystem::path& path, const nlohmann::json& j, int indent = 2);
 
+// #132 - true when this process wrote `path` through WriteBytes in the last `withinMs`
+// milliseconds. The project file watcher uses it to ignore the editor's own saves.
+bool WrittenBySelfRecently(const std::filesystem::path& path, int withinMs = 3000);
+
 } // namespace AtomicFile
