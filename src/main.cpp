@@ -306,6 +306,14 @@ static void YawPitchFromWorld(const glm::mat4& m, float& yawDeg, float& pitchDeg
     pitchDeg = std::clamp(glm::degrees(std::asin(std::clamp(f.y, -1.0f, 1.0f))), -89.0f, 89.0f);
 }
 
+// #165 - the roll that, applied on top of yaw/pitch, lines Camera::Up() up with the entity's own
+// +Y, so a tilted scene Camera plays back tilted exactly like the edit-mode Game preview.
+static float RollFromWorld(const glm::mat4& m, const Camera& unrolled) {
+    const glm::vec3 up = glm::vec3(m[1]);
+    const float x = -glm::dot(up, unrolled.Right()), y = glm::dot(up, unrolled.Up());
+    return (x * x + y * y) > 1e-12f ? glm::degrees(std::atan2(x, y)) : 0.0f;
+}
+
 static entt::entity FindActiveSceneCamera(const World& world) {
     entt::entity best = entt::null;
     int bestOrder = 0x7fffffff;
@@ -1916,6 +1924,8 @@ int main(int argc, char** argv) {
                     const glm::mat4 camModel = world.ComposeWorldTransform(playCameraEntity);
                     playSceneCam.Position = glm::vec3(camModel[3]);
                     YawPitchFromWorld(camModel, playSceneCam.Yaw, playSceneCam.Pitch);
+                    playSceneCam.Roll = 0.0f;
+                    playSceneCam.Roll = RollFromWorld(camModel, playSceneCam);
                     playSceneCam.Fov = cc.FovDegrees;
                     playSceneCam.NearPlane = cc.NearPlane;
                     playSceneCam.FarPlane = cc.FarPlane;
