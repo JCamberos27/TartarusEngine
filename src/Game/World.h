@@ -157,6 +157,11 @@ public:
     // leave a stale or dangling entry.
     void RebuildWorldTransformCache();
 
+    // #201 - derives InactiveTag (activeInHierarchy == false) from DeactivatedTag on the entity
+    // or any ancestor. RebuildWorldTransformCache() runs it every frame; scene/prefab loads run
+    // it on the way out so their callers see a consistent state immediately.
+    void SyncActiveInHierarchy();
+
     // World matrix of `entity` from the cache built by the last RebuildWorldTransformCache().
     // Falls back to ComposeWorldTransform for anything the cache doesn't know about — an entity
     // spawned after the rebuild, or a caller running before the first one — so it is always
