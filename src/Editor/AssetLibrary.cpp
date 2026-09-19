@@ -171,6 +171,9 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path) {
     m_TextureCache[path] = tex;
     m_TextureList.push_back(tex);
     m_TexturePaths.push_back(path);
+    std::error_code ec;
+    const auto written = std::filesystem::last_write_time(path, ec);
+    if (!ec) m_TextureWriteTime[path] = written;
     return tex;
 }
 
@@ -202,6 +205,7 @@ void AssetLibrary::RemoveModel(const std::shared_ptr<Model>& model) {
 void AssetLibrary::RemoveTexture(const std::shared_ptr<Texture>& texture) {
     if (!texture) return;
     m_TextureCache.erase(texture->Path());
+    m_TextureWriteTime.erase(texture->Path());
     m_TextureList.erase(std::remove(m_TextureList.begin(), m_TextureList.end(), texture), m_TextureList.end());
     m_TexturePaths.erase(std::remove(m_TexturePaths.begin(), m_TexturePaths.end(), texture->Path()), m_TexturePaths.end());
     m_AssetFolder.erase(texture->Path());
@@ -480,6 +484,23 @@ bool AssetLibrary::ReimportTexture(const std::string& path) {
     auto it = m_TextureCache.find(path);
     if (it == m_TextureCache.end()) return false;
     return it->second->Reimport(GetTextureSettings(path));
+}
+
+int AssetLibrary::ReimportChangedOnDisk() {
+    int count = 0;
+    for (auto& [path, tex] : m_TextureCache) {
+        std::error_code ec;
+        const auto written = std::filesystem::last_write_time(path, ec);
+        if (ec) continue; // missing or embedded (#113 in-memory textures have no file)
+        auto known = m_TextureWriteTime.find(path);
+        if (known != m_TextureWriteTime.end() && known->second == written) continue;
+        const bool first = known == m_TextureWriteTime.end();
+        m_TextureWriteTime[path] = written;
+        if (first) continue; // no baseline yet (loaded before the file existed); record only
+        // TextureCache is keyed on the file's mtime too, so this decodes the new pixels.
+        if (tex->Reimport(GetTextureSettings(path))) ++count;
+    }
+    return count;
 }
 
 bool AssetLibrary::ReimportModel(const std::string& path) {
