@@ -492,11 +492,19 @@ void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& 
 
 void EditorLayer::PushUndo(const World& world, const std::string& label, bool selectionOnly,
                            const std::vector<int>* selectedOrdersOverride) {
+    PROFILE_SCOPE("PushUndo");
     CancelEyedropper(); // #93
-    const std::string sceneJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
+    // #138 - a selection-only entry never has its scene restored (Undo/Redo skip the reload for
+    // it: popping the entries above it already brought the scene back to what it was when the
+    // selection changed), so it doesn't need the current scene serialised - every Hierarchy /
+    // viewport click used to cost a full save + diff. It records the top entry's state instead,
+    // which keeps the delta chain intact (an empty patch) at the cost of a string copy.
+    const bool reuseTop = selectionOnly && !m_UndoStack.empty() && !m_UndoBaseJson.empty();
+    const std::string sceneJson = reuseTop ? m_UndoBaseJson
+                                : m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                               : SceneSerializer::SaveToString(world);
     UndoEntry entry;
-    entry.Hash = HashSceneJson(sceneJson);
+    entry.Hash = reuseTop ? m_UndoStack.back().Hash : HashSceneJson(sceneJson);
     entry.SelectedOrders = selectedOrdersOverride ? *selectedOrdersOverride : CaptureSelectedOrders(world);
     // Plenty of call sites fire on "field focused" / "gizmo grabbed" before anything actually
     // changes — a double-click-to-type on a Transform field lands here twice with no edit
@@ -663,8 +671,9 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     if (!PopHistoryEntry(m_UndoStack, m_UndoBaseJson, entry, targetJson)) return;
     if (entry.CountsAsSceneEdit()) m_ContentDepth--; // Q6 — a real-edit entry just left the live stack
     if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
-    // An asset-only step leaves the scene as it is — skip the full registry rebuild.
-    if (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash) {
+    // An asset-only step leaves the scene as it is — skip the full registry rebuild. So does a
+    // selection-only step (#138): its stored state is only a placeholder (see PushUndo).
+    if (!entry.SelectionOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash)) {
         if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
             // #83 — a snapshot that can't be applied must not leave a half-loaded world.
             Log::Error("Undo failed - the scene was left as it was.");
@@ -696,7 +705,7 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     std::string targetJson;
     if (!PopHistoryEntry(m_RedoStack, m_RedoBaseJson, entry, targetJson)) return;
     if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
-    if (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash) {
+    if (!entry.SelectionOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash)) { // #138
         if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
             Log::Error("Redo failed - the scene was left as it was."); // #83
             SceneSerializer::LoadFromString(world, assets, currentJson);
