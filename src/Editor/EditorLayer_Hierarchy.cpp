@@ -1467,6 +1467,25 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
                 stack.insert(stack.end(), h->Children.begin(), h->Children.end());
         }
     }
+    // #178 - Unity's Select Prefab Root: replaces each selected object with the outermost prefab
+    // instance it belongs to (objects not inside any instance are dropped).
+    std::vector<entt::entity> prefabRoots;
+    for (entt::entity e : GetSelectedItems()) {
+        entt::entity root = entt::null;
+        for (entt::entity walk = e; walk != entt::null && world.Registry.valid(walk);) {
+            if (world.Registry.all_of<PrefabInstanceComponent>(walk)) root = walk;
+            const auto* h = world.Registry.try_get<HierarchyComponent>(walk);
+            walk = h ? h->Parent : entt::null;
+        }
+        if (root != entt::null && std::find(prefabRoots.begin(), prefabRoots.end(), root) == prefabRoots.end())
+            prefabRoots.push_back(root);
+    }
+    if (ImGui::MenuItem(ICON_FA_CUBES "  Select Prefab Root", nullptr, false, !prefabRoots.empty())) {
+        ClearSelection();
+        for (entt::entity root : prefabRoots) AddToSelectionIfAbsent(root);
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        EditorUI::SetTooltip("Select the prefab instance each selected object is part of.");
     if (ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS_PLUS "  Frame Selected", "F", false, HasAnySelection()) && m_EditorCameraPtr) {
         FocusOnSelection(world, *m_EditorCameraPtr);
     }
