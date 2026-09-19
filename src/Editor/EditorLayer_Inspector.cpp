@@ -621,9 +621,13 @@ std::shared_ptr<Texture> LoadTextureForSlot(AssetLibrary& assets, const std::str
     return tex;
 }
 
+// A freshly assigned map should show as-is: see MaterialAsset::DefaultFactorsForNewMap (#102).
 void DefaultEmissiveTint(Material& m, std::shared_ptr<Texture> Material::* slot) {
-    if (slot == &Material::EmissiveMap && m.EmissiveMap && m.EmissiveColor == glm::vec3(0.0f))
-        m.EmissiveColor = glm::vec3(1.0f);
+    const char* name = slot == &Material::EmissiveMap ? "_EmissiveMap"
+                     : slot == &Material::MetallicMap ? "_MetallicMap"
+                     : slot == &Material::RoughnessMap ? "_RoughnessMap"
+                     : slot == &Material::MetallicRoughnessMap ? "_MetallicRoughnessMap" : "";
+    MaterialAsset::DefaultFactorsForNewMap(m, name);
 }
 
 // Small eyedropper button, drawn right after a colour swatch. Arms EditorLayer's viewport
@@ -1207,14 +1211,14 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
                 {
                     std::string path;
                     if (TexturePickerPopup("##texPicker", assets, path)) {
-                        MaterialAsset::SetTexture(mat, prop.Name, assets.LoadTexture(path));
+                        MaterialAsset::SetTexture(mat, prop.Name, assets.LoadTexture(path)); MaterialAsset::DefaultFactorsForNewMap(mat, prop.Name); // #102
                         save();
                     }
                 }
                 if (ImGui::BeginDragDropTarget()) {
                     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
                         std::string texPath((const char*)p->Data);
-                        MaterialAsset::SetTexture(mat, prop.Name, assets.LoadTexture(texPath));
+                        MaterialAsset::SetTexture(mat, prop.Name, assets.LoadTexture(texPath)); MaterialAsset::DefaultFactorsForNewMap(mat, prop.Name);
                         save();
                     }
                     ImGui::EndDragDropTarget();
@@ -1253,9 +1257,9 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
     colorRow("Base Color", &Material::BaseColor,
              "Surface tint, multiplied with the Albedo map.");
     scalarRow("Metallic", &Material::Metallic, 0.0f, 1.0f,
-              "0 = non-metal, 1 = pure metal. Ignored where a Metallic map is set.");
+              "0 = non-metal, 1 = pure metal. With a Metallic map, scales it (1 = the map as-is).");
     scalarRow("Roughness", &Material::Roughness, 0.04f, 1.0f,
-              "0 = mirror-smooth, 1 = fully matte. Ignored where a Roughness map is set.");
+              "0 = mirror-smooth, 1 = fully matte. With a Roughness map, scales it (1 = the map as-is).");
     colorRow("Emissive Color", &Material::EmissiveColor,
              "Color this surface glows, independent of scene lighting.");
     scalarRow("Emissive Strength", &Material::EmissiveStrength, 0.0f, 10.0f,
@@ -1264,8 +1268,8 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
     ImGui::SeparatorText("Texture Maps");
     mapRow("Albedo",    &Material::AlbedoMap,    "The base color texture (diffuse / base color map).");
     mapRow("Normal",    &Material::NormalMap,    "Fine surface detail (bumps, grooves) without extra geometry.");
-    mapRow("Metallic",  &Material::MetallicMap,  "Grayscale: white = metal. Overrides the Metallic value above.");
-    mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = matte. Overrides the Roughness value above.");
+    mapRow("Metallic",  &Material::MetallicMap,  "Grayscale: white = metal. Multiplied by the Metallic value above.");
+    mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = matte. Multiplied by the Roughness value above.");
     mapRow("AO",        &Material::AOMap,        "Ambient occlusion - darkens crevices and contact points.");
     mapRow("Emissive",  &Material::EmissiveMap,  "Texture for glowing areas, tinted by Emissive Color.");
 }
@@ -3226,9 +3230,9 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         colorRow("Base Color", &Material::BaseColor,
                  "Surface tint, multiplied with the Albedo map. Applied to every selected material.");
         scalarRow("Metallic", &Material::Metallic, 0.0f, 1.0f,
-                  "0 = non-metal, 1 = pure metal. Ignored where a Metallic map is set.");
+                  "0 = non-metal, 1 = pure metal. With a Metallic map, scales it (1 = the map as-is).");
         scalarRow("Roughness", &Material::Roughness, 0.04f, 1.0f,
-                  "0 = mirror-smooth, 1 = fully matte. Ignored where a Roughness map is set.");
+                  "0 = mirror-smooth, 1 = fully matte. With a Roughness map, scales it (1 = the map as-is).");
         colorRow("Emissive Color", &Material::EmissiveColor,
                  "Color this surface glows, independent of scene lighting.");
         scalarRow("Emissive Strength", &Material::EmissiveStrength, 0.0f, 10.0f,
@@ -3305,8 +3309,8 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
 
         mapRow("Albedo",    &Material::AlbedoMap,   "The base color texture (diffuse / base color map).");
         mapRow("Normal",    &Material::NormalMap,    "Fine surface detail (bumps, grooves) without extra geometry.");
-        mapRow("Metallic",  &Material::MetallicMap,  "Grayscale: white = metal. Overrides the Metallic value above.");
-        mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = matte. Overrides the Roughness value above.");
+        mapRow("Metallic",  &Material::MetallicMap,  "Grayscale: white = metal. Multiplied by the Metallic value above.");
+        mapRow("Roughness", &Material::RoughnessMap, "Grayscale: white = matte. Multiplied by the Roughness value above.");
         mapRow("AO",        &Material::AOMap,        "Ambient occlusion - darkens crevices and contact points.");
         mapRow("Emissive",  &Material::EmissiveMap,  "Texture for glowing areas, tinted by Emissive Color.");
     };
@@ -3458,7 +3462,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                     if (TexturePickerPopup("##texPicker", assets, path)) {
                         PushUndo(world, std::string("Set ") + label);
                         auto tex = assets.LoadTexture(path);
-                        for (Material* mm : mats) MaterialAsset::SetTexture(*mm, prop.Name, tex);
+                        for (Material* mm : mats) { MaterialAsset::SetTexture(*mm, prop.Name, tex); MaterialAsset::DefaultFactorsForNewMap(*mm, prop.Name); }
                     }
                 }
                 if (missing) ImGui::PopStyleColor();
@@ -3470,7 +3474,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                         std::string texPath((const char*)p->Data);
                         PushUndo(world, std::string("Set ") + label);
                         auto tex = assets.LoadTexture(texPath);
-                        for (Material* mm : mats) MaterialAsset::SetTexture(*mm, prop.Name, tex);
+                        for (Material* mm : mats) { MaterialAsset::SetTexture(*mm, prop.Name, tex); MaterialAsset::DefaultFactorsForNewMap(*mm, prop.Name); }
                     }
                     ImGui::EndDragDropTarget();
                 }
