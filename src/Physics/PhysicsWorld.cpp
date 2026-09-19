@@ -205,6 +205,11 @@ struct PhysicsState {
     PxQuat          playerGroundLastRot{PxIdentity};
     bool            playerGroundHitThisMove = false;
     float           platformYawDeltaDeg = 0.0f; // this frame's platform spin, for Player yaw
+    // #168 - each kinematic's pose as authored THIS frame (its kinematic target). The simulated
+    // pose only advances on frames where a substep runs, so carrying the Player by it moved the
+    // capsule 0 or 2 steps' worth per frame at high refresh rates (judder); the target moves
+    // every frame, in step with what the renderer draws.
+    std::unordered_map<const PxRigidDynamic*, PxTransform> kinematicFramePose;
     // #185 hardening — every dynamic body's linear velocity captured just before simulate(),
     // so onContact (post-solve) can report the real closing speed of an impact.
     std::unordered_map<const PxActor*, PxVec3> preStepVel;
@@ -805,6 +810,13 @@ void SimEventCallback::onConstraintBreak(PxConstraintInfo* constraints, PxU32 co
 // #185 PR 10 — the Player capsule hit something while moving. Push a dynamic body out of the
 // way (scaled so light things fly and heavy things barely budge), and if the thing is a
 // kinematic body underfoot, remember it so MoveCharacter can carry the Player along with it.
+// The pose a moving platform is carried by: this frame's authored target (#168), else the
+// simulated pose (a kinematic with no Transform-driven target).
+static PxTransform PlatformPose(const PhysicsState& s, const PxRigidDynamic* body) {
+    auto it = s.kinematicFramePose.find(body);
+    return it != s.kinematicFramePose.end() ? it->second : body->getGlobalPose();
+}
+
 void PlayerHitReport::onShapeHit(const PxControllerShapeHit& hit) {
     if (!owner || !hit.actor) return;
     PxRigidDynamic* body = hit.actor->is<PxRigidDynamic>();
@@ -816,7 +828,7 @@ void PlayerHitReport::onShapeHit(const PxControllerShapeHit& hit) {
         if (n.y > 0.4f) { // standing on top of a moving platform
             if (owner->playerGround != body) {
                 owner->playerGround = body;
-                const PxTransform gp = body->getGlobalPose();
+                const PxTransform gp = PlatformPose(*owner, body);
                 owner->playerGroundLastPos = gp.p;
                 owner->playerGroundLastRot = gp.q;
             }
@@ -1114,11 +1126,14 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
 
     // Kinematic bodies are driven by their TransformComponent (e.g. an Animator-moved platform):
     // push this frame's authored pose into the actor before stepping so it sweeps other bodies.
+    g_State->kinematicFramePose.clear();
     for (auto& [body, e] : g_State->kinematics) {
         if (!world.Registry.valid(e)) continue;
         if (!world.Registry.all_of<TransformComponent>(e)) continue;
         const TransformComponent w = world.WorldSpaceTransform(e); // #114
-        body->setKinematicTarget(PxTransform(ToPx(w.Position), EulerToPx(w.RotationEuler)));
+        const PxTransform target(ToPx(w.Position), EulerToPx(w.RotationEuler));
+        body->setKinematicTarget(target);
+        g_State->kinematicFramePose[body] = target; // #168
     }
 
     // Fixed-timestep accumulator: gameplay physics must not vary with frame rate. Cap the
@@ -1345,7 +1360,7 @@ unsigned MoveCharacter(const float disp[3], float dt) {
     g_State->playerGroundHitThisMove = false;
     g_State->platformYawDeltaDeg = 0.0f;
     if (g_State->playerGround) {
-        const PxTransform gp = g_State->playerGround->getGlobalPose();
+        const PxTransform gp = PlatformPose(*g_State, g_State->playerGround);
         d += gp.p - g_State->playerGroundLastPos;
         const PxQuat dq = gp.q * g_State->playerGroundLastRot.getConjugate();
         const float yaw = std::atan2(2.0f * (dq.w * dq.y + dq.x * dq.z),
@@ -1913,11 +1928,14 @@ void StepOneSubstep(World& world) {
     g_State->triggerEvents.clear();
     g_State->enteredThisFrame.clear();
     g_State->contactEvents.clear();
+    g_State->kinematicFramePose.clear();
     for (auto& [body, e] : g_State->kinematics) {
         if (!world.Registry.valid(e)) continue;
         if (world.Registry.all_of<TransformComponent>(e)) {
             const TransformComponent w = world.WorldSpaceTransform(e); // #114
-            body->setKinematicTarget(PxTransform(ToPx(w.Position), EulerToPx(w.RotationEuler)));
+            const PxTransform target(ToPx(w.Position), EulerToPx(w.RotationEuler));
+            body->setKinematicTarget(target);
+            g_State->kinematicFramePose[body] = target; // #168
         }
     }
     RunOneSubstep(*g_State, FixedStep());
