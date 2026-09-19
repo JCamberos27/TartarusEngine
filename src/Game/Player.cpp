@@ -10,7 +10,8 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     (void)window; // kept in the signature for a future direct-input path; unused today
 
     if (readInput)
-        Cam.ProcessMouseLook((float)Input::GetMouseDeltaX(), (float)Input::GetMouseDeltaY());
+        Cam.ProcessMouseLook((float)Input::GetMouseDeltaX(),
+                             (float)Input::GetMouseDeltaY() * (InvertY ? -1.0f : 1.0f), MouseSensitivity);
 
     // Planar move input, relative to look yaw.
     glm::vec3 forward = glm::normalize(glm::vec3(Cam.Front().x, 0, Cam.Front().z));
@@ -65,9 +66,9 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     PhysicsWorld::GetCharacterFootPosition(out);
     Cam.Position = glm::vec3(out[0], out[1], out[2]) + glm::vec3(0, EyeHeight, 0);
 
-    // Simple world floor so a fall through a gap doesn't drop forever.
-    if (Cam.Position.y < -20.0f) {
-        const glm::vec3 resetFeet(0.0f, 1.0f, 0.0f);
+    // Kill plane (#165: per scene): a fall through a gap respawns at the spawn point.
+    if (Cam.Position.y < KillY) {
+        const glm::vec3 resetFeet = RespawnFeet;
         const float rf[3] = {resetFeet.x, resetFeet.y, resetFeet.z};
         PhysicsWorld::SetCharacterFootPosition(rf);
         Cam.Position = resetFeet + glm::vec3(0, EyeHeight, 0);

@@ -149,7 +149,8 @@ void RegisterEngineComponents() {
     Register<CameraComponent>({
         "Camera", ICON_FA_VIDEO,
         "The Game view renders through this camera while editing, so you can frame a shot "
-        "without walking there. Play mode still uses the first-person controller.",
+        "without walking there. In Play it's the game camera too, unless the scene has a "
+        "First Person Controller.",
         "Rendering",
         {
             { "Field of View", T::Float, TARTARUS_REFLECT_FIELD(CameraComponent, FovDegrees), 0.25f,
@@ -158,6 +159,38 @@ void RegisterEngineComponents() {
               "Closest distance the camera renders.", 0.001f, 100.0f },
             { "Far", T::Float, TARTARUS_REFLECT_FIELD(CameraComponent, FarPlane), 1.0f,
               "Farthest distance the camera renders.", 0.1f, 100000.0f },
+        },
+    });
+
+    // #165 - the Play-mode player, configurable per scene instead of hard-wired in main.cpp.
+    Register<FirstPersonControllerComponent>({
+        "First Person Controller", ICON_FA_PERSON_WALKING,
+        "Play spawns the first-person player here (feet at this position, facing this object's "
+        "forward) with the settings below. WASD to move, Shift to sprint, Space to jump.",
+        "Gameplay",
+        {
+            { "Move Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, MoveSpeed), 0.05f,
+              "Walking speed, metres per second.", 0.0f, 100.0f },
+            { "Sprint Multiplier", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SprintMultiplier), 0.01f,
+              "Speed multiplier while Shift is held.", 1.0f, 10.0f },
+            { "Jump Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, JumpSpeed), 0.05f,
+              "Upward launch speed. Jump height is about Jump Speed^2 / (2 x gravity).", 0.0f, 50.0f },
+            { "Eye Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, EyeHeight), 0.01f,
+              "Camera height above the feet.", 0.1f, 10.0f },
+            { "Capsule Radius", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CapsuleRadius), 0.01f,
+              "Collision capsule radius.", 0.05f, 5.0f },
+            { "Capsule Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CapsuleHeight), 0.01f,
+              "Total collision capsule height, feet to head.", 0.2f, 10.0f },
+            { "Mouse Sensitivity", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, MouseSensitivity), 0.005f,
+              "Degrees of turn per pixel of mouse movement.", 0.01f, 1.0f },
+            { "Invert Y", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, InvertY), 0.0f,
+              "Moving the mouse up looks down." },
+            { "Field of View", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, FieldOfView), 0.25f,
+              "Vertical field of view, in degrees.", 20.0f, 150.0f },
+            { "Kill Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, KillY), 0.5f,
+              "Falling below this world height respawns the player at this object.", -100000.0f, 100000.0f },
+            { "Gravity Gun", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, GravityGun), 0.0f,
+              "The built-in tool: right mouse picks up a rigidbody, left mouse throws it." },
         },
     });
 
