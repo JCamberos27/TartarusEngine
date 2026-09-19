@@ -171,6 +171,9 @@ bool Input::IsGamepadButtonDown(int button) {
 bool Input::IsGamepadButtonPressed(int button) {
     return button >= 0 && button < kPadButtons && s_CurPad[button] && !s_PrevPad[button];
 }
+bool Input::IsGamepadButtonReleased(int button) {
+    return button >= 0 && button < kPadButtons && !s_CurPad[button] && s_PrevPad[button];
+}
 float Input::GetGamepadAxis(int axis) {
     return axis >= 0 && axis < kPadAxes ? s_PadAxes[axis] : 0.0f;
 }
