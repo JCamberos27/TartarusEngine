@@ -2134,6 +2134,9 @@ int main(int argc, char** argv) {
             // score). Last frame's holders get a 25% bonus, so near-ties don't flicker.
             static std::set<entt::entity> s_PrevShadowed;
             std::set<entt::entity> frameShadowed;
+            // Per-scene budgets (Lighting > Shadows), clamped to the shader's array ceilings.
+            const int spotShadowBudget = std::clamp(world.MaxSpotShadows, 0, SpotShadowMap::kMaxSpots);
+            const int pointShadowBudget = std::clamp(world.MaxPointShadows, 0, PointShadowMap::kMaxPoints);
             {
                 const glm::vec3 viewPos = (playing ? *gameCam : editorCamera).Position;
                 std::vector<std::pair<float, entt::entity>> spots, points;
@@ -2154,15 +2157,15 @@ int main(int argc, char** argv) {
                     std::stable_sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
                     for (size_t i = 0; i < v.size() && i < n; ++i) frameShadowed.insert(v[i].second);
                 };
-                take(spots, (size_t)SpotShadowMap::kMaxSpots);
-                take(points, (size_t)PointShadowMap::kMaxPoints);
+                take(spots, (size_t)spotShadowBudget);
+                take(points, (size_t)pointShadowBudget);
                 s_PrevShadowed = frameShadowed;
                 // Candidates that didn't get a slot, for the Inspector's over-budget warning.
                 std::set<entt::entity> overBudget;
                 for (const auto* v : {&spots, &points})
                     for (const auto& [score, e] : *v)
                         if (!frameShadowed.count(e)) overBudget.insert(e);
-                editor.SetShadowOverBudget(std::move(overBudget));
+                editor.SetShadowOverBudget(std::move(overBudget), spotShadowBudget, pointShadowBudget);
             }
 
             for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
@@ -2197,7 +2200,7 @@ int main(int argc, char** argv) {
                     float cosOuter = cosf(glm::radians(lc.SpotAngleDegrees));
                     float cosInner = cosf(glm::radians(lc.SpotAngleDegrees * 0.9f));
                     int slot = -1;
-                    if (frameShadowed.count(e) && spotShadowCount < SpotShadowMap::kMaxSpots) {
+                    if (frameShadowed.count(e) && spotShadowCount < spotShadowBudget) {
                         slot = spotShadowCount++;
                         glm::vec3 up = std::abs(aim.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
                         float fov = glm::radians(std::min(lc.SpotAngleDegrees * 2.0f + 4.0f, 175.0f));
@@ -2216,7 +2219,7 @@ int main(int argc, char** argv) {
                                         ~(std::uint32_t)lc.CullingMask); // #203
                 } else {
                     int slot = -1;
-                    if (frameShadowed.count(e) && pointShadowCount < PointShadowMap::kMaxPoints) {
+                    if (frameShadowed.count(e) && pointShadowCount < pointShadowBudget) {
                         slot = pointShadowCount++;
                         pointShadowPos[slot] = pos;
                         pointShadowFar[slot] = std::max(lc.Range, 0.2f);
@@ -2333,8 +2336,10 @@ int main(int argc, char** argv) {
             };
 
             // --- Spot-light shadow maps (#119) — once per frame, like the sun CSM ------------
+            // Layers are allocated for the budget, not the hard ceiling (#110); a zero budget
+            // still keeps one layer so sampler unit 9 is never unbound.
             if (world.ShadowsEnabled) {
-                spotShadowMap.Configure(std::min(world.ShadowResolution, 2048));
+                spotShadowMap.Configure(std::min(world.ShadowResolution, 2048), std::max(spotShadowBudget, 1));
             }
             if (world.ShadowsEnabled && spotShadowCount > 0) {
                 PROFILE_SCOPE("Spot Shadow Pass");
@@ -2391,7 +2396,7 @@ int main(int argc, char** argv) {
 
             // --- Point-light cube shadow maps (#119) — six faces per casting point light ------
             if (world.ShadowsEnabled) {
-                pointShadowMap.Configure(std::min(world.ShadowResolution, 1024));
+                pointShadowMap.Configure(std::min(world.ShadowResolution, 1024), std::max(pointShadowBudget, 1));
             }
             if (world.ShadowsEnabled && pointShadowCount > 0) {
                 PROFILE_SCOPE("Point Shadow Pass");

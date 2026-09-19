@@ -28,6 +28,8 @@
 #include "HotReloadEditorModule.h" // EditorModuleHost::ConsoleState() — console.toggle shortcut
 #include "EditorModuleAPI.h"       // EditorConsoleState's full definition (Visible)
 #include "GLStateCache.h"
+#include "SpotShadowMap.h"  // #110 - shadow budget slider ceilings
+#include "PointShadowMap.h"
 #include "PhysicsWorld.h" // #185 — the Physics debug panel + HUD read live sim state
 #include "TimeService.h"
 #include "Window.h" // Preferences > Display: connected monitors for fullscreen (#154) // play banner shows the effective time scale (#144)
@@ -983,6 +985,27 @@ void EditorLayer::DrawShadowSettings(World& world, float w) {
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("How far from the camera the cascades cover. Shorter = crisper shadows.");
+
+    // #110 - local-light shadow budgets. The most important shadowed lights (nearest/brightest
+    // from the camera) take the slots; the rest light without a shadow and say so in the Inspector.
+    ImGui::SetNextItemWidth(w);
+    {
+        bool activated = false;
+        EditorUI::SliderInt("Max spot shadows", &world.MaxSpotShadows, 0, SpotShadowMap::kMaxSpots, "%d",
+                            ImGuiSliderFlags_AlwaysClamp, &activated);
+        if (activated) PushUndo(world, "Edit Max Spot Shadows");
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("How many shadowed spot lights get a shadow map each frame (one depth pass each).");
+    ImGui::SetNextItemWidth(w);
+    {
+        bool activated = false;
+        EditorUI::SliderInt("Max point shadows", &world.MaxPointShadows, 0, PointShadowMap::kMaxPoints, "%d",
+                            ImGuiSliderFlags_AlwaysClamp, &activated);
+        if (activated) PushUndo(world, "Edit Max Point Shadows");
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("How many shadowed point lights get a shadow cube each frame (six depth passes each).");
     if (!world.ShadowsEnabled) ImGui::EndDisabled();
 }
 
