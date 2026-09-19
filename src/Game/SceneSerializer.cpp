@@ -490,7 +490,7 @@ bool ReflectJsonNearlyEqual(ReflectFieldType t, const json& a, const json& b) {
 void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
     if (const auto* order = world.Registry.try_get<OrderComponent>(entity)) j["order"] = order->Value;
     if (const auto* tag = world.Registry.try_get<TagComponent>(entity)) j["tag"] = tag->Tag;
-    if (world.Registry.all_of<InactiveTag>(entity)) j["active"] = false;
+    if (world.Registry.all_of<DeactivatedTag>(entity)) j["active"] = false;
     if (world.Registry.all_of<StaticTag>(entity)) j["static"] = true;
     // Layer slot (#236 A1). Omitted for the default (0) so scenes that never touch layers are
     // byte-identical to before; slot names live in project/layers.json, not the scene.
@@ -563,7 +563,7 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
 
 void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, entt::entity entity) {
     if (j.contains("tag")) world.Registry.emplace_or_replace<TagComponent>(entity, j["tag"].get<std::string>());
-    if (!j.value("active", true)) world.Registry.emplace_or_replace<InactiveTag>(entity);
+    if (!j.value("active", true)) world.Registry.emplace_or_replace<DeactivatedTag>(entity);
     if (j.value("static", false)) world.Registry.emplace_or_replace<StaticTag>(entity);
     if (const int layer = j.value("layer", 0); layer > 0 && layer < LayerRegistry::kCount) // #150: range-checked
         world.Registry.emplace_or_replace<LayerComponent>(entity, LayerComponent{layer});
@@ -1118,7 +1118,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             s["id"]       = idOf[e];
             s["parentId"] = parentIdOf(e);
             if (const auto* o = world.Registry.try_get<OrderComponent>(e)) s["order"] = o->Value;
-            if (world.Registry.all_of<InactiveTag>(e)) s["active"] = false;
+            if (world.Registry.all_of<DeactivatedTag>(e)) s["active"] = false;
             if (world.Registry.all_of<StaticTag>(e)) s["static"] = true;
             if (const auto* lc = world.Registry.try_get<LayerComponent>(e); lc && lc->Layer != 0)
                 s["layer"] = lc->Layer;
@@ -1435,8 +1435,8 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             }
 
             // Root-level overrides carried by the stub.
-            if (!s.value("active", true)) world.Registry.emplace_or_replace<InactiveTag>(rootE);
-            else                          world.Registry.remove<InactiveTag>(rootE);
+            if (!s.value("active", true)) world.Registry.emplace_or_replace<DeactivatedTag>(rootE);
+            else                          world.Registry.remove<DeactivatedTag>(rootE);
             if (s.value("static", false)) world.Registry.emplace_or_replace<StaticTag>(rootE);
             if (const int layer = s.value("layer", 0); layer > 0 && layer < LayerRegistry::kCount)
                 world.Registry.emplace_or_replace<LayerComponent>(rootE, LayerComponent{layer});
@@ -1830,6 +1830,7 @@ std::string SceneSerializer::TakeLoadWarning() {
 }
 
 bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string& path, bool persistMigration) {
+    struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
     std::ifstream in(path);
     if (!in.is_open()) return false;
 
@@ -1928,6 +1929,7 @@ std::string SceneSerializer::SaveToString(const World& world, const AssetLibrary
 }
 
 bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const std::string& data) {
+    struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
     json root;
     try {
         root = json::parse(data);
@@ -2028,6 +2030,7 @@ std::string SceneSerializer::SaveEntitiesToString(const World& world,
 bool SceneSerializer::AppendEntitiesFromString(World& world, AssetLibrary& assets,
     const std::string& data, std::vector<entt::entity>& outCreated,
     std::unordered_map<int, entt::entity>* outSourceOrder) {
+    struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
     json root;
     try {
         root = json::parse(data);
@@ -2056,6 +2059,7 @@ bool SceneSerializer::SavePrefab(const World& world, entt::entity root, const st
 
 entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& assets,
     const std::string& path, std::vector<entt::entity>* outAll) {
+    struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
     std::ifstream in(path);
     if (!in.is_open()) {
         Log::Error("Prefab: '" + path + "' could not be opened.");
