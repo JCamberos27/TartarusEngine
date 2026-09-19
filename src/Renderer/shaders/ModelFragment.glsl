@@ -196,6 +196,11 @@ uniform vec2  uUVOffset;
 uniform float uNormalStrength; // 0 = unset -> 1
 uniform int   uNormalFlipY;    // 1: DirectX-style normal map (green down)
 uniform int   uDoubleSided;    // 1: back faces are lit as front faces (culling is off for them)
+// Unity Standard's Forward Rendering Options, as "off" flags so a caller that never sets them (a
+// preview renderer) keeps both: 1 drops the lights' specular highlight / the sky and probe
+// reflection, for a fully matte surface.
+uniform int   uNoSpecularHighlights;
+uniform int   uNoGlossyReflections;
 uniform int   uUseVertexColor; // 1: albedo (and alpha) x the mesh's vertex colour
 uniform int uHasHeightMap;             uniform sampler2D uHeightMap;        // parallax
 uniform float uParallaxScale;
@@ -324,6 +329,7 @@ vec3 ShadeLightAniso(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0
     vec3  F   = FresnelSchlick(max(dot(H, V), 0.0), F0);
     vec3 specular = D * Vis * F;
     vec3 kD = (1.0 - F) * (1.0 - metallic);
+    if (uNoSpecularHighlights == 1) { specular = vec3(0.0); kD = vec3(1.0 - metallic); }
     return (kD * albedo / PI + specular) * radiance * NdotL;
 }
 #endif
@@ -545,6 +551,7 @@ vec3 ShadeLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0,
     vec3  F   = FresnelSchlick(max(dot(H, V), 0.0), F0);
     vec3 specular = (NDF * G * F) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 1e-4);
     vec3 kD = (1.0 - F) * (1.0 - metallic);
+    if (uNoSpecularHighlights == 1) { specular = vec3(0.0); kD = vec3(1.0 - metallic); }
     return (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
 }
 
@@ -1000,7 +1007,7 @@ void main() {
         }
 #endif
         vec2 ab = texture(uBrdfLut, vec2(NdotV, roughness)).rg;
-        vec3 specularIBL = prefiltered * (F * ab.x + ab.y);
+        vec3 specularIBL = uNoGlossyReflections == 1 ? vec3(0.0) : prefiltered * (F * ab.x + ab.y);
 
         ambient = (kD * diffuseIBL + specularIBL) * ao * uIBLIntensity;
     } else {

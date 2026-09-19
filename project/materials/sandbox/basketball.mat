@@ -1,7 +1,7 @@
 {
   "matVersion": 2,
   "name": "Basketball",
-  "_comment": "Pebbled composite leather: albedo with black seams, pebble normal map, matte.",
+  "_comment": "Pebbled composite leather: albedo with black seams, pebble normal map; fully matte (Specular Highlights and Reflections off, as on a Unity Standard material).",
   "shader": "engine://Standard.shader",
   "properties": {
     "_BaseColor": [
@@ -13,6 +13,8 @@
     "_Roughness": 0.85,
     "_AlbedoMap": "textures/basketball/basketball_albedo.png",
     "_NormalMap": "textures/basketball/basketball_normal.png",
-    "_NormalStrength": 1.2
+    "_NormalStrength": 1.2,
+    "_SpecularHighlights": false,
+    "_GlossyReflections": false
   }
 }

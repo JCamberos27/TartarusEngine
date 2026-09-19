@@ -417,8 +417,9 @@ def build_materials():
     mat('Basketball', 'basketball.mat', {
         '_BaseColor': [1, 1, 1], '_Metallic': 0.0, '_Roughness': 0.85,
         '_AlbedoMap': T + 'basketball_albedo.png', '_NormalMap': T + 'basketball_normal.png',
-        '_NormalStrength': 1.2},
-        comment='Pebbled composite leather: albedo with black seams, pebble normal map, matte.')
+        '_NormalStrength': 1.2, '_SpecularHighlights': False, '_GlossyReflections': False},
+        comment='Pebbled composite leather: albedo with black seams, pebble normal map; fully matte '
+                '(Specular Highlights and Reflections off, as on a Unity Standard material).')
     mat('Backboard Glass', 'backboard_glass.mat', {
         '_BaseColor': [1, 1, 1], '_Metallic': 0.0, '_Roughness': 0.04, '_AlbedoMap': T + 'backboard.png'},
         queue=2, comment='Tempered glass with painted border and target square (alpha in the texture).')
