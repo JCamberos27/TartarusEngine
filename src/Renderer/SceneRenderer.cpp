@@ -273,13 +273,18 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     appliedPrograms.clear();
     appliedPrograms.push_back(&modelShader);
     int passAlphaBlend = 0;
-    auto selectProgram = [&](const MaterialAsset* ma) -> Shader* {
-        Shader* prog = &modelShader;
-        std::uint32_t key = 0;
+    // The program a material draws through, without touching GL state — also the opaque sort key.
+    auto programFor = [&](const MaterialAsset* ma, std::uint32_t& key) -> Shader* {
+        key = 0;
         if (ma && ma->Shader) {
             key = ShaderVariantKeyFor(ma->Mat, *ma->Shader);
-            if (Shader* v = ma->Shader->Variant(key)) prog = v;
+            if (Shader* v = ma->Shader->Variant(key)) return v;
         }
+        return &modelShader;
+    };
+    auto selectProgram = [&](const MaterialAsset* ma) -> Shader* {
+        std::uint32_t key = 0;
+        Shader* prog = programFor(ma, key);
         if (std::find(appliedPrograms.begin(), appliedPrograms.end(), prog) == appliedPrograms.end()) {
             ApplyFrameState(*prog, fs);
             prog->SetInt("uAlphaBlend", passAlphaBlend);
@@ -299,6 +304,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         Model* Ref;
         const std::vector<std::shared_ptr<MaterialAsset>>* Slots;
         std::uint64_t MatKey;
+        const Shader* Prog;   // #112 - slot 0's program; the opaque pass groups by it first
         int Meshes, Tris, Verts;
         // PR9 transparent queue
         MaterialAsset::Queue Queue;
@@ -357,6 +363,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const auto& slots = renderable.Materials;
         std::uint64_t matKey = (!slots.empty() && slots[0])
             ? slots[0]->Mat.Hash() : m->MaterialSortKey();
+        std::uint32_t progKeyUnused = 0;
+        const Shader* prog = programFor(!slots.empty() ? slots[0].get() : nullptr, progKeyUnused);
         // PR9 / #112: classify per submesh — a model whose slot 1 is transparent used to draw
         // entirely opaque because only slot 0's queue was checked (and vice versa). A model
         // with both kinds is queued in both passes, each drawing only its own submeshes.
@@ -388,22 +396,24 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                     anyTransmission = slots[i]->Mat.TransmissionStrength > 0.0f;
                 }
             }
-            transparentList.push_back({ model, m, &slots, matKey,
+            transparentList.push_back({ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
                 renderable.ReceiveShadows, layerBit });
         }
         if (anyOpaque) {
-            drawList.push_back({ model, m, &slots, matKey,
+            drawList.push_back({ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass,
                 renderable.ReceiveShadows, layerBit });
         }
     }
 
-    // --- Opaque pass: sort by material key, then front-to-back within a material (#112 —
-    // cheaper overdraw: nearer surfaces fill depth first and hide what is behind them).
+    // --- Opaque pass: sort by shader program (the costliest switch), then material key, then
+    // front-to-back within a material (#112 — cheaper overdraw: nearer surfaces fill depth
+    // first and hide what is behind them).
     std::sort(drawList.begin(), drawList.end(), [](const DrawItem& a, const DrawItem& b) {
+        if (a.Prog != b.Prog) return std::less<const Shader*>()(a.Prog, b.Prog);
         if (a.MatKey != b.MatKey) return a.MatKey < b.MatKey;
         return a.ViewDepth < b.ViewDepth;
     });
