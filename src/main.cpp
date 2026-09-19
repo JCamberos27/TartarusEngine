@@ -1887,12 +1887,17 @@ int main(int argc, char** argv) {
                 // the sentinel set by BakeFromCubemap makes the check false until we switch source.
                 // #108 — also rebake when the HDRI rotation changes, so lighting follows the sky.
                 const float skyRot = glm::radians(world.SkyRotationDegrees);
+                // #277 — keep the HDRI's sun out of ambient/reflections when a directional light
+                // already supplies it (Auto), so it isn't counted twice.
+                const bool clampSun = world.SkyHdriSun == World::HdriSunMode::Remove ||
+                    (world.SkyHdriSun == World::HdriSunMode::Auto && frameHaveDirectional);
+                const float sunClamp = clampSun ? world.SkyHdriSunThreshold : 0.0f;
                 if (hdriCube && (hdriNeedsBake || iblProbe.NeedsBake(glm::vec3(-1.0f), glm::vec3(-1.0f)) ||
-                                 iblProbe.BakedRotation() != skyRot)) {
+                                 iblProbe.BakedRotation() != skyRot || iblProbe.BakedRadianceClamp() != sunClamp)) {
                     hdriNeedsBake = false;
                     PROFILE_SCOPE("IBL Bake (HDRI)");
                     PROFILE_GPU_SCOPE("IBL Bake (HDRI)");
-                    iblProbe.BakeFromCubemap(hdriCube->Texture(), hdriCube->FaceSize(), skyRot);
+                    iblProbe.BakeFromCubemap(hdriCube->Texture(), hdriCube->FaceSize(), skyRot, sunClamp);
                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
                     glViewport(0, 0, window.GetWidth(), window.GetHeight());
                     GLStateCache::Invalidate();
