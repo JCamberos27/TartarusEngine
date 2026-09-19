@@ -9,7 +9,9 @@
 // needs, and it keeps the engine's third-party surface unchanged.
 #include "UnitTests.h"
 
+#include "AnimatorController.h"
 #include "AssetGuid.h"
+#include "Components.h"
 #include "AtomicFile.h"
 #include "ComponentReflection.h"
 #include "ComponentRegistry.h"
@@ -188,6 +190,79 @@ void TestComponentRegistry() {
     }
 }
 
+// --- Animator Controller: transitions, exit time, Any state, triggers, JSON round trip (#175) --
+void TestAnimatorController() {
+    using AC = AnimatorController;
+    AC c;
+    c.Parameters = {{"Speed", AC::ParamType::Float, 0.0f}, {"Jump", AC::ParamType::Trigger, 0.0f},
+                    {"Grounded", AC::ParamType::Bool, 1.0f}};
+    c.States = {{"Idle", "idle", 1.0f, true}, {"Walk", "walk", 1.0f, true},
+                {"Run", "run", 1.2f, true}, {"Jump", "jump", 1.0f, false}};
+    c.DefaultState = "Idle";
+    AC::Transition idleWalk{"Idle", "Walk", {{"Speed", AC::Op::Greater, 0.1f}}, false, 0.9f, 0.2f};
+    AC::Transition walkIdle{"Walk", "Idle", {{"Speed", AC::Op::Less, 0.1f}}, false, 0.9f, 0.2f};
+    AC::Transition walkRun{"Walk", "Run", {{"Speed", AC::Op::Greater, 3.0f}}, false, 0.9f, 0.2f};
+    AC::Transition anyJump{"Any", "Jump", {{"Jump", AC::Op::If, 0.0f}}, false, 0.9f, 0.1f};
+    AC::Transition jumpIdle{"Jump", "Idle", {}, true, 0.95f, 0.2f};
+    AC::Transition broken{"Idle", "Run", {}, false, 0.9f, 0.2f}; // no condition, no exit time: never
+    c.Transitions = {idleWalk, walkIdle, walkRun, anyJump, jumpIdle, broken};
+
+    CHECK(c.DefaultStateIndex() == 0);
+    CHECK(c.FindState("Run") == 2);
+    CHECK(c.FindState("Nope") == -1);
+
+    std::vector<AnimatorParam> p = {{"Speed", 0, 0.0f}, {"Jump", 3, 0.0f}, {"Grounded", 2, 1.0f}};
+    CHECK(c.PickTransition(0, 0.0f, p) == -1);            // idle, not moving
+    p[0].Value = 1.0f;
+    CHECK(c.PickTransition(0, 0.0f, p) == 0);             // Idle -> Walk
+    CHECK(c.PickTransition(1, 0.0f, p) == -1);            // walking, not fast enough to run
+    p[0].Value = 4.0f;
+    CHECK(c.PickTransition(1, 0.0f, p) == 2);             // Walk -> Run
+    p[1].Value = 1.0f;                                   // SetTrigger("Jump")
+    CHECK(c.PickTransition(2, 0.3f, p) == 3);             // Any -> Jump beats nothing else
+    CHECK(p[1].Value == 0.0f);                           // ... and consumed the trigger
+    CHECK(c.PickTransition(3, 0.5f, p) == -1);            // Jump waits for its exit time
+    CHECK(c.PickTransition(3, 0.96f, p) == 4);            // Jump -> Idle at 95%
+    p[1].Value = 1.0f;
+    CHECK(c.PickTransition(3, 0.2f, p) == -1);            // Any never re-enters the state it targets
+    CHECK(p[1].Value == 1.0f);                           // an unused trigger stays set
+    std::vector<AnimatorParam> none;
+    CHECK(c.PickTransition(0, 0.0f, none) == -1);         // missing parameters never match
+    CHECK(c.PickTransition(-1, 0.0f, p) == -1);
+    CHECK(c.PickTransition(99, 0.0f, p) == -1);
+
+    // JSON round trip keeps everything.
+    AC back;
+    CHECK(AC::FromJsonString(c.ToJsonString(), back));
+    CHECK(back.Parameters.size() == 3 && back.Parameters[1].Type == AC::ParamType::Trigger);
+    CHECK(back.States.size() == 4 && back.States[2].Speed == 1.2f && !back.States[3].Loop);
+    CHECK(back.Transitions.size() == 6 && back.Transitions[3].From == "Any");
+    CHECK(back.Transitions[4].HasExitTime && back.Transitions[4].ExitTime == 0.95f);
+    CHECK(back.Transitions[1].Conditions.size() == 1 && back.Transitions[1].Conditions[0].Mode == AC::Op::Less);
+    CHECK(back.DefaultState == "Idle");
+
+    // Robustness: garbage is rejected, unknown enum names fall back, bad entries are skipped.
+    AC junk;
+    CHECK(!AC::FromJsonString("{not json", junk));
+    CHECK(!AC::FromJsonString("[1,2]", junk));
+    CHECK(AC::FromJsonString(R"({"parameters":[{"name":"x","type":"banana"},{"type":"int"}],
+        "states":[{"name":"A","speed":"fast"},5],"transitions":[{"from":"A","to":"A",
+        "conditions":[{"param":"x","mode":"sideways"}]}]})", junk));
+    CHECK(junk.Parameters.size() == 1 && junk.Parameters[0].Type == AC::ParamType::Float);
+    CHECK(junk.States.size() == 1 && junk.States[0].Speed == 1.0f);
+    CHECK(junk.Transitions.size() == 1 && junk.Transitions[0].Conditions[0].Mode == AC::Op::Greater);
+
+    // The component's setters create parameters on first use and keep their type.
+    AnimatorControllerComponent comp;
+    comp.SetFloat("Speed", 2.5f);
+    comp.SetTrigger("Jump");
+    comp.SetBool("Grounded", true);
+    CHECK(comp.Params.size() == 3);
+    CHECK(comp.GetFloat("Speed") == 2.5f && comp.GetFloat("Jump") == 1.0f && comp.GetFloat("Grounded") == 1.0f);
+    comp.ResetTrigger("Jump");
+    CHECK(comp.GetFloat("Jump") == 0.0f && comp.GetFloat("Missing") == 0.0f);
+}
+
 } // namespace
 
 int RunUnitTests() {
@@ -198,6 +273,7 @@ int RunUnitTests() {
         {"TextureCacheHash", TestTextureCacheHash},
         {"MaterialRobustness", TestMaterialRobustness},
         {"ComponentRegistry", TestComponentRegistry},
+        {"AnimatorController", TestAnimatorController},
     };
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;

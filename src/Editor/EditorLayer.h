@@ -1,4 +1,6 @@
 #pragma once
+#include "AnimatorController.h" // #175 Part B - m_CtrlEdit
+#include <filesystem>
 #include <imgui.h> // ImGuiID (GetSceneGameDockNodeId)
 #include <glm/glm.hpp>
 #include <entt/entt.hpp>
@@ -1833,6 +1835,12 @@ private:
     // per reflected section at each phase: Top (before the generic field widgets) and Bottom
     // (after them). A no-op for components with nothing extra.
     enum class ReflectExtraPhase { Top, Bottom };
+    // #175 Part B - Animator Controller component: picker, live parameters, controller editor
+    // (EditorLayer_Animator.cpp). The working copy is re-read when the file changes on disk.
+    void DrawAnimatorControllerExtra(World& world, entt::entity entity);
+    AnimatorController m_CtrlEdit;
+    std::string m_CtrlEditPath;
+    std::filesystem::file_time_type m_CtrlEditStamp{};
     void DrawReflectedComponentExtra(const char* componentName, World& world, entt::entity entity,
                                      ReflectExtraPhase phase);
     // Multi-select counterpart: `sel` is every selected entity that has this component.

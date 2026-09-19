@@ -328,6 +328,48 @@ struct SkeletalAnimationComponent {
     std::string PlayingClip;         // what the system last asked the model for
 };
 
+// #175 Part B - one Animator Controller parameter's live value (Type matches
+// AnimatorController::ParamType: 0 Float, 1 Int, 2 Bool, 3 Trigger; Bool/Trigger are 0 or 1).
+struct AnimatorParam {
+    std::string Name;
+    int Type = 0;
+    float Value = 0.0f;
+};
+
+// #175 Part B - drives this entity's model from an Animator Controller asset (.controller):
+// clips as states, crossfaded transitions on parameter conditions. While playing it takes over
+// from an Animation component on the same entity. Game code steers it with the setters below.
+struct AnimatorControllerComponent {
+    std::string Controller;  // project-relative .controller path
+    float Speed = 1.0f;      // multiplies every state's speed
+
+    void  SetFloat(const std::string& name, float v)  { Param(name, 0).Value = v; }
+    void  SetInt(const std::string& name, int v)      { Param(name, 1).Value = (float)v; }
+    void  SetBool(const std::string& name, bool v)    { Param(name, 2).Value = v ? 1.0f : 0.0f; }
+    void  SetTrigger(const std::string& name)         { Param(name, 3).Value = 1.0f; }
+    void  ResetTrigger(const std::string& name)       { Param(name, 3).Value = 0.0f; }
+    float GetFloat(const std::string& name) const {
+        for (const auto& p : Params) if (p.Name == name) return p.Value;
+        return 0.0f;
+    }
+    const std::string& CurrentState() const { return StateName; }
+
+    // --- runtime (not serialized) ---
+    std::vector<AnimatorParam> Params; // seeded from the controller's defaults at start
+    bool  Started = false;
+    int   State = -1;
+    std::string StateName;
+    float StateTime = 0.0f;            // seconds in the current state, scaled by speed
+
+    // A parameter by name, created (with `type`) if the controller hasn't declared it yet -
+    // game code may set values before the first frame.
+    AnimatorParam& Param(const std::string& name, int type) {
+        for (auto& p : Params) if (p.Name == name) return p;
+        Params.push_back({name, type, 0.0f});
+        return Params.back();
+    }
+};
+
 struct AnimatorComponent {
     glm::vec3 SpinDegPerSec{0.0f};   // continuous local rotation, degrees/second per axis
 

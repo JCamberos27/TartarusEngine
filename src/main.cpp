@@ -22,6 +22,7 @@
 #include "SceneSerializer.h"
 #include "AnimationSystem.h"
 #include "ParticleSystem.h"
+#include "AnimatorController.h"
 #include "Grid.h"
 #include "ColliderGizmo.h" // #185 PR 2 — collider wireframe overlay
 #include "Sky.h"
@@ -1388,6 +1389,13 @@ int main(int argc, char** argv) {
                                       << " capsule=" << capHit << (capHit ? "@" + std::to_string(cap.Distance) : std::string())
                                       << " maskNone=" << maskedHit << " overlapBox=" << overlaps << "\n";
                         }
+                        for (auto [ae, ac] : world.Registry.view<const AnimatorControllerComponent>().each()) { // #175 Part B
+                            const auto* arc = world.Registry.try_get<RenderableComponent>(ae);
+                            const Model* am = arc ? arc->ModelRef.get() : nullptr;
+                            std::cout << "[SmokeTest]   animator " << entt::to_integral(ae) << " state=" << ac.StateName
+                                      << " clip=" << (am && am->CurrentAnimation() >= 0 ? am->AnimationName(am->CurrentAnimation()) : std::string("(none)"))
+                                      << " params=" << ac.Params.size() << "\n";
+                        }
                         for (auto [pe, ps] : world.Registry.view<const ParticleSystemComponent>().each()) { // #177
                             glm::vec3 lo(1e9f), hi(-1e9f);
                             for (const auto& pt : ps.Live) { lo = glm::min(lo, pt.Pos); hi = glm::max(hi, pt.Pos); }
@@ -1707,6 +1715,7 @@ int main(int argc, char** argv) {
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
                 UpdateAnimators(world, gameDt);
                 UpdateSkeletalAnimations(world, assets); // #175 — Animation components drive their models' clips
+                UpdateAnimatorControllers(world, assets, gameDt); // #175 Part B — state machines
             }
 
             // The gameplay DLL watches its freshly-built source copy even while editing, and
