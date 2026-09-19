@@ -80,6 +80,16 @@ public:
     float BloomKnee{0.5f};
     float BloomIntensity{0.25f};
 
+    // #162 - anti-aliasing and colour grading, applied in the final tonemap pass.
+    bool  FxaaEnabled{false};
+    float GradeTemperature{0.0f};  // -100..100, 0 = neutral (Unity's White Balance)
+    float GradeTint{0.0f};
+    float GradeContrast{0.0f};
+    float GradeSaturation{0.0f};
+    glm::vec3 GradeColorFilter{1.0f};
+    float VignetteIntensity{0.0f}; // 0 = off
+    float VignetteSmoothness{0.4f};
+
     bool  ShadowsEnabled{true};
     int   ShadowResolution{4096};
     int   ShadowCascades{4};
