@@ -639,6 +639,11 @@ vec3 ShadePointSpotSSS(uint i, vec3 N, float thickness) {
         float outerCos = lt.DirCutoff.w;
         if (cosAngle < outerCos) return vec3(0.0);
         atten *= smoothstep(outerCos, max(lt.Params.x, outerCos + 1e-3), cosAngle);
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #102: no light through occluders
+    } else {
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N);
     }
     if (atten <= 0.0) return vec3(0.0);
     return SubsurfaceTransmission(N, L, lt.ColorRange.rgb * atten, thickness);
@@ -684,18 +689,21 @@ void main() {
     if (uAlphaClip == 1 && uHasAlbedoMap == 1 && albedoSample.a < uAlphaCutoff) discard; // #101
     vec3 albedo = (uHasAlbedoMap == 1 ? albedoSample.rgb : vec3(1.0)) * uBaseColor;
 
+    // #102 — glTF / Unity semantics: a map is SCALED by its factor (factor * texture), it no
+    // longer replaces it. Materials saved before this carry factor 1 where a map is set (see
+    // MaterialAsset / SceneSerializer), so they render exactly as before.
     float metallic = uMetallic;
     float roughness = uRoughness;
     if (uHasMetallicRoughnessMap == 1) {
         vec3 mr = (tri ? SampleTriplanar(uMetallicRoughnessMap, vWorldPos, triW, uTriplanarScale)
                        : texture(uMetallicRoughnessMap, vUV)).rgb;
-        roughness = mr.g;
-        metallic = mr.b;
+        roughness *= mr.g;
+        metallic *= mr.b;
     } else {
-        if (uHasRoughnessMap == 1) roughness = (tri ? SampleTriplanar(uRoughnessMap, vWorldPos, triW, uTriplanarScale)
-                                                     : texture(uRoughnessMap, vUV)).r;
-        if (uHasMetallicMap == 1) metallic = (tri ? SampleTriplanar(uMetallicMap, vWorldPos, triW, uTriplanarScale)
-                                                   : texture(uMetallicMap, vUV)).r;
+        if (uHasRoughnessMap == 1) roughness *= (tri ? SampleTriplanar(uRoughnessMap, vWorldPos, triW, uTriplanarScale)
+                                                      : texture(uRoughnessMap, vUV)).r;
+        if (uHasMetallicMap == 1) metallic *= (tri ? SampleTriplanar(uMetallicMap, vWorldPos, triW, uTriplanarScale)
+                                                    : texture(uMetallicMap, vUV)).r;
     }
     float ao = uHasAOMap == 1 ? (tri ? SampleTriplanar(uAOMap, vWorldPos, triW, uTriplanarScale)
                                       : texture(uAOMap, vUV)).r : 1.0;
@@ -773,7 +781,9 @@ void main() {
     // instead of scanning the whole buffer and skipping non-directional ones by type.
     for (uint i = 0u; i < uDirectionalCount; ++i) {
         vec3 L = normalize(-uLights[i].DirCutoff.xyz); // DirCutoff.xyz travels forward; L points back
-        vec3 radiance = uLights[i].ColorRange.rgb * SunShadow(vWorldPos, N, L);
+        // #102 — only the directional light that owns the cascade map samples it (Params.y 0);
+        // any other directional used to be shadowed by the primary sun's map.
+        vec3 radiance = uLights[i].ColorRange.rgb * (uLights[i].Params.y >= 0.0 ? SunShadow(vWorldPos, N, L) : 1.0);
 #ifdef _ANISO
         Lo += ShadeLightAniso(N, V, L, radiance, albedo, F0, metallic, roughness, anisoT, anisoB);
 #else
@@ -925,9 +935,13 @@ void main() {
         // then sample the opaque color with roughness-based LOD for frosted-glass blur.
         float eta = 1.0 / max(uIOR, 1.001);
         vec3 refrDir = refract(-V, N, eta);
-        // Project the refracted tangential offset to screen UV deltas.
+        // #102 — the bend is how far the refracted ray deviates from the straight-through view
+        // ray, measured in VIEW space so it maps onto the screen (it used the world-space ray's
+        // xy, which pointed the wrong way and rotated with the camera).
+        vec3 viewIn  = normalize(mat3(uView) * -V);
+        vec3 viewOut = normalize(mat3(uView) * refrDir);
         float screenAspect = uScreenSize.x / max(uScreenSize.y, 1.0);
-        vec2 refrOffset = refrDir.xy * vec2(1.0, screenAspect) * 0.08 * uTransmissionStrength;
+        vec2 refrOffset = (viewOut.xy - viewIn.xy) * vec2(1.0 / screenAspect, 1.0) * 0.25 * uTransmissionStrength;
         vec2 screenUV = gl_FragCoord.xy / uScreenSize;
         float maxLod = log2(max(uScreenSize.x, uScreenSize.y));
         float refrLod = roughness * maxLod * 0.5;
@@ -941,7 +955,10 @@ void main() {
     }
     // else: leave linear HDR for the shared Tonemapper pass.
 
-    FragColor = vec4(color, uAlphaBlend != 0 ? uOpacity : 1.0);
+    // #102 — the albedo map's alpha drives transparency too (a PNG with alpha fades where it's
+    // transparent), multiplied by the material's Opacity.
+    float surfaceAlpha = uOpacity * (uHasAlbedoMap == 1 ? albedoSample.a : 1.0);
+    FragColor = vec4(color, uAlphaBlend != 0 ? surfaceAlpha : 1.0);
 }
 // OIT (order-independent transparency) is explicitly out of scope for PR 9.
 // Transparent materials use back-to-front painter's algorithm via the transparent draw list.

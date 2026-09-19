@@ -39,7 +39,10 @@ public:
     // matching what the old shader received. Drops lights past kMaxLights rather than crashing or
     // corrupting the buffer — but that drop is no longer silent: it flips m_Overflowed so the
     // caller can warn (#204).
-    void AddDirectional(const glm::vec3& dirWorld, const glm::vec3& colorLinear, float intensity);
+    // `sampleSunShadow`: this is the directional light the cascaded shadow map was rendered for
+    // (#102 — only that one samples it; any other directional is unshadowed).
+    void AddDirectional(const glm::vec3& dirWorld, const glm::vec3& colorLinear, float intensity,
+                        bool sampleSunShadow = true);
     void AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLinear, float intensity, float range,
                   int shadowSlot = -1);
     void AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, const glm::vec3& colorLinear,

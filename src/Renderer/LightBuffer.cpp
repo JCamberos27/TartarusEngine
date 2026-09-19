@@ -18,14 +18,15 @@ void LightBuffer::EnsureCreated() {
                          nullptr, GL_DYNAMIC_STORAGE_BIT);
 }
 
-void LightBuffer::AddDirectional(const glm::vec3& dirWorld, const glm::vec3& colorLinear, float intensity) {
+void LightBuffer::AddDirectional(const glm::vec3& dirWorld, const glm::vec3& colorLinear, float intensity,
+                                 bool sampleSunShadow) {
     if ((int)m_Lights.size() >= kMaxLights) { m_Overflowed = true; return; }
     glm::vec3 d = glm::length(dirWorld) > 1e-8f ? glm::normalize(dirWorld) : glm::vec3(0, -1, 0);
     GpuLight l{};
     l.PositionType = glm::vec4(0.0f, 0.0f, 0.0f, (float)Type::Directional);
     l.ColorRange   = glm::vec4(colorLinear * intensity, 0.0f);
     l.DirCutoff    = glm::vec4(d, -1.0f);
-    l.Params       = glm::vec4(-1.0f, -1.0f, 0.0f, 0.0f);
+    l.Params       = glm::vec4(-1.0f, sampleSunShadow ? 0.0f : -1.0f, 0.0f, 0.0f); // y: cascade map, as spot/point slots
     // Insert right after the existing directional run, not at the end - keeps every directional
     // light packed at the front of the array so the shader can loop just uDirectionalCount
     // entries instead of scanning the whole buffer (#188).
