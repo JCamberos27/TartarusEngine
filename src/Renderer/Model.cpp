@@ -1215,7 +1215,7 @@ const ShaderRenderState* EffectiveRenderState(const std::vector<std::shared_ptr<
 void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
                          const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                          const ProgramSelector& selectProgram, float opacity,
-                         const std::function<void(Shader&)>& onProgramBound) {
+                         const std::function<void(Shader&)>& onProgramBound, MeshPass pass) {
     const glm::mat4 nrm = glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform))));
 
     Shader*      lastProg = nullptr;
@@ -1224,6 +1224,8 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
 
     for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
         const bool hasSlot = i < (int)slots.size() && slots[i];
+        const bool transparent = hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent;
+        if ((pass == MeshPass::Opaque && transparent) || (pass == MeshPass::Transparent && !transparent)) continue;
         stateScope.Apply(EffectiveRenderState(slots, i, hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat));
         Shader* prog = &fallback;
         if (Shader* p = selectProgram(hasSlot ? slots[i].get() : nullptr)) prog = p;
@@ -1242,7 +1244,8 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
         }
         // Per-draw: the transparent pass varies opacity per entity. No-op on opaque programs
         // (uOpacity is only read when uAlphaBlend == 1; an absent uniform is loc -1).
-        prog->SetFloat("uOpacity", opacity);
+        // In the transparent pass each submesh uses its own slot's opacity (#112).
+        prog->SetFloat("uOpacity", pass == MeshPass::Transparent ? slots[i]->Opacity : opacity);
 
         const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
         if (hasSlot && slots[i]->Shader)
