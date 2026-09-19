@@ -338,6 +338,10 @@ public:
     void SetShowHierarchy(bool on) { m_ShowHierarchy = on; }
     const std::string& HierarchyFilterText() const { return m_HierarchyFilter; }
     void SetHierarchyFilterText(const std::string& s) { m_HierarchyFilter = s; }
+    // #178 - Search in Scene: while the Hierarchy search (text or type chips) is active, the Scene
+    // view greys out every object that doesn't match it.
+    bool SceneSearchActive() const;
+    bool MatchesSceneSearch(const World& world, entt::entity entity) const { return MatchesHierarchyFilter(world, entity); }
     void HierarchyExpandAll(World& world, bool open);                            // EditorLayer_Hierarchy.cpp
     void DrawHierarchyTreeBody(World& world, AssetLibrary& assets);              // EditorLayer_Hierarchy.cpp
 
