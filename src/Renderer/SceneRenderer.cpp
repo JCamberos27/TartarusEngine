@@ -290,6 +290,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         int  QueueIndex;
         float ViewDepth; // view-space -Z (more positive = farther) for back-to-front sort
         glm::vec3 Centre; // world-space bounds centre — picks this object's reflection probes (#108)
+        Model::MeshPass Pass; // #112 — which of the model's submeshes this item draws
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -337,34 +338,43 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const auto& slots = renderable.Materials;
         std::uint64_t matKey = (!slots.empty() && slots[0])
             ? slots[0]->Mat.Hash() : m->MaterialSortKey();
-        // PR9: classify into opaque or transparent based on slot 0's queue.
-        MaterialAsset::Queue q = MaterialAsset::Queue::Opaque;
-        int qi = 2000;
-        float viewDepth = 0.0f;
-        if (!slots.empty() && slots[0]) {
-            q  = slots[0]->RenderQueue;
-            qi = slots[0]->QueueIndex;
+        // PR9 / #112: classify per submesh — a model whose slot 1 is transparent used to draw
+        // entirely opaque because only slot 0's queue was checked (and vice versa). A model
+        // with both kinds is queued in both passes, each drawing only its own submeshes.
+        bool anyOpaque = false, anyTransparent = false;
+        int qi = 2000; // QueueIndex of the first transparent slot
+        for (int i = 0; i < m->MeshCount(); ++i) {
+            const bool hasSlot = i < (int)slots.size() && slots[i];
+            if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) {
+                if (!anyTransparent) qi = slots[i]->QueueIndex;
+                anyTransparent = true;
+            } else {
+                anyOpaque = true;
+            }
         }
+        const Model::MeshPass opaquePass = anyTransparent ? Model::MeshPass::Opaque : Model::MeshPass::All;
+        float viewDepth = 0.0f;
         // #112 — depth from the world-space bounds centre, not the entity origin (a large mesh
         // whose pivot sits at one end sorted as if it were all at that end).
         const glm::vec3 centre = validBounds ? glm::vec3(model * glm::vec4((boundsMin + boundsMax) * 0.5f, 1.0f))
                                              : glm::vec3(model[3]);
         viewDepth = -(ctx.View * glm::vec4(centre, 1.0f)).z;
-        if (q == MaterialAsset::Queue::Transparent) {
+        if (anyTransparent) {
             if (!anyTransmission) {
                 for (int i = 0; i < m->MeshCount() && !anyTransmission; ++i) {
                     const bool hasSlot = i < (int)slots.size() && slots[i];
-                    const Material& mm = hasSlot ? slots[i]->Mat : m->MeshMaterial(i);
-                    anyTransmission = mm.TransmissionStrength > 0.0f;
+                    if (!hasSlot || slots[i]->RenderQueue != MaterialAsset::Queue::Transparent) continue;
+                    anyTransmission = slots[i]->Mat.TransmissionStrength > 0.0f;
                 }
             }
             transparentList.push_back({ model, m, &slots, matKey,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
-                q, qi, viewDepth, centre });
-        } else {
+                MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent });
+        }
+        if (anyOpaque) {
             drawList.push_back({ model, m, &slots, matKey,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
-                q, qi, viewDepth, centre });
+                MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass });
         }
     }
 
@@ -389,7 +399,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     modelShader.SetInt("uAlphaBlend", 0); // explicit: ensure opaque pass outputs alpha=1
     for (const DrawItem& it : drawList) {
         probeItem = &it;
-        it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw);
+        it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass);
 
         localStats.DrawCalls += it.Meshes;
         localStats.Triangles += it.Tris;
@@ -434,10 +444,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                             0x0001/*GL_ONE*/, GL_ONE_MINUS_SRC_ALPHA);
 
         for (const DrawItem& it : transparentList) {
-            float opacity = (!it.Slots->empty() && (*it.Slots)[0])
-                ? (*it.Slots)[0]->Opacity : 1.0f;
             probeItem = &it;
-            it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, opacity, perDraw);
+            // Opacity comes from each transparent submesh's own slot (#112).
+            it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass);
 
             localStats.DrawCalls += it.Meshes;
             localStats.Triangles += it.Tris;
