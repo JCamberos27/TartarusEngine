@@ -67,7 +67,7 @@ struct EditorSettings {
 
     // Absolute path of the scene open when the editor last closed / last Open'd / Saved As.
     // Loaded on startup when the file still exists; empty (or missing file) falls back to the
-    // built-in default (project/scenes/Showcase.json). Written by OpenScene / DoSaveAs. (#95)
+    // built-in default (project/scenes/Sandbox.json). Written by OpenScene / DoSaveAs. (#95)
     std::string LastScenePath;
 
     // GameViewPanel's own preferences (see GameViewPanel::LoadSettings/SaveSettings) — kept here
