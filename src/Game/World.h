@@ -163,6 +163,10 @@ public:
     int ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj);
     // Removes every LodCulledTag.
     void ClearLod();
+    // #201 - derives InactiveTag (activeInHierarchy == false) from DeactivatedTag on the entity
+    // or any ancestor. RebuildWorldTransformCache() runs it every frame; scene/prefab loads run
+    // it on the way out so their callers see a consistent state immediately.
+    void SyncActiveInHierarchy();
 
     // World matrix of `entity` from the cache built by the last RebuildWorldTransformCache().
     // Falls back to ComposeWorldTransform for anything the cache doesn't know about — an entity
