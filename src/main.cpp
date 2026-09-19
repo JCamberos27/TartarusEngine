@@ -30,6 +30,7 @@
 #include "OpaqueColorCopy.h"
 #include "Screenshot.h"
 #include "Tonemapper.h"
+#include "GameModuleAPI.h" // #170 smoke: QueryFilter / RaycastHit
 #include "LightBuffer.h"
 #include "ClusterGrid.h"
 #include "CascadedShadowMap.h"
@@ -1304,6 +1305,23 @@ int main(int argc, char** argv) {
                             std::cout << "[SmokeTest]   play camera=" << (playUsesPlayer ? "player" : "scene")
                                       << " pos=(" << pc.Position.x << ", " << pc.Position.y << ", " << pc.Position.z
                                       << ") yaw=" << pc.Yaw << " fov=" << pc.Fov << "\n";
+                        }
+                        { // #170 - filtered queries straight down through the scene origin
+                            const float o[3] = {0.0f, 50.0f, 0.0f}, down[3] = {0.0f, -1.0f, 0.0f};
+                            const float he[3] = {0.25f, 0.25f, 0.25f}, p1[3] = {-0.5f, 50.0f, 0.0f}, p2[3] = {0.5f, 50.0f, 0.0f};
+                            QueryFilter all, none; none.LayerMask = 0u;
+                            RaycastHit hits[16], box, cap, masked;
+                            const int n = PhysicsWorld::RaycastAll(o, down, 100.0f, all, hits, 16);
+                            const bool boxHit = PhysicsWorld::BoxCast(o, he, nullptr, down, 100.0f, all, box);
+                            const bool capHit = PhysicsWorld::CapsuleCast(p1, p2, 0.2f, down, 100.0f, all, cap);
+                            const bool maskedHit = PhysicsWorld::RaycastFiltered(o, down, 100.0f, none, masked);
+                            const float oc[3] = {0.0f, 0.0f, 0.0f}, big[3] = {50.0f, 50.0f, 50.0f};
+                            const int overlaps = PhysicsWorld::OverlapBox(oc, big, nullptr, all, nullptr, 0);
+                            std::cout << "[SmokeTest]   queries rayAll=" << n
+                                      << (n > 0 ? " firstDist=" + std::to_string(hits[0].Distance) : std::string())
+                                      << " box=" << boxHit << (boxHit ? "@" + std::to_string(box.Distance) : std::string())
+                                      << " capsule=" << capHit << (capHit ? "@" + std::to_string(cap.Distance) : std::string())
+                                      << " maskNone=" << maskedHit << " overlapBox=" << overlaps << "\n";
                         }
                         std::cout << "[SmokeTest]   -> Stop\n";  togglePlay(); ++smokePlayCycles;
                     }
