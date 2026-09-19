@@ -305,6 +305,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         float ViewDepth; // view-space -Z (more positive = farther) for back-to-front sort
         glm::vec3 Centre; // world-space bounds centre — picks this object's reflection probes (#108)
         Model::MeshPass Pass; // #112 — which of the model's submeshes this item draws
+        bool ReceiveShadows;  // #163
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -324,6 +325,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             if (layer >= 0 && layer < 32 && !((in.layerVisibleMask >> layer) & 1u)) continue;
         }
         auto& renderable = world.Registry.get<RenderableComponent>(entity);
+        // #163 - Shadows Only: drawn by the shadow passes, never in the camera view.
+        if (renderable.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
         glm::mat4 model = world.GetCachedWorldTransform(entity);
 
         // Frustum culling: skip the draw call entirely for anything outside the camera's view.
@@ -383,12 +386,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             }
             transparentList.push_back({ model, m, &slots, matKey,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
-                MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent });
+                MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
+                renderable.ReceiveShadows });
         }
         if (anyOpaque) {
             drawList.push_back({ model, m, &slots, matKey,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
-                MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass });
+                MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass,
+                renderable.ReceiveShadows });
         }
     }
 
@@ -402,12 +407,13 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // #108 — reflection probes are chosen per object (from its bounds centre), not once per
     // frame from the camera position, which gave every object in view the same two probes and
     // made reflections pop as the camera moved. Only when the scene has probes at all.
+    // #163 - and Receive Shadows is per object too; both go through this per-draw hook.
     const DrawItem* probeItem = nullptr;
-    const std::function<void(Shader&)> bindProbes = [&](Shader& prog) {
-        in.probeArray->Bind(prog, probeItem->Centre);
+    const bool anyProbes = in.probeArray->Count() > 0;
+    const std::function<void(Shader&)> perDraw = [&](Shader& prog) {
+        if (anyProbes) in.probeArray->Bind(prog, probeItem->Centre);
+        prog.SetInt("uNoReceiveShadows", probeItem->ReceiveShadows ? 0 : 1);
     };
-    const std::function<void(Shader&)> noHook;
-    const std::function<void(Shader&)>& perDraw = in.probeArray->Count() > 0 ? bindProbes : noHook;
 
     passAlphaBlend = 0;
     modelShader.SetInt("uAlphaBlend", 0); // explicit: ensure opaque pass outputs alpha=1
