@@ -25,6 +25,11 @@ public:
     float JumpSpeed = 5.5f;
     float Gravity = -18.0f;
     bool Grounded = false;
+    // #165 - were hard-coded.
+    float MouseSensitivity = 0.1f;
+    bool InvertY = false;
+    float KillY = -20.0f;
+    glm::vec3 RespawnFeet{0.0f, 1.0f, 0.0f};
 
     // readInput == false keeps the body simulating (gravity, collision, resting on geometry)
     // but ignores mouse-look / WASD / jump — used while the game runs inside the docked Game

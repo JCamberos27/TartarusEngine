@@ -232,13 +232,32 @@ struct LightComponent {
 };
 
 // A game camera placed in the scene. The Game view renders through the first active one of
-// these (in creation order) while editing, so you can frame a shot without walking there in
-// Play mode; Play mode still uses the first-person Player controller. Absent == the Game view
-// falls back to the editor camera and shows a "No camera in scene" hint (#36 B10).
+// these (in creation order) while editing, so you can frame a shot without walking there.
+// In Play (#165) it's also the game camera, unless the scene has a First Person Controller.
+// Absent == the Game view falls back to the editor camera and shows a "No camera in scene"
+// hint (#36 B10).
 struct CameraComponent {
     float FovDegrees = 60.0f;
     float NearPlane = 0.1f;
     float FarPlane = 1000.0f;
+};
+
+// #165 - the built-in first-person player, as a component. In Play the player spawns at this
+// entity's position (feet) facing its forward (-Z), with these settings. Without one, Play
+// renders through the scene's Camera (a fixed/animated shot, no player); with neither, it falls
+// back to the old behaviour (a default player dropped in at the editor camera).
+struct FirstPersonControllerComponent {
+    float MoveSpeed = 6.0f;
+    float SprintMultiplier = 1.6f;
+    float JumpSpeed = 5.5f;
+    float EyeHeight = 1.6f;
+    float CapsuleRadius = 0.3f;
+    float CapsuleHeight = 1.8f;
+    float MouseSensitivity = 0.1f;  // degrees per pixel
+    bool  InvertY = false;
+    float FieldOfView = 75.0f;
+    float KillY = -20.0f;           // falling below this respawns at the spawn point
+    bool  GravityGun = true;        // the built-in pick-up/throw tool (right/left mouse)
 };
 
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue
