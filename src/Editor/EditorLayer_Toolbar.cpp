@@ -400,6 +400,13 @@ void EditorLayer::DrawViewportStatusBar(World& world, Camera& editorCamera) {
             }
         }
 
+        // Camera readout — where the Scene view is and what it's looking at, so a screenshot is
+        // enough to reproduce a view exactly.
+        sep();
+        ImGui::TextDisabled("cam %.2f, %.2f, %.2f  yaw %.1f  pitch %.1f", editorCamera.Position.x,
+                            editorCamera.Position.y, editorCamera.Position.z, editorCamera.Yaw, editorCamera.Pitch);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Scene camera position and yaw / pitch (degrees)");
+
         sep();
         if (selCount == 0) {
             ImGui::TextDisabled("no selection");
