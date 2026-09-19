@@ -403,6 +403,7 @@ int main(int argc, char** argv) {
         CrashHandler::SetInteractive(false);
         LayerRegistry::Load();
         ProjectSettings::Load();
+        ShaderLibrary::Init(EnginePaths::Resolve("assets/shaders")); // #208 - shader validation resolves engine:// refs
         ProjectSettings::BuildSettings bs = ProjectSettings::Build();
         if (!buildOutArg.empty()) bs.OutputDir = std::filesystem::absolute(buildOutArg).string();
         if (bs.Scenes.empty()) bs.Scenes.push_back("scenes/Sandbox.json");
