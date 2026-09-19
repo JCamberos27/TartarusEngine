@@ -3300,6 +3300,16 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
     // The PBR property lambdas below capture it by reference so they work for both paths.
     std::vector<Material*> mats;
 
+    // #107 - an editable (embedded) override for submesh `i`, starting as an exact copy of the
+    // imported material: every scalar, flag and map, so turning the override on doesn't change
+    // how the object looks (only the texture maps used to be copied, so a grey primitive turned
+    // white and imported roughness/metallic/emissive were lost).
+    auto MakeEmbeddedFromImported = [](RenderableComponent* rc, int i) {
+        auto ma = std::make_shared<MaterialAsset>();
+        if (i < rc->ModelRef->MeshCount()) ma->Mat = rc->ModelRef->MeshMaterial(i);
+        return ma;
+    };
+
     auto DrawPbrFields = [&]() {
         auto vec3Shared = [&](glm::vec3 Material::* field, glm::vec3& shared) {
             shared = mats[0]->*field;
@@ -3714,7 +3724,8 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                 ? (ImGui::CalcTextSize("Save").x + ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetStyle().ItemSpacing.x)
                 : 0.0f;
             const float clearW = (isFileBacked || isEmbedded) ? iconW : 0.0f;
-            const float btnW   = -(saveW + clearW + FLT_MIN);
+            const float editW  = slot ? 0.0f : iconW; // #107 - "make editable" on an imported slot
+            const float btnW   = -(saveW + clearW + editW + FLT_MIN);
 
             if (missing) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
             if (ImGui::Button(btnLabel.c_str(), ImVec2(btnW, 0))) {
@@ -3738,6 +3749,18 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
                     AssignSlot(i, std::string((const char*)p->Data));
                 }
                 ImGui::EndDragDropTarget();
+            }
+
+            // #107 - single-select had no way to get an editable material: "Use Custom Material"
+            // only existed for multi-select. Creates an embedded copy of the imported material.
+            if (!slot) {
+                ImGui::SameLine();
+                if (ActionButton(ICON_FA_PEN, "Customize - make an editable copy of the imported material", false,
+                                 ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+                    PushUndo(world, "Edit Material");
+                    if (i >= (int)rc->Materials.size()) rc->Materials.resize(i + 1);
+                    rc->Materials[i] = MakeEmbeddedFromImported(rc, i);
+                }
             }
 
             // "Save" button — converts embedded → file-backed
@@ -3772,18 +3795,26 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             ImGui::PopID();
         }
 
-        // PBR property editor — only when slot 0 is embedded
-        bool slot0Embedded = !rc->Materials.empty() && rc->Materials[0] && rc->Materials[0]->Path.empty();
-        if (slot0Embedded) {
+        // PBR property editor for every embedded slot (#107 - was slot 0 only, so a multi-mesh
+        // model's other submeshes could be overridden but never edited).
+        for (int i = 0; i < (int)rc->Materials.size() && i < meshCount; ++i) {
+            auto& slot = rc->Materials[i];
+            if (!slot || !slot->Path.empty()) continue;
             ImGui::Spacing();
-            mats.push_back(&rc->Materials[0]->Mat);
-            auto& slot0 = rc->Materials[0];
-            if (slot0->Shader) {
+            if (meshCount > 1) {
+                char header[32]; snprintf(header, sizeof(header), "Slot %d", i);
+                ImGui::SeparatorText(header);
+            }
+            ImGui::PushID(1000 + i);
+            mats.clear();
+            mats.push_back(&slot->Mat);
+            if (slot->Shader) {
                 // Data-driven inspector: iterate ShaderAsset::Properties(), skip Hidden.
-                DrawShaderPropertyRow(*slot0->Shader);
+                DrawShaderPropertyRow(*slot->Shader);
             } else {
                 DrawPbrFields();
             }
+            ImGui::PopID();
         }
 
         return;
@@ -3878,16 +3909,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             for (RenderableComponent* rc : rcs) {
                 bool hasCustom = !rc->Materials.empty() && rc->Materials[0];
                 if (enable && !hasCustom) {
-                    auto ma = std::make_shared<MaterialAsset>();
-                    if (rc->ModelRef->MeshCount() > 0) {
-                        const Material& imported = rc->ModelRef->MeshMaterial(0);
-                        ma->Mat.AlbedoMap   = imported.AlbedoMap;
-                        ma->Mat.NormalMap   = imported.NormalMap;
-                        ma->Mat.MetallicMap = imported.MetallicMap;
-                        ma->Mat.RoughnessMap= imported.RoughnessMap;
-                        ma->Mat.AOMap       = imported.AOMap;
-                        ma->Mat.EmissiveMap = imported.EmissiveMap;
-                    }
+                    auto ma = MakeEmbeddedFromImported(rc, 0);
                     if (rc->Materials.empty()) rc->Materials.push_back(ma);
                     else rc->Materials[0] = ma;
                 } else if (!enable) {
