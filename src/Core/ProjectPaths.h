@@ -13,9 +13,10 @@
 // keep authored content out of build/.
 namespace ProjectPaths {
 
-// The project directory: the nearest "project" folder found walking up from the working
-// directory, or the working directory itself when there isn't one (so a stray exe run from
-// anywhere still works, exactly as it did before). Resolved once, on first use.
+// The project directory: `--project <dir>` if given (SetRootOverride), else the nearest
+// "project" folder walking up from the executable (#151), else from the working directory,
+// else the working directory itself (so a stray exe run from anywhere still works). Resolved
+// once, on first use — after EnginePaths::Init().
 const std::string& Root();
 
 // #174 - a built player pins the project to the folder shipped next to its exe instead of
