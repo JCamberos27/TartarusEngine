@@ -90,6 +90,16 @@ public:
     float VignetteIntensity{0.0f}; // 0 = off
     float VignetteSmoothness{0.4f};
 
+    // #162 - distance fog (Unity's Lighting > Other Settings > Fog).
+    bool  FogEnabled{false};
+    int   FogMode{2};               // 1 Linear, 2 Exponential, 3 Exponential Squared
+    glm::vec3 FogColor{0.55f, 0.62f, 0.72f}; // linear
+    float FogDensity{0.01f};        // Exponential modes
+    float FogStart{10.0f};          // Linear mode, metres from the camera
+    float FogEnd{300.0f};
+    float FogHeightFalloff{0.0f};   // Exponential modes: 0 = uniform, higher = hugs the ground
+    float FogBaseHeight{0.0f};      // world Y where height fog is at full density
+
     bool  ShadowsEnabled{true};
     int   ShadowResolution{4096};
     int   ShadowCascades{4};

@@ -823,6 +823,14 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         root["gradeColorFilter"] = {world.GradeColorFilter.r, world.GradeColorFilter.g, world.GradeColorFilter.b};
         root["vignetteIntensity"] = world.VignetteIntensity;
         root["vignetteSmoothness"] = world.VignetteSmoothness;
+        root["fogEnabled"] = world.FogEnabled;
+        root["fogMode"] = world.FogMode;
+        root["fogColor"] = {world.FogColor.r, world.FogColor.g, world.FogColor.b};
+        root["fogDensity"] = world.FogDensity;
+        root["fogStart"] = world.FogStart;
+        root["fogEnd"] = world.FogEnd;
+        root["fogHeightFalloff"] = world.FogHeightFalloff;
+        root["fogBaseHeight"] = world.FogBaseHeight;
         root["shadowsEnabled"] = world.ShadowsEnabled;
         root["shadowResolution"] = world.ShadowResolution;
         root["shadowCascades"] = world.ShadowCascades;
@@ -1174,6 +1182,18 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
                         world.GradeColorFilter[i] = std::max(0.0f, root["gradeColorFilter"][i].get<float>());
             world.VignetteIntensity  = std::clamp(root.value("vignetteIntensity", 0.0f), 0.0f, 1.0f);
             world.VignetteSmoothness = std::clamp(root.value("vignetteSmoothness", 0.4f), 0.01f, 1.0f);
+            world.FogEnabled       = root.value("fogEnabled", false);
+            world.FogMode          = std::clamp(root.value("fogMode", 2), 1, 3);
+            world.FogColor         = glm::vec3(0.55f, 0.62f, 0.72f);
+            if (root.contains("fogColor") && root["fogColor"].is_array() && root["fogColor"].size() == 3)
+                for (int i = 0; i < 3; ++i)
+                    if (root["fogColor"][i].is_number())
+                        world.FogColor[i] = std::max(0.0f, root["fogColor"][i].get<float>());
+            world.FogDensity       = std::max(0.0f, root.value("fogDensity", 0.01f));
+            world.FogStart         = root.value("fogStart", 10.0f);
+            world.FogEnd           = root.value("fogEnd", 300.0f);
+            world.FogHeightFalloff = std::max(0.0f, root.value("fogHeightFalloff", 0.0f));
+            world.FogBaseHeight    = root.value("fogBaseHeight", 0.0f);
             world.ShadowsEnabled   = root.value("shadowsEnabled", true);
             world.ShadowResolution = root.value("shadowResolution", 4096);
             world.ShadowCascades   = root.value("shadowCascades", 4);
