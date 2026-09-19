@@ -1,4 +1,4 @@
-﻿// Hierarchy panel: the entity tree, selection, rename, grouping/parenting, and the
+// Hierarchy panel: the entity tree, selection, rename, grouping/parenting, and the
 // Add-entity menu body. Split out of EditorLayer.cpp for build time (#179).
 
 #include "EditorLayer.h"
