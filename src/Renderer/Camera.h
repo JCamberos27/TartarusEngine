@@ -8,6 +8,9 @@ public:
     glm::vec3 Position{0.0f, 1.7f, 0.0f};
     float Yaw = -90.0f;   // degrees, facing -Z by default
     float Pitch = 0.0f;
+    // Degrees of roll about Front() (#165). Only scene Camera entities set this in Play; the
+    // player and editor cameras leave it at 0, so their horizon always stays level.
+    float Roll = 0.0f;
     float Fov = 75.0f;
 
     // Editor-only (the player camera never sets this): orthographic/parallel projection
@@ -42,6 +45,7 @@ private:
     // Right/Up no longer each recomputing Front from scratch on top of that.
     mutable float m_CachedYaw = std::numeric_limits<float>::quiet_NaN();
     mutable float m_CachedPitch = std::numeric_limits<float>::quiet_NaN();
+    mutable float m_CachedRoll = std::numeric_limits<float>::quiet_NaN();
     mutable glm::vec3 m_CachedFront{0.0f, 0.0f, -1.0f};
     mutable glm::vec3 m_CachedRight{1.0f, 0.0f, 0.0f};
     mutable glm::vec3 m_CachedUp{0.0f, 1.0f, 0.0f};

@@ -15,6 +15,7 @@
 #include "AssetGuid.h"
 #include "Components.h"
 #include "AtomicFile.h"
+#include "Camera.h"
 #include "ComponentReflection.h"
 #include "ComponentRegistry.h"
 #include "MaterialAsset.h"
@@ -66,6 +67,27 @@ std::filesystem::path TempDir() {
 std::string ReadAll(const std::filesystem::path& p) {
     std::ifstream f(p, std::ios::binary);
     return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+}
+
+// --- Camera roll (#165) --------------------------------------------------------------------
+void TestCameraRoll() {
+    auto near = [](glm::vec3 a, glm::vec3 b) { return glm::length(a - b) < 1e-4f; };
+    Camera cam; // yaw -90: looking down -Z, right = +X, up = +Y
+    CHECK(near(cam.Right(), {1, 0, 0}));
+    CHECK(near(cam.Up(), {0, 1, 0}));
+    const glm::mat4 level = cam.ViewMatrix();
+    cam.Roll = 90.0f;
+    CHECK(near(cam.Front(), {0, 0, -1}));   // roll never changes where the camera looks
+    CHECK(near(cam.Right(), {0, 1, 0}));
+    CHECK(near(cam.Up(), {-1, 0, 0}));
+    // A point to the camera's rolled right lands on view-space +X.
+    const glm::vec4 v = cam.ViewMatrix() * glm::vec4(cam.Position + glm::vec3(0, 1, -5), 1.0f);
+    CHECK(v.x > 0.99f && std::abs(v.y) < 1e-4f);
+    cam.Roll = 0.0f;
+    const glm::mat4 back = cam.ViewMatrix();
+    bool same = true;
+    for (int c = 0; c < 4; ++c) same &= near(glm::vec3(level[c]), glm::vec3(back[c]));
+    CHECK(same);
 }
 
 // --- AssetGuid ------------------------------------------------------------------------------
@@ -435,6 +457,7 @@ int RunUnitTests() {
         {"AnimatorController", TestAnimatorController},
         {"AssetIdentity", TestAssetIdentity},
         {"ProjectWatcher", TestProjectWatcher},
+        {"CameraRoll", TestCameraRoll},
     };
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;
