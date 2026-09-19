@@ -1589,7 +1589,8 @@ int main(int argc, char** argv) {
                 glm::vec3 pos = glm::vec3(m[3]);
                 glm::vec3 aim = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
                 if (lc.Kind == LightComponent::Type::Directional) {
-                    lightBuffer.AddDirectional(aim, lc.Color, lc.Intensity);
+                    // Only the first lit directional drives the cascade pass (below) - it alone samples it.
+                    lightBuffer.AddDirectional(aim, lc.Color, lc.Intensity, !frameHaveDirectional && lc.Intensity > 0.0f);
                     // A zero-intensity sun contributes no light, so it must not drive the
                     // cascaded shadow pass either — it's the way a scene opts out of having a
                     // directional at all while still suppressing SceneSerializer's synthesised

@@ -219,6 +219,7 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
         m.RoughnessMap         = loadTex(ma->RoughnessMapPath);
         m.AOMap                = loadTex(ma->AOMapPath);
         m.EmissiveMap          = loadTex(ma->EmissiveMapPath);
+    MaterialAsset::UpgradeLegacyMapFactors(m, top.Bool("factorsScaleMaps", false)); // #102
         m.ClearCoatMap         = loadTex(ma->ClearCoatMapPath);
         m.ThicknessMap         = loadTex(ma->ThicknessMapPath);
 
@@ -276,6 +277,7 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
 bool MaterialAsset::Save() const {
     const auto& m = Mat;
     json j;
+    j["factorsScaleMaps"] = true; // #102 — see UpgradeLegacyMapFactors
 
     if (!ShaderPath.empty()) {
         // v2 format: shader reference + properties map
@@ -377,6 +379,18 @@ bool MaterialAsset::Save() const {
 }
 
 // --- Property access by shader property name ---
+
+void MaterialAsset::UpgradeLegacyMapFactors(Material& m, bool savedWithScaling) {
+    if (savedWithScaling) return;
+    if (m.MetallicMap || m.MetallicRoughnessMap) m.Metallic = 1.0f;
+    if (m.RoughnessMap || m.MetallicRoughnessMap) m.Roughness = 1.0f;
+}
+
+void MaterialAsset::DefaultFactorsForNewMap(Material& m, const std::string& n) {
+    if (n == "_EmissiveMap" && m.EmissiveMap && m.EmissiveColor == glm::vec3(0.0f)) m.EmissiveColor = glm::vec3(1.0f);
+    if ((n == "_MetallicMap" && m.MetallicMap) || (n == "_MetallicRoughnessMap" && m.MetallicRoughnessMap)) m.Metallic = 1.0f;
+    if ((n == "_RoughnessMap" && m.RoughnessMap) || (n == "_MetallicRoughnessMap" && m.MetallicRoughnessMap)) m.Roughness = 1.0f;
+}
 
 bool MaterialAsset::IsBuiltinProp(const std::string& n) {
     static const std::unordered_set<std::string> kBuiltin = {
