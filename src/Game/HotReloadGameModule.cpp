@@ -77,6 +77,32 @@ GameModuleHostAPI MakeHostAPI() {
     api.GetContactEvents = physics.GetContactEvents;
     api.SphereCast = physics.SphereCast;
     api.OverlapSphere = physics.OverlapSphere;
+    // #170 - filtered queries.
+    api.RaycastFiltered = [](const float o[3], const float d[3], float maxDist, const QueryFilter& f, RaycastHit& hit) {
+        return PhysicsWorld::RaycastFiltered(o, d, maxDist, f, hit);
+    };
+    api.RaycastAll = [](const float o[3], const float d[3], float maxDist, const QueryFilter& f, RaycastHit* out, int maxHits) {
+        return PhysicsWorld::RaycastAll(o, d, maxDist, f, out, maxHits);
+    };
+    api.SphereCastFiltered = [](const float o[3], const float d[3], float r, float maxDist, const QueryFilter& f,
+                                RaycastHit& hit) {
+        return PhysicsWorld::SphereCastFiltered(o, d, r, maxDist, f, hit);
+    };
+    api.BoxCast = [](const float c[3], const float he[3], const float rot[4], const float d[3], float maxDist,
+                     const QueryFilter& f, RaycastHit& hit) {
+        return PhysicsWorld::BoxCast(c, he, rot, d, maxDist, f, hit);
+    };
+    api.CapsuleCast = [](const float p1[3], const float p2[3], float r, const float d[3], float maxDist,
+                         const QueryFilter& f, RaycastHit& hit) {
+        return PhysicsWorld::CapsuleCast(p1, p2, r, d, maxDist, f, hit);
+    };
+    api.OverlapSphereFiltered = [](const float c[3], float r, const QueryFilter& f, std::uint32_t* out, int maxE) {
+        return PhysicsWorld::OverlapSphereFiltered(c, r, f, out, maxE);
+    };
+    api.OverlapBox = [](const float c[3], const float he[3], const float rot[4], const QueryFilter& f,
+                        std::uint32_t* out, int maxE) {
+        return PhysicsWorld::OverlapBox(c, he, rot, f, out, maxE);
+    };
     return api;
 }
 
