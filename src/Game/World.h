@@ -157,6 +157,12 @@ public:
     // leave a stale or dangling entry.
     void RebuildWorldTransformCache();
 
+    // #163 - picks each LOD Group's level for a view (eye position + projection) and tags the
+    // renderers of every other level with LodCulledTag. Call before each view's draw and shadow
+    // passes. Returns the number of LOD Groups evaluated.
+    int ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj);
+    // Removes every LodCulledTag.
+    void ClearLod();
     // #201 - derives InactiveTag (activeInHierarchy == false) from DeactivatedTag on the entity
     // or any ancestor. RebuildWorldTransformCache() runs it every frame; scene/prefab loads run
     // it on the way out so their callers see a consistent state immediately.

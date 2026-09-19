@@ -25,6 +25,8 @@
 #include "UndoDeltaChain.h"
 #include "World.h"
 
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <json.hpp>
 
 #include <algorithm>
@@ -89,6 +91,36 @@ void TestCameraRoll() {
     bool same = true;
     for (int c = 0; c < 4; ++c) same &= near(glm::vec3(level[c]), glm::vec3(back[c]));
     CHECK(same);
+}
+
+// --- LOD Group (#163) ---------------------------------------------------------------------
+void TestLodGroup() {
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity group = world.CreateEmptyEntity(zero, zero, one, "Group");
+    world.Registry.emplace<LODGroupComponent>(group).Size = 2.0f;
+    entt::entity lv[3];
+    for (int i = 0; i < 3; ++i) {
+        lv[i] = world.CreateEmptyEntity(zero, zero, one, "LOD" + std::to_string(i));
+        world.Registry.emplace<RenderableComponent>(lv[i]);
+        CHECK(world.SetParent(lv[i], group));
+    }
+    // 90 degree FOV: yScale = 1, so a 2 m object at distance d is 1/d of the view tall.
+    const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+    auto shown = [&](float dist) {
+        CHECK(world.ApplyLod(glm::vec3(0.0f, 0.0f, dist), proj) == 1);
+        int visible = -1, count = 0;
+        for (int i = 0; i < 3; ++i)
+            if (!world.Registry.all_of<LodCulledTag>(lv[i])) { visible = i; ++count; }
+        return count <= 1 ? visible : -2;
+    };
+    CHECK(shown(1.0f) == 0);   // 100% of the view  -> LOD 0 (>= 0.6)
+    CHECK(shown(2.0f) == 1);   // 50%               -> LOD 1 (>= 0.3)
+    CHECK(shown(5.0f) == 2);   // 20%               -> LOD 2 (>= 0.1)
+    CHECK(shown(20.0f) == -1); // 5%, below the last used level -> culled
+    world.Registry.destroy(group);
+    CHECK(world.ApplyLod(zero, proj) == 0); // no groups left: nothing stays tagged
+    CHECK(world.Registry.view<LodCulledTag>().empty());
 }
 
 // --- Active in hierarchy (#201) -------------------------------------------------------------
@@ -483,6 +515,7 @@ int RunUnitTests() {
         {"AnimatorController", TestAnimatorController},
         {"AssetIdentity", TestAssetIdentity},
         {"ProjectWatcher", TestProjectWatcher},
+        {"LodGroup", TestLodGroup},
         {"ActiveInHierarchy", TestActiveInHierarchy},
         {"CameraRoll", TestCameraRoll},
     };
