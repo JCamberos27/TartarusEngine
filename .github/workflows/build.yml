@@ -69,6 +69,14 @@ jobs:
       - name: Build
         run: cmake --build build --config ${{ matrix.config }} --parallel
 
+      # #173 - headless unit tests (undo deltas, GUIDs, atomic writes, texture-cache keys,
+      # material JSON robustness, component registry). They run before any window / GL context
+      # exists, so unlike the smoke test below they work on this GPU-less runner and DO gate the
+      # job: the exit code is the number of failed checks.
+      - name: Unit tests
+        timeout-minutes: 5
+        run: build\${{ matrix.config }}\TartarusEngine.exe --unit-tests
+
       # Best-effort only — see the note at the top of this file. continue-on-error means this
       # step's outcome never fails the job; check its own log to see whether it actually ran.
       #
