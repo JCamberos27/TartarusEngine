@@ -51,6 +51,7 @@
 #include "Frustum.h"
 #include "PhysicsWorld.h" // #185 — PhysX world stepped during Play
 #include "GravityGun.h" // the player's always-on grab/throw ability
+#include "CrosshairOverlay.h"
 #include "GameViewPanel.h"
 #include "ProjectPaths.h"
 #include "PlayerConfig.h" // #174
@@ -590,6 +591,7 @@ int main(int argc, char** argv) {
         }
         Player player;
         GravityGun gravityGun;
+        CrosshairOverlay crosshair; // Play-mode crosshair + gravity gun hold / throw-charge indicator
         // #165 - what Play renders through: the first-person player (playUsesPlayer), or the
         // scene's Camera entity, mirrored each frame into playSceneCam.
         bool playUsesPlayer = true;
@@ -1076,6 +1078,8 @@ int main(int argc, char** argv) {
             player.Gravity = ProjectSettings::Physics().Gravity.y; // #236 A4 — project-scoped
             playUsesPlayer = true;
             playGravityGun = true;
+            gravityGun.Reset();
+            gravityGun.Settings = GravityGunSettings{};
             playCameraEntity = entt::null;
             if (entt::entity ctrl = FindFirstPersonController(world); ctrl != entt::null) {
                 const auto& fp = world.Registry.get<FirstPersonControllerComponent>(ctrl);
@@ -1090,6 +1094,10 @@ int main(int argc, char** argv) {
                 player.KillY = fp.KillY;
                 player.Cam.Fov = fp.FieldOfView;
                 playGravityGun = fp.GravityGun;
+                gravityGun.Settings.MinThrowSpeed = fp.MinThrowSpeed;
+                gravityGun.Settings.MaxThrowSpeed = std::max(fp.MaxThrowSpeed, fp.MinThrowSpeed);
+                gravityGun.Settings.ChargeTime = fp.ThrowChargeTime;
+                gravityGun.Settings.BackspinRevPerSec = fp.ThrowBackspin;
                 const glm::mat4 spawn = world.ComposeWorldTransform(ctrl);
                 player.RespawnFeet = glm::vec3(spawn[3]);
                 player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
@@ -2941,6 +2949,10 @@ int main(int argc, char** argv) {
                                  gvWidth, gvHeight,
                                  MakePostSettings(world, gvBloomGlowTex, gvBloomIntensity));
                 }
+                if (playing && playUsesPlayer)
+                    crosshair.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
+                                   playGravityGun && gravityGun.IsHolding(),
+                                   playGravityGun && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f);
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
 
                 // #143: exponentially smoothed (same 0.92/0.08 blend as the Scene view's status
@@ -3101,6 +3113,9 @@ int main(int argc, char** argv) {
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh,
                                  MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity));
                 }
+                if (playing && playUsesPlayer)
+                    crosshair.Draw(0, mw, mh, playGravityGun && gravityGun.IsHolding(),
+                                   playGravityGun && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f);
             }
 
             {
