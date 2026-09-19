@@ -402,6 +402,28 @@ bool ShaderAsset::IsBuiltinKeyword(const std::string& k) {
            k == "_TRANSMISSION" || k == "_REFLECTION_PROBES";
 }
 
+bool ShaderAsset::CollectSourceFiles(std::vector<std::string>& files, std::string& problem) const {
+    const std::string baseDir = std::filesystem::path(m_Path).parent_path().string();
+    const int errorsBefore = Log::CountOf(LogLevel::Error);
+    for (const std::string* ref : {&m_VertFile, &m_FragFile}) {
+        if (ref->empty()) continue;
+        const std::string resolved = ShaderLibrary::ResolveRef(*ref, baseDir);
+        std::error_code ec;
+        if (!std::filesystem::is_regular_file(resolved, ec)) {
+            problem = "stage '" + *ref + "' isn't at " + resolved;
+            return false;
+        }
+        std::vector<std::string> deps;
+        ShaderLibrary::ReadFileAt(resolved, m_Path, &deps); // the file itself + every #include it reached
+        files.insert(files.end(), deps.begin(), deps.end());
+    }
+    if (Log::CountOf(LogLevel::Error) > errorsBefore) { // ResolveIncludes logs an include it can't open
+        problem = "an #include can't be found (the Console names it)";
+        return false;
+    }
+    return true;
+}
+
 void ShaderAsset::CompileVariant(ShaderVariantKey key) {
     // #208 — stages resolve against this descriptor's folder (engine:// / project:// explicit).
     const std::string baseDir = std::filesystem::path(m_Path).parent_path().string();

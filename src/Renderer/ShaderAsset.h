@@ -89,6 +89,11 @@ public:
     // error the current definition is kept. Returns whether anything was reloaded.
     bool ReloadFromDisk();
 
+    // #208 - every source file this descriptor compiles from: its resolved stage files and their
+    // #includes (ShaderLibrary::DependencyKey spellings). False, with `problem` naming what's
+    // missing, when a stage or an include can't be found. Used to validate a player build.
+    bool CollectSourceFiles(std::vector<std::string>& files, std::string& problem) const;
+
     // Per-property draw bindings (texture-unit assignments). Same for all variants.
     const std::vector<PropertyBinding>& Bindings() const { return m_Bindings; }
 
