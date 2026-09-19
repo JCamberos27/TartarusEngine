@@ -498,6 +498,54 @@ void RegisterEngineComponents() {
               "0 = automatic (the size of the first child's meshes).", 0.0f, 10000.0f },
         },
     });
+    // #162 / #203 - Unity's post-processing Volume.
+    {
+        ReflectComponent m{
+            "Post-process Volume", ICON_FA_WAND_MAGIC_SPARKLES,
+            "Changes the look (exposure, colour, vignette, bloom, lens effects) while the camera is\n"
+            "inside this box, fading in over Blend Distance - or everywhere, when Global. Tick an\n"
+            "override to take that setting over from Lighting > Post-processing.",
+            "Rendering",
+            {
+                { "Global", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, Global), 0.0f,
+                  "Applies everywhere, not just inside the box." },
+                { "Size", T::Vec3, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, Size), 0.1f,
+                  "Box size in this object's local units (scaled by its Scale)." },
+                { "Blend Distance", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, BlendDistance), 0.05f,
+                  "Metres outside the box over which the effect fades in. 0 = hard edge.", 0.0f, 1000.0f },
+                { "Weight", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, Weight), 0.01f,
+                  "How strongly the overrides apply at full effect.", 0.0f, 1.0f },
+                { "Priority", T::Int, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, Priority), 0.1f,
+                  "Where volumes overlap, higher priority is applied last and wins." },
+                { "Override Exposure", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideExposure), 0.0f, "" },
+                { "Exposure", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, ExposureEV), 0.05f,
+                  "Exposure compensation in stops.", -10.0f, 10.0f },
+                { "Override Temperature", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideTemperature), 0.0f, "" },
+                { "Temperature", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, Temperature), 0.5f,
+                  "White balance: negative = cooler / bluer, positive = warmer.", -100.0f, 100.0f },
+                { "Override Tint", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideTint), 0.0f, "" },
+                { "Tint", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, Tint), 0.5f,
+                  "White balance: negative = green, positive = magenta.", -100.0f, 100.0f },
+                { "Override Contrast", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideContrast), 0.0f, "" },
+                { "Contrast", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, Contrast), 0.5f, "", -100.0f, 100.0f },
+                { "Override Saturation", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideSaturation), 0.0f, "" },
+                { "Saturation", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, Saturation), 0.5f,
+                  "-100 = greyscale.", -100.0f, 100.0f },
+                { "Override Vignette", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideVignette), 0.0f, "" },
+                { "Vignette", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, Vignette), 0.01f, "", 0.0f, 1.0f },
+                { "Override Bloom", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideBloom), 0.0f,
+                  "Needs bloom enabled in Lighting > Post-processing." },
+                { "Bloom Intensity", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, BloomIntensity), 0.005f, "", 0.0f, 2.0f },
+                { "Override Chromatic Aberration", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideChromatic), 0.0f, "" },
+                { "Chromatic Aberration", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, ChromaticAberration), 0.01f, "", 0.0f, 1.0f },
+                { "Override Film Grain", T::Bool, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, OverrideGrain), 0.0f, "" },
+                { "Film Grain", T::Float, TARTARUS_REFLECT_FIELD(PostProcessVolumeComponent, FilmGrain), 0.01f, "", 0.0f, 1.0f },
+            },
+        };
+        for (auto& f : m.Fields)
+            if (f.Type == T::Float && std::strcmp(f.Name, "Blend Distance") != 0) { f.Slider = true; f.Format = "%.2f"; }
+        Register<PostProcessVolumeComponent>(std::move(m));
+    }
     Register<AudioListenerComponent>({
         "Audio Listener", ICON_FA_HEADPHONES,
         "In Play, 3D sounds are heard from this object (its position and facing) instead of from "
