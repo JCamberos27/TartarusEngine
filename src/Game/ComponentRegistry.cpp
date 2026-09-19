@@ -463,6 +463,9 @@ void RegisterEngineComponents() {
               "Within this many metres the sound plays at full volume.", 0.01f, 10000.0f },
             { "Max Distance", T::Float, TARTARUS_REFLECT_FIELD(AudioSourceComponent, MaxDistance), 0.5f,
               "Beyond this the volume stops dropping (Logarithmic) or is silent (Linear).", 0.02f, 10000.0f },
+            { "Doppler Level", T::Float, TARTARUS_REFLECT_FIELD(AudioSourceComponent, DopplerLevel), 0.01f,
+              "How much the pitch rises as this source and the listener approach each other and\n"
+              "falls as they separate. 0 = off, 1 = physically correct (3D sounds only).", 0.0f, 5.0f },
         };
         m.Fields[0].AssetKind = ReflectAssetKind::Sound;
         m.Fields[1].Slider = true; m.Fields[1].Format = "%.2f";

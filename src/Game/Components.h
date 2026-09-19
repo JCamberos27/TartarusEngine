@@ -169,6 +169,7 @@ struct AudioSourceComponent {
     int   Rolloff = 0;
     float MinDistance = 1.0f;
     float MaxDistance = 500.0f;
+    float DopplerLevel = 1.0f; // #171 - 0 = no pitch shift from motion, 1 = physical
 };
 
 // #171 - Unity's Audio Listener: in Play, 3D sounds are heard from this entity (position and
