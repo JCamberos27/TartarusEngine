@@ -56,7 +56,7 @@ Model::Model(const std::string& path, const ModelImportSettings& settings)
 
 std::shared_ptr<Model> Model::CreateInstance() const {
     std::shared_ptr<Model> inst(new Model());
-    inst->m_D = m_D;       // #96 â€” shared import: no Assimp, no new GPU buffers or textures
+    inst->m_D = m_D;       // #96 — shared import: no Assimp, no new GPU buffers or textures
     inst->m_Path = m_Path;
     inst->m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
     return inst;
@@ -68,7 +68,7 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
     // inches) in the file's global settings. aiProcess_GlobalScale + this property tells
     // Assimp to read that and auto-convert to real-world meters, so a model built at 1
     // unit = 1cm no longer imports 100x too large without the artist doing anything special.
-    // Files with no such metadata (most .obj) are unaffected â€” this can't invent scale that
+    // Files with no such metadata (most .obj) are unaffected — this can't invent scale that
     // was never recorded, so hand-authored/untagged assets may still need manual correction.
     // settings.GlobalScale multiplies on top of that derived correction (Import Settings'
     // "Import Scale" knob), rather than replacing it.
@@ -86,7 +86,7 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
 
     const aiScene* scene = importer.ReadFile(m_Path, flags);
 
-    // #175 â€” an animation-only file (Mixamo "without skin", a clip library) has no meshes, which
+    // #175 — an animation-only file (Mixamo "without skin", a clip library) has no meshes, which
     // Assimp flags INCOMPLETE; that's a valid clip asset, not a failed import.
     const bool animationOnly = scene && scene->mRootNode && scene->mNumMeshes == 0 && scene->mNumAnimations > 0;
     if (!scene || ((scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) && !animationOnly) || !scene->mRootNode) {
@@ -103,7 +103,7 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
         return;
     }
 
-    // #96 â€” import into a fresh SharedData, then move it into the object every instance of this
+    // #96 — import into a fresh SharedData, then move it into the object every instance of this
     // asset shares, so a Reimport reaches placed instances too and starts from a clean slate.
     const std::shared_ptr<SharedData> target = m_D;
     m_D = std::make_shared<SharedData>();
@@ -248,7 +248,7 @@ std::shared_ptr<Model> Model::CreatePrimitive(const std::string& kind, const std
 
 void Model::ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& parentTransform) {
     // Assimp's mesh vertex data is expressed in the local space of whatever node the mesh
-    // is attached to, NOT world/model space â€” each node in the FBX/glTF hierarchy can carry
+    // is attached to, NOT world/model space — each node in the FBX/glTF hierarchy can carry
     // its own offset/rotation (e.g. a shotgun's barrel, stock, and trigger guard are commonly
     // separate nodes). Skipping this accumulation collapses every part to the model origin.
     glm::mat4 nodeTransform = parentTransform * AiToGlm(node->mTransformation);
@@ -314,7 +314,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
 
     std::vector<unsigned int> indices;
     indices.reserve(mesh->mNumFaces * 3);
-    // #113 â€” a mirrored node transform (negative determinant, e.g. a -1 scale for the other
+    // #113 — a mirrored node transform (negative determinant, e.g. a -1 scale for the other
     // side of a symmetric prop) baked into the vertices flips every triangle's winding, so the
     // mesh renders inside-out under back-face culling. Swap two indices per triangle to undo it.
     const bool flipWinding = !skinned && glm::determinant(glm::mat3(nodeTransform)) < 0.0f;
@@ -335,7 +335,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
 
     auto gpuMesh = std::make_unique<ModelMesh>(vertices, indices);
     if (skinned) {
-        // #98 â€” the GPU copy stays in mesh space for the skinning shader; bounds, picking,
+        // #98 — the GPU copy stays in mesh space for the skinning shader; bounds, picking,
         // snapping and collider cooking use the bind pose (same blend as the vertex shader).
         std::vector<glm::vec3> posed;
         posed.reserve(vertices.size());
@@ -358,7 +358,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     if (m_D->Settings.MaterialImportMode == ModelImportSettings::MaterialMode::ImportEmbedded) {
         if (mesh->mMaterialIndex < scene->mNumMaterials) {
             gpuMesh->Mat = ExtractMaterial(scene, mesh->mMaterialIndex);
-            // #113 â€” a mesh that ships vertex colours gets them (glTF COLOR_0 always tints).
+            // #113 — a mesh that ships vertex colours gets them (glTF COLOR_0 always tints).
             if (mesh->HasVertexColors(0)) gpuMesh->Mat.UseVertexColor = true;
         }
     } else if (m_D->Settings.MaterialImportMode == ModelImportSettings::MaterialMode::CreateSynthetic) {
@@ -371,7 +371,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
 }
 
 std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath, TextureRole role) {
-    // #95 â€” the role decides the colour space. Every map used to be loaded with the default
+    // #95 — the role decides the colour space. Every map used to be loaded with the default
     // (sRGB) settings, so normal / metallic / roughness / AO maps were gamma-decoded on sample:
     // bent normals and wrong roughness on essentially every imported model. Only albedo and
     // emissive are colour data. Keyed by path + role, in case one file feeds both kinds of slot.
@@ -473,7 +473,7 @@ std::string Model::ResolveTexturePathIn(const std::string& modelDirStr, const st
     namespace fs = std::filesystem;
 
     // Embedded texture ("*0", "*1", ...): the pixels live inside the model file, not on disk.
-    // The Texture class is disk-only, so there's nothing to resolve here â€” hand the marker back
+    // The Texture class is disk-only, so there's nothing to resolve here — hand the marker back
     // and let the caller log one clear line instead of a mangled path.
     if (!raw.empty() && raw[0] == '*') return raw;
     if (raw.empty()) return raw;
@@ -518,7 +518,7 @@ std::string Model::ResolveTexturePathIn(const std::string& modelDirStr, const st
         }
     }
 
-    // Nothing matched â€” return a clean best-effort path so the load failure names something
+    // Nothing matched — return a clean best-effort path so the load failure names something
     // sensible rather than "modelDir + someone-else's-absolute-path".
     if (p.is_absolute()) return p.lexically_normal().string();
     return (modelDir / p).lexically_normal().string();
@@ -573,7 +573,7 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
         material->GetTexture(type, 0, &str);
         if (str.length == 0) return nullptr;
 
-        // #113 â€” embedded media (.glb, FBX with embedded textures): "*N" or a name matching an
+        // #113 — embedded media (.glb, FBX with embedded textures): "*N" or a name matching an
         // aiTexture's filename. Decoded from memory instead of leaving the slot blank.
         if (const aiTexture* emb = scene->GetEmbeddedTexture(str.C_Str()))
             return LoadEmbeddedTexture(emb, str.C_Str(), role);
@@ -591,15 +591,15 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
     mat.NormalMap = loadSlot(aiTextureType_NORMALS, TextureRole::Normal);
     // assimp puts glTF2's packed metal-rough map in UNKNOWN (and, in newer versions, also in
     // GLTF_METALLIC_ROUGHNESS). FBX uses UNKNOWN for arbitrary unmapped slots, which must not be
-    // read as metal-rough (#113) â€” only trust it for glTF materials.
+    // read as metal-rough (#113) — only trust it for glTF materials.
     const bool isGltf = material->Get(AI_MATKEY_GLTF_ALPHAMODE, str_unused) == AI_SUCCESS ||
                         IsGltfPath(m_Path);
     if (isGltf) mat.MetallicRoughnessMap = loadSlot(aiTextureType_UNKNOWN, TextureRole::Data);
-    // Standalone maps â€” NOT the packed slot above, which is a different (G=rough, B=metal)
+    // Standalone maps — NOT the packed slot above, which is a different (G=rough, B=metal)
     // texture layout that a plain grayscale roughness/metalness map would be misread against.
     mat.RoughnessMap = loadSlot(aiTextureType_DIFFUSE_ROUGHNESS, TextureRole::Data);
     mat.MetallicMap = loadSlot(aiTextureType_METALNESS, TextureRole::Data);
-    // #113 â€” the real AO slot first; glTF occlusion arrives as LIGHTMAP in assimp, so that stays
+    // #113 — the real AO slot first; glTF occlusion arrives as LIGHTMAP in assimp, so that stays
     // a fallback (a true FBX lightmap is baked lighting, not occlusion, but is rarely shipped).
     mat.AOMap = loadSlot(aiTextureType_AMBIENT_OCCLUSION, TextureRole::Data);
     if (!mat.AOMap) mat.AOMap = loadSlot(aiTextureType_LIGHTMAP, TextureRole::Data);
@@ -612,10 +612,10 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
     if (material->Get(AI_MATKEY_COLOR_EMISSIVE, color) == AI_SUCCESS) {
         mat.EmissiveColor = {color.r, color.g, color.b};
     }
-    // #102 â€” the emissive map is now tinted by EmissiveColor; files that ship an emissive map
+    // #102 — the emissive map is now tinted by EmissiveColor; files that ship an emissive map
     // with no (or a black) emissive factor mean "the map as-is".
     if (mat.EmissiveMap && mat.EmissiveColor == glm::vec3(0.0f)) mat.EmissiveColor = glm::vec3(1.0f);
-    // #101 â€” alpha cutout. glTF says so explicitly (alphaMode MASK + alphaCutoff); formats with
+    // #101 — alpha cutout. glTF says so explicitly (alphaMode MASK + alphaCutoff); formats with
     // no alpha mode (FBX/OBJ) keep the old behaviour of treating an albedo map that carries an
     // alpha channel as cutout, which is what foliage/fence assets in those formats rely on.
     aiString alphaMode;
@@ -627,9 +627,9 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
         mat.AlphaClip = true;
     }
 
-    // #102 â€” factors now scale their maps, so a file that has a map but no factor (FBX, OBJ)
+    // #102 — factors now scale their maps, so a file that has a map but no factor (FBX, OBJ)
     // means factor 1 (the glTF default), not the engine's scalar-only defaults of 0 / 0.5.
-    // #113 â€” double-sided materials (glTF doubleSided, FBX/OBJ two-sided flag).
+    // #113 — double-sided materials (glTF doubleSided, FBX/OBJ two-sided flag).
     int twoSided = 0;
     if (material->Get(AI_MATKEY_TWOSIDED, twoSided) == AI_SUCCESS && twoSided) mat.DoubleSided = true;
 
@@ -731,7 +731,7 @@ void Model::ReadAnimations(const aiScene* scene) {
             }
             clip.Channels.push_back(std::move(bac));
         }
-        // #113 â€” resolve node -> channel once here, not by name per node per frame.
+        // #113 — resolve node -> channel once here, not by name per node per frame.
         clip.NodeChannel.assign(m_D->Nodes.size(), -1);
         for (int c = 0; c < (int)clip.Channels.size(); ++c)
             for (int n = 0; n < (int)m_D->Nodes.size(); ++n)
@@ -825,7 +825,7 @@ void Model::PlayAnimation(int index, float fadeSeconds, AnimationWrapMode wrap, 
 
 void Model::UpdateAnimation(float dt) {
     const int clipCount = AnimationCount();
-    if (m_Anim.Clip >= clipCount) m_Anim.Clip = -1;         // #96 â€” reimported with fewer clips
+    if (m_Anim.Clip >= clipCount) m_Anim.Clip = -1;         // #96 — reimported with fewer clips
     if (m_AnimFrom.Clip >= clipCount) m_AnimFrom.Clip = -1;
     const bool fading = m_FadeDuration > 0.0f;
     if (m_Anim.Clip < 0 && !fading && !m_PosePending) return;
@@ -895,7 +895,7 @@ void EnsureBoneSsbo() {
 } // namespace
 
 void Model::UploadBoneMatrices(Shader& shader) const {
-    // #98 â€” skin whenever there are bones: the clip's pose while playing, else the bind pose.
+    // #98 — skin whenever there are bones: the clip's pose while playing, else the bind pose.
     const bool skinning = m_D->BoneCounter > 0;
     shader.SetInt("uUseSkinning", skinning ? 1 : 0);
 
@@ -930,7 +930,7 @@ struct MaterialLocs {
     int hasHeight, heightMap, hasDetailAlbedo, detailAlbedoMap, hasDetailNormal, detailNormalMap; // #102
 };
 
-// #102 / #113 â€” the surface-option uniforms, set for BOTH the built-in and the data-driven
+// #102 / #113 — the surface-option uniforms, set for BOTH the built-in and the data-driven
 // (Standard.shader) paths so a shader that declares them gets them either way.
 void SetSurfaceOptions(Shader& shader, const Material& mat) {
     shader.SetVec2("uUVTiling", mat.UVTiling);
@@ -1017,7 +1017,7 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
     bindSlot(5, mat.RoughnessMap, locs.hasRoughness, locs.roughnessMap, DefaultTextures::White());
     bindSlot(6, mat.AOMap, locs.hasAO, locs.aoMap, DefaultTextures::White());
     bindSlot(7, mat.EmissiveMap, locs.hasEmissive, locs.emissiveMap, DefaultTextures::Black());
-    // #102 â€” units 16+ (8..15 are the engine's shadow / IBL / SSAO units).
+    // #102 — units 16+ (8..15 are the engine's shadow / IBL / SSAO units).
     bindSlot(16, mat.HeightMap, locs.hasHeight, locs.heightMap, DefaultTextures::White());
     bindSlot(17, mat.DetailAlbedoMap, locs.hasDetailAlbedo, locs.detailAlbedoMap, DefaultTextures::White());
     bindSlot(18, mat.DetailNormalMap, locs.hasDetailNormal, locs.detailNormalMap, DefaultTextures::FlatNormal());
@@ -1029,7 +1029,7 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
 // `ma.Mat.ExtraProps` (typed store filled by MaterialAsset::Load, #354).
 void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const ShaderAsset& sa) {
     const Material& mat = ma.Mat;
-    // #99 â€” the redundant-bind skip must also see custom (non-builtin) shader properties;
+    // #99 — the redundant-bind skip must also see custom (non-builtin) shader properties;
     // Material::Hash() only covers the built-in fields, so two materials differing only in an
     // ExtraProp used to render with whichever was bound first.
     size_t hash = mat.Hash();
@@ -1043,7 +1043,7 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
     }
     mix((size_t)ma.RenderQueue);
     if (GLStateCache::MaterialAlreadyBound(hash, shader.Program())) return;
-    // #101 â€” cutout for the AlphaTest queue (Standard.shader includes ModelFragment's uAlphaClip).
+    // #101 — cutout for the AlphaTest queue (Standard.shader includes ModelFragment's uAlphaClip).
     shader.SetInt("uAlphaClip", (mat.AlphaClip || ma.RenderQueue == MaterialAsset::Queue::AlphaTest) ? 1 : 0);
     SetSurfaceOptions(shader, mat); // #102
     shader.SetFloat("uAlphaCutoff", mat.AlphaCutoff);
@@ -1053,7 +1053,7 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
     for (const PropertyBinding& b : bindings) {
         const ShaderProperty& prop = props[b.PropIndex];
         const std::string& pname   = prop.Name;
-        // Derive uniform name: "_AlbedoMap" â†’ "uAlbedoMap"
+        // Derive uniform name: "_AlbedoMap" → "uAlbedoMap"
         std::string uname = "u" + pname.substr(1);
         const bool builtin = MaterialAsset::IsBuiltinProp(pname);
         const MaterialProp* extra = nullptr;
@@ -1072,7 +1072,7 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
                 tex->Bind(b.TextureUnit);
                 shader.SetInt(hasName, 1);
             } else {
-                // #99 â€” an absent map still binds its declared default ("white"/"black"/
+                // #99 — an absent map still binds its declared default ("white"/"black"/
                 // "normal"), like the built-in path does, so the sampler never sees texture 0
                 // (KHR 131204) or a stale texture left on that unit by a previous draw.
                 const unsigned int fallback = prop.DefaultTex == "normal" ? DefaultTextures::FlatNormal()
@@ -1090,7 +1090,7 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
                                           : (extra ? glm::vec3(extra->V)
                                                    : glm::vec3(prop.DefaultVec)));
             break;
-        // #99 â€” vec2/vec4 uniforms need the matching setter; glUniform3f on them is
+        // #99 — vec2/vec4 uniforms need the matching setter; glUniform3f on them is
         // GL_INVALID_OPERATION and the value was silently never set.
         case ShaderPropType::Vec2:
             shader.SetVec2(uname, builtin ? glm::vec2(MaterialAsset::GetVec(mat, pname))
@@ -1132,7 +1132,7 @@ void Model::Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset
 }
 
 namespace {
-// #104 â€” per-mesh ShaderLab render state around a draw. Captures the pass's own state the first
+// #104 — per-mesh ShaderLab render state around a draw. Captures the pass's own state the first
 // time a mesh overrides something, applies the override, and puts the pass state back for the
 // next mesh without one (and at the end), so passes and meshes with no declared state never pay
 // for a glGet or a state change.
@@ -1228,7 +1228,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
         if (Shader* p = selectProgram(hasSlot ? slots[i].get() : nullptr)) prog = p;
 
         if (prog != lastProg) {
-            // Per-program state the single-program Model::Draw sets once up front. Bind first â€”
+            // Per-program state the single-program Model::Draw sets once up front. Bind first —
             // the selector only binds a program the first time it applies frame state to it, and
             // glUniform* always targets the currently bound program.
             prog->Bind();
@@ -1256,22 +1256,22 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
     int albedoLoc = shader.Loc("uAlbedo");
     int alphaTestLoc = shader.Loc("uAlphaTest");
     int alphaCutoffLoc = shader.Loc("uAlphaCutoff");
-    ShaderStateScope stateScope; // #104 â€” a Cull Off (double-sided) shader casts from both sides
+    ShaderStateScope stateScope; // #104 — a Cull Off (double-sided) shader casts from both sides
     for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
         bool hasSlot = i < (int)slots.size() && slots[i];
-        // Transparent materials don't cast shadows â€” skip them in the depth-only pass.
+        // Transparent materials don't cast shadows — skip them in the depth-only pass.
         if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
         stateScope.ApplyCullOnly(EffectiveRenderState(slots, i, hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat));
         const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
         // Only cost paid over a pure depth draw: one texture bind + two uniforms, and only for
-        // CUTOUT materials with an albedo map (foliage/fences) â€” the shadow then follows the
+        // CUTOUT materials with an albedo map (foliage/fences) — the shadow then follows the
         // cutout instead of a solid silhouette (#116). #101: it used to do this for every
         // albedo-mapped mesh, so an opaque material whose albedo alpha means something else
         // (smoothness, a mask) cast holey shadows. #192: skip even that when the previous mesh
         // in this pass drew with the same material.
         const bool clip = mat.AlphaClip || (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::AlphaTest);
         if (!GLStateCache::MaterialAlreadyBound(mat.Hash() ^ (clip ? 0x5bd1e995ull : 0ull), shader.Program())) {
-            shader.SetVec2("uUVTiling", mat.UVTiling); // #102 â€” the cutout follows the material's tiling
+            shader.SetVec2("uUVTiling", mat.UVTiling); // #102 — the cutout follows the material's tiling
             shader.SetVec2("uUVOffset", mat.UVOffset);
             if (clip && mat.AlbedoMap && mat.AlbedoMap->IsValid()) {
                 mat.AlbedoMap->Bind(0);
@@ -1280,7 +1280,7 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
             } else {
                 // uAlphaTest = 0 means the sampler result is never read, but the ShadowDepth
                 // program still declares `sampler2D uAlbedo`, so unit 0 must hold a real texture
-                // or the driver reports KHR 131204 ("texture 0 ... cannot be used") every draw â€”
+                // or the driver reports KHR 131204 ("texture 0 ... cannot be used") every draw —
                 // the residual load-time warnings after PR #370 (audit GL-101 / #366 on unit 0).
                 GLStateCache::BindTexture2D(0, DefaultTextures::White());
                 shader.SetInt(alphaTestLoc, 0);
