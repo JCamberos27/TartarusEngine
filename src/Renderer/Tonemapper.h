@@ -17,6 +17,9 @@ struct PostSettings {
 
     float VignetteIntensity = 0.0f; // 0 = off
     float VignetteSmoothness = 0.4f;
+    float ChromaticAberration = 0.0f; // 0..1, colour fringing toward the edges
+    float FilmGrain = 0.0f;           // 0..1, animated luminance noise
+    float FilmGrainResponse = 0.8f;   // 0..1, how much bright areas are spared
 
     bool Fxaa = false;
     bool Dither = true;
