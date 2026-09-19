@@ -21,6 +21,9 @@ Tonemapper::~Tonemapper() {
     delete m_Ldr;
     delete m_LumShader;
     delete m_AdaptShader;
+    delete m_DofShader;
+    if (m_DofTex) glDeleteTextures(1, &m_DofTex);
+    if (m_DofFbo) glDeleteFramebuffers(1, &m_DofFbo);
     if (m_Vao) glDeleteVertexArrays(1, &m_Vao);
     if (m_LumTex) glDeleteTextures(1, &m_LumTex);
     if (m_LumFbo) glDeleteFramebuffers(1, &m_LumFbo);
@@ -134,6 +137,45 @@ unsigned int Tonemapper::UpdateAutoExposure(unsigned int srcHdrTexture, const Po
     return m_EvTex[slot][next];
 }
 
+unsigned int Tonemapper::ApplyDepthOfField(unsigned int srcHdrTexture, int w, int h, const PostSettings& post) {
+    if (!m_DofShader)
+        m_DofShader = new Shader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+                                 ShaderLibrary::ReadFile("DepthOfField.frag.glsl"));
+    if (w != m_DofW || h != m_DofH || !m_DofTex) {
+        if (m_DofTex) glDeleteTextures(1, &m_DofTex);
+        if (m_DofFbo) glDeleteFramebuffers(1, &m_DofFbo);
+        glGenTextures(1, &m_DofTex);
+        glBindTexture(GL_TEXTURE_2D, m_DofTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glGenFramebuffers(1, &m_DofFbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, m_DofFbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_DofTex, 0);
+        m_DofW = w; m_DofH = h;
+        GLStateCache::Invalidate(); // raw texture bind above
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, m_DofFbo);
+    glViewport(0, 0, w, h);
+    glBindVertexArray(m_Vao);
+    m_DofShader->Bind();
+    GLStateCache::BindTexture2D(0, srcHdrTexture);
+    GLStateCache::BindTexture2D(1, post.DepthTexture);
+    m_DofShader->SetInt("uHdr", 0);
+    m_DofShader->SetInt("uDepth", 1);
+    m_DofShader->SetFloat("uProjA", post.ProjA);
+    m_DofShader->SetFloat("uProjB", post.ProjB);
+    m_DofShader->SetInt("uOrtho", post.Ortho ? 1 : 0);
+    m_DofShader->SetFloat("uFocus", std::max(post.FocusDistance, 0.0f));
+    m_DofShader->SetFloat("uRange", std::max(post.FocusRange, 0.01f));
+    m_DofShader->SetFloat("uMaxRadius", std::clamp(post.MaxBlur, 0.0f, 32.0f) * (float)h / 1080.0f);
+    m_DofShader->SetVec2("uTexel", glm::vec2(1.0f / (float)w, 1.0f / (float)h));
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    return m_DofTex;
+}
+
 void Tonemapper::Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW, int dstH, const PostSettings& post) {
     EnsureCreated();
 
@@ -144,6 +186,9 @@ void Tonemapper::Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW
 
     // #162 - with FXAA the tone-mapped image goes to an intermediate first, then FXAA resolves
     // it into the real destination.
+    if (post.DepthOfField && post.DepthTexture && post.MaxBlur > 0.0f && dstW > 0 && dstH > 0)
+        srcHdrTexture = ApplyDepthOfField(srcHdrTexture, dstW, dstH, post);
+
     unsigned int adaptedEv = 0;
     if (post.AutoExposure) adaptedEv = UpdateAutoExposure(srcHdrTexture, post);
     else m_EvValid[std::clamp(post.ExposureSlot, 0, kExposureSlots - 1)] = false; // re-enabling snaps
