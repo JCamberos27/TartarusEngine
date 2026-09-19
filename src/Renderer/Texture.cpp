@@ -4,6 +4,7 @@
 #include "GLStateCache.h"
 #include "TextureCache.h"
 #include "stb_image.h"
+#include "stb_dxt.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -45,12 +46,8 @@ unsigned char LinearToSrgb(float l) {
 // #156 - averages colour in LINEAR space for an sRGB texture (averaging the encoded bytes made
 // downscaled textures too dark and banded), and weights colour by alpha when there is an alpha
 // channel so fully transparent texels don't bleed their (often black) colour into the edges.
-std::vector<unsigned char> DownsampleBox(const unsigned char* src, int srcW, int srcH, int channels,
-    int maxSize, int& outW, int& outH, bool srgb) {
-    float scale = std::min((float)maxSize / srcW, (float)maxSize / srcH);
-    outW = std::max(1, (int)(srcW * scale));
-    outH = std::max(1, (int)(srcH * scale));
-
+std::vector<unsigned char> ResizeBox(const unsigned char* src, int srcW, int srcH, int channels,
+    int outW, int outH, bool srgb) {
     std::vector<unsigned char> dst((size_t)outW * outH * channels);
     for (int y = 0; y < outH; ++y) {
         // Source row range covering this destination texel's footprint.
@@ -89,6 +86,125 @@ std::vector<unsigned char> DownsampleBox(const unsigned char* src, int srcW, int
         }
     }
     return dst;
+}
+
+std::vector<unsigned char> DownsampleBox(const unsigned char* src, int srcW, int srcH, int channels,
+    int maxSize, int& outW, int& outH, bool srgb) {
+    float scale = std::min((float)maxSize / srcW, (float)maxSize / srcH);
+    outW = std::max(1, (int)(srcW * scale));
+    outH = std::max(1, (int)(srcH * scale));
+    return ResizeBox(src, srcW, srcH, channels, outW, outH, srgb);
+}
+
+// #156 - S3TC (BC1/BC3) is an extension; RGTC (BC4/BC5) is core. Every desktop driver ships it,
+// but check rather than upload a format the driver would reject.
+bool HasS3tc() {
+    static const bool s_Has = [] {
+        GLint n = 0;
+        glGetIntegerv(GL_NUM_EXTENSIONS, &n);
+        for (GLint i = 0; i < n; ++i) {
+            const char* e = (const char*)glGetStringi(GL_EXTENSIONS, (GLuint)i);
+            if (e && std::strcmp(e, "GL_EXT_texture_compression_s3tc") == 0) return true;
+        }
+        return false;
+    }();
+    return s_Has;
+}
+
+const char* FormatName(GLenum f) {
+    switch (f) {
+        case GL_COMPRESSED_RGB_S3TC_DXT1_EXT:        return "BC1";
+        case GL_COMPRESSED_SRGB_S3TC_DXT1_EXT:       return "sRGB BC1";
+        case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:       return "BC3";
+        case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT: return "sRGB BC3";
+        case GL_COMPRESSED_RED_RGTC1:                return "BC4";
+        case GL_COMPRESSED_RG_RGTC2:                 return "BC5";
+        case GL_SRGB8_ALPHA8: return "sRGB RGBA8";
+        case GL_SRGB8:        return "sRGB RGB8";
+        case GL_RGBA8:        return "RGBA8";
+        case GL_RGB8:         return "RGB8";
+        case GL_RG8:          return "RG8";
+        case GL_R8:           return "R8";
+        default:              return "?";
+    }
+}
+
+// #156 - encodes `px` (w x h, `channels` bytes per texel, stb layout: 1 grey, 2 grey+alpha,
+// 3 RGB, 4 RGBA) to BCn, with a CPU-built mip chain when `mips` is set: glGenerateMipmap can't
+// run on a compressed texture, so each level is box-filtered from the one above (linear-space
+// for sRGB, alpha-weighted) and then encoded. Returns false, leaving `out` untouched, when the
+// format needs S3TC and the driver lacks it.
+bool EncodeBlockCompressed(const unsigned char* px, int w, int h, int channels, bool srgb, bool mips,
+                           bool highQuality, TextureCache::Image& out) {
+    // Working layout per format: 4 = RGBA for BC1/BC3, 1 = R for BC4, 2 = RG for BC5. A colour
+    // (sRGB) grey image has no 1/2-channel sRGB BC format, so it's expanded to RGBA like the
+    // uncompressed path does.
+    const bool dxt = srgb || channels >= 3;
+    if (dxt && !HasS3tc()) return false;
+    const int wc = dxt ? 4 : channels;
+    const size_t texels = (size_t)w * h;
+
+    std::vector<unsigned char> level(texels * wc);
+    bool opaque = true;
+    for (size_t i = 0; i < texels; ++i) {
+        const unsigned char* s = px + i * channels;
+        unsigned char* d = level.data() + i * wc;
+        if (!dxt) { for (int c = 0; c < wc; ++c) d[c] = s[c]; continue; }
+        const bool grey = channels <= 2;
+        d[0] = s[0];
+        d[1] = grey ? s[0] : s[1];
+        d[2] = grey ? s[0] : s[2];
+        d[3] = channels == 4 ? s[3] : channels == 2 ? s[1] : 255;
+        opaque &= d[3] == 255;
+    }
+
+    GLenum format;
+    int blockBytes;
+    if (!dxt) {
+        format = wc == 1 ? GL_COMPRESSED_RED_RGTC1 : GL_COMPRESSED_RG_RGTC2;
+        blockBytes = wc == 1 ? 8 : 16;
+    } else if (opaque) {
+        format = srgb ? GL_COMPRESSED_SRGB_S3TC_DXT1_EXT : GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
+        blockBytes = 8;
+    } else {
+        format = srgb ? GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT : GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+        blockBytes = 16;
+    }
+
+    out.GLFormat = format;
+    out.LevelSizes.clear();
+    out.Pixels.clear();
+    const int mode = highQuality ? STB_DXT_HIGHQUAL : STB_DXT_NORMAL;
+    int lw = w, lh = h;
+    for (;;) {
+        const int bx = (lw + 3) / 4, by = (lh + 3) / 4;
+        const size_t start = out.Pixels.size();
+        out.Pixels.resize(start + (size_t)bx * by * blockBytes);
+        unsigned char* dst = out.Pixels.data() + start;
+        unsigned char block[16 * 4];
+        for (int y = 0; y < by; ++y) {
+            for (int x = 0; x < bx; ++x, dst += blockBytes) {
+                // Gather 4x4 texels, clamping at the edge so partial blocks repeat the border.
+                for (int j = 0; j < 4; ++j) {
+                    const int sy = std::min(y * 4 + j, lh - 1);
+                    for (int i = 0; i < 4; ++i) {
+                        const int sx = std::min(x * 4 + i, lw - 1);
+                        std::memcpy(block + (j * 4 + i) * wc, level.data() + ((size_t)sy * lw + sx) * wc, (size_t)wc);
+                    }
+                }
+                if (wc == 1)      stb_compress_bc4_block(dst, block);
+                else if (wc == 2) stb_compress_bc5_block(dst, block);
+                else              stb_compress_dxt_block(dst, block, blockBytes == 16 ? 1 : 0, mode);
+            }
+        }
+        out.LevelSizes.push_back((uint32_t)(out.Pixels.size() - start));
+        if (!mips || (lw == 1 && lh == 1)) break;
+        const int nw = std::max(1, lw / 2), nh = std::max(1, lh / 2);
+        // Same filter as the Max Size downsample (2 channels = grey+alpha, as stb decodes it).
+        level = ResizeBox(level.data(), lw, lh, wc, nw, nh, srgb);
+        lw = nw; lh = nh;
+    }
+    return true;
 }
 
 } // namespace
@@ -140,8 +256,12 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     std::vector<unsigned char> resized;
     const unsigned char* uploadData = nullptr;
     int uploadW = 0, uploadH = 0;
+    // #156 - set when the pixels are BCn blocks (from the cache, or encoded below).
+    const TextureCache::Image* compressed = nullptr;
+    TextureCache::Image encoded;
 
     if (fromCache) {
+        if (cached.GLFormat != 0) compressed = &cached;
         m_Width = cached.SourceWidth;
         m_Height = cached.SourceHeight;
         m_Channels = cached.Channels;
@@ -180,16 +300,34 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
             uploadData = resized.data();
         }
 
-        // Bake the result for next time — post-downsample, so the cache stores exactly the
-        // bytes glTexImage2D receives below.
+        // #156 - block-compress on import. Falls back to the raw upload if the format isn't
+        // available (no S3TC), which is then what gets cached under these settings.
+        if (settings.CompressionMode != TextureImportSettings::Compression::None &&
+            EncodeBlockCompressed(uploadData, uploadW, uploadH, m_Channels, effective.IsSRGB,
+                                  effective.GenerateMipmaps,
+                                  settings.CompressionMode == TextureImportSettings::Compression::HighQuality,
+                                  encoded)) {
+            compressed = &encoded;
+        }
+
+        // Bake the result for next time — post-downsample (and post-encode), so the cache
+        // stores exactly the bytes the upload below receives.
         TextureCache::Image entry;
         entry.SourceWidth = m_Width;
         entry.SourceHeight = m_Height;
         entry.Width = uploadW;
         entry.Height = uploadH;
         entry.Channels = m_Channels;
-        entry.Pixels.assign(uploadData, uploadData + (size_t)uploadW * uploadH * m_Channels);
-        if (!fromMemory) TextureCache::Store(m_Path, settings, entry);
+        if (!fromMemory) {
+            if (compressed) {
+                entry.GLFormat = encoded.GLFormat;
+                entry.LevelSizes = encoded.LevelSizes;
+                entry.Pixels = encoded.Pixels;
+            } else {
+                entry.Pixels.assign(uploadData, uploadData + (size_t)uploadW * uploadH * m_Channels);
+            }
+            TextureCache::Store(m_Path, settings, entry);
+        }
     }
 
     const auto uploadStart = std::chrono::steady_clock::now();
@@ -208,7 +346,7 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     std::vector<unsigned char> expanded;
     GLint swizzle[4] = {GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA};
     bool useSwizzle = false;
-    if ((m_Channels == 1 || m_Channels == 2) && effective.IsSRGB) {
+    if ((m_Channels == 1 || m_Channels == 2) && effective.IsSRGB && !compressed) { // BCn: expanded at encode
         const size_t px = (size_t)uploadW * uploadH;
         expanded.resize(px * 4);
         for (size_t i = 0; i < px; ++i) {
@@ -249,15 +387,40 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     }
 
     glCreateTextures(GL_TEXTURE_2D, 1, &m_ID);
-    glTextureStorage2D(m_ID, levels, (GLenum)internalFormat, uploadW, uploadH);
+    if (compressed) {
+        // #156 - BCn: every mip level was built and encoded on the CPU; upload them as-is.
+        // Grey sRGB images were expanded to RGBA before encoding (and so aren't swizzled).
+        const GLenum cf = (GLenum)compressed->GLFormat;
+        levels = (int)compressed->LevelSizes.size();
+        glTextureStorage2D(m_ID, levels, cf, uploadW, uploadH);
+        const unsigned char* blocks = compressed->Pixels.data();
+        m_GpuBytes = 0;
+        for (int l = 0; l < levels; ++l) {
+            const int lw = std::max(1, uploadW >> l), lh = std::max(1, uploadH >> l);
+            const GLsizei size = (GLsizei)compressed->LevelSizes[(size_t)l];
+            glCompressedTextureSubImage2D(m_ID, l, 0, 0, lw, lh, cf, size, blocks);
+            blocks += size;
+            m_GpuBytes += (size_t)size;
+        }
+        m_GpuFormatName = FormatName(cf);
+    } else {
+        glTextureStorage2D(m_ID, levels, (GLenum)internalFormat, uploadW, uploadH);
 
-    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-    // The decode/cache path hands us tightly packed rows (stride = w*channels). Without this,
-    // GL assumes 4-byte row alignment and shears any RGB texture whose width isn't a multiple
-    // of 4 (#99). Restored to the 4 default right after.
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTextureSubImage2D(m_ID, 0, 0, 0, uploadW, uploadH, format, GL_UNSIGNED_BYTE, uploadData);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        // The decode/cache path hands us tightly packed rows (stride = w*channels). Without this,
+        // GL assumes 4-byte row alignment and shears any RGB texture whose width isn't a multiple
+        // of 4 (#99). Restored to the 4 default right after.
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTextureSubImage2D(m_ID, 0, 0, 0, uploadW, uploadH, format, GL_UNSIGNED_BYTE, uploadData);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+        // Bytes per texel as the driver stores it (RGB8 is padded to 4 on every desktop GPU);
+        // a full mip chain adds a third.
+        const int bpp = (internalFormat == GL_R8) ? 1 : (internalFormat == GL_RG8) ? 2 : 4;
+        m_GpuBytes = (size_t)uploadW * uploadH * bpp;
+        if (levels > 1) m_GpuBytes += m_GpuBytes / 3;
+        m_GpuFormatName = FormatName((GLenum)internalFormat);
+    }
 
     if (useSwizzle) { // #94
         glTextureParameteri(m_ID, GL_TEXTURE_SWIZZLE_R, swizzle[0]);
@@ -266,7 +429,7 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
         glTextureParameteri(m_ID, GL_TEXTURE_SWIZZLE_A, swizzle[3]);
     }
 
-    if (effective.GenerateMipmaps) glGenerateTextureMipmap(m_ID);
+    if (effective.GenerateMipmaps && !compressed) glGenerateTextureMipmap(m_ID);
 
     GLint wrap = effective.WrapMode == TextureImportSettings::Wrap::ClampToEdge ? GL_CLAMP_TO_EDGE : GL_REPEAT;
     glTextureParameteri(m_ID, GL_TEXTURE_WRAP_S, wrap);
