@@ -1,0 +1,17 @@
+{
+  "matVersion": 2,
+  "name": "Backboard Glass",
+  "_comment": "Tempered glass with painted border and target square (alpha in the texture).",
+  "shader": "engine://Standard.shader",
+  "renderQueue": 2,
+  "properties": {
+    "_BaseColor": [
+      1,
+      1,
+      1
+    ],
+    "_Metallic": 0.0,
+    "_Roughness": 0.04,
+    "_AlbedoMap": "textures/basketball/backboard.png"
+  }
+}

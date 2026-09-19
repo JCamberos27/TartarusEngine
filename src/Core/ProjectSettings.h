@@ -14,9 +14,11 @@
 namespace ProjectSettings {
 
 struct PhysicsSettings {
-    // Rigid bodies use all three axes (the PhysX scene gravity, set when Play starts); the
-    // Play-mode Player's own fall uses the Y component (Player::Gravity).
-    glm::vec3 Gravity{0.0f, -18.0f, 0.0f};
+    // Rigid bodies use all three axes (the PhysX scene gravity, set when Play starts). Earth's,
+    // like Unity's default: it used to be -18 (the first-person player's snappy game-feel
+    // value), which made every crate, domino and ball fall at almost twice real speed. The
+    // player's own fall is the First Person Controller's Gravity (Player::Gravity).
+    glm::vec3 Gravity{0.0f, -9.81f, 0.0f};
     // Stored + shown, not yet consumed (Player integrates on a collision-safety substep cap,
     // not a fixed sim step). Lands with the #185 physics step.
     float FixedTimestep = 1.0f / 60.0f;

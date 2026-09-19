@@ -45,6 +45,85 @@ void Add(RegisteredComponent entry) { Storage().push_back(std::move(entry)); }
 void RegisterEngineComponents() {
     using T = ReflectFieldType;
 
+    {
+        ReflectComponent m;
+        m.Name = "Goal Trigger"; m.Icon = ICON_FA_BULLSEYE; m.Category = "Gameplay";
+        m.Tooltip = "Scores when an object with the Tag drops into this trigger collider (Is Trigger on).\n"
+                    "Adds points to the scene's Scoreboard, bursts child Particle Systems, flashes child\n"
+                    "Lights and plays the Score Sound.";
+        m.Fields = {
+            { "Tag", T::String, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, Tag), 0.0f,
+              "Only objects with this Tag score." },
+            { "Team", T::Enum, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, Team), 0.0f,
+              "Whose score a goal here adds to." },
+            { "Points", T::Int, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, Points), 1.0f,
+              "Points per goal.", 0.0f, 100.0f },
+            { "Three Points", T::Int, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, ThreePoints), 1.0f,
+              "Points for a long shot (see Three Point Distance).", 0.0f, 100.0f },
+            { "Three Point Distance", T::Float, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, ThreePointDistance), 0.05f,
+              "A goal thrown from at least this far away (flat distance from where the gravity gun\n"
+              "released it) scores Three Points. 0 = off.", 0.0f, 1000.0f },
+            { "Require Downward", T::Bool, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, RequireDownward), 0.0f,
+              "Only count objects moving down (through a hoop from above)." },
+            { "Score Sound", T::AssetRef, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, ScoreSound), 0.0f,
+              "Played at the goal when it scores." },
+            { "Flash Intensity", T::Float, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, FlashIntensity), 0.5f,
+              "Child Lights jump to this intensity on a goal and fade back.", 0.0f, 1000.0f },
+        };
+        m.Fields[1].EnumLabels = "Home\0Away\0"; m.Fields[1].EnumCount = 2;
+        m.Fields[6].AssetKind = ReflectAssetKind::Sound;
+        Register<GoalTriggerComponent>(std::move(m));
+    }
+    Register<ScoreboardComponent>({
+        "Scoreboard", ICON_FA_TABLE_LIST,
+        "Holds the Home and Away score that Goal Triggers add to (the first Scoreboard in the scene).\n"
+        "Score Digit objects show it. Play -> Stop puts it back to the values here.",
+        "Gameplay",
+        {
+            { "Home", T::Int, TARTARUS_REFLECT_FIELD(ScoreboardComponent, Home), 1.0f, "Home score.", 0.0f, 999.0f },
+            { "Away", T::Int, TARTARUS_REFLECT_FIELD(ScoreboardComponent, Away), 1.0f, "Away score.", 0.0f, 999.0f },
+        },
+    });
+    {
+        ReflectComponent m;
+        m.Name = "Score Digit"; m.Icon = ICON_FA_HASHTAG; m.Category = "Gameplay";
+        m.Tooltip = "A seven-segment digit of a team's score. Lights its children named \"Seg A\" .. \"Seg G\"\n"
+                    "(A top, B top right, C bottom right, D bottom, E bottom left, F top left, G middle)\n"
+                    "by raising their material's emission.";
+        m.Fields = {
+            { "Team", T::Enum, TARTARUS_REFLECT_FIELD(ScoreDigitComponent, Team), 0.0f, "Whose score it shows." },
+            { "Place", T::Enum, TARTARUS_REFLECT_FIELD(ScoreDigitComponent, Place), 0.0f,
+              "Which digit: ones, or tens (blank below 10)." },
+            { "On Strength", T::Float, TARTARUS_REFLECT_FIELD(ScoreDigitComponent, OnStrength), 0.05f,
+              "Emissive strength of a lit segment.", 0.0f, 100.0f },
+            { "Off Strength", T::Float, TARTARUS_REFLECT_FIELD(ScoreDigitComponent, OffStrength), 0.005f,
+              "Emissive strength of an unlit segment.", 0.0f, 100.0f },
+        };
+        m.Fields[0].EnumLabels = "Home\0Away\0"; m.Fields[0].EnumCount = 2;
+        m.Fields[1].EnumLabels = "Ones\0Tens\0"; m.Fields[1].EnumCount = 2;
+        Register<ScoreDigitComponent>(std::move(m));
+    }
+    {
+        ReflectComponent m;
+        m.Name = "Impact Sound"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
+        m.Tooltip = "Plays a sound where this object hits something, louder the harder the hit.\n"
+                    "Needs a Collider. Both objects in a hit play their own Impact Sound.";
+        m.Fields = {
+            { "Clip", T::AssetRef, TARTARUS_REFLECT_FIELD(ImpactSoundComponent, Clip), 0.0f, "The sound." },
+            { "Volume", T::Float, TARTARUS_REFLECT_FIELD(ImpactSoundComponent, Volume), 0.01f,
+              "Volume of the hardest hit.", 0.0f, 1.0f },
+            { "Min Speed", T::Float, TARTARUS_REFLECT_FIELD(ImpactSoundComponent, MinSpeed), 0.05f,
+              "Hits slower than this (m/s) are silent.", 0.0f, 100.0f },
+            { "Max Speed", T::Float, TARTARUS_REFLECT_FIELD(ImpactSoundComponent, MaxSpeed), 0.1f,
+              "Hits at this speed (m/s) or faster play at full Volume.", 0.01f, 200.0f },
+            { "Pitch Variation", T::Float, TARTARUS_REFLECT_FIELD(ImpactSoundComponent, PitchVariation), 0.005f,
+              "Random pitch change per hit, +/- this fraction.", 0.0f, 0.5f },
+        };
+        m.Fields[0].AssetKind = ReflectAssetKind::Sound;
+        m.Fields[1].Slider = true; m.Fields[1].Format = "%.2f";
+        Register<ImpactSoundComponent>(std::move(m));
+    }
+
     Register<SpinComponent>({
         "Spin", ICON_FA_ARROWS_SPIN,
         "Spins the object around a local axis while playing (SpinSystem, in TartarusGame.dll).",
@@ -192,7 +271,7 @@ void RegisterEngineComponents() {
             { "Sprint Multiplier", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SprintMultiplier), 0.01f,
               "Speed multiplier while Shift is held.", 1.0f, 10.0f },
             { "Jump Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, JumpSpeed), 0.05f,
-              "Upward launch speed. Jump height is about Jump Speed^2 / (2 x gravity).", 0.0f, 50.0f },
+              "Upward launch speed. Jump height is about Jump Speed^2 / (2 x Gravity).", 0.0f, 50.0f },
             { "Eye Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, EyeHeight), 0.01f,
               "Camera height above the feet.", 0.1f, 10.0f },
             { "Capsule Radius", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CapsuleRadius), 0.01f,
@@ -207,8 +286,21 @@ void RegisterEngineComponents() {
               "Vertical field of view, in degrees.", 20.0f, 150.0f },
             { "Kill Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, KillY), 0.5f,
               "Falling below this world height respawns the player at this object.", -100000.0f, 100000.0f },
+            { "Gravity", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, Gravity), 0.1f,
+              "How hard the player falls, m/s\xC2\xB2. Separate from the physics world's gravity (Project\n"
+              "Settings > Physics, Earth's 9.81 by default): most games give the player a heavier,\n"
+              "snappier fall than real life. Jump height is about Jump Speed\xC2\xB2 / (2 x Gravity).", 0.0f, 200.0f },
             { "Gravity Gun", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, GravityGun), 0.0f,
               "The built-in tool: right mouse picks up a rigidbody, left mouse throws it." },
+            { "Min Throw Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, MinThrowSpeed), 0.1f,
+              "Gravity gun: launch speed (m/s) of a quick click. Hold left mouse to charge up.", 0.0f, 200.0f },
+            { "Max Throw Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, MaxThrowSpeed), 0.1f,
+              "Gravity gun: launch speed (m/s) when fully charged.", 0.0f, 200.0f },
+            { "Throw Charge Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ThrowChargeTime), 0.01f,
+              "Gravity gun: seconds of holding left mouse to reach Max Throw Speed.", 0.05f, 10.0f },
+            { "Throw Backspin", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ThrowBackspin), 0.05f,
+              "Gravity gun: backspin (revolutions per second) put on a thrown ball, like a real shot.\n"
+              "Only round (sphere collider) bodies get it.", 0.0f, 20.0f },
         },
     });
 
