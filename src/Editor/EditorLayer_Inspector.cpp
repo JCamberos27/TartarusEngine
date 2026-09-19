@@ -3,6 +3,8 @@
 // EditorLayer.cpp for build time (#179).
 
 #include "EditorLayer.h"
+#include "PointShadowMap.h"
+#include "SpotShadowMap.h"
 #include "EditorLayerInternal.h"
 #include "FileDialog.h"
 #include "AssetLibrary.h"
@@ -2955,6 +2957,21 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
     if (std::strcmp(componentName, "Light") == 0) {
         auto* light = registry.try_get<LightComponent>(entity);
         if (!light) return;
+
+        // #110 — say so when this light's shadow isn't drawn because more important shadowed
+        // lights took every slot (it used to silently lose its shadow).
+        if (phase == ReflectExtraPhase::Bottom && light->Shadow.Enabled && m_ShadowOverBudget.count(entity)) {
+            const bool spot = light->Kind == LightComponent::Type::Spot;
+            ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::WarningColor());
+            ImGui::TextWrapped(ICON_FA_TRIANGLE_EXCLAMATION "  Shadow not rendered: over budget");
+            ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("At most %d shadowed %s lights are drawn at once. The ones nearest and\n"
+                                     "brightest from the camera win; this one lost, so it lights without a shadow.\n"
+                                     "Move closer, raise its intensity/range, or turn shadows off on other lights.",
+                                     spot ? SpotShadowMap::kMaxSpots : PointShadowMap::kMaxPoints,
+                                     spot ? "spot" : "point");
+        }
 
         if (phase == ReflectExtraPhase::Top) {
             // Colour: a raw swatch (+ eyedropper), or a Kelvin bar when ColorTempK > 0 (the
