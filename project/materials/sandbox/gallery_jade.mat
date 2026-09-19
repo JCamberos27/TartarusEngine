@@ -1,0 +1,22 @@
+{
+  "matVersion": 2,
+  "name": "Gallery Jade",
+  "_comment": "Subsurface.",
+  "shader": "engine://Standard.shader",
+  "properties": {
+    "_BaseColor": [
+      0.3,
+      0.72,
+      0.45
+    ],
+    "_Metallic": 0.0,
+    "_Roughness": 0.25,
+    "_SubsurfaceEnabled": true,
+    "_SubsurfaceColor": [
+      0.4,
+      0.95,
+      0.6
+    ],
+    "_Thickness": 0.25
+  }
+}

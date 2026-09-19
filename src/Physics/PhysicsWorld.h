@@ -199,8 +199,15 @@ void SetActorPose(unsigned entity, const float posXYZ[3], const float rotEulerDe
 // when `launch` is true. All no-ops outside Play or on a non-dynamic entity.
 void GrabBody(unsigned entity);
 void UpdateGrab(const float target[3]);
-void ReleaseBody(bool launch, const float impulse[3]);
+// `backspinRadPerSec` > 0 also spins a round (sphere-collider) body backwards about the axis
+// across the throw, the way a shot basketball leaves the hand.
+void ReleaseBody(bool launch, const float impulse[3], float backspinRadPerSec = 0.0f);
 bool IsGrabbing();
+// The entity the gravity gun holds, or 0xFFFFFFFF.
+unsigned GrabbedEntity();
+// World position of the PhysX actor built for `entity` (dynamic, kinematic or static, triggers
+// included). False outside Play or for an entity without one.
+bool GetActorPosition(unsigned entity, float out[3]);
 
 // --- Debug (#185 PR 12) -------------------------------------------------------------
 // Copy up to `maxPoints` world-space contact points from this frame's events (3 floats each)

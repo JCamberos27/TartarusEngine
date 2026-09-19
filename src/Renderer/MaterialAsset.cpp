@@ -124,6 +124,20 @@ bool IsTextureAsset(const std::string& absPath) {
 }
 
 // Save side: record the GUID of every texture the material references.
+// Save side: texture paths under the project are written project-relative, so a .mat is
+// portable between machines and checkouts (an absolute C:/Users/... path only works on the
+// machine that saved it). Paths outside the project stay absolute.
+void RelativizeTexturePaths(json& j) {
+    const bool v2 = j.contains("properties") && j["properties"].is_object();
+    json& props = v2 ? j["properties"] : j;
+    for (auto& [key, value] : props.items()) {
+        if (!value.is_string() || key == "name" || key == "shader") continue;
+        const std::string stored = value.get<std::string>();
+        if (stored.empty() || !std::filesystem::path(stored).is_absolute() || !IsTextureAsset(stored)) continue;
+        value = ProjectPaths::Relativize(stored);
+    }
+}
+
 void WriteTextureGuids(json& j) {
     const bool v2 = j.contains("properties") && j["properties"].is_object();
     const json& props = v2 ? j["properties"] : j;
@@ -301,8 +315,10 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
     m.ParallaxScale  = r.Num(key("_ParallaxScale", "parallaxScale"), 0.02f);
 
     if (lib) {
+        // A project-relative path (what Save writes, so .mat files are portable) resolves
+        // against the project root, not the process's working directory.
         auto loadTex = [&](const std::string& p) -> std::shared_ptr<Texture> {
-            return p.empty() ? nullptr : lib->LoadTexture(p);
+            return p.empty() ? nullptr : lib->LoadTexture(AbsoluteAssetPath(p));
         };
         m.AlbedoMap            = loadTex(ma->AlbedoMapPath);
         m.NormalMap            = loadTex(ma->NormalMapPath);
@@ -358,7 +374,7 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
                     break;
                 case ShaderPropType::Texture2D:
                     mp.TexPath = v && v->is_string() ? v->get<std::string>() : std::string();
-                    mp.Tex = mp.TexPath.empty() ? nullptr : lib->LoadTexture(mp.TexPath);
+                    mp.Tex = mp.TexPath.empty() ? nullptr : lib->LoadTexture(AbsoluteAssetPath(mp.TexPath));
                     break;
                 }
                 ma->Mat.ExtraProps.emplace(p.Name, std::move(mp));
@@ -503,6 +519,7 @@ bool MaterialAsset::Save() const {
 
     // Atomic write: a crash mid-save must not truncate the .mat (audit CPP-206).
     WriteTextureGuids(j); // #132
+    RelativizeTexturePaths(j);
     return AtomicFile::WriteJson(Path, j);
 }
 

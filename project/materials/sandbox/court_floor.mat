@@ -1,0 +1,25 @@
+{
+  "matVersion": 2,
+  "name": "Court Floor",
+  "_comment": "Varnished maple: base court texture, x2 detail grain + board seams, glossy clear coat.",
+  "shader": "engine://Standard.shader",
+  "properties": {
+    "_BaseColor": [
+      1,
+      1,
+      1
+    ],
+    "_Metallic": 0.0,
+    "_Roughness": 0.4,
+    "_AlbedoMap": "textures/basketball/court_floor.jpg",
+    "_DetailAlbedoMap": "textures/basketball/wood_detail.png",
+    "_DetailNormalMap": "textures/basketball/wood_seams_normal.png",
+    "_DetailTiling": [
+      40.81249999999999,
+      24.05
+    ],
+    "_ClearCoat": 0.9,
+    "_ClearCoatRoughness": 0.06,
+    "_ReflectionProbes": true
+  }
+}
