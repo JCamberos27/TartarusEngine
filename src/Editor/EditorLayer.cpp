@@ -863,6 +863,47 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Curve that maps linear HDR to display. ACES = punchy filmic; AgX = gentler, less hue shift.");
+
+    // #162 - anti-aliasing, colour grading and vignette (all in the final tonemap pass).
+    if (EditorUIPrimitives::Checkbox("FXAA", &world.FxaaEnabled)) PushUndo(world, "Toggle FXAA");
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Fast approximate anti-aliasing on the final image. Smooths what MSAA misses:\n"
+                             "shiny highlights, alpha-cutout edges, thin lines. Slightly softens texture detail.");
+
+    auto postSlider = [&](const char* label, float* v, float lo, float hi, const char* fmt, const char* undo,
+                          const char* tip) {
+        ImGui::SetNextItemWidth(w);
+        bool activated = false;
+        EditorUI::SliderFloat(label, v, lo, hi, fmt, 0, &activated);
+        if (activated) PushUndo(world, undo);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+    };
+    ImGui::SeparatorText("Color Grading");
+    postSlider("Temperature", &world.GradeTemperature, -100.0f, 100.0f, "%.0f", "Edit Temperature",
+               "White balance: negative = cooler (bluer), positive = warmer (yellower).");
+    postSlider("Tint", &world.GradeTint, -100.0f, 100.0f, "%.0f", "Edit Tint",
+               "White balance: negative = greener, positive = more magenta.");
+    postSlider("Contrast", &world.GradeContrast, -100.0f, 100.0f, "%.0f", "Edit Contrast",
+               "Spreads tones away from (positive) or toward (negative) mid grey.");
+    postSlider("Saturation", &world.GradeSaturation, -100.0f, 100.0f, "%.0f", "Edit Saturation",
+               "-100 = greyscale, 0 = unchanged, 100 = double colour intensity.");
+    {
+        EditorUI::ColorEditLinear("Color filter", &world.GradeColorFilter.x, ImGuiColorEditFlags_DisplayHex);
+        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Color Filter");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Multiplies the whole image by this colour. White = no change.");
+    }
+    if (ImGui::SmallButton("Reset grading")) {
+        PushUndo(world, "Reset Color Grading");
+        world.GradeTemperature = world.GradeTint = world.GradeContrast = world.GradeSaturation = 0.0f;
+        world.GradeColorFilter = glm::vec3(1.0f);
+    }
+
+    ImGui::SeparatorText("Vignette");
+    postSlider("Vignette intensity", &world.VignetteIntensity, 0.0f, 1.0f, "%.2f", "Edit Vignette",
+               "Darkens the corners of the image. 0 = off.");
+    if (world.VignetteIntensity > 0.0f)
+        postSlider("Vignette smoothness", &world.VignetteSmoothness, 0.01f, 1.0f, "%.2f", "Edit Vignette",
+                   "How gradually the darkening fades in from the centre.");
 }
 
 void EditorLayer::DrawShadowSettings(World& world, float w) {
