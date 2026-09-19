@@ -780,6 +780,12 @@ void EditorLayer::UpdatePlayModeAudio(const World& world) {
     for (auto it = m_PlayModeAudioHandles.begin(); it != m_PlayModeAudioHandles.end();) {
         const auto [e, handle] = *it;
         if (!world.Registry.valid(e) || !AudioEngine::IsPlaying(handle)) { it = m_PlayModeAudioHandles.erase(it); continue; }
+        // Like Unity, deactivating the object (or removing its Audio Source) stops its sound.
+        if (world.Registry.all_of<InactiveTag>(e) || !world.Registry.all_of<AudioSourceComponent>(e)) {
+            AudioEngine::Stop(handle);
+            it = m_PlayModeAudioHandles.erase(it);
+            continue;
+        }
         const auto* audio = world.Registry.try_get<AudioSourceComponent>(e);
         if (audio && audio->Spatial)
             AudioEngine::SetPosition(handle, glm::vec3(world.ComposeWorldTransform(e)[3]));
