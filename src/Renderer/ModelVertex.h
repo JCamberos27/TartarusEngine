@@ -11,4 +11,5 @@ struct ModelVertex {
     float TangentSign = 1.0f; // +1/-1: handedness, needed to get bitangent right on mirrored UV islands
     int BoneIDs[MAX_BONE_INFLUENCE] = {-1, -1, -1, -1};
     float Weights[MAX_BONE_INFLUENCE] = {0, 0, 0, 0};
+    glm::vec4 Color{1.0f}; // #113 — vertex colour (shader location 7); white when the mesh has none
 };
