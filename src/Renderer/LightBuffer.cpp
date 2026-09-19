@@ -1,4 +1,5 @@
 #include "LightBuffer.h"
+#include <cstring>
 #include "gl.h"
 
 #include <cstdint>
@@ -18,8 +19,17 @@ void LightBuffer::EnsureCreated() {
                          nullptr, GL_DYNAMIC_STORAGE_BIT);
 }
 
+namespace {
+// The excluded-layer bits ride in a float slot; the shader reads them back with floatBitsToUint.
+float LayerBits(std::uint32_t bits) {
+    float f;
+    std::memcpy(&f, &bits, sizeof(f));
+    return f;
+}
+} // namespace
+
 void LightBuffer::AddDirectional(const glm::vec3& dirWorld, const glm::vec3& colorLinear, float intensity,
-                                 bool sampleSunShadow) {
+                                 bool sampleSunShadow, std::uint32_t excludedLayers) {
     if ((int)m_Lights.size() >= kMaxLights) { m_Overflowed = true; return; }
     glm::vec3 d = glm::length(dirWorld) > 1e-8f ? glm::normalize(dirWorld) : glm::vec3(0, -1, 0);
     GpuLight l{};
@@ -27,6 +37,7 @@ void LightBuffer::AddDirectional(const glm::vec3& dirWorld, const glm::vec3& col
     l.ColorRange   = glm::vec4(colorLinear * intensity, 0.0f);
     l.DirCutoff    = glm::vec4(d, -1.0f);
     l.Params       = glm::vec4(-1.0f, sampleSunShadow ? 0.0f : -1.0f, 0.0f, 0.0f); // y: cascade map, as spot/point slots
+    l.Params.z     = LayerBits(excludedLayers);
     // Insert right after the existing directional run, not at the end - keeps every directional
     // light packed at the front of the array so the shader can loop just uDirectionalCount
     // entries instead of scanning the whole buffer (#188).
@@ -35,18 +46,20 @@ void LightBuffer::AddDirectional(const glm::vec3& dirWorld, const glm::vec3& col
 }
 
 void LightBuffer::AddPoint(const glm::vec3& posWorld, const glm::vec3& colorLinear, float intensity, float range,
-                          int shadowSlot) {
+                          int shadowSlot, std::uint32_t excludedLayers) {
     if ((int)m_Lights.size() >= kMaxLights) { m_Overflowed = true; return; }
     GpuLight l{};
     l.PositionType = glm::vec4(posWorld, (float)Type::Point);
     l.ColorRange   = glm::vec4(colorLinear * intensity, range);
     l.DirCutoff    = glm::vec4(0.0f, 0.0f, -1.0f, -1.0f);
     l.Params       = glm::vec4(-1.0f, (float)shadowSlot, 0.0f, 0.0f); // .y = point cube-shadow slot, -1 = none (#119)
+    l.Params.z     = LayerBits(excludedLayers);
     m_Lights.push_back(l);
 }
 
 void LightBuffer::AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, const glm::vec3& colorLinear,
-                          float intensity, float range, float cosOuter, float cosInner, int shadowSlot) {
+                          float intensity, float range, float cosOuter, float cosInner, int shadowSlot,
+                          std::uint32_t excludedLayers) {
     if ((int)m_Lights.size() >= kMaxLights) { m_Overflowed = true; return; }
     glm::vec3 d = glm::length(dirWorld) > 1e-8f ? glm::normalize(dirWorld) : glm::vec3(0, -1, 0);
     GpuLight l{};
@@ -54,6 +67,7 @@ void LightBuffer::AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, 
     l.ColorRange   = glm::vec4(colorLinear * intensity, range);
     l.DirCutoff    = glm::vec4(d, cosOuter);
     l.Params       = glm::vec4(cosInner, (float)shadowSlot, 0.0f, 0.0f); // .y = spot shadow slot, -1 = none (#119)
+    l.Params.z     = LayerBits(excludedLayers);
     m_Lights.push_back(l);
 }
 

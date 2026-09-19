@@ -1908,7 +1908,8 @@ int main(int argc, char** argv) {
                 glm::vec3 aim = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
                 if (lc.Kind == LightComponent::Type::Directional) {
                     // Only the first lit directional drives the cascade pass (below) - it alone samples it.
-                    lightBuffer.AddDirectional(aim, lc.Color, lc.Intensity, !frameHaveDirectional && lc.Intensity > 0.0f);
+                    lightBuffer.AddDirectional(aim, lc.Color, lc.Intensity, !frameHaveDirectional && lc.Intensity > 0.0f,
+                                               ~(std::uint32_t)lc.CullingMask); // #203
                     // A zero-intensity sun contributes no light, so it must not drive the
                     // cascaded shadow pass either — it's the way a scene opts out of having a
                     // directional at all while still suppressing SceneSerializer's synthesised
@@ -1943,7 +1944,8 @@ int main(int argc, char** argv) {
                         spotShadowVP[slot] = glm::perspective(fov, 1.0f, nearP, spotShadowFar[slot]) *
                                              glm::lookAt(pos, pos + aim, up);
                     }
-                    lightBuffer.AddSpot(pos, aim, lc.Color, lc.Intensity, lc.Range, cosOuter, cosInner, slot);
+                    lightBuffer.AddSpot(pos, aim, lc.Color, lc.Intensity, lc.Range, cosOuter, cosInner, slot,
+                                        ~(std::uint32_t)lc.CullingMask); // #203
                 } else {
                     int slot = -1;
                     if (frameShadowed.count(e) && pointShadowCount < PointShadowMap::kMaxPoints) {
@@ -1954,7 +1956,7 @@ int main(int argc, char** argv) {
                         pointShadowBias[slot] = lc.Shadow.Bias;
                         pointShadowNormalBias[slot] = lc.Shadow.NormalBias;
                     }
-                    lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range, slot);
+                    lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range, slot, ~(std::uint32_t)lc.CullingMask); // #203
                 }
             }
             // No fallback light: a scene with no lights is intentionally unlit, so deleting a
