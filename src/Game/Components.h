@@ -175,6 +175,28 @@ struct AudioSourceComponent {
     float DopplerLevel = 1.0f; // #171 - 0 = no pitch shift from motion, 1 = physical
 };
 
+// #162 / #203 - Unity's post-processing Volume. A Global volume applies everywhere; a local one
+// applies inside its box (Size, in the object's local units, scaled by its transform) and fades
+// in over Blend Distance outside it. Each ticked override pulls that setting toward its value by
+// the volume's weight; volumes apply in Priority order (higher wins), on top of the scene's own
+// Lighting > Post-processing values.
+struct PostProcessVolumeComponent {
+    bool      Global = false;
+    glm::vec3 Size{10.0f};
+    float     BlendDistance = 2.0f;
+    float     Weight = 1.0f;
+    int       Priority = 0;
+    bool OverrideExposure = false;    float ExposureEV = 0.0f;
+    bool OverrideTemperature = false; float Temperature = 0.0f;
+    bool OverrideTint = false;        float Tint = 0.0f;
+    bool OverrideContrast = false;    float Contrast = 0.0f;
+    bool OverrideSaturation = false;  float Saturation = 0.0f;
+    bool OverrideVignette = false;    float Vignette = 0.3f;
+    bool OverrideBloom = false;       float BloomIntensity = 0.1f;
+    bool OverrideChromatic = false;   float ChromaticAberration = 0.5f;
+    bool OverrideGrain = false;       float FilmGrain = 0.3f;
+};
+
 // #171 - Unity's Audio Listener: in Play, 3D sounds are heard from this entity (position and
 // facing) instead of from the game camera. The first active one wins.
 struct AudioListenerComponent {

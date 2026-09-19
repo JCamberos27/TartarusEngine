@@ -1,6 +1,7 @@
 #include "Window.h"
 #include "Input.h"
 #include "InputMap.h"
+#include "PostProcessVolume.h"
 #include "TimeService.h"
 #include <limits>
 #include "CrashHandler.h"
@@ -280,7 +281,7 @@ static PostSettings WithDepthOfField(PostSettings p, const World& world, const H
     return p;
 }
 static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float bloomIntensity,
-                                     float dt, int exposureSlot) {
+                                     float dt, int exposureSlot, const glm::vec3& cameraPos) {
     PostSettings p;
     p.ExposureEV = world.ExposureEV;
     p.Operator = world.TonemapOperator;
@@ -307,6 +308,7 @@ static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, 
     p.AutoExposureSpeedDown = world.AutoExposureSpeedDown;
     p.DeltaTime = dt;
     p.ExposureSlot = exposureSlot;
+    ApplyPostProcessVolumes(world, cameraPos, p); // #162 / #203 - local and global volumes
     return p;
 }
 
@@ -2942,7 +2944,7 @@ int main(int argc, char** argv) {
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(sceneHdr.ResolvedColorTexture(), sceneFramebuffer.Handle(), scW, scH,
-                                 MakePostSettings(world, bloomGlowTex, bloomIntensity, dt, 0));
+                                 MakePostSettings(world, bloomGlowTex, bloomIntensity, dt, 0, editorCamera.Position));
                 }
 
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
@@ -3120,7 +3122,7 @@ int main(int argc, char** argv) {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameView.GetFramebuffer().Handle(),
                                  gvWidth, gvHeight,
-                                 WithDepthOfField(MakePostSettings(world, gvBloomGlowTex, gvBloomIntensity, dt, 1), world, gameHdr, gvProj));
+                                 WithDepthOfField(MakePostSettings(world, gvBloomGlowTex, gvBloomIntensity, dt, 1, gvEye), world, gameHdr, gvProj));
                 }
                 if (playing && playUsesPlayer)
                     crosshair.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
@@ -3286,7 +3288,7 @@ int main(int argc, char** argv) {
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh,
-                                 WithDepthOfField(MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity, dt, 1), world, gameHdr, proj));
+                                 WithDepthOfField(MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity, dt, 1, gameCam->Position), world, gameHdr, proj));
                 }
                 if (playing && playUsesPlayer)
                     crosshair.Draw(0, mw, mh, playGravityGun && gravityGun.IsHolding(),
