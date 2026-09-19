@@ -129,7 +129,9 @@ int ResolveAnimationClip(Model& model, const std::string& clipRef, AssetLibrary&
 }
 
 void UpdateSkeletalAnimations(World& world, AssetLibrary& assets) {
-    auto view = world.Registry.view<SkeletalAnimationComponent, RenderableComponent>(entt::exclude<InactiveTag>);
+    // #175 Part B - an Animator Controller on the same entity owns the model's clip.
+    auto view = world.Registry.view<SkeletalAnimationComponent, RenderableComponent>(
+        entt::exclude<InactiveTag, AnimatorControllerComponent>);
     for (auto e : view) {
         auto& anim = view.get<SkeletalAnimationComponent>(e);
         Model* model = view.get<RenderableComponent>(e).ModelRef.get();
