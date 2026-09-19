@@ -300,6 +300,7 @@ void __stdcall glTexImage2D(GLenum target, GLint level, GLint internalformat, GL
 void __stdcall glDeleteTextures(GLsizei n, const GLuint* textures);
 void __stdcall glGetIntegerv(GLenum pname, GLint* data);
 GLboolean __stdcall glIsEnabled(GLenum cap);
+void __stdcall glGetBooleanv(GLenum pname, GLboolean* data);
 const GLubyte* __stdcall glGetString(GLenum name);
 void __stdcall glPixelStorei(GLenum pname, GLint param);
 void __stdcall glScissor(GLint x, GLint y, GLsizei width, GLsizei height);
@@ -374,6 +375,9 @@ typedef void (__stdcall* PFNGLTEXIMAGE2DMULTISAMPLEPROC)(GLenum, GLsizei, GLenum
 typedef void (__stdcall* PFNGLCREATEBUFFERSPROC)(GLsizei, GLuint*);
 typedef void (__stdcall* PFNGLNAMEDBUFFERSTORAGEPROC)(GLuint, GLsizeiptr, const void*, GLbitfield);
 typedef void (__stdcall* PFNGLNAMEDBUFFERSUBDATAPROC)(GLuint, GLintptr, GLsizeiptr, const void*);
+typedef void (__stdcall* PFNGLNAMEDBUFFERDATAPROC)(GLuint, GLsizeiptr, const void*, GLenum);
+typedef void (__stdcall* PFNGLVERTEXARRAYBINDINGDIVISORPROC)(GLuint, GLuint, GLuint);
+typedef void (__stdcall* PFNGLDRAWARRAYSINSTANCEDBASEINSTANCEPROC)(GLenum, GLint, GLsizei, GLsizei, GLuint);
 typedef void (__stdcall* PFNGLGETNAMEDBUFFERSUBDATAPROC)(GLuint, GLintptr, GLsizeiptr, void*);
 // DSA — textures.
 typedef void (__stdcall* PFNGLCREATETEXTURESPROC)(GLenum, GLsizei, GLuint*);
@@ -474,6 +478,9 @@ extern PFNGLTEXIMAGE2DMULTISAMPLEPROC glTexImage2DMultisample;
 extern PFNGLCREATEBUFFERSPROC glCreateBuffers;
 extern PFNGLNAMEDBUFFERSTORAGEPROC glNamedBufferStorage;
 extern PFNGLNAMEDBUFFERSUBDATAPROC glNamedBufferSubData;
+extern PFNGLNAMEDBUFFERDATAPROC glNamedBufferData;
+extern PFNGLVERTEXARRAYBINDINGDIVISORPROC glVertexArrayBindingDivisor;
+extern PFNGLDRAWARRAYSINSTANCEDBASEINSTANCEPROC glDrawArraysInstancedBaseInstance;
 extern PFNGLGETNAMEDBUFFERSUBDATAPROC glGetNamedBufferSubData;
 extern PFNGLCREATETEXTURESPROC glCreateTextures;
 extern PFNGLTEXTURESTORAGE2DPROC glTextureStorage2D;

@@ -1,0 +1,29 @@
+{
+  "formatVersion": 2,
+  "_comment": "Regression scene for #177 (runs Play -> Stop twice: filename contains 'smoke_play'). Two Particle Systems - an additive fire jet and an alpha-blended, gravity-affected dust fountain - viewed through a scene Camera. The smoke log prints each system's live count and height range. Engine primitives only.",
+  "skyHorizonColor": [0.40, 0.48, 0.60],
+  "skyZenithColor": [0.12, 0.24, 0.52],
+  "skyAmbientIntensity": 1.0,
+  "assetFolders": ["Scenes"],
+  "assetMeta": [],
+  "boxes": [
+    { "center": [0, -0.1, 0], "size": [24, 0.2, 24], "color": [0.34, 0.34, 0.37], "rotation": [0, 0, 0], "name": "Ground", "id": 0, "parentId": -1, "order": 0 }
+  ],
+  "empties": [
+    { "name": "Main Camera", "id": 20, "parentId": -1, "order": 20,
+      "position": [0, 3, 9], "rotation": [-12, 0, 0], "scale": [1, 1, 1],
+      "Camera": { "Field of View": 55.0 } },
+    { "name": "Sun", "id": 10, "parentId": -1, "order": 10,
+      "position": [6, 10, 6], "rotation": [52, -36, 0], "scale": [1, 1, 1],
+      "light": { "kind": "directional", "color": [1.0, 0.96, 0.9], "intensity": 4.0, "range": 30.0 } },
+    { "name": "Fire", "id": 30, "parentId": -1, "order": 30,
+      "position": [-2, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1],
+      "Particle System": { "Rate": 120.0, "Lifetime": 1.2, "Start Speed": 2.5, "Spread": 15.0, "Intensity": 4.0, "Blend Mode": 1 } },
+    { "name": "Dust", "id": 31, "parentId": -1, "order": 31,
+      "position": [2, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1],
+      "Particle System": { "Rate": 60.0, "Lifetime": 2.0, "Start Speed": 5.0, "Spread": 30.0, "Gravity Modifier": 1.0,
+                           "Start Color": [0.6, 0.55, 0.5], "End Color": [0.4, 0.38, 0.36], "Start Alpha": 0.8, "End Alpha": 0.0,
+                           "Start Size": 0.3, "End Size": 0.6, "Blend Mode": 0 } }
+  ],
+  "models": []
+}
