@@ -910,8 +910,11 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         // ImGui panel, the transform gizmo, or the nav gizmo (rotate ring / dolly / pan
         // buttons) already owns this click; Alt+Left-drag is reserved for orbiting the camera
         // around the current selection (see main.cpp's UpdateEditorCamera).
+        // The left tool palette is a child window of "Scene", so WantsCaptureMouse() reads the
+        // cursor as over the viewport; a click on one of its buttons also picked whatever sat
+        // behind it. Any hovered ImGui item owns the click (the viewport image isn't an item).
         m_BoxSelectActive = !WantsCaptureMouse() && !m_GizmoEngaged && !m_ViewGizmoBlocking &&
-                            !m_LightHandleEngaged && !io.KeyAlt;
+                            !m_LightHandleEngaged && !io.KeyAlt && !ImGui::IsAnyItemHovered();
         m_BoxSelectStart = {io.MousePos.x, io.MousePos.y};
         return; // click vs. drag is only decided on release, below
     }
