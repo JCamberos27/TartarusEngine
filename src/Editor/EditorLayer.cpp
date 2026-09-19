@@ -2521,7 +2521,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             m_AutoSaveTimer = 0.0f;
             // #90 — Draw() also runs during in-panel Play, when the world holds transient play
             // state; the recovery file must only ever hold edit-mode content.
-            if (m_Dirty && !m_InPlayMode) WriteRecoverySnapshot(world, assets);
+            if ((m_Dirty || m_PrefabModeSceneDirty) && !m_InPlayMode) WriteRecoverySnapshot(world, assets);
         }
     } else {
         m_AutoSaveTimer = 0.0f; // don't let it silently accumulate while disabled
@@ -3260,6 +3260,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // Play-mode tint (#236 R2): a warm border around the WHOLE editor window (not just the
     // Scene rect — that hides behind the Game tab) + a centred tag, so it's unmistakable that
     // edits now revert on Stop.
+    DrawPrefabModeBar(world, assets); // #176
+
     if (m_InPlayMode) {
         const ImGuiViewport* vp = ImGui::GetMainViewport();
         ImDrawList* dl = ImGui::GetForegroundDrawList();
