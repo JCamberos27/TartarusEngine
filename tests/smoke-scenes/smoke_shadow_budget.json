@@ -1,0 +1,1706 @@
+{
+ "formatVersion": 2,
+ "_comment": "Engine-owned smoke scene for #110: 16 shadowed spots + 8 shadowed points with the budgets at their ceilings (maxSpotShadows 16, maxPointShadows 8), so every spot layer / point cube and the full-size shader arrays are exercised. Engine primitives only.",
+ "skyHorizonColor": [
+  0.2,
+  0.22,
+  0.28
+ ],
+ "skyZenithColor": [
+  0.05,
+  0.06,
+  0.12
+ ],
+ "skyAmbientIntensity": 0.3,
+ "maxSpotShadows": 16,
+ "maxPointShadows": 8,
+ "assetFolders": [
+  "Scenes"
+ ],
+ "assetMeta": [],
+ "boxes": [
+  {
+   "center": [
+    0,
+    -0.1,
+    0
+   ],
+   "size": [
+    40,
+    0.2,
+    40
+   ],
+   "color": [
+    0.3,
+    0.3,
+    0.32
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "name": "Ground",
+   "id": 0,
+   "parentId": -1,
+   "order": 0
+  },
+  {
+   "center": [
+    -10,
+    0.6,
+    -10
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    -34,
+    0
+   ],
+   "name": "Post 1",
+   "id": 1,
+   "parentId": -1,
+   "order": 1
+  },
+  {
+   "center": [
+    -10,
+    0.6,
+    -5
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    -27,
+    0
+   ],
+   "name": "Post 2",
+   "id": 2,
+   "parentId": -1,
+   "order": 2
+  },
+  {
+   "center": [
+    -10,
+    0.6,
+    0
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    -20,
+    0
+   ],
+   "name": "Post 3",
+   "id": 3,
+   "parentId": -1,
+   "order": 3
+  },
+  {
+   "center": [
+    -10,
+    0.6,
+    5
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    -13,
+    0
+   ],
+   "name": "Post 4",
+   "id": 4,
+   "parentId": -1,
+   "order": 4
+  },
+  {
+   "center": [
+    -10,
+    0.6,
+    10
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    -6,
+    0
+   ],
+   "name": "Post 5",
+   "id": 5,
+   "parentId": -1,
+   "order": 5
+  },
+  {
+   "center": [
+    -5,
+    0.6,
+    -10
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    -24,
+    0
+   ],
+   "name": "Post 6",
+   "id": 6,
+   "parentId": -1,
+   "order": 6
+  },
+  {
+   "center": [
+    -5,
+    0.6,
+    -5
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    -17,
+    0
+   ],
+   "name": "Post 7",
+   "id": 7,
+   "parentId": -1,
+   "order": 7
+  },
+  {
+   "center": [
+    -5,
+    0.6,
+    0
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    -10,
+    0
+   ],
+   "name": "Post 8",
+   "id": 8,
+   "parentId": -1,
+   "order": 8
+  },
+  {
+   "center": [
+    -5,
+    0.6,
+    5
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    -3,
+    0
+   ],
+   "name": "Post 9",
+   "id": 9,
+   "parentId": -1,
+   "order": 9
+  },
+  {
+   "center": [
+    -5,
+    0.6,
+    10
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    4,
+    0
+   ],
+   "name": "Post 10",
+   "id": 10,
+   "parentId": -1,
+   "order": 10
+  },
+  {
+   "center": [
+    0,
+    0.6,
+    -10
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    -14,
+    0
+   ],
+   "name": "Post 11",
+   "id": 11,
+   "parentId": -1,
+   "order": 11
+  },
+  {
+   "center": [
+    0,
+    0.6,
+    -5
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    -7,
+    0
+   ],
+   "name": "Post 12",
+   "id": 12,
+   "parentId": -1,
+   "order": 12
+  },
+  {
+   "center": [
+    0,
+    0.6,
+    0
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "name": "Post 13",
+   "id": 13,
+   "parentId": -1,
+   "order": 13
+  },
+  {
+   "center": [
+    0,
+    0.6,
+    5
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    7,
+    0
+   ],
+   "name": "Post 14",
+   "id": 14,
+   "parentId": -1,
+   "order": 14
+  },
+  {
+   "center": [
+    0,
+    0.6,
+    10
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    14,
+    0
+   ],
+   "name": "Post 15",
+   "id": 15,
+   "parentId": -1,
+   "order": 15
+  },
+  {
+   "center": [
+    5,
+    0.6,
+    -10
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    -4,
+    0
+   ],
+   "name": "Post 16",
+   "id": 16,
+   "parentId": -1,
+   "order": 16
+  },
+  {
+   "center": [
+    5,
+    0.6,
+    -5
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    3,
+    0
+   ],
+   "name": "Post 17",
+   "id": 17,
+   "parentId": -1,
+   "order": 17
+  },
+  {
+   "center": [
+    5,
+    0.6,
+    0
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    10,
+    0
+   ],
+   "name": "Post 18",
+   "id": 18,
+   "parentId": -1,
+   "order": 18
+  },
+  {
+   "center": [
+    5,
+    0.6,
+    5
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    17,
+    0
+   ],
+   "name": "Post 19",
+   "id": 19,
+   "parentId": -1,
+   "order": 19
+  },
+  {
+   "center": [
+    5,
+    0.6,
+    10
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    24,
+    0
+   ],
+   "name": "Post 20",
+   "id": 20,
+   "parentId": -1,
+   "order": 20
+  },
+  {
+   "center": [
+    10,
+    0.6,
+    -10
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    6,
+    0
+   ],
+   "name": "Post 21",
+   "id": 21,
+   "parentId": -1,
+   "order": 21
+  },
+  {
+   "center": [
+    10,
+    0.6,
+    -5
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    13,
+    0
+   ],
+   "name": "Post 22",
+   "id": 22,
+   "parentId": -1,
+   "order": 22
+  },
+  {
+   "center": [
+    10,
+    0.6,
+    0
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    20,
+    0
+   ],
+   "name": "Post 23",
+   "id": 23,
+   "parentId": -1,
+   "order": 23
+  },
+  {
+   "center": [
+    10,
+    0.6,
+    5
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    27,
+    0
+   ],
+   "name": "Post 24",
+   "id": 24,
+   "parentId": -1,
+   "order": 24
+  },
+  {
+   "center": [
+    10,
+    0.6,
+    10
+   ],
+   "size": [
+    1,
+    1.2,
+    1
+   ],
+   "color": [
+    0.7,
+    0.7,
+    0.72
+   ],
+   "rotation": [
+    0,
+    34,
+    0
+   ],
+   "name": "Post 25",
+   "id": 25,
+   "parentId": -1,
+   "order": 25
+  }
+ ],
+ "empties": [
+  {
+   "name": "Spot 1",
+   "id": 100,
+   "parentId": -1,
+   "order": 100,
+   "position": [
+    -10.5,
+    5,
+    -8.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 2",
+   "id": 101,
+   "parentId": -1,
+   "order": 101,
+   "position": [
+    -3.5,
+    5,
+    -8.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 3",
+   "id": 102,
+   "parentId": -1,
+   "order": 102,
+   "position": [
+    3.5,
+    5,
+    -8.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 4",
+   "id": 103,
+   "parentId": -1,
+   "order": 103,
+   "position": [
+    10.5,
+    5,
+    -8.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 5",
+   "id": 104,
+   "parentId": -1,
+   "order": 104,
+   "position": [
+    -10.5,
+    5,
+    -1.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 6",
+   "id": 105,
+   "parentId": -1,
+   "order": 105,
+   "position": [
+    -3.5,
+    5,
+    -1.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 7",
+   "id": 106,
+   "parentId": -1,
+   "order": 106,
+   "position": [
+    3.5,
+    5,
+    -1.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 8",
+   "id": 107,
+   "parentId": -1,
+   "order": 107,
+   "position": [
+    10.5,
+    5,
+    -1.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 9",
+   "id": 108,
+   "parentId": -1,
+   "order": 108,
+   "position": [
+    -10.5,
+    5,
+    5.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 10",
+   "id": 109,
+   "parentId": -1,
+   "order": 109,
+   "position": [
+    -3.5,
+    5,
+    5.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 11",
+   "id": 110,
+   "parentId": -1,
+   "order": 110,
+   "position": [
+    3.5,
+    5,
+    5.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 12",
+   "id": 111,
+   "parentId": -1,
+   "order": 111,
+   "position": [
+    10.5,
+    5,
+    5.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 13",
+   "id": 112,
+   "parentId": -1,
+   "order": 112,
+   "position": [
+    -10.5,
+    5,
+    12.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 14",
+   "id": 113,
+   "parentId": -1,
+   "order": 113,
+   "position": [
+    -3.5,
+    5,
+    12.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 15",
+   "id": 114,
+   "parentId": -1,
+   "order": 114,
+   "position": [
+    3.5,
+    5,
+    12.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Spot 16",
+   "id": 115,
+   "parentId": -1,
+   "order": 115,
+   "position": [
+    10.5,
+    5,
+    12.5
+   ],
+   "rotation": [
+    60,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "spot",
+    "color": [
+     0.8,
+     0.85,
+     1.0
+    ],
+    "intensity": 20.0,
+    "range": 12.0,
+    "spotAngle": 35.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Point 1",
+   "id": 116,
+   "parentId": -1,
+   "order": 116,
+   "position": [
+    -8.5,
+    2.5,
+    -4.5
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "point",
+    "color": [
+     1.0,
+     0.6,
+     0.35
+    ],
+    "intensity": 8.0,
+    "range": 8.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Point 2",
+   "id": 117,
+   "parentId": -1,
+   "order": 117,
+   "position": [
+    -1.5,
+    2.5,
+    -4.5
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "point",
+    "color": [
+     1.0,
+     0.6,
+     0.35
+    ],
+    "intensity": 8.0,
+    "range": 8.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Point 3",
+   "id": 118,
+   "parentId": -1,
+   "order": 118,
+   "position": [
+    5.5,
+    2.5,
+    -4.5
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "point",
+    "color": [
+     1.0,
+     0.6,
+     0.35
+    ],
+    "intensity": 8.0,
+    "range": 8.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Point 4",
+   "id": 119,
+   "parentId": -1,
+   "order": 119,
+   "position": [
+    12.5,
+    2.5,
+    -4.5
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "point",
+    "color": [
+     1.0,
+     0.6,
+     0.35
+    ],
+    "intensity": 8.0,
+    "range": 8.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Point 5",
+   "id": 120,
+   "parentId": -1,
+   "order": 120,
+   "position": [
+    -8.5,
+    2.5,
+    4.5
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "point",
+    "color": [
+     1.0,
+     0.6,
+     0.35
+    ],
+    "intensity": 8.0,
+    "range": 8.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Point 6",
+   "id": 121,
+   "parentId": -1,
+   "order": 121,
+   "position": [
+    -1.5,
+    2.5,
+    4.5
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "point",
+    "color": [
+     1.0,
+     0.6,
+     0.35
+    ],
+    "intensity": 8.0,
+    "range": 8.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Point 7",
+   "id": 122,
+   "parentId": -1,
+   "order": 122,
+   "position": [
+    5.5,
+    2.5,
+    4.5
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "point",
+    "color": [
+     1.0,
+     0.6,
+     0.35
+    ],
+    "intensity": 8.0,
+    "range": 8.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  },
+  {
+   "name": "Point 8",
+   "id": 123,
+   "parentId": -1,
+   "order": 123,
+   "position": [
+    12.5,
+    2.5,
+    4.5
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "point",
+    "color": [
+     1.0,
+     0.6,
+     0.35
+    ],
+    "intensity": 8.0,
+    "range": 8.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 1.0,
+     "nearPlane": 0.1,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  }
+ ],
+ "models": [],
+ "libraryModels": [],
+ "libraryTextures": [],
+ "librarySounds": [],
+ "libraryPrefabs": []
+}

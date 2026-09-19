@@ -3,8 +3,6 @@
 // EditorLayer.cpp for build time (#179).
 
 #include "EditorLayer.h"
-#include "PointShadowMap.h"
-#include "SpotShadowMap.h"
 #include "EditorLayerInternal.h"
 #include "FileDialog.h"
 #include "AssetLibrary.h"
@@ -3221,9 +3219,10 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("At most %d shadowed %s lights are drawn at once. The ones nearest and\n"
                                      "brightest from the camera win; this one lost, so it lights without a shadow.\n"
-                                     "Move closer, raise its intensity/range, or turn shadows off on other lights.",
-                                     spot ? SpotShadowMap::kMaxSpots : PointShadowMap::kMaxPoints,
-                                     spot ? "spot" : "point");
+                                     "Raise Max %s shadows in Lighting > Shadows, move closer, raise its\n"
+                                     "intensity/range, or turn shadows off on other lights.",
+                                     spot ? m_SpotShadowBudget : m_PointShadowBudget,
+                                     spot ? "spot" : "point", spot ? "spot" : "point");
         }
 
         // #203 - Unity's Culling Mask: which layers this light reaches, as a layer checklist.
