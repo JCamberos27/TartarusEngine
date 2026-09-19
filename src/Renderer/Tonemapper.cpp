@@ -184,6 +184,11 @@ void Tonemapper::Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW
     m_Shader->SetFloat("uVignetteSmoothness", std::clamp(post.VignetteSmoothness, 0.01f, 1.0f));
     m_Shader->SetFloat("uAspect", dstH > 0 ? (float)dstW / (float)dstH : 1.0f);
     m_Shader->SetInt("uDither", post.Dither ? 1 : 0);
+    m_Shader->SetFloat("uChromatic", std::clamp(post.ChromaticAberration, 0.0f, 1.0f));
+    m_Shader->SetFloat("uGrain", std::clamp(post.FilmGrain, 0.0f, 1.0f));
+    m_Shader->SetFloat("uGrainResponse", std::clamp(post.FilmGrainResponse, 0.0f, 1.0f));
+    static unsigned s_GrainFrame = 0; // new grain pattern every frame
+    m_Shader->SetFloat("uGrainSeed", (float)(s_GrainFrame++ % 64u));
 
     glBindVertexArray(m_Vao);
     glDrawArrays(GL_TRIANGLES, 0, 3);

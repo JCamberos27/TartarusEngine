@@ -936,6 +936,15 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
         postSlider("Vignette smoothness", &world.VignetteSmoothness, 0.01f, 1.0f, "%.2f", "Edit Vignette",
                    "How gradually the darkening fades in from the centre.");
 
+    ImGui::SeparatorText("Lens");
+    postSlider("Chromatic aberration", &world.ChromaticAberration, 0.0f, 1.0f, "%.2f", "Edit Chromatic Aberration",
+               "Splits red and blue apart toward the edges of the image, like a cheap lens. 0 = off.");
+    postSlider("Film grain", &world.FilmGrain, 0.0f, 1.0f, "%.2f", "Edit Film Grain",
+               "Animated noise over the image, like film stock. 0 = off.");
+    if (world.FilmGrain > 0.0f)
+        postSlider("Grain response", &world.FilmGrainResponse, 0.0f, 1.0f, "%.2f", "Edit Film Grain",
+                   "How much bright areas are spared: 0 = grain everywhere, 1 = mostly in the shadows.");
+
     ImGui::SeparatorText("Fog");
     if (EditorUIPrimitives::Checkbox("Fog", &world.FogEnabled)) PushUndo(world, "Toggle Fog");
     if (ImGui::IsItemHovered())

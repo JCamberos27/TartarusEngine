@@ -281,6 +281,9 @@ static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, 
     for (int i = 0; i < 3; ++i) p.ColorFilter[i] = world.GradeColorFilter[i];
     p.VignetteIntensity = world.VignetteIntensity;
     p.VignetteSmoothness = world.VignetteSmoothness;
+    p.ChromaticAberration = world.ChromaticAberration;
+    p.FilmGrain = world.FilmGrain;
+    p.FilmGrainResponse = world.FilmGrainResponse;
     p.Fxaa = world.FxaaEnabled;
     p.AutoExposure = world.AutoExposure;
     p.AutoExposureMinEV = world.AutoExposureMinEV;

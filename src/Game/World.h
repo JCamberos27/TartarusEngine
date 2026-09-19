@@ -94,6 +94,9 @@ public:
     glm::vec3 GradeColorFilter{1.0f};
     float VignetteIntensity{0.0f}; // 0 = off
     float VignetteSmoothness{0.4f};
+    float ChromaticAberration{0.0f}; // #162 - 0 = off
+    float FilmGrain{0.0f};           // #162 - 0 = off
+    float FilmGrainResponse{0.8f};
 
     // #162 - distance fog (Unity's Lighting > Other Settings > Fog).
     bool  FogEnabled{false};
