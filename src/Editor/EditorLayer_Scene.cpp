@@ -750,6 +750,8 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
     // so a source under a moved/rotated parent plays from its actual world position, not its
     // parent-local one.
     m_PlayModeAudioHandles.clear();
+    m_PlayModeAudioPrevPos.clear();
+    m_PlayModeListenerPrevPos.reset();
     auto audioView = world.Registry.view<const AudioSourceComponent>();
     for (entt::entity e : audioView) {
         if (world.Registry.all_of<InactiveTag>(e)) continue;
@@ -762,6 +764,7 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
             AudioEngine::SetPosition(handle, glm::vec3(world.GetCachedWorldTransform(e)[3]));
             AudioEngine::SetRolloff(handle, (AudioEngine::Rolloff)std::clamp(audio.Rolloff, 0, 1),
                                     audio.MinDistance, audio.MaxDistance);
+            AudioEngine::SetDopplerLevel(handle, audio.DopplerLevel);
         } else {
             AudioEngine::SetSpatial(handle, false);
         }
@@ -776,7 +779,11 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
     Log::Info("Entered play mode - scene state saved, changes will be reverted on exit.");
 }
 
-void EditorLayer::UpdatePlayModeAudio(const World& world) {
+void EditorLayer::UpdatePlayModeAudio(const World& world, float dt, const glm::vec3& listenerPos) {
+    // #171 - listener velocity for Doppler, from its last two positions (zero on the first frame).
+    AudioEngine::SetListenerVelocity(m_PlayModeListenerPrevPos
+        ? AudioEngine::FrameVelocity(*m_PlayModeListenerPrevPos, listenerPos, dt) : glm::vec3(0.0f));
+    m_PlayModeListenerPrevPos = listenerPos;
     for (auto it = m_PlayModeAudioHandles.begin(); it != m_PlayModeAudioHandles.end();) {
         const auto [e, handle] = *it;
         if (!world.Registry.valid(e) || !AudioEngine::IsPlaying(handle)) { it = m_PlayModeAudioHandles.erase(it); continue; }
@@ -787,8 +794,16 @@ void EditorLayer::UpdatePlayModeAudio(const World& world) {
             continue;
         }
         const auto* audio = world.Registry.try_get<AudioSourceComponent>(e);
-        if (audio && audio->Spatial)
-            AudioEngine::SetPosition(handle, glm::vec3(world.ComposeWorldTransform(e)[3]));
+        if (audio && audio->Spatial) {
+            const glm::vec3 pos = glm::vec3(world.ComposeWorldTransform(e)[3]);
+            // #171 - Doppler: the voice's velocity from its last two positions.
+            auto prev = m_PlayModeAudioPrevPos.find(e);
+            AudioEngine::SetVelocity(handle, prev == m_PlayModeAudioPrevPos.end() ? glm::vec3(0.0f)
+                                                 : AudioEngine::FrameVelocity(prev->second, pos, dt));
+            AudioEngine::SetDopplerLevel(handle, audio->DopplerLevel);
+            AudioEngine::SetPosition(handle, pos);
+            m_PlayModeAudioPrevPos[e] = pos;
+        }
         ++it;
     }
 }
@@ -807,6 +822,8 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     // cut off an unrelated editor preview sound started while Play was running).
     for (auto& [entity, handle] : m_PlayModeAudioHandles) AudioEngine::Stop(handle);
     m_PlayModeAudioHandles.clear();
+    m_PlayModeAudioPrevPos.clear();
+    m_PlayModeListenerPrevPos.reset();
 
     SceneSerializer::LoadFromString(world, assets, m_PlayModeSnapshot);
     m_PlayModeSnapshot.clear();

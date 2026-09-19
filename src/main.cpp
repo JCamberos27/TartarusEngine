@@ -2060,7 +2060,8 @@ int main(int argc, char** argv) {
                     } else {
                         AudioEngine::SetListener(gameCam->Position, gameCam->Front(), gameCam->Up());
                     }
-                    editor.UpdatePlayModeAudio(world);
+                    editor.UpdatePlayModeAudio(world, gameDt,
+                        listener != entt::null ? glm::vec3(world.ComposeWorldTransform(listener)[3]) : gameCam->Position);
                 }
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
