@@ -23,6 +23,7 @@
 #include "EnginePaths.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
+#include "BuildPipeline.h" // #174 - m_LastBuildReport
 #include "Shortcuts.h"
 #include "HotReloadEditorModule.h" // EditorModuleHost::ConsoleState() — console.toggle shortcut
 #include "EditorModuleAPI.h"       // EditorConsoleState's full definition (Visible)
@@ -1095,6 +1096,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
     static const char* kProjectCats[] = {
         ICON_FA_PERSON_FALLING_BURST "  Physics",
         ICON_FA_TAGS "  Tags & Layers",
+        ICON_FA_HAMMER "  Build", // #174 - kBuildSettingsCategory
     };
     const int kProjectCatCount = (int)(sizeof(kProjectCats) / sizeof(kProjectCats[0]));
     m_ProjSettingsCategory = std::clamp(m_ProjSettingsCategory, 0, kProjectCatCount - 1);
@@ -1120,6 +1122,8 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         "gravity fixed timestep solver iterations player push strength player layer collision "
         "matrix time maximum allowed timestep max delta time scale timescale slow motion",
         "tags layers layer names tag",
+        "build settings player scenes in build startup scene product name company version output "
+        "folder resolution window size fullscreen vsync development build and run export ship",
     };
     static_assert(sizeof(kEditorCatKeywords) == sizeof(kEditorCats), "one keyword string per category");
     static_assert(sizeof(kProjectCatKeywords) == sizeof(kProjectCats), "one keyword string per category");
@@ -1807,6 +1811,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
 // is just the category body, not its own window.
 void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
     const float kw = 200.0f * m_UIScale;
+    if (m_ProjSettingsCategory == kBuildSettingsCategory) { DrawBuildSettingsBody(); return; }
 
     if (m_ProjSettingsCategory == 0) { // Physics
         ProjectSettings::PhysicsSettings& p = ProjectSettings::MutablePhysics();
@@ -1926,7 +1931,7 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
             }
             ImGui::EndTable();
         }
-    } else { // Tags & Layers
+    } else if (m_ProjSettingsCategory == 1) { // Tags & Layers
         ImGui::SeparatorText("Tags");
         // Defect #16 — TextDisabled doesn't wrap; this line is long enough to clip mid-sentence
         // at the Preferences window's default width.
@@ -3131,6 +3136,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (Shortcuts::Triggered("history.toggle")) SetShowHistory(!ShowHistory());
         if (Shortcuts::Triggered("lighting.toggle")) m_ShowLighting = !m_ShowLighting;
         if (Shortcuts::Triggered("project.settings")) OpenProjectSettings();
+        if (Shortcuts::Triggered("build.settings")) OpenBuildSettings(); // #174
+        if (Shortcuts::Triggered("build.run")) RunBuild(true);
         if (Shortcuts::Triggered("console.toggle")) {
             // Same "surface a buried tab instead of closing it" behaviour as the toolbar's own
             // Console button (Defect #11) — see EditorModuleToolbar.cpp's DrawTopToolbar.
