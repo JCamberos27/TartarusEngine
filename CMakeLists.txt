@@ -147,7 +147,9 @@ ExternalProject_Add(physx_external
     -DPX_BUILDSNIPPETS:BOOL=OFF
     -DPX_BUILDPVDRUNTIME:BOOL=OFF
     -DPX_GENERATE_STATIC_LIBRARIES:BOOL=OFF
-    -DPX_FLOAT_POINT_PRECISE_MATH:BOOL=OFF
+    # Precise math (/fp:precise, not /fp:fast): under /fp:fast, sweep CCD returned a NaN pose for
+    # a CCD sphere hitting a static box at ~15 m/s or more (a thrown basketball froze mid-air).
+    -DPX_FLOAT_POINT_PRECISE_MATH:BOOL=ON
     -DPX_GENERATE_GPU_PROJECTS:BOOL=OFF
     -DNV_USE_STATIC_WINCRT:BOOL=OFF   # match the engine's /MD (dynamic CRT) — the #1 bring-up footgun
     -DNV_USE_DEBUG_WINCRT:BOOL=ON     # PhysX 'debug' config -> /MDd, matching engine Debug
