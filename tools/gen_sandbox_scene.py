@@ -111,8 +111,9 @@ for n, c, s in (('Wall North', (0, H / 2, -60.5), (122, H, 1)), ('Wall South', (
 
 # ---------------------------------------------------------------- lighting
 g_light = group('Lighting')
-# Late-afternoon sun from the south-west: long readable shadows across the plaza.
-light('Sun', (0, 30, 0), (-42, -35, 0), 'directional', (1.0, 0.93, 0.82), 2.4, rng=200, shadows=True,
+# Sun from the south-west at 47.9 deg - the elevation of the sun in the HDRI sky below, which is
+# rotated (skyRotationDegrees) so its sun sits where this light comes from.
+light('Sun', (0, 30, 0), (-47.9, -35, 0), 'directional', (1.0, 0.93, 0.82), 2.4, rng=200, shadows=True,
       softness=0.35, angular=1.2, parent=g_light)
 i = nid()
 ents['empties'].append({'name': 'Plaza Reflection Probe', 'id': i, 'parentId': g_light, 'order': i,
@@ -246,6 +247,10 @@ scene = {
                 'playground (crate pyramid, brick wall, ball ramp, domino run). North: ball pit. West: '
                 'movement course (stairs, 10/20/30 degree ramps, step-height blocks). Late-afternoon sun '
                 '+ sky ambient, warm plaza lamps, reflection probes.',
+    # Poly Haven 'Kloofendal 48d Partly Cloudy (Pure Sky)' (CC0), 4k .hdr - local, not in git (size);
+    # get it from polyhaven.com into project/assets/sky/. Missing -> the procedural colours below.
+    'skySource': 1, 'skyHdriPath': 'assets/sky/kloofendal_48d_partly_cloudy_puresky_4k.hdr',
+    'skyRotationDegrees': 90.7,
     'skyHorizonColor': [0.70, 0.76, 0.84], 'skyZenithColor': [0.22, 0.42, 0.74], 'skyAmbientIntensity': 0.8,
     'exposureEV': 0.0, 'tonemapOperator': 1,
     'bloomEnabled': True, 'bloomIntensity': 0.12, 'bloomThreshold': 1.2, 'bloomKnee': 0.5,
