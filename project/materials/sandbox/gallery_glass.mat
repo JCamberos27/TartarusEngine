@@ -1,0 +1,18 @@
+{
+  "matVersion": 2,
+  "name": "Gallery Glass",
+  "_comment": "Transmission: refracts what is behind it.",
+  "shader": "engine://Standard.shader",
+  "renderQueue": 2,
+  "properties": {
+    "_BaseColor": [
+      0.92,
+      0.97,
+      1.0
+    ],
+    "_Metallic": 0.0,
+    "_Roughness": 0.02,
+    "_TransmissionStrength": 1.0,
+    "_IOR": 1.5
+  }
+}

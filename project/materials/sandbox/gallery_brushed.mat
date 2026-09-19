@@ -1,0 +1,17 @@
+{
+  "matVersion": 2,
+  "name": "Gallery Brushed Steel",
+  "_comment": "Anisotropic highlight.",
+  "shader": "engine://Standard.shader",
+  "properties": {
+    "_BaseColor": [
+      0.8,
+      0.8,
+      0.82
+    ],
+    "_Metallic": 1.0,
+    "_Roughness": 0.35,
+    "_Anisotropy": 0.85,
+    "_AnisotropyRotation": 0.0
+  }
+}

@@ -1920,16 +1920,45 @@ void UpdateGrab(const float target[3]) {
     b->setAngularVelocity(PxVec3(0.0f));
 }
 
-void ReleaseBody(bool launch, const float impulse[3]) {
+void ReleaseBody(bool launch, const float impulse[3], float backspinRadPerSec) {
     if (!g_State || !g_State->grabbed) return;
     PxRigidDynamic* b = g_State->grabbed;
     b->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, g_State->grabSavedGravityDisabled);
     b->setAngularDamping(g_State->grabSavedAngularDamping);
     if (launch) {
+        const PxVec3 v(impulse[0], impulse[1], impulse[2]);
         b->setLinearVelocity(PxVec3(0.0f));
-        b->addForce(PxVec3(impulse[0], impulse[1], impulse[2]), PxForceMode::eVELOCITY_CHANGE, /*autowake=*/true);
+        b->addForce(v, PxForceMode::eVELOCITY_CHANGE, /*autowake=*/true);
+        // Backspin: angular velocity about the throw's right axis (throw x up), which turns the
+        // top of the ball back toward the thrower. Round bodies only - a spun crate just tumbles.
+        PxShape* shape = nullptr;
+        const bool round = backspinRadPerSec > 0.0f && b->getNbShapes() > 0 && b->getShapes(&shape, 1) == 1 &&
+                           shape->getGeometry().getType() == PxGeometryType::eSPHERE;
+        const PxVec3 right = v.cross(PxVec3(0.0f, 1.0f, 0.0f));
+        if (round && right.magnitude() > 1e-4f) {
+            b->setMaxAngularVelocity(std::max(b->getMaxAngularVelocity(), backspinRadPerSec * 1.5f));
+            b->setAngularVelocity(right.getNormalized() * backspinRadPerSec);
+        }
     }
     g_State->grabbed = nullptr;
+}
+
+unsigned GrabbedEntity() {
+    if (!g_State || !g_State->grabbed) return 0xFFFFFFFFu;
+    for (const auto& [e, body] : g_State->bodyByEntity)
+        if (body == g_State->grabbed) return e;
+    return 0xFFFFFFFFu;
+}
+
+bool GetActorPosition(unsigned entity, float out[3]) {
+    if (!g_State) return false;
+    PxRigidActor* a = nullptr;
+    if (auto it = g_State->bodyByEntity.find(entity); it != g_State->bodyByEntity.end()) a = it->second;
+    else if (auto st = g_State->staticByEntity.find(entity); st != g_State->staticByEntity.end()) a = st->second;
+    if (!a) return false;
+    const PxVec3 p = a->getGlobalPose().p;
+    out[0] = p.x; out[1] = p.y; out[2] = p.z;
+    return true;
 }
 
 // --- Debug (#185 PR 12) --------------------------------------------------------------

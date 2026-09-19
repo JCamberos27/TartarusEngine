@@ -308,6 +308,12 @@ struct FirstPersonControllerComponent {
     float FieldOfView = 75.0f;
     float KillY = -20.0f;           // falling below this respawns at the spawn point
     bool  GravityGun = true;        // the built-in pick-up/throw tool (right/left mouse)
+    float Gravity = 18.0f;          // m/s^2 pulling the player down - game feel, separate from the physics world's
+    // Gravity gun throw: hold left mouse to charge from Min to Max Throw Speed over Charge Time.
+    float MinThrowSpeed = 4.0f;     // m/s, a tap
+    float MaxThrowSpeed = 18.0f;    // m/s, fully charged
+    float ThrowChargeTime = 1.0f;   // seconds to full power
+    float ThrowBackspin = 2.0f;     // revolutions per second given to a thrown ball (round bodies only)
 };
 
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue
@@ -433,6 +439,53 @@ struct TransformControllerComponent {
 struct SpinComponent {
     glm::vec3 Axis{0.0f, 1.0f, 0.0f}; // local axis to spin around (normalised at use)
     float Speed = 90.0f;             // degrees per second, applied only while playing
+};
+
+// --- Scoring and impact sounds (Sandbox basketball court). Plain data, run by ScoringSystem /
+// ImpactSoundSystem in TartarusGame.dll; generic enough for any "ball through a hoop / into a
+// goal" game.
+
+// A trigger volume that scores when an object with `Tag` enters it (moving downward, if
+// RequireDownward - a ball dropping through a rim, not one pushed up from below). Adds Points
+// (ThreePoints when the ball was thrown from ThreePointDistance or further, measured flat from
+// where the gravity gun let go of it) to Team on the scene's Scoreboard, bursts every Particle
+// System among this object's children, flashes their Lights and plays ScoreSound.
+struct GoalTriggerComponent {
+    std::string Tag = "Ball";
+    int Team = 0;                    // 0 = Home, 1 = Away
+    int Points = 2;
+    int ThreePoints = 3;
+    float ThreePointDistance = 0.0f; // 0 = every basket is worth Points
+    bool RequireDownward = true;
+    std::string ScoreSound;          // played at the trigger when it scores (optional)
+    float FlashIntensity = 40.0f;    // child Lights jump to this, then fade back
+};
+
+// The running score. The first one in the scene is the one goals add to; Play -> Stop resets it.
+struct ScoreboardComponent {
+    int Home = 0;
+    int Away = 0;
+};
+
+// A seven-segment digit showing one place of a team's score. Its children named "Seg A" .. "Seg G"
+// (the standard segment letters: A top, B top right, C bottom right, D bottom, E bottom left,
+// F top left, G middle) light up by raising their material's emission.
+struct ScoreDigitComponent {
+    int Team = 0;             // 0 = Home, 1 = Away
+    int Place = 0;            // 0 = ones, 1 = tens (blank while the score is under 10)
+    float OnStrength = 6.0f;  // emissive strength of a lit segment
+    float OffStrength = 0.04f;
+};
+
+// Plays a sound where this object hits something, louder the harder the hit (the contact's
+// closing speed between MinSpeed and MaxSpeed), with a little random pitch so repeats don't sound
+// identical. Both objects in a contact play their own sound (a ball's bounce + a rim's clang).
+struct ImpactSoundComponent {
+    std::string Clip;
+    float Volume = 1.0f;
+    float MinSpeed = 0.6f;        // m/s; softer contacts are silent
+    float MaxSpeed = 8.0f;        // m/s; full volume from here
+    float PitchVariation = 0.08f; // +/- fraction
 };
 
 // Present only on entities that are parented, or that have at least one child — an entity with

@@ -1822,8 +1822,8 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
         ImGui::DragFloat3("m/s\xC2\xB2##grav", &p.Gravity.x, 0.1f, -200.0f, 200.0f, "%.2f");
         if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
         if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("World gravity for rigid bodies (all three axes), applied when Play starts.\n"
-                                 "The Play-mode Player falls with the Y component.");
+            EditorUI::SetTooltip("World gravity for rigid bodies and particles (all three axes), applied when Play\n"
+                                 "starts. Earth's is 9.81. The player's fall is the First Person Controller's own Gravity.");
 
         // #15 — Defect #15: this section's header used to read "Simulation (reserved for
         // #185)", an internal issue number leaked straight into shipped UI. #185 has since
