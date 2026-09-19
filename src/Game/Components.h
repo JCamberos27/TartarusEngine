@@ -91,10 +91,16 @@ struct ColliderComponent {
     bool IsTrigger = false;
 
     // Surface response (#185 PR 7). Bounciness is restitution: 0 = dead stop, 1 = no energy
-    // lost. Friction is the combined static+dynamic coefficient (0 = ice). PhysicsWorld shares
-    // one PxMaterial per distinct (Friction, Bounciness) pair.
+    // lost. Friction is the sliding (dynamic) coefficient, StaticFriction what it takes to
+    // start sliding (0 = ice). PhysicsWorld shares one PxMaterial per distinct combination.
     float Bounciness = 0.0f;
     float Friction   = 0.6f;
+    // #170 / #204 - Unity's Physic Material: separate static friction, and how two touching
+    // colliders' values combine (PxCombineMode order: 0 Average, 1 Minimum, 2 Multiply,
+    // 3 Maximum). When the two sides disagree, the higher mode wins (Maximum > Multiply > ...).
+    float StaticFriction = 0.6f;
+    int   FrictionCombine = 0;
+    int   BounceCombine = 0;
 };
 
 // Makes a collider entity a *dynamic* PhysX body while playing (#185 PR 4) instead of the

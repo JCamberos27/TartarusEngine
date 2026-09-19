@@ -125,7 +125,7 @@ struct PhysicsCore {
     PxDefaultCpuDispatcher* dispatcher      = nullptr;
     PxMaterial*             defaultMaterial = nullptr;
     PxU32                   workers         = 1;
-    std::map<std::pair<int, int>, PxMaterial*>       materialCache;
+    std::map<long long, PxMaterial*>                 materialCache; // key: GetMaterial()
     // Keyed by CookKey (model path + file timestamp + geometry size), so a model reimported
     // mid-session gets a fresh collider instead of the stale cooked one.
     std::unordered_map<std::string, PxConvexMesh*>   convexCache;
@@ -180,7 +180,7 @@ struct PhysicsState {
     std::vector<PxTriangleMesh*> triangleMeshes;
     // #185 PR 7 — one PxMaterial per distinct (friction, bounciness) rounded to 1/100; the
     // per-entity dynamic-body lookup for the force API; this frame's solid-contact events.
-    std::map<std::pair<int, int>, PxMaterial*>&      materialCache; // PhysicsCore's (#167)
+    std::map<long long, PxMaterial*>&                materialCache; // PhysicsCore's (#167)
     std::unordered_map<std::uint32_t, PxRigidDynamic*> bodyByEntity;
     std::vector<ContactEvent>                        contactEvents;
     // #185 PR 11 — joints built on Play-enter, released before the scene. jointOwner maps each
@@ -349,15 +349,24 @@ PxTriangleMesh* CookTriangle(PxPhysics& physics, const std::vector<glm::vec3>& v
     return PxCreateTriangleMesh(params, d, physics.getPhysicsInsertionCallback());
 }
 
-// One PxMaterial per distinct (friction, bounciness), rounded to 1/100 so a slider wobble
-// doesn't spawn hundreds (#185 PR 7). Friction feeds both the static and dynamic coefficient.
-PxMaterial* GetMaterial(PhysicsState& s, float friction, float bounciness) {
-    friction   = std::max(0.0f, friction);
-    bounciness = std::min(1.0f, std::max(0.0f, bounciness));
-    const std::pair<int, int> key{(int)std::lround(friction * 100.0f), (int)std::lround(bounciness * 100.0f)};
+// One PxMaterial per distinct (friction, static friction, bounciness, combine modes), values
+// rounded to 1/100 so a slider wobble doesn't spawn hundreds (#185 PR 7, #170 / #204).
+PxMaterial* GetMaterial(PhysicsState& s, const ColliderComponent& c) {
+    const float friction   = std::max(0.0f, c.Friction);
+    const float staticFr   = std::max(0.0f, c.StaticFriction);
+    const float bounciness = std::min(1.0f, std::max(0.0f, c.Bounciness));
+    const int frictionCombine = std::clamp(c.FrictionCombine, 0, 3);
+    const int bounceCombine   = std::clamp(c.BounceCombine, 0, 3);
+    const long long key = (long long)std::lround(friction * 100.0f) |
+                          ((long long)std::lround(staticFr * 100.0f) << 16) |
+                          ((long long)std::lround(bounciness * 100.0f) << 32) |
+                          ((long long)frictionCombine << 48) | ((long long)bounceCombine << 52);
     auto it = s.materialCache.find(key);
     if (it != s.materialCache.end()) return it->second;
-    PxMaterial* m = s.physics->createMaterial(friction, friction, bounciness);
+    PxMaterial* m = s.physics->createMaterial(staticFr, friction, bounciness);
+    // PxCombineMode is eAVERAGE, eMIN, eMULTIPLY, eMAX - the order ColliderComponent stores.
+    m->setFrictionCombineMode((PxCombineMode::Enum)frictionCombine);
+    m->setRestitutionCombineMode((PxCombineMode::Enum)bounceCombine);
     s.materialCache.emplace(key, m);
     return m;
 }
@@ -382,7 +391,7 @@ void BuildActors(PhysicsState& s, const World& world) {
         PxTransform actorPose(PxIdentity);
         PxTransform shapeLocal(PxIdentity);
         PxShape* shape = nullptr;
-        PxMaterial* mat = GetMaterial(s, c.Friction, c.Bounciness); // #185 PR 7
+        PxMaterial* mat = GetMaterial(s, c); // #185 PR 7, #170 combine modes
         auto make = [&](const PxGeometry& g) {
             shape = s.physics->createShape(g, *mat, /*isExclusive=*/true, flags);
         };
