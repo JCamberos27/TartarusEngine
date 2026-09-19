@@ -1,34 +1,42 @@
 #include "ProjectPaths.h"
+#include "EnginePaths.h"
 
 #include <filesystem>
 
 namespace ProjectPaths {
 namespace {
 
-std::string FindRoot() {
-    namespace fs = std::filesystem;
+namespace fs = std::filesystem;
+
+// Walk up from `dir` looking for a "project" folder. From the usual build/Release/ exe
+// directory that's two levels up; the bound just stops this from wandering to the filesystem
+// root on a machine where no such folder exists. Empty if none.
+std::string FindProjectAbove(fs::path dir) {
     std::error_code ec;
-
-    fs::path dir = fs::current_path(ec);
-    if (ec) return ".";
-
-    // Walk up looking for a "project" folder. From the usual build/Release/ working directory
-    // that's two levels up; the bound just stops this from wandering to the filesystem root on
-    // a machine where no such folder exists.
     const int kMaxLevels = 8;
-    for (int level = 0; level < kMaxLevels; ++level) {
+    for (int level = 0; level < kMaxLevels && !dir.empty(); ++level) {
         fs::path candidate = dir / "project";
-        if (fs::is_directory(candidate, ec) && !ec) {
-            return candidate.lexically_normal().string();
-        }
+        if (fs::is_directory(candidate, ec) && !ec) return candidate.lexically_normal().string();
         fs::path parent = dir.parent_path();
-        if (parent.empty() || parent == dir) break; // reached the root
+        if (parent == dir) break; // reached the root
         dir = parent;
     }
+    return {};
+}
 
-    // No project folder anywhere above us — keep the historical behavior (working directory)
-    // rather than inventing a location or failing.
-    fs::path cwd = fs::current_path(ec);
+std::string FindRoot() {
+    std::error_code ec;
+    // #151 - the executable's location first: a launch from a shortcut, IDE or terminal with
+    // some other working directory used to adopt whatever "project" folder sat above THAT
+    // directory (or the directory itself), and write scenes and settings there.
+    if (!EnginePaths::ExeDir().empty())
+        if (std::string r = FindProjectAbove(fs::path(EnginePaths::ExeDir())); !r.empty()) return r;
+    // Then the working directory (an exe built outside the source tree, run from inside it).
+    const fs::path cwd = fs::current_path(ec);
+    if (!ec)
+        if (std::string r = FindProjectAbove(cwd); !r.empty()) return r;
+    // No project folder anywhere — keep the historical behavior (working directory) rather
+    // than inventing a location or failing.
     return ec ? std::string(".") : cwd.string();
 }
 
