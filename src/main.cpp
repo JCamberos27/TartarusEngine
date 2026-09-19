@@ -1197,6 +1197,18 @@ int main(int argc, char** argv) {
                                       << ", " << p.y << ", " << p.z << ")" << std::endl;
                             if (!sane) Log::Error("[SmokeTest] simulated body ended up at a non-finite / far-away position.");
                         }
+                        // #175 — Animation components: which clip is playing, how far in, and where
+                        // the last bone sits, so a regression in playback / skinning shows up.
+                        for (entt::entity ae : world.Registry.view<SkeletalAnimationComponent, RenderableComponent>()) {
+                            const Model* m = world.Registry.get<RenderableComponent>(ae).ModelRef.get();
+                            if (!m || !m->HasAnimations()) continue;
+                            const int clip = m->CurrentAnimation();
+                            const glm::vec3 bone = glm::vec3(m->FinalBoneMatrix(m->BoneCount() - 1)[3]);
+                            std::cout << "[SmokeTest]   anim " << entt::to_integral(ae) << " clip="
+                                      << (clip >= 0 ? m->AnimationName(clip) : std::string("(none)"))
+                                      << " t=" << m->AnimationTime() << " lastBone=(" << bone.x << ", " << bone.y
+                                      << ", " << bone.z << ")\n";
+                        }
                         std::cout << "[SmokeTest]   -> Stop\n";  togglePlay(); ++smokePlayCycles;
                     }
                 }
@@ -1466,6 +1478,7 @@ int main(int argc, char** argv) {
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
                 UpdateAnimators(world, gameDt);
+                UpdateSkeletalAnimations(world, assets); // #175 — Animation components drive their models' clips
             }
 
             // The gameplay DLL watches its freshly-built source copy even while editing, and

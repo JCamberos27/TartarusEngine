@@ -26,7 +26,7 @@ void main() {
         float totalWeight = 0.0;
         for (int i = 0; i < 4; ++i) {
             if (aBoneIDs[i] >= 0) {
-                skinMat += uBones[clamp(aBoneIDs[i], 0, 99)] * aWeights[i]; // clamp as ModelVertex (#98)
+                skinMat += uBones[clamp(aBoneIDs[i], 0, uBones.length() - 1)] * aWeights[i]; // clamp as ModelVertex (#98)
                 totalWeight += aWeights[i];
             }
         }
