@@ -16,6 +16,7 @@ namespace {
 
 PhysicsSettings g_Physics;
 TimeSettings g_Time;
+AudioSettings g_Audio; // #171
 std::vector<std::string> g_Tags;
 
 const std::string& SettingsPath() {
@@ -47,6 +48,8 @@ const PhysicsSettings& Physics()       { return g_Physics; }
 PhysicsSettings&       MutablePhysics() { return g_Physics; }
 const TimeSettings&    Time()           { return g_Time; }
 TimeSettings&          MutableTime()    { return g_Time; }
+const AudioSettings&   Audio()          { return g_Audio; }
+AudioSettings&         MutableAudio()   { return g_Audio; }
 
 const std::vector<std::string>& Tags() { return g_Tags; }
 
@@ -119,6 +122,13 @@ void Load() {
         g_Time.TimeScale        = std::clamp(num("timeScale", g_Time.TimeScale), 0.0f, 100.0f);
     }
 
+    if (const auto it = root.find("audio"); it != root.end() && it->is_object()) { // #171
+        g_Audio.MasterVolume = std::clamp(it->value("masterVolume", 1.0f), 0.0f, 1.0f);
+        if (const auto b = it->find("busVolumes"); b != it->end() && b->is_array())
+            for (int i = 0; i < 5 && i < (int)b->size(); ++i)
+                if ((*b)[i].is_number()) g_Audio.BusVolume[i] = std::clamp((*b)[i].get<float>(), 0.0f, 1.0f);
+    }
+
     if (const auto it = root.find("tags"); it != root.end() && it->is_array()) {
         for (const auto& t : *it) {
             if (t.is_string()) AddTag(t.get<std::string>());
@@ -139,6 +149,10 @@ void Save() {
     root["time"] = {
         {"maximumDeltaTime", g_Time.MaximumDeltaTime},
         {"timeScale", g_Time.TimeScale},
+    };
+    root["audio"] = {
+        {"masterVolume", g_Audio.MasterVolume},
+        {"busVolumes", std::vector<float>(std::begin(g_Audio.BusVolume), std::end(g_Audio.BusVolume))},
     };
     root["tags"] = g_Tags;
 
