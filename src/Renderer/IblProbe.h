@@ -64,8 +64,12 @@ public:
     // #108 — rotationRadians: the HDRI's Y rotation (World::SkyRotationDegrees), applied while
     // convolving so diffuse / specular lighting match the rotated sky. faceSize: envCube's base
     // face size, for the prefilter's mip-selection heuristic (was a fixed 128).
-    void BakeFromCubemap(unsigned int envCube, int faceSize, float rotationRadians);
+    // #277 - radianceClamp > 0 caps each env sample's brightest channel (hue kept) during both
+    // convolutions, which removes an HDRI's sun from ambient/reflections when a directional
+    // light already provides it. 0 = no clamp.
+    void BakeFromCubemap(unsigned int envCube, int faceSize, float rotationRadians, float radianceClamp = 0.0f);
     float BakedRotation() const { return m_BakedRotation; }
+    float BakedRadianceClamp() const { return m_BakedRadianceClamp; }
 
     unsigned int IrradianceMap() const { return m_IrradianceCube; } // samplerCube
     unsigned int SpecularMap() const { return m_SpecularCube; }     // samplerCube, kSpecularMips levels
@@ -103,6 +107,7 @@ private:
     bool m_FboComplete = false;  // last Bake()'s FBO passed GLFramebufferCheck (audit #358)
     bool m_Baked = false;
     float m_BakedRotation = 0.0f; // #108
+    float m_BakedRadianceClamp = 0.0f; // #277
     glm::vec3 m_BakedHorizon{0.0f};
     glm::vec3 m_BakedZenith{0.0f};
 };

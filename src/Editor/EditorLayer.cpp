@@ -742,6 +742,34 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
             if (activated) PushUndo(world, "Edit HDRI Rotation");
         }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Y-axis rotation of the HDRI environment in degrees.");
+
+        // #277 — HDRI sun vs. the directional light: don't light the scene with the sun twice.
+        {
+            static const char* kSunModes[] = {"Auto", "Keep", "Remove"};
+            int mode = (int)world.SkyHdriSun;
+            ImGui::SetNextItemWidth(w);
+            if (ImGui::Combo("HDRI sun in lighting", &mode, kSunModes, IM_ARRAYSIZE(kSunModes))) {
+                PushUndo(world, "Edit HDRI Sun Mode");
+                world.SkyHdriSun = (World::HdriSunMode)mode;
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("How the HDRI's own sun feeds ambient light and reflections.\n"
+                                     "Auto: removed while a directional light is lit (that light already is the sun),\n"
+                                     "kept otherwise. Stops the sun being counted twice and washing out the scene.\n"
+                                     "Keep: always included.  Remove: always removed.\n"
+                                     "The visible sky is never changed.");
+            if (world.SkyHdriSun != World::HdriSunMode::Keep) {
+                ImGui::SetNextItemWidth(w);
+                bool activated = false;
+                EditorUI::SliderFloat("Sun threshold", &world.SkyHdriSunThreshold, 1.0f, 1000.0f, "%.0f",
+                                      ImGuiSliderFlags_Logarithmic, &activated);
+                if (activated) PushUndo(world, "Edit HDRI Sun Threshold");
+                world.SkyHdriSunThreshold = std::max(1.0f, world.SkyHdriSunThreshold);
+                if (ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("Radiance above this is treated as the sun and capped when baking\n"
+                                         "ambient/reflections. Open sky is ~1-10; a sun is ~10,000+.");
+            }
+        }
     } else {
         EditorUI::ColorEditLinear("Horizon color", &world.SkyHorizonColor.x, ImGuiColorEditFlags_DisplayHex);
         if (ImGui::IsItemActivated()) PushUndo(world, "Edit Sky Color");

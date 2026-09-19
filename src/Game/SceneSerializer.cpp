@@ -793,6 +793,10 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             root["skyHdriPath"] = AssetPathForWrite(world.SkyHdriPath); // audit #364 — was stored absolute
         if (world.SkyRotationDegrees != 0.0f)
             root["skyRotationDegrees"] = world.SkyRotationDegrees;
+        if (world.SkyHdriSun != World::HdriSunMode::Auto)
+            root["skyHdriSun"] = (int)world.SkyHdriSun; // #277
+        if (world.SkyHdriSunThreshold != 50.0f)
+            root["skyHdriSunThreshold"] = world.SkyHdriSunThreshold;
 
         // #9, Phase M item 1 — post-processing/shadow settings, scene-authored since v3.
         root["exposureEV"] = world.ExposureEV;
@@ -1126,6 +1130,8 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
         world.SkySourceMode          = (World::SkySource)std::clamp(root.value("skySource", 0), 0, 1); // #122
         world.SkyHdriPath            = AssetPathForRead(root.value("skyHdriPath", std::string())); // audit #364
         world.SkyRotationDegrees     = root.value("skyRotationDegrees",     0.0f);
+        world.SkyHdriSun             = (World::HdriSunMode)std::clamp(root.value("skyHdriSun", 0), 0, 2); // #277
+        world.SkyHdriSunThreshold    = std::max(1.0f, root.value("skyHdriSunThreshold", 50.0f));
 
         // #9, Phase M item 1 — v3+ scenes own these directly; a pre-v3 file has none of these
         // keys (BuildSceneJson only started writing them at v3), which is exactly the signal to
