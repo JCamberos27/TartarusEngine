@@ -61,11 +61,14 @@ void ReflectionProbeArray::Bind(Shader& shader, const glm::vec3& viewCenter) con
 
     if (found == 0) { shader.SetInt("uProbeCount", 0); return; }
     shader.SetInt("uProbeCount", found);
+    // Bound per draw now (#108), so no per-call string building for the uniform names.
+    static const char* kCenter[kMaxDraw]   = {"uProbeCenter[0]",   "uProbeCenter[1]"};
+    static const char* kHalfSize[kMaxDraw] = {"uProbeHalfSize[0]", "uProbeHalfSize[1]"};
+    static const char* kBlend[kMaxDraw]    = {"uProbeBlend[0]",    "uProbeBlend[1]"};
     for (int j = 0; j < found; ++j) {
         const ProbeData& p = m_Probes[best[j].idx];
-        std::string jStr = std::to_string(j);
-        shader.SetVec3("uProbeCenter["  + jStr + "]",   p.Center);
-        shader.SetVec3("uProbeHalfSize[" + jStr + "]",  p.HalfSize);
-        shader.SetFloat("uProbeBlend["  + jStr + "]",   best[j].score / totalScore);
+        shader.SetVec3(kCenter[j],   p.Center);
+        shader.SetVec3(kHalfSize[j], p.HalfSize);
+        shader.SetFloat(kBlend[j],   best[j].score / totalScore);
     }
 }

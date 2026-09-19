@@ -289,6 +289,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         MaterialAsset::Queue Queue;
         int  QueueIndex;
         float ViewDepth; // view-space -Z (more positive = farther) for back-to-front sort
+        glm::vec3 Centre; // world-space bounds centre — picks this object's reflection probes (#108)
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -359,11 +360,11 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             }
             transparentList.push_back({ model, m, &slots, matKey,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
-                q, qi, viewDepth });
+                q, qi, viewDepth, centre });
         } else {
             drawList.push_back({ model, m, &slots, matKey,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
-                q, qi, viewDepth });
+                q, qi, viewDepth, centre });
         }
     }
 
@@ -374,10 +375,21 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         return a.ViewDepth < b.ViewDepth;
     });
 
+    // #108 — reflection probes are chosen per object (from its bounds centre), not once per
+    // frame from the camera position, which gave every object in view the same two probes and
+    // made reflections pop as the camera moved. Only when the scene has probes at all.
+    const DrawItem* probeItem = nullptr;
+    const std::function<void(Shader&)> bindProbes = [&](Shader& prog) {
+        in.probeArray->Bind(prog, probeItem->Centre);
+    };
+    const std::function<void(Shader&)> noHook;
+    const std::function<void(Shader&)>& perDraw = in.probeArray->Count() > 0 ? bindProbes : noHook;
+
     passAlphaBlend = 0;
     modelShader.SetInt("uAlphaBlend", 0); // explicit: ensure opaque pass outputs alpha=1
     for (const DrawItem& it : drawList) {
-        it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram);
+        probeItem = &it;
+        it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw);
 
         localStats.DrawCalls += it.Meshes;
         localStats.Triangles += it.Tris;
@@ -424,7 +436,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         for (const DrawItem& it : transparentList) {
             float opacity = (!it.Slots->empty() && (*it.Slots)[0])
                 ? (*it.Slots)[0]->Opacity : 1.0f;
-            it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, opacity);
+            probeItem = &it;
+            it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, opacity, perDraw);
 
             localStats.DrawCalls += it.Meshes;
             localStats.Triangles += it.Tris;
