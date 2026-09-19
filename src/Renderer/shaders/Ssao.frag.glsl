@@ -25,10 +25,14 @@ void main() {
 
     vec3 fragPos = ReconstructViewPos(vUV, depth);
 
-    // Reconstruct view-space normal from depth derivatives.
-    // cross(dFdx, dFdy) points toward the viewer for front faces in OpenGL view space.
+    // Reconstruct view-space normal from depth derivatives, then orient it toward the eye.
+    // "Toward the eye" means against the view RAY to this pixel (fragPos, the eye is at the
+    // origin), not the camera's forward axis: testing N.z flipped the ground's normal into the
+    // floor whenever the camera pitched above level (the ground normal then points away along
+    // view z while still facing the eye), so the whole hemisphere sampled inside geometry and
+    // the floor went dark just from tilting the camera up.
     vec3 N = normalize(cross(dFdx(fragPos), dFdy(fragPos)));
-    if (N.z < 0.0) N = -N;
+    if (dot(N, fragPos) > 0.0) N = -N;
 
     // Randomise the TBN tangent frame using the tiling noise texture.
     vec3 rvec = normalize(vec3(
