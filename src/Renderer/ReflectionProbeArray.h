@@ -24,7 +24,8 @@ public:
     // Call once per frame, before any drawScene.
     void Update(const World& world);
 
-    // Sets uProbeCount + per-probe uniforms on `shader` for the draw centroid `viewCenter`.
+    // Sets uProbeCount + per-probe uniforms on `shader` for the draw centroid `viewCenter` (the
+    // object's world bounds centre - SceneRenderer calls this per draw, #108).
     // Selects up to kMaxDraw nearest probes by distance, weighted by Importance.
     // No-op (uProbeCount = 0) when no probes exist or the shader has _REFLECTION_PROBES off.
     void Bind(Shader& shader, const glm::vec3& viewCenter) const;
