@@ -151,6 +151,31 @@ void TestInputMap() {
     CHECK(InputMap::GetAxis("Horizontal") == 0.0f && !InputMap::GetButton("Jump"));
 }
 
+// #123 - decomposes keep the Euler triple nearest the old one instead of flipping to an
+// equivalent (the alternate YXZ solution and +-360 wraps are the same rotation).
+void TestNearestEuler() {
+    auto sameRotation = [](const glm::vec3& a, const glm::vec3& b) {
+        const glm::mat4 ma = ComposeTransform(glm::vec3(0.0f), a, glm::vec3(1.0f));
+        const glm::mat4 mb = ComposeTransform(glm::vec3(0.0f), b, glm::vec3(1.0f));
+        for (int c = 0; c < 3; ++c)
+            for (int r = 0; r < 3; ++r)
+                if (std::abs(ma[c][r] - mb[c][r]) > 1e-4f) return false;
+        return true;
+    };
+    const glm::vec3 flipped(180.0f, 0.0f, 180.0f);
+    const glm::vec3 near0 = NearestEquivalentEuler(flipped, glm::vec3(0.0f, 170.0f, 0.0f));
+    CHECK(sameRotation(near0, flipped));
+    CHECK(std::abs(near0.x) < 1e-3f && std::abs(near0.y - 180.0f) < 1e-3f && std::abs(near0.z) < 1e-3f);
+    const glm::vec3 e(30.0f, -20.0f, 50.0f);
+    CHECK(NearestEquivalentEuler(e, e) == e);
+    const glm::vec3 wrapped = NearestEquivalentEuler(glm::vec3(10.0f, -170.0f, 0.0f), glm::vec3(10.0f, 185.0f, 0.0f));
+    CHECK(std::abs(wrapped.y - 190.0f) < 1e-3f && sameRotation(wrapped, glm::vec3(10.0f, -170.0f, 0.0f)));
+    const glm::vec3 alt(180.0f - 25.0f, 40.0f + 180.0f, -60.0f + 180.0f);
+    CHECK(sameRotation(alt, glm::vec3(25.0f, 40.0f, -60.0f)));
+    const glm::vec3 back = NearestEquivalentEuler(alt, glm::vec3(20.0f, 45.0f, -55.0f));
+    CHECK(glm::length(back - glm::vec3(25.0f, 40.0f, -60.0f)) < 1e-3f);
+}
+
 void TestLodGroup() {
     World world;
     const glm::vec3 zero(0.0f), one(1.0f);
@@ -573,6 +598,7 @@ int RunUnitTests() {
         {"AssetIdentity", TestAssetIdentity},
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},
+        {"NearestEuler", TestNearestEuler},
         {"DopplerVelocity", TestDopplerVelocity},
         {"InputMap", TestInputMap},
         {"ActiveInHierarchy", TestActiveInHierarchy},
