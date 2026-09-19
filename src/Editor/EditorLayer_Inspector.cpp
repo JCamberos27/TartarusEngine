@@ -491,7 +491,10 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
         // which is fine and far less alarming than "6.5e-09" of floating-point dust; the exact
         // value is still in the hover tooltip.
         const float mag = std::fabs(before);
-        const char* fmt = (mag >= 1.0e6f) ? "%.4g" : "%.3f";
+        // Anything that rounds to zero shows "0.000": %.3f printed floating-point dust like
+        // -1e-8 (left by a matrix decompose, e.g. on Duplicate) as "-0.000". A literal format is
+        // display-only; the exact value is still in the tooltip.
+        const char* fmt = (mag >= 1.0e6f) ? "%.4g" : (mag < 5.0e-4f ? "0.000" : "%.3f");
         bool itemChanged = ImGui::DragFloat("##v", axes[i].value, speed, minV, maxV, fmt);
         if (ImGui::IsItemHovered() && !ImGui::IsItemActive())
             EditorUI::SetTooltip("%.9g\nClick and drag to change; double-click to type a value", *axes[i].value);
@@ -581,7 +584,8 @@ MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool
         ImGui::SetNextItemWidth(dragW);
         ImGuiID fieldId = ImGui::GetID("##v");
         bool editing = ImGui::GetActiveID() == fieldId;
-        const char* fmt = (mixedAxis[i] && !editing) ? "\xE2\x80\x94" : "%.3f"; // em dash while untouched
+        const char* fmt = (mixedAxis[i] && !editing) ? "\xE2\x80\x94" // em dash while untouched
+                        : (std::fabs(*axes[i].v) < 5.0e-4f ? "0.000" : "%.3f"); // never "-0.000"
         float before = *axes[i].v;
         bool fieldChanged = ImGui::DragFloat("##v", axes[i].v, speed, minV, maxV, fmt);
         if (ImGui::IsItemActivated()) r.activated = true;
