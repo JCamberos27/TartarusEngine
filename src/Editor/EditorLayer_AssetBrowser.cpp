@@ -558,6 +558,43 @@ bool IsBuiltinShaderPath(const std::string& key) {
     const std::string dir = std::filesystem::path(ShaderLibrary::Dir()).generic_string();
     return !dir.empty() && std::filesystem::path(key).generic_string().rfind(dir, 0) == 0;
 }
+// #178 - Unity's project-wide Find References: every scene, prefab, material, Animator Controller
+// and Physic Material file that mentions the asset, by its GUID (how scenes reference most
+// assets, #132) or by its project-relative path. Plain text search; files are small.
+std::vector<std::string> FindProjectReferences(const std::string& assetKey) {
+    std::vector<std::string> needles;
+    if (const AssetGuid g = AssetDatabase::GuidForPath(assetKey); g.IsValid()) needles.push_back(g.ToString());
+    std::string rel = std::filesystem::path(assetKey).is_absolute() ? ProjectPaths::Relativize(assetKey) : assetKey;
+    std::replace(rel.begin(), rel.end(), '\\', '/');
+    if (!rel.empty()) needles.push_back(rel);
+    std::vector<std::string> out;
+    if (needles.empty()) return out;
+    std::error_code ec;
+    const std::filesystem::path root(ProjectPaths::Root());
+    const std::filesystem::path self = std::filesystem::weakly_canonical(std::filesystem::path(ProjectPaths::Resolve(rel)), ec);
+    for (auto it = std::filesystem::recursive_directory_iterator(root, std::filesystem::directory_options::skip_permission_denied, ec);
+         !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (it.depth() == 0 && it->is_directory() && it->path().filename() == "Library") {
+            it.disable_recursion_pending();
+            continue;
+        }
+        if (!it->is_regular_file()) continue;
+        const std::string ext = it->path().extension().string();
+        if (ext != ".json" && ext != ".prefab" && ext != ".mat" && ext != ".controller" && ext != ".physicmaterial") continue;
+        std::error_code ec2;
+        if (std::filesystem::weakly_canonical(it->path(), ec2) == self) continue;
+        std::ifstream in(it->path(), std::ios::binary);
+        const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        for (const std::string& needle : needles)
+            if (text.find(needle) != std::string::npos) {
+                out.push_back(std::filesystem::relative(it->path(), root, ec2).generic_string());
+                break;
+            }
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
 } // namespace
 
 void EditorLayer::RequestDeleteAssets(World& world, AssetLibrary& assets, const std::vector<AssetKeyRef>& requested, bool skipDialog) {
@@ -1985,6 +2022,16 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 else Log::Info("Selected " + std::to_string(hits.size()) + " object(s) using '" + cell.display + "'.");
             }
 
+            if (!isFolder && m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS "  Find References in Project")) {
+                const std::vector<std::string> refs = FindProjectReferences(cell.key);
+                if (refs.empty()) {
+                    Log::Info("No scene, prefab, material or controller in the project references '" + cell.display + "'.");
+                } else {
+                    Log::Info(std::to_string(refs.size()) + " file(s) reference '" + cell.display + "' (double-click one to find it):");
+                    for (const std::string& r : refs)
+                        Log::Info("    " + r, LogContext::Asset(ProjectPaths::Resolve(r)));
+                }
+            }
             // Reimport straight from the context menu instead of only via Import Settings >
             // Apply (#28 P17). Single selection, real imported assets only.
             if (!isFolder && m_ExtraAssetSelection.empty() &&
