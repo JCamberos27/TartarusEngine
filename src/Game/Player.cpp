@@ -9,9 +9,17 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     (void)world;  // collision now runs against PhysicsWorld's PhysX scene, not World's AABBs
     (void)window; // kept in the signature for a future direct-input path; unused today
 
-    if (readInput)
+    if (readInput) {
         Cam.ProcessMouseLook((float)Input::GetMouseDeltaX(),
                              (float)Input::GetMouseDeltaY() * (InvertY ? -1.0f : 1.0f), MouseSensitivity);
+        // #145 - gamepad right stick: a turn rate, not a delta. Stick Y is +down, look is +up.
+        constexpr float kStickLookDegPerSec = 180.0f;
+        const float lx = Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_RIGHT_X);
+        const float ly = -Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_RIGHT_Y);
+        if (lx != 0.0f || ly != 0.0f)
+            Cam.ProcessMouseLook(lx * kStickLookDegPerSec * dt,
+                                 ly * kStickLookDegPerSec * dt * (InvertY ? -1.0f : 1.0f), 1.0f);
+    }
 
     // Planar move input, relative to look yaw.
     glm::vec3 forward = glm::normalize(glm::vec3(Cam.Front().x, 0, Cam.Front().z));
@@ -24,12 +32,21 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
         if (Input::IsKeyDown(GLFW_KEY_D)) wish += right;
         if (Input::IsKeyDown(GLFW_KEY_A)) wish -= right;
     }
-    float speed = MoveSpeed * ((readInput && Input::IsKeyDown(GLFW_KEY_LEFT_SHIFT)) ? SprintMultiplier : 1.0f);
-    if (glm::length(wish) > 0.0001f) wish = glm::normalize(wish) * speed;
+    if (glm::length(wish) > 0.0001f) wish = glm::normalize(wish);
+    if (readInput) { // #145 - gamepad left stick, analog: half-tilt walks at half speed
+        wish += right * Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_LEFT_X);
+        wish -= forward * Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_LEFT_Y);
+        if (glm::length(wish) > 1.0f) wish = glm::normalize(wish);
+    }
+    const bool sprint = readInput && (Input::IsKeyDown(GLFW_KEY_LEFT_SHIFT) ||
+                                      Input::IsGamepadButtonDown(GLFW_GAMEPAD_BUTTON_LEFT_THUMB));
+    float speed = MoveSpeed * (sprint ? SprintMultiplier : 1.0f);
+    wish *= speed;
     Velocity.x = wish.x;
     Velocity.z = wish.z;
 
-    if (readInput && Grounded && Input::IsKeyPressed(GLFW_KEY_SPACE))
+    if (readInput && Grounded && (Input::IsKeyPressed(GLFW_KEY_SPACE) ||
+                                  Input::IsGamepadButtonPressed(GLFW_GAMEPAD_BUTTON_A)))
         Velocity.y = JumpSpeed; // one impulse; the capsule move below integrates the arc
 
     Velocity.y += Gravity * dt;
