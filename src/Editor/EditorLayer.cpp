@@ -904,6 +904,42 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
     if (world.VignetteIntensity > 0.0f)
         postSlider("Vignette smoothness", &world.VignetteSmoothness, 0.01f, 1.0f, "%.2f", "Edit Vignette",
                    "How gradually the darkening fades in from the centre.");
+
+    ImGui::SeparatorText("Fog");
+    if (EditorUIPrimitives::Checkbox("Fog", &world.FogEnabled)) PushUndo(world, "Toggle Fog");
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Fades surfaces toward the fog colour with distance from the camera.\n"
+                             "The sky itself isn't fogged, so pick a colour close to the horizon.");
+    if (world.FogEnabled) {
+        static const char* kFogModes[] = {"Linear", "Exponential", "Exponential Squared"};
+        int mode = std::clamp(world.FogMode, 1, 3) - 1;
+        ImGui::SetNextItemWidth(w);
+        if (ImGui::Combo("Fog mode", &mode, kFogModes, IM_ARRAYSIZE(kFogModes))) {
+            PushUndo(world, "Change Fog Mode");
+            world.FogMode = mode + 1;
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Linear: none before Start, full at End.\n"
+                                 "Exponential: thickens steadily with distance (Density).\n"
+                                 "Exponential Squared: clear up close, then thickens quickly.");
+        EditorUI::ColorEditLinear("Fog color", &world.FogColor.x, ImGuiColorEditFlags_DisplayHex);
+        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Fog Color");
+        if (world.FogMode == 1) {
+            postSlider("Fog start", &world.FogStart, 0.0f, 500.0f, "%.1f m", "Edit Fog",
+                       "Distance where fog begins.");
+            postSlider("Fog end", &world.FogEnd, 1.0f, 2000.0f, "%.1f m", "Edit Fog",
+                       "Distance where surfaces are fully fog-coloured.");
+        } else {
+            postSlider("Fog density", &world.FogDensity, 0.0f, 0.2f, "%.4f", "Edit Fog",
+                       "How quickly fog thickens with distance.");
+            postSlider("Height falloff", &world.FogHeightFalloff, 0.0f, 1.0f, "%.3f", "Edit Fog",
+                       "0 = same density at every height. Higher = fog settles near the ground\n"
+                       "(below Fog base height) and thins out above it.");
+            if (world.FogHeightFalloff > 0.0f)
+                postSlider("Fog base height", &world.FogBaseHeight, -100.0f, 100.0f, "%.1f m", "Edit Fog",
+                           "World height where the fog is at its full Density.");
+        }
+    }
 }
 
 void EditorLayer::DrawShadowSettings(World& world, float w) {
