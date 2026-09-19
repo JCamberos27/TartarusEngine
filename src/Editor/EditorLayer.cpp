@@ -540,6 +540,7 @@ void EditorLayer::FreeGpuResources() {
     for (auto& [path, entry] : m_ModelThumbnails) { (void)path; if (entry.first) glDeleteTextures(1, &entry.first); }
     m_ModelThumbnails.clear();
     m_ThumbnailLRU.clear();
+    ClearMaterialThumbnails(); // #107
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
 }
 
