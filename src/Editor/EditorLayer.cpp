@@ -806,6 +806,30 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Photographic stops applied before the tone curve. 0 = neutral. Applies live.");
 
+    // #162 - Unity's Exposure > Automatic: the Exposure above becomes compensation on top.
+    if (EditorUIPrimitives::Checkbox("Auto exposure", &world.AutoExposure)) PushUndo(world, "Toggle Auto Exposure");
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Measures the average brightness of the view and eases exposure toward mid grey,\n"
+                             "like an eye adjusting when walking from a dark room into daylight.\n"
+                             "Exposure (EV) above still applies as compensation.");
+    if (world.AutoExposure) {
+        auto aeSlider = [&](const char* label, float* v, float lo, float hi, const char* fmt, const char* tip) {
+            ImGui::SetNextItemWidth(w);
+            bool activated = false;
+            EditorUI::SliderFloat(label, v, lo, hi, fmt, 0, &activated);
+            if (activated) PushUndo(world, "Edit Auto Exposure");
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+        };
+        aeSlider("Min EV", &world.AutoExposureMinEV, -12.0f, 0.0f, "%+.1f",
+                 "Limit for dark scenes: how many stops auto exposure may brighten the image.");
+        aeSlider("Max EV", &world.AutoExposureMaxEV, 0.0f, 12.0f, "%+.1f",
+                 "Limit for bright scenes: how many stops auto exposure may darken the image.");
+        aeSlider("Speed up", &world.AutoExposureSpeedUp, 0.0f, 10.0f, "%.1f",
+                 "How quickly it adapts when the view gets brighter. 0 = never.");
+        aeSlider("Speed down", &world.AutoExposureSpeedDown, 0.0f, 10.0f, "%.1f",
+                 "How quickly it adapts when the view gets darker. 0 = never.");
+    }
+
     if (EditorUIPrimitives::Checkbox("SSAO", &world.SsaoEnabled)) PushUndo(world, "Toggle SSAO");
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Screen-space ambient occlusion. Darkens crevices and contact shadows. Depth pre-pass + blur;\napplies to both the Scene and Game views.");
