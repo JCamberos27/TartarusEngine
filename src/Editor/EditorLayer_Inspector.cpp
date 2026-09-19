@@ -267,7 +267,19 @@ void PropertyLabel(const char* label, const char* tooltip = nullptr, bool highli
 // #102 / #113 — the non-texture surface options for shader-less materials (the Standard.shader
 // path shows the same fields from its Properties{}). Edits every material in `mats`; reports the
 // start / end of an edit for the caller's undo or save, like HdrColorEdit.
-struct SurfaceEdit { bool activated = false, committed = false; };
+// One-click widgets (checkboxes, combos) change the value on the same frame the edit starts, so
+// they don't mutate directly: they queue the change in `apply`, which the caller runs AFTER
+// staging its undo snapshot. Mutating first meant the snapshot already held the new value and
+// the edit recorded no undo step at all (#107).
+struct SurfaceEdit {
+    bool activated = false, committed = false;
+    std::function<void()> apply;
+    void Defer(std::function<void()> fn) {
+        activated = committed = true;
+        apply = apply ? [prev = std::move(apply), fn = std::move(fn)]() { prev(); fn(); } : std::move(fn);
+    }
+    void Apply() { if (apply) { apply(); apply = nullptr; } }
+};
 SurfaceEdit DrawSurfaceOptionRows(const std::vector<Material*>& mats) {
     SurfaceEdit ev;
     if (mats.empty()) return ev;
@@ -300,10 +312,8 @@ SurfaceEdit DrawSurfaceOptionRows(const std::vector<Material*>& mats) {
         PropertyLabel(label, tip);
         ImGui::PushID(label);
         bool v = first.*field;
-        if (EditorUIPrimitives::Checkbox("##b", &v)) {
-            for (Material* m : mats) m->*field = v;
-            ev.activated = ev.committed = true;
-        }
+        if (EditorUIPrimitives::Checkbox("##b", &v))
+            ev.Defer([mats, field, v]() { for (Material* m : mats) m->*field = v; });
         ImGui::PopID();
     };
     ImGui::SeparatorText("Surface Options");
@@ -316,6 +326,62 @@ SurfaceEdit DrawSurfaceOptionRows(const std::vector<Material*>& mats) {
     boolRow("Vertex Colors", &Material::UseVertexColor, "Multiply the colour (and alpha) by the mesh's vertex colours.");
     floatRow("Parallax Scale", &Material::ParallaxScale, 0.0f, 0.1f, "Depth of the Height map's parallax effect.");
     vec2Row("Detail Tiling", &Material::DetailTiling, 0.05f, "UV tiling of the Detail Albedo / Detail Normal maps.");
+    return ev;
+}
+
+// #107 — Unity's Rendering Mode for shader-less materials: Opaque / Cutout / Transparent, plus
+// Alpha Cutoff, Opacity and Queue Offset. These live on MaterialAsset (RenderQueue / Opacity /
+// QueueIndex) and could only be set by hand-editing .mat JSON. Edits every asset in `assets`.
+SurfaceEdit DrawRenderModeRows(const std::vector<MaterialAsset*>& assets) {
+    SurfaceEdit ev;
+    if (assets.empty()) return ev;
+    MaterialAsset& first = *assets[0];
+    bool mixed = false;
+    for (const MaterialAsset* a : assets) mixed |= a->RenderQueue != first.RenderQueue;
+
+    ImGui::SeparatorText("Rendering");
+    PropertyLabel("Rendering Mode",
+        "Opaque: solid.\nCutout: fully solid or fully invisible by the albedo alpha (foliage, fences).\n"
+        "Transparent: blended by Opacity x albedo alpha (glass, water); doesn't cast shadows.");
+    static const char* kModes[] = {"Opaque", "Cutout", "Transparent"};
+    int mode = (int)first.RenderQueue; // Queue: Opaque 0, AlphaTest 1, Transparent 2
+    if (mixed) ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
+    if (ImGui::Combo("##RenderMode", &mode, kModes, IM_ARRAYSIZE(kModes))) {
+        ev.Defer([assets, mode]() {
+            for (MaterialAsset* a : assets) {
+                a->RenderQueue = (MaterialAsset::Queue)mode;
+                a->Mat.AlphaClip = a->RenderQueue == MaterialAsset::Queue::AlphaTest; // #101 pairing
+            }
+        });
+    }
+    if (mixed) { ImGui::PopItemFlag(); return ev; }
+
+    auto sliderRow = [&](const char* label, float lo, float hi, const char* tip, auto get) {
+        PropertyLabel(label, tip);
+        ImGui::PushID(label);
+        float v = get(first);
+        bool activated = false, committed = false;
+        if (EditorUI::SliderFloat("##f", &v, lo, hi, "%.2f", 0, &activated, &committed) && std::isfinite(v))
+            for (MaterialAsset* a : assets) get(*a) = v;
+        ev.activated |= activated;
+        ev.committed |= committed;
+        ImGui::PopID();
+    };
+    if (first.RenderQueue == MaterialAsset::Queue::AlphaTest) {
+        sliderRow("Alpha Cutoff", 0.0f, 1.0f, "Pixels with albedo alpha below this are discarded.",
+                  [](MaterialAsset& a) -> float& { return a.Mat.AlphaCutoff; });
+    } else if (first.RenderQueue == MaterialAsset::Queue::Transparent) {
+        sliderRow("Opacity", 0.0f, 1.0f, "Overall surface alpha, multiplied by the albedo alpha.",
+                  [](MaterialAsset& a) -> float& { return a.Opacity; });
+        PropertyLabel("Queue Offset", "Draw order among transparent materials: lower draws first (further back).\n"
+                                      "Only needed when overlapping transparent objects sort wrongly.");
+        int qi = first.QueueIndex - 2000; // 2000 = MaterialAsset::QueueIndex default
+        if (ImGui::DragInt("##QueueOffset", &qi, 0.2f, -1000, 1000)) {
+            for (MaterialAsset* a : assets) a->QueueIndex = 2000 + qi;
+        }
+        ev.activated |= ImGui::IsItemActivated();
+        ev.committed |= ImGui::IsItemDeactivatedAfterEdit();
+    }
     return ev;
 }
 
@@ -1337,7 +1403,11 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
     mapRow("Height",    &Material::HeightMap,    "Grayscale height (white = high) for parallax occlusion mapping."); // #102
     mapRow("Detail Albedo", &Material::DetailAlbedoMap, "x2 detail: 50% grey leaves the colour unchanged.");
     mapRow("Detail Normal", &Material::DetailNormalMap, "Fine surface detail blended on top of the Normal map.");
-    if (DrawSurfaceOptionRows({&mat}).committed) save();
+    // (.mat asset edits save to disk; they aren't scene undo steps.)
+    for (SurfaceEdit se : {DrawSurfaceOptionRows({&mat}), DrawRenderModeRows({ma.get()})}) { // #107
+        se.Apply();
+        if (se.committed) save();
+    }
 }
 
 // The Inspector's body — everything inside the panel window. The module
@@ -3316,6 +3386,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
     // mats is filled by whichever branch runs (single-select slot 0 or multi-select).
     // The PBR property lambdas below capture it by reference so they work for both paths.
     std::vector<Material*> mats;
+    std::vector<MaterialAsset*> matAssets; // parallel to mats: the owning assets (#107 Rendering rows)
 
     // #107 - an editable (embedded) override for submesh `i`, starting as an exact copy of the
     // imported material: every scalar, flag and map, so turning the override on doesn't change
@@ -3469,9 +3540,11 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         mapRow("Height",    &Material::HeightMap,    "Grayscale height (white = high) for parallax occlusion mapping."); // #102
         mapRow("Detail Albedo", &Material::DetailAlbedoMap, "x2 detail: 50% grey leaves the colour unchanged.");
         mapRow("Detail Normal", &Material::DetailNormalMap, "Fine surface detail blended on top of the Normal map.");
-        const SurfaceEdit se = DrawSurfaceOptionRows(mats);
-        if (se.activated) StageUndo(world);
-        if (se.committed) CommitStagedUndo(world, "Edit Material");
+        for (SurfaceEdit se : {DrawSurfaceOptionRows(mats), DrawRenderModeRows(matAssets)}) { // #107
+            if (se.activated) StageUndo(world);
+            se.Apply(); // after the snapshot, so one-click edits are undoable
+            if (se.committed) CommitStagedUndo(world, "Edit Material");
+        }
     };
 
     // Data-driven inspector for materials that have a linked ShaderAsset.
@@ -3825,6 +3898,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             ImGui::PushID(1000 + i);
             mats.clear();
             mats.push_back(&slot->Mat);
+            matAssets.assign(1, slot.get());
             if (slot->Shader) {
                 // Data-driven inspector: iterate ShaderAsset::Properties(), skip Hidden.
                 DrawShaderPropertyRow(*slot->Shader);
@@ -3953,6 +4027,9 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         return;
     }
 
-    for (RenderableComponent* rc : rcs) mats.push_back(&rc->Materials[0]->Mat);
+    for (RenderableComponent* rc : rcs) {
+        mats.push_back(&rc->Materials[0]->Mat);
+        matAssets.push_back(rc->Materials[0].get());
+    }
     DrawPbrFields();
 }
