@@ -66,22 +66,34 @@ std::vector<std::string> g_MigrationLog;
 // values onto World, rather than silently resetting to compiled defaults.
 void MigratePostProcessSettingsFromPrefs(World& world) {
     std::ifstream in(EditorSettings::PrefsFilePath());
-    json prefs;
+    // Starts as an object, not null: with no editor_prefs.json (a fresh machine, or a built game,
+    // which has its own user folder) json::value() on a null threw type_error 306 and the whole
+    // pre-v3 scene failed to load. Wrong-typed values fall back to the defaults the same way.
+    json prefs = json::object();
     if (in.is_open()) {
         try { in >> prefs; } catch (const std::exception&) { prefs = json::object(); }
+        if (!prefs.is_object()) prefs = json::object();
     }
-    world.ExposureEV       = prefs.value("exposureEV", 0.0f);
-    world.TonemapOperator  = prefs.value("tonemapOperator", 1);
-    world.MsaaSamples      = prefs.value("msaaSamples", 4);
-    world.SsaoEnabled      = prefs.value("ssaoEnabled", false);
-    world.BloomEnabled     = prefs.value("bloomEnabled", false);
-    world.BloomThreshold   = prefs.value("bloomThreshold", 1.0f);
-    world.BloomKnee        = prefs.value("bloomKnee", 0.5f);
-    world.BloomIntensity   = prefs.value("bloomIntensity", 0.25f);
-    world.ShadowsEnabled   = prefs.value("shadowsEnabled", true);
-    world.ShadowResolution = prefs.value("shadowResolution", 4096);
-    world.ShadowCascades   = prefs.value("shadowCascades", 4);
-    world.ShadowDistance   = prefs.value("shadowDistance", 500.0f);
+    auto num = [&prefs](const char* key, auto fallback) {
+        const auto it = prefs.find(key);
+        return (it != prefs.end() && it->is_number()) ? it->get<decltype(fallback)>() : fallback;
+    };
+    auto flag = [&prefs](const char* key, bool fallback) {
+        const auto it = prefs.find(key);
+        return (it != prefs.end() && it->is_boolean()) ? it->get<bool>() : fallback;
+    };
+    world.ExposureEV       = num("exposureEV", 0.0f);
+    world.TonemapOperator  = num("tonemapOperator", 1);
+    world.MsaaSamples      = num("msaaSamples", 4);
+    world.SsaoEnabled      = flag("ssaoEnabled", false);
+    world.BloomEnabled     = flag("bloomEnabled", false);
+    world.BloomThreshold   = num("bloomThreshold", 1.0f);
+    world.BloomKnee        = num("bloomKnee", 0.5f);
+    world.BloomIntensity   = num("bloomIntensity", 0.25f);
+    world.ShadowsEnabled   = flag("shadowsEnabled", true);
+    world.ShadowResolution = num("shadowResolution", 4096);
+    world.ShadowCascades   = num("shadowCascades", 4);
+    world.ShadowDistance   = num("shadowDistance", 500.0f);
     g_MigrationLog.push_back("post-processing/shadow settings (exposure=" +
         std::to_string(world.ExposureEV) + ", bloom=" + (world.BloomEnabled ? "on" : "off") +
         ", ssao=" + (world.SsaoEnabled ? "on" : "off") + ") migrated from editor_prefs.json");
