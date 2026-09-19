@@ -41,6 +41,7 @@ namespace UndoDelta {
 // JSON Patch that turns `fromJson` into `toJson`. Returns "" if either side won't parse, which
 // ApplyPatch treats as an unrecoverable link (a real empty patch dumps as "[]", never "").
 inline std::string MakePatch(const std::string& fromJson, const std::string& toJson) {
+    if (fromJson == toJson) return "[]"; // #138 - skip two parses + a diff for an unchanged scene
     try {
         return nlohmann::json::diff(nlohmann::json::parse(fromJson),
                                     nlohmann::json::parse(toJson)).dump();
