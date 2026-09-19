@@ -194,6 +194,52 @@ void RegisterEngineComponents() {
         },
     });
 
+    // #177 - a basic CPU particle emitter (fire, sparks, smoke, dust). Simulated every frame,
+    // in the editor as well as Play, so it can be tuned live; the live particles aren't saved.
+    {
+        static const char* kBlendLabels = "Alpha Blended\0Additive\0";
+        ReflectComponent m;
+        m.Name = "Particle System"; m.Icon = ICON_FA_FIRE; m.Category = "Effects";
+        m.Tooltip = "Emits soft, camera-facing particles from this object along its local +Y axis.";
+        m.Fields = {
+            { "Emitting", T::Bool, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Emitting), 0.0f,
+              "Spawn new particles. Turning it off lets the live ones finish." },
+            { "Rate", T::Float, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Rate), 0.5f,
+              "Particles spawned per second.", 0.0f, 10000.0f },
+            { "Max Particles", T::Int, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, MaxParticles), 1.0f,
+              "Upper limit on live particles; emission pauses while at the limit.", 1.0f, 100000.0f },
+            { "Lifetime", T::Float, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Lifetime), 0.01f,
+              "How long each particle lives, in seconds (varies by about 15%).", 0.01f, 60.0f },
+            { "Start Speed", T::Float, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, StartSpeed), 0.05f,
+              "Launch speed, metres per second.", 0.0f, 200.0f },
+            { "Spread", T::Float, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Spread), 0.5f,
+              "Cone half-angle around the object's +Y axis, in degrees. 0 = a straight jet, 180 = every direction.",
+              0.0f, 180.0f },
+            { "Start Size", T::Float, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, StartSize), 0.005f,
+              "Particle diameter when spawned, in metres.", 0.0f, 50.0f },
+            { "End Size", T::Float, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, EndSize), 0.005f,
+              "Particle diameter at the end of its life.", 0.0f, 50.0f },
+            { "Start Color", T::Color, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, StartColor), 0.0f,
+              "Colour when spawned." },
+            { "End Color", T::Color, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, EndColor), 0.0f,
+              "Colour at the end of its life." },
+            { "Start Alpha", T::Float, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, StartAlpha), 0.01f,
+              "Opacity when spawned.", 0.0f, 1.0f },
+            { "End Alpha", T::Float, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, EndAlpha), 0.01f,
+              "Opacity at the end of its life (0 = fades out).", 0.0f, 1.0f },
+            { "Intensity", T::Float, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Intensity), 0.05f,
+              "Brightness multiplier. Above 1 glows through Bloom.", 0.0f, 100.0f },
+            { "Gravity Modifier", T::Float, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, GravityModifier), 0.01f,
+              "How much project gravity pulls the particles (1 = falls like a rigidbody, negative rises).",
+              -10.0f, 10.0f },
+            { "Blend Mode", T::Enum, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, BlendMode), 0.0f,
+              "Additive: brightens what's behind (fire, sparks, magic). Alpha Blended: covers it (smoke, dust)." },
+        };
+        m.Fields.back().EnumLabels = kBlendLabels;
+        m.Fields.back().EnumCount = 2;
+        Register<ParticleSystemComponent>(std::move(m));
+    }
+
     // Migrated from hand-coded serialization/Inspector code onto reflection (#302 Wave 2b) — the
     // first component to use every widget hint the reflection layer has (Enum, Color, sliders,
     // log scale, format strings, per-Kind VisibleIf, the "Shadows" TreeNode group). Kind values
