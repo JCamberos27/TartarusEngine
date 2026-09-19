@@ -1593,6 +1593,12 @@ int main(int argc, char** argv) {
                 take(spots, (size_t)SpotShadowMap::kMaxSpots);
                 take(points, (size_t)PointShadowMap::kMaxPoints);
                 s_PrevShadowed = frameShadowed;
+                // Candidates that didn't get a slot, for the Inspector's over-budget warning.
+                std::set<entt::entity> overBudget;
+                for (const auto* v : {&spots, &points})
+                    for (const auto& [score, e] : *v)
+                        if (!frameShadowed.count(e)) overBudget.insert(e);
+                editor.SetShadowOverBudget(std::move(overBudget));
             }
 
             for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
