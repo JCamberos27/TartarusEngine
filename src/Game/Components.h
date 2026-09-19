@@ -198,6 +198,20 @@ struct TagComponent {
 // whole subtree (#201). Runtime systems only ever test this one.
 struct InactiveTag {};
 
+// #163 - Unity's LOD Group. The entity's direct children are its levels, in order: child 0 is
+// LOD 0 (full detail), child 1 is LOD 1, and so on (up to 4; any further children are ignored
+// by LOD and always drawn). Each level is used while the group's height on screen, as a fraction
+// of the view height, is at least that level's threshold; below the last used level's threshold
+// the whole group is culled. Evaluated per view by World::ApplyLod.
+struct LODGroupComponent {
+    float Lod0 = 0.6f, Lod1 = 0.3f, Lod2 = 0.1f, Lod3 = 0.03f; // screen-height thresholds, 0..1
+    float Size = 0.0f; // world-space size used for the screen height; 0 = automatic from LOD 0's bounds
+};
+
+// Runtime only, never saved: this renderer belongs to an LOD level the current view isn't
+// using (see LODGroupComponent). Draw and shadow passes skip it; unlike InactiveTag it doesn't
+// affect physics, scripts or the Hierarchy.
+struct LodCulledTag {};
 // Unity's activeSelf == false: the authored "active" checkbox. Set by the editor and the
 // scene/prefab loader, saved as "active": false. See InactiveTag for what it causes.
 struct DeactivatedTag {};

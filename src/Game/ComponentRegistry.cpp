@@ -474,6 +474,27 @@ void RegisterEngineComponents() {
     }
 
     // #171 - Unity's Audio Listener.
+    Register<LODGroupComponent>({
+        "LOD Group", ICON_FA_LAYER_GROUP,
+        "Swaps between simpler versions of an object as it gets smaller on screen.\n"
+        "Its children are the levels in order: the first child is LOD 0 (full detail), the second\n"
+        "LOD 1, and so on (up to 4). Below the last level's threshold the object isn't drawn.",
+        "Rendering",
+        {
+            { "LOD 0", T::Float, TARTARUS_REFLECT_FIELD(LODGroupComponent, Lod0), 0.005f,
+              "The first child is drawn while the object is at least this tall on screen\n"
+              "(fraction of the view height, e.g. 0.6 = 60%).", 0.0f, 1.0f },
+            { "LOD 1", T::Float, TARTARUS_REFLECT_FIELD(LODGroupComponent, Lod1), 0.005f,
+              "The second child is drawn from here down to the LOD 2 threshold.", 0.0f, 1.0f },
+            { "LOD 2", T::Float, TARTARUS_REFLECT_FIELD(LODGroupComponent, Lod2), 0.005f,
+              "The third child is drawn from here down to the LOD 3 threshold.", 0.0f, 1.0f },
+            { "LOD 3", T::Float, TARTARUS_REFLECT_FIELD(LODGroupComponent, Lod3), 0.001f,
+              "The fourth child is drawn from here down; smaller than this, nothing is drawn.", 0.0f, 1.0f },
+            { "Size", T::Float, TARTARUS_REFLECT_FIELD(LODGroupComponent, Size), 0.05f,
+              "World-space size used to work out the height on screen, in metres.\n"
+              "0 = automatic (the size of the first child's meshes).", 0.0f, 10000.0f },
+        },
+    });
     Register<AudioListenerComponent>({
         "Audio Listener", ICON_FA_HEADPHONES,
         "In Play, 3D sounds are heard from this object (its position and facing) instead of from "

@@ -6,6 +6,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <algorithm>
+#include <limits>
 #include <glm/gtc/quaternion.hpp>
 
 namespace {
@@ -129,6 +130,79 @@ glm::mat4 World::ComposeWorldTransform(entt::entity entity) const {
             world = ComposeTransform(*t) * world;
     }
     return world;
+}
+
+void World::ClearLod() {
+    Registry.clear<LodCulledTag>();
+}
+
+int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
+    auto groups = Registry.view<LODGroupComponent, HierarchyComponent>();
+    if (groups.begin() == groups.end()) {
+        if (!Registry.view<LodCulledTag>().empty()) ClearLod();
+        return 0;
+    }
+    ClearLod();
+    const bool ortho = proj[3][3] == 1.0f; // glm::ortho leaves w = 1; perspective sets it 0
+    const float yScale = proj[1][1];       // 1 / tan(fovY/2), or 1 / halfHeight for ortho
+    std::vector<entt::entity> stack;
+    auto tagSubtree = [&](entt::entity root) {
+        stack.assign(1, root);
+        while (!stack.empty()) {
+            const entt::entity e = stack.back();
+            stack.pop_back();
+            if (!Registry.valid(e)) continue;
+            if (Registry.all_of<RenderableComponent>(e)) Registry.emplace_or_replace<LodCulledTag>(e);
+            if (const auto* h = Registry.try_get<HierarchyComponent>(e))
+                stack.insert(stack.end(), h->Children.begin(), h->Children.end());
+        }
+    };
+    // Diagonal of a subtree's renderers' world bounds, for the automatic group size.
+    auto subtreeSize = [&](entt::entity root) {
+        glm::vec3 lo(std::numeric_limits<float>::max()), hi(-std::numeric_limits<float>::max());
+        stack.assign(1, root);
+        while (!stack.empty()) {
+            const entt::entity e = stack.back();
+            stack.pop_back();
+            if (!Registry.valid(e)) continue;
+            if (const auto* r = Registry.try_get<RenderableComponent>(e); r && r->ModelRef) {
+                const glm::vec3 bmin = r->ModelRef->BoundsMin(), bmax = r->ModelRef->BoundsMax();
+                if (bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z) {
+                    const glm::mat4 m = GetCachedWorldTransform(e);
+                    for (int c = 0; c < 8; ++c) {
+                        const glm::vec3 corner((c & 1) ? bmax.x : bmin.x, (c & 2) ? bmax.y : bmin.y, (c & 4) ? bmax.z : bmin.z);
+                        const glm::vec3 w = glm::vec3(m * glm::vec4(corner, 1.0f));
+                        lo = glm::min(lo, w);
+                        hi = glm::max(hi, w);
+                    }
+                }
+            }
+            if (const auto* h = Registry.try_get<HierarchyComponent>(e))
+                stack.insert(stack.end(), h->Children.begin(), h->Children.end());
+        }
+        return lo.x <= hi.x ? glm::length(hi - lo) : 0.0f;
+    };
+
+    int evaluated = 0;
+    for (entt::entity g : groups) {
+        if (Registry.all_of<InactiveTag>(g)) continue;
+        const auto& lod = groups.get<LODGroupComponent>(g);
+        const auto& children = groups.get<HierarchyComponent>(g).Children;
+        const int levels = (int)std::min<size_t>(children.size(), 4);
+        if (levels == 0) continue;
+        ++evaluated;
+        const float size = lod.Size > 0.0f ? lod.Size : subtreeSize(children[0]);
+        const glm::vec3 centre = glm::vec3(GetCachedWorldTransform(g)[3]);
+        const float dist = std::max(glm::length(centre - viewPos), 1e-4f);
+        const float height = ortho ? size * yScale * 0.5f : size * yScale / (2.0f * dist);
+        const float thresholds[4] = {lod.Lod0, lod.Lod1, lod.Lod2, lod.Lod3};
+        int active = -1; // -1 = culled
+        for (int i = 0; i < levels; ++i)
+            if (height >= thresholds[i]) { active = i; break; }
+        for (int i = 0; i < levels; ++i)
+            if (i != active) tagSubtree(children[i]);
+    }
+    return evaluated;
 }
 
 void World::SyncActiveInHierarchy() {
