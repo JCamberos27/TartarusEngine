@@ -115,6 +115,24 @@ void RegisterEngineComponents() {
         Register<SkeletalAnimationComponent>(std::move(m));
     }
 
+    // #175 Part B - the Animator Controller state machine. Controller is an EditorHidden string:
+    // the Inspector draws a picker of the project's .controller files plus the controller's
+    // states / parameters / transitions editor (EditorLayer_Inspector.cpp, keyed "Animator Controller").
+    {
+        ReflectComponent m;
+        m.Name = "Animator Controller"; m.Icon = ICON_FA_DIAGRAM_PROJECT; m.Category = "Rendering";
+        m.Tooltip = "Plays this object's model clips from a state machine (a .controller file): states, and "
+                    "crossfaded transitions on parameters that game code sets.";
+        m.Fields = {
+            { "Controller", T::String, TARTARUS_REFLECT_FIELD(AnimatorControllerComponent, Controller), 0.0f,
+              "The .controller file this object runs." },
+            { "Speed", T::Float, TARTARUS_REFLECT_FIELD(AnimatorControllerComponent, Speed), 0.01f,
+              "Multiplies every state's playback speed.", 0.0f, 10.0f },
+        };
+        m.Fields[0].EditorHidden = true;
+        Register<AnimatorControllerComponent>(std::move(m));
+    }
+
     Register<AnimatorComponent>({
         "Animator", ICON_FA_PERSON_RUNNING,
         "Procedural motion driven every frame in Play mode - continuous spin, orbit around an "
