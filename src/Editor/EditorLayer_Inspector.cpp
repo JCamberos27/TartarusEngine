@@ -888,10 +888,9 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
     if (isTexture) {
         auto tex = assets.LoadTexture(key); // cache hit - already imported to appear in the browser
         if (tex && tex->IsValid()) {
-            const char* kFormats[] = {"", "R8", "", "RGB8", "RGBA8"}; // indexed by channel count (1/3/4); 0/2 unused
-            int channels = tex->SourceChannels();
-            ImGui::Text("%d x %d, %s, %d channel(s)", tex->Width(), tex->Height(),
-                (channels >= 1 && channels <= 4 && kFormats[channels][0]) ? kFormats[channels] : "8-bit", channels);
+            // Source size, then what's actually on the GPU (#156): format and memory with mips.
+            ImGui::Text("%d x %d, %d channel(s)", tex->Width(), tex->Height(), tex->SourceChannels());
+            ImGui::TextDisabled("GPU: %s, %.2f MB", tex->GpuFormatName(), tex->GpuBytes() / (1024.0 * 1024.0));
 
             float previewSize = 160.0f;
             float aspect = tex->Height() > 0 ? (float)tex->Width() / (float)tex->Height() : 1.0f;

@@ -1419,7 +1419,7 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets) {
             {"textureType", (int)s.TextureType}, {"generateMipmaps", s.GenerateMipmaps},
             {"isSRGB", s.IsSRGB}, {"filterMode", (int)s.FilterMode},
             {"wrapMode", (int)s.WrapMode}, {"maxTextureSize", s.MaxTextureSize},
-            {"anisoLevel", s.AnisoLevel},
+            {"anisoLevel", s.AnisoLevel}, {"compression", (int)s.CompressionMode},
         };
     }
     for (const auto& [key, s] : assets.ModelSettingsMap()) {
@@ -1481,6 +1481,7 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
                 s.WrapMode = (TextureImportSettings::Wrap)std::clamp(t.value("wrapMode", 0), 0, 1);
                 s.MaxTextureSize = t.value("maxTextureSize", 2048);
                 s.AnisoLevel = std::clamp(t.value("anisoLevel", 8), 1, 16);
+                s.CompressionMode = (TextureImportSettings::Compression)std::clamp(t.value("compression", 0), 0, 2);
                 assets.SetTextureSettings(path, s);
             }
             if (entry.contains("modelImport")) {

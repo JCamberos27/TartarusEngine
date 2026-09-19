@@ -12,6 +12,11 @@ struct TextureImportSettings {
     enum class Type { Default, NormalMap, Sprite2D };
     enum class Filter { Point, Bilinear, Trilinear };
     enum class Wrap { Repeat, ClampToEdge };
+    // #156 - GPU block compression (Unity's Compression). None uploads raw 8-bit pixels. Normal /
+    // High Quality encode BCn on import (High runs extra endpoint refinement, ~40% slower to
+    // bake): BC1 for opaque colour, BC3 with alpha, BC4 for single-channel data and BC5 for
+    // two-channel data. 4-8x less VRAM than RGBA8. Encoded once and kept in Library/Textures.
+    enum class Compression { None, Normal, HighQuality };
 
     Type TextureType = Type::Default;
 
@@ -29,6 +34,7 @@ struct TextureImportSettings {
     // driver supports; only applies with mipmaps and a non-Point filter. Sampler state only, so
     // it isn't part of TextureCache's pixel hash.
     int AnisoLevel = 8;
+    Compression CompressionMode = Compression::None;
 };
 
 // Cumulative timing across every Texture::UploadFromFile call this process has made (audit
@@ -74,6 +80,10 @@ public:
     const std::string& Path() const { return m_Path; }
     unsigned int GLHandle() const { return m_ID; } // for ImGui::Image thumbnails in the Asset Browser
     const TextureImportSettings& ImportSettings() const { return m_Settings; }
+    // #156 - what actually got uploaded, for the importer's memory readout: GPU bytes including
+    // the mip chain, and a short format name ("RGBA8", "sRGB BC1", ...).
+    size_t GpuBytes() const { return m_GpuBytes; }
+    const char* GpuFormatName() const { return m_GpuFormatName; }
 
 private:
     void UploadFromFile(const TextureImportSettings& settings);
@@ -83,6 +93,8 @@ private:
 
     unsigned int m_ID = 0;
     int m_Width = 0, m_Height = 0, m_Channels = 0;
+    size_t m_GpuBytes = 0;
+    const char* m_GpuFormatName = "";
     std::string m_Path;
     TextureImportSettings m_Settings;
 };

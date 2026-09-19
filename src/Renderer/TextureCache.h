@@ -29,6 +29,11 @@ struct Image {
     int Width = 0, Height = 0;              // dimensions actually uploaded
     int Channels = 0;                       // 1, 3 or 4
     std::vector<unsigned char> Pixels;      // tightly packed, Width * Height * Channels
+    // #156 - block-compressed entries: GLFormat is the compressed internal format and Pixels
+    // holds every mip level's blocks back to back, LevelSizes[i] bytes each (level 0 first).
+    // GLFormat 0 = the plain uncompressed layout above.
+    uint32_t GLFormat = 0;
+    std::vector<uint32_t> LevelSizes;
 };
 
 // Returns false (leaving `out` untouched) on a miss — no entry, a stale one, or an unreadable
