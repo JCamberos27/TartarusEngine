@@ -11,6 +11,8 @@ draws nothing (audit #356).
   cascaded sun shadows, procedural sky + IBL, frustum culling.
 - `smoke_lighting` — directional + point + spot, each shadow-casting, over creased geometry.
   Clustered light culling, all three shadow-map paths, SSAO seams, bloom highlight.
+- `smoke_shadow_budget` — 16 shadowed spots + 8 shadowed points with the shadow budgets at their
+  ceilings (#110): every spot layer / point cube and the full-size shader arrays.
 - `smoke_stress` — ~64 primitive boxes + 4 point lights. Draw-call scaling, material-sorted
   draw list, cluster saturation, culling at volume.
 

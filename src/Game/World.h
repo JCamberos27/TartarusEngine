@@ -104,6 +104,11 @@ public:
     int   ShadowResolution{4096};
     int   ShadowCascades{4};
     float ShadowDistance{500.0f};
+    // #110 - shadow budgets for local lights: how many shadowed spot / point lights get a map
+    // each frame (the most important ones, scored in main.cpp). Clamped to 0..SpotShadowMap::
+    // kMaxSpots / PointShadowMap::kMaxPoints on load and in the UI.
+    int   MaxSpotShadows{4};
+    int   MaxPointShadows{2};
 
     // Creates a level-geometry entity: a fresh (unshared) cube-primitive Model tinted `color`,
     // a Collider, and LevelGeometryTag. `size` becomes the entity's Transform Scale, matching
