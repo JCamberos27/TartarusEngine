@@ -1,5 +1,6 @@
 #include "Player.h"
 #include "Input.h"
+#include "InputMap.h"
 #include "PhysicsWorld.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
@@ -25,28 +26,20 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     glm::vec3 forward = glm::normalize(glm::vec3(Cam.Front().x, 0, Cam.Front().z));
     glm::vec3 right   = glm::normalize(glm::vec3(Cam.Right().x, 0, Cam.Right().z));
 
+    // #145 - the Input Manager's Horizontal / Vertical / Sprint / Jump actions (Project Settings >
+    // Input), so rebinding them moves the Player too. Keys give full tilt, a stick is analog.
     glm::vec3 wish{0.0f};
     if (readInput) {
-        if (Input::IsKeyDown(GLFW_KEY_W)) wish += forward;
-        if (Input::IsKeyDown(GLFW_KEY_S)) wish -= forward;
-        if (Input::IsKeyDown(GLFW_KEY_D)) wish += right;
-        if (Input::IsKeyDown(GLFW_KEY_A)) wish -= right;
-    }
-    if (glm::length(wish) > 0.0001f) wish = glm::normalize(wish);
-    if (readInput) { // #145 - gamepad left stick, analog: half-tilt walks at half speed
-        wish += right * Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_LEFT_X);
-        wish -= forward * Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_LEFT_Y);
+        wish = right * InputMap::GetAxis("Horizontal") + forward * InputMap::GetAxis("Vertical");
         if (glm::length(wish) > 1.0f) wish = glm::normalize(wish);
     }
-    const bool sprint = readInput && (Input::IsKeyDown(GLFW_KEY_LEFT_SHIFT) ||
-                                      Input::IsGamepadButtonDown(GLFW_GAMEPAD_BUTTON_LEFT_THUMB));
+    const bool sprint = readInput && InputMap::GetButton("Sprint");
     float speed = MoveSpeed * (sprint ? SprintMultiplier : 1.0f);
     wish *= speed;
     Velocity.x = wish.x;
     Velocity.z = wish.z;
 
-    if (readInput && Grounded && (Input::IsKeyPressed(GLFW_KEY_SPACE) ||
-                                  Input::IsGamepadButtonPressed(GLFW_GAMEPAD_BUTTON_A)))
+    if (readInput && Grounded && InputMap::GetButtonDown("Jump"))
         Velocity.y = JumpSpeed; // one impulse; the capsule move below integrates the arc
 
     Velocity.y += Gravity * dt;

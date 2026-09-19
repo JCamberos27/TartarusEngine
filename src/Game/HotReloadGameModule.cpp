@@ -8,6 +8,8 @@
 #include "TimeService.h"
 #include "AudioEngine.h"
 #include "ProjectPaths.h"
+#include "Input.h"
+#include "InputMap.h"
 #include <algorithm>
 #include <filesystem>
 #include <unordered_set>
@@ -125,6 +127,19 @@ GameModuleHostAPI MakeHostAPI() {
     };
     api.GetGrabbedEntity = []() -> std::uint32_t { return PhysicsWorld::GrabbedEntity(); };
     api.GetActorPosition = [](std::uint32_t e, float out[3]) { return PhysicsWorld::GetActorPosition(e, out); };
+    // v12 - Input Manager (#145)
+    api.GetAxis = [](const char* a) { return a ? InputMap::GetAxis(a) : 0.0f; };
+    api.GetButton = [](const char* a) { return a && InputMap::GetButton(a); };
+    api.GetButtonDown = [](const char* a) { return a && InputMap::GetButtonDown(a); };
+    api.GetButtonUp = [](const char* a) { return a && InputMap::GetButtonUp(a); };
+    api.GetKey = [](int code) { return InputMap::GetBinding(code); };
+    api.GetKeyDown = [](int code) { return InputMap::GetBindingDown(code); };
+    api.GetKeyUp = [](int code) { return InputMap::GetBindingUp(code); };
+    api.GetMouseDelta = [](float out[2]) {
+        const bool on = InputMap::Enabled();
+        out[0] = on ? (float)Input::GetMouseDeltaX() : 0.0f;
+        out[1] = on ? (float)Input::GetMouseDeltaY() : 0.0f;
+    };
     return api;
 }
 
