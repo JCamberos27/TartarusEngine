@@ -718,6 +718,23 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
 // index: PrefabInstanceComponent::InstanceEntities is in the same order the file lists entities
 // (boxes, then models, then empties, each in file order — see InstantiatePrefab / ApplySceneJson).
 
+// #122 - boxes used to write their transform as "center" / "size" while models and empties use
+// "position" / "scale". Boxes now write the shared keys; this upgrades an older file's boxes in
+// place so everything that compares or edits entity objects by key (prefab override diffing,
+// Apply / Revert to prefab) sees one schema.
+void UpgradeLegacyBoxKeys(json& root) {
+    auto it = root.find("boxes");
+    if (it == root.end() || !it->is_array()) return;
+    for (json& b : *it) {
+        if (!b.is_object()) continue;
+        for (const auto& [from, to] : {std::pair<const char*, const char*>{"center", "position"}, {"size", "scale"}}) {
+            if (!b.contains(from)) continue;
+            if (!b.contains(to)) b[to] = b[from];
+            b.erase(from);
+        }
+    }
+}
+
 // The .prefab file's entity objects, flattened into one list in that canonical order.
 std::vector<const json*> PrefabEntityObjects(const json& prefab) {
     std::vector<const json*> out;
@@ -1017,8 +1034,8 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         const std::string name = nameOf(entity);
         const auto& renderable = boxView.get<const RenderableComponent>(entity);
         json b = {
-            {"center", Vec3ToJson(transform.Position)},
-            {"size", Vec3ToJson(transform.Scale)},
+            {"position", Vec3ToJson(transform.Position)},
+            {"scale", Vec3ToJson(transform.Scale)},
             {"color", Vec3ToJson(renderable.ModelRef->MeshMaterial(0).BaseColor)},
             {"rotation", Vec3ToJson(transform.RotationEuler)},
             {"name", name},
@@ -1120,7 +1137,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
                 if (pf.is_open()) {
                     // #82 — a corrupt / merge-conflicted .prefab must not abort the whole scene
                     // save: skip this instance's override diff (its stub still saves) and warn.
-                    try { pf >> prefab; prefabOk = true; }
+                    try { pf >> prefab; UpgradeLegacyBoxKeys(prefab); prefabOk = true; }
                     catch (const std::exception& ex) {
                         Log::Warn("Scene: couldn't parse prefab '" + pi.SourcePath +
                                   "' while saving - its per-field overrides were not re-diffed: " + ex.what());
@@ -1316,8 +1333,11 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             // soft-deleted state (nothing before ever displayed or collided with a dead box).
             if (!b.value("alive", true)) continue;
 
-            glm::vec3 center = JsonToVec3(b.value("center", json::array({0, 0, 0})));
-            glm::vec3 size = JsonToVec3(b.value("size", json::array({1, 1, 1})), glm::vec3(1.0f));
+            // #122 - "position" / "scale" like every other entity; "center" / "size" in older files.
+            const char* posKey = b.contains("position") ? "position" : "center";
+            const char* scaleKey = b.contains("scale") ? "scale" : "size";
+            glm::vec3 center = JsonToVec3(b.value(posKey, json::array({0, 0, 0})));
+            glm::vec3 size = JsonToVec3(b.value(scaleKey, json::array({1, 1, 1})), glm::vec3(1.0f));
             glm::vec3 color = JsonToVec3(b.value("color", json::array({1, 1, 1})), glm::vec3(1.0f));
             glm::vec3 rotation = JsonToVec3(b.value("rotation", json::array({0, 0, 0})));
             std::string name = b.value("name", std::string());
@@ -1661,6 +1681,7 @@ const json* CachedPrefabJson(const std::string& path) {
     if (!f.is_open()) return nullptr;
     json parsed;
     try { f >> parsed; } catch (...) { return nullptr; }
+    UpgradeLegacyBoxKeys(parsed); // #122
     return &(g_prefabPristineCache[path] = std::move(parsed));
 }
 
@@ -1738,6 +1759,7 @@ json LiveFieldValue(const World& world, entt::entity entity, const char* compone
 // Mutable counterpart of PrefabEntityObjects: the idx-th entity object in canonical order
 // (boxes, then models, then empties, each in file order), or nullptr if out of range.
 json* PrefabEntityObjectMutable(json& prefab, int idx) {
+    UpgradeLegacyBoxKeys(prefab); // #122 - the file is rewritten in the shared schema
     int seen = 0;
     for (const char* key : {"boxes", "models", "empties"})
         if (auto it = prefab.find(key); it != prefab.end() && it->is_array())
