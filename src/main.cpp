@@ -60,6 +60,7 @@
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
 #include "AssetDatabase.h"
+#include "ProjectWatcher.h" // #132
 #include "ThumbnailCache.h"
 #include "SplashScreen.h"
 #include "GLDebug.h"
@@ -71,6 +72,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <filesystem>
+#include "MaterialAsset.h"
+#include "AtomicFile.h"
+#include <fstream>
 #include <string>
 #include <algorithm>
 #include <cmath>
@@ -402,6 +406,7 @@ int main(int argc, char** argv) {
     if (buildMode) { // #174 - no window, GL or audio needed: this only copies files
         CrashHandler::SetInteractive(false);
         LayerRegistry::Load();
+        AssetDatabase::ScanProject(); // #132 - GUIDs, so moved build scenes / shaders resolve
         ProjectSettings::Load();
         ShaderLibrary::Init(EnginePaths::Resolve("assets/shaders")); // #208 - shader validation resolves engine:// refs
         ProjectSettings::BuildSettings bs = ProjectSettings::Build();
@@ -431,6 +436,10 @@ int main(int argc, char** argv) {
         const std::filesystem::path shipped = std::filesystem::path(EnginePaths::ExeDir()) / "project";
         if (std::filesystem::is_directory(shipped, pe)) ProjectPaths::SetRootOverride(shipped.string());
     }
+
+    // #132 - register the project's assets on a worker thread while the window, GL context and
+    // shaders come up. Any GUID lookup made before it finishes waits for it.
+    if (!undoBenchMode && !assetLoadBenchMode) AssetDatabase::BeginScanProject();
 
     // #146: a persistent log for bug reports (Unity's Editor.log). Headless runs get their own
     // file so a smoke test on a dev machine doesn't rotate away the last real editor session's.
@@ -618,7 +627,8 @@ int main(int argc, char** argv) {
         }
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
         ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
-        AssetDatabase::ScanProject(); // create .meta sidecars for existing assets (#333 PR 1)
+        // (#333 PR 1) .meta sidecars for existing assets: scanned in the background since start-up
+        // (#132, BeginScanProject above); the scene load below waits for it on its first lookup.
         ThumbnailCache::PruneOrphans(); // #133 — drop cached thumbnails of deleted assets
         std::string scenePath = ProjectPaths::Resolve("scenes/Sandbox.json");
         {
@@ -1189,6 +1199,11 @@ int main(int argc, char** argv) {
 
         // #89 — see the matching catch after the loop. (Loop body deliberately not re-indented.)
         bool wasFocused = true; // #132 - reimport-on-focus edge detector
+        // #132 - watch the project folder for files added / removed / renamed / edited outside the
+        // editor; SyncProjectChanges applies them once per frame. Not in a built game.
+        struct ProjectWatcherGuard { ~ProjectWatcherGuard() { ProjectWatcher::Stop(); } } projectWatcherGuard;
+        if (!playerMode) ProjectWatcher::Start(ProjectPaths::Root());
+
         // #174 - the built game starts in Play, filling the window, cursor captured.
         if (playerMode) {
             startPlay();
@@ -1208,6 +1223,7 @@ int main(int argc, char** argv) {
                 continue;
             }
             ++frameIndex;
+            if (!playerMode) editor.SyncProjectChanges(world, assets); // #132 - outside-the-editor file changes
             // #132 - coming back to the editor (alt-tab from Photoshop, a git pull) picks up
             // textures that changed on disk, like Unity's reimport on focus.
             if (!headless) {
@@ -1336,6 +1352,72 @@ int main(int argc, char** argv) {
                     SceneRendererDebug::ResetVariantDrawCounts(); // #354 per-scene variant tally
                     smokePlayScene = path.find("smoke_play") != std::string::npos;
                     smokePlayCycles = 0;
+                }
+
+                // #132 - a smoke_project_sync* scene checks the project watcher end to end: files
+                // added, moved (the .meta left behind) and deleted outside the editor, applied by
+                // SyncProjectChanges. Each step pumps the watcher (inside this one frame) until
+                // it lands or 3 s pass.
+                if (smokeSceneActive && smokeFramesRendered == 15 &&
+                    smokeScenePaths[smokeSceneIndex].find("smoke_project_sync") != std::string::npos) {
+                    namespace fs = std::filesystem;
+                    std::error_code se;
+                    const fs::path dir = ProjectPaths::Resolve("__smoke_sync");
+                    fs::remove_all(dir, se);
+                    fs::create_directories(dir, se);
+                    auto pump = [&](auto done) {
+                        for (int i = 0; i < 60 && !done(); ++i) {
+                            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                            editor.SyncProjectChanges(world, assets);
+                        }
+                        return (bool)done();
+                    };
+                    const std::string a = (dir / "a.png").string();
+                    const std::string m = (dir / "m.mat").string();
+                    const std::string c = (dir / "c.png").string();      // renamed in place
+                    const std::string b = (dir / "sub" / "c.png").string(); // then moved to a subfolder
+                    unsigned char px[4 * 4 * 4];
+                    for (int i = 0; i < 64; ++i) px[i] = (unsigned char)(i * 4);
+                    stbi_write_png(a.c_str(), 4, 4, 4, px, 16);
+                    const bool added = pump([&] { return !assets.FindListed(a).empty(); });
+                    const AssetGuid guidA = AssetDatabase::GuidForPath(a);
+                    const bool metaA = fs::exists(a + ".meta", se);
+                    // A material using it, and a scene reference (the sky path string).
+                    AtomicFile::WriteBytes(m, "{\"matVersion\":1,\"albedoMap\":\"" + fs::path(a).generic_string() + "\"}");
+                    std::this_thread::sleep_for(std::chrono::milliseconds(3100)); // past the self-write window
+                    std::ofstream(m, std::ios::app) << "\n";                        // an outside edit: re-import it
+                    const bool matAdded = pump([&] { return !assets.FindListed(m).empty(); });
+                    const std::string savedSky = world.SkyHdriPath;
+                    world.SkyHdriPath = a;
+                    // Rename it in place, alone: its .meta stays behind and must be carried over.
+                    fs::rename(a, c, se);
+                    const bool renamed = pump([&] { return !assets.FindListed(c).empty() && assets.FindListed(a).empty(); });
+                    const bool renamedGuid = guidA.IsValid() && AssetDatabase::GuidForPath(c) == guidA &&
+                                             fs::exists(c + ".meta", se) && !fs::exists(a + ".meta", se);
+                    // Then move it, with its .meta (what Explorer / git do), into a subfolder.
+                    fs::create_directories(dir / "sub", se);
+                    fs::rename(c + ".meta", b + ".meta", se);
+                    fs::rename(c, b, se);
+                    const bool moved = pump([&] { return !assets.FindListed(b).empty() && assets.FindListed(c).empty(); });
+                    const bool sameGuid = renamedGuid && AssetDatabase::GuidForPath(b) == guidA;
+                    const bool metaMoved = fs::exists(b + ".meta", se) && !fs::exists(c + ".meta", se);
+                    const bool skyFollowed = AssetDatabase::PathKey(world.SkyHdriPath) == AssetDatabase::PathKey(b);
+                    std::shared_ptr<MaterialAsset> mat = assets.LoadMaterial(assets.FindListed(m));
+                    const bool matFollowed = mat && mat->Mat.AlbedoMap &&
+                        AssetDatabase::PathKey(mat->AlbedoMapPath) == AssetDatabase::PathKey(b);
+                    world.SkyHdriPath = savedSky;
+                    // Delete it; its .meta goes with it.
+                    fs::remove(b, se);
+                    const bool removed = pump([&] { return assets.FindListed(b).empty(); });
+                    const bool metaCleaned = !fs::exists(b + ".meta", se);
+                    std::cout << "[SmokeTest]   project sync added=" << added << " meta=" << metaA << " matAdded=" << matAdded
+                              << " renamed=" << renamed << " moved=" << moved << " sameGuid=" << sameGuid << " metaMoved=" << metaMoved
+                              << " skyFollowed=" << skyFollowed << " matFollowed=" << matFollowed
+                              << " removed=" << removed << " metaCleaned=" << metaCleaned << "\n";
+                    if (!(added && metaA && matAdded && renamed && moved && sameGuid && metaMoved && skyFollowed && matFollowed && removed && metaCleaned))
+                        Log::Error("[SmokeTest] project sync check failed.");
+                    fs::remove_all(dir, se);
+                    pump([] { return false; }); // let the clean-up events drain before the next scene
                 }
 
                 // #176 - a smoke_prefab* scene round-trips Prefab Mode: save a box as a temp

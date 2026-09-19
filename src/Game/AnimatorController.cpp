@@ -1,6 +1,7 @@
 #include "AnimatorController.h"
 #include "AnimationSystem.h"
 #include "AssetLibrary.h"
+#include "AssetDatabase.h" // #132 - clip GUIDs
 #include "AtomicFile.h"
 #include "Components.h"
 #include "Log.h"
@@ -126,7 +127,7 @@ bool AnimatorController::FromJsonString(const std::string& text, AnimatorControl
             if (!s.is_object() || Str(s, "name").empty()) continue;
             State st;
             st.Name = Str(s, "name");
-            st.Clip = Str(s, "clip");
+            st.Clip = AssetDatabase::FollowRef(Str(s, "clip"), Str(s, "clipGuid")); // #132
             st.Speed = Num(s, "speed", 1.0f);
             st.Loop = Flag(s, "loop", true);
             c.States.push_back(std::move(st));
@@ -163,8 +164,11 @@ std::string AnimatorController::ToJsonString() const {
     for (const auto& p : Parameters)
         j["parameters"].push_back({{"name", p.Name}, {"type", kTypeNames[(int)p.Type]}, {"default", p.Default}});
     j["states"] = json::array();
-    for (const auto& s : States)
-        j["states"].push_back({{"name", s.Name}, {"clip", s.Clip}, {"speed", s.Speed}, {"loop", s.Loop}});
+    for (const auto& s : States) {
+        json st = {{"name", s.Name}, {"clip", s.Clip}, {"speed", s.Speed}, {"loop", s.Loop}};
+        if (const std::string g = AssetDatabase::RefGuid(s.Clip); !g.empty()) st["clipGuid"] = g; // #132
+        j["states"].push_back(std::move(st));
+    }
     j["transitions"] = json::array();
     for (const auto& t : Transitions) {
         json cs = json::array();
