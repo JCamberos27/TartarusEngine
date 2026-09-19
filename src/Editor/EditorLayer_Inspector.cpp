@@ -1160,8 +1160,13 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
     // strings (what Save() actually writes) have to be re-synced from the live texture pointers
     // before every write, since editing here mutates Mat's shared_ptr slots directly.
     auto save = [&]() {
+        // #107 — the file still holds the pre-edit contents here (edits only hit disk on
+        // commit), so it's the undo state. Recorded only when the save actually changed it.
+        std::string before = ReadTextFile(matPath);
         ma->SyncTexturePathsFromMat();
         ma->Save();
+        if (ReadTextFile(matPath) != before)
+            PushAssetUndo(world, matPath, std::move(before), "Edit " + std::filesystem::path(matPath).stem().string());
     };
 
     auto colorRow = [&](const char* label, glm::vec3 Material::* field, const char* tip) {
