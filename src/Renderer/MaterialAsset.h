@@ -51,6 +51,15 @@ struct MaterialAsset {
     // therefore stored on Mat, not in ExtraProps).
     static bool IsBuiltinProp(const std::string& name);
 
+    // #102 — metallic / roughness maps used to REPLACE their factors; now factor * map. A
+    // material saved before that (no "factorsScaleMaps" marker) gets factor 1 on every slot that
+    // has a map, so it renders exactly as it did. No-op when `savedWithScaling` is true.
+    static void UpgradeLegacyMapFactors(Material& m, bool savedWithScaling);
+    // Called when the user assigns a map in the Inspector: an emissive map with a black colour
+    // gets white, and metallic / roughness maps set their factor to 1, so the map shows as-is
+    // (0 metallic x map would hide it) - the factor can then be lowered to scale it.
+    static void DefaultFactorsForNewMap(Material& m, const std::string& slotName);
+
     // Serialized texture paths (parallel to Mat's shared_ptr slots). Written to the .mat file
     // and used by Load() to resolve textures via AssetLibrary. The shared_ptrs in Mat are only
     // filled when Load() is given a non-null lib.
