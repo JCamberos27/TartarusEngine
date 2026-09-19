@@ -177,6 +177,8 @@ void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor)
     m_IrradianceShader->Bind();
     m_IrradianceShader->SetInt("uEnvMap", 0);
     m_IrradianceShader->SetFloat("uEnvRotation", 0.0f); // #108 — procedural sky is never rotated
+    m_IrradianceShader->SetFloat("uRadianceClamp", 0.0f); // #277 — nor clamped
+    m_IrradianceShader->SetFloat("uEnvResolution", (float)kEnvSize);
     for (int face = 0; face < 6; ++face) {
         BeginCubeFace(m_IrradianceCube, face, 0, kIrradianceSize);
         SetFaceBasis(*m_IrradianceShader, face);
@@ -188,6 +190,7 @@ void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor)
     m_PrefilterShader->SetInt("uEnvMap", 0);
     m_PrefilterShader->SetFloat("uEnvResolution", (float)kEnvSize);
     m_PrefilterShader->SetFloat("uEnvRotation", 0.0f);
+    m_PrefilterShader->SetFloat("uRadianceClamp", 0.0f);
     for (int mip = 0; mip < kSpecularMips; ++mip) {
         int size = kSpecularSize >> mip;
         float roughness = (float)mip / (float)(kSpecularMips - 1);
@@ -219,8 +222,9 @@ void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor)
     m_BakedZenith = zenithColor;
 }
 
-void IblProbe::BakeFromCubemap(unsigned int envCube, int faceSize, float rotationRadians) {
+void IblProbe::BakeFromCubemap(unsigned int envCube, int faceSize, float rotationRadians, float radianceClamp) {
     m_BakedRotation = rotationRadians;
+    m_BakedRadianceClamp = radianceClamp;
     EnsureCreated();
     if (!m_Fbo) return;
 
@@ -245,6 +249,8 @@ void IblProbe::BakeFromCubemap(unsigned int envCube, int faceSize, float rotatio
     m_IrradianceShader->Bind();
     m_IrradianceShader->SetInt("uEnvMap", 0);
     m_IrradianceShader->SetFloat("uEnvRotation", rotationRadians);
+    m_IrradianceShader->SetFloat("uRadianceClamp", radianceClamp);
+    m_IrradianceShader->SetFloat("uEnvResolution", (float)(faceSize > 0 ? faceSize : kEnvSize));
     for (int face = 0; face < 6; ++face) {
         BeginCubeFace(m_IrradianceCube, face, 0, kIrradianceSize);
         if (face == 0 && !GLFramebufferCheck::Complete("IblProbe irradiance cube", m_Fbo,
@@ -273,6 +279,7 @@ void IblProbe::BakeFromCubemap(unsigned int envCube, int faceSize, float rotatio
     m_PrefilterShader->SetInt("uEnvMap", 0);
     m_PrefilterShader->SetFloat("uEnvResolution", (float)(faceSize > 0 ? faceSize : kEnvSize));
     m_PrefilterShader->SetFloat("uEnvRotation", rotationRadians);
+    m_PrefilterShader->SetFloat("uRadianceClamp", radianceClamp);
     for (int mip = 0; mip < kSpecularMips; ++mip) {
         int size = kSpecularSize >> mip;
         float roughness = (float)mip / (float)(kSpecularMips - 1);

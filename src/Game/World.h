@@ -39,6 +39,13 @@ public:
     SkySource   SkySourceMode{SkySource::Procedural};
     std::string SkyHdriPath;               // absolute or project-relative path to a .hdr file
     float       SkyRotationDegrees{0.0f};  // Y-axis rotation of the HDRI in degrees [0, 360)
+    // #277 - an HDRI that contains the sun also bakes it into ambient + reflections, so a scene
+    // that ALSO has a directional Sun counts it twice and washes out. Auto removes the HDRI's
+    // sun from the IBL bake (radiance clamped to SkyHdriSunThreshold) whenever a directional
+    // light is lit; Keep never clamps; Remove always does. The visible sky is never affected.
+    enum class HdriSunMode { Auto = 0, Keep = 1, Remove = 2 };
+    HdriSunMode SkyHdriSun{HdriSunMode::Auto};
+    float       SkyHdriSunThreshold{50.0f}; // IBL radiance ceiling; open sky is ~1-10, a sun ~1e4-1e5
 
     // Vertical gradient sky (see Sky.h) — horizon at the world's XZ plane, zenith straight up.
     // Default is pure black: a fresh scene reads as a dark stage, and the sky never washes out
