@@ -10,6 +10,7 @@
 #include "UnitTests.h"
 
 #include "AnimatorController.h"
+#include "AssetDatabase.h"
 #include "AssetGuid.h"
 #include "Components.h"
 #include "AtomicFile.h"
@@ -30,6 +31,8 @@
 #include <set>
 #include <string>
 #include <vector>
+
+using json = nlohmann::json;
 
 namespace {
 
@@ -167,6 +170,30 @@ void TestMaterialRobustness() {
     CHECK(!threw);
     std::error_code ec;
     std::filesystem::remove(path, ec);
+
+    // #208 - a material follows its shader by GUID when the .shader is renamed.
+    const auto dir = TempDir() / "shaderguid";
+    std::filesystem::remove_all(dir, ec);
+    std::filesystem::create_directories(dir, ec);
+    const auto oldShader = dir / "Old.shader", newShader = dir / "New.shader", mat = dir / "m.mat";
+    CHECK(AtomicFile::WriteBytes(oldShader, "Vertex { engine://ModelVertex.glsl }", true));
+    // A temp folder is outside the project, where EnsureGuid won't write .meta files: provide one.
+    const AssetGuid fresh = AssetGuid::Generate();
+    CHECK(AtomicFile::WriteBytes(dir / "Old.shader.meta", json({{"guid", fresh.ToString()}, {"type", "shader"}}).dump(), true));
+    const AssetGuid g = AssetDatabase::EnsureGuid(oldShader.string());
+    CHECK(g == fresh);
+    CHECK(g.IsValid());
+    const json mj = {{"matVersion", 2}, {"shader", oldShader.string()}, {"shaderGuid", g.ToString()}};
+    CHECK(AtomicFile::WriteBytes(mat, mj.dump(), true));
+    std::filesystem::rename(oldShader, newShader, ec);
+    AssetDatabase::NotifyMoved(oldShader.string(), newShader.string());
+    auto moved = MaterialAsset::Load(mat.string(), nullptr);
+    CHECK(moved && std::filesystem::path(moved->ShaderPath) == newShader);
+    // No GUID (or an unknown one) keeps the stored path.
+    CHECK(AtomicFile::WriteBytes(mat, json({{"matVersion", 2}, {"shader", "missing.shader"}}).dump(), true));
+    auto kept = MaterialAsset::Load(mat.string(), nullptr);
+    CHECK(kept && kept->ShaderPath == "missing.shader");
+    std::filesystem::remove_all(dir, ec);
 }
 
 // --- Component registry: unique names / keys, enum labels well-formed --------------------------

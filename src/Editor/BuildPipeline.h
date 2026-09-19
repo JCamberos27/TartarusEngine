@@ -29,6 +29,7 @@ struct Report {
     std::vector<std::pair<std::string, std::uint64_t>> BytesByGroup;   // "Engine", "Scenes", ...
     std::vector<std::pair<std::string, std::uint64_t>> LargestFiles;  // relative path, bytes (top 10)
     double Seconds = 0.0;
+    int ShadersChecked = 0; // #208 - project .shader descriptors whose stages/includes were validated
 };
 
 // Where a build with these settings lands (resolves the empty default).

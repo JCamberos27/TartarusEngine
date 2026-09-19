@@ -4,6 +4,8 @@
 #include "PlayerConfig.h"
 #include "ProjectPaths.h"
 #include "ProjectSettings.h"
+#include "ShaderAsset.h"
+#include "ShaderLibrary.h"
 
 #include <algorithm>
 #include <chrono>
@@ -129,6 +131,38 @@ Report Build(const ProjectSettings::BuildSettings& s) {
         if (!fs::is_regular_file(projectRoot / sc, ec)) return fail("scene '" + sc + "' doesn't exist.");
     }
 
+    // #208 - every project shader must compile from files the build ships: its stages and
+    // includes have to exist and live in the project (copied) or the engine shader folder.
+    {
+        const std::string projectKey = ShaderLibrary::DependencyKey(projectRoot.string());
+        const std::string engineKey = ShaderLibrary::DependencyKey(ShaderLibrary::Dir());
+        auto under = [](const std::string& key, const std::string& root) {
+            return !root.empty() && key.size() > root.size() && key.compare(0, root.size(), root) == 0 &&
+                   (key[root.size()] == '/' || root.back() == '/');
+        };
+        int shaders = 0;
+        std::error_code sec;
+        for (auto it = fs::recursive_directory_iterator(projectRoot, fs::directory_options::skip_permission_denied, sec);
+             !sec && it != fs::recursive_directory_iterator(); it.increment(sec)) {
+            if (it.depth() == 0 && it->is_directory() && IsEditorOnlyProjectDir(it->path().filename().string())) {
+                it.disable_recursion_pending();
+                continue;
+            }
+            if (!it->is_regular_file() || it->path().extension() != ".shader") continue;
+            const std::string rel = fs::relative(it->path(), projectRoot, sec).generic_string();
+            auto sa = ShaderAsset::ParseFile(it->path().string());
+            if (!sa) return fail("shader '" + rel + "' doesn't parse (the Console says why).");
+            std::vector<std::string> files;
+            std::string problem;
+            if (!sa->CollectSourceFiles(files, problem)) return fail("shader '" + rel + "': " + problem + ".");
+            for (const std::string& f : files)
+                if (!under(f, projectKey) && !under(f, engineKey))
+                    return fail("shader '" + rel + "' uses '" + f + "', which is outside the project; move it into the project.");
+            ++shaders;
+        }
+        r.ShadersChecked = shaders;
+    }
+
     const fs::path exeDir(EnginePaths::ExeDir());
     fs::path exe;
 #ifdef _WIN32
@@ -200,8 +234,8 @@ Report Build(const ProjectSettings::BuildSettings& s) {
     r.Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     r.Ok = true;
     char msg[160];
-    std::snprintf(msg, sizeof(msg), "Built %d files (%.1f MB) in %.1f s.", r.FileCount,
-                  (double)r.TotalBytes / (1024.0 * 1024.0), r.Seconds);
+    std::snprintf(msg, sizeof(msg), "Built %d files (%.1f MB) in %.1f s; %d project shader(s) checked.", r.FileCount,
+                  (double)r.TotalBytes / (1024.0 * 1024.0), r.Seconds, r.ShadersChecked);
     r.Message = msg;
     Log::Info(std::string("Build: ") + msg + " -> " + r.OutputDir);
     return r;
