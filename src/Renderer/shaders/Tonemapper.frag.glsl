@@ -11,6 +11,43 @@ uniform sampler2D uBloom;
 uniform int   uBloomEnabled;
 uniform float uBloomIntensity;
 
+// #162 - colour grading (linear HDR, before the curve) and vignette (display space, after).
+uniform vec3  uWhiteBalance;   // LMS gains from Temperature/Tint (1,1,1 = neutral)
+uniform vec3  uColorFilter;    // linear multiply
+uniform float uContrast;       // 1 = neutral; scales log distance from mid grey
+uniform float uSaturation;     // 1 = neutral
+uniform float uVignette;       // 0 = off
+uniform float uVignetteSmoothness;
+uniform float uAspect;         // width / height, so the vignette is round
+uniform int   uDither;         // 1 = add +-0.5 LSB noise before 8-bit quantization
+
+// Unity's white-balance matrices (linear sRGB <-> LMS), row-major lists: `v * mat3(list)` = M v.
+const mat3 kLinToLms = mat3(3.90405e-1, 5.49941e-1, 8.92632e-3,
+                            7.08416e-2, 9.63172e-1, 1.35775e-3,
+                            2.31082e-2, 1.28021e-1, 9.36245e-1);
+const mat3 kLmsToLin = mat3( 2.85847e+0, -1.62879e+0, -2.48910e-2,
+                            -2.10182e-1,  1.15820e+0,  3.24281e-4,
+                            -4.18120e-2, -1.18169e-1,  1.06867e+0);
+
+vec3 Grade(vec3 c) {
+    c = ((c * kLinToLms) * uWhiteBalance) * kLmsToLin;
+    c *= uColorFilter;
+    // Contrast around 18% grey in log space, so it pivots on mid-tones and never clips HDR.
+    const float kMidGrey = 0.18;
+    c = kMidGrey * pow(max(c, vec3(0.0)) / kMidGrey, vec3(uContrast));
+    float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    return max(luma + (c - luma) * uSaturation, vec3(0.0));
+}
+
+// Exact sRGB OETF (was pow(1/2.2), which crushes the darkest steps).
+vec3 LinearToSrgb(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+}
+
+// Interleaved gradient noise (Jimenez 2014): cheap, well-distributed per-pixel dither.
+float Ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+
 // --- ACES (Narkowicz 2015 fitted) --------------------------------------------------------
 vec3 TonemapACES(vec3 x) {
     const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
@@ -57,10 +94,21 @@ void main() {
     if (uBloomEnabled != 0)
         hdr += texture(uBloom, vUV).rgb * uBloomIntensity;
 
+    hdr = Grade(hdr);
+
     vec3 mapped;
     if (uOperator == 1)      mapped = TonemapACES(hdr);
     else if (uOperator == 2) mapped = TonemapAgX(hdr);
     else                     mapped = hdr / (hdr + vec3(1.0)); // Reinhard
 
-    FragColor = vec4(pow(clamp(mapped, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
+    if (uVignette > 0.0) {
+        vec2 d = (vUV - 0.5) * vec2(uAspect, 1.0) * 2.0 * uVignette / max(uAspect, 1.0);
+        mapped *= pow(clamp(1.0 - dot(d, d), 0.0, 1.0), max(uVignetteSmoothness * 5.0, 0.01));
+    }
+
+    vec3 display = LinearToSrgb(mapped);
+    // Banding fix: +-0.5 LSB triangular-ish noise so smooth gradients (sky, fog) dither
+    // instead of stepping when written to the 8-bit target.
+    if (uDither != 0) display += (Ign(gl_FragCoord.xy) - 0.5) / 255.0;
+    FragColor = vec4(display, 1.0);
 }
