@@ -54,6 +54,8 @@ struct AssetGridCell {
 // In-game editor overlay (Dear ImGui + ImGuizmo): import assets, place/inspect
 // entities, manipulate them with viewport gizmos. Toggle with F1; gameplay pauses
 // while the editor is open.
+namespace BuildPipeline { struct Report; } // #174
+
 class EditorLayer {
 public:
     // Declared (rather than left implicit) and defined in the .cpp — a stylistic match for the
@@ -200,6 +202,7 @@ public:
     // things (which group to land on), they just open the same window instead of two.
     void OpenPreferences() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; }
     void OpenProjectSettings() { m_ShowPreferences = true; m_SettingsGroupIsProject = true; }
+    void OpenBuildSettings() { OpenProjectSettings(); m_ProjSettingsCategory = kBuildSettingsCategory; } // #174
     // Phase 6 item 11 — Help > Shortcuts jumps straight to the existing press-to-bind editor
     // (Preferences category 5) instead of leaving it something you only find by browsing.
     void OpenShortcutsReference() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; m_PrefsCategory = 5; }
@@ -1062,6 +1065,11 @@ private:
 
     void DrawProjectSettingsBody(World& world); // "THIS PROJECT" group's body, called from DrawSettingsWindow
     int m_ProjSettingsCategory = 0;
+    // #174 - Project Settings > Build (EditorLayer_Build.cpp).
+    static constexpr int kBuildSettingsCategory = 2;
+    void DrawBuildSettingsBody();
+    void RunBuild(bool runAfter);
+    std::shared_ptr<BuildPipeline::Report> m_LastBuildReport;
     char m_NewTagBuf[48] = {};
 
     // Physics debug panel + Play HUD overlay (#185). Host-side (EditorLayer is in the exe), so

@@ -17,6 +17,7 @@ namespace {
 PhysicsSettings g_Physics;
 TimeSettings g_Time;
 AudioSettings g_Audio; // #171
+BuildSettings g_Build; // #174
 std::vector<std::string> g_Tags;
 
 const std::string& SettingsPath() {
@@ -50,6 +51,8 @@ const TimeSettings&    Time()           { return g_Time; }
 TimeSettings&          MutableTime()    { return g_Time; }
 const AudioSettings&   Audio()          { return g_Audio; }
 AudioSettings&         MutableAudio()   { return g_Audio; }
+const BuildSettings&   Build()          { return g_Build; }
+BuildSettings&         MutableBuild()   { return g_Build; }
 
 const std::vector<std::string>& Tags() { return g_Tags; }
 
@@ -66,6 +69,7 @@ void RemoveTag(const std::string& name) {
 
 void Load() {
     g_Physics = PhysicsSettings{};
+    g_Build = BuildSettings{};
     g_Tags.clear();
 
     std::ifstream in(SettingsPath());
@@ -129,6 +133,34 @@ void Load() {
                 if ((*b)[i].is_number()) g_Audio.BusVolume[i] = std::clamp((*b)[i].get<float>(), 0.0f, 1.0f);
     }
 
+    if (const auto it = root.find("build"); it != root.end() && it->is_object()) { // #174
+        const json& b = *it;
+        auto str = [&b](const char* key, const std::string& fallback) {
+            const auto f = b.find(key);
+            return (f != b.end() && f->is_string()) ? f->get<std::string>() : fallback;
+        };
+        auto integer = [&b](const char* key, int fallback) {
+            const auto f = b.find(key);
+            return (f != b.end() && f->is_number()) ? f->get<int>() : fallback;
+        };
+        auto boolean = [&b](const char* key, bool fallback) {
+            const auto f = b.find(key);
+            return (f != b.end() && f->is_boolean()) ? f->get<bool>() : fallback;
+        };
+        g_Build.ProductName = str("productName", g_Build.ProductName);
+        g_Build.CompanyName = str("companyName", g_Build.CompanyName);
+        g_Build.Version     = str("version", g_Build.Version);
+        g_Build.OutputDir   = str("outputDir", g_Build.OutputDir);
+        g_Build.Width       = std::clamp(integer("width", g_Build.Width), 320, 16384);
+        g_Build.Height      = std::clamp(integer("height", g_Build.Height), 200, 16384);
+        g_Build.Fullscreen  = boolean("fullscreen", g_Build.Fullscreen);
+        g_Build.VSync       = boolean("vsync", g_Build.VSync);
+        g_Build.DevelopmentBuild = boolean("developmentBuild", g_Build.DevelopmentBuild);
+        if (const auto s = b.find("scenes"); s != b.end() && s->is_array())
+            for (const auto& sc : *s)
+                if (sc.is_string() && !sc.get<std::string>().empty()) g_Build.Scenes.push_back(sc.get<std::string>());
+    }
+
     if (const auto it = root.find("tags"); it != root.end() && it->is_array()) {
         for (const auto& t : *it) {
             if (t.is_string()) AddTag(t.get<std::string>());
@@ -153,6 +185,18 @@ void Save() {
     root["audio"] = {
         {"masterVolume", g_Audio.MasterVolume},
         {"busVolumes", std::vector<float>(std::begin(g_Audio.BusVolume), std::end(g_Audio.BusVolume))},
+    };
+    root["build"] = {
+        {"productName", g_Build.ProductName},
+        {"companyName", g_Build.CompanyName},
+        {"version", g_Build.Version},
+        {"outputDir", g_Build.OutputDir},
+        {"scenes", g_Build.Scenes},
+        {"width", g_Build.Width},
+        {"height", g_Build.Height},
+        {"fullscreen", g_Build.Fullscreen},
+        {"vsync", g_Build.VSync},
+        {"developmentBuild", g_Build.DevelopmentBuild},
     };
     root["tags"] = g_Tags;
 

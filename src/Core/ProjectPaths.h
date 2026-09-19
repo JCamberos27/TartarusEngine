@@ -18,6 +18,10 @@ namespace ProjectPaths {
 // anywhere still works, exactly as it did before). Resolved once, on first use.
 const std::string& Root();
 
+// #174 - a built player pins the project to the folder shipped next to its exe instead of
+// walking up from the working directory. Must be called before the first Root().
+void SetRootOverride(const std::string& root);
+
 // Root() joined with `name`, as a native path string.
 std::string Resolve(const std::string& name);
 

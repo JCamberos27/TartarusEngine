@@ -208,6 +208,8 @@ void BuildDefaultTable() {
     Register("history.toggle",   "Toggle History",         Ctx_Global, CSk(ImGuiKey_H));
     Register("lighting.toggle",  "Toggle Lighting Panel",  Ctx_Global, CSk(ImGuiKey_L));
     Register("project.settings", "Open Project Settings",  Ctx_Global, CSk(ImGuiKey_P));
+    Register("build.settings",   "Open Build Settings",    Ctx_Global, CSk(ImGuiKey_B)); // #174
+    Register("build.run",        "Build and Run",          Ctx_Global, Ck(ImGuiKey_B));
 
     // --- Capture (Ctx_App, evaluated via TriggeredGlfw like the play controls above — capture
     // has to work even with editor UI hidden / no panel focused). ---

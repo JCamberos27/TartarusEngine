@@ -362,6 +362,17 @@ bool Window::ApplyPlacement(const Placement& p) {
     return true;
 }
 
+void Window::UseStandardFrame() {
+#if defined(_WIN32)
+    RemoveCustomFrame(m_Handle);
+    HWND hwnd = glfwGetWin32Window(m_Handle);
+    MARGINS m{ 0, 0, 0, 0 };
+    DwmExtendFrameIntoClientArea(hwnd, &m);
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                 SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+#endif
+}
+
 void Window::Show() {
     glfwShowWindow(m_Handle);
 }
