@@ -13,17 +13,19 @@ void PointShadowMap::Release() {
     if (m_DepthArray) { glDeleteTextures(1, &m_DepthArray); m_DepthArray = 0; }
 }
 
-void PointShadowMap::Configure(int resolution) {
+void PointShadowMap::Configure(int resolution, int cubes) {
     resolution = std::clamp(resolution, 256, 2048);
-    if (m_DepthArray != 0 && resolution == m_Resolution) return;
+    cubes = std::clamp(cubes, 1, kMaxPoints);
+    if (m_DepthArray != 0 && resolution == m_Resolution && cubes == m_Cubes) return;
 
     Release();
     m_Resolution = resolution;
+    m_Cubes = cubes;
     m_CompleteChecked = false; // re-check after a resolution change (audit #358)
 
     // A cube-map array is a 2D array with depth = numCubes * 6; layer = cube*6 + face.
     glCreateTextures(GL_TEXTURE_CUBE_MAP_ARRAY, 1, &m_DepthArray);
-    glTextureStorage3D(m_DepthArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, kMaxPoints * 6);
+    glTextureStorage3D(m_DepthArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, cubes * 6);
     glTextureParameteri(m_DepthArray, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(m_DepthArray, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTextureParameteri(m_DepthArray, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -40,7 +42,7 @@ void PointShadowMap::Configure(int resolution) {
 }
 
 void PointShadowMap::BeginFace(int slot, int face) const {
-    slot = std::clamp(slot, 0, kMaxPoints - 1);
+    slot = std::clamp(slot, 0, std::max(m_Cubes, 1) - 1);
     face = std::clamp(face, 0, 5);
     glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
     glNamedFramebufferTextureLayer(m_Fbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0, slot * 6 + face);

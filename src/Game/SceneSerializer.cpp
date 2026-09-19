@@ -14,6 +14,8 @@
 #include "EditorSettings.h"
 
 #include "Log.h"
+#include "SpotShadowMap.h"
+#include "PointShadowMap.h"
 
 #include <json.hpp>
 #include <fstream>
@@ -904,6 +906,8 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         root["shadowResolution"] = world.ShadowResolution;
         root["shadowCascades"] = world.ShadowCascades;
         root["shadowDistance"] = world.ShadowDistance;
+        root["maxSpotShadows"] = world.MaxSpotShadows;
+        root["maxPointShadows"] = world.MaxPointShadows;
     }
 
     // Every box/model entity gets a stable 0-based id (assigned in the exact order written
@@ -1224,6 +1228,9 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
         world.SkyRotationDegrees     = root.value("skyRotationDegrees",     0.0f);
         world.SkyHdriSun             = (World::HdriSunMode)std::clamp(root.value("skyHdriSun", 0), 0, 2); // #277
         world.SkyHdriSunThreshold    = std::max(1.0f, root.value("skyHdriSunThreshold", 50.0f));
+        // #110 - local-light shadow budgets; absent in older scenes -> the old fixed caps.
+        world.MaxSpotShadows  = std::clamp(root.value("maxSpotShadows", 4), 0, SpotShadowMap::kMaxSpots);
+        world.MaxPointShadows = std::clamp(root.value("maxPointShadows", 2), 0, PointShadowMap::kMaxPoints);
 
         // #9, Phase M item 1 — v3+ scenes own these directly; a pre-v3 file has none of these
         // keys (BuildSceneJson only started writing them at v3), which is exactly the signal to

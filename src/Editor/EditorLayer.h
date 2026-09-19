@@ -660,7 +660,11 @@ public:
 
     // #110 — shadowed spot/point lights that lost the per-frame shadow-slot competition (4 spot,
     // 2 point). main.cpp publishes the set every frame; the Light inspector warns on them.
-    void SetShadowOverBudget(std::set<entt::entity> lights) { m_ShadowOverBudget = std::move(lights); }
+    void SetShadowOverBudget(std::set<entt::entity> lights, int spotBudget, int pointBudget) {
+        m_ShadowOverBudget = std::move(lights);
+        m_SpotShadowBudget = spotBudget;
+        m_PointShadowBudget = pointBudget;
+    }
 
     // World-space center of the current selection's bounding box (single object or group) —
     // main.cpp reads this to know what to orbit the editor camera around while Alt+Left-drag
@@ -783,6 +787,7 @@ private:
     bool m_CachedPlaying = false;
     bool m_CachedPaused = false;
     std::set<entt::entity> m_ShadowOverBudget; // #110, see SetShadowOverBudget
+    int m_SpotShadowBudget = 4, m_PointShadowBudget = 2; // #110 - this frame's caps, for the warning tooltip
     bool m_CachedPlayMaximized = false;
     bool m_GameInputActive = false; // see SetGameInputActive
     // Set by Settings > Reset Layout; consumed at the top of Draw()'s dockspace setup to

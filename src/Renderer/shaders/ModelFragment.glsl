@@ -97,26 +97,26 @@ uniform float uShadowMapResolution;
 // light's Params.y. The map stores LINEAR distance-to-light / far, so the compare below is
 // against distance(fragment, uSpotShadowPos) / uSpotShadowFar — bias uniform in world space,
 // shadow reaches the full light Range. Unit 9 (the sun CSM is unit 8, material maps 1..7).
-uniform int  uSpotShadowCount;
-uniform mat4 uSpotShadowVP[4];
-uniform vec3 uSpotShadowPos[4];
-uniform float uSpotShadowFar[4];
-uniform float uSpotShadowHalfTan[4]; // tan(half-FOV) of each spot's map — the world texel footprint
+uniform int  uSpotShadowCount; // arrays below are sized to SpotShadowMap::kMaxSpots (#110)
+uniform mat4 uSpotShadowVP[16];
+uniform vec3 uSpotShadowPos[16];
+uniform float uSpotShadowFar[16];
+uniform float uSpotShadowHalfTan[16]; // tan(half-FOV) of each spot's map — the world texel footprint
                                      // at distance d is 2*d*halfTan/res, NOT the 2*d/res that a
                                      // 90° cube face gives; a narrow spot was over-offsetting (#134)
-uniform float uSpotShadowBias[4];       // per-light x depth bias   (#140 phase 2, default 1.0)
-uniform float uSpotShadowNormalBias[4]; // per-light x normal offset
-uniform float uSpotShadowSoftness[4];   // per-light x PCF tap spread
+uniform float uSpotShadowBias[16];       // per-light x depth bias   (#140 phase 2, default 1.0)
+uniform float uSpotShadowNormalBias[16]; // per-light x normal offset
+uniform float uSpotShadowSoftness[16];   // per-light x PCF tap spread
 uniform sampler2DArrayShadow uSpotShadowMap;
 uniform float uSpotShadowMapResolution; // known CPU-side (SpotShadowMap::Configure) (#190)
 
 // Point-light cube shadow maps (#119): one depth cube per casting point light, indexed by the
 // light's Params.y. Also stores linear distance / uPointShadowFar[slot] (the light's Range).
 // Unit 10.
-uniform int   uPointShadowCount;
-uniform float uPointShadowFar[2];
-uniform float uPointShadowBias[2];       // per-light x depth bias   (#140 phase 2, default 1.0)
-uniform float uPointShadowNormalBias[2]; // per-light x normal offset
+uniform int   uPointShadowCount; // arrays below are sized to PointShadowMap::kMaxPoints (#110)
+uniform float uPointShadowFar[8];
+uniform float uPointShadowBias[8];       // per-light x depth bias   (#140 phase 2, default 1.0)
+uniform float uPointShadowNormalBias[8]; // per-light x normal offset
 uniform samplerCubeArrayShadow uPointShadowMap;
 uniform float uPointShadowMapResolution; // known CPU-side (PointShadowMap::Configure) (#190)
 

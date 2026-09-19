@@ -13,16 +13,18 @@ void SpotShadowMap::Release() {
     if (m_DepthArray) { glDeleteTextures(1, &m_DepthArray); m_DepthArray = 0; }
 }
 
-void SpotShadowMap::Configure(int resolution) {
+void SpotShadowMap::Configure(int resolution, int layers) {
     resolution = std::clamp(resolution, 256, 4096);
-    if (m_DepthArray != 0 && resolution == m_Resolution) return;
+    layers = std::clamp(layers, 1, kMaxSpots);
+    if (m_DepthArray != 0 && resolution == m_Resolution && layers == m_Layers) return;
 
     Release();
     m_Resolution = resolution;
+    m_Layers = layers;
     m_CompleteChecked = false; // re-check after a resolution change (audit #358)
 
     glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_DepthArray);
-    glTextureStorage3D(m_DepthArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, kMaxSpots);
+    glTextureStorage3D(m_DepthArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, layers);
     glTextureParameteri(m_DepthArray, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(m_DepthArray, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTextureParameteri(m_DepthArray, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
@@ -40,7 +42,7 @@ void SpotShadowMap::Configure(int resolution) {
 }
 
 void SpotShadowMap::Begin(int i) const {
-    i = std::clamp(i, 0, kMaxSpots - 1);
+    i = std::clamp(i, 0, std::max(m_Layers, 1) - 1);
     glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
     glNamedFramebufferTextureLayer(m_Fbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0, i);
     if (!m_CompleteChecked) { // audit #358 — layered FBO: check once, after a layer is attached
