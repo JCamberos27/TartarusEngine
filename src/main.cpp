@@ -268,6 +268,29 @@ static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, 
     return p;
 }
 
+// #165 - the scene's First Person Controller (first active one in creation order), if any.
+static entt::entity FindFirstPersonController(const World& world) {
+    entt::entity best = entt::null;
+    int bestOrder = 0x7fffffff;
+    for (auto e : world.Registry.view<const FirstPersonControllerComponent, const TransformComponent>()) {
+        if (world.Registry.all_of<InactiveTag>(e)) continue;
+        const auto* ord = world.Registry.try_get<OrderComponent>(e);
+        int o = ord ? ord->Value : 0;
+        if (o < bestOrder) { bestOrder = o; best = e; }
+    }
+    return best;
+}
+
+// #165 - yaw/pitch (Camera's convention) of an entity's forward (-Z) axis. Roll is dropped:
+// Camera has none.
+static void YawPitchFromWorld(const glm::mat4& m, float& yawDeg, float& pitchDeg) {
+    glm::vec3 f = -glm::vec3(m[2]);
+    const float len = glm::length(f);
+    f = len > 1e-6f ? f / len : glm::vec3(0.0f, 0.0f, -1.0f);
+    yawDeg = glm::degrees(std::atan2(f.z, f.x));
+    pitchDeg = std::clamp(glm::degrees(std::asin(std::clamp(f.y, -1.0f, 1.0f))), -89.0f, 89.0f);
+}
+
 static entt::entity FindActiveSceneCamera(const World& world) {
     entt::entity best = entt::null;
     int bestOrder = 0x7fffffff;
@@ -501,6 +524,12 @@ int main(int argc, char** argv) {
         }
         Player player;
         GravityGun gravityGun;
+        // #165 - what Play renders through: the first-person player (playUsesPlayer), or the
+        // scene's Camera entity, mirrored each frame into playSceneCam.
+        bool playUsesPlayer = true;
+        bool playGravityGun = true;
+        entt::entity playCameraEntity = entt::null;
+        Camera playSceneCam;
         // Default spawn/editor-camera start: south of the Sandbox's Character Plaza, looking north
         // over the animated Y Bots with the physics playground (east) and movement course (west)
         // in view either side.
@@ -961,14 +990,40 @@ int main(int argc, char** argv) {
             gameInputEngaged = false;
             gameView.OnPlayStateChanged(true);
             editor.RequestGameTabFocus(); // show what you just started
-            // Drop the player in from wherever the editor camera is looking, so pressing Play
-            // inspects the part of the level you were just working on. The editor camera is left
-            // where it is — the Scene tab stays usable during play.
-            player.Cam.Position = editorCamera.Position;
-            player.Cam.Yaw = editorCamera.Yaw;
-            player.Cam.Pitch = editorCamera.Pitch;
-            player.Velocity = glm::vec3(0.0f);
+            // #165 - pick what Play runs: a First Person Controller entity (spawn there, with its
+            // settings), else the scene's Camera (no player), else the legacy default player
+            // dropped in at the editor camera so Play inspects what you were just working on.
+            // The editor camera is left where it is — the Scene tab stays usable during play.
+            player = Player{};
             player.Gravity = ProjectSettings::Physics().Gravity.y; // #236 A4 — project-scoped
+            playUsesPlayer = true;
+            playGravityGun = true;
+            playCameraEntity = entt::null;
+            if (entt::entity ctrl = FindFirstPersonController(world); ctrl != entt::null) {
+                const auto& fp = world.Registry.get<FirstPersonControllerComponent>(ctrl);
+                player.MoveSpeed = fp.MoveSpeed;
+                player.SprintMultiplier = fp.SprintMultiplier;
+                player.JumpSpeed = fp.JumpSpeed;
+                player.EyeHeight = fp.EyeHeight;
+                player.Size = glm::vec3(fp.CapsuleRadius * 2.0f, std::max(fp.CapsuleHeight, fp.CapsuleRadius * 2.0f + 0.1f),
+                                        fp.CapsuleRadius * 2.0f);
+                player.MouseSensitivity = fp.MouseSensitivity;
+                player.InvertY = fp.InvertY;
+                player.KillY = fp.KillY;
+                player.Cam.Fov = fp.FieldOfView;
+                playGravityGun = fp.GravityGun;
+                const glm::mat4 spawn = world.ComposeWorldTransform(ctrl);
+                player.RespawnFeet = glm::vec3(spawn[3]);
+                player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
+                YawPitchFromWorld(spawn, player.Cam.Yaw, player.Cam.Pitch);
+            } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
+                playUsesPlayer = false;
+                playGravityGun = false;
+            } else {
+                player.Cam.Position = editorCamera.Position;
+                player.Cam.Yaw = editorCamera.Yaw;
+                player.Cam.Pitch = editorCamera.Pitch;
+            }
             window.SetCursorLocked(false); // click the Game view to take control
         };
         auto stopPlay = [&]() {
@@ -1239,6 +1294,12 @@ int main(int argc, char** argv) {
                                       << " t=" << m->AnimationTime() << " lastBone=(" << bone.x << ", " << bone.y
                                       << ", " << bone.z << ")\n";
                         }
+                        { // #165 - which camera Play ran through, and where it ended up
+                            const Camera& pc = playUsesPlayer ? player.Cam : playSceneCam;
+                            std::cout << "[SmokeTest]   play camera=" << (playUsesPlayer ? "player" : "scene")
+                                      << " pos=(" << pc.Position.x << ", " << pc.Position.y << ", " << pc.Position.z
+                                      << ") yaw=" << pc.Yaw << " fov=" << pc.Fov << "\n";
+                        }
                         std::cout << "[SmokeTest]   -> Stop\n";  togglePlay(); ++smokePlayCycles;
                     }
                 }
@@ -1404,7 +1465,22 @@ int main(int argc, char** argv) {
             // The camera the Game view (and maximized play) renders from: the player while
             // playing, otherwise the editor's own free camera (so the Game panel still previews
             // something sensible while editing).
-            Camera* gameCam = playing ? &player.Cam : &editorCamera;
+            // #165 - or the scene's Camera entity, when Play runs without a player. Mirrored
+            // from the entity every frame so an animated/parented camera moves the shot.
+            if (playing && !playUsesPlayer) {
+                if (!world.Registry.valid(playCameraEntity) || !world.Registry.all_of<CameraComponent>(playCameraEntity))
+                    playCameraEntity = FindActiveSceneCamera(world); // e.g. after a scene reload mid-play
+                if (playCameraEntity != entt::null) {
+                    const auto& cc = world.Registry.get<CameraComponent>(playCameraEntity);
+                    const glm::mat4 camModel = world.ComposeWorldTransform(playCameraEntity);
+                    playSceneCam.Position = glm::vec3(camModel[3]);
+                    YawPitchFromWorld(camModel, playSceneCam.Yaw, playSceneCam.Pitch);
+                    playSceneCam.Fov = cc.FovDegrees;
+                    playSceneCam.NearPlane = cc.NearPlane;
+                    playSceneCam.FarPlane = cc.FarPlane;
+                }
+            }
+            Camera* gameCam = !playing ? &editorCamera : playUsesPlayer ? &player.Cam : &playSceneCam;
 
             // "Does the running game own the mouse/keyboard this frame?" — the cursor-lock state
             // while maximized, the click-to-focus latch while in a panel.
@@ -1475,12 +1551,12 @@ int main(int argc, char** argv) {
             if (simThisFrame) {
                 // The gravity gun (#185, promoted off its old debug harness) is a normal part of
                 // Play mode, not a debug tool — always live whenever the game has input focus.
-                if (gameHasInput) {
+                if (gameHasInput && playUsesPlayer && playGravityGun) {
                     gravityGun.Update(gameDt, player);
                 }
                 // G = explosion shockwave at the player. A separate physics *debug/test* tool
                 // (not part of the gravity gun above) — stays behind Gizmos > Physics debug input.
-                if (gameHasInput && EditorSettings::Get().PhysicsDebugInput) {
+                if (gameHasInput && playUsesPlayer && EditorSettings::Get().PhysicsDebugInput) {
                     if (Input::IsKeyPressed(GLFW_KEY_G)) {
                         const float c[3] = {player.Cam.Position.x,
                                             player.Cam.Position.y - player.EyeHeight,
@@ -1502,11 +1578,11 @@ int main(int argc, char** argv) {
                 // reach physics only). The game module's FixedUpdate rides the physics sub-steps.
                 PhysicsWorld::Step(gameDt, world,
                                    [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); });
-                player.Update(gameDt, world, window.Handle(), gameHasInput);
+                if (playUsesPlayer) player.Update(gameDt, world, window.Handle(), gameHasInput);
                 // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
                 // against wherever the player is looking from, updated after the move so the
                 // listener matches the frame that's about to be rendered.
-                AudioEngine::SetListener(player.Cam.Position, player.Cam.Front(), player.Cam.Up());
+                AudioEngine::SetListener(gameCam->Position, gameCam->Front(), gameCam->Up());
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
                 UpdateAnimators(world, gameDt);
@@ -2443,8 +2519,8 @@ int main(int argc, char** argv) {
                 glm::mat4 gvView, gvProj;
                 glm::vec3 gvEye;
                 // While editing, render through a placed Camera entity if the scene has one, so
-                // the Game panel previews the framed shot (#36 B10). Play mode always uses the
-                // first-person controller camera.
+                // the Game panel previews the framed shot (#36 B10). In Play, gameCam already is
+                // the right camera (#165: the player, or the scene Camera mirrored into it).
                 entt::entity sceneCamEnt = playing ? entt::null : FindActiveSceneCamera(world);
                 if (sceneCamEnt != entt::null) {
                     const auto& cc = world.Registry.get<CameraComponent>(sceneCamEnt);
