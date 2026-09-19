@@ -46,6 +46,9 @@ public:
     // cursor is over the toolbar's empty area — that region acts as the drag handle
     // (double-click to maximize/restore). No-op off Windows.
     void SetTitleBarDragActive(bool active) { m_TitleBarDragActive = active; }
+    // #174 - a windowed built game has no editor toolbar to drag by: put the normal OS title bar
+    // back. (Fullscreen players keep the custom frame, which borderless fullscreen relies on.)
+    void UseStandardFrame();
     bool TitleBarDragActive() const { return m_TitleBarDragActive; }
 
     // Swap-interval control for the current GL context. mode: 0 = off, 1 = on (sync to

@@ -52,6 +52,9 @@
 #include "GravityGun.h" // the player's always-on grab/throw ability
 #include "GameViewPanel.h"
 #include "ProjectPaths.h"
+#include "PlayerConfig.h" // #174
+#include "BuildPipeline.h"
+#include "UserPaths.h"
 #include "EnginePaths.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
@@ -70,6 +73,7 @@
 #include <string>
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <cstdint>
 #include <thread>
 #include <vector>
@@ -338,6 +342,10 @@ int main(int argc, char** argv) {
     // external texture/model assets to bench against, so this synthesizes PNGs the same way
     // --undo-bench synthesizes entities.
     bool assetLoadBenchMode = false;
+    // #174 - `--build [outDir]`: File > Build without the UI (CI packaging, scripted builds).
+    // Uses Project Settings > Build; outDir overrides its Output Folder. Exit 0 on success.
+    bool buildMode = false;
+    std::string buildOutArg;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--smoke-test") {
@@ -347,6 +355,10 @@ int main(int argc, char** argv) {
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
         else if (a == "--undo-bench") { undoBenchMode = true; }
         else if (a == "--asset-load-bench") { assetLoadBenchMode = true; }
+        else if (a == "--build") {
+            buildMode = true;
+            if (i + 1 < argc && argv[i + 1][0] != '-') buildOutArg = argv[++i];
+        }
     }
     // #173 - `--unit-tests`: pure C++ tests, run before any window / GL / audio / PhysX exists
     // so they work on a GPU-less CI runner. Exit code = failed checks (0 = pass).
@@ -386,10 +398,41 @@ int main(int argc, char** argv) {
     // the working directory, so a launch from the repo root or an unrelated CWD still finds
     // them (audit #355 / BUG-102).
     EnginePaths::Init(argv[0]);
+    if (buildMode) { // #174 - no window, GL or audio needed: this only copies files
+        CrashHandler::SetInteractive(false);
+        LayerRegistry::Load();
+        ProjectSettings::Load();
+        ProjectSettings::BuildSettings bs = ProjectSettings::Build();
+        if (!buildOutArg.empty()) bs.OutputDir = std::filesystem::absolute(buildOutArg).string();
+        if (bs.Scenes.empty()) bs.Scenes.push_back("scenes/Sandbox.json");
+        const BuildPipeline::Report r = BuildPipeline::Build(bs);
+        std::cout << "[Build] " << r.Message << "\n";
+        if (r.Ok) {
+            std::cout << "[Build] " << r.ExePath << "\n";
+            for (const auto& [group, bytes] : r.BytesByGroup)
+                std::cout << "[Build]   " << group << ": " << bytes / 1024 << " KB\n";
+        }
+        return r.Ok ? 0 : 1;
+    }
+
+    // #174 - a player.json next to the exe (written by File > Build) makes this run as the built
+    // game: its own project folder and user-data folder, straight into Play, no editor UI.
+    PlayerConfig playerCfg;
+    const bool playerMode = !headless &&
+        PlayerConfig::Load((std::filesystem::path(EnginePaths::ExeDir()) / PlayerConfig::kFileName).string(), playerCfg);
+    if (playerMode) {
+        std::string appName;
+        for (char c : playerCfg.ProductName)
+            appName += (std::isalnum((unsigned char)c) || c == ' ' || c == '-' || c == '_') ? c : '_';
+        UserPaths::SetAppName(appName.empty() ? std::string("TartarusGame") : appName);
+        std::error_code pe;
+        const std::filesystem::path shipped = std::filesystem::path(EnginePaths::ExeDir()) / "project";
+        if (std::filesystem::is_directory(shipped, pe)) ProjectPaths::SetRootOverride(shipped.string());
+    }
 
     // #146: a persistent log for bug reports (Unity's Editor.log). Headless runs get their own
     // file so a smoke test on a dev machine doesn't rotate away the last real editor session's.
-    Log::OpenFile(headless ? "Headless.log" : "Editor.log");
+    Log::OpenFile(headless ? "Headless.log" : playerMode ? "Player.log" : "Editor.log");
 
     try {
         // Up before anything else so it covers the whole startup, including the GL context
@@ -399,7 +442,7 @@ int main(int argc, char** argv) {
         // (#155), and nothing earlier reads them. Per-user file, no GL or project state needed.
         EditorSettings::Load();
         SplashScreen splash;
-        if (!headless) {
+        if (!headless && !playerMode) {
             const EditorSettings& es = EditorSettings::Get();
             SplashScreen::TargetRect target{es.WindowX, es.WindowY, es.WindowWidth, es.WindowHeight};
             splash.Show(EnginePaths::Resolve("assets/branding/splash.png"), 1.0f,
@@ -411,7 +454,8 @@ int main(int argc, char** argv) {
         // structurally always 0 in a Release run and the harness only checks "did it draw".
         // Set before the Window exists: it decides whether to request a debug context (#157).
         if (smokeTestMode) GLDebug::ForceEnable();
-        Window window(1280, 720, "Tartarus Engine");
+        Window window(1280, 720, playerMode ? playerCfg.ProductName : std::string("Tartarus Engine"));
+        if (playerMode && !playerCfg.Fullscreen) window.UseStandardFrame();
         // GL context + loader are live now. No-op unless a Debug build or TARTARUS_GL_DEBUG=1.
         GLDebug::Init();
         Input::Init(window.Handle());
@@ -559,12 +603,16 @@ int main(int argc, char** argv) {
             const EditorSettings& es = EditorSettings::Get();
             Window::Placement placement;
             placement.Valid = es.WindowPlacementValid && !headless;
+            if (playerMode) {
+                // #174 - the build's windowed size.
+                glfwSetWindowSize(window.Handle(), playerCfg.Width, playerCfg.Height); // centred once shown
+            }
             placement.X = es.WindowX;
             placement.Y = es.WindowY;
             placement.Width = es.WindowWidth;
             placement.Height = es.WindowHeight;
             placement.Maximized = es.WindowMaximized;
-            if (!window.ApplyPlacement(placement)) window.Maximize();
+            if (!playerMode && !window.ApplyPlacement(placement)) window.Maximize();
         }
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
         ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
@@ -576,6 +624,7 @@ int main(int argc, char** argv) {
             std::error_code sceneEc;
             if (!last.empty() && std::filesystem::exists(last, sceneEc) && !sceneEc)
                 scenePath = last;
+            if (playerMode && !playerCfg.Scenes.empty()) scenePath = ProjectPaths::Resolve(playerCfg.Scenes.front());
         }
         AssetLibrary assets;
 
@@ -693,7 +742,7 @@ int main(int argc, char** argv) {
         // the harness must never rewrite the startup scene just from opening it for a read-only
         // regression check (audit #77). Ordinary interactive startup keeps the existing
         // "upgrade once" behavior.
-        bool sceneLoaded = SceneSerializer::Load(world, assets, scenePath, /*persistMigration=*/!headless);
+        bool sceneLoaded = SceneSerializer::Load(world, assets, scenePath, /*persistMigration=*/!headless && !playerMode);
         if (sceneLoaded) {
             std::cout << "Loaded scene from " << scenePath << std::endl;
         }
@@ -1137,6 +1186,13 @@ int main(int argc, char** argv) {
 
         // #89 — see the matching catch after the loop. (Loop body deliberately not re-indented.)
         bool wasFocused = true; // #132 - reimport-on-focus edge detector
+        // #174 - the built game starts in Play, filling the window, cursor captured.
+        if (playerMode) {
+            startPlay();
+            setMaximized(true);
+            if (playerCfg.Fullscreen) window.SetFullscreen(true);
+        }
+
         try {
         while (true) {
             // #143: a minimized editor has nothing to show, and a 0x0 framebuffer only risks a
@@ -1367,8 +1423,9 @@ int main(int argc, char** argv) {
 
             // Frame-pacing preferences are live: changing VSync / FPS Limit in Preferences takes
             // effect on the very next frame. SetVSync only touches the driver on an actual change.
-            if (EditorSettings::Get().VSyncMode != appliedVSyncMode) {
-                appliedVSyncMode = EditorSettings::Get().VSyncMode;
+            if (const int wantVSync = playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
+                wantVSync != appliedVSyncMode) {
+                appliedVSyncMode = wantVSync;
                 window.SetVSync(appliedVSyncMode);
             }
 
@@ -1376,6 +1433,7 @@ int main(int argc, char** argv) {
             Input::Update();
 
             if (window.ShouldClose()) {
+                if (playerMode) break; // #174 - a game just quits; there is no scene to save
                 // #88 — prompt for ANY unsaved scene, titled or not (Save on an untitled one
                 // routes through Save As).
                 if (exitApproved || !editor.IsDirty()) break;
@@ -1391,7 +1449,7 @@ int main(int argc, char** argv) {
             // rather than on the composed string.
             const std::string& currentScenePath = editor.CurrentScenePath();
             bool dirty = editor.IsDirty();
-            if (!titleInitialized || currentScenePath != lastScenePath || dirty != lastDirty) {
+            if (!playerMode && (!titleInitialized || currentScenePath != lastScenePath || dirty != lastDirty)) {
                 std::string sceneName = std::filesystem::path(currentScenePath).filename().string();
                 if (sceneName.empty()) sceneName = "Untitled"; // File > New Scene: no path yet
                 std::string desiredTitle = "Tartarus Engine \xE2\x80\x94 " + sceneName +
@@ -1405,14 +1463,17 @@ int main(int argc, char** argv) {
             // Play / pause / step / maximize + window fullscreen are Ctx_App shortcuts now
             // (#236 F) — rebindable in Preferences ▸ Shortcuts, evaluated here via the GLFW
             // path since this runs before the ImGui frame.
-            if (Shortcuts::TriggeredGlfw("play.toggle")) togglePlay();
+            // #174 - a built game can't be stopped, paused or un-maximized; a Development Build
+            // keeps the stats overlay and the physics debug keys.
+            const bool devKeys = !playerMode || playerCfg.DevelopmentBuild;
+            if (!playerMode && Shortcuts::TriggeredGlfw("play.toggle")) togglePlay();
             // Pause (F2 / toolbar) and single-frame Step (F3 / toolbar). The toolbar requests are
             // raised during the previous frame's editor draw; consuming them here folds them into
             // the same state the keys drive, one frame later.
-            if (playing && (Shortcuts::TriggeredGlfw("play.pause") || editor.ConsumePauseToggleRequest()))
+            if (playing && !playerMode && (Shortcuts::TriggeredGlfw("play.pause") || editor.ConsumePauseToggleRequest()))
                 paused = !paused;
             // #236 A5 — Error Pause: freeze the sim the frame a fresh error lands.
-            if (playing && !paused && EditorModuleHost::ConsoleState().ErrorPause) {
+            if (playing && !paused && !playerMode && EditorModuleHost::ConsoleState().ErrorPause) {
                 const int errNow = Log::CountOf(LogLevel::Error);
                 if (errNow > errPauseSeen) {
                     paused = true;
@@ -1424,11 +1485,11 @@ int main(int argc, char** argv) {
                 (Shortcuts::TriggeredGlfw("play.step") || editor.ConsumeStepRequest());
             // Mirrors the toolbar's Fullscreen/Restore button — maximize the Game view over
             // the editor panels (only meaningful while playing; setMaximized no-ops otherwise).
-            if (playing && Shortcuts::TriggeredGlfw("play.maximize")) setMaximized(!playMaximized);
+            if (playing && !playerMode && Shortcuts::TriggeredGlfw("play.maximize")) setMaximized(!playMaximized);
 
             // F6 toggles the Physics debug panel from anywhere — the Window menu that also does it
             // is hidden during maximized play (#185).
-            if (Shortcuts::TriggeredGlfw("physics.panel")) {
+            if (devKeys && Shortcuts::TriggeredGlfw("physics.panel")) {
                 EditorSettings::Get().ShowPhysicsPanel = !EditorSettings::Get().ShowPhysicsPanel;
                 EditorSettings::Save();
             }
@@ -1436,7 +1497,7 @@ int main(int argc, char** argv) {
             // where the Scene-viewport overlay isn't drawn). Turning it on with nothing selected
             // enables a sensible default set so there's immediately something to see (#185).
             // (F3 is Step One Frame; F6 is the Physics panel.)
-            if (Shortcuts::TriggeredGlfw("physics.overlay")) {
+            if (devKeys && Shortcuts::TriggeredGlfw("physics.overlay")) {
                 EditorSettings& es = EditorSettings::Get();
                 es.PlayDebugOverlay = !es.PlayDebugOverlay;
                 if (es.PlayDebugOverlay) {
@@ -1452,7 +1513,8 @@ int main(int argc, char** argv) {
             // #154: fullscreen style + display from Preferences, applied at the moment of switching.
             window.SetFullscreenOptions((Window::FullscreenMode)EditorSettings::Get().FullscreenMode,
                                         EditorSettings::Get().FullscreenMonitor);
-            if (Shortcuts::TriggeredGlfw("window.fullscreen")) {
+            // A windowed player has the standard OS frame, which borderless fullscreen can't use.
+            if ((!playerMode || playerCfg.Fullscreen) && Shortcuts::TriggeredGlfw("window.fullscreen")) {
                 window.ToggleFullscreen();
             }
 
@@ -2481,7 +2543,7 @@ int main(int argc, char** argv) {
                 // stand down (a shoot-click or strafe key shouldn't also poke the editor).
                 editor.SetGameInputActive(gameHasInput);
                 if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
-                else if (playing)    editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
+                else if (playing && devKeys) editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
                 // One coalesced, atomic prefs write per frame for however many preference
                 // controls changed this frame (audit CPP-206 / PERF-211).
                 EditorSettings::Flush();
@@ -2493,7 +2555,7 @@ int main(int argc, char** argv) {
                 // EditorLayer owning the simulation clock itself; must land before Draw() below,
                 // which is what actually renders Zone B this frame.
                 editor.SetPlayState(playing, paused, playMaximized);
-                editorModule.Draw(editorUIVisible, dt);
+                if (devKeys) editorModule.Draw(editorUIVisible, dt);
 
                 // Staged-undo cleanup + selection-history recording (#38/#236 R2): must run after
                 // every module panel (Inspector, Hierarchy, Asset Browser, Console) has had its
@@ -2534,7 +2596,7 @@ int main(int argc, char** argv) {
             // whichever of Scene/Game is on screen — drawn unconditionally, not just during
             // maximized play (the toolbar's old Zone B icon row is gone; see
             // EditorModuleToolbar.cpp's file comment).
-            editor.DrawViewportActionBar(world, assets, playing, playMaximized, paused);
+            if (!playerMode) editor.DrawViewportActionBar(world, assets, playing, playMaximized, paused);
             if (editor.ConsumePlayStopRequest()) togglePlay();
             if (editor.ConsumeMaximizeToggleRequest()) setMaximized(!playMaximized);
 
@@ -2926,6 +2988,16 @@ int main(int argc, char** argv) {
             if (!firstFramePresented) {
                 firstFramePresented = true;
                 window.Show();
+                if (playerMode && !playerCfg.Fullscreen) {
+                    // #174 - centre the windowed game in the primary monitor's work area. Done
+                    // once shown, when the frame size (title bar, borders) is known.
+                    int ax = 0, ay = 0, aw = 0, ah = 0, ww = 0, wh = 0, fl = 0, ft = 0, fr = 0, fb = 0;
+                    glfwGetMonitorWorkarea(glfwGetPrimaryMonitor(), &ax, &ay, &aw, &ah);
+                    glfwGetWindowSize(window.Handle(), &ww, &wh);
+                    glfwGetWindowFrameSize(window.Handle(), &fl, &ft, &fr, &fb);
+                    glfwSetWindowPos(window.Handle(), ax + std::max(0, (aw - (ww + fl + fr)) / 2) + fl,
+                                     ay + std::max(0, (ah - (wh + ft + fb)) / 2) + ft);
+                }
                 splash.Close(); // blocks out any remainder of the minimum display time
             }
 
@@ -3028,7 +3100,7 @@ int main(int argc, char** argv) {
             // #143: remember the window placement for next launch (editor.Shutdown() flushes).
             // Skipped while fullscreen - the windowed placement from last time stays.
             Window::Placement placement = window.GetPlacement();
-            if (placement.Valid) {
+            if (placement.Valid && !playerMode) {
                 EditorSettings& es = EditorSettings::Get();
                 es.WindowPlacementValid = true;
                 es.WindowX = placement.X;
