@@ -996,7 +996,8 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
 
     auto& name = world.Registry.get<NameComponent>(entity);
     bool selected = IsSelected(entity);
-    bool inactive = world.Registry.all_of<InactiveTag>(entity);
+    bool inactive = world.Registry.all_of<InactiveTag>(entity);             // in hierarchy (greyed)
+    bool selfDeactivated = world.Registry.all_of<DeactivatedTag>(entity);   // its own checkbox (#201)
     // #236 A2 — a prefab-instance root paints its name in prefab blue (amber-red when missing).
     const auto* prefabInst = world.Registry.try_get<PrefabInstanceComponent>(entity);
     // #236 B — SceneVis-lite: a row hidden in the Scene view reads like an inactive one (dimmed).
@@ -1381,32 +1382,50 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
         // Game view, physics and saves are unaffected.
         const bool sceneHidden = world.Registry.all_of<HiddenInSceneTag>(entity);
         const bool sceneLocked = world.Registry.all_of<SceneLockedTag>(entity);
+        // Like Unity's Scene visibility/pickability: a click applies to the object and everything
+        // under it; Alt+click to change only this one.
+        auto setOnSubtree = [&](auto* tagPtr, bool on) {
+            using Tag = std::remove_pointer_t<decltype(tagPtr)>;
+            std::vector<entt::entity> stack{entity};
+            while (!stack.empty()) {
+                const entt::entity e = stack.back();
+                stack.pop_back();
+                if (!world.Registry.valid(e)) continue;
+                if (on) world.Registry.emplace_or_replace<Tag>(e);
+                else    world.Registry.remove<Tag>(e);
+                if (ImGui::GetIO().KeyAlt) break;
+                if (const auto* h = world.Registry.try_get<HierarchyComponent>(e))
+                    stack.insert(stack.end(), h->Children.begin(), h->Children.end());
+            }
+        };
 
         ImGui::SameLine();
         ImGui::SetCursorScreenPos(ImVec2(rowMax.x - eyeW - gap - lockW - hideW - 2.0f * gap, rowMin.y));
         if (SceneVisToggle("##svhide", ICON_FA_EYE_SLASH, ICON_FA_EYE, sceneHidden, rowHovered,
-                           sceneHidden ? "Hidden in the Scene view - click to show"
-                                       : "Hide in the Scene view (still in the game, still collides, still saved)")) {
+                           sceneHidden ? "Hidden in the Scene view - click to show (Alt+click: this object only)"
+                                       : "Hide in the Scene view with its children (still in the game, still collides,\n"
+                                         "still saved). Alt+click: this object only.")) {
             PushUndo(world, "Toggle Scene Visibility");
-            if (sceneHidden) world.Registry.remove<HiddenInSceneTag>(entity);
-            else             world.Registry.emplace<HiddenInSceneTag>(entity);
+            setOnSubtree((HiddenInSceneTag*)nullptr, !sceneHidden);
         }
         ImGui::SameLine(0.0f, gap);
         if (SceneVisToggle("##svlock", ICON_FA_LOCK, ICON_FA_LOCK_OPEN, sceneLocked, rowHovered,
-                           sceneLocked ? "Locked out of Scene-view clicks - click to unlock"
-                                       : "Lock: can't be clicked in the Scene view (Hierarchy select still works)")) {
+                           sceneLocked ? "Locked out of Scene-view clicks - click to unlock (Alt+click: this object only)"
+                                       : "Lock with its children: can't be clicked in the Scene view (Hierarchy select\n"
+                                         "still works). Alt+click: this object only.")) {
             PushUndo(world, "Toggle Scene Lock");
-            if (sceneLocked) world.Registry.remove<SceneLockedTag>(entity);
-            else             world.Registry.emplace<SceneLockedTag>(entity);
+            setOnSubtree((SceneLockedTag*)nullptr, !sceneLocked);
         }
 
         ImGui::SetCursorScreenPos(ImVec2(rowMax.x - eyeW - 4.0f * m_UIScale, rowMin.y));
-        if (ActiveToggle("##rowactive", !inactive, rowHovered,
-                         inactive ? "Inactive - click to enable" : "Active - click to disable",
+        if (ActiveToggle("##rowactive", !selfDeactivated, rowHovered,
+                         selfDeactivated ? "Inactive - click to enable"
+                         : inactive      ? "Hidden because a parent is inactive - click to disable this one too"
+                                         : "Active - click to disable",
                          /*alignTop=*/true)) {
             PushUndo(world, "Toggle Active");
-            if (inactive) world.Registry.remove<InactiveTag>(entity);
-            else world.Registry.emplace<InactiveTag>(entity);
+            if (selfDeactivated) world.Registry.remove<DeactivatedTag>(entity);
+            else world.Registry.emplace<DeactivatedTag>(entity);
         }
     }
 
@@ -1467,6 +1486,25 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
                 stack.insert(stack.end(), h->Children.begin(), h->Children.end());
         }
     }
+    // #178 - Unity's Select Prefab Root: replaces each selected object with the outermost prefab
+    // instance it belongs to (objects not inside any instance are dropped).
+    std::vector<entt::entity> prefabRoots;
+    for (entt::entity e : GetSelectedItems()) {
+        entt::entity root = entt::null;
+        for (entt::entity walk = e; walk != entt::null && world.Registry.valid(walk);) {
+            if (world.Registry.all_of<PrefabInstanceComponent>(walk)) root = walk;
+            const auto* h = world.Registry.try_get<HierarchyComponent>(walk);
+            walk = h ? h->Parent : entt::null;
+        }
+        if (root != entt::null && std::find(prefabRoots.begin(), prefabRoots.end(), root) == prefabRoots.end())
+            prefabRoots.push_back(root);
+    }
+    if (ImGui::MenuItem(ICON_FA_CUBES "  Select Prefab Root", nullptr, false, !prefabRoots.empty())) {
+        ClearSelection();
+        for (entt::entity root : prefabRoots) AddToSelectionIfAbsent(root);
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        EditorUI::SetTooltip("Select the prefab instance each selected object is part of.");
     if (ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS_PLUS "  Frame Selected", "F", false, HasAnySelection()) && m_EditorCameraPtr) {
         FocusOnSelection(world, *m_EditorCameraPtr);
     }
@@ -1805,12 +1843,12 @@ void EditorLayer::ToggleSelectionActive(World& world) {
     if (sel.empty()) return;
     bool anyActive = false;
     for (entt::entity e : sel)
-        if (world.Registry.valid(e) && !world.Registry.all_of<InactiveTag>(e)) { anyActive = true; break; }
+        if (world.Registry.valid(e) && !world.Registry.all_of<DeactivatedTag>(e)) { anyActive = true; break; }
     StageUndo(world);
     for (entt::entity e : sel) {
         if (!world.Registry.valid(e)) continue;
-        if (anyActive) world.Registry.emplace_or_replace<InactiveTag>(e); // mixed/all-active -> disable all
-        else world.Registry.remove<InactiveTag>(e);
+        if (anyActive) world.Registry.emplace_or_replace<DeactivatedTag>(e); // mixed/all-active -> disable all
+        else world.Registry.remove<DeactivatedTag>(e);
     }
     CommitStagedUndo(world, "Toggle Active");
 }

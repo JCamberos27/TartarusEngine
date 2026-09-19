@@ -123,6 +123,31 @@ void TestLodGroup() {
     CHECK(world.Registry.view<LodCulledTag>().empty());
 }
 
+// --- Active in hierarchy (#201) -------------------------------------------------------------
+void TestActiveInHierarchy() {
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity parent = world.CreateEmptyEntity(zero, zero, one, "Parent");
+    const entt::entity child = world.CreateEmptyEntity(zero, zero, one, "Child");
+    const entt::entity grandchild = world.CreateEmptyEntity(zero, zero, one, "Grandchild");
+    CHECK(world.SetParent(child, parent));
+    CHECK(world.SetParent(grandchild, child));
+    auto inactive = [&](entt::entity e) { return world.Registry.all_of<InactiveTag>(e); };
+
+    world.Registry.emplace<DeactivatedTag>(parent);
+    world.SyncActiveInHierarchy();
+    CHECK(inactive(parent) && inactive(child) && inactive(grandchild)); // whole subtree hides
+
+    world.Registry.emplace<DeactivatedTag>(child);
+    world.Registry.remove<DeactivatedTag>(parent);
+    world.SyncActiveInHierarchy();
+    CHECK(!inactive(parent) && inactive(child) && inactive(grandchild));
+
+    world.Registry.remove<DeactivatedTag>(child);
+    world.SyncActiveInHierarchy();
+    CHECK(!inactive(parent) && !inactive(child) && !inactive(grandchild)); // nothing left behind
+}
+
 // --- AssetGuid ------------------------------------------------------------------------------
 void TestAssetGuid() {
     const AssetGuid g = AssetGuid::Generate();
@@ -491,6 +516,7 @@ int RunUnitTests() {
         {"AssetIdentity", TestAssetIdentity},
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},
+        {"ActiveInHierarchy", TestActiveInHierarchy},
         {"CameraRoll", TestCameraRoll},
     };
     for (const auto& [name, fn] : tests) {

@@ -189,10 +189,13 @@ struct TagComponent {
     std::string Tag = "Untagged";
 };
 
-// Unity's GameObject "active" checkbox as a tag: an inactive entity is skipped by rendering,
+// Unity's activeInHierarchy, as a tag: an inactive entity is skipped by rendering,
 // collision/raycasting, and editor picking, but keeps all its components and stays listed
 // (greyed out) in the Hierarchy so it can be switched back on. Deliberately a tag rather than
 // a bool field so "active" is the zero-cost default that needs no component at all.
+// DERIVED - never set it directly: World::SyncActiveInHierarchy() puts it on every entity
+// that has DeactivatedTag itself or on any ancestor, so switching a parent off hides its
+// whole subtree (#201). Runtime systems only ever test this one.
 struct InactiveTag {};
 
 // #163 - Unity's LOD Group. The entity's direct children are its levels, in order: child 0 is
@@ -209,6 +212,9 @@ struct LODGroupComponent {
 // using (see LODGroupComponent). Draw and shadow passes skip it; unlike InactiveTag it doesn't
 // affect physics, scripts or the Hierarchy.
 struct LodCulledTag {};
+// Unity's activeSelf == false: the authored "active" checkbox. Set by the editor and the
+// scene/prefab loader, saved as "active": false. See InactiveTag for what it causes.
+struct DeactivatedTag {};
 
 // Unity's "Static" checkbox: marks geometry that never moves at runtime. Purely declarative
 // today (nothing in the engine batches or bakes yet) — it's here so scenes can be authored with

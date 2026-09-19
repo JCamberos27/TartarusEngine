@@ -2022,7 +2022,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
 
         int nActive = 0, nStatic = 0;
         forEach([&](entt::entity e) {
-            if (!world.Registry.all_of<InactiveTag>(e)) nActive++;
+            if (!world.Registry.all_of<DeactivatedTag>(e)) nActive++;
             if (world.Registry.all_of<StaticTag>(e)) nStatic++;
         });
         bool setVal = false;
@@ -2030,8 +2030,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                             "Active - inactive objects are not drawn and don't collide")) {
             PushUndo(world, "Toggle Active");
             forEach([&](entt::entity e) {
-                if (setVal) world.Registry.remove<InactiveTag>(e);
-                else        world.Registry.emplace_or_replace<InactiveTag>(e);
+                if (setVal) world.Registry.remove<DeactivatedTag>(e);
+                else        world.Registry.emplace_or_replace<DeactivatedTag>(e);
             });
         }
         if (MultiEditCheckbox("Static", nStatic > 0, nStatic != 0 && nStatic != count, setVal)) {
@@ -2243,7 +2243,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // --- Header: active checkbox + icon + name, then tag/static, matching Unity's Inspector
     // top block but with the same per-kind icon the Hierarchy already uses, so the two panels
     // read as one consistent visual language instead of the Inspector being icon-less.
-    bool active = !registry.all_of<InactiveTag>(entity);
+    bool active = !registry.all_of<DeactivatedTag>(entity);
     {
         // #152 — same eye control as the Hierarchy. The header line hover-reveals it for an
         // active object; an inactive one always shows the dim eye-slash.
@@ -2254,8 +2254,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                          "Active - inactive objects are not drawn and don't collide",
                          /*alignTop=*/false)) {
             PushUndo(world, "Toggle Active");
-            if (active) registry.emplace<InactiveTag>(entity);   // was active, now hide
-            else        registry.remove<InactiveTag>(entity);
+            if (active) registry.emplace<DeactivatedTag>(entity);   // was active, now hide
+            else        registry.remove<DeactivatedTag>(entity);
         }
     }
     ImGui::SameLine();
