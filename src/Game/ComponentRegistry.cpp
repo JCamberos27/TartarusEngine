@@ -462,6 +462,7 @@ void RegisterEngineComponents() {
     {
         ReflectComponent m;
         m.Name = "Collider"; m.Icon = ICON_FA_CUBE; m.Category = "Physics";
+        static const char* kCombineLabels = "Average\0Minimum\0Multiply\0Maximum\0";
         m.Tooltip = "Blocks movement and is hit by raycasts. While playing this drives a PhysX actor:\n"
                     "static on its own, dynamic/kinematic with a sibling Rigidbody. The shape below\n"
                     "picks its geometry.";
@@ -480,7 +481,14 @@ void RegisterEngineComponents() {
             { "Bounciness", T::Float, TARTARUS_REFLECT_FIELD(ColliderComponent, Bounciness), 0.0f,
               "Restitution: 0 stops dead, 1 loses no energy on a bounce.", 0.0f, 1.0f },
             { "Friction", T::Float, TARTARUS_REFLECT_FIELD(ColliderComponent, Friction), 0.0f,
-              "Combined static + dynamic friction. 0 = ice.", 0.0f, 2.0f },
+              "Dynamic friction: how much a sliding contact is slowed. 0 = ice.", 0.0f, 2.0f },
+            { "Static Friction", T::Float, TARTARUS_REFLECT_FIELD(ColliderComponent, StaticFriction), 0.0f,
+              "How hard it is to start sliding. Usually equal to or a little above Friction.", 0.0f, 2.0f },
+            { "Friction Combine", T::Enum, TARTARUS_REFLECT_FIELD(ColliderComponent, FrictionCombine), 0.0f,
+              "How this collider's friction combines with the one it touches.\n"
+              "If the two differ, the later mode in the list wins (Maximum beats everything)." },
+            { "Bounce Combine", T::Enum, TARTARUS_REFLECT_FIELD(ColliderComponent, BounceCombine), 0.0f,
+              "How this collider's bounciness combines with the one it touches (same rule)." },
             { "HalfExtents", T::Vec3, TARTARUS_REFLECT_FIELD(ColliderComponent, HalfExtents), 0.05f },
         };
         auto F = [&](const char* name) -> ReflectField& {
@@ -490,6 +498,9 @@ void RegisterEngineComponents() {
         F("Shape").EnumLabels = "Box\0Sphere\0Capsule\0Convex Hull\0Mesh\0"; F("Shape").EnumCount = 5;
         F("Bounciness").Slider = true; F("Bounciness").Format = "%.2f";
         F("Friction").Slider = true; F("Friction").Format = "%.2f";
+        F("Static Friction").Slider = true; F("Static Friction").Format = "%.2f";
+        F("Friction Combine").EnumLabels = kCombineLabels; F("Friction Combine").EnumCount = 4;
+        F("Bounce Combine").EnumLabels = kCombineLabels; F("Bounce Combine").EnumCount = 4;
         F("HalfExtents").EditorHidden = true;
         Register<ColliderComponent>(std::move(m));
     }
