@@ -1462,6 +1462,21 @@ void EditorLayer::DrawReflectionProbeGizmos(World& world, Camera& editorCamera) 
         for (auto& e : edges) strokeEdge(c[e[0]], c[e[1]], col, kThick);
     }
 
+    // #162 / #203 - local Post-process Volumes: their (oriented) box.
+    const ImU32 kVolumeColor = IM_COL32(120, 230, 150, 170);
+    auto volumeView = world.Registry.view<const TransformComponent, const PostProcessVolumeComponent>();
+    for (auto [entity, tc, vol] : volumeView.each()) {
+        if (vol.Global || world.Registry.all_of<InactiveTag>(entity)) continue;
+        const glm::mat4 wt = world.GetCachedWorldTransform(entity);
+        const glm::vec3 h = glm::abs(vol.Size) * 0.5f;
+        glm::vec3 c[8];
+        for (int i = 0; i < 8; ++i)
+            c[i] = glm::vec3(wt * glm::vec4((i & 1) ? h.x : -h.x, (i & 2) ? h.y : -h.y, (i & 4) ? h.z : -h.z, 1.0f));
+        const int edges[12][2] = {{0,1},{2,3},{4,5},{6,7},{0,2},{1,3},{4,6},{5,7},{0,4},{1,5},{2,6},{3,7}};
+        const ImU32 col = IsSelected(entity) ? kProbeSelected : kVolumeColor;
+        for (auto& e : edges) strokeEdge(c[e[0]], c[e[1]], col, kThick);
+    }
+
     draw->PopClipRect();
 }
 
