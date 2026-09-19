@@ -611,9 +611,15 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
         mat.AlphaClip = true;
     }
 
+    // #102 — factors now scale their maps, so a file that has a map but no factor (FBX, OBJ)
+    // means factor 1 (the glTF default), not the engine's scalar-only defaults of 0 / 0.5.
     float scalar;
-    if (material->Get(AI_MATKEY_METALLIC_FACTOR, scalar) == AI_SUCCESS) mat.Metallic = scalar;
-    if (material->Get(AI_MATKEY_ROUGHNESS_FACTOR, scalar) == AI_SUCCESS) mat.Roughness = scalar;
+    const bool hasMetalFactor = material->Get(AI_MATKEY_METALLIC_FACTOR, scalar) == AI_SUCCESS;
+    if (hasMetalFactor) mat.Metallic = scalar;
+    else if (mat.MetallicMap || mat.MetallicRoughnessMap) mat.Metallic = 1.0f;
+    const bool hasRoughFactor = material->Get(AI_MATKEY_ROUGHNESS_FACTOR, scalar) == AI_SUCCESS;
+    if (hasRoughFactor) mat.Roughness = scalar;
+    else if (mat.RoughnessMap || mat.MetallicRoughnessMap) mat.Roughness = 1.0f;
 
     return mat;
 }
