@@ -297,6 +297,24 @@ void AudioEngine::SetAttenuation(SoundHandle handle, float minDistance, float ma
     ma_sound_set_rolloff(sound, rolloff);
 }
 
+void AudioEngine::SetRolloff(SoundHandle handle, Rolloff mode, float minDistance, float maxDistance) {
+    ma_sound* sound = Resolve(handle);
+    if (!sound) return;
+    minDistance = std::max(minDistance, 0.01f);
+    maxDistance = std::max(maxDistance, minDistance + 0.01f);
+    ma_sound_set_attenuation_model(sound, mode == Rolloff::Linear ? ma_attenuation_model_linear
+                                                                  : ma_attenuation_model_inverse);
+    ma_sound_set_min_distance(sound, minDistance);
+    ma_sound_set_max_distance(sound, maxDistance);
+    ma_sound_set_rolloff(sound, 1.0f);
+}
+
+void AudioEngine::SetSpatial(SoundHandle handle, bool spatial) {
+    ma_sound* sound = Resolve(handle);
+    if (!sound) return;
+    ma_sound_set_spatialization_enabled(sound, spatial ? MA_TRUE : MA_FALSE);
+}
+
 void AudioEngine::SetListener(const glm::vec3& position, const glm::vec3& forward,
                               const glm::vec3& up) {
     if (!s_Initialized) return;
