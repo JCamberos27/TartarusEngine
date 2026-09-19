@@ -2,7 +2,7 @@
   "matVersion": 2,
   "name": "Gallery Glass",
   "_comment": "Transmission: refracts what is behind it.",
-  "shader": "engine://Standard.shader",
+  "shader": "engine://StandardAdvanced.shader",
   "renderQueue": 2,
   "properties": {
     "_BaseColor": [

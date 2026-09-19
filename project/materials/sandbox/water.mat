@@ -2,7 +2,7 @@
   "matVersion": 2,
   "name": "Fountain Water",
   "_comment": "Refracts the basin floor.",
-  "shader": "engine://Standard.shader",
+  "shader": "engine://StandardAdvanced.shader",
   "renderQueue": 2,
   "opacity": 0.7,
   "properties": {

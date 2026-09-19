@@ -2,7 +2,7 @@
   "matVersion": 2,
   "name": "Gallery Neon",
   "_comment": "Emissive: glows through Bloom.",
-  "shader": "engine://Standard.shader",
+  "shader": "engine://StandardAdvanced.shader",
   "properties": {
     "_BaseColor": [
       0.05,
