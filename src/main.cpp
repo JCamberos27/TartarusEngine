@@ -266,7 +266,8 @@ static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, bool gizmo
 // The first active in-scene Camera entity (creation order), or entt::null. The Game view
 // previews through it while editing so a shot can be framed without walking there (#36 B10).
 // #162 - the scene's post settings for the final tonemap pass.
-static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float bloomIntensity) {
+static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float bloomIntensity,
+                                     float dt, int exposureSlot) {
     PostSettings p;
     p.ExposureEV = world.ExposureEV;
     p.Operator = world.TonemapOperator;
@@ -280,6 +281,13 @@ static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, 
     p.VignetteIntensity = world.VignetteIntensity;
     p.VignetteSmoothness = world.VignetteSmoothness;
     p.Fxaa = world.FxaaEnabled;
+    p.AutoExposure = world.AutoExposure;
+    p.AutoExposureMinEV = world.AutoExposureMinEV;
+    p.AutoExposureMaxEV = world.AutoExposureMaxEV;
+    p.AutoExposureSpeedUp = world.AutoExposureSpeedUp;
+    p.AutoExposureSpeedDown = world.AutoExposureSpeedDown;
+    p.DeltaTime = dt;
+    p.ExposureSlot = exposureSlot;
     return p;
 }
 
@@ -2888,7 +2896,7 @@ int main(int argc, char** argv) {
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(sceneHdr.ResolvedColorTexture(), sceneFramebuffer.Handle(), scW, scH,
-                                 MakePostSettings(world, bloomGlowTex, bloomIntensity));
+                                 MakePostSettings(world, bloomGlowTex, bloomIntensity, dt, 0));
                 }
 
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
@@ -3066,7 +3074,7 @@ int main(int argc, char** argv) {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameView.GetFramebuffer().Handle(),
                                  gvWidth, gvHeight,
-                                 MakePostSettings(world, gvBloomGlowTex, gvBloomIntensity));
+                                 MakePostSettings(world, gvBloomGlowTex, gvBloomIntensity, dt, 1));
                 }
                 if (playing && playUsesPlayer)
                     crosshair.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
@@ -3232,7 +3240,7 @@ int main(int argc, char** argv) {
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh,
-                                 MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity));
+                                 MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity, dt, 1));
                 }
                 if (playing && playUsesPlayer)
                     crosshair.Draw(0, mw, mh, playGravityGun && gravityGun.IsHolding(),
