@@ -3030,6 +3030,11 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
         return;
     }
 
+    if (std::strcmp(componentName, "Animator Controller") == 0 && phase == ReflectExtraPhase::Top) {
+        DrawAnimatorControllerExtra(world, entity); // #175 Part B
+        return;
+    }
+
     if (std::strcmp(componentName, "Camera") == 0 && phase == ReflectExtraPhase::Bottom) {
         auto* cam = registry.try_get<CameraComponent>(entity);
         if (!cam) return;
