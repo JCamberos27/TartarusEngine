@@ -8,14 +8,48 @@
 // beside it and provides stable identity across renames/moves (PR 2+).
 //
 // Call order:
-//   1. AssetDatabase::ScanProject()  — once, after ProjectSettings::Load(), before any Load*
+//   1. AssetDatabase::BeginScanProject() — at start-up (#132: on a worker thread; every lookup
+//      waits for it). ScanProject() is the synchronous form (--build, a watcher overflow).
 //   2. AssetDatabase::EnsureGuid()   — called by every AssetLibrary::Load* and ImportDroppedFile
-//   3. AssetDatabase::NotifyMoved()  — called by CommitRename / any file-rename path in the editor
+//   3. AssetDatabase::NotifyMoved()  — whenever a file moves (EditorLayer::SyncProjectChanges
+//      applies moves made outside the editor, reported by ProjectWatcher)
+//
+// Tracked (#132): textures, models, audio, prefabs, materials, HDRIs, shaders and their GLSL
+// sources, Animator Controllers, scripts, and scenes (.json under project/scenes). References to
+// them are stored as path + GUID: scenes (asset fields, models, prefabs, sky, clip / controller /
+// script paths), .mat textures and shaders, .controller clips, the Build Settings scene list and
+// the editor's last-opened scene - so a rename or move outside the editor keeps every link.
 namespace AssetDatabase {
 
 // Walks ProjectPaths::Root() and calls EnsureGuid on every file with a known asset extension,
 // creating missing .meta files. Safe to call multiple times (idempotent per path).
 void ScanProject();
+
+// #132 - ScanProject on a worker thread, so a big project's scan overlaps window / GL / shader
+// start-up instead of blocking it. Every lookup below (from another thread) waits for the scan
+// to finish, so callers never see a half-registered project. WaitForScan blocks explicitly.
+void BeginScanProject();
+void WaitForScan();
+bool IsScanning();
+
+// The asset type a path would be registered as ("texture", "model", "scene", ...), or "" when
+// it isn't an asset (unknown extension, or a .json outside project/scenes).
+std::string AssetType(const std::string& path);
+
+// The canonical spelling of a path used for comparisons: absolute, normalised, '/' separators,
+// lower-case on Windows. Two spellings of one file compare equal.
+std::string PathKey(const std::string& path);
+
+// Drops `path` from the GUID maps (its file was deleted outside the editor). Leaves any .meta
+// on disk alone; the next scan prunes it if the asset really is gone.
+void ForgetPath(const std::string& path);
+
+// #132 - references stored as project-relative path strings, optionally with a "#name" suffix
+// (an animation clip inside a model file). RefGuid: the GUID of the referenced file as a string,
+// or "" when it isn't a registered file. FollowRef: `ref` itself while its file exists, else its
+// file's new project-relative location (suffix kept) when `guid` resolves, else `ref` unchanged.
+std::string RefGuid(const std::string& ref);
+std::string FollowRef(const std::string& ref, const std::string& guid);
 
 // Returns the GUID for `path`, creating a .meta sidecar if one doesn't exist yet.
 // Returns an invalid guid for synthetic paths (IsSynthetic returns true).

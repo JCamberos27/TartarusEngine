@@ -3,6 +3,7 @@
 #include "ProjectPaths.h"
 #include "UserPaths.h"
 #include "AtomicFile.h"
+#include "AssetDatabase.h" // #132 - lastSceneGuid
 
 #include <json.hpp>
 #include <fstream>
@@ -107,6 +108,16 @@ void EditorSettings::Load() {
     s.GridShowAxisLines = SafeValue(root, "gridShowAxisLines", s.GridShowAxisLines);
     s.GridAxisThickness = SafeValue(root, "gridAxisThickness", s.GridAxisThickness);
     s.LastScenePath = SafeValue(root, "lastScenePath", s.LastScenePath);
+    {
+        // #132 - the last scene was renamed or moved since: follow its GUID. Only looked up when
+        // the path is gone, so the common case never waits on the background asset scan.
+        std::error_code ec;
+        const std::string guid = SafeValue(root, "lastSceneGuid", std::string());
+        if (!guid.empty() && (s.LastScenePath.empty() || !std::filesystem::exists(s.LastScenePath, ec))) {
+            const std::string moved = AssetDatabase::PathForGuid(AssetGuid::FromString(guid));
+            if (!moved.empty() && std::filesystem::exists(moved, ec)) s.LastScenePath = moved;
+        }
+    }
     s.GameViewMaximizeOnPlay = SafeValue(root, "gameViewMaximizeOnPlay", s.GameViewMaximizeOnPlay);
     s.GameViewShowStats = SafeValue(root, "gameViewShowStats", s.GameViewShowStats);
     s.SceneShowStats = SafeValue(root, "sceneShowStats", s.SceneShowStats);
@@ -244,6 +255,10 @@ void EditorSettings::Flush() {
     root["gridShowAxisLines"] = Get().GridShowAxisLines;
     root["gridAxisThickness"] = Get().GridAxisThickness;
     root["lastScenePath"] = Get().LastScenePath;
+    if (!Get().LastScenePath.empty()) { // #132
+        const AssetGuid g = AssetDatabase::GuidForPath(Get().LastScenePath);
+        if (g.IsValid()) root["lastSceneGuid"] = g.ToString();
+    }
     root["gameViewMaximizeOnPlay"] = Get().GameViewMaximizeOnPlay;
     root["gameViewShowStats"] = Get().GameViewShowStats;
     root["sceneShowStats"] = Get().SceneShowStats;

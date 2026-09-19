@@ -609,6 +609,11 @@ public:
     // #176 - Prefab Mode (EditorLayer_PrefabMode.cpp): edit a .prefab in isolation. Leaving
     // saves unsaved prefab edits and restores the scene (and its undo history) as it was.
     bool InPrefabMode() const { return !m_PrefabModePath.empty(); }
+
+    // #132 - applies files added / removed / renamed / edited outside the editor (ProjectWatcher)
+    // to the Asset Database, the library and the open scene. Call once per frame
+    // (EditorLayer_ProjectSync.cpp).
+    void SyncProjectChanges(World& world, AssetLibrary& assets);
     const std::string& PrefabModePath() const { return m_PrefabModePath; }
     void EnterPrefabMode(World& world, AssetLibrary& assets, const std::string& path);
     void ExitPrefabMode(World& world, AssetLibrary& assets, bool save = true);
@@ -1697,6 +1702,11 @@ private:
     SavedHistory m_PrePrefabHistory;
     bool m_PrefabModeSceneDirty = false;
     void RestorePrePrefabHistory();
+    // #132 - one change each (EditorLayer_ProjectSync.cpp).
+    void OnExternalMove(World& world, AssetLibrary& assets, const std::string& oldPath, const std::string& newPath);
+    void OnExternalAdd(World& world, AssetLibrary& assets, const std::string& path);
+    void OnExternalRemove(World& world, AssetLibrary& assets, const std::string& path);
+    void OnExternalModify(World& world, AssetLibrary& assets, const std::string& path);
     void DrawPrefabModeBar(World& world, AssetLibrary& assets);
     // Selection captured by stable OrderComponent value on Play, re-resolved to fresh entity
     // ids on Stop — the registry is rebuilt in between and entt recycles ids (#110).

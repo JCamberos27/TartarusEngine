@@ -78,6 +78,8 @@ public:
     int SourceChannels() const { return m_Channels; }
     bool IsValid() const { return m_ID != 0; }
     const std::string& Path() const { return m_Path; }
+    // #132 - the file was renamed or moved outside the editor; the uploaded pixels stay valid.
+    void SetPath(const std::string& path) { m_Path = path; }
     unsigned int GLHandle() const { return m_ID; } // for ImGui::Image thumbnails in the Asset Browser
     const TextureImportSettings& ImportSettings() const { return m_Settings; }
     // #156 - what actually got uploaded, for the importer's memory readout: GPU bytes including

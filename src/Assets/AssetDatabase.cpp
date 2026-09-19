@@ -5,11 +5,17 @@
 #include "AtomicFile.h"
 #include <json.hpp>
 
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#include <thread>
 #include <random>
 #include <cctype>
+#include <cstring>
 #include <sstream>
 #include <regex>
 #include <unordered_map>
@@ -86,8 +92,32 @@ const std::unordered_map<std::string, std::string>& KnownExtensions() {
         {".shader", "shader"},
         {".glsl",  "shadersource"}, {".vert", "shadersource"}, {".frag", "shadersource"},
         {".comp",  "shadersource"},
+        // #132 / #175 - Animator Controllers and gameplay scripts are referenced from scenes too.
+        {".controller", "animatorcontroller"},
+        {".tescript", "script"},
     };
     return kExts;
+}
+
+// #132 - the background startup scan (BeginScanProject). Lookups from any other thread wait
+// for it to finish, so nothing ever sees a half-registered project; the scan thread itself
+// (which calls EnsureGuid for every file) must not wait on itself.
+std::mutex              g_ScanMutex;
+std::condition_variable g_ScanDone;
+std::atomic<bool>       g_Scanning{false};
+std::thread::id         g_ScanThread;
+// Joined on destruction so an early exit (--resave, a startup error) never destroys a joinable
+// std::thread, which would call std::terminate.
+struct ScanWorker {
+    std::thread Thread;
+    ~ScanWorker() { if (Thread.joinable()) Thread.join(); }
+} g_ScanWorker;
+
+void WaitIfScanning() {
+    if (!g_Scanning.load(std::memory_order_acquire)) return;
+    std::unique_lock<std::mutex> lk(g_ScanMutex);
+    if (std::this_thread::get_id() == g_ScanThread) return;
+    g_ScanDone.wait(lk, [] { return !g_Scanning.load(std::memory_order_acquire); });
 }
 
 std::string MetaPath(const std::string& assetPath) {
@@ -236,6 +266,28 @@ AssetGuid ResolveDuplicateGuid(const std::string& path, AssetGuid guid) {
 // ---------------------------------------------------------------------------
 
 namespace {
+bool IsUnderRoot(const std::string& path, const std::string& root);
+} // namespace
+
+std::string PathKey(const std::string& path) { return Key(path); }
+
+std::string AssetType(const std::string& path) {
+    std::string ext = std::filesystem::path(path).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+    const auto& known = KnownExtensions();
+    if (auto it = known.find(ext); it != known.end()) return it->second;
+    // #132 - a .json is a scene only under project/scenes (settings.json, layers.json and
+    // player.json are not assets), so scenes get GUIDs without every JSON file getting a .meta.
+    if (ext == ".json" && IsUnderRoot(path, ProjectPaths::Resolve("scenes"))) {
+        const std::string name = std::filesystem::path(path).filename().string();
+        auto endsWith = [&](const char* s) { const size_t n = std::strlen(s); return name.size() > n && name.compare(name.size() - n, n, s) == 0; };
+        if (endsWith(".recovery.json") || endsWith(".backup.json")) return {}; // editor safety copies
+        return "scene";
+    }
+    return {};
+}
+
+namespace {
 bool IsUnderRoot(const std::string& path, const std::string& root) {
     namespace fs = std::filesystem;
     std::error_code ec;
@@ -256,21 +308,17 @@ bool IsSynthetic(const std::string& path) {
 }
 
 AssetGuid EnsureGuid(const std::string& path) {
-    if (IsSynthetic(path)) return {};
+    if (IsSynthetic(path) || path.empty()) return {};
+    WaitIfScanning();
 
     std::lock_guard<std::mutex> lk(g_Mutex);
 
     auto it = g_PathToGuid.find(Key(path));
     if (it != g_PathToGuid.end()) return it->second;
 
-    // Determine asset type from extension (fall back to "asset").
-    std::string ext = std::filesystem::path(path).extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-        [](unsigned char c) { return (char)std::tolower(c); });
-    const auto& known = KnownExtensions();
-    std::string type = "asset";
-    auto extIt = known.find(ext);
-    if (extIt != known.end()) type = extIt->second;
+    // Asset type from the extension (fall back to "asset").
+    std::string type = AssetType(path);
+    if (type.empty()) type = "asset";
 
     // Only create a .meta if the source file actually exists on disk. Missing assets (stale
     // scene references, paths from a different checkout) are tracked in-memory only so they
@@ -320,12 +368,14 @@ AssetGuid EnsureGuid(const std::string& path) {
 }
 
 AssetGuid GuidForPath(const std::string& path) {
+    WaitIfScanning();
     std::lock_guard<std::mutex> lk(g_Mutex);
     auto it = g_PathToGuid.find(Key(path));
     return it != g_PathToGuid.end() ? it->second : AssetGuid{};
 }
 
 std::string PathForGuid(AssetGuid guid) {
+    WaitIfScanning();
     std::lock_guard<std::mutex> lk(g_Mutex);
     auto it = g_GuidToPath.find(guid);
     return it != g_GuidToPath.end() ? it->second : std::string{};
@@ -341,6 +391,7 @@ std::string Resolve(AssetGuid guid, const std::string& fallbackPath) {
 
 void NotifyMoved(const std::string& oldPath, const std::string& newPath) {
     if (oldPath == newPath) return;
+    WaitIfScanning();
 
     std::lock_guard<std::mutex> lk(g_Mutex);
 
@@ -368,8 +419,9 @@ void NotifyMoved(const std::string& oldPath, const std::string& newPath) {
 
 void ScanProject() {
     namespace fs = std::filesystem;
+    const auto t0 = std::chrono::steady_clock::now();
     const std::string root = ProjectPaths::Root();
-    const auto& known = KnownExtensions();
+    int assets = 0;
 
     std::vector<std::string> orphanMetas;
     std::error_code ec;
@@ -394,21 +446,15 @@ void ScanProject() {
         // is an orphan; collected here and pruned below.
         if (path.size() > 5 && path.substr(path.size() - 5) == ".meta") {
             const std::string assetPath = path.substr(0, path.size() - 5);
-            std::string assetExt = fs::path(assetPath).extension().string();
-            std::transform(assetExt.begin(), assetExt.end(), assetExt.begin(),
-                [](unsigned char c) { return (char)std::tolower(c); });
             std::error_code existEc;
-            if (known.count(assetExt) && !fs::exists(assetPath, existEc) && !existEc)
+            if (!AssetType(assetPath).empty() && !fs::exists(assetPath, existEc) && !existEc)
                 orphanMetas.push_back(path);
             continue;
         }
 
-        std::string ext = entry.path().extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(),
-            [](unsigned char c) { return (char)std::tolower(c); });
-        if (known.find(ext) == known.end()) continue;
-
+        if (AssetType(path).empty()) continue;
         EnsureGuid(path);
+        ++assets;
     }
 
     // Unity deletes a .meta whose asset no longer exists; do the same, but say which ones.
@@ -417,10 +463,80 @@ void ScanProject() {
         if (fs::remove(meta, rmEc))
             Log::Info("AssetDatabase: removed orphaned '" + ProjectPaths::Relativize(meta) + "' (its asset no longer exists).");
     }
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    char buf[96];
+    std::snprintf(buf, sizeof(buf), "AssetDatabase: %d asset(s) registered in %.0f ms.", assets, ms);
+    Log::Info(buf);
+}
+
+void BeginScanProject() {
+    if (g_Scanning.exchange(true)) return; // already running
+    if (g_ScanWorker.Thread.joinable()) g_ScanWorker.Thread.join(); // a previous, finished scan
+    std::lock_guard<std::mutex> lk(g_ScanMutex); // held until the worker's id is recorded
+    g_ScanWorker.Thread = std::thread([] {
+        {
+            std::lock_guard<std::mutex> wait(g_ScanMutex); // g_ScanThread is set by now
+        }
+        try { ScanProject(); } catch (...) { Log::Error("AssetDatabase: the project scan failed."); }
+        {
+            std::lock_guard<std::mutex> done(g_ScanMutex);
+            g_ScanThread = {};
+            g_Scanning.store(false, std::memory_order_release);
+        }
+        g_ScanDone.notify_all();
+    });
+    g_ScanThread = g_ScanWorker.Thread.get_id();
+}
+
+void WaitForScan() {
+    WaitIfScanning();
+    if (g_ScanWorker.Thread.joinable() && !g_Scanning.load()) g_ScanWorker.Thread.join();
+}
+
+bool IsScanning() { return g_Scanning.load(std::memory_order_acquire); }
+
+namespace {
+std::string RefFileAbsolute(const std::string& file) {
+    return std::filesystem::path(file).is_absolute() ? file : ProjectPaths::Resolve(file);
+}
+} // namespace
+
+std::string RefGuid(const std::string& ref) {
+    const std::string file = ref.substr(0, ref.find('#'));
+    if (file.empty() || IsSynthetic(file)) return {};
+    const std::string abs = RefFileAbsolute(file);
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(abs, ec)) return {};
+    const AssetGuid g = EnsureGuid(abs);
+    return g.IsValid() ? g.ToString() : std::string();
+}
+
+std::string FollowRef(const std::string& ref, const std::string& guid) {
+    if (guid.empty()) return ref;
+    const size_t hash = ref.find('#');
+    const std::string file = ref.substr(0, hash);
+    std::error_code ec;
+    if (!file.empty() && std::filesystem::exists(RefFileAbsolute(file), ec)) return ref;
+    const std::string moved = PathForGuid(AssetGuid::FromString(guid));
+    if (moved.empty() || !std::filesystem::exists(moved, ec)) return ref;
+    const std::string followed = ProjectPaths::Relativize(moved) + (hash == std::string::npos ? std::string() : ref.substr(hash));
+    Log::Info("AssetDatabase: reference '" + ref + "' followed its file to '" + followed + "'.");
+    return followed;
+}
+
+void ForgetPath(const std::string& path) {
+    WaitIfScanning();
+    std::lock_guard<std::mutex> lk(g_Mutex);
+    auto it = g_PathToGuid.find(Key(path));
+    if (it == g_PathToGuid.end()) return;
+    auto back = g_GuidToPath.find(it->second);
+    if (back != g_GuidToPath.end() && Key(back->second) == Key(path)) g_GuidToPath.erase(back);
+    g_PathToGuid.erase(it);
 }
 
 std::string ReadMetaFields(const std::string& path) {
     if (IsSynthetic(path)) return "{}";
+    WaitIfScanning();
     std::lock_guard<std::mutex> lk(g_Mutex);
     json j = ReadMetaFull(MetaPath(path));
     return j.empty() ? "{}" : j.dump();
@@ -433,6 +549,7 @@ bool MergeMetaFields(const std::string& path, const std::string& fieldsJson) {
     try { incoming = json::parse(fieldsJson); } catch (...) { return false; }
     if (!incoming.is_object()) return false;
 
+    WaitIfScanning();
     std::lock_guard<std::mutex> lk(g_Mutex);
 
     auto it = g_PathToGuid.find(Key(path));
@@ -445,12 +562,8 @@ bool MergeMetaFields(const std::string& path, const std::string& fieldsJson) {
     if (!j.contains("metaVersion")) j["metaVersion"] = 1;
     if (!j.contains("guid"))        j["guid"] = guid.ToString();
     if (!j.contains("type")) {
-        std::string ext = std::filesystem::path(path).extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(),
-            [](unsigned char c) { return (char)std::tolower(c); });
-        const auto& known = KnownExtensions();
-        auto extIt = known.find(ext);
-        j["type"] = (extIt != known.end()) ? extIt->second : std::string("asset");
+        const std::string type = AssetType(path);
+        j["type"] = type.empty() ? std::string("asset") : type;
     }
 
     for (auto& [key, val] : incoming.items()) j[key] = val;
