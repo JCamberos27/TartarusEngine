@@ -20,8 +20,11 @@ struct ShaderProperty {
     // intensity above 1 is allowed, shown as colour x 2^EV), [Toggle] (Float/Int shown as a
     // checkbox, 0/1), [Normal] (Texture2D expects a normal map), [NoScaleOffset] (no tiling UI;
     // informational until per-texture tiling exists), [Header(text)] (a section title above the
-    // property), [Tooltip(text)] (inspector hover text).
+    // property), [Tooltip(text)] (inspector hover text). [Invert] is the engine's own: a
+    // Range(min, max) Float shown flipped (min + max - value), so _Roughness can be edited as
+    // Unity's Smoothness while the material keeps storing roughness.
     bool HDR = false;
+    bool Invert = false;
     bool Toggle = false;
     bool NormalMap = false;
     bool NoScaleOffset = false;

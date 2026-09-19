@@ -1,7 +1,7 @@
 # Generates the default testing scene, project/scenes/Sandbox.json, and its prototype grid
 # textures (project/textures/proto_grid_*.png). Usage: python tools/gen_sandbox_scene.py <repo root>
 # Hand edits made in the editor are lost if this is re-run - it's the scene's starting point.
-# The scene's other assets (court, basketball, materials, sounds, animator controller) come from
+# The scene's other assets (court, basketball, materials, animator controller) come from
 # tools/gen_sandbox_assets.py; run that first on a fresh checkout.
 import json, math, random, sys, os
 from PIL import Image, ImageDraw
@@ -70,10 +70,6 @@ def col(shape='box', half=None, friction=0.6, bounce=0.0, static=None, fcomb='av
     if COMBINE[fcomb]: c['frictionCombine'] = COMBINE[fcomb]
     if COMBINE[bcomb]: c['bounceCombine'] = COMBINE[bcomb]
     return c
-
-def impact(clip, volume=1.0, min_speed=0.6, max_speed=8.0, pitch=0.08):
-    return {'Impact Sound': {'Clip': 'sounds/' + clip, 'Volume': volume, 'Min Speed': min_speed,
-                             'Max Speed': max_speed, 'Pitch Variation': pitch}}
 
 def particles(**f):
     d = {'Emitting': True, 'Rate': 20.0, 'Max Particles': 500, 'Lifetime': 2.0, 'Start Speed': 3.0, 'Spread': 25.0,
@@ -231,8 +227,7 @@ for row in range(base):
     for c in range(base - row):
         x = 14 + c * 1.02 + row * 0.51
         box(f'Pyramid Crate {row}-{c}', (x, 0.1 + 0.5 + row * 1.0 + 0.001 * row, -8), (1, 1, 1),
-            m=mat(ORANGE if (row + c) % 2 == 0 else TEAL, 0.7), body=rigidbody(8), friction=0.7, parent=g_phys,
-            extra=impact('wood_knock.wav', 0.8, 1.0, 7.0, 0.12))
+            m=mat(ORANGE if (row + c) % 2 == 0 else TEAL, 0.7), body=rigidbody(8), friction=0.7, parent=g_phys)
 
 # Brick wall of small crates (staggered)
 for row in range(6):
@@ -241,7 +236,7 @@ for row in range(6):
     for c in range(n):
         box(f'Wall Brick {row}-{c}', (24 + off + c * 0.81, 0.1 + 0.3 + row * 0.6 + 0.001 * row, -3),
             (0.8, 0.6, 0.4), m=mat((0.55, 0.12, 0.09) if row % 2 == 0 else (0.45, 0.10, 0.08), 0.8), body=rigidbody(3),
-            friction=0.8, parent=g_phys, extra=impact('wood_knock.wav', 0.55, 1.0, 7.0, 0.2))
+            friction=0.8, parent=g_phys)
 
 # Ramp with balls parked at the top; they roll off as soon as Play starts
 ang = 18.0
@@ -253,22 +248,21 @@ box('Ramp Back Stop', (16, top_y + 0.6, 5 - L / 2 * math.cos(math.radians(ang)) 
 for k in range(5):
     x = 14.6 + k * 0.7
     sphere(f'Ramp Ball {k + 1}', (x, top_y + 0.9, 5 - L / 2 * math.cos(math.radians(ang)) + 0.6), 0.3,
-           mat(PALETTE[k + 3], 0.25, 0.1 if k % 2 else 0.8), body=rigidbody(2, 0.02, 0.05, True), parent=g_phys,
-           extra=impact('rubber_ball.wav', 0.6, 0.8, 6.0))
+           mat(PALETTE[k + 3], 0.25, 0.1 if k % 2 else 0.8), body=rigidbody(2, 0.02, 0.05, True), parent=g_phys)
 
 # Domino run: the first one is tipped, so the whole line cascades on Play
 for k in range(18):
     tilt = 20 if k == 0 else 0
     box(f'Domino {k + 1}', (26, 0.1 + 0.6 + (0.1 if k == 0 else 0), 4 + k * 0.55), (0.6, 1.2, 0.15),
         rot=(tilt, 0, 0), m=mat((0.95, 0.95, 0.93) if k % 2 == 0 else (0.1, 0.1, 0.11), 0.35),
-        body=rigidbody(1.5), friction=0.5, parent=g_phys, extra=impact('wood_knock.wav', 0.35, 0.3, 3.0, 0.1))
+        body=rigidbody(1.5), friction=0.5, parent=g_phys)
 
 # Loose spheres of different sizes / materials for pushing around
 for k in range(8):
     r = 0.25 + 0.1 * (k % 4)
     sphere(f'Physics Ball {k + 1}', (18 + (k % 4) * 1.6, 0.1 + r + 0.01, -13 + (k // 4) * 1.6), r,
            mat(PALETTE[k], 0.3 if k % 2 else 0.6, 1.0 if k in (2, 5) else 0.0), body=rigidbody(1 + r * 4),
-           parent=g_phys, extra=impact('rubber_ball.wav', 0.6, 0.8, 6.0))
+           parent=g_phys)
 
 # ---------------------------------------------------------------- ball pit (north)
 g_pit = group('Ball Pit')
@@ -287,8 +281,7 @@ for layer in range(3):
             z = pz - 3.1 + gz * 1.24 + random.uniform(-0.15, 0.15)
             k += 1
             sphere(f'Pit Ball {k}', (x, 1.5 + layer * 1.3, z), 0.35, mat(random.choice(PALETTE), 0.35),
-                   body=rigidbody(0.6, 0.05, 0.1), bounce=0.4, parent=g_pit,
-                   extra=impact('rubber_ball.wav', 0.18, 1.5, 6.0, 0.15))
+                   body=rigidbody(0.6, 0.05, 0.1), bounce=0.4, parent=g_pit)
 
 # ---------------------------------------------------------------- movement course (west)
 g_course = group('Movement Course')
@@ -313,19 +306,22 @@ for k in range(4):
     box(f'Pillar {k + 1}', (-30 + (k % 2) * 4, 0.1 + 1.5, 6 + (k // 2) * 4), (1, 3, 1), m=WALL, parent=g_course)
 
 # ---------------------------------------------------------------- basketball arena (south)
-# A regulation NBA court (28.65 x 15.24 m, 2 m apron) inside a glass hall with a 12 m roof, so
-# a thrown ball bounces off the glass instead of rolling away. Play basketball with the gravity
+# An NBA court scaled up by COURT_S (markings, floor and hall) with hoops and balls scaled by
+# HOOP_S - a regulation 24 cm ball in a 46 cm ring is too fiddly to shoot with the gravity gun. The
+# rim stays at the real 3.05 m. A glass hall with a roof keeps a thrown ball from rolling away. Play basketball with the gravity
 # gun: right mouse picks the ball up, hold left mouse to charge a shot, release to throw.
 # Scoring: a Goal Trigger under each rim counts baskets on the Scoreboard (+3 from 6.9 m out),
 # bursts sparks and confetti, flashes a light and plays the swish.
 g_arena = group('Basketball Arena')
-CZ = 32.0                                   # court centre z
-COURT_L, COURT_W, APRON = 28.65, 15.24, 2.0
+COURT_S = 1.5                               # court + hall scale (the floor texture stretches with it)
+HOOP_S = 2.0                                # ring, net, backboard and ball scale
+COURT_L, COURT_W, APRON = 28.65 * COURT_S, 15.24 * COURT_S, 2.0 * COURT_S
 FLOOR_L, FLOOR_W = COURT_L + 2 * APRON, COURT_W + 2 * APRON
 FLOOR_TOP = 0.12
 HALL_X = FLOOR_L / 2 + 1.0                  # glass walls
 HALL_Z = FLOOR_W / 2 + 1.0
-HALL_H = 12.0
+HALL_H = 15.0
+CZ = 21.38 + HALL_Z                         # court centre z: the north (door) wall stays at z 21.4
 RIM_Y = FLOOR_TOP + 3.05
 STEEL = mat((0.16, 0.17, 0.19), 0.4, 0.85)
 NAVY_PAD = mat((0.10, 0.17, 0.38), 0.75, sheen=[0.2, 0.25, 0.4])
@@ -360,7 +356,7 @@ for sx in (-1, 1):
     box('Door Post ' + ('East' if sx > 0 else 'West'), (sx * DOOR, HALL_H / 2, CZ - HALL_Z), (0.14, HALL_H, 0.14),
         m=STEEL, parent=g_hall)
 box('Door Lintel', (0, 3.0, CZ - HALL_Z), (2 * DOOR + 0.14, 0.14, 0.14), m=STEEL, parent=g_hall)
-n_long, n_short = 8, 5
+n_long, n_short = 10, 6
 for k in range(n_long + 1):
     x = -HALL_X + k * (2 * HALL_X / n_long)
     for sz in (-1, 1):
@@ -396,59 +392,65 @@ for sx in (-1, 1):
 BALL_TAG = 'Basketball'
 for side, team, label in ((-1, 'Home', 'West'), (1, 'Away', 'East')):
     g_hoop = group(f'Hoop {label}', parent=g_arena)
-    bx = side * (COURT_L / 2 - 1.60)               # basket centre
-    face = side * (COURT_L / 2 - 1.22)             # backboard front face
+    bx = side * (COURT_L / 2 - 1.60 * COURT_S)     # basket centre, on the painted markings
+    face = side * (COURT_L / 2 - 1.22 * COURT_S)   # backboard front face
     board_x = face + side * 0.015
-    # Backboard: tempered glass with painted lines, a steel frame and a padded bottom edge.
-    box(f'Backboard {label}', (board_x, FLOOR_TOP + 2.90 + 0.535, CZ), (0.03, 1.07, 1.83),
+    # Backboard: tempered glass with painted lines, a steel frame and a padded bottom edge. Its
+    # bottom edge sits 0.15 m (x HOOP_S) below the rim, as on a real board.
+    BW, BH = 1.83 * HOOP_S, 1.07 * HOOP_S
+    board_bot = RIM_Y - 0.15 * HOOP_S
+    board_y = board_bot + BH / 2
+    box(f'Backboard {label}', (board_x, board_y, CZ), (0.03, BH, BW),
         m=matref('materials/sandbox/backboard_glass.mat'), collider=col('box', friction=0.4, bounce=0.45),
-        parent=g_hoop, extra=impact('backboard_thud.wav', 0.9, 0.8, 9.0, 0.06))
+        parent=g_hoop)
     fx = board_x + side * 0.03
-    for n, c, s in (('Top', (fx, FLOOR_TOP + 3.97, CZ), (0.04, 0.04, 1.87)),
-                    ('Left', (fx, FLOOR_TOP + 3.435, CZ - 0.935), (0.04, 1.11, 0.04)),
-                    ('Right', (fx, FLOOR_TOP + 3.435, CZ + 0.935), (0.04, 1.11, 0.04))):
+    for n, c, s in (('Top', (fx, board_bot + BH + 0.02, CZ), (0.05, 0.05, BW + 0.05)),
+                    ('Left', (fx, board_y, CZ - BW / 2 - 0.02), (0.05, BH + 0.04, 0.05)),
+                    ('Right', (fx, board_y, CZ + BW / 2 + 0.02), (0.05, BH + 0.04, 0.05))):
         box(f'Backboard Frame {n} {label}', c, s, m=STEEL, parent=g_hoop)
-    box(f'Backboard Pad {label}', (board_x, FLOOR_TOP + 2.86, CZ), (0.07, 0.09, 1.87), m=NAVY_PAD, parent=g_hoop)
-    # Rim + bracket + net.
-    model(f'Rim {label}', 'models/basketball/rim.obj', (bx, RIM_Y, CZ), m=matref('materials/sandbox/rim.mat'),
-          collider=col('mesh', friction=0.5, bounce=0.35), parent=g_hoop,
-          extra=impact('rim_clang.wav', 0.75, 0.7, 8.0, 0.05))
-    box(f'Rim Bracket {label}', (bx + side * (0.2376 + (abs(face - bx) - 0.2376) / 2), RIM_Y - 0.02, CZ),
-        (abs(face - bx) - 0.2376 + 0.01, 0.05, 0.2), m=matref('materials/sandbox/rim.mat'), parent=g_hoop)
-    model(f'Net {label}', 'models/basketball/net.obj', (bx, RIM_Y, CZ), m=matref('materials/sandbox/net.mat'),
-          parent=g_hoop)
+    box(f'Backboard Pad {label}', (board_x, board_bot - 0.04, CZ), (0.08, 0.12, BW + 0.05), m=NAVY_PAD, parent=g_hoop)
+    # Rim + bracket + net (the OBJs are regulation size; scaled by HOOP_S).
+    RING_R = 0.2376 * HOOP_S                       # outer radius of the ring tube
+    model(f'Rim {label}', 'models/basketball/rim.obj', (bx, RIM_Y, CZ), scale=(HOOP_S,) * 3,
+          m=matref('materials/sandbox/rim.mat'), collider=col('mesh', friction=0.5, bounce=0.35), parent=g_hoop)
+    box(f'Rim Bracket {label}', (bx + side * (RING_R + (abs(face - bx) - RING_R) / 2), RIM_Y - 0.03, CZ),
+        (abs(face - bx) - RING_R + 0.02, 0.08, 0.3), m=matref('materials/sandbox/rim.mat'), parent=g_hoop)
+    model(f'Net {label}', 'models/basketball/net.obj', (bx, RIM_Y, CZ), scale=(HOOP_S,) * 3,
+          m=matref('materials/sandbox/net.mat'), parent=g_hoop)
     # Stanchion behind the baseline: padded base, post, arm to the board, diagonal brace.
     post_x = side * (COURT_L / 2 + 1.35)
     box(f'Stanchion Base {label}', (side * (COURT_L / 2 + 1.55), FLOOR_TOP + 0.5, CZ), (1.1, 1.0, 1.6), m=NAVY_PAD,
         parent=g_hoop)
-    box(f'Stanchion Post {label}', (post_x, FLOOR_TOP + 2.2, CZ), (0.22, 2.4, 0.22), m=STEEL, parent=g_hoop)
+    post_h = board_y + 0.1 - FLOOR_TOP
+    box(f'Stanchion Post {label}', (post_x, FLOOR_TOP + post_h / 2, CZ), (0.22, post_h, 0.22), m=STEEL, parent=g_hoop)
     box(f'Stanchion Post Pad {label}', (post_x, FLOOR_TOP + 1.6, CZ), (0.34, 1.2, 0.34), m=NAVY_PAD, parent=g_hoop)
     arm_x0, arm_x1 = board_x + side * 0.03, post_x
-    box(f'Stanchion Arm {label}', ((arm_x0 + arm_x1) / 2, FLOOR_TOP + 3.43, CZ), (abs(arm_x1 - arm_x0), 0.14, 0.14),
+    box(f'Stanchion Arm {label}', ((arm_x0 + arm_x1) / 2, board_y, CZ), (abs(arm_x1 - arm_x0), 0.14, 0.14),
         m=STEEL, parent=g_hoop)
     brace_len = math.hypot(abs(arm_x1 - arm_x0) * 0.6, 1.0)
     brace_ang = math.degrees(math.atan2(1.0, abs(arm_x1 - arm_x0) * 0.6))
-    box(f'Stanchion Brace {label}', (arm_x1 - side * abs(arm_x1 - arm_x0) * 0.3, FLOOR_TOP + 2.93, CZ),
+    box(f'Stanchion Brace {label}', (arm_x1 - side * abs(arm_x1 - arm_x0) * 0.3, board_y - 0.5, CZ),
         (brace_len, 0.1, 0.1), rot=(0, 0, -side * brace_ang), m=STEEL, parent=g_hoop)
     # Goal trigger just under the ring, with its celebration as children.
-    goal = empty(f'Goal {label}', (bx, RIM_Y - 0.28, CZ), parent=g_hoop, extra={
-        'collider': col('box', half=(0.12, 0.06, 0.12), trigger=True),
-        'Goal Trigger': {'Tag': BALL_TAG, 'Team': team, 'Points': 2, 'Three Points': 3, 'Three Point Distance': 6.9,
-                         'Require Downward': True, 'Score Sound': 'sounds/basket_score.wav', 'Flash Intensity': 45.0}})
-    empty(f'Goal Sparks {label}', (0, 0.33, 0), parent=goal, extra=particles(
+    goal = empty(f'Goal {label}', (bx, RIM_Y - 0.28 * HOOP_S, CZ), parent=g_hoop, extra={
+        'collider': col('box', half=(0.12 * HOOP_S, 0.06 * HOOP_S, 0.12 * HOOP_S), trigger=True),
+        'Goal Trigger': {'Tag': BALL_TAG, 'Team': team, 'Points': 2, 'Three Points': 3,
+                         'Three Point Distance': round(6.9 * COURT_S, 3),
+                         'Require Downward': True, 'Flash Intensity': 45.0}})
+    empty(f'Goal Sparks {label}', (0, 0.28 * HOOP_S + 0.05, 0), parent=goal, extra=particles(
         Emitting=False, Rate=900.0, **{'Max Particles': 450, 'Lifetime': 1.1, 'Start Speed': 4.5, 'Spread': 55.0,
         'Start Size': 0.07, 'End Size': 0.01, 'Start Color': [1.0, 0.82, 0.35], 'End Color': [1.0, 0.35, 0.05],
         'Intensity': 7.0, 'Gravity Modifier': 0.7, 'Blend Mode': 'Additive'}))
-    empty(f'Goal Confetti {label}', (0, 0.38, 0), parent=goal, extra=particles(
+    empty(f'Goal Confetti {label}', (0, 0.28 * HOOP_S + 0.1, 0), parent=goal, extra=particles(
         Emitting=False, Rate=650.0, **{'Max Particles': 400, 'Lifetime': 2.4, 'Start Speed': 5.5, 'Spread': 35.0,
         'Start Size': 0.1, 'End Size': 0.08, 'Start Color': [0.35, 0.65, 1.0] if team == 'Away' else [1.0, 0.55, 0.15],
         'End Color': [1.0, 0.95, 0.7], 'Start Alpha': 1.0, 'End Alpha': 0.0, 'Intensity': 1.4,
         'Gravity Modifier': 0.35}))
-    light(f'Goal Flash {label}', (0, 1.08, 0), (0, 0, 0), 'point', (1.0, 0.8, 0.45), 0.0, rng=14, parent=goal)
+    light(f'Goal Flash {label}', (0, 0.28 * HOOP_S + 0.8, 0), (0, 0, 0), 'point', (1.0, 0.8, 0.45), 0.0, rng=14, parent=goal)
 
 # --- scoreboard: a centre-hung box with seven-segment digits on its north and south faces.
 g_score = group('Scoreboard', parent=g_arena)
-SB_Y = 8.6
+SB_Y = HALL_H - 4.4
 empty('Score', (0, SB_Y, CZ), parent=g_score, extra={'Scoreboard': {'Home': 0, 'Away': 0}})
 box('Scoreboard Body', (0, SB_Y, CZ), (3.4, 2.0, 3.4), m=mat((0.05, 0.05, 0.06), 0.5, 0.3), parent=g_score)
 box('Scoreboard Rim Top', (0, SB_Y + 1.05, CZ), (3.5, 0.1, 3.5), m=STEEL, parent=g_score)
@@ -479,35 +481,44 @@ for face in (-1, 1):                         # -1 north face (seen from the nort
             m=mat((0.1, 0.1, 0.1), 0.5, emis=TEAM_GLOW[team], emisStrength=2.5), parent=g_score)
 
 # --- basketballs: a rack on the north apron, one at centre court, one on each free-throw line.
-BALL_R = 0.1193
+BALL_R = 0.1193 * HOOP_S
 def basketball(name, pos, parent):
     return model(name, 'models/basketball/basketball.obj', pos, rot=(random.uniform(0, 360), random.uniform(0, 360), 0),
                  scale=(2 * BALL_R,) * 3, m=matref('materials/sandbox/basketball.mat'),
                  collider=col('sphere', half=(0.5, 0, 0), friction=0.55, static=0.7, bounce=0.84),
                  body=rigidbody(0.62, 0.1, 0.25, ccd=True), parent=parent,
-                 extra={'tag': BALL_TAG, **impact('basketball_bounce.wav', 0.9, 0.5, 7.0, 0.06)})
+                 extra={'tag': BALL_TAG})
 g_balls = group('Basketballs', parent=g_arena)
-RACK_Z = CZ - COURT_W / 2 - 1.1
-RACK_X = 6.0
-box('Ball Rack Frame L', (RACK_X - 1.3, 0.55, RACK_Z), (0.05, 1.1, 0.5), m=STEEL, parent=g_balls)
-box('Ball Rack Frame R', (RACK_X + 1.3, 0.55, RACK_Z), (0.05, 1.1, 0.5), m=STEEL, parent=g_balls)
-for tier, y in enumerate((0.42, 0.95)):
-    box(f'Ball Rack Shelf {tier + 1}', (RACK_X, y, RACK_Z), (2.6, 0.04, 0.44), m=STEEL, parent=g_balls, friction=0.9)
-    box(f'Ball Rack Lip Front {tier + 1}', (RACK_X, y + 0.05, RACK_Z - 0.2), (2.6, 0.06, 0.02), m=STEEL, parent=g_balls)
-    box(f'Ball Rack Lip Back {tier + 1}', (RACK_X, y + 0.05, RACK_Z + 0.2), (2.6, 0.06, 0.02), m=STEEL, parent=g_balls)
+RACK_Z = CZ - COURT_W / 2 - APRON / 2
+RACK_X = 6.0 * COURT_S
+PITCH = 2 * BALL_R + 0.08                   # ball spacing on the rack
+RACK_W = 5 * PITCH + 0.1
+RACK_D = 2 * BALL_R + 0.1
+TIERS = (0.42, 0.42 + 2 * BALL_R + 0.2)
+box('Ball Rack Frame L', (RACK_X - RACK_W / 2, TIERS[1] / 2 + 0.1, RACK_Z), (0.05, TIERS[1] + 0.2, RACK_D), m=STEEL,
+    parent=g_balls)
+box('Ball Rack Frame R', (RACK_X + RACK_W / 2, TIERS[1] / 2 + 0.1, RACK_Z), (0.05, TIERS[1] + 0.2, RACK_D), m=STEEL,
+    parent=g_balls)
+for tier, y in enumerate(TIERS):
+    box(f'Ball Rack Shelf {tier + 1}', (RACK_X, y, RACK_Z), (RACK_W, 0.04, RACK_D), m=STEEL, parent=g_balls, friction=0.9)
+    box(f'Ball Rack Lip Front {tier + 1}', (RACK_X, y + 0.05, RACK_Z - RACK_D / 2), (RACK_W, 0.06, 0.02), m=STEEL,
+        parent=g_balls)
+    box(f'Ball Rack Lip Back {tier + 1}', (RACK_X, y + 0.05, RACK_Z + RACK_D / 2), (RACK_W, 0.06, 0.02), m=STEEL,
+        parent=g_balls)
     for k in range(5):
-        basketball(f'Basketball {tier * 5 + k + 1}', (RACK_X - 1.0 + k * 0.5, y + 0.02 + BALL_R + 0.001, RACK_Z), g_balls)
+        basketball(f'Basketball {tier * 5 + k + 1}', (RACK_X + (k - 2) * PITCH, y + 0.02 + BALL_R + 0.001, RACK_Z),
+                   g_balls)
 basketball('Basketball Centre Court', (0, FLOOR_TOP + BALL_R + 0.001, CZ), g_balls)
 for side in (-1, 1):
     basketball(f'Basketball Free Throw {"East" if side > 0 else "West"}',
-               (side * (COURT_L / 2 - 5.79 - 0.3), FLOOR_TOP + BALL_R + 0.001, CZ + 0.4), g_balls)
+               (side * (COURT_L / 2 - 5.79 * COURT_S - 0.3), FLOOR_TOP + BALL_R + 0.001, CZ + 0.6), g_balls)
 
 # --- arena lighting: four shadowed spots from the roof, fixtures that glow, and a reflection
 # probe so the varnished floor reflects the hall.
 g_alight = group('Arena Lighting', parent=g_arena)
 for k, (sx, sz) in enumerate(((-1, -1), (1, -1), (-1, 1), (1, 1))):
-    x, z = sx * 7.2, CZ + sz * 3.6
-    light(f'Arena Spot {k + 1}', (x, HALL_H - 0.9, z), (-90, 0, 0), 'spot', (1.0, 0.96, 0.9), 30.0, rng=16, spot=42,
+    x, z = sx * 7.2 * COURT_S, CZ + sz * 3.6 * COURT_S
+    light(f'Arena Spot {k + 1}', (x, HALL_H - 0.9, z), (-90, 0, 0), 'spot', (1.0, 0.96, 0.9), 45.0, rng=HALL_H + 5, spot=42,
           shadows=True, softness=1.2, parent=g_alight)
     box(f'Arena Fixture {k + 1}', (x, HALL_H - 0.75, z), (0.9, 0.12, 0.9),
         m=mat((0.9, 0.9, 0.88), 0.4, emis=(1.0, 0.96, 0.9), emisStrength=9.0), parent=g_alight,
@@ -521,7 +532,7 @@ empty('Player Spawn', (0, 0.02, CZ - HALL_Z - 4.5), (0, 180, 0), extra={'First P
     'Capsule Height': 1.85, 'Mouse Sensitivity': 0.1, 'Invert Y': False, 'Field of View': 75.0, 'Kill Height': -20.0,
     'Gravity': 18.0, 'Gravity Gun': True, 'Min Throw Speed': 3.5, 'Max Throw Speed': 16.0, 'Throw Charge Time': 1.1,
     'Throw Backspin': 2.0}})
-cam_pos = (-15.0, 7.2, CZ - 8.2)
+cam_pos = (-15.0 * COURT_S, 7.2 * COURT_S, CZ - 8.2 * COURT_S)
 tgt = (0.0, 2.0, CZ)
 dx, dy, dz = tgt[0] - cam_pos[0], tgt[1] - cam_pos[1], tgt[2] - cam_pos[2]
 yaw = math.degrees(math.atan2(-dx, -dz))
@@ -544,12 +555,10 @@ prim('cylinder', 'Fountain Water', (0, 0.42, FZ), (4.3, 0.02, 4.3), matref('mate
 prim('cylinder', 'Fountain Column', (0, 0.75, FZ), (0.5, 1.5, 0.5), STONE, parent=g_fount, collider=col('convex'))
 prim('donut', 'Fountain Bowl', (0, 1.5, FZ), (2.0, 1.2, 2.0), STONE, parent=g_fount)
 prim('cylinder', 'Fountain Spout', (0, 1.6, FZ), (0.16, 0.3, 0.16), mat((0.72, 0.55, 0.3), 0.3, 1.0), parent=g_fount)
-empty('Fountain Jet', (0, 1.75, FZ), parent=g_fount, extra={**particles(
+empty('Fountain Jet', (0, 1.75, FZ), parent=g_fount, extra=particles(
     Rate=280.0, **{'Max Particles': 700, 'Lifetime': 1.35, 'Start Speed': 4.6, 'Spread': 7.0, 'Start Size': 0.07,
     'End Size': 0.17, 'Start Color': [0.85, 0.94, 1.0], 'End Color': [0.7, 0.85, 1.0], 'Start Alpha': 0.75,
-    'End Alpha': 0.0, 'Intensity': 1.3, 'Gravity Modifier': 1.0}),
-    'Audio Source': {'Clip': 'sounds/fountain_loop.wav', 'Volume': 0.55, 'Loop': True, 'Play On Start': True,
-                     'Output': 'Ambient'}})
+    'End Alpha': 0.0, 'Intensity': 1.3, 'Gravity Modifier': 1.0}))
 empty('Fountain Mist', (0, 0.5, FZ), parent=g_fount, extra=particles(
     Rate=45.0, **{'Max Particles': 200, 'Lifetime': 1.8, 'Start Speed': 0.7, 'Spread': 80.0, 'Start Size': 0.3,
     'End Size': 0.9, 'Start Color': [0.9, 0.95, 1.0], 'End Color': [0.9, 0.95, 1.0], 'Start Alpha': 0.22,
@@ -573,8 +582,9 @@ for k, (label, file) in enumerate(GALLERY):
 box('Gallery Plinth', (0, 0.05, -9), (17, 0.1, 2.2), m=mat((0.26, 0.28, 0.31), 0.6), parent=g_gal)
 
 # ---------------------------------------------------------------- wrecking ball (physics playground)
-# A 150 kg ball on a seven-link chain of Ball joints, starting 55 degrees up; on Play it swings
-# into the brick wall.
+# A 120 kg ball on a seven-link chain of Ball joints, starting 55 degrees up; on Play it swings
+# into the brick wall. The links are heavy (25 kg) and damped: a light chain on a heavy ball (the
+# old 6 kg : 150 kg) is a mass ratio the solver can't hold, so the chain stretched and whipped.
 g_wreck = group('Wrecking Ball', parent=g_phys)
 PIV = (27.2, 8.6, -6.6)
 for sx in (-1, 1):
@@ -588,7 +598,7 @@ prev = -1
 for k in range(7):
     c = tuple(PIV[i] + d[i] * (LINK / 2 + LINK * k) for i in range(3))
     link = prim('capsule', f'Chain Link {k + 1}', c, (0.24, LINK, 0.24), mat((0.3, 0.3, 0.32), 0.35, 1.0),
-                parent=g_wreck, collider=col('capsule', half=(0.25, 0.25, 0)), body=rigidbody(6, 0.05, 0.3),
+                parent=g_wreck, collider=col('capsule', half=(0.25, 0.25, 0)), body=rigidbody(25, 0.15, 0.8),
                 extra={'rotation': [-(180 - 55), 0, 0]})
     ents['models'][-1]['joint'] = {'type': 2, 'connectedOrder': prev, 'anchor': [0, -LINK / 2, 0], 'axis': [1, 0, 0],
                                    'breakForce': 0.0, 'breakTorque': 0.0, 'useLimit': False, 'limitLower': 0.0,
@@ -596,8 +606,8 @@ for k in range(7):
     prev = link
 BR = 0.6
 bc = tuple(PIV[i] + d[i] * (LINK * 7 + BR) for i in range(3))
-sphere('Wrecking Ball', bc, BR, mat((0.14, 0.14, 0.15), 0.35, 0.95), body=rigidbody(150, 0.02, 0.1, True),
-       friction=0.5, bounce=0.1, parent=g_wreck, extra=impact('metal_clank.wav', 1.0, 1.2, 7.0, 0.05))
+sphere('Wrecking Ball', bc, BR, mat((0.14, 0.14, 0.15), 0.35, 0.95), body=rigidbody(120, 0.05, 0.3, True),
+       friction=0.5, bounce=0.1, parent=g_wreck)
 ents['models'][-1]['joint'] = {'type': 2, 'connectedOrder': prev, 'anchor': [-d[0] * BR, -d[1] * BR, -d[2] * BR],
                                'axis': [1, 0, 0], 'breakForce': 0.0, 'breakTorque': 0.0, 'useLimit': False,
                                'limitLower': 0.0, 'limitUpper': 0.0}
@@ -618,9 +628,9 @@ scene = {
     'formatVersion': 3,
     '_comment': 'Tartarus Sandbox - the default testing scene. Centre: animated Mixamo Y Bots (idle/walk/run/'
                 'strafe/jump + one on an Animator Controller; assets in project/assets/characters/ybot, not in '
-                'git). South: glass-walled basketball arena (NBA court, hoops with goal triggers, scoreboard, '
-                'sounds) - Play spawns you at its door; right mouse grabs a ball, hold left mouse to charge a '
-                'shot. Between: fountain (particles + looping audio). North: material gallery, then the ball '
+                'git). South: glass-walled basketball arena (an NBA court at 1.5x with 2x hoops and balls, goal '
+                'triggers, scoreboard) - Play spawns you at its door; right mouse grabs a ball, hold left mouse '
+                'to charge a shot. Between: fountain (particles). North: material gallery, then the ball '
                 'pit. East: physics playground (crate pyramid, brick wall + wrecking ball on a chain of joints, '
                 'ball ramp, domino run). West: movement course (stairs, ramps, step blocks, lift, turntable). '
                 'Late-afternoon sun, sky ambient, light fog, colour grading. Regenerate with '

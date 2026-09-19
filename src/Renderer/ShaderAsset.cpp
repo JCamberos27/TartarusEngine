@@ -147,6 +147,7 @@ PropParse ParsePropLine(const std::string& rawLine, ShaderProperty& out, std::st
         else if (attr == "Toggle" || attr.rfind("Toggle(", 0) == 0) out.Toggle = true;
         else if (attr == "Normal") out.NormalMap = true;
         else if (attr == "NoScaleOffset") out.NoScaleOffset = true;
+        else if (attr == "Invert") out.Invert = true;
         else if (attr.rfind("Header", 0) == 0) out.Header = argOf("Header");
         else if (attr.rfind("Tooltip", 0) == 0) out.Tooltip = argOf("Tooltip");
         else Log::Warn("ShaderAsset: unknown property attribute [" + attr + "] ignored.");
