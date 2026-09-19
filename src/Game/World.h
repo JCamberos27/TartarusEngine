@@ -97,6 +97,11 @@ public:
     float ChromaticAberration{0.0f}; // #162 - 0 = off
     float FilmGrain{0.0f};           // #162 - 0 = off
     float FilmGrainResponse{0.8f};
+    // #162 - depth of field (Game view / player only).
+    bool  DepthOfField{false};
+    float FocusDistance{10.0f};
+    float FocusRange{3.0f};
+    float DofMaxBlur{8.0f};
 
     // #162 - distance fog (Unity's Lighting > Other Settings > Fog).
     bool  FogEnabled{false};
