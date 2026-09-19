@@ -22,6 +22,8 @@
 #include "ComponentRegistry.h"
 #include "MaterialAsset.h"
 #include "PhysicMaterialAsset.h"
+#include "PostProcessVolume.h"
+#include "Tonemapper.h"
 #include "ProjectPaths.h"
 #include "ProjectWatcher.h"
 #include "TextureCache.h"
@@ -199,6 +201,42 @@ void TestPhysicMaterial() {
     c.Material = path;
     CHECK(ResolvePhysicMaterial(c).Friction == c.Friction);
     CHECK(!PhysicMaterialAsset::LoadFile(path, back));
+}
+
+// #162 / #203 - Post-process Volumes: full weight inside the box, linear fade over the blend
+// distance, nothing beyond; overrides blend in priority order.
+void TestPostProcessVolume() {
+    const glm::mat4 at = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 0.0f, 0.0f));
+    const glm::vec3 size(4.0f);
+    CHECK(PostVolumeWeight(false, size, 2.0f, 1.0f, at, glm::vec3(10.0f, 0.0f, 0.0f)) == 1.0f);
+    CHECK(PostVolumeWeight(false, size, 2.0f, 1.0f, at, glm::vec3(11.9f, 0.0f, 0.0f)) == 1.0f);
+    CHECK(std::abs(PostVolumeWeight(false, size, 2.0f, 1.0f, at, glm::vec3(13.0f, 0.0f, 0.0f)) - 0.5f) < 1e-4f);
+    CHECK(PostVolumeWeight(false, size, 2.0f, 1.0f, at, glm::vec3(20.0f, 0.0f, 0.0f)) == 0.0f);
+    CHECK(PostVolumeWeight(true, size, 2.0f, 0.4f, at, glm::vec3(1000.0f)) == 0.4f);
+    const glm::mat4 scaled = glm::scale(at, glm::vec3(2.0f)); // box now 8 m wide
+    CHECK(PostVolumeWeight(false, size, 0.0f, 1.0f, scaled, glm::vec3(13.5f, 0.0f, 0.0f)) == 1.0f);
+
+    World world;
+    const entt::entity a = world.Registry.create();
+    world.Registry.emplace<TransformComponent>(a);
+    auto& va = world.Registry.emplace<PostProcessVolumeComponent>(a);
+    va.Global = true; va.OverrideSaturation = true; va.Saturation = -100.0f; va.Priority = 1;
+    const entt::entity b = world.Registry.create();
+    world.Registry.emplace<TransformComponent>(b);
+    auto& vb = world.Registry.emplace<PostProcessVolumeComponent>(b);
+    vb.Global = true; vb.OverrideSaturation = true; vb.Saturation = 50.0f; vb.OverrideExposure = true; vb.ExposureEV = 2.0f;
+    vb.Weight = 0.5f; vb.Priority = 0;
+    world.RebuildWorldTransformCache();
+    PostSettings p;
+    p.Saturation = 0.0f; p.ExposureEV = 0.0f;
+    ApplyPostProcessVolumes(world, glm::vec3(0.0f), p);
+    CHECK(p.Saturation == -100.0f);                  // b (priority 0) then a (priority 1, weight 1) wins
+    CHECK(std::abs(p.ExposureEV - 1.0f) < 1e-5f);    // only b overrides exposure, at weight 0.5
+    world.Registry.emplace<DeactivatedTag>(a);
+    world.RebuildWorldTransformCache();
+    p.Saturation = 0.0f;
+    ApplyPostProcessVolumes(world, glm::vec3(0.0f), p);
+    CHECK(std::abs(p.Saturation - 25.0f) < 1e-4f);   // inactive volumes don't apply
 }
 
 void TestLodGroup() {
@@ -625,6 +663,7 @@ int RunUnitTests() {
         {"LodGroup", TestLodGroup},
         {"NearestEuler", TestNearestEuler},
         {"PhysicMaterial", TestPhysicMaterial},
+        {"PostProcessVolume", TestPostProcessVolume},
         {"DopplerVelocity", TestDopplerVelocity},
         {"InputMap", TestInputMap},
         {"ActiveInHierarchy", TestActiveInHierarchy},
