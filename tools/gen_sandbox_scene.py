@@ -519,7 +519,7 @@ empty('Arena Reflection Probe', (0, 4.0, CZ), parent=g_alight,
 empty('Player Spawn', (0, 0.02, CZ - HALL_Z - 4.5), (0, 180, 0), extra={'First Person Controller': {
     'Move Speed': 6.0, 'Sprint Multiplier': 1.6, 'Jump Speed': 5.5, 'Eye Height': 1.7, 'Capsule Radius': 0.3,
     'Capsule Height': 1.85, 'Mouse Sensitivity': 0.1, 'Invert Y': False, 'Field of View': 75.0, 'Kill Height': -20.0,
-    'Gravity Gun': True, 'Min Throw Speed': 3.5, 'Max Throw Speed': 16.0, 'Throw Charge Time': 1.1,
+    'Gravity': 18.0, 'Gravity Gun': True, 'Min Throw Speed': 3.5, 'Max Throw Speed': 16.0, 'Throw Charge Time': 1.1,
     'Throw Backspin': 2.0}})
 cam_pos = (-15.0, 7.2, CZ - 8.2)
 tgt = (0.0, 2.0, CZ)

@@ -308,6 +308,7 @@ struct FirstPersonControllerComponent {
     float FieldOfView = 75.0f;
     float KillY = -20.0f;           // falling below this respawns at the spawn point
     bool  GravityGun = true;        // the built-in pick-up/throw tool (right/left mouse)
+    float Gravity = 18.0f;          // m/s^2 pulling the player down - game feel, separate from the physics world's
     // Gravity gun throw: hold left mouse to charge from Min to Max Throw Speed over Charge Time.
     float MinThrowSpeed = 4.0f;     // m/s, a tap
     float MaxThrowSpeed = 18.0f;    // m/s, fully charged

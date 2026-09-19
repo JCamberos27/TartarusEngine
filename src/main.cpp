@@ -1075,7 +1075,9 @@ int main(int argc, char** argv) {
             // dropped in at the editor camera so Play inspects what you were just working on.
             // The editor camera is left where it is — the Scene tab stays usable during play.
             player = Player{};
-            player.Gravity = ProjectSettings::Physics().Gravity.y; // #236 A4 — project-scoped
+            // The player's fall is its own game-feel value (the First Person Controller's Gravity,
+            // 18 m/s^2 when there's none), not the physics world's Earth gravity.
+            player.Gravity = -FirstPersonControllerComponent{}.Gravity;
             playUsesPlayer = true;
             playGravityGun = true;
             gravityGun.Reset();
@@ -1084,6 +1086,7 @@ int main(int argc, char** argv) {
             if (entt::entity ctrl = FindFirstPersonController(world); ctrl != entt::null) {
                 const auto& fp = world.Registry.get<FirstPersonControllerComponent>(ctrl);
                 player.MoveSpeed = fp.MoveSpeed;
+                player.Gravity = -std::abs(fp.Gravity);
                 player.SprintMultiplier = fp.SprintMultiplier;
                 player.JumpSpeed = fp.JumpSpeed;
                 player.EyeHeight = fp.EyeHeight;
@@ -1634,6 +1637,82 @@ int main(int argc, char** argv) {
                         }
                         std::cout << "[SmokeTest]   -> Stop\n";  togglePlay(); ++smokePlayCycles;
                     }
+                }
+
+                // Sandbox basketball: on the first Play frame, step the physics world (and the game
+                // module, which scores) synchronously in fixed steps. 1) Drop the ball 1.8 m onto
+                // the court: a real basketball comes back up to roughly 1.2-1.4 m. 2) Throw a free
+                // throw solved for a swish (same gravity / damping model as PhysX): the Goal Trigger
+                // under the rim must add 2 to the Scoreboard.
+                if (smokeSceneActive && playing && smokeFramesRendered == 21 &&
+                    smokeScenePaths[smokeSceneIndex].find("smoke_play_basketball") != std::string::npos) {
+                    entt::entity ballE = entt::null;
+                    for (auto [e, tag] : world.Registry.view<TagComponent>().each())
+                        if (tag.Tag == "Basketball") ballE = e;
+                    ScoreboardComponent* board = nullptr;
+                    for (auto [e, b] : world.Registry.view<ScoreboardComponent>().each()) board = &b;
+                    glm::vec3 basket(0.0f);
+                    for (auto [e, g] : world.Registry.view<GoalTriggerComponent>().each())
+                        basket = world.WorldSpaceTransform(e).Position + glm::vec3(0.0f, 0.28f, 0.0f);
+                    const unsigned id = ballE != entt::null ? (unsigned)entt::to_integral(ballE) : 0xFFFFFFFFu;
+                    const float fdt = 1.0f / 60.0f, floorTop = 0.12f, radius = 0.1193f;
+                    const float gravity = ProjectSettings::Physics().Gravity.y;
+                    auto run = [&](float seconds, const auto& each) {
+                        for (int i = 0; i < (int)(seconds / fdt); ++i) {
+                            PhysicsWorld::Step(fdt, world, [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); });
+                            gameModule.Tick(world, fdt, true);
+                            each();
+                        }
+                    };
+                    const float zeroRot[3] = {0.0f, 0.0f, 0.0f};
+                    // 1) drop
+                    const float drop[3] = {-3.0f, floorTop + 1.8f + radius, 0.0f};
+                    PhysicsWorld::SetActorPose(id, drop, zeroRot, true);
+                    bool bounced = false, rising = false;
+                    float peak = 0.0f, prevVy = 0.0f;
+                    run(2.5f, [&] {
+                        BodyState bs;
+                        float p[3];
+                        if (!PhysicsWorld::GetBodyState(id, bs) || !PhysicsWorld::GetActorPosition(id, p)) return;
+                        if (!bounced && prevVy < -0.5f && bs.Velocity[1] > 0.0f) { bounced = true; rising = true; }
+                        if (rising) {
+                            peak = std::max(peak, p[1] - floorTop - radius);
+                            if (bs.Velocity[1] < 0.0f) rising = false;
+                        }
+                        prevVy = bs.Velocity[1];
+                    });
+                    // 2) free throw: 4.6 m out, released at 2.1 m, 52 degrees; bisect the speed.
+                    const float angle = glm::radians(52.0f);
+                    const glm::vec3 start(basket.x - 4.6f, 2.1f, basket.z);
+                    auto heightAtBasket = [&](float speed) {
+                        glm::vec3 x = start, v(std::cos(angle) * speed, std::sin(angle) * speed, 0.0f);
+                        for (int i = 0; i < 600; ++i) {
+                            v.y += gravity * fdt;
+                            v *= 1.0f - fdt * 0.1f; // the ball's Linear Damping
+                            x += v * fdt;
+                            if (x.x >= basket.x) return x.y - basket.y;
+                        }
+                        return -100.0f;
+                    };
+                    float lo = 4.0f, hi = 14.0f;
+                    for (int i = 0; i < 40; ++i) {
+                        const float mid = 0.5f * (lo + hi);
+                        (heightAtBasket(mid) < 0.0f ? lo : hi) = mid;
+                    }
+                    const float speed = 0.5f * (lo + hi);
+                    const int homeBefore = board ? board->Home : -1;
+                    const float startP[3] = {start.x, start.y, start.z};
+                    PhysicsWorld::SetActorPose(id, startP, zeroRot, true);
+                    const float vel[3] = {std::cos(angle) * speed, std::sin(angle) * speed, 0.0f};
+                    PhysicsWorld::SetLinearVelocity(id, vel);
+                    run(3.0f, [] {});
+                    const int scored = board ? board->Home - homeBefore : -1;
+                    const float bounce = peak / 1.8f;
+                    std::cout << "[SmokeTest]   basketball bounce=" << bounce << " (" << peak << " m from 1.8 m) shotSpeed="
+                              << speed << " scored=" << scored << std::endl;
+                    if (ballE == entt::null || !board) Log::Error("[SmokeTest] basketball scene is missing its ball or scoreboard.");
+                    if (bounce < 0.55f || bounce > 0.85f) Log::Error("[SmokeTest] basketball bounce is not ball-like.");
+                    if (scored != 2) Log::Error("[SmokeTest] the free throw did not score 2 through the goal trigger.");
                 }
             }
             // #144: `dt` is unscaled (editor camera, UI, capture polling - never slowed or frozen

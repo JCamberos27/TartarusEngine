@@ -1,0 +1,278 @@
+{
+ "formatVersion": 3,
+ "_comment": "Sandbox basketball regression: real-ball bounce (drop 1.8 m, restitution 0.84 on the court) and a free throw solved for a swish, which must score 2 on the Scoreboard through the Goal Trigger + ScoringSystem in TartarusGame.dll. Uses the Sandbox rim / ball / materials.",
+ "skySource": 0,
+ "skyHorizonColor": [
+  0.7,
+  0.76,
+  0.84
+ ],
+ "skyZenithColor": [
+  0.22,
+  0.42,
+  0.74
+ ],
+ "skyAmbientIntensity": 0.8,
+ "shadowsEnabled": true,
+ "boxes": [
+  {
+   "name": "Court",
+   "id": 1,
+   "parentId": -1,
+   "order": 1,
+   "center": [
+    0,
+    0.06,
+    0
+   ],
+   "size": [
+    12,
+    0.12,
+    6
+   ],
+   "color": [
+    0.8,
+    0.6,
+    0.4
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "collider": {
+    "isTrigger": false,
+    "friction": 0.6,
+    "bounciness": 0.84,
+    "staticFriction": 0.75
+   }
+  },
+  {
+   "name": "Backboard",
+   "id": 2,
+   "parentId": -1,
+   "order": 2,
+   "center": [
+    2.395,
+    3.555,
+    0
+   ],
+   "size": [
+    0.03,
+    1.07,
+    1.83
+   ],
+   "color": [
+    0.8,
+    0.9,
+    0.95
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "collider": {
+    "isTrigger": false,
+    "friction": 0.4,
+    "bounciness": 0.45
+   }
+  }
+ ],
+ "models": [
+  {
+   "path": "models/basketball/rim.obj",
+   "name": "Rim",
+   "id": 3,
+   "parentId": -1,
+   "order": 3,
+   "position": [
+    2.0,
+    3.17,
+    0.0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "materials": [
+    {
+     "path": "materials/sandbox/rim.mat"
+    }
+   ],
+   "collider": {
+    "isTrigger": false,
+    "shape": 4,
+    "friction": 0.5,
+    "bounciness": 0.35
+   }
+  },
+  {
+   "path": "models/basketball/basketball.obj",
+   "name": "Basketball",
+   "id": 6,
+   "parentId": -1,
+   "order": 6,
+   "position": [
+    -3.0,
+    2.0,
+    0.0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    0.2386,
+    0.2386,
+    0.2386
+   ],
+   "materials": [
+    {
+     "path": "materials/sandbox/basketball.mat"
+    }
+   ],
+   "tag": "Basketball",
+   "collider": {
+    "isTrigger": false,
+    "shape": 1,
+    "halfExtents": [
+     0.5,
+     0,
+     0
+    ],
+    "friction": 0.55,
+    "bounciness": 0.84,
+    "staticFriction": 0.7
+   },
+   "Rigidbody": {
+    "Mass": 0.62,
+    "Use Gravity": true,
+    "Is Kinematic": false,
+    "Initial Velocity": [
+     0,
+     0,
+     0
+    ],
+    "Linear Damping": 0.1,
+    "Angular Damping": 0.25,
+    "Continuous Collision": true,
+    "Interpolate": "Interpolate"
+   },
+   "Impact Sound": {
+    "Clip": "sounds/basketball_bounce.wav",
+    "Volume": 0.9,
+    "Min Speed": 0.5,
+    "Max Speed": 7.0,
+    "Pitch Variation": 0.06
+   }
+  }
+ ],
+ "empties": [
+  {
+   "name": "Goal",
+   "id": 4,
+   "parentId": -1,
+   "order": 4,
+   "position": [
+    2.0,
+    2.89,
+    0.0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "collider": {
+    "isTrigger": true,
+    "halfExtents": [
+     0.12,
+     0.06,
+     0.12
+    ],
+    "friction": 0.6
+   },
+   "Goal Trigger": {
+    "Tag": "Basketball",
+    "Team": "Home",
+    "Points": 2,
+    "Three Points": 3,
+    "Three Point Distance": 6.9,
+    "Require Downward": true,
+    "Score Sound": "sounds/basket_score.wav",
+    "Flash Intensity": 40.0
+   }
+  },
+  {
+   "name": "Score",
+   "id": 5,
+   "parentId": -1,
+   "order": 5,
+   "position": [
+    0,
+    5,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "Scoreboard": {
+    "Home": 0,
+    "Away": 0
+   }
+  },
+  {
+   "name": "Sun",
+   "id": 7,
+   "parentId": -1,
+   "order": 7,
+   "position": [
+    0,
+    10,
+    0
+   ],
+   "rotation": [
+    -50,
+    -30,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "directional",
+    "color": [
+     1,
+     0.95,
+     0.85
+    ],
+    "intensity": 2.5,
+    "range": 100,
+    "castShadows": true,
+    "angularSize": 1.0
+   }
+  }
+ ]
+}

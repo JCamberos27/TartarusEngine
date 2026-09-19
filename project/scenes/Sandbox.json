@@ -32592,6 +32592,7 @@
     "Invert Y": false,
     "Field of View": 75.0,
     "Kill Height": -20.0,
+    "Gravity": 18.0,
     "Gravity Gun": true,
     "Min Throw Speed": 3.5,
     "Max Throw Speed": 16.0,
