@@ -31,6 +31,7 @@
 #include "Screenshot.h"
 #include "Tonemapper.h"
 #include "GameModuleAPI.h" // #170 smoke: QueryFilter / RaycastHit
+#include "Tests/UnitTests.h" // #173
 #include "LightBuffer.h"
 #include "ClusterGrid.h"
 #include "CascadedShadowMap.h"
@@ -345,6 +346,13 @@ int main(int argc, char** argv) {
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
         else if (a == "--undo-bench") { undoBenchMode = true; }
         else if (a == "--asset-load-bench") { assetLoadBenchMode = true; }
+    }
+    // #173 - `--unit-tests`: pure C++ tests, run before any window / GL / audio / PhysX exists
+    // so they work on a GPU-less CI runner. Exit code = failed checks (0 = pass).
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) != "--unit-tests") continue;
+        CrashHandler::SetInteractive(false);
+        return RunUnitTests() == 0 ? 0 : 1;
     }
     const bool resaveMode = !resaveIn.empty();
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
