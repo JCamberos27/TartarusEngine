@@ -10,13 +10,17 @@
 // stays in editor_prefs.json instead; see EditorSettings.
 namespace LayerRegistry {
 
-// Slots 0..kCount-1. Deliberately small to start; the on-disk format is a plain string array,
-// so raising this later doesn't invalidate any saved scene or layers.json.
-constexpr int kCount = 8;
+// Slots 0..kCount-1 — Unity's 32 (#150), so every per-layer mask is one 32-bit word (physics
+// collision matrix, viewport visibility / pick-lock). The on-disk format is a plain string array,
+// so the old 8-slot layers.json files load unchanged.
+constexpr int kCount = 32;
 
 // True for a real slot index. Slot 0 is always "Default" and SetName() ignores it.
 bool IsValid(int layer);
 bool IsRenamable(int layer);
+// Worth offering in a picker: "Default" or a slot the user has named (Unity lists only these).
+// Pickers also keep whatever slot the object is on now, named or not.
+bool IsListed(int layer);
 
 // The raw authored name for a slot: empty string when the user hasn't named it (slots 1..7
 // start empty). Slot 0 always returns "Default".

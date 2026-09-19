@@ -1807,6 +1807,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             const std::string preview = layerMixed ? std::string("\xE2\x80\x94") : LayerRegistry::DisplayName(sharedLayer);
             if (ImGui::BeginCombo("##mlayer", preview.c_str())) {
                 for (int i = 0; i < LayerRegistry::kCount; ++i) {
+                    if (!LayerRegistry::IsListed(i) && i != sharedLayer) continue; // #150: named layers only
                     if (ImGui::Selectable(LayerRegistry::DisplayName(i).c_str(), !layerMixed && i == sharedLayer)) {
                         PushUndo(world, "Set Layer");
                         forEach([&](entt::entity e) {
@@ -2149,6 +2150,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::BeginCombo("##Layer", LayerRegistry::DisplayName(cur).c_str())) {
             for (int i = 0; i < LayerRegistry::kCount; ++i) {
+                if (!LayerRegistry::IsListed(i) && i != cur) continue; // #150: named layers only
                 if (ImGui::Selectable(LayerRegistry::DisplayName(i).c_str(), i == cur)) {
                     if (i != cur) {
                         PushUndo(world, "Set Layer");
