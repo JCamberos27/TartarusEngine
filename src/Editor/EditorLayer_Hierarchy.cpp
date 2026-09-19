@@ -996,7 +996,8 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
 
     auto& name = world.Registry.get<NameComponent>(entity);
     bool selected = IsSelected(entity);
-    bool inactive = world.Registry.all_of<InactiveTag>(entity);
+    bool inactive = world.Registry.all_of<InactiveTag>(entity);             // in hierarchy (greyed)
+    bool selfDeactivated = world.Registry.all_of<DeactivatedTag>(entity);   // its own checkbox (#201)
     // #236 A2 — a prefab-instance root paints its name in prefab blue (amber-red when missing).
     const auto* prefabInst = world.Registry.try_get<PrefabInstanceComponent>(entity);
     // #236 B — SceneVis-lite: a row hidden in the Scene view reads like an inactive one (dimmed).
@@ -1401,12 +1402,14 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
         }
 
         ImGui::SetCursorScreenPos(ImVec2(rowMax.x - eyeW - 4.0f * m_UIScale, rowMin.y));
-        if (ActiveToggle("##rowactive", !inactive, rowHovered,
-                         inactive ? "Inactive - click to enable" : "Active - click to disable",
+        if (ActiveToggle("##rowactive", !selfDeactivated, rowHovered,
+                         selfDeactivated ? "Inactive - click to enable"
+                         : inactive      ? "Hidden because a parent is inactive - click to disable this one too"
+                                         : "Active - click to disable",
                          /*alignTop=*/true)) {
             PushUndo(world, "Toggle Active");
-            if (inactive) world.Registry.remove<InactiveTag>(entity);
-            else world.Registry.emplace<InactiveTag>(entity);
+            if (selfDeactivated) world.Registry.remove<DeactivatedTag>(entity);
+            else world.Registry.emplace<DeactivatedTag>(entity);
         }
     }
 
@@ -1805,12 +1808,12 @@ void EditorLayer::ToggleSelectionActive(World& world) {
     if (sel.empty()) return;
     bool anyActive = false;
     for (entt::entity e : sel)
-        if (world.Registry.valid(e) && !world.Registry.all_of<InactiveTag>(e)) { anyActive = true; break; }
+        if (world.Registry.valid(e) && !world.Registry.all_of<DeactivatedTag>(e)) { anyActive = true; break; }
     StageUndo(world);
     for (entt::entity e : sel) {
         if (!world.Registry.valid(e)) continue;
-        if (anyActive) world.Registry.emplace_or_replace<InactiveTag>(e); // mixed/all-active -> disable all
-        else world.Registry.remove<InactiveTag>(e);
+        if (anyActive) world.Registry.emplace_or_replace<DeactivatedTag>(e); // mixed/all-active -> disable all
+        else world.Registry.remove<DeactivatedTag>(e);
     }
     CommitStagedUndo(world, "Toggle Active");
 }
