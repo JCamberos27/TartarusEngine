@@ -21,3 +21,8 @@ project/shortcuts.json
 # Dock layout (#137): per-user, now under %LOCALAPPDATA%\TartarusEngine\ (UserPaths). A stray
 # copy in the working directory is only read once, to migrate an existing layout.
 imgui.ini
+
+# Mixamo characters/animations used by the Sandbox scene (project/scenes/Sandbox.json). Mixamo's
+# licence doesn't allow redistributing the raw FBX files, so they stay local: download Y Bot +
+# the Male Locomotion Pack from mixamo.com into project/assets/characters/ybot/.
+project/assets/characters/
