@@ -247,6 +247,11 @@ private:
 // drag-drop placement, vertex snapping). Keeping it in one place means all of those stay
 // consistent with each other by construction instead of by copy-paste diligence.
 glm::mat4 ComposeTransform(const glm::vec3& position, const glm::vec3& rotationEulerDegrees, const glm::vec3& scale);
+// #123 - YXZ Euler angles are ambiguous: (x, y, z) and (180-x, y+180, z+180), each also +-360,
+// are the same rotation. Returns the equivalent of eulerDeg closest to hintDeg (normally the
+// value being replaced), so decomposing a matrix never makes the Inspector jump to a flipped
+// triple like (180, 0, 180) for (0, 180, 0).
+glm::vec3 NearestEquivalentEuler(const glm::vec3& eulerDeg, const glm::vec3& hintDeg);
 inline glm::mat4 ComposeTransform(const TransformComponent& t) {
     return ComposeTransform(t.Position, t.RotationEuler, t.Scale);
 }
