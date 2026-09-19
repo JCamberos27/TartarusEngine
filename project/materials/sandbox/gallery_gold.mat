@@ -1,0 +1,14 @@
+{
+  "matVersion": 2,
+  "name": "Gallery Gold",
+  "shader": "engine://Standard.shader",
+  "properties": {
+    "_BaseColor": [
+      1.0,
+      0.77,
+      0.34
+    ],
+    "_Metallic": 1.0,
+    "_Roughness": 0.22
+  }
+}

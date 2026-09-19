@@ -1,0 +1,14 @@
+{
+  "matVersion": 2,
+  "name": "Gallery Chrome",
+  "shader": "engine://Standard.shader",
+  "properties": {
+    "_BaseColor": [
+      0.95,
+      0.95,
+      0.96
+    ],
+    "_Metallic": 1.0,
+    "_Roughness": 0.05
+  }
+}

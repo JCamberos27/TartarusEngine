@@ -6,6 +6,11 @@
 #include "PhysicsWorld.h" // #185 PR 2 — Raycast is backed by the host-side PhysX world
 #include "HotReloadSwap.h"
 #include "TimeService.h"
+#include "AudioEngine.h"
+#include "ProjectPaths.h"
+#include <algorithm>
+#include <filesystem>
+#include <unordered_set>
 
 #include <string>
 #include <windows.h>
@@ -103,6 +108,23 @@ GameModuleHostAPI MakeHostAPI() {
                         std::uint32_t* out, int maxE) {
         return PhysicsWorld::OverlapBox(c, he, rot, f, out, maxE);
     };
+    // v11
+    api.PlaySoundAt = [](const char* path, const float pos[3], float volume, float pitch) {
+        if (!path || !*path || !AudioEngine::IsInitialized()) return;
+        std::string p = path;
+        if (!std::filesystem::path(p).is_absolute()) p = ProjectPaths::Resolve(p);
+        static std::unordered_set<std::string> loaded;
+        if (!loaded.count(p)) {
+            if (!AudioEngine::Load(p)) return;
+            loaded.insert(p);
+        }
+        const AudioEngine::SoundHandle h = AudioEngine::Play(p, std::clamp(volume, 0.0f, 1.0f), false, AudioEngine::Bus::SFX);
+        AudioEngine::SetPosition(h, glm::vec3(pos[0], pos[1], pos[2]));
+        AudioEngine::SetAttenuation(h, 2.0f, 45.0f);
+        AudioEngine::SetPitch(h, std::clamp(pitch, 0.25f, 4.0f));
+    };
+    api.GetGrabbedEntity = []() -> std::uint32_t { return PhysicsWorld::GrabbedEntity(); };
+    api.GetActorPosition = [](std::uint32_t e, float out[3]) { return PhysicsWorld::GetActorPosition(e, out); };
     return api;
 }
 

@@ -188,6 +188,7 @@ list(REMOVE_ITEM ENGINE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/SpinSystem.cpp
+  ${CMAKE_SOURCE_DIR}/src/Game/ScoringSystem.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleConsole.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleStats.cpp
@@ -218,6 +219,7 @@ add_library(TartarusGame SHARED
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/SpinSystem.cpp
+  ${CMAKE_SOURCE_DIR}/src/Game/ScoringSystem.cpp
 )
 
 # Reloadable editor tools intentionally use a narrow host callback table rather than sharing
@@ -261,6 +263,7 @@ target_include_directories(TartarusGame PRIVATE
   ${CMAKE_SOURCE_DIR}/src/Core
   ${CMAKE_SOURCE_DIR}/src/Game
   ${CMAKE_SOURCE_DIR}/src/Physics
+  ${CMAKE_SOURCE_DIR}/src/Renderer # MaterialAsset (header-only use: the Score Digit segments' emission)
 )
 target_link_libraries(TartarusGame PRIVATE glm::glm EnTT::EnTT)
 target_compile_definitions(TartarusGame PRIVATE GLM_ENABLE_EXPERIMENTAL)
