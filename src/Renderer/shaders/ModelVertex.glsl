@@ -13,8 +13,8 @@ uniform mat4 uNormalMatrix; // mat3 inverse-transpose of uModel in a mat4 (loade
 uniform mat4 uView;
 uniform mat4 uProj;
 uniform int uUseSkinning;
-// Bone palette as an std430 SSBO (binding 1), uploaded per skinned draw (#104). MAX_BONES=100
-// entries; the index is still clamped to [0,99] below so a >100-bone rig can't read past it.
+// Bone palette as an std430 SSBO (binding 1), uploaded per skinned draw (#104). MAX_BONES=512
+// entries (#113); the index is clamped to the buffer's length so a bad index can't read past it.
 layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; };
 
 out vec3 vWorldPos;
@@ -33,7 +33,7 @@ void main() {
         float totalWeight = 0.0;
         for (int i = 0; i < 4; ++i) {
             if (aBoneIDs[i] >= 0) {
-                skinMat += uBones[clamp(aBoneIDs[i], 0, 99)] * aWeights[i]; // clamp: never index uBones[] OOB (#98)
+                skinMat += uBones[clamp(aBoneIDs[i], 0, uBones.length() - 1)] * aWeights[i]; // never OOB (#98)
                 totalWeight += aWeights[i];
             }
         }
