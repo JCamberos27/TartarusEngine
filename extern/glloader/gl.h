@@ -108,6 +108,20 @@
 #define GL_TEXTURE_LOD_BIAS 0x8501
 // Anisotropic filtering — an extension since 2000, promoted to core in GL 4.6.
 #define GL_TEXTURE_MAX_ANISOTROPY 0x84FE
+// #156 - block-compressed texture formats. RGTC (BC4/BC5) is core; S3TC (BC1/BC3) and its sRGB
+// variants come from EXT_texture_compression_s3tc / EXT_texture_sRGB, present on every desktop GPU.
+#define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 0x83F0
+#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
+#define GL_COMPRESSED_SRGB_S3TC_DXT1_EXT 0x8C4C
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT 0x8C4F
+#define GL_COMPRESSED_RED_RGTC1 0x8DBB
+#define GL_COMPRESSED_RG_RGTC2 0x8DBD
+#ifndef GL_EXTENSIONS
+#define GL_EXTENSIONS 0x1F03
+#endif
+#ifndef GL_NUM_EXTENSIONS
+#define GL_NUM_EXTENSIONS 0x821D
+#endif
 #define GL_MAX_TEXTURE_MAX_ANISOTROPY 0x84FF
 #ifndef GL_MAX_TEXTURE_IMAGE_UNITS
 #define GL_MAX_TEXTURE_IMAGE_UNITS 0x8872
@@ -367,6 +381,7 @@ typedef void (__stdcall* PFNGLTEXTURESTORAGE2DPROC)(GLuint, GLsizei, GLenum, GLs
 typedef void (__stdcall* PFNGLTEXTURESTORAGE3DPROC)(GLuint, GLsizei, GLenum, GLsizei, GLsizei, GLsizei);
 typedef void (__stdcall* PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC)(GLuint, GLsizei, GLenum, GLsizei, GLsizei, GLboolean);
 typedef void (__stdcall* PFNGLTEXTURESUBIMAGE2DPROC)(GLuint, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*);
+typedef void (__stdcall* PFNGLCOMPRESSEDTEXTURESUBIMAGE2DPROC)(GLuint, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLsizei, const void*);
 typedef void (__stdcall* PFNGLTEXTURESUBIMAGE3DPROC)(GLuint, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLenum, const void*);
 typedef void (__stdcall* PFNGLTEXTUREPARAMETERIPROC)(GLuint, GLenum, GLint);
 typedef void (__stdcall* PFNGLTEXTUREPARAMETERFVPROC)(GLuint, GLenum, const GLfloat*);
@@ -465,6 +480,7 @@ extern PFNGLTEXTURESTORAGE2DPROC glTextureStorage2D;
 extern PFNGLTEXTURESTORAGE3DPROC glTextureStorage3D;
 extern PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC glTextureStorage2DMultisample;
 extern PFNGLTEXTURESUBIMAGE2DPROC glTextureSubImage2D;
+extern PFNGLCOMPRESSEDTEXTURESUBIMAGE2DPROC glCompressedTextureSubImage2D; // #156
 extern PFNGLTEXTURESUBIMAGE3DPROC glTextureSubImage3D;
 extern PFNGLTEXTUREPARAMETERIPROC glTextureParameteri;
 extern PFNGLTEXTUREPARAMETERFVPROC glTextureParameterfv;

@@ -177,6 +177,7 @@ file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/src/*.cpp
   ${CMAKE_SOURCE_DIR}/extern/glloader/*.cpp
   ${CMAKE_SOURCE_DIR}/extern/stb_image_impl.cpp
+  ${CMAKE_SOURCE_DIR}/extern/stb_dxt_impl.cpp
   ${CMAKE_SOURCE_DIR}/extern/miniaudio_impl.cpp
   ${CMAKE_SOURCE_DIR}/extern/ImViewGuizmo_impl.cpp
 )
@@ -349,6 +350,7 @@ target_compile_options(TartarusEngine PRIVATE
 set(TARTARUS_VENDORED_SOURCES
   ${IMGUI_SOURCES}
   ${CMAKE_SOURCE_DIR}/extern/stb_image_impl.cpp
+  ${CMAKE_SOURCE_DIR}/extern/stb_dxt_impl.cpp
   ${CMAKE_SOURCE_DIR}/extern/miniaudio_impl.cpp
   ${CMAKE_SOURCE_DIR}/extern/ImViewGuizmo_impl.cpp
 )
