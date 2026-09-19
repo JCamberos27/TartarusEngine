@@ -1,4 +1,4 @@
-// Hierarchy panel: the entity tree, selection, rename, grouping/parenting, and the
+﻿// Hierarchy panel: the entity tree, selection, rename, grouping/parenting, and the
 // Add-entity menu body. Split out of EditorLayer.cpp for build time (#179).
 
 #include "EditorLayer.h"
@@ -1381,23 +1381,39 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
         // Game view, physics and saves are unaffected.
         const bool sceneHidden = world.Registry.all_of<HiddenInSceneTag>(entity);
         const bool sceneLocked = world.Registry.all_of<SceneLockedTag>(entity);
+        // Like Unity's Scene visibility/pickability: a click applies to the object and everything
+        // under it; Alt+click to change only this one.
+        auto setOnSubtree = [&](auto* tagPtr, bool on) {
+            using Tag = std::remove_pointer_t<decltype(tagPtr)>;
+            std::vector<entt::entity> stack{entity};
+            while (!stack.empty()) {
+                const entt::entity e = stack.back();
+                stack.pop_back();
+                if (!world.Registry.valid(e)) continue;
+                if (on) world.Registry.emplace_or_replace<Tag>(e);
+                else    world.Registry.remove<Tag>(e);
+                if (ImGui::GetIO().KeyAlt) break;
+                if (const auto* h = world.Registry.try_get<HierarchyComponent>(e))
+                    stack.insert(stack.end(), h->Children.begin(), h->Children.end());
+            }
+        };
 
         ImGui::SameLine();
         ImGui::SetCursorScreenPos(ImVec2(rowMax.x - eyeW - gap - lockW - hideW - 2.0f * gap, rowMin.y));
         if (SceneVisToggle("##svhide", ICON_FA_EYE_SLASH, ICON_FA_EYE, sceneHidden, rowHovered,
-                           sceneHidden ? "Hidden in the Scene view - click to show"
-                                       : "Hide in the Scene view (still in the game, still collides, still saved)")) {
+                           sceneHidden ? "Hidden in the Scene view - click to show (Alt+click: this object only)"
+                                       : "Hide in the Scene view with its children (still in the game, still collides,\n"
+                                         "still saved). Alt+click: this object only.")) {
             PushUndo(world, "Toggle Scene Visibility");
-            if (sceneHidden) world.Registry.remove<HiddenInSceneTag>(entity);
-            else             world.Registry.emplace<HiddenInSceneTag>(entity);
+            setOnSubtree((HiddenInSceneTag*)nullptr, !sceneHidden);
         }
         ImGui::SameLine(0.0f, gap);
         if (SceneVisToggle("##svlock", ICON_FA_LOCK, ICON_FA_LOCK_OPEN, sceneLocked, rowHovered,
-                           sceneLocked ? "Locked out of Scene-view clicks - click to unlock"
-                                       : "Lock: can't be clicked in the Scene view (Hierarchy select still works)")) {
+                           sceneLocked ? "Locked out of Scene-view clicks - click to unlock (Alt+click: this object only)"
+                                       : "Lock with its children: can't be clicked in the Scene view (Hierarchy select\n"
+                                         "still works). Alt+click: this object only.")) {
             PushUndo(world, "Toggle Scene Lock");
-            if (sceneLocked) world.Registry.remove<SceneLockedTag>(entity);
-            else             world.Registry.emplace<SceneLockedTag>(entity);
+            setOnSubtree((SceneLockedTag*)nullptr, !sceneLocked);
         }
 
         ImGui::SetCursorScreenPos(ImVec2(rowMax.x - eyeW - 4.0f * m_UIScale, rowMin.y));
