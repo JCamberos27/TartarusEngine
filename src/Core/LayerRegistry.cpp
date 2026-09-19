@@ -24,9 +24,9 @@ const std::string& DefaultName() {
     return kDefault;
 }
 
-const std::string& LayersPath() {
-    static const std::string path = ProjectPaths::Resolve("layers.json");
-    return path;
+// Resolved each time (#150): a cached static went stale if the project root changed.
+std::string LayersPath() {
+    return ProjectPaths::Resolve("layers.json");
 }
 
 std::string Sanitize(const std::string& in) {
@@ -39,7 +39,13 @@ std::string Sanitize(const std::string& in) {
     const auto notSpace = [](unsigned char c) { return !std::isspace(c); };
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), notSpace));
     s.erase(std::find_if(s.rbegin(), s.rend(), notSpace).base(), s.end());
-    if (s.size() > 24) s.resize(24);
+    // 24 bytes max, cut on a UTF-8 code-point boundary (#150: a byte cut could split a
+    // multi-byte character and leave invalid UTF-8 in the name).
+    if (s.size() > 24) {
+        size_t cut = 24;
+        while (cut > 0 && (static_cast<unsigned char>(s[cut]) & 0xC0) == 0x80) --cut; // continuation byte
+        s.resize(cut);
+    }
     return s;
 }
 
@@ -47,6 +53,7 @@ std::string Sanitize(const std::string& in) {
 
 bool IsValid(int layer) { return layer >= 0 && layer < kCount; }
 bool IsRenamable(int layer) { return layer >= 1 && layer < kCount; }
+bool IsListed(int layer) { return layer == 0 || (IsValid(layer) && !g_Names[layer].empty()); }
 
 const std::string& Name(int layer) {
     if (layer == 0) return DefaultName();

@@ -1758,9 +1758,16 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("How hard walking into a dynamic body shoves it. 0 = the Player passes through nothing but still can't push.");
         ImGui::SetNextItemWidth(kw);
-        ImGui::SliderInt("Player layer", &p.PlayerLayer, 0, LayerRegistry::kCount - 1,
-                         LayerRegistry::DisplayName(p.PlayerLayer).c_str());
-        if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
+        if (ImGui::BeginCombo("Player layer", LayerRegistry::DisplayName(p.PlayerLayer).c_str())) { // #150: 32 slots
+            for (int i = 0; i < LayerRegistry::kCount; ++i) {
+                if (!LayerRegistry::IsListed(i) && i != p.PlayerLayer) continue;
+                if (ImGui::Selectable(LayerRegistry::DisplayName(i).c_str(), i == p.PlayerLayer)) {
+                    p.PlayerLayer = i;
+                    ProjectSettings::Save();
+                }
+            }
+            ImGui::EndCombo();
+        }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Collision-matrix layer the Player capsule is on.");
 
         // #185 PR 8 — layer collision matrix. Lower triangle: cell (row r, col c) toggles
@@ -1768,19 +1775,23 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
         ImGui::SeparatorText("Collision Matrix");
         ImGui::TextDisabled("Which layer pairs collide while playing. Name layers in Tags & Layers.");
         ImGui::Spacing();
-        if (ImGui::BeginTable("##collmatrix", LayerRegistry::kCount + 1,
+        // #150: 32 slots, so like Unity only the named layers (and Default) get a row/column;
+        // unnamed slots keep colliding with everything.
+        std::vector<int> shown;
+        for (int i = 0; i < LayerRegistry::kCount; ++i) if (LayerRegistry::IsListed(i)) shown.push_back(i);
+        if (ImGui::BeginTable("##collmatrix", (int)shown.size() + 1,
                               ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersInnerV)) {
             ImGui::TableNextColumn(); // corner
-            for (int c = 0; c < LayerRegistry::kCount; ++c) {
+            for (int c : shown) {
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted(std::to_string(c).c_str());
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", LayerRegistry::DisplayName(c).c_str());
             }
-            for (int r = 0; r < LayerRegistry::kCount; ++r) {
+            for (int r : shown) {
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted(LayerRegistry::DisplayName(r).c_str());
-                for (int c = 0; c < LayerRegistry::kCount; ++c) {
+                for (int c : shown) {
                     ImGui::TableNextColumn();
                     if (c > r) continue; // lower triangle only (symmetric)
                     bool on = p.LayersCollide(r, c);

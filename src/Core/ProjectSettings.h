@@ -1,5 +1,6 @@
 #pragma once
 #include <glm/glm.hpp>
+#include "LayerRegistry.h"
 #include <string>
 #include <vector>
 
@@ -24,18 +25,20 @@ struct PhysicsSettings {
     // #185 PR 8 — collision matrix over the 8 LayerRegistry slots. Bit j of LayerCollisionMask[i]
     // set == entities on layer i and layer j collide. Symmetric (the editor keeps both bits in
     // sync); default all-on. Copied into the PhysX scene at Play-enter, so edits apply next Play.
-    unsigned LayerCollisionMask[8] = {0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu};
+    // #150: one row per LayerRegistry slot (32), default all-on.
+    unsigned LayerCollisionMask[LayerRegistry::kCount];
+    PhysicsSettings() { for (unsigned& m : LayerCollisionMask) m = 0xFFFFFFFFu; }
 
     // #185 hardening — Play-mode Player tuning.
     float PlayerPushStrength = 2.0f; // impulse the walking Player imparts to a dynamic body it hits
-    int   PlayerLayer        = 0;    // collision-matrix layer the Player capsule is on (0-7)
+    int   PlayerLayer        = 0;    // collision-matrix layer the Player capsule is on (0-31)
 
     bool LayersCollide(int a, int b) const {
-        if (a < 0 || a > 7 || b < 0 || b > 7) return true;
+        if (!LayerRegistry::IsValid(a) || !LayerRegistry::IsValid(b)) return true;
         return (LayerCollisionMask[a] >> b) & 1u;
     }
     void SetLayersCollide(int a, int b, bool on) {
-        if (a < 0 || a > 7 || b < 0 || b > 7) return;
+        if (!LayerRegistry::IsValid(a) || !LayerRegistry::IsValid(b)) return;
         auto set = [&](int i, int j) {
             if (on) LayerCollisionMask[i] |= (1u << j);
             else    LayerCollisionMask[i] &= ~(1u << j);

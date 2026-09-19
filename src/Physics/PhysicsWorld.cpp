@@ -80,15 +80,15 @@ struct SimEventCallback : PxSimulationEventCallback {
 // Custom filter shader: PxDefaultSimulationFilterShader solves contacts but reports none.
 // This keeps its trigger handling, adds the NOTIFY flags so onContact fires for solid pairs
 // (#185 PR 7), kills pairs the layer matrix disables (#185 PR 8; word1 of each shape's filter
-// data is its layer 0-7, constantBlock is ProjectSettings' 8-word mask), and asks for CCD
+// data is its layer 0-31, constantBlock is ProjectSettings' 32-word mask, #150), and asks for CCD
 // contact detection so a body with the eENABLE_CCD flag actually sweeps (#185 PR 9).
 PxFilterFlags EngineFilterShader(
     PxFilterObjectAttributes attributes0, PxFilterData filterData0,
     PxFilterObjectAttributes attributes1, PxFilterData filterData1,
     PxPairFlags& pairFlags, const void* constantBlock, PxU32 constantBlockSize) {
-    if (constantBlock && constantBlockSize >= sizeof(PxU32) * 8) {
+    if (constantBlock && constantBlockSize >= sizeof(PxU32) * 32) {
         const PxU32* mask = static_cast<const PxU32*>(constantBlock);
-        const PxU32 la = filterData0.word1 & 7u, lb = filterData1.word1 & 7u;
+        const PxU32 la = filterData0.word1 & 31u, lb = filterData1.word1 & 31u;
         if (((mask[la] >> lb) & 1u) == 0u) return PxFilterFlag::eKILL;
     }
     if (PxFilterObjectIsTrigger(attributes0) || PxFilterObjectIsTrigger(attributes1)) {
@@ -147,7 +147,7 @@ struct PhysicsState {
           convexCache(core.convexCache), triangleCache(core.triangleCache) {}
     SimEventCallback       simCb;
     PlayerHitReport        hitReport;
-    PxU32                  layerMask[8] = {0xFFu,0xFFu,0xFFu,0xFFu,0xFFu,0xFFu,0xFFu,0xFFu}; // #185 PR 8 constant block
+    PxU32                  layerMask[32] = {}; // #185 PR 8 constant block; one row per layer (#150), filled at Create
     // Borrowed from PhysicsCore (#167) - never released here.
     PxFoundation*          foundation   = nullptr;
     PxPhysics*             physics      = nullptr;
@@ -493,7 +493,7 @@ void BuildActors(PhysicsState& s, const World& world) {
 
         // #185 PR 8 — stamp the layer (word1) so EngineFilterShader can apply the matrix.
         const auto* lc = world.Registry.try_get<const LayerComponent>(e);
-        const PxU32 layer = (lc && lc->Layer >= 0 && lc->Layer < 8) ? (PxU32)lc->Layer : 0u;
+        const PxU32 layer = (lc && lc->Layer >= 0 && lc->Layer < 32) ? (PxU32)lc->Layer : 0u;
         shape->setSimulationFilterData(PxFilterData(1u << layer, layer, 0u, 0u));
 
         if (!rb) {
@@ -891,7 +891,8 @@ void Create(const World& world) {
     s->simCb.owner = s;      // #185 PR 5
     s->hitReport.owner = s;  // #185 PR 10
     // #185 PR 8 — snapshot the layer collision matrix; PhysX copies it as the filter constant block.
-    for (int i = 0; i < 8; ++i) s->layerMask[i] = ProjectSettings::Physics().LayerCollisionMask[i];
+    static_assert(LayerRegistry::kCount == 32, "the filter shader's constant block is one PxU32 row per layer");
+    for (int i = 0; i < 32; ++i) s->layerMask[i] = ProjectSettings::Physics().LayerCollisionMask[i];
 
     PxSceneDesc desc(s->physics->getTolerancesScale());
     const glm::vec3 g = ProjectSettings::Physics().Gravity;
@@ -1200,7 +1201,7 @@ void CreateCharacter(float radius, float cylinderHalfHeight, const float footPos
     // project-configured Player layer so the collision matrix applies to it (#185 PR 8).
     if (PxRigidActor* a = g_State->controller->getActor()) {
         a->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(kPlayerEntity));
-        const PxU32 pl = (PxU32)std::clamp(ProjectSettings::Physics().PlayerLayer, 0, 7);
+        const PxU32 pl = (PxU32)std::clamp(ProjectSettings::Physics().PlayerLayer, 0, 31);
         const PxU32 nbShapes = a->getNbShapes();
         std::vector<PxShape*> shapes(nbShapes);
         a->getShapes(shapes.data(), nbShapes);
@@ -1253,10 +1254,10 @@ unsigned MoveCharacter(const float disp[3], float dt) {
     // #169 - the collision matrix used to apply to simulation pairs only; the CCT's own sweep
     // (default filters) still hit every layer, so the Player collided with layers set not to.
     struct LayerFilter : PxQueryFilterCallback {
-        PxU32 Mask = 0xFFu;
+        PxU32 Mask = 0xFFFFFFFFu;
         PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor*,
                                        PxHitFlags&) override {
-            const PxU32 layer = shape->getSimulationFilterData().word1 & 7u;
+            const PxU32 layer = shape->getSimulationFilterData().word1 & 31u;
             return ((Mask >> layer) & 1u) ? PxQueryHitType::eBLOCK : PxQueryHitType::eNONE;
         }
         PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*,
@@ -1264,7 +1265,7 @@ unsigned MoveCharacter(const float disp[3], float dt) {
             return PxQueryHitType::eBLOCK;
         }
     } layerFilter;
-    const int playerLayer = std::clamp(ProjectSettings::Physics().PlayerLayer, 0, 7);
+    const int playerLayer = std::clamp(ProjectSettings::Physics().PlayerLayer, 0, 31);
     layerFilter.Mask = ProjectSettings::Physics().LayerCollisionMask[playerLayer];
     PxControllerFilters filters(nullptr, &layerFilter, nullptr); // prefilter is on by default
     PxControllerCollisionFlags f =

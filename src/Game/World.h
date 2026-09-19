@@ -131,6 +131,13 @@ public:
     // when it has no parent. For systems that must work in world space (physics actors, collider
     // gizmos, editor raycasts) — reading TransformComponent directly misplaces any child entity.
     TransformComponent WorldSpaceTransform(entt::entity entity) const;
+
+    // #150 — Unity's tag queries, for game code (the game module gets this World directly).
+    // Tags are TagComponent::Tag ("Untagged" when absent); inactive entities are skipped, like
+    // GameObject.FindWithTag. Exact, case-sensitive match.
+    bool CompareTag(entt::entity entity, const std::string& tag) const;
+    entt::entity FindWithTag(const std::string& tag) const;                // entt::null if none
+    std::vector<entt::entity> FindAllWithTag(const std::string& tag) const;
     // #114 — the inverse: write a WORLD-space position + rotation into the entity's (local)
     // TransformComponent, converting through its parent's world matrix. Scale is left untouched.
     void SetWorldPose(entt::entity entity, const glm::vec3& worldPosition, const glm::quat& worldRotation);
