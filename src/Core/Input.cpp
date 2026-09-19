@@ -43,6 +43,12 @@ void Input::ScrollCallback(GLFWwindow*, double xoffset, double yoffset) {
 
 void Input::Init(GLFWwindow* window) {
     s_Window = window;
+    // Input is polled once per frame, so a key or button pressed AND released between two
+    // polls (a quick tap at a low frame rate, or synthetic/remote input) used to be missed
+    // entirely - e.g. Esc not releasing a captured Game view. Sticky mode makes glfwGetKey /
+    // glfwGetMouseButton report such a tap as down for one poll. Input.cpp is their only caller.
+    glfwSetInputMode(window, GLFW_STICKY_KEYS, GLFW_TRUE);
+    glfwSetInputMode(window, GLFW_STICKY_MOUSE_BUTTONS, GLFW_TRUE);
     glfwGetCursorPos(window, &s_LastX, &s_LastY);
     glfwSetScrollCallback(window, ScrollCallback);
 }
