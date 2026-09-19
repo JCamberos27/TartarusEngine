@@ -2289,7 +2289,7 @@ int main(int argc, char** argv) {
                 // reach every occluder (animated models padded like the main pass's culling).
                 glm::vec3 casterMin(std::numeric_limits<float>::max()), casterMax(-std::numeric_limits<float>::max());
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-                    if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                    if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
                     const auto& r = world.Registry.get<RenderableComponent>(entity);
                     if (!r.ModelRef) continue;
                     glm::vec3 bmin = r.ModelRef->BoundsMin(), bmax = r.ModelRef->BoundsMax();
@@ -2330,7 +2330,7 @@ int main(int argc, char** argv) {
                     // the near slice covers a few metres yet used to redraw the whole level x4.
                     Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
                     for (auto entity : casters) {
-                        if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                        if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
                         auto& renderable = world.Registry.get<RenderableComponent>(entity);
                         // #163 - Cast Shadows: Off skips; Two Sided draws without back-face culling.
                         if (renderable.CastShadows == RenderableComponent::ShadowCasting::Off) continue;
@@ -2369,6 +2369,12 @@ int main(int argc, char** argv) {
             if (world.ShadowsEnabled) {
                 spotShadowMap.Configure(std::min(world.ShadowResolution, 2048), std::max(spotShadowBudget, 1));
             }
+            // #163 - spot/point shadows render once per frame, so they use the LOD levels of the
+            // camera the user is mainly looking through (each view's draw re-applies its own).
+            {
+                const Camera& lodCam = playing ? *gameCam : editorCamera;
+                world.ApplyLod(lodCam.Position, lodCam.ProjectionMatrix(1.0f));
+            }
             if (world.ShadowsEnabled && spotShadowCount > 0) {
                 PROFILE_SCOPE("Spot Shadow Pass");
                 PROFILE_GPU_SCOPE("Spot Shadow Pass");
@@ -2396,7 +2402,7 @@ int main(int argc, char** argv) {
                     localShadowShader.SetFloat(localFarLoc, spotShadowFar[s]);
                     Frustum lf = Frustum::FromViewProj(spotShadowVP[s]);
                     for (auto entity : casters) {
-                        if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                        if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
                         auto& r = world.Registry.get<RenderableComponent>(entity);
                         if (r.CastShadows == RenderableComponent::ShadowCasting::Off) continue; // #163
                         const bool twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
@@ -2463,7 +2469,7 @@ int main(int argc, char** argv) {
                         localShadowShader.SetMat4(cubeLightViewProjLoc, vp);
                         Frustum lf = Frustum::FromViewProj(vp);
                         for (auto entity : casters) {
-                            if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                            if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
                             auto& r = world.Registry.get<RenderableComponent>(entity);
                             if (r.CastShadows == RenderableComponent::ShadowCasting::Off) continue; // #163
                             const bool twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
@@ -2595,6 +2601,7 @@ int main(int argc, char** argv) {
             sceneInputs.ssaoIntensity    = world.SsaoIntensity;
             sceneInputs.layerVisibleMask = frameSettings.LayerVisibleMask;
             auto drawScene = [&](const RenderFrameContext& ctx, EditorLayer::RenderStats* outStats) {
+                world.ApplyLod(ctx.ViewPos, ctx.Proj); // #163 - this view's LOD levels (sun shadows too)
                 sceneInputs.sunShadowsReady = renderSunShadows(ctx.View, ctx.Proj); // #109
                 sceneRenderer.RenderScene(world, ctx, sceneInputs, outStats);
             };
@@ -2606,6 +2613,7 @@ int main(int argc, char** argv) {
             // in the main pass so they don't here either; everything outside the view is culled.
             auto ssaoDepthPrepass = [&](Ssao& target, int w, int h, const glm::mat4& view,
                                         const glm::mat4& proj, bool editorView) {
+                world.ApplyLod(glm::vec3(glm::inverse(view)[3]), proj); // #163 - same levels as the draw
                 glBindFramebuffer(GL_FRAMEBUFFER, target.DepthFbo());
                 glViewport(0, 0, w, h);
                 glClear(GL_DEPTH_BUFFER_BIT);
@@ -2621,7 +2629,7 @@ int main(int argc, char** argv) {
                 const int modelLoc = shadowShader.Loc("uModel");
                 const Frustum frustum = Frustum::FromViewProj(proj * view);
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-                    if (world.Registry.all_of<InactiveTag>(entity)) continue;
+                    if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
                     if (editorView) {
                         if (world.Registry.all_of<HiddenInSceneTag>(entity)) continue;
                         const auto* lc = world.Registry.try_get<LayerComponent>(entity);

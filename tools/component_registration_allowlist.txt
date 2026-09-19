@@ -21,3 +21,4 @@ DeactivatedTag          = The "active" checkbox in the Inspector header / Hierar
 StaticTag               = The "Static" checkbox in the Inspector header.
 HiddenInSceneTag        = Editor Scene-view "hidden" column in the Hierarchy (#236 B). No runtime effect.
 SceneLockedTag          = Editor Scene-view "locked" column in the Hierarchy (#236 B). No runtime effect.
+LodCulledTag            = Runtime-only (#163): set per view by World::ApplyLod on renderers of LOD levels the view isn't using. Never saved, no Inspector.
