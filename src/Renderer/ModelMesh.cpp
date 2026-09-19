@@ -46,6 +46,7 @@ ModelMesh::ModelMesh(const std::vector<ModelVertex>& vertices, const std::vector
 
     floatAttrib(5, 4, offsetof(ModelVertex, Weights));
     floatAttrib(6, 1, offsetof(ModelVertex, TangentSign));
+    floatAttrib(7, 4, offsetof(ModelVertex, Color)); // #113
 }
 
 ModelMesh::~ModelMesh() {
