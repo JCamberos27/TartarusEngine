@@ -97,6 +97,13 @@ const std::vector<std::string>& Tags();
 void AddTag(const std::string& name);
 void RemoveTag(const std::string& name);
 
+// #121 - the Asset Browser's virtual folders (including empty ones, so they persist).
+// Project data, not scene data: these used to be written into every scene file, so opening a
+// second scene forked the organisation and creating a new one lost it. Folder membership for
+// an individual asset lives in that asset's .meta ("folder"); this is only the folder list.
+const std::vector<std::string>& AssetFolders();
+void SetAssetFolders(std::vector<std::string> folders);
+
 // project/settings.json. A missing or unparseable file leaves the defaults in place and is not
 // treated as an error (same policy as LayerRegistry / EditorSettings).
 void Load();

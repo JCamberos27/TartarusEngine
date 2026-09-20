@@ -27,6 +27,7 @@
 #include "ProjectPaths.h"
 #include "ProjectWatcher.h"
 #include "TextureCache.h"
+#include "SceneSerializer.h" // #121
 #include "UndoDeltaChain.h"
 #include "World.h"
 
@@ -291,6 +292,42 @@ void TestActiveInHierarchy() {
     world.Registry.remove<DeactivatedTag>(child);
     world.SyncActiveInHierarchy();
     CHECK(!inactive(parent) && !inactive(child) && !inactive(grandchild)); // nothing left behind
+}
+
+// --- #121: asset data migrates out of scene files into .meta, and never clobbers it ---------
+void TestAssetMetaMigration() {
+    auto migrate = [](const std::string& entry, const std::string& meta) {
+        return json::parse(SceneSerializer::MigrateAssetMetaFields(entry, meta));
+    };
+
+    // A bare sidecar takes everything the old scene entry had. textureImport lands on "importer".
+    const std::string entry = R"({"path":"t.png","folder":"Props","displayName":"Crate",)"
+                              R"("labels":["a","b"],"textureImport":{"isSRGB":false,"anisoLevel":4}})";
+    json add = migrate(entry, R"({"guid":"g","type":"texture"})");
+    CHECK(add["folder"] == "Props");
+    CHECK(add["displayName"] == "Crate");
+    CHECK(add["labels"].size() == 2);
+    CHECK(add["importer"]["isSRGB"] == false && add["importer"]["anisoLevel"] == 4);
+    CHECK(!add.contains("textureImport")); // renamed, not carried through under the old key
+
+    // The sidecar wins wherever it already has a value: the scene copy is the stale one.
+    add = migrate(entry, R"({"folder":"Newer","importer":{"isSRGB":true}})");
+    CHECK(!add.contains("folder") && !add.contains("importer"));
+    CHECK(add["displayName"] == "Crate" && add["labels"].size() == 2); // the rest still migrates
+
+    // Nothing to do -> "{}", so the caller skips the .meta write entirely.
+    CHECK(SceneSerializer::MigrateAssetMetaFields(entry,
+              R"({"folder":"F","displayName":"D","labels":[],"importer":{}})") == "{}");
+    CHECK(SceneSerializer::MigrateAssetMetaFields(R"({"path":"t.png"})", "{}") == "{}");
+
+    // modelImport maps onto the same "importer" key.
+    add = migrate(R"({"modelImport":{"globalScale":0.01}})", "{}");
+    CHECK(add["importer"]["globalScale"] == 0.01);
+
+    // Malformed input on either side is never a reason to guess at a sidecar write.
+    CHECK(SceneSerializer::MigrateAssetMetaFields("not json", "{}") == "{}");
+    CHECK(SceneSerializer::MigrateAssetMetaFields(entry, "not json") == "{}");
+    CHECK(SceneSerializer::MigrateAssetMetaFields("[1,2]", "{}") == "{}");
 }
 
 // --- AssetGuid ------------------------------------------------------------------------------
@@ -668,6 +705,7 @@ int RunUnitTests() {
         {"InputMap", TestInputMap},
         {"ActiveInHierarchy", TestActiveInHierarchy},
         {"CameraRoll", TestCameraRoll},
+        {"AssetMetaMigration", TestAssetMetaMigration},
     };
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;
