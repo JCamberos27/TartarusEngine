@@ -633,6 +633,54 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
     int twoSided = 0;
     if (material->Get(AI_MATKEY_TWOSIDED, twoSided) == AI_SUCCESS && twoSided) mat.DoubleSided = true;
 
+    // #113 - KHR_texture_transform (glTF). Assimp converts the extension into an aiUVTransform
+    // already expressed in ITS uv space (it flips V on the mesh at import and rotates about the
+    // image centre), and for an unrotated transform that space is exactly what the shader does:
+    // `uv * uUVTiling + uUVOffset`. So scale/translation map straight across.
+    //
+    // The engine's UV transform is per-material and applies to every map, while the glTF extension
+    // is per-texture-slot. In practice an asset transforms all of its slots the same way, so the
+    // base-colour slot is read and any slot that disagrees is reported rather than silently
+    // dropped. Rotation has no material field to land in and is reported the same way.
+    {
+        const std::pair<aiTextureType, const char*> slots[] = {
+            {aiTextureType_BASE_COLOR, "base colour"}, {aiTextureType_DIFFUSE, "diffuse"},
+            {aiTextureType_NORMALS, "normal"},         {aiTextureType_EMISSIVE, "emissive"},
+            {aiTextureType_METALNESS, "metallic"},     {aiTextureType_DIFFUSE_ROUGHNESS, "roughness"},
+            {aiTextureType_AMBIENT_OCCLUSION, "occlusion"},
+        };
+        bool have = false, rotated = false, disagreed = false;
+        aiUVTransform chosen;
+        for (const auto& [type, label] : slots) {
+            aiUVTransform x;
+            if (material->Get(AI_MATKEY_UVTRANSFORM(type, 0), x) != AI_SUCCESS) continue;
+            if (x.mRotation != 0.0f) rotated = true;
+            if (!have) { chosen = x; have = true; continue; }
+            if (x.mScaling.x != chosen.mScaling.x || x.mScaling.y != chosen.mScaling.y ||
+                x.mTranslation.x != chosen.mTranslation.x || x.mTranslation.y != chosen.mTranslation.y)
+                disagreed = true;
+        }
+        if (have) {
+            // assimp's translation carries a V compensation for ITS glTF importer flipping V on
+            // the mesh. This engine also passes aiProcess_FlipUVs, which flips it back, so the
+            // imported UVs come out exactly as authored (verified: the fixture quad's UVs import
+            // as (0,0),(1,0),(1,1),(0,1), its authored values). That compensation therefore has
+            // to be undone, or every transformed texture is offset in V by scale-1.
+            //   offset.y = t_y - (s_y - 1)   ->  identity (t=0,s=1) stays 0,
+            //                                    scale 3 / offset 0.5 -> 2.5 - 3 + 1 = 0.5.
+            mat.UVTiling = {chosen.mScaling.x, chosen.mScaling.y};
+            mat.UVOffset = {chosen.mTranslation.x, chosen.mTranslation.y - chosen.mScaling.y + 1.0f};
+            if (rotated)
+                Log::Warn("Model: '" + m_Path + "' uses KHR_texture_transform with a rotation, which "
+                          "this material has no field for - the offset and scale were applied, the "
+                          "rotation was not.");
+            if (disagreed)
+                Log::Warn("Model: '" + m_Path + "' gives different texture slots different "
+                          "KHR_texture_transform values; the engine's UV tiling/offset is per-material, "
+                          "so the base-colour slot's transform was applied to every map.");
+        }
+    }
+
     float scalar;
     const bool hasMetalFactor = material->Get(AI_MATKEY_METALLIC_FACTOR, scalar) == AI_SUCCESS;
     if (hasMetalFactor) mat.Metallic = scalar;
