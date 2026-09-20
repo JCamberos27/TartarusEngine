@@ -668,6 +668,106 @@ void TestPhysicsWorldSync() {
     PhysicsWorld::Shutdown(); // release the session-lifetime core too (#167)
 }
 
+// --- #202 / #122: a scene survives save -> load -> save unchanged ---------------------------
+// The serializer is the one place where a silent mistake costs authored work: a field dropped on
+// load, an unstable entity order, a component written but not read. None of that shows up as a
+// crash - the scene just quietly comes back different. Round-tripping and comparing the two
+// documents catches the whole class at once, which is what #202 asks for under "scene
+// round-trips" and what #121/#342 changed enough of to be worth pinning down.
+void TestSceneRoundTrip() {
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+
+    World a;
+    AssetLibrary assetsA;
+    const glm::vec3 zero(0.0f), one(1.0f);
+
+    // A deliberately awkward scene: hierarchy, a nameless entity, non-default transforms, and
+    // components spanning every reflected field type (bool, int, float, vec3, colour, string,
+    // enum) plus the tag-style components that are written as flags.
+    const entt::entity parent = a.CreateEmptyEntity(glm::vec3(1.5f, -2.25f, 3.0f),
+                                                    glm::vec3(0.0f, 45.0f, 0.0f), one, "Parent");
+    const entt::entity child  = a.CreateEmptyEntity(glm::vec3(0.5f, 0.0f, 0.0f), zero,
+                                                    glm::vec3(2.0f, 2.0f, 2.0f), "Child");
+    CHECK(a.SetParent(child, parent));
+    const entt::entity nameless = a.CreateEmptyEntity(zero, zero, one, ""); // #122 - must survive
+    // Entities only, no CreateBox: a box carries a primitive Renderable, and building one calls
+    // into GL, which does not exist here. That is why this suite stays on empties.
+    const entt::entity box = a.CreateEmptyEntity(glm::vec3(0.0f, 1.0f, 0.0f),
+                                                 glm::vec3(0.0f, 30.0f, 0.0f),
+                                                 glm::vec3(2.0f, 0.5f, 2.0f), "Box");
+
+    SpinComponent spin; spin.Axis = glm::vec3(0.0f, 0.0f, 1.0f); spin.Speed = 42.5f;
+    a.Registry.emplace<SpinComponent>(parent, spin);
+
+    CameraComponent cam; cam.FovDegrees = 72.5f; cam.NearPlane = 0.25f; cam.FarPlane = 750.0f;
+    a.Registry.emplace<CameraComponent>(child, cam);
+
+    ColliderComponent col;
+    col.Kind = ColliderComponent::Shape::Sphere;   // an enum, round-tripped by label
+    col.HalfExtents = glm::vec3(1.25f, 0.0f, 0.0f);
+    col.Center = glm::vec3(0.0f, 0.5f, 0.0f);
+    a.Registry.emplace<ColliderComponent>(box, col);
+
+    a.Registry.emplace<TagComponent>(nameless, TagComponent{"Ball"});
+    a.Registry.emplace<LayerComponent>(box, LayerComponent{3});
+    a.Registry.emplace<StaticTag>(box);
+    a.Registry.emplace<DeactivatedTag>(nameless);
+    a.SyncActiveInHierarchy();
+
+    const std::string first = SceneSerializer::SaveToString(a, assetsA);
+    CHECK(!first.empty());
+
+    World b;
+    AssetLibrary assetsB;
+    CHECK(SceneSerializer::LoadFromString(b, assetsB, first));
+    const std::string second = SceneSerializer::SaveToString(b, assetsB);
+
+    // Compared as parsed JSON, not as text: key order and whitespace are not the contract, the
+    // data is. A mismatch here means the scene came back different from the one that was saved.
+    const json j1 = json::parse(first, nullptr, false);
+    const json j2 = json::parse(second, nullptr, false);
+    CHECK(!j1.is_discarded() && !j2.is_discarded());
+    CHECK(j1 == j2);
+
+    // Spot-check the values themselves, so a round-trip that is merely self-consistent (both
+    // sides dropping the same field) still fails.
+    int found = 0;
+    for (entt::entity e : b.Registry.view<NameComponent>()) {
+        const std::string& n = b.Registry.get<NameComponent>(e).Name;
+        if (n == "Parent") {
+            ++found;
+            CHECK(b.Registry.all_of<SpinComponent>(e));
+            const auto& sp = b.Registry.get<SpinComponent>(e);
+            CHECK(sp.Speed == 42.5f && sp.Axis.z == 1.0f);
+            CHECK(b.Registry.all_of<HierarchyComponent>(e));
+            CHECK(b.Registry.get<HierarchyComponent>(e).Children.size() == 1);
+        } else if (n == "Child") {
+            ++found;
+            CHECK(b.Registry.all_of<CameraComponent>(e));
+            const auto& cc = b.Registry.get<CameraComponent>(e);
+            CHECK(cc.FovDegrees == 72.5f && cc.NearPlane == 0.25f && cc.FarPlane == 750.0f);
+        } else if (n == "Box") {
+            ++found;
+            CHECK(b.Registry.all_of<ColliderComponent>(e));
+            const auto& cl = b.Registry.get<ColliderComponent>(e);
+            CHECK(cl.Kind == ColliderComponent::Shape::Sphere);
+            CHECK(cl.HalfExtents.x == 1.25f && cl.Center.y == 0.5f);
+            CHECK(b.Registry.all_of<StaticTag>(e));
+            CHECK(b.Registry.all_of<LayerComponent>(e) && b.Registry.get<LayerComponent>(e).Layer == 3);
+        }
+    }
+    CHECK(found == 3);
+
+    // The nameless entity is still there, still deactivated, still tagged (#122).
+    int tagged = 0;
+    for (entt::entity e : b.Registry.view<TagComponent>())
+        if (b.Registry.get<TagComponent>(e).Tag == "Ball") {
+            ++tagged;
+            CHECK(b.Registry.all_of<DeactivatedTag>(e));
+        }
+    CHECK(tagged == 1);
+}
+
 // --- AssetGuid ------------------------------------------------------------------------------
 void TestAssetGuid() {
     const AssetGuid g = AssetGuid::Generate();
@@ -1048,6 +1148,7 @@ int RunUnitTests() {
         {"LogStackTrace", TestLogStackTrace},
         {"HierarchyCycleRepair", TestHierarchyCycleRepair},
         {"CameraFrustumValidation", TestCameraFrustumValidation},
+        {"SceneRoundTrip", TestSceneRoundTrip},
         {"PhysicsWorldSync", TestPhysicsWorldSync},
     };
     for (const auto& [name, fn] : tests) {
