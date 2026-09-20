@@ -558,6 +558,20 @@ bool IsBuiltinShaderPath(const std::string& key) {
     const std::string dir = std::filesystem::path(ShaderLibrary::Dir()).generic_string();
     return !dir.empty() && std::filesystem::path(key).generic_string().rfind(dir, 0) == 0;
 }
+// #129 - true for an existing file inside the project folder (the only kind Delete from Disk may
+// send to the Recycle Bin: never an engine file or something imported from elsewhere).
+bool IsProjectFile(const std::string& key) {
+    std::error_code ec;
+    const std::filesystem::path p(key);
+    if (!std::filesystem::is_regular_file(p, ec)) return false;
+    const std::string file = std::filesystem::weakly_canonical(p, ec).generic_string();
+    std::string root = std::filesystem::weakly_canonical(std::filesystem::path(ProjectPaths::Root()), ec).generic_string();
+    if (root.empty()) return false;
+    if (root.back() != '/') root += '/';
+    auto lower = [](std::string x) { std::transform(x.begin(), x.end(), x.begin(), [](unsigned char c) { return (char)std::tolower(c); }); return x; };
+    return lower(file).rfind(lower(root), 0) == 0;
+}
+
 // #178 - Unity's project-wide Find References: every scene, prefab, material, Animator Controller
 // and Physic Material file that mentions the asset, by its GUID (how scenes reference most
 // assets, #132) or by its project-relative path. Plain text search; files are small.
@@ -768,6 +782,64 @@ void EditorLayer::DrawDeleteConfirmPopup(World& world, AssetLibrary& assets) {
                 : "Delete Assets");
             for (const auto& item : m_PendingDelete) PerformAssetDelete(world, assets, item.Key, item.IsFolder);
             m_PendingDelete.clear();
+            ClearAssetSelection();
+            ImGui::CloseCurrentPopup();
+            if (!m_DeleteError.empty()) m_OpenDeleteErrorRequested = true;
+        }
+        ImGui::EndPopup();
+    }
+
+    // #129 - Delete from Disk confirmation: lists the project files that still reference the
+    // asset(s), since those references break once the file is gone.
+    const char* kDiskPopupId = "Delete from Disk?";
+    if (m_OpenDiskDeleteRequested) {
+        ImGui::OpenPopup(kDiskPopupId);
+        m_OpenDiskDeleteRequested = false;
+    }
+    ImGui::SetNextWindowSize(ImVec2(380.0f * m_UIScale, 0.0f));
+    if (ImGui::BeginPopupModal(kDiskPopupId, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 340.0f * m_UIScale);
+        if (m_PendingDiskDelete.size() == 1)
+            ImGui::Text("Move \"%s\" and its .meta to the Recycle Bin?", LeafNameOf(m_PendingDiskDelete[0]).c_str());
+        else
+            ImGui::Text("Move %d files and their .meta files to the Recycle Bin?", (int)m_PendingDiskDelete.size());
+        ImGui::TextDisabled("This can't be undone here - restore from the Recycle Bin if needed.");
+        if (!m_PendingDiskDeleteRefs.empty()) {
+            ImGui::Spacing();
+            ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  Still referenced by:");
+            const size_t shown = std::min<size_t>(m_PendingDiskDeleteRefs.size(), 8);
+            for (size_t i = 0; i < shown; ++i) ImGui::BulletText("%s", m_PendingDiskDeleteRefs[i].c_str());
+            if (m_PendingDiskDeleteRefs.size() > shown)
+                ImGui::TextDisabled("...and %d more.", (int)(m_PendingDiskDeleteRefs.size() - shown));
+            ImGui::TextDisabled("Those references will be missing the next time they load.");
+        }
+        ImGui::PopTextWrapPos();
+        ImGui::Spacing();
+        const float bw = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+        if (PrimaryButton("Cancel", ImVec2(bw, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            m_PendingDiskDelete.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (PrimaryButton("Delete", ImVec2(bw, 0.0f))) {
+            m_DeleteError.clear();
+            for (const std::string& key : m_PendingDiskDelete) {
+                const std::string leaf = LeafNameOf(key);
+                if (!PerformAssetDelete(world, assets, key, false)) continue; // e.g. the open scene
+                std::error_code ec;
+                for (const std::string& path : {key, key + ".meta"}) {
+                    if (!std::filesystem::exists(std::filesystem::path(path), ec)) continue; // scenes recycle themselves
+                    std::string why;
+                    if (!FileDialog::RecycleFile(path, why)) {
+                        if (why.empty()) why = "the file may be open in another program or write-protected";
+                        if (!m_DeleteError.empty()) m_DeleteError += "\n";
+                        m_DeleteError += "\xE2\x80\xA2 \"" + LeafNameOf(path) + "\" - " + why + ".";
+                    }
+                }
+                AssetDatabase::ForgetPath(key);
+                Log::Info("Sent to Recycle Bin: " + leaf);
+            }
+            m_PendingDiskDelete.clear();
             ClearAssetSelection();
             ImGui::CloseCurrentPopup();
             if (!m_DeleteError.empty()) m_OpenDeleteErrorRequested = true;
@@ -2088,6 +2160,22 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 }
                 ImGui::PopStyleColor();
                 if (cell.kind == Cell::Kind::Prefab) ImGui::TextDisabled("The .prefab file stays on disk.");
+                // #129 - Unity's Delete: the file and its .meta go to the Recycle Bin (project files only).
+                std::vector<std::string> onDisk;
+                for (const auto& item : selectionForAction)
+                    if (!item.IsFolder && !IsBuiltinShaderPath(item.Key) && IsProjectFile(item.Key)) onDisk.push_back(item.Key);
+                ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
+                if (!onDisk.empty() &&
+                    ImGui::MenuItem(onDisk.size() > 1 ? ICON_FA_TRASH "  Delete Selected from Disk..." : ICON_FA_TRASH "  Delete from Disk...")) {
+                    m_PendingDiskDeleteRefs.clear();
+                    for (const std::string& k : onDisk)
+                        for (std::string& r : FindProjectReferences(k))
+                            if (std::find(m_PendingDiskDeleteRefs.begin(), m_PendingDiskDeleteRefs.end(), r) == m_PendingDiskDeleteRefs.end())
+                                m_PendingDiskDeleteRefs.push_back(std::move(r));
+                    m_PendingDiskDelete = onDisk;
+                    m_OpenDiskDeleteRequested = true;
+                }
+                ImGui::PopStyleColor();
             }
             ImGui::EndPopup();
         }

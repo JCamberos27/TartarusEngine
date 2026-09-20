@@ -1712,6 +1712,11 @@ private:
     void DrawDeleteConfirmPopup(World& world, AssetLibrary& assets);
     std::vector<AssetKeyRef> m_PendingDelete;
     bool m_OpenDeleteConfirmRequested = false;
+    // #129 - Delete from Disk: library assets whose file (and .meta) go to the Recycle Bin, plus the
+    // project files that reference them (shown in the confirmation).
+    std::vector<std::string> m_PendingDiskDelete;
+    std::vector<std::string> m_PendingDiskDeleteRefs;
+    bool m_OpenDiskDeleteRequested = false;
     std::string m_DeleteError;                  // non-empty -> the "Can't Delete" modal shows it
     bool m_OpenDeleteErrorRequested = false;
 
