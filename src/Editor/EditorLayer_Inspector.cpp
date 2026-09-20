@@ -28,6 +28,8 @@
 #include "LayerRegistry.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "AtomicFile.h"   // #178 preset write
+#include "AssetDatabase.h" // #178 preset .meta
 #include "GLStateCache.h"
 #include "Framebuffer.h"
 #include "gl.h"
@@ -2748,6 +2750,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         if (!rc.Meta.GenericInspector) continue; // Mesh Renderer: drawn by its hand-coded section above
         if (!rc.Has(registry, entity)) continue;
         bool reflRemoved = false, reflReset = false, reflCopy = false, reflPaste = false;
+        bool reflSavePreset = false;            // #178
+        std::string reflApplyPreset;            // #178 - chosen .preset path
         // #315 B4b — this instance added a component its .prefab lacks: tint the header + add
         // Revert/Apply to its right-click menu. Passed as rc.Meta.Name (display Name, not the
         // JSON Key) — IsPrefabComponentAdded/ApplyPrefabComponent look the component up in
@@ -2757,7 +2761,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         bool reflPfRevert = false, reflPfApply = false;
         const bool reflOpen = BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, true, reflRemoved,
             /*defaultOpen=*/true, rc.Meta.Tooltip, &reflReset, &reflCopy, &reflPaste,
-            compAdded ? &reflPfRevert : nullptr, compAdded ? &reflPfApply : nullptr);
+            compAdded ? &reflPfRevert : nullptr, compAdded ? &reflPfApply : nullptr,
+            // #178 - every generically-inspected component is also generically serialised, so
+            // all of them can round-trip through a preset.
+            &reflSavePreset, &reflApplyPreset);
         if (compAdded) DrawOverrideGutterBar();
         // "Revert to Prefab" on an added component == remove it; route through the same
         // end-of-loop removal path (below) so nothing touches a component mid-teardown.
@@ -2766,6 +2773,16 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         if (reflReset) {
             PushUndo(world, std::string("Reset ") + rc.Meta.Name);
             rc.Add(registry, entity); // emplace_or_replace -> back to default-constructed
+        }
+        if (reflSavePreset) SaveComponentPreset(world, entity, rc.Meta.Name); // #178 - reads only, no undo
+        if (!reflApplyPreset.empty()) { // #178
+            std::ifstream pf(reflApplyPreset);
+            const std::string text = pf.is_open()
+                ? std::string((std::istreambuf_iterator<char>(pf)), std::istreambuf_iterator<char>())
+                : std::string();
+            PushUndo(world, std::string("Apply Preset to ") + rc.Meta.Name);
+            if (!SceneSerializer::ApplyComponentPresetJson(world, assets, entity, text))
+                Log::Error("Preset: could not apply " + reflApplyPreset + ".");
         }
         if (reflCopy) {
             // Type-erased snapshot: read each reflected field into a variant, then a closure
@@ -2876,13 +2893,76 @@ void EditorLayer::PasteComponentFromClip(World& world, entt::entity entity) {
     if (m_ComponentClipApply && world.Registry.valid(entity)) m_ComponentClipApply(*this, world, entity);
 }
 
+// --- #178 Preset assets ---------------------------------------------------------------------
+// A preset is a small JSON file holding one component reflected fields, in the same encoding
+// scenes use (SceneSerializer::ComponentToPresetJson), so an asset reference inside a preset
+// follows its GUID exactly like a scene reference does. Presets live in project/presets and are
+// ordinary assets: the Asset Browser lists them, Rename renames them, Delete from Disk removes
+// them.
+std::vector<std::pair<std::string, std::string>> EditorLayer::PresetsForComponent(const std::string& component) const {
+    std::vector<std::pair<std::string, std::string>> out;
+    if (component.empty()) return out;
+    std::error_code ec;
+    const std::filesystem::path dir = ProjectPaths::Resolve("presets");
+    if (!std::filesystem::exists(dir, ec) || ec) return out;
+    for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+        if (ec) break;
+        if (!entry.is_regular_file(ec) || ec) continue;
+        if (entry.path().extension() != ".preset") continue;
+        std::ifstream f(entry.path());
+        if (!f.is_open()) continue;
+        const std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        if (SceneSerializer::PresetComponentName(text) != component) continue; // a preset for another component
+        out.emplace_back(entry.path().stem().string(), entry.path().string());
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+std::string EditorLayer::SaveComponentPreset(const World& world, entt::entity entity, const char* component) {
+    const std::string name = component ? component : "";
+    const std::string text = SceneSerializer::ComponentToPresetJson(world, entity, component);
+    if (text.empty()) {
+        Log::Error("Preset: " + name + " cannot be saved as a preset (not a reflected component).");
+        return {};
+    }
+    std::error_code ec;
+    const std::filesystem::path dir = ProjectPaths::Resolve("presets");
+    std::filesystem::create_directories(dir, ec);
+    if (ec) { Log::Error("Preset: could not create " + dir.string() + "."); return {}; }
+
+    // Never overwrite an existing preset: saving the same component twice makes a second one,
+    // the way Unity Save Preset does. Rename it in the Asset Browser to something meaningful.
+    std::filesystem::path path;
+    for (int n = 0; n < 1000; ++n) {
+        const std::string file = name + (n == 0 ? "" : " " + std::to_string(n + 1)) + ".preset";
+        path = dir / file;
+        if (!std::filesystem::exists(path, ec)) break;
+        path.clear();
+    }
+    if (path.empty()) { Log::Error("Preset: too many presets named after this component."); return {}; }
+
+    if (!AtomicFile::WriteBytes(path, text, /*binary=*/false)) {
+        Log::Error("Preset: could not write " + path.string() + ".");
+        return {};
+    }
+    AssetDatabase::EnsureGuid(path.string()); // gets a .meta like any other asset
+    // Asset context, so double-clicking the Console line reveals the file in the Asset Browser.
+    Log::Info("Preset: saved " + path.filename().string() + ". Rename it in the Asset Browser.",
+              LogContext::Asset(path.string()));
+    return path.string();
+}
+
 bool EditorLayer::BeginComponentSection(const char* icon,
     const char* label, bool removable, bool& removedOut, bool defaultOpen, const char* tooltip,
-    bool* resetOut, bool* copyOut, bool* pasteOut, bool* prefabRevertOut, bool* prefabApplyOut) {
+    bool* resetOut, bool* copyOut, bool* pasteOut, bool* prefabRevertOut, bool* prefabApplyOut,
+    bool* savePresetOut, std::string* applyPresetOut) {
     removedOut = false;
     if (resetOut) *resetOut = false;
     if (copyOut)  *copyOut = false;
     if (pasteOut) *pasteOut = false;
+    if (savePresetOut) *savePresetOut = false;
+    if (applyPresetOut) applyPresetOut->clear();
     if (prefabRevertOut) *prefabRevertOut = false;
     if (prefabApplyOut)  *prefabApplyOut = false;
 
@@ -2968,7 +3048,24 @@ bool EditorLayer::BeginComponentSection(const char* icon,
             if (ImGui::MenuItem(ICON_FA_PASTE "  Paste Component Values", nullptr, false, canPaste))
                 *pasteOut = true;
         }
-        if ((resetOut || copyOut || pasteOut) && removable) ImGui::Separator();
+        // #178 - Preset assets: save this component's current values, or stamp a saved set back
+        // on. Only offered for generically-serialised components (the caller decides by passing
+        // these), since a preset is the scene's own field encoding.
+        if (savePresetOut || applyPresetOut) {
+            ImGui::Separator();
+            if (savePresetOut && ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save Preset")) *savePresetOut = true;
+            if (applyPresetOut) {
+                const auto presets = PresetsForComponent(label);
+                if (ImGui::BeginMenu(ICON_FA_SLIDERS "  Apply Preset", !presets.empty())) {
+                    for (const auto& [name, path] : presets)
+                        if (ImGui::MenuItem(name.c_str())) *applyPresetOut = path;
+                    ImGui::EndMenu();
+                }
+                if (presets.empty() && ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("No saved presets for this component yet - use Save Preset first.");
+            }
+        }
+        if ((resetOut || copyOut || pasteOut || savePresetOut) && removable) ImGui::Separator();
         if (removable && ImGui::MenuItem(ICON_FA_XMARK "  Remove Component")) removedOut = true;
         if (prefabRevertOut || prefabApplyOut) {
             ImGui::Separator();
