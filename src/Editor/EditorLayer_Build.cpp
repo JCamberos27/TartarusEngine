@@ -141,6 +141,19 @@ void EditorLayer::DrawBuildSettingsBody() {
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Keeps the statistics overlay and the physics debug keys (F5 / F6) in the game.");
 
+    // #174 - product branding. Project-relative paths, copied into the build by BuildPipeline;
+    // empty leaves the game with the engine's own icon and no splash.
+    ImGui::SeparatorText("Branding");
+    changed |= InputString("Icon", b.IconPath, kw * 1.5f);
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("PNG used for the game's window and taskbar icon.\n"
+                             "Project-relative, e.g. textures/game_icon.png. Empty keeps the engine's icon.\n"
+                             "Does not change the icon Explorer shows on the .exe itself.");
+    changed |= InputString("Splash Image", b.SplashPath, kw * 1.5f);
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("PNG shown while the game loads, at its own pixel size.\n"
+                             "Project-relative. Empty means no splash, as before.");
+
     ImGui::SeparatorText("Output");
     const std::string resolved = BuildPipeline::ResolveOutputDir(b);
     changed |= InputString("Output Folder", b.OutputDir, kw * 1.5f);
