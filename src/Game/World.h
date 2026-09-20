@@ -103,6 +103,12 @@ public:
     float FocusRange{3.0f};
     float DofMaxBlur{8.0f};
 
+    // #162 - camera motion blur (Game view / player only, like DOF). Velocity is reprojected
+    // from depth, so this blurs camera movement, not an object moving under a still camera.
+    bool  MotionBlur{false};
+    float MotionBlurIntensity{0.5f};
+    int   MotionBlurSamples{12};
+
     // #162 - distance fog (Unity's Lighting > Other Settings > Fog).
     bool  FogEnabled{false};
     int   FogMode{2};               // 1 Linear, 2 Exponential, 3 Exponential Squared
