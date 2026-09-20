@@ -34,6 +34,11 @@ struct LogEntry {
     // without relying on vector indices, which shift whenever old entries are dropped.
     unsigned long long Seq = 0;
     LogContext Context;
+    // #178 - return addresses captured at the log call, for Warning and Error only (Info is far
+    // too chatty to pay for, and a stack is rarely what you want from it). Raw addresses:
+    // capturing is cheap and thread-safe, while turning them into names is slow and not, so
+    // that happens lazily on the main thread via Log::ResolveStack when the row is expanded.
+    std::vector<void*> Stack;
 };
 
 // Thread safety (#146): Info/Warn/Error may be called from any thread. Messages from other
@@ -55,6 +60,12 @@ public:
     // logged before this call. Written unbuffered so it survives a crash. Returns the full path,
     // or "" if the file couldn't be opened (logging carries on without it).
     static std::string OpenFile(const std::string& fileName);
+
+    // #178 - frames as "module!symbol  file:line" lines, newline-separated, nearest frame
+    // first; "" when `frames` is empty or symbols are unavailable. Main thread only: the
+    // dbghelp Sym* APIs are single-threaded. The first call initialises the symbol handler,
+    // which takes a moment - hence resolving only when the user asks for a stack.
+    static std::string ResolveStack(const std::vector<void*>& frames);
 
     static const std::vector<LogEntry>& Entries();
     static void Clear();
