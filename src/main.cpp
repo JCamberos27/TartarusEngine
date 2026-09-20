@@ -2316,7 +2316,8 @@ int main(int argc, char** argv) {
                         spotShadowBias[slot] = lc.Shadow.Bias;
                         spotShadowNormalBias[slot] = lc.Shadow.NormalBias;
                         spotShadowSoftness[slot] = lc.Shadow.Softness;
-                        spotShadowVP[slot] = glm::perspective(fov, 1.0f, nearP, spotShadowFar[slot]) *
+                        // #202 - MakePerspective takes degrees; `fov` above is already radians.
+                        spotShadowVP[slot] = MakePerspective(glm::degrees(fov), 1.0f, nearP, spotShadowFar[slot]) *
                                              glm::lookAt(pos, pos + aim, up);
                     }
                     lightBuffer.AddSpot(pos, aim, lc.Color, lc.Intensity, lc.Range, cosOuter, cosInner, slot,
@@ -2535,7 +2536,7 @@ int main(int argc, char** argv) {
                 int cubeLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
                 int cubeModelLoc = localShadowShader.Loc("uModel");
                 for (int s = 0; s < pointShadowCount; ++s) {
-                    glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, pointShadowNear[s], pointShadowFar[s]);
+                    glm::mat4 proj = MakePerspective(90.0f, 1.0f, pointShadowNear[s], pointShadowFar[s]); // #202
                     localShadowShader.SetVec3(cubeLightPosLoc, pointShadowPos[s]);
                     localShadowShader.SetFloat(cubeFarLoc, pointShadowFar[s]);
                     for (int f = 0; f < 6; ++f) {
@@ -3120,7 +3121,9 @@ int main(int argc, char** argv) {
                     const auto& cc = world.Registry.get<CameraComponent>(sceneCamEnt);
                     glm::mat4 camModel = world.ComposeWorldTransform(sceneCamEnt);
                     gvView = glm::inverse(camModel);
-                    gvProj = glm::perspective(glm::radians(cc.FovDegrees), gvAspect, cc.NearPlane, cc.FarPlane);
+                    // #202 - through MakePerspective, not glm directly: these are raw component
+                    // values and gvAspect comes from a viewport that can collapse to zero pixels.
+                    gvProj = MakePerspective(cc.FovDegrees, gvAspect, cc.NearPlane, cc.FarPlane);
                     gvEye = glm::vec3(camModel[3]);
                 } else {
                     gvView = gameCam->ViewMatrix();
