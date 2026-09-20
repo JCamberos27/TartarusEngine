@@ -5,6 +5,7 @@
 #include "GLStateCache.h"
 #include "gl.h"
 
+#include <glm/gtc/type_ptr.hpp> // make_mat4 - #162 motion blur
 #include <algorithm>
 #include <cmath>
 
@@ -24,6 +25,9 @@ Tonemapper::~Tonemapper() {
     delete m_DofShader;
     if (m_DofTex) glDeleteTextures(1, &m_DofTex);
     if (m_DofFbo) glDeleteFramebuffers(1, &m_DofFbo);
+    delete m_MbShader; // #162
+    if (m_MbTex) glDeleteTextures(1, &m_MbTex);
+    if (m_MbFbo) glDeleteFramebuffers(1, &m_MbFbo);
     if (m_Vao) glDeleteVertexArrays(1, &m_Vao);
     if (m_LumTex) glDeleteTextures(1, &m_LumTex);
     if (m_LumFbo) glDeleteFramebuffers(1, &m_LumFbo);
@@ -137,6 +141,46 @@ unsigned int Tonemapper::UpdateAutoExposure(unsigned int srcHdrTexture, const Po
     return m_EvTex[slot][next];
 }
 
+unsigned int Tonemapper::ApplyMotionBlur(unsigned int srcHdrTexture, int w, int h, const PostSettings& post) {
+    if (!m_MbShader)
+        m_MbShader = new Shader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
+                                ShaderLibrary::ReadFile("MotionBlur.frag.glsl"));
+    if (w != m_MbW || h != m_MbH || !m_MbTex) {
+        if (m_MbTex) glDeleteTextures(1, &m_MbTex);
+        if (m_MbFbo) glDeleteFramebuffers(1, &m_MbFbo);
+        glGenTextures(1, &m_MbTex);
+        glBindTexture(GL_TEXTURE_2D, m_MbTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glGenFramebuffers(1, &m_MbFbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, m_MbFbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_MbTex, 0);
+        m_MbW = w; m_MbH = h;
+        GLStateCache::Invalidate(); // raw texture bind above
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, m_MbFbo);
+    glViewport(0, 0, w, h);
+    glBindVertexArray(m_Vao);
+    m_MbShader->Bind();
+    GLStateCache::BindTexture2D(0, srcHdrTexture);
+    GLStateCache::BindTexture2D(1, post.DepthTexture);
+    m_MbShader->SetInt("uHdr", 0);
+    m_MbShader->SetInt("uDepth", 1);
+    m_MbShader->SetMat4("uInvViewProj", glm::make_mat4(post.InvViewProj));
+    m_MbShader->SetMat4("uPrevViewProj", glm::make_mat4(post.PrevViewProj));
+    m_MbShader->SetFloat("uIntensity", std::clamp(post.MotionBlurIntensity, 0.0f, 1.0f));
+    m_MbShader->SetInt("uSamples", std::clamp(post.MotionBlurSamples, 2, 32));
+    m_MbShader->SetVec2("uTexel", glm::vec2(1.0f / (float)w, 1.0f / (float)h));
+    // Cap the streak at ~4% of frame height, so a fast whip-pan blurs hard without smearing the
+    // whole screen into mush.
+    m_MbShader->SetFloat("uMaxRadius", 0.04f * (float)h);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    return m_MbTex;
+}
+
 unsigned int Tonemapper::ApplyDepthOfField(unsigned int srcHdrTexture, int w, int h, const PostSettings& post) {
     if (!m_DofShader)
         m_DofShader = new Shader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
@@ -188,6 +232,11 @@ void Tonemapper::Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW
     // it into the real destination.
     if (post.DepthOfField && post.DepthTexture && post.MaxBlur > 0.0f && dstW > 0 && dstH > 0)
         srcHdrTexture = ApplyDepthOfField(srcHdrTexture, dstW, dstH, post);
+
+    // #162 - after DOF, so the streak smears the already depth-blurred image rather than the
+    // other way round, and skipped entirely on a view's first frame (no previous matrix yet).
+    if (post.MotionBlur && post.PrevViewProjValid && post.DepthTexture && dstW > 0 && dstH > 0)
+        srcHdrTexture = ApplyMotionBlur(srcHdrTexture, dstW, dstH, post);
 
     unsigned int adaptedEv = 0;
     if (post.AutoExposure) adaptedEv = UpdateAutoExposure(srcHdrTexture, post);
