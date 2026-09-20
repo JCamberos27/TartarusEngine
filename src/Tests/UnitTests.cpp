@@ -1,10 +1,15 @@
 // #173 - headless unit tests: `TartarusEngine.exe --unit-tests`.
 //
-// Runs before any window, GL context, audio device or PhysX world exists, so it works on a CI
-// runner with no GPU (unlike --smoke-test). Only pure C++ code is exercised here: undo deltas,
+// Runs before any window, GL context or audio device exists, so it works on a CI runner with no
+// GPU (unlike --smoke-test). Almost everything here is pure C++: undo deltas,
 // GUIDs, atomic file writes, texture-cache keys, material JSON robustness, the component
 // registry, the Animator Controller, asset identity / GUID-following references and the project
 // file watcher (#132). Each CHECK prints on failure; the run returns the number of failed checks (0 = pass).
+//
+// The one exception is PhysicsWorldSync (#201), which stands up a real PhysX world. PhysX needs
+// no GL, and that check previously lived only in --smoke-test, which CI runs with
+// continue-on-error for want of a GPU - so it never gated anything. It runs last, and shuts the
+// PhysX core back down when it is done.
 //
 // Deliberately no test framework dependency: a CHECK macro and a list of functions is all this
 // needs, and it keeps the engine's third-party surface unchanged.
@@ -19,6 +24,8 @@
 #include "Components.h"
 #include "AtomicFile.h"
 #include "Camera.h"
+#include "PhysicsWorld.h"  // #201 - the physics sync regression test
+#include "GameModuleAPI.h"  // QueryFilter / RaycastHit
 #include <cmath>   // #202 isfinite
 #include <limits>
 #include "ComponentReflection.h"
@@ -600,6 +607,73 @@ void TestCameraFrustumValidation() {
     CHECK(cams == 1);
 }
 
+// --- #201: the PhysX scene tracks the World while playing ----------------------------------
+// This lived only in --smoke-test, which CI runs with continue-on-error because the runners have
+// no GPU - so the check never actually gated anything. PhysX needs no GL, so it belongs here
+// where the exit code is enforced. It is the one test that stands a real PhysX world up.
+void TestPhysicsWorldSync() {
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    // A static floor slab under the origin, and a ray straight down onto it.
+    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -1.0f, 0.0f), zero, one, "Floor");
+    ColliderComponent col;
+    col.Kind = ColliderComponent::Shape::Box;
+    col.HalfExtents = glm::vec3(10.0f, 0.5f, 10.0f);
+    world.Registry.emplace<ColliderComponent>(floorE, col);
+    world.SyncActiveInHierarchy();
+    world.RebuildWorldTransformCache();
+
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    if (!PhysicsWorld::IsActive()) return;
+
+    const float origin[3] = {0.0f, 20.0f, 0.0f}, down[3] = {0.0f, -1.0f, 0.0f};
+    QueryFilter all;
+    RaycastHit hit;
+    auto hitsFloor = [&] {
+        return PhysicsWorld::RaycastFiltered(origin, down, 100.0f, all, hit) &&
+               hit.Entity == entt::to_integral(floorE);
+    };
+    auto resync = [&] {
+        world.SyncActiveInHierarchy();
+        world.RebuildWorldTransformCache();
+        PhysicsWorld::Step(0.0f, world, {}); // frozen step: sync only, no simulation
+    };
+
+    CHECK(hitsFloor()); // built at Play-enter
+
+    // Deactivated mid-play: the actor must leave the scene, not linger as an invisible blocker.
+    world.Registry.emplace_or_replace<DeactivatedTag>(floorE);
+    resync();
+    CHECK(!hitsFloor());
+
+    // Re-activated: built again.
+    world.Registry.remove<DeactivatedTag>(floorE);
+    resync();
+    CHECK(hitsFloor());
+
+    // An entity that gains a Collider while playing gets an actor: a second slab above the
+    // first, which the ray must now stop on instead.
+    const entt::entity lidE = world.CreateEmptyEntity(glm::vec3(0.0f, 5.0f, 0.0f), zero, one, "Lid");
+    world.Registry.emplace<ColliderComponent>(lidE, col);
+    resync();
+    CHECK(PhysicsWorld::RaycastFiltered(origin, down, 100.0f, all, hit));
+    CHECK(hit.Entity == entt::to_integral(lidE));
+
+    // Destroyed mid-play: its actor goes with it, and the ray falls through to the floor again.
+    world.DestroyEntityAndChildren(lidE);
+    resync();
+    CHECK(hitsFloor());
+
+    // Losing the Collider component alone is enough to drop the actor.
+    world.Registry.remove<ColliderComponent>(floorE);
+    resync();
+    CHECK(!PhysicsWorld::RaycastFiltered(origin, down, 100.0f, all, hit));
+
+    PhysicsWorld::Destroy();
+    PhysicsWorld::Shutdown(); // release the session-lifetime core too (#167)
+}
+
 // --- AssetGuid ------------------------------------------------------------------------------
 void TestAssetGuid() {
     const AssetGuid g = AssetGuid::Generate();
@@ -980,6 +1054,7 @@ int RunUnitTests() {
         {"LogStackTrace", TestLogStackTrace},
         {"HierarchyCycleRepair", TestHierarchyCycleRepair},
         {"CameraFrustumValidation", TestCameraFrustumValidation},
+        {"PhysicsWorldSync", TestPhysicsWorldSync},
     };
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;
