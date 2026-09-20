@@ -42,6 +42,8 @@ bool PlayerConfig::Load(const std::string& path, PlayerConfig& out) {
     c.Fullscreen  = boolean("fullscreen", c.Fullscreen);
     c.VSync       = boolean("vsync", c.VSync);
     c.DevelopmentBuild = boolean("developmentBuild", c.DevelopmentBuild);
+    c.IconPath    = str("iconPath", c.IconPath);
+    c.SplashPath  = str("splashPath", c.SplashPath);
     if (const auto s = j.find("scenes"); s != j.end() && s->is_array())
         for (const auto& sc : *s)
             if (sc.is_string() && !sc.get<std::string>().empty()) c.Scenes.push_back(sc.get<std::string>());
@@ -60,6 +62,8 @@ bool PlayerConfig::Save(const std::string& path) const {
         {"fullscreen", Fullscreen},
         {"vsync", VSync},
         {"developmentBuild", DevelopmentBuild},
+        {"iconPath", IconPath},
+        {"splashPath", SplashPath},
     };
     return AtomicFile::WriteJson(path, j);
 }
