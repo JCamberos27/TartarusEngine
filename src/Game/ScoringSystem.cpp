@@ -158,8 +158,10 @@ void UpdateScoring(const GameModuleHostAPI& host, World& world, float dt) {
     BeginFrame(host, world);
     TrackReleases(host);
 
-    ScoreboardComponent* board = nullptr;
-    for (auto [e, b] : world.Registry.view<ScoreboardComponent>().each()) { board = &b; break; }
+    // The first scoreboard in the scene (front() rather than a break out of a loop: MSVC flags
+    // the loop's unreachable increment as C4702 in Debug, and warnings are errors, #173).
+    auto boards = world.Registry.view<ScoreboardComponent>();
+    ScoreboardComponent* board = boards.empty() ? nullptr : &boards.get<ScoreboardComponent>(boards.front());
 
     if (host.GetTriggerEvents) {
         TriggerEvent events[64];

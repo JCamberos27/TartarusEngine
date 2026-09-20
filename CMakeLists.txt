@@ -256,7 +256,7 @@ target_include_directories(TartarusEditor PRIVATE
 # Must match the host's ImGui configuration exactly — the two copies share one ImGuiContext.
 target_compile_definitions(TartarusEditor PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
 target_compile_options(TartarusEditor PRIVATE
-  $<$<CXX_COMPILER_ID:MSVC>:/W4 /MP>
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /MP>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
 )
 
@@ -270,7 +270,7 @@ target_include_directories(TartarusGame PRIVATE
 target_link_libraries(TartarusGame PRIVATE glm::glm EnTT::EnTT)
 target_compile_definitions(TartarusGame PRIVATE GLM_ENABLE_EXPERIMENTAL)
 target_compile_options(TartarusGame PRIVATE
-  $<$<CXX_COMPILER_ID:MSVC>:/W4 /MP>
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /MP>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
 )
 
@@ -343,8 +343,9 @@ target_compile_definitions(TartarusEngine PRIVATE GLM_ENABLE_EXPERIMENTAL GLFW_I
 # most latent problems (unused results, signed/unsigned mismatch, uninitialized reads, shadowed
 # variables, truncating conversions). /MP is unrelated to warnings but cheap to add here too —
 # parallel compilation noticeably cuts build times.
+# #173 - warnings are errors (MSVC /WX) for all three engine targets: the tree builds clean at /W4.
 target_compile_options(TartarusEngine PRIVATE
-  $<$<CXX_COMPILER_ID:MSVC>:/W4 /MP>
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /MP>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
 )
 
