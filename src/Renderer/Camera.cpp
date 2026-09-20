@@ -49,8 +49,18 @@ glm::mat4 Camera::ViewMatrix() const {
 }
 
 glm::mat4 Camera::ProjectionMatrix(float aspect, float nearOverride, float farOverride) const {
-    const float nearPlane = nearOverride >= 0.0f ? nearOverride : NearPlane;
-    const float farPlane  = farOverride  >= 0.0f ? farOverride  : FarPlane;
+    float nearPlane = nearOverride >= 0.0f ? nearOverride : NearPlane;
+    float farPlane  = farOverride  >= 0.0f ? farOverride  : FarPlane;
+
+    // #202 - a degenerate frustum must never reach glm. far == near divides by zero and a
+    // non-positive near makes the perspective divide meaningless: either way the matrix comes
+    // back full of inf/NaN, which then spreads into every world position derived from it and
+    // the view simply goes black - with nothing in the log to say why. The values can arrive
+    // from a hand-edited scene, an older file, or a component written at runtime, so the guard
+    // belongs here at the single point of use rather than at each of those call sites.
+    if (!(aspect > 0.0f)) aspect = 1.0f;                       // also catches NaN
+    if (!(nearPlane > 0.0f)) nearPlane = 0.01f;
+    if (!(farPlane > nearPlane)) farPlane = nearPlane + 1.0f;
     if (Orthographic) {
         float halfW = OrthoHalfHeight * aspect;
         return glm::ortho(-halfW, halfW, -OrthoHalfHeight, OrthoHalfHeight, nearPlane, farPlane);
