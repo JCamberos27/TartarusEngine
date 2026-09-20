@@ -19,6 +19,8 @@
 #include "Components.h"
 #include "AtomicFile.h"
 #include "Camera.h"
+#include <cmath>   // #202 isfinite
+#include <limits>
 #include "ComponentReflection.h"
 #include "ComponentRegistry.h"
 #include "AssetLibrary.h" // #178 preset apply
@@ -494,6 +496,57 @@ void TestHierarchyCycleRepair() {
     CHECK(loadedRoots == 1); // one link cut, the other kept
 }
 
+// --- #202: a degenerate camera frustum must not produce a NaN projection -------------------
+void TestCameraFrustumValidation() {
+    auto finite = [](const glm::mat4& m) {
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r)
+                if (!std::isfinite(m[c][r])) return false;
+        return true;
+    };
+
+    // The guard is at the point of use, so it holds whatever the values came from.
+    Camera cam;
+    cam.NearPlane = 10.0f; cam.FarPlane = 10.0f;      // far == near: divides by zero
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    cam.NearPlane = 0.0f;  cam.FarPlane = 100.0f;     // non-positive near
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    cam.NearPlane = -5.0f; cam.FarPlane = -10.0f;     // both wrong, and inverted
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    cam.NearPlane = 0.1f;  cam.FarPlane = 1000.0f;
+    CHECK(finite(cam.ProjectionMatrix(0.0f)));        // zero aspect
+    CHECK(finite(cam.ProjectionMatrix(std::numeric_limits<float>::quiet_NaN())));
+    cam.Orthographic = true;
+    cam.NearPlane = 5.0f; cam.FarPlane = 5.0f;
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    cam.Orthographic = false;
+
+    // A sane frustum is left exactly alone - the guard must not quietly reshape good cameras.
+    cam.NearPlane = 0.3f; cam.FarPlane = 250.0f;
+    const glm::mat4 expected = glm::perspective(glm::radians(cam.Fov), 1.5f, 0.3f, 250.0f);
+    const glm::mat4 got = cam.ProjectionMatrix(1.5f);
+    for (int c = 0; c < 4; ++c)
+        for (int r = 0; r < 4; ++r)
+            CHECK(std::fabs(got[c][r] - expected[c][r]) < 1e-6f);
+
+    // And a scene carrying an unusable CameraComponent is corrected on load, not just tolerated.
+    World world;
+    AssetLibrary assets;
+    const std::string sceneJson = R"({"formatVersion":3,"empties":[{"name":"Cam","id":1,"parentId":-1,)"
+        R"("position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1],)"
+        R"("Camera":{"Field of View":0.0,"Near":0.0,"Far":-5.0}}]})";
+    CHECK(SceneSerializer::LoadFromString(world, assets, sceneJson));
+    int cams = 0;
+    for (entt::entity e : world.Registry.view<CameraComponent>()) {
+        ++cams;
+        const auto& cc = world.Registry.get<CameraComponent>(e);
+        CHECK(cc.NearPlane > 0.0f);
+        CHECK(cc.FarPlane > cc.NearPlane);
+        CHECK(cc.FovDegrees > 0.0f && cc.FovDegrees < 180.0f);
+    }
+    CHECK(cams == 1);
+}
+
 // --- AssetGuid ------------------------------------------------------------------------------
 void TestAssetGuid() {
     const AssetGuid g = AssetGuid::Generate();
@@ -873,6 +926,7 @@ int RunUnitTests() {
         {"ComponentPreset", TestComponentPreset},
         {"LogStackTrace", TestLogStackTrace},
         {"HierarchyCycleRepair", TestHierarchyCycleRepair},
+        {"CameraFrustumValidation", TestCameraFrustumValidation},
     };
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;
