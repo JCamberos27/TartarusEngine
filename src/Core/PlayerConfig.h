@@ -15,6 +15,15 @@ struct PlayerConfig {
     bool VSync = true;
     bool DevelopmentBuild = false;
 
+    // #174 - product branding, written by the Build pipeline after it has copied the chosen
+    // images into the player. Both are paths relative to the exe (EnginePaths::Resolve), not
+    // project-relative like Scenes, because the source assets do not travel with the build:
+    // the pipeline stages them as assets/branding/player_icon.png and player_splash.png.
+    // Empty means "none", and the player then behaves exactly as before - the exe's own icon
+    // resource for the window, and no splash.
+    std::string IconPath;
+    std::string SplashPath;
+
     static constexpr const char* kFileName = "player.json";
 
     // False when the file is missing or unreadable (the caller then runs as the editor).

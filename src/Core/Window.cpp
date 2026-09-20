@@ -3,6 +3,7 @@
 #include "Log.h"
 #include "GLDebug.h"
 #include <GLFW/glfw3.h>
+#include "stb_image.h" // #174 - decoding a product icon PNG for glfwSetWindowIcon
 #include <stdexcept>
 #include <iostream>
 #include <string>
@@ -286,6 +287,23 @@ void Window::SwapBuffers() {
 
 void Window::SetTitle(const std::string& title) {
     glfwSetWindowTitle(m_Handle, title.c_str());
+}
+
+bool Window::SetIconFromFile(const std::string& pngPath) {
+    int w = 0, h = 0, channels = 0;
+    // Forced to 4 channels: glfwSetWindowIcon documents its pixels as 32-bit RGBA, and a
+    // greyscale or RGB source would otherwise be handed over with the wrong stride.
+    unsigned char* pixels = stbi_load(pngPath.c_str(), &w, &h, &channels, 4);
+    if (!pixels) {
+        Log::Warn("Window: couldn't decode the icon '" + pngPath + "' - keeping the built-in one.");
+        return false;
+    }
+    GLFWimage image{w, h, pixels};
+    // One image, so the window manager scales it for every size it needs. Supplying several
+    // sizes would be better, but a single source PNG is what Build Settings offers.
+    glfwSetWindowIcon(m_Handle, 1, &image);
+    stbi_image_free(pixels);
+    return true;
 }
 
 void Window::Maximize() {
