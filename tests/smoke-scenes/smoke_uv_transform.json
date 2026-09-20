@@ -1,0 +1,140 @@
+{
+ "formatVersion": 2,
+ "_comment": "Engine-owned smoke/regression scene for #113: a glTF quad whose baseColorTexture carries KHR_texture_transform (offset 0.25,0.5 scale 2,3). The importer must turn that into the material's UV tiling/offset - the smoke test prints it as 'uv=' on the model line, and a regression shows up as uv=1,1+0,0. Uses only the checked-in fixture under project/models.",
+ "skyHorizonColor": [
+  0.45,
+  0.55,
+  0.68
+ ],
+ "skyZenithColor": [
+  0.15,
+  0.3,
+  0.6
+ ],
+ "skyAmbientIntensity": 1.0,
+ "boxes": [
+  {
+   "center": [
+    0,
+    -0.1,
+    0
+   ],
+   "size": [
+    24,
+    0.2,
+    24
+   ],
+   "color": [
+    0.35,
+    0.35,
+    0.38
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "name": "Ground",
+   "id": 0,
+   "parentId": -1,
+   "order": 0
+  },
+  {
+   "center": [
+    0,
+    1.0,
+    0
+   ],
+   "size": [
+    2,
+    2,
+    2
+   ],
+   "color": [
+    0.8,
+    0.25,
+    0.2
+   ],
+   "rotation": [
+    0,
+    20,
+    0
+   ],
+   "name": "Cube",
+   "id": 1,
+   "parentId": -1,
+   "order": 1
+  }
+ ],
+ "empties": [
+  {
+   "name": "Sun",
+   "id": 2,
+   "parentId": -1,
+   "order": 2,
+   "position": [
+    6,
+    10,
+    6
+   ],
+   "rotation": [
+    50,
+    -35,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "light": {
+    "kind": "directional",
+    "color": [
+     1.0,
+     0.96,
+     0.9
+    ],
+    "intensity": 5.0,
+    "range": 30.0,
+    "angularSize": 1.0,
+    "castShadows": true,
+    "shadow": {
+     "enabled": true,
+     "bias": 1.0,
+     "normalBias": 1.0,
+     "softness": 0.3,
+     "nearPlane": 0.05,
+     "resolution": 0,
+     "updateMode": 0
+    }
+   }
+  }
+ ],
+ "models": [
+  {
+   "path": "models/uvtransform/uv_transform_quad.gltf",
+   "name": "UV Transform Quad",
+   "id": 7,
+   "parentId": -1,
+   "order": 7,
+   "position": [
+    0,
+    1.0,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    2,
+    2,
+    2
+   ]
+  }
+ ],
+ "libraryModels": [
+  "models/uvtransform/uv_transform_quad.gltf"
+ ]
+}
