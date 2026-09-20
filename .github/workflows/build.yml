@@ -6,12 +6,21 @@ name: Build
 # foremost: it exists to catch the class of bug a human never gets to see locally until they
 # pull a branch and build it themselves.
 #
-# The --smoke-test step (loads every scene, renders a fixed number of frames, checks for GL
-# errors) is run best-effort with continue-on-error: hosted GitHub Windows runners have no GPU,
-# and this engine requires a real OpenGL 4.6 core context with compute shader support, which a
-# software/basic-display-adapter fallback very likely can't provide. So a smoke-test failure
-# here is NOT proof of a real bug — only a compile failure or a smoke-test PASS are conclusive;
-# a smoke-test FAIL/crash on this runner needs a human (or a GPU-equipped runner) to confirm.
+# EVERY step here gates. That was not always true, and the ways it was not are worth knowing:
+#
+#  - The unit-test step ran the engine bare. In Release WIN32_EXECUTABLE makes it a
+#    GUI-subsystem binary, which PowerShell does not wait for, so the step passed while tests
+#    failed (#351). Native tools are invoked through Start-Process -Wait -PassThru for that
+#    reason - do the same for anything added here that is meant to gate.
+#  - The crash-dump assertion ran against a smoke process that had not finished, for the same
+#    reason (#354).
+#  - The --smoke-test step was continue-on-error because hosted runners have no GPU and this
+#    engine needs a real OpenGL 4.6 core context with compute shaders. It now gets one from Mesa
+#    llvmpipe (fetched and checksum-verified below), renders all 16 scenes in about 3 minutes,
+#    and gates (#357).
+#
+# So a red build here means something real: it failed to compile, a unit test failed, a scene
+# failed to render, or the engine left a crash dump.
 
 on:
   push:
@@ -135,12 +144,12 @@ jobs:
           Write-Host "using $($gl.FullName)"
           Copy-Item -Path (Join-Path $gl.Directory.FullName "*.dll") -Destination "build\${{ matrix.config }}" -Force
 
-      # Still continue-on-error for THIS change only: the point of this step right now is to find
-      # out whether the engine runs under llvmpipe at all, without turning CI red while we learn.
-      # Once a run is seen to pass, this becomes a real gate (that flip is the follow-up).
-      # Software rasterisation is slow, hence the much larger timeout.
+      # A REAL GATE. It was continue-on-error for as long as the runners had no OpenGL 4.6 at
+      # all; with llvmpipe supplying one, all 16 scenes pass here (verified: both configs, exit 0,
+      # about 3 minutes each), so a rendering regression must now fail the build rather than being
+      # swallowed. Software rasterisation is slow, hence the much larger timeout - it is roughly
+      # 3 minutes today, and the headroom is for scenes added later, not for a hang.
       - name: Smoke test (Mesa llvmpipe)
-        continue-on-error: true
         timeout-minutes: 25
         shell: pwsh
         env:
@@ -154,7 +163,7 @@ jobs:
           Write-Host "smoke test exited with $($p.ExitCode)"
           exit $p.ExitCode
 
-      # The smoke step above is swallowed (no GPU here). This one is NOT: the CrashHandler
+      # The smoke step above now gates too (llvmpipe). This one stays because it catches a
       # writes build/<config>/crash_*.dmp on any unhandled fault, including one in the shutdown
       # path. That teardown crash class (e.g. #389 — registry destroyed after the hot-reload
       # DLLs it bound into were unloaded) is deterministic C++, not GPU-dependent: if the smoke
