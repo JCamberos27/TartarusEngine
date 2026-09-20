@@ -1533,6 +1533,25 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     // which entity happened to be read first).
     world.RepairHierarchyCycles();
 
+    // #202 - clip planes are the one camera field where a bad value is fatal rather than ugly:
+    // far == near divides by zero and a non-positive near makes the perspective divide
+    // meaningless, so the whole view goes black. The Inspector already clamps them, but nothing
+    // did on load, and a reflected float is read straight out of the JSON (a registry Min/Max is
+    // a drag limit for the widget, not a load-time constraint). Correct it here and say so,
+    // rather than leaving a scene that silently renders nothing.
+    for (entt::entity e : world.Registry.view<CameraComponent>()) {
+        auto& cam = world.Registry.get<CameraComponent>(e);
+        const float near0 = cam.NearPlane, far0 = cam.FarPlane, fov0 = cam.FovDegrees;
+        if (!(cam.NearPlane > 0.0f)) cam.NearPlane = 0.1f;                       // also catches NaN
+        if (!(cam.FarPlane > cam.NearPlane)) cam.FarPlane = cam.NearPlane + 1000.0f;
+        if (!(cam.FovDegrees > 0.0f) || cam.FovDegrees >= 180.0f) cam.FovDegrees = 60.0f;
+        if (cam.NearPlane != near0 || cam.FarPlane != far0 || cam.FovDegrees != fov0)
+            Log::Warn("Camera: " + EntityLogRef(world.Registry, e) + " had an unusable frustum "
+                      "(near " + std::to_string(near0) + ", far " + std::to_string(far0) +
+                      ", fov " + std::to_string(fov0) + ") - corrected on load.",
+                      EntityLogContext(world.Registry, e));
+    }
+
     // #119 — a copied joint whose partner was copied with it must connect to the partner's copy,
     // not the original (a partner outside the fragment keeps the original reference).
     if (!clearFirst) {
