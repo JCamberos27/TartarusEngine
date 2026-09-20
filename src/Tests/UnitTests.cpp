@@ -20,6 +20,7 @@
 #include "Camera.h"
 #include "ComponentReflection.h"
 #include "ComponentRegistry.h"
+#include "AssetLibrary.h" // #178 preset apply
 #include "MaterialAsset.h"
 #include "PhysicMaterialAsset.h"
 #include "PostProcessVolume.h"
@@ -328,6 +329,53 @@ void TestAssetMetaMigration() {
     CHECK(SceneSerializer::MigrateAssetMetaFields("not json", "{}") == "{}");
     CHECK(SceneSerializer::MigrateAssetMetaFields(entry, "not json") == "{}");
     CHECK(SceneSerializer::MigrateAssetMetaFields("[1,2]", "{}") == "{}");
+}
+
+// --- #178: component presets round-trip through the scene field encoding --------------------
+void TestComponentPreset() {
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    World world;
+    AssetLibrary assets;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity src = world.CreateEmptyEntity(zero, zero, one, "Source");
+    const entt::entity dst = world.CreateEmptyEntity(zero, zero, one, "Target");
+
+    SpinComponent spin;
+    spin.Axis = glm::vec3(1.0f, 0.0f, 0.0f);
+    spin.Speed = 123.5f;
+    world.Registry.emplace<SpinComponent>(src, spin);
+
+    const std::string preset = SceneSerializer::ComponentToPresetJson(world, src, "Spin");
+    CHECK(!preset.empty());
+    CHECK(SceneSerializer::PresetComponentName(preset) == "Spin");
+
+    // Applies to an entity that does not have the component yet: it is added, not skipped.
+    CHECK(!world.Registry.all_of<SpinComponent>(dst));
+    CHECK(SceneSerializer::ApplyComponentPresetJson(world, assets, dst, preset));
+    CHECK(world.Registry.all_of<SpinComponent>(dst));
+    const SpinComponent& got = world.Registry.get<SpinComponent>(dst);
+    CHECK(got.Speed == 123.5f);
+    CHECK(got.Axis.x == 1.0f && got.Axis.y == 0.0f && got.Axis.z == 0.0f);
+
+    // A field the preset does not mention keeps its current value rather than snapping to the
+    // default, so a preset saved before a field existed stays usable.
+    world.Registry.get<SpinComponent>(dst).Speed = 7.0f;
+    CHECK(SceneSerializer::ApplyComponentPresetJson(world, assets, dst,
+              R"({"preset":1,"component":"Spin","fields":{"Axis":[0.0,0.0,1.0]}})"));
+    CHECK(world.Registry.get<SpinComponent>(dst).Axis.z == 1.0f);
+    CHECK(world.Registry.get<SpinComponent>(dst).Speed == 7.0f); // untouched
+
+    // Rejections: malformed, unknown component, missing fields block, and a component that has
+    // no generic serialisation. None of these may half-write anything.
+    CHECK(!SceneSerializer::ApplyComponentPresetJson(world, assets, dst, "not json"));
+    CHECK(!SceneSerializer::ApplyComponentPresetJson(world, assets, dst,
+              R"({"preset":1,"component":"NoSuchComponent","fields":{}})"));
+    CHECK(!SceneSerializer::ApplyComponentPresetJson(world, assets, dst, R"({"preset":1,"component":"Spin"})"));
+    CHECK(SceneSerializer::PresetComponentName("not json").empty());
+    CHECK(SceneSerializer::PresetComponentName(R"({"component":"NoSuchComponent"})").empty());
+
+    // A component the source entity does not have yields no preset at all.
+    CHECK(SceneSerializer::ComponentToPresetJson(world, src, "NoSuchComponent").empty());
 }
 
 // --- AssetGuid ------------------------------------------------------------------------------
@@ -706,6 +754,7 @@ int RunUnitTests() {
         {"ActiveInHierarchy", TestActiveInHierarchy},
         {"CameraRoll", TestCameraRoll},
         {"AssetMetaMigration", TestAssetMetaMigration},
+        {"ComponentPreset", TestComponentPreset},
     };
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;
