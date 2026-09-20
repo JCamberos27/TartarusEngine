@@ -98,10 +98,21 @@ jobs:
       # on a message box that a non-interactive desktop never dismisses) instead of exiting.
       # continue-on-error can't salvage a step that never returns — the job would ride GitHub's
       # 6-hour ceiling and land red. A short cap turns that hang into a fast, swallowed timeout.
+      # Waited for explicitly, same reason as the unit-test step: in Release the engine is a
+      # GUI-subsystem binary (WIN32_EXECUTABLE), so a bare invocation returns IMMEDIATELY and the
+      # crash-dump assertion below - which IS a gate - ran against a process that had barely
+      # started. continue-on-error still keeps a smoke FAILURE from failing the job (no GPU here,
+      # see the note at the top of this file); what it must not do is let the job move on before
+      # the run has finished.
       - name: Smoke test (best effort - no GPU on this runner)
         continue-on-error: true
         timeout-minutes: 5
-        run: build/${{ matrix.config }}/TartarusEngine.exe --smoke-test
+        shell: pwsh
+        run: |
+          $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -NoNewWindow -Wait -PassThru
+          Write-Host "smoke test exited with $($p.ExitCode)"
+          exit $p.ExitCode
 
       # The smoke step above is swallowed (no GPU here). This one is NOT: the CrashHandler
       # writes build/<config>/crash_*.dmp on any unhandled fault, including one in the shutdown
