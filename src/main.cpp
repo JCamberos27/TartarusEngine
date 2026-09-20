@@ -1412,11 +1412,17 @@ int main(int argc, char** argv) {
                                 Log::Error("[SmokeTest] two instances of '" + rc.ModelRef->Path() +
                                            "' do not share their imported data.");
                             const glm::vec3 bmin = rc.ModelRef->BoundsMin(), bmax = rc.ModelRef->BoundsMax();
-                            if (isNew)
+                            if (isNew) {
+                                const Material& m = rc.ModelRef->MeshMaterial(0);
                                 std::cout << "[SmokeTest]   model " << std::filesystem::path(rc.ModelRef->Path()).filename().string()
                                           << " bounds (" << bmin.x << "," << bmin.y << "," << bmin.z << ")-("
                                           << bmax.x << "," << bmax.y << "," << bmax.z << ") albedoMap="
-                                          << (rc.ModelRef->MeshMaterial(0).AlbedoMap ? "yes" : "no") << std::endl;
+                                          << (m.AlbedoMap ? "yes" : "no")
+                                          // #113 - KHR_texture_transform lands here, so a regression shows up
+                                          // as uv=1,1+0,0 on a model that should carry a transform.
+                                          << " uv=" << m.UVTiling.x << "," << m.UVTiling.y
+                                          << "+" << m.UVOffset.x << "," << m.UVOffset.y << std::endl;
+                            }
                         }
                     }
                     smokeFramesRendered = 0;
