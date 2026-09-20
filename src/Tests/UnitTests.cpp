@@ -33,6 +33,7 @@
 #include "AssetLibrary.h" // #178 preset apply
 #include "MaterialAsset.h"
 #include "PhysicMaterialAsset.h"
+#include "PlayerConfig.h" // #174 - player.json round-trip
 #include "PostProcessVolume.h"
 #include "Tonemapper.h"
 #include "ProjectPaths.h"
@@ -601,6 +602,65 @@ void TestCameraFrustumValidation() {
     CHECK(cams == 1);
 }
 
+// --- #174: player.json keeps every field it was given -------------------------------------
+// player.json is the ONLY thing a built game is configured by, and nothing in the editor reads
+// it back, so a field dropped in Save() or missed in Load() is invisible until someone ships a
+// build and finds their icon or splash gone. Values are spot-checked individually rather than
+// by comparing the two structs wholesale: a field dropped symmetrically (never written, never
+// read) would compare equal and pass, which is exactly how the scene round-trip test could have
+// been fooled (#356).
+void TestPlayerConfigRoundTrip() {
+    const std::filesystem::path path = TempDir() / "player_roundtrip.json";
+
+    PlayerConfig out;
+    out.ProductName      = "Round Trip";
+    out.CompanyName      = "Some Studio";
+    out.Version          = "2.3.4";
+    out.Scenes           = {"scenes/First.json", "scenes/Second.json"};
+    out.Width            = 1600;
+    out.Height           = 900;
+    out.Fullscreen       = false;
+    out.VSync            = false;
+    out.DevelopmentBuild = true;
+    out.IconPath         = "assets/branding/player_icon.png";
+    out.SplashPath       = "assets/branding/player_splash.png";
+    CHECK(out.Save(path.string()));
+
+    PlayerConfig in;
+    CHECK(PlayerConfig::Load(path.string(), in));
+    CHECK(in.ProductName == "Round Trip");
+    CHECK(in.CompanyName == "Some Studio");
+    CHECK(in.Version == "2.3.4");
+    CHECK(in.Scenes.size() == 2);
+    CHECK(in.Scenes.size() == 2 && in.Scenes[0] == "scenes/First.json");
+    CHECK(in.Scenes.size() == 2 && in.Scenes[1] == "scenes/Second.json");
+    CHECK(in.Width == 1600 && in.Height == 900);
+    CHECK(!in.Fullscreen && !in.VSync);
+    CHECK(in.DevelopmentBuild);
+    CHECK(in.IconPath == "assets/branding/player_icon.png");
+    CHECK(in.SplashPath == "assets/branding/player_splash.png");
+
+    // A player.json written before branding existed must still load, leaving both empty so the
+    // game keeps the engine icon and shows no splash rather than chasing a missing file.
+    const std::filesystem::path old = TempDir() / "player_old.json";
+    {
+        std::ofstream f(old);
+        f << R"({"productName":"Old Build","scenes":["scenes/Only.json"],"width":800,"height":600})";
+    }
+    PlayerConfig legacy;
+    CHECK(PlayerConfig::Load(old.string(), legacy));
+    CHECK(legacy.ProductName == "Old Build");
+    CHECK(legacy.IconPath.empty() && legacy.SplashPath.empty());
+    CHECK(legacy.Fullscreen); // untouched keys keep their defaults
+
+    // A missing file is a "run as the editor" signal, not an error.
+    CHECK(!PlayerConfig::Load((TempDir() / "definitely_absent.json").string(), legacy));
+
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    std::filesystem::remove(old, ec);
+}
+
 // --- #201: the PhysX scene tracks the World while playing ----------------------------------
 // This lived only in --smoke-test, which CI runs with continue-on-error because the runners have
 // no GPU - so the check never actually gated anything. PhysX needs no GL, so it belongs here
@@ -1149,6 +1209,7 @@ int RunUnitTests() {
         {"HierarchyCycleRepair", TestHierarchyCycleRepair},
         {"CameraFrustumValidation", TestCameraFrustumValidation},
         {"SceneRoundTrip", TestSceneRoundTrip},
+        {"PlayerConfigRoundTrip", TestPlayerConfigRoundTrip},
         {"PhysicsWorldSync", TestPhysicsWorldSync},
     };
     for (const auto& [name, fn] : tests) {

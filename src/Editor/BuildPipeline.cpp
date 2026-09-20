@@ -216,7 +216,31 @@ Report Build(const ProjectSettings::BuildSettings& s) {
         if (fs::exists(meta, ec) && !copy.File(meta, out / "project" / (sc + ".meta"), "Scenes")) return fail(copy.Error);
     }
 
+    // #174 - product branding. The chosen images are copied to fixed names under the player's
+    // own assets/branding/ rather than referenced where they sit in project/: the icon and
+    // splash have to load before any project or asset database exists, and a user is free to
+    // point them at something outside the project entirely.
+    //
+    // A missing or unreadable source is reported and then skipped rather than failing the
+    // build: shipping a game with the default icon beats refusing to ship it.
+    std::string playerIconRel, playerSplashRel;
+    auto stageBranding = [&](const std::string& rel, const char* outName, std::string& outRel) {
+        if (rel.empty()) return;
+        const fs::path src = fs::path(rel).is_absolute() ? fs::path(rel) : projectRoot / rel;
+        if (!fs::is_regular_file(src, ec)) {
+            Log::Warn("Build: branding image not found, using the engine default: " + rel);
+            return;
+        }
+        const std::string dstRel = std::string("assets/branding/") + outName + src.extension().string();
+        if (copy.File(src, out / fs::path(dstRel), "Engine")) outRel = dstRel;
+        else Log::Warn("Build: couldn't copy branding image '" + rel + "': " + copy.Error);
+    };
+    stageBranding(s.IconPath, "player_icon", playerIconRel);
+    stageBranding(s.SplashPath, "player_splash", playerSplashRel);
+
     PlayerConfig pc;
+    pc.IconPath = playerIconRel;
+    pc.SplashPath = playerSplashRel;
     pc.ProductName = s.ProductName;
     pc.CompanyName = s.CompanyName;
     pc.Version = s.Version;
