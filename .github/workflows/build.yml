@@ -104,10 +104,50 @@ jobs:
       # started. continue-on-error still keeps a smoke FAILURE from failing the job (no GPU here,
       # see the note at the top of this file); what it must not do is let the job move on before
       # the run has finished.
-      - name: Smoke test (best effort - no GPU on this runner)
-        continue-on-error: true
-        timeout-minutes: 5
+      # #173 suggestion 2 - a software OpenGL 4.6 driver, so the smoke test can actually run on a
+      # GPU-less runner. The engine requires a 4.6 CORE context and fails fast below it
+      # (Window.cpp), and it uses compute shaders, so the basic-display-adapter fallback cannot
+      # serve it; Mesa llvmpipe can.
+      #
+      # There is no official Mesa binary for Windows, so this pulls a community build. It is
+      # pinned two ways and BOTH are load-bearing: an exact release tag, and the SHA-256 that
+      # GitHub publishes for that asset, verified before anything is extracted or executed. A
+      # changed or substituted archive fails the step instead of running.
+      - name: Fetch Mesa llvmpipe (software OpenGL 4.6)
+        id: mesa
         shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ver  = "26.1.8"
+          $name = "mesa3d-$ver-release-msvc.7z"
+          $sha  = "4C6D32E653E0FF9AD07796E40C0BCFABF2764D849E3CE4F3B1590112C87E42F9"
+          $url  = "https://github.com/pal1000/mesa-dist-win/releases/download/$ver/$name"
+          Invoke-WebRequest -Uri $url -OutFile $name
+          $got = (Get-FileHash -Algorithm SHA256 -Path $name).Hash
+          if ($got -ne $sha) { throw "Mesa archive SHA-256 mismatch: expected $sha, got $got" }
+          Write-Host "Mesa $ver checksum verified"
+          7z x $name -omesa -y | Out-Null
+          # Layout differs between Mesa builds, so find the 64-bit opengl32.dll rather than
+          # assuming a path.
+          $gl = Get-ChildItem -Path mesa -Recurse -Filter opengl32.dll |
+                Where-Object { $_.FullName -match "x64" } | Select-Object -First 1
+          if (-not $gl) { throw "no x64 opengl32.dll in the Mesa archive" }
+          Write-Host "using $($gl.FullName)"
+          Copy-Item -Path (Join-Path $gl.Directory.FullName "*.dll") -Destination "build\${{ matrix.config }}" -Force
+
+      # Still continue-on-error for THIS change only: the point of this step right now is to find
+      # out whether the engine runs under llvmpipe at all, without turning CI red while we learn.
+      # Once a run is seen to pass, this becomes a real gate (that flip is the follow-up).
+      # Software rasterisation is slow, hence the much larger timeout.
+      - name: Smoke test (Mesa llvmpipe)
+        continue-on-error: true
+        timeout-minutes: 25
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "4.6"
+          MESA_GLSL_VERSION_OVERRIDE: "460"
         run: |
           $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
           $p = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -NoNewWindow -Wait -PassThru
