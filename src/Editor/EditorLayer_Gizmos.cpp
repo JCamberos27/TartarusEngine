@@ -698,7 +698,7 @@ bool EditorLayer::DropLightToSurface(World& world, entt::entity light) {
 
     // Write the LOCAL translation, so a parented light lands on the surface in world space.
     entt::entity parent = entt::null;
-    if (auto* h = world.Registry.try_get<HierarchyComponent>(light)) parent = h->Parent;
+    if (auto* hier = world.Registry.try_get<HierarchyComponent>(light)) parent = hier->Parent;
     glm::mat4 parentWorld = parent != entt::null ? world.ComposeWorldTransform(parent) : glm::mat4(1.0f);
     world.Registry.get<TransformComponent>(light).Position =
         glm::vec3(glm::inverse(parentWorld) * glm::vec4(landing, 1.0f));

@@ -26,8 +26,10 @@ fs::path EnvRoot() {
 // The first component of `rel` ("assets" for "assets/shaders/..."), used to decide whether an
 // ancestor directory is an install root.
 fs::path FirstComponent(const fs::path& rel) {
-    for (const auto& part : rel) return part;
-    return {};
+    // begin()/end() rather than a range-for that returns on its first element: MSVC flags the
+    // loop's unreachable increment as C4702 in Debug, and warnings are errors (#173).
+    const auto it = rel.begin();
+    return it == rel.end() ? fs::path{} : *it;
 }
 
 } // namespace

@@ -2787,9 +2787,9 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             }
             m_ComponentClipKind = rc.Meta.Name;
             const RegisteredComponent* rcp = &rc; // ComponentRegistry::All() entries are stable for the run
-            std::string name = rc.Meta.Name;
-            m_ComponentClipApply = [rcp, vals, name](EditorLayer& self, World& w, entt::entity e) {
-                self.PushUndo(w, "Paste " + name);
+            std::string compName = rc.Meta.Name;
+            m_ComponentClipApply = [rcp, vals, compName](EditorLayer& self, World& w, entt::entity e) {
+                self.PushUndo(w, "Paste " + compName);
                 if (!rcp->Has(w.Registry, e)) rcp->Add(w.Registry, e);
                 void* dst = rcp->Get(w.Registry, e);
                 size_t i = 0;
