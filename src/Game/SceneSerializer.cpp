@@ -1526,6 +1526,13 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
         if (it != idToEntity.end()) world.AttachChildRaw(child, it->second);
     }
 
+    // #202 - AttachChildRaw only refuses self-parenting, so a file whose parentIds form a loop
+    // would load a genuine cycle: those entities are unreachable from any root, never draw, and
+    // the loop gets written straight back out on the next save. Break it here, once the whole
+    // graph exists, rather than refusing individual links in file order (which would depend on
+    // which entity happened to be read first).
+    world.RepairHierarchyCycles();
+
     // #119 — a copied joint whose partner was copied with it must connect to the partner's copy,
     // not the original (a partner outside the fragment keeps the original reference).
     if (!clearFirst) {
