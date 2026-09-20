@@ -220,6 +220,15 @@ public:
     // whichever frame (local or world) it belongs in.
     void AttachChildRaw(entt::entity child, entt::entity parent);
 
+    // #202 - breaks any parent cycle in the hierarchy, returning how many were broken.
+    // AttachChildRaw only rejects self-parenting, so a scene file whose parentIds form a loop
+    // (A -> B -> A, hand-edited, merged badly, or written by an older build) loads a genuine
+    // cycle: those entities are then unreachable from any root, so they never draw, and saving
+    // writes the loop straight back out. SetParent already refuses to create one interactively;
+    // this is the same guarantee for the load path. Each cycle is broken by detaching the entity
+    // that closes it, which becomes a root, and is reported.
+    int RepairHierarchyCycles();
+
     // Destroys `entity` and, recursively, every descendant in its HierarchyComponent — so
     // deleting a parent doesn't leave orphaned children pointing at a dead entt::entity.
     void DestroyEntityAndChildren(entt::entity entity);
