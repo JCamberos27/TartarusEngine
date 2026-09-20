@@ -413,6 +413,87 @@ void TestLogStackTrace() {
     Log::Clear();
 }
 
+// --- #202: a scene whose parentIds form a loop must not load a cyclic hierarchy -------------
+void TestHierarchyCycleRepair() {
+    // Built with AttachChildRaw, which is exactly what the scene loader uses: it only refuses
+    // self-parenting, so this is the shape a hand-edited or badly merged scene file produces.
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity a = world.CreateEmptyEntity(zero, zero, one, "A");
+    const entt::entity b = world.CreateEmptyEntity(zero, zero, one, "B");
+    const entt::entity c = world.CreateEmptyEntity(zero, zero, one, "C");
+
+    world.AttachChildRaw(b, a);   // B under A
+    world.AttachChildRaw(c, b);   // C under B
+    world.AttachChildRaw(a, c);   // ...and A under C: a three-entity loop
+
+    CHECK(world.RepairHierarchyCycles() == 1);
+
+    // Every entity now reaches a root in a bounded walk.
+    auto reachesRoot = [&](entt::entity e) {
+        int hops = 0;
+        for (entt::entity w = e; w != entt::null; ) {
+            if (++hops > 64) return false;
+            const auto* h = world.Registry.try_get<HierarchyComponent>(w);
+            w = h ? h->Parent : entt::null;
+        }
+        return true;
+    };
+    CHECK(reachesRoot(a) && reachesRoot(b) && reachesRoot(c));
+
+    // The cut is minimal: only the link that closed the loop went, so the rest of the chain
+    // is still parented and no Children list keeps a stale entry.
+    int parented = 0;
+    for (entt::entity e : {a, b, c})
+        if (const auto* h = world.Registry.try_get<HierarchyComponent>(e); h && h->Parent != entt::null) ++parented;
+    CHECK(parented == 2);
+    for (entt::entity e : {a, b, c}) {
+        const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+        if (!h) continue;
+        for (entt::entity kid : h->Children) {
+            const auto* kh = world.Registry.try_get<HierarchyComponent>(kid);
+            CHECK(kh && kh->Parent == e); // no orphaned child entry left behind
+        }
+    }
+
+    // Idempotent, and a healthy hierarchy is left completely alone.
+    CHECK(world.RepairHierarchyCycles() == 0);
+
+    World clean;
+    const entt::entity p1 = clean.CreateEmptyEntity(zero, zero, one, "P");
+    const entt::entity k1 = clean.CreateEmptyEntity(zero, zero, one, "K");
+    CHECK(clean.SetParent(k1, p1));
+    CHECK(clean.RepairHierarchyCycles() == 0);
+    CHECK(clean.Registry.get<HierarchyComponent>(k1).Parent == p1);
+
+    // End to end: this is the path that actually matters - a scene FILE whose parentIds form a
+    // loop must not produce a cyclic world. Two empties, each claiming the other as its parent.
+    World loaded;
+    AssetLibrary assets;
+    const std::string sceneJson = R"({"formatVersion":3,"empties":[
+        {"name":"X","id":1,"parentId":2,"position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1]},
+        {"name":"Y","id":2,"parentId":1,"position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1]}]})";
+    CHECK(SceneSerializer::LoadFromString(loaded, assets, sceneJson));
+    int loadedRoots = 0, loadedCount = 0;
+    for (entt::entity e : loaded.Registry.view<HierarchyComponent>()) {
+        ++loadedCount;
+        // Bounded walk that BREAKS, not just CHECKs: a surviving cycle would otherwise spin
+        // here forever and hang the whole suite instead of failing it.
+        int hops = 0;
+        bool terminated = true;
+        for (entt::entity w = e; w != entt::null; ) {
+            if (++hops > 64) { terminated = false; break; }
+            const auto* h = loaded.Registry.try_get<HierarchyComponent>(w);
+            w = h ? h->Parent : entt::null;
+        }
+        CHECK(terminated);
+        const auto* h = loaded.Registry.try_get<HierarchyComponent>(e);
+        if (!h || h->Parent == entt::null) ++loadedRoots;
+    }
+    CHECK(loadedCount == 2);
+    CHECK(loadedRoots == 1); // one link cut, the other kept
+}
+
 // --- AssetGuid ------------------------------------------------------------------------------
 void TestAssetGuid() {
     const AssetGuid g = AssetGuid::Generate();
@@ -791,6 +872,7 @@ int RunUnitTests() {
         {"AssetMetaMigration", TestAssetMetaMigration},
         {"ComponentPreset", TestComponentPreset},
         {"LogStackTrace", TestLogStackTrace},
+        {"HierarchyCycleRepair", TestHierarchyCycleRepair},
     };
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;

@@ -6,6 +6,9 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <algorithm>
+#include <cstdint>        // #202 hierarchy cycle repair
+#include <unordered_map>
+#include <vector>
 #include <limits>
 #include <glm/gtc/quaternion.hpp>
 
@@ -407,6 +410,48 @@ void World::AttachChildRaw(entt::entity child, entt::entity parent) {
     auto& childHier = Registry.get_or_emplace<HierarchyComponent>(child);
     childHier.Parent = parent;
     Registry.get_or_emplace<HierarchyComponent>(parent).Children.push_back(child);
+}
+
+// #202 - see the header. Walks every entity to its root, marking the chain as it goes. A node
+// reached twice within one walk closes a cycle, so the entity that closes it is detached and
+// becomes a root. Entities already proven to reach a root are memoised, so this is linear in the
+// hierarchy rather than quadratic on a deep one.
+int World::RepairHierarchyCycles() {
+    enum class State : std::uint8_t { Unknown, InProgress, Rooted };
+    std::unordered_map<std::uint32_t, State> state;
+    std::vector<entt::entity> chain;
+    int broken = 0;
+
+    for (entt::entity start : Registry.view<HierarchyComponent>()) {
+        chain.clear();
+        entt::entity walk = start;
+        while (walk != entt::null && Registry.valid(walk)) {
+            State& st = state[entt::to_integral(walk)];
+            if (st == State::Rooted) break;              // this chain already proven acyclic
+            if (st == State::InProgress) {
+                // `walk` is its own ancestor: cut the link that closed the loop.
+                auto& hier = Registry.get<HierarchyComponent>(walk);
+                const entt::entity parent = hier.Parent;
+                if (auto* parentHier = Registry.try_get<HierarchyComponent>(parent)) {
+                    auto& kids = parentHier->Children;
+                    kids.erase(std::remove(kids.begin(), kids.end(), walk), kids.end());
+                }
+                hier.Parent = entt::null;
+                ++broken;
+                Log::Error("Hierarchy: " + EntityLogRef(Registry, walk) + " was its own ancestor - "
+                           "the parent link was cut and it is now a root. The scene file's parent "
+                           "ids form a loop (#202).", EntityLogContext(Registry, walk));
+                break;
+            }
+            st = State::InProgress;
+            chain.push_back(walk);
+            const auto* h = Registry.try_get<HierarchyComponent>(walk);
+            walk = h ? h->Parent : entt::null;
+        }
+        // Everything on this chain reaches a root now (the cycle, if any, was just cut).
+        for (entt::entity e : chain) state[entt::to_integral(e)] = State::Rooted;
+    }
+    return broken;
 }
 
 void World::DestroyEntityAndChildren(entt::entity entity) {
