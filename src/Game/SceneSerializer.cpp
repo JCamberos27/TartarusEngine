@@ -1537,10 +1537,17 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     return true;
 }
 
-// Persists the Asset Browser's whole library (not just what's placed in the scene) plus its
-// virtual folder structure and any renamed assets — otherwise an imported-but-unused asset,
-// or one you'd organized into a folder, would simply vanish on the next launch.
-void AppendAssetLibraryJson(json& root, const AssetLibrary& assets) {
+// Persists the Asset Browser's library list (not just what's placed in the scene) — otherwise an
+// imported-but-unused asset would simply vanish on the next launch. Per-asset data (folder,
+// display name, labels, import settings) is NOT written here: it lives in the asset's .meta
+// sidecar, and the folder list lives in project/settings.json (#121).
+// `includeAssetMetadata` (#121): fold in the per-asset folder/display-name/labels/import-settings
+// block and the virtual-folder list. TRUE ONLY for the in-memory undo snapshot, which has to be a
+// true replace so that an Asset Browser edit (move to folder, rename, relabel, change import
+// settings) stays undoable. It is FALSE for every scene FILE: that duplication is what #121 is
+// about - it forked the folder organisation across scenes, let one texture carry different import
+// settings per scene, and produced scene merge conflicts from unrelated Asset Browser edits.
+void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool includeAssetMetadata = false) {
     json modelPaths = json::array();
     for (const auto& m : assets.Models()) modelPaths.push_back(PathRef(m->Path()));
     root["libraryModels"] = modelPaths;
@@ -1565,68 +1572,76 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets) {
         for (const auto& p : assets.Prefabs()) arr.push_back(PathRef(p));
         root["libraryPrefabs"] = arr;
     }
+    if (!includeAssetMetadata) return; // scene file: per-asset data lives in .meta (#121)
+
     root["assetFolders"] = assets.Folders();
 
     json meta = json::array();
+    std::unordered_map<std::string, std::size_t> indexByPath; // #121 - findOrCreate used to be O(n^2)
     auto findOrCreate = [&](const std::string& key) -> json& {
-        const std::string stored = AssetPathForWrite(key); // audit #364 — portable path
-        for (auto& entry : meta) {
-            if (entry["path"] == stored) return entry;
-        }
+        const std::string stored = AssetPathForWrite(key); // audit #364 - portable path
+        if (auto it = indexByPath.find(stored); it != indexByPath.end()) return meta[it->second];
         json entry{{"path", stored}};
-    AssetGuid g = AssetDatabase::GuidForPath(key);
-    if (g.IsValid()) entry["guid"] = g.ToString();
-    meta.push_back(std::move(entry));
+        AssetGuid g = AssetDatabase::GuidForPath(key);
+        if (g.IsValid()) entry["guid"] = g.ToString();
+        indexByPath.emplace(stored, meta.size());
+        meta.push_back(std::move(entry));
         return meta.back();
     };
     for (const auto& [key, folder] : assets.AssetFolders()) findOrCreate(key)["folder"] = folder;
     for (const auto& [key, name] : assets.DisplayNames()) findOrCreate(key)["displayName"] = name;
     for (const auto& [key, labels] : assets.LabelsMap()) findOrCreate(key)["labels"] = labels;
-    for (const auto& [key, s] : assets.TextureSettingsMap()) {
+    for (const auto& [key, t] : assets.TextureSettingsMap()) {
         findOrCreate(key)["textureImport"] = {
-            {"textureType", (int)s.TextureType}, {"generateMipmaps", s.GenerateMipmaps},
-            {"isSRGB", s.IsSRGB}, {"filterMode", (int)s.FilterMode},
-            {"wrapMode", (int)s.WrapMode}, {"maxTextureSize", s.MaxTextureSize},
-            {"anisoLevel", s.AnisoLevel}, {"compression", (int)s.CompressionMode},
+            {"textureType", (int)t.TextureType}, {"generateMipmaps", t.GenerateMipmaps},
+            {"isSRGB", t.IsSRGB}, {"filterMode", (int)t.FilterMode},
+            {"wrapMode", (int)t.WrapMode}, {"maxTextureSize", t.MaxTextureSize},
+            {"anisoLevel", t.AnisoLevel}, {"compression", (int)t.CompressionMode},
         };
     }
-    for (const auto& [key, s] : assets.ModelSettingsMap()) {
+    for (const auto& [key, m] : assets.ModelSettingsMap()) {
         findOrCreate(key)["modelImport"] = {
-            {"globalScale", s.GlobalScale}, {"importNormals", s.ImportNormals},
-            {"importAnimations", s.ImportAnimations}, {"importSkeleton", s.ImportSkeleton},
-            {"optimizeGraph", s.OptimizeGraph}, {"materialImportMode", (int)s.MaterialImportMode},
+            {"globalScale", m.GlobalScale}, {"importNormals", m.ImportNormals},
+            {"importAnimations", m.ImportAnimations}, {"importSkeleton", m.ImportSkeleton},
+            {"optimizeGraph", m.OptimizeGraph}, {"materialImportMode", (int)m.MaterialImportMode},
         };
-    }
-    // Drop assetMeta entries whose asset no longer exists on disk (audit #364): stale rows for
-    // deleted files — e.g. old "Untitled.json" scenes — otherwise persist forever and, when
-    // authored on another machine, carry a dead absolute path into every save.
-    {
-        json live = json::array();
-        for (auto& entry : meta) {
-            AssetGuid g = AssetGuid::FromString(entry.value("guid", std::string()));
-            std::string resolved = AssetDatabase::Resolve(g, AssetPathForRead(entry.value("path", std::string())));
-            std::error_code ec;
-            if (!resolved.empty() && std::filesystem::exists(resolved, ec) && !ec)
-                live.push_back(std::move(entry));
-        }
-        meta = std::move(live);
     }
     root["assetMeta"] = meta;
 }
 
-void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
-    // assetMeta is read FIRST, before any LoadModel/LoadTexture call below, so that the import
-    // settings (and folder/display-name/labels) are already known by the time an asset is
-    // actually loaded. LoadModel/LoadTexture consult GetModelSettings/GetTextureSettings
-    // themselves, so populating these maps up front makes each asset get imported exactly once,
-    // with the correct settings, instead of once with defaults and once more via Reimport.
+void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndoSnapshot = false) {
+    // #121 - MIGRATION ONLY. Scenes saved before this change carry an `assetMeta` block that
+    // duplicates every asset's folder, display name, labels and import settings. That copy is no
+    // longer written, and it is no longer applied to the AssetLibrary either: the asset's .meta
+    // sidecar is the single source of truth, and the loaders below read it. Here the old block is
+    // only folded INTO .meta, and only for fields the sidecar does not already have - a scene is
+    // the stale copy, so it must never overwrite what the Asset Browser has since written.
+    //
+    // Runs before the library loads below, so the migrated values are in place by the time an
+    // asset is actually imported and it gets imported once, with the right settings, rather than
+    // once with defaults plus a Reimport.
     if (root.contains("assetMeta")) {
+        // An undo snapshot is authoritative: it is the in-memory record of what the library
+        // looked like a moment ago, so restoring it is a true replace. The Set* calls below
+        // write straight through to each asset's .meta, so undoing an Asset Browser edit undoes
+        // the sidecar write too.
+        if (fromUndoSnapshot) assets.ClearMetadataOnly();
+
+        int migrated = 0;
         for (const auto& entry : root["assetMeta"]) {
             // v2: prefer guid resolution; v1: plain path.
             AssetGuid g = AssetGuid::FromString(entry.value("guid", std::string()));
             std::string fallback = AssetPathForRead(entry.value("path", std::string())); // audit #364
             std::string path = AssetDatabase::Resolve(g, fallback);
             if (path.empty()) continue;
+
+            if (!fromUndoSnapshot) {
+                const std::string add =
+                    SceneSerializer::MigrateAssetMetaFields(entry.dump(), AssetDatabase::ReadMetaFields(path));
+                if (add != "{}" && AssetDatabase::MergeMetaFields(path, add)) ++migrated;
+                continue;
+            }
+
             if (entry.contains("folder")) assets.SetAssetFolder(path, entry["folder"].get<std::string>());
             if (entry.contains("displayName")) assets.SetDisplayName(path, entry["displayName"].get<std::string>());
             if (entry.contains("labels")) {
@@ -1636,34 +1651,38 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
             }
             if (entry.contains("textureImport")) {
                 const auto& t = entry["textureImport"];
-                TextureImportSettings s;
+                TextureImportSettings st;
                 // Clamp: a scene saved before #198 removed the unused Cubemap enum value could
-                // still carry that old index (3) — fall back to Default rather than construct an
+                // still carry that old index (3) - fall back to Default rather than construct an
                 // out-of-range enum.
                 int rawType = t.value("textureType", 0);
-                s.TextureType = (rawType >= 0 && rawType <= (int)TextureImportSettings::Type::Sprite2D)
+                st.TextureType = (rawType >= 0 && rawType <= (int)TextureImportSettings::Type::Sprite2D)
                     ? (TextureImportSettings::Type)rawType : TextureImportSettings::Type::Default;
-                s.GenerateMipmaps = t.value("generateMipmaps", true);
-                s.IsSRGB = t.value("isSRGB", true);
-                s.FilterMode = (TextureImportSettings::Filter)std::clamp(t.value("filterMode", 1), 0, 2); // #122
-                s.WrapMode = (TextureImportSettings::Wrap)std::clamp(t.value("wrapMode", 0), 0, 1);
-                s.MaxTextureSize = t.value("maxTextureSize", 2048);
-                s.AnisoLevel = std::clamp(t.value("anisoLevel", 8), 1, 16);
-                s.CompressionMode = (TextureImportSettings::Compression)std::clamp(t.value("compression", 0), 0, 2);
-                assets.SetTextureSettings(path, s);
+                st.GenerateMipmaps = t.value("generateMipmaps", true);
+                st.IsSRGB = t.value("isSRGB", true);
+                st.FilterMode = (TextureImportSettings::Filter)std::clamp(t.value("filterMode", 1), 0, 2); // #122
+                st.WrapMode = (TextureImportSettings::Wrap)std::clamp(t.value("wrapMode", 0), 0, 1);
+                st.MaxTextureSize = t.value("maxTextureSize", 2048);
+                st.AnisoLevel = std::clamp(t.value("anisoLevel", 8), 1, 16);
+                st.CompressionMode = (TextureImportSettings::Compression)std::clamp(t.value("compression", 0), 0, 2);
+                assets.SetTextureSettings(path, st);
             }
             if (entry.contains("modelImport")) {
                 const auto& m = entry["modelImport"];
-                ModelImportSettings s;
-                s.GlobalScale = m.value("globalScale", 1.0f);
-                s.ImportNormals = m.value("importNormals", true);
-                s.ImportAnimations = m.value("importAnimations", true);
-                s.ImportSkeleton = m.value("importSkeleton", true);
-                s.OptimizeGraph = m.value("optimizeGraph", true);
-                s.MaterialImportMode = (ModelImportSettings::MaterialMode)std::clamp(m.value("materialImportMode", 0), 0, 2); // #122
-                assets.SetModelSettings(path, s);
+                ModelImportSettings sm;
+                sm.GlobalScale = m.value("globalScale", 1.0f);
+                sm.ImportNormals = m.value("importNormals", true);
+                sm.ImportAnimations = m.value("importAnimations", true);
+                sm.ImportSkeleton = m.value("importSkeleton", true);
+                sm.OptimizeGraph = m.value("optimizeGraph", true);
+                sm.MaterialImportMode = (ModelImportSettings::MaterialMode)std::clamp(m.value("materialImportMode", 0), 0, 2); // #122
+                assets.SetModelSettings(path, sm);
             }
         }
+        if (migrated > 0)
+            Log::Info("Scene: moved asset data for " + std::to_string(migrated) +
+                      " asset(s) out of the scene file and into their .meta sidecars (#121). "
+                      "Save the scene to drop the old block.");
     }
     if (root.contains("libraryModels")) {
         for (const auto& p : root["libraryModels"]) {
@@ -1695,8 +1714,12 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root) {
             if (!path.empty()) assets.RegisterPrefab(path);
         }
     }
+    // #121 - same migration for the virtual folder list, which now lives in
+    // project/settings.json. CreateFolder writes through to it, so an old scene's folders are
+    // adopted once and then persist for the project rather than for this one scene.
     if (root.contains("assetFolders")) {
-        for (const auto& f : root["assetFolders"]) assets.CreateFolder(f.get<std::string>());
+        for (const auto& f : root["assetFolders"])
+            if (f.is_string()) assets.CreateFolder(f.get<std::string>());
     }
 }
 
@@ -1950,7 +1973,7 @@ std::string SceneSerializer::SaveToString(const World& world, const AssetLibrary
     // treat it as a full replace rather than mistaking an entity-only snapshot (the play-mode
     // one) for "nothing changed, don't touch the library."
     root["hasAssetLibrarySnapshot"] = true;
-    AppendAssetLibraryJson(root, assets);
+    AppendAssetLibraryJson(root, assets, /*includeAssetMetadata=*/true); // #121 - undo only, never a file
     return root.dump();
 }
 
@@ -2023,12 +2046,16 @@ bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const s
         std::set<std::string> keepSounds = keepSet("librarySounds", assets.Sounds());
         std::set<std::string> keepPrefabs = keepSet("libraryPrefabs", assets.Prefabs());
         std::set<std::string> keepMaterials = keepSet("libraryMaterials", liveMaterials);
+        // #121 - an undo snapshot still carries the folder list, so undoing a folder create /
+        // rename / delete still works. A snapshot WITHOUT the key is not "no folders": keep what
+        // the library has rather than deleting every folder in the project.
         std::set<std::string> keepFolders;
         if (auto it = root.find("assetFolders"); it != root.end() && it->is_array())
             for (const auto& f : *it) if (f.is_string()) keepFolders.insert(f.get<std::string>());
+        else
+            keepFolders.insert(assets.Folders().begin(), assets.Folders().end());
         assets.PruneToKeepSet(keepModels, keepTextures, keepSounds, keepPrefabs, keepFolders, keepMaterials);
-        assets.ClearMetadataOnly();
-        try { ApplyAssetLibraryJson(assets, root); }
+        try { ApplyAssetLibraryJson(assets, root, /*fromUndoSnapshot=*/true); }
         catch (const std::exception& e) {
             Log::Error(std::string("Scene: snapshot asset library data is malformed: ") + e.what()); // #83
             return false;
@@ -2121,6 +2148,29 @@ entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& asse
 // --- Prefab per-field overrides, editor helpers (#302 Part B) -------------------------------
 
 void SceneSerializer::ClearPrefabPristineCache() { g_prefabPristineCache.clear(); }
+
+// #121 - see the header. Parse failures on either side yield "{}": a scene or sidecar we cannot
+// read is never a reason to write a guess into the sidecar.
+std::string SceneSerializer::MigrateAssetMetaFields(const std::string& entryJson,
+                                                    const std::string& existingMetaJson) {
+    json entry, existing;
+    try {
+        entry = json::parse(entryJson);
+        existing = json::parse(existingMetaJson);
+    } catch (...) { return "{}"; }
+    if (!entry.is_object() || !existing.is_object()) return "{}";
+
+    json add = json::object();
+    auto carry = [&](const char* from, const char* to) {
+        if (entry.contains(from) && !existing.contains(to) && !add.contains(to)) add[to] = entry[from];
+    };
+    carry("folder", "folder");
+    carry("displayName", "displayName");
+    carry("labels", "labels");
+    carry("textureImport", "importer");
+    carry("modelImport", "importer");
+    return add.dump();
+}
 
 bool SceneSerializer::IsPrefabFieldOverridden(const World& world, entt::entity entity,
                                               const char* component, const char* field) {

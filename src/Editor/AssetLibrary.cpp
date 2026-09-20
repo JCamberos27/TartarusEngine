@@ -4,6 +4,7 @@
 #include "Model.h"
 #include "Texture.h"
 #include "AssetDatabase.h"
+#include "ProjectSettings.h" // #121 - virtual folders are project data, not scene data
 #include <algorithm>
 #include <map>
 #include <set>
@@ -409,6 +410,15 @@ void AssetLibrary::PruneToKeepSet(const std::set<std::string>& modelPaths, const
     }
 }
 
+// #121 - the folder list lives in project/settings.json. AssetLibrary keeps a working copy
+// (the Asset Browser reads it every frame) and writes it back on every change.
+AssetLibrary::AssetLibrary() : m_Folders(ProjectSettings::AssetFolders()) {}
+
+void AssetLibrary::PersistFolders() {
+    ProjectSettings::SetAssetFolders(m_Folders);
+    ProjectSettings::Save();
+}
+
 void AssetLibrary::ClearMetadataOnly() {
     m_AssetFolder.clear();
     m_DisplayNames.clear();
@@ -421,6 +431,7 @@ void AssetLibrary::ClearMetadataOnly() {
 void AssetLibrary::CreateFolder(const std::string& folderPath) {
     if (std::find(m_Folders.begin(), m_Folders.end(), folderPath) == m_Folders.end()) {
         m_Folders.push_back(folderPath);
+        PersistFolders();
     }
 }
 
@@ -432,6 +443,7 @@ void AssetLibrary::RenameFolder(const std::string& oldPath, const std::string& n
     };
     for (auto& f : m_Folders) remap(f);
     for (auto& [assetKey, folder] : m_AssetFolder) remap(folder);
+    PersistFolders();
 }
 
 bool AssetLibrary::CanDeleteFolder(const std::string& folderPath) const {
@@ -447,6 +459,7 @@ bool AssetLibrary::CanDeleteFolder(const std::string& folderPath) const {
 void AssetLibrary::DeleteFolder(const std::string& folderPath) {
     if (!CanDeleteFolder(folderPath)) return;
     m_Folders.erase(std::remove(m_Folders.begin(), m_Folders.end(), folderPath), m_Folders.end());
+    PersistFolders();
 }
 
 void AssetLibrary::DeleteFolderRecursive(const std::string& folderPath) {
@@ -479,6 +492,7 @@ void AssetLibrary::DeleteFolderRecursive(const std::string& folderPath) {
     m_Folders.erase(std::remove_if(m_Folders.begin(), m_Folders.end(), [&](const std::string& f) {
         return f == folderPath || f.rfind(folderPath + "/", 0) == 0;
     }), m_Folders.end());
+    PersistFolders();
 }
 
 TextureImportSettings AssetLibrary::GetTextureSettings(const std::string& path) const {
