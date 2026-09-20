@@ -253,12 +253,29 @@ target_include_directories(TartarusEditor PRIVATE
   ${CMAKE_SOURCE_DIR}/extern   # IconsFontAwesome6.h
   ${imgui_SOURCE_DIR}
 )
+# #202 / #346 - Release keeps its optimisations but now also emits a PDB (/Zi + /DEBUG).
+# Without one, dbghelp has no symbols in the shipped configuration, which made two features
+# silently do nothing there: the Console stack traces on warnings and errors, and the crash
+# handler minidumps - a dump from a Release build could not be symbolicated, so the one artifact
+# produced when the engine actually falls over was unreadable.
+#
+# /DEBUG defaults the linker to /OPT:NOREF, which would stop it folding unused code and bloat the
+# binary, so the usual pair is restored explicitly. Code generation is unaffected: /Zi changes
+# what is written alongside the object, not what is in it.
+function(tartarus_enable_release_debug_info target)
+  if(MSVC)
+    target_compile_options(${target} PRIVATE $<$<CONFIG:Release>:/Zi>)
+    target_link_options(${target} PRIVATE $<$<CONFIG:Release>:/DEBUG /OPT:REF /OPT:ICF>)
+  endif()
+endfunction()
+
 # Must match the host's ImGui configuration exactly — the two copies share one ImGuiContext.
 target_compile_definitions(TartarusEditor PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
 target_compile_options(TartarusEditor PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /MP>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
 )
+tartarus_enable_release_debug_info(TartarusEditor)
 
 target_include_directories(TartarusGame PRIVATE
   ${CMAKE_SOURCE_DIR}/src
@@ -273,6 +290,7 @@ target_compile_options(TartarusGame PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /MP>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
 )
+tartarus_enable_release_debug_info(TartarusGame)
 
 # A normal TartarusEngine build also produces its current gameplay module next to the exe.
 add_dependencies(TartarusEngine TartarusGame TartarusEditor)
@@ -348,6 +366,7 @@ target_compile_options(TartarusEngine PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /MP>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
 )
+tartarus_enable_release_debug_info(TartarusEngine)
 
 # Vendored sources compiled directly into this target (ImGui, ImGuizmo, ImViewGuizmo, stb_image,
 # miniaudio) are third-party code we don't own and aren't the "fallout" #180 means to fix — dial
