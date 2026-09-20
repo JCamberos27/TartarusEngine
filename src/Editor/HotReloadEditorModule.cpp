@@ -18,6 +18,7 @@
 #include <cstring>
 #include <iterator>
 #include <set>
+#include <unordered_map> // #178 - stack-trace resolve cache
 #include <string>
 #include <vector>
 #include <imgui.h>
@@ -99,6 +100,26 @@ bool LogGetEntryContextFn(int index, int* outEntityOrder, const char** outAssetP
     const LogContext& c = entries[(size_t)index].Context;
     if (outEntityOrder) *outEntityOrder = c.EntityOrder;
     if (outAssetPath)   *outAssetPath = c.AssetPath.c_str();
+    return true;
+}
+
+// #178 - resolved lazily and cached by entry Seq: symbol resolution is slow, and the same row
+// is re-asked for every frame its stack is open. Keyed on Seq rather than index because the
+// ring buffer shifts indices when old entries are trimmed.
+bool LogGetEntryStackFn(int index, const char** outStack) {
+    const std::vector<LogEntry>& entries = Log::Entries();
+    if (index < 0 || (size_t)index >= entries.size()) return false;
+    const LogEntry& e = entries[(size_t)index];
+    if (e.Stack.empty()) return false;
+
+    static std::unordered_map<unsigned long long, std::string> s_Cache;
+    auto it = s_Cache.find(e.Seq);
+    if (it == s_Cache.end()) {
+        if (s_Cache.size() > 256) s_Cache.clear(); // bounded: these are only ever a debugging aid
+        it = s_Cache.emplace(e.Seq, Log::ResolveStack(e.Stack)).first;
+    }
+    if (it->second.empty()) return false;
+    if (outStack) *outStack = it->second.c_str();
     return true;
 }
 
@@ -615,6 +636,7 @@ EditorModuleHostAPI MakeHostAPI() {
     api.OpenProjectSettings = &TbOpenProjectSettings;
     api.OpenShortcutsReference = &TbOpenShortcutsReference;
     api.LogGetEntryContext = &LogGetEntryContextFn;
+    api.LogGetEntryStack = &LogGetEntryStackFn; // #178
     api.OpenAbout = &HelpOpenAbout;
     api.OpenDocumentation = &HelpOpenDocumentation;
     api.OpenLogFolder = &HelpOpenLogFolder;
