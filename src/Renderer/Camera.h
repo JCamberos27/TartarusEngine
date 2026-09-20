@@ -3,6 +3,17 @@
 #include <limits>
 
 // First-person camera: position + yaw/pitch, derives view matrix and basis vectors.
+// #202 - the one place a perspective projection is built. Every degenerate input is corrected
+// here rather than at each call site: far == near divides by zero, a non-positive near makes the
+// perspective divide meaningless, and a non-finite aspect (a zero-height viewport gives inf, a
+// zero-by-zero one gives NaN) poisons the whole matrix. glm::perspective also ASSERTS on a zero
+// aspect, so an unguarded call aborts a Debug build outright.
+//
+// Call this instead of glm::perspective anywhere camera values reach a projection - they can come
+// from a hand-edited scene, an older file, a component written at runtime, or a viewport that has
+// momentarily collapsed to zero pixels.
+glm::mat4 MakePerspective(float fovDegrees, float aspect, float nearPlane, float farPlane);
+
 class Camera {
 public:
     glm::vec3 Position{0.0f, 1.7f, 0.0f};

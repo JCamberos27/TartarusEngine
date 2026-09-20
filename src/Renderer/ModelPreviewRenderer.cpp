@@ -1,4 +1,5 @@
 #include "ModelPreviewRenderer.h"
+#include "Camera.h" // #202 - MakePerspective
 #include "Model.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
@@ -98,7 +99,7 @@ unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, 
     float aspect = previewH > 0 ? (float)previewW / (float)previewH : 1.0f;
     float nearPlane = std::max(0.01f, distance * 0.01f);
     float farPlane = (radius + distance) * 4.0f + 10.0f;
-    glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, nearPlane, farPlane);
+    glm::mat4 proj = MakePerspective(45.0f, aspect, nearPlane, farPlane); // #202
 
     m_Shader->Bind();
     m_Shader->SetMat4("uView", view);
