@@ -12,6 +12,7 @@
 
 #include "AnimatorController.h"
 #include "AudioEngine.h"
+#include "Log.h" // #178 stack traces
 #include "InputMap.h"
 #include "AssetDatabase.h"
 #include "AssetGuid.h"
@@ -376,6 +377,40 @@ void TestComponentPreset() {
 
     // A component the source entity does not have yields no preset at all.
     CHECK(SceneSerializer::ComponentToPresetJson(world, src, "NoSuchComponent").empty());
+}
+
+// --- #178: Warning/Error log entries carry a resolvable call stack -------------------------
+void TestLogStackTrace() {
+    Log::Clear();
+    Log::Info("stack-test info");
+    Log::Warn("stack-test warn");
+    Log::Error("stack-test error");
+
+    const std::vector<LogEntry>& entries = Log::Entries();
+    const LogEntry* info = nullptr; const LogEntry* warn = nullptr; const LogEntry* err = nullptr;
+    for (const LogEntry& e : entries) {
+        if (e.Message == "stack-test info")  info = &e;
+        if (e.Message == "stack-test warn")  warn = &e;
+        if (e.Message == "stack-test error") err = &e;
+    }
+    CHECK(info && warn && err);
+    if (!info || !warn || !err) return;
+
+    // Info is deliberately not instrumented; Warning and Error are.
+    CHECK(info->Stack.empty());
+    CHECK(!warn->Stack.empty());
+    CHECK(!err->Stack.empty());
+
+    // Resolution has to produce real frames, not just succeed: a silent "" would mean the
+    // feature ships doing nothing. The test function itself must appear in its own stack.
+    const std::string text = Log::ResolveStack(err->Stack);
+    CHECK(!text.empty());
+    CHECK(text.find("TestLogStackTrace") != std::string::npos);
+    // Nearest frame first, and Log internals are skipped, so the top frame is the caller.
+    CHECK(text.find("Log::Error") == std::string::npos);
+
+    CHECK(Log::ResolveStack({}).empty());
+    Log::Clear();
 }
 
 // --- AssetGuid ------------------------------------------------------------------------------
@@ -755,6 +790,7 @@ int RunUnitTests() {
         {"CameraRoll", TestCameraRoll},
         {"AssetMetaMigration", TestAssetMetaMigration},
         {"ComponentPreset", TestComponentPreset},
+        {"LogStackTrace", TestLogStackTrace},
     };
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;

@@ -124,7 +124,8 @@
 //        previous one, and module-held UI state can be carried across a reload.
 //   33 - #184: Help menu actions - OpenAbout, OpenDocumentation, OpenLogFolder, ReportBug.
 //   34 - #146: LogGetEntryContext, the structured entity / asset link of a log entry.
-constexpr std::uint32_t kEditorModuleAPIVersion = 34;
+//   35 - #178: LogGetEntryStack, a Warning/Error entry resolved call stack (Console stack traces).
+constexpr std::uint32_t kEditorModuleAPIVersion = 35;
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -574,6 +575,15 @@ struct EditorModuleHostAPI {
     // tagged with by the code that logged it (Log::Warn(msg, LogContext)). `outAssetPath`
     // points at host storage with the same lifetime rule as LogGetEntry's strings.
     bool (*LogGetEntryContext)(int index, int* outEntityOrder, const char** outAssetPath) = nullptr;
+
+    // --- Console stack traces (API v35, #178) ---
+    // The call stack captured when entry `index` was logged, as newline-separated
+    // "symbol  file:line" lines, nearest frame first. Only Warnings and Errors carry one;
+    // everything else returns false. Symbols are resolved on the FIRST call for an entry and
+    // cached, because resolving is slow - so call this when the user asks to see a stack, not
+    // while drawing every row. `outStack` points at host storage, same lifetime rule as
+    // LogGetEntry strings.
+    bool (*LogGetEntryStack)(int index, const char** outStack) = nullptr;
 
     // --- Help menu (API v33, #184) ---
     void (*OpenAbout)() = nullptr;         // Settings > About (version + system report)

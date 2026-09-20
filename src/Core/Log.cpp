@@ -1,5 +1,11 @@
 #include "Log.h"
 #include "UserPaths.h"
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <dbghelp.h> // #178 - Console stack traces (Dbghelp is already linked for MiniDumpWriteDump)
+#endif
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
@@ -44,6 +50,7 @@ struct PendingEntry {
     LogLevel Level;
     std::string Message;
     LogContext Context;
+    std::vector<void*> Stack; // #178
 };
 std::vector<PendingEntry> g_Pending;
 std::atomic<bool> g_HasPending{false};
@@ -96,13 +103,15 @@ void Sink(LogLevel level, const std::string& message) {
     WriteFileLine(NowHMS(), level, message);
 }
 
-void AddEntry(LogLevel level, std::string message, LogContext context) {
+void AddEntry(LogLevel level, std::string message, LogContext context, std::vector<void*> stack = {}) {
     auto& entries = Storage();
     if (!entries.empty() && entries.back().Level == level && entries.back().Message == message &&
         entries.back().Context == context) {
+        // Keep the first occurrence stack: it is the one with the original context, and
+        // re-capturing per repeat would pay for a stack on a per-frame error forever.
         entries.back().Count++;
     } else {
-        entries.push_back({level, std::move(message), NowHMS(), 1, g_NextSeq++, std::move(context)});
+        entries.push_back({level, std::move(message), NowHMS(), 1, g_NextSeq++, std::move(context), std::move(stack)});
         const size_t li = (size_t)level;
         if (++g_LevelCounts[li] > kMaxPerLevel[li] + kTrimSlack) {
             // Drop this level's oldest entries back down to its cap; other levels are untouched
@@ -131,18 +140,36 @@ void DrainPending() {
         batch.swap(g_Pending);
         g_HasPending.store(false, std::memory_order_release);
     }
-    for (auto& p : batch) AddEntry(p.Level, std::move(p.Message), std::move(p.Context));
+    for (auto& p : batch) AddEntry(p.Level, std::move(p.Message), std::move(p.Context), std::move(p.Stack));
+}
+
+// #178 - return addresses for a Warning/Error, nearest frame first. Thread-safe and cheap (a
+// walk of the stack, no symbol work); Info is excluded because it is far too chatty to pay
+// anything for. Log own frames are dropped at RESOLVE time by symbol name rather than with a
+// FramesToSkip count here: how many frames Push/CaptureStack/Log::Error actually occupy depends
+// on what the optimiser inlined, so a fixed count is right in one build configuration and wrong
+// in the other.
+std::vector<void*> CaptureStack(LogLevel level) {
+    if (level == LogLevel::Info) return {};
+#ifdef _WIN32
+    void* frames[32];
+    const USHORT n = CaptureStackBackTrace(/*FramesToSkip=*/1, (DWORD)std::size(frames), frames, nullptr);
+    return std::vector<void*>(frames, frames + n);
+#else
+    return {};
+#endif
 }
 
 void Push(LogLevel level, const std::string& rawMessage, LogContext context = {}) {
     std::string message = NormalizeSeparators(rawMessage);
     Sink(level, message);
+    std::vector<void*> stack = CaptureStack(level);
     if (OnMainThread()) {
         DrainPending();
-        AddEntry(level, std::move(message), std::move(context));
+        AddEntry(level, std::move(message), std::move(context), std::move(stack));
     } else {
         std::lock_guard<std::mutex> lock(g_PendingMutex);
-        g_Pending.push_back({level, std::move(message), std::move(context)});
+        g_Pending.push_back({level, std::move(message), std::move(context), std::move(stack)});
         g_HasPending.store(true, std::memory_order_release);
     }
 }
@@ -155,6 +182,63 @@ void Log::Error(const std::string& message) { Push(LogLevel::Error, message); }
 void Log::Info(const std::string& message, const LogContext& context) { Push(LogLevel::Info, message, context); }
 void Log::Warn(const std::string& message, const LogContext& context) { Push(LogLevel::Warning, message, context); }
 void Log::Error(const std::string& message, const LogContext& context) { Push(LogLevel::Error, message, context); }
+
+// #178 - main thread only, and only when the user expands a row: SymInitialize walks the loaded
+// modules and is slow enough that doing it per logged error would be worse than the bug being
+// diagnosed. dbghelp Sym* is single-threaded, hence the main-thread rule in the header.
+std::string Log::ResolveStack(const std::vector<void*>& frames) {
+    if (frames.empty()) return {};
+#ifdef _WIN32
+    static bool s_Init = false, s_Ok = false;
+    if (!s_Init) {
+        s_Init = true;
+        SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
+        s_Ok = SymInitialize(GetCurrentProcess(), nullptr, TRUE) != FALSE;
+    }
+    if (!s_Ok) return {};
+
+    const HANDLE proc = GetCurrentProcess();
+    alignas(SYMBOL_INFO) char buf[sizeof(SYMBOL_INFO) + MAX_SYM_NAME];
+    SYMBOL_INFO* sym = reinterpret_cast<SYMBOL_INFO*>(buf);
+    sym->SizeOfStruct = sizeof(SYMBOL_INFO);
+    sym->MaxNameLen = MAX_SYM_NAME;
+
+    // Drop the leading frames belonging to the logging machinery itself, so the first line is
+    // the code that actually logged. Keyed on the SOURCE FILE rather than the symbol name: the
+    // file-local helpers here resolve as "`anonymous namespace'::Push", and how many frames they
+    // occupy depends on what the optimiser inlined, so neither a name match nor a fixed
+    // FramesToSkip count is reliable across build configurations.
+    bool pastInternals = false;
+
+    std::string out;
+    for (void* addr : frames) {
+        const DWORD64 a = reinterpret_cast<DWORD64>(addr);
+        std::string name = "(unknown)";
+        DWORD64 disp = 0;
+        if (SymFromAddr(proc, a, &disp, sym)) name = sym->Name;
+        std::string where, file;
+        IMAGEHLP_LINE64 line{};
+        line.SizeOfStruct = sizeof(line);
+        DWORD lineDisp = 0;
+        if (SymGetLineFromAddr64(proc, a, &lineDisp, &line) && line.FileName) {
+            // Just the file name: the full build path is noise in a Console row.
+            file = std::filesystem::path(line.FileName).filename().string();
+            where = "  " + file + ":" + std::to_string(line.LineNumber);
+        }
+        if (!pastInternals) {
+            // No line info (a release frame, a foreign module) ends the skip too, rather than
+            // silently eating the caller.
+            if (file == "Log.cpp") continue;
+            pastInternals = true;
+        }
+        if (!out.empty()) out += "\n";
+        out += name + where;
+    }
+    return out;
+#else
+    return {};
+#endif
+}
 
 const std::vector<LogEntry>& Log::Entries() {
     if (OnMainThread()) DrainPending();
