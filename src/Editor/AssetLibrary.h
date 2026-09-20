@@ -15,6 +15,10 @@ class ShaderAsset;
 // and listed in the Asset Browser panel.
 class AssetLibrary {
 public:
+    // #121 - seeds the virtual-folder list from project/settings.json. Construct after
+    // ProjectSettings::Load().
+    AssetLibrary();
+
     std::shared_ptr<Model> LoadModel(const std::string& path);
     std::shared_ptr<Texture> LoadTexture(const std::string& path);
     void RegisterSound(const std::string& path); // sounds are played by path via AudioEngine
@@ -112,10 +116,10 @@ public:
         const std::set<std::string>& folderPaths,
         const std::set<std::string>& materialPaths = {});
 
-    // Clears only folder assignments, display names, and import settings — NOT the loaded
-    // assets themselves. Paired with PruneToKeepSet and a plain re-application of a snapshot's
-    // metadata, this makes metadata restore a true replace too, without touching decoded
-    // pixel/mesh data. Cheap regardless of library size (these are just small maps of strings).
+    // Clears only folder assignments, display names, labels and import settings - NOT the loaded
+    // assets themselves. Paired with PruneToKeepSet and the undo snapshot re-applying its own
+    // copy, this makes an undo of an Asset Browser edit a true replace. Only the in-memory undo
+    // snapshot carries that copy; scene files do not (#121).
     void ClearMetadataOnly();
 
     void CreateFolder(const std::string& folderPath);
@@ -133,6 +137,9 @@ public:
     // the Asset Browser only offers this behind a confirmation dialog.
     void DeleteFolderRecursive(const std::string& folderPath);
     const std::vector<std::string>& Folders() const { return m_Folders; }
+
+    // Writes m_Folders back to project/settings.json (#121).
+    void PersistFolders();
 
     // For SceneSerializer: every asset key currently known to have a folder and/or display
     // name override, so the file format only needs to store what's actually customized.
