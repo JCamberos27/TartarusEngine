@@ -410,24 +410,18 @@ void TestLogStackTrace() {
     CHECK(!warn->Stack.empty());
     CHECK(!err->Stack.empty());
 
-    // CAPTURE is guaranteed in every configuration (above) - it is just addresses. RESOLUTION
-    // is not: it needs a PDB, and the Release build currently ships without one, so ResolveStack
-    // legitimately comes back empty there. Asserting a symbol name unconditionally made this
-    // test fail in Release while passing in Debug.
+    // Asserted in BOTH configurations now that Release ships a PDB. That is the point of this
+    // change: before it, resolution returned nothing in Release and the Console stack traces did
+    // nothing in the build the desktop shortcut actually runs. These assertions are what fails if
+    // the Release debug-info setting is ever dropped again - a silent "" would otherwise look
+    // exactly like a pass.
     const std::string text = Log::ResolveStack(err->Stack);
-    if (!text.empty()) {
-        // Whatever did resolve, the logging machinery must not be in it: nearest frame first,
-        // and Log own frames are filtered by source file.
-        CHECK(text.find("Log.cpp") == std::string::npos);
-        CHECK(text.find("Log::Error") == std::string::npos);
-    }
-#ifndef NDEBUG
-    // Debug does have symbols and does not inline these frames, so there the strong form holds:
-    // real frames, naming the function that logged. A silent "" would mean the feature ships
-    // doing nothing, which is exactly what this is here to catch.
     CHECK(!text.empty());
-    CHECK(text.find("TestLogStackTrace") != std::string::npos);
-#endif
+    CHECK(text.find("TestLogStackTrace") != std::string::npos); // the function that logged
+    // Nearest frame first, and Log own frames are filtered by source file, so neither the
+    // machinery nor its file may appear.
+    CHECK(text.find("Log.cpp") == std::string::npos);
+    CHECK(text.find("Log::Error") == std::string::npos);
 
     CHECK(Log::ResolveStack({}).empty());
     Log::Clear();
