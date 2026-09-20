@@ -79,6 +79,37 @@ jobs:
           path: build/_deps
           key: fetchcontent-${{ matrix.config }}-${{ hashFiles('CMakeLists.txt') }}
 
+      # PhysX is an ExternalProject, not FetchContent, so it lands in build/physx_external-prefix
+      # and the cache above never covered it: 1.1 GB of clone plus build, recompiled on every job
+      # of every run, and most of the Build step's ~9m24s (#361).
+      #
+      # Measured by deleting a local build tree down to just these two caches and rebuilding:
+      # configure + build finished in 85 seconds with zero PhysX source files recompiled. The
+      # ExternalProject steps still run, they just find everything up to date ("Already at
+      # requested tag", "no change (already patched)", "Configuring done (0.1s)").
+      #
+      # The WHOLE prefix is cached. Dropping build-out/ and src/physx_external-build/ (640 MB
+      # between them) and keeping only the harvested stage/ looks tempting and does not work:
+      # MSBuild needs those intermediates to conclude the build is up to date, and without them
+      # PhysX recompiles in full. src/physx_external/.git is required too - the git update step
+      # has no stamp file, so it runs on every build and fails outright without the repo.
+      #
+      # Keyed like the cache above, on CMakeLists.txt plus the two PhysX helper scripts. A
+      # narrower key on PHYSX_GIT_TAG alone would survive unrelated CMakeLists edits, but it
+      # would also let a changed ExternalProject flag restore a stale PhysX silently - and
+      # /fp:fast vs /fp:precise here was already the cause of a real bug (a thrown basketball
+      # freezing mid-air, #312). Slower and honest beats faster and quietly wrong.
+      #
+      # No matrix.config in the key on purpose: PhysX builds debug AND release in one
+      # ExternalProject invocation, so both jobs share one entry. On a cold key they both miss,
+      # both build it, and both try to save - the loser logs "Cache already exists" and carries
+      # on. That is expected, not a failure.
+      - name: Cache the PhysX build
+        uses: actions/cache@v4
+        with:
+          path: build/physx_external-prefix
+          key: physx-${{ hashFiles('CMakeLists.txt', 'tools/physx_patch.cmake', 'tools/physx_harvest.cmake') }}
+
       # No -G here on purpose: hardcoding "Visual Studio 17 2022" broke the first run of this
       # workflow the moment the hosted windows-latest image moved to VS2026 (the generator name
       # is tied to a specific VS version and doesn't auto-upgrade). Omitting -G lets CMake pick
