@@ -1680,6 +1680,26 @@ int main(int argc, char** argv) {
                                       << " box=" << boxHit << (boxHit ? "@" + std::to_string(box.Distance) : std::string())
                                       << " capsule=" << capHit << (capHit ? "@" + std::to_string(cap.Distance) : std::string())
                                       << " maskNone=" << maskedHit << " overlapBox=" << overlaps << "\n";
+                            // #201 - deactivating the collider under the ray while playing must
+                            // take its actor out of the PhysX scene (it used to stay, invisible).
+                            if (n > 0 && hits[0].Entity != 0xFFFFFFFFu) {
+                                const entt::entity hitE = static_cast<entt::entity>(hits[0].Entity);
+                                if (world.Registry.valid(hitE)) {
+                                    world.Registry.emplace_or_replace<DeactivatedTag>(hitE);
+                                    world.RebuildWorldTransformCache(); // derives InactiveTag
+                                    PhysicsWorld::Step(0.0f, world, {});
+                                    RaycastHit after;
+                                    const bool again = PhysicsWorld::RaycastFiltered(o, down, 100.0f, all, after) &&
+                                                       after.Entity == hits[0].Entity;
+                                    std::cout << "[SmokeTest]   deactivate-sync hitAgain=" << again << "\n";
+                                    if (again) Log::Error("[SmokeTest] a deactivated collider was still hit by a raycast.");
+                                    // Put it back: the scene outlives this check (later Play
+                                    // cycles re-run it), so the probe must not leave a mark.
+                                    world.Registry.remove<DeactivatedTag>(hitE);
+                                    world.RebuildWorldTransformCache();
+                                    PhysicsWorld::Step(0.0f, world, {});
+                                }
+                            }
                         }
                         for (auto [ae, ac] : world.Registry.view<const AnimatorControllerComponent>().each()) { // #175 Part B
                             const auto* arc = world.Registry.try_get<RenderableComponent>(ae);

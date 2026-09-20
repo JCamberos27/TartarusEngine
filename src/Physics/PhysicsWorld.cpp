@@ -197,6 +197,9 @@ struct PhysicsState {
     // contact / joint log lines (written from PhysX callbacks, no registry at hand) can name
     // entities by the stable id the Console links to.
     std::unordered_map<std::uint32_t, int> orderByEntity;
+    // #166 / #201 - every entity BuildActors has handled (built or skipped), so SyncEntities
+    // can spot ones that appeared or disappeared since.
+    std::unordered_set<std::uint32_t> attempted;
     // #185 PR 12 / #167 — cooked meshes, cached in PhysicsCore for the whole session.
     std::unordered_map<std::string, PxConvexMesh*>&   convexCache;
     std::unordered_map<std::string, PxTriangleMesh*>& triangleCache;
@@ -387,13 +390,17 @@ PxMaterial* GetMaterial(PhysicsState& s, const ColliderComponent& c) {
     return m;
 }
 
-void BuildActors(PhysicsState& s, const World& world) {
+// `only` (#166 / #201): build just these entities - ones spawned, re-activated or given a
+// Collider while playing (see SyncEntities). Null = every active collider (Play-enter).
+void BuildActors(PhysicsState& s, const World& world, const std::unordered_set<std::uint32_t>* only = nullptr) {
     int statics = 0, dynamic = 0, kinematic = 0, skipped = 0;
     s.orderByEntity.clear();
     for (auto [e, order] : world.Registry.view<const OrderComponent>().each())
         s.orderByEntity[entt::to_integral(e)] = order.Value;
     auto view = world.Registry.view<const TransformComponent, const ColliderComponent>(entt::exclude<InactiveTag>);
     for (entt::entity e : view) {
+        if (only && !only->count(entt::to_integral(e))) continue;
+        s.attempted.insert(entt::to_integral(e)); // built or skipped: either way, not retried every frame
         // #114 — world space: a collider on a child entity used to be built at its LOCAL
         // offset from the world origin.
         const TransformComponent t = world.WorldSpaceTransform(e);
@@ -570,10 +577,78 @@ void BuildActors(PhysicsState& s, const World& world) {
         s.scene->addActor(*b);
     }
 
-    std::string msg = "PhysX: " + std::to_string(statics) + " static, " + std::to_string(dynamic) +
-                      " dynamic, " + std::to_string(kinematic) + " kinematic collider(s)";
+    std::string msg = "PhysX: " + std::string(only ? "added " : "") + std::to_string(statics) + " static, " +
+                      std::to_string(dynamic) + " dynamic, " + std::to_string(kinematic) + " kinematic collider(s)";
     if (skipped) msg += "; " + std::to_string(skipped) + " skipped (degenerate size)";
-    Log::Info(msg + ".");
+    Log::Info(msg + (only ? " while playing." : "."));
+}
+
+// #166 / #201 - drops one entity's actor (and every joint attached to it) from the scene, with
+// all the per-body bookkeeping that points at it.
+void RemoveActor(PhysicsState& s, std::uint32_t id) {
+    PxRigidActor* actor = nullptr;
+    if (auto it = s.bodyByEntity.find(id); it != s.bodyByEntity.end()) {
+        PxRigidDynamic* b = it->second;
+        actor = b;
+        s.bodyByEntity.erase(it);
+        auto drop = [b](std::vector<std::pair<PxRigidDynamic*, entt::entity>>& v) {
+            v.erase(std::remove_if(v.begin(), v.end(), [b](const auto& p) { return p.first == b; }), v.end());
+        };
+        drop(s.dynamics);
+        drop(s.kinematics);
+        s.prevPose.erase(b);
+        s.kinematicFramePose.erase(b);
+        s.preStepVel.erase(b);
+        s.jointed.erase(b);
+        if (s.grabbed == b) { s.grabbed = nullptr; s.grabHasTarget = false; s.grabHasRotation = false; }
+        if (s.playerGround == b) s.playerGround = nullptr;
+    } else if (auto st = s.staticByEntity.find(id); st != s.staticByEntity.end()) {
+        actor = st->second;
+        s.staticByEntity.erase(st);
+    }
+    if (!actor) return;
+    for (PxJoint*& j : s.joints) {
+        if (!j) continue;
+        PxRigidActor *a0 = nullptr, *a1 = nullptr;
+        j->getActors(a0, a1);
+        if (a0 == actor || a1 == actor) {
+            s.jointOwner.erase(j);
+            j->release();
+            j = nullptr;
+        }
+    }
+    s.joints.erase(std::remove(s.joints.begin(), s.joints.end(), nullptr), s.joints.end());
+    for (auto it = s.triggerOverlaps.begin(); it != s.triggerOverlaps.end();)
+        it = (it->first == id || it->second == id) ? s.triggerOverlaps.erase(it) : std::next(it);
+    s.playerTriggers.erase(id);
+    s.scene->removeActor(*actor);
+    actor->release();
+}
+
+// #166 / #201 - keeps the PhysX scene in step with the World while playing: actors go away for
+// entities that were destroyed, deactivated or lost their Collider, and are built for ones that
+// were spawned, re-activated or given a Collider. (Before, Play-enter was the only sync, so a
+// deleted or deactivated object left an invisible collider behind and a duplicated one fell
+// through nothing.)
+// Joints are not re-made here: BuildJoints walks every JointComponent at Play-enter and would
+// duplicate the existing ones, so an entity that gains a collider mid-Play gets an actor but no
+// joint. Nothing can spawn one yet; revisit with Instantiate (#166).
+void SyncEntities(PhysicsState& s, const World& world) {
+    std::vector<std::uint32_t> gone;
+    for (std::uint32_t id : s.attempted) {
+        const entt::entity e = static_cast<entt::entity>(id);
+        if (!world.Registry.valid(e) || !world.Registry.all_of<TransformComponent, ColliderComponent>(e) ||
+            world.Registry.all_of<InactiveTag>(e))
+            gone.push_back(id);
+    }
+    for (std::uint32_t id : gone) {
+        RemoveActor(s, id);
+        s.attempted.erase(id);
+    }
+    std::unordered_set<std::uint32_t> added;
+    for (entt::entity e : world.Registry.view<const TransformComponent, const ColliderComponent>(entt::exclude<InactiveTag>))
+        if (!s.attempted.count(entt::to_integral(e))) added.insert(entt::to_integral(e));
+    if (!added.empty()) BuildActors(s, world, &added);
 }
 
 // --- Joints (#185 PR 11) ---------------------------------------------------------------
@@ -1119,6 +1194,7 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
     // Frozen (time scale 0): no sim, so no events this frame - but last frame's are cleared above
     // rather than replayed to the game module every frame. The debug-draw history keeps its age,
     // so contact sparks stay visible to inspect while frozen.
+    SyncEntities(*g_State, world); // #166 / #201 - even while frozen, so a deleted object stops blocking
     if (dt <= 0.0f) { g_State->lastSubsteps = 0; g_State->lastStepMillis = 0.0f; return; }
 
     // Age the debug-draw history (contacts / queries) so sparks fade over ~½ second.
