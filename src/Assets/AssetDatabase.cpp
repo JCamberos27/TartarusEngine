@@ -96,6 +96,7 @@ const std::unordered_map<std::string, std::string>& KnownExtensions() {
         {".controller", "animatorcontroller"},
         {".tescript", "script"},
         {".physicmaterial", "physicmaterial"}, // #170
+        {".preset", "preset"},                 // #178 - saved component settings
     };
     return kExts;
 }
