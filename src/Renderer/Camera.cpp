@@ -62,8 +62,15 @@ glm::mat4 Camera::ProjectionMatrix(float aspect, float nearOverride, float farOv
     if (!(nearPlane > 0.0f)) nearPlane = 0.01f;
     if (!(farPlane > nearPlane)) farPlane = nearPlane + 1.0f;
     if (Orthographic) {
-        float halfW = OrthoHalfHeight * aspect;
-        return glm::ortho(-halfW, halfW, -OrthoHalfHeight, OrthoHalfHeight, nearPlane, farPlane);
+        // #202 - same reasoning as the clip planes above, for the axis this path divides by.
+        // glm::ortho computes 2/(right-left) and 2/(top-bottom), so a zero (or NaN, or negative)
+        // half-height gives an inf/NaN matrix. The interactive zoom clamps to [0.25, 250], but
+        // nothing else does - a view transition derives it from distance * tan(halfFov), which
+        // is zero when the camera sits on its pivot.
+        float halfH = OrthoHalfHeight;
+        if (!(halfH > 0.0f)) halfH = 0.25f; // also catches NaN
+        const float halfW = halfH * aspect;
+        return glm::ortho(-halfW, halfW, -halfH, halfH, nearPlane, farPlane);
     }
     return glm::perspective(glm::radians(Fov), aspect, nearPlane, farPlane);
 }
