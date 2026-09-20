@@ -25,6 +25,12 @@ public:
     void SetTitle(const std::string& title);
     void Maximize();
 
+    // #174 - replaces the window/taskbar icon with a PNG at runtime, for a built game whose
+    // product icon is not the one compiled into the exe's resources. Returns false (leaving
+    // the exe's own icon in place) when the file is missing or cannot be decoded; a built
+    // game should still run with the default icon rather than refuse to start.
+    bool SetIconFromFile(const std::string& pngPath);
+
     // #143: the window's restored ("normal") rect plus whether it is maximized, so the editor
     // can reopen where the user left it. Coordinates are OS workspace pixels on Windows
     // (GetWindowPlacement's own space, so a save/restore round-trip is exact); elsewhere they

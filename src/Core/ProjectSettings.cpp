@@ -172,6 +172,8 @@ void Load() {
         g_Build.Fullscreen  = boolean("fullscreen", g_Build.Fullscreen);
         g_Build.VSync       = boolean("vsync", g_Build.VSync);
         g_Build.DevelopmentBuild = boolean("developmentBuild", g_Build.DevelopmentBuild);
+        g_Build.IconPath    = str("iconPath", g_Build.IconPath);     // #174
+        g_Build.SplashPath  = str("splashPath", g_Build.SplashPath); // #174
         const auto guids = b.find("sceneGuids"); // #132 - parallel to "scenes"
         if (const auto s = b.find("scenes"); s != b.end() && s->is_array())
             for (size_t i = 0; i < s->size(); ++i) {
@@ -250,6 +252,8 @@ void Save() {
         {"fullscreen", g_Build.Fullscreen},
         {"vsync", g_Build.VSync},
         {"developmentBuild", g_Build.DevelopmentBuild},
+        {"iconPath", g_Build.IconPath},
+        {"splashPath", g_Build.SplashPath},
     };
     root["tags"] = g_Tags;
     root["assetFolders"] = g_AssetFolders; // #121

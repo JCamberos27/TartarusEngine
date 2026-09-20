@@ -85,6 +85,10 @@ struct BuildSettings {
     bool Fullscreen = true;
     bool VSync = true;
     bool DevelopmentBuild = false;   // keep the stats overlay + physics debug keys in the player
+    // #174 - project-relative paths to the images the built game uses for its window/taskbar
+    // icon and its startup splash. Empty means the player keeps the engine's own defaults.
+    std::string IconPath;
+    std::string SplashPath;
 };
 const BuildSettings& Build();
 BuildSettings&       MutableBuild();
