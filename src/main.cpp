@@ -535,6 +535,12 @@ int main(int argc, char** argv) {
             SplashScreen::TargetRect target{es.WindowX, es.WindowY, es.WindowWidth, es.WindowHeight};
             splash.Show(EnginePaths::Resolve("assets/branding/splash.png"), 1.0f,
                         es.WindowPlacementValid ? &target : nullptr);
+        } else if (!headless && playerMode && !playerCfg.SplashPath.empty()) {
+            // #174 - the game's own splash, staged into the build by BuildPipeline. No target
+            // rect: a player has no saved editor placement, so this centres on the primary
+            // monitor. Empty SplashPath (the default) keeps the old behaviour of no splash at
+            // all, so an existing player.json is unaffected.
+            splash.Show(EnginePaths::Resolve(playerCfg.SplashPath), 1.0f, nullptr);
         }
 
         // The smoke test's whole job is catching GL-level regressions, so force debug output on
@@ -543,6 +549,11 @@ int main(int argc, char** argv) {
         // Set before the Window exists: it decides whether to request a debug context (#157).
         if (smokeTestMode) GLDebug::ForceEnable();
         Window window(1280, 720, playerMode ? playerCfg.ProductName : std::string("Tartarus Engine"));
+        // #174 - the product's own icon, if the build was given one. The editor keeps the icon
+        // compiled into the exe's resources (app_icon.rc), which is also what a player falls
+        // back to when IconPath is empty or the file won't decode.
+        if (playerMode && !playerCfg.IconPath.empty())
+            window.SetIconFromFile(EnginePaths::Resolve(playerCfg.IconPath));
         if (playerMode && !playerCfg.Fullscreen) window.UseStandardFrame();
         // GL context + loader are live now. No-op unless a Debug build or TARTARUS_GL_DEBUG=1.
         GLDebug::Init();
