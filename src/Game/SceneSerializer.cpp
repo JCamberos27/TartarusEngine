@@ -2155,6 +2155,68 @@ entt::entity SceneSerializer::InstantiatePrefab(World& world, AssetLibrary& asse
 
 void SceneSerializer::ClearPrefabPristineCache() { g_prefabPristineCache.clear(); }
 
+// --- #178 Preset assets ---------------------------------------------------------------------
+// A .preset file is {"preset":1,"component":"<name>","fields":{...}}, where `fields` is exactly
+// the block a scene writes for that component - same keys, same encoding - so asset references
+// inside a preset follow their GUID the way scene references do.
+namespace {
+const RegisteredComponent* FindSerialisableComponent(const char* name) {
+    if (!name || !*name) return nullptr;
+    for (const auto& rc : ComponentRegistry::All())
+        if (rc.Meta.GenericSerialize && std::strcmp(rc.Meta.Name, name) == 0) return &rc;
+    return nullptr; // unknown, or hand-coded (Mesh Renderer and friends)
+}
+} // namespace
+
+std::string SceneSerializer::ComponentToPresetJson(const World& world, entt::entity entity,
+                                                   const char* component) {
+    const RegisteredComponent* rc = FindSerialisableComponent(component);
+    if (!rc || !world.Registry.valid(entity) || !rc->Has(world.Registry, entity)) return {};
+    // const_cast is safe: the component is a live mutable object; this path only reads it.
+    void* comp = const_cast<void*>(rc->GetConst(world.Registry, entity));
+    json fields;
+    for (const auto& f : rc->Meta.Fields) fields[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(comp));
+    return json{{"preset", 1}, {"component", rc->Meta.Name}, {"fields", std::move(fields)}}.dump(2);
+}
+
+std::string SceneSerializer::PresetComponentName(const std::string& presetJson) {
+    json j = json::parse(presetJson, nullptr, false);
+    if (j.is_discarded() || !j.is_object()) return {};
+    const auto it = j.find("component");
+    if (it == j.end() || !it->is_string()) return {};
+    const std::string name = it->get<std::string>();
+    return FindSerialisableComponent(name.c_str()) ? name : std::string();
+}
+
+bool SceneSerializer::ApplyComponentPresetJson(World& world, AssetLibrary& assets, entt::entity entity,
+                                               const std::string& presetJson) {
+    json j = json::parse(presetJson, nullptr, false);
+    if (j.is_discarded() || !j.is_object() || !world.Registry.valid(entity)) return false;
+    const auto cit = j.find("component");
+    if (cit == j.end() || !cit->is_string()) return false;
+    const RegisteredComponent* rc = FindSerialisableComponent(cit->get<std::string>().c_str());
+    if (!rc) return false;
+    const auto fit = j.find("fields");
+    if (fit == j.end() || !fit->is_object()) return false;
+
+    if (!rc->Has(world.Registry, entity)) rc->Add(world.Registry, entity);
+    void* comp = rc->Get(world.Registry, entity);
+    // A field the preset does not mention keeps its current value rather than snapping to the
+    // component default, so a preset saved before a field existed stays usable. Same legacy-key
+    // fallback the scene loader uses (#43).
+    for (const auto& f : rc->Meta.Fields) {
+        const char* key = ReflectFieldKey(f);
+        if (fit->contains(key)) { ReflectFieldFromJson(f, f.Address(comp), fit->at(key), assets); continue; }
+        for (int i = 0; i < f.LegacyNameCount; ++i) {
+            if (f.LegacyNames[i] && fit->contains(f.LegacyNames[i])) {
+                ReflectFieldFromJson(f, f.Address(comp), fit->at(f.LegacyNames[i]), assets);
+                break;
+            }
+        }
+    }
+    return true;
+}
+
 // #121 - see the header. Parse failures on either side yield "{}": a scene or sidecar we cannot
 // read is never a reason to write a guess into the sidecar.
 std::string SceneSerializer::MigrateAssetMetaFields(const std::string& entryJson,

@@ -1963,7 +1963,19 @@ private:
         bool* resetOut = nullptr, bool* copyOut = nullptr, bool* pasteOut = nullptr,
         // #315 B4b — when non-null, the header's right-click menu gains "Revert to Prefab" /
         // "Apply to Prefab" for a component this instance added on top of its .prefab.
-        bool* prefabRevertOut = nullptr, bool* prefabApplyOut = nullptr);
+        bool* prefabRevertOut = nullptr, bool* prefabApplyOut = nullptr,
+        // #178 Preset assets. savePresetOut: "Save Preset" was chosen. applyPresetOut: receives
+        // the chosen .preset file's path. Both only appear when the caller passes them, i.e. for
+        // generically-serialised components - a preset of a hand-coded component can't round-trip.
+        bool* savePresetOut = nullptr, std::string* applyPresetOut = nullptr);
+
+    // #178 - every .preset under the project whose "component" matches `component`, as
+    // {display name, path}. Rescanned when the menu opens; presets are few and this is not a
+    // per-frame path.
+    std::vector<std::pair<std::string, std::string>> PresetsForComponent(const std::string& component) const;
+    // #178 - writes `entity`'s `component` to project/presets as a new .preset file. Returns the
+    // path written, or "" on failure (reported to the Console).
+    std::string SaveComponentPreset(const World& world, entt::entity entity, const char* component);
     void EndComponentSection();
 
     // Single-slot component clipboard (#236): "Copy Component" on a header header snapshots the
