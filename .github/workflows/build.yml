@@ -6,12 +6,21 @@ name: Build
 # foremost: it exists to catch the class of bug a human never gets to see locally until they
 # pull a branch and build it themselves.
 #
-# The --smoke-test step (loads every scene, renders a fixed number of frames, checks for GL
-# errors) is run best-effort with continue-on-error: hosted GitHub Windows runners have no GPU,
-# and this engine requires a real OpenGL 4.6 core context with compute shader support, which a
-# software/basic-display-adapter fallback very likely can't provide. So a smoke-test failure
-# here is NOT proof of a real bug — only a compile failure or a smoke-test PASS are conclusive;
-# a smoke-test FAIL/crash on this runner needs a human (or a GPU-equipped runner) to confirm.
+# EVERY step here gates. That was not always true, and the ways it was not are worth knowing:
+#
+#  - The unit-test step ran the engine bare. In Release WIN32_EXECUTABLE makes it a
+#    GUI-subsystem binary, which PowerShell does not wait for, so the step passed while tests
+#    failed (#351). Native tools are invoked through Start-Process -Wait -PassThru for that
+#    reason - do the same for anything added here that is meant to gate.
+#  - The crash-dump assertion ran against a smoke process that had not finished, for the same
+#    reason (#354).
+#  - The --smoke-test step was continue-on-error because hosted runners have no GPU and this
+#    engine needs a real OpenGL 4.6 core context with compute shaders. It now gets one from Mesa
+#    llvmpipe (fetched and checksum-verified below), renders all 16 scenes in about 3 minutes,
+#    and gates (#357).
+#
+# So a red build here means something real: it failed to compile, a unit test failed, a scene
+# failed to render, or the engine left a crash dump.
 
 on:
   push:
@@ -104,17 +113,57 @@ jobs:
       # started. continue-on-error still keeps a smoke FAILURE from failing the job (no GPU here,
       # see the note at the top of this file); what it must not do is let the job move on before
       # the run has finished.
-      - name: Smoke test (best effort - no GPU on this runner)
-        continue-on-error: true
-        timeout-minutes: 5
+      # #173 suggestion 2 - a software OpenGL 4.6 driver, so the smoke test can actually run on a
+      # GPU-less runner. The engine requires a 4.6 CORE context and fails fast below it
+      # (Window.cpp), and it uses compute shaders, so the basic-display-adapter fallback cannot
+      # serve it; Mesa llvmpipe can.
+      #
+      # There is no official Mesa binary for Windows, so this pulls a community build. It is
+      # pinned two ways and BOTH are load-bearing: an exact release tag, and the SHA-256 that
+      # GitHub publishes for that asset, verified before anything is extracted or executed. A
+      # changed or substituted archive fails the step instead of running.
+      - name: Fetch Mesa llvmpipe (software OpenGL 4.6)
+        id: mesa
         shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ver  = "26.1.8"
+          $name = "mesa3d-$ver-release-msvc.7z"
+          $sha  = "4C6D32E653E0FF9AD07796E40C0BCFABF2764D849E3CE4F3B1590112C87E42F9"
+          $url  = "https://github.com/pal1000/mesa-dist-win/releases/download/$ver/$name"
+          Invoke-WebRequest -Uri $url -OutFile $name
+          $got = (Get-FileHash -Algorithm SHA256 -Path $name).Hash
+          if ($got -ne $sha) { throw "Mesa archive SHA-256 mismatch: expected $sha, got $got" }
+          Write-Host "Mesa $ver checksum verified"
+          7z x $name -omesa -y | Out-Null
+          # Layout differs between Mesa builds, so find the 64-bit opengl32.dll rather than
+          # assuming a path.
+          $gl = Get-ChildItem -Path mesa -Recurse -Filter opengl32.dll |
+                Where-Object { $_.FullName -match "x64" } | Select-Object -First 1
+          if (-not $gl) { throw "no x64 opengl32.dll in the Mesa archive" }
+          Write-Host "using $($gl.FullName)"
+          Copy-Item -Path (Join-Path $gl.Directory.FullName "*.dll") -Destination "build\${{ matrix.config }}" -Force
+
+      # A REAL GATE. It was continue-on-error for as long as the runners had no OpenGL 4.6 at
+      # all; with llvmpipe supplying one, all 16 scenes pass here (verified: both configs, exit 0,
+      # about 3 minutes each), so a rendering regression must now fail the build rather than being
+      # swallowed. Software rasterisation is slow, hence the much larger timeout - it is roughly
+      # 3 minutes today, and the headroom is for scenes added later, not for a hang.
+      - name: Smoke test (Mesa llvmpipe)
+        timeout-minutes: 25
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "4.6"
+          MESA_GLSL_VERSION_OVERRIDE: "460"
         run: |
           $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
           $p = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -NoNewWindow -Wait -PassThru
           Write-Host "smoke test exited with $($p.ExitCode)"
           exit $p.ExitCode
 
-      # The smoke step above is swallowed (no GPU here). This one is NOT: the CrashHandler
+      # The smoke step above now gates too (llvmpipe). This one stays because it catches a
       # writes build/<config>/crash_*.dmp on any unhandled fault, including one in the shutdown
       # path. That teardown crash class (e.g. #389 — registry destroyed after the hot-reload
       # DLLs it bound into were unloaded) is deterministic C++, not GPU-dependent: if the smoke
