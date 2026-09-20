@@ -18,6 +18,11 @@ name: Build
 #    engine needs a real OpenGL 4.6 core context with compute shaders. It now gets one from Mesa
 #    llvmpipe (fetched and checksum-verified below), renders all 16 scenes in about 3 minutes,
 #    and gates (#357).
+#  - The crash-dump assertion globbed build/<config>/, where dumps stopped being written when
+#    #148 moved them to %LOCALAPPDATA%\TartarusEngine\Crashes\. The check was right when it was
+#    written and went quiet eight days later without failing (#358). A check that can only ever
+#    pass looks exactly like a check that keeps passing - if you move where an artifact lands,
+#    grep this file for the old path.
 #
 # So a red build here means something real: it failed to compile, a unit test failed, a scene
 # failed to render, or the engine left a crash dump.
@@ -99,20 +104,6 @@ jobs:
           $p = Start-Process -FilePath $exe -ArgumentList "--unit-tests" -NoNewWindow -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "unit tests reported $($p.ExitCode) failed check(s)" }
 
-      # Best-effort only — see the note at the top of this file. continue-on-error means this
-      # step's outcome never fails the job; check its own log to see whether it actually ran.
-      #
-      # timeout-minutes is load-bearing, not just tidiness: with no GL driver on the runner the
-      # Debug build fails to create its window and then STALLS (the debug CRT's abort path waits
-      # on a message box that a non-interactive desktop never dismisses) instead of exiting.
-      # continue-on-error can't salvage a step that never returns — the job would ride GitHub's
-      # 6-hour ceiling and land red. A short cap turns that hang into a fast, swallowed timeout.
-      # Waited for explicitly, same reason as the unit-test step: in Release the engine is a
-      # GUI-subsystem binary (WIN32_EXECUTABLE), so a bare invocation returns IMMEDIATELY and the
-      # crash-dump assertion below - which IS a gate - ran against a process that had barely
-      # started. continue-on-error still keeps a smoke FAILURE from failing the job (no GPU here,
-      # see the note at the top of this file); what it must not do is let the job move on before
-      # the run has finished.
       # #173 suggestion 2 - a software OpenGL 4.6 driver, so the smoke test can actually run on a
       # GPU-less runner. The engine requires a 4.6 CORE context and fails fast below it
       # (Window.cpp), and it uses compute shaders, so the basic-display-adapter fallback cannot
@@ -144,11 +135,27 @@ jobs:
           Write-Host "using $($gl.FullName)"
           Copy-Item -Path (Join-Path $gl.Directory.FullName "*.dll") -Destination "build\${{ matrix.config }}" -Force
 
+      # The crash handler writes dumps to %LOCALAPPDATA%\TartarusEngine\Crashes\, which persists
+      # for the life of the runner. Clearing it first means the assertion after the smoke test can
+      # only ever fire on a dump THIS job produced - nothing carried in from an earlier step.
+      - name: Clear crash dumps before the smoke run
+        shell: pwsh
+        run: |
+          $dir = "$env:LOCALAPPDATA\TartarusEngine\Crashes"
+          if (Test-Path $dir) { Remove-Item "$dir\*" -Force -Recurse -ErrorAction SilentlyContinue }
+          Write-Host "cleared $dir"
+
       # A REAL GATE. It was continue-on-error for as long as the runners had no OpenGL 4.6 at
       # all; with llvmpipe supplying one, all 16 scenes pass here (verified: both configs, exit 0,
       # about 3 minutes each), so a rendering regression must now fail the build rather than being
       # swallowed. Software rasterisation is slow, hence the much larger timeout - it is roughly
       # 3 minutes today, and the headroom is for scenes added later, not for a hang.
+      #
+      # The timeout is load-bearing rather than tidiness: a Debug build that cannot create its
+      # window STALLS instead of exiting (the debug CRT's abort path waits on a message box that
+      # a non-interactive desktop never dismisses). Without a cap the job would ride GitHub's
+      # 6-hour ceiling. Start-Process -Wait -PassThru for the usual reason - in Release the engine
+      # is a GUI-subsystem binary and a bare invocation returns immediately (#351, #354).
       - name: Smoke test (Mesa llvmpipe)
         timeout-minutes: 25
         shell: pwsh
@@ -163,20 +170,43 @@ jobs:
           Write-Host "smoke test exited with $($p.ExitCode)"
           exit $p.ExitCode
 
-      # The smoke step above now gates too (llvmpipe). This one stays because it catches a
-      # writes build/<config>/crash_*.dmp on any unhandled fault, including one in the shutdown
-      # path. That teardown crash class (e.g. #389 — registry destroyed after the hot-reload
-      # DLLs it bound into were unloaded) is deterministic C++, not GPU-dependent: if the smoke
-      # run got far enough to leave a dump, that's a real regression regardless of the runner.
+      # The smoke step above gates on its own exit code, but a process can render all 16 scenes,
+      # report success and THEN fault on the way out. CrashHandler catches that and writes a
+      # minidump, so a dump existing is a failure even when the exit code was 0. That teardown
+      # crash class (e.g. #389 — the registry destroyed after the hot-reload DLLs it bound into
+      # were unloaded) is deterministic C++, not GPU-dependent, which is why it gets its own step.
+      #
+      # LOOK IN THE RIGHT PLACE. This step used to glob build/<config>/, which was correct when it
+      # was written (0e2d843, Sept 10) and stopped being correct eight days later when #148 moved
+      # dumps to %LOCALAPPDATA%\TartarusEngine\Crashes\ (8f95561, Sept 18). Nothing failed; the
+      # glob just matched nothing, every run, for as long as it took to notice (#358). The exe
+      # directory is still checked because ResolveDumpDir() falls back to it when LOCALAPPDATA is
+      # unset — both paths, so neither can go quiet again.
+      #
+      # Only .dmp: the handler writes a minidump and a line to stderr, never a .txt. The old
+      # version cat'd crash_*.txt, which never existed either.
       - name: Assert smoke test left no crash dump
         if: always()
-        shell: bash
+        shell: pwsh
         run: |
-          shopt -s nullglob
-          dumps=(build/${{ matrix.config }}/crash_*.dmp build/${{ matrix.config }}/crash_*.txt)
-          if (( ${#dumps[@]} )); then
-            echo "::error::smoke test crashed — dump(s): ${dumps[*]}"
-            for t in build/${{ matrix.config }}/crash_*.txt; do echo "--- $t ---"; cat "$t"; done
+          $dirs = @("$env:LOCALAPPDATA\TartarusEngine\Crashes", "build\${{ matrix.config }}")
+          $dumps = @($dirs | Where-Object { Test-Path $_ } |
+                     ForEach-Object { Get-ChildItem $_ -Filter "crash_*.dmp" -ErrorAction SilentlyContinue })
+          if ($dumps.Count -gt 0) {
+            foreach ($d in $dumps) { Write-Host "  $($d.FullName)  ($($d.Length) bytes)" }
+            Write-Host "::error::smoke test left $($dumps.Count) crash dump(s) - see the crash-dumps artifact"
+            New-Item -ItemType Directory -Force -Path crash-dumps | Out-Null
+            $dumps | ForEach-Object { Copy-Item $_.FullName crash-dumps -Force }
             exit 1
-          fi
-          echo "no crash dump — ok"
+          }
+          Write-Host "no crash dump - ok"
+
+      # A red build that throws the evidence away is half a gate. Only runs when the step above
+      # found something, so a green build uploads nothing.
+      - name: Upload crash dumps
+        if: failure() && hashFiles('crash-dumps/*') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-dumps-${{ matrix.config }}
+          path: crash-dumps/
+          retention-days: 14
