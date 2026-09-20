@@ -519,7 +519,25 @@ void TestCameraFrustumValidation() {
     cam.Orthographic = true;
     cam.NearPlane = 5.0f; cam.FarPlane = 5.0f;
     CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    // The ortho path divides by the half-height too: glm::ortho computes 2/(top-bottom).
+    cam.NearPlane = 0.1f; cam.FarPlane = 100.0f;
+    cam.OrthoHalfHeight = 0.0f;
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    cam.OrthoHalfHeight = -3.0f;
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    cam.OrthoHalfHeight = std::numeric_limits<float>::quiet_NaN();
+    CHECK(finite(cam.ProjectionMatrix(16.0f / 9.0f)));
+    // A usable ortho camera is still passed through untouched.
+    cam.OrthoHalfHeight = 8.0f;
+    {
+        const glm::mat4 want = glm::ortho(-8.0f * 1.5f, 8.0f * 1.5f, -8.0f, 8.0f, 0.1f, 100.0f);
+        const glm::mat4 have = cam.ProjectionMatrix(1.5f);
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r)
+                CHECK(std::fabs(have[c][r] - want[c][r]) < 1e-6f);
+    }
     cam.Orthographic = false;
+    cam.NearPlane = 0.1f; cam.FarPlane = 1000.0f;
 
     // A sane frustum is left exactly alone - the guard must not quietly reshape good cameras.
     cam.NearPlane = 0.3f; cam.FarPlane = 250.0f;
