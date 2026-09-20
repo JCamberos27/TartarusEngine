@@ -30,11 +30,18 @@ name: Build
 on:
   push:
     branches: ['**']
+    # Tags are a separate filter, not covered by branches: without this a `v*` tag push runs
+    # nothing and the release job below could never fire (#173 suggestion 4).
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
 jobs:
   build:
+    # Only the release step needs more than read, and only on a tag. Declaring it here rather
+    # than leaving the workflow on the repository default keeps the token narrow.
+    permissions:
+      contents: write
     runs-on: windows-latest
     # Backstop: a hung build or smoke test must not sit on a runner until GitHub's 6-hour
     # job ceiling. The compile + cached deps finish well inside this; anything approaching it
@@ -210,3 +217,116 @@ jobs:
           name: crash-dumps-${{ matrix.config }}
           path: crash-dumps/
           retention-days: 14
+
+      # --- Packaging (#173 suggestion 4) ---------------------------------------------------
+      # Release only: a Debug ZIP would ship the debug CRT, which end users do not have.
+      - name: Package (CPack ZIP)
+        if: matrix.config == 'Release'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          cpack --config build/CPackConfig.cmake -C Release
+          Get-ChildItem build/package -Filter *.zip | ForEach-Object {
+            Write-Host "$($_.Name)  $([math]::Round($_.Length / 1MB, 1)) MB"
+          }
+
+      # Producing a ZIP proves nothing about whether it works. This extracts it somewhere with no
+      # relation to the build tree and runs the engine out of it, so a missing DLL or a
+      # forgotten install() rule fails HERE rather than in a user's download.
+      #
+      # The assets diff is the part that earns its keep: every POST_BUILD step stages content next
+      # to the exe, and each one needs a matching install() rule. Comparing the two trees means
+      # adding a staged asset without packaging it cannot pass, which a fixed manifest list would
+      # not catch.
+      - name: Verify the package runs standalone
+        if: matrix.config == 'Release'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $zip = (Get-ChildItem build/package -Filter *.zip | Select-Object -First 1)
+          if (-not $zip) { throw "cpack produced no ZIP" }
+          $dest = "$env:RUNNER_TEMP\pkgcheck"
+          Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive -Path $zip.FullName -DestinationPath $dest
+          # Archive generators wrap the payload in a top-level folder by default
+          # (CPACK_INCLUDE_TOPLEVEL_DIRECTORY); don't assume it either way.
+          $root = if (Test-Path (Join-Path $dest "TartarusEngine.exe")) { $dest }
+                  else { (Get-ChildItem $dest -Directory | Select-Object -First 1).FullName }
+          if (-not $root) { throw "nothing usable in the extracted archive" }
+          Write-Host "extracted to $root"
+
+          $required = @(
+            "TartarusEngine.exe", "TartarusEditor.dll", "TartarusGame.dll",
+            "PhysX.dll", "PhysXCommon.dll", "PhysXFoundation.dll", "PhysXCooking.dll",
+            "LICENSE", "THIRD-PARTY-NOTICES.md", "README-FIRST-RUN.txt",
+            "assets\shaders\ModelFragment.glsl", "assets\fonts\fa-solid-900.ttf",
+            "assets\branding\splash.png", "project\scenes\Sandbox.json"
+          )
+          $missing = $required | Where-Object { -not (Test-Path (Join-Path $root $_)) }
+          if ($missing) { throw "package is missing: $($missing -join ', ')" }
+
+          # Mixamo's licence does not allow redistributing the character FBX files, and the sky
+          # HDRIs are too large to ship. Neither exists on a runner, so this asserts the install
+          # rules stay an allow-list - on a developer machine, where both DO exist, an
+          # exclude-list edited wrongly would quietly put them in the ZIP.
+          foreach ($banned in @("project\assets\characters", "project\assets\sky")) {
+            if (Test-Path (Join-Path $root $banned)) { throw "package must not contain $banned" }
+          }
+
+          # Exactly these top-level entries, nothing else. A FetchContent dependency with its own
+          # install() rules lands here uninvited - EnTT put include/entt and lib/EnTT in the first
+          # ZIP built from this config, and it is header-only. This is the durable guard: whoever
+          # adds the next dependency finds out from a red build rather than from a user.
+          $expected = @(
+            "assets", "project", "LICENSE", "README-FIRST-RUN.txt", "THIRD-PARTY-NOTICES.md",
+            "TartarusEngine.exe", "TartarusEditor.dll", "TartarusGame.dll",
+            "PhysX.dll", "PhysXCommon.dll", "PhysXCooking.dll", "PhysXFoundation.dll"
+          )
+          $actual = Get-ChildItem $root | ForEach-Object { $_.Name }
+          $extra = $actual | Where-Object { $expected -notcontains $_ }
+          if ($extra) {
+            throw "unexpected top-level entries in the package: $($extra -join ', ') - a dependency is probably installing itself; see the EnTT note in CMakeLists.txt"
+          }
+
+          # Every file staged next to the exe by a POST_BUILD step must also be in the package.
+          $staged   = Get-ChildItem "build\Release\assets" -Recurse -File |
+                      ForEach-Object { $_.FullName.Substring((Resolve-Path "build\Release\assets").Path.Length + 1) }
+          $packaged = Get-ChildItem (Join-Path $root "assets") -Recurse -File |
+                      ForEach-Object { $_.FullName.Substring((Join-Path $root "assets").Length + 1) }
+          $notPackaged = $staged | Where-Object { $packaged -notcontains $_ }
+          if ($notPackaged) {
+            throw "staged next to the exe but not in the package (add an install() rule in CMakeLists.txt): $($notPackaged -join ', ')"
+          }
+          Write-Host "$($staged.Count) staged asset files, all present in the package"
+
+          # Run the engine from the extracted folder. Unit tests need no GL context, so this is a
+          # real check that the binary starts and finds its DLLs with nothing from the build tree
+          # on the path. Waited for explicitly - GUI-subsystem binary, see #351.
+          $exe = Join-Path $root "TartarusEngine.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--unit-tests" -WorkingDirectory $root -NoNewWindow -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "the packaged engine reported $($p.ExitCode) failed check(s)" }
+          Write-Host "the packaged engine runs standalone"
+
+      - name: Upload the package
+        if: matrix.config == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: TartarusEngine-win64
+          path: build/package/*.zip
+          retention-days: 30
+
+      # Tag a commit v0.1.0 (matching the version in CMakeLists.txt) and push it to publish.
+      # Uses the gh CLI rather than a third-party release action: one less thing to pin, review
+      # and trust with a write token.
+      - name: Publish the release
+        if: matrix.config == 'Release' && startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $zip = (Get-ChildItem build/package -Filter *.zip | Select-Object -First 1).FullName
+          gh release create "${{ github.ref_name }}" $zip `
+            --repo "${{ github.repository }}" `
+            --title "Tartarus Engine ${{ github.ref_name }}" `
+            --generate-notes

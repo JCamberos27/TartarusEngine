@@ -1,8 +1,44 @@
 cmake_minimum_required(VERSION 3.16)
-project(TartarusEngine CXX)
+# The engine's own version, distinct from the per-project "product version" a user sets in
+# Build Settings for the game they ship. Bump it here; the packaged ZIP name, the generated
+# TartarusVersion.h and the About panel all follow from this one line. (#173 suggestion 4)
+project(TartarusEngine VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# --- Version header ---------------------------------------------------------------------
+# Generated into the build tree so nothing version-specific is checked in. Captured at CONFIGURE
+# time on purpose: regenerating on every build would relink the engine after every commit, for a
+# string whose only job is to identify a release build. CI configures from a clean checkout, so a
+# packaged build always carries the right SHA.
+find_package(Git QUIET)
+set(TARTARUS_GIT_DESCRIBE "unknown")
+if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+  execute_process(
+    COMMAND ${GIT_EXECUTABLE} describe --always --dirty
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE _git_describe
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  if(_git_describe)
+    set(TARTARUS_GIT_DESCRIBE "${_git_describe}")
+  endif()
+endif()
+configure_file(
+  ${CMAKE_SOURCE_DIR}/cmake/TartarusVersion.h.in
+  ${CMAKE_BINARY_DIR}/generated/TartarusVersion.h
+  @ONLY
+)
+if(WIN32)
+  # VERSIONINFO resource: puts the version where Explorer and minidump module lists read it.
+  configure_file(
+    ${CMAKE_SOURCE_DIR}/cmake/TartarusVersion.rc.in
+    ${CMAKE_BINARY_DIR}/generated/TartarusVersion.rc
+    @ONLY
+  )
+endif()
 
 include(FetchContent)
 
@@ -45,12 +81,22 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(assimp)
 
 # --- EnTT (entity-component system) — header-only, ships its own CMake target ---
+# Populated + add_subdirectory(EXCLUDE_FROM_ALL) rather than FetchContent_MakeAvailable: v3.13.2's
+# install() rules are UNCONDITIONAL (no ENTT_INSTALL option to switch off, unlike glfw and
+# assimp above), so a plain MakeAvailable put include/entt - 73 headers - plus lib/EnTT CMake
+# config files and a pkg-config file into the packaged ZIP. CMake ignores install rules from an
+# EXCLUDE_FROM_ALL subdirectory, which is the documented way to consume a dependency you only
+# want to build against. The EnTT::EnTT target is unaffected.
 FetchContent_Declare(
   entt
   GIT_REPOSITORY https://github.com/skypjack/entt.git
   GIT_TAG v3.13.2
 )
-FetchContent_MakeAvailable(entt)
+FetchContent_GetProperties(entt)
+if(NOT entt_POPULATED)
+  FetchContent_Populate(entt)
+  add_subdirectory(${entt_SOURCE_DIR} ${entt_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
 
 # --- Dear ImGui (editor UI) — no CMakeLists upstream, so populate + build manually ---
 # On the "docking" branch (not a numbered release) specifically for real dock-node based
@@ -211,6 +257,7 @@ set(IMGUI_SOURCES
 # shortcut targeting it keeps showing the icon across rebuilds; nothing to re-link externally.
 if(WIN32)
   list(APPEND ENGINE_SOURCES ${CMAKE_SOURCE_DIR}/extern/branding/app_icon.rc)
+  list(APPEND ENGINE_SOURCES ${CMAKE_BINARY_DIR}/generated/TartarusVersion.rc)
   # UTF-8 active code page + long-path awareness (#139 / #149) — see the file's comment.
   list(APPEND ENGINE_SOURCES ${CMAKE_SOURCE_DIR}/src/TartarusEngine.manifest)
 endif()
@@ -326,6 +373,7 @@ if(WIN32)
 endif()
 
 target_include_directories(TartarusEngine PRIVATE
+  ${CMAKE_BINARY_DIR}/generated   # TartarusVersion.h
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/src/Core
   ${CMAKE_SOURCE_DIR}/src/Renderer
@@ -503,3 +551,109 @@ if(BUILD_TIF_SPLITTER)
   target_link_libraries(TifSplitter PRIVATE TIFF::tiff)
   target_compile_features(TifSplitter PRIVATE cxx_std_20)
 endif()
+
+# --- Install + package (#173 suggestion 4) -----------------------------------------------
+# Produces a self-contained ZIP: unzip anywhere, run TartarusEngine.exe. The layout matches
+# what the POST_BUILD steps above stage next to the exe, because that is the layout the engine
+# resolves against at runtime (EnginePaths walks out from the executable, ProjectPaths looks for
+# a "project" folder beside it).
+#
+#   cmake --build build --config Release --target package
+#   cpack --config build/CPackConfig.cmake -C Release      # equivalent
+#
+# Deliberately NOT "install the whole build/<config> directory". That directory picks things up
+# that must not ship: import libraries, imgui.ini, crash dumps, and - on CI - Mesa's software
+# opengl32.dll, which would silently force every user onto llvmpipe. Everything below is
+# enumerated instead, and the CI package check diffs the staged assets tree against the packaged
+# one so a new POST_BUILD asset directory cannot be forgotten here without failing the build.
+
+# Executable and the two hot-reloadable modules. $<TARGET_FILE:...> is the .dll for a SHARED
+# library on Windows, which skips the .lib/.exp import pair an end user has no use for.
+install(TARGETS TartarusEngine RUNTIME DESTINATION ".")
+install(FILES
+  $<TARGET_FILE:TartarusGame>
+  $<TARGET_FILE:TartarusEditor>
+  DESTINATION "."
+)
+
+# PhysX runtime, from the same staged per-config folder the POST_BUILD copy uses.
+foreach(_pxdll ${_physx_runtime_dlls})
+  install(FILES "${PHYSX_STAGE}/${_physx_stage_for_config}/${_pxdll}.dll" DESTINATION ".")
+endforeach()
+
+# Engine-owned content, from the source tree rather than the build tree so `cpack` does not
+# depend on which config was staged last.
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/Renderer/shaders/"    DESTINATION "assets/shaders")
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/tests/smoke-scenes/"      DESTINATION "assets/test-scenes")
+install(FILES
+  "${CMAKE_SOURCE_DIR}/extern/fonts/fa-solid-900.ttf"
+  "${CMAKE_SOURCE_DIR}/extern/fonts/InterVariable.ttf"
+  "${CMAKE_SOURCE_DIR}/extern/fonts/JetBrainsMono-Regular.ttf"
+  DESTINATION "assets/fonts"
+)
+install(FILES
+  "${CMAKE_SOURCE_DIR}/extern/branding/tartarus_wordmark.png"
+  "${CMAKE_SOURCE_DIR}/extern/branding/tartarus_engine_mark.png"
+  "${CMAKE_SOURCE_DIR}/extern/branding/splash.png"
+  DESTINATION "assets/branding"
+)
+
+# The sample project, as an ALLOW-LIST of directories rather than "project/ minus exclusions".
+#
+# That choice is load-bearing. project/assets/characters/ (Mixamo) and project/assets/sky/
+# (Poly Haven HDRIs) are gitignored and absent on CI, but they DO exist in a developer's working
+# tree - and Mixamo's licence does not permit redistributing those FBX files. An exclude-list
+# that someone later edits wrongly ships them; an allow-list that someone later forgets to extend
+# merely omits a folder from the sample. Wrong in the safe direction.
+#
+# Library/ and screenshots/ are per-user output, not content. .shutter.wav is the exception -
+# the Screenshots folder's own sound, which is tracked and has to come along.
+foreach(_projdir scenes materials models textures sounds animations scripts)
+  if(EXISTS "${CMAKE_SOURCE_DIR}/project/${_projdir}")
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/project/${_projdir}/"
+            DESTINATION "project/${_projdir}"
+            PATTERN "*.recovery.json" EXCLUDE
+            PATTERN "*.json.bak"      EXCLUDE)
+  endif()
+endforeach()
+install(FILES
+  "${CMAKE_SOURCE_DIR}/project/screenshots/.shutter.wav"
+  "${CMAKE_SOURCE_DIR}/project/screenshots/.shutter.wav.meta"
+  DESTINATION "project/screenshots"
+)
+
+# Licences and the first-run notes (which explain the two asset sets the ZIP cannot carry).
+configure_file(
+  "${CMAKE_SOURCE_DIR}/packaging/README-FIRST-RUN.txt.in"
+  "${CMAKE_BINARY_DIR}/generated/README-FIRST-RUN.txt"
+  @ONLY
+)
+install(FILES
+  "${CMAKE_SOURCE_DIR}/LICENSE"
+  "${CMAKE_SOURCE_DIR}/THIRD-PARTY-NOTICES.md"
+  "${CMAKE_BINARY_DIR}/generated/README-FIRST-RUN.txt"
+  DESTINATION "."
+)
+
+set(CPACK_GENERATOR "ZIP")
+set(CPACK_PACKAGE_NAME "TartarusEngine")
+set(CPACK_PACKAGE_VENDOR "Jacob Camberos")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Tartarus Engine - a hand-rolled C++17 / OpenGL 4.6 game engine and editor")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+# Unzips to a single TartarusEngine-<version>-win64/ folder rather than spraying the contents
+# into whatever directory the user extracted into.
+set(CPACK_PACKAGE_FILE_NAME "TartarusEngine-${PROJECT_VERSION}-win64")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "TartarusEngine-${PROJECT_VERSION}-win64")
+# Left OFF deliberately. Scoping the package to a "runtime" component does keep a dependency's
+# own install rules out, but archive generators drop the top-level wrapper folder when component
+# install is on - the ZIP then sprays its contents over whatever directory someone extracted
+# into, and CPACK_INCLUDE_TOPLEVEL_DIRECTORY does not put it back. Dependencies are kept from
+# installing at the source instead (see EnTT above), and CI asserts the package's top-level
+# entries are exactly the expected set, so a new dependency that leaks fails the build.
+set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
+set(CPACK_PACKAGE_DIRECTORY "${CMAKE_BINARY_DIR}/package")
+# CPack otherwise sweeps in the FetchContent source trees (assimp's test data alone is larger
+# than everything the engine actually ships).
+set(CPACK_SOURCE_IGNORE_FILES "/\\.git/;/build/;/_deps/")
+include(CPack)
