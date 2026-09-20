@@ -90,6 +90,7 @@
 #include <chrono>
 #pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
 #include <stb_image_write.h> // --asset-load-bench: synthesize PNGs to load (ARCH-201 / #375)
+#include <glm/gtc/type_ptr.hpp> // #162 - motion blur matrices
 #include <cstring>
 #include <cstdlib>
 #include <intrin.h>   // __cpuid — CPU brand string for the boot log
@@ -271,13 +272,39 @@ static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, bool gizmo
 // #162 - depth of field reads the view's resolved depth (requested only when DOF is on, so the
 // depth resolve stays off otherwise, #206) and its projection. Game views only: blurring the
 // Scene view would just get in the way of editing.
-static PostSettings WithDepthOfField(PostSettings p, const World& world, const HdrTarget& hdr, const glm::mat4& proj) {
-    if (!world.DepthOfField) return p;
-    p.DepthOfField = true;
-    p.DepthTexture = hdr.ResolvedDepthTexture();
-    p.ProjA = proj[2][2];
-    p.ProjB = proj[3][2];
-    p.Ortho = proj[2][3] == 0.0f;
+// #162 - motion blur joins DOF here: both need this view's resolved depth, so they share the
+// one place that requests it. `viewSlot` picks which previous view-projection to remember -
+// the docked Game view and the maximized player are separate views and must not blur with each
+// other's camera motion.
+static PostSettings WithDepthEffects(PostSettings p, const World& world, const HdrTarget& hdr,
+                                     const glm::mat4& view, const glm::mat4& proj, int viewSlot) {
+    // Remembered per view even when motion blur is off, so switching it on mid-session starts
+    // from the real previous frame rather than a stale one from minutes ago.
+    static constexpr int kViewSlots = 2;
+    static glm::mat4 s_PrevVP[kViewSlots] = {glm::mat4(1.0f), glm::mat4(1.0f)};
+    static bool s_PrevValid[kViewSlots] = {false, false};
+    const int slot = std::clamp(viewSlot, 0, kViewSlots - 1);
+    const glm::mat4 vp = proj * view;
+
+    if (world.MotionBlur) {
+        p.MotionBlur = true;
+        p.MotionBlurIntensity = world.MotionBlurIntensity;
+        p.MotionBlurSamples = world.MotionBlurSamples;
+        p.PrevViewProjValid = s_PrevValid[slot];
+        const glm::mat4 invVP = glm::inverse(vp);
+        std::memcpy(p.InvViewProj, glm::value_ptr(invVP), sizeof(p.InvViewProj));
+        std::memcpy(p.PrevViewProj, glm::value_ptr(s_PrevVP[slot]), sizeof(p.PrevViewProj));
+    }
+    s_PrevVP[slot] = vp;
+    s_PrevValid[slot] = true;
+
+    if (world.DepthOfField) {
+        p.DepthOfField = true;
+        p.ProjA = proj[2][2];
+        p.ProjB = proj[3][2];
+        p.Ortho = proj[2][3] == 0.0f;
+    }
+    if (p.DepthOfField || p.MotionBlur) p.DepthTexture = hdr.ResolvedDepthTexture();
     return p;
 }
 static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float bloomIntensity,
@@ -3148,7 +3175,7 @@ int main(int argc, char** argv) {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameView.GetFramebuffer().Handle(),
                                  gvWidth, gvHeight,
-                                 WithDepthOfField(MakePostSettings(world, gvBloomGlowTex, gvBloomIntensity, dt, 1, gvEye), world, gameHdr, gvProj));
+                                 WithDepthEffects(MakePostSettings(world, gvBloomGlowTex, gvBloomIntensity, dt, 1, gvEye), world, gameHdr, gvView, gvProj, 0));
                 }
                 if (playing && playUsesPlayer)
                     crosshair.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
@@ -3314,7 +3341,7 @@ int main(int argc, char** argv) {
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
                 tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh,
-                                 WithDepthOfField(MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity, dt, 1, gameCam->Position), world, gameHdr, proj));
+                                 WithDepthEffects(MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity, dt, 1, gameCam->Position), world, gameHdr, view, proj, 1));
                 }
                 if (playing && playUsesPlayer)
                     crosshair.Draw(0, mw, mh, playGravityGun && gravityGun.IsHolding(),
