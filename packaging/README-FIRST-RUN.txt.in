@@ -1,0 +1,52 @@
+Tartarus Engine @PROJECT_VERSION@ (@TARTARUS_GIT_DESCRIBE@)
+==========================================================
+
+Windows x64. Unzip anywhere and run TartarusEngine.exe - there is no installer and nothing is
+written to the registry. Everything the editor needs is in this folder.
+
+
+WHAT IS IN HERE
+---------------
+  TartarusEngine.exe        the editor
+  TartarusEditor.dll        editor panels (hot-reloadable)
+  TartarusGame.dll          gameplay systems (hot-reloadable)
+  PhysX*.dll                NVIDIA PhysX 5 runtime
+  assets/                   engine-owned content: shaders, fonts, branding, smoke-test scenes
+  project/                  the sample project the editor opens on first run
+  LICENSE                   this engine's licence
+  THIRD-PARTY-NOTICES.md    licences of everything it is built on
+
+Your own settings (preferences, shortcuts, panel layout, logs) do NOT live here. They go to
+%LOCALAPPDATA%\TartarusEngine\ so this folder stays disposable - delete it, unzip a newer
+build, and your setup carries over.
+
+
+THE SAMPLE PROJECT IS MISSING TWO SETS OF FILES
+-----------------------------------------------
+The Sandbox scene opens on first run, and two kinds of asset it uses cannot be redistributed
+in this download:
+
+  * Characters and animations (project/assets/characters/)
+    Mixamo's licence does not allow redistributing the FBX files. Download "Y Bot" and the
+    "Male Locomotion Pack" from mixamo.com into project/assets/characters/ybot/.
+
+  * Sky HDRIs (project/assets/sky/)
+    CC0 from Poly Haven, but too large to ship here. The scene names the file it wants
+    (see "skyHdriPath" in project/scenes/Sandbox.json); download it from polyhaven.com
+    into project/assets/sky/.
+
+The scene loads without them. The Console will warn about each missing asset, the characters
+will not appear, and the sky falls back to a procedural gradient. Everything else - the arena,
+physics, the gravity gun, lighting and post-processing - works as shipped.
+
+
+IF IT WILL NOT START
+--------------------
+The engine needs a real OpenGL 4.6 core context with compute shader support. If it exits with
+a message about the OpenGL version, update your GPU driver; Intel/AMD/NVIDIA drivers from the
+last few years all supply 4.6. Remote Desktop sessions and some VMs expose only a software
+adapter below 4.6 and will not run it.
+
+Crash dumps, if any, land next to the executable as crash_<pid>_<timestamp>.dmp with a .txt
+summary beside them. Both are useful in a bug report, along with Preferences > About >
+Copy report.
