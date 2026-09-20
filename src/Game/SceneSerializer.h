@@ -107,6 +107,24 @@ namespace SceneSerializer {
 
     void ClearPrefabPristineCache();
 
+    // #178 - Preset assets: one reflected component's fields as JSON, using the exact same
+    // encoding scenes use, so an asset reference in a preset round-trips by GUID like it does
+    // in a scene. `component` is a ComponentRegistry name (ReflectMeta::Name).
+    //
+    // Only generically-serialised components are supported; the hand-coded ones (Mesh Renderer
+    // and friends) return "" / false rather than writing a half-preset.
+    std::string ComponentToPresetJson(const World& world, entt::entity entity, const char* component);
+
+    // Writes a preset produced by ComponentToPresetJson onto `entity`, adding the component if
+    // it is missing. Returns false if the JSON is malformed or names an unknown component.
+    // The caller owns undo: push before calling.
+    bool ApplyComponentPresetJson(World& world, AssetLibrary& assets, entt::entity entity,
+                                  const std::string& presetJson);
+
+    // The component name a preset file targets, or "" if it is not a readable preset. Lets the
+    // UI offer only the presets that fit the component being edited.
+    std::string PresetComponentName(const std::string& presetJson);
+
     // #121 - migration helper. Given one entry from a pre-#121 scene's `assetMeta` array and the
     // asset's current .meta contents (both JSON-object strings), returns the fields that should
     // be merged into the .meta, as a JSON object string ("{}" when there is nothing to do).
