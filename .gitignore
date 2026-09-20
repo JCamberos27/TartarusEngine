@@ -37,3 +37,8 @@ project/assets/sky/
 project/screenshots/*
 !project/screenshots/.shutter.wav
 !project/screenshots/.shutter.wav.meta
+
+# Baked apartment source textures (36 MB of 2K PNGs). Nothing references them — the apartment
+# meshes export with no materials so their slots stay empty for hand-authored ones. Kept on
+# disk as raw material to pull from, out of git for the same reason as the HDRIs above.
+project/textures/apartment/
