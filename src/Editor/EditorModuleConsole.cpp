@@ -442,6 +442,21 @@ void Draw(const EditorModuleHostAPI& host) {
                         std::string all = BuildShownText(host, state);
                         ImGui::SetClipboardText(all.c_str());
                     }
+                    // #178 - Warnings and Errors carry the call stack from where they were
+                    // logged. Resolved on demand (symbol lookup is slow), so this asks the host
+                    // only when the menu is actually open.
+                    {
+                        const char* stack = nullptr;
+                        if (host.LogGetEntryStack && host.LogGetEntryStack(entryIndex, &stack) && stack && *stack) {
+                            ImGui::Separator();
+                            if (ImGui::MenuItem(ICON_FA_LAYER_GROUP "  Copy stack trace"))
+                                ImGui::SetClipboardText(stack);
+                            if (ImGui::BeginMenu(ICON_FA_LAYER_GROUP "  Stack trace")) {
+                                ImGui::TextUnformatted(stack);
+                                ImGui::EndMenu();
+                            }
+                        }
+                    }
                     if (hasEntityRef || hasAssetRef) {
                         ImGui::Separator();
                         if (hasEntityRef) {
