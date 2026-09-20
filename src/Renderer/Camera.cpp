@@ -1,4 +1,5 @@
 #include "Camera.h"
+#include <cmath> // #202 isfinite
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 
@@ -48,6 +49,15 @@ glm::mat4 Camera::ViewMatrix() const {
     return glm::lookAt(Position, Position + Front(), Up());
 }
 
+// #202 - see the header. Shared by Camera::ProjectionMatrix and every direct call site.
+glm::mat4 MakePerspective(float fovDegrees, float aspect, float nearPlane, float farPlane) {
+    if (!std::isfinite(aspect) || aspect <= 0.0f) aspect = 1.0f;  // inf from a zero-height viewport, NaN from 0x0
+    if (!std::isfinite(fovDegrees) || fovDegrees <= 0.0f || fovDegrees >= 180.0f) fovDegrees = 60.0f;
+    if (!std::isfinite(nearPlane) || nearPlane <= 0.0f) nearPlane = 0.01f;
+    if (!std::isfinite(farPlane) || farPlane <= nearPlane) farPlane = nearPlane + 1.0f;
+    return glm::perspective(glm::radians(fovDegrees), aspect, nearPlane, farPlane);
+}
+
 glm::mat4 Camera::ProjectionMatrix(float aspect, float nearOverride, float farOverride) const {
     float nearPlane = nearOverride >= 0.0f ? nearOverride : NearPlane;
     float farPlane  = farOverride  >= 0.0f ? farOverride  : FarPlane;
@@ -58,9 +68,9 @@ glm::mat4 Camera::ProjectionMatrix(float aspect, float nearOverride, float farOv
     // the view simply goes black - with nothing in the log to say why. The values can arrive
     // from a hand-edited scene, an older file, or a component written at runtime, so the guard
     // belongs here at the single point of use rather than at each of those call sites.
-    if (!(aspect > 0.0f)) aspect = 1.0f;                       // also catches NaN
-    if (!(nearPlane > 0.0f)) nearPlane = 0.01f;
-    if (!(farPlane > nearPlane)) farPlane = nearPlane + 1.0f;
+    if (!std::isfinite(aspect) || aspect <= 0.0f) aspect = 1.0f;  // inf from a zero-height viewport, NaN from 0x0
+    if (!std::isfinite(nearPlane) || nearPlane <= 0.0f) nearPlane = 0.01f;
+    if (!std::isfinite(farPlane) || farPlane <= nearPlane) farPlane = nearPlane + 1.0f;
     if (Orthographic) {
         // #202 - same reasoning as the clip planes above, for the axis this path divides by.
         // glm::ortho computes 2/(right-left) and 2/(top-bottom), so a zero (or NaN, or negative)
@@ -68,9 +78,9 @@ glm::mat4 Camera::ProjectionMatrix(float aspect, float nearOverride, float farOv
         // nothing else does - a view transition derives it from distance * tan(halfFov), which
         // is zero when the camera sits on its pivot.
         float halfH = OrthoHalfHeight;
-        if (!(halfH > 0.0f)) halfH = 0.25f; // also catches NaN
+        if (!std::isfinite(halfH) || halfH <= 0.0f) halfH = 0.25f;
         const float halfW = halfH * aspect;
         return glm::ortho(-halfW, halfW, -halfH, halfH, nearPlane, farPlane);
     }
-    return glm::perspective(glm::radians(Fov), aspect, nearPlane, farPlane);
+    return MakePerspective(Fov, aspect, nearPlane, farPlane);
 }
