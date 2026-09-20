@@ -1,4 +1,5 @@
 #include "MaterialPreviewRenderer.h"
+#include "Camera.h" // #202 - MakePerspective
 #include "DefaultTextures.h"
 #include "GLStateCache.h"
 #include "IblProbe.h"
@@ -298,8 +299,10 @@ unsigned int MaterialPreviewRenderer::Render(const std::shared_ptr<MaterialAsset
                                                         std::sin(clampedPitch),
                                                         std::cos(clampedPitch) * std::cos(yaw));
     const glm::mat4 view = glm::lookAt(eye, centre, glm::vec3(0.0f, 1.0f, 0.0f));
-    const glm::mat4 proj = glm::perspective(fov, (float)width / (float)height,
-                                            std::max(0.01f, distance - radius * 2.0f), distance + radius * 2.0f);
+    // #202 - guarded: `height` can be zero for a collapsed preview, and near/far can coincide
+    // for a degenerate bounding radius. MakePerspective takes degrees; `fov` here is radians.
+    const glm::mat4 proj = MakePerspective(glm::degrees(fov), (float)width / (float)height,
+                                           std::max(0.01f, distance - radius * 2.0f), distance + radius * 2.0f);
 
     // Lights fixed to the camera, so orbiting shows the surface from every side under the same
     // studio lighting (Unity's preview behaves the same way).

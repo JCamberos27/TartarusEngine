@@ -539,6 +539,30 @@ void TestCameraFrustumValidation() {
     cam.Orthographic = false;
     cam.NearPlane = 0.1f; cam.FarPlane = 1000.0f;
 
+    // MakePerspective is the shared chokepoint every direct call site now goes through, so the
+    // same guarantees have to hold when it is called on its own.
+    const float inf = std::numeric_limits<float>::infinity();
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    CHECK(finite(MakePerspective(60.0f, inf, 0.1f, 100.0f)));   // zero-height viewport: w/0 == inf
+    CHECK(finite(MakePerspective(60.0f, nan, 0.1f, 100.0f)));   // 0x0 viewport: 0/0 == NaN
+    CHECK(finite(MakePerspective(60.0f, 0.0f, 0.1f, 100.0f)));
+    CHECK(finite(MakePerspective(60.0f, -2.0f, 0.1f, 100.0f)));
+    CHECK(finite(MakePerspective(0.0f, 1.5f, 0.1f, 100.0f)));   // degenerate fov
+    CHECK(finite(MakePerspective(180.0f, 1.5f, 0.1f, 100.0f))); // tan(90 deg) is infinite
+    CHECK(finite(MakePerspective(nan, 1.5f, 0.1f, 100.0f)));
+    CHECK(finite(MakePerspective(60.0f, 1.5f, 0.0f, 100.0f)));
+    CHECK(finite(MakePerspective(60.0f, 1.5f, 50.0f, 50.0f)));  // far == near
+    CHECK(finite(MakePerspective(60.0f, 1.5f, 100.0f, 1.0f)));  // inverted
+    CHECK(finite(MakePerspective(60.0f, 1.5f, nan, inf)));
+    // Valid input is reproduced exactly - the chokepoint must not reshape good cameras.
+    {
+        const glm::mat4 want = glm::perspective(glm::radians(55.0f), 1.5f, 0.2f, 300.0f);
+        const glm::mat4 have = MakePerspective(55.0f, 1.5f, 0.2f, 300.0f);
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r)
+                CHECK(std::fabs(have[c][r] - want[c][r]) < 1e-6f);
+    }
+
     // A sane frustum is left exactly alone - the guard must not quietly reshape good cameras.
     cam.NearPlane = 0.3f; cam.FarPlane = 250.0f;
     const glm::mat4 expected = glm::perspective(glm::radians(cam.Fov), 1.5f, 0.3f, 250.0f);
