@@ -106,4 +106,16 @@ namespace SceneSerializer {
     bool ApplyPrefabComponent(World& world, entt::entity entity, const char* component);
 
     void ClearPrefabPristineCache();
+
+    // #121 - migration helper. Given one entry from a pre-#121 scene's `assetMeta` array and the
+    // asset's current .meta contents (both JSON-object strings), returns the fields that should
+    // be merged into the .meta, as a JSON object string ("{}" when there is nothing to do).
+    //
+    // The scene copy is the STALE one - the Asset Browser has been writing straight to .meta
+    // since #320 - so a field the sidecar already has is never overwritten. The scene's separate
+    // `textureImport` / `modelImport` blocks both map onto the single `importer` key the .meta
+    // readers use; their inner key names already match.
+    //
+    // Pure string-in/string-out so the precedence rule is unit-testable without a project on disk.
+    std::string MigrateAssetMetaFields(const std::string& entryJson, const std::string& existingMetaJson);
 }

@@ -22,6 +22,7 @@ TimeSettings g_Time;
 AudioSettings g_Audio; // #171
 BuildSettings g_Build; // #174
 std::vector<std::string> g_Tags;
+std::vector<std::string> g_AssetFolders; // #121
 
 const std::string& SettingsPath() {
     static const std::string path = ProjectPaths::Resolve("settings.json");
@@ -59,6 +60,10 @@ BuildSettings&         MutableBuild()   { return g_Build; }
 
 const std::vector<std::string>& Tags() { return g_Tags; }
 
+const std::vector<std::string>& AssetFolders() { return g_AssetFolders; } // #121
+
+void SetAssetFolders(std::vector<std::string> folders) { g_AssetFolders = std::move(folders); }
+
 void AddTag(const std::string& name) {
     std::string t = SanitizeTag(name);
     if (t.empty()) return;
@@ -74,6 +79,7 @@ void Load() {
     g_Physics = PhysicsSettings{};
     g_Build = BuildSettings{};
     g_Tags.clear();
+    g_AssetFolders.clear();
 
     std::ifstream in(SettingsPath());
     if (!in.is_open()) return; // no file yet — defaults stand, not an error
@@ -192,6 +198,18 @@ void Load() {
             if (t.is_string()) AddTag(t.get<std::string>());
         }
     }
+
+    // #121 - the Asset Browser's virtual folders. Deduplicated on read: before this moved out
+    // of the scene files, two scenes could each carry their own copy of the same folder.
+    if (const auto it = root.find("assetFolders"); it != root.end() && it->is_array()) {
+        for (const auto& f : *it) {
+            if (!f.is_string()) continue;
+            std::string name = f.get<std::string>();
+            if (name.empty()) continue;
+            if (std::find(g_AssetFolders.begin(), g_AssetFolders.end(), name) == g_AssetFolders.end())
+                g_AssetFolders.push_back(std::move(name));
+        }
+    }
 }
 
 void Save() {
@@ -234,6 +252,7 @@ void Save() {
         {"developmentBuild", g_Build.DevelopmentBuild},
     };
     root["tags"] = g_Tags;
+    root["assetFolders"] = g_AssetFolders; // #121
 
     // Atomic: a crash mid-write must not truncate project settings (audit CPP-206).
     if (!AtomicFile::WriteJson(SettingsPath(), root))
