@@ -49,7 +49,9 @@ namespace {
 // editor prefs. One-way: a pre-v3 file has its values migrated forward from editor_prefs.json on
 // load (see ApplySceneJson's MigratePostProcessSettingsFromPrefs call) and is immediately
 // re-saved by SceneSerializer::Load(), after writing a ".bak" of the original.
-constexpr int kSceneFormatVersion = 3;
+// v4 (#123): every entity "rotation" changes from YXZ Euler degrees [x,y,z] to a normalized
+// quaternion [x,y,z,w]. Older scenes are converted on load and immediately re-saved.
+constexpr int kSceneFormatVersion = 4;
 
 // Set by ApplySceneJson when the file being loaded declares a formatVersion newer than this build
 // understands; read (and cleared) via SceneSerializer::TakeLoadWarning() so a caller like the
@@ -138,6 +140,50 @@ glm::vec3 JsonToVec3(const json& j, const glm::vec3& fallback = glm::vec3(0.0f))
     return glm::vec3(FiniteOr(j[0].get<float>(), fallback.x, "vector"),
                      FiniteOr(j[1].get<float>(), fallback.y, "vector"),
                      FiniteOr(j[2].get<float>(), fallback.z, "vector"));
+}
+
+json QuatToJson(const glm::quat& value) {
+    const glm::quat q = NormalizeRotation(value);
+    return json::array({FiniteOr(q.x, 0.0f, "quaternion"),
+                        FiniteOr(q.y, 0.0f, "quaternion"),
+                        FiniteOr(q.z, 0.0f, "quaternion"),
+                        FiniteOr(q.w, 1.0f, "quaternion")});
+}
+
+glm::quat JsonToQuat(const json& j) {
+    if (!j.is_array() || j.size() != 4 ||
+        !j[0].is_number() || !j[1].is_number() || !j[2].is_number() || !j[3].is_number())
+        return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    return NormalizeRotation(glm::quat(FiniteOr(j[3].get<float>(), 1.0f, "quaternion"),
+                                       FiniteOr(j[0].get<float>(), 0.0f, "quaternion"),
+                                       FiniteOr(j[1].get<float>(), 0.0f, "quaternion"),
+                                       FiniteOr(j[2].get<float>(), 0.0f, "quaternion")));
+}
+
+// New data is a quaternion. A three-number value is a pre-v4 YXZ Euler rotation and is the
+// load-time migration path for scenes, prefabs and clipboard fragments.
+void SetTransformRotationFromJson(TransformComponent& transform, const json& value,
+                                  bool* migratedEuler = nullptr) {
+    if (value.is_array() && value.size() == 4) {
+        transform.SetRotationQuaternion(JsonToQuat(value));
+        return;
+    }
+    if (value.is_array() && value.size() == 3) {
+        transform.SetRotationEuler(JsonToVec3(value));
+        if (migratedEuler) *migratedEuler = true;
+        return;
+    }
+    transform.SetRotationQuaternion(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+}
+
+glm::quat RotationFromJson(const json& value) {
+    if (value.is_array() && value.size() == 4) return JsonToQuat(value);
+    if (value.is_array() && value.size() == 3) return QuaternionFromEulerYXZ(JsonToVec3(value));
+    return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+}
+
+bool RotationJsonNearlyEqual(const json& a, const json& b) {
+    return SameRotation(RotationFromJson(a), RotationFromJson(b), 1e-5f);
 }
 
 std::string PathOrEmpty(const std::shared_ptr<Texture>& tex) {
@@ -803,12 +849,16 @@ void DiffPrefabEntity(const World& world, entt::entity live, const json& pristin
     // box/model/empty writers always emit all three, so `contains` is just defensiveness.
     const TransformComponent t = effectiveTransform(live);
     const struct { const char* f; glm::vec3 v; } tf[] = {
-        {"position", t.Position}, {"rotation", t.RotationEuler}, {"scale", t.Scale}};
+        {"position", t.Position}, {"scale", t.Scale}};
     for (const auto& e : tf) {
         if (!pristine.contains(e.f)) continue;
         json now = Vec3ToJson(e.v);
         if (!ReflectJsonNearlyEqual(ReflectFieldType::Vec3, now, pristine.at(e.f)))
             emit("Transform", e.f, now);
+    }
+    if (pristine.contains("rotation")) {
+        json now = QuatToJson(t.Rotation);
+        if (!RotationJsonNearlyEqual(now, pristine.at("rotation"))) emit("Transform", "rotation", std::move(now));
     }
 
     // Name.
@@ -824,7 +874,7 @@ void ApplyPrefabOverride(World& world, AssetLibrary& assets, entt::entity e,
     if (comp == "Transform") {
         auto& t = world.Registry.get<TransformComponent>(e);
         if      (field == "position") t.Position = JsonToVec3(v);
-        else if (field == "rotation") t.RotationEuler = JsonToVec3(v);
+        else if (field == "rotation") SetTransformRotationFromJson(t, v);
         else if (field == "scale")    t.Scale = JsonToVec3(v);
         return;
     }
@@ -868,11 +918,10 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
                     bool flattenPrefabInstances = false) {
     json root;
     auto included = [&](entt::entity e) { return !only || only->count(e) > 0; };
+    // v4 changes the shape of every "rotation" value, so fragments and prefabs now need the
+    // version too even though they still omit scene environment settings.
+    root["formatVersion"] = kSceneFormatVersion;
     if (!only) {
-        // Omitted for entity-subset fragments (clipboard/prefab) same as the sky colors below —
-        // a fragment is spliced into whatever scene is already loaded, never loaded standalone,
-        // so it has no independent format to version.
-        root["formatVersion"] = kSceneFormatVersion;
         root["skyHorizonColor"] = Vec3ToJson(world.SkyHorizonColor);
         root["skyZenithColor"] = Vec3ToJson(world.SkyZenithColor);
         root["skyAmbientIntensity"] = world.SkyAmbientIntensity; // #196
@@ -976,13 +1025,10 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         glm::mat4 worldMatrix = world.ComposeWorldTransform(e);
         glm::vec3 pos, scale, skew; glm::vec4 persp; glm::quat rot;
         glm::decompose(worldMatrix, scale, rot, pos, skew, persp);
-        float ex, ey, ez;
-        glm::extractEulerAngleYXZ(glm::mat4_cast(rot), ey, ex, ez);
-
         TransformComponent out;
         out.Position = pos;
         out.Scale = scale;
-        out.RotationEuler = glm::degrees(glm::vec3(ex, ey, ez));
+        out.SetRotationQuaternion(rot);
         return out;
     };
 
@@ -1054,7 +1100,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             {"position", Vec3ToJson(transform.Position)},
             {"scale", Vec3ToJson(transform.Scale)},
             {"color", Vec3ToJson(renderable.ModelRef->MeshMaterial(0).BaseColor)},
-            {"rotation", Vec3ToJson(transform.RotationEuler)},
+            {"rotation", QuatToJson(transform.Rotation)},
             {"name", name},
             {"id", idOf[entity]},
             {"parentId", parentIdOf(entity)},
@@ -1073,7 +1119,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         json e = {
             {"name", nameOf(entity)},
             {"position", Vec3ToJson(transform.Position)},
-            {"rotation", Vec3ToJson(transform.RotationEuler)},
+            {"rotation", QuatToJson(transform.Rotation)},
             {"scale", Vec3ToJson(transform.Scale)},
             {"id", idOf[entity]},
             {"parentId", parentIdOf(entity)},
@@ -1099,7 +1145,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         }
         m["name"] = nameOf(entity);
         m["position"] = Vec3ToJson(transform.Position);
-        m["rotation"] = Vec3ToJson(transform.RotationEuler);
+        m["rotation"] = QuatToJson(transform.Rotation);
         m["scale"] = Vec3ToJson(transform.Scale);
         // AudioSourceComponent moved onto reflection (#302 Wave 3): it now round-trips through
         // the generic "Audio Source" block written by WriteCommonComponents below (for every
@@ -1130,7 +1176,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             }
             s["name"]     = nameOf(e);
             s["position"] = Vec3ToJson(t.Position);
-            s["rotation"] = Vec3ToJson(t.RotationEuler);
+            s["rotation"] = QuatToJson(t.Rotation);
             s["scale"]    = Vec3ToJson(t.Scale);
             s["id"]       = idOf[e];
             s["parentId"] = parentIdOf(e);
@@ -1357,6 +1403,14 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
         world.Registry.emplace_or_replace<OrderComponent>(e, order);
     };
 
+    bool migratedEulerRotations = false;
+    auto applyRotation = [&](TransformComponent& transform, const json& object) {
+        if (auto it = object.find("rotation"); it != object.end())
+            SetTransformRotationFromJson(transform, *it, &migratedEulerRotations);
+        else
+            transform.SetRotationQuaternion(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    };
+
     if (root.contains("boxes")) {
         for (const auto& b : root["boxes"]) {
             // "alive" is a pre-ECS field: a shot-dead box used to be soft-deleted (kept in the
@@ -1371,9 +1425,9 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             glm::vec3 center = JsonToVec3(b.value(posKey, json::array({0, 0, 0})));
             glm::vec3 size = JsonToVec3(b.value(scaleKey, json::array({1, 1, 1})), glm::vec3(1.0f));
             glm::vec3 color = JsonToVec3(b.value("color", json::array({1, 1, 1})), glm::vec3(1.0f));
-            glm::vec3 rotation = JsonToVec3(b.value("rotation", json::array({0, 0, 0})));
             std::string name = b.value("name", std::string());
-            entt::entity e = world.CreateBox(center, size, color, rotation, name);
+            entt::entity e = world.CreateBox(center, size, color, glm::vec3(0.0f), name);
+            applyRotation(world.Registry.get<TransformComponent>(e), b);
             ReadMaterialSlots(assets, b, world.Registry.get<RenderableComponent>(e)); // #120
             ReadRendererFlags(b, world.Registry.get<RenderableComponent>(e)); // #163
             ReadCommonComponents(b, world, assets, e);
@@ -1396,10 +1450,10 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
 
             std::string name = m.value("name", std::string("Model"));
             glm::vec3 position = JsonToVec3(m.value("position", json::array({0, 0, 0})));
-            glm::vec3 rotation = JsonToVec3(m.value("rotation", json::array({0, 0, 0})));
             glm::vec3 scale = JsonToVec3(m.value("scale", json::array({1, 1, 1})), glm::vec3(1.0f));
 
-            entt::entity e = world.CreateModelEntity(model, position, rotation, scale, name);
+            entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), scale, name);
+            applyRotation(world.Registry.get<TransformComponent>(e), m);
             auto& rc = world.Registry.get<RenderableComponent>(e);
 
             ReadMaterialSlots(assets, m, rc);
@@ -1418,10 +1472,10 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     if (root.contains("empties")) {
         for (const auto& en : root["empties"]) {
             glm::vec3 position = JsonToVec3(en.value("position", json::array({0, 0, 0})));
-            glm::vec3 rotation = JsonToVec3(en.value("rotation", json::array({0, 0, 0})));
             glm::vec3 scale = JsonToVec3(en.value("scale", json::array({1, 1, 1})), glm::vec3(1.0f));
-            entt::entity e = world.CreateEmptyEntity(position, rotation, scale,
+            entt::entity e = world.CreateEmptyEntity(position, glm::vec3(0.0f), scale,
                 en.value("name", std::string("Empty")));
+            applyRotation(world.Registry.get<TransformComponent>(e), en);
             ReadCommonComponents(en, world, assets, e);
             applyOrder(e, en);
             created(e);
@@ -1440,7 +1494,6 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
         for (const auto& s : root["prefabInstances"]) {
             const std::string src = ResolveAssetRef(s, "source", "sourceGuid");
             glm::vec3 position = JsonToVec3(s.value("position", json::array({0, 0, 0})));
-            glm::vec3 rotation = JsonToVec3(s.value("rotation", json::array({0, 0, 0})));
             glm::vec3 scale = JsonToVec3(s.value("scale", json::array({1, 1, 1})), glm::vec3(1.0f));
             const std::string name = s.value("name", std::string("Prefab Instance"));
 
@@ -1451,7 +1504,8 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
 
             const bool missing = (rootE == entt::null);
             if (missing) {
-                rootE = world.CreateEmptyEntity(position, rotation, scale, name);
+                rootE = world.CreateEmptyEntity(position, glm::vec3(0.0f), scale, name);
+                applyRotation(world.Registry.get<TransformComponent>(rootE), s);
                 world.Registry.emplace_or_replace<PrefabInstanceComponent>(
                     rootE, PrefabInstanceComponent{src, /*Missing=*/true});
                 if (!src.empty())
@@ -1461,7 +1515,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             } else {
                 auto& t = world.Registry.get<TransformComponent>(rootE);
                 t.Position = position;
-                t.RotationEuler = rotation;
+                applyRotation(t, s);
                 t.Scale = scale;
                 world.Registry.emplace_or_replace<NameComponent>(rootE, NameComponent{name});
             }
@@ -1565,6 +1619,12 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
         }
         if (outSourceOrder) *outSourceOrder = std::move(sourceOrder);
     }
+
+    // Even an empty v3 scene must advance to v4 on disk; otherwise it would be treated as a
+    // migration candidate on every open forever. A scene with rotations sets the same message
+    // through migratedEulerRotations; the format check covers the empty-scene case.
+    if (migratedEulerRotations || (clearFirst && formatVersion < 4))
+        g_MigrationLog.push_back("transform rotation storage migrated from YXZ Euler degrees to quaternions");
 
     return true;
 }
@@ -1818,7 +1878,7 @@ json LiveFieldValue(const World& world, entt::entity entity, const char* compone
         const auto* t = world.Registry.try_get<TransformComponent>(entity);
         if (!t) return nullptr;
         if (std::strcmp(field, "position") == 0) return Vec3ToJson(t->Position);
-        if (std::strcmp(field, "rotation") == 0) return Vec3ToJson(t->RotationEuler);
+        if (std::strcmp(field, "rotation") == 0) return QuatToJson(t->Rotation);
         if (std::strcmp(field, "scale")    == 0) return Vec3ToJson(t->Scale);
         return nullptr;
     }
@@ -2279,8 +2339,9 @@ bool SceneSerializer::IsPrefabFieldOverridden(const World& world, entt::entity e
 
     if (std::strcmp(component, "Transform") == 0) {
         const auto& t = world.Registry.get<TransformComponent>(entity);
+        if (std::strcmp(field, "rotation") == 0)
+            return !RotationJsonNearlyEqual(QuatToJson(t.Rotation), pristine);
         json now = std::strcmp(field, "position") == 0 ? Vec3ToJson(t.Position)
-                 : std::strcmp(field, "rotation") == 0 ? Vec3ToJson(t.RotationEuler)
                  : std::strcmp(field, "scale")    == 0 ? Vec3ToJson(t.Scale) : json(nullptr);
         if (now.is_null()) return false;
         return !ReflectJsonNearlyEqual(ReflectFieldType::Vec3, now, pristine);
@@ -2341,7 +2402,10 @@ bool SceneSerializer::ApplyPrefabField(World& world, entt::entity entity,
     json* pe = PrefabEntityObjectMutable(prefab, idx);
     if (!pe) return false;
 
-    if (std::strcmp(component, "Transform") == 0)      (*pe)[field] = value;
+    if (std::strcmp(component, "Transform") == 0) {
+        (*pe)[field] = value;
+        if (std::strcmp(field, "rotation") == 0) prefab["formatVersion"] = kSceneFormatVersion;
+    }
     else if (std::strcmp(component, "Name") == 0)      (*pe)["name"] = value;
     else {
         // `component` is a display Name; translate to its JSON Key before writing (see

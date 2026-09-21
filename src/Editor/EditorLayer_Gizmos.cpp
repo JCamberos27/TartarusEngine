@@ -127,25 +127,6 @@ inline void SetWorldPosition(World& world, entt::entity entity, const glm::vec3&
     transform.Position = glm::vec3(toLocal * glm::vec4(worldPosition, 1.0f));
 }
 
-// Euler angles in degrees (X,Y,Z as stored in TransformComponent::RotationEuler) from a matrix,
-// using the SAME Ry*Rx*Rz decomposition ComposeTransform builds it with — so a gizmo-set
-// rotation and an Inspector-typed one agree and compose(decompose(M)) == M (#108). ImGuizmo's
-// own DecomposeMatrixToComponents uses a different order, which made objects jump when a gizmo
-// rotate was followed by an Inspector nudge (or vice versa).
-inline glm::vec3 EulerYXZFromMatrix(const glm::mat4& m) {
-    glm::mat3 b(m);
-    for (int c = 0; c < 3; ++c) {
-        float len = glm::length(b[c]);
-        if (len > 1e-8f) b[c] /= len;
-    }
-    if (glm::determinant(b) < 0.0f) b[0] = -b[0]; // mirrored basis (negative scale) has no clean Euler
-    float ey, ex, ez;
-    glm::extractEulerAngleYXZ(glm::mat4(b), ey, ex, ez);
-    glm::vec3 d = glm::degrees(glm::vec3(ex, ey, ez));
-    for (int i = 0; i < 3; ++i) if (std::fabs(d[i]) < 1.0e-4f) d[i] = 0.0f; // kill dust / -0.0
-    return d;
-}
-
 // The gizmo drag and the Inspector's own number fields edit the same thing; give the History
 // entry the same verb either way ("Move" / "Rotate" / "Scale") instead of a generic
 // "Transform" from the gizmo path only (#19 P8).
@@ -555,7 +536,7 @@ void EditorLayer::LookThroughLight(World& world, Camera& editorCamera, entt::ent
     {
         const auto& tf0 = world.Registry.get<const TransformComponent>(light);
         m_LookThroughStartPos = tf0.Position;
-        m_LookThroughStartRot = tf0.RotationEuler;
+        m_LookThroughStartRot = tf0.EulerDegrees();
         m_LookThroughMoved = false;
     }
 
@@ -645,18 +626,18 @@ void EditorLayer::UpdateLookThrough(World& world, Camera& editorCamera) {
         glm::vec3 newPos = glm::vec3(invParent * glm::vec4(editorCamera.Position, 1.0f));
         glm::vec3 fwd = editorCamera.Front();
         glm::vec3 up = std::fabs(fwd.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
-        glm::vec3 newRot = EulerYXZFromMatrix(invParent *
+        glm::quat newRotation = QuaternionFromMatrix(invParent *
             glm::inverse(glm::lookAt(glm::vec3(0.0f), fwd, up)));
 
         bool moved = glm::length(newPos - tf.Position) > 1e-4f ||
-                     glm::length(newRot - tf.RotationEuler) > 1e-3f;
+                     !SameRotation(newRotation, tf.Rotation);
         if (moved) {
             if (!m_LookThroughMoved) {           // first real move -> one undo point, light still at entry pose
                 PushUndo(world, "Reposition Light (Look Through)");
                 m_LookThroughMoved = true;
             }
             tf.Position = newPos;
-            tf.RotationEuler = newRot;
+            tf.SetRotationQuaternion(newRotation);
         }
     }
 
@@ -1609,7 +1590,7 @@ void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
                     fwd = glm::normalize(fwd);
                     glm::vec3 up = std::fabs(fwd.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
                     glm::mat4 rot = glm::inverse(glm::lookAt(glm::vec3(0.0f), fwd, up));
-                    xf.RotationEuler = EulerYXZFromMatrix(glm::inverse(parentWorld) * rot);
+                    xf.SetRotationQuaternion(QuaternionFromMatrix(glm::inverse(parentWorld) * rot));
                 }
             }
         }
@@ -1852,7 +1833,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         // so the live readout below can show a delta from here (#236 E).
         PushUndo(world, GizmoOpUndoLabel(m_GizmoOp));
         m_GizmoDragStartPos = transform.Position;
-        m_GizmoDragStartRot = transform.RotationEuler;
+        m_GizmoDragStartRot = transform.EulerDegrees();
         m_GizmoDragStartScale = transform.Scale;
     }
     m_GizmoWasUsing = isUsingNow;
@@ -1870,19 +1851,20 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(newLocal), nt, nr, ns);
         glm::vec3 newPos{nt[0], nt[1], nt[2]};
         glm::vec3 newScale{ns[0], ns[1], ns[2]};
-        // Rotation via the ComposeTransform-matching order, NOT ImGuizmo's decompose (#108).
-        glm::vec3 newRot = NearestEquivalentEuler(EulerYXZFromMatrix(newLocal), transform.RotationEuler); // #123
+        // Store the manipulated orientation directly. Euler is only an Inspector/readout view,
+        // so the gizmo never passes through a gimbal-locked decomposition (#123).
+        const glm::quat newRotation = QuaternionFromMatrix(newLocal);
 
         // Write back only the channel this gizmo actually drives — ImGuizmo's decompose leaks
         // float noise into the other two, and a pure translate drag was nudging Rotation
         // 0.000 -> -0.000 every time, accumulating over many drags (#12 P1).
         switch (m_GizmoOp) {
             case GizmoOp::Translate: transform.Position = newPos;      break;
-            case GizmoOp::Rotate:    transform.RotationEuler = newRot;  break;
+            case GizmoOp::Rotate:    transform.SetRotationQuaternion(newRotation); break;
             case GizmoOp::Scale:     transform.Scale = newScale;        break;
             default: // Rect / Universal / bounds edit — position and scale both move
                 transform.Position = newPos;
-                transform.RotationEuler = newRot;
+                transform.SetRotationQuaternion(newRotation);
                 transform.Scale = newScale;
                 break;
         }
@@ -1897,7 +1879,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
                 IM_COL32(120, 220, 160, 255),
                 m_SurfaceSnapAlign ? "surface + align" : "surface");
         }
-        DrawGizmoDragReadout(transform.Position, transform.RotationEuler, transform.Scale);
+        DrawGizmoDragReadout(transform.Position, transform.EulerDegrees(), transform.Scale);
         PushGizmoEditToPhysics(m_Selected, parentWorld * ComposeTransform(transform)); // #185
     }
 
@@ -1909,9 +1891,9 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
 void EditorLayer::PushGizmoEditToPhysics(entt::entity e, const glm::mat4& worldMatrix) {
     if (!m_InPlayMode || !PhysicsWorld::IsActive() || e == entt::null) return;
     const glm::vec3 p(worldMatrix[3]);
-    const glm::vec3 rot = EulerYXZFromMatrix(worldMatrix);
+    const glm::quat rotation = QuaternionFromMatrix(worldMatrix);
     const float pf[3] = { p.x, p.y, p.z };
-    const float rf[3] = { rot.x, rot.y, rot.z };
+    const float rf[4] = { rotation.x, rotation.y, rotation.z, rotation.w };
     PhysicsWorld::SetActorPose((unsigned)entt::to_integral(e), pf, rf, /*zeroVelocity=*/true);
 }
 
@@ -2130,7 +2112,7 @@ void EditorLayer::ApplySurfaceSnap(World& world, Camera& editorCamera, entt::ent
         rot[0] = glm::vec4(right, 0.0f);
         rot[1] = glm::vec4(up, 0.0f);
         rot[2] = glm::vec4(fwd, 0.0f);
-        transform.RotationEuler = EulerYXZFromMatrix(glm::inverse(parentWorld) * rot);
+        transform.SetRotationQuaternion(QuaternionFromMatrix(glm::inverse(parentWorld) * rot));
     }
 }
 
@@ -2305,7 +2287,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
             ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(newLocal), nt, nr, ns);
             auto& transform = world.Registry.get<TransformComponent>(r.entity);
             transform.Position = {nt[0], nt[1], nt[2]};
-            transform.RotationEuler = NearestEquivalentEuler(EulerYXZFromMatrix(newLocal), transform.RotationEuler); // #108, #123
+            transform.SetRotationQuaternion(QuaternionFromMatrix(newLocal));
             transform.Scale = {ns[0], ns[1], ns[2]};
             PushGizmoEditToPhysics(r.entity, newWorld); // #185
         }
