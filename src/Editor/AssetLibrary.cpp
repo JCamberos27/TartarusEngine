@@ -172,10 +172,7 @@ std::shared_ptr<Model> AssetLibrary::InstantiateModel(const std::string& path) {
     return CloneModel(LoadModel(path));
 }
 
-std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path) {
-    auto it = FindAnySpelling(m_TextureCache, path); // #132 - see LoadModel
-    if (it != m_TextureCache.end()) return it->second;
-
+void AssetLibrary::ResolveTextureSettings(const std::string& path, TextureUse use) {
     // Populate settings and browser metadata from .meta before constructing the texture, so
     // that the first import uses the persisted settings rather than requiring a Reimport.
     // If settings were already set in-memory (e.g. from a scene's assetMeta block applied
@@ -191,6 +188,25 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path) {
             } catch (...) {}
         }
     }
+
+    // #369 - nothing chose settings for a texture a material uses as a data map, so default it to
+    // linear (and to the NormalMap type for a normal map) instead of the sRGB colour default.
+    // Gamma-decoding a normal map bends every normal - lighting on a rolling ball shifted with
+    // its orientation. Kept in memory only: loading a material must not write .meta files. The
+    // Inspector does the same for a map assigned by hand, but a .mat only names its textures.
+    if (use != TextureUse::Color && m_TextureSettings.find(path) == m_TextureSettings.end()) {
+        TextureImportSettings s;
+        s.IsSRGB = false;
+        if (use == TextureUse::Normal) s.TextureType = TextureImportSettings::Type::NormalMap;
+        m_TextureSettings[path] = s;
+    }
+}
+
+std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path, TextureUse use) {
+    auto it = FindAnySpelling(m_TextureCache, path); // #132 - see LoadModel
+    if (it != m_TextureCache.end()) return it->second;
+
+    ResolveTextureSettings(path, use);
 
     // Register the GUID BEFORE constructing the Texture, not after (audit #75). TextureCache's
     // on-disk entry is keyed by AssetDatabase::GuidForPath when one is registered, falling back
