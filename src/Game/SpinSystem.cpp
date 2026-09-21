@@ -1,5 +1,6 @@
 #include "SpinSystem.h"
 #include "World.h"
+#include "RotationMath.h"
 #include "Components.h"
 
 #include <cmath>
@@ -8,25 +9,28 @@
 void UpdateSpinners(World& world, float dt) {
     auto view = world.Registry.view<SpinComponent, TransformComponent>(entt::exclude<InactiveTag>); // #199 - an inactive object is paused, not just hidden
     for (auto entity : view) {
-        const auto& spin = view.get<SpinComponent>(entity);
+        auto& spin = view.get<SpinComponent>(entity);
         float len = glm::length(spin.Axis);
         if (len < 1e-6f) continue; // a zero axis has no meaningful rotation
-        glm::vec3 axis = spin.Axis / len;
         glm::vec3& rot = view.get<TransformComponent>(entity).RotationEuler;
-        rot += axis * spin.Speed * dt;
 
-        // Wrap the axes this spinner actually drives back into [0,360) every frame (audit
-        // CPP-205 / #375): left running, this was unbounded accumulation into RotationEuler —
-        // fine for the first few minutes, but a spinner left playing for hours (a looping
-        // showcase build, an idle level) grows the stored degrees into the millions, losing
-        // float precision exactly like #375's write-up on this component describes. Wrapping is
-        // exact here (unlike a general Euler-angle re-derivation elsewhere in CPP-205) because
-        // ComposeTransform's eulerAngleYXZ is periodic in each axis — mod-360 doesn't change the
-        // resulting rotation, only how big the stored number gets. Same technique
-        // AnimationSystem already uses for its own spin/orbit offsets (AnimationSystem.cpp).
-        for (int k = 0; k < 3; ++k) {
-            if (axis[k] != 0.0f)
-                rot[k] = std::fmod(std::fmod(rot[k], 360.0f) + 360.0f, 360.0f);
+        // #123 - turn about the axis itself. Adding axis * angle to the Euler components was only
+        // right for a principal axis; a diagonal one added equal pitch and yaw, which spins about
+        // some other line.
+        //
+        // The orientation is always BaseRotation turned by Angle, never the previous frame's
+        // output turned a little more, so a spinner left running for hours has no error to build
+        // up, and the wrapped Angle keeps the numbers small (audit CPP-205 / #375). If anything
+        // else moved the rotation since we last wrote it (the Inspector during Play, physics,
+        // the gravity gun) or the axis was edited, restart from where the object is now.
+        if (!spin.Initialized || rot != spin.LastRotation || spin.Axis != spin.LastAxis) {
+            spin.BaseRotation = rot;
+            spin.LastAxis = spin.Axis;
+            spin.Angle = 0.0f;
+            spin.Initialized = true;
         }
+        spin.Angle = std::fmod(spin.Angle + spin.Speed * dt, 360.0f);
+        rot = RotateEulerAboutLocalAxis(spin.BaseRotation, spin.Axis, spin.Angle);
+        spin.LastRotation = rot;
     }
 }

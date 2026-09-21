@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include "World.h"
+#include "RotationMath.h"
 #include "Components.h"
 
 #include <glm/glm.hpp>
@@ -59,15 +60,15 @@ void UpdateAnimators(World& world, float dt) {
         anim.Elapsed += dt;
         const float t = anim.Elapsed;
 
-        // Spin: authored base + offset(Elapsed), same reversible form as orbit/bob (#109) —
-        // no unbounded accumulation into RotationEuler. Wrap only the axes that actually spin
-        // so an authored tilt on a still axis isn't snapped into [0,360).
-        glm::vec3 rot = anim.BaseRotation + anim.SpinDegPerSec * t;
-        for (int k = 0; k < 3; ++k) {
-            if (anim.SpinDegPerSec[k] != 0.0f)
-                rot[k] = std::fmod(std::fmod(rot[k], 360.0f) + 360.0f, 360.0f);
-        }
-        transform.RotationEuler = rot;
+        // Spin: authored base turned by offset(Elapsed), same reversible form as orbit/bob (#109) —
+        // no unbounded accumulation into RotationEuler. SpinDegPerSec is an angular velocity, so
+        // the turn is |w| * t about w's own direction (#123); adding it to the Euler components
+        // would only match that for a single principal axis. The angle is wrapped to one turn so
+        // a long-running scene doesn't lose float precision. A zero spin leaves the base as-is.
+        const float spinRate = glm::length(anim.SpinDegPerSec);
+        transform.RotationEuler = spinRate > 0.0f
+            ? RotateEulerAboutLocalAxis(anim.BaseRotation, anim.SpinDegPerSec, std::fmod(spinRate * t, 360.0f))
+            : anim.BaseRotation;
 
         // Position = authored base + orbit + bob.
         glm::vec3 pos = anim.BasePosition;

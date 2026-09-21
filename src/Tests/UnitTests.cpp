@@ -40,8 +40,20 @@
 #include "ProjectWatcher.h"
 #include "TextureCache.h"
 #include "SceneSerializer.h" // #121
+#include "AnimationSystem.h"           // #123 - the spin systems, driven frame by frame below
+#include "HotReloadGameModule.h"      // Spin / Transform Controller run inside TartarusGame.dll, not the exe
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h> // GetModuleFileNameW: --unit-tests runs before EnginePaths::Init
+#undef near            // windows.h #defines these two, and the tests use them as variable names
+#undef far
 #include "UndoDeltaChain.h"
 #include "World.h"
+#include "RotationMath.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -190,6 +202,139 @@ void TestNearestEuler() {
     CHECK(sameRotation(alt, glm::vec3(25.0f, 40.0f, -60.0f)));
     const glm::vec3 back = NearestEquivalentEuler(alt, glm::vec3(20.0f, 45.0f, -55.0f));
     CHECK(glm::length(back - glm::vec3(25.0f, 40.0f, -60.0f)) < 1e-3f);
+}
+
+// #123 - spinning about a diagonal axis turns the object about that axis. Adding axis * angle to
+// the Euler components (the old behaviour) added equal pitch and yaw, which is another rotation.
+void TestRotateEulerAboutLocalAxis() {
+    auto rotationOf = [](const glm::vec3& euler) { return glm::mat3(ComposeTransform(glm::vec3(0.0f), euler, glm::vec3(1.0f))); };
+    auto sameRotation = [&](const glm::vec3& a, const glm::mat3& expected) {
+        const glm::mat3 m = rotationOf(a);
+        for (int c = 0; c < 3; ++c)
+            for (int r = 0; r < 3; ++r)
+                if (std::abs(m[c][r] - expected[c][r]) > 1e-4f) return false;
+        return true;
+    };
+    // A diagonal axis from the identity is exactly angleAxis about it, at any angle...
+    const glm::vec3 diag(1.0f, 1.0f, 0.0f);
+    for (float angle : {10.0f, 90.0f, 200.0f, -45.0f}) {
+        const glm::mat3 expected = glm::mat3(glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::normalize(diag)));
+        CHECK(sameRotation(RotateEulerAboutLocalAxis(glm::vec3(0.0f), diag, angle), expected));
+    }
+    // ...and the axis is left unmoved by the turn (the old add-to-Euler result moved it).
+    const glm::mat3 turned = rotationOf(RotateEulerAboutLocalAxis(glm::vec3(0.0f), diag, 90.0f));
+    CHECK(glm::length(turned * glm::normalize(diag) - glm::normalize(diag)) < 1e-4f);
+    CHECK(glm::length(rotationOf(glm::vec3(90.0f, 90.0f, 0.0f)) * glm::normalize(diag) - glm::normalize(diag)) > 0.1f);
+    // The axis is local: the result is the starting orientation followed by the turn.
+    const glm::vec3 start(30.0f, -20.0f, 50.0f);
+    const glm::mat3 local = rotationOf(start) * glm::mat3(glm::rotate(glm::mat4(1.0f), glm::radians(60.0f), glm::normalize(diag)));
+    CHECK(sameRotation(RotateEulerAboutLocalAxis(start, diag, 60.0f), local));
+    // The default spin, +Y from an untilted start, is still plain yaw.
+    CHECK(sameRotation(RotateEulerAboutLocalAxis(glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 37.0f), rotationOf(glm::vec3(0.0f, 37.0f, 0.0f))));
+    // Axis magnitude is irrelevant, and a zero axis or zero angle is a no-op.
+    CHECK(sameRotation(RotateEulerAboutLocalAxis(start, diag * 5.0f, 60.0f), local));
+    CHECK(RotateEulerAboutLocalAxis(start, glm::vec3(0.0f), 60.0f) == start);
+    CHECK(RotateEulerAboutLocalAxis(start, diag, 0.0f) == start);
+}
+
+// #123 - the three Euler-driven spin systems, run frame by frame, turn about the axis they were
+// given rather than adding it to the Euler components.
+void TestSpinSystemsAboutDiagonalAxis() {
+    const glm::vec3 diag = glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f));
+    auto matrixOf = [](const glm::vec3& euler) { return glm::mat3(ComposeTransform(glm::vec3(0.0f), euler, glm::vec3(1.0f))); };
+    auto turnAbout = [](const glm::vec3& axis, float deg) { return glm::mat3(glm::rotate(glm::mat4(1.0f), glm::radians(deg), axis)); };
+    auto near = [](const glm::mat3& a, const glm::mat3& b, float eps) {
+        for (int c = 0; c < 3; ++c)
+            for (int r = 0; r < 3; ++r)
+                if (std::abs(a[c][r] - b[c][r]) > eps) return false;
+        return true;
+    };
+    const float dt = 1.0f / 60.0f;
+
+    // SpinSystem and TransformControllerSystem are compiled only into TartarusGame.dll, so run
+    // them the way the editor does: load the built module next to the exe and tick it.
+    HotReloadGameModule gameModule;
+    wchar_t exePath[MAX_PATH] = {};
+    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+    gameModule.Initialize(std::filesystem::path(exePath).parent_path() / TARTARUS_GAME_MODULE_FILENAME);
+
+    // Spin: 60 frames at 90 deg/s is a quarter turn about the diagonal, and the axis itself never moves.
+    {
+        World world;
+        entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "s");
+        SpinComponent spin; spin.Axis = glm::vec3(1.0f, 1.0f, 0.0f); spin.Speed = 90.0f;
+        world.Registry.emplace<SpinComponent>(e, spin);
+        for (int i = 0; i < 60; ++i) gameModule.Tick(world, dt, true);
+        const glm::mat3 m = matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler);
+        CHECK(near(m, turnAbout(diag, 90.0f), 1e-3f));
+        CHECK(glm::length(m * diag - diag) < 1e-3f);
+
+        // Ten minutes more (36000 frames = 900 turns): still the exact rotation, and the stored
+        // degrees stay inside one turn instead of growing.
+        for (int i = 0; i < 36000; ++i) gameModule.Tick(world, dt, true);
+        const glm::vec3 rot = world.Registry.get<TransformComponent>(e).RotationEuler;
+        CHECK(near(matrixOf(rot), turnAbout(diag, 90.0f), 2e-2f));
+        CHECK(std::abs(rot.x) <= 360.0f && std::abs(rot.y) <= 360.0f && std::abs(rot.z) <= 360.0f);
+
+        // Something else moves the object (Inspector edit, physics): the spin carries on from
+        // where it now is instead of snapping back to where it started.
+        const glm::vec3 moved(0.0f, 45.0f, 0.0f);
+        world.Registry.get<TransformComponent>(e).RotationEuler = moved;
+        gameModule.Tick(world, dt, true);
+        CHECK(near(matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler),
+                   matrixOf(moved) * turnAbout(diag, 90.0f * dt), 1e-3f));
+
+        // Editing the axis restarts from the current orientation too, with no jump.
+        const glm::vec3 before = world.Registry.get<TransformComponent>(e).RotationEuler;
+        world.Registry.get<SpinComponent>(e).Axis = glm::vec3(0.0f, 0.0f, 1.0f);
+        gameModule.Tick(world, dt, true);
+        CHECK(near(matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler),
+                   matrixOf(before) * turnAbout(glm::vec3(0.0f, 0.0f, 1.0f), 90.0f * dt), 1e-3f));
+    }
+
+    // The default spin (+Y) on an untilted object is still plain yaw, and a zero axis does nothing.
+    {
+        World world;
+        entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "y");
+        world.Registry.emplace<SpinComponent>(e);
+        for (int i = 0; i < 30; ++i) gameModule.Tick(world, dt, true);
+        CHECK(near(matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler), matrixOf(glm::vec3(0.0f, 45.0f, 0.0f)), 1e-3f));
+        world.Registry.get<SpinComponent>(e).Axis = glm::vec3(0.0f);
+        const glm::vec3 held = world.Registry.get<TransformComponent>(e).RotationEuler;
+        gameModule.Tick(world, dt, true);
+        CHECK(world.Registry.get<TransformComponent>(e).RotationEuler == held);
+    }
+
+    // Animator: the base orientation turned by |w| * t about w's own direction.
+    {
+        World world;
+        const glm::vec3 base(20.0f, 30.0f, 0.0f);
+        entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), base, glm::vec3(1.0f), "a");
+        AnimatorComponent anim; anim.SpinDegPerSec = glm::vec3(60.0f, 60.0f, 0.0f);
+        world.Registry.emplace<AnimatorComponent>(e, anim);
+        UpdateAnimators(world, 0.5f); // initialises and advances t to 0.5 s
+        const float angle = glm::length(anim.SpinDegPerSec) * 0.5f;
+        CHECK(near(matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler),
+                   matrixOf(base) * turnAbout(glm::normalize(anim.SpinDegPerSec), angle), 1e-3f));
+        UpdateAnimators(world, 100.0f); // a long time later: same form, still reversible and bounded
+        const float later = std::fmod(glm::length(anim.SpinDegPerSec) * 100.5f, 360.0f);
+        CHECK(near(matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler),
+                   matrixOf(base) * turnAbout(glm::normalize(anim.SpinDegPerSec), later), 2e-2f));
+    }
+
+    // Transform controller: same rule for RotationDegPerSec.
+    {
+        World world;
+        const glm::vec3 base(0.0f, 15.0f, 0.0f);
+        entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), base, glm::vec3(1.0f), "t");
+        TransformControllerComponent ctl; ctl.RotationDegPerSec = glm::vec3(0.0f, 45.0f, 45.0f);
+        world.Registry.emplace<TransformControllerComponent>(e, ctl);
+        gameModule.Tick(world, 2.0f, true);
+        CHECK(near(matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler),
+                   matrixOf(base) * turnAbout(glm::normalize(ctl.RotationDegPerSec), glm::length(ctl.RotationDegPerSec) * 2.0f), 1e-3f));
+    }
+
+    gameModule.Shutdown();
 }
 
 // #170 - a Physic Material asset round-trips through its file and overrides the collider's own
@@ -1197,6 +1342,8 @@ int RunUnitTests() {
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},
         {"NearestEuler", TestNearestEuler},
+        {"RotateEulerAboutLocalAxis", TestRotateEulerAboutLocalAxis},
+        {"SpinSystemsAboutDiagonalAxis", TestSpinSystemsAboutDiagonalAxis},
         {"PhysicMaterial", TestPhysicMaterial},
         {"PostProcessVolume", TestPostProcessVolume},
         {"DopplerVelocity", TestDopplerVelocity},
