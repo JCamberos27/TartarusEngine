@@ -1,5 +1,6 @@
 #include "TransformControllerSystem.h"
 #include "World.h"
+#include "RotationMath.h"
 #include "Components.h"
 
 #include <cmath>
@@ -22,7 +23,12 @@ void UpdateTransformControllers(World& world, float dt) {
         controller.Elapsed += dt;
         const float elapsed = controller.Elapsed;
         transform.Position = controller.BasePosition + controller.TranslationUnitsPerSec * elapsed;
-        transform.RotationEuler = controller.BaseRotation + controller.RotationDegPerSec * elapsed;
+        // #123 - RotationDegPerSec is an angular velocity: turn the base by |w| * t about w's own
+        // direction. Adding it to the Euler components only matched that for one principal axis.
+        const float spinRate = glm::length(controller.RotationDegPerSec);
+        transform.RotationEuler = spinRate > 0.0f
+            ? RotateEulerAboutLocalAxis(controller.BaseRotation, controller.RotationDegPerSec, std::fmod(spinRate * elapsed, 360.0f))
+            : controller.BaseRotation;
 
         if (controller.ScalePulseAmplitude != 0.0f && controller.ScalePulseFrequencyHz != 0.0f) {
             float wave = std::sin(elapsed * controller.ScalePulseFrequencyHz * 6.28318530718f);

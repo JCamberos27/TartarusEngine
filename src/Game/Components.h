@@ -441,7 +441,7 @@ struct AnimatorControllerComponent {
 };
 
 struct AnimatorComponent {
-    glm::vec3 SpinDegPerSec{0.0f};   // continuous local rotation, degrees/second per axis
+    glm::vec3 SpinDegPerSec{0.0f};   // continuous local rotation: angular velocity, degrees/second, about this vector's own direction
 
     glm::vec3 OrbitAxis{0.0f, 1.0f, 0.0f};
     float OrbitDegPerSec = 0.0f;     // revolve around Base position on this axis
@@ -493,6 +493,17 @@ struct TransformControllerComponent {
 struct SpinComponent {
     glm::vec3 Axis{0.0f, 1.0f, 0.0f}; // local axis to spin around (normalised at use)
     float Speed = 90.0f;             // degrees per second, applied only while playing
+
+    // Runtime scratch, never serialized and not in the reflected field list (#123). SpinSystem
+    // holds the orientation it started from plus the angle turned since, rather than re-deriving
+    // the Euler triple from the previous frame's result every frame, so error can't accumulate.
+    // It restarts from the transform's current rotation whenever anything else moved it or Axis
+    // changed (LastRotation / LastAxis are what it last wrote and saw).
+    bool      Initialized = false;
+    glm::vec3 BaseRotation{0.0f};
+    float     Angle = 0.0f; // degrees turned about Axis since BaseRotation, wrapped to one turn
+    glm::vec3 LastAxis{0.0f};
+    glm::vec3 LastRotation{0.0f};
 };
 
 // --- Scoring and impact sounds (Sandbox basketball court). Plain data, run by ScoringSystem /
