@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <vector>
 #include <glm/glm.hpp>
+#include "RotationMath.h"
 #include <entt/entt.hpp>
 
 class Model;
@@ -16,8 +17,30 @@ struct MaterialAsset; // full definition in MaterialAsset.h; shared_ptr<Material
 
 struct TransformComponent {
     glm::vec3 Position{0.0f};
-    glm::vec3 RotationEuler{0.0f}; // degrees
+    glm::quat Rotation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3 Scale{1.0f};
+
+    // Editor presentation only; never serialized. Keeping the last authored/displayed Euler
+    // triple lets the Inspector show the representation the user entered instead of flipping to
+    // another equivalent decomposition. Runtime orientation always comes from Rotation.
+    glm::vec3 EulerHint{0.0f};
+
+    TransformComponent() = default;
+    TransformComponent(const glm::vec3& position, const glm::vec3& eulerDegrees,
+                       const glm::vec3& scale)
+        : Position(position), Scale(scale) { SetRotationEuler(eulerDegrees); }
+
+    glm::vec3 EulerDegrees() const {
+        return NearestEquivalentEuler(EulerYXZFromQuaternion(Rotation), EulerHint);
+    }
+    void SetRotationEuler(const glm::vec3& eulerDegrees) {
+        Rotation = QuaternionFromEulerYXZ(eulerDegrees);
+        EulerHint = eulerDegrees;
+    }
+    void SetRotationQuaternion(const glm::quat& rotation) {
+        Rotation = NormalizeRotation(rotation);
+        EulerHint = NearestEquivalentEuler(EulerYXZFromQuaternion(Rotation), EulerHint);
+    }
 };
 
 struct NameComponent {
@@ -455,7 +478,7 @@ struct AnimatorComponent {
     // --- runtime scratch (not serialized) ---
     bool Initialized = false;
     glm::vec3 BasePosition{0.0f};
-    glm::vec3 BaseRotation{0.0f};   // authored RotationEuler, so spin is reversible like orbit/bob (#109)
+    glm::quat BaseRotation{1.0f, 0.0f, 0.0f, 0.0f}; // authored orientation, so spin is reversible like orbit/bob (#109)
     glm::vec3 BaseColor{1.0f};
     float Elapsed = 0.0f;
 };
@@ -480,7 +503,7 @@ struct TransformControllerComponent {
     // Runtime scratch, never serialized. Play -> Stop reloads the authored scene snapshot.
     bool Initialized = false;
     glm::vec3 BasePosition{0.0f};
-    glm::vec3 BaseRotation{0.0f};
+    glm::quat BaseRotation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3 BaseScale{1.0f};
     float Elapsed = 0.0f;
 };
@@ -495,15 +518,15 @@ struct SpinComponent {
     float Speed = 90.0f;             // degrees per second, applied only while playing
 
     // Runtime scratch, never serialized and not in the reflected field list (#123). SpinSystem
-    // holds the orientation it started from plus the angle turned since, rather than re-deriving
-    // the Euler triple from the previous frame's result every frame, so error can't accumulate.
+    // holds the orientation it started from plus the angle turned since, rather than feeding the
+    // previous frame's result back into the next one, so error can't accumulate.
     // It restarts from the transform's current rotation whenever anything else moved it or Axis
     // changed (LastRotation / LastAxis are what it last wrote and saw).
     bool      Initialized = false;
-    glm::vec3 BaseRotation{0.0f};
+    glm::quat BaseRotation{1.0f, 0.0f, 0.0f, 0.0f};
     float     Angle = 0.0f; // degrees turned about Axis since BaseRotation, wrapped to one turn
     glm::vec3 LastAxis{0.0f};
-    glm::vec3 LastRotation{0.0f};
+    glm::quat LastRotation{1.0f, 0.0f, 0.0f, 0.0f};
 };
 
 // --- Scoring and impact sounds (Sandbox basketball court). Plain data, run by ScoringSystem /
