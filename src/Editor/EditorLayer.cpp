@@ -3257,9 +3257,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             auto& t = world.Registry.get<TransformComponent>(m_Selected);
             t.Position = editorCamera.Position;
             glm::vec3 d = glm::normalize(editorCamera.Front());
-            t.RotationEuler = glm::vec3(
+            t.SetRotationEuler(glm::vec3(
                 glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
-                glm::degrees(std::atan2(-d.x, -d.z)), 0.0f);
+                glm::degrees(std::atan2(-d.x, -d.z)), 0.0f));
             world.Registry.get<CameraComponent>(m_Selected).FovDegrees = editorCamera.Fov;
         }
 

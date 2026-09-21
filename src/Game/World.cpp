@@ -283,36 +283,6 @@ void World::RebuildWorldTransformCache() {
     }
 }
 
-glm::vec3 NearestEquivalentEuler(const glm::vec3& eulerDeg, const glm::vec3& hintDeg) {
-    auto wrapNear = [](float v, float hint) { return v + 360.0f * std::round((hint - v) / 360.0f); };
-    glm::vec3 best(0.0f);
-    float bestCost = 1e30f;
-    const glm::vec3 candidates[2] = {eulerDeg, glm::vec3(180.0f - eulerDeg.x, eulerDeg.y + 180.0f, eulerDeg.z + 180.0f)};
-    for (const glm::vec3& c : candidates) {
-        const glm::vec3 w(wrapNear(c.x, hintDeg.x), wrapNear(c.y, hintDeg.y), wrapNear(c.z, hintDeg.z));
-        const glm::vec3 d = glm::abs(w - hintDeg);
-        const float cost = d.x + d.y + d.z;
-        if (cost < bestCost - 1e-3f) { bestCost = cost; best = w; }
-    }
-    return best;
-}
-
-namespace {
-// Rotation-only part of an affine matrix (columns normalised; a mirrored basis is flipped so the
-// result is a proper rotation) as YXZ Euler degrees — the order ComposeTransform builds with.
-glm::vec3 EulerDegreesYXZ(const glm::mat4& m) {
-    glm::mat3 b(m);
-    for (int c = 0; c < 3; ++c) {
-        const float len = glm::length(b[c]);
-        if (len > 1e-8f) b[c] /= len;
-    }
-    if (glm::determinant(b) < 0.0f) b[0] = -b[0];
-    float ey, ex, ez;
-    glm::extractEulerAngleYXZ(glm::mat4(b), ey, ex, ez);
-    return glm::degrees(glm::vec3(ex, ey, ez));
-}
-} // namespace
-
 TransformComponent World::WorldSpaceTransform(entt::entity entity) const {
     const auto* local = Registry.try_get<TransformComponent>(entity);
     if (!local) return TransformComponent{};
@@ -322,7 +292,7 @@ TransformComponent World::WorldSpaceTransform(entt::entity entity) const {
     TransformComponent out = *local;
     out.Position = glm::vec3(m[3]);
     out.Scale = glm::vec3(glm::length(glm::vec3(m[0])), glm::length(glm::vec3(m[1])), glm::length(glm::vec3(m[2])));
-    out.RotationEuler = EulerDegreesYXZ(m);
+    out.SetRotationQuaternion(QuaternionFromMatrix(m));
     return out;
 }
 
@@ -332,13 +302,13 @@ void World::SetWorldPose(entt::entity entity, const glm::vec3& worldPosition, co
     const auto* hier = Registry.try_get<HierarchyComponent>(entity);
     if (!hier || hier->Parent == entt::null) {
         tc->Position = worldPosition;
-        tc->RotationEuler = NearestEquivalentEuler(EulerDegreesYXZ(glm::mat4_cast(worldRotation)), tc->RotationEuler);
+        tc->SetRotationQuaternion(worldRotation);
         return;
     }
     const glm::mat4 world = glm::translate(glm::mat4(1.0f), worldPosition) * glm::mat4_cast(worldRotation);
     const glm::mat4 local = glm::inverse(ComposeWorldTransform(hier->Parent)) * world;
     tc->Position = glm::vec3(local[3]);
-    tc->RotationEuler = NearestEquivalentEuler(EulerDegreesYXZ(local), tc->RotationEuler);
+    tc->SetRotationQuaternion(QuaternionFromMatrix(local));
 }
 
 glm::mat4 World::GetCachedWorldTransform(entt::entity entity) const {
@@ -395,13 +365,10 @@ bool World::SetParent(entt::entity child, entt::entity parent) {
     glm::vec3 pos, scale, skew; glm::vec4 persp; glm::quat rot;
     glm::decompose(newLocal, scale, rot, pos, skew, persp);
 
-    float ex, ey, ez;
-    glm::extractEulerAngleYXZ(glm::mat4_cast(rot), ey, ex, ez);
-
     auto& t = Registry.get<TransformComponent>(child);
     t.Position = pos;
     t.Scale = scale;
-    t.RotationEuler = NearestEquivalentEuler(glm::degrees(glm::vec3(ex, ey, ez)), t.RotationEuler);
+    t.SetRotationQuaternion(rot);
     return true;
 }
 
@@ -471,11 +438,9 @@ void World::DestroyEntityAndChildren(entt::entity entity) {
     Registry.destroy(entity);
 }
 
-glm::mat4 ComposeTransform(const glm::vec3& position, const glm::vec3& rotationEulerDegrees, const glm::vec3& scale) {
+glm::mat4 ComposeTransform(const glm::vec3& position, const glm::quat& rotation, const glm::vec3& scale) {
     glm::mat4 m = glm::translate(glm::mat4(1.0f), position);
-    m = glm::rotate(m, glm::radians(rotationEulerDegrees.y), glm::vec3(0, 1, 0));
-    m = glm::rotate(m, glm::radians(rotationEulerDegrees.x), glm::vec3(1, 0, 0));
-    m = glm::rotate(m, glm::radians(rotationEulerDegrees.z), glm::vec3(0, 0, 1));
+    m *= glm::mat4_cast(NormalizeRotation(rotation));
     m = glm::scale(m, scale);
     return m;
 }

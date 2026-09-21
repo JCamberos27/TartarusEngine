@@ -77,7 +77,7 @@ inline void MakeDirectionalLight(World& world, entt::entity e) {
     lc.AngularSizeDegrees = 2.0f;
     lc.Shadow.Enabled = true;      // a freshly added sun casts shadows by default
     lc.Shadow.Softness = 0.25f;    // crisper penumbra out of the box (~0.25 on the Softness slider)
-    world.Registry.get<TransformComponent>(e).RotationEuler = glm::vec3(-36.25f, 53.13f, 0.0f);
+    world.Registry.get<TransformComponent>(e).SetRotationEuler(glm::vec3(-36.25f, 53.13f, 0.0f));
 }
 
 // The Hierarchy lists entities by OrderComponent (a stable per-entity sequence assigned at
@@ -722,10 +722,10 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
         glm::vec3 d = t.Position;
         if (glm::dot(d, d) > 1.0e-4f) {
             d = glm::normalize(-d); // direction from the camera toward the origin
-            t.RotationEuler = glm::vec3(
+            t.SetRotationEuler(glm::vec3(
                 glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
                 glm::degrees(std::atan2(-d.x, -d.z)),
-                0.0f);
+                0.0f));
         }
     }
 }

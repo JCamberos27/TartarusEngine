@@ -14,7 +14,7 @@ void UpdateTransformControllers(World& world, float dt) {
 
         if (!controller.Initialized) {
             controller.BasePosition = transform.Position;
-            controller.BaseRotation = transform.RotationEuler;
+            controller.BaseRotation = transform.Rotation;
             controller.BaseScale = transform.Scale;
             controller.Elapsed = 0.0f;
             controller.Initialized = true;
@@ -26,9 +26,9 @@ void UpdateTransformControllers(World& world, float dt) {
         // #123 - RotationDegPerSec is an angular velocity: turn the base by |w| * t about w's own
         // direction. Adding it to the Euler components only matched that for one principal axis.
         const float spinRate = glm::length(controller.RotationDegPerSec);
-        transform.RotationEuler = spinRate > 0.0f
-            ? RotateEulerAboutLocalAxis(controller.BaseRotation, controller.RotationDegPerSec, std::fmod(spinRate * elapsed, 360.0f))
-            : controller.BaseRotation;
+        transform.SetRotationQuaternion(spinRate > 0.0f
+            ? RotateAboutLocalAxis(controller.BaseRotation, controller.RotationDegPerSec, std::fmod(spinRate * elapsed, 360.0f))
+            : controller.BaseRotation);
 
         if (controller.ScalePulseAmplitude != 0.0f && controller.ScalePulseFrequencyHz != 0.0f) {
             float wave = std::sin(elapsed * controller.ScalePulseFrequencyHz * 6.28318530718f);
