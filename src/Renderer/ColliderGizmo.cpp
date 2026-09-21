@@ -156,11 +156,9 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
             continue;
         }
 
-        // Rotation built the SAME way World::ComposeTransform does (Ry * Rx * Rz), so a tumbling
-        // body's wireframe tracks its true orientation — glm::quat(euler) uses a different order.
-        const glm::mat3 R = glm::mat3(glm::eulerAngleYXZ(glm::radians(t.RotationEuler.y),
-                                                         glm::radians(t.RotationEuler.x),
-                                                         glm::radians(t.RotationEuler.z)));
+        // Use the authoritative quaternion so a tumbling body's wireframe tracks its true
+        // orientation without an Euler decomposition/recomposition step (#123).
+        const glm::mat3 R = glm::mat3_cast(NormalizeRotation(t.Rotation));
         const glm::vec3 s = glm::abs(t.Scale);
 
         if (c.HalfExtents == glm::vec3(0.0f)) {

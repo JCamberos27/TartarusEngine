@@ -1969,11 +1969,11 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         };
 
         auto transformRow = [&](const char* label, float speed, float minV, float maxV,
-                                const std::function<glm::vec3&(TransformComponent&)>& ref,
+                                const std::function<glm::vec3(const TransformComponent&)>& get,
+                                const std::function<void(TransformComponent&, const glm::vec3&)>& set,
                                 const char* tip, const char* undoLabel, const char* pfField) {
             glm::vec3 shared(0.0f); bool mixed[3];
-            reduceVec3([&](const TransformComponent& t) { return ref(const_cast<TransformComponent&>(t)); },
-                       shared, mixed);
+            reduceVec3(get, shared, mixed);
             glm::vec3 edit = shared; bool touched[3];
             // #315 — prefab-override marker: tints the label + right-click Revert/Apply when any
             // selected entity's Transform.<pfField> diverges from its prefab. Always inert for a
@@ -1984,8 +1984,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             if (res.activated) StageUndo(world);
             if (res.changed) {
                 forEach([&](entt::entity e) {
-                    glm::vec3& target = ref(world.Registry.get<TransformComponent>(e));
+                    auto& transform = world.Registry.get<TransformComponent>(e);
+                    glm::vec3 target = get(transform);
                     for (int a = 0; a < 3; ++a) if (touched[a]) target[a] = edit[a];
+                    set(transform, target);
                 });
             }
             if (res.committed) CommitStagedUndo(world, undoLabel);
@@ -2006,14 +2008,17 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 ? "Sets X / Y / Z (relative to each object's parent) on every selected object."
                 : "Sets X / Y / Z on every selected object.";
             transformRow(posLabel, 0.05f, 0.0f, 0.0f,
-                [](TransformComponent& t) -> glm::vec3& { return t.Position; },
+                [](const TransformComponent& t) { return t.Position; },
+                [](TransformComponent& t, const glm::vec3& value) { t.Position = value; },
                 posTip, "Set Position", "position");
         }
         transformRow("Rotation", 0.5f, 0.0f, 0.0f,
-            [](TransformComponent& t) -> glm::vec3& { return t.RotationEuler; },
+            [](const TransformComponent& t) { return t.EulerDegrees(); },
+            [](TransformComponent& t, const glm::vec3& value) { t.SetRotationEuler(value); },
             "Sets Euler rotation (degrees) on every selected object.", "Set Rotation", "rotation");
         transformRow("Scale", 0.01f, 0.0f, 0.0f,
-            [](TransformComponent& t) -> glm::vec3& { return t.Scale; },
+            [](const TransformComponent& t) { return t.Scale; },
+            [](TransformComponent& t, const glm::vec3& value) { t.Scale = value; },
             "Sets scale on every selected object.", "Set Scale", "scale");
 
         EndComponentSection();
@@ -2482,8 +2487,11 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             {this, &world, entity, "Transform", "position"});
         if (rowActive) StageUndo(world);
         if (rowCommitted) CommitStagedUndo(world, "Move");
-        DrawVec3Row("Rotation", transform.RotationEuler, 1.0f, 0.0f, 0.0f, rowActive, rowCommitted,
+        glm::vec3 rotationEuler = transform.EulerDegrees();
+        const glm::vec3 rotationBefore = rotationEuler;
+        DrawVec3Row("Rotation", rotationEuler, 1.0f, 0.0f, 0.0f, rowActive, rowCommitted,
             "Rotation in degrees around each axis.", {this, &world, entity, "Transform", "rotation"});
+        if (rotationEuler != rotationBefore) transform.SetRotationEuler(rotationEuler);
         if (rowActive) StageUndo(world);
         if (rowCommitted) CommitStagedUndo(world, "Rotate");
         // #128 — unclamped (was [0.01, 100]): negative mirrors, and large values match what the
@@ -2502,14 +2510,14 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         if (ImGui::Button(ICON_FA_ROTATE_LEFT "  Reset##xf", ImVec2(tw, 0.0f))) {
             PushUndo(world, "Reset Transform");
             transform.Position = glm::vec3(0.0f);
-            transform.RotationEuler = glm::vec3(0.0f);
+            transform.SetRotationEuler(glm::vec3(0.0f));
             transform.Scale = glm::vec3(1.0f);
         }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Position 0, rotation 0, scale 1");
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_COPY "  Copy##xf", ImVec2(tw, 0.0f))) {
             m_TransformClipPos = transform.Position;
-            m_TransformClipRot = transform.RotationEuler;
+            m_TransformClipRot = transform.EulerDegrees();
             m_TransformClipScale = transform.Scale;
             m_HasTransformClipboard = true;
         }
@@ -2519,7 +2527,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         if (ImGui::Button(ICON_FA_PASTE "  Paste##xf", ImVec2(tw, 0.0f))) {
             PushUndo(world, "Paste Transform");
             transform.Position = m_TransformClipPos;
-            transform.RotationEuler = m_TransformClipRot;
+            transform.SetRotationEuler(m_TransformClipRot);
             transform.Scale = m_TransformClipScale;
         }
         if (ImGui::IsItemHovered() && m_HasTransformClipboard) EditorUI::SetTooltip("Paste the copied Transform values");
@@ -2533,7 +2541,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     if (tfReset) {
         PushUndo(world, "Reset Transform");
         transform.Position = glm::vec3(0.0f);
-        transform.RotationEuler = glm::vec3(0.0f);
+        transform.SetRotationEuler(glm::vec3(0.0f));
         transform.Scale = glm::vec3(1.0f);
     }
     if (tfCopy)  CopyComponentToClip("Transform", transform);
@@ -3292,10 +3300,10 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             glm::vec3 d = glm::normalize(ec.Front());
             // Match the Add > Camera convention: ComposeTransform yaws (Y) then pitches (X),
             // local -Z is forward.
-            t.RotationEuler = glm::vec3(
+            t.SetRotationEuler(glm::vec3(
                 glm::degrees(std::asin(glm::clamp(d.y, -1.0f, 1.0f))),
                 glm::degrees(std::atan2(-d.x, -d.z)),
-                0.0f);
+                0.0f));
             cam->FovDegrees = ec.Fov;
         }
         if (ImGui::IsItemHovered())
