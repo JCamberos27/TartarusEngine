@@ -190,7 +190,8 @@ bool GetQueryRecording();
 // simulated body during Play instead of the sim immediately overwriting the drag. Dynamic:
 // setGlobalPose + (optionally) zero velocities + wake. Kinematic: next kinematic target.
 // Static: setGlobalPose. No-op outside Play or for an unknown entity.
-void SetActorPose(unsigned entity, const float posXYZ[3], const float rotEulerDeg[3], bool zeroVelocity);
+// Rotation is a normalized quaternion in x,y,z,w order.
+void SetActorPose(unsigned entity, const float posXYZ[3], const float rotationXYZW[4], bool zeroVelocity);
 
 // --- Gravity gun (#185 hardening) ---------------------------------------------------
 // Drives the gravity gun (GravityGun.cpp). GrabBody latches a dynamic body and suspends its

@@ -52,7 +52,7 @@ void UpdateAnimators(World& world, float dt) {
 
         if (!anim.Initialized) {
             anim.BasePosition = transform.Position;
-            anim.BaseRotation = transform.RotationEuler;
+            anim.BaseRotation = transform.Rotation;
             anim.BaseColor = light ? light->Color : glm::vec3(1.0f);
             anim.Elapsed = 0.0f;
             anim.Initialized = true;
@@ -61,14 +61,14 @@ void UpdateAnimators(World& world, float dt) {
         const float t = anim.Elapsed;
 
         // Spin: authored base turned by offset(Elapsed), same reversible form as orbit/bob (#109) —
-        // no unbounded accumulation into RotationEuler. SpinDegPerSec is an angular velocity, so
+        // no unbounded accumulation. SpinDegPerSec is an angular velocity, so
         // the turn is |w| * t about w's own direction (#123); adding it to the Euler components
         // would only match that for a single principal axis. The angle is wrapped to one turn so
         // a long-running scene doesn't lose float precision. A zero spin leaves the base as-is.
         const float spinRate = glm::length(anim.SpinDegPerSec);
-        transform.RotationEuler = spinRate > 0.0f
-            ? RotateEulerAboutLocalAxis(anim.BaseRotation, anim.SpinDegPerSec, std::fmod(spinRate * t, 360.0f))
-            : anim.BaseRotation;
+        transform.SetRotationQuaternion(spinRate > 0.0f
+            ? RotateAboutLocalAxis(anim.BaseRotation, anim.SpinDegPerSec, std::fmod(spinRate * t, 360.0f))
+            : anim.BaseRotation);
 
         // Position = authored base + orbit + bob.
         glm::vec3 pos = anim.BasePosition;

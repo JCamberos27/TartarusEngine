@@ -204,6 +204,76 @@ void TestNearestEuler() {
     CHECK(glm::length(back - glm::vec3(25.0f, 40.0f, -60.0f)) < 1e-3f);
 }
 
+// #123 - quaternion is the authoritative transform rotation; Euler is only a stable editor view,
+// and v3 Euler scene data migrates to the v4 quaternion representation without changing pose.
+void TestQuaternionTransformStorage() {
+    auto nearMatrix = [](const glm::mat3& a, const glm::mat3& b, float eps = 1e-4f) {
+        for (int c = 0; c < 3; ++c)
+            for (int r = 0; r < 3; ++r)
+                if (std::abs(a[c][r] - b[c][r]) > eps) return false;
+        return true;
+    };
+
+    TransformComponent transform;
+    const glm::vec3 authored(0.0f, 180.0f, 0.0f);
+    transform.SetRotationEuler(authored);
+    CHECK(glm::length(transform.EulerDegrees() - authored) < 1e-3f); // preserve the authored hint
+    CHECK(std::abs(glm::length(transform.Rotation) - 1.0f) < 1e-5f);
+
+    // Cross the old Euler singularity by composing quaternions. The stored orientation remains
+    // exact even though no unique Euler triple exists at the middle pose.
+    const glm::quat base = QuaternionFromEulerYXZ(glm::vec3(89.9f, 15.0f, -20.0f));
+    const glm::quat turned = RotateAboutLocalAxis(base, glm::vec3(0.3f, 1.0f, 0.2f), 120.0f);
+    transform.SetRotationQuaternion(turned);
+    CHECK(SameRotation(transform.Rotation, turned));
+    CHECK(nearMatrix(glm::mat3(ComposeTransform(transform)), glm::mat3_cast(turned)));
+
+    World migrated;
+    AssetLibrary assets;
+    const std::string v3 = R"({"formatVersion":3,"empties":[{"name":"Legacy","id":0,"parentId":-1,)"
+        R"("position":[0,0,0],"rotation":[25,40,-60],"scale":[1,1,1]}]})";
+    CHECK(SceneSerializer::LoadFromString(migrated, assets, v3));
+    const auto view = migrated.Registry.view<TransformComponent>();
+    CHECK(view.size() == 1);
+    if (!view.empty()) {
+        const auto& loaded = migrated.Registry.get<TransformComponent>(*view.begin());
+        CHECK(SameRotation(loaded.Rotation, QuaternionFromEulerYXZ(glm::vec3(25.0f, 40.0f, -60.0f))));
+        CHECK(glm::length(loaded.EulerDegrees() - glm::vec3(25.0f, 40.0f, -60.0f)) < 1e-3f);
+    }
+
+    const json saved = json::parse(SceneSerializer::SaveToString(migrated, assets));
+    CHECK(saved.value("formatVersion", 0) == 4);
+    CHECK(saved["empties"].size() == 1);
+    CHECK(saved["empties"][0]["rotation"].is_array() && saved["empties"][0]["rotation"].size() == 4);
+
+    World reloaded;
+    AssetLibrary assets2;
+    CHECK(SceneSerializer::LoadFromString(reloaded, assets2, saved.dump()));
+    const auto reloadedView = reloaded.Registry.view<TransformComponent>();
+    CHECK(reloadedView.size() == 1);
+    if (!reloadedView.empty()) {
+        CHECK(SameRotation(reloaded.Registry.get<TransformComponent>(*reloadedView.begin()).Rotation,
+                           QuaternionFromEulerYXZ(glm::vec3(25.0f, 40.0f, -60.0f))));
+    }
+
+    // File loads upgrade even an empty v3 scene: the format changed independently of whether
+    // that particular file happened to contain a transform, and the original remains backed up.
+    const auto migrationPath = TempDir() / "quaternion-v3-migration.json";
+    const auto backupPath = std::filesystem::path(migrationPath.string() + ".bak");
+    std::error_code ec;
+    std::filesystem::remove(migrationPath, ec);
+    std::filesystem::remove(backupPath, ec);
+    const std::string emptyV3 = R"({"formatVersion":3,"empties":[]})";
+    CHECK(AtomicFile::WriteBytes(migrationPath, emptyV3, false));
+    World emptyMigrated;
+    AssetLibrary assets3;
+    CHECK(SceneSerializer::Load(emptyMigrated, assets3, migrationPath.string(), true));
+    CHECK(json::parse(ReadAll(migrationPath)).value("formatVersion", 0) == 4);
+    CHECK(ReadAll(backupPath) == emptyV3);
+    std::filesystem::remove(migrationPath, ec);
+    std::filesystem::remove(backupPath, ec);
+}
+
 // #123 - spinning about a diagonal axis turns the object about that axis. Adding axis * angle to
 // the Euler components (the old behaviour) added equal pitch and yaw, which is another rotation.
 void TestRotateEulerAboutLocalAxis() {
@@ -265,31 +335,30 @@ void TestSpinSystemsAboutDiagonalAxis() {
         SpinComponent spin; spin.Axis = glm::vec3(1.0f, 1.0f, 0.0f); spin.Speed = 90.0f;
         world.Registry.emplace<SpinComponent>(e, spin);
         for (int i = 0; i < 60; ++i) gameModule.Tick(world, dt, true);
-        const glm::mat3 m = matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler);
+        const glm::mat3 m = glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation);
         CHECK(near(m, turnAbout(diag, 90.0f), 1e-3f));
         CHECK(glm::length(m * diag - diag) < 1e-3f);
 
-        // Ten minutes more (36000 frames = 900 turns): still the exact rotation, and the stored
-        // degrees stay inside one turn instead of growing.
+        // Ten minutes more (36000 frames = 900 turns): still the exact normalized rotation.
         for (int i = 0; i < 36000; ++i) gameModule.Tick(world, dt, true);
-        const glm::vec3 rot = world.Registry.get<TransformComponent>(e).RotationEuler;
-        CHECK(near(matrixOf(rot), turnAbout(diag, 90.0f), 2e-2f));
-        CHECK(std::abs(rot.x) <= 360.0f && std::abs(rot.y) <= 360.0f && std::abs(rot.z) <= 360.0f);
+        const glm::quat rot = world.Registry.get<TransformComponent>(e).Rotation;
+        CHECK(near(glm::mat3_cast(rot), turnAbout(diag, 90.0f), 2e-2f));
+        CHECK(std::abs(glm::length(rot) - 1.0f) < 1e-4f);
 
         // Something else moves the object (Inspector edit, physics): the spin carries on from
         // where it now is instead of snapping back to where it started.
         const glm::vec3 moved(0.0f, 45.0f, 0.0f);
-        world.Registry.get<TransformComponent>(e).RotationEuler = moved;
+        world.Registry.get<TransformComponent>(e).SetRotationEuler(moved);
         gameModule.Tick(world, dt, true);
-        CHECK(near(matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler),
+        CHECK(near(glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation),
                    matrixOf(moved) * turnAbout(diag, 90.0f * dt), 1e-3f));
 
         // Editing the axis restarts from the current orientation too, with no jump.
-        const glm::vec3 before = world.Registry.get<TransformComponent>(e).RotationEuler;
+        const glm::quat before = world.Registry.get<TransformComponent>(e).Rotation;
         world.Registry.get<SpinComponent>(e).Axis = glm::vec3(0.0f, 0.0f, 1.0f);
         gameModule.Tick(world, dt, true);
-        CHECK(near(matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler),
-                   matrixOf(before) * turnAbout(glm::vec3(0.0f, 0.0f, 1.0f), 90.0f * dt), 1e-3f));
+        CHECK(near(glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation),
+                   glm::mat3_cast(before) * turnAbout(glm::vec3(0.0f, 0.0f, 1.0f), 90.0f * dt), 1e-3f));
     }
 
     // The default spin (+Y) on an untilted object is still plain yaw, and a zero axis does nothing.
@@ -298,11 +367,11 @@ void TestSpinSystemsAboutDiagonalAxis() {
         entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "y");
         world.Registry.emplace<SpinComponent>(e);
         for (int i = 0; i < 30; ++i) gameModule.Tick(world, dt, true);
-        CHECK(near(matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler), matrixOf(glm::vec3(0.0f, 45.0f, 0.0f)), 1e-3f));
+        CHECK(near(glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation), matrixOf(glm::vec3(0.0f, 45.0f, 0.0f)), 1e-3f));
         world.Registry.get<SpinComponent>(e).Axis = glm::vec3(0.0f);
-        const glm::vec3 held = world.Registry.get<TransformComponent>(e).RotationEuler;
+        const glm::quat held = world.Registry.get<TransformComponent>(e).Rotation;
         gameModule.Tick(world, dt, true);
-        CHECK(world.Registry.get<TransformComponent>(e).RotationEuler == held);
+        CHECK(SameRotation(world.Registry.get<TransformComponent>(e).Rotation, held));
     }
 
     // Animator: the base orientation turned by |w| * t about w's own direction.
@@ -314,11 +383,11 @@ void TestSpinSystemsAboutDiagonalAxis() {
         world.Registry.emplace<AnimatorComponent>(e, anim);
         UpdateAnimators(world, 0.5f); // initialises and advances t to 0.5 s
         const float angle = glm::length(anim.SpinDegPerSec) * 0.5f;
-        CHECK(near(matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler),
+        CHECK(near(glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation),
                    matrixOf(base) * turnAbout(glm::normalize(anim.SpinDegPerSec), angle), 1e-3f));
         UpdateAnimators(world, 100.0f); // a long time later: same form, still reversible and bounded
         const float later = std::fmod(glm::length(anim.SpinDegPerSec) * 100.5f, 360.0f);
-        CHECK(near(matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler),
+        CHECK(near(glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation),
                    matrixOf(base) * turnAbout(glm::normalize(anim.SpinDegPerSec), later), 2e-2f));
     }
 
@@ -330,7 +399,7 @@ void TestSpinSystemsAboutDiagonalAxis() {
         TransformControllerComponent ctl; ctl.RotationDegPerSec = glm::vec3(0.0f, 45.0f, 45.0f);
         world.Registry.emplace<TransformControllerComponent>(e, ctl);
         gameModule.Tick(world, 2.0f, true);
-        CHECK(near(matrixOf(world.Registry.get<TransformComponent>(e).RotationEuler),
+        CHECK(near(glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation),
                    matrixOf(base) * turnAbout(glm::normalize(ctl.RotationDegPerSec), glm::length(ctl.RotationDegPerSec) * 2.0f), 1e-3f));
     }
 
@@ -1394,6 +1463,7 @@ int RunUnitTests() {
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},
         {"NearestEuler", TestNearestEuler},
+        {"QuaternionTransformStorage", TestQuaternionTransformStorage},
         {"RotateEulerAboutLocalAxis", TestRotateEulerAboutLocalAxis},
         {"SpinSystemsAboutDiagonalAxis", TestSpinSystemsAboutDiagonalAxis},
         {"MaterialTextureDefaults", TestMaterialTextureDefaults},

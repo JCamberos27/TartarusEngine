@@ -1792,10 +1792,10 @@ int main(int argc, char** argv) {
                             each();
                         }
                     };
-                    const float zeroRot[3] = {0.0f, 0.0f, 0.0f};
+                    const float identityRot[4] = {0.0f, 0.0f, 0.0f, 1.0f};
                     // 1) drop
                     const float drop[3] = {-3.0f, floorTop + 1.8f + radius, 0.0f};
-                    PhysicsWorld::SetActorPose(id, drop, zeroRot, true);
+                    PhysicsWorld::SetActorPose(id, drop, identityRot, true);
                     bool bounced = false, rising = false;
                     float peak = 0.0f, prevVy = 0.0f;
                     run(2.5f, [&] {
@@ -1830,7 +1830,7 @@ int main(int argc, char** argv) {
                     const float speed = 0.5f * (lo + hi);
                     const int homeBefore = board ? board->Home : -1;
                     const float startP[3] = {start.x, start.y, start.z};
-                    PhysicsWorld::SetActorPose(id, startP, zeroRot, true);
+                    PhysicsWorld::SetActorPose(id, startP, identityRot, true);
                     const float vel[3] = {std::cos(angle) * speed, std::sin(angle) * speed, 0.0f};
                     PhysicsWorld::SetLinearVelocity(id, vel);
                     run(3.0f, [] {});
