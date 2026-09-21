@@ -337,6 +337,58 @@ void TestSpinSystemsAboutDiagonalAxis() {
     gameModule.Shutdown();
 }
 
+// #369 - a texture a .mat names as a data map defaults to linear (and a normal map to the NormalMap
+// type) when its .meta has no importer block, instead of the sRGB colour default that bends normals.
+// An explicit importer block still wins. Only the settings step is exercised - it needs no GL.
+void TestMaterialTextureDefaults() {
+    namespace fs = std::filesystem;
+    const fs::path dir = TempDir() / "mat_tex_defaults";
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir, ec);
+    auto make = [&](const char* name, const char* metaJson) {
+        const fs::path p = dir / name;
+        std::ofstream(p, std::ios::binary) << "not decoded by this test";
+        if (metaJson) std::ofstream(fs::path(p.string() + ".meta"), std::ios::binary) << metaJson;
+        return p.generic_string();
+    };
+    const char* bare = R"({"guid":"a1b2c3d4e5f60718","metaVersion":1,"type":"texture"})";
+    AssetLibrary assets;
+    using Use = AssetLibrary::TextureUse;
+
+    // A bare sidecar: normal maps become linear NormalMap textures, other data maps linear.
+    const std::string normal = make("n.png", bare), rough = make("r.png", bare), albedo = make("a.png", bare);
+    assets.ResolveTextureSettings(normal, Use::Normal);
+    assets.ResolveTextureSettings(rough, Use::Data);
+    assets.ResolveTextureSettings(albedo, Use::Color);
+    CHECK(!assets.GetTextureSettings(normal).IsSRGB);
+    CHECK(assets.GetTextureSettings(normal).TextureType == TextureImportSettings::Type::NormalMap);
+    CHECK(!assets.GetTextureSettings(rough).IsSRGB);
+    CHECK(assets.GetTextureSettings(rough).TextureType == TextureImportSettings::Type::Default);
+    // Colour maps keep the sRGB default, and nothing is remembered for them.
+    CHECK(assets.GetTextureSettings(albedo).IsSRGB);
+    CHECK(assets.TextureSettingsMap().count(albedo) == 0);
+
+    // No .meta at all behaves the same as a bare one.
+    const std::string noMeta = make("m.png", nullptr);
+    assets.ResolveTextureSettings(noMeta, Use::Normal);
+    CHECK(!assets.GetTextureSettings(noMeta).IsSRGB);
+
+    // An explicit importer block is an override: even a normal-map slot keeps what the file says.
+    const std::string forced = make("f.png", R"({"guid":"0011223344556677","type":"texture","importer":{"isSRGB":true,"textureType":0,"anisoLevel":2}})");
+    assets.ResolveTextureSettings(forced, Use::Normal);
+    CHECK(assets.GetTextureSettings(forced).IsSRGB);
+    CHECK(assets.GetTextureSettings(forced).AnisoLevel == 2);
+
+    // Settings already known in memory are never replaced by a later, different use.
+    assets.ResolveTextureSettings(rough, Use::Normal);
+    CHECK(assets.GetTextureSettings(rough).TextureType == TextureImportSettings::Type::Default);
+
+    // Nothing was written to any sidecar.
+    CHECK(ReadAll(dir / "n.png.meta") == bare);
+    fs::remove_all(dir, ec);
+}
+
 // #170 - a Physic Material asset round-trips through its file and overrides the collider's own
 // surface values; a missing file leaves them alone.
 void TestPhysicMaterial() {
@@ -1344,6 +1396,7 @@ int RunUnitTests() {
         {"NearestEuler", TestNearestEuler},
         {"RotateEulerAboutLocalAxis", TestRotateEulerAboutLocalAxis},
         {"SpinSystemsAboutDiagonalAxis", TestSpinSystemsAboutDiagonalAxis},
+        {"MaterialTextureDefaults", TestMaterialTextureDefaults},
         {"PhysicMaterial", TestPhysicMaterial},
         {"PostProcessVolume", TestPostProcessVolume},
         {"DopplerVelocity", TestDopplerVelocity},
