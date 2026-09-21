@@ -114,7 +114,7 @@ $key = $Choice
 if (-not $key) {
     $opts = @()
     if (-not $script:onMain -or $script:behindMain -gt 0) { $opts += 'U/M = latest main' }
-    if ($script:prs.Count -gt 0) { $opts += "1-$($script:prs.Count) = try a pull request" }
+    if ($script:prs.Count -gt 0) { $opts += ($(if ($script:prs.Count -eq 1) { "1" } else { "1-$($script:prs.Count)" }) + " = try a pull request") }
     if ($opts.Count -eq 0) { exit 0 }
     Write-Host ("  {0}   |   any other key, or wait {1}s = launch as is" -f ($opts -join '   '), $TimeoutSec) -ForegroundColor White
     try {
