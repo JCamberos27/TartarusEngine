@@ -20,7 +20,16 @@ public:
     AssetLibrary();
 
     std::shared_ptr<Model> LoadModel(const std::string& path);
-    std::shared_ptr<Texture> LoadTexture(const std::string& path);
+    // #369 - what a texture is used for, which decides its default import colour space. Colour
+    // (albedo, emissive) is sRGB; Data (metallic, roughness, AO, height, ...) and Normal are raw
+    // linear values, and Normal also gets the NormalMap import type. Only a *default*: an
+    // explicit "importer" block in the texture's .meta always wins.
+    enum class TextureUse { Color, Data, Normal };
+    std::shared_ptr<Texture> LoadTexture(const std::string& path, TextureUse use = TextureUse::Color);
+    // The settings half of LoadTexture, split out so it can be tested without a GL context:
+    // reads the .meta importer block if there is one, else applies the default for `use`.
+    // Does nothing if settings for `path` are already known (in-memory settings win).
+    void ResolveTextureSettings(const std::string& path, TextureUse use);
     void RegisterSound(const std::string& path); // sounds are played by path via AudioEngine
     // Prefabs are tracked by path only (like sounds) rather than loaded into memory — a prefab
     // file is read fresh on each instantiate, so editing one on disk affects the next instance.
