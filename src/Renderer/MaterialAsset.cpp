@@ -319,22 +319,25 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
     if (lib) {
         // A project-relative path (what Save writes, so .mat files are portable) resolves
         // against the project root, not the process's working directory.
-        auto loadTex = [&](const std::string& p) -> std::shared_ptr<Texture> {
-            return p.empty() ? nullptr : lib->LoadTexture(AbsoluteAssetPath(p));
+        // #369 - only albedo, detail albedo and emissive are colour; every other map holds raw
+        // values, so it must not default to sRGB (see AssetLibrary::ResolveTextureSettings).
+        using Use = AssetLibrary::TextureUse;
+        auto loadTex = [&](const std::string& p, Use use = Use::Data) -> std::shared_ptr<Texture> {
+            return p.empty() ? nullptr : lib->LoadTexture(AbsoluteAssetPath(p), use);
         };
-        m.AlbedoMap            = loadTex(ma->AlbedoMapPath);
-        m.NormalMap            = loadTex(ma->NormalMapPath);
+        m.AlbedoMap            = loadTex(ma->AlbedoMapPath, Use::Color);
+        m.NormalMap            = loadTex(ma->NormalMapPath, Use::Normal);
         m.MetallicRoughnessMap = loadTex(ma->MetallicRoughnessMapPath);
         m.MetallicMap          = loadTex(ma->MetallicMapPath);
         m.RoughnessMap         = loadTex(ma->RoughnessMapPath);
         m.AOMap                = loadTex(ma->AOMapPath);
-        m.EmissiveMap          = loadTex(ma->EmissiveMapPath);
+        m.EmissiveMap          = loadTex(ma->EmissiveMapPath, Use::Color);
     MaterialAsset::UpgradeLegacyMapFactors(m, top.Bool("factorsScaleMaps", false)); // #102
         m.ClearCoatMap         = loadTex(ma->ClearCoatMapPath);
         m.ThicknessMap         = loadTex(ma->ThicknessMapPath);
         m.HeightMap            = loadTex(ma->HeightMapPath);
-        m.DetailAlbedoMap      = loadTex(ma->DetailAlbedoMapPath);
-        m.DetailNormalMap      = loadTex(ma->DetailNormalMapPath);
+        m.DetailAlbedoMap      = loadTex(ma->DetailAlbedoMapPath, Use::Color);
+        m.DetailNormalMap      = loadTex(ma->DetailNormalMapPath, Use::Normal);
 
         // Resolve shader asset when path is set (AssetLibrary handles caching). A project-
         // relative "shader" value is resolved against the project root so a .mat works from any
