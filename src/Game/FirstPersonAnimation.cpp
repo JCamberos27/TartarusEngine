@@ -25,6 +25,19 @@ float Number(const json& j, const char* key, float fallback) {
     return it != j.end() && it->is_number() ? it->get<float>() : fallback;
 }
 
+// Optional [x, y, z] array. Absent or malformed falls back to `fallback`, so older .fpsanim
+// files keep loading; the caller still gets a chance to reject non-finite values.
+glm::vec3 Vec3(const json& j, const char* key, const glm::vec3& fallback) {
+    const auto it = j.find(key);
+    if (it == j.end() || !it->is_array() || it->size() != 3) return fallback;
+    glm::vec3 out = fallback;
+    for (int i = 0; i < 3; ++i) {
+        if (!(*it)[i].is_number()) return fallback;
+        out[i] = (*it)[i].get<float>();
+    }
+    return out;
+}
+
 bool Fail(std::string* error, const std::string& message) {
     if (error) *error = message;
     return false;
@@ -52,8 +65,12 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     parsed.ArmsModel = String(root, "armsModel");
     parsed.WeaponModel = String(root, "weaponModel");
     parsed.DefaultState = String(root, "defaultState");
+    parsed.ViewRotation = Vec3(root, "viewRotation", glm::vec3(0.0f));
     if (parsed.ArmsModel.empty()) return Fail(error, "missing required string 'armsModel'");
     if (parsed.WeaponModel.empty()) return Fail(error, "missing required string 'weaponModel'");
+    if (!std::isfinite(parsed.ViewRotation.x) || !std::isfinite(parsed.ViewRotation.y) ||
+        !std::isfinite(parsed.ViewRotation.z))
+        return Fail(error, "'viewRotation' must be three finite numbers (Y-X-Z degrees)");
 
     const auto clipsIt = root.find("clips");
     if (clipsIt == root.end() || !clipsIt->is_array() || clipsIt->empty())

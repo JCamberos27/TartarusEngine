@@ -265,15 +265,35 @@ void Model::ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& par
 std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& nodeTransform) {
     std::vector<ModelVertex> vertices(mesh->mNumVertices);
 
-    // Skinned meshes are positioned entirely by their bone matrices (computed by walking
-    // the full node hierarchy in CalculateBoneTransform), so baking the mesh's own node
-    // transform into the raw vertex data here would double-apply it once skinning runs.
     // Gated on m_D->Settings.ImportSkeleton too: with skeleton import off, ExtractBoneWeights below
     // never runs, so treating this as "skinned" would leave every vertex's bone weights at their
     // default (unset) values instead of the identity-pose vertex position baked in here - the
     // mesh would render collapsed to the origin rather than as a static copy of its bind pose.
     bool skinned = m_D->Settings.ImportSkeleton && mesh->mNumBones > 0;
-    glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(nodeTransform)));
+
+    // Which transform belongs in the vertex data?  Exactly the same one as for a non-skinned
+    // mesh: the owning node's world transform.
+    //
+    // The shader multiplies every vertex by `GlobalInverse * PosedGlobal * BoneOffset`, which
+    // lands in ROOT space. BoneOffset (Assimp: inverse(TransformLink) * absolute_transform)
+    // only accounts for the *bone* hierarchy - FBX passes the ROOT node's transform as
+    // absolute_transform, i.e. identity here - so nothing in that palette ever mentions the mesh
+    // node's own frame. Folding nodeTransform in here is what puts the vertex into root space
+    // before skinning, exactly as it does for static meshes.
+    //
+    // Measuring the residual C = RestGlobal * BoneOffset does NOT let you cancel anything out:
+    // C is not a constant error term, it is the node tree's pose-versus-bind delta (bind pose
+    // => C == I; a posed import => C == that pose). Inverting it erased the pose Assimp had
+    // already baked into the node tree - it dropped the FPS weapon from the hands down to the
+    // model's origin, where the FBX's un-posed mesh data sits.
+    //
+    // Why this reads as "no bug at bind, tears the moment a clip plays": at bind the whole
+    // palette collapses to GlobalInverse * C, a single matrix shared by every bone, so a missing
+    // node transform cannot tear anything - it just uniformly rotates the mesh. Only once a clip
+    // plays does each bone apply its own delta to that un-rotated vertex, blowing a 0.02 m edge
+    // apart into 0.5 m blades.
+    const glm::mat4& bake = nodeTransform;
+    glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(bake)));
 
     for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
         ModelVertex v;
@@ -298,11 +318,9 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
             v.TangentSign = 1.0f;
         }
 
-        if (!skinned) {
-            v.Position = glm::vec3(nodeTransform * glm::vec4(v.Position, 1.0f));
-            v.Normal = glm::normalize(normalMatrix * v.Normal);
-            v.Tangent = glm::normalize(glm::mat3(nodeTransform) * v.Tangent);
-        }
+        v.Position = glm::vec3(bake * glm::vec4(v.Position, 1.0f));
+        v.Normal = glm::normalize(normalMatrix * v.Normal);
+        v.Tangent = glm::normalize(glm::mat3(bake) * v.Tangent);
 
         vertices[i] = v;
 
@@ -317,7 +335,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     // #113 — a mirrored node transform (negative determinant, e.g. a -1 scale for the other
     // side of a symmetric prop) baked into the vertices flips every triangle's winding, so the
     // mesh renders inside-out under back-face culling. Swap two indices per triangle to undo it.
-    const bool flipWinding = !skinned && glm::determinant(glm::mat3(nodeTransform)) < 0.0f;
+    const bool flipWinding = glm::determinant(glm::mat3(bake)) < 0.0f;
     for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
         const aiFace& face = mesh->mFaces[i];
         if (flipWinding && face.mNumIndices == 3) {
@@ -335,8 +353,9 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
 
     auto gpuMesh = std::make_unique<ModelMesh>(vertices, indices);
     if (skinned) {
-        // #98 — the GPU copy stays in mesh space for the skinning shader; bounds, picking,
-        // snapping and collider cooking use the bind pose (same blend as the vertex shader).
+        // #98 — bounds, picking, snapping and collider cooking are rebuilt from this CPU copy at
+        // the bind pose (same blend as the vertex shader), so they track whatever `bake` folded
+        // into the GPU vertices above and never drift out of step with what's on screen.
         std::vector<glm::vec3> posed;
         posed.reserve(vertices.size());
         for (const ModelVertex& v : vertices) {
@@ -933,6 +952,30 @@ void Model::UpdateAnimation(float dt) {
     }
     EvaluatePose();
     m_PosePending = false;
+}
+
+bool Model::NodeTransform(const std::string& name, glm::mat4& out) const {
+    const auto& nodes = m_D->Nodes;
+    size_t idx = nodes.size();
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        if (nodes[i].Name == name) { idx = i; break; }
+    }
+    if (idx == nodes.size()) return false;
+
+    // Same "is a pose live?" test UploadBoneMatrices uses, plus m_NodeGlobals being populated:
+    // it is scratch filled by EvaluatePose, so before the first evaluation (or after a
+    // reimport) it is simply absent and the bind walk below is the truthful answer.
+    const bool posed = (m_Anim.Clip >= 0 || m_FadeDuration > 0.0f) && m_NodeGlobals.size() == nodes.size();
+    if (posed) {
+        out = m_NodeGlobals[idx];
+        return true;
+    }
+
+    // Bind pose: accumulate each ancestor's bind-local transform, parents first.
+    glm::mat4 global(1.0f);
+    for (int i = (int)idx; i >= 0; i = nodes[i].Parent) global = nodes[i].BindLocal * global;
+    out = global;
+    return true;
 }
 
 void Model::EvaluatePose() {

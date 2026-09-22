@@ -2,6 +2,32 @@
 
 Branch: `feature/fps-first-person-animation`
 
+## RESOLVED — root cause found (read this first)
+
+The "fan of blades" tear described below is **fixed**, and the fix is a three-line
+change in one place: `Model::ProcessMesh` skipped the owning node's world transform
+for **skinned** meshes (`if (!skinned)`) while Assimp's `mOffsetMatrix` values expect
+root-space vertices. Every probe in this document compared **bone transforms** against
+Blender and never measured **vertex placement**, which is exactly where the bug was —
+so they were all correct and all irrelevant to the actual defect.
+
+```cpp
+const glm::mat4& bake = nodeTransform;   // skinned or not, always
+```
+
+**Do not "cancel out" `C = RestGlobal · BoneOffset`.** It is the node tree's
+pose-versus-bind delta, not a residual error term (bind pose ⇒ `C == I`; the clip FBXs
+carry a frame-0 pose ⇒ `C` varies; the weapon's base node tree carries the ADS pose ⇒
+`C ≈ translate(-0.069, 1.503, 0.446)`, the gun-socket delta). Applying `C⁻¹` erased the
+pose already baked into the node tree and dropped the weapon to the model origin.
+
+Two further first-person-presentation fixes landed on the same branch (camera anchored
+on the `head` bone instead of the model root, and a `viewRotation` of `[0, 180, 0]` on
+the `.fpsanim` because the rig faces model `+Z` while the camera looks down `-Z`).
+Full write-up, asset pipeline, runtime map, probe how-to and known gaps:
+
+> **`FPS_ANIMATION_SYSTEM.md`**
+
 This document exists because an extensive debugging session could not find the
 root cause of a real, confirmed visual bug before running out of productive
 leads. It's written so a fresh AI session (or human) can pick this up without
@@ -283,6 +309,12 @@ standalone program, not the engine) and an external ground truth
 (Blender's own live evaluation, not just Blender's reconstruction of the
 exported file).
 
+> **AMENDED (resolved):** the conclusion in this paragraph — "very likely not in
+> bone-transform math at all" — was right, but both remaining candidates were the
+> wrong shape. The bug was in `Model::ProcessMesh`: it baked `nodeTransform` into
+> static meshes only, so skinned vertices stayed in mesh-local space while the
+> palette expected root space. See `FPS_ANIMATION_SYSTEM.md` §3.
+
 **What this means for whoever continues:** the skeletal transform pipeline
 — hierarchy, channel matching, per-bone global composition — is about as
 thoroughly proven correct as is practical without a GPU capture. The
@@ -380,6 +412,16 @@ no silent garbage term). Nothing suspicious was found by inspection alone; this
 has **not** been confirmed against an actual GPU capture, so it's "looks
 correct on read" rather than "proven correct" the way the CPU-side bone math
 now is.
+
+> **AMENDED (resolved):** "the CPU-side skeletal pipeline is about as exhaustively
+> verified as it can be" overstated what was covered. What was exhaustively verified
+> was **bone transforms**: hierarchy, channel matching, and every composed skin matrix.
+> **Vertex placement** was never measured by any probe — no probe checked where a
+> vertex ends up after `ProcessMesh`. That was the defect: skinned meshes skipped
+> `nodeTransform`, so vertices stayed in mesh-local space while Assimp's offsets
+> assume root space. It is silent at bind (the palette collapses to one matrix) and
+> catastrophic under any clip. Fixed as `bake = nodeTransform`; see
+> `FPS_ANIMATION_SYSTEM.md` §3.
 
 **What's left, ranked by how promising it looks right now:**
 

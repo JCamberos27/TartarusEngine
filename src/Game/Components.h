@@ -396,7 +396,13 @@ struct FirstPersonControllerComponent {
     // leaving this empty preserves the existing controller exactly (including Sandbox gravity gun
     // playtests). The fields below are authored setup, not a second physics character.
     std::string AnimationSet;
-    glm::vec3 ViewModelOffset{0.0f, -0.18f, -0.38f};
+    // The rig bone the play camera sits on. Placement parks this bone's world position exactly on
+    // the camera, so ViewModelOffset below is only a residual nudge - which matters because these
+    // rigs are authored standing in their own scene (feet at y=0, head near y=1.56): without a
+    // bone anchor the model's root goes where the camera is and the whole rig floats ~1 m above
+    // the view. Leave empty to fall back to positioning the model's root directly on the camera.
+    std::string CameraBone = "head";
+    glm::vec3 ViewModelOffset{0.0f};
     glm::vec3 ViewModelRotation{0.0f};
     float ViewModelScale = 1.0f;
     float ViewModelFov = 60.0f;

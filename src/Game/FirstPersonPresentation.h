@@ -67,6 +67,8 @@ private:
     glm::vec3 m_Offset{0.0f};
     glm::vec3 m_Rotation{0.0f};
     float m_Scale = 1.0f;
+    std::string m_CameraBone;   // rig node the play camera is pinned to (empty = root-anchored)
+    bool m_CameraBoneWarned = false;
     std::string m_CurrentState;
     std::string m_LastError;
 
