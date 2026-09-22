@@ -138,6 +138,12 @@ public:
     // bind pose (#98 — a rig with no clip playing used to render in raw mesh space).
     void UploadBoneMatrices(Shader& shader) const;
     bool IsPlayingAnimation() const { return m_Anim.Clip >= 0; }
+    // Has the current clip run out? True when nothing is set to play, false while a wrapping clip
+    // runs, and - unlike IsPlayingAnimation(), which a ClampForever clip never clears - true for a
+    // ClampForever clip that has reached its last frame and is now only holding it. This is the
+    // question a "did that one-shot finish?" gate actually wants: IsPlayingAnimation() answers
+    // "is a clip still driving the pose", and a held pose still is.
+    bool AnimationFinished() const;
     int  BoneCount() const { return m_D->BoneCounter; }
     // The current skinning matrix of bone `i` (bind pose when nothing plays). For tests / tools.
     glm::mat4 FinalBoneMatrix(int i) const {

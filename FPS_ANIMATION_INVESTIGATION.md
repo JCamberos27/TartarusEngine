@@ -509,6 +509,81 @@ running alongside the smoke test. This was A/B-proved innocent by restoring the 
 Idle FBX and re-running: **identical numbers either way.** Only the per-scene asset
 content matters; the totals are environment, not the change under test.
 
+## UPDATE 4: the arms and the AK blink out of frame whenever a one-shot ends
+
+Reported after the socket/FOV work: *"the arms and ak mesh disappear at moments during
+the idle animation, or i guess more like when it switches animation."* Engine-side this
+time — not the rig, not the skinning, not the re-exported clips.
+
+**Mechanism.** `FirstPersonPresentation::Play()` asked for `AnimationWrapMode::Once` on
+every non-looping state. `Model::UpdateAnimation` clears `Clip` the moment a `Once`
+clip reaches its end:
+
+```cpp
+if (s.Wrap == AnimationWrapMode::Once && (s.Time >= len || s.Time < 0.0f)) s.Clip = -1;
+```
+
+From that frame two things fall back to the base FBX:
+
+- `Model::UploadBoneMatrices`'s `posed` test goes false, so the model is skinned with
+  `m_D->BindPoseBones` instead of `m_FinalBoneMatrices`;
+- `Model::NodeTransform`'s identical test goes false, so it answers from the **bind
+  walk** rather than `m_NodeGlobals`.
+
+For these rigs the base FBX's bind pose is the **Manny T-pose**, so the arms leave the
+view — *and* `FirstPersonPresentation::Update()` solves the weapon's entity transform
+from `NodeTransform("ik_hand_gun")`, which has just moved to the right **hip**, so the
+gun leaves with it. Both meshes vanish on the same frame, which is why they read as one
+symptom.
+
+Then the next state's `PlayAnimation` stores that `Clip = -1` state as `m_AnimFrom`, and
+`EvaluatePose` reads an absent source clip as the bind pose — so the crossfade **travels
+through the T-pose** for the full `fade` (0.12 s on Idle ≈ 7 frames) on the way back.
+
+**Which states.** Every one-shot: Fire, TacReload, EmptyReload, Inspect, MagCheck,
+Melee, Draw, Holster, Regrip — **and `IdleToSprint` / `SprintToIdle`**, because
+`FirstPersonTransitionVia` routes Idle↔Sprint through them. Just starting and stopping
+a sprint was enough to blink. Transitions between two *looping* states (Idle↔Walk↔Aim)
+never hit this path, which is why it looked intermittent.
+
+**Evidence** — `work/bind_probe.cpp`, which replicates `Model::EvaluatePose` exactly and
+prints the base FBX's bind pose against each clip:
+
+| node | bind pose (arms base) | Idle clip | delta |
+|---|---|---|---|
+| `hand_l` | (0.478, 1.045, 0.157) — hip, arm down | — | **768 mm / 109°** |
+| `hand_r` | (−0.478, 1.045, 0.157) | — | **547 mm / 74°** |
+| `ik_hand_gun` | (−0.478, 1.045, 0.157) — right hip | — | **678 mm / 105°** |
+| `head` | (0, 1.626, 0.007) | — | 120 mm / 7° |
+| worst bone | `CB_Gun` | — | **1569 mm / 177°** |
+
+The weapon base alone is innocent: `AKS-74U_A_W_ADS.fbx`'s `root` sits within 0.0 mm of
+every weapon clip's t=0, so the weapon rig's own bind pose is a correct on-screen pose.
+The gun only disappears because its **socket** moves.
+
+**Fix.** One-shot states now request `AnimationWrapMode::ClampForever` — the mode
+`AnimatorController` already uses for non-looping clips — which keeps the clip alive and
+holding its last frame, so both the skinned palette and `NodeTransform` stay posed and
+the next state crossfades **from the real end pose**. Because a held clip never stops
+reporting `IsPlayingAnimation()`, completion is now read through the new
+`Model::AnimationFinished()`, which uses the *same* predicate `UpdateAnimation` applies
+to a `Once` clip. `AnimationWrapMode::Once`'s documented "returns to bind pose"
+behaviour is deliberately **unchanged** for every other caller.
+
+**Verification** — build exit 0; unit tests **800 checks, 0 failures**;
+smoke `FPS_Animation_smoke_play.json` **PASS**, `newLogErrors=0 drawCalls=1
+playCycles=2 variants: 0x00=220` — byte-for-byte the same counters as before the change.
+`Apartment`=6 / `Sandbox`=1 are the known missing-HDR environment noise (see UPDATE 3's
+method note).
+
+**Follow-up found while probing, not yet acted on:** the weapon rig's `mag2` bone sits
+**121.8 mm from bind at t=0 of every weapon clip** (305 mm / 40° under Sprint), and
+`Play()` cuts the weapon to bind with `StopAnimation()` — i.e. fade 0 — whenever it
+enters a state with no weapon clip (Idle/Walk/Aim/Draw/Regrip). That is a hard snap on
+the magazine at both ends of every weapon clip, pre-existing and unrelated to the
+disappearance. **Ask before "fixing"** — it may be authored behaviour, and the clip
+files are not ours to change without a decision.
+
 ## Original next-step writeup (now executed — see UPDATE above; left for the reasoning/code)
 
 **Play the `A_FP_Idle` action directly on the live rig in Blender, with

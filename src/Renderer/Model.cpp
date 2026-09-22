@@ -864,6 +864,16 @@ float Model::AnimationLength(int index) const {
     return c ? c->LengthSeconds() : 0.0f;
 }
 
+bool Model::AnimationFinished() const {
+    if (m_Anim.Clip < 0) return true; // stopped, or a Once clip that dropped itself
+    if (m_Anim.Wrap == AnimationWrapMode::Loop || m_Anim.Wrap == AnimationWrapMode::PingPong)
+        return false;                 // wraps forever by construction
+    // Deliberately the same predicate UpdateAnimation() applies to a Once clip, so "finished"
+    // means the same thing whether the clip then drops itself or holds with ClampForever.
+    const float len = AnimationLength(m_Anim.Clip);
+    return m_Anim.Time >= len || m_Anim.Time < 0.0f;
+}
+
 int Model::FindClipByRef(const std::string& ref) const {
     for (int e = 0; e < (int)m_ExternalClips.size(); ++e)
         if (m_ExternalClips[e].Ref == ref) return (int)m_D->Animations.size() + e;

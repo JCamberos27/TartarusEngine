@@ -377,6 +377,7 @@ main CMake project.
 | `assimp_probe.cpp`, `full_skin_probe.cpp`, `bone_match_probe.cpp`, `dup_name_probe.cpp` | The earlier bone-math investigations — see `FPS_ANIMATION_INVESTIGATION.md` |
 | `bl_inspect.py`, `bl_inspect2.py`, `bl_idle_probe.py`, `bl_idle_probe2.py`, `bl_pair_check.py` | Read-only Blender ground truth: world/evaluated AABBs, bone landmarks, per-bone motion under a given weapon pairing |
 | `hand_probe.cpp` | Per-bone motion through a whole clip — left-vs-right path, per-sample rotation/translation step, loop seam, skinned-but-undriven bones. The tool that found the left-hand bug |
+| `bind_probe.cpp` | The base FBX's **bind pose** against each clip, node by node: world positions of `head`, `ik_hand_gun` and the hands, plus the worst bind↔clip displacement. Answers "what does the engine paint when no clip is live?" — the tool that found the disappearing-arms bug |
 | `fbx_info.cpp` | What is actually inside an FBX: nodes, meshes, and every take it carries |
 
 **Gotcha:** `AiToGlm` must be a *direct element copy*. `glm::make_mat4(&m.a1)` reads
@@ -413,6 +414,21 @@ Copy the implementation from `work/pose_probe.cpp`.
 5. **`FirstPersonPresentation::Tick`/state-transition logic** was exercised by the
    smoke test's 2 play cycles, not stress-tested across all 15 states in the editor.
    Worth a manual pass through Fire/Reload/Sprint/Melee with the Game tab open.
+6. **A one-shot state must request `ClampForever`, never `Once`.** `Once` clears
+   `Clip` at the end, which drops `UploadBoneMatrices` and `Model::NodeTransform` back
+   to the base FBX's **bind pose** — and for these rigs that bind pose is the Manny
+   T-pose (`work/bind_probe.cpp`: `ik_hand_gun` 678 mm from where the animation puts
+   it), so the arms *and* the socket-parented weapon both blink out of frame, and the
+   next crossfade then travels through the T-pose. `Play()` therefore uses `ClampForever`
+   for non-looping states and reads completion with `Model::AnimationFinished()`, since
+   a held clip never clears `IsPlayingAnimation()`. `Once`'s own "returns to bind pose"
+   contract is untouched for every other caller. See `FPS_ANIMATION_INVESTIGATION.md`
+   UPDATE 4 for the measurements.
+7. **The weapon's `mag2` bone is 121.8 mm off bind at t=0 of every weapon clip**, and
+   `Play()` cuts the weapon to bind with `StopAnimation()` (fade 0) when entering a
+   state that has no weapon clip — a hard snap on the magazine at both ends. Pre-existing,
+   measured with `work/bind_probe.cpp`, **not yet acted on**: it may be authored
+   behaviour. Ask before changing it.
 
 ---
 
