@@ -133,7 +133,19 @@ bool FirstPersonPresentation::AttachAndValidate(AssetLibrary& assets) {
 
 bool FirstPersonPresentation::Play(const FirstPersonAnimationClip& clip) {
     if (!m_ArmsModel || !m_WeaponModel) return false;
-    const AnimationWrapMode wrap = clip.Loop ? AnimationWrapMode::Loop : AnimationWrapMode::Once;
+    // A one-shot holds its last frame rather than dropping to Once. Once clears Clip the moment
+    // it reaches the end, and from that frame Model::UploadBoneMatrices stops using the posed
+    // palette and paints the model with the BASE FBX's bind pose - and Model::NodeTransform falls
+    // back to the bind walk too, so the weapon socket goes with it. For these rigs that bind pose
+    // is the Manny T-pose (work/bind_probe: hands at the hips, ik_hand_gun 678 mm from where the
+    // animation puts it, worst bone 1569 mm / 177 deg). So every finished one-shot - Fire, the
+    // reloads, Draw, Holster, and both sprint transitions - blinked the arms AND the gun out of
+    // frame for a frame, then crossfaded back THROUGH the T-pose on the way to the next state.
+    // ClampForever (the mode the Animator Controller already uses for non-looping clips) keeps the
+    // clip alive and holding, which is exactly what the next state should fade from. Completion is
+    // read with AnimationFinished() in ActionFinished(), since a held clip never stops "playing".
+    const AnimationWrapMode wrap =
+        clip.Loop ? AnimationWrapMode::Loop : AnimationWrapMode::ClampForever;
     if (clip.ArmsBindPose) {
         m_ArmsModel->StopAnimation();
     } else {
@@ -188,8 +200,12 @@ bool FirstPersonPresentation::StartAction(const std::string& state, FirstPersonA
 
 bool FirstPersonPresentation::ActionFinished() const {
     if (!m_ArmsModel || !m_WeaponModel) return true;
-    const bool armsDone = !m_ActionGateArms || !m_ArmsModel->IsPlayingAnimation();
-    const bool weaponDone = !m_ActionGateWeapon || !m_WeaponModel->IsPlayingAnimation();
+    // A bind-pose arms slot or an absent weapon clip is never running a clip, so it can't gate
+    // completion - only the rig(s) actually given a timed clip do (mirrors Play()'s own check).
+    // AnimationFinished(), not IsPlayingAnimation(): a ClampForever clip holds its last frame
+    // indefinitely, so "is a clip driving the pose" stays true long after the action ended.
+    const bool armsDone = !m_ActionGateArms || m_ArmsModel->AnimationFinished();
+    const bool weaponDone = !m_ActionGateWeapon || m_WeaponModel->AnimationFinished();
     return armsDone && weaponDone;
 }
 
