@@ -18,9 +18,12 @@ skinning.
 | 1 | Arms rendered fine at bind pose, tore into a "fan of blades" the instant any clip played | `Model::ProcessMesh` skipped the owning node's world transform for skinned meshes, while Assimp's `mOffsetMatrix` values expect root-space vertices | `bake = nodeTransform` — bake the node transform for **every** mesh, skinned or not |
 | 2 | Arms + weapon floated ~1 m above the player capsule / camera | The rig is authored *standing* (feet at `y=0`, head at `y≈1.56`) but the presentation parked the model's **root** at the camera | Anchor placement on a rig bone (`head`): solve for the root that puts the bone exactly on the camera |
 | 3 | Arms and weapon rendered on the opposite side of the camera (behind it) | Blender character faces `-Y` → FBX converts it to model `+Z`; the engine camera looks down its own `-Z`. Exactly 180° out | New `viewRotation` field on the `.fpsanim` asset, `[0, 180, 0]` |
+| 4 | The spare magazine existed in Blender but was invisible in the engine — reload showed no second mag in the hand | assimp's `aiProcess_JoinIdenticalVertices` keyed its dedup on position/normal/uv/colour and **ignored bone weights**, so the two coincident magazine islands (identical at rest, told apart only by the `magazine`/`mag2` bones) merged — and the losing bone was left holding 17594 stale vertex ids | Local assimp patch: skin-aware vertex identity + always rewrite `mNumWeights`. Applied at configure time from `tools/assimp_patches/` |
 
 Fix 1 is a renderer bug affecting **any** skinned FBX, not just this rig. Fixes 2 and 3
-are first-person-presentation concerns.
+are first-person-presentation concerns. Fix 4 is upstream of the engine entirely — see
+§8 item 8 and `FPS_ANIMATION_INVESTIGATION.md` UPDATE 5; it will re-break silently if
+assimp's `GIT_TAG` is bumped without rebasing the patch.
 
 Everything below assumes you've read section 3 (the bake rule) — it is the invariant
 most likely to be broken by accident.
@@ -378,7 +381,14 @@ main CMake project.
 | `bl_inspect.py`, `bl_inspect2.py`, `bl_idle_probe.py`, `bl_idle_probe2.py`, `bl_pair_check.py` | Read-only Blender ground truth: world/evaluated AABBs, bone landmarks, per-bone motion under a given weapon pairing |
 | `hand_probe.cpp` | Per-bone motion through a whole clip — left-vs-right path, per-sample rotation/translation step, loop seam, skinned-but-undriven bones. The tool that found the left-hand bug |
 | `bind_probe.cpp` | The base FBX's **bind pose** against each clip, node by node: world positions of `head`, `ik_hand_gun` and the hands, plus the worst bind↔clip displacement. Answers "what does the engine paint when no clip is live?" — the tool that found the disappearing-arms bug |
-| `fbx_info.cpp` | What is actually inside an FBX: nodes, meshes, and every take it carries |
+| `fbx_info.cpp` | What is actually inside an FBX: nodes, meshes, and every take it carries — per-bone weight lists and per-take animated node names |
+| `mag_probe.cpp` | Out-of-range skin-weight audit under the engine's exact flag set (`--scan` over every shipped FBX), a post-processing **flag bisect**, per-bone raw `aiBone` dumps, and forward-skin positions at chosen ticks. The tool that proved `aiProcess_JoinIdenticalVertices` was deleting the spare magazine |
+| `build_probe.bat` | `cmd /c "work\build_probe.bat <name>"` — builds `work\<name>.cpp` with the right vcvars + `/MD` + assimp/glm include and lib paths, so a new probe is one command instead of the `cl` line above |
+
+**Probes link the *same* assimp the engine does**, which now carries
+`tools/assimp_patches/*.patch` (see §8). If you build a probe against a re-cloned
+`build\_deps` that hasn't been configured yet, run `cmake --build build` once first or
+you'll be measuring unpatched assimp.
 
 **Gotcha:** `AiToGlm` must be a *direct element copy*. `glm::make_mat4(&m.a1)` reads
 column-major from Assimp's row-major matrix and silently transposes everything — that
@@ -428,7 +438,28 @@ Copy the implementation from `work/pose_probe.cpp`.
    `Play()` cuts the weapon to bind with `StopAnimation()` (fade 0) when entering a
    state that has no weapon clip — a hard snap on the magazine at both ends. Pre-existing,
    measured with `work/bind_probe.cpp`, **not yet acted on**: it may be authored
-   behaviour. Ask before changing it.
+   behaviour. Ask before changing it. This item is now **live rather than latent**: it
+   was invisible while the spare magazine's vertex weights were being dropped (see
+   item 8), because a frozen mesh can't snap. With `mag2` driving its island again, the
+   snap will be visible in Play mode.
+8. **assimp is patched locally; a fresh clone depends on that patch.** assimp comes from
+   github at a pinned `GIT_TAG` (`CMakeLists.txt`) rather than a fork, and stock v5.4.3's
+   `aiProcess_JoinIdenticalVertices` silently destroyed the spare magazine: its dedup key
+   ignored bone weights, so the two *coincident* magazine islands — modelled exactly on
+   top of each other and told apart only by the `magazine` / `mag2` bones — merged into
+   one, and the losing bone was then left holding 17594 stale vertex ids. Every engine
+   path downstream (`ExtractBoneWeights`, `ModelVertex.glsl`) behaved correctly; it just
+   received nothing. The fix rides along as
+   `tools/assimp_patches/0001-join-vertices-keep-skin-bindings-apart.patch`, applied at
+   configure time by `tools/apply_assimp_patches.cmake`. **All 11 weapon FBXs were
+   affected** (193,534 dropped weights over 27 files); the arms files were clean.
+   Consequences to remember: (a) `build/_deps` no longer survives a clean configure
+   unpatched — that's what the hook is for; (b) if you ever bump assimp's `GIT_TAG`, the
+   applier fails the configure loudly instead of building without the fix, and the patch
+   will need rebasing; (c) don't "optimise" it away with the per-asset
+   `importer.optimizeGraph=false` fallback — that keeps the mesh correct but costs
+   29215 → 130947 verts (+348%) versus +18.7% for the patch. See
+   `FPS_ANIMATION_INVESTIGATION.md` UPDATE 5.
 
 ---
 

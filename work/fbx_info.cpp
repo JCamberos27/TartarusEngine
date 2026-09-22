@@ -45,12 +45,26 @@ int main(int argc, char** argv) {
             bones += mm->mNumBones;
             printf("    mesh %-28s verts=%-8u faces=%-8u bones=%u\n",
                    mm->mName.C_Str(), mm->mNumVertices, mm->mNumFaces, mm->mNumBones);
+            // Which bones actually carry geometry, and how much of it. A bone that is animated
+            // but has nothing weighted to it moves nothing, and a mesh island present in the
+            // .blend but absent here simply did not make it into the export.
+            for (unsigned b = 0; b < mm->mNumBones; ++b) {
+                const aiBone* bb = mm->mBones[b];
+                printf("        bone %-24s weights=%u\n", bb->mName.C_Str(), bb->mNumWeights);
+            }
         }
         printf("    TOTAL verts=%llu faces=%llu bone-instances=%llu\n", verts, tris, bones);
         for (unsigned x = 0; x < sc->mNumAnimations; ++x) {
             const aiAnimation* an = sc->mAnimations[x];
             printf("    take %-30s dur=%-8.1f tps=%-6.1f channels=%u\n",
                    an->mName.C_Str(), an->mDuration, an->mTicksPerSecond, an->mNumChannels);
+            // Every animated node by name: a node that exists in the tree but has no channel
+            // here will never move, no matter how the .blend keys it.
+            printf("      animated:");
+            for (unsigned c = 0; c < an->mNumChannels; ++c) {
+                printf(" %s", an->mChannels[c]->mNodeName.C_Str());
+            }
+            printf("\n");
         }
         std::set<std::string> names;
         CollectNames(sc->mRootNode, names);

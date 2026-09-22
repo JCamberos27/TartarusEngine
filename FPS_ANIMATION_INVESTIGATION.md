@@ -584,6 +584,121 @@ the magazine at both ends of every weapon clip, pre-existing and unrelated to th
 disappearance. **Ask before "fixing"** — it may be authored behaviour, and the clip
 files are not ours to change without a decision.
 
+## UPDATE 5: the spare magazine exists in Blender but not in the engine — assimp's vertex join
+
+Reported after the disappearance fix: *"the reload should show a 2nd magazine in the hand
+being swapped out — visible in Blender but not in the engine."* Root cause found, and it
+is **not** in the engine's animation path — it happens three layers down, inside assimp's
+`aiProcess_JoinIdenticalVertices`.
+
+**The asset.** The weapon is a single object `aks74u` with 9 disjoint vertex groups
+summing exactly to its vertex count: `magazine` 3190, `mag2` 3190, `root` 12469, `stock`
+2590, `bolt` 670, `fire_selector` 523, `rear_sling_loop` 420, `mag_release` 82,
+`trigger` 76. The spare magazine is **not a separate object** — it is a second mesh
+island bound to the `mag2` bone, and it is a *perfect geometric duplicate of the installed
+magazine*: both islands have 17594 raw verts and an identical rest bounding box
+`(0.0111, −0.0131, −0.2062)..(0.1404, 0.0131, −0.0019)`. `magazine` and `mag2` share the
+same rest head `(5.0641, −1.3933, 0.0)`. At rest the two islands occupy **the same
+space**; only the `mag2` bone's animation ever separates them — ~66 cm at rest (parked at
+the hip pouch), ~5 cm at the midpoint of the reload (in the hand).
+
+So "identical vertices, different binding" is exactly the situation the asset is built
+around, and it is precisely what `aiProcess_JoinIdenticalVertices` does not understand.
+
+**Mechanism.** `build/_deps/assimp-src/code/PostProcessing/JoinVerticesProcess.cpp` keys
+its dedup map on a `Vertex` whose `std::hash` hashes **position only**, and
+`areVerticesEqual` compares position/normal/uv/color — **bone weights are not part of the
+key in either direction**. The two islands therefore hash to the same buckets and compare
+equal. One island wins (in practice `magazine`, which reads first in bone-array order),
+the other's verts all get `JOINED_VERTICES_MARK`, and then:
+
+```cpp
+if (newWeights.size() > 0) {          // <-- the second, independent defect
+    delete [] bone->mWeights;
+    bone->mNumWeights = (unsigned int)newWeights.size();
+    ...
+}
+```
+
+When *every* one of a bone's weights was filtered out, this guard skipped the rewrite, so
+the bone kept `mNumWeights = 17594` **and the original vertex ids** — indices into a
+buffer that had already been shrunk to `magazine`'s vertices. `Model::ExtractBoneWeights`
+then hit its `if (vertexId >= vertices.size()) continue;` and dropped all 17594 silently.
+With zero vertices carrying a `mag2` influence, `ModelVertex.glsl`'s
+`totalWeight <= 0.0001 → skinMat = mat4(1.0)` fallback leaves those verts at rest — frozen
+**exactly underneath** the installed magazine, hence invisible.
+
+**Bisect (assimp v5.4.3).** On `AKS-74U_A_W_Tac_Reload.fbx`, counting `mag2` weights
+whose vertex id survives the flag set:
+
+| flags | `mag2` weights in range |
+|---|---|
+| base (no post-processing) | 17594 |
+| base + `JoinIdenticalVertices` | **0** |
+| base + `OptimizeMeshes` | 17594 |
+| base + `LimitBoneWeights` | 17594 |
+| **engine exact (all three)** | **0** |
+
+`aiProcess_JoinIdenticalVertices` alone is sufficient and necessary.
+
+**Blast radius** (`work/mag_probe.exe --scan`, out-of-range weights across every shipped
+FBX under the engine's exact flags): **all 11 weapon FBXs** dropped 17594 weights each —
+**193,534 dropped over 27 files** — while **all 16 FirstPerson/arms FBXs were clean**.
+This was weapon-specific because only the weapon models a duplicate skinned island.
+Only `AKS-74U_A_W_ADS.fbx` supplies geometry; the other 10 weapon FBXs are channel-only.
+
+**Fix — a local assimp patch**, not a `.blend` change and not a per-asset importer flag.
+Two defects, both needed:
+
+1. **Identity must include the skin binding.** `JoinVerticesProcess.cpp` now builds a
+   canonical per-vertex `(bone index, weight)` table and keys the dedup map on a local
+   `SkinnedVertex` wrapper carrying it, so differently-skinned coincident vertices are
+   never merged. The functors live in the same TU as the existing `std::hash<Vertex>`
+   specializations, so the public `assimp/Vertex.h` every other process depends on is
+   untouched. Skinned meshes only pay for it when `mNumBones > 0`.
+2. **Always rewrite `bone->mNumWeights`**, even down to zero, so a bone can never expose
+   stale ids into a shrunken buffer.
+
+Carried as `tools/assimp_patches/0001-join-vertices-keep-skin-bindings-apart.patch` and
+applied at configure time by `tools/apply_assimp_patches.cmake` (hooked into
+`CMakeLists.txt` right after `FetchContent_MakeAvailable(assimp)`), because assimp is
+fetched from github at a pinned `GIT_TAG v5.4.3` and `build/_deps` does not survive a
+clean configure. The applier probes with `git apply --check`, falls back to
+`--check --reverse` for "already applied", and **fails the configure** if neither
+matches — so a tag bump that invalidates the patch cannot silently build assimp without
+the fix. Round-trip verified: pristine v5.4.3 (`c35200e38`) → applied → idempotent skip.
+`Model::ExtractBoneWeights`'s out-of-range drop still exists as a safety net, but it is no
+longer reached silently.
+
+**Verification** (`work/mag_probe.exe`, engine-exact flags, patched assimp):
+
+| | before | after |
+|---|---|---|
+| dropped weights, all 27 FBXs | 193,534 | **0** |
+| `mag2` weights in range | 0 of 17594 | **5469 of 5469** (mesh0 3773 + mesh1 1696 — exactly mirroring `magazine`) |
+| weapon verts | 29,215 | **34,684** (+18.7%) |
+| weights per vertex | — | 1.000 across 31292 verts |
+| spare mag vs installed mag @ rest | n/a | **0.551 m** (hip pouch; Blender: ~66 cm) |
+| @ tick 85 (mid-reload) | n/a | **0.059 m** (in the hand; Blender: ~5 cm) |
+| @ tick 170 (end) | n/a | **0.551 m** (returned) |
+
+Both islands now survive with their own bindings, and the spare magazine tracks the clip
+where it used to sit frozen underneath the installed one. Note the vertex cost: **+18.7%,
+not the +348%** the rejected per-asset `optimizeGraph=false` workaround would have paid.
+
+Also confirmed: build exit 0; unit tests **800 checks, 0 failures**; smoke
+`FPS_Animation_smoke_play.json` **PASS**, `newGlErrors=0 newLogErrors=0 drawCalls=1
+playCycles=2 variants: 0x00=220` — identical to the pre-change baseline. `Apartment`=6 /
+`Sandbox`=1 remain the missing-asset environment noise; all five files those runs complain
+about (`…/kloofendal_48d_partly_cloudy_puresky_4k.hdr`, `Y Bot.fbx`, `walking.fbx`, and
+the two `Desktop/AKS-74U Textures/*.png`) were checked with `Test-Path` and **do not
+exist on disk**, so those failures are pre-existing and unrelated.
+
+**Consequence for UPDATE 4's follow-up:** that `mag2` snap item is now *live*. While the
+weights were being dropped the spare magazine was frozen and the snap was invisible;
+now that `mag2` drives its island again, the 121.8 mm t=0 displacement will actually be
+seen. Still **ask before changing it** — it may be authored behaviour.
+
 ## Original next-step writeup (now executed — see UPDATE above; left for the reasoning/code)
 
 **Play the `A_FP_Idle` action directly on the live rig in Blender, with
