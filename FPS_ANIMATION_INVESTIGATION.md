@@ -727,10 +727,12 @@ falls into one of two batches by file timestamp:
 | shipped 4:00:42 | `ADS`, `Draw`, `Fire`, `Holster`, `IdleToSprint`, **`Mag_Check`**, `Regrip`, `Sprint`, `SprintToIdle`, `Tac_Reload`, `Walk` | 89 |
 
 The 4:00:42 batch **predates the `A_FP_x → A_W_x` pairing rule** described in
-`FPS_ANIMATION_SYSTEM.md` §2. And the `.blend` is *still saved* with the weapon parked on
-`A_W_Tac_Reload` (with arm action `A_FP_Tac_Reload`), which is exactly what an
-export that does not run `export_clip.py` will bake against. So every clip in that batch
-was baked with the magazine being pulled out from under it.
+`FPS_ANIMATION_SYSTEM.md` §2. The `.blend` was *saved* with the weapon parked on
+`A_W_Tac_Reload` (arms on `A_FP_Tac_Reload`) — exactly what an export that does **not**
+run `export_clip.py` bakes against — so every clip in that batch was written with the
+magazine being pulled out from under it. That saved state has since been neutralised;
+see **"Closing the door"** below. (It is still what shipped, and what every clip in this
+batch was baked against.)
 
 **Which made `A_FP_Tac_Reload` correct by accident** — it was baked against the very
 action it is meant to pair with (and the user had already verified TacReload looks right),
@@ -811,6 +813,51 @@ hand.
 
 **Rollback:** every file is git-tracked, so `git checkout -- project/assets/fps/AKS74U/FirstPerson/`
 restores all ten; the original `Mag_Check` is also kept as `work/AKS-74U_A_FP_Mag_Check_ORIGINAL.fbx`.
+
+### Closing the door: the `.blend` is now saved on a neutral pairing
+
+The standing rule for this file is *ask before touching animation data*; the user
+approved this specific change, and a byte-identical backup was taken first:
+`C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend.pre-neutral.bak`
+(305,729,203 bytes, size verified against the source).
+
+| | before | after |
+|---|---|---|
+| `Armature` (arms) action | `A_FP_Tac_Reload` | **`A_FP_Idle`** |
+| `AK` (weapon) action | `A_W_Tac_Reload` | **`A_W_ADS`** |
+| file size | 305,729,203 B | 305,729,971 B (**+768 B**, still zstd) |
+
+Those two are chosen because they *are* the fallback pairing `FPS_ANIMATION_SYSTEM.md` §2
+already documents: `A_W_ADS` is the weapon's bind pose, which is what the engine renders
+alongside Idle/Walk/Aim/Draw/Regrip. So an export that skips `export_clip.py` now bakes
+something sane instead of TacReload's magazine swap.
+
+**What deliberately did not change** (verified by reopening the file in a fresh Blender
+process): `pose_position=POSE` on both armatures; all 35 NLA "Action Stash" tracks still
+muted (25 arms + 10 weapon), so only `animation_data.action` matters; frames 0..275 @ 60;
+and the fingerprint `objects=130 meshes=122 armatures=2 actions=26 materials=10` is
+identical to the pre-save reading — 26 actions, so nothing was created, dropped or
+re-keyed.
+
+**That the action actually drives the rig** — the one thing a fingerprint cannot show,
+since a bound-but-unevaluating slot silently yields bind pose (and this rig's bind pose is
+the Manny T-pose) — was checked on the reopened file: `hand_l` evaluates **76.8
+rig-units (≈0.77 m)** from its rest position under `A_FP_Idle`, where an unbound action
+would read exactly `0`.
+
+Two caveats worth remembering:
+
+- The file is **zstd-compressed**, so the "saved-with version" header isn't readable from
+  stdlib and I could not prove which Blender version wrote the original. If it was an
+  older major version, this save upgraded the format in place — that is exactly what the
+  `.pre-neutral.bak` is for.
+- The **scene frame range was left at 0..275** (`A_FP_Tac_Reload`'s), because
+  `export_clip.py` passes its own explicit start/end and overrides it. Changing it would
+  only matter to a hand-driven Blender GUI export.
+
+Tooling: `work/inspect_blend.py` (read-only state dump), `work/preflight_neutral.py`
+(compression + version + `pose_position` + fingerprint), `work/set_neutral_action.py`
+(the only script that ever saves this file).
 
 **Open follow-ups:** (a) the real fix for `EmptyReload` is an ammo system — `G` is a
 temporary debug binding, and it only reached Play mode after `InputMap::MergeDefaults`
