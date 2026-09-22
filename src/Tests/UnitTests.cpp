@@ -175,6 +175,28 @@ void TestInputMap() {
     CHECK(InputMap::FromJson(nlohmann::json::object()).empty());
     CHECK(InputMap::BindingName(InputMap::kMouseBase + 1) == "Mouse 1" && InputMap::BindingName(87) == "W");
 
+    // A saved action list must not be able to LOSE a default. project/settings.json only holds
+    // the actions that existed when it was written, and an unknown name merely warns once - so a
+    // default added since then would read as "the key does nothing". That is how the EmptyReload
+    // debug binding shipped dead: Defaults() had it, the saved list did not.
+    {
+        nlohmann::json savedJson = nlohmann::json::array();
+        savedJson.push_back({{"name", "Reload"}, {"positive", 71}}); // a deliberate rebind (default is 82)
+        auto saved = InputMap::FromJson(savedJson);
+        InputMap::MergeDefaults(saved);
+
+        auto count = [&saved](const char* n) {
+            int c = 0;
+            for (const InputMap::Action& s : saved)
+                if (s.Name == n) ++c;
+            return c;
+        };
+        CHECK(saved.size() == InputMap::Defaults().size()); // each default present exactly once
+        CHECK(count("Reload") == 1);
+        CHECK(saved[0].Positive == 71);      // the file's own binding survives the merge
+        CHECK(count("EmptyReload") == 1);    // the default the file predates comes back
+    }
+
     // Disabled (no game input): everything reads zero, including unknown names (no crash).
     InputMap::SetEnabled(false);
     CHECK(InputMap::GetAxis("Horizontal") == 0.0f && !InputMap::GetButton("Jump"));
