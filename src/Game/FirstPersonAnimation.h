@@ -1,5 +1,7 @@
 #pragma once
 
+#include <glm/glm.hpp>
+
 #include <string>
 #include <vector>
 
@@ -21,6 +23,12 @@ struct FirstPersonAnimationSet {
     std::string ArmsModel;
     std::string WeaponModel;
     std::string DefaultState;
+    // Y-X-Z Euler degrees the models themselves need to line up with the play camera, applied
+    // before any per-scene View Model Rotation. This belongs to the asset, not the scene: it
+    // describes the axis convention of the FBXs named above. The Manny rig comes out of Blender
+    // facing model +Z while the engine's camera looks down its own -Z, so without the 180 Y this
+    // set renders the arms and weapon behind the camera.
+    glm::vec3 ViewRotation{0.0f};
     std::vector<FirstPersonAnimationClip> Clips;
 
     const FirstPersonAnimationClip* Find(const std::string& state) const;

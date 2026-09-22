@@ -2,6 +2,7 @@
   "armsModel": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",
   "weaponModel": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",
   "defaultState": "Idle",
+  "viewRotation": [0.0, 180.0, 0.0],
   "clips": [
     { "name": "Idle", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx", "loop": true, "fade": 0.12 },
     { "name": "Walk", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Walk.fbx", "loop": true, "fade": 0.10 },

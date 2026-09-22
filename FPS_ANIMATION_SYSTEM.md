@@ -1,0 +1,386 @@
+# FPS First-Person Animation — System Reference
+
+Branch: `feature/fps-first-person-animation`
+
+This is the **how it works / what's in the tree** document: the asset pipeline, the
+runtime, the three fixes this branch landed, and the invariants you have to keep to
+avoid re-breaking them. The long forensic writeup of the original "fan of blades"
+tear (what was measured, what was ruled out) lives separately in
+`FPS_ANIMATION_INVESTIGATION.md` — read that before forming new hypotheses about
+skinning.
+
+---
+
+## 1. TL;DR — what this branch fixed
+
+| # | Symptom | Root cause | Fix |
+|---|---------|-----------|-----|
+| 1 | Arms rendered fine at bind pose, tore into a "fan of blades" the instant any clip played | `Model::ProcessMesh` skipped the owning node's world transform for skinned meshes, while Assimp's `mOffsetMatrix` values expect root-space vertices | `bake = nodeTransform` — bake the node transform for **every** mesh, skinned or not |
+| 2 | Arms + weapon floated ~1 m above the player capsule / camera | The rig is authored *standing* (feet at `y=0`, head at `y≈1.56`) but the presentation parked the model's **root** at the camera | Anchor placement on a rig bone (`head`): solve for the root that puts the bone exactly on the camera |
+| 3 | Arms and weapon rendered on the opposite side of the camera (behind it) | Blender character faces `-Y` → FBX converts it to model `+Z`; the engine camera looks down its own `-Z`. Exactly 180° out | New `viewRotation` field on the `.fpsanim` asset, `[0, 180, 0]` |
+
+Fix 1 is a renderer bug affecting **any** skinned FBX, not just this rig. Fixes 2 and 3
+are first-person-presentation concerns.
+
+Everything below assumes you've read section 3 (the bake rule) — it is the invariant
+most likely to be broken by accident.
+
+---
+
+## 2. The asset pipeline
+
+```
+C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend      (read-only ground truth)
+        │  Blender export (frame ranges recorded in export_manifest.json)
+        ▼
+project/assets/fps/AKS74U/
+├── AKS74U.fpsanim                       the semantic state machine (15 states)
+├── export_manifest.json                 which .blend, which frame range per clip
+├── verification_report.json             per-FBX import check ("ok": true for all)
+├── FirstPerson/
+│   ├── AKS-74U_A_FP_ADS.fbx             armsModel: mesh + skeleton + base node tree
+│   └── AKS-74U_A_FP_<State>.fbx         one per state: baked animation only
+└── Weapon/
+    ├── AKS-74U_A_W_ADS.fbx              weaponModel: mesh + `AK` armature + base node tree
+    └── AKS-74U_A_W_<State>.fbx          one per state (not every state has one)
+```
+
+### The `.blend` standing rule
+
+**Always ask before changing anything in `AKS-74U 60fps (Revised).blend`.** Read-only
+inspection is fine and was the norm all session, but still give a courtesy heads-up.
+Never open it in a connected interactive Blender instance that holds a dirty scene —
+drive it headless instead:
+
+```powershell
+& "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background `
+    "C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend" --python work\bl_inspect.py
+```
+
+`work/bl_inspect.py` and `work/bl_inspect2.py` are the read-only scripts used for the
+world-space / evaluated bounding boxes and bone landmarks quoted below.
+
+### `AKS74U.fpsanim` schema
+
+```jsonc
+{
+  "armsModel":   "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",
+  "weaponModel": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",
+  "defaultState": "Idle",
+  "viewRotation": [0.0, 180.0, 0.0],   // NEW: Y-X-Z degrees, see section 5
+  "clips": [
+    { "name": "Idle",  "arms": ".../FP_Idle.fbx", "loop": true, "fade": 0.12 },
+    { "name": "Aim",   "armsBindPose": true, "loop": true, "fade": 0.10 },
+    { "name": "Fire",  "arms": ".../FP_Fire.fbx", "weapon": ".../W_Fire.fbx", "fade": 0.03 }
+    // ...
+  ]
+}
+```
+
+Parsed by `FirstPersonAnimationSet::FromJsonString`
+(`src/Game/FirstPersonAnimation.cpp`). Per clip:
+
+- `arms` **or** `armsBindPose: true` — required. `armsBindPose` means "use the base
+  model's own bind pose as this state's pose" (used by `Aim`; the base file's node
+  tree is the ADS pose).
+- `weapon` — optional **by design**. The AK source has no Idle/Walk/Draw/Regrip
+  weapon clips, so those states deliberately leave it empty; the runtime must honour
+  that fallback rather than guessing a clip name.
+- `loop`, `fade` (seconds, 0..5).
+- Unknown/absent optional keys fall back to defaults, so older `.fpsanim` files keep
+  loading.
+
+`viewRotation` is validated for finiteness at load; a bad value fails the load with a
+specific message rather than silently producing a NaN transform.
+
+---
+
+## 3. Vertex space and the bake rule (the important invariant)
+
+### The spaces
+
+```
+mesh-local  --[ ProcessMesh `bake` ]-->  model ROOT space  --[ palette ]-->  ? 
+                                                                           
+palette[i] = GlobalInverseTransform * PosedGlobal[i] * BoneOffset[i]
+```
+
+`GlobalInverseTransform` is `inverse(rootNodeTransform)` (identity for these files).
+`PosedGlobal` comes from `EvaluatePose()` walking `m_D->Nodes` parents-first.
+
+The shader (`src/Renderer/shaders/ModelVertex.glsl`) does standard weighted-blend
+skinning: `skinMat += uBones[id] * weight` over 4 slots, `totalWeight <= 0.0001 →
+identity`.
+
+### The rule
+
+```cpp
+const glm::mat4& bake = nodeTransform;   // ALWAYS — skinned or not
+```
+
+`Model::ProcessMesh` folds the owning node's world transform into the vertex data for
+**every** mesh. The palette never mentions the mesh node's own frame, so this is the
+only thing that puts the vertex into root space before skinning.
+
+The winding-flip correction (for a negative-determinant node transform) now applies to
+skinned meshes too, for the same reason.
+
+### Why it read as "no bug at bind, tears when a clip plays"
+
+At bind pose the entire palette collapses to `GlobalInverse * C`, a *single* matrix
+shared by every bone — a missing node transform just uniformly reorients the mesh, so
+nothing tears. Only once a clip plays does each bone apply its own delta to that
+un-rotated vertex, blowing a 0.02 m edge apart into 0.5 m blades.
+
+### `C` is not an error term — do not cancel it
+
+Define `C = RestGlobal * BoneOffset`. It is tempting to treat `C` as residual error and
+apply `bake = C⁻¹ * nodeTransform`. **That is wrong**, and it was tried:
+
+- Assimp's FBX path builds `mOffsetMatrix = inverse(TransformLink) * absolute_transform`
+  (`FBXConverter.cpp:1674`), where `absolute_transform` is the **root** node's transform
+  — identity here.
+- So `C` is the node tree's **pose-versus-bind delta**, not a residual:
+  - arms base node tree = rest → `C == I`
+  - clip FBX node trees = frame-0 pose → `C` varies per bone (measured spread ≈ 2.16
+    for `FP_Idle`, ≈ 2.21 for `FP_Sprint`)
+  - weapon base node tree = **ADS pose** → `C ≈ translate(-0.069, 1.503, 0.446)`, i.e.
+    the gun-socket delta
+- Cancelling it erased the pose Assimp had already baked into the node tree and dropped
+  the weapon from the hands down to the model's origin (the floor).
+
+Measurements that pinned this down (`work/pose_probe.cpp`, after the bake fix):
+
+| file | bake | resulting root-space box |
+|------|------|--------------------------|
+| `FP_Idle` @ t=0 | `nodeTransform` | `x[-0.330, 0.217]  y[0.959, 1.538]  z[-0.088, 0.705]` |
+| `FP_Idle` @ t=0 | `C⁻¹·nodeTransform` *(wrong)* | `x[-0.288, 0.219]  y[0.895, 1.699]  z[-0.117, 0.757]` |
+| `W_ADS` | `C⁻¹·nodeTransform` *(wrong)* | ≈ origin — the gun on the floor |
+
+`mag2`'s `C` is an outlier on purpose: the magazine bone moves independently. Not a bug.
+
+---
+
+## 4. Runtime placement — the camera-bone anchor
+
+### Code map
+
+| File | Role |
+|------|------|
+| `src/main.cpp` | `Start` ≈ line 1214; camera setup 705-707 / 1191-1221; `Update(world, player.Cam)` ≈ 2142; `Tick` ≈ 2158 |
+| `src/Game/Components.h` | `FirstPersonControllerComponent` — the authored fields |
+| `src/Game/FirstPersonPresentation.{h,cpp}` | `Start`/`Stop`/`SetState`/`Tick`/`TriggerAction`/`Update` |
+| `src/Game/FirstPersonAnimation.{h,cpp}` | `.fpsanim` parsing + the tiered interrupt rules |
+| `src/Renderer/Model.{h,cpp}` | import, skinning, pose evaluation, `NodeTransform` |
+
+`Update()` gives the arms and the weapon the **identical** world pose every frame —
+they are two rigs standing in one shared root space, so there is no separate weapon
+placement logic to keep in sync.
+
+### The placement math
+
+These rigs are authored **standing in their own scene**: feet at `y = 0`, head at
+`y ≈ 1.557`, arms spanning `y ≈ 0.96–1.54`. The player camera is at `EyeHeight = 1.6`
+above the capsule base.
+
+The old code parked the model's **root** at `camera.Position + offset`, i.e. at ~1.42 m
+— and then the mesh added its own 0.96–1.54 m on top, landing the arms at 2.3–2.9 m
+while the camera sat at 1.6 m. That is the "arms way above the collider" bug.
+
+The fix solves for the root that puts a **rig bone** exactly on the camera:
+
+```
+world(local) = position + rotation * (scale * local)
+⇒ position   = camera.Position - rotation * (scale * boneLocal)
+```
+
+- `rotation` still comes from the camera (including pitch), so the rig tracks look
+  direction and the bone stays pinned through it.
+- `ViewModelOffset` therefore becomes a **residual nudge in the camera's frame** and
+  defaults to `{0, 0, 0}`.
+- With `CameraBone = "head"` the shoulders land below and slightly behind the camera
+  and the hands/gun land in front — a normal first-person frame.
+
+### Config fields
+
+```cpp
+std::string CameraBone = "head";   // empty = fall back to root-anchored placement
+glm::vec3   ViewModelOffset{0.0f}; // residual, camera frame
+glm::vec3   ViewModelRotation{0.0f}; // per-scene Y-X-Z degrees, applied AFTER the asset's viewRotation
+float       ViewModelScale = 1.0f;
+```
+
+Both new/reworded fields are registered in `src/Game/ComponentRegistry.cpp`, so they
+serialize and show up in the Inspector automatically. If the named bone is missing the
+presentation logs **one** warning and falls back to root-anchored placement — it does
+not spam the console every frame.
+
+### `Model::NodeTransform(name, out)`
+
+```cpp
+// Model-root-space transform of a named node, in the current pose (bind when no clip plays).
+bool Model::NodeTransform(const std::string& name, glm::mat4& out) const;
+```
+
+- Returns the **node's** world matrix, *not* a skinning matrix. Multiply it by the
+  entity's world transform to get a bone's world position.
+- Returns `false` and leaves `out` untouched when the model has no such node.
+- Posed path reads `m_NodeGlobals` (filled by `EvaluatePose`), gated on
+  `m_NodeGlobals.size() == nodes.size()` so it never reads an un-initialised scratch
+  buffer before the first evaluation or after a reimport.
+- Bind path walks each ancestor's `BindLocal` up the parent chain.
+
+**Important:** the `head` bone is present as a **node** (266 nodes, depth 11 under
+`spine_05 → neck_01 → neck_02 → head`) but is **not one of the 52 skinned bones** —
+so `BoneInfoMap`/`FinalBoneMatrix` will not find it. Only `NodeTransform` will. The arms
+model imports as a **single mesh** (`SK_FP_Arms_Manneguin`, 20,411 verts, 52 bones), so
+there is no head geometry for the camera to be trapped inside.
+
+---
+
+## 5. Orientation — `viewRotation`
+
+The Manny rig comes out of Blender facing `-Y`. Blender's default FBX axis conversion
+maps it to `(x, y, z) → (x, z, -y)`, so `-Y` becomes **`+Z`** in engine space. The
+engine camera's local forward is **`-Z`**. The rig therefore faced exactly backwards:
+the arms and weapon rendered behind the camera.
+
+Rather than a magic number in scene data, the correction lives on the **asset**:
+
+```jsonc
+"viewRotation": [0.0, 180.0, 0.0]     // Y-X-Z degrees
+```
+
+because it describes the axis convention of the two FBXs the asset names. It would be
+wrong to put it in `ModelImportSettings` (that's per-FBX, and the arms/weapon are
+separate files that must stay in agreement) or in every scene that uses the set.
+
+Composition order in `FirstPersonPresentation::Update`:
+
+```cpp
+rotation = cameraRotation * QuaternionFromEulerYXZ(m_Set.ViewRotation)  // asset
+                                 * QuaternionFromEulerYXZ(m_Rotation);  // scene tweak
+```
+
+The anchor math uses this same `rotation`, so adding a `viewRotation` keeps the head
+bone pinned to the camera — flipping the model flips the root's offset around with it,
+which is what you want (the body ends up *behind* the camera, the arms in front).
+
+### Axis reference used everywhere in this work
+
+Blender (Z-up, cm) → engine (Y-up, m):
+
+```
+(x_b, y_b, z_b)  →  (x_b, z_b, -y_b) / 100
+```
+
+Bone world position in Blender: `arm.matrix_world @ pose_bone.matrix`.
+
+---
+
+## 6. Verifying changes
+
+```powershell
+# headless smoke test over every scene
+.\build\Release\TartarusEngine.exe --smoke-test project\scenes
+```
+
+Expected for this branch: `FPS_Animation_smoke_play.json` →
+`PASS ... frames=100 loadOk=1 newGlErrors=0 newLogErrors=0 playCycles=2`.
+`Apartment` and `Sandbox` fail on **pre-existing missing assets** (`Y Bot.fbx` and
+friends are gitignored per the Mixamo licence) — unrelated to this work.
+
+No `DIAG` leftovers: `grep -c DIAG src\Renderer\Model.cpp` must return `0`.
+
+### Editor / screenshot gotchas
+
+- The editor auto-reopens the last scene from
+  `C:\Users\jacob\AppData\Local\TartarusEngine\editor_prefs.json` (`lastScenePath`);
+  back it up before letting a script drive the editor.
+- Play mode auto-starts on launch for this setup; `PLAY MODE — changes revert on Stop`
+  is in the title bar.
+- The window is maximised at 2560×1440, and `read` on a full screenshot returns a
+  **downscaled preview**. Click coordinates must come from full-res crops
+  (`System.Drawing` crop → read the crop), not from preview pixels — a preview scale of
+  ~1.28 makes tab/button clicks miss silently.
+- Win32 mouse clicks: `mouse_event(0x02)` down / `0x04)` up via `Add-Type`.
+- Use `Window → Console`, not the notification bell, to read logs (the bell truncates).
+- Read the scene's `cam`/`yaw`/`pitch` debug overlay in the Game tab to confirm what the
+  player camera is actually doing.
+
+---
+
+## 7. Standalone probes (`work/`)
+
+These link directly against the **prebuilt** Assimp + glm under
+`build\_deps\` — no engine rebuild, no editor, no UI. This is the preferred way to
+test a hypothesis about import/skinning math.
+
+```powershell
+$wt = "$PWD\build\_deps"
+cmd /c "`"C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat`" >nul 2>&1 && ^
+ cl /nologo /EHsc /std:c++17 /MD /O2 ^
+ /I`"$wt\assimp-src\include`" /I`"$wt\assimp-build\include`" /I`"$wt\glm-src`" ^
+ work\pose_probe.cpp /Fe:work\pose_probe.exe /link ^
+ /LIBPATH:`"$wt\assimp-build\lib\Release`" /LIBPATH:`"$wt\assimp-build\contrib\zlib\Release`" ^
+ assimp-vc145-mt.lib zlibstatic.lib"
+```
+
+**Must be `/MD`, not `/MT`** — the prebuilt Assimp lib is `MD_DynamicRelease` despite the
+`-mt` in its filename (that suffix is Assimp's naming convention, not its runtime).
+PowerShell 5.1 has no `&&`; chain inside `cmd /c "..."`. They are **not** built by the
+main CMake project.
+
+| Probe | What it answers |
+|-------|-----------------|
+| `pose_probe.cpp` | Decisive arms/weapon bind + posed bounding boxes — the tool that found the `C` misunderstanding and then verified the fix |
+| `bake_audit_probe.cpp` | Per-skinned-mesh: what transform `ProcessMesh` actually bakes |
+| `forward_skin_probe.cpp` | Forward (CPU) skinning result for a mesh |
+| `clip_coverage_probe.cpp` | Which bones a clip actually drives |
+| `bone_dump.cpp` | Per-bone `|A−I|`, `|C−I|`, `C`'s translation, hierarchy depth ≤3 |
+| `nodes.cpp` | Node-name search across the hierarchy (how `head` was located) |
+| `align_probe.cpp`, `diag_probe.cpp` | Axis alignment / ad-hoc diagnostics |
+| `assimp_probe.cpp`, `full_skin_probe.cpp`, `bone_match_probe.cpp`, `dup_name_probe.cpp` | The earlier bone-math investigations — see `FPS_ANIMATION_INVESTIGATION.md` |
+| `bl_inspect.py`, `bl_inspect2.py` | Read-only Blender ground truth (world/evaluated AABBs, bone landmarks) |
+
+**Gotcha:** `AiToGlm` must be a *direct element copy*. `glm::make_mat4(&m.a1)` reads
+column-major from Assimp's row-major matrix and silently transposes everything — that
+bug sat in `bake_audit_probe.cpp` and made its output meaningless until it was fixed.
+Copy the implementation from `work/pose_probe.cpp`.
+
+---
+
+## 8. Known gaps / next steps
+
+1. **`Idle` and `Walk` have no weapon clips.** `AKS74U.fpsanim` leaves their `weapon`
+   entries empty because `A_W_Idle.fbx` / `A_W_Walk.fbx` were never exported. The
+   runtime falls back explicitly (the weapon holds its current pose). Fix by exporting
+   those two clips from the `.blend` and adding them — **ask before touching the
+   `.blend`**.
+2. **`View Model FOV` is reserved.** There is no dedicated first-person render pass, so
+   the arms/weapon render at world camera FOV. Changing the field does nothing yet.
+3. **Materials/textures are out of scope** per the user. Untextured rendering is
+   expected and correct; `Texture: failed to load ...` console errors are known noise,
+   as are the `Y Bot.fbx` import failures.
+4. **The camera sits on the head bone's origin**, which is the skull base, not the eye
+   socket — 1.557 m vs `EyeHeight` 1.6 m. Close enough to read as correct; if you want
+   exact eye placement, anchor on an eye bone (none exists on this rig) or nudge with
+   `ViewModelOffset`.
+5. **`FirstPersonPresentation::Tick`/state-transition logic** was exercised by the
+   smoke test's 2 play cycles, not stress-tested across all 15 states in the editor.
+   Worth a manual pass through Fire/Reload/Sprint/Melee with the Game tab open.
+
+---
+
+## 9. Things that will bite you
+
+- **Two frames of reference, one pose.** Arms and weapon get *identical* world pose.
+  Any arms/weapon separation is root-space mesh placement, never transform code.
+- **`C = RestGlobal · BoneOffset` is pose-vs-bind, not error.** See section 3.
+- **Don't re-check what `FPS_ANIMATION_INVESTIGATION.md` ruled out** without new
+  evidence — each item there was killed with hard numbers, not guesswork.
+- **The standalone probes replicate `Model.cpp`, they are not `Model.cpp`.** They
+  omitted `ProcessMesh`'s vertex placement entirely — which is precisely where the bug
+  was. A faithful replica that agrees with Blender proves *bone transforms*, not the
+  whole pipeline.
+- **Preview downscales; crops don't.** Derive every UI click from a full-resolution crop.

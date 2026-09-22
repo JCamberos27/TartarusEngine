@@ -70,8 +70,8 @@
         "View Model FOV": 60.0,
         "View Model Offset": [
           0.0,
-          -0.18000000715255737,
-          -0.3799999952316284
+          0.0,
+          0.0
         ],
         "View Model Rotation": [
           0.0,

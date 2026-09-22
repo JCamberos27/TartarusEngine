@@ -304,7 +304,11 @@ void RegisterEngineComponents() {
             { "Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AnimationSet), 0.0f,
               "Optional .fpsanim asset for a camera-bound first-person arms and weapon presentation." },
             { "View Model Offset", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelOffset), 0.01f,
-              "Position of the first-person presentation relative to the play camera." },
+              "Residual nudge, in the play camera's frame, applied on top of the Camera Bone\n"
+              "anchor. Leave at zero unless you are deliberately nudging the view model." },
+            { "Camera Bone", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CameraBone), 0.0f,
+              "Rig bone the play camera sits on (\"head\" by default). The view model is placed so\n"
+              "this bone lands exactly on the camera. Empty puts the model's root there instead." },
             { "View Model Rotation", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelRotation), 0.5f,
               "Euler rotation offset, in degrees, applied after the play camera orientation." },
             { "View Model Scale", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelScale), 0.01f,
