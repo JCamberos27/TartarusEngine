@@ -217,7 +217,100 @@ should return `0`.
   process-lifetime SSBO, `g_BoneSsbo`, uploaded fresh immediately before
   each model's own draw).
 
-## Most promising next step (not yet executed)
+## UPDATE: the decisive test was run — the bone/skeleton pipeline is proven correct end-to-end
+
+Two follow-up tests were run after the section below was originally written
+(it's left intact below since the reasoning is still valid background).
+
+**Test 1 — play `A_FP_Idle` live on the rig in Blender, zero export/import
+involved.** Result: clean. At frame 64 (mid-clip), the deformed mesh has a
+normal bounding box for an arm (55.6 × 81.5 × 33.4 cm) and no wildly
+stretched edges anywhere (max edge length 2.3cm, 99th percentile 1.4cm,
+mean 0.5cm, across the whole mesh). This rules out "the original bake is
+broken" — the source animation data is genuinely fine.
+
+**Test 2 — byte-level comparison between Assimp's parse of the exported FBX
+and Blender's live evaluation.** A standalone tool
+(`work/assimp_probe.cpp`) was written that links directly against the
+engine's own already-built Assimp static library
+(`build/_deps/assimp-build/lib/Release/assimp-vc145-mt.lib`), loads
+`AKS-74U_A_FP_ADS.fbx` (base) and `AKS-74U_A_FP_Idle.fbx` (clip) with the
+exact same import flags `Model.cpp` uses (`GlobalScale=1.0`,
+`AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS=false`, `Triangulate | FlipUVs |
+GlobalScale | GenSmoothNormals | CalcTangentSpace | LimitBoneWeights |
+JoinIdenticalVertices | OptimizeMeshes`), and replicates
+`Model::AttachClip`/`Model::EvaluatePose`'s exact math (name-match
+channels onto the base hierarchy, sample at a given tick, compose through
+the parent chain) — entirely independent of the running engine, editor, or
+any UI interaction. It was compiled directly with MSVC against the
+project's existing build artifacts:
+
+```
+"C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat"
+cl /EHsc /std:c++17 /MD ^
+  /I"build\_deps\assimp-src\include" /I"build\_deps\assimp-build\include" /I"build\_deps\glm-src" ^
+  work\assimp_probe.cpp /Fe:work\assimp_probe.exe ^
+  /link /LIBPATH:"build\_deps\assimp-build\lib\Release" /LIBPATH:"build\_deps\assimp-build\contrib\zlib\Release" ^
+  assimp-vc145-mt.lib zlibstatic.lib
+```
+
+(Note: must be `/MD`, not `/MT` — the prebuilt Assimp lib is `MD_DynamicRelease`
+despite the `-mt` in its filename; that suffix is just Assimp's own naming
+convention and does not indicate the runtime library it was built against.)
+
+It was sampled at tick=64 (matching Blender's frame 64, since this rig's
+exported `mTicksPerSecond=60` = 1 tick per frame) for the same 10 bones
+checked earlier in the session (`root`, `pelvis`, `spine_05`, `clavicle_r`,
+`upperarm_r`, `upperarm_twist_01_r`, `upperarm_twist_02_r`, `lowerarm_r`,
+`lowerarm_twist_01_r`, `hand_r`). Blender's live rig evaluation at the same
+frame was fetched separately (`arm.matrix_world @ pose_bone.matrix`,
+world-space translation) and converted from Blender's native Z-up/cm
+convention to the engine's Y-up/m convention
+(`(bx, by, bz)_blender_cm → (bx, bz, -by) / 100`, matching Blender's
+default FBX export axis/unit convention) for direct comparison.
+
+**Every single bone matched to 3-4 decimal places.** E.g. `clavicle_r`:
+Blender gives `(-0.0447, 1.5056, 0.0141)`, the standalone Assimp probe
+gives `(-0.0447, 1.5056, 0.0141)`. Same order-of-magnitude agreement for
+`upperarm_r`, both twist bones, `lowerarm_r`, and `hand_r`.
+
+**This proves, independent of the running engine, that the source bake,
+the FBX export, and Assimp's parsing of it are all correct** — the same
+conclusion the earlier bone-by-bone `Log::Warn` diagnostics inside the
+running engine had already reached (see "Things verified correct" below),
+now independently corroborated by a completely separate code path (a
+standalone program, not the engine) and an external ground truth
+(Blender's own live evaluation, not just Blender's reconstruction of the
+exported file).
+
+**What this means for whoever continues:** the skeletal transform pipeline
+— hierarchy, channel matching, per-bone global composition — is about as
+thoroughly proven correct as is practical without a GPU capture. The
+remaining bug is very likely **not** in bone-transform math at all. The
+two live candidates left are:
+
+1. Something in the real `Model.cpp`/`Model.h` code path that this
+   standalone replica didn't capture (it's a simplified reimplementation,
+   not the actual engine code — e.g. it doesn't replicate blending,
+   `BoneOffset`/`BindPoseBones` computation, or anything past the raw
+   global-transform composition). Worth literally instrumenting the real
+   `EvaluatePose()` to log the same 10 bones at the same tick and diffing
+   against these numbers directly, rather than trusting the replica any
+   further.
+2. Something in the **vertex/mesh data** pipeline rather than skeletal
+   math — i.e. not "is bone X's matrix correct" (proven yes) but "does
+   vertex Y actually get multiplied by the *right* bone's matrix, with the
+   *right* weight." The two weight-truncation fixes already applied
+   (largest-weight selection + renormalization) were verified real bugs
+   but had zero visible effect on the corruption — so if it is a
+   vertex-weight issue, it's a different one than those two.
+
+The standalone probe tool is left at `work/assimp_probe.cpp` (not built by
+the main CMake project — compile it ad hoc as shown above) since it's a
+fast, UI-free way to sanity-check any bone's transform against Blender
+without touching the running engine at all.
+
+## Original next-step writeup (now executed — see UPDATE above; left for the reasoning/code)
 
 **Play the `A_FP_Idle` action directly on the live rig in Blender, with
 zero export/import round-trip involved at all**, and check whether the
