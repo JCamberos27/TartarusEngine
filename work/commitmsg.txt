@@ -1,66 +1,43 @@
-fps: rebake the stale 4:00 arm-clip batch with correct weapon pairing
+blend: save the .blend on a neutral action pairing
 
-MagCheck's magazine floated detached from the hands. CB_ik_hand_l carries
-CHILD_OF -> AK:magazine at influence 1.0, so the left arm is baked against the
-weapon action playing alongside it -- and all 11 clips written at 4:00:42
-predate the A_FP_x -> A_W_x pairing rule, exported while the .blend was saved
-with the weapon parked on A_W_Tac_Reload.
+The .blend shipped saved with the weapon parked on A_W_Tac_Reload (arms on
+A_FP_Tac_Reload), which is what an export that skips work/export_clip.py bakes
+against -- the root cause of the broken 4:00:42 batch in UPDATE 6. User
+approved this specific change to animation data, per the standing rule of
+asking first.
 
-Why only Mag_Check ever showed it: A_W_Tac_Reload's magazine starts moving
-around frame 44, and every other stale clip's range ends at 46 or earlier
-(Draw 0..46, Fire 0..36, Holster 0..28, IdleToSprint 0..16, Regrip 0..40,
-Sprint/SprintToIdle/Walk 0..44). There the wrong pairing was latent. Mag_Check
-runs 0..260, deep into the swap. Tac_Reload was correct by accident -- it was
-baked against the very action it pairs with.
+Before:  Armature -> A_FP_Tac_Reload   AK -> A_W_Tac_Reload
+After:   Armature -> A_FP_Idle         AK -> A_W_ADS
 
-A/B proof (same action, same 0..260 range, same meshes=0, only the paired
-weapon action differing), hand_l world path:
+Those two are the fallback pairing FPS_ANIMATION_SYSTEM.md already documents:
+A_W_ADS is the weapon's bind pose, which is what the engine renders alongside
+Idle/Walk/Aim/Draw/Regrip. A naive export now bakes something sane instead of
+TacReload's magazine swap.
 
-  shipped (as found)               1085.7 mm
-  rebaked vs A_W_Tac_Reload        1086.3 mm   delta   0.6
-  rebaked vs A_W_Mag_Check         1062.9 mm   delta -22.8
+Verification (reopened in a fresh Blender process after the save):
+- pose_position=POSE on both armatures; all 35 NLA Action Stash tracks still
+  muted (25 arms + 10 weapon), so only animation_data.action matters
+- fingerprint unchanged: objects=130 meshes=122 armatures=2 actions=26
+  materials=10, frames 0..275 @ 60 -- 26 actions, so nothing created, dropped
+  or re-keyed
+- action_slot bound and evaluating: hand_l lands 76.8 rig-units (~0.77 m) from
+  rest under A_FP_Idle, where an unbound action reads exactly 0 (and this rig's
+  bind pose is the Manny T-pose)
+- file 305,729,203 -> 305,729,971 bytes (+768), still zstd
 
-Pairing alone swings the hand 23.4 mm and the shipped file lands on the
-A_W_Tac_Reload bake to within noise. This corrects FPS_ANIMATION_SYSTEM.md §2,
-which previously claimed Mag_Check "measured identical under both pairings".
+Rollback: AKS-74U 60fps (Revised).blend.pre-neutral.bak, a size-verified copy
+taken before the write, next to the original on the Desktop.
 
-Changes:
-- Re-exported 10 stale arm clips via work/export_clip.py with correct pairing:
-  Mag_Check, Draw, Fire, Holster, IdleToSprint, Regrip, Sprint, SprintToIdle,
-  Tac_Reload, Walk.
-- meshes=0 for all of them: clip FBXs are channel-only and geometry belongs to
-  the ADS armsModel. meshes=1 had produced 267 nodes plus stray Mesh.001 /
-  Mesh.003 meshes and doubled the file size; meshes=0 gives 265 nodes / 0
-  meshes, an exact structural match to the clips that already work
-  (Inspect/Idle/Melee), and leaves motion byte-identical.
-- hand_l deltas vs what shipped: Mag_Check -22.8 mm (lowerarm_l -67.0 mm),
-  everything else <=3.2 mm. The nine no-op rows were rebaked anyway so the
-  batch is one exporter run in one format.
-- ADS deliberately NOT touched: it is the armsModel (geometry, bind pose and
-  node tree every clip attaches to) and its animation is never played, so
-  rebaking it was the only move here that could break everything. Idle, Aim,
-  Empty_Reload, Inspect and Melee were already correct.
+Caveat recorded in the docs: the file is zstd-compressed so the saved-with
+version header isn't readable from stdlib; if the original came from an older
+Blender major, this save upgraded the format in place -- which is what the
+backup is for.
 
-Docs:
-- FPS_ANIMATION_INVESTIGATION.md: UPDATE 6 (root cause, the A/B, the batch
-  table, the meshes=0 structure trap, verification and rollback).
-- FPS_ANIMATION_SYSTEM.md: §2 correction of the false "identical under both
-  pairings" claim plus the meshes=0 rule; §7 rows for nodes --chain,
-  export_clip.py and extract_frames.py; §8 item 9 rewritten (EmptyReload now
-  reachable via temporary G, and why InputMap::MergeDefaults was needed) and
-  new item 10 for the rebaked batch.
+New scripts (committed since the docs reference them):
+- work/inspect_blend.py      read-only state dump
+- work/preflight_neutral.py  compression/version, pose_position, fingerprint
+- work/set_neutral_action.py the only script that saves the .blend
 
-Housekeeping: .gitignore now covers work/ probe binaries, logs and re-exported
-FBX copies. work/extract_frames.py (Blender VSE frame extractor, no ffmpeg on
-this box) is tracked since the docs reference it.
-
-Verified: build 0; unit tests 804 checks / 0 failures (must be run with the
-editor closed -- an open editor races the scene round-trip files and reports
-2 spurious failures); smoke FPS_Animation_smoke_play PASS, newGlErrors=0
-newLogErrors=0 drawCalls=1 playCycles=2 variants: 0x00=220, identical to the
-pre-change baseline. User confirmed in Play mode that the magazine now meets
-the left hand.
-
-Rollback: git checkout -- project/assets/fps/AKS74U/FirstPerson/ restores all
-ten; the original Mag_Check is also kept locally as
-work/AKS-74U_A_FP_Mag_Check_ORIGINAL.fbx.
+Docs: FPS_ANIMATION_INVESTIGATION.md UPDATE 6 gains "Closing the door" and no
+longer claims the file is still saved on A_W_Tac_Reload; FPS_ANIMATION_SYSTEM.md
+§2 records the neutral saved state and §7 lists the three scripts.

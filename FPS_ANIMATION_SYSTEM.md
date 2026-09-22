@@ -95,6 +95,15 @@ the gun while the right hand sat still:
 `ADS` armsModel, so a meshed export bolts on stray meshes (`Mesh.001`, `Mesh.003`, 267
 nodes) and doubles the file for nothing. The clips that work are 265 nodes / 0 meshes.
 
+**The `.blend` is now saved on that same neutral pairing** (user-approved; see
+`FPS_ANIMATION_INVESTIGATION.md` UPDATE 6, "Closing the door"): `Armature` → `A_FP_Idle`,
+`AK` → `A_W_ADS`. It used to be saved on `A_FP_Tac_Reload` / `A_W_Tac_Reload`, which is
+what baked the broken 4:00:42 batch. `export_clip.py` still **never** saves it —
+`work/set_neutral_action.py` is the only script that writes the file, with
+`work/inspect_blend.py` / `work/preflight_neutral.py` to read it, and
+`AKS-74U 60fps (Revised).blend.pre-neutral.bak` sitting beside the original as the
+rollback.
+
 Export arm clips with **`meshes 0`**: `Model::AttachClip` reads only the clip's channels,
 so meshes add nothing but a material — and the material the meshed export brought in
 referenced a missing `T_Quantum_Basemesh_Arms_Normal.1003.png`.
@@ -403,6 +412,8 @@ main CMake project.
 | `build_probe.bat` | `cmd /c "work\build_probe.bat <name>"` — builds `work\<name>.cpp` with the right vcvars + `/MD` + assimp/glm include and lib paths, so a new probe is one command instead of the `cl` line above |
 | `export_clip.py` | Blender-side clip export: applies the pairing rule above, pins the weapon NLA off, restores both armatures **in memory** (never saves the `.blend`), and prints `weapon action paired = …`. Run as `blender -b "<blend>" --python work\export_clip.py -- <action> <out.fbx> <start> <end> <meshes 0|1> [weapon\|auto]` |
 | `extract_frames.py` | Frames from a video via Blender's VSE — there is no ffmpeg on this box, so this is how a Play-mode recording gets turned into PNGs/contact sheet for inspection |
+| `inspect_blend.py`, `preflight_neutral.py` | Read-only dumps of the `.blend`: live actions per armature + NLA, compression and saved-with version, `pose_position`, and a datablock fingerprint to diff before/after a write |
+| `set_neutral_action.py` | The **only** script that saves the `.blend`, and only when explicitly approved: parks it on the neutral `A_FP_Idle` / `A_W_ADS` pairing |
 
 **Probes link the *same* assimp the engine does**, which now carries
 `tools/assimp_patches/*.patch` (see §8). If you build a probe against a re-cloned
