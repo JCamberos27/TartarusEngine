@@ -146,6 +146,13 @@ public:
         return posed && i < (int)m_FinalBoneMatrices.size() ? m_FinalBoneMatrices[i] : m_D->BindPoseBones[i];
     }
 
+    // Model-root-space transform of a named node (a bone, for a rig) as it currently stands:
+    // the animated pose while a clip plays, the bind pose otherwise. This is the NODE's world,
+    // not a skinning matrix - it is what you multiply by the entity's world transform to get a
+    // bone's world position, e.g. to hang a camera off a head bone. Returns false when the model
+    // has no node of that name, in which case `out` is left untouched.
+    bool NodeTransform(const std::string& name, glm::mat4& out) const;
+
     const std::string& Path() const { return m_Path; }
     // #132 - the file was renamed or moved outside the editor; the loaded data stays valid.
     void SetPath(const std::string& path) { m_Path = path; }

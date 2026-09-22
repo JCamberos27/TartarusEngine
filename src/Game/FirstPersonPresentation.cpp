@@ -76,6 +76,7 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     m_Offset = config.ViewModelOffset;
     m_Rotation = config.ViewModelRotation;
     m_Scale = config.ViewModelScale;
+    m_CameraBone = config.CameraBone;
 
     if (!AttachAndValidate(assets) || !SetState(m_Set.DefaultState)) {
         Stop(world);
@@ -95,6 +96,8 @@ void FirstPersonPresentation::Stop(World& world) {
     m_WeaponModel.reset();
     m_CurrentState.clear();
     m_Set = {};
+    m_CameraBone.clear();
+    m_CameraBoneWarned = false;
     m_ActionGateArms = false;
     m_ActionGateWeapon = false;
     m_ActionState.clear();
@@ -219,10 +222,32 @@ void FirstPersonPresentation::Tick(float planarSpeed, bool sprinting, bool aimin
 void FirstPersonPresentation::Update(World& world, const Camera& camera) {
     if (!IsActive() || !world.Registry.valid(m_Arms) || !world.Registry.valid(m_Weapon)) return;
     const glm::quat cameraRotation = CameraRotation(camera);
-    const glm::quat rotation = NormalizeRotation(cameraRotation * QuaternionFromEulerYXZ(m_Rotation));
-    // ViewModelOffset is expressed in the camera's local frame. Its default negative Z moves the
-    // model in front of a camera whose local forward is -Z.
-    const glm::vec3 position = camera.Position + cameraRotation * m_Offset;
+    // The asset's axis correction is the inner factor (it describes the models' own space), then
+    // the scene's View Model Rotation as a tweak on top of that.
+    const glm::quat rotation = NormalizeRotation(cameraRotation *
+                                                 QuaternionFromEulerYXZ(m_Set.ViewRotation) *
+                                                 QuaternionFromEulerYXZ(m_Rotation));
+
+    // Placement is anchored on a rig bone, not on the model's root. These rigs are authored
+    // standing in their own scene - feet at y=0, head near y=1.56 - so parking the ROOT on the
+    // camera (the old behaviour) stacks that ~1.5 m of authored height on top of the view and
+    // leaves the arms and weapon floating overhead. Instead solve for the root that puts the
+    // camera bone exactly on the camera: the world point of a local point is
+    //     position + rotation * (scale * local)
+    // so     position = camera.Position - rotation * (scale * boneLocal).
+    // Rotation still comes from the camera, so the rig tracks pitch and the bone stays pinned
+    // through it; ViewModelOffset then reads as a residual nudge in the camera's frame.
+    glm::vec3 position = camera.Position;
+    glm::mat4 anchor(1.0f);
+    if (!m_CameraBone.empty() && m_ArmsModel && m_ArmsModel->NodeTransform(m_CameraBone, anchor)) {
+        position -= rotation * (m_Scale * glm::vec3(anchor[3]));
+    } else if (!m_CameraBone.empty() && !m_CameraBoneWarned) {
+        m_CameraBoneWarned = true;
+        Log::Warn("First-person presentation: arms model has no '" + m_CameraBone +
+                  "' bone; placing the view model's root on the camera instead.");
+    }
+    position += cameraRotation * m_Offset;
+
     for (entt::entity e : {m_Arms, m_Weapon}) {
         world.SetWorldPose(e, position, rotation);
         world.Registry.get<TransformComponent>(e).Scale = glm::vec3(m_Scale);
