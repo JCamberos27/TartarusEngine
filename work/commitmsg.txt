@@ -1,0 +1,45 @@
+FPS: crossfade the weapon back to bind instead of hard-cutting the mag2 snap
+
+Entering a state with no weapon clip (Idle/Walk/Aim/Draw/Regrip) called
+m_WeaponModel->StopAnimation(), which is PlayAnimation(-1) with an implicit
+fade of 0 - an instant cut to the base FBX's bind pose. The weapon rig's mag2
+bone sits 121.8 mm off bind at t=0 AND tEnd of every weapon clip (worst node in
+the rig, worst rotation 0.0 deg, i.e. a pure translation - work/bind_probe.cpp,
+node globals vs node globals), and both magazine islands sit exactly on top of
+each other AT bind. So the spare magazine hard-cut in and out at both ends of
+every weapon clip.
+
+The branch now calls PlayAnimation(-1, clip.Fade, wrap) instead. Three things
+make that safe:
+
+  - Model::PlayAnimation starts a fade whenever a clip is currently live
+    (m_Anim.Clip >= 0 || index >= 0), so it crossfades from the pose on screen.
+  - NodeTransform stays posed while m_FadeDuration > 0, so the weapon socket
+    tracks the blend, and on the frame the fade ends the bind walk becomes the
+    answer - it lands on exactly the pose the cut used to jump to.
+  - m_ActionGateWeapon = !WeaponClip.empty(), so a state taking this branch
+    never waits on AnimationFinished(), which would see Clip == -1 and report
+    finished immediately.
+
+The .blend and every clip file are untouched, so if that snap was authored
+behaviour the data still matches the original export.
+
+Also corrects two figures recorded in the investigation notes: the "Blender ~66
+cm / ~5 cm" values in UPDATE 5 were a hardcoded label in mag_probe, never a
+measurement, and mag_probe's vertex-space forward-skin carries a constant
+offset-matrix bias (identical at tick 0 and tick 170) that the engine does not
+render - its comment and the doc table now say so and point at bind_probe's
+121.8 mm as the number that describes the jump.
+
+Verified: build exit 0; unit tests 800 checks / 0 failures; smoke
+FPS_Animation_smoke_play.json PASS newGlErrors=0 newLogErrors=0 drawCalls=1
+playCycles=2 variants: 0x00=220, identical to baseline. Apartment=6 /
+Sandbox=1 unchanged (missing-asset environment noise). Confirmed visually by
+the user: TacReload shows the spare magazine in the hand and it travels the
+swap.
+
+EmptyReload remains unreachable (main.cpp hardcodes TacReload on the Reload
+key, and there is no ammo system to gate it on) - documented as FPS_ANIMATION_
+SYSTEM.md item 9, not changed.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>

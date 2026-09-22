@@ -157,9 +157,23 @@ bool FirstPersonPresentation::Play(const FirstPersonAnimationClip& clip) {
         m_ArmsModel->PlayAnimation(armsClip, clip.Fade, wrap);
     }
     if (clip.WeaponClip.empty()) {
-        // The source collection does not contain a weapon counterpart for this state. Resetting
-        // to bind pose is deterministic and makes the missing counterpart visible in review.
-        m_WeaponModel->StopAnimation();
+        // The source collection does not contain a weapon counterpart for this state (Idle, Walk,
+        // Aim, Draw, Regrip), so the weapon falls back to its bind pose. Crossfade there instead
+        // of cutting: StopAnimation() is PlayAnimation(-1) with an implicit fade of 0, and a cut is
+        // a visible snap - the spare magazine (the mag2 island) jumps 121.8 mm off bind at both
+        // t=0 and tEnd of every weapon clip (work/bind_probe.cpp), and both magazine islands sit
+        // exactly on top of each other AT bind, so the cut pops the spare mag in and out.
+        //
+        // PlayAnimation(-1, fade) is a supported fade-to-bind: it starts a fade whenever a clip is
+        // currently live (m_Anim.Clip >= 0), NodeTransform stays posed for the whole fade so the
+        // socket follows the blend, and on the frame the fade ends m_FadeDuration hits 0 and the
+        // bind walk below becomes the answer - i.e. it lands on precisely the pose the cut used to
+        // jump to, just without the jump.
+        //
+        // Safe for the action gate: m_ActionGateWeapon is !WeaponClip.empty(), so a state taking
+        // this branch never waits on m_WeaponModel->AnimationFinished() - which would otherwise see
+        // Clip == -1 and report finished immediately.
+        m_WeaponModel->PlayAnimation(-1, clip.Fade, wrap);
     } else {
         const int weaponClip = m_WeaponModel->FindClipByRef(clip.WeaponClip);
         if (weaponClip < 0) {
