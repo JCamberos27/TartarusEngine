@@ -1,42 +1,66 @@
-Fix: a saved input list can no longer lose a default action
+fps: rebake the stale 4:00 arm-clip batch with correct weapon pairing
 
-project/settings.json carries an "input" array, and ProjectSettings::Load used
-to let it replace InputMap::Defaults() wholesale:
+MagCheck's magazine floated detached from the hands. CB_ik_hand_l carries
+CHILD_OF -> AK:magazine at influence 1.0, so the left arm is baked against the
+weapon action playing alongside it -- and all 11 clips written at 4:00:42
+predate the A_FP_x -> A_W_x pairing rule, exported while the .blend was saved
+with the weapon parked on A_W_Tac_Reload.
 
-    InputMap::Actions() = actions.empty() ? InputMap::Defaults()
-                                          : std::move(actions);
+Why only Mag_Check ever showed it: A_W_Tac_Reload's magazine starts moving
+around frame 44, and every other stale clip's range ends at 46 or earlier
+(Draw 0..46, Fire 0..36, Holster 0..28, IdleToSprint 0..16, Regrip 0..40,
+Sprint/SprintToIdle/Walk 0..44). There the wrong pairing was latent. Mag_Check
+runs 0..260, deep into the swap. Tac_Reload was correct by accident -- it was
+baked against the very action it pairs with.
 
-The file only holds the actions that existed the last time it was written, so
-any default added since then was simply absent from the live map - and
-InputMap::Lookup only warns once about a name it cannot find, which reads as
-"the key does nothing". Adding an action to Defaults() was therefore silently a
-no-op for every project that already had saved bindings.
+A/B proof (same action, same 0..260 range, same meshes=0, only the paired
+weapon action differing), hand_l world path:
 
-That is why the EmptyReload debug binding (G) shipped dead: Defaults() had it,
-the saved list had 13 actions and no EmptyReload, so G was never registered.
-Relaunching could not have helped.
+  shipped (as found)               1085.7 mm
+  rebaked vs A_W_Tac_Reload        1086.3 mm   delta   0.6
+  rebaked vs A_W_Mag_Check         1062.9 mm   delta -22.8
 
-The merge now lives in InputMap::MergeDefaults and tops a non-empty list up
-with every default it does not name, leaving the file's own entries and their
-bindings untouched - so a deliberate rebind still wins over the default.
+Pairing alone swings the hand 23.4 mm and the shipped file lands on the
+A_W_Tac_Reload bake to within noise. This corrects FPS_ANIMATION_SYSTEM.md §2,
+which previously claimed Mag_Check "measured identical under both pairings".
 
-Verified: build exit 0; unit tests 804 checks / 0 failures (4 new assertions
-cover exactly this: each default present exactly once, no duplicate of the
-saved action, the saved binding of 71 surviving, and EmptyReload coming back);
-smoke FPS_Animation_smoke_play.json PASS newGlErrors=0 newLogErrors=0
-drawCalls=1 playCycles=2 variants: 0x00=220, identical to baseline.
-Apartment=6 / Sandbox=1 unchanged (missing-asset environment noise).
+Changes:
+- Re-exported 10 stale arm clips via work/export_clip.py with correct pairing:
+  Mag_Check, Draw, Fire, Holster, IdleToSprint, Regrip, Sprint, SprintToIdle,
+  Tac_Reload, Walk.
+- meshes=0 for all of them: clip FBXs are channel-only and geometry belongs to
+  the ADS armsModel. meshes=1 had produced 267 nodes plus stray Mesh.001 /
+  Mesh.003 meshes and doubled the file size; meshes=0 gives 265 nodes / 0
+  meshes, an exact structural match to the clips that already work
+  (Inspect/Idle/Melee), and leaves motion byte-identical.
+- hand_l deltas vs what shipped: Mag_Check -22.8 mm (lowerarm_l -67.0 mm),
+  everything else <=3.2 mm. The nine no-op rows were rebaked anyway so the
+  batch is one exporter run in one format.
+- ADS deliberately NOT touched: it is the armsModel (geometry, bind pose and
+  node tree every clip attaches to) and its animation is never played, so
+  rebaking it was the only move here that could break everything. Idle, Aim,
+  Empty_Reload, Inspect and Melee were already correct.
 
-Separately, the MagCheck arms defect is now diagnosed from the user's screen
-recording: the magazine floats detached in mid-air while the left hand stays
-planted at the mag well (hand_l IS animating - it travels to the well and back
-- it just never meets the magazine). work/export_clip.py's header records that
-the .blend was saved with the weapon parked on A_W_Tac_Reload, and all clips
-written in the 4:00:42 batch predate the A_FP_x -> A_W_x pairing rule. So
-A_FP_Tac_Reload was baked against A_W_Tac_Reload and is correct by accident
-(which is why TacReload looks right), while A_FP_Mag_Check was baked against
-the same TacReload magazine path but plays A_W_Mag_Check in engine - the hand
-chases the wrong animation. Re-exporting the stale clips is NOT done here; it
-needs the .blend and the user's go-ahead.
+Docs:
+- FPS_ANIMATION_INVESTIGATION.md: UPDATE 6 (root cause, the A/B, the batch
+  table, the meshes=0 structure trap, verification and rollback).
+- FPS_ANIMATION_SYSTEM.md: §2 correction of the false "identical under both
+  pairings" claim plus the meshes=0 rule; §7 rows for nodes --chain,
+  export_clip.py and extract_frames.py; §8 item 9 rewritten (EmptyReload now
+  reachable via temporary G, and why InputMap::MergeDefaults was needed) and
+  new item 10 for the rebaked batch.
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Housekeeping: .gitignore now covers work/ probe binaries, logs and re-exported
+FBX copies. work/extract_frames.py (Blender VSE frame extractor, no ffmpeg on
+this box) is tracked since the docs reference it.
+
+Verified: build 0; unit tests 804 checks / 0 failures (must be run with the
+editor closed -- an open editor races the scene round-trip files and reports
+2 spurious failures); smoke FPS_Animation_smoke_play PASS, newGlErrors=0
+newLogErrors=0 drawCalls=1 playCycles=2 variants: 0x00=220, identical to the
+pre-change baseline. User confirmed in Play mode that the magazine now meets
+the left hand.
+
+Rollback: git checkout -- project/assets/fps/AKS74U/FirstPerson/ restores all
+ten; the original Mag_Check is also kept locally as
+work/AKS-74U_A_FP_Mag_Check_ORIGINAL.fbx.
