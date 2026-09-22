@@ -851,6 +851,30 @@ void TestCameraFrustumValidation() {
         for (int r = 0; r < 4; ++r)
             CHECK(std::fabs(got[c][r] - expected[c][r]) < 1e-6f);
 
+    // The first-person view-model sub-pass rebuilds a projection from the world's, changing only
+    // the FOV. It doesn't know the camera's near/far — it reads them back out of the matrix it
+    // was handed, so that readback is the thing to pin down: get it wrong and the arms and the
+    // scene they are composited over disagree about where the near plane sits.
+    {
+        const glm::mat4& worldProj = got;
+        const float nearZ = std::fabs(worldProj[3][2] / (worldProj[2][2] - 1.0f));
+        const float farZ  = std::fabs(worldProj[3][2] / (worldProj[2][2] + 1.0f));
+        CHECK(std::fabs(nearZ - cam.NearPlane) < 1e-4f);
+        // far recovers through a near-zero denominator (proj[2][2] + 1), so float rounding is
+        // amplified ~5 orders of magnitude here — exact to a few hundredths is the ceiling.
+        CHECK(std::fabs(farZ - cam.FarPlane) < 0.05f);
+
+        // What the sub-pass then builds: same clip range, different cone.
+        const glm::mat4 vm = MakePerspective(60.0f, 1.5f, nearZ, farZ);
+        const glm::mat4 want = glm::perspective(glm::radians(60.0f), 1.5f, nearZ, farZ);
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r)
+                CHECK(std::fabs(vm[c][r] - want[c][r]) < 1e-3f);
+        // 60 deg is narrower than the world's 75: a larger y scale, i.e. the held weapon is
+        // framed tighter than the scene behind it, not stretched to match it.
+        CHECK(vm[1][1] > worldProj[1][1]);
+    }
+
     // And a scene carrying an unusable CameraComponent is corrected on load, not just tolerated.
     World world;
     AssetLibrary assets;
@@ -1328,6 +1352,9 @@ void TestFirstPersonAnimationSet() {
         "armsModel":"models/fps/arms_base.fbx",
         "weaponModel":"models/fps/aks74u_base.fbx",
         "defaultState":"Idle",
+        "weaponSocket":"ik_hand_gun",
+        "weaponRoot":"root",
+        "weaponMountRotation":[0,90,90],
         "clips":[
             {"name":"Idle","arms":"animations/A_FP_Idle.fbx","loop":true,"fade":0.15},
             {"name":"Fire","arms":"animations/A_FP_Fire.fbx","weapon":"animations/A_W_Fire.fbx"}
@@ -1345,6 +1372,21 @@ void TestFirstPersonAnimationSet() {
     CHECK(set.Find("Idle")->WeaponClip.empty()); // missing pair is explicit, never inferred
     CHECK(set.Find("Fire") && set.Find("Fire")->WeaponClip == "animations/A_W_Fire.fbx");
 
+    // The weapon rides the arms rig's gun socket instead of being handed the arms' pose.
+    CHECK(set.WeaponSocket == "ik_hand_gun");
+    CHECK(set.WeaponRoot == "root");
+    CHECK(set.WeaponMountRotation.x == 0.0f && set.WeaponMountRotation.y == 90.0f &&
+          set.WeaponMountRotation.z == 90.0f);
+    // Omitted mount fields stay neutral: no socket means "share the arms' pose", the old
+    // behaviour, rather than snapping the weapon to a socket it was never told about.
+    CHECK(FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","clips":[{"name":"Idle","arms":"i.fbx"}]})",
+        set, &error));
+    CHECK(set.WeaponSocket.empty() && set.WeaponRoot.empty());
+    CHECK(set.WeaponMountRotation.x == 0.0f && set.WeaponMountRotation.y == 0.0f &&
+          set.WeaponMountRotation.z == 0.0f);
+    CHECK(FirstPersonAnimationSet::FromJsonString(valid, set, &error)); // back to the full set
+
     const FirstPersonAnimationSet original = set;
     CHECK(!FirstPersonAnimationSet::FromJsonString(
         R"({"armsModel":"a.fbx","weaponModel":"w.fbx","clips":[{"name":"Idle","arms":"i.fbx"},{"name":"Idle","arms":"again.fbx"}]})",
@@ -1356,6 +1398,17 @@ void TestFirstPersonAnimationSet() {
         R"({"armsModel":"a.fbx","weaponModel":"w.fbx","defaultState":"Missing","clips":[{"name":"Idle","arms":"i.fbx"}]})",
         set, &error));
     CHECK(error.find("defaultState") != std::string::npos);
+
+    // A mount needs both ends. Naming only one is a typo that would otherwise fall back to the
+    // shared pose while looking configured, so it fails the load instead.
+    CHECK(!FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","weaponSocket":"ik_hand_gun","clips":[{"name":"Idle","arms":"i.fbx"}]})",
+        set, &error));
+    CHECK(error.find("weaponRoot") != std::string::npos);
+    CHECK(!FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","weaponRoot":"root","clips":[{"name":"Idle","arms":"i.fbx"}]})",
+        set, &error));
+    CHECK(error.find("weaponSocket") != std::string::npos);
 }
 
 // #165 - the FirstPersonPresentation driver's pure priority/resting-state logic, tested without

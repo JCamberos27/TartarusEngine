@@ -40,4 +40,13 @@ struct RenderFrameContext {
 
     // The caller's per-viewport SSAO instance; null or !IsValid() -> the draw runs without AO.
     Ssao* SsaoSrc = nullptr;
+
+    // Vertical FOV in degrees for the view-model sub-pass, which draws ViewModelTag entities
+    // last, after a depth clear, instead of in the world pass. Non-positive (the -1 default)
+    // skips the sub-pass and leaves those entities in the world pass under this view's own
+    // projection — the editor Scene tab wants that; the Game view and maximized Play pass
+    // FirstPersonPresentation::ViewModelFov(). Only this sub-pass's projection changes: the
+    // world camera's FOV, and therefore everything the sky/cluster/shadow passes were fitted
+    // to, is untouched.
+    float ViewModelFov = -1.0f;
 };

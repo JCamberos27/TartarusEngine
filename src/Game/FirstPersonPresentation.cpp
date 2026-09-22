@@ -72,10 +72,18 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
         auto& renderable = world.Registry.get<RenderableComponent>(e);
         renderable.CastShadows = RenderableComponent::ShadowCasting::Off;
         renderable.ReceiveShadows = false;
+        // Routes them into the renderer's view-model sub-pass (own FOV, depth cleared) rather
+        // than the world pass. Runtime-only tag: these entities are created here and destroyed
+        // by Stop(), so it never reaches a scene file.
+        world.Registry.emplace_or_replace<ViewModelTag>(e);
     }
     m_Offset = config.ViewModelOffset;
     m_Rotation = config.ViewModelRotation;
     m_Scale = config.ViewModelScale;
+    // Not validated here: MakePerspective is the engine's one guarded projection constructor
+    // (#202) and corrects every degenerate FOV, so an out-of-range value costs a wrong-looking
+    // view model, never a broken frame. The Inspector already clamps it to 20..150.
+    m_ViewModelFov = config.ViewModelFov;
     m_CameraBone = config.CameraBone;
 
     if (!AttachAndValidate(assets) || !SetState(m_Set.DefaultState)) {
@@ -97,6 +105,7 @@ void FirstPersonPresentation::Stop(World& world) {
     m_CurrentState.clear();
     m_Set = {};
     m_CameraBone.clear();
+    m_ViewModelFov = -1.0f;
     m_CameraBoneWarned = false;
     m_ActionGateArms = false;
     m_ActionGateWeapon = false;
@@ -248,8 +257,41 @@ void FirstPersonPresentation::Update(World& world, const Camera& camera) {
     }
     position += cameraRotation * m_Offset;
 
-    for (entt::entity e : {m_Arms, m_Weapon}) {
-        world.SetWorldPose(e, position, rotation);
-        world.Registry.get<TransformComponent>(e).Scale = glm::vec3(m_Scale);
+    world.SetWorldPose(m_Arms, position, rotation);
+    world.Registry.get<TransformComponent>(m_Arms).Scale = glm::vec3(m_Scale);
+
+    // The weapon is parented to the arms rig's gun socket rather than handed the same pose
+    // blind (see FirstPersonAnimationSet::WeaponSocket). Both rigs live on entities with this
+    // pose, so their posed node globals speak one root space and the attachment solves directly:
+    //
+    //     weaponEntity * weaponRoot = armsEntity * socket * mount
+    //  -> weaponEntity = armsEntity * (socket * mount * weaponRoot^-1)
+    //
+    // `socket` and `weaponRoot` are the posed node globals - the bind walk while nothing is
+    // playing - so the gun tracks the hands rigidly wherever they go. Only the weapon's ROOT is
+    // overridden: its own clip channels (bolt, trigger, magazine, ...) still animate underneath,
+    // which is the whole point of the separate rig. Without this the weapon clip's root is the
+    // only thing moving the gun and it barely moves at all (Sprint 14.5 cm, Holster 21.7 cm,
+    // Draw 18.2 cm and Aim 67.8 cm of socket-to-weapon error).
+    glm::vec3 weaponPosition = position;
+    glm::quat weaponRotation = rotation;
+    if (!m_Set.WeaponSocket.empty() && m_ArmsModel && m_WeaponModel) {
+        glm::mat4 socket(1.0f), weaponRoot(1.0f);
+        if (m_ArmsModel->NodeTransform(m_Set.WeaponSocket, socket) &&
+            m_WeaponModel->NodeTransform(m_Set.WeaponRoot, weaponRoot)) {
+            const glm::mat4 mount =
+                socket * glm::mat4_cast(QuaternionFromEulerYXZ(m_Set.WeaponMountRotation)) *
+                glm::inverse(weaponRoot);
+            weaponPosition = position + rotation * (m_Scale * glm::vec3(mount[3]));
+            weaponRotation = NormalizeRotation(rotation * QuaternionFromMatrix(mount));
+        } else if (!m_WeaponSocketWarned) {
+            m_WeaponSocketWarned = true;
+            Log::Warn("First-person presentation: arms model has no '" + m_Set.WeaponSocket +
+                      "' socket or weapon model has no '" + m_Set.WeaponRoot +
+                      "' root; the weapon keeps the arms' pose instead.");
+        }
     }
+
+    world.SetWorldPose(m_Weapon, weaponPosition, weaponRotation);
+    world.Registry.get<TransformComponent>(m_Weapon).Scale = glm::vec3(m_Scale);
 }

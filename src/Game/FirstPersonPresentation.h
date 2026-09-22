@@ -22,9 +22,18 @@ public:
     bool Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent& config);
     void Stop(World& world);
 
-    // Keeps the presentation in camera space. The current renderer uses the normal world pass;
-    // the authored ViewModelFov is deliberately reserved for the later dedicated view-model pass.
+    // Keeps the presentation in camera space. The renderer draws these rigs in its own
+    // view-model sub-pass — see ViewModelFov() below — so the world camera's FOV is never
+    // touched; ViewModelOffset is a residual nudge ({0,0,0} for the source set, because the
+    // CameraBone anchor already puts the rig's head bone exactly on the camera).
     void Update(World& world, const Camera& camera);
+
+    // Vertical FOV in degrees for that sub-pass, or a non-positive value when there is nothing
+    // to put in it. A caller passing this straight through as RenderFrameContext::ViewModelFov
+    // therefore gets the dedicated pass while Play is running with an animation set, and falls
+    // back to the plain world pass (including drawing the entities normally, in the editor Scene
+    // tab) when it isn't. Read-only: only Start()/Stop() ever change it.
+    float ViewModelFov() const { return IsActive() ? m_ViewModelFov : -1.0f; }
 
     // Plays a semantic state on both rigs at the same simulation instant. A state without a
     // weapon clip intentionally restores the weapon's bind pose rather than guessing a clip.
@@ -67,8 +76,10 @@ private:
     glm::vec3 m_Offset{0.0f};
     glm::vec3 m_Rotation{0.0f};
     float m_Scale = 1.0f;
+    float m_ViewModelFov = -1.0f; // authored in Start(), read by ViewModelFov()
     std::string m_CameraBone;   // rig node the play camera is pinned to (empty = root-anchored)
     bool m_CameraBoneWarned = false;
+    bool m_WeaponSocketWarned = false;
     std::string m_CurrentState;
     std::string m_LastError;
 

@@ -29,6 +29,20 @@ struct FirstPersonAnimationSet {
     // facing model +Z while the engine's camera looks down its own -Z, so without the 180 Y this
     // set renders the arms and weapon behind the camera.
     glm::vec3 ViewRotation{0.0f};
+    // The weapon rides the arms rig's gun socket rather than merely sharing the arms entity's
+    // pose. `WeaponSocket` names a bone on the ARMS rig, `WeaponRoot` the bone on the WEAPON rig
+    // that has to land on it, and `WeaponMountRotation` (Y-X-Z degrees) is the fixed mount between
+    // the two - measured from the source FBXs as exactly (0, 90, 90) with zero translation, the
+    // same for every clip's frame 0.
+    //
+    // This is what "the AK is parented to ik_hand_gun" means at runtime. The weapon clips never
+    // move the gun: only A_W_ADS keys `root` at all, so without the socket the gun's placement
+    // is frozen while the hands move. Measured socket-vs-weapon error, root space:
+    // Sprint 11.5-14.5 cm, Draw 18.2 cm, Holster up to 21.7 cm, Aim 67.8 cm.
+    // An empty `WeaponSocket` disables the parenting (shared pose, the old behaviour).
+    std::string WeaponSocket;
+    std::string WeaponRoot;
+    glm::vec3 WeaponMountRotation{0.0f};
     std::vector<FirstPersonAnimationClip> Clips;
 
     const FirstPersonAnimationClip* Find(const std::string& state) const;

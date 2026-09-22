@@ -314,7 +314,11 @@ void RegisterEngineComponents() {
             { "View Model Scale", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelScale), 0.01f,
               "Scale of the first-person arms and weapon presentation.", 0.01f, 100.0f },
             { "View Model FOV", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelFov), 0.25f,
-              "Reserved for the dedicated first-person render pass. It does not change world camera FOV.", 20.0f, 150.0f },
+              "Vertical FOV, in degrees, the first-person arms and weapon are projected with in the\n"
+              "renderer's view-model pass (drawn after a depth clear, so the world can't clip them).\n"
+              "Independent of the world camera's FOV: this changes how the held weapon is framed,\n"
+              "never the scene behind it. Narrower than the world FOV by default, which is what\n"
+              "keeps the weapon reading as held instead of stretched.", 20.0f, 150.0f },
         },
     });
 

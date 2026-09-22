@@ -1,4 +1,4 @@
-{
+﻿{
   "source": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U 60fps (Revised).blend",
   "fps": 60,
   "exports": [
@@ -16,7 +16,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 9534764
+      "bytes": 1852412
     },
     {
       "file": "AKS-74U_A_FP_Draw.fbx",
@@ -32,7 +32,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 9812140
+      "bytes": 1970876
     },
     {
       "file": "AKS-74U_A_FP_Empty_Reload.fbx",
@@ -48,7 +48,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 10675532
+      "bytes": 4828780
     },
     {
       "file": "AKS-74U_A_FP_Fire.fbx",
@@ -64,7 +64,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 9754732
+      "bytes": 1968620
     },
     {
       "file": "AKS-74U_A_FP_Holster.fbx",
@@ -80,7 +80,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 9765756
+      "bytes": 1979612
     },
     {
       "file": "AKS-74U_A_FP_Idle.fbx",
@@ -96,7 +96,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 10195404
+      "bytes": 3442364
     },
     {
       "file": "AKS-74U_A_FP_IdleToSprint.fbx",
@@ -112,7 +112,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 9666940
+      "bytes": 1963804
     },
     {
       "file": "AKS-74U_A_FP_Inspect.fbx",
@@ -128,7 +128,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 10972556
+      "bytes": 5682428
     },
     {
       "file": "AKS-74U_A_FP_Mag_Check.fbx",
@@ -144,7 +144,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 10843148
+      "bytes": 2058172
     },
     {
       "file": "AKS-74U_A_FP_Melee.fbx",
@@ -160,7 +160,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 9912748
+      "bytes": 2604524
     },
     {
       "file": "AKS-74U_A_FP_Regrip.fbx",
@@ -176,7 +176,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 9778476
+      "bytes": 1969388
     },
     {
       "file": "AKS-74U_A_FP_Sprint.fbx",
@@ -192,7 +192,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 9798828
+      "bytes": 1970988
     },
     {
       "file": "AKS-74U_A_FP_SprintToIdle.fbx",
@@ -208,7 +208,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 9799068
+      "bytes": 1969388
     },
     {
       "file": "AKS-74U_A_FP_Tac_Reload.fbx",
@@ -224,7 +224,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 10430236
+      "bytes": 2046572
     },
     {
       "file": "AKS-74U_A_FP_Walk.fbx",
@@ -240,7 +240,7 @@
         "Quantum_Body_Full.001",
         "Quantum_Body_Full.002"
       ],
-      "bytes": 9798412
+      "bytes": 1969004
     },
     {
       "file": "AKS-74U_A_W_ADS.fbx",
@@ -373,6 +373,17 @@
         "aks74u"
       ],
       "bytes": 1749324
+    },
+    {
+      "file": "AKS-74U_A_FP_Aim.fbx",
+      "action": "A_FP_ADS",
+      "frameStart": 0,
+      "frameEnd": 1,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 1532556,
+      "note": "Armature only. Carries the A_FP_ADS single-frame pose so the Aim state can play it instead of falling back to the arms bind pose (which is the A-pose, 67.8 cm from the weapon). Exported with bake_anim=True because the action only keys CB_* control bones; the deform bones get their values from the constraint evaluation that baking samples. No meshes, so it adds no material or texture loads."
     }
   ],
   "errors": []
