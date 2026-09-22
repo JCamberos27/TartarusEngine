@@ -301,6 +301,16 @@ void RegisterEngineComponents() {
             { "Throw Backspin", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ThrowBackspin), 0.05f,
               "Gravity gun: backspin (revolutions per second) put on a thrown ball, like a real shot.\n"
               "Only round (sphere collider) bodies get it.", 0.0f, 20.0f },
+            { "Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AnimationSet), 0.0f,
+              "Optional .fpsanim asset for a camera-bound first-person arms and weapon presentation." },
+            { "View Model Offset", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelOffset), 0.01f,
+              "Position of the first-person presentation relative to the play camera." },
+            { "View Model Rotation", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelRotation), 0.5f,
+              "Euler rotation offset, in degrees, applied after the play camera orientation." },
+            { "View Model Scale", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelScale), 0.01f,
+              "Scale of the first-person arms and weapon presentation.", 0.01f, 100.0f },
+            { "View Model FOV", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelFov), 0.25f,
+              "Reserved for the dedicated first-person render pass. It does not change world camera FOV.", 20.0f, 150.0f },
         },
     });
 
@@ -751,6 +761,7 @@ void RegisterEngineComponents() {
         {"Animation", "Clip"},
         {"Animator Controller", "Controller"},
         {"Transform Controller", "Script Path"},
+        {"First Person Controller", "Animation Set"},
     };
     for (const auto& [component, field] : kAssetPathFields)
         for (RegisteredComponent& rc : Storage())

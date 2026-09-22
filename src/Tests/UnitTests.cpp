@@ -16,6 +16,7 @@
 #include "UnitTests.h"
 
 #include "AnimatorController.h"
+#include "FirstPersonAnimation.h"
 #include "AudioEngine.h"
 #include "Log.h" // #178 stack traces
 #include "InputMap.h"
@@ -1322,6 +1323,91 @@ void TestAnimatorController() {
     CHECK(comp.GetFloat("Jump") == 0.0f && comp.GetFloat("Missing") == 0.0f);
 }
 
+void TestFirstPersonAnimationSet() {
+    const std::string valid = R"({
+        "armsModel":"models/fps/arms_base.fbx",
+        "weaponModel":"models/fps/aks74u_base.fbx",
+        "defaultState":"Idle",
+        "clips":[
+            {"name":"Idle","arms":"animations/A_FP_Idle.fbx","loop":true,"fade":0.15},
+            {"name":"Fire","arms":"animations/A_FP_Fire.fbx","weapon":"animations/A_W_Fire.fbx"}
+        ]
+    })";
+    FirstPersonAnimationSet set;
+    std::string error;
+    CHECK(FirstPersonAnimationSet::FromJsonString(valid, set, &error));
+    CHECK(error.empty());
+    CHECK(set.ArmsModel == "models/fps/arms_base.fbx");
+    CHECK(set.WeaponModel == "models/fps/aks74u_base.fbx");
+    CHECK(set.DefaultState == "Idle");
+    CHECK(set.Clips.size() == 2);
+    CHECK(set.Find("Idle") && set.Find("Idle")->Loop);
+    CHECK(set.Find("Idle")->WeaponClip.empty()); // missing pair is explicit, never inferred
+    CHECK(set.Find("Fire") && set.Find("Fire")->WeaponClip == "animations/A_W_Fire.fbx");
+
+    const FirstPersonAnimationSet original = set;
+    CHECK(!FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","clips":[{"name":"Idle","arms":"i.fbx"},{"name":"Idle","arms":"again.fbx"}]})",
+        set, &error));
+    CHECK(error.find("duplicate") != std::string::npos);
+    CHECK(set.Clips.size() == original.Clips.size()); // bad reload must not corrupt a live set
+
+    CHECK(!FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","defaultState":"Missing","clips":[{"name":"Idle","arms":"i.fbx"}]})",
+        set, &error));
+    CHECK(error.find("defaultState") != std::string::npos);
+}
+
+// #165 - the FirstPersonPresentation driver's pure priority/resting-state logic, tested without
+// a live World/Model (see FirstPersonPresentation::Tick/TriggerAction for how it's wired up).
+void TestFirstPersonAnimationFSM() {
+    using Tier = FirstPersonActionTier;
+    CHECK(FirstPersonTierOf("Fire") == Tier::Action);
+    CHECK(FirstPersonTierOf("Inspect") == Tier::Action);
+    CHECK(FirstPersonTierOf("MagCheck") == Tier::Action);
+    CHECK(FirstPersonTierOf("TacReload") == Tier::Committed);
+    CHECK(FirstPersonTierOf("EmptyReload") == Tier::Committed);
+    CHECK(FirstPersonTierOf("Melee") == Tier::Committed);
+    CHECK(FirstPersonTierOf("Draw") == Tier::Equip);
+    CHECK(FirstPersonTierOf("Holster") == Tier::Equip);
+    CHECK(FirstPersonTierOf("IdleToSprint") == Tier::Transition);
+    CHECK(FirstPersonTierOf("SprintToIdle") == Tier::Transition);
+    CHECK(FirstPersonTierOf("Idle") == Tier::None);   // a resting state, not a triggerable action
+    CHECK(FirstPersonTierOf("Walk") == Tier::None);
+    CHECK(FirstPersonTierOf("Sprint") == Tier::None);
+    CHECK(FirstPersonTierOf("Aim") == Tier::None);
+    CHECK(FirstPersonTierOf("Nonsense") == Tier::None);
+
+    // Nothing busy: anything goes.
+    CHECK(FirstPersonCanInterrupt("Fire", Tier::Action, "", Tier::None));
+    // Fire spam restarts in place even though same-tier requests are otherwise blocked.
+    CHECK(FirstPersonCanInterrupt("Fire", Tier::Action, "Fire", Tier::Action));
+    // A same-tier different action is dropped, not queued.
+    CHECK(!FirstPersonCanInterrupt("Inspect", Tier::Action, "MagCheck", Tier::Action));
+    // A lower tier can't interrupt a higher one (can't Inspect through a reload).
+    CHECK(!FirstPersonCanInterrupt("Inspect", Tier::Action, "TacReload", Tier::Committed));
+    // A strictly higher tier always wins (Holster cuts off a reload in progress).
+    CHECK(FirstPersonCanInterrupt("Holster", Tier::Equip, "TacReload", Tier::Committed));
+    // Even Equip doesn't interrupt Equip unless it's the same action restarting.
+    CHECK(!FirstPersonCanInterrupt("Draw", Tier::Equip, "Holster", Tier::Equip));
+    // A real action always pre-empts a locomotion transition (the lowest tier).
+    CHECK(FirstPersonCanInterrupt("Fire", Tier::Action, "IdleToSprint", Tier::Transition));
+
+    CHECK(FirstPersonRestingState(0.0f, false, false) == "Idle");
+    CHECK(FirstPersonRestingState(0.0f, false, true) == "Aim");   // aim pose only applies at rest
+    CHECK(FirstPersonRestingState(2.0f, false, true) == "Walk");  // moving beats aiming - no such clip
+    CHECK(FirstPersonRestingState(2.0f, false, false) == "Walk");
+    CHECK(FirstPersonRestingState(2.0f, true, false) == "Sprint");
+    CHECK(FirstPersonRestingState(0.0f, true, false) == "Idle");  // can't sprint standing still
+
+    CHECK(FirstPersonTransitionVia("Idle", "Sprint") == "IdleToSprint");
+    CHECK(FirstPersonTransitionVia("Sprint", "Idle") == "SprintToIdle");
+    CHECK(FirstPersonTransitionVia("Sprint", "Walk") == "SprintToIdle");
+    CHECK(FirstPersonTransitionVia("Sprint", "Sprint").empty());
+    CHECK(FirstPersonTransitionVia("Idle", "Walk").empty());   // no authored transition clip
+    CHECK(FirstPersonTransitionVia("Walk", "Sprint").empty()); // only Idle<->Sprint was authored
+}
+
 // --- #132: asset identity - path keys, asset types, GUID-following references ------------------
 void TestAssetIdentity() {
     namespace fs = std::filesystem;
@@ -1459,6 +1545,8 @@ int RunUnitTests() {
         {"MaterialRobustness", TestMaterialRobustness},
         {"ComponentRegistry", TestComponentRegistry},
         {"AnimatorController", TestAnimatorController},
+        {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
+        {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
         {"AssetIdentity", TestAssetIdentity},
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},

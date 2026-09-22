@@ -1,0 +1,379 @@
+{
+  "source": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U 60fps (Revised).blend",
+  "fps": 60,
+  "exports": [
+    {
+      "file": "AKS-74U_A_FP_ADS.fbx",
+      "action": "A_FP_ADS",
+      "frameStart": 0,
+      "frameEnd": 0,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 9534764
+    },
+    {
+      "file": "AKS-74U_A_FP_Draw.fbx",
+      "action": "A_FP_Draw",
+      "frameStart": 0,
+      "frameEnd": 46,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 9812140
+    },
+    {
+      "file": "AKS-74U_A_FP_Empty_Reload.fbx",
+      "action": "A_FP_Empty_Reload",
+      "frameStart": 0,
+      "frameEnd": 220,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 10675532
+    },
+    {
+      "file": "AKS-74U_A_FP_Fire.fbx",
+      "action": "A_FP_Fire",
+      "frameStart": 0,
+      "frameEnd": 36,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 9754732
+    },
+    {
+      "file": "AKS-74U_A_FP_Holster.fbx",
+      "action": "A_FP_Holster",
+      "frameStart": 0,
+      "frameEnd": 28,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 9765756
+    },
+    {
+      "file": "AKS-74U_A_FP_Idle.fbx",
+      "action": "A_FP_Idle",
+      "frameStart": 0,
+      "frameEnd": 128,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 10195404
+    },
+    {
+      "file": "AKS-74U_A_FP_IdleToSprint.fbx",
+      "action": "A_FP_IdleToSprint",
+      "frameStart": 0,
+      "frameEnd": 16,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 9666940
+    },
+    {
+      "file": "AKS-74U_A_FP_Inspect.fbx",
+      "action": "A_FP_Inspect",
+      "frameStart": 0,
+      "frameEnd": 282,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 10972556
+    },
+    {
+      "file": "AKS-74U_A_FP_Mag_Check.fbx",
+      "action": "A_FP_Mag_Check",
+      "frameStart": 0,
+      "frameEnd": 260,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 10843148
+    },
+    {
+      "file": "AKS-74U_A_FP_Melee.fbx",
+      "action": "A_FP_Melee",
+      "frameStart": 0,
+      "frameEnd": 65,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 9912748
+    },
+    {
+      "file": "AKS-74U_A_FP_Regrip.fbx",
+      "action": "A_FP_Regrip",
+      "frameStart": 0,
+      "frameEnd": 40,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 9778476
+    },
+    {
+      "file": "AKS-74U_A_FP_Sprint.fbx",
+      "action": "A_FP_Sprint",
+      "frameStart": 0,
+      "frameEnd": 44,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 9798828
+    },
+    {
+      "file": "AKS-74U_A_FP_SprintToIdle.fbx",
+      "action": "A_FP_SprintToIdle",
+      "frameStart": 0,
+      "frameEnd": 44,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 9799068
+    },
+    {
+      "file": "AKS-74U_A_FP_Tac_Reload.fbx",
+      "action": "A_FP_Tac_Reload",
+      "frameStart": 0,
+      "frameEnd": 170,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 10430236
+    },
+    {
+      "file": "AKS-74U_A_FP_Walk.fbx",
+      "action": "A_FP_Walk",
+      "frameStart": 0,
+      "frameEnd": 44,
+      "fps": 60,
+      "skeleton": "Armature",
+      "meshes": [
+        "SK_Manny_Simple",
+        "SK_Manny_Arms",
+        "Quantum_Body_Full",
+        "Quantum_Body_Full.001",
+        "Quantum_Body_Full.002"
+      ],
+      "bytes": 9798412
+    },
+    {
+      "file": "AKS-74U_A_W_ADS.fbx",
+      "action": "A_W_ADS",
+      "frameStart": 0,
+      "frameEnd": 0,
+      "fps": 60,
+      "skeleton": "AK",
+      "meshes": [
+        "aks74u"
+      ],
+      "bytes": 1652828
+    },
+    {
+      "file": "AKS-74U_A_W_Empty_Reload.fbx",
+      "action": "A_W_Empty_Reload",
+      "frameStart": 0,
+      "frameEnd": 220,
+      "fps": 60,
+      "skeleton": "AK",
+      "meshes": [
+        "aks74u"
+      ],
+      "bytes": 1773100
+    },
+    {
+      "file": "AKS-74U_A_W_Fire.fbx",
+      "action": "A_W_Fire",
+      "frameStart": 0,
+      "frameEnd": 36,
+      "fps": 60,
+      "skeleton": "AK",
+      "meshes": [
+        "aks74u"
+      ],
+      "bytes": 1679852
+    },
+    {
+      "file": "AKS-74U_A_W_Holster.fbx",
+      "action": "A_W_Holster",
+      "frameStart": 0,
+      "frameEnd": 28,
+      "fps": 60,
+      "skeleton": "AK",
+      "meshes": [
+        "aks74u"
+      ],
+      "bytes": 1678620
+    },
+    {
+      "file": "AKS-74U_A_W_IdleToSprint.fbx",
+      "action": "A_W_IdleToSprint",
+      "frameStart": 0,
+      "frameEnd": 16,
+      "fps": 60,
+      "skeleton": "AK",
+      "meshes": [
+        "aks74u"
+      ],
+      "bytes": 1667644
+    },
+    {
+      "file": "AKS-74U_A_W_Inspect.fbx",
+      "action": "A_W_Inspect",
+      "frameStart": 0,
+      "frameEnd": 282,
+      "fps": 60,
+      "skeleton": "AK",
+      "meshes": [
+        "aks74u"
+      ],
+      "bytes": 1800300
+    },
+    {
+      "file": "AKS-74U_A_W_Mag_Check.fbx",
+      "action": "A_W_Mag_Check",
+      "frameStart": 0,
+      "frameEnd": 260,
+      "fps": 60,
+      "skeleton": "AK",
+      "meshes": [
+        "aks74u"
+      ],
+      "bytes": 1793324
+    },
+    {
+      "file": "AKS-74U_A_W_Melee.fbx",
+      "action": "A_W_Melee",
+      "frameStart": 0,
+      "frameEnd": 65,
+      "fps": 60,
+      "skeleton": "AK",
+      "meshes": [
+        "aks74u"
+      ],
+      "bytes": 1696476
+    },
+    {
+      "file": "AKS-74U_A_W_Sprint.fbx",
+      "action": "A_W_Sprint",
+      "frameStart": 0,
+      "frameEnd": 44,
+      "fps": 60,
+      "skeleton": "AK",
+      "meshes": [
+        "aks74u"
+      ],
+      "bytes": 1686108
+    },
+    {
+      "file": "AKS-74U_A_W_SprintToIdle.fbx",
+      "action": "A_W_SprintToIdle",
+      "frameStart": 0,
+      "frameEnd": 44,
+      "fps": 60,
+      "skeleton": "AK",
+      "meshes": [
+        "aks74u"
+      ],
+      "bytes": 1686108
+    },
+    {
+      "file": "AKS-74U_A_W_Tac_Reload.fbx",
+      "action": "A_W_Tac_Reload",
+      "frameStart": 0,
+      "frameEnd": 170,
+      "fps": 60,
+      "skeleton": "AK",
+      "meshes": [
+        "aks74u"
+      ],
+      "bytes": 1749324
+    }
+  ],
+  "errors": []
+}
