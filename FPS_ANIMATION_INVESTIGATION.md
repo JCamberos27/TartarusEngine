@@ -310,6 +310,104 @@ the main CMake project — compile it ad hoc as shown above) since it's a
 fast, UI-free way to sanity-check any bone's transform against Blender
 without touching the running engine at all.
 
+## UPDATE 2: three more hypotheses tested and killed; the vertex shader was inspected and looks clean
+
+Three additional standalone probes (same technique as `work/assimp_probe.cpp` —
+link directly against the project's prebuilt Assimp static lib, no engine/editor
+involved) were written and run to close the remaining gaps UPDATE 1 left open.
+All three came back clean, further narrowing (but not yet finding) the bug.
+
+**`work/bone_match_probe.cpp`** — checks `Model::AttachClip`'s name-matching
+rule (exact string match between a clip channel's bone name and a node name in
+the base skeleton) for **every** channel in 5 different clips (`Idle`, `Walk`,
+`Sprint`, `Fire`, `Draw`), not just a 10-bone sample. Result: **89/89 channels
+matched in all 5 clips, zero unmatched names.** Rules out a partial/silent
+name-mismatch (e.g. a handful of bones — say, specific twist bones — quietly
+falling back to bind pose while everything else animates, which would tear the
+mesh exactly at the seam and wouldn't trip the existing `matched == 0` or
+`matched * 2 < total` warnings in `AttachClip`).
+
+**`work/dup_name_probe.cpp`** — checks for duplicate node names in the base
+skeleton's 266-node tree. This was a serious hypothesis: `Model::ImportFromFile`
+builds *two* independent name-keyed representations of the same tree —
+`m_ImportNodeGlobals` (a `std::unordered_map`, populated via `emplace`, which
+**keeps the first occurrence** of a duplicate key) for `BindPoseBones`, versus
+`m_D->Nodes` (a flat array, walked in the same DFS order, but where
+`EvaluatePose` **overwrites** `m_FinalBoneMatrices[boneId]` on every matching
+node) for the animated palette. If any bone name were duplicated anywhere in
+the 266-node tree, bind pose and animated pose could legitimately read two
+different nodes' transforms for the "same" bone ID — bind pose using the first
+occurrence, animated pose using the last. This would exactly explain "bind pose
+clean, animated pose torn" without contradicting the earlier tick=64 spot-check
+(if the specific bones sampled then happened not to collide). Result: **266
+total nodes, 266 unique names, zero duplicates.** Hypothesis dead.
+
+**`work/full_skin_probe.cpp`** — extends the byte-level comparison from 10
+sampled bones to **all 52 actually-skinned bones** (the full set referenced by
+`aiMesh::mBones` across the model, i.e. every bone `ExtractBoneWeights` would
+register), computing the *complete* final skin matrix
+(`GlobalInverseTransform * NodeGlobal * BoneOffset` — not just the raw node
+global checked in UPDATE 1) at tick=64. Result: **all 52 bones produce clean
+rigid transforms** — every rotation submatrix has all three column lengths
+exactly `1.0000` (no scale corruption, no shear, no NaN/Inf), and every
+translation is a small, sane, anatomically-plausible number. Notably,
+`upperarm_l`/`upperarm_r` themselves carry **no vertex weights at all** — only
+`clavicle_*`, the twist bones, `lowerarm_*`, `hand_*`, and finger bones do —
+so the upper-arm segment's shape is controlled entirely by the twist bones,
+which were already confirmed matching Blender exactly in UPDATE 1. Full output
+saved at `work/full_skin_probe_out.txt` for reference.
+
+Taken together with UPDATE 1's Blender-live-rig test and 10-bone comparison,
+this means: the source bake is clean, every clip's every channel resolves to
+the correct bone by name, there are no hidden name collisions, and the fully
+composed CPU-side skin matrix for *every single skinned bone* is numerically
+correct at the sampled tick. The CPU-side skeletal pipeline is about as
+exhaustively verified as it can be without literally running the real engine's
+own `EvaluatePose()` and diffing its output byte-for-byte (candidate #1 from
+UPDATE 1 — still not done; would still be worthwhile if everything else below
+comes up empty, since it's the one remaining "is the standalone replica
+faithful to the real code" gap).
+
+**The vertex shader (`src/Renderer/shaders/ModelVertex.glsl`) was read in
+full** as the next place to look, since the CPU-side matrices feeding it are
+now heavily verified. On inspection it looks correct: standard weighted-blend
+skinning (`skinMat += uBones[clamp(aBoneIDs[i], 0, uBones.length()-1)] *
+aWeights[i]`, summed across 4 slots, `totalWeight <= 0.0001 → identity`
+fallback so unweighted vertices don't collapse to the origin), matching
+`ModelVertex.h`'s documented default of `BoneIDs = {-1,-1,-1,-1}` (a slot with
+`aBoneIDs[i] < 0` is simply skipped in the shader loop — no out-of-bounds read,
+no silent garbage term). Nothing suspicious was found by inspection alone; this
+has **not** been confirmed against an actual GPU capture, so it's "looks
+correct on read" rather than "proven correct" the way the CPU-side bone math
+now is.
+
+**What's left, ranked by how promising it looks right now:**
+
+1. **The SSBO upload/binding path** (`Model::UploadBoneMatrices`,
+   `src/Renderer/Model.cpp` — search for `g_BoneSsbo`). This is the one
+   remaining link between "CPU has the right matrices" (proven) and "shader
+   reads the right matrices" (assumed, not proven) that hasn't been directly
+   instrumented or captured. It's a single process-lifetime SSBO shared by
+   every model, re-uploaded via `glNamedBufferSubData(g_BoneSsbo, 0, count *
+   sizeof(mat4), palette.data())` immediately before each model's draw call,
+   with `count = clamp(BoneCounter, 1, MAX_BONES)`. This was reasoned about
+   (not GPU-captured) in UPDATE 1's "ruled out" list as "tightly paired
+   per-model at every call site" — that reasoning holds for *ordering*
+   (upload-then-draw, no interleaving), but the actual **byte contents** of
+   what lands in the buffer at draw time have never been directly captured
+   and compared against the CPU-side `m_FinalBoneMatrices` this session
+   computed by hand. Worth a RenderDoc capture (see "Other leads" below,
+   already flagged but still not done) or a direct post-`glNamedBufferSubData`
+   readback+log for one frame.
+2. Actually instrumenting the real `Model::EvaluatePose()` to log the same
+   52-bone table `full_skin_probe.cpp` produces, at the same tick, from
+   *inside the running engine*, and diffing byte-for-byte against
+   `work/full_skin_probe_out.txt`. This closes candidate #1 from UPDATE 1
+   for good — either it matches (pipeline fully exonerated, bug is 100%
+   downstream of `m_FinalBoneMatrices`) or it doesn't (found it).
+3. A GPU capture remains the most direct way to settle this once and for
+   all — see "Other leads" below.
+
 ## Original next-step writeup (now executed — see UPDATE above; left for the reasoning/code)
 
 **Play the `A_FP_Idle` action directly on the live rig in Blender, with
