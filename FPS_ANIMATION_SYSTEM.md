@@ -75,8 +75,25 @@ the gun while the right hand sat still:
 | Inspect | 1140 mm → 881 mm |
 | Melee | 1057 → 999 mm |
 
-`Mag_Check` and the other twelve measured identical under both pairings and were left
-alone; confirm with `work/hand_probe.cpp` (section 7) or `work/bl_pair_check.py`.
+> **Correction — see `FPS_ANIMATION_INVESTIGATION.md` UPDATE 6.** An earlier revision of
+> this section claimed `Mag_Check` "and the other twelve measured identical under both
+> pairings and were left alone". That was **wrong for `Mag_Check`**, and the clip shipped
+> visibly broken because of it. A clean A/B — same action, same `0..260` range, same
+> `meshes=0`, *only* the paired weapon action differing — settles it:
+>
+> | MagCheck bake | `hand_l` world path |
+> |---|---|
+> | shipped (as found) | 1085.7 mm |
+> | rebaked against `A_W_Tac_Reload` | **1086.3 mm** (Δ 0.6 — matches shipped) |
+> | rebaked against `A_W_Mag_Check` | **1062.9 mm** (Δ **−22.8** — the fix) |
+>
+> Pairing alone moves the hand **23.4 mm**, and the shipped file is the `A_W_Tac_Reload`
+> bake to within noise. The whole 4:00:42 batch has since been re-exported with correct
+> pairing. Re-check any clip with `work/hand_probe.cpp` (section 7) or `work/bl_pair_check.py`.
+
+**Clip FBXs are channel-only: always export with `meshes=0`.** Geometry comes from the
+`ADS` armsModel, so a meshed export bolts on stray meshes (`Mesh.001`, `Mesh.003`, 267
+nodes) and doubles the file for nothing. The clips that work are 265 nodes / 0 meshes.
 
 Export arm clips with **`meshes 0`**: `Model::AttachClip` reads only the clip's channels,
 so meshes add nothing but a material — and the material the meshed export brought in
@@ -375,7 +392,7 @@ main CMake project.
 | `forward_skin_probe.cpp` | Forward (CPU) skinning result for a mesh |
 | `clip_coverage_probe.cpp` | Which bones a clip actually drives |
 | `bone_dump.cpp` | Per-bone `|A−I|`, `|C−I|`, `C`'s translation, hierarchy depth ≤3 |
-| `nodes.cpp` | Node-name search across the hierarchy (how `head` was located) |
+| `nodes.cpp` | Node-name search across the hierarchy (how `head` was located); `--chain <node>` prints one node's full ancestor chain |
 | `align_probe.cpp`, `diag_probe.cpp` | Axis alignment / ad-hoc diagnostics |
 | `assimp_probe.cpp`, `full_skin_probe.cpp`, `bone_match_probe.cpp`, `dup_name_probe.cpp` | The earlier bone-math investigations — see `FPS_ANIMATION_INVESTIGATION.md` |
 | `bl_inspect.py`, `bl_inspect2.py`, `bl_idle_probe.py`, `bl_idle_probe2.py`, `bl_pair_check.py` | Read-only Blender ground truth: world/evaluated AABBs, bone landmarks, per-bone motion under a given weapon pairing |
@@ -384,6 +401,8 @@ main CMake project.
 | `fbx_info.cpp` | What is actually inside an FBX: nodes, meshes, and every take it carries — per-bone weight lists and per-take animated node names |
 | `mag_probe.cpp` | Out-of-range skin-weight audit under the engine's exact flag set (`--scan` over every shipped FBX), a post-processing **flag bisect**, per-bone raw `aiBone` dumps, and forward-skin positions at chosen ticks. The tool that proved `aiProcess_JoinIdenticalVertices` was deleting the spare magazine |
 | `build_probe.bat` | `cmd /c "work\build_probe.bat <name>"` — builds `work\<name>.cpp` with the right vcvars + `/MD` + assimp/glm include and lib paths, so a new probe is one command instead of the `cl` line above |
+| `export_clip.py` | Blender-side clip export: applies the pairing rule above, pins the weapon NLA off, restores both armatures **in memory** (never saves the `.blend`), and prints `weapon action paired = …`. Run as `blender -b "<blend>" --python work\export_clip.py -- <action> <out.fbx> <start> <end> <meshes 0|1> [weapon\|auto]` |
+| `extract_frames.py` | Frames from a video via Blender's VSE — there is no ffmpeg on this box, so this is how a Play-mode recording gets turned into PNGs/contact sheet for inspection |
 
 **Probes link the *same* assimp the engine does**, which now carries
 `tools/assimp_patches/*.patch` (see §8). If you build a probe against a re-cloned
@@ -466,16 +485,33 @@ Copy the implementation from `work/pose_probe.cpp`.
    `importer.optimizeGraph=false` fallback — that keeps the mesh correct but costs
    29215 → 130947 verts (+348%) versus +18.7% for the patch. See
    `FPS_ANIMATION_INVESTIGATION.md` UPDATE 5.
-9. **`EmptyReload` is authored but unreachable.** It has its own arms and weapon clips
-   (`AKS-74U_A_FP_Empty_Reload.fbx` / `AKS-74U_A_W_Empty_Reload.fbx`) and is listed as a
-   `Committed`-tier state, but `main.cpp` hardcodes the Reload key:
-   `if (InputMap::GetButtonDown("Reload")) …TriggerAction("TacReload");` — nothing in the
-   codebase ever calls `TriggerAction("EmptyReload")`. It also can't be gated on
-   "magazine empty", because **there is no ammo system at all** (no ammo/rounds/counter
-   anywhere in `src/`). So it cannot currently be seen in Play mode, by any input.
-   Reaching it needs either an ammo system (a real feature) or a temporary debug binding —
-   **ask before adding either**. Verified `TacReload`, which shares the same weapon-clip
-   path, does show the spare magazine.
+9. **`EmptyReload` is authored but only reachable via a temporary debug key.** It has its
+   own arms and weapon clips (`AKS-74U_A_FP_Empty_Reload.fbx` /
+   `AKS-74U_A_W_Empty_Reload.fbx`) and is listed as a `Committed`-tier state, but
+   `main.cpp` hardcodes the Reload key:
+   `if (InputMap::GetButtonDown("Reload")) …TriggerAction("TacReload");` — gameplay code
+   never calls `TriggerAction("EmptyReload")`, because gating it needs "magazine empty"
+   and **there is no ammo system at all** (no ammo/rounds/counter anywhere in `src/`).
+   **Interim:** `G` fires it (TEMPORARY DEBUG binding in `main.cpp` + `InputMap::Defaults()`);
+   confirmed in Play mode. The real fix is an ammo system — **ask before adding one**.
+   Two traps were cleared on the way: (a) the binding was dead on arrival because
+   `ProjectSettings` let `project/settings.json`'s 13-entry `input` array *replace*
+   `Defaults()` wholesale, so any newly-added default key read nothing (`Lookup()` warns
+   once, then the key is silently dead) — `InputMap::MergeDefaults` now tops a saved list
+   up with missing defaults, pinned by 4 assertions in `TestInputMap`; (b) the clip itself
+   is fine — `TacReload`, sharing the same weapon-clip path, shows the spare magazine.
+
+10. **Ten stale arm clips were re-exported — the "4:00:42 batch".** `Mag_Check` was the
+    only one that was *visibly* wrong, but all ten now come from a single exporter run
+    with correct weapon pairing and `meshes=0`. Measured `hand_l` deltas against what
+    shipped: `Mag_Check` **−22.8 mm**, everything else **≤3.2 mm** — because
+    `A_W_Tac_Reload`'s magazine only starts moving around frame 44 and every other stale
+    clip's range ends by frame 46, so the wrong pairing was *latent* everywhere except
+    `Mag_Check`'s 0..260 range. **`ADS` was deliberately not touched:** it is the base
+    model (geometry + bind pose + node tree) every clip attaches to, and its animation is
+    never played — rebaking it was the one genuinely break-everything risk here. Also
+    untouched: `Idle`, `Aim`, `Empty_Reload`, `Inspect`, `Melee`, already exported
+    correctly. See `FPS_ANIMATION_INVESTIGATION.md` UPDATE 6.
 
 ---
 
