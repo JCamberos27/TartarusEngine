@@ -727,13 +727,35 @@ void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh)
             if (vertexId >= vertices.size()) continue;
 
             ModelVertex& v = vertices[vertexId];
-            for (int slot = 0; slot < MAX_BONE_INFLUENCE; ++slot) {
-                if (v.BoneIDs[slot] < 0) {
-                    v.BoneIDs[slot] = boneID;
-                    v.Weights[slot] = weight;
-                    break;
-                }
+            int slot = 0;
+            for (; slot < MAX_BONE_INFLUENCE; ++slot)
+                if (v.BoneIDs[slot] < 0) break;
+            if (slot == MAX_BONE_INFLUENCE) {
+                // Already at capacity - a 5th+ influence (common right where a twist bone blends
+                // in) must replace the current SMALLEST kept weight if it outweighs it, not get
+                // silently dropped. Dropping arbitrarily by arrival order can evict the vertex's
+                // dominant bone entirely, skinning it from the wrong bones altogether.
+                int smallest = 0;
+                for (int s = 1; s < MAX_BONE_INFLUENCE; ++s)
+                    if (v.Weights[s] < v.Weights[smallest]) smallest = s;
+                if (weight <= v.Weights[smallest]) continue;
+                slot = smallest;
             }
+            v.BoneIDs[slot] = boneID;
+            v.Weights[slot] = weight;
+        }
+    }
+
+    // A vertex whose true influence count exceeds MAX_BONE_INFLUENCE only keeps its largest
+    // weights above, leaving them summing below 1 - the vertex shader would skin it as a
+    // shrunken blend toward the origin. Renormalizing keeps it a proper convex combination.
+    for (ModelVertex& v : vertices) {
+        float sum = 0.0f;
+        for (int slot = 0; slot < MAX_BONE_INFLUENCE; ++slot)
+            if (v.BoneIDs[slot] >= 0) sum += v.Weights[slot];
+        if (sum > 0.0001f && std::fabs(sum - 1.0f) > 0.0001f) {
+            for (int slot = 0; slot < MAX_BONE_INFLUENCE; ++slot)
+                if (v.BoneIDs[slot] >= 0) v.Weights[slot] /= sum;
         }
     }
 }
@@ -844,7 +866,25 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
     for (int c = 0; c < (int)clip.Channels.size(); ++c)
         for (int n = 0; n < (int)m_D->Nodes.size(); ++n)
             if (m_D->Nodes[n].Name == clip.Channels[c].BoneName) { x.NodeChannel[n] = c; ++matched; break; }
-    if (matched == 0) return -1;
+    if (matched == 0) {
+        // A bare "-1" at the call site made mixed FBX exports nearly impossible to diagnose.
+        // Give the author a small, actionable sample from each side without flooding the log
+        // with an entire production skeleton.
+        auto sample = [](auto count, auto nameAt) {
+            std::string out;
+            const int n = std::min<int>((int)count, 4);
+            for (int i = 0; i < n; ++i) {
+                if (i) out += ", ";
+                out += nameAt(i);
+            }
+            return out.empty() ? std::string("(none)") : out;
+        };
+        Log::Warn("Animation: '" + ref + "' has no skeleton-node matches on '" + m_Path +
+                  "' (clip samples: " + sample(clip.Channels.size(), [&](int i) { return clip.Channels[i].BoneName; }) +
+                  "; target samples: " + sample(m_D->Nodes.size(), [&](int i) { return m_D->Nodes[i].Name; }) + ")",
+                  LogContext::Asset(m_Path));
+        return -1;
+    }
     if (matched * 2 < (int)clip.Channels.size())
         Log::Warn("Animation: '" + ref + "' matches only " + std::to_string(matched) + " of its " +
                   std::to_string(clip.Channels.size()) + " animated bones on '" + m_Path +

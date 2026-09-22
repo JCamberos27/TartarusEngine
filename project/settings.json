@@ -1,0 +1,218 @@
+{
+  "assetFolders": [
+    "Scenes",
+    "Screenshots",
+    "Shaders",
+    "assets",
+    "assets/fps",
+    "assets/fps/AKS74U",
+    "assets/fps/AKS74U/FirstPerson"
+  ],
+  "audio": {
+    "busVolumes": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "masterVolume": 1.0
+  },
+  "build": {
+    "companyName": "",
+    "developmentBuild": false,
+    "fullscreen": true,
+    "height": 720,
+    "iconPath": "",
+    "outputDir": "",
+    "productName": "My Game",
+    "sceneGuids": [],
+    "scenes": [],
+    "splashPath": "",
+    "version": "1.0",
+    "vsync": true,
+    "width": 1280
+  },
+  "input": [
+    {
+      "altNegative": 263,
+      "altPositive": 262,
+      "gamepadAxis": 0,
+      "gamepadButton": -1,
+      "invertGamepadAxis": false,
+      "name": "Horizontal",
+      "negative": 65,
+      "positive": 68
+    },
+    {
+      "altNegative": 264,
+      "altPositive": 265,
+      "gamepadAxis": 1,
+      "gamepadButton": -1,
+      "invertGamepadAxis": true,
+      "name": "Vertical",
+      "negative": 83,
+      "positive": 87
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": 0,
+      "invertGamepadAxis": false,
+      "name": "Jump",
+      "negative": -1,
+      "positive": 32
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": 9,
+      "invertGamepadAxis": false,
+      "name": "Sprint",
+      "negative": -1,
+      "positive": 340
+    },
+    {
+      "altNegative": -1,
+      "altPositive": 341,
+      "gamepadAxis": -1,
+      "gamepadButton": 5,
+      "invertGamepadAxis": false,
+      "name": "Fire1",
+      "negative": -1,
+      "positive": 1000
+    },
+    {
+      "altNegative": -1,
+      "altPositive": 342,
+      "gamepadAxis": -1,
+      "gamepadButton": 4,
+      "invertGamepadAxis": false,
+      "name": "Fire2",
+      "negative": -1,
+      "positive": 1001
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": 2,
+      "invertGamepadAxis": false,
+      "name": "Interact",
+      "negative": -1,
+      "positive": 69
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": 7,
+      "invertGamepadAxis": false,
+      "name": "Cancel",
+      "negative": -1,
+      "positive": 256
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": -1,
+      "invertGamepadAxis": false,
+      "name": "Reload",
+      "negative": -1,
+      "positive": 82
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": -1,
+      "invertGamepadAxis": false,
+      "name": "Inspect",
+      "negative": -1,
+      "positive": 70
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": -1,
+      "invertGamepadAxis": false,
+      "name": "Melee",
+      "negative": -1,
+      "positive": 86
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": -1,
+      "invertGamepadAxis": false,
+      "name": "MagCheck",
+      "negative": -1,
+      "positive": 84
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": -1,
+      "invertGamepadAxis": false,
+      "name": "Holster",
+      "negative": -1,
+      "positive": 72
+    }
+  ],
+  "physics": {
+    "fixedTimestep": 0.01666666753590107,
+    "gravity": [
+      0.0,
+      -9.8100004196167,
+      0.0
+    ],
+    "layerCollision": [
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295,
+      4294967295
+    ],
+    "playerLayer": 0,
+    "playerPushStrength": 2.0,
+    "solverIterations": 8
+  },
+  "tags": [],
+  "time": {
+    "maximumDeltaTime": 0.10000000149011612,
+    "timeScale": 1.0
+  }
+}

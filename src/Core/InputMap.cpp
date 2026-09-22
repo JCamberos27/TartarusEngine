@@ -80,6 +80,14 @@ std::vector<Action> Defaults() {
         act("Fire2",  kMouseBase + 1, kNone, GLFW_KEY_LEFT_ALT,     kNone, GLFW_GAMEPAD_BUTTON_LEFT_BUMPER,  kNone, false),
         act("Interact", GLFW_KEY_E, kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_X, kNone, false),
         act("Cancel", GLFW_KEY_ESCAPE, kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_START, kNone, false),
+        // First-person weapon actions (#165 FirstPersonPresentation). Fire/Aim reuse Fire1/Fire2
+        // rather than adding new mouse-bound actions - the two only ever apply to a controller
+        // with its gravity gun turned off, so the bindings never actually collide in one scene.
+        act("Reload",   GLFW_KEY_R, kNone, kNone, kNone, kNone, kNone, false),
+        act("Inspect",  GLFW_KEY_F, kNone, kNone, kNone, kNone, kNone, false),
+        act("Melee",    GLFW_KEY_V, kNone, kNone, kNone, kNone, kNone, false),
+        act("MagCheck", GLFW_KEY_T, kNone, kNone, kNone, kNone, kNone, false),
+        act("Holster",  GLFW_KEY_H, kNone, kNone, kNone, kNone, kNone, false),
     };
 }
 

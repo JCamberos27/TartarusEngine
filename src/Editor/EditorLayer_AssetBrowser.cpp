@@ -594,7 +594,7 @@ std::vector<std::string> FindProjectReferences(const std::string& assetKey) {
         }
         if (!it->is_regular_file()) continue;
         const std::string ext = it->path().extension().string();
-        if (ext != ".json" && ext != ".prefab" && ext != ".mat" && ext != ".controller" && ext != ".physicmaterial") continue;
+        if (ext != ".json" && ext != ".prefab" && ext != ".mat" && ext != ".controller" && ext != ".fpsanim" && ext != ".physicmaterial") continue;
         std::error_code ec2;
         if (std::filesystem::weakly_canonical(it->path(), ec2) == self) continue;
         std::ifstream in(it->path(), std::ios::binary);
