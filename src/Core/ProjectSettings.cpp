@@ -142,11 +142,19 @@ void Load() {
                 if ((*b)[i].is_number()) g_Audio.BusVolume[i] = std::clamp((*b)[i].get<float>(), 0.0f, 1.0f);
     }
 
-    // #145 - Input Manager actions. A missing or empty list means the defaults.
+    // #145 - Input Manager actions. A missing or empty list means the defaults; a non-empty one
+    // keeps its own entries but is topped up with any default it predates (see MergeDefaults) -
+    // otherwise an action added after the file was written silently never registers. That is
+    // what made the EmptyReload debug binding dead on arrival: Defaults() had it, the saved
+    // project/settings.json did not, and the list wholesale replaced the defaults.
     {
         std::vector<InputMap::Action> actions;
         if (const auto it = root.find("input"); it != root.end()) actions = InputMap::FromJson(*it);
-        InputMap::Actions() = actions.empty() ? InputMap::Defaults() : std::move(actions);
+        if (actions.empty())
+            actions = InputMap::Defaults();
+        else
+            InputMap::MergeDefaults(actions);
+        InputMap::Actions() = std::move(actions);
     }
 
     if (const auto it = root.find("build"); it != root.end() && it->is_object()) { // #174
