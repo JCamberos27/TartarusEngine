@@ -8,6 +8,7 @@
 #include "Shader.h"
 #include "Camera.h"
 #include "Player.h"
+#include "FirstPersonPresentation.h"
 #include "World.h"
 #include "Components.h"
 #include "gl.h"
@@ -676,6 +677,7 @@ int main(int argc, char** argv) {
             editorModule.Initialize(executable.parent_path() / TARTARUS_EDITOR_MODULE_FILENAME, window.Handle());
         }
         Player player;
+        FirstPersonPresentation firstPersonPresentation;
         GravityGun gravityGun;
         CrosshairOverlay crosshair; // Play-mode crosshair + gravity gun hold / throw-charge indicator
         TrajectoryRibbon throwArc;  // red predicted path while the gravity gun charges a throw
@@ -1207,6 +1209,9 @@ int main(int argc, char** argv) {
                 player.RespawnFeet = glm::vec3(spawn[3]);
                 player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
                 YawPitchFromWorld(spawn, player.Cam.Yaw, player.Cam.Pitch);
+                // FPS presentation is opt-in on the controller. Sandbox keeps its gravity gun
+                // path untouched because its controller has no Animation Set assigned.
+                firstPersonPresentation.Start(world, assets, fp);
             } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
                 playUsesPlayer = false;
                 playGravityGun = false;
@@ -1219,6 +1224,10 @@ int main(int argc, char** argv) {
         };
         auto stopPlay = [&]() {
             if (!playing) return;
+            // Runtime-only arms/weapon entities were created after the play snapshot. Remove
+            // them before restoring the authored world so they can never be serialized or leak
+            // into another scene after a stop.
+            firstPersonPresentation.Stop(world);
             editor.OnExitPlayMode(world, assets);
             playing = false;
             paused = false;
@@ -2127,7 +2136,29 @@ int main(int argc, char** argv) {
                 // reach physics only). The game module's FixedUpdate rides the physics sub-steps.
                 PhysicsWorld::Step(gameDt, world,
                                    [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); });
-                if (playUsesPlayer) player.Update(gameDt, world, window.Handle(), gameHasInput);
+                if (playUsesPlayer) {
+                    player.Update(gameDt, world, window.Handle(), gameHasInput);
+                    if (firstPersonPresentation.IsActive()) {
+                        firstPersonPresentation.Update(world, player.Cam);
+                        // The weapon system owns Fire1/Fire2/Reload/Inspect/MagCheck/Melee/Holster
+                        // whenever the gravity gun is off for this controller (#165 GravityGun) -
+                        // the two never read input in the same scene, so no bindings collide.
+                        const bool weaponInput = gameHasInput && !playGravityGun;
+                        if (weaponInput) {
+                            if (InputMap::GetButtonDown("Fire1")) firstPersonPresentation.TriggerAction("Fire");
+                            if (InputMap::GetButtonDown("Reload")) firstPersonPresentation.TriggerAction("TacReload");
+                            if (InputMap::GetButtonDown("Inspect")) firstPersonPresentation.TriggerAction("Inspect");
+                            if (InputMap::GetButtonDown("MagCheck")) firstPersonPresentation.TriggerAction("MagCheck");
+                            if (InputMap::GetButtonDown("Melee")) firstPersonPresentation.TriggerAction("Melee");
+                            if (InputMap::GetButtonDown("Holster"))
+                                firstPersonPresentation.TriggerAction(
+                                    firstPersonPresentation.IsEquipped() ? "Holster" : "Draw");
+                        }
+                        const float planarSpeed = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z));
+                        firstPersonPresentation.Tick(planarSpeed, gameHasInput && InputMap::GetButton("Sprint"),
+                                                     weaponInput && InputMap::GetButton("Fire2"));
+                    }
+                }
                 // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
                 // against wherever the player is looking from, updated after the move so the
                 // listener matches the frame that's about to be rendered.

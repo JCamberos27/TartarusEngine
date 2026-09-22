@@ -1,0 +1,330 @@
+00:02.156  blend            | Read blend: "C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend"
+[
+  {
+    "name": "aks74u_AlbedoTransparency.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U Textures\\aks74u_AlbedoTransparency.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "aks74u_MetallicSmoothness.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U Textures\\aks74u_MetallicSmoothness.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "aks74u_Normal.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U Textures\\aks74u_Normal.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "aks74u_Occlusion.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U Textures\\aks74u_Occlusion.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "Arms_02_Base_Color.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\FPS Arms Texture\\FPS_Arms_01_Texture\\PBR_4k\\Arms_02_Base_Color.png",
+    "packed": true,
+    "size": [
+      4096,
+      4096
+    ]
+  },
+  {
+    "name": "Arms_Curvature_mask.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\FPS Arms Texture\\FPS_Arms_01_Texture\\PBR_4k\\Arms_Curvature_mask.png",
+    "packed": true,
+    "size": [
+      4096,
+      4096
+    ]
+  },
+  {
+    "name": "Arms_Height.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\FPS Arms Texture\\FPS_Arms_01_Texture\\PBR_4k\\Arms_Height.png",
+    "packed": true,
+    "size": [
+      4096,
+      4096
+    ]
+  },
+  {
+    "name": "Arms_Mixed_AO.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\FPS Arms Texture\\FPS_Arms_01_Texture\\PBR_4k\\Arms_Mixed_AO.png",
+    "packed": true,
+    "size": [
+      4096,
+      4096
+    ]
+  },
+  {
+    "name": "Arms_Normal_OpenGL.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\FPS Arms Texture\\FPS_Arms_01_Texture\\PBR_4k\\Arms_Normal_OpenGL.png",
+    "packed": true,
+    "size": [
+      4096,
+      4096
+    ]
+  },
+  {
+    "name": "Arms_Roughness.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\FPS Arms Texture\\FPS_Arms_01_Texture\\PBR_4k\\Arms_Roughness.png",
+    "packed": true,
+    "size": [
+      4096,
+      4096
+    ]
+  },
+  {
+    "name": "Arms_Scattering.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\FPS Arms Texture\\FPS_Arms_01_Texture\\PBR_4k\\Arms_Scattering.png",
+    "packed": true,
+    "size": [
+      4096,
+      4096
+    ]
+  },
+  {
+    "name": "Arms_Specular.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\FPS Arms Texture\\FPS_Arms_01_Texture\\PBR_4k\\Arms_Specular.png",
+    "packed": true,
+    "size": [
+      4096,
+      4096
+    ]
+  },
+  {
+    "name": "cartridge_545x39mm_AlbedoTransparency.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U Textures\\AKS-74U Cartridge Textures\\cartridge_545x39mm_AlbedoTransparency.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "Quantum_AO_1001",
+    "path": "C:\\Users\\nickr\\OneDrive\\Documents\\Blender\\Metahuman\\Textures\\_Metahuman_UDIM_Asset\\AO.1001.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "Quantum_BaseColor_1001",
+    "path": "C:\\Users\\nickr\\OneDrive\\Documents\\Blender\\Metahuman\\Textures\\_Metahuman_UDIM_Asset\\BaseColor.1001.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "Quantum_MetallicSmoothness_1001",
+    "path": "C:\\Users\\nickr\\OneDrive\\Documents\\Blender\\Metahuman\\Textures\\_Metahuman_UDIM_Asset\\MetallicSmoothness.1001.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "Quantum_MetallicSmoothness_1002",
+    "path": "C:\\Users\\nickr\\OneDrive\\Documents\\Blender\\Metahuman\\Textures\\_Metahuman_UDIM_Asset\\MetallicSmoothness.1002.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "Quantum_Normal_1001",
+    "path": "C:\\Users\\nickr\\OneDrive\\Documents\\Blender\\Metahuman\\Textures\\_Metahuman_UDIM_Asset\\Normal.1001.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "Quantum_Normal_1002",
+    "path": "C:\\Users\\nickr\\OneDrive\\Documents\\Blender\\Metahuman\\Textures\\_Metahuman_UDIM_Asset\\Normal.1002.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "Quantum_UDIM_AO",
+    "path": "C:\\Users\\nickr\\OneDrive\\Documents\\Blender\\Metahuman\\Textures\\_Metahuman_UDIM_Asset\\AO.<UDIM>.png",
+    "packed": true,
+    "size": [
+      2048,
+      2048
+    ]
+  },
+  {
+    "name": "Quantum_UDIM_BaseColor",
+    "path": "C:\\Users\\nickr\\OneDrive\\Documents\\Blender\\Metahuman\\Textures\\_Metahuman_UDIM_Asset\\BaseColor.<UDIM>.png",
+    "packed": true,
+    "size": [
+      4096,
+      4096
+    ]
+  },
+  {
+    "name": "Quantum_UDIM_MetallicSmoothness",
+    "path": "C:\\Users\\nickr\\OneDrive\\Documents\\Blender\\Metahuman\\Textures\\_Metahuman_UDIM_Asset\\MetallicSmoothness.<UDIM>.png",
+    "packed": true,
+    "size": [
+      4096,
+      4096
+    ]
+  },
+  {
+    "name": "Quantum_UDIM_Normal",
+    "path": "C:\\Users\\nickr\\OneDrive\\Documents\\Blender\\Metahuman\\Textures\\_Metahuman_UDIM_Asset\\Normal.<UDIM>.png",
+    "packed": true,
+    "size": [
+      4096,
+      4096
+    ]
+  },
+  {
+    "name": "rainforest_trail_4k.exr",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\..\\hdris\\rainforest_trail_4k.exr",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "T_Manny_01_D.TGA.001",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\..\\Textures\\Manny\\T_Manny_01_D.TGA",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "T_Manny_01_MSR_MSK.TGA.001",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\..\\Textures\\Manny\\T_Manny_01_MSR_MSK.TGA",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "T_Manny_01_N.TGA.001",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\..\\Textures\\Manny\\T_Manny_01_N.TGA",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "T_Manny_02_D.TGA.001",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\..\\Textures\\Manny\\T_Manny_02_D.TGA",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "T_Manny_02_MSR_MSK.TGA.001",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\..\\Textures\\Manny\\T_Manny_02_MSR_MSK.TGA",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "T_Manny_02_N.TGA.001",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\..\\..\\Textures\\Manny\\T_Manny_02_N.TGA",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "T_Quantum_Basemesh_Arms_AO.<UDIM>_Occlusion.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\Arms\\T_Quantum_Basemesh_Arms_AO.1003_Occlusion.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "T_Quantum_Basemesh_Arms_MetallicSmoothness.<UDIM>.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\Arms\\T_Quantum_Basemesh_Arms_MetallicSmoothness.1003.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "T_Quantum_Basemesh_Arms_Normal.<UDIM>.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\Arms\\T_Quantum_Basemesh_Arms_Normal.1003.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "T_Quantum_Basemesh_Arms_Ornament_BaseColor.<UDIM>.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\Arms\\T_Quantum_Basemesh_Arms_Ornament_BaseColor.1003.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "T_Quantum_Basemesh_Body_BaseColor.<UDIM>.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\Body\\T_Quantum_Basemesh_Body_BaseColor.1002.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  },
+  {
+    "name": "T_Quantum_Basemesh_Body_OcclusionRoughnessMetallic.<UDIM>_Occlusion.png",
+    "path": "C:\\Users\\jacob\\OneDrive\\Desktop\\Body\\T_Quantum_Basemesh_Body_OcclusionRoughnessMetallic.<UDIM>_Occlusion.png",
+    "packed": false,
+    "size": [
+      0,
+      0
+    ]
+  }
+]
+Blender 5.1.2 (hash ec6e62d40fa9 built 2026-05-19 01:37:34)
+
+Blender quit

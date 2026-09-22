@@ -94,6 +94,7 @@ const std::unordered_map<std::string, std::string>& KnownExtensions() {
         {".comp",  "shadersource"},
         // #132 / #175 - Animator Controllers and gameplay scripts are referenced from scenes too.
         {".controller", "animatorcontroller"},
+        {".fpsanim", "firstpersonanimationset"},
         {".tescript", "script"},
         {".physicmaterial", "physicmaterial"}, // #170
         {".preset", "preset"},                 // #178 - saved component settings

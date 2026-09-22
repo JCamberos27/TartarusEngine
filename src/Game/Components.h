@@ -391,6 +391,15 @@ struct FirstPersonControllerComponent {
     float MaxThrowSpeed = 18.0f;    // m/s, fully charged
     float ThrowChargeTime = 1.0f;   // seconds to full power
     float ThrowBackspin = 2.0f;     // revolutions per second given to a thrown ball (round bodies only)
+
+    // Optional camera-bound arms + weapon presentation. The .fpsanim asset defines paired clips;
+    // leaving this empty preserves the existing controller exactly (including Sandbox gravity gun
+    // playtests). The fields below are authored setup, not a second physics character.
+    std::string AnimationSet;
+    glm::vec3 ViewModelOffset{0.0f, -0.18f, -0.38f};
+    glm::vec3 ViewModelRotation{0.0f};
+    float ViewModelScale = 1.0f;
+    float ViewModelFov = 60.0f;
 };
 
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue
