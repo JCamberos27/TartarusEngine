@@ -45,6 +45,40 @@ project/assets/fps/AKS74U/
     └── AKS-74U_A_W_<State>.fbx          one per state (not every state has one)
 ```
 
+### Export rule: pair the weapon action with the arms action
+
+`CB_ik_hand_l` carries `CHILD_OF -> AK:magazine` at influence 1.0, so **the left arm is
+glued to the weapon armature's magazine bone** — Blender's bake samples the weapon as
+much as it samples the arms. An arms clip must therefore be exported while the weapon is
+playing the action `AKS74U.fpsanim` will play alongside it:
+
+| arms clip | weapon action during the bake |
+|---|---|
+| `A_FP_<x>` | `A_W_<x>`, when that action exists |
+| Idle / Walk / Aim / Draw / Regrip (empty `weapon` in `.fpsanim`) | `A_W_ADS` — the weapon holds its bind pose, and the bind pose *is* the ADS export |
+
+`work/export_clip.py` derives this from the action name, pins the weapon's NLA off for
+the duration, and restores both armatures in memory.
+
+**Skipping it is not subtle.** The shipped `AKS-74U_A_FP_Idle.fbx` was baked with the
+file still saved on `A_W_Tac_Reload`, whose magazine starts moving around frame 44 —
+inside the idle's 0..128 range — so the left hand chased a magazine being pulled out of
+the gun while the right hand sat still:
+
+| clip | `hand_l` world path, before → after re-export |
+|---|---|
+| Idle | 223.6 mm → **2.1 mm** (right hand: 2.6 mm) |
+| Empty_Reload | 2324 mm → 3062 mm |
+| Inspect | 1140 mm → 881 mm |
+| Melee | 1057 → 999 mm |
+
+`Mag_Check` and the other twelve measured identical under both pairings and were left
+alone; confirm with `work/hand_probe.cpp` (section 7) or `work/bl_pair_check.py`.
+
+Export arm clips with **`meshes 0`**: `Model::AttachClip` reads only the clip's channels,
+so meshes add nothing but a material — and the material the meshed export brought in
+referenced a missing `T_Quantum_Basemesh_Arms_Normal.1003.png`.
+
 ### The `.blend` standing rule
 
 **Always ask before changing anything in `AKS-74U 60fps (Revised).blend`.** Read-only
@@ -341,7 +375,9 @@ main CMake project.
 | `nodes.cpp` | Node-name search across the hierarchy (how `head` was located) |
 | `align_probe.cpp`, `diag_probe.cpp` | Axis alignment / ad-hoc diagnostics |
 | `assimp_probe.cpp`, `full_skin_probe.cpp`, `bone_match_probe.cpp`, `dup_name_probe.cpp` | The earlier bone-math investigations — see `FPS_ANIMATION_INVESTIGATION.md` |
-| `bl_inspect.py`, `bl_inspect2.py` | Read-only Blender ground truth (world/evaluated AABBs, bone landmarks) |
+| `bl_inspect.py`, `bl_inspect2.py`, `bl_idle_probe.py`, `bl_idle_probe2.py`, `bl_pair_check.py` | Read-only Blender ground truth: world/evaluated AABBs, bone landmarks, per-bone motion under a given weapon pairing |
+| `hand_probe.cpp` | Per-bone motion through a whole clip — left-vs-right path, per-sample rotation/translation step, loop seam, skinned-but-undriven bones. The tool that found the left-hand bug |
+| `fbx_info.cpp` | What is actually inside an FBX: nodes, meshes, and every take it carries |
 
 **Gotcha:** `AiToGlm` must be a *direct element copy*. `glm::make_mat4(&m.a1)` reads
 column-major from Assimp's row-major matrix and silently transposes everything — that
@@ -353,12 +389,20 @@ Copy the implementation from `work/pose_probe.cpp`.
 ## 8. Known gaps / next steps
 
 1. **`Idle` and `Walk` have no weapon clips.** `AKS74U.fpsanim` leaves their `weapon`
-   entries empty because `A_W_Idle.fbx` / `A_W_Walk.fbx` were never exported. The
-   runtime falls back explicitly (the weapon holds its current pose). Fix by exporting
-   those two clips from the `.blend` and adding them — **ask before touching the
-   `.blend`**.
-2. **`View Model FOV` is reserved.** There is no dedicated first-person render pass, so
-   the arms/weapon render at world camera FOV. Changing the field does nothing yet.
+   entries empty, and the runtime falls back explicitly (the weapon holds its current
+   pose, which is the ADS/bind pose). Note the `A_W_Idle` / `A_W_Walk` **actions do not
+   exist in the `.blend`** — verified with `work/bl_idle_probe2.py` — so this is not an
+   export that was forgotten; closing the gap means *authoring* animation. **Ask before
+   touching the `.blend`.** Until then the exporter bakes those arms clips against
+   `A_W_ADS`, which is exactly what the engine renders alongside them.
+2. **`View Model FOV` works, but is captured at Start.** A view-model sub-pass runs at
+   the end of `SceneRenderer::RenderScene`, clears depth, re-projects `ViewModelTag`
+   entities with their own perspective (near/far shared with the world pass) and
+   re-Culls the froxel lists into its own FrameState. The world gather, the SSAO depth
+   prepass and the Scene tab all keep the world projection. The value is read in
+   `FirstPersonPresentation::Start()`, so it is **not live-tunable** — Stop/Play after
+   changing it. `ViewModelFov()` returns −1 when no first-person presentation is active,
+   which leaves the pass off; the Inspector clamps the field to 20–150.
 3. **Materials/textures are out of scope** per the user. Untextured rendering is
    expected and correct; `Texture: failed to load ...` console errors are known noise,
    as are the `Y Bot.fbx` import failures.

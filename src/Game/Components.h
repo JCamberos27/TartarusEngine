@@ -289,6 +289,18 @@ struct LayerComponent {
 struct HiddenInSceneTag {};
 struct SceneLockedTag {};
 
+// Runtime only, never saved: set by FirstPersonPresentation on the arms and weapon entities it
+// creates for Play, and read by the renderer's view-model sub-pass. Tagged entities are drawn
+// last, after a depth clear, projected with FirstPersonControllerComponent::ViewModelFov instead
+// of the view's own FOV — the depth clear is what stops world geometry (metres away) from
+// clipping hands that sit ~0.3 m from the eye, and the separate, usually narrower FOV is what
+// makes a held weapon read as held rather than stretched into the scene.
+//
+// A caller that leaves RenderFrameContext::ViewModelFov at its default — the editor Scene tab,
+// which previews through its own camera — has no sub-pass to run, so tagged entities are drawn
+// there as ordinary scene geometry exactly as before.
+struct ViewModelTag {};
+
 // A dynamic light. Point/Spot use the entity's world position; Directional (the sun) ignores
 // position and takes its travel direction from the entity's -Z axis (rotate the entity to aim
 // it), matching the spot-cone convention. Every kind goes through the same LightBuffer SSBO and

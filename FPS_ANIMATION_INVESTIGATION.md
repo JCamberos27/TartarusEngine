@@ -450,6 +450,65 @@ now is.
 3. A GPU capture remains the most direct way to settle this once and for
    all — see "Other leads" below.
 
+## UPDATE 3: a second, unrelated bug — the left hand swings during `A_FP_Idle`
+
+Reported after the socket/FOV work: *"the left hand is moving very strange during idle."*
+This is **not** the tear above — the skeleton, skinning and pose evaluation are all
+correct (re-verified: every one of the 52 skinned bones is driven, no frozen child of a
+moving parent, loop seam ≤0.06°). It is an **asset-side** defect introduced at export
+time, and it has nothing to do with `Model::ProcessMesh`.
+
+**Mechanism.** `CB_ik_hand_l` carries `CHILD_OF -> AK:magazine` at influence 1.0, so the
+whole left arm is parented to the **weapon** armature's magazine bone. `bake_anim`
+therefore samples the weapon as much as the arms — but `work/export_clip.py` only ever
+assigned the *arms* action, so every export ran with the weapon still on whatever the
+`.blend` was last saved on: `A_W_Tac_Reload`. Its magazine starts moving around frame 44,
+inside the idle's 0..128 range, so the baked left hand chased a magazine being pulled out
+of the gun while the right hand (parented to `CB_Gun`, keyed directly in the action) sat
+perfectly still.
+
+**Evidence.** `work/bl_idle_probe.py` / `bl_idle_probe2.py` evaluate `A_FP_Idle` inside
+Blender and measure world-space path per bone, left vs right:
+
+| weapon action during the bake | `lowerarm_l` path | `lowerarm_r` path |
+|---|---|---|
+| `A_W_Tac_Reload` (the file's saved state) | **25.175** | 0.184 |
+| `A_W_ADS`, or weapon animation off | **0.141** | 0.184 |
+
+The shipped FBX matched the first row, not the second (`work/hand_probe.cpp`:
+`lowerarm_l` 266.2 mm against `lowerarm_r` 0.0 mm — roughly 100:1 left/right, with
+`upperarm_l` carrying 68 rotation keys against `upperarm_r`'s 2). The right arm being
+*dead still* while the left travels 71 cm in aggregate is what made it read as "strange"
+rather than merely asymmetric.
+
+**Fix.** `work/export_clip.py` derives the weapon action from the arms action
+(`A_FP_x -> A_W_x`, falling back to `A_W_ADS` when no weapon counterpart exists — which
+is precisely what `AKS74U.fpsanim` implies for Idle/Walk/Aim/Draw/Regrip), pins the
+weapon's NLA off for the export, and restores both armatures in memory. Four clips were
+re-exported armature-only: **Idle, Empty_Reload, Inspect, Melee**. `Mag_Check` and the
+other twelve measured identical under both pairings and were left untouched.
+
+**Verification** — `work/hand_probe.cpp`, 240 uniform samples, byte-identical code path
+for before and after:
+
+- Idle `hand_l` **223.6 mm → 2.1 mm**, against `hand_r` 2.6 mm; L/R aggregate path ratio
+  **0.00 → 1.12**. Blender independently predicted 1.4 / 1.8 mm — exact agreement.
+- Empty_Reload 2324 → 3062 mm, Inspect 1140 → 881 mm, Melee 1057 → 999 mm.
+- Unit tests **800 checks, 0 failures**; smoke `FPS_Animation_smoke_play.json` **PASS**
+  with identical `drawCalls=1 playCycles=2 variants: 0x00=220`.
+
+**Do not re-derive this.** If a left hand ever looks wrong again, run
+`work/bl_pair_check.py` first: it evaluates every `A_FP_*` action under both the saved
+and the correct weapon pairing and prints the divergence per clip. `work/hand_probe.cpp`
+does the same on the shipped FBXs, and `work/fbx_info.cpp` shows what a clip actually
+contains (meshes, takes, channel count).
+
+**Method note.** The smoke suite's `Apartment`/`Sandbox` `newLogErrors` and the
+`undo round-trip OK (... models ...)` counts shift depending on whether the editor is
+running alongside the smoke test. This was A/B-proved innocent by restoring the original
+Idle FBX and re-running: **identical numbers either way.** Only the per-scene asset
+content matters; the totals are environment, not the change under test.
+
 ## Original next-step writeup (now executed — see UPDATE above; left for the reasoning/code)
 
 **Play the `A_FP_Idle` action directly on the live rig in Blender, with

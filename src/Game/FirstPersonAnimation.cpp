@@ -66,11 +66,19 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     parsed.WeaponModel = String(root, "weaponModel");
     parsed.DefaultState = String(root, "defaultState");
     parsed.ViewRotation = Vec3(root, "viewRotation", glm::vec3(0.0f));
+    parsed.WeaponSocket = String(root, "weaponSocket");
+    parsed.WeaponRoot = String(root, "weaponRoot");
+    parsed.WeaponMountRotation = Vec3(root, "weaponMountRotation", glm::vec3(0.0f));
     if (parsed.ArmsModel.empty()) return Fail(error, "missing required string 'armsModel'");
     if (parsed.WeaponModel.empty()) return Fail(error, "missing required string 'weaponModel'");
     if (!std::isfinite(parsed.ViewRotation.x) || !std::isfinite(parsed.ViewRotation.y) ||
         !std::isfinite(parsed.ViewRotation.z))
         return Fail(error, "'viewRotation' must be three finite numbers (Y-X-Z degrees)");
+    if (!std::isfinite(parsed.WeaponMountRotation.x) || !std::isfinite(parsed.WeaponMountRotation.y) ||
+        !std::isfinite(parsed.WeaponMountRotation.z))
+        return Fail(error, "'weaponMountRotation' must be three finite numbers (Y-X-Z degrees)");
+    if (parsed.WeaponSocket.empty() != parsed.WeaponRoot.empty())
+        return Fail(error, "'weaponSocket' and 'weaponRoot' must be given together (or both omitted)");
 
     const auto clipsIt = root.find("clips");
     if (clipsIt == root.end() || !clipsIt->is_array() || clipsIt->empty())
