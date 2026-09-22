@@ -2734,6 +2734,9 @@ int main(int argc, char** argv) {
             // inactive entities, and in the editor Scene view HiddenInScene + the layer mask, are
             // skipped (they used to leave AO "ghosts"); transparent-queue objects write no depth
             // in the main pass so they don't here either; everything outside the view is culled.
+            // ViewModelTag is skipped unconditionally for the same reason those did: the arms and
+            // weapon are a camera-attached overlay composited over the world in their own
+            // sub-pass, so their depth here would only darken the world pixels hugging them.
             auto ssaoDepthPrepass = [&](Ssao& target, int w, int h, const glm::mat4& view,
                                         const glm::mat4& proj, bool editorView) {
                 world.ApplyLod(glm::vec3(glm::inverse(view)[3]), proj); // #163 - same levels as the draw
@@ -2753,6 +2756,7 @@ int main(int argc, char** argv) {
                 const Frustum frustum = Frustum::FromViewProj(proj * view);
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
+                    if (world.Registry.all_of<ViewModelTag>(entity)) continue; // see note above
                     if (editorView) {
                         if (world.Registry.all_of<HiddenInSceneTag>(entity)) continue;
                         const auto* lc = world.Registry.try_get<LayerComponent>(entity);
@@ -3190,7 +3194,8 @@ int main(int argc, char** argv) {
                 EditorLayer::RenderStats gvRenderStats;
                 drawScene(RenderFrameContext{ gvView, gvProj, gvEye, /*Unlit=*/false,
                               /*EditorView=*/false, /*DebugView=*/0,
-                              &gameHdr, &gameOpaqueColor, &gameSsao },
+                              &gameHdr, &gameOpaqueColor, &gameSsao,
+                              firstPersonPresentation.ViewModelFov() },
                           &gvRenderStats);
 
                 // Physics debug overlay over the game view (#185, F5) — depth-tested, no depth write.
@@ -3358,7 +3363,8 @@ int main(int argc, char** argv) {
                 EditorLayer::RenderStats stats;
                 drawScene(RenderFrameContext{ view, proj, gameCam->Position, /*Unlit=*/false,
                               /*EditorView=*/false, /*DebugView=*/0,
-                              &gameHdr, &gameOpaqueColor, &gameSsao },
+                              &gameHdr, &gameOpaqueColor, &gameSsao,
+                              firstPersonPresentation.ViewModelFov() },
                           &stats);
                 editor.SetRenderStats(stats);
                 // Physics debug overlay over the game view (#185, F5).
