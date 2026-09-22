@@ -511,8 +511,15 @@ int main(int argc, char** argv) {
         printf("  mag2/SPARE n=%-6d centroid=(%9.4f,%9.4f,%9.4f)  ext=(%.4f,%.4f,%.4f)\n",
                m2.n, m2.cen.x, m2.cen.y, m2.cen.z, m2.ext.x, m2.ext.y, m2.ext.z);
         if (m2.n && mg.n)
-            printf("  >> |mag2 - magazine| = %.4f   (Blender world: ~66 at rest, ~5 at mid-reload)\n",
-                   glm::length(m2.cen - mg.cen));
+            // Vertex-space separation, NOT the engine's node-level displacement. This probe skins
+            // raw mesh vertices with globalInverse*world*mOffsetMatrix and never bakes each mesh's
+            // node transform the way Model::ProcessMesh does, so a constant offset-matrix mismatch
+            // between the `magazine` and `mag2` bones shows up here as extra separation that the
+            // engine does not render. For the number that matters - how far the rig JUMPS when it
+            // reverts to bind - use work/bind_probe.cpp (node globals vs node globals), which
+            // reports 121.8 mm.
+            printf("  >> |mag2 - magazine| = %.4f   (vertex space - see comment; for the jump use "
+                   "bind_probe)\n", glm::length(m2.cen - mg.cen));
         if (m2.n && whole.n)
             printf("  >> |mag2 - gun centroid| = %.4f\n", glm::length(m2.cen - whole.cen));
     };

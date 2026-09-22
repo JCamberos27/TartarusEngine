@@ -576,13 +576,16 @@ playCycles=2 variants: 0x00=220` — byte-for-byte the same counters as before t
 `Apartment`=6 / `Sandbox`=1 are the known missing-HDR environment noise (see UPDATE 3's
 method note).
 
-**Follow-up found while probing, not yet acted on:** the weapon rig's `mag2` bone sits
-**121.8 mm from bind at t=0 of every weapon clip** (305 mm / 40° under Sprint), and
-`Play()` cuts the weapon to bind with `StopAnimation()` — i.e. fade 0 — whenever it
-enters a state with no weapon clip (Idle/Walk/Aim/Draw/Regrip). That is a hard snap on
-the magazine at both ends of every weapon clip, pre-existing and unrelated to the
-disappearance. **Ask before "fixing"** — it may be authored behaviour, and the clip
-files are not ours to change without a decision.
+**Follow-up found while probing — since fixed:** the weapon rig's `mag2` bone sits
+**121.8 mm from bind at t=0 *and* tEnd of every weapon clip** (305 mm / 40° under
+Sprint), and `Play()` used to cut the weapon to bind with `StopAnimation()` — i.e.
+fade 0 — whenever it entered a state with no weapon clip (Idle/Walk/Aim/Draw/Regrip).
+That was a hard snap on the magazine at both ends of every weapon clip, and while the
+spare magazine's weights were being dropped (UPDATE 5) it was invisible, because a
+frozen mesh can't snap. `Play()` now crossfades with
+`PlayAnimation(-1, clip.Fade, wrap)` instead of cutting; the `.blend` and every clip
+file are untouched, so if that snap turns out to be authored behaviour the data still
+matches the original export. See `FPS_ANIMATION_SYSTEM.md` §8 item 7.
 
 ## UPDATE 5: the spare magazine exists in Blender but not in the engine — assimp's vertex join
 
@@ -678,9 +681,19 @@ longer reached silently.
 | `mag2` weights in range | 0 of 17594 | **5469 of 5469** (mesh0 3773 + mesh1 1696 — exactly mirroring `magazine`) |
 | weapon verts | 29,215 | **34,684** (+18.7%) |
 | weights per vertex | — | 1.000 across 31292 verts |
-| spare mag vs installed mag @ rest | n/a | **0.551 m** (hip pouch; Blender: ~66 cm) |
-| @ tick 85 (mid-reload) | n/a | **0.059 m** (in the hand; Blender: ~5 cm) |
+| spare mag vs installed mag @ rest | n/a | **0.551 m** (vertex space) |
+| @ tick 85 (mid-reload) | n/a | **0.059 m** (in the hand) |
 | @ tick 170 (end) | n/a | **0.551 m** (returned) |
+
+> **Read those last three rows with care.** They come from `mag_probe`'s *vertex-space*
+> forward-skin, which skins raw mesh vertices with `globalInverse·world·mOffsetMatrix`
+> and never bakes each mesh's node transform the way `Model::ProcessMesh` does. A
+> constant offset-matrix mismatch between `magazine` and `mag2` therefore shows up here
+> as extra separation the engine does not render — note the two figures are identical at
+> tick 0 and tick 170, i.e. a fixed bias, not motion. The number that actually describes
+> *how far the rig jumps* is **`work/bind_probe.cpp`'s 121.8 mm** (node globals vs node
+> globals), and the authoritative check is the visual one: the magazine appears in the
+> hand and travels the swap, confirmed by the user in Play mode.
 
 Both islands now survive with their own bindings, and the spare magazine tracks the clip
 where it used to sit frozen underneath the installed one. Note the vertex cost: **+18.7%,
@@ -694,10 +707,10 @@ about (`…/kloofendal_48d_partly_cloudy_puresky_4k.hdr`, `Y Bot.fbx`, `walking.
 the two `Desktop/AKS-74U Textures/*.png`) were checked with `Test-Path` and **do not
 exist on disk**, so those failures are pre-existing and unrelated.
 
-**Consequence for UPDATE 4's follow-up:** that `mag2` snap item is now *live*. While the
-weights were being dropped the spare magazine was frozen and the snap was invisible;
-now that `mag2` drives its island again, the 121.8 mm t=0 displacement will actually be
-seen. Still **ask before changing it** — it may be authored behaviour.
+**Consequence for UPDATE 4's follow-up:** that `mag2` snap was *latent* while the weights
+were being dropped — a frozen mesh can't snap — and became real the moment `mag2` started
+driving its island again. It is now fixed engine-side by the fade-to-bind described in
+UPDATE 4's follow-up; no animation data changed.
 
 ## Original next-step writeup (now executed — see UPDATE above; left for the reasoning/code)
 
