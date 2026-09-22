@@ -243,4 +243,13 @@ std::vector<Action> FromJson(const nlohmann::json& j) {
     return out;
 }
 
+void MergeDefaults(std::vector<Action>& actions) {
+    for (Action& d : Defaults()) {
+        bool have = false;
+        for (const Action& a : actions)
+            if (a.Name == d.Name) { have = true; break; }
+        if (!have) actions.push_back(std::move(d));
+    }
+}
+
 } // namespace InputMap

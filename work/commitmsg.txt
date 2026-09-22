@@ -1,43 +1,42 @@
-FPS: add a temporary G binding that plays the unreachable EmptyReload state
+Fix: a saved input list can no longer lose a default action
 
-EmptyReload is fully authored - it has its own arms clip (A_FP_Empty_Reload),
-its own weapon clip (A_W_Empty_Reload) and is a Committed-tier state - but
-nothing can ever reach it: main.cpp hardcodes the Reload key to TacReload, and
-there is no ammo system to decide that the magazine is empty. It therefore
-could not be eyeballed at all.
+project/settings.json carries an "input" array, and ProjectSettings::Load used
+to let it replace InputMap::Defaults() wholesale:
 
-InputMap::Defaults() gains an "EmptyReload" action on G (R/F/V/T/H, W/A/S/D,
-Space, Shift, Ctrl, Alt, E and Esc were already taken) and main.cpp fires
-TriggerAction("EmptyReload") on it. Both sites are marked TEMPORARY DEBUG and
-carry a note to remove them once an ammo system decides when EmptyReload
-should fire - this is not gameplay, it is a way to see the animation.
+    InputMap::Actions() = actions.empty() ? InputMap::Defaults()
+                                          : std::move(actions);
 
-Also extends work/nodes.cpp, the probe used to reason about external-clip
-channel coverage: the name filter was hardcoded to head|neck|eye|spine|camera,
-so it could never show arm nodes, and it printed no parent. It now takes an
-optional substring (and prints each node's parent) or "--chain <node>" to print
-the full root->node ancestor chain.
+The file only holds the actions that existed the last time it was written, so
+any default added since then was simply absent from the live map - and
+InputMap::Lookup only warns once about a name it cannot find, which reads as
+"the key does nothing". Adding an action to Defaults() was therefore silently a
+no-op for every project that already had saved bindings.
 
-That chain mode is what settles the MagCheck arms question. The suspicion was
-that MagCheck leaves ~174 of the base rig's 266 nodes unanimated (its FBX has
-92 nodes / 89 channels versus Inspect's 264) and that a frozen node upstream of
-a skinned bone would drop the left arm to bind. It does not: hand_l's chain is
-RootNode -> Armature -> root -> pelvis -> spine_01..05 -> clavicle_l ->
-upperarm_l -> lowerarm_l -> hand_l, and all eleven names are in MagCheck's
-channel list. The CB_/REF_ nodes are a sibling tree hanging off Armature
-(CB_root's parent is Armature), never an ancestor of a skinned bone, so their
-sitting at bind is harmless.
+That is why the EmptyReload debug binding (G) shipped dead: Defaults() had it,
+the saved list had 13 actions and no EmptyReload, so G was never registered.
+Relaunching could not have helped.
 
-Verified: build exit 0; unit tests 800 checks / 0 failures; smoke
-FPS_Animation_smoke_play.json PASS newGlErrors=0 newLogErrors=0 drawCalls=1
-playCycles=2 variants: 0x00=220, identical to baseline. Apartment=6 / Sandbox=1
-unchanged (missing-asset environment noise).
+The merge now lives in InputMap::MergeDefaults and tops a non-empty list up
+with every default it does not name, leaving the file's own entries and their
+bindings untouched - so a deliberate rebind still wins over the default.
 
-MagCheck's arms data is also confirmed sound by work/hand_probe: 52/52 skinned
-bones driven, 0 undriven, no motionless child of a moving parent, hand_l
-travelling 1085.7 mm and lowerarm_l 1172.9 mm of world-space path. All 25 clip
-references in AKS74U.fpsanim resolve to real files. What still looks wrong is
-therefore either the baked content or how the state plays - not missing
-channels - and is not changed here.
+Verified: build exit 0; unit tests 804 checks / 0 failures (4 new assertions
+cover exactly this: each default present exactly once, no duplicate of the
+saved action, the saved binding of 71 surviving, and EmptyReload coming back);
+smoke FPS_Animation_smoke_play.json PASS newGlErrors=0 newLogErrors=0
+drawCalls=1 playCycles=2 variants: 0x00=220, identical to baseline.
+Apartment=6 / Sandbox=1 unchanged (missing-asset environment noise).
+
+Separately, the MagCheck arms defect is now diagnosed from the user's screen
+recording: the magazine floats detached in mid-air while the left hand stays
+planted at the mag well (hand_l IS animating - it travels to the well and back
+- it just never meets the magazine). work/export_clip.py's header records that
+the .blend was saved with the weapon parked on A_W_Tac_Reload, and all clips
+written in the 4:00:42 batch predate the A_FP_x -> A_W_x pairing rule. So
+A_FP_Tac_Reload was baked against A_W_Tac_Reload and is correct by accident
+(which is why TacReload looks right), while A_FP_Mag_Check was baked against
+the same TacReload magazine path but plays A_W_Mag_Check in engine - the hand
+chases the wrong animation. Re-exporting the stale clips is NOT done here; it
+needs the .blend and the user's go-ahead.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
