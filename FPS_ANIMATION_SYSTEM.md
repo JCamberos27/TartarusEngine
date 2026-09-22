@@ -434,14 +434,20 @@ Copy the implementation from `work/pose_probe.cpp`.
    a held clip never clears `IsPlayingAnimation()`. `Once`'s own "returns to bind pose"
    contract is untouched for every other caller. See `FPS_ANIMATION_INVESTIGATION.md`
    UPDATE 4 for the measurements.
-7. **The weapon's `mag2` bone is 121.8 mm off bind at t=0 of every weapon clip**, and
-   `Play()` cuts the weapon to bind with `StopAnimation()` (fade 0) when entering a
-   state that has no weapon clip — a hard snap on the magazine at both ends. Pre-existing,
-   measured with `work/bind_probe.cpp`, **not yet acted on**: it may be authored
-   behaviour. Ask before changing it. This item is now **live rather than latent**: it
-   was invisible while the spare magazine's vertex weights were being dropped (see
-   item 8), because a frozen mesh can't snap. With `mag2` driving its island again, the
-   snap will be visible in Play mode.
+7. **The weapon's `mag2` bone is 121.8 mm off bind at t=0 *and* tEnd of every weapon
+   clip** (measured with `work/bind_probe.cpp`, node globals vs node globals — worst node
+   in the rig, worst rotation 0.0°, i.e. a pure translation), and both magazine islands
+   sit exactly on top of each other *at* bind. `Play()` used to call `StopAnimation()`
+   whenever it entered a state with no weapon clip (Idle/Walk/Aim/Draw/Regrip), which is
+   `PlayAnimation(-1)` with an implicit **fade of 0** — so the spare magazine hard-cut in
+   and out at both ends of every weapon clip. **Fixed:** that branch now calls
+   `PlayAnimation(-1, clip.Fade, wrap)`, a supported fade-to-bind. `Model::PlayAnimation`
+   starts a fade whenever a clip is currently live, `NodeTransform` stays posed for the
+   whole fade (so the socket tracks it) and lands on the bind walk exactly when the fade
+   ends, and `m_ActionGateWeapon = !WeaponClip.empty()` means this branch never waits on
+   `AnimationFinished()`, which would otherwise see `Clip == -1` and report done at once.
+   The clip files were **not** touched, so if that snap was authored behaviour the data is
+   exactly as it was.
 8. **assimp is patched locally; a fresh clone depends on that patch.** assimp comes from
    github at a pinned `GIT_TAG` (`CMakeLists.txt`) rather than a fork, and stock v5.4.3's
    `aiProcess_JoinIdenticalVertices` silently destroyed the spare magazine: its dedup key
@@ -460,6 +466,16 @@ Copy the implementation from `work/pose_probe.cpp`.
    `importer.optimizeGraph=false` fallback — that keeps the mesh correct but costs
    29215 → 130947 verts (+348%) versus +18.7% for the patch. See
    `FPS_ANIMATION_INVESTIGATION.md` UPDATE 5.
+9. **`EmptyReload` is authored but unreachable.** It has its own arms and weapon clips
+   (`AKS-74U_A_FP_Empty_Reload.fbx` / `AKS-74U_A_W_Empty_Reload.fbx`) and is listed as a
+   `Committed`-tier state, but `main.cpp` hardcodes the Reload key:
+   `if (InputMap::GetButtonDown("Reload")) …TriggerAction("TacReload");` — nothing in the
+   codebase ever calls `TriggerAction("EmptyReload")`. It also can't be gated on
+   "magazine empty", because **there is no ammo system at all** (no ammo/rounds/counter
+   anywhere in `src/`). So it cannot currently be seen in Play mode, by any input.
+   Reaching it needs either an ammo system (a real feature) or a temporary debug binding —
+   **ask before adding either**. Verified `TacReload`, which shares the same weapon-clip
+   path, does show the spare magazine.
 
 ---
 
