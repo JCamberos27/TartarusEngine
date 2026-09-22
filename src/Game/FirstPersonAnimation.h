@@ -31,9 +31,10 @@ struct FirstPersonAnimationSet {
     glm::vec3 ViewRotation{0.0f};
     // The weapon rides the arms rig's gun socket rather than merely sharing the arms entity's
     // pose. `WeaponSocket` names a bone on the ARMS rig, `WeaponRoot` the bone on the WEAPON rig
-    // that has to land on it, and `WeaponMountRotation` (Y-X-Z degrees) is the fixed mount between
-    // the two - measured from the source FBXs as exactly (0, 90, 90) with zero translation, the
-    // same for every clip's frame 0.
+    // that has to land on it, and `WeaponMountRotation` (Y-X-Z degrees) + `WeaponMountOffset`
+    // (metres) are the fixed mount between the two - measured from the source FBXs as exactly
+    // (0, 90, 90) for the rotation plus a REAL translation (see WeaponMountOffset), the same for
+    // every clip's frame 0.
     //
     // This is what "the AK is parented to ik_hand_gun" means at runtime. The weapon clips never
     // move the gun: only A_W_ADS keys `root` at all, so without the socket the gun's placement
@@ -43,6 +44,16 @@ struct FirstPersonAnimationSet {
     std::string WeaponSocket;
     std::string WeaponRoot;
     glm::vec3 WeaponMountRotation{0.0f};
+    // Translation half of the mount, metres in the SOCKET's frame - literally where the
+    // authored weapon root sits relative to the socket (work/ads_sight_probe.cpp):
+    //     mount = socket * T(WeaponMountOffset) * R(WeaponMountRotation) * weaponRoot^-1
+    // and T * R must equal inv(socket) * weaponRoot for `mount` to come out identity, i.e. the
+    // gun exactly where the artist posed it. The rotation alone measured exactly right,
+    // (0, 90, 90), but the pair also carries (-0.0761, -0.0701, -0.0310) m: dropping it parked
+    // the gun 108 mm off the artist's placement (77 mm left, 29 mm up, 70 mm near) in every
+    // state, which put the ADS sight line 48 mm left of and 31 mm above the camera. Default
+    // {0,0,0} is the old rotation-only mount, so assets without the field are unaffected.
+    glm::vec3 WeaponMountOffset{0.0f};
     std::vector<FirstPersonAnimationClip> Clips;
 
     const FirstPersonAnimationClip* Find(const std::string& state) const;
