@@ -22,6 +22,18 @@ project/shortcuts.json
 # copy in the working directory is only read once, to migrate an existing layout.
 imgui.ini
 
+# Local scratch tooling and derived assets under work/: probes are built from tracked
+# .cpp/.py sources, but the binaries, logs and re-exported FBX copies are per-machine output.
+# Nothing here is authoritative - the shipped clips live under project/assets/.
+work/*.exe
+work/*.obj
+work/*.fbx
+work/rebake/
+work/rebake0/
+work/pairtest/
+work/*.txt
+!work/commitmsg.txt
+
 # Mixamo characters/animations used by the Sandbox scene (project/scenes/Sandbox.json). Mixamo's
 # licence doesn't allow redistributing the raw FBX files, so they stay local: download Y Bot +
 # the Male Locomotion Pack from mixamo.com into project/assets/characters/ybot/.

@@ -712,6 +712,113 @@ were being dropped — a frozen mesh can't snap — and became real the moment `
 driving its island again. It is now fixed engine-side by the fade-to-bind described in
 UPDATE 4's follow-up; no animation data changed.
 
+## UPDATE 6: MagCheck's floating magazine — the stale export batch, and the pairing that was wrong all along
+
+Reported alongside UPDATE 5, from a Play-mode recording: **during `MagCheck` the magazine
+floats in space, detached, while the left hand stays planted** somewhere else. The right
+hand and the weapon looked fine.
+
+**Where the data came from.** Every arm clip in `project/assets/fps/AKS74U/FirstPerson/`
+falls into one of two batches by file timestamp:
+
+| batch | clips | channels |
+|---|---|---|
+| re-exported 8:41–8:51 | `Idle`, `Aim`, `Empty_Reload`, `Inspect`, `Melee` | 264 |
+| shipped 4:00:42 | `ADS`, `Draw`, `Fire`, `Holster`, `IdleToSprint`, **`Mag_Check`**, `Regrip`, `Sprint`, `SprintToIdle`, `Tac_Reload`, `Walk` | 89 |
+
+The 4:00:42 batch **predates the `A_FP_x → A_W_x` pairing rule** described in
+`FPS_ANIMATION_SYSTEM.md` §2. And the `.blend` is *still saved* with the weapon parked on
+`A_W_Tac_Reload` (with arm action `A_FP_Tac_Reload`), which is exactly what an
+export that does not run `export_clip.py` will bake against. So every clip in that batch
+was baked with the magazine being pulled out from under it.
+
+**Which made `A_FP_Tac_Reload` correct by accident** — it was baked against the very
+action it is meant to pair with (and the user had already verified TacReload looks right),
+while `A_FP_Mag_Check` chased `A_W_Tac_Reload`'s magazine instead of `A_W_Mag_Check`'s.
+
+**Why only MagCheck ever showed it.** `A_W_Tac_Reload`'s magazine starts moving around
+**frame 44**, and *every other stale clip's frame range ends at 46 or earlier* — Draw
+0..46, Fire 0..36, Holster 0..28, IdleToSprint 0..16, Regrip 0..40, Sprint 0..44,
+SprintToIdle 0..44, Walk 0..44. Across their whole range the wrongly-paired magazine was
+sitting still, so which action it was parked on made no measurable difference. `Mag_Check`
+runs **0..260**, deep into TacReload's mag swap, and is the only clip in the batch long
+enough for the bad pairing to actually bite.
+
+**The earlier claim was wrong, and here is the A/B that proves it.** `FPS_ANIMATION_SYSTEM.md`
+§2 used to assert that `Mag_Check` "measured identical under both pairings and was left
+alone". That measurement was bad. Same action, same `0..260` range, same `meshes=0`, only
+the paired weapon action changed:
+
+| MagCheck bake | `hand_l` world path |
+|---|---|
+| shipped (as found) | 1085.7 mm |
+| rebaked against `A_W_Tac_Reload` | **1086.3 mm** — Δ **0.6** vs shipped |
+| rebaked against `A_W_Mag_Check` | **1062.9 mm** — Δ **−22.8** vs shipped |
+
+Pairing alone swings the hand **23.4 mm**, and the shipped file lands on the
+`A_W_Tac_Reload` bake to within noise. Root cause confirmed by controlled experiment, not
+inference.
+
+**What changed, and what did not.** All ten stale clips were re-exported with correct
+pairing; `ADS` was **deliberately excluded** (it is the armsModel — geometry, bind pose
+and node tree that every clip attaches to, and its animation is never played, so rebaking
+it was the only move here that could actually break everything). `Idle`, `Aim`,
+`Empty_Reload`, `Inspect` and `Melee` were already correct.
+
+`hand_l` world-path delta vs what shipped, and `lowerarm_l` where it moved:
+
+| clip | range | `lowerarm_l` | `hand_l` | `hand_r` |
+|---|---|---|---|---|
+| **`Mag_Check`** | 0..260 | **−67.0 mm** | **−22.8 mm** | +1.2 |
+| Draw | 0..46 | +0.2 | −1.6 | −0.4 |
+| Fire | 0..36 | +1.0 | −2.8 | +1.5 |
+| Holster | 0..28 | 0.0 | 0.0 | −0.1 |
+| IdleToSprint | 0..16 | 0.0 | 0.0 | 0.0 |
+| Regrip | 0..40 | +1.2 | +0.8 | +3.2 |
+| Sprint | 0..44 | +0.2 | −0.5 | +1.1 |
+| SprintToIdle | 0..44 | +0.4 | −0.6 | −1.3 |
+| Walk | 0..44 | +0.9 | −0.9 | +6.4 |
+| `Tac_Reload` | 0..170 | −0.4 | −0.9 | +3.5 |
+
+The nine non-MagCheck rows are ≤3.2 mm — exporter-version noise, not motion. They were
+rebaked anyway for uniformity (one exporter run, one format) rather than left as a
+mixed batch.
+
+**A second trap on the way: `meshes`.** The first rebake passed `meshes=1`, which produced
+267 nodes and bolted on two stray meshes named `Mesh.001` / `Mesh.003` (5–8 MB files).
+Structural comparison against the clips that demonstrably work:
+
+| file | nodes | meshes |
+|---|---|---|
+| `Inspect` / `Idle` / `Melee` (work) | 265 | **0** |
+| first rebake (`meshes=1`) | 267 | 2 — `Mesh.001`, `Mesh.003` |
+| old 4:00 batch | 92 | 1 — `SK_FP_Arms_Manneguin` |
+| `ADS` (base, untouched) | 266 | 1 |
+
+Geometry belongs to `ADS`; clip FBXs are channel-only. Re-running with `meshes=0` gives
+265 nodes / 0 meshes — an exact structural match to the working clips — and drops files
+back to ~1.9–2.3 MB. Motion is provably unaffected by the flag: the `meshes=0` export
+produces identical deltas to the `meshes=1` export on every clip measured.
+
+**Verification.** Unit tests **804 checks, 0 failures**; smoke
+`FPS_Animation_smoke_play.json` **PASS**, `newGlErrors=0 newLogErrors=0 drawCalls=1
+playCycles=2 variants: 0x00=220` — identical to the pre-change baseline (`Apartment`=6 /
+`Sandbox`=1 remain the pre-existing missing-asset noise). One operational note: the first
+run reported *2 failures*, which is the known spurious signature of running `--unit-tests`
+with the editor open (they race on the scene round-trip files) — closing `TartarusEngine.exe`
+restored 804/0. **Confirmed by the user in Play mode:** the magazine now meets the left
+hand.
+
+**Rollback:** every file is git-tracked, so `git checkout -- project/assets/fps/AKS74U/FirstPerson/`
+restores all ten; the original `Mag_Check` is also kept as `work/AKS-74U_A_FP_Mag_Check_ORIGINAL.fbx`.
+
+**Open follow-ups:** (a) the real fix for `EmptyReload` is an ammo system — `G` is a
+temporary debug binding, and it only reached Play mode after `InputMap::MergeDefaults`
+stopped `project/settings.json`'s `input` array from replacing `Defaults()` wholesale
+(see `FPS_ANIMATION_SYSTEM.md` §8 item 9); (b) `export_clip.py` always prints
+`weapon action paired = …` — read it, because a wrong pairing is invisible until someone
+watches the clip at a frame range long enough to expose it.
+
 ## Original next-step writeup (now executed — see UPDATE above; left for the reasoning/code)
 
 **Play the `A_FP_Idle` action directly on the live rig in Blender, with
