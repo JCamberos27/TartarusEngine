@@ -2147,6 +2147,11 @@ int main(int argc, char** argv) {
                         if (weaponInput) {
                             if (InputMap::GetButtonDown("Fire1")) firstPersonPresentation.TriggerAction("Fire");
                             if (InputMap::GetButtonDown("Reload")) firstPersonPresentation.TriggerAction("TacReload");
+                            // TEMPORARY DEBUG: G plays EmptyReload directly so it can be eyeballed -
+                            // see the matching note in InputMap.cpp Defaults(). Not gameplay: there
+                            // is no ammo system to decide when the magazine is actually empty.
+                            if (InputMap::GetButtonDown("EmptyReload"))
+                                firstPersonPresentation.TriggerAction("EmptyReload");
                             if (InputMap::GetButtonDown("Inspect")) firstPersonPresentation.TriggerAction("Inspect");
                             if (InputMap::GetButtonDown("MagCheck")) firstPersonPresentation.TriggerAction("MagCheck");
                             if (InputMap::GetButtonDown("Melee")) firstPersonPresentation.TriggerAction("Melee");

@@ -84,6 +84,12 @@ std::vector<Action> Defaults() {
         // rather than adding new mouse-bound actions - the two only ever apply to a controller
         // with its gravity gun turned off, so the bindings never actually collide in one scene.
         act("Reload",   GLFW_KEY_R, kNone, kNone, kNone, kNone, kNone, false),
+        // TEMPORARY DEBUG BINDING - not gameplay. EmptyReload is authored (it has its own arms
+        // and weapon clips and is a Committed-tier state) but unreachable: main.cpp hardcodes the
+        // Reload key to TacReload, and there is no ammo system to gate "magazine empty" on. G is
+        // otherwise unbound. Remove this line (and its main.cpp use) once an ammo system decides
+        // when EmptyReload should fire.
+        act("EmptyReload", GLFW_KEY_G, kNone, kNone, kNone, kNone, kNone, false),
         act("Inspect",  GLFW_KEY_F, kNone, kNone, kNone, kNone, kNone, false),
         act("Melee",    GLFW_KEY_V, kNone, kNone, kNone, kNone, kNone, false),
         act("MagCheck", GLFW_KEY_T, kNone, kNone, kNone, kNone, kNone, false),
