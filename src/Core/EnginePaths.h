@@ -5,7 +5,7 @@
 // images. Distinct from ProjectPaths, which locates the *editable* project content (scenes,
 // preferences) by walking up for a "project/" folder.
 //
-// These used to be bare relative strings ("assets/shaders", "assets/branding/splash.png")
+// These used to be bare relative strings ("assets/shaders", "assets/branding/tartarus_wordmark.png")
 // passed straight to fstream, so they only resolved when the working directory happened to be
 // build/<Config>/. Launched from the repo root (the documented CI --smoke-test invocation) or
 // any other directory, every shader read returned "" and the driver reported a misleading
@@ -27,7 +27,7 @@ void Init(const char* argv0);
 // The directory containing the running executable, as resolved by Init(). Empty before Init().
 const std::string& ExeDir();
 
-// Resolve a shipped-asset path (e.g. "assets/shaders", "assets/branding/splash.png") to an
+// Resolve a shipped-asset path (e.g. "assets/shaders", "assets/branding/tartarus_wordmark.png") to an
 // absolute native path string using the order documented above.
 std::string Resolve(const std::string& relativePath);
 
