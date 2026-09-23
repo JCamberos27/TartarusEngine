@@ -228,22 +228,6 @@ foreach ($l in (Center-Block $art)) {
 }
 Pause-Frame 1800
 
-# Collapse from the full-height artwork view into a tight reading frame. The intermediate steps
-# preserve the window's centre and make the handoff feel deliberate rather than a hard snap.
-$out.Write($clear)
-foreach ($readingStep in @(
-    @{ Columns = 104; Rows = 60 },
-    @{ Columns =  96; Rows = 52 },
-    @{ Columns =  88; Rows = 44 },
-    @{ Columns =  80; Rows = 36 }
-)) {
-    Set-LaunchConsoleLayout -Columns $readingStep.Columns -Rows $readingStep.Rows -FontHeight 16
-    Start-Sleep -Milliseconds 55
-}
-$width = 80; $height = 36
-try { $width = [Math]::Max(40, [Console]::WindowWidth - 1); $height = [Math]::Max(20, [Console]::WindowHeight) } catch {}
-$out = [Console]::Out
-
 # --- 3. Genesis types at high speed ----------------------------------------------------------------
 # SystemSounds is asynchronous. A tiny tick is played while text is arriving, throttled to a rate
 # the Windows audio mixer can render instead of trying to queue thousands of overlapping sounds.
@@ -304,13 +288,18 @@ if ($buildProc) {
 
 # Amen is deliberately withheld until the engine build has completed, so the final cue and the
 # prompt always arrive together at the end of loading.
+$out.Write($clear)
+try {
+    $width = [Math]::Max(40, [Console]::WindowWidth - 1)
+    $height = [Math]::Max(20, [Console]::WindowHeight)
+} catch {}
 $amen = 'Amen.'
 $promptPrefix = 'There is no '
 $promptEsc = 'Esc'
 $promptSuffix = 'ape.'
 $prompt = "$promptPrefix$promptEsc$promptSuffix"
-$promptRow = [Math]::Max(1, $height - 2)
-$amenRow = [Math]::Max(1, $height - 1)
+$promptRow = [Math]::Max(1, [int]($height / 2) - 1)
+$amenRow = [Math]::Min($height, $promptRow + 3)
 $amenPad = ' ' * [Math]::Max(0, [int](($width - $amen.Length) / 2))
 $promptPad = ' ' * [Math]::Max(0, [int](($width - $prompt.Length) / 2))
 $out.Write("$E[$amenRow;1H$E[2K$amenPad$gold$amen$reset")
