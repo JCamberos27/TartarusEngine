@@ -1,6 +1,6 @@
 # The launch screen run-editor.cmd shows while the editor builds: the Tartarus banner, the art,
-# then Genesis scrolling past at speed. The build runs in the background the whole time, so the
-# show costs no extra launch time. Any key skips the animation.
+# then Genesis types rapidly into the console. The build runs in the background the whole time,
+# so the show costs no extra launch time. Any key skips the animation.
 #
 #   launch-screen.ps1 [-Build]   -Build runs the Release build alongside and exits with its code
 #
@@ -27,8 +27,89 @@ if ($Build) {
 }
 
 # --- console helpers -------------------------------------------------------------------------------
-try { [Console]::CursorVisible = $false } catch {}
-$width = 120; $height = 30
+# The desktop shortcut starts this as an ordinary (not maximized) window.  Give it a deliberate,
+# generous size for the logo, then centre it in the usable desktop area.  The API calls
+# are best-effort so launching from Windows Terminal or a redirected session still works normally.
+function Set-LaunchConsoleLayout {
+    param(
+        [int]$Columns,
+        [int]$Rows,
+        [int]$FontHeight
+    )
+    $columns = $Columns; $rows = $Rows
+    try {
+        $columns = [Math]::Min($columns, [Console]::LargestWindowWidth)
+        $rows = [Math]::Min($rows, [Console]::LargestWindowHeight)
+        [Console]::SetBufferSize([Math]::Max([Console]::BufferWidth, $columns), [Math]::Max([Console]::BufferHeight, $rows))
+        [Console]::SetWindowSize($columns, $rows)
+    } catch {}
+
+    try {
+        if (-not ('TartarusLaunchConsole' -as [type])) { Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class TartarusLaunchConsole {
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] public struct COORD { public short X, Y; }
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] public struct CONSOLE_FONT_INFOEX {
+        public uint Size; public uint Font; public COORD FontSize; public int Family, Weight;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string FaceName;
+    }
+    [DllImport("kernel32.dll")] static extern IntPtr GetConsoleWindow();
+    [DllImport("kernel32.dll")] static extern IntPtr GetStdHandle(int handle);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool SetCurrentConsoleFontEx(IntPtr output, bool maximumWindow, ref CONSOLE_FONT_INFOEX info);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+    [DllImport("user32.dll")] static extern bool SystemParametersInfo(int action, int param, out RECT rect, int flags);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int width, int height, uint flags);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")] static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")] static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int index, IntPtr value);
+    [DllImport("user32.dll")] static extern bool ShowScrollBar(IntPtr hWnd, int bar, bool show);
+    public static void UseFontHeight(short height) {
+        CONSOLE_FONT_INFOEX info = new CONSOLE_FONT_INFOEX();
+        info.Size = (uint)Marshal.SizeOf(typeof(CONSOLE_FONT_INFOEX)); info.FontSize.Y = height;
+        info.Family = 54; info.Weight = 400; info.FaceName = "Consolas";
+        SetCurrentConsoleFontEx(GetStdHandle(-11), false, ref info);
+    }
+    public static void RemoveChromeAndScrollbar() {
+        IntPtr window = GetConsoleWindow(); if (window == IntPtr.Zero) return;
+        const long chromeAndScrollbars = 0x00C00000L | 0x00040000L | 0x00100000L | 0x00200000L;
+        long style = GetWindowLongPtr(window, -16).ToInt64();
+        SetWindowLongPtr(window, -16, new IntPtr(style & ~chromeAndScrollbars));
+        ShowScrollBar(window, 1, false); // SB_VERT
+        ShowScrollBar(window, 0, false); // SB_HORZ
+        SetWindowPos(window, IntPtr.Zero, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020);
+    }
+    public static void Center() {
+        IntPtr window = GetConsoleWindow(); if (window == IntPtr.Zero) return;
+        RECT bounds, work; if (!GetWindowRect(window, out bounds) || !SystemParametersInfo(48, 0, out work, 0)) return;
+        int width = bounds.Right - bounds.Left, height = bounds.Bottom - bounds.Top;
+        int x = work.Left + Math.Max(0, (work.Right - work.Left - width) / 2);
+        int y = work.Top + Math.Max(0, (work.Bottom - work.Top - height) / 2);
+        SetWindowPos(window, IntPtr.Zero, x, y, 0, 0, 0x0001 | 0x0004 | 0x0010);
+    }
+}
+'@ -ErrorAction Stop
+        }
+        [TartarusLaunchConsole]::UseFontHeight([int16]$FontHeight)
+        # Recalculate after the smaller font is applied: it lets the complete supplied logo fit
+        # without turning the launch window into a maximized full-screen console.
+        try {
+            $columns = [Math]::Min($columns, [Console]::LargestWindowWidth)
+            $rows = [Math]::Min($rows, [Console]::LargestWindowHeight)
+            [Console]::SetBufferSize([Math]::Max([Console]::BufferWidth, $columns), [Math]::Max([Console]::BufferHeight, $rows))
+            [Console]::SetWindowSize($columns, $rows)
+            # Match the scrollback buffer to the visible area. Genesis then scrolls naturally,
+            # without reserving space for a persistent console scrollbar.
+            [Console]::SetBufferSize($columns, $rows)
+        } catch {}
+        [TartarusLaunchConsole]::RemoveChromeAndScrollbar()
+        [TartarusLaunchConsole]::Center()
+    } catch {}
+}
+
+Set-LaunchConsoleLayout -Columns 166 -Rows 96 -FontHeight 10
+try { [Console]::CursorVisible = $false; [Console]::ForegroundColor = [ConsoleColor]::White; [Console]::BackgroundColor = [ConsoleColor]::Black } catch {}
+$width = 166; $height = 96
 try { $width = [Math]::Max(40, [Console]::WindowWidth - 1); $height = [Math]::Max(20, [Console]::WindowHeight) } catch {}
 $out = [Console]::Out
 $skipped = $false
@@ -89,11 +170,15 @@ function Shrink-Art([string[]]$lines, [int]$f) {
     }
 }
 
-# --- 1. banner: "Tartarus" over "Engine", a gold-to-ember gradient, then the binary --------------
+# --- 1. banner: Tartarus over Engine, in clean white ------------------------------------------------
 $banner = $sections['banner']
-$top = Center-Block ($banner | ForEach-Object { if ($_.Length -gt 96) { $_.Substring(0, 96) } else { $_ } } | Select-Object -First 9)
-$bottom = Center-Block ($banner | ForEach-Object { if ($_.Length -gt 96) { $_.Substring(96) } else { '' } })
-$rows = @($top) + @('') + @($bottom)
+# Keep the whole supplied lockup visible on ordinary displays. Large ASCII titles are sampled down
+# as a unit when necessary; this is preferable to hiding their right-hand side in a wider-than-screen
+# console window.
+$bannerWidth = ($banner | Measure-Object -Property Length -Maximum).Maximum
+$bannerFit = [int][Math]::Ceiling($bannerWidth / [double][Math]::Max(1, $width - 4))
+if ($bannerFit -gt 1) { $banner = @(Shrink-Art $banner $bannerFit) }
+$rows = @(Center-Block $banner)
 
 $binary = New-Object System.Collections.Generic.List[string]
 foreach ($b in $sections['binary']) {
@@ -108,34 +193,32 @@ foreach ($b in $sections['binary']) {
 
 $out.Write($clear + (Top-Pad ($rows.Count + 2 + $binary.Count)))
 for ($i = 0; $i -lt $rows.Count; $i++) {
-    $t = $i / [Math]::Max(1, $rows.Count - 1)
-    $out.WriteLine("$(Rgb 255 ([int](215 - 110 * $t)) ([int](90 - 60 * $t)))$($rows[$i])$reset")
+    $out.WriteLine("$(Rgb 255 255 255)$($rows[$i])$reset")
     Pause-Frame 30
 }
 $out.WriteLine(); $out.WriteLine()
 foreach ($w in $binary) {
     $pad = ' ' * [Math]::Max(0, [int](($width - $w.Length) / 2))
-    $out.WriteLine("$(Rgb 95 95 105)$pad$w$reset")
+    $out.WriteLine("$(Rgb 255 255 255)$pad$w$reset")
     Pause-Frame 30
 }
 Pause-Frame 900
 
-# --- 2. the art, alone on screen, drawn in top to bottom and shaded by character density ----------
+# --- 2. the art, alone on screen, drawn in top to bottom in white ----------------------------------
 $art = @($sections['art'])
-$fit = [int][Math]::Ceiling($art.Count / [double]($height - 2))
+$artWidth = ($art | Measure-Object -Property Length -Maximum).Maximum
+$fit = [int][Math]::Max(
+    [Math]::Ceiling($art.Count / [double]($height - 2)),
+    [Math]::Ceiling($artWidth / [double][Math]::Max(1, $width - 4)))
 if ($fit -gt 1) { $art = @(Shrink-Art $art $fit) }
-$shade = @{
-    '@' = (Rgb 255 236 190); '%' = (Rgb 240 205 140); '#' = (Rgb 225 180 110)
-    '*' = (Rgb 200 150 85);  '+' = (Rgb 170 120 70);  '=' = (Rgb 140 98 60)
-    '-' = (Rgb 115 82 52);   ':' = (Rgb 95 70 48);    '.' = (Rgb 75 60 45)
-}
+$white = Rgb 255 255 255
 $out.Write($clear + (Top-Pad $art.Count))
 foreach ($l in (Center-Block $art)) {
     $sb = New-Object System.Text.StringBuilder
     $last = $null
     foreach ($ch in $l.ToCharArray()) {
         if ($ch -ne ' ') {
-            $col = $shade[[string]$ch]; if (-not $col) { $col = $shade['@'] }
+            $col = $white
             if ($col -ne $last) { [void]$sb.Append($col); $last = $col }
         }
         [void]$sb.Append($ch)
@@ -145,33 +228,67 @@ foreach ($l in (Center-Block $art)) {
 }
 Pause-Frame 1800
 
-# --- 3. Genesis at super speed ---------------------------------------------------------------------
+# Collapse from the full-height artwork view into a tight reading frame. The intermediate steps
+# preserve the window's centre and make the handoff feel deliberate rather than a hard snap.
+$out.Write($clear)
+foreach ($readingStep in @(
+    @{ Columns = 104; Rows = 60 },
+    @{ Columns =  96; Rows = 52 },
+    @{ Columns =  88; Rows = 44 },
+    @{ Columns =  80; Rows = 36 }
+)) {
+    Set-LaunchConsoleLayout -Columns $readingStep.Columns -Rows $readingStep.Rows -FontHeight 16
+    Start-Sleep -Milliseconds 55
+}
+$width = 80; $height = 36
+try { $width = [Math]::Max(40, [Console]::WindowWidth - 1); $height = [Math]::Max(20, [Console]::WindowHeight) } catch {}
+$out = [Console]::Out
+
+# --- 3. Genesis types at high speed ----------------------------------------------------------------
+# SystemSounds is asynchronous. A tiny tick is played while text is arriving, throttled to a rate
+# the Windows audio mixer can render instead of trying to queue thousands of overlapping sounds.
 $gold = Rgb 255 200 90; $verse = Rgb 210 150 70; $text = Rgb 170 170 178
 $indent = ' ' * [Math]::Max(0, [int](($width - 76) / 2))   # the text is wrapped at 76 columns
 $genesis = $sections['genesis']
-$perFrame = 45   # ~5,700 lines at 45 per 8 ms frame: a couple of seconds end to end
+$charactersPerSecond = 150000
+$charactersPerFrame = 256
+$charactersPerWrite = 32
+$soundEveryMilliseconds = 45
 $out.Write($clear + ("`n" * $height))
-$sb = New-Object System.Text.StringBuilder
+$typed = New-Object System.Text.StringBuilder
 for ($i = 0; $i -lt $genesis.Count; $i++) {
     $l = $genesis[$i]
     if ($l -match '^Genesis Chapter') {
-        [void]$sb.Append("`n$indent$gold$E[1m$l$E[22m$reset`n")
+        [void]$typed.Append("`n$indent$gold$E[1m$l$E[22m$reset`n")
     } elseif ($l -match '^(\d+:\d+\.)(.*)$') {
-        [void]$sb.Append("$indent$verse$($Matches[1])$text$($Matches[2])$reset`n")
+        [void]$typed.Append("$indent$verse$($Matches[1])$text$($Matches[2])$reset`n")
     } else {
-        [void]$sb.Append("$indent$text$l$reset`n")
+        [void]$typed.Append("$indent$text$l$reset`n")
     }
-    if ((($i + 1) % $perFrame) -eq 0 -or $i -eq $genesis.Count - 1) {
-        if (-not $skipped) { $out.Write($sb.ToString()) }
-        [void]$sb.Clear()
-        Pause-Frame 8
+
+}
+
+$stopwatch = [Diagnostics.Stopwatch]::StartNew()
+$lastSoundAt = -$soundEveryMilliseconds
+for ($i = 0; $i -lt $typed.Length; $i += $charactersPerWrite) {
+    $count = [Math]::Min($charactersPerWrite, $typed.Length - $i)
+    # Write short bursts rather than one host call per glyph. The result still visibly types in,
+    # but it remains quick even with the full text of Genesis.
+    $out.Write($typed.ToString($i, $count))
+    if ((($i + $count) % $charactersPerFrame) -eq 0) {
+        if (Skip-Requested) { break }
+        $targetMilliseconds = (($i + $count) * 1000.0) / $charactersPerSecond
+        if (($stopwatch.ElapsedMilliseconds - $lastSoundAt) -ge $soundEveryMilliseconds) {
+            try { [System.Media.SystemSounds]::Beep.Play() } catch {}
+            $lastSoundAt = $stopwatch.ElapsedMilliseconds
+        }
+        # A short spin preserves the fast, typewriter-like cadence without the 15 ms granularity
+        # of Start-Sleep on many Windows hosts.
+        while ($stopwatch.Elapsed.TotalMilliseconds -lt $targetMilliseconds) { [Threading.Thread]::SpinWait(128) }
     }
 }
-$amen = 'Amen.'
-$out.WriteLine("`n$(' ' * [Math]::Max(0, [int](($width - $amen.Length) / 2)))$gold$amen$reset`n")
-try { [Console]::CursorVisible = $true } catch {}
-
-# --- wait out the build ----------------------------------------------------------------------------
+# --- keep the conclusion synchronized with the build -----------------------------------------------
+$buildExitCode = 0
 if ($buildProc) {
     $spin = '|/-\'; $n = 0
     while (-not $buildProc.HasExited) {
@@ -181,6 +298,40 @@ if ($buildProc) {
     }
     if ($n -gt 0) { $out.Write("`r" + (' ' * 44) + "`r") }
     $buildProc.WaitForExit()
-    exit $buildProc.ExitCode
+    $buildExitCode = $buildProc.ExitCode
+    if ($buildExitCode -ne 0) { exit $buildExitCode }
 }
-exit 0
+
+# Amen is deliberately withheld until the engine build has completed, so the final cue and the
+# prompt always arrive together at the end of loading.
+$amen = 'Amen.'
+$promptPrefix = 'There is no '
+$promptEsc = 'Esc'
+$promptSuffix = 'ape.'
+$prompt = "$promptPrefix$promptEsc$promptSuffix"
+$promptRow = [Math]::Max(1, $height - 2)
+$amenRow = [Math]::Max(1, $height - 1)
+$amenPad = ' ' * [Math]::Max(0, [int](($width - $amen.Length) / 2))
+$promptPad = ' ' * [Math]::Max(0, [int](($width - $prompt.Length) / 2))
+$out.Write("$E[$amenRow;1H$E[2K$amenPad$gold$amen$reset")
+$out.Write("$E[$promptRow;1H$E[2K$promptPad$text$promptPrefix$E[4m$promptEsc$E[24m$promptSuffix$reset")
+try { [Console]::CursorVisible = $true } catch {}
+
+# run-editor.cmd launches the editor only after this script exits. Waiting here turns the prompt
+# into an intentional final transition instead of a message that flashes past. Escape is the only
+# accepted key; every other key is ignored with a quiet system tick.
+if ($Build) {
+    try {
+        do {
+            $key = [Console]::ReadKey($true)
+            if ($key.Key -eq [ConsoleKey]::Escape) {
+                $accepted = Rgb 90 230 120
+                $out.Write("$E[$promptRow;1H$E[2K$promptPad$text$promptPrefix$accepted$E[4m$promptEsc$E[24m$text$promptSuffix$reset")
+                Start-Sleep -Milliseconds 180
+            } else {
+                [System.Media.SystemSounds]::Beep.Play()
+            }
+        } while ($key.Key -ne [ConsoleKey]::Escape)
+    } catch {}
+}
+exit $buildExitCode
