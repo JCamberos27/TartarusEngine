@@ -1901,6 +1901,11 @@ private:
     void DrawAnimatorWindow(World& world);
     // Inspector panels for a selected .fpsanim (weapon definition) / .controller asset.
     void DrawWeaponDefinitionEditor(const std::string& path);
+    // The weapon definition keeps its own undo history (it is a file, not scene state). While
+    // it is on show and the Inspector has focus, Ctrl+Z / Ctrl+Y step it instead of the scene:
+    // the shortcut dispatch leaves a request here (-1 undo, +1 redo) for the next draw.
+    int m_WeaponDefUndoRequest = 0;
+    int m_WeaponDefShownFrame = -100;
     void DrawControllerAssetInspector(const std::string& path);
     bool m_ShowAnimator = false;
     struct AnimatorWindowState;

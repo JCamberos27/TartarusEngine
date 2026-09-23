@@ -54,7 +54,15 @@ bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::
 void AimBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int bone,
              const glm::vec3& aimAxis, const glm::vec3& targetPos, float maxAngleDeg, float weight);
 
-// Runs an IK Rig component on `pose` for `model`: its bone offsets (runtime, written by game
+// Moves `move` rigidly so the line rear -> front (points fixed to `ref`, in its local space)
+// lies on the line through `eye` along `forward`: turned to face along it (the smallest turn,
+// so the roll is kept) and slid onto it. `distance` > 0 also sets how far along it the rear
+// point sits; 0 keeps its current depth. `weight` blends from no change (0).
+void AlignLine(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int move, int ref,
+               const glm::vec3& rearLocal, const glm::vec3& frontLocal, const glm::vec3& eye,
+               const glm::vec3& forward, float distance, float weight);
+
+// Runs an IK Rig component on `pose` for `model`: its line alignment and bone offsets (runtime,
 // code), then its limbs and look-at. No-op when the rig is disabled or its weight is 0.
 void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose);
 

@@ -96,6 +96,8 @@ bool PickFromList(const char* id, std::string& value, const std::vector<std::str
 struct WeaponProceduralContext {
     const Model* Arms = nullptr;
     std::vector<std::string> Bones;
+    const Model* Weapon = nullptr;
+    std::vector<std::string> WeaponBones;
     std::vector<std::string> StatesAndTags;
     bool CanLoadArms = false;   // the rig isn't loaded yet but can be, on request
     bool LoadArms = false;      // out: the user asked to load it
@@ -167,7 +169,7 @@ void DrawWeaponProcedural(WeaponProceduralSettings& p, float labelW, float rpm, 
         if (InputName("##name", v, w, true)) changed = true;
         if (unknown) ImGui::PopStyleColor();
         if (ImGui::IsItemHovered()) {
-            if (unknown) EditorUI::SetTooltip("The arms rig has no bone named '%s'.", v.c_str());
+            if (unknown) EditorUI::SetTooltip("The rig has no bone named '%s'.", v.c_str());
             else if (tip) EditorUI::SetTooltip("%s", tip);
         }
         ImGui::SameLine();
@@ -202,7 +204,7 @@ void DrawWeaponProcedural(WeaponProceduralSettings& p, float labelW, float rpm, 
         if (std::fabs(end) > std::max(peak * 0.02f, 1e-5f))
             ImGui::TextColored(warn, ICON_FA_TRIANGLE_EXCLAMATION "  %s ends at %g, not 0: it will snap back when each shot ends.", what, end);
     };
-    // Puts one section back to the defaults, after a confirmation (there is no undo here).
+    // Puts one section back to the defaults, after a confirmation.
     auto resetSection = [&](const char* id, const char* what, const std::function<void()>& apply) {
         ImGui::PushID(id);
         char tip[128];
@@ -211,7 +213,7 @@ void DrawWeaponProcedural(WeaponProceduralSettings& p, float labelW, float rpm, 
             ImGui::OpenPopup("##reset");
         if (ImGui::BeginPopup("##reset")) {
             ImGui::Text("Reset all %s settings to the defaults?", what);
-            ImGui::TextDisabled("This can't be undone.");
+            ImGui::TextDisabled("Undo (Ctrl+Z) brings them back.");
             if (ImGui::Button("Reset")) {
                 apply();
                 changed = true;
@@ -424,6 +426,51 @@ void DrawWeaponProcedural(WeaponProceduralSettings& p, float labelW, float rpm, 
         dragF("Speed (1/s)", "##lespd", l.Speed, 0.1f, 0.1f, 50.0f, "%.1f", "How fast the lean goes in and comes back.");
         check("While Sprinting", "##lesprint", l.WhileSprinting, "Off: sprinting straightens up.");
         resetSection("lereset", "Lean", [&] { p.Lean = kDefaults.Lean; });
+    }
+
+    if (ImGui::CollapsingHeader("Sight Alignment##proc")) {
+        auto& sg = p.Sight;
+        ImGui::TextWrapped("With sights up, IK holds the weapon's sight line on the centre of the screen, so it aims "
+                           "true without hand-tuning. Recoil, sway and breathing still move it.");
+        row("Source", "Where the sight line comes from.\n"
+                      "Aim Clip: read from the ADS state's clip when Play starts - use this when the Aim clip already lines up.\n"
+                      "Manual: two points on the weapon, for weapons without a lined-up Aim clip.");
+        const char* modes[] = {"Off", "Aim Clip", "Manual"};
+        int mode = std::clamp(sg.Mode, 0, 2);
+        if (ImGui::Combo("##sgmode", &mode, modes, 3)) {
+            sg.Mode = mode;
+            changed = true;
+        }
+        if (sg.Mode == WeaponSightSettings::Manual) {
+            pickField("Reference Bone", "##sgref", sg.ReferenceBone, ctx.WeaponBones, ctx.Weapon != nullptr && !sg.ReferenceBone.empty(),
+                      "Weapon-rig bone the points are measured in. Empty = the weapon root.", "Pick a bone from the weapon rig");
+            dragV3("Rear Sight", "##sgrear", sg.Rear, 0.0005f, "%.4f",
+                   "Rear sight point in the reference bone's space (weapon model units).\n"
+                   "When Play starts the Console prints the Aim clip's line in the weapon root's space as a starting point.");
+            dragV3("Front Sight", "##sgfront", sg.Front, 0.0005f, "%.4f", "Front sight point: the line runs rear -> front, toward the target.");
+            if (glm::length(sg.Front - sg.Rear) < 1e-6f)
+                ImGui::TextColored(warn, ICON_FA_TRIANGLE_EXCLAMATION "  Rear and front are the same point, so there's no line to align.");
+        }
+        if (sg.Mode != WeaponSightSettings::Off) {
+            dragF("Eye Distance", "##sgeye", sg.EyeDistance, 0.002f, 0.0f, 1.0f, sg.EyeDistance > 0.0f ? "%.3f m" : "keep",
+                  "Distance from the eye to the rear sight. 0 (keep) = wherever the pose holds it.");
+            dragF("Weight", "##sgw", sg.Weight, 0.01f, 0.0f, 1.0f, "%.2f", "How strongly the sights are held on centre (0 = off).");
+        }
+        resetSection("sgreset", "Sight Alignment", [&] { p.Sight = kDefaults.Sight; });
+    }
+
+    if (ImGui::CollapsingHeader("Wall Block##proc")) {
+        auto& wb = p.Wall;
+        check("Enabled", "##wben", wb.Enabled, "Pull the gun back and lower it when the view is up against something, instead of clipping into it.");
+        dragF("Distance", "##wbdist", wb.Distance, 0.01f, 0.1f, 3.0f, "%.2f m",
+              "How close a wall straight ahead has to be to start. Fully blocked at 30% of this.");
+        dragF("Radius", "##wbrad", wb.Radius, 0.005f, 0.005f, 0.5f, "%.3f m", "Thickness of the check: bigger catches thin edges and corners sooner.");
+        dragV3("Position (m)", "##wbpos", wb.Position, 0.0005f, "%.4f", "Fully blocked offset, camera frame: +Z pulls back, -Y lowers.");
+        dragV3("Rotation (deg)", "##wbrot", wb.Rotation, 0.1f, "%.1f", "Fully blocked pitch, yaw, roll: negative pitch points the muzzle down.");
+        dragF("Blend In (s)", "##wbbi", wb.BlendIn, 0.005f, 0.0f, 2.0f, "%.3f", "Seconds to pull back when a wall appears.");
+        dragF("Blend Out (s)", "##wbbo", wb.BlendOut, 0.005f, 0.0f, 2.0f, "%.3f", "Seconds to come back up when it's gone.");
+        check("Block Firing", "##wbfire", wb.BlockFire, "No firing while the gun is more than half pulled back.");
+        resetSection("wbreset", "Wall Block", [&] { p.Wall = kDefaults.Wall; });
     }
 
     if (ImGui::CollapsingHeader("IK##proc")) {
@@ -1973,23 +2020,66 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         fs::file_time_type Stamp{};
         FirstPersonAnimationSet Set;
         std::string Error;
+        // Undo history: whole-file snapshots. `Saved` is what's on disk, i.e. the state before
+        // the edit in progress (a drag changes Set live but only commits on release).
+        FirstPersonAnimationSet Saved;
+        std::vector<FirstPersonAnimationSet> Undo, Redo;
     };
     static Cache cache;
     std::error_code ec;
     const auto stamp = fs::last_write_time(fs::u8path(path), ec);
     if (cache.Path != path || cache.Stamp != stamp) {
+        if (cache.Path != path) {
+            cache.Undo.clear();
+            cache.Redo.clear();
+        } else {
+            cache.Redo.clear(); // changed on disk by something else: redo no longer follows
+        }
         cache.Path = path;
         cache.Stamp = stamp;
         cache.Error.clear();
         if (!FirstPersonAnimationSet::LoadFile(path, cache.Set, &cache.Error)) cache.Set = {};
+        cache.Saved = cache.Set;
     }
+    m_WeaponDefShownFrame = ImGui::GetFrameCount();
     ImGui::SeparatorText(ICON_FA_CROSSHAIRS "  Weapon Definition");
     ImGui::TextWrapped("%s", ProjectPaths::Relativize(path).c_str());
     if (!cache.Error.empty()) {
+        m_WeaponDefUndoRequest = 0;
         ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s", cache.Error.c_str());
         return;
     }
     FirstPersonAnimationSet& s = cache.Set;
+    const auto save = [&]() {
+        if (s.SaveFile(path)) cache.Stamp = fs::last_write_time(fs::u8path(path), ec);
+        else Log::Error("Couldn't save " + ProjectPaths::Relativize(path) + ".");
+        cache.Saved = s;
+    };
+    // Steps one history into the other: what's saved now goes onto `to`, `from`'s top comes back.
+    const auto step = [&](std::vector<FirstPersonAnimationSet>& from, std::vector<FirstPersonAnimationSet>& to) {
+        if (from.empty()) return;
+        to.push_back(cache.Saved);
+        s = std::move(from.back());
+        from.pop_back();
+        save();
+    };
+    {
+        const float bw = ImGui::GetFrameHeight() * 1.6f;
+        ImGui::BeginDisabled(cache.Undo.empty());
+        if (ActionButton(ICON_FA_ROTATE_LEFT, "Undo the last weapon edit (Ctrl+Z while the Inspector has focus)", false, ImVec2(bw, 0.0f)))
+            m_WeaponDefUndoRequest = -1;
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::BeginDisabled(cache.Redo.empty());
+        if (ActionButton(ICON_FA_ROTATE_RIGHT, "Redo (Ctrl+Y while the Inspector has focus)", false, ImVec2(bw, 0.0f)))
+            m_WeaponDefUndoRequest = 1;
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::TextDisabled("%d edit%s to undo", (int)cache.Undo.size(), cache.Undo.size() == 1 ? "" : "s");
+    }
+    if (m_WeaponDefUndoRequest < 0) step(cache.Undo, cache.Redo);
+    else if (m_WeaponDefUndoRequest > 0) step(cache.Redo, cache.Undo);
+    m_WeaponDefUndoRequest = 0;
     FirstPersonWeaponGameplay& g = s.Gameplay;
     bool changed = false;
     const float labelW = 150.0f * m_UIScale;
@@ -2094,15 +2184,30 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         ctx.Arms = arms.get();
         for (int i = 0; i < arms->NodeCount(); ++i) ctx.Bones.push_back(arms->NodeName(i));
     }
+    std::shared_ptr<Model> weapon;
+    const std::string weaponPath = s.WeaponModel.empty() ? std::string() : ProjectPaths::Resolve(s.WeaponModel);
+    if (!weaponPath.empty() && m_AssetsPtr) {
+        const fs::path want = fs::u8path(weaponPath).lexically_normal();
+        for (const auto& m : m_AssetsPtr->Models())
+            if (m && fs::u8path(m->Path()).lexically_normal() == want) { weapon = m; break; }
+    }
+    if (weapon) {
+        ctx.Weapon = weapon.get();
+        for (int i = 0; i < weapon->NodeCount(); ++i) ctx.WeaponBones.push_back(weapon->NodeName(i));
+    }
 
     DrawWeaponProcedural(s.Procedural, labelW, g.RoundsPerMinute, ctx, changed);
-    if (ctx.LoadArms && m_AssetsPtr && !m_AssetsPtr->LoadModel(armsPath))
-        Log::Warn("Couldn't load the arms model '" + s.ArmsModel + "' to check bone names.");
+    if (ctx.LoadArms && m_AssetsPtr) {
+        if (!m_AssetsPtr->LoadModel(armsPath)) Log::Warn("Couldn't load the arms model '" + s.ArmsModel + "' to check bone names.");
+        if (!weapon && !weaponPath.empty()) m_AssetsPtr->LoadModel(weaponPath);
+    }
 
     ImGui::Spacing();
     ImGui::TextDisabled("Gameplay and procedural numbers apply live in Play; rigs and controller on the next Play.");
     if (changed) {
-        if (s.SaveFile(path)) cache.Stamp = fs::last_write_time(fs::u8path(path), ec);
-        else Log::Error("Couldn't save " + ProjectPaths::Relativize(path) + ".");
+        cache.Undo.push_back(cache.Saved);
+        if (cache.Undo.size() > 200) cache.Undo.erase(cache.Undo.begin());
+        cache.Redo.clear();
+        save();
     }
 }

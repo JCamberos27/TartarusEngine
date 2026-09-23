@@ -3180,8 +3180,18 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // Ctrl+Z / Ctrl+Y are uniformly the scene undo/redo stack (Phase 6 item 6 / Q6) — a
         // selection change is just another entry on it now, same as any edit. Ctrl+[ / Ctrl+]
         // stay their own, separate selection-only back/forward (SelectionHistoryBack/Forward).
-        if (Shortcuts::Triggered("editor.undo")) Undo(world, assets);
-        if (Shortcuts::Triggered("editor.redo")) Redo(world, assets);
+        // ...except while a weapon definition is on show in a focused Inspector: that file has
+        // its own history (DrawWeaponDefinitionEditor).
+        const bool weaponDefUndo = navRoot && navRoot == ImGui::FindWindowByName("Inspector") &&
+                                   m_WeaponDefShownFrame >= ImGui::GetFrameCount() - 1;
+        if (Shortcuts::Triggered("editor.undo")) {
+            if (weaponDefUndo) m_WeaponDefUndoRequest = -1;
+            else Undo(world, assets);
+        }
+        if (Shortcuts::Triggered("editor.redo")) {
+            if (weaponDefUndo) m_WeaponDefUndoRequest = 1;
+            else Redo(world, assets);
+        }
         // Q12 — Ctrl+S/Ctrl+Shift+S mirror the File menu's Play-mode gate (DrawFileMenuBody).
         if (Shortcuts::Triggered("editor.saveAs")) {
             if (m_InPlayMode) Log::Info("Save is disabled while Playing - changes here revert on Stop anyway.");

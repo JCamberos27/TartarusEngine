@@ -2071,6 +2071,39 @@ void TestWeaponProcedural() {
         WeaponProceduralSettings back = WeaponProceduralSettings::Defaults();
         CHECK(WeaponProceduralSettings::FromJson(l.ToJson(), back, &err) && back.Lean.WhileSprinting);
     }
+
+    // Wall block: eases into the blocked pose and out again; the ADS weight is reported for the
+    // sight alignment; the new blocks round-trip.
+    {
+        WeaponProceduralSettings w = s;
+        w.Wall.Enabled = true;
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.WallBlock = 1.0f;
+        WeaponProceduralPose p = run(st, w, in, 1.0f);
+        CHECK(p.WallBlock == 1.0f);
+        CHECK(glm::length(p.Position - w.Wall.Position) < 1e-4f && glm::length(p.Rotation - w.Wall.Rotation) < 1e-3f);
+        in.WallBlock = 0.0f;
+        in.Ads = true;
+        p = run(st, w, in, 1.0f);
+        CHECK(p.WallBlock == 0.0f && glm::length(p.Position) < 1e-4f);
+        CHECK(p.AdsWeight == 1.0f);
+
+        WeaponProceduralSettings out = WeaponProceduralSettings::Defaults();
+        w.Sight.Mode = WeaponSightSettings::Manual;
+        w.Sight.ReferenceBone = "receiver";
+        w.Sight.Rear = glm::vec3(0.0f, 0.05f, 0.1f);
+        w.Sight.EyeDistance = 0.12f;
+        w.Wall.BlockFire = true;
+        w.Wall.Distance = 0.9f;
+        std::string err;
+        CHECK(WeaponProceduralSettings::FromJson(w.ToJson(), out, &err));
+        CHECK(out.Sight.Mode == WeaponSightSettings::Manual && out.Sight.ReferenceBone == "receiver" &&
+              out.Sight.Rear == w.Sight.Rear && out.Sight.EyeDistance == 0.12f);
+        CHECK(out.Wall.BlockFire && out.Wall.Distance == 0.9f);
+        CHECK(WeaponProceduralSettings::Defaults().Sight.Mode == WeaponSightSettings::AimClip);
+        CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"wall":{"distance":0}})"), out, &err));
+    }
 }
 
 // --- Procedural animation: curves and IK -----------------------------------------------------
@@ -2131,6 +2164,41 @@ void TestIKSolver() {
     const float reach = glm::length(b - a) + glm::length(c - b);
     const glm::vec3 bendAxis = glm::normalize(glm::cross(c - a, b - a));
     const glm::vec3 childOffset = glm::inverse(IK::Rotation(g[3])) * (IK::Position(g[4]) - c);
+
+    // Line alignment (sights on the view axis): moving the end bone puts a line fixed to its
+    // child onto the target line, facing along it; a set distance places it; weight 0 is a no-op.
+    {
+        const glm::vec3 eye(2.0f, 1.0f, -1.0f);
+        const glm::vec3 fwd = glm::normalize(glm::vec3(1.0f, -1.0f, 0.5f));
+        const glm::vec3 rearL(0.0f, 0.1f, 0.0f), frontL(1.0f, 0.1f, 0.0f);
+        const auto line = [&](const std::vector<glm::mat4>& gg, glm::vec3& r, glm::vec3& f) {
+            r = glm::vec3(gg[4] * glm::vec4(rearL, 1.0f));
+            f = glm::vec3(gg[4] * glm::vec4(frontL, 1.0f));
+        };
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        IK::AlignLine(p, parents, gg, 3, 4, rearL, frontL, eye, fwd, 0.0f, 1.0f);
+        glm::vec3 r, f;
+        line(gg, r, f);
+        const glm::vec3 off = (r - eye) - fwd * glm::dot(r - eye, fwd);
+        CHECK(glm::length(off) < 1e-4f);                          // on the view axis
+        CHECK(glm::dot(glm::normalize(f - r), fwd) > 1.0f - 1e-5f); // and facing along it
+        // Recomputing the globals from the edited local pose agrees (the edit is real, not cached).
+        std::vector<glm::mat4> fresh;
+        IK::ComputeGlobals(p, parents, fresh);
+        CHECK(glm::length(IK::Position(fresh[4]) - IK::Position(gg[4])) < 1e-4f);
+
+        IK::Pose p2 = pose;
+        std::vector<glm::mat4> g2 = g;
+        IK::AlignLine(p2, parents, g2, 3, 4, rearL, frontL, eye, fwd, 2.0f, 1.0f);
+        line(g2, r, f);
+        CHECK(glm::length(r - (eye + fwd * 2.0f)) < 1e-4f);
+
+        IK::Pose p3 = pose;
+        std::vector<glm::mat4> g3 = g;
+        IK::AlignLine(p3, parents, g3, 3, 4, rearL, frontL, eye, fwd, 0.0f, 0.0f);
+        CHECK(glm::length(IK::Position(g3[4]) - IK::Position(g[4])) < 1e-6f);
+    }
 
     // Reachable: the end lands on the target, bone lengths hold, the elbow bends the same way.
     {

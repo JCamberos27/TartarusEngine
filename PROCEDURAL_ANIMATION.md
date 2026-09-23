@@ -9,7 +9,9 @@ Everything is tuned per weapon in the weapon definition (`.fpsanim`). To open it
 
 Then open **Procedural** in the Inspector. Edits save immediately and apply **live in Play**: the running game re-reads the file within a quarter second, and that includes changes to the IK bone names.
 
-Every field explains itself when you hover its label. Each section has a **Reset to Defaults** button, which asks before it resets anything, because these edits can't be undone.
+Every field explains itself when you hover its label. Each section has a **Reset to Defaults** button, which asks before it resets anything.
+
+**Undo:** weapon edits have their own history. **Ctrl+Z** / **Ctrl+Y** step through it while the Inspector has focus. There are also undo and redo buttons at the top of the weapon definition. Anywhere else, Ctrl+Z is the scene's undo as usual.
 
 ## Axes and units
 
@@ -37,6 +39,8 @@ All layers are summed:
 | **State Offsets** | A pose tweak per state name or tag, e.g. lower and roll the gun in `Sprint`, with blend in/out times. The drop-down next to the name lists the controller's states and tags. A name the controller doesn't have is shown in the warning colour. |
 | **Locomotion Rate** | Sets the `WalkRate` / `SprintRate` parameters from the player's speed. Use them as the Walk and Sprint states' **speed parameter** so the clips step at the pace you move. |
 | **Lean** | `LeanLeft` / `LeanRight` (default **Z / C**, rebindable in Settings → This Project → Input) roll the camera, slide it sideways, and roll the gun a little further into the lean. The side step stops short of walls, so leaning can't put the eye through them, and the roll shrinks with it. Sprinting straightens up unless **While Sprinting** is on. |
+| **Sight Alignment** | With sights up, IK holds the weapon's sight line on the centre of the screen, so it aims true without hand-tuning. It works on the animated pose before the other layers, so recoil, sway and breathing still move the sights.<br><br>**Source** sets where the line comes from:<br>- **Aim Clip** (the default) reads the line from the ADS state's clip when Play starts. The AK's Aim clip already lines up, so it keeps that exact picture and holds it through transitions.<br>- **Manual** takes rear and front sight points on the weapon rig, for weapons without a lined-up Aim clip. The Console prints the Aim clip's line as a starting point.<br><br>**Eye Distance** moves the sights nearer or further (0 keeps the pose's distance). When Play starts, a self-check logs how precisely the sights hold on the real rig. |
+| **Wall Block** | When a wall is close ahead of the view, the gun pulls back and lowers instead of clipping into it. It eases in and out. **Block Firing** optionally stops shots while the gun is more than half pulled back. |
 | **IK** | Bone names (gun bone, both arm chains) and the **Off Tag** (`IKOff`). The drop-downs list the arms rig's bones; names it lacks are shown in the warning colour. States with the Off tag, and hidden states, fade every offset out over the blend time, so they play purely as authored. The AK tags Draw and Holster. Turning **Enabled** off keeps the motion but moves the whole view model instead of the gun bone. |
 
 ### Curve editor
@@ -81,5 +85,6 @@ Code can also push rigid bone offsets through `IKRigComponent::Offsets` (runtime
 | Procedural stack | `src/Game/FirstPersonProcedural.{h,cpp}`. `WeaponProceduralState::Update` takes an input (dt, look rate, camera-frame velocity, tags, lean) and returns a `WeaponProceduralPose`. No world or model needed, so it's unit-tested directly (`TestWeaponProcedural`). |
 | Wiring | `FirstPersonPresentation` feeds it each `Tick`, writes the gun offset into the arms' `IKRigComponent`, and puts the camera punch and lean on the play camera. `RemoveViewKick` takes them off before `Player::Update`. |
 | Rigs without the bones | If the arms rig lacks the gun bone or arm chains, a warning is logged and the procedural pose moves the whole view model instead. |
-| Self-check | When Play starts, the driver moves the gun 10% of an arm's length on the real rig and logs how far the hands land from their grip. The AK logs 0.000%. |
+| Self-check | When Play starts, the driver moves the gun 10% of an arm's length on the real rig and logs how far the hands land from their grip. The AK logs 0.000%. It also knocks the Aim pose 3 cm and 4° off and logs how well sight alignment brings it back. The AK logs 0.000 mm and 0.000°. |
+| Sight alignment | `IKRigComponent::Align` (`IKLineAlign`) holds a line fixed to one bone on a target line by moving another bone rigidly (`IK::AlignLine`). The rig applies it before the Offsets. |
 | File format | The `procedural` object in the `.fpsanim` (see `WeaponProceduralSettings::ToJson`). Missing keys keep their defaults, so `"procedural": {}` means the AK tuning. Files written before this existed migrate their old `gameplay.recoil` / `adsBob` numbers into curves of the same shape. |

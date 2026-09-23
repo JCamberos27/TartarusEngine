@@ -550,6 +550,21 @@ struct IKBoneOffset {
     glm::vec3 Pivot{0.0f};         // rotation centre, relative to the bone's own position
 };
 
+// Holds a line fixed to one bone (a gun's rear -> front sight) on a target line (the view axis)
+// by moving another bone rigidly, in model space. Runtime only; applied to the animated pose
+// before the Offsets, so they still move the line afterwards.
+struct IKLineAlign {
+    bool Active = false;
+    std::string MoveBone;          // moved rigidly, with everything under it
+    std::string RefBone;           // the line rides this bone
+    glm::vec3 RearLocal{0.0f};     // the line, in RefBone's local space
+    glm::vec3 FrontLocal{0.0f, 0.0f, 1.0f};
+    glm::vec3 Eye{0.0f};           // target line: through Eye along Forward (model space)
+    glm::vec3 Forward{0.0f, 0.0f, -1.0f};
+    float Distance = 0.0f;         // model units from Eye to put the rear point; 0 = keep its depth
+    float Weight = 0.0f;
+};
+
 // Post-process IK on an Animator Controller's output pose (IK.h): procedural bone offsets, up to
 // two two-bone limbs and a look-at, run after the layers blend and before the pose is applied.
 struct IKRigComponent {
@@ -565,6 +580,7 @@ struct IKRigComponent {
     float LookAtWeight = 1.0f;
 
     // --- runtime (not serialized) ---
+    IKLineAlign Align;
     std::vector<IKBoneOffset> Offsets;
 };
 

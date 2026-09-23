@@ -98,6 +98,11 @@ private:
     void SetError(const std::string& message);
     bool SetupIK();
     void WriteIK();
+    // Reads the sight line from the ADS state's clip (WeaponSightSettings::AimClip) into
+    // m_AimClipRear/Front, in the weapon socket's local space.
+    void ComputeAimClipSight(AssetLibrary& assets, const AnimatorController& ctrl);
+    // The sight line to hold for the current settings, socket-local. False = none.
+    bool SightLine(glm::vec3& rear, glm::vec3& front) const;
     void ReloadIfChanged(float dt);
 
     World* m_World = nullptr;
@@ -131,6 +136,10 @@ private:
     bool m_UsesIK = false;
     float m_LookYaw = 0.0f, m_LookPitch = 0.0f, m_PrevLookYaw = 0.0f, m_PrevLookPitch = 0.0f;
     bool m_HaveLook = false;
+    // Sight alignment and the wall check.
+    bool m_HaveAimClipSight = false;
+    glm::vec3 m_AimClipRear{0.0f}, m_AimClipFront{0.0f};
+    float m_WallBlock = 0.0f;     // 0..1 target from this frame's cast
     glm::vec3 m_FlatRight{1.0f, 0.0f, 0.0f}, m_FlatForward{0.0f, 0.0f, -1.0f};
     // The view kick currently on the camera (so it can come off exactly).
     bool m_KickApplied = false;

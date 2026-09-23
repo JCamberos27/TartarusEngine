@@ -145,6 +145,38 @@ struct WeaponLeanSettings {
     bool WhileSprinting = false;   // off: sprinting straightens up
 };
 
+// Sight alignment: while sights are up, IK holds the weapon's sight line on the camera's view
+// axis, so a weapon aims true without a hand-tuned Aim clip or aim offset. Applied to the
+// animated pose before every other layer, so recoil, sway and breathing still move the sights.
+struct WeaponSightSettings {
+    enum Source { Off = 0, AimClip = 1, Manual = 2 };
+    // AimClip: the line is read from the ADS state's clip when Play starts - wherever the view
+    // axis passes through the gun in that pose - so a weapon whose Aim clip already lines up
+    // keeps that sight picture exactly and stays on it through transitions. Manual: two points.
+    int Mode = AimClip;
+    // Manual: rear and front sight points in this WEAPON-rig bone's space, in the weapon
+    // model's units ("" = the weapon root). The Console prints the Aim clip's line in these
+    // terms when Play starts, as a starting point.
+    std::string ReferenceBone;
+    glm::vec3 Rear{0.0f};
+    glm::vec3 Front{0.0f, 0.0f, 1.0f};
+    float EyeDistance = 0.0f;      // metres from the eye to the rear sight; 0 = keep the pose's
+    float Weight = 1.0f;           // 0..1
+};
+
+// Wall block: when the view is right up against something, the gun pulls back and lowers
+// instead of clipping into it.
+struct WeaponWallSettings {
+    bool Enabled = true;
+    float Distance = 0.75f;        // metres ahead of the eye that count as "too close"
+    float Radius = 0.06f;          // thickness of the check, metres
+    glm::vec3 Position{0.02f, -0.03f, 0.08f}; // fully blocked pose, camera frame
+    glm::vec3 Rotation{-18.0f, 10.0f, 8.0f};   // degrees: muzzle down and aside
+    float BlendIn = 0.12f;
+    float BlendOut = 0.2f;
+    bool BlockFire = false;        // no firing while the gun is more than half blocked
+};
+
 struct WeaponIKSettings {
     bool Enabled = true;
     std::string GunBone = "ik_hand_gun";
@@ -165,6 +197,8 @@ struct WeaponProceduralSettings {
     std::vector<WeaponStateOffset> StateOffsets;
     WeaponLocomotionSettings Locomotion;
     WeaponLeanSettings Lean;
+    WeaponSightSettings Sight;
+    WeaponWallSettings Wall;
     WeaponIKSettings IK;
 
     // The AKS-74U tuning: every curve filled in.
@@ -185,6 +219,8 @@ struct WeaponProceduralPose {
     // 0..1, eased toward 0 in states tagged OffTag: how much of the procedural motion (and the IK
     // carrying it) applies. IK.Enabled doesn't change it; that picks IK vs whole-view-model.
     float IKWeight = 1.0f;
+    float AdsWeight = 0.0f;        // 0..1 eased sights-up blend (drives sight alignment)
+    float WallBlock = 0.0f;        // 0..1 eased wall block
     float WalkRate = 1.0f;         // for the controller's WalkRate / SprintRate parameters
     float SprintRate = 1.0f;
 
@@ -199,6 +235,7 @@ struct WeaponProceduralInput {
     bool Ads = false;              // the current state is tagged ADS
     bool IKOff = false;            // the current state is tagged IKOff (or hidden)
     float Lean = 0.0f;             // -1 left .. +1 right
+    float WallBlock = 0.0f;        // 0..1: how close the view is to a wall (see WeaponWallSettings)
     // The player's full walk and sprint speeds (m/s), for references left at 0.
     float WalkSpeed = 0.0f;
     float SprintSpeed = 0.0f;
@@ -239,6 +276,7 @@ private:
     float m_BreathPhase = 0.0f;
     float m_Ads = 0.0f;            // 0..1 linear, eased by Aim.Blend
     float m_Lean = 0.0f;
+    float m_Wall = 0.0f;
     float m_IK = 1.0f;
     std::vector<float> m_StateWeights;
     WeaponProceduralPose m_Pose;

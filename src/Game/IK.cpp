@@ -161,6 +161,24 @@ void AimBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>
     SetGlobal(pose, parents, globals, bone, pos, glm::normalize(delta * rot));
 }
 
+void AlignLine(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int move, int ref,
+               const glm::vec3& rearLocal, const glm::vec3& frontLocal, const glm::vec3& eye,
+               const glm::vec3& forward, float distance, float weight) {
+    if (!ValidNode(pose, move) || !ValidNode(pose, ref)) return;
+    weight = std::clamp(weight, 0.0f, 1.0f);
+    if (weight <= 0.0f || glm::length(forward) < 1e-6f) return;
+    const glm::vec3 rear = glm::vec3(globals[ref] * glm::vec4(rearLocal, 1.0f));
+    const glm::vec3 front = glm::vec3(globals[ref] * glm::vec4(frontLocal, 1.0f));
+    const glm::vec3 line = front - rear;
+    if (glm::length(line) < 1e-6f) return;
+    const glm::vec3 f = glm::normalize(forward);
+    const glm::quat turn = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::rotation(glm::normalize(line), f), weight);
+    // Turning about the rear point leaves it where it is, so the slide is measured from it.
+    const float depth = distance > 0.0f ? distance : glm::dot(rear - eye, f);
+    const glm::vec3 target = eye + f * depth;
+    OffsetBone(pose, parents, globals, move, (target - rear) * weight, turn, rear);
+}
+
 void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose) {
     const float w = std::clamp(rig.Weight, 0.0f, 1.0f);
     if (!rig.Enabled || w <= 0.0f || pose.empty() || (int)pose.size() != model.NodeCount()) return;
@@ -188,6 +206,16 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose) {
         if (limb.Upper < 0 || limb.Lower < 0 || limb.End < 0 || limb.Target < 0) continue;
         if (l->KeepAnimatedOffset) limb.Relative = glm::inverse(globals[limb.Target]) * globals[limb.End];
         limbs[limbCount++] = limb;
+    }
+
+    // Alignment works on the animated pose, before any offset: the offsets (recoil, sway, ...)
+    // then move the aligned gun, rather than being cancelled by it.
+    if (rig.Align.Active && rig.Align.Weight > 0.0f) {
+        const int move = model.NodeIndex(rig.Align.MoveBone);
+        const int ref = model.NodeIndex(rig.Align.RefBone);
+        if (move >= 0 && ref >= 0)
+            AlignLine(pose, parents, globals, move, ref, rig.Align.RearLocal, rig.Align.FrontLocal, rig.Align.Eye,
+                      rig.Align.Forward, rig.Align.Distance, rig.Align.Weight * w);
     }
 
     for (const IKBoneOffset& off : rig.Offsets) {

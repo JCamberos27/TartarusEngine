@@ -219,6 +219,11 @@ json WeaponProceduralSettings::ToJson() const {
                        {"sprintReference", l.SprintReference}, {"minRate", l.MinRate}, {"maxRate", l.MaxRate}};
     j["lean"] = {{"enabled", Lean.Enabled}, {"angle", Lean.Angle}, {"offset", Lean.Offset},
                  {"weaponRoll", Lean.WeaponRoll}, {"speed", Lean.Speed}, {"whileSprinting", Lean.WhileSprinting}};
+    j["sight"] = {{"mode", Sight.Mode}, {"referenceBone", Sight.ReferenceBone}, {"rear", Vec(Sight.Rear)},
+                  {"front", Vec(Sight.Front)}, {"eyeDistance", Sight.EyeDistance}, {"weight", Sight.Weight}};
+    j["wall"] = {{"enabled", Wall.Enabled}, {"distance", Wall.Distance}, {"radius", Wall.Radius},
+                 {"position", Vec(Wall.Position)}, {"rotation", Vec(Wall.Rotation)},
+                 {"blendIn", Wall.BlendIn}, {"blendOut", Wall.BlendOut}, {"blockFire", Wall.BlockFire}};
     const auto& k = IK;
     j["ik"] = {{"enabled", k.Enabled}, {"gunBone", k.GunBone},
                {"rightUpper", k.RightUpper}, {"rightLower", k.RightLower}, {"rightHand", k.RightHand},
@@ -329,6 +334,28 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.Number("speed", s.Lean.Speed);
         r.Bool("whileSprinting", s.Lean.WhileSprinting);
     });
+    root.Object("sight", [&](Reader& r) {
+        auto& o = s.Sight;
+        float mode = (float)o.Mode;
+        r.Number("mode", mode);
+        o.Mode = std::clamp((int)std::lround(mode), 0, 2);
+        r.String("referenceBone", o.ReferenceBone);
+        r.Vector("rear", o.Rear);
+        r.Vector("front", o.Front);
+        r.Number("eyeDistance", o.EyeDistance);
+        r.Number("weight", o.Weight);
+    });
+    root.Object("wall", [&](Reader& r) {
+        auto& o = s.Wall;
+        r.Bool("enabled", o.Enabled);
+        r.Number("distance", o.Distance);
+        r.Number("radius", o.Radius);
+        r.Vector("position", o.Position);
+        r.Vector("rotation", o.Rotation);
+        r.Number("blendIn", o.BlendIn);
+        r.Number("blendOut", o.BlendOut);
+        r.Bool("blockFire", o.BlockFire);
+    });
     root.Object("ik", [&](Reader& r) {
         auto& o = s.IK;
         r.Bool("enabled", o.Enabled);
@@ -353,7 +380,8 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         !positive(s.Bob.SprintStride, "bob.sprintStride") || !positive(s.Bob.WalkFullSpeed, "bob.walkFullSpeed") ||
         !positive(s.Breath.Period, "breath.period") ||
         !positive(s.Recoil.Smoothing.Frequency, "recoil.smoothing.frequency") ||
-        !positive(s.Sway.Spring.Frequency, "sway.spring.frequency"))
+        !positive(s.Sway.Spring.Frequency, "sway.spring.frequency") ||
+        !positive(s.Wall.Distance, "wall.distance") || !positive(s.Wall.Radius, "wall.radius"))
         return false;
     if (!(s.Locomotion.WalkReference >= 0.0f) || !(s.Locomotion.SprintReference >= 0.0f)) {
         if (error) *error = "'procedural.locomotion' references must be 0 (the player's speed) or positive";
@@ -421,6 +449,7 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     const float ads = s.Aim.Blend.Empty() ? m_Ads : std::clamp(s.Aim.Blend.Evaluate(m_Ads), 0.0f, 1.0f);
     const auto adsMix = [ads](float hip, float aim) { return hip + (aim - hip) * ads; };
     pose.IKWeight = m_IK;
+    pose.AdsWeight = ads;
 
     // Recoil: every live shot's curves, summed, then smoothed by a spring so full-auto builds
     // into a climb and settles back instead of stepping.
@@ -510,6 +539,18 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
         const float weight = Smooth01(m_StateWeights[i]);
         pose.Position += o.Position * weight;
         pose.Rotation += o.Rotation * weight;
+    }
+
+    // Wall block: pulled back and lowered while the view is up against something.
+    {
+        const auto& wb = s.Wall;
+        const float target = wb.Enabled ? std::clamp(in.WallBlock, 0.0f, 1.0f) : 0.0f;
+        const float time = target > m_Wall ? wb.BlendIn : wb.BlendOut;
+        m_Wall = MoveToward(m_Wall, target, time > 0.0f ? dt / time : 1.0f);
+        const float weight = Smooth01(m_Wall);
+        pose.Position += wb.Position * weight;
+        pose.Rotation += wb.Rotation * weight;
+        pose.WallBlock = weight;
     }
 
     // Lean: the camera rolls and slides; the gun rolls a little further into it.

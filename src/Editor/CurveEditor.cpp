@@ -209,7 +209,7 @@ bool Draw(const char* id, Curve& curve, const ImVec2& sizeIn, const Options& o) 
         st.SetDrag(0);
         committed = true;
     }
-    // Right-click a key for its menu (not an instant delete: there is no undo here).
+    // Right-click a key for its menu rather than an instant delete, so a stray click is harmless.
     const ImGuiID keyMenuKey = st.Id ^ 0x55u;
     if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
         if (hoverKey >= 0) {

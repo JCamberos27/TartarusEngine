@@ -158,6 +158,7 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     }
     m_Procedural.Reset();
     m_UsesIK = SetupIK();
+    ComputeAimClipSight(assets, *ctrl);
     int states = 0;
     for (const auto& L : ctrl->Layers) states += (int)L.States.size();
     Log::Info("First-person presentation loaded '" + config.AnimationSet + "' (" +
@@ -190,6 +191,8 @@ void FirstPersonPresentation::Stop(World& world) {
     m_Procedural.Reset();
     m_UsesIK = false;
     m_HaveLook = false;
+    m_HaveAimClipSight = false;
+    m_WallBlock = 0.0f;
     m_SetFile.clear();
     m_ReloadPoll = 0.0f;
 }
@@ -256,6 +259,112 @@ bool FirstPersonPresentation::SetupIK() {
     return true;
 }
 
+void FirstPersonPresentation::ComputeAimClipSight(AssetLibrary& assets, const AnimatorController& ctrl) {
+    m_HaveAimClipSight = false;
+    if (!m_UsesIK || !m_ArmsModel || !m_WeaponModel || m_CameraBone.empty() || m_Set.WeaponSocket.empty()) return;
+    // The first state tagged ADS, and its arms clip.
+    const AnimatorController::State* aim = nullptr;
+    for (const auto& L : ctrl.Layers) {
+        for (const auto& st : L.States)
+            if (std::find(st.Tags.begin(), st.Tags.end(), K::kTagAds) != st.Tags.end()) { aim = &st; break; }
+        if (aim) break;
+    }
+    if (!aim) return;
+    const auto& motion = aim->MotionFor(ctrl.TrackIndex(TrackOr(ctrl, "arms", 0)));
+    const int clip = motion.Clip.empty() ? -1 : ResolveAnimationClip(*m_ArmsModel, motion.Clip, assets);
+    if (clip < 0) return;
+
+    std::vector<LocalTRS> pose;
+    m_ArmsModel->SampleLocalPose(clip, m_ArmsModel->AnimationLength(clip) * 0.5f, AnimationWrapMode::Loop, pose);
+    std::vector<int> parents(pose.size());
+    for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m_ArmsModel->NodeParent(i);
+    std::vector<glm::mat4> globals;
+    IK::ComputeGlobals(pose, parents, globals);
+    const int head = m_ArmsModel->NodeIndex(m_CameraBone);
+    const int socket = m_ArmsModel->NodeIndex(m_Set.WeaponSocket);
+    if (head < 0 || socket < 0) return;
+
+    // The eye and view axis in model space: a camera-frame point x sits at
+    // anchor + C^-1 (x - ViewModelOffset) / scale (see WriteIK / Update).
+    const glm::quat Ci = glm::inverse(NormalizeRotation(QuaternionFromEulerYXZ(m_Set.ViewRotation) * QuaternionFromEulerYXZ(m_Rotation)));
+    const glm::vec3 eye = IK::Position(globals[head]) - Ci * m_Offset / m_Scale;
+    const glm::vec3 fwd = glm::normalize(Ci * glm::vec3(0.0f, 0.0f, -1.0f));
+    // The line: the view axis, from level with the socket to 25 cm further out.
+    const float depth = glm::dot(IK::Position(globals[socket]) - eye, fwd);
+    const glm::vec3 rear = eye + fwd * depth;
+    const glm::vec3 front = rear + fwd * (0.25f / m_Scale);
+    const glm::mat4 toSocket = glm::inverse(globals[socket]);
+    m_AimClipRear = glm::vec3(toSocket * glm::vec4(rear, 1.0f));
+    m_AimClipFront = glm::vec3(toSocket * glm::vec4(front, 1.0f));
+    m_HaveAimClipSight = true;
+
+    // Self-check on the real rig: knock the gun 3 cm and 4 degrees off the Aim pose, align, and
+    // measure how far the sight line ends up from the view axis.
+    {
+        IKRigComponent probe;
+        probe.Enabled = true;
+        probe.Align.Active = true;
+        probe.Align.MoveBone = m_Set.Procedural.IK.GunBone;
+        probe.Align.RefBone = m_Set.WeaponSocket;
+        probe.Align.RearLocal = m_AimClipRear;
+        probe.Align.FrontLocal = m_AimClipFront;
+        probe.Align.Eye = eye;
+        probe.Align.Forward = fwd;
+        probe.Align.Weight = 1.0f;
+        std::vector<LocalTRS> knocked = pose;
+        std::vector<glm::mat4> kg = globals;
+        const int gun = m_ArmsModel->NodeIndex(m_Set.Procedural.IK.GunBone);
+        IK::OffsetBone(knocked, parents, kg, gun, glm::vec3(0.03f, -0.02f, 0.01f) / m_Scale,
+                       glm::angleAxis(glm::radians(4.0f), glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f))), IK::Position(kg[gun]));
+        IK::ApplyRig(probe, *m_ArmsModel, knocked);
+        IK::ComputeGlobals(knocked, parents, kg);
+        const glm::vec3 r = glm::vec3(kg[socket] * glm::vec4(m_AimClipRear, 1.0f));
+        const glm::vec3 f = glm::vec3(kg[socket] * glm::vec4(m_AimClipFront, 1.0f));
+        const float missMm = glm::length((r - eye) - fwd * glm::dot(r - eye, fwd)) * m_Scale * 1000.0f;
+        const float missDeg = glm::degrees(std::acos(std::clamp(glm::dot(glm::normalize(f - r), fwd), -1.0f, 1.0f)));
+        char msg[192];
+        std::snprintf(msg, sizeof msg, "First-person sights: alignment holds the sight line to %.3f mm / %.3f deg of the view axis (probe 3 cm, 4 deg off).",
+                      missMm, missDeg);
+        if (missMm < 0.5f && missDeg < 0.05f) Log::Info(msg);
+        else Log::Warn(msg);
+    }
+
+    // The same line in the weapon root's terms, for a Manual setup to start from.
+    glm::mat4 weaponRoot(1.0f);
+    if (m_WeaponModel->NodeTransform(m_Set.WeaponRoot, weaponRoot)) {
+        const glm::mat4 socketToWeapon =
+            weaponRoot * glm::inverse(glm::mat4_cast(QuaternionFromEulerYXZ(m_Set.WeaponMountRotation)));
+        const glm::vec3 r = glm::vec3(socketToWeapon * glm::vec4(m_AimClipRear, 1.0f));
+        const glm::vec3 f = glm::vec3(socketToWeapon * glm::vec4(m_AimClipFront, 1.0f));
+        char msg[256];
+        std::snprintf(msg, sizeof msg,
+                      "First-person sights: the '%s' clip's sight line in the weapon root's space: rear (%.4f, %.4f, %.4f), front (%.4f, %.4f, %.4f).",
+                      aim->Name.c_str(), r.x, r.y, r.z, f.x, f.y, f.z);
+        Log::Info(msg);
+    }
+}
+
+bool FirstPersonPresentation::SightLine(glm::vec3& rear, glm::vec3& front) const {
+    const WeaponSightSettings& s = m_Set.Procedural.Sight;
+    if (s.Mode == WeaponSightSettings::AimClip) {
+        rear = m_AimClipRear;
+        front = m_AimClipFront;
+        return m_HaveAimClipSight;
+    }
+    if (s.Mode != WeaponSightSettings::Manual || !m_WeaponModel) return false;
+    // Weapon-rig bone space -> socket space: socket * mount * weaponRoot^-1 places the weapon
+    // model (Update), so a weapon-model point p is at mount * weaponRoot^-1 * p under the socket.
+    const std::string& refName = s.ReferenceBone.empty() ? m_Set.WeaponRoot : s.ReferenceBone;
+    glm::mat4 weaponRoot(1.0f), ref(1.0f);
+    if (!m_WeaponModel->NodeTransform(m_Set.WeaponRoot, weaponRoot) || !m_WeaponModel->NodeTransform(refName, ref))
+        return false;
+    const glm::mat4 toSocket =
+        glm::mat4_cast(QuaternionFromEulerYXZ(m_Set.WeaponMountRotation)) * glm::inverse(weaponRoot) * ref;
+    rear = glm::vec3(toSocket * glm::vec4(s.Rear, 1.0f));
+    front = glm::vec3(toSocket * glm::vec4(s.Front, 1.0f));
+    return glm::length(front - rear) > 1e-6f;
+}
+
 // Camera-frame procedural pose -> the arms rig's model space. The arms entity is rotated
 // camera * C (C = the asset's view rotation, then the scene's tweak) and scaled by m_Scale, so a
 // camera-frame vector v is C^-1 v / scale in model space, and a rotation q is C^-1 q C.
@@ -270,6 +379,23 @@ void FirstPersonPresentation::WriteIK() {
     rig->Offsets[0].Position = Ci * p.Position / m_Scale;
     rig->Offsets[0].Rotation = NormalizeRotation(Ci * p.RotationQuat() * C);
     rig->Offsets[0].Pivot = Ci * p.Pivot / m_Scale;
+
+    // Sight alignment toward the eye the camera is placed on this frame: the camera bone's
+    // last pose, which is what Update anchored the rig with.
+    IKLineAlign& a = rig->Align;
+    a.Active = false;
+    const WeaponSightSettings& sight = m_Set.Procedural.Sight;
+    glm::mat4 anchor(1.0f);
+    if (sight.Mode != WeaponSightSettings::Off && p.AdsWeight > 0.0f && !m_Set.WeaponSocket.empty() &&
+        m_ArmsModel && m_ArmsModel->NodeTransform(m_CameraBone, anchor) && SightLine(a.RearLocal, a.FrontLocal)) {
+        a.Active = true;
+        a.MoveBone = m_Set.Procedural.IK.GunBone;
+        a.RefBone = m_Set.WeaponSocket;
+        a.Eye = glm::vec3(anchor[3]) - Ci * m_Offset / m_Scale;
+        a.Forward = glm::normalize(Ci * glm::vec3(0.0f, 0.0f, -1.0f));
+        a.Distance = sight.EyeDistance > 0.0f ? sight.EyeDistance / m_Scale : 0.0f;
+        a.Weight = std::clamp(sight.Weight, 0.0f, 1.0f) * p.AdsWeight;
+    }
 }
 
 void FirstPersonPresentation::ReloadIfChanged(float dt) {
@@ -341,6 +467,8 @@ bool FirstPersonPresentation::Fire() {
     auto* ac = Animator();
     if (!ac || !m_Equipped || HasTag(K::kTagHidden)) return false;
     if (m_Ammo <= 0) return false; // dry: the player has to press Reload themselves
+    // Gun pulled back from a wall: optionally no firing into it.
+    if (m_Set.Procedural.Wall.BlockFire && m_Procedural.Pose().WallBlock > 0.5f) return false;
     if (ac->HasTag(K::kTagAds)) {
         // Each round starts its own recoil curves; full-auto overlaps them into a climb.
         m_Procedural.OnShot(m_Set.Procedural, true);
@@ -430,6 +558,7 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     in.Ads = ac->HasTag(K::kTagAds);
     in.IKOff = ac->HasTag(K::kTagHidden) || (!m_Set.Procedural.IK.OffTag.empty() && ac->HasTag(m_Set.Procedural.IK.OffTag.c_str()));
     in.Lean = m_Equipped ? lean : 0.0f;
+    in.WallBlock = m_WallBlock;
     in.WalkSpeed = m_WalkSpeed;
     in.SprintSpeed = m_SprintSpeed;
     in.StateName = &ac->StateName;
@@ -501,6 +630,21 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
                 side *= fraction;
                 roll *= fraction;
             }
+        }
+        // Wall check: how far into "too close" the view is, straight ahead of the eye.
+        m_WallBlock = 0.0f;
+        const WeaponWallSettings& wall = m_Set.Procedural.Wall;
+        if (wall.Enabled && wall.Distance > 0.0f) {
+            const glm::vec3 ahead = camera.Front();
+            const float from[3] = {camera.Position.x, camera.Position.y, camera.Position.z};
+            const float along[3] = {ahead.x, ahead.y, ahead.z};
+            RaycastHit wallHit;
+            QueryFilter wallFilter;
+            wallFilter.HitTriggers = 0;
+            if (PhysicsWorld::SphereCastFiltered(from, along, std::max(wall.Radius, 0.005f), wall.Distance, wallFilter, wallHit) &&
+                wallHit.Hit)
+                // Starts at the edge of the range, full with the wall 30% of the way out.
+                m_WallBlock = std::clamp((wall.Distance - wallHit.Distance) / (wall.Distance * 0.7f), 0.0f, 1.0f);
         }
         // Never punch the view past straight up/down, where the look basis flips.
         const float pitch = std::clamp(camera.Pitch + p.CameraKick.x, -89.0f, 89.0f) - camera.Pitch;
