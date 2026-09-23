@@ -80,6 +80,27 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(assimp)
 
+# --- local assimp patches ---------------------------------------------------------------
+# assimp comes straight off github at a pinned tag rather than forked, so fixes we need
+# locally live in tools/assimp_patches/*.patch and are applied here - configure time, after
+# the sources exist and before any of them compile - which is what makes a fresh clone build
+# correctly with no manual step. CONFIGURE_DEPENDS makes editing a patch re-run configure;
+# tools/apply_assimp_patches.cmake probes with `git apply --check` so each patch applies
+# exactly once and a tag bump that invalidates one fails loudly instead of building without it.
+file(GLOB ASSIMP_LOCAL_PATCHES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tools/assimp_patches/*.patch")
+if(ASSIMP_LOCAL_PATCHES)
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${ASSIMP_LOCAL_PATCHES})
+  execute_process(
+    COMMAND ${CMAKE_COMMAND}
+            -DASSIMP_SRC=${assimp_SOURCE_DIR}
+            -DASSIMP_PATCH_DIR=${CMAKE_SOURCE_DIR}/tools/assimp_patches
+            -P ${CMAKE_SOURCE_DIR}/tools/apply_assimp_patches.cmake
+    RESULT_VARIABLE ASSIMP_PATCH_RESULT)
+  if(NOT ASSIMP_PATCH_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to apply local assimp patches (see above)")
+  endif()
+endif()
+
 # --- EnTT (entity-component system) — header-only, ships its own CMake target ---
 # Populated + add_subdirectory(EXCLUDE_FROM_ALL) rather than FetchContent_MakeAvailable: v3.13.2's
 # install() rules are UNCONDITIONAL (no ENTT_INSTALL option to switch off, unlike glfw and
@@ -459,11 +480,6 @@ add_custom_command(TARGET TartarusEngine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${CMAKE_SOURCE_DIR}/extern/branding/tartarus_engine_mark.png"
     "$<TARGET_FILE_DIR:TartarusEngine>/assets/branding/tartarus_engine_mark.png"
-  # Startup splash. Pre-scaled to its display size on purpose: the 4K source would cost more
-  # to decode than the splash is meant to hide.
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_SOURCE_DIR}/extern/branding/splash.png"
-    "$<TARGET_FILE_DIR:TartarusEngine>/assets/branding/splash.png"
 )
 
 # GLSL shader files — copied next to the exe so ShaderLibrary::ReadFile("assets/shaders/...")
@@ -594,7 +610,6 @@ install(FILES
 install(FILES
   "${CMAKE_SOURCE_DIR}/extern/branding/tartarus_wordmark.png"
   "${CMAKE_SOURCE_DIR}/extern/branding/tartarus_engine_mark.png"
-  "${CMAKE_SOURCE_DIR}/extern/branding/splash.png"
   DESTINATION "assets/branding"
 )
 

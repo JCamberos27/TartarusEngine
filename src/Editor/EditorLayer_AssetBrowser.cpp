@@ -594,7 +594,7 @@ std::vector<std::string> FindProjectReferences(const std::string& assetKey) {
         }
         if (!it->is_regular_file()) continue;
         const std::string ext = it->path().extension().string();
-        if (ext != ".json" && ext != ".prefab" && ext != ".mat" && ext != ".controller" && ext != ".physicmaterial") continue;
+        if (ext != ".json" && ext != ".prefab" && ext != ".mat" && ext != ".controller" && ext != ".fpsanim" && ext != ".physicmaterial") continue;
         std::error_code ec2;
         if (std::filesystem::weakly_canonical(it->path(), ec2) == self) continue;
         std::ifstream in(it->path(), std::ios::binary);
@@ -918,6 +918,7 @@ void EditorLayer::DuplicateSelectedAsset(World& world, AssetLibrary& assets) {
         for (char& c : dupExt) c = (char)tolower((unsigned char)c);
         if (dupExt == ".json") InvalidateScenesListing();
         else if (dupExt == ".png" || dupExt == ".jpg" || dupExt == ".jpeg") InvalidateShotsListing();
+        else if (dupExt == ".controller" || dupExt == ".fpsanim") InvalidateAnimationListing();
 
         std::string newPath = candidate.generic_string();
         std::string folder = assets.AssetFolder(key);
@@ -1129,6 +1130,8 @@ const char* AssetKindLabel(Cell::Kind k) {
         case Cell::Kind::Sound:      return "Sound";
         case Cell::Kind::Screenshot: return "Screenshot";
         case Cell::Kind::Shader:     return "Shader";
+        case Cell::Kind::Animator:   return "Animator Controller";
+        case Cell::Kind::Weapon:     return "Weapon Definition";
     }
     return "";
 }
@@ -1175,6 +1178,7 @@ void EditorLayer::RefreshAssetBrowser() {
     InvalidateScenesListing();
     InvalidateShotsListing();
     InvalidateShadersListing();
+    InvalidateAnimationListing();
     InvalidateModelThumbnail();          // clears every cached model thumbnail
     m_ShotThumbs.clear();                // shared_ptr<Texture> entries free their GL textures here
     m_AssetListingRefreshTimer = 0.0f;
@@ -1217,6 +1221,26 @@ void EditorLayer::RefreshShadersListingIfNeeded() {
         m_ShadersListingCache.paths.push_back(entry.path().generic_string());
     }
     m_ShadersListingCache.valid = true;
+}
+
+// Animator Controllers and weapon definitions, wherever they live under the project.
+void EditorLayer::RefreshAnimationListingIfNeeded() {
+    if (m_AnimationListingCache.valid) return;
+    m_AnimationListingCache.paths.clear();
+    std::error_code ec;
+    const std::filesystem::path root(ProjectPaths::Root());
+    for (auto it = std::filesystem::recursive_directory_iterator(root, std::filesystem::directory_options::skip_permission_denied, ec);
+         !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (it.depth() == 0 && it->is_directory() && it->path().filename() == "Library") {
+            it.disable_recursion_pending();
+            continue;
+        }
+        const auto ext = it->path().extension();
+        if (it->is_regular_file() && (ext == ".controller" || ext == ".fpsanim"))
+            m_AnimationListingCache.paths.push_back(it->path().generic_string());
+    }
+    std::sort(m_AnimationListingCache.paths.begin(), m_AnimationListingCache.paths.end());
+    m_AnimationListingCache.valid = true;
 }
 
 // Same idea for project/screenshots/ — see RefreshScenesListingIfNeeded above.
@@ -1320,6 +1344,7 @@ std::string EditorLayer::AssetBrowserTreeFrameSetup(AssetLibrary& assets) {
         m_AssetListingRefreshTimer = 0.0f;
         InvalidateScenesListing();
         InvalidateShotsListing();
+        InvalidateAnimationListing();
     }
     assets.CreateFolder("Scenes");
     assets.CreateFolder("Screenshots");
@@ -1394,6 +1419,20 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
             if (!MatchesAssetSearch(parsedSearch, name, "shader", {})) continue;
             if (IsBuiltinShaderPath(path)) name += " (built-in)";
             cells.push_back({Cell::Kind::Shader, path, name, nullptr, nullptr});
+        }
+    }
+
+    // Animator Controllers (.controller) and weapon definitions (.fpsanim): double-click opens
+    // the Animator window / selects the weapon definition for the Inspector.
+    static const std::string kAnimationFolder = "Animation";
+    assets.CreateFolder(kAnimationFolder);
+    if ((filtering && inSearchScope(kAnimationFolder)) || m_CurrentAssetFolder == kAnimationFolder) {
+        RefreshAnimationListingIfNeeded();
+        for (const auto& path : m_AnimationListingCache.paths) {
+            const bool weapon = std::filesystem::path(path).extension() == ".fpsanim";
+            std::string name = std::filesystem::path(path).stem().string();
+            if (!MatchesAssetSearch(parsedSearch, name, weapon ? "weapon" : "animator", {})) continue;
+            cells.push_back({weapon ? Cell::Kind::Weapon : Cell::Kind::Animator, path, name, nullptr, nullptr});
         }
     }
 
@@ -1496,6 +1535,8 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
                 case Cell::Kind::Sound:      return 6;
                 case Cell::Kind::Screenshot: return 7;
                 case Cell::Kind::Shader:     return 8;
+                case Cell::Kind::Animator:   return 9;
+                case Cell::Kind::Weapon:     return 10;
             }
             return 7;
         };
@@ -1583,6 +1624,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             : cell.kind == Cell::Kind::Screenshot ? ICON_FA_IMAGE
             : cell.kind == Cell::Kind::Material ? ICON_FA_DROPLET
             : cell.kind == Cell::Kind::Shader ? ICON_FA_FILE_CODE
+            : cell.kind == Cell::Kind::Animator ? ICON_FA_DIAGRAM_PROJECT
+            : cell.kind == Cell::Kind::Weapon ? ICON_FA_CROSSHAIRS
             : (playing ? ICON_FA_STOP : ICON_FA_MUSIC);
 
         bool clicked = false;
@@ -1793,6 +1836,9 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         }
         if (cell.kind == Cell::Kind::Screenshot && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             OpenScreenshotPreview(cell.key); // centred in-editor lightbox (Show in folder is on the context menu)
+        }
+        if (cell.kind == Cell::Kind::Animator && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+            OpenAnimatorWindow(ProjectPaths::Relativize(cell.key));
         }
         if (cell.kind == Cell::Kind::Shader && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             Screenshot::OpenFile(cell.key); // item 15: browsable + externally-openable, no in-editor text editor
@@ -2229,6 +2275,28 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
                 BeginRenameAsset(candidate, false, std::filesystem::path(candidate).stem().string());
             } else {
                 Log::Error("Create Material: couldn't write '" + candidate + "'.");
+            }
+        }
+        if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Create Animator Controller")) {
+            // Under project/animators/, like Create Material's materials/; listed in the virtual
+            // Animation folder and opened straight into the Animator window.
+            std::error_code ec;
+            std::filesystem::create_directories(std::filesystem::u8path(ProjectPaths::Resolve("animators")), ec);
+            std::string rel = "animators/New Animator Controller.controller";
+            for (int n = 1; std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve(rel)), ec); ++n)
+                rel = "animators/New Animator Controller (" + std::to_string(n) + ").controller";
+            AnimatorController c;
+            AnimatorController::State idle;
+            idle.Name = "Idle";
+            idle.Motions.resize(c.Tracks.size());
+            c.Layers[0].States.push_back(std::move(idle));
+            c.Layers[0].DefaultState = "Idle";
+            if (c.SaveFile(ProjectPaths::Resolve(rel))) {
+                InvalidateAnimationListing();
+                OpenAnimatorWindow(rel);
+                Log::Info("Created " + rel + ".");
+            } else {
+                Log::Error("Create Animator Controller: couldn't write '" + rel + "'.");
             }
         }
         ImGui::EndPopup();

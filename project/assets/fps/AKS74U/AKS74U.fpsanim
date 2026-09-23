@@ -1,0 +1,42 @@
+{
+  "armsModel": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",
+  "controller": "assets/fps/AKS74U/AKS74U.controller",
+  "gameplay": {
+    "adsBob": {
+      "ease": 8.0,
+      "fullSpeed": 3.5,
+      "side": 0.003,
+      "stride": 2.4,
+      "vertical": 0.0015
+    },
+    "allowFullAuto": true,
+    "magazine": 30,
+    "recoil": {
+      "offset": [
+        0.0,
+        0.002,
+        0.014
+      ],
+      "pitch": 1.2,
+      "rise": 0.035,
+      "settle": 0.08
+    },
+    "regripMax": 20.0,
+    "regripMin": 10.0,
+    "reloadHoldSeconds": 0.35,
+    "rpm": 700.0
+  },
+  "viewRotation": [
+    0.0,
+    180.0,
+    0.0
+  ],
+  "weaponModel": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",
+  "weaponMountRotation": [
+    0.0,
+    90.0,
+    90.0
+  ],
+  "weaponRoot": "root",
+  "weaponSocket": "ik_hand_gun"
+}

@@ -21,6 +21,7 @@
 #include "ShaderVariant.h"
 #include "DefaultTextures.h"
 #include "Frustum.h"
+#include "Camera.h"    // MakePerspective — the view-model sub-pass's one projection switch
 #include "ParticleRenderer.h"
 #include "gl.h"
 #include "Core/Profiler.h"
@@ -241,6 +242,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     }
 
     const FrameState fs = GatherFrameState(world, ctx, in);
+    // Which frame state the program selector pushes. The view-model sub-pass swaps this for its
+    // own (see below) — that swap is the only reason it isn't a plain const FrameState.
+    const FrameState* activeFs = &fs;
 
     // Clustered-forward light culling (#120) — one compute dispatch per frame, before any
     // program that reads the froxel lists is bound.
@@ -260,6 +264,24 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     localStats.LightBufferOverflowed = lightBuffer.Overflowed();  // #204
     localStats.ClusterSaturated = fs.clusterOn && clusterGrid.Saturated(); // #204
     Frustum camFrustum = Frustum::FromViewProj(ctx.Proj * ctx.View);
+
+    // --- View-model sub-pass setup -----------------------------------------------------------
+    // Entities tagged ViewModelTag (the first-person arms + weapon) are routed into their own
+    // lists above and drawn last, under a projection that differs from the world's only in FOV:
+    // near/far are read back out of ctx.Proj, so depth stays in the same terms the cluster build
+    // and everything else this frame already assume. Disabled (-1 default) for callers that
+    // preview through their own camera, and for orthographic views, where a perspective
+    // ViewModelFov would be meaningless — both fall back to drawing them as ordinary geometry.
+    bool viewModelPass = ctx.ViewModelFov > 0.0f && std::abs(ctx.Proj[3][3]) < 0.5f &&
+                         fs.vp[2] > 0 && fs.vp[3] > 0;
+    glm::mat4 vmProj = ctx.Proj;
+    Frustum vmFrustum = camFrustum;
+    if (viewModelPass) {
+        const float nearZ = std::abs(ctx.Proj[3][2] / (ctx.Proj[2][2] - 1.0f));
+        const float farZ  = std::abs(ctx.Proj[3][2] / (ctx.Proj[2][2] + 1.0f));
+        vmProj = MakePerspective(ctx.ViewModelFov, (float)fs.vp[2] / (float)fs.vp[3], nearZ, farZ);
+        vmFrustum = Frustum::FromViewProj(vmProj * ctx.View);
+    }
     { // scope limits PROFILE_SCOPE to just this loop, not the rest of the frame
     PROFILE_SCOPE("Scene Draw");
     PROFILE_GPU_SCOPE("Scene Draw"); // shared by both Scene-tab and Game-tab draws
@@ -286,7 +308,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         std::uint32_t key = 0;
         Shader* prog = programFor(ma, key);
         if (std::find(appliedPrograms.begin(), appliedPrograms.end(), prog) == appliedPrograms.end()) {
-            ApplyFrameState(*prog, fs);
+            ApplyFrameState(*prog, *activeFs);
             prog->SetInt("uAlphaBlend", passAlphaBlend);
             appliedPrograms.push_back(prog);
         }
@@ -317,8 +339,13 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
+    // Held out of the world pass while a view-model sub-pass will run (see viewModelPass above).
+    static std::vector<DrawItem> viewModelList;
+    static std::vector<DrawItem> viewModelTransparentList;
     drawList.clear();
     transparentList.clear();
+    viewModelList.clear();
+    viewModelTransparentList.clear();
     bool anyTransmission = false; // #112 — refraction capture only when something samples it
 
     for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
@@ -335,6 +362,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         auto& renderable = world.Registry.get<RenderableComponent>(entity);
         // #163 - Shadows Only: drawn by the shadow passes, never in the camera view.
         if (renderable.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
+        // Tagged view-model geometry belongs to the sub-pass below when there is one; with no
+        // sub-pass this view draws it here like anything else. `isViewModel` is therefore just
+        // "route to the other list", not "hide".
+        const bool isViewModel = viewModelPass && world.Registry.all_of<ViewModelTag>(entity);
         glm::mat4 model = world.GetCachedWorldTransform(entity);
 
         // Frustum culling: skip the draw call entirely for anything outside the camera's view.
@@ -353,7 +384,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 boundsMax = c + h;
             }
             AABB worldBounds = AABB{boundsMin, boundsMax}.Transformed(model);
-            if (!camFrustum.Intersects(worldBounds)) {
+            if (!(isViewModel ? vmFrustum : camFrustum).Intersects(worldBounds)) {
                 localStats.Culled++;
                 continue;
             }
@@ -396,27 +427,31 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                     anyTransmission = slots[i]->Mat.TransmissionStrength > 0.0f;
                 }
             }
-            transparentList.push_back({ model, m, &slots, matKey, prog,
+            const DrawItem item{ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
-                renderable.ReceiveShadows, layerBit });
+                renderable.ReceiveShadows, layerBit };
+            (isViewModel ? viewModelTransparentList : transparentList).push_back(item);
         }
         if (anyOpaque) {
-            drawList.push_back({ model, m, &slots, matKey, prog,
+            const DrawItem item{ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass,
-                renderable.ReceiveShadows, layerBit });
+                renderable.ReceiveShadows, layerBit };
+            (isViewModel ? viewModelList : drawList).push_back(item);
         }
     }
 
     // --- Opaque pass: sort by shader program (the costliest switch), then material key, then
     // front-to-back within a material (#112 — cheaper overdraw: nearer surfaces fill depth
-    // first and hide what is behind them).
-    std::sort(drawList.begin(), drawList.end(), [](const DrawItem& a, const DrawItem& b) {
+    // first and hide what is behind them). Shared with the view-model sub-pass, which draws the
+    // same way under a different projection.
+    const auto opaqueOrder = [](const DrawItem& a, const DrawItem& b) {
         if (a.Prog != b.Prog) return std::less<const Shader*>()(a.Prog, b.Prog);
         if (a.MatKey != b.MatKey) return a.MatKey < b.MatKey;
         return a.ViewDepth < b.ViewDepth;
-    });
+    };
+    std::sort(drawList.begin(), drawList.end(), opaqueOrder);
 
     // #108 — reflection probes are chosen per object (from its bounds centre), not once per
     // frame from the camera position, which gave every object in view the same two probes and
@@ -499,6 +534,99 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // the context is gone. The OS reclaims the handful of GL objects with the process.
         static ParticleRenderer* particles = new ParticleRenderer();
         if (particles->Draw(world, ctx) > 0) ++localStats.DrawCalls;
+    }
+
+    // --- View-model sub-pass: tagged geometry, its own projection, after a depth clear --------
+    // Everything above has been written; only the tagged arms/weapon remain, and they now draw
+    // on top of all of it rather than fighting it for depth.
+    if (viewModelPass && !viewModelList.empty()) {
+        PROFILE_SCOPE("View Model Draw");
+        PROFILE_GPU_SCOPE("View Model Draw");
+
+        // Depth writes must be unmasked first — the transparent and particle passes both turn
+        // them off, and glClear(GL_DEPTH_BUFFER_BIT) is a silent no-op while they are masked.
+        // Colour is untouched, so the world stays visible around the hands while nothing in it
+        // can punch through them: the arms sit ~0.3 m from the eye over floor metres away, and
+        // sharing one depth range with the scene is exactly what would clip them into it.
+        glDepthMask(GL_TRUE);
+        glClear(GL_DEPTH_BUFFER_BIT);
+
+        // Re-fit the froxel lists to this projection. They were culled for the world's FOV, so
+        // reading them as-is would light the arms from slices built for a different one. Safe
+        // here: the world's draws have already consumed this frame's lists.
+        RenderFrameContext vmCtx = ctx;
+        vmCtx.Proj = vmProj;
+        const FrameState vmFs = GatherFrameState(world, vmCtx, in);
+        if (vmFs.clusterOn) {
+            clusterGrid.Cull(*in.clusterBuildShader, *in.clusterCullShader, vmCtx.View, vmCtx.Proj,
+                             vmFs.clusterNearZ, vmFs.clusterFarZ, vmFs.vp[2], vmFs.vp[3]);
+        }
+
+        // Everything below runs against the view model's frame state — uProj above all, which is
+        // the entire point of the pass.
+        activeFs = &vmFs;
+        appliedPrograms.clear();
+        appliedPrograms.push_back(&modelShader);
+        passAlphaBlend = 0;
+        ApplyFrameState(modelShader, vmFs);
+        modelShader.SetInt("uAlphaBlend", 0);
+
+        std::sort(viewModelList.begin(), viewModelList.end(), opaqueOrder);
+        for (const DrawItem& it : viewModelList) {
+            probeItem = &it;
+            it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass);
+
+            localStats.DrawCalls += it.Meshes;
+            localStats.Triangles += it.Tris;
+            localStats.Vertices += it.Verts;
+        }
+
+        // Transparent view-model slots (a lens, glass) follow the opaque arms rather than
+        // preceding them as they would in the world pass — here the opaque geometry of the same
+        // object is already down, so they composite over it instead of under it.
+        if (!viewModelTransparentList.empty()) {
+            passAlphaBlend = 1;
+            for (Shader* p : appliedPrograms) { p->Bind(); p->SetInt("uAlphaBlend", 1); }
+
+            if (anyTransmission && ctx.TxHdr && ctx.TxCapture) {
+                ctx.TxHdr->ResolveTo();
+                ctx.TxCapture->CopyFrom(ctx.TxHdr->ResolvedColorTexture(), vmFs.vp[2], vmFs.vp[3]);
+                ctx.TxHdr->BindForRender();
+                glActiveTexture(GL_TEXTURE0 + 14);
+                glBindTexture(GL_TEXTURE_2D, ctx.TxCapture->Texture());
+                for (Shader* p : appliedPrograms) {
+                    p->Bind();
+                    p->SetInt("uOpaqueColor", 14);
+                    p->SetVec2("uScreenSize", glm::vec2((float)vmFs.vp[2], (float)vmFs.vp[3]));
+                }
+                glActiveTexture(GL_TEXTURE0);
+            }
+
+            std::sort(viewModelTransparentList.begin(), viewModelTransparentList.end(),
+                [](const DrawItem& a, const DrawItem& b) {
+                    if (a.QueueIndex != b.QueueIndex) return a.QueueIndex < b.QueueIndex;
+                    if (a.ViewDepth  != b.ViewDepth)  return a.ViewDepth  > b.ViewDepth;
+                    return a.MatKey < b.MatKey;
+                });
+
+            glEnable(GL_BLEND);
+            glDepthMask(GL_FALSE);
+            glBlendFuncSeparate(GL_SRC_ALPHA,  GL_ONE_MINUS_SRC_ALPHA,
+                                0x0001/*GL_ONE*/, GL_ONE_MINUS_SRC_ALPHA);
+            for (const DrawItem& it : viewModelTransparentList) {
+                probeItem = &it;
+                it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass);
+
+                localStats.DrawCalls += it.Meshes;
+                localStats.Triangles += it.Tris;
+                localStats.Vertices += it.Verts;
+            }
+            glDepthMask(GL_TRUE);
+            glDisable(GL_BLEND);
+            for (Shader* p : appliedPrograms) { p->Bind(); p->SetInt("uAlphaBlend", 0); }
+        }
+
+        activeFs = &fs; // nothing below reads it; leave the selector on the caller's state
     }
     } // end "Scene Draw" profile scope
     if (outStats) *outStats = localStats;

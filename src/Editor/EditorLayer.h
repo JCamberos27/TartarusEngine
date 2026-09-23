@@ -47,7 +47,7 @@ struct RegisteredComponent; // ComponentRegistry.h
 struct ReflectField;        // ComponentReflection.h
 
 struct AssetGridCell {
-    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot, Shader } kind;
+    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot, Shader, Animator, Weapon } kind;
     std::string key;
     std::string display;
     std::shared_ptr<Model> model;
@@ -196,11 +196,6 @@ public:
     // and Inspector to maximize the Scene viewport.
     enum class LayoutKind { Default, Wide, Tall, Focus };
     void RequestDefaultLayout(LayoutKind kind) { m_ResetLayoutKind = kind; m_ResetLayoutRequested = true; }
-    // Phase 6 item 14 — the top toolbar's notification bell. Unread only counts Warning/Error
-    // entries (see EditorNotification::Level); the bell's dropdown lists every notification.
-    int NotificationUnreadCount() const { return m_NotificationUnreadCount; }
-    void MarkNotificationsRead() { m_NotificationUnreadCount = 0; }
-    void DrawNotificationsPopupBody();
     // #4 item 3 — Preferences and Project Settings are one searchable, dockable "Settings" window
     // now (DrawSettingsWindow), not two. Both entry points still exist because they mean different
     // things (which group to land on), they just open the same window instead of two.
@@ -580,12 +575,6 @@ public:
     void OnCaptureTaken();
     void OnCaptureDone(const std::string& path, int w, int h);
     void DrawCaptureFeedback(float dt);          // fading white flash only; called from Draw()
-    // Phase 3 item 9 (audit #5, Appendix A #8) — the capture toast used to be click-through
-    // (raw draw-list rect+text, no real ImGui item under it) and transient (auto-faded after a
-    // few seconds). DrawNotifications renders the persistent, interactive replacement: a stack
-    // of dismissible cards, one per capture, each with a thumbnail and Open/Show-in-folder/
-    // Copy-path actions. See EditorNotification below.
-    void DrawNotifications();                    // called from Draw()
     // Double-clicking a shot in the Asset Browser's Screenshots folder opens a centred, sleek
     // in-editor lightbox instead of shelling out to the OS viewer.
     void OpenScreenshotPreview(const std::string& path);
@@ -741,34 +730,6 @@ private:
     bool m_HideOverlaysThisFrame = false;
     float m_CaptureFlashT = 0.0f;              // eased 1 -> 0 over ~0.35s after a shot
     std::string m_LastCapturePath;
-
-    // Phase 3 item 9 — one persistent, dismissible card per capture (audit #5 Appendix A #8).
-    // A plain struct + vector rather than a heavier pub-sub system: captures are the only
-    // producer today, and DrawNotifications' stack-of-cards rendering doesn't care how an entry
-    // got added, so a second notification source later just calls PushCaptureNotification's
-    // pattern (or a small sibling Push*) without this needing to change.
-    // Phase 6 item 14 — generalized beyond captures: a Log::Warn/Error also lands here now (no
-    // thumbnail, FilePath empty), and the top toolbar's bell shows how many of those are unread.
-    // Info/Success entries (captures) never count toward that badge — they're already visible as
-    // their own dismissible card, badging them too would just be noise for routine, expected
-    // events.
-    enum class NotificationLevel { Info, Success, Warning, Error };
-    struct EditorNotification {
-        NotificationLevel Level = NotificationLevel::Success;
-        std::string Title;                 // filename, or a truncated log message
-        std::string Subtitle;              // "1920x1080", or the log entry's timestamp
-        std::string FilePath;              // full path — Open / Show in folder / Copy path; empty for log-sourced entries
-        std::shared_ptr<Texture> Thumbnail; // small preview; null if the capture failed or n/a
-    };
-    std::vector<EditorNotification> m_Notifications;
-    void PushCaptureNotification(const std::string& path, int w, int h);
-    void PushNotification(NotificationLevel level, const std::string& title, const std::string& subtitle);
-    // Diffs Core/Log.h's ring buffer once a frame (Log::Revision()) and turns any new
-    // Warning/Error entry into a bell notification — called from Draw().
-    void PollLogNotifications();
-    unsigned long long m_LastLogSeqSeen = 0; // LogEntry::Seq of the newest entry already handled
-    unsigned int m_LastLogRevisionSeen = 0;
-    int m_NotificationUnreadCount = 0;
 
     // Frosted backdrop behind modal dialogs — created lazily the first time a modal opens (see
     // EndFrame): the whole framebuffer is blurred and the dialog window redrawn crisp on top.
@@ -1614,14 +1575,19 @@ private:
     AssetDirListingCache m_ShotsListingCache;
     // Same idea for project/shaders/ — Phase 6 item 15's "browsable" Shaders folder.
     AssetDirListingCache m_ShadersListingCache;
+    // Animator Controllers (.controller) and weapon definitions (.fpsanim) anywhere under the
+    // project, listed in a virtual "Animation" folder.
+    AssetDirListingCache m_AnimationListingCache;
     float m_AssetListingRefreshTimer = 0.0f;   // ticks up in DrawAssetBrowser; see kAssetListingRefreshInterval
     bool m_AssetBrowserFocusedLastFrame = false; // edge-detects m_AssetBrowserFocused for "just gained focus"
     void RefreshScenesListingIfNeeded();
     void RefreshShotsListingIfNeeded();
     void RefreshShadersListingIfNeeded();
+    void RefreshAnimationListingIfNeeded();
     void InvalidateScenesListing() { m_ScenesListingCache.valid = false; }
     void InvalidateShotsListing() { m_ShotsListingCache.valid = false; }
     void InvalidateShadersListing() { m_ShadersListingCache.valid = false; }
+    void InvalidateAnimationListing() { m_AnimationListingCache.valid = false; }
 public:
     // #236 G — Refresh / Reimport All (Ctrl+R): bust every Asset Browser cache so the next frame
     // re-scans the scenes/ and screenshots/ folders and re-renders thumbnails from disk.
@@ -1926,9 +1892,19 @@ private:
     // #175 Part B - Animator Controller component: picker, live parameters, controller editor
     // (EditorLayer_Animator.cpp). The working copy is re-read when the file changes on disk.
     void DrawAnimatorControllerExtra(World& world, entt::entity entity);
-    AnimatorController m_CtrlEdit;
-    std::string m_CtrlEditPath;
-    std::filesystem::file_time_type m_CtrlEditStamp{};
+public:
+    // Animator v2 - the node-graph Animator window (EditorLayer_Animator.cpp): layers, parameters,
+    // a pan/zoom state graph and the selection's properties, with its own undo and live Play view.
+    // `entity` (optional) supplies the rig whose clips the pickers offer and whose state is shown live.
+    void OpenAnimatorWindow(const std::string& controllerRel, entt::entity entity = entt::null);
+private:
+    void DrawAnimatorWindow(World& world);
+    // Inspector panels for a selected .fpsanim (weapon definition) / .controller asset.
+    void DrawWeaponDefinitionEditor(const std::string& path);
+    void DrawControllerAssetInspector(const std::string& path);
+    bool m_ShowAnimator = false;
+    struct AnimatorWindowState;
+    std::shared_ptr<AnimatorWindowState> m_AnimatorWin; // shared_ptr: the type is only complete in EditorLayer_Animator.cpp
     void DrawReflectedComponentExtra(const char* componentName, World& world, entt::entity entity,
                                      ReflectExtraPhase phase);
     // Multi-select counterpart: `sel` is every selected entity that has this component.

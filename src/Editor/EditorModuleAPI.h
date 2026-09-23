@@ -125,7 +125,9 @@
 //   33 - #184: Help menu actions - OpenAbout, OpenDocumentation, OpenLogFolder, ReportBug.
 //   34 - #146: LogGetEntryContext, the structured entity / asset link of a log entry.
 //   35 - #178: LogGetEntryStack, a Warning/Error entry resolved call stack (Console stack traces).
-constexpr std::uint32_t kEditorModuleAPIVersion = 35;
+//   36 - Notifications removed: GetNotificationUnreadCount, MarkNotificationsRead and
+//        DrawNotificationsPopupBody are gone (the bell and the capture/log cards were removed).
+constexpr std::uint32_t kEditorModuleAPIVersion = 36;
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -244,11 +246,6 @@ struct EditorModuleHostAPI {
     // the caller uses that to decide whether a row's context-menu item should even appear.
     bool (*SelectEntityByOrder)(int orderValue) = nullptr; // "entity #N" -> OrderComponent N (v31)
     bool (*PingAssetPath)(const char* path) = nullptr;
-
-    // --- Notification bell (API v28) ---------------------------------------------------------
-    int (*GetNotificationUnreadCount)() = nullptr;
-    void (*MarkNotificationsRead)() = nullptr;
-    void (*DrawNotificationsPopupBody)() = nullptr;
 
     // --- Editor services --------------------------------------------------------------------
     // Routed through the host so the module doesn't duplicate EditorSettings (another singleton)

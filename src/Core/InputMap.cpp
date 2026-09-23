@@ -80,6 +80,19 @@ std::vector<Action> Defaults() {
         act("Fire2",  kMouseBase + 1, kNone, GLFW_KEY_LEFT_ALT,     kNone, GLFW_GAMEPAD_BUTTON_LEFT_BUMPER,  kNone, false),
         act("Interact", GLFW_KEY_E, kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_X, kNone, false),
         act("Cancel", GLFW_KEY_ESCAPE, kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_START, kNone, false),
+        // First-person weapon actions (#165 FirstPersonPresentation). Fire/Aim reuse Fire1/Fire2
+        // rather than adding new mouse-bound actions - the two only ever apply to a controller
+        // with its gravity gun turned off, so the bindings never actually collide in one scene.
+        // Reload is tap/hold: a tap reloads (tactical or empty, from the magazine count), a hold
+        // checks the magazine - so neither EmptyReload nor MagCheck needs a key of its own.
+        act("Reload",   GLFW_KEY_R, kNone, kNone, kNone, kNone, kNone, false),
+        act("FireMode", GLFW_KEY_B, kNone, kNone, kNone, kNone, kNone, false), // semi <-> full auto
+        act("Inspect",  GLFW_KEY_F, kNone, kNone, kNone, kNone, kNone, false),
+        act("Melee",    GLFW_KEY_Q, kNone, kNone, kNone, kNone, kNone, false),
+        act("Holster",  GLFW_KEY_H, kNone, kNone, kNone, kNone, kNone, false),
+        // Weapon slots: 1 = the AK, 2 = unarmed (the scroll wheel toggles between them too).
+        act("Weapon1",  GLFW_KEY_1, kNone, kNone, kNone, kNone, kNone, false),
+        act("Weapon2",  GLFW_KEY_2, kNone, kNone, kNone, kNone, kNone, false),
     };
 }
 
@@ -227,6 +240,15 @@ std::vector<Action> FromJson(const nlohmann::json& j) {
         out.push_back(std::move(a));
     }
     return out;
+}
+
+void MergeDefaults(std::vector<Action>& actions) {
+    for (Action& d : Defaults()) {
+        bool have = false;
+        for (const Action& a : actions)
+            if (a.Name == d.Name) { have = true; break; }
+        if (!have) actions.push_back(std::move(d));
+    }
 }
 
 } // namespace InputMap

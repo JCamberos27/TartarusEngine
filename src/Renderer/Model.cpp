@@ -265,15 +265,35 @@ void Model::ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& par
 std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& nodeTransform) {
     std::vector<ModelVertex> vertices(mesh->mNumVertices);
 
-    // Skinned meshes are positioned entirely by their bone matrices (computed by walking
-    // the full node hierarchy in CalculateBoneTransform), so baking the mesh's own node
-    // transform into the raw vertex data here would double-apply it once skinning runs.
     // Gated on m_D->Settings.ImportSkeleton too: with skeleton import off, ExtractBoneWeights below
     // never runs, so treating this as "skinned" would leave every vertex's bone weights at their
     // default (unset) values instead of the identity-pose vertex position baked in here - the
     // mesh would render collapsed to the origin rather than as a static copy of its bind pose.
     bool skinned = m_D->Settings.ImportSkeleton && mesh->mNumBones > 0;
-    glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(nodeTransform)));
+
+    // Which transform belongs in the vertex data?  Exactly the same one as for a non-skinned
+    // mesh: the owning node's world transform.
+    //
+    // The shader multiplies every vertex by `GlobalInverse * PosedGlobal * BoneOffset`, which
+    // lands in ROOT space. BoneOffset (Assimp: inverse(TransformLink) * absolute_transform)
+    // only accounts for the *bone* hierarchy - FBX passes the ROOT node's transform as
+    // absolute_transform, i.e. identity here - so nothing in that palette ever mentions the mesh
+    // node's own frame. Folding nodeTransform in here is what puts the vertex into root space
+    // before skinning, exactly as it does for static meshes.
+    //
+    // Measuring the residual C = RestGlobal * BoneOffset does NOT let you cancel anything out:
+    // C is not a constant error term, it is the node tree's pose-versus-bind delta (bind pose
+    // => C == I; a posed import => C == that pose). Inverting it erased the pose Assimp had
+    // already baked into the node tree - it dropped the FPS weapon from the hands down to the
+    // model's origin, where the FBX's un-posed mesh data sits.
+    //
+    // Why this reads as "no bug at bind, tears the moment a clip plays": at bind the whole
+    // palette collapses to GlobalInverse * C, a single matrix shared by every bone, so a missing
+    // node transform cannot tear anything - it just uniformly rotates the mesh. Only once a clip
+    // plays does each bone apply its own delta to that un-rotated vertex, blowing a 0.02 m edge
+    // apart into 0.5 m blades.
+    const glm::mat4& bake = nodeTransform;
+    glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(bake)));
 
     for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
         ModelVertex v;
@@ -298,11 +318,9 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
             v.TangentSign = 1.0f;
         }
 
-        if (!skinned) {
-            v.Position = glm::vec3(nodeTransform * glm::vec4(v.Position, 1.0f));
-            v.Normal = glm::normalize(normalMatrix * v.Normal);
-            v.Tangent = glm::normalize(glm::mat3(nodeTransform) * v.Tangent);
-        }
+        v.Position = glm::vec3(bake * glm::vec4(v.Position, 1.0f));
+        v.Normal = glm::normalize(normalMatrix * v.Normal);
+        v.Tangent = glm::normalize(glm::mat3(bake) * v.Tangent);
 
         vertices[i] = v;
 
@@ -317,7 +335,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     // #113 — a mirrored node transform (negative determinant, e.g. a -1 scale for the other
     // side of a symmetric prop) baked into the vertices flips every triangle's winding, so the
     // mesh renders inside-out under back-face culling. Swap two indices per triangle to undo it.
-    const bool flipWinding = !skinned && glm::determinant(glm::mat3(nodeTransform)) < 0.0f;
+    const bool flipWinding = glm::determinant(glm::mat3(bake)) < 0.0f;
     for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
         const aiFace& face = mesh->mFaces[i];
         if (flipWinding && face.mNumIndices == 3) {
@@ -335,8 +353,9 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
 
     auto gpuMesh = std::make_unique<ModelMesh>(vertices, indices);
     if (skinned) {
-        // #98 — the GPU copy stays in mesh space for the skinning shader; bounds, picking,
-        // snapping and collider cooking use the bind pose (same blend as the vertex shader).
+        // #98 — bounds, picking, snapping and collider cooking are rebuilt from this CPU copy at
+        // the bind pose (same blend as the vertex shader), so they track whatever `bake` folded
+        // into the GPU vertices above and never drift out of step with what's on screen.
         std::vector<glm::vec3> posed;
         posed.reserve(vertices.size());
         for (const ModelVertex& v : vertices) {
@@ -727,13 +746,35 @@ void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh)
             if (vertexId >= vertices.size()) continue;
 
             ModelVertex& v = vertices[vertexId];
-            for (int slot = 0; slot < MAX_BONE_INFLUENCE; ++slot) {
-                if (v.BoneIDs[slot] < 0) {
-                    v.BoneIDs[slot] = boneID;
-                    v.Weights[slot] = weight;
-                    break;
-                }
+            int slot = 0;
+            for (; slot < MAX_BONE_INFLUENCE; ++slot)
+                if (v.BoneIDs[slot] < 0) break;
+            if (slot == MAX_BONE_INFLUENCE) {
+                // Already at capacity - a 5th+ influence (common right where a twist bone blends
+                // in) must replace the current SMALLEST kept weight if it outweighs it, not get
+                // silently dropped. Dropping arbitrarily by arrival order can evict the vertex's
+                // dominant bone entirely, skinning it from the wrong bones altogether.
+                int smallest = 0;
+                for (int s = 1; s < MAX_BONE_INFLUENCE; ++s)
+                    if (v.Weights[s] < v.Weights[smallest]) smallest = s;
+                if (weight <= v.Weights[smallest]) continue;
+                slot = smallest;
             }
+            v.BoneIDs[slot] = boneID;
+            v.Weights[slot] = weight;
+        }
+    }
+
+    // A vertex whose true influence count exceeds MAX_BONE_INFLUENCE only keeps its largest
+    // weights above, leaving them summing below 1 - the vertex shader would skin it as a
+    // shrunken blend toward the origin. Renormalizing keeps it a proper convex combination.
+    for (ModelVertex& v : vertices) {
+        float sum = 0.0f;
+        for (int slot = 0; slot < MAX_BONE_INFLUENCE; ++slot)
+            if (v.BoneIDs[slot] >= 0) sum += v.Weights[slot];
+        if (sum > 0.0001f && std::fabs(sum - 1.0f) > 0.0001f) {
+            for (int slot = 0; slot < MAX_BONE_INFLUENCE; ++slot)
+                if (v.BoneIDs[slot] >= 0) v.Weights[slot] /= sum;
         }
     }
 }
@@ -823,6 +864,16 @@ float Model::AnimationLength(int index) const {
     return c ? c->LengthSeconds() : 0.0f;
 }
 
+bool Model::AnimationFinished() const {
+    if (m_Anim.Clip < 0) return true; // stopped, or a Once clip that dropped itself
+    if (m_Anim.Wrap == AnimationWrapMode::Loop || m_Anim.Wrap == AnimationWrapMode::PingPong)
+        return false;                 // wraps forever by construction
+    // Deliberately the same predicate UpdateAnimation() applies to a Once clip, so "finished"
+    // means the same thing whether the clip then drops itself or holds with ClampForever.
+    const float len = AnimationLength(m_Anim.Clip);
+    return m_Anim.Time >= len || m_Anim.Time < 0.0f;
+}
+
 int Model::FindClipByRef(const std::string& ref) const {
     for (int e = 0; e < (int)m_ExternalClips.size(); ++e)
         if (m_ExternalClips[e].Ref == ref) return (int)m_D->Animations.size() + e;
@@ -844,7 +895,25 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
     for (int c = 0; c < (int)clip.Channels.size(); ++c)
         for (int n = 0; n < (int)m_D->Nodes.size(); ++n)
             if (m_D->Nodes[n].Name == clip.Channels[c].BoneName) { x.NodeChannel[n] = c; ++matched; break; }
-    if (matched == 0) return -1;
+    if (matched == 0) {
+        // A bare "-1" at the call site made mixed FBX exports nearly impossible to diagnose.
+        // Give the author a small, actionable sample from each side without flooding the log
+        // with an entire production skeleton.
+        auto sample = [](auto count, auto nameAt) {
+            std::string out;
+            const int n = std::min<int>((int)count, 4);
+            for (int i = 0; i < n; ++i) {
+                if (i) out += ", ";
+                out += nameAt(i);
+            }
+            return out.empty() ? std::string("(none)") : out;
+        };
+        Log::Warn("Animation: '" + ref + "' has no skeleton-node matches on '" + m_Path +
+                  "' (clip samples: " + sample(clip.Channels.size(), [&](int i) { return clip.Channels[i].BoneName; }) +
+                  "; target samples: " + sample(m_D->Nodes.size(), [&](int i) { return m_D->Nodes[i].Name; }) + ")",
+                  LogContext::Asset(m_Path));
+        return -1;
+    }
     if (matched * 2 < (int)clip.Channels.size())
         Log::Warn("Animation: '" + ref + "' matches only " + std::to_string(matched) + " of its " +
                   std::to_string(clip.Channels.size()) + " animated bones on '" + m_Path +
@@ -855,6 +924,9 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
 
 void Model::PlayAnimation(int index, float fadeSeconds, AnimationWrapMode wrap, float speed) {
     if (index >= AnimationCount()) index = -1;
+    // Taking playback back from ApplyLocalPose: the built-in path owns the pose again. There is no
+    // live clip to fade from in that case (the animator's pose isn't one), so this starts clean.
+    if (m_ExternalPose) { m_ExternalPose = false; m_Anim = {}; m_AnimFrom = {}; m_FadeDuration = m_FadeElapsed = 0.0f; }
     // Crossfade from the current pose (a stopped model fades from its bind pose).
     if (fadeSeconds > 0.0f && (m_Anim.Clip >= 0 || index >= 0)) {
         m_AnimFrom = m_Anim;
@@ -872,6 +944,7 @@ void Model::PlayAnimation(int index, float fadeSeconds, AnimationWrapMode wrap, 
 }
 
 void Model::UpdateAnimation(float dt) {
+    if (m_ExternalPose) return; // the Animator Controller posed this model (ApplyLocalPose)
     const int clipCount = AnimationCount();
     if (m_Anim.Clip >= clipCount) m_Anim.Clip = -1;         // #96 — reimported with fewer clips
     if (m_AnimFrom.Clip >= clipCount) m_AnimFrom.Clip = -1;
@@ -893,6 +966,30 @@ void Model::UpdateAnimation(float dt) {
     }
     EvaluatePose();
     m_PosePending = false;
+}
+
+bool Model::NodeTransform(const std::string& name, glm::mat4& out) const {
+    const auto& nodes = m_D->Nodes;
+    size_t idx = nodes.size();
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        if (nodes[i].Name == name) { idx = i; break; }
+    }
+    if (idx == nodes.size()) return false;
+
+    // Same "is a pose live?" test UploadBoneMatrices uses, plus m_NodeGlobals being populated:
+    // it is scratch filled by EvaluatePose, so before the first evaluation (or after a
+    // reimport) it is simply absent and the bind walk below is the truthful answer.
+    const bool posed = (m_ExternalPose || m_Anim.Clip >= 0 || m_FadeDuration > 0.0f) && m_NodeGlobals.size() == nodes.size();
+    if (posed) {
+        out = m_NodeGlobals[idx];
+        return true;
+    }
+
+    // Bind pose: accumulate each ancestor's bind-local transform, parents first.
+    glm::mat4 global(1.0f);
+    for (int i = (int)idx; i >= 0; i = nodes[i].Parent) global = nodes[i].BindLocal * global;
+    out = global;
+    return true;
 }
 
 void Model::EvaluatePose() {
@@ -930,6 +1027,59 @@ void Model::EvaluatePose() {
     }
 }
 
+int Model::NodeIndex(const std::string& name) const {
+    const auto& nodes = m_D->Nodes;
+    for (int i = 0; i < (int)nodes.size(); ++i)
+        if (nodes[i].Name == name) return i;
+    return -1;
+}
+
+void Model::BindLocalPose(std::vector<LocalTRS>& out) const {
+    const auto& nodes = m_D->Nodes;
+    out.resize(nodes.size());
+    for (size_t i = 0; i < nodes.size(); ++i) out[i] = nodes[i].BindTRS;
+}
+
+bool Model::SampleLocalPose(int clip, float seconds, AnimationWrapMode wrap, std::vector<LocalTRS>& out,
+                            std::vector<unsigned char>* driven) const {
+    const auto& nodes = m_D->Nodes;
+    BindLocalPose(out);
+    if (driven) driven->assign(nodes.size(), 0);
+    const std::vector<int>* map = nullptr;
+    const AnimationClip* c = clip >= 0 ? ClipAt(clip, &map) : nullptr;
+    if (!c) return false;
+    // Same sampling EvaluatePose does for the playing clip, so an animator-driven model and a
+    // PlayAnimation-driven one land on identical poses for the same clip and time.
+    const float ticks = WrappedClipTicks(*c, seconds, wrap);
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        const int ch = (*map)[i];
+        if (ch < 0) continue;
+        out[i] = c->Channels[ch].Sample(ticks, nodes[i].BindTRS);
+        if (driven) (*driven)[i] = 1;
+    }
+    return true;
+}
+
+void Model::ApplyLocalPose(const std::vector<LocalTRS>& pose) {
+    const auto& nodes = m_D->Nodes;
+    if (pose.size() != nodes.size()) return;
+    m_NodeGlobals.resize(nodes.size());
+    if (m_FinalBoneMatrices.size() < (size_t)MAX_BONES) m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        const AnimNode& n = nodes[i];
+        const glm::mat4 local = pose[i].ToMatrix();
+        m_NodeGlobals[i] = n.Parent >= 0 ? m_NodeGlobals[n.Parent] * local : local;
+        if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = m_D->GlobalInverseTransform * m_NodeGlobals[i] * n.BoneOffset;
+    }
+    m_ExternalPose = true;
+    m_PosePending = false;
+}
+
+float Model::NormalizedTime() const {
+    const float len = m_Anim.Clip >= 0 ? AnimationLength(m_Anim.Clip) : 0.0f;
+    return len > 0.0f ? m_Anim.Time / len : 0.0f;
+}
+
 namespace {
 // One shared bone-palette SSBO (binding 1), re-uploaded before each skinned draw. Replaces the
 // 100-element glUniformMatrix4fv array (#104). Single-threaded, sequential draws, so one buffer
@@ -949,7 +1099,7 @@ void Model::UploadBoneMatrices(Shader& shader) const {
 
     EnsureBoneSsbo();
     if (skinning) {
-        const bool posed = (m_Anim.Clip >= 0 && m_Anim.Clip < AnimationCount()) || m_FadeDuration > 0.0f;
+        const bool posed = m_ExternalPose || (m_Anim.Clip >= 0 && m_Anim.Clip < AnimationCount()) || m_FadeDuration > 0.0f;
         const std::vector<glm::mat4>& palette =
             posed && m_FinalBoneMatrices.size() >= (size_t)MAX_BONES ? m_FinalBoneMatrices : m_D->BindPoseBones;
         // Only the rig's own bones (#113), not the whole MAX_BONES palette.

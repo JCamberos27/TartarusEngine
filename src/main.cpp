@@ -8,6 +8,7 @@
 #include "Shader.h"
 #include "Camera.h"
 #include "Player.h"
+#include "FirstPersonPresentation.h"
 #include "World.h"
 #include "Components.h"
 #include "gl.h"
@@ -449,6 +450,25 @@ int main(int argc, char** argv) {
         CrashHandler::SetInteractive(false);
         return RunUnitTests() == 0 ? 0 : 1;
     }
+    // Animator v2 - `--upgrade-fpsanim <weapon.fpsanim> <out.controller> <controller ref>`: turns a
+    // v1 weapon definition (a flat clip list) into the standard first-person Animator Controller
+    // graph, writes it to <out.controller>, and rewrites the .fpsanim as v2 pointing at
+    // <controller ref> (the project-relative path the engine should load it by).
+    for (int i = 1; i + 3 < argc; ++i) {
+        if (std::string(argv[i]) != "--upgrade-fpsanim") continue;
+        CrashHandler::SetInteractive(false);
+        FirstPersonAnimationSet set;
+        std::string err;
+        if (!FirstPersonAnimationSet::LoadFile(argv[i + 1], set, &err)) { std::cerr << "load failed: " << err << "\n"; return 1; }
+        if (set.Clips.empty()) { std::cerr << "already v2 (no clip list)\n"; return 1; }
+        const AnimatorController ctrl = BuildFirstPersonController(set);
+        if (!ctrl.SaveFile(argv[i + 2])) { std::cerr << "couldn't write " << argv[i + 2] << "\n"; return 1; }
+        set.Controller = argv[i + 3];
+        if (!set.SaveFile(argv[i + 1])) { std::cerr << "couldn't rewrite " << argv[i + 1] << "\n"; return 1; }
+        std::cout << "wrote " << argv[i + 2] << " (" << ctrl.Layers[0].States.size() << " states, "
+                  << ctrl.Layers[0].Transitions.size() << " transitions)\n";
+        return 0;
+    }
     const bool resaveMode = !resaveIn.empty();
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
@@ -523,19 +543,12 @@ int main(int argc, char** argv) {
     Log::OpenFile(headless ? "Headless.log" : playerMode ? "Player.log" : "Editor.log");
 
     try {
-        // Up before anything else so it covers the whole startup, including the GL context
-        // creation and shader compiles below. The main window stays hidden until its first
-        // frame is presented (see Window::Show), so the two never overlap.
-        // Preferences first: the splash centres on the monitor the saved window placement is on
-        // (#155), and nothing earlier reads them. Per-user file, no GL or project state needed.
+        // Per-user preferences, loaded before anything reads them. No GL or project state needed.
         EditorSettings::Load();
+        // The editor starts with no splash: the console shows the load log until the main window
+        // presents its first frame (see Window::Show). Only a built game can opt into one.
         SplashScreen splash;
-        if (!headless && !playerMode) {
-            const EditorSettings& es = EditorSettings::Get();
-            SplashScreen::TargetRect target{es.WindowX, es.WindowY, es.WindowWidth, es.WindowHeight};
-            splash.Show(EnginePaths::Resolve("assets/branding/splash.png"), 1.0f,
-                        es.WindowPlacementValid ? &target : nullptr);
-        } else if (!headless && playerMode && !playerCfg.SplashPath.empty()) {
+        if (!headless && playerMode && !playerCfg.SplashPath.empty()) {
             // #174 - the game's own splash, staged into the build by BuildPipeline. No target
             // rect: a player has no saved editor placement, so this centres on the primary
             // monitor. Empty SplashPath (the default) keeps the old behaviour of no splash at
@@ -676,6 +689,7 @@ int main(int argc, char** argv) {
             editorModule.Initialize(executable.parent_path() / TARTARUS_EDITOR_MODULE_FILENAME, window.Handle());
         }
         Player player;
+        FirstPersonPresentation firstPersonPresentation;
         GravityGun gravityGun;
         CrosshairOverlay crosshair; // Play-mode crosshair + gravity gun hold / throw-charge indicator
         TrajectoryRibbon throwArc;  // red predicted path while the gravity gun charges a throw
@@ -1207,6 +1221,9 @@ int main(int argc, char** argv) {
                 player.RespawnFeet = glm::vec3(spawn[3]);
                 player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
                 YawPitchFromWorld(spawn, player.Cam.Yaw, player.Cam.Pitch);
+                // FPS presentation is opt-in on the controller. Sandbox keeps its gravity gun
+                // path untouched because its controller has no Animation Set assigned.
+                firstPersonPresentation.Start(world, assets, fp);
             } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
                 playUsesPlayer = false;
                 playGravityGun = false;
@@ -1219,6 +1236,10 @@ int main(int argc, char** argv) {
         };
         auto stopPlay = [&]() {
             if (!playing) return;
+            // Runtime-only arms/weapon entities were created after the play snapshot. Remove
+            // them before restoring the authored world so they can never be serialized or leak
+            // into another scene after a stop.
+            firstPersonPresentation.Stop(world);
             editor.OnExitPlayMode(world, assets);
             playing = false;
             paused = false;
@@ -2127,7 +2148,37 @@ int main(int argc, char** argv) {
                 // reach physics only). The game module's FixedUpdate rides the physics sub-steps.
                 PhysicsWorld::Step(gameDt, world,
                                    [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); });
-                if (playUsesPlayer) player.Update(gameDt, world, window.Handle(), gameHasInput);
+                if (playUsesPlayer) {
+                    player.Update(gameDt, world, window.Handle(), gameHasInput);
+                    if (firstPersonPresentation.IsActive()) {
+                        firstPersonPresentation.Update(world, player.Cam);
+                        // The weapon system owns Fire1/Fire2/FireMode/Reload/Inspect/Melee/Holster/
+                        // Weapon1/Weapon2 and the scroll wheel whenever the gravity gun is off for this
+                        // controller (#165 GravityGun) - the two never read input in the same
+                        // scene, so no bindings collide.
+                        const bool weaponInput = gameHasInput && !playGravityGun;
+                        if (weaponInput) {
+                            if (InputMap::GetButtonDown("FireMode")) firstPersonPresentation.ToggleFireMode();
+                            firstPersonPresentation.UpdateTrigger(InputMap::GetButtonDown("Fire1"),
+                                                                  InputMap::GetButton("Fire1"));
+                            // R is tap-to-reload, hold-to-check-the-magazine.
+                            firstPersonPresentation.UpdateReloadKey(InputMap::GetButton("Reload"), gameDt);
+                            if (InputMap::GetButtonDown("Inspect")) firstPersonPresentation.TriggerAction("Inspect");
+                            if (InputMap::GetButtonDown("Melee")) firstPersonPresentation.TriggerAction("Melee");
+                            // Two slots, AK and unarmed: 1/2 pick one, the wheel (either way) and
+                            // Holster toggle between them.
+                            if (InputMap::GetButtonDown("Weapon1")) firstPersonPresentation.SetEquipped(true);
+                            if (InputMap::GetButtonDown("Weapon2")) firstPersonPresentation.SetEquipped(false);
+                            if (Input::GetScrollDeltaY() != 0.0 || InputMap::GetButtonDown("Holster"))
+                                firstPersonPresentation.SetEquipped(!firstPersonPresentation.IsEquipped());
+                        } else {
+                            firstPersonPresentation.ResetReloadKey(); // focus lost mid-press: never resolve it as a tap
+                        }
+                        const float planarSpeed = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z));
+                        firstPersonPresentation.Tick(gameDt, planarSpeed, gameHasInput && InputMap::GetButton("Sprint"),
+                                                     weaponInput && InputMap::GetButton("Fire2"));
+                    }
+                }
                 // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
                 // against wherever the player is looking from, updated after the move so the
                 // listener matches the frame that's about to be rendered.
@@ -2703,6 +2754,9 @@ int main(int argc, char** argv) {
             // inactive entities, and in the editor Scene view HiddenInScene + the layer mask, are
             // skipped (they used to leave AO "ghosts"); transparent-queue objects write no depth
             // in the main pass so they don't here either; everything outside the view is culled.
+            // ViewModelTag is skipped unconditionally for the same reason those did: the arms and
+            // weapon are a camera-attached overlay composited over the world in their own
+            // sub-pass, so their depth here would only darken the world pixels hugging them.
             auto ssaoDepthPrepass = [&](Ssao& target, int w, int h, const glm::mat4& view,
                                         const glm::mat4& proj, bool editorView) {
                 world.ApplyLod(glm::vec3(glm::inverse(view)[3]), proj); // #163 - same levels as the draw
@@ -2722,6 +2776,7 @@ int main(int argc, char** argv) {
                 const Frustum frustum = Frustum::FromViewProj(proj * view);
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
+                    if (world.Registry.all_of<ViewModelTag>(entity)) continue; // see note above
                     if (editorView) {
                         if (world.Registry.all_of<HiddenInSceneTag>(entity)) continue;
                         const auto* lc = world.Registry.try_get<LayerComponent>(entity);
@@ -3159,7 +3214,8 @@ int main(int argc, char** argv) {
                 EditorLayer::RenderStats gvRenderStats;
                 drawScene(RenderFrameContext{ gvView, gvProj, gvEye, /*Unlit=*/false,
                               /*EditorView=*/false, /*DebugView=*/0,
-                              &gameHdr, &gameOpaqueColor, &gameSsao },
+                              &gameHdr, &gameOpaqueColor, &gameSsao,
+                              firstPersonPresentation.ViewModelFov() },
                           &gvRenderStats);
 
                 // Physics debug overlay over the game view (#185, F5) — depth-tested, no depth write.
@@ -3327,7 +3383,8 @@ int main(int argc, char** argv) {
                 EditorLayer::RenderStats stats;
                 drawScene(RenderFrameContext{ view, proj, gameCam->Position, /*Unlit=*/false,
                               /*EditorView=*/false, /*DebugView=*/0,
-                              &gameHdr, &gameOpaqueColor, &gameSsao },
+                              &gameHdr, &gameOpaqueColor, &gameSsao,
+                              firstPersonPresentation.ViewModelFov() },
                           &stats);
                 editor.SetRenderStats(stats);
                 // Physics debug overlay over the game view (#185, F5).
