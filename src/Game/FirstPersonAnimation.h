@@ -61,7 +61,7 @@ struct FirstPersonAnimationSet {
 // Idle/Walk/Sprint/Aim are resting states, not triggerable one-shots, and have no tier.
 enum class FirstPersonActionTier { None = -1, Transition = 0, Action = 1, Committed = 2, Equip = 3 };
 
-// Fire/Inspect/MagCheck are freely interruptible one-shots; TacReload/EmptyReload/Melee are
+// Fire/Inspect/MagCheck/Regrip are freely interruptible one-shots; TacReload/EmptyReload/Melee are
 // committed once started; Draw/Holster can't be interrupted at all; IdleToSprint/SprintToIdle
 // are the lowest tier so any real action pre-empts a locomotion transition. Anything else
 // (Idle/Walk/Sprint/Aim, or an unrecognized name) returns None.
@@ -73,11 +73,36 @@ bool FirstPersonCanInterrupt(const std::string& state, FirstPersonActionTier req
                              const std::string& current, FirstPersonActionTier currentTier);
 
 // Idle / Walk / Sprint / Aim from movement + input alone. The caller only consults this once
-// nothing is busy holding the current pose. Aim only applies at rest - the source set has no
-// aim-while-moving clip, so movement always wins over the aim pose.
+// nothing is busy holding the current pose. Sprinting (while moving) wins over aiming - there
+// is no sprinting in ADS - and aiming wins over walking: the source set has no aim-walk clip,
+// and the hip Walk clip would pull the sights off centre, so the driver keeps the Aim pose and
+// adds a procedural walk bob on top instead.
 std::string FirstPersonRestingState(float planarSpeed, bool sprinting, bool aiming);
 
 // The transition state to play on the way from `from` to `to` ("" = crossfade directly into
 // `to` via its own Fade). The source set only authored a transition pair for Idle<->Sprint;
 // every other resting-state change has no transition clip.
 std::string FirstPersonTransitionVia(const std::string& from, const std::string& to);
+
+// The reload state for a magazine holding `ammo` of `capacity` rounds: EmptyReload when it is
+// dry (the clip that also works the bolt), TacReload when it is part-spent, "" when it is full.
+std::string FirstPersonReloadStateFor(int ammo, int capacity);
+
+// Seconds of uninterrupted Idle before the next Regrip fidget, from a uniform [0,1] sample:
+// 10-20 s, so it reads as an occasional habit rather than a loop.
+float FirstPersonRegripDelay(float unit01);
+
+// The reload key is overloaded: a tap reloads, a hold checks the magazine. A tap only resolves
+// on release (until then it can't be told from the start of a hold); a hold fires MagCheck the
+// moment it crosses kHoldSeconds, and its release then does nothing.
+enum class FirstPersonReloadInput { None, Reload, MagCheck };
+struct FirstPersonReloadButton {
+    // Long enough that a deliberate tap never trips it, short enough that a hold doesn't feel
+    // laggy - the same ballpark shooters use for tap/hold on one key.
+    static constexpr float kHoldSeconds = 0.35f;
+    bool Down = false;
+    bool Fired = false;
+    float Held = 0.0f;
+
+    FirstPersonReloadInput Update(bool down, float dt);
+};

@@ -194,7 +194,7 @@ void TestInputMap() {
         CHECK(saved.size() == InputMap::Defaults().size()); // each default present exactly once
         CHECK(count("Reload") == 1);
         CHECK(saved[0].Positive == 71);      // the file's own binding survives the merge
-        CHECK(count("EmptyReload") == 1);    // the default the file predates comes back
+        CHECK(count("Weapon1") == 1);        // the default the file predates comes back
     }
 
     // Disabled (no game input): everything reads zero, including unknown names (no crash).
@@ -1440,6 +1440,7 @@ void TestFirstPersonAnimationFSM() {
     CHECK(FirstPersonTierOf("Fire") == Tier::Action);
     CHECK(FirstPersonTierOf("Inspect") == Tier::Action);
     CHECK(FirstPersonTierOf("MagCheck") == Tier::Action);
+    CHECK(FirstPersonTierOf("Regrip") == Tier::Action);   // an idle fidget: anything real cuts it off
     CHECK(FirstPersonTierOf("TacReload") == Tier::Committed);
     CHECK(FirstPersonTierOf("EmptyReload") == Tier::Committed);
     CHECK(FirstPersonTierOf("Melee") == Tier::Committed);
@@ -1469,8 +1470,10 @@ void TestFirstPersonAnimationFSM() {
     CHECK(FirstPersonCanInterrupt("Fire", Tier::Action, "IdleToSprint", Tier::Transition));
 
     CHECK(FirstPersonRestingState(0.0f, false, false) == "Idle");
-    CHECK(FirstPersonRestingState(0.0f, false, true) == "Aim");   // aim pose only applies at rest
-    CHECK(FirstPersonRestingState(2.0f, false, true) == "Walk");  // moving beats aiming - no such clip
+    CHECK(FirstPersonRestingState(0.0f, false, true) == "Aim");
+    CHECK(FirstPersonRestingState(2.0f, false, true) == "Aim");   // ADS walk: Aim pose + procedural bob
+    CHECK(FirstPersonRestingState(2.0f, true, true) == "Sprint"); // sprinting drops ADS
+    CHECK(FirstPersonRestingState(0.0f, true, true) == "Aim");    // sprint key alone, standing: still ADS
     CHECK(FirstPersonRestingState(2.0f, false, false) == "Walk");
     CHECK(FirstPersonRestingState(2.0f, true, false) == "Sprint");
     CHECK(FirstPersonRestingState(0.0f, true, false) == "Idle");  // can't sprint standing still
@@ -1479,8 +1482,44 @@ void TestFirstPersonAnimationFSM() {
     CHECK(FirstPersonTransitionVia("Sprint", "Idle") == "SprintToIdle");
     CHECK(FirstPersonTransitionVia("Sprint", "Walk") == "SprintToIdle");
     CHECK(FirstPersonTransitionVia("Sprint", "Sprint").empty());
+    CHECK(FirstPersonTransitionVia("Sprint", "Aim").empty());  // ADS doesn't wait out SprintToIdle
     CHECK(FirstPersonTransitionVia("Idle", "Walk").empty());   // no authored transition clip
     CHECK(FirstPersonTransitionVia("Walk", "Sprint").empty()); // only Idle<->Sprint was authored
+
+    // Ammo: which reload the magazine count asks for.
+    CHECK(FirstPersonReloadStateFor(30, 30).empty());       // full - nothing to reload
+    CHECK(FirstPersonReloadStateFor(29, 30) == "TacReload");
+    CHECK(FirstPersonReloadStateFor(1, 30) == "TacReload");
+    CHECK(FirstPersonReloadStateFor(0, 30) == "EmptyReload");
+
+    // Regrip fidget: 10-20 s of idle, whatever the random sample.
+    CHECK(FirstPersonRegripDelay(0.0f) == 10.0f);
+    CHECK(FirstPersonRegripDelay(1.0f) == 20.0f);
+    CHECK(FirstPersonRegripDelay(-3.0f) == 10.0f && FirstPersonRegripDelay(7.0f) == 20.0f);
+
+    // Reload key: a tap reloads on release, a hold mag-checks once at the threshold.
+    {
+        using In = FirstPersonReloadInput;
+        const float dt = 1.0f / 60.0f;
+        FirstPersonReloadButton b;
+        CHECK(b.Update(false, dt) == In::None);             // idle
+        CHECK(b.Update(true, dt) == In::None);              // pressed
+        CHECK(b.Update(true, dt) == In::None);              // still short of the hold
+        CHECK(b.Update(false, dt) == In::Reload);           // quick release = tap
+        CHECK(b.Update(false, dt) == In::None);             // fires once
+
+        int magChecks = 0;
+        CHECK(b.Update(true, dt) == In::None);
+        for (int i = 0; i < 60; ++i) magChecks += b.Update(true, dt) == In::MagCheck;
+        CHECK(magChecks == 1);                              // one MagCheck per hold, however long
+        CHECK(b.Update(false, dt) == In::None);             // releasing a hold doesn't also reload
+
+        // Crosses the threshold on the frame the hold reaches it, not before.
+        FirstPersonReloadButton h;
+        h.Update(true, 0.0f);
+        CHECK(h.Update(true, FirstPersonReloadButton::kHoldSeconds * 0.9f) == In::None);
+        CHECK(h.Update(true, FirstPersonReloadButton::kHoldSeconds * 0.2f) == In::MagCheck);
+    }
 }
 
 // --- #132: asset identity - path keys, asset types, GUID-following references ------------------

@@ -2,6 +2,7 @@
 
 #include <json.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <unordered_set>
@@ -121,7 +122,8 @@ bool FirstPersonAnimationSet::LoadFile(const std::string& path, FirstPersonAnima
 
 FirstPersonActionTier FirstPersonTierOf(const std::string& state) {
     if (state == "IdleToSprint" || state == "SprintToIdle") return FirstPersonActionTier::Transition;
-    if (state == "Fire" || state == "Inspect" || state == "MagCheck") return FirstPersonActionTier::Action;
+    if (state == "Fire" || state == "Inspect" || state == "MagCheck" || state == "Regrip")
+        return FirstPersonActionTier::Action;
     if (state == "TacReload" || state == "EmptyReload" || state == "Melee") return FirstPersonActionTier::Committed;
     if (state == "Draw" || state == "Holster") return FirstPersonActionTier::Equip;
     return FirstPersonActionTier::None;
@@ -136,14 +138,45 @@ bool FirstPersonCanInterrupt(const std::string& state, FirstPersonActionTier req
 
 std::string FirstPersonRestingState(float planarSpeed, bool sprinting, bool aiming) {
     const bool moving = planarSpeed > 0.05f;
-    if (sprinting && moving) return "Sprint";
+    if (sprinting && moving) return "Sprint"; // no sprinting in ADS: sprint drops the sights
+    if (aiming) return "Aim"; // walking too: the driver adds a procedural walk bob to the pose
     if (moving) return "Walk";
-    if (aiming) return "Aim";
     return "Idle";
 }
 
 std::string FirstPersonTransitionVia(const std::string& from, const std::string& to) {
     if (from == "Idle" && to == "Sprint") return "IdleToSprint";
-    if (from == "Sprint" && to != "Sprint") return "SprintToIdle";
+    // Aiming out of a sprint goes straight to the sights - waiting out SprintToIdle first
+    // would make ADS feel unresponsive.
+    if (from == "Sprint" && to != "Sprint" && to != "Aim") return "SprintToIdle";
     return "";
+}
+
+std::string FirstPersonReloadStateFor(int ammo, int capacity) {
+    if (ammo >= capacity) return "";
+    return ammo <= 0 ? "EmptyReload" : "TacReload";
+}
+
+float FirstPersonRegripDelay(float unit01) {
+    return 10.0f + 10.0f * std::clamp(unit01, 0.0f, 1.0f);
+}
+
+FirstPersonReloadInput FirstPersonReloadButton::Update(bool down, float dt) {
+    if (down) {
+        if (!Down) {
+            Down = true;
+            Fired = false;
+            Held = 0.0f;
+            return FirstPersonReloadInput::None;
+        }
+        Held += dt;
+        if (!Fired && Held >= kHoldSeconds) {
+            Fired = true;
+            return FirstPersonReloadInput::MagCheck;
+        }
+        return FirstPersonReloadInput::None;
+    }
+    if (!Down) return FirstPersonReloadInput::None;
+    Down = false;
+    return Fired ? FirstPersonReloadInput::None : FirstPersonReloadInput::Reload;
 }
