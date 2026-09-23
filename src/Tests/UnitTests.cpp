@@ -1299,53 +1299,111 @@ void TestComponentRegistry() {
 // --- Animator Controller: transitions, exit time, Any state, triggers, JSON round trip (#175) --
 void TestAnimatorController() {
     using AC = AnimatorController;
+    auto state = [](const char* name, const char* clip, float speed, bool loop) {
+        AC::State s;
+        s.Name = name;
+        s.Motions = {AC::Motion{clip, "", {}}};
+        s.Speed = speed;
+        s.Loop = loop;
+        return s;
+    };
+    auto tr = [](const char* from, const char* to, std::vector<AC::Condition> conds, bool exit, float exitTime, float dur) {
+        AC::Transition t;
+        if (std::string(from) == "Any") t.FromKind = AC::Source::Any;
+        else if (std::string(from) == "Entry") t.FromKind = AC::Source::Entry;
+        else t.From = from;
+        t.To = to;
+        t.Conditions = std::move(conds);
+        t.HasExitTime = exit;
+        t.ExitTime = exitTime;
+        t.Duration = dur;
+        return t;
+    };
     AC c;
     c.Parameters = {{"Speed", AC::ParamType::Float, 0.0f}, {"Jump", AC::ParamType::Trigger, 0.0f},
                     {"Grounded", AC::ParamType::Bool, 1.0f}};
-    c.States = {{"Idle", "idle", 1.0f, true}, {"Walk", "walk", 1.0f, true},
-                {"Run", "run", 1.2f, true}, {"Jump", "jump", 1.0f, false}};
-    c.DefaultState = "Idle";
-    AC::Transition idleWalk{"Idle", "Walk", {{"Speed", AC::Op::Greater, 0.1f}}, false, 0.9f, 0.2f};
-    AC::Transition walkIdle{"Walk", "Idle", {{"Speed", AC::Op::Less, 0.1f}}, false, 0.9f, 0.2f};
-    AC::Transition walkRun{"Walk", "Run", {{"Speed", AC::Op::Greater, 3.0f}}, false, 0.9f, 0.2f};
-    AC::Transition anyJump{"Any", "Jump", {{"Jump", AC::Op::If, 0.0f}}, false, 0.9f, 0.1f};
-    AC::Transition jumpIdle{"Jump", "Idle", {}, true, 0.95f, 0.2f};
-    AC::Transition broken{"Idle", "Run", {}, false, 0.9f, 0.2f}; // no condition, no exit time: never
-    c.Transitions = {idleWalk, walkIdle, walkRun, anyJump, jumpIdle, broken};
+    AC::Layer& L = c.Layers[0];
+    L.States = {state("Idle", "idle", 1.0f, true), state("Walk", "walk", 1.0f, true),
+                state("Run", "run", 1.2f, true), state("Jump", "jump", 1.0f, false)};
+    L.DefaultState = "Idle";
+    L.Transitions = {tr("Idle", "Walk", {{"Speed", AC::Op::Greater, 0.1f}}, false, 0.9f, 0.2f),
+                     tr("Walk", "Idle", {{"Speed", AC::Op::Less, 0.1f}}, false, 0.9f, 0.2f),
+                     tr("Walk", "Run", {{"Speed", AC::Op::Greater, 3.0f}}, false, 0.9f, 0.2f),
+                     tr("Any", "Jump", {{"Jump", AC::Op::If, 0.0f}}, false, 0.9f, 0.1f),
+                     tr("Jump", "Idle", {}, true, 0.95f, 0.2f),
+                     tr("Idle", "Run", {}, false, 0.9f, 0.2f)}; // no condition, no exit time: never
 
-    CHECK(c.DefaultStateIndex() == 0);
-    CHECK(c.FindState("Run") == 2);
-    CHECK(c.FindState("Nope") == -1);
+    CHECK(L.DefaultStateIndex() == 0);
+    CHECK(L.FindState("Run") == 2);
+    CHECK(L.FindState("Nope") == -1);
 
     std::vector<AnimatorParam> p = {{"Speed", 0, 0.0f}, {"Jump", 3, 0.0f}, {"Grounded", 2, 1.0f}};
-    CHECK(c.PickTransition(0, 0.0f, p) == -1);            // idle, not moving
+    CHECK(c.PickTransition(0, 0, 0.0f, p) == -1);            // idle, not moving
     p[0].Value = 1.0f;
-    CHECK(c.PickTransition(0, 0.0f, p) == 0);             // Idle -> Walk
-    CHECK(c.PickTransition(1, 0.0f, p) == -1);            // walking, not fast enough to run
+    CHECK(c.PickTransition(0, 0, 0.0f, p) == 0);             // Idle -> Walk
+    CHECK(c.PickTransition(0, 1, 0.0f, p) == -1);            // walking, not fast enough to run
     p[0].Value = 4.0f;
-    CHECK(c.PickTransition(1, 0.0f, p) == 2);             // Walk -> Run
-    p[1].Value = 1.0f;                                   // SetTrigger("Jump")
-    CHECK(c.PickTransition(2, 0.3f, p) == 3);             // Any -> Jump beats nothing else
-    CHECK(p[1].Value == 0.0f);                           // ... and consumed the trigger
-    CHECK(c.PickTransition(3, 0.5f, p) == -1);            // Jump waits for its exit time
-    CHECK(c.PickTransition(3, 0.96f, p) == 4);            // Jump -> Idle at 95%
+    CHECK(c.PickTransition(0, 1, 0.0f, p) == 2);             // Walk -> Run
+    p[1].Value = 1.0f;                                       // SetTrigger("Jump")
+    CHECK(c.PickTransition(0, 2, 0.3f, p) == 3);             // Any -> Jump beats nothing else
+    CHECK(p[1].Value == 0.0f);                               // ... and consumed the trigger
+    CHECK(c.PickTransition(0, 3, 0.5f, p) == -1);            // Jump waits for its exit time
+    CHECK(c.PickTransition(0, 3, 0.96f, p) == 4);            // Jump -> Idle at 95%
     p[1].Value = 1.0f;
-    CHECK(c.PickTransition(3, 0.2f, p) == -1);            // Any never re-enters the state it targets
-    CHECK(p[1].Value == 1.0f);                           // an unused trigger stays set
+    CHECK(c.PickTransition(0, 3, 0.2f, p) == -1);            // Any never re-enters the state it targets
+    CHECK(p[1].Value == 1.0f);                               // an unused trigger stays set
     std::vector<AnimatorParam> none;
-    CHECK(c.PickTransition(0, 0.0f, none) == -1);         // missing parameters never match
-    CHECK(c.PickTransition(-1, 0.0f, p) == -1);
-    CHECK(c.PickTransition(99, 0.0f, p) == -1);
+    CHECK(c.PickTransition(0, 0, 0.0f, none) == -1);         // missing parameters never match
+    CHECK(c.PickTransition(0, -1, 0.0f, p) == -1);
+    CHECK(c.PickTransition(0, 99, 0.0f, p) == -1);
+    CHECK(c.PickTransition(5, 0, 0.0f, p) == -1);            // no such layer
 
-    // JSON round trip keeps everything.
+    // ... unless it may transition to itself (Fire spam restarting the Fire state).
+    L.Transitions[3].CanTransitionToSelf = true;
+    CHECK(c.PickTransition(0, 3, 0.2f, p) == 3);
+    L.Transitions[3].CanTransitionToSelf = false;
+
+    // Priority: an Any-State transition that respects it only enters a higher-priority state.
+    L.States[3].Priority = 2;
+    L.States[2].Priority = 3;                                // "Run" stands in for a reload here
+    L.Transitions[3].RespectPriority = true;
+    p[1].Value = 1.0f;
+    CHECK(c.PickTransition(0, 2, 0.3f, p) == -1);            // Jump (2) can't cut Run (3) short
+    CHECK(p[1].Value == 1.0f);
+    CHECK(c.PickTransition(0, 0, 0.3f, p) == 3);             // but it does interrupt Idle (0)
+    L.States[2].Priority = L.States[3].Priority = 0;
+    L.Transitions[3].RespectPriority = false;
+
+    // JSON round trip keeps everything, in format v2.
+    L.States[3].Tags = {"Air"};
+    L.States[3].Events = {{"Land", 0.9f}};
+    L.States[2].SpeedParam = "Speed";
+    L.Transitions[4].Interruptible = false;
+    L.Transitions[4].Offset = 0.25f;
     AC back;
     CHECK(AC::FromJsonString(c.ToJsonString(), back));
+    CHECK(back.Layers.size() == 1 && back.Tracks.size() == 1);
+    const AC::Layer& B = back.Layers[0];
     CHECK(back.Parameters.size() == 3 && back.Parameters[1].Type == AC::ParamType::Trigger);
-    CHECK(back.States.size() == 4 && back.States[2].Speed == 1.2f && !back.States[3].Loop);
-    CHECK(back.Transitions.size() == 6 && back.Transitions[3].From == "Any");
-    CHECK(back.Transitions[4].HasExitTime && back.Transitions[4].ExitTime == 0.95f);
-    CHECK(back.Transitions[1].Conditions.size() == 1 && back.Transitions[1].Conditions[0].Mode == AC::Op::Less);
-    CHECK(back.DefaultState == "Idle");
+    CHECK(B.States.size() == 4 && B.States[2].Speed == 1.2f && !B.States[3].Loop);
+    CHECK(B.States[0].MotionFor(0).Clip == "idle" && B.States[2].SpeedParam == "Speed");
+    CHECK(B.States[3].HasTag("Air") && B.States[3].Events.size() == 1 && B.States[3].Events[0].Time == 0.9f);
+    CHECK(B.Transitions.size() == 6 && B.Transitions[3].FromKind == AC::Source::Any);
+    CHECK(B.Transitions[4].HasExitTime && B.Transitions[4].ExitTime == 0.95f);
+    CHECK(!B.Transitions[4].Interruptible && B.Transitions[4].Offset == 0.25f);
+    CHECK(B.Transitions[1].Conditions.size() == 1 && B.Transitions[1].Conditions[0].Mode == AC::Op::Less);
+    CHECK(B.DefaultState == "Idle");
+
+    // v1 files (flat states, one clip each, "from":"Any") load as a single base layer.
+    AC v1;
+    CHECK(AC::FromJsonString(R"({"defaultState":"B","parameters":[{"name":"go","type":"trigger"}],
+        "states":[{"name":"A","clip":"a.fbx","loop":true},{"name":"B","clip":"b.fbx","speed":2}],
+        "transitions":[{"from":"Any","to":"A","conditions":[{"param":"go","mode":"if"}]},
+                       {"from":"A","to":"B","hasExitTime":true,"exitTime":1.0}]})", v1));
+    CHECK(v1.Layers.size() == 1 && v1.Tracks.size() == 1);
+    CHECK(v1.Layers[0].States.size() == 2 && v1.Layers[0].States[1].MotionFor(0).Clip == "b.fbx");
+    CHECK(v1.Layers[0].States[1].Speed == 2.0f && v1.Layers[0].DefaultStateIndex() == 1);
+    CHECK(v1.Layers[0].Transitions[0].FromKind == AC::Source::Any && v1.Layers[0].Transitions[1].From == "A");
 
     // Robustness: garbage is rejected, unknown enum names fall back, bad entries are skipped.
     AC junk;
@@ -1355,8 +1413,8 @@ void TestAnimatorController() {
         "states":[{"name":"A","speed":"fast"},5],"transitions":[{"from":"A","to":"A",
         "conditions":[{"param":"x","mode":"sideways"}]}]})", junk));
     CHECK(junk.Parameters.size() == 1 && junk.Parameters[0].Type == AC::ParamType::Float);
-    CHECK(junk.States.size() == 1 && junk.States[0].Speed == 1.0f);
-    CHECK(junk.Transitions.size() == 1 && junk.Transitions[0].Conditions[0].Mode == AC::Op::Greater);
+    CHECK(junk.Layers[0].States.size() == 1 && junk.Layers[0].States[0].Speed == 1.0f);
+    CHECK(junk.Layers[0].Transitions.size() == 1 && junk.Layers[0].Transitions[0].Conditions[0].Mode == AC::Op::Greater);
 
     // The component's setters create parameters on first use and keep their type.
     AnimatorControllerComponent comp;
@@ -1367,6 +1425,87 @@ void TestAnimatorController() {
     CHECK(comp.GetFloat("Speed") == 2.5f && comp.GetFloat("Jump") == 1.0f && comp.GetFloat("Grounded") == 1.0f);
     comp.ResetTrigger("Jump");
     CHECK(comp.GetFloat("Jump") == 0.0f && comp.GetFloat("Missing") == 0.0f);
+
+    // 1D blend weights: clamp at the ends, split linearly between neighbours, order-independent.
+    const std::vector<AC::BlendChild> kids = {{"run", 4.0f, 1.0f}, {"idle", 0.0f, 1.0f}, {"walk", 1.5f, 1.0f}};
+    auto w = AnimatorBlendWeights(kids, -1.0f);
+    CHECK(w[1] == 1.0f && w[0] == 0.0f && w[2] == 0.0f);
+    w = AnimatorBlendWeights(kids, 9.0f);
+    CHECK(w[0] == 1.0f);
+    w = AnimatorBlendWeights(kids, 2.75f);
+    CHECK(std::abs(w[2] - 0.5f) < 1e-5f && std::abs(w[0] - 0.5f) < 1e-5f && w[1] == 0.0f);
+    CHECK(AnimatorBlendWeights({}, 1.0f).empty());
+
+    // Bone masks: an included subtree, minus an excluded branch inside it.
+    AC::Layer masked;
+    masked.MaskInclude = {"spine"};
+    masked.MaskExclude = {"arm_r"};
+    const std::vector<std::string> names = {"root", "spine", "arm_l", "arm_r", "hand_r", "leg"};
+    const std::vector<int> parents = {-1, 0, 1, 1, 3, 0};
+    const auto m = AnimatorMaskWeights(masked, names, parents);
+    CHECK(m[0] == 0.0f && m[1] == 1.0f && m[2] == 1.0f && m[3] == 0.0f && m[4] == 0.0f && m[5] == 0.0f);
+    const auto all = AnimatorMaskWeights(AC::Layer{}, names, parents);
+    CHECK(all[0] == 1.0f && all[5] == 1.0f);
+
+    // --- The runtime, without a model: every state lasts 1 s. -------------------------------------
+    const auto oneSecond = [](int, int) { return 1.0f; };
+    AC run;
+    run.Parameters = {{"Go", AC::ParamType::Trigger, 0.0f}, {"Ammo", AC::ParamType::Int, 3.0f}};
+    AC::Layer& R = run.Layers[0];
+    R.States = {state("Idle", "", 1.0f, true), state("Reload", "", 1.0f, false), state("Fire", "", 1.0f, false)};
+    R.States[1].Priority = 3;
+    R.States[1].Events = {{"Refill", 1.0f}, {"Start", 0.0f}};
+    R.States[2].Priority = 2;
+    R.States[0].Events = {{"Loop", 0.5f}};
+    R.Transitions = {tr("Any", "Reload", {{"Go", AC::Op::If, 0.0f}, {"Ammo", AC::Op::Less, 30.0f}}, false, 0.0f, 0.1f),
+                     tr("Any", "Fire", {{"Go", AC::Op::If, 0.0f}}, false, 0.0f, 0.0f),
+                     tr("Reload", "Exit", {}, true, 1.0f, 0.2f),
+                     tr("Fire", "Exit", {}, true, 1.0f, 0.0f)};
+    R.Transitions[0].RespectPriority = R.Transitions[1].RespectPriority = true;
+    AnimatorControllerComponent rc;
+    AdvanceAnimator(run, rc, 0.0f, oneSecond);
+    CHECK(rc.Started && rc.StateName == "Idle" && rc.Params.size() == 2);
+    AdvanceAnimator(run, rc, 0.6f, oneSecond);
+    CHECK(rc.EventFired("Loop") && std::abs(rc.StateTime - 0.6f) < 1e-4f);
+    AdvanceAnimator(run, rc, 1.0f, oneSecond);
+    CHECK(rc.EventFired("Loop"));                            // a looping state's event fires every pass
+    rc.SetTrigger("Go");
+    AdvanceAnimator(run, rc, 0.01f, oneSecond);
+    CHECK(rc.StateName == "Reload" && rc.InTransition);      // crossfading in
+    CHECK(rc.EventFired("Start") && !rc.EventFired("Refill"));
+    CHECK(rc.GetFloat("Go") == 0.0f);                        // consumed
+    rc.SetTrigger("Go");
+    AdvanceAnimator(run, rc, 0.3f, oneSecond);
+    CHECK(rc.StateName == "Reload");                         // Fire (2) can't interrupt Reload (3)
+    CHECK(!rc.InTransition);                                 // the 0.1 s fade finished
+    rc.ResetTrigger("Go");
+    AdvanceAnimator(run, rc, 0.8f, oneSecond);               // crosses 1.0: the refill lands, then Exit
+    CHECK(rc.EventFired("Refill"));
+    CHECK(rc.StateName == "Idle" && rc.InTransition);        // back through Entry to the default
+    CHECK(rc.Layers[0].Stack.size() == 2);                   // Reload still fading out underneath
+    rc.SetTrigger("Go");
+    rc.SetInt("Ammo", 30);                                   // full: Reload's condition fails, Fire wins
+    AdvanceAnimator(run, rc, 0.05f, oneSecond);
+    CHECK(rc.StateName == "Fire" && !rc.InTransition);       // a 0 s transition cuts the stack
+    CHECK(rc.Layers[0].Stack.size() == 1);
+
+    // Non-interruptible transitions block everything until their crossfade ends.
+    AC lock;
+    lock.Parameters = {{"A", AC::ParamType::Trigger, 0.0f}, {"B", AC::ParamType::Trigger, 0.0f}};
+    lock.Layers[0].States = {state("S0", "", 1.0f, true), state("S1", "", 1.0f, true), state("S2", "", 1.0f, true)};
+    lock.Layers[0].Transitions = {tr("S0", "S1", {{"A", AC::Op::If, 0.0f}}, false, 0.0f, 0.5f),
+                                  tr("S1", "S2", {{"B", AC::Op::If, 0.0f}}, false, 0.0f, 0.1f)};
+    lock.Layers[0].Transitions[0].Interruptible = false;
+    AnimatorControllerComponent lc;
+    AdvanceAnimator(lock, lc, 0.0f, oneSecond);
+    lc.SetTrigger("A");
+    AdvanceAnimator(lock, lc, 0.1f, oneSecond);
+    CHECK(lc.StateName == "S1");
+    lc.SetTrigger("B");
+    AdvanceAnimator(lock, lc, 0.1f, oneSecond);
+    CHECK(lc.StateName == "S1");                             // still fading: B waits
+    AdvanceAnimator(lock, lc, 0.5f, oneSecond);
+    CHECK(lc.StateName == "S2");                             // fade done, B fires
 }
 
 void TestFirstPersonAnimationSet() {
@@ -1433,64 +1572,161 @@ void TestFirstPersonAnimationSet() {
     CHECK(error.find("weaponSocket") != std::string::npos);
 }
 
-// #165 - the FirstPersonPresentation driver's pure priority/resting-state logic, tested without
-// a live World/Model (see FirstPersonPresentation::Tick/TriggerAction for how it's wired up).
+// Animator v2 - the standard first-person graph (BuildFirstPersonController), driven through the
+// real controller runtime exactly as FirstPersonPresentation drives it, without a World or Model:
+// every state lasts 1 s. This pins the behaviour the old hard-coded C++ state machine had.
 void TestFirstPersonAnimationFSM() {
-    using Tier = FirstPersonActionTier;
-    CHECK(FirstPersonTierOf("Fire") == Tier::Action);
-    CHECK(FirstPersonTierOf("Inspect") == Tier::Action);
-    CHECK(FirstPersonTierOf("MagCheck") == Tier::Action);
-    CHECK(FirstPersonTierOf("Regrip") == Tier::Action);   // an idle fidget: anything real cuts it off
-    CHECK(FirstPersonTierOf("TacReload") == Tier::Committed);
-    CHECK(FirstPersonTierOf("EmptyReload") == Tier::Committed);
-    CHECK(FirstPersonTierOf("Melee") == Tier::Committed);
-    CHECK(FirstPersonTierOf("Draw") == Tier::Equip);
-    CHECK(FirstPersonTierOf("Holster") == Tier::Equip);
-    CHECK(FirstPersonTierOf("IdleToSprint") == Tier::Transition);
-    CHECK(FirstPersonTierOf("SprintToIdle") == Tier::Transition);
-    CHECK(FirstPersonTierOf("Idle") == Tier::None);   // a resting state, not a triggerable action
-    CHECK(FirstPersonTierOf("Walk") == Tier::None);
-    CHECK(FirstPersonTierOf("Sprint") == Tier::None);
-    CHECK(FirstPersonTierOf("Aim") == Tier::None);
-    CHECK(FirstPersonTierOf("Nonsense") == Tier::None);
+    namespace K = FirstPersonAnimatorContract;
+    FirstPersonAnimationSet set;
+    set.ArmsModel = "arms.fbx";
+    set.WeaponModel = "weapon.fbx";
+    const char* withWeapon[] = {"IdleToSprint", "Sprint", "SprintToIdle", "Holster", "Fire", "TacReload",
+                                "EmptyReload", "Inspect", "MagCheck", "Melee"};
+    for (const char* n : {"Idle", "Walk", "IdleToSprint", "Sprint", "SprintToIdle", "Aim", "Draw", "Holster",
+                          "Fire", "TacReload", "EmptyReload", "Inspect", "MagCheck", "Melee", "Regrip"}) {
+        FirstPersonAnimationClip c;
+        c.Name = n;
+        c.ArmsClip = std::string("FP_") + n + ".fbx";
+        for (const char* w : withWeapon) if (std::string(w) == n) c.WeaponClip = std::string("W_") + n + ".fbx";
+        c.Loop = std::string(n) == "Idle" || std::string(n) == "Walk" || std::string(n) == "Sprint" || std::string(n) == "Aim";
+        c.Fade = 0.1f;
+        set.Clips.push_back(c);
+    }
+    set.DefaultState = "Idle";
+    const AnimatorController ctrl = BuildFirstPersonController(set);
+    CHECK(ctrl.Tracks.size() == 2 && ctrl.Tracks[0] == "arms" && ctrl.Tracks[1] == "weapon");
+    const auto& L = ctrl.Layers[0];
+    CHECK(L.States.size() == 16); // the 15 clip states + Holstered
+    CHECK(L.States[L.FindState("Idle")].MotionFor(1).Empty());               // no weapon Idle clip: bind pose
+    CHECK(L.States[L.FindState("Fire")].MotionFor(1).Clip == "W_Fire.fbx");
+    CHECK(L.States[L.FindState("Aim")].HasTag(K::kTagAds));
+    CHECK(L.States[L.FindState("Holstered")].HasTag(K::kTagHidden));
+    CHECK(L.States[L.FindState("Holstered")].MotionFor(0).Clip == "FP_Holster.fbx"); // holds Holster's end
 
-    // Nothing busy: anything goes.
-    CHECK(FirstPersonCanInterrupt("Fire", Tier::Action, "", Tier::None));
-    // Fire spam restarts in place even though same-tier requests are otherwise blocked.
-    CHECK(FirstPersonCanInterrupt("Fire", Tier::Action, "Fire", Tier::Action));
-    // A same-tier different action is dropped, not queued.
-    CHECK(!FirstPersonCanInterrupt("Inspect", Tier::Action, "MagCheck", Tier::Action));
-    // A lower tier can't interrupt a higher one (can't Inspect through a reload).
-    CHECK(!FirstPersonCanInterrupt("Inspect", Tier::Action, "TacReload", Tier::Committed));
-    // A strictly higher tier always wins (Holster cuts off a reload in progress).
-    CHECK(FirstPersonCanInterrupt("Holster", Tier::Equip, "TacReload", Tier::Committed));
-    // Even Equip doesn't interrupt Equip unless it's the same action restarting.
-    CHECK(!FirstPersonCanInterrupt("Draw", Tier::Equip, "Holster", Tier::Equip));
-    // A real action always pre-empts a locomotion transition (the lowest tier).
-    CHECK(FirstPersonCanInterrupt("Fire", Tier::Action, "IdleToSprint", Tier::Transition));
+    // Round trip through JSON keeps the graph intact.
+    AnimatorController back;
+    CHECK(AnimatorController::FromJsonString(ctrl.ToJsonString(), back));
+    CHECK(back.Layers[0].States.size() == L.States.size() && back.Layers[0].Transitions.size() == L.Transitions.size());
 
-    CHECK(FirstPersonRestingState(0.0f, false, false) == "Idle");
-    CHECK(FirstPersonRestingState(0.0f, false, true) == "Aim");
-    CHECK(FirstPersonRestingState(2.0f, false, true) == "Aim");   // ADS walk: Aim pose + procedural bob
-    CHECK(FirstPersonRestingState(2.0f, true, true) == "Sprint"); // sprinting drops ADS
-    CHECK(FirstPersonRestingState(0.0f, true, true) == "Aim");    // sprint key alone, standing: still ADS
-    CHECK(FirstPersonRestingState(2.0f, false, false) == "Walk");
-    CHECK(FirstPersonRestingState(2.0f, true, false) == "Sprint");
-    CHECK(FirstPersonRestingState(0.0f, true, false) == "Idle");  // can't sprint standing still
+    AnimatorControllerComponent ac;
+    const auto oneSecond = [](int, int) { return 1.0f; };
+    std::vector<std::string> events;
+    auto run = [&](float seconds) {
+        events.clear();
+        for (float t = 0.0f; t < seconds - 1e-4f; t += 1.0f / 60.0f) {
+            AdvanceAnimator(ctrl, ac, 1.0f / 60.0f, oneSecond);
+            events.insert(events.end(), ac.FiredEvents.begin(), ac.FiredEvents.end());
+        }
+    };
+    auto fired = [&](const char* e) { return (int)std::count(events.begin(), events.end(), std::string(e)); };
+    auto input = [&](float speed, bool sprint, bool aim) {
+        ac.SetFloat(K::kSpeed, speed);
+        ac.SetBool(K::kSprint, sprint);
+        ac.SetBool(K::kAim, aim);
+    };
 
-    CHECK(FirstPersonTransitionVia("Idle", "Sprint") == "IdleToSprint");
-    CHECK(FirstPersonTransitionVia("Sprint", "Idle") == "SprintToIdle");
-    CHECK(FirstPersonTransitionVia("Sprint", "Walk") == "SprintToIdle");
-    CHECK(FirstPersonTransitionVia("Sprint", "Sprint").empty());
-    CHECK(FirstPersonTransitionVia("Sprint", "Aim").empty());  // ADS doesn't wait out SprintToIdle
-    CHECK(FirstPersonTransitionVia("Idle", "Walk").empty());   // no authored transition clip
-    CHECK(FirstPersonTransitionVia("Walk", "Sprint").empty()); // only Idle<->Sprint was authored
+    run(0.1f);
+    CHECK(ac.StateName == "Idle" && ac.HasTag(K::kTagIdle));
+    CHECK(ac.GetFloat(K::kAmmo) == 30.0f && ac.GetFloat(K::kEquipped) == 1.0f); // defaults from the set
 
-    // Ammo: which reload the magazine count asks for.
-    CHECK(FirstPersonReloadStateFor(30, 30).empty());       // full - nothing to reload
-    CHECK(FirstPersonReloadStateFor(29, 30) == "TacReload");
-    CHECK(FirstPersonReloadStateFor(1, 30) == "TacReload");
-    CHECK(FirstPersonReloadStateFor(0, 30) == "EmptyReload");
+    // Locomotion: walk, aim while walking (Aim beats Walk), sprint drops ADS, releasing sprint
+    // with aim held goes straight back to the sights - no SprintToIdle on the way.
+    input(2.0f, false, false); run(0.2f);
+    CHECK(ac.StateName == "Walk");
+    input(2.0f, false, true); run(0.2f);
+    CHECK(ac.StateName == "Aim" && ac.HasTag(K::kTagAds));
+    input(2.0f, true, true); run(0.2f);
+    CHECK(ac.StateName == "Sprint");
+    input(2.0f, false, true); run(0.05f);
+    CHECK(ac.StateName == "Aim");
+    input(0.0f, true, true); run(0.2f);
+    CHECK(ac.StateName == "Aim");                 // the sprint key alone, standing: still ADS
+    input(0.0f, false, false); run(0.2f);
+    CHECK(ac.StateName == "Idle");
+
+    // Idle -> Sprint plays the IdleToSprint clip first; leaving Sprint plays SprintToIdle.
+    input(2.0f, true, false); run(0.05f);
+    CHECK(ac.StateName == "IdleToSprint");
+    run(1.1f);
+    CHECK(ac.StateName == "Sprint");
+    input(0.0f, false, false); run(0.05f);
+    CHECK(ac.StateName == "SprintToIdle");
+    run(1.2f);
+    CHECK(ac.StateName == "Idle");
+
+    // Hip fire plays Fire (a Shot per trigger, restarting on spam) and returns to Idle.
+    ac.SetTrigger(K::kFire); run(0.05f);
+    CHECK(ac.StateName == "Fire" && fired(K::kEventShot) == 1);
+    ac.SetTrigger(K::kFire); run(0.05f);
+    CHECK(ac.StateName == "Fire" && fired(K::kEventShot) == 1); // restarted: a second round
+    run(1.2f);
+    CHECK(ac.StateName == "Idle");
+
+    // A tactical reload can't be cut short by firing, refills exactly once when it completes,
+    // and hands back to the sights when aim is still held.
+    ac.SetInt(K::kAmmo, 12);
+    ac.SetTrigger(K::kReload); run(0.05f);
+    CHECK(ac.StateName == "TacReload" && ac.HasTag(K::kTagReload));
+    ac.SetTrigger(K::kFire); run(0.1f);
+    CHECK(ac.StateName == "TacReload");
+    ac.ResetTrigger(K::kFire);
+    ac.SetTrigger(K::kInspect); run(0.1f);
+    CHECK(ac.StateName == "TacReload");
+    ac.ResetTrigger(K::kInspect);
+    input(0.0f, false, true);
+    run(1.0f);
+    CHECK(fired(K::kEventRefill) == 1);
+    CHECK(ac.StateName == "Aim");
+    input(0.0f, false, false); run(0.2f);
+
+    // An empty magazine picks EmptyReload.
+    ac.SetInt(K::kAmmo, 0);
+    ac.SetTrigger(K::kReload); run(0.05f);
+    CHECK(ac.StateName == "EmptyReload");
+
+    // Holster outranks a reload (which then never refills), ends hidden, and nothing but Draw
+    // leaves it.
+    ac.SetBool(K::kEquipped, false); run(0.05f);
+    CHECK(ac.StateName == "Holster");
+    run(1.2f);
+    CHECK(fired(K::kEventRefill) == 0);
+    CHECK(ac.StateName == "Holstered" && ac.HasTag(K::kTagHidden));
+    ac.SetTrigger(K::kFire); ac.SetTrigger(K::kMelee); run(0.1f);
+    CHECK(ac.StateName == "Holstered");
+    ac.ResetTrigger(K::kFire); ac.ResetTrigger(K::kMelee);
+    ac.SetBool(K::kEquipped, true); run(0.05f);
+    CHECK(ac.StateName == "Draw" && !ac.HasTag(K::kTagHidden));
+    ac.SetBool(K::kEquipped, false); run(0.3f);
+    CHECK(ac.StateName == "Draw");                // Holster can't cut Draw short ...
+    run(1.0f);
+    CHECK(ac.StateName == "Holster");             // ... it waits for it
+    ac.SetBool(K::kEquipped, true); run(1.5f);
+    CHECK(ac.StateName == "Draw" || ac.StateName == "Idle");
+
+    // Idle fidget: only from Idle, on the Fidget trigger.
+    run(1.2f);
+    CHECK(ac.StateName == "Idle");
+    ac.SetTrigger(K::kFidget); run(0.05f);
+    CHECK(ac.StateName == "Regrip");
+    ac.SetTrigger(K::kMelee); run(0.05f);
+    CHECK(ac.StateName == "Melee");               // anything real cuts a fidget off
+
+    // A v2 weapon definition names its controller and carries its gameplay numbers.
+    FirstPersonAnimationSet v2;
+    std::string error;
+    CHECK(FirstPersonAnimationSet::FromJsonString(R"({"armsModel":"a.fbx","weaponModel":"w.fbx",
+        "controller":"weapons/w.controller","gameplay":{"magazine":20,"rpm":600,"allowFullAuto":false,
+        "recoil":{"pitch":2.0}}})", v2, &error));
+    CHECK(v2.Controller == "weapons/w.controller" && v2.Clips.empty());
+    CHECK(v2.Gameplay.Magazine == 20 && v2.Gameplay.RoundsPerMinute == 600.0f && !v2.Gameplay.AllowFullAuto);
+    CHECK(v2.Gameplay.RecoilPitchDegrees == 2.0f && v2.Gameplay.RecoilRise == 0.035f); // unspecified = defaults
+    FirstPersonAnimationSet again;
+    CHECK(FirstPersonAnimationSet::FromJsonString(v2.ToJsonString(), again, &error));
+    CHECK(again.Controller == v2.Controller && again.Gameplay.Magazine == 20 && !again.Gameplay.AllowFullAuto);
+    CHECK(!FirstPersonAnimationSet::FromJsonString(R"({"armsModel":"a.fbx","weaponModel":"w.fbx"})", v2, &error));
+    CHECK(error.find("controller") != std::string::npos);
+    CHECK(!FirstPersonAnimationSet::FromJsonString(R"({"armsModel":"a.fbx","weaponModel":"w.fbx",
+        "controller":"c.controller","gameplay":{"rpm":0}})", v2, &error));
 
     // Regrip fidget: 10-20 s of idle, whatever the random sample.
     CHECK(FirstPersonRegripDelay(0.0f) == 10.0f);

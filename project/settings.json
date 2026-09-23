@@ -6,7 +6,8 @@
     "assets",
     "assets/fps",
     "assets/fps/AKS74U",
-    "assets/fps/AKS74U/FirstPerson"
+    "assets/fps/AKS74U/FirstPerson",
+    "Animation"
   ],
   "audio": {
     "busVolumes": [

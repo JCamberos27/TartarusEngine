@@ -5,10 +5,18 @@
 #include <string>
 #include <vector>
 
-// Authored description of a paired first-person presentation. The arms and weapon are separate
-// rigs, so a semantic state owns both clip references and their shared transition settings. A
-// missing weapon clip is intentional (the AK source has no weapon Idle/Walk/Draw/Regrip clips),
-// and the runtime must apply its explicit fallback rather than guessing a clip name.
+struct AnimatorController;
+
+// A weapon definition (.fpsanim): the camera-bound arms + weapon rigs, the Animator Controller
+// that animates them, how the weapon mounts in the hands, and the weapon's gameplay numbers.
+//
+// Everything about WHICH animation plays WHEN lives in the controller (`controller`), edited in
+// the Animator window like any other. The first-person driver (FirstPersonPresentation) only
+// sets its parameters and reacts to its tags and events - see FirstPersonAnimatorContract below.
+//
+// Format v1 files carried a flat `clips` list instead of a controller. They still load: the
+// driver builds the standard first-person graph from those clips in memory
+// (BuildFirstPersonController), and the same function turns them into a .controller file.
 struct FirstPersonAnimationClip {
     std::string Name;
     std::string ArmsClip;
@@ -19,10 +27,33 @@ struct FirstPersonAnimationClip {
     float Fade = 0.08f;
 };
 
+// Per-weapon gameplay numbers. Defaults are the AKS-74U's.
+struct FirstPersonWeaponGameplay {
+    int Magazine = 30;
+    float RoundsPerMinute = 700.0f;       // full-auto cadence
+    bool AllowFullAuto = true;            // false: B does nothing (semi-only weapon)
+    float ReloadHoldSeconds = 0.35f;      // R held this long checks the magazine instead of reloading
+    float RegripMin = 10.0f, RegripMax = 20.0f; // seconds of settled Idle before a Fidget
+    // ADS recoil: the whole view model kicks about the eye, in camera space.
+    float RecoilPitchDegrees = 1.2f;
+    glm::vec3 RecoilOffset{0.0f, 0.002f, 0.014f}; // camera frame: up, into the shoulder
+    float RecoilRise = 0.035f;            // seconds to full kick
+    float RecoilSettle = 0.08f;           // exponential settle time constant
+    // ADS walk bob: a camera-plane figure-eight while moving in a state tagged ADS.
+    float BobStride = 2.4f;               // metres per stride (two steps)
+    float BobSide = 0.003f;
+    float BobVertical = 0.0015f;
+    float BobFullSpeed = 3.5f;            // planar m/s at full amplitude
+    float BobEase = 8.0f;                 // 1/s fade in/out
+};
+
 struct FirstPersonAnimationSet {
     std::string ArmsModel;
     std::string WeaponModel;
-    std::string DefaultState;
+    // The Animator Controller (.controller) driving both rigs: its "arms" track plays on the arms
+    // model, its "weapon" track on the weapon model. Empty = a v1 file; see Clips.
+    std::string Controller;
+    std::string DefaultState;             // v1 only
     // Y-X-Z Euler degrees the models themselves need to line up with the play camera, applied
     // before any per-scene View Model Rotation. This belongs to the asset, not the scene: it
     // describes the axis convention of the FBXs named above. The Manny rig comes out of Blender
@@ -35,15 +66,15 @@ struct FirstPersonAnimationSet {
     // the two - measured from the source FBXs as exactly (0, 90, 90) with zero translation, the
     // same for every clip's frame 0.
     //
-    // This is what "the AK is parented to ik_hand_gun" means at runtime. The weapon clips never
-    // move the gun: only A_W_ADS keys `root` at all, so without the socket the gun's placement
-    // is frozen while the hands move. Measured socket-vs-weapon error, root space:
-    // Sprint 11.5-14.5 cm, Draw 18.2 cm, Holster up to 21.7 cm, Aim 67.8 cm.
+    // The weapon clips never move the gun: only A_W_ADS keys `root` at all, so without the socket
+    // the gun's placement is frozen while the hands move. Measured socket-vs-weapon error, root
+    // space: Sprint 11.5-14.5 cm, Draw 18.2 cm, Holster up to 21.7 cm, Aim 67.8 cm.
     // An empty `WeaponSocket` disables the parenting (shared pose, the old behaviour).
     std::string WeaponSocket;
     std::string WeaponRoot;
     glm::vec3 WeaponMountRotation{0.0f};
-    std::vector<FirstPersonAnimationClip> Clips;
+    FirstPersonWeaponGameplay Gameplay;
+    std::vector<FirstPersonAnimationClip> Clips; // v1 only
 
     const FirstPersonAnimationClip* Find(const std::string& state) const;
 
@@ -53,53 +84,55 @@ struct FirstPersonAnimationSet {
                                std::string* error = nullptr);
     static bool LoadFile(const std::string& path, FirstPersonAnimationSet& out,
                          std::string* error = nullptr);
+    // Writes the v2 form (controller path, no clip list).
+    std::string ToJsonString() const;
+    bool SaveFile(const std::string& path) const;
 };
 
-// The driver's fixed priority tiers for the AKS74U set's named states (below). A request only
-// takes over from whatever is currently holding when it strictly outranks it, or it re-requests
-// the exact same state (Fire's "tap again to restart" behavior) - see FirstPersonCanInterrupt.
-// Idle/Walk/Sprint/Aim are resting states, not triggerable one-shots, and have no tier.
-enum class FirstPersonActionTier { None = -1, Transition = 0, Action = 1, Committed = 2, Equip = 3 };
+// The names the first-person driver and a weapon's controller agree on. A controller built for
+// a new weapon only has to use these; everything else in it is free-form.
+namespace FirstPersonAnimatorContract {
+// Parameters the driver sets every frame.
+inline constexpr const char* kSpeed = "Speed";       // Float, planar m/s
+inline constexpr const char* kSprint = "Sprint";     // Bool, sprint held
+inline constexpr const char* kAim = "Aim";           // Bool, aim held
+inline constexpr const char* kEquipped = "Equipped"; // Bool, weapon wanted in hand
+inline constexpr const char* kAmmo = "Ammo";         // Int, rounds in the magazine
+// Triggers the driver sets for one frame on input (dropped if nothing takes them).
+inline constexpr const char* kFire = "Fire";
+inline constexpr const char* kReload = "Reload";
+inline constexpr const char* kMagCheck = "MagCheck";
+inline constexpr const char* kInspect = "Inspect";
+inline constexpr const char* kMelee = "Melee";
+inline constexpr const char* kFidget = "Fidget";     // after RegripMin..Max s in a state tagged Idle
+// State tags the driver reads.
+inline constexpr const char* kTagAds = "ADS";        // sights up: fire is a procedural kick, walk bobs
+inline constexpr const char* kTagReload = "Reload";  // a reload is running (R does nothing)
+inline constexpr const char* kTagHidden = "Hidden";  // unarmed: both rigs hidden
+inline constexpr const char* kTagIdle = "Idle";      // settled idle: counts toward the Fidget
+// Events the driver reacts to.
+inline constexpr const char* kEventShot = "Shot";    // a round leaves the gun (hip fire)
+inline constexpr const char* kEventRefill = "Refill";// the magazine is full again
+} // namespace FirstPersonAnimatorContract
 
-// Fire/Inspect/MagCheck/Regrip are freely interruptible one-shots; TacReload/EmptyReload/Melee are
-// committed once started; Draw/Holster can't be interrupted at all; IdleToSprint/SprintToIdle
-// are the lowest tier so any real action pre-empts a locomotion transition. Anything else
-// (Idle/Walk/Sprint/Aim, or an unrecognized name) returns None.
-FirstPersonActionTier FirstPersonTierOf(const std::string& state);
+// The standard first-person graph for a v1 clip list (the AKS-74U's 15 states): locomotion with
+// Idle<->Sprint transition clips, ADS, one-shots returning through Exit, reloads/melee that
+// firing can't interrupt, Draw/Holster that nothing interrupts, and a hidden Holstered state.
+// Used to run v1 files and to write their .controller once.
+AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set);
 
-// True when a request for `state` at `requestedTier` may take over from whatever is currently
-// holding (`current` empty / currentTier None = nothing busy).
-bool FirstPersonCanInterrupt(const std::string& state, FirstPersonActionTier requestedTier,
-                             const std::string& current, FirstPersonActionTier currentTier);
-
-// Idle / Walk / Sprint / Aim from movement + input alone. The caller only consults this once
-// nothing is busy holding the current pose. Sprinting (while moving) wins over aiming - there
-// is no sprinting in ADS - and aiming wins over walking: the source set has no aim-walk clip,
-// and the hip Walk clip would pull the sights off centre, so the driver keeps the Aim pose and
-// adds a procedural walk bob on top instead.
-std::string FirstPersonRestingState(float planarSpeed, bool sprinting, bool aiming);
-
-// The transition state to play on the way from `from` to `to` ("" = crossfade directly into
-// `to` via its own Fade). The source set only authored a transition pair for Idle<->Sprint;
-// every other resting-state change has no transition clip.
-std::string FirstPersonTransitionVia(const std::string& from, const std::string& to);
-
-// The reload state for a magazine holding `ammo` of `capacity` rounds: EmptyReload when it is
-// dry (the clip that also works the bolt), TacReload when it is part-spent, "" when it is full.
-std::string FirstPersonReloadStateFor(int ammo, int capacity);
-
-// Seconds of uninterrupted Idle before the next Regrip fidget, from a uniform [0,1] sample:
-// 10-20 s, so it reads as an occasional habit rather than a loop.
-float FirstPersonRegripDelay(float unit01);
+// Seconds of settled Idle before the next Fidget, from a uniform [0,1] sample.
+float FirstPersonRegripDelay(float unit01, float minSeconds = 10.0f, float maxSeconds = 20.0f);
 
 // The reload key is overloaded: a tap reloads, a hold checks the magazine. A tap only resolves
 // on release (until then it can't be told from the start of a hold); a hold fires MagCheck the
-// moment it crosses kHoldSeconds, and its release then does nothing.
+// moment it crosses HoldSeconds, and its release then does nothing.
 enum class FirstPersonReloadInput { None, Reload, MagCheck };
 struct FirstPersonReloadButton {
     // Long enough that a deliberate tap never trips it, short enough that a hold doesn't feel
     // laggy - the same ballpark shooters use for tap/hold on one key.
     static constexpr float kHoldSeconds = 0.35f;
+    float HoldSeconds = kHoldSeconds;
     bool Down = false;
     bool Fired = false;
     float Held = 0.0f;

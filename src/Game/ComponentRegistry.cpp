@@ -207,6 +207,9 @@ void RegisterEngineComponents() {
               "The .controller file this object runs." },
             { "Speed", T::Float, TARTARUS_REFLECT_FIELD(AnimatorControllerComponent, Speed), 0.01f,
               "Multiplies every state's playback speed.", 0.0f, 10.0f },
+            { "Track", T::String, TARTARUS_REFLECT_FIELD(AnimatorControllerComponent, Track), 0.0f,
+              "Which of the controller's clip tracks this object plays (empty = the first).\n"
+              "A controller can carry several clip sets per state, e.g. \"arms\" and \"weapon\"." },
         };
         m.Fields[0].EditorHidden = true;
         Register<AnimatorControllerComponent>(std::move(m));

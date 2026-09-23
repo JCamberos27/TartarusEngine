@@ -924,6 +924,9 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
 
 void Model::PlayAnimation(int index, float fadeSeconds, AnimationWrapMode wrap, float speed) {
     if (index >= AnimationCount()) index = -1;
+    // Taking playback back from ApplyLocalPose: the built-in path owns the pose again. There is no
+    // live clip to fade from in that case (the animator's pose isn't one), so this starts clean.
+    if (m_ExternalPose) { m_ExternalPose = false; m_Anim = {}; m_AnimFrom = {}; m_FadeDuration = m_FadeElapsed = 0.0f; }
     // Crossfade from the current pose (a stopped model fades from its bind pose).
     if (fadeSeconds > 0.0f && (m_Anim.Clip >= 0 || index >= 0)) {
         m_AnimFrom = m_Anim;
@@ -941,6 +944,7 @@ void Model::PlayAnimation(int index, float fadeSeconds, AnimationWrapMode wrap, 
 }
 
 void Model::UpdateAnimation(float dt) {
+    if (m_ExternalPose) return; // the Animator Controller posed this model (ApplyLocalPose)
     const int clipCount = AnimationCount();
     if (m_Anim.Clip >= clipCount) m_Anim.Clip = -1;         // #96 — reimported with fewer clips
     if (m_AnimFrom.Clip >= clipCount) m_AnimFrom.Clip = -1;
@@ -975,7 +979,7 @@ bool Model::NodeTransform(const std::string& name, glm::mat4& out) const {
     // Same "is a pose live?" test UploadBoneMatrices uses, plus m_NodeGlobals being populated:
     // it is scratch filled by EvaluatePose, so before the first evaluation (or after a
     // reimport) it is simply absent and the bind walk below is the truthful answer.
-    const bool posed = (m_Anim.Clip >= 0 || m_FadeDuration > 0.0f) && m_NodeGlobals.size() == nodes.size();
+    const bool posed = (m_ExternalPose || m_Anim.Clip >= 0 || m_FadeDuration > 0.0f) && m_NodeGlobals.size() == nodes.size();
     if (posed) {
         out = m_NodeGlobals[idx];
         return true;
@@ -1023,6 +1027,59 @@ void Model::EvaluatePose() {
     }
 }
 
+int Model::NodeIndex(const std::string& name) const {
+    const auto& nodes = m_D->Nodes;
+    for (int i = 0; i < (int)nodes.size(); ++i)
+        if (nodes[i].Name == name) return i;
+    return -1;
+}
+
+void Model::BindLocalPose(std::vector<LocalTRS>& out) const {
+    const auto& nodes = m_D->Nodes;
+    out.resize(nodes.size());
+    for (size_t i = 0; i < nodes.size(); ++i) out[i] = nodes[i].BindTRS;
+}
+
+bool Model::SampleLocalPose(int clip, float seconds, AnimationWrapMode wrap, std::vector<LocalTRS>& out,
+                            std::vector<unsigned char>* driven) const {
+    const auto& nodes = m_D->Nodes;
+    BindLocalPose(out);
+    if (driven) driven->assign(nodes.size(), 0);
+    const std::vector<int>* map = nullptr;
+    const AnimationClip* c = clip >= 0 ? ClipAt(clip, &map) : nullptr;
+    if (!c) return false;
+    // Same sampling EvaluatePose does for the playing clip, so an animator-driven model and a
+    // PlayAnimation-driven one land on identical poses for the same clip and time.
+    const float ticks = WrappedClipTicks(*c, seconds, wrap);
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        const int ch = (*map)[i];
+        if (ch < 0) continue;
+        out[i] = c->Channels[ch].Sample(ticks, nodes[i].BindTRS);
+        if (driven) (*driven)[i] = 1;
+    }
+    return true;
+}
+
+void Model::ApplyLocalPose(const std::vector<LocalTRS>& pose) {
+    const auto& nodes = m_D->Nodes;
+    if (pose.size() != nodes.size()) return;
+    m_NodeGlobals.resize(nodes.size());
+    if (m_FinalBoneMatrices.size() < (size_t)MAX_BONES) m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        const AnimNode& n = nodes[i];
+        const glm::mat4 local = pose[i].ToMatrix();
+        m_NodeGlobals[i] = n.Parent >= 0 ? m_NodeGlobals[n.Parent] * local : local;
+        if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = m_D->GlobalInverseTransform * m_NodeGlobals[i] * n.BoneOffset;
+    }
+    m_ExternalPose = true;
+    m_PosePending = false;
+}
+
+float Model::NormalizedTime() const {
+    const float len = m_Anim.Clip >= 0 ? AnimationLength(m_Anim.Clip) : 0.0f;
+    return len > 0.0f ? m_Anim.Time / len : 0.0f;
+}
+
 namespace {
 // One shared bone-palette SSBO (binding 1), re-uploaded before each skinned draw. Replaces the
 // 100-element glUniformMatrix4fv array (#104). Single-threaded, sequential draws, so one buffer
@@ -1042,7 +1099,7 @@ void Model::UploadBoneMatrices(Shader& shader) const {
 
     EnsureBoneSsbo();
     if (skinning) {
-        const bool posed = (m_Anim.Clip >= 0 && m_Anim.Clip < AnimationCount()) || m_FadeDuration > 0.0f;
+        const bool posed = m_ExternalPose || (m_Anim.Clip >= 0 && m_Anim.Clip < AnimationCount()) || m_FadeDuration > 0.0f;
         const std::vector<glm::mat4>& palette =
             posed && m_FinalBoneMatrices.size() >= (size_t)MAX_BONES ? m_FinalBoneMatrices : m_D->BindPoseBones;
         // Only the rig's own bones (#113), not the whole MAX_BONES palette.

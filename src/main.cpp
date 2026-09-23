@@ -450,6 +450,25 @@ int main(int argc, char** argv) {
         CrashHandler::SetInteractive(false);
         return RunUnitTests() == 0 ? 0 : 1;
     }
+    // Animator v2 - `--upgrade-fpsanim <weapon.fpsanim> <out.controller> <controller ref>`: turns a
+    // v1 weapon definition (a flat clip list) into the standard first-person Animator Controller
+    // graph, writes it to <out.controller>, and rewrites the .fpsanim as v2 pointing at
+    // <controller ref> (the project-relative path the engine should load it by).
+    for (int i = 1; i + 3 < argc; ++i) {
+        if (std::string(argv[i]) != "--upgrade-fpsanim") continue;
+        CrashHandler::SetInteractive(false);
+        FirstPersonAnimationSet set;
+        std::string err;
+        if (!FirstPersonAnimationSet::LoadFile(argv[i + 1], set, &err)) { std::cerr << "load failed: " << err << "\n"; return 1; }
+        if (set.Clips.empty()) { std::cerr << "already v2 (no clip list)\n"; return 1; }
+        const AnimatorController ctrl = BuildFirstPersonController(set);
+        if (!ctrl.SaveFile(argv[i + 2])) { std::cerr << "couldn't write " << argv[i + 2] << "\n"; return 1; }
+        set.Controller = argv[i + 3];
+        if (!set.SaveFile(argv[i + 1])) { std::cerr << "couldn't rewrite " << argv[i + 1] << "\n"; return 1; }
+        std::cout << "wrote " << argv[i + 2] << " (" << ctrl.Layers[0].States.size() << " states, "
+                  << ctrl.Layers[0].Transitions.size() << " transitions)\n";
+        return 0;
+    }
     const bool resaveMode = !resaveIn.empty();
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
@@ -678,7 +697,6 @@ int main(int argc, char** argv) {
         }
         Player player;
         FirstPersonPresentation firstPersonPresentation;
-        FirstPersonReloadButton fpReloadButton; // tap/hold state for the Reload action
         GravityGun gravityGun;
         CrosshairOverlay crosshair; // Play-mode crosshair + gravity gun hold / throw-charge indicator
         TrajectoryRibbon throwArc;  // red predicted path while the gravity gun charges a throw
@@ -1213,7 +1231,6 @@ int main(int argc, char** argv) {
                 // FPS presentation is opt-in on the controller. Sandbox keeps its gravity gun
                 // path untouched because its controller has no Animation Set assigned.
                 firstPersonPresentation.Start(world, assets, fp);
-                fpReloadButton = {};
             } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
                 playUsesPlayer = false;
                 playGravityGun = false;
@@ -2152,11 +2169,7 @@ int main(int argc, char** argv) {
                             firstPersonPresentation.UpdateTrigger(InputMap::GetButtonDown("Fire1"),
                                                                   InputMap::GetButton("Fire1"));
                             // R is tap-to-reload, hold-to-check-the-magazine.
-                            switch (fpReloadButton.Update(InputMap::GetButton("Reload"), gameDt)) {
-                            case FirstPersonReloadInput::Reload: firstPersonPresentation.Reload(); break;
-                            case FirstPersonReloadInput::MagCheck: firstPersonPresentation.TriggerAction("MagCheck"); break;
-                            case FirstPersonReloadInput::None: break;
-                            }
+                            firstPersonPresentation.UpdateReloadKey(InputMap::GetButton("Reload"), gameDt);
                             if (InputMap::GetButtonDown("Inspect")) firstPersonPresentation.TriggerAction("Inspect");
                             if (InputMap::GetButtonDown("Melee")) firstPersonPresentation.TriggerAction("Melee");
                             // Two slots, AK and unarmed: 1/2 pick one, the wheel (either way) and
@@ -2166,7 +2179,7 @@ int main(int argc, char** argv) {
                             if (Input::GetScrollDeltaY() != 0.0 || InputMap::GetButtonDown("Holster"))
                                 firstPersonPresentation.SetEquipped(!firstPersonPresentation.IsEquipped());
                         } else {
-                            fpReloadButton = {}; // focus lost mid-press: never resolve it as a tap
+                            firstPersonPresentation.ResetReloadKey(); // focus lost mid-press: never resolve it as a tap
                         }
                         const float planarSpeed = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z));
                         firstPersonPresentation.Tick(gameDt, planarSpeed, gameHasInput && InputMap::GetButton("Sprint"),
