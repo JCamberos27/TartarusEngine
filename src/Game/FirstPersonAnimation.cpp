@@ -98,26 +98,46 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         gp.ReloadHoldSeconds = Number(*g, "reloadHoldSeconds", gp.ReloadHoldSeconds);
         gp.RegripMin = Number(*g, "regripMin", gp.RegripMin);
         gp.RegripMax = Number(*g, "regripMax", gp.RegripMax);
-        if (const auto r = g->find("recoil"); r != g->end() && r->is_object()) {
-            gp.RecoilPitchDegrees = Number(*r, "pitch", gp.RecoilPitchDegrees);
-            gp.RecoilOffset = Vec3(*r, "offset", gp.RecoilOffset);
-            gp.RecoilRise = Number(*r, "rise", gp.RecoilRise);
-            gp.RecoilSettle = Number(*r, "settle", gp.RecoilSettle);
-        }
-        if (const auto b = g->find("adsBob"); b != g->end() && b->is_object()) {
-            gp.BobStride = Number(*b, "stride", gp.BobStride);
-            gp.BobSide = Number(*b, "side", gp.BobSide);
-            gp.BobVertical = Number(*b, "vertical", gp.BobVertical);
-            gp.BobFullSpeed = Number(*b, "fullSpeed", gp.BobFullSpeed);
-            gp.BobEase = Number(*b, "ease", gp.BobEase);
-        }
         if (!(gp.RoundsPerMinute > 0.0f) || !std::isfinite(gp.RoundsPerMinute))
             return Fail(error, "'gameplay.rpm' must be a positive number");
-        if (!(gp.RecoilRise > 0.0f) || !(gp.RecoilSettle > 0.0f) || !(gp.BobStride > 0.0f) || !(gp.BobFullSpeed > 0.0f))
-            return Fail(error, "'gameplay' recoil rise/settle and bob stride/fullSpeed must be positive");
         if (!(gp.ReloadHoldSeconds > 0.0f)) return Fail(error, "'gameplay.reloadHoldSeconds' must be positive");
-        if (!Finite(gp.RecoilOffset)) return Fail(error, "'gameplay.recoil.offset' must be three finite numbers");
         if (gp.RegripMax < gp.RegripMin) std::swap(gp.RegripMin, gp.RegripMax);
+
+        // Before the procedural block existed, ADS recoil was one pitch + offset kick (linear
+        // rise, exponential settle) and the ADS bob a sine figure-eight. Carried over as curves
+        // of the same shape, so an old weapon keeps its feel until someone retunes it.
+        if (!root.contains("procedural")) {
+            WeaponProceduralSettings& p = parsed.Procedural;
+            if (const auto r = g->find("recoil"); r != g->end() && r->is_object()) {
+                const float pitch = Number(*r, "pitch", 1.2f);
+                const glm::vec3 offset = Vec3(*r, "offset", glm::vec3(0.0f, 0.002f, 0.014f));
+                const float rise = Number(*r, "rise", 0.035f), settle = Number(*r, "settle", 0.08f);
+                if (!(rise > 0.0f) || !(settle > 0.0f) || !Finite(offset) || !std::isfinite(pitch))
+                    return Fail(error, "'gameplay.recoil' needs positive rise/settle and finite pitch/offset");
+                p.Recoil.Duration = rise + 5.0f * settle;
+                const float peak = rise / p.Recoil.Duration, tau = settle / p.Recoil.Duration;
+                p.Recoil.Rotation = {FirstPersonKickCurve(pitch, peak, tau), {}, {}};
+                p.Recoil.Position = {FirstPersonKickCurve(offset.x, peak, tau), FirstPersonKickCurve(offset.y, peak, tau),
+                                     FirstPersonKickCurve(offset.z, peak, tau)};
+                p.Recoil.PitchRange = p.Recoil.UpRange = p.Recoil.KickRange = p.Recoil.SideRange = glm::vec2(1.0f);
+                p.Recoil.HipScale = 0.0f; // it used to kick in ADS only
+            }
+            if (const auto b = g->find("adsBob"); b != g->end() && b->is_object()) {
+                const float stride = Number(*b, "stride", 2.4f), fullSpeed = Number(*b, "fullSpeed", 3.5f);
+                if (!(stride > 0.0f) || !(fullSpeed > 0.0f))
+                    return Fail(error, "'gameplay.adsBob' stride and fullSpeed must be positive");
+                p.Bob.WalkStride = stride;
+                p.Bob.WalkFullSpeed = fullSpeed;
+                p.Bob.Ease = Number(*b, "ease", p.Bob.Ease);
+                p.Bob.Walk = {FirstPersonSineCurve(Number(*b, "side", 0.003f)),
+                              FirstPersonSineCurve(Number(*b, "vertical", 0.0015f), 2.0f), {}};
+                p.Bob.HipScale = 0.0f;    // ADS only, as before
+            }
+        }
+    }
+    if (const auto p = root.find("procedural"); p != root.end()) {
+        std::string why;
+        if (!WeaponProceduralSettings::FromJson(*p, parsed.Procedural, &why)) return Fail(error, why);
     }
 
     // v1: a flat clip list (no controller).
@@ -181,11 +201,8 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
         {"reloadHoldSeconds", gp.ReloadHoldSeconds},
         {"regripMin", gp.RegripMin},
         {"regripMax", gp.RegripMax},
-        {"recoil", {{"pitch", gp.RecoilPitchDegrees}, {"offset", vec3(gp.RecoilOffset)},
-                    {"rise", gp.RecoilRise}, {"settle", gp.RecoilSettle}}},
-        {"adsBob", {{"stride", gp.BobStride}, {"side", gp.BobSide}, {"vertical", gp.BobVertical},
-                    {"fullSpeed", gp.BobFullSpeed}, {"ease", gp.BobEase}}},
     };
+    j["procedural"] = Procedural.ToJson();
     RoundFloats(j);
     return j.dump(2);
 }

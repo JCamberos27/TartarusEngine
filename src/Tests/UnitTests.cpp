@@ -1721,7 +1721,11 @@ void TestFirstPersonAnimationFSM() {
         "recoil":{"pitch":2.0}}})", v2, &error));
     CHECK(v2.Controller == "weapons/w.controller" && v2.Clips.empty());
     CHECK(v2.Gameplay.Magazine == 20 && v2.Gameplay.RoundsPerMinute == 600.0f && !v2.Gameplay.AllowFullAuto);
-    CHECK(v2.Gameplay.RecoilPitchDegrees == 2.0f && v2.Gameplay.RecoilRise == 0.035f); // unspecified = defaults
+    // A pre-procedural recoil block becomes curves of the same shape: the 2 degree kick peaks at
+    // the old rise time (defaults for what's unspecified), ADS only.
+    CHECK(std::fabs(v2.Procedural.Recoil.Duration - (0.035f + 5.0f * 0.08f)) < 1e-5f);
+    CHECK(std::fabs(v2.Procedural.Recoil.Rotation.X.Evaluate(0.035f / v2.Procedural.Recoil.Duration) - 2.0f) < 1e-4f);
+    CHECK(v2.Procedural.Recoil.HipScale == 0.0f && v2.Procedural.Recoil.PitchRange == glm::vec2(1.0f));
     FirstPersonAnimationSet again;
     CHECK(FirstPersonAnimationSet::FromJsonString(v2.ToJsonString(), again, &error));
     CHECK(again.Controller == v2.Controller && again.Gameplay.Magazine == 20 && !again.Gameplay.AllowFullAuto);
@@ -1886,6 +1890,140 @@ void TestProjectWatcher() {
     fs::remove_all(dir, ec);
 }
 
+// --- Procedural animation: the first-person weapon stack --------------------------------------
+void TestWeaponProcedural() {
+    // Settings round-trip through the .fpsanim "procedural" block.
+    const WeaponProceduralSettings defaults = WeaponProceduralSettings::Defaults();
+    WeaponProceduralSettings loaded;
+    std::string error;
+    CHECK(WeaponProceduralSettings::FromJson(defaults.ToJson(), loaded, &error));
+    CHECK(std::fabs(loaded.Recoil.Rotation.X.Evaluate(0.2f) - defaults.Recoil.Rotation.X.Evaluate(0.2f)) < 1e-4f);
+    CHECK(std::fabs(loaded.Bob.Sprint.Z.Evaluate(0.3f) - defaults.Bob.Sprint.Z.Evaluate(0.3f)) < 1e-4f);
+    CHECK(loaded.StateOffsets.size() == defaults.StateOffsets.size() && loaded.IK.GunBone == "ik_hand_gun");
+    WeaponProceduralSettings untouched = defaults;
+    CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"recoil":{"duration":0}})"), untouched, &error));
+    CHECK(error.find("duration") != std::string::npos);
+    CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"sway":{"lookRotation":"big"}})"), untouched, &error));
+    CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"bob":{"walk":{"x":[[0,"a"]]}}})"), untouched, &error));
+    CHECK(untouched.Recoil.Duration == defaults.Recoil.Duration); // a bad load changes nothing
+    // Partial blocks keep everything they don't name.
+    CHECK(WeaponProceduralSettings::FromJson(json::parse(R"({"lean":{"angle":20}})"), untouched, &error));
+    CHECK(untouched.Lean.Angle == 20.0f && untouched.Lean.Offset == defaults.Lean.Offset);
+
+    // One layer at a time, everything else off, so each can be read in isolation.
+    WeaponProceduralSettings s = defaults;
+    s.Sway.Enabled = s.Bob.Enabled = s.Breath.Enabled = s.Lean.Enabled = false;
+    s.StateOffsets.clear();
+    const auto run = [](WeaponProceduralState& st, const WeaponProceduralSettings& set, WeaponProceduralInput in,
+                        float seconds) {
+        in.Dt = 1.0f / 120.0f;
+        for (float t = 0.0f; t < seconds; t += in.Dt) st.Update(set, in);
+        return st.Pose();
+    };
+
+    // Recoil: a shot kicks the muzzle up and back, and it settles back to rest.
+    {
+        WeaponProceduralState st;
+        st.OnShot(s, true);
+        const WeaponProceduralPose early = run(st, s, {}, 0.06f);
+        CHECK(early.Rotation.x > 0.5f && early.Position.z > 0.005f);
+        CHECK(early.CameraKick.x > 0.0f);
+        const WeaponProceduralPose rest = run(st, s, {}, 1.5f);
+        CHECK(std::fabs(rest.Rotation.x) < 0.02f && std::fabs(rest.Position.z) < 1e-4f && st.ActiveShots() == 0);
+    }
+    // Full auto overlaps shots into a climb bigger than any single kick.
+    {
+        WeaponProceduralState single, burst;
+        single.OnShot(s, true);
+        float singlePeak = 0.0f, burstPeak = 0.0f;
+        WeaponProceduralInput in;
+        in.Dt = 1.0f / 120.0f;
+        for (int f = 0; f < 120; ++f) singlePeak = std::max(singlePeak, single.Update(s, in).Rotation.x);
+        for (int f = 0; f < 120; ++f) {
+            if (f % 10 == 0) burst.OnShot(s, true); // ~720 rpm
+            burstPeak = std::max(burstPeak, burst.Update(s, in).Rotation.x);
+        }
+        CHECK(burstPeak > singlePeak * 1.5f);
+    }
+    // A disabled recoil does nothing.
+    {
+        WeaponProceduralSettings off = s;
+        off.Recoil.Enabled = false;
+        WeaponProceduralState st;
+        st.OnShot(off, true);
+        CHECK(st.ActiveShots() == 0);
+    }
+
+    // Sway: turning right, the gun lags (yaws left of the view) and settles when the turn stops.
+    {
+        WeaponProceduralSettings sw = s;
+        sw.Sway.Enabled = true;
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.LookRate = glm::vec2(200.0f, 0.0f);
+        const WeaponProceduralPose turning = run(st, sw, in, 0.5f);
+        CHECK(turning.Rotation.y > 0.5f && turning.Position.x < 0.0f);
+        CHECK(turning.Rotation.y <= sw.Sway.MaxRotation * 1.5f);
+        const WeaponProceduralPose settled = run(st, sw, {}, 3.0f);
+        CHECK(std::fabs(settled.Rotation.y) < 0.02f);
+    }
+
+    // Per-state offsets blend in on a state name or a tag, and back out.
+    {
+        WeaponProceduralSettings so = s;
+        so.StateOffsets = {{"Sprint", glm::vec3(0.0f, -0.02f, 0.0f), glm::vec3(0.0f, 0.0f, 10.0f), 0.2f, 0.2f}};
+        WeaponProceduralState st;
+        const std::string sprint = "Sprint", idle = "Idle";
+        const std::vector<std::string> noTags, sprintTag = {"Sprint"};
+        WeaponProceduralInput in;
+        in.StateName = &sprint;
+        in.StateTags = &noTags;
+        WeaponProceduralPose p = run(st, so, in, 0.5f);
+        CHECK(std::fabs(p.Position.y + 0.02f) < 1e-4f && std::fabs(p.Rotation.z - 10.0f) < 1e-3f);
+        in.StateName = &idle;
+        p = run(st, so, in, 0.5f);
+        CHECK(std::fabs(p.Position.y) < 1e-5f);
+        in.StateTags = &sprintTag;
+        p = run(st, so, in, 0.5f);
+        CHECK(std::fabs(p.Position.y + 0.02f) < 1e-4f);
+    }
+
+    // IK fades out in states tagged IKOff; the lean rolls the camera; clip rates follow speed.
+    {
+        WeaponProceduralSettings k = s;
+        k.Lean.Enabled = true;
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.IKOff = true;
+        in.Lean = 1.0f;
+        in.Velocity = glm::vec3(0.0f, 0.0f, -3.0f);
+        const WeaponProceduralPose p = run(st, k, in, 2.0f);
+        CHECK(p.IKWeight == 0.0f);
+        CHECK(std::fabs(p.CameraRoll - k.Lean.Angle) < 0.05f && std::fabs(p.CameraSide - k.Lean.Offset) < 0.01f);
+        CHECK(p.WalkRate == k.Locomotion.MinRate);                   // 3 / 6 m/s, clamped up to the minimum
+        in.Velocity = glm::vec3(0.0f, 0.0f, -7.2f);
+        CHECK(std::fabs(run(st, k, in, 0.1f).WalkRate - 1.2f) < 1e-4f);
+        in.IKOff = false;
+        CHECK(run(st, k, in, 0.5f).IKWeight == 1.0f);
+    }
+
+    // Bob follows the stride and scales with speed; standing still, it fades away.
+    {
+        WeaponProceduralSettings b = s;
+        b.Bob.Enabled = true;
+        b.Bob.HipScale = 1.0f;
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.Velocity = glm::vec3(0.0f, 0.0f, -3.5f);
+        in.Dt = 1.0f / 120.0f;
+        float maxSide = 0.0f;
+        for (int f = 0; f < 480; ++f) maxSide = std::max(maxSide, std::fabs(st.Update(b, in).Position.x));
+        CHECK(maxSide > 0.002f && maxSide < 0.0035f);
+        in.Velocity = glm::vec3(0.0f);
+        CHECK(std::fabs(run(st, b, in, 2.0f).Position.x) < 1e-4f);
+    }
+}
+
 // --- Procedural animation: curves and IK -----------------------------------------------------
 void TestCurve() {
     auto near = [](float a, float b, float eps = 1e-4f) { return std::fabs(a - b) <= eps; };
@@ -2036,6 +2174,7 @@ int RunUnitTests() {
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
         {"Curve", TestCurve},
         {"IKSolver", TestIKSolver},
+        {"WeaponProcedural", TestWeaponProcedural},
         {"AssetIdentity", TestAssetIdentity},
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},

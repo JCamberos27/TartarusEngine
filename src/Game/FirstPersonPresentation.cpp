@@ -5,6 +5,7 @@
 #include "AssetLibrary.h"
 #include "Camera.h"
 #include "Components.h"
+#include "IK.h"
 #include "Log.h"
 #include "Model.h"
 #include "ProjectPaths.h"
@@ -16,6 +17,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace K = FirstPersonAnimatorContract;
 
@@ -33,17 +35,6 @@ glm::quat CameraRotation(const Camera& camera) {
 bool FinitePositive(float value) {
     return std::isfinite(value) && value > 0.0f;
 }
-
-// ADS recoil, 0..1 over seconds since the shot: a fast linear rise, then an exponential settle
-// back onto the sight picture. Short enough that semi-auto tapping never stacks into a drift.
-float RecoilKick(float t, const FirstPersonWeaponGameplay& g) {
-    if (t < 0.0f) return 0.0f;
-    if (t < g.RecoilRise) return t / g.RecoilRise;
-    return std::exp(-(t - g.RecoilRise) / g.RecoilSettle);
-}
-
-// Past this the kick is invisible; the recoil clock stops.
-constexpr float kRecoilDone = 0.6f;
 
 std::string TrackOr(const AnimatorController& ctrl, const char* wanted, int fallback) {
     for (const auto& t : ctrl.Tracks) if (t == wanted) return t;
@@ -64,6 +55,11 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     if (config.AnimationSet.empty()) return true;
 
     const std::string setPath = ProjectPaths::Resolve(config.AnimationSet);
+    m_SetFile = std::filesystem::u8path(setPath);
+    {
+        std::error_code ec;
+        m_SetFileTime = std::filesystem::last_write_time(m_SetFile, ec);
+    }
     if (!FirstPersonAnimationSet::LoadFile(setPath, m_Set, &m_LastError)) {
         SetError("could not load '" + config.AnimationSet + "': " + m_LastError);
         return false;
@@ -150,6 +146,8 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
         Stop(world);
         return false;
     }
+    m_Procedural.Reset();
+    m_UsesIK = SetupIK();
     int states = 0;
     for (const auto& L : ctrl->Layers) states += (int)L.States.size();
     Log::Info("First-person presentation loaded '" + config.AnimationSet + "' (" +
@@ -175,13 +173,114 @@ void FirstPersonPresentation::Stop(World& world) {
     m_Equipped = true;
     m_HiddenApplied = false;
     m_Ammo = m_Set.Gameplay.Magazine;
-    m_RecoilTime = -1.0f;
     m_FullAuto = false;
     m_FireCooldown = 0.0f;
-    m_AimBobWeight = 0.0f;
-    m_AimBobPhase = 0.0f;
     m_IdleTime = 0.0f;
     m_ReloadKey = {};
+    m_Procedural.Reset();
+    m_UsesIK = false;
+    m_HaveLook = false;
+    m_SetFile.clear();
+    m_ReloadPoll = 0.0f;
+}
+
+bool FirstPersonPresentation::SetupIK() {
+    const WeaponIKSettings& k = m_Set.Procedural.IK;
+    if (!k.Enabled || !m_World || !m_ArmsModel) return false;
+    for (const std::string* bone : {&k.GunBone, &k.RightUpper, &k.RightLower, &k.RightHand, &k.LeftUpper, &k.LeftLower, &k.LeftHand}) {
+        if (m_ArmsModel->NodeIndex(*bone) < 0) {
+            Log::Warn("First-person presentation: arms model has no '" + *bone +
+                      "' bone; procedural motion moves the whole view model instead of the gun (no IK).");
+            return false;
+        }
+    }
+    // Both hands keep the grip they have in the clip, relative to the gun bone, wherever the
+    // procedural stack moves it.
+    auto& rig = m_World->Registry.emplace_or_replace<IKRigComponent>(m_Arms);
+    const auto limb = [&](IKLimb& l, const std::string& upper, const std::string& lower, const std::string& hand) {
+        l.Enabled = true;
+        l.Upper = upper;
+        l.Lower = lower;
+        l.End = hand;
+        l.Target = k.GunBone;
+        l.KeepAnimatedOffset = true;
+        l.MatchRotation = true;
+        l.Weight = 1.0f;
+    };
+    limb(rig.LimbA, k.RightUpper, k.RightLower, k.RightHand);
+    limb(rig.LimbB, k.LeftUpper, k.LeftLower, k.LeftHand);
+    rig.Offsets.assign(1, IKBoneOffset{});
+    rig.Offsets[0].Bone = k.GunBone;
+
+    // Self-check on the real rig: pull the gun 10% of an arm's length toward the right shoulder
+    // and tip it 5 degrees, solve, and measure how far each hand lands from its grip. Anything
+    // beyond a tiny miss means these bones don't form the chains they're named as.
+    {
+        std::vector<LocalTRS> pose;
+        m_ArmsModel->BindLocalPose(pose);
+        std::vector<int> parents(pose.size());
+        for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m_ArmsModel->NodeParent(i);
+        std::vector<glm::mat4> before, after;
+        IK::ComputeGlobals(pose, parents, before);
+        const int gun = m_ArmsModel->NodeIndex(k.GunBone);
+        const int shoulder = m_ArmsModel->NodeIndex(k.RightUpper);
+        const int hands[2] = {m_ArmsModel->NodeIndex(k.RightHand), m_ArmsModel->NodeIndex(k.LeftHand)};
+        const float armLength = glm::length(IK::Position(before[hands[0]]) - IK::Position(before[shoulder]));
+        IKRigComponent probe = rig;
+        const glm::vec3 toShoulder = IK::Position(before[shoulder]) - IK::Position(before[gun]);
+        probe.Offsets[0].Position = glm::length(toShoulder) > 1e-6f ? glm::normalize(toShoulder) * armLength * 0.1f : glm::vec3(0.0f);
+        probe.Offsets[0].Rotation = glm::angleAxis(glm::radians(5.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        IK::ApplyRig(probe, *m_ArmsModel, pose);
+        IK::ComputeGlobals(pose, parents, after);
+        float worst = 0.0f;
+        for (int h : hands) {
+            const glm::mat4 want = after[gun] * glm::inverse(before[gun]) * before[h];
+            worst = std::max(worst, glm::length(IK::Position(want) - IK::Position(after[h])) / std::max(armLength, 1e-6f));
+        }
+        char msg[192];
+        std::snprintf(msg, sizeof msg, "First-person IK: hands stay on the gun to within %.3f%% of an arm's length (probe offset 10%%).",
+                      worst * 100.0f);
+        if (worst < 0.005f) Log::Info(msg);
+        else Log::Warn(std::string(msg) + " Check the IK bone names in the weapon definition.");
+    }
+    return true;
+}
+
+// Camera-frame procedural pose -> the arms rig's model space. The arms entity is rotated
+// camera * C (C = the asset's view rotation, then the scene's tweak) and scaled by m_Scale, so a
+// camera-frame vector v is C^-1 v / scale in model space, and a rotation q is C^-1 q C.
+void FirstPersonPresentation::WriteIK() {
+    if (!m_UsesIK || !m_World || !m_World->Registry.valid(m_Arms)) return;
+    auto* rig = m_World->Registry.try_get<IKRigComponent>(m_Arms);
+    if (!rig || rig->Offsets.empty()) return;
+    const WeaponProceduralPose& p = m_Procedural.Pose();
+    const glm::quat C = NormalizeRotation(QuaternionFromEulerYXZ(m_Set.ViewRotation) * QuaternionFromEulerYXZ(m_Rotation));
+    const glm::quat Ci = glm::inverse(C);
+    rig->Weight = p.IKWeight;
+    rig->Offsets[0].Position = Ci * p.Position / m_Scale;
+    rig->Offsets[0].Rotation = NormalizeRotation(Ci * p.RotationQuat() * C);
+    rig->Offsets[0].Pivot = Ci * p.Pivot / m_Scale;
+}
+
+void FirstPersonPresentation::ReloadIfChanged(float dt) {
+    m_ReloadPoll += dt;
+    if (m_SetFile.empty() || m_ReloadPoll < 0.25f) return;
+    m_ReloadPoll = 0.0f;
+    std::error_code ec;
+    const auto stamp = std::filesystem::last_write_time(m_SetFile, ec);
+    if (ec || stamp == m_SetFileTime) return;
+    m_SetFileTime = stamp;
+    FirstPersonAnimationSet fresh;
+    std::string why;
+    if (!FirstPersonAnimationSet::LoadFile(m_SetFile.u8string(), fresh, &why)) {
+        Log::Warn("First-person presentation: kept the running weapon tuning; the edited file doesn't load: " + why);
+        return;
+    }
+    // Numbers only: the rigs and controller need a restart of Play to change.
+    m_Set.Gameplay = fresh.Gameplay;
+    m_Set.Procedural = fresh.Procedural;
+    m_ReloadKey.HoldSeconds = m_Set.Gameplay.ReloadHoldSeconds;
+    m_Ammo = std::min(m_Ammo, m_Set.Gameplay.Magazine);
 }
 
 bool FirstPersonPresentation::AttachAndValidate(AssetLibrary& assets, const AnimatorController& ctrl) {
@@ -228,14 +327,13 @@ bool FirstPersonPresentation::Fire() {
     if (!ac || !m_Equipped || HasTag(K::kTagHidden)) return false;
     if (m_Ammo <= 0) return false; // dry: the player has to press Reload themselves
     if (ac->HasTag(K::kTagAds)) {
-        // Re-enter the rise at the current kick rather than from 0, so full-auto shots chain
-        // into a shake instead of snapping back onto the sights between rounds.
-        m_RecoilTime = RecoilKick(m_RecoilTime, m_Set.Gameplay) * m_Set.Gameplay.RecoilRise;
+        // Each round starts its own recoil curves; full-auto overlaps them into a climb.
+        m_Procedural.OnShot(m_Set.Procedural, true);
         --m_Ammo;
         return true;
     }
-    // Hip fire: the controller plays Fire (or refuses, e.g. mid-reload); the round is spent on
-    // its Shot event, so a refused trigger costs nothing.
+    // Hip fire: the controller plays Fire (or refuses, e.g. mid-reload); the round is spent -
+    // and the hip recoil kicks - on its Shot event, so a refused trigger costs nothing.
     ac->SetTrigger(K::kFire);
     return true;
 }
@@ -288,14 +386,12 @@ void FirstPersonPresentation::SetEquipped(bool equipped) {
     if (auto* ac = Animator()) ac->SetBool(K::kEquipped, equipped);
 }
 
-void FirstPersonPresentation::Tick(float dt, float planarSpeed, bool sprinting, bool aiming) {
+void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool sprinting, bool aiming, float lean) {
     auto* ac = Animator();
     if (!ac) return;
+    ReloadIfChanged(dt);
     const FirstPersonWeaponGameplay& g = m_Set.Gameplay;
-    if (m_RecoilTime >= 0.0f) {
-        m_RecoilTime += dt;
-        if (m_RecoilTime > kRecoilDone) m_RecoilTime = -1.0f;
-    }
+    const float planarSpeed = glm::length(glm::vec2(velocity.x, velocity.z));
     m_FireCooldown = std::max(0.0f, m_FireCooldown - dt);
 
     ac->SetFloat(K::kSpeed, planarSpeed);
@@ -304,13 +400,27 @@ void FirstPersonPresentation::Tick(float dt, float planarSpeed, bool sprinting, 
     ac->SetBool(K::kEquipped, m_Equipped);
     ac->SetInt(K::kAmmo, m_Ammo);
 
-    // The ADS walk bob follows whatever pose is up: it eases in while moving in an ADS state
-    // and back out otherwise (stopping, or a reload taking over), so it never pops.
-    const bool ads = ac->HasTag(K::kTagAds);
-    const float bobTarget = ads ? std::min(planarSpeed / g.BobFullSpeed, 1.0f) : 0.0f;
-    m_AimBobWeight += (bobTarget - m_AimBobWeight) * std::min(1.0f, dt * g.BobEase);
-    m_AimBobPhase = std::fmod(m_AimBobPhase + dt * planarSpeed * glm::two_pi<float>() / g.BobStride,
-                              glm::two_pi<float>());
+    // The procedural stack, fed from what the controller is doing and how the camera moved.
+    WeaponProceduralInput in;
+    in.Dt = dt;
+    if (m_HaveLook && dt > 0.0f) {
+        float yaw = m_LookYaw - m_PrevLookYaw;
+        yaw = std::remainder(yaw, 360.0f); // yaw is unbounded; never read a wrap as a flick
+        in.LookRate = glm::vec2(yaw, m_LookPitch - m_PrevLookPitch) / dt;
+    }
+    m_PrevLookYaw = m_LookYaw;
+    m_PrevLookPitch = m_LookPitch;
+    in.Velocity = glm::vec3(glm::dot(velocity, m_FlatRight), 0.0f, -glm::dot(velocity, m_FlatForward));
+    in.Sprinting = sprinting && planarSpeed > 0.1f;
+    in.Ads = ac->HasTag(K::kTagAds);
+    in.IKOff = ac->HasTag(K::kTagHidden) || (!m_Set.Procedural.IK.OffTag.empty() && ac->HasTag(m_Set.Procedural.IK.OffTag.c_str()));
+    in.Lean = m_Equipped ? lean : 0.0f;
+    in.StateName = &ac->StateName;
+    in.StateTags = &ac->StateTags;
+    const WeaponProceduralPose& pose = m_Procedural.Update(m_Set.Procedural, in);
+    ac->SetFloat(K::kWalkRate, pose.WalkRate);
+    ac->SetFloat(K::kSprintRate, pose.SprintRate);
+    WriteIK();
 
     // The occasional fidget only interrupts a settled idle, never a pose the player asked for.
     if (m_Equipped && ac->HasTag(K::kTagIdle) && !ac->InTransition) {
@@ -326,12 +436,53 @@ void FirstPersonPresentation::Tick(float dt, float planarSpeed, bool sprinting, 
     }
 }
 
-void FirstPersonPresentation::Update(World& world, const Camera& camera) {
+void FirstPersonPresentation::RemoveViewKick(Camera& camera) {
+    if (!m_KickApplied) return;
+    camera.Pitch -= m_KickAngles.x;
+    camera.Yaw -= m_KickAngles.y;
+    camera.Roll -= m_KickAngles.z;
+    camera.Position -= m_KickOffset;
+    m_KickApplied = false;
+    m_KickAngles = m_KickOffset = glm::vec3(0.0f);
+}
+
+void FirstPersonPresentation::Update(World& world, Camera& camera) {
     if (!IsActive() || !world.Registry.valid(m_Arms) || !world.Registry.valid(m_Weapon)) return;
+
+    // The player's own look, before any punch goes on: the sway reads how fast it turns.
+    RemoveViewKick(camera);
+    m_LookYaw = camera.Yaw;
+    m_LookPitch = camera.Pitch;
+    if (!m_HaveLook) {
+        m_PrevLookYaw = m_LookYaw;
+        m_PrevLookPitch = m_LookPitch;
+        m_HaveLook = true;
+    }
+    {
+        glm::vec3 f = camera.Front();
+        f.y = 0.0f;
+        m_FlatForward = glm::length(f) > 1e-5f ? glm::normalize(f) : glm::vec3(0.0f, 0.0f, -1.0f);
+        m_FlatRight = glm::normalize(glm::cross(m_FlatForward, glm::vec3(0.0f, 1.0f, 0.0f)));
+    }
+    // Recoil view punch and lean, on the camera the whole frame renders from.
+    {
+        const WeaponProceduralPose& p = m_Procedural.Pose();
+        m_KickAngles = glm::vec3(p.CameraKick.x, p.CameraKick.y, p.CameraRoll);
+        camera.Pitch += m_KickAngles.x;
+        camera.Yaw += m_KickAngles.y;
+        camera.Roll += m_KickAngles.z;
+        m_KickOffset = camera.Right() * p.CameraSide;
+        camera.Position += m_KickOffset;
+        m_KickApplied = true;
+    }
+
     auto* ac = world.Registry.try_get<AnimatorControllerComponent>(m_Arms);
     if (ac) {
         // What the controller did last frame: rounds spent on hip fire, a reload that landed.
-        if (ac->EventFired(K::kEventShot)) m_Ammo = std::max(0, m_Ammo - 1);
+        if (ac->EventFired(K::kEventShot)) {
+            m_Ammo = std::max(0, m_Ammo - 1);
+            m_Procedural.OnShot(m_Set.Procedural, false);
+        }
         if (ac->EventFired(K::kEventRefill)) m_Ammo = m_Set.Gameplay.Magazine;
         ac->FiredEvents.clear();
         // Triggers live for exactly one controller update: an input the controller refused
@@ -355,16 +506,15 @@ void FirstPersonPresentation::Update(World& world, const Camera& camera) {
         m_HiddenApplied = hidden;
     }
 
-    const FirstPersonWeaponGameplay& g = m_Set.Gameplay;
     const glm::quat cameraRotation = CameraRotation(camera);
-    // ADS recoil kicks the whole view model about the eye (the camera bone below stays pinned),
-    // in the camera's own frame so it reads as muzzle-up whatever the asset's axis convention.
-    const float kick = RecoilKick(m_RecoilTime, g);
-    const glm::quat recoil =
-        glm::angleAxis(glm::radians(g.RecoilPitchDegrees * kick), glm::vec3(1.0f, 0.0f, 0.0f));
+    // Without IK (a rig lacking the gun bone or arm chains) the procedural pose moves the whole
+    // view model about the eye instead, in the camera's own frame.
+    const WeaponProceduralPose& proc = m_Procedural.Pose();
+    const glm::quat procRotation = m_UsesIK ? glm::quat(1.0f, 0.0f, 0.0f, 0.0f) : proc.RotationQuat();
+    const glm::vec3 procPosition = m_UsesIK ? glm::vec3(0.0f) : proc.Position;
     // The asset's axis correction is the inner factor (it describes the models' own space), then
     // the scene's View Model Rotation as a tweak on top of that.
-    const glm::quat rotation = NormalizeRotation(cameraRotation * recoil *
+    const glm::quat rotation = NormalizeRotation(cameraRotation * procRotation *
                                                  QuaternionFromEulerYXZ(m_Set.ViewRotation) *
                                                  QuaternionFromEulerYXZ(m_Rotation));
 
@@ -386,9 +536,7 @@ void FirstPersonPresentation::Update(World& world, const Camera& camera) {
         Log::Warn("First-person presentation: arms model has no '" + m_CameraBone +
                   "' bone; placing the view model's root on the camera instead.");
     }
-    const glm::vec3 bob = m_AimBobWeight * glm::vec3(g.BobSide * std::sin(m_AimBobPhase),
-                                                     g.BobVertical * std::sin(2.0f * m_AimBobPhase), 0.0f);
-    position += cameraRotation * (m_Offset + kick * g.RecoilOffset + bob);
+    position += cameraRotation * (m_Offset + procPosition);
 
     world.SetWorldPose(m_Arms, position, rotation);
     world.Registry.get<TransformComponent>(m_Arms).Scale = glm::vec3(m_Scale);

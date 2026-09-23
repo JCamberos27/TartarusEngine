@@ -1,5 +1,7 @@
 #pragma once
 
+#include "FirstPersonProcedural.h"
+
 #include <glm/glm.hpp>
 
 #include <string>
@@ -34,17 +36,6 @@ struct FirstPersonWeaponGameplay {
     bool AllowFullAuto = true;            // false: B does nothing (semi-only weapon)
     float ReloadHoldSeconds = 0.35f;      // R held this long checks the magazine instead of reloading
     float RegripMin = 10.0f, RegripMax = 20.0f; // seconds of settled Idle before a Fidget
-    // ADS recoil: the whole view model kicks about the eye, in camera space.
-    float RecoilPitchDegrees = 1.2f;
-    glm::vec3 RecoilOffset{0.0f, 0.002f, 0.014f}; // camera frame: up, into the shoulder
-    float RecoilRise = 0.035f;            // seconds to full kick
-    float RecoilSettle = 0.08f;           // exponential settle time constant
-    // ADS walk bob: a camera-plane figure-eight while moving in a state tagged ADS.
-    float BobStride = 2.4f;               // metres per stride (two steps)
-    float BobSide = 0.003f;
-    float BobVertical = 0.0015f;
-    float BobFullSpeed = 3.5f;            // planar m/s at full amplitude
-    float BobEase = 8.0f;                 // 1/s fade in/out
 };
 
 struct FirstPersonAnimationSet {
@@ -74,6 +65,9 @@ struct FirstPersonAnimationSet {
     std::string WeaponRoot;
     glm::vec3 WeaponMountRotation{0.0f};
     FirstPersonWeaponGameplay Gameplay;
+    // Recoil, sway, bob, breathing, aim, per-state offsets, lean and IK (FirstPersonProcedural.h).
+    // Files from before it existed load their old gameplay.recoil / adsBob numbers into it.
+    WeaponProceduralSettings Procedural = WeaponProceduralSettings::Defaults();
     std::vector<FirstPersonAnimationClip> Clips; // v1 only
 
     const FirstPersonAnimationClip* Find(const std::string& state) const;
@@ -98,6 +92,10 @@ inline constexpr const char* kSprint = "Sprint";     // Bool, sprint held
 inline constexpr const char* kAim = "Aim";           // Bool, aim held
 inline constexpr const char* kEquipped = "Equipped"; // Bool, weapon wanted in hand
 inline constexpr const char* kAmmo = "Ammo";         // Int, rounds in the magazine
+// Float clip-rate multipliers that follow the player's speed (procedural.locomotion): use them
+// as the Walk / Sprint states' speed parameter.
+inline constexpr const char* kWalkRate = "WalkRate";
+inline constexpr const char* kSprintRate = "SprintRate";
 // Triggers the driver sets for one frame on input (dropped if nothing takes them).
 inline constexpr const char* kFire = "Fire";
 inline constexpr const char* kReload = "Reload";
@@ -106,7 +104,7 @@ inline constexpr const char* kInspect = "Inspect";
 inline constexpr const char* kMelee = "Melee";
 inline constexpr const char* kFidget = "Fidget";     // after RegripMin..Max s in a state tagged Idle
 // State tags the driver reads.
-inline constexpr const char* kTagAds = "ADS";        // sights up: fire is a procedural kick, walk bobs
+inline constexpr const char* kTagAds = "ADS";        // sights up: fire is a procedural kick, aim offset on
 inline constexpr const char* kTagReload = "Reload";  // a reload is running (R does nothing)
 inline constexpr const char* kTagHidden = "Hidden";  // unarmed: both rigs hidden
 inline constexpr const char* kTagIdle = "Idle";      // settled idle: counts toward the Fidget

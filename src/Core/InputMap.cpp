@@ -93,6 +93,10 @@ std::vector<Action> Defaults() {
         // Weapon slots: 1 = the AK, 2 = unarmed (the scroll wheel toggles between them too).
         act("Weapon1",  GLFW_KEY_1, kNone, kNone, kNone, kNone, kNone, false),
         act("Weapon2",  GLFW_KEY_2, kNone, kNone, kNone, kNone, kNone, false),
+        // Lean (procedural: the camera rolls and slides, the gun rolls into it). Q and E are
+        // Melee and Interact, so these sit on Z / C.
+        act("LeanLeft",  GLFW_KEY_Z, kNone, kNone, kNone, kNone, kNone, false),
+        act("LeanRight", GLFW_KEY_C, kNone, kNone, kNone, kNone, kNone, false),
     };
 }
 
