@@ -10,8 +10,10 @@
 #include "RotationMath.h"
 #include "World.h"
 
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -27,6 +29,32 @@ glm::quat CameraRotation(const Camera& camera) {
 
 bool FinitePositive(float value) {
     return std::isfinite(value) && value > 0.0f;
+}
+
+// ADS recoil, 0..1 over seconds since the shot: a fast linear rise, then an exponential settle
+// back onto the sight picture. Short enough that semi-auto tapping never stacks into a drift.
+constexpr float kRecoilRise = 0.035f;
+constexpr float kRecoilSettle = 0.08f;
+constexpr float kRecoilDone = 0.6f;
+constexpr float kRecoilPitchDegrees = 1.2f;              // muzzle up, pivoting on the eye
+const glm::vec3 kRecoilOffset{0.0f, 0.002f, 0.014f};     // camera frame: a touch up, into the shoulder
+
+float RecoilKick(float t) {
+    if (t < 0.0f) return 0.0f;
+    if (t < kRecoilRise) return t / kRecoilRise;
+    return std::exp(-(t - kRecoilRise) / kRecoilSettle);
+}
+
+// ADS walk bob: a figure-eight in the camera plane (side-to-side once per stride, up-down once
+// per step), small enough that the sights stay usable. One stride = two steps = kBobStride m.
+constexpr float kBobStride = 2.4f;
+constexpr float kBobSide = 0.003f;
+constexpr float kBobVertical = 0.0015f;
+constexpr float kBobFullSpeed = 3.5f;  // planar m/s at which the bob reaches full amplitude
+constexpr float kBobEase = 8.0f;       // 1/s, how fast the bob fades in and out
+
+bool IsReload(const std::string& state) {
+    return state == "TacReload" || state == "EmptyReload";
 }
 
 } // namespace
@@ -112,6 +140,17 @@ void FirstPersonPresentation::Stop(World& world) {
     m_ActionState.clear();
     m_ActionTier = FirstPersonActionTier::None;
     m_Equipped = true;
+    m_Hidden = false;
+    m_HiddenApplied = false;
+    m_Ammo = kMagazineSize;
+    m_RefillOnFinish = false;
+    m_RecoilTime = -1.0f;
+    m_FullAuto = false;
+    m_FireCooldown = 0.0f;
+    m_AimBobWeight = 0.0f;
+    m_AimBobPhase = 0.0f;
+    m_IdleTime = 0.0f;
+    m_RegripDelay = FirstPersonRegripDelay(std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng));
 }
 
 bool FirstPersonPresentation::AttachAndValidate(AssetLibrary& assets) {
@@ -209,6 +248,9 @@ bool FirstPersonPresentation::StartAction(const std::string& state, FirstPersonA
     m_ActionGateWeapon = !clip->WeaponClip.empty();
     m_ActionState = state;
     m_ActionTier = tier;
+    // Whatever took over, a reload it cut short doesn't count; Reload() re-arms this after.
+    m_RefillOnFinish = false;
+    m_IdleTime = 0.0f;
     return true;
 }
 
@@ -236,19 +278,93 @@ bool FirstPersonPresentation::TriggerAction(const std::string& state) {
     if (tier != FirstPersonActionTier::Equip && !m_Equipped) return false;
     if (!FirstPersonCanInterrupt(state, tier, m_ActionState, m_ActionTier)) return false;
     if (!StartAction(state, tier)) return false;
-    if (state == "Draw") m_Equipped = true;
-    else if (state == "Holster") m_Equipped = false;
+    if (state == "Draw") {
+        m_Equipped = true;
+        m_Hidden = false; // Update() un-hides the rigs before the Draw clip's first visible frame
+    } else if (state == "Holster") {
+        m_Equipped = false;
+    }
     return true;
 }
 
-void FirstPersonPresentation::Tick(float planarSpeed, bool sprinting, bool aiming) {
+bool FirstPersonPresentation::Fire() {
+    if (!IsActive() || !m_Equipped) return false;
+    if (m_Ammo <= 0) return false; // dry: the player has to press Reload themselves
+    if (m_ActionState.empty() && m_CurrentState == "Aim") {
+        // Re-enter the rise at the current kick rather than from 0, so full-auto shots chain
+        // into a shake instead of snapping back onto the sights between rounds.
+        m_RecoilTime = RecoilKick(m_RecoilTime) * kRecoilRise;
+    } else if (!TriggerAction("Fire")) {
+        return false;
+    }
+    --m_Ammo;
+    return true;
+}
+
+void FirstPersonPresentation::ToggleFireMode() {
+    if (!IsActive() || !m_Equipped) return;
+    m_FullAuto = !m_FullAuto;
+    Log::Info(std::string("Fire mode: ") + (m_FullAuto ? "Full-Auto" : "Semi-Auto"));
+}
+
+void FirstPersonPresentation::UpdateTrigger(bool pressed, bool held) {
+    if (m_FullAuto) {
+        if (!held || m_FireCooldown > 0.0f) return;
+    } else if (!pressed) {
+        return;
+    }
+    if (Fire()) m_FireCooldown = kFullAutoInterval;
+}
+
+bool FirstPersonPresentation::Reload() {
+    if (!IsActive() || !m_Equipped || IsReload(m_ActionState)) return false;
+    const std::string state = FirstPersonReloadStateFor(m_Ammo, kMagazineSize);
+    if (state.empty() || !TriggerAction(state)) return false;
+    m_RefillOnFinish = true;
+    return true;
+}
+
+bool FirstPersonPresentation::SetEquipped(bool equipped) {
+    return TriggerAction(equipped ? "Draw" : "Holster");
+}
+
+void FirstPersonPresentation::Tick(float dt, float planarSpeed, bool sprinting, bool aiming) {
     if (!IsActive()) return;
+    if (m_RecoilTime >= 0.0f) {
+        m_RecoilTime += dt;
+        if (m_RecoilTime > kRecoilDone) m_RecoilTime = -1.0f;
+    }
+    m_FireCooldown = std::max(0.0f, m_FireCooldown - dt);
+    // The ADS walk bob follows whatever pose is up this frame: it eases in while moving in Aim
+    // and back out otherwise (stopping, or a reload taking over), so it never pops.
+    const float bobTarget = m_CurrentState == "Aim" ? std::min(planarSpeed / kBobFullSpeed, 1.0f) : 0.0f;
+    m_AimBobWeight += (bobTarget - m_AimBobWeight) * std::min(1.0f, dt * kBobEase);
+    m_AimBobPhase = std::fmod(m_AimBobPhase + dt * planarSpeed * glm::two_pi<float>() / kBobStride,
+                              glm::two_pi<float>());
     if (!m_ActionState.empty()) {
         if (!ActionFinished()) return; // a one-shot or locomotion transition is still holding
+        if (m_RefillOnFinish) m_Ammo = kMagazineSize;
+        m_RefillOnFinish = false;
         m_ActionState.clear();
         m_ActionTier = FirstPersonActionTier::None;
     }
+    // Unarmed: the Holster clip has finished, so there is nothing left to show until Draw.
+    if (!m_Equipped) {
+        m_Hidden = true;
+        return;
+    }
     const std::string resting = FirstPersonRestingState(planarSpeed, sprinting, aiming);
+    // The occasional regrip only interrupts a settled Idle, never a pose the player asked for.
+    if (resting == "Idle" && m_CurrentState == "Idle") {
+        m_IdleTime += dt;
+        if (m_IdleTime >= m_RegripDelay && m_Set.Find("Regrip")) {
+            m_RegripDelay = FirstPersonRegripDelay(std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng));
+            StartAction("Regrip", FirstPersonActionTier::Action);
+            return;
+        }
+    } else {
+        m_IdleTime = 0.0f;
+    }
     if (resting == m_CurrentState) return;
     const std::string via = FirstPersonTransitionVia(m_CurrentState, resting);
     if (!via.empty() && m_Set.Find(via)) {
@@ -260,10 +376,29 @@ void FirstPersonPresentation::Tick(float planarSpeed, bool sprinting, bool aimin
 
 void FirstPersonPresentation::Update(World& world, const Camera& camera) {
     if (!IsActive() || !world.Registry.valid(m_Arms) || !world.Registry.valid(m_Weapon)) return;
+    // Unarmed hides the rigs the way an unticked "active" box does: not drawn, and their clips
+    // pause (the animation tick skips InactiveTag). DeactivatedTag is what keeps InactiveTag from
+    // being recomputed away by World::SyncActiveInHierarchy.
+    if (m_Hidden != m_HiddenApplied) {
+        for (entt::entity e : {m_Arms, m_Weapon}) {
+            if (m_Hidden) {
+                world.Registry.emplace_or_replace<DeactivatedTag>(e);
+                world.Registry.emplace_or_replace<InactiveTag>(e);
+            } else {
+                world.Registry.remove<DeactivatedTag, InactiveTag>(e);
+            }
+        }
+        m_HiddenApplied = m_Hidden;
+    }
     const glm::quat cameraRotation = CameraRotation(camera);
+    // ADS recoil kicks the whole view model about the eye (the camera bone below stays pinned),
+    // in the camera's own frame so it reads as muzzle-up whatever the asset's axis convention.
+    const float kick = RecoilKick(m_RecoilTime);
+    const glm::quat recoil =
+        glm::angleAxis(glm::radians(kRecoilPitchDegrees * kick), glm::vec3(1.0f, 0.0f, 0.0f));
     // The asset's axis correction is the inner factor (it describes the models' own space), then
     // the scene's View Model Rotation as a tweak on top of that.
-    const glm::quat rotation = NormalizeRotation(cameraRotation *
+    const glm::quat rotation = NormalizeRotation(cameraRotation * recoil *
                                                  QuaternionFromEulerYXZ(m_Set.ViewRotation) *
                                                  QuaternionFromEulerYXZ(m_Rotation));
 
@@ -285,7 +420,9 @@ void FirstPersonPresentation::Update(World& world, const Camera& camera) {
         Log::Warn("First-person presentation: arms model has no '" + m_CameraBone +
                   "' bone; placing the view model's root on the camera instead.");
     }
-    position += cameraRotation * m_Offset;
+    const glm::vec3 bob = m_AimBobWeight * glm::vec3(kBobSide * std::sin(m_AimBobPhase),
+                                                     kBobVertical * std::sin(2.0f * m_AimBobPhase), 0.0f);
+    position += cameraRotation * (m_Offset + kick * kRecoilOffset + bob);
 
     world.SetWorldPose(m_Arms, position, rotation);
     world.Registry.get<TransformComponent>(m_Arms).Scale = glm::vec3(m_Scale);

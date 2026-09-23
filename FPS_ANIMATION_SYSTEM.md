@@ -541,16 +541,9 @@ Copy the implementation from `work/pose_probe.cpp`.
    `importer.optimizeGraph=false` fallback — that keeps the mesh correct but costs
    29215 → 130947 verts (+348%) versus +18.7% for the patch. See
    `FPS_ANIMATION_INVESTIGATION.md` UPDATE 5.
-9. **`EmptyReload` is authored but only reachable via a temporary debug key.** It has its
-   own arms and weapon clips (`AKS-74U_A_FP_Empty_Reload.fbx` /
-   `AKS-74U_A_W_Empty_Reload.fbx`) and is listed as a `Committed`-tier state, but
-   `main.cpp` hardcodes the Reload key:
-   `if (InputMap::GetButtonDown("Reload")) …TriggerAction("TacReload");` — gameplay code
-   never calls `TriggerAction("EmptyReload")`, because gating it needs "magazine empty"
-   and **there is no ammo system at all** (no ammo/rounds/counter anywhere in `src/`).
-   **Interim:** `G` fires it (TEMPORARY DEBUG binding in `main.cpp` + `InputMap::Defaults()`);
-   confirmed in Play mode. The real fix is an ammo system — **ask before adding one**.
-   Two traps were cleared on the way: (a) the binding was dead on arrival because
+9. **`EmptyReload` is now driven by the magazine count** (it used to be reachable only via
+   a temporary `G` debug key, now removed). See "Weapon gameplay" below.
+   Two traps were cleared on the way to the old debug key: (a) the binding was dead on arrival because
    `ProjectSettings` let `project/settings.json`'s 13-entry `input` array *replace*
    `Defaults()` wholesale, so any newly-added default key read nothing (`Lookup()` warns
    once, then the key is silently dead) — `InputMap::MergeDefaults` now tops a saved list
@@ -568,6 +561,48 @@ Copy the implementation from `work/pose_probe.cpp`.
     never played — rebaking it was the one genuinely break-everything risk here. Also
     untouched: `Idle`, `Aim`, `Empty_Reload`, `Inspect`, `Melee`, already exported
     correctly. See `FPS_ANIMATION_INVESTIGATION.md` UPDATE 6.
+
+### Weapon gameplay — ammo, binds, equip, ADS fire
+
+All in `FirstPersonPresentation` (`Fire()` / `Reload()` / `SetEquipped()` / `Tick(dt, …)`),
+with the pure rules in `FirstPersonAnimation.h` pinned by `TestFirstPersonAnimationFSM`.
+Input is read in `main.cpp` next to `firstPersonPresentation.Update`.
+
+| Input | Does |
+|---|---|
+| LMB / L-Ctrl (`Fire1`) | 1 round per shot. Hip: the `Fire` clip. ADS: procedural kick (below). Dry trigger does nothing — the empty reload is always the player's R |
+| B (`FireMode`) | Toggle Semi-Auto (one shot per press, the default) / Full-Auto (held, ~700 rpm = every 86 ms). Logged to the Console; resets to semi on Play |
+| R tap (`Reload`) | `TacReload` with rounds left, `EmptyReload` at 0, nothing when full or already reloading |
+| R hold ≥ 0.35 s | `MagCheck` (fires at the threshold; the release then does nothing) |
+| F (`Inspect`) | `Inspect` |
+| Q (`Melee`) | `Melee` |
+| 1 / 2 (`Weapon1` / `Weapon2`) | Draw the AK / Holster to unarmed |
+| Scroll wheel, H (`Holster`) | Toggle between the two |
+
+- **Magazine:** 30 rounds (`kMagazineSize`), refilled when the reload clip *completes*;
+  anything that cuts a reload short (Holster) leaves the count unchanged. No reserve ammo.
+  `EmptyReload` / `MagCheck` no longer have keys of their own.
+- **Regrip:** after 10–20 s (uniform random, re-rolled each time) of uninterrupted
+  `Idle`, as an `Action`-tier one-shot, so any input cuts it off. Never from Aim/Walk.
+- **Unarmed:** no unarmed arms pose exists, so once `Holster` finishes both rigs get
+  `DeactivatedTag` + `InactiveTag` (not drawn, clips paused), cleared again by `Draw`.
+  Draw/Holster still can't interrupt each other, so 1/2/scroll mid-swap is ignored.
+- **ADS fire:** the source set has no ADS fire clip, and the hip `Fire` clip would pull
+  the sights off centre every shot. When settled in `Aim`, `Fire()` keeps the pose and
+  kicks the whole view model about the eye in camera space — 1.2° muzzle up plus 14 mm
+  back / 2 mm up, 35 ms rise then an 80 ms exponential settle — so the sight picture
+  returns exactly to the one measured in §4. Each shot re-enters the rise at the current
+  kick, so full-auto chains into a shake instead of snapping between rounds.
+- **ADS while moving:** aiming wins over Walk, but sprinting (Sprint held *and* moving)
+  wins over aiming — no sprinting in ADS, sprint drops the sights
+  (`FirstPersonRestingState`). Releasing Sprint with Fire2 still held goes straight back
+  to `Aim`, skipping `SprintToIdle`. There is no aim-walk clip, so the Aim pose gets
+  a procedural bob instead of the hip `Walk` clip (which would pull the sights off
+  centre): a camera-plane figure-eight, 3 mm side-to-side per stride and 1.5 mm vertical
+  per step, stride 2.4 m, full amplitude at 3.5 m/s, eased in/out at 8/s. Firing while
+  walking in ADS is the same kick on top of the bob. Every other action (reloads, MagCheck,
+  Inspect, Melee) plays from ADS as its normal clip and hands back to `Aim` if Fire2 is
+  still held.
 
 ---
 

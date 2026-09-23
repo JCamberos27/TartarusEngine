@@ -51,6 +51,7 @@
           "path": "assets/fps/AKS74U/AKS74U.fpsanim",
           "pathGuid": "c0ff631aac421f76"
         },
+        "Camera Bone": "head",
         "Capsule Height": 1.7999999523162842,
         "Capsule Radius": 0.30000001192092896,
         "Eye Height": 1.600000023841858,
@@ -67,15 +68,15 @@
         "Sprint Multiplier": 1.600000023841858,
         "Throw Backspin": 2.0,
         "Throw Charge Time": 1.0,
-        "View Model FOV": 60.0,
+        "View Model FOV": 50.0,
         "View Model Offset": [
-          0.0562,
-          -0.032,
+          0.05620000138878822,
+          -0.03200000151991844,
           0.0
         ],
         "View Model Rotation": [
-          -0.24,
-          0.39,
+          -0.23999999463558197,
+          0.38999998569488525,
           0.0
         ],
         "View Model Scale": 1.0
@@ -309,6 +310,10 @@
     {
       "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Regrip.fbx",
       "pathGuid": "c10ae2c34481e1f7"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Aim.fbx",
+      "pathGuid": "9004884db6cdfb0e"
     }
   ],
   "libraryPrefabs": [],

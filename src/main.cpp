@@ -678,6 +678,7 @@ int main(int argc, char** argv) {
         }
         Player player;
         FirstPersonPresentation firstPersonPresentation;
+        FirstPersonReloadButton fpReloadButton; // tap/hold state for the Reload action
         GravityGun gravityGun;
         CrosshairOverlay crosshair; // Play-mode crosshair + gravity gun hold / throw-charge indicator
         TrajectoryRibbon throwArc;  // red predicted path while the gravity gun charges a throw
@@ -1212,6 +1213,7 @@ int main(int argc, char** argv) {
                 // FPS presentation is opt-in on the controller. Sandbox keeps its gravity gun
                 // path untouched because its controller has no Animation Set assigned.
                 firstPersonPresentation.Start(world, assets, fp);
+                fpReloadButton = {};
             } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
                 playUsesPlayer = false;
                 playGravityGun = false;
@@ -2140,27 +2142,34 @@ int main(int argc, char** argv) {
                     player.Update(gameDt, world, window.Handle(), gameHasInput);
                     if (firstPersonPresentation.IsActive()) {
                         firstPersonPresentation.Update(world, player.Cam);
-                        // The weapon system owns Fire1/Fire2/Reload/Inspect/MagCheck/Melee/Holster
-                        // whenever the gravity gun is off for this controller (#165 GravityGun) -
-                        // the two never read input in the same scene, so no bindings collide.
+                        // The weapon system owns Fire1/Fire2/FireMode/Reload/Inspect/Melee/Holster/
+                        // Weapon1/Weapon2 and the scroll wheel whenever the gravity gun is off for this
+                        // controller (#165 GravityGun) - the two never read input in the same
+                        // scene, so no bindings collide.
                         const bool weaponInput = gameHasInput && !playGravityGun;
                         if (weaponInput) {
-                            if (InputMap::GetButtonDown("Fire1")) firstPersonPresentation.TriggerAction("Fire");
-                            if (InputMap::GetButtonDown("Reload")) firstPersonPresentation.TriggerAction("TacReload");
-                            // TEMPORARY DEBUG: G plays EmptyReload directly so it can be eyeballed -
-                            // see the matching note in InputMap.cpp Defaults(). Not gameplay: there
-                            // is no ammo system to decide when the magazine is actually empty.
-                            if (InputMap::GetButtonDown("EmptyReload"))
-                                firstPersonPresentation.TriggerAction("EmptyReload");
+                            if (InputMap::GetButtonDown("FireMode")) firstPersonPresentation.ToggleFireMode();
+                            firstPersonPresentation.UpdateTrigger(InputMap::GetButtonDown("Fire1"),
+                                                                  InputMap::GetButton("Fire1"));
+                            // R is tap-to-reload, hold-to-check-the-magazine.
+                            switch (fpReloadButton.Update(InputMap::GetButton("Reload"), gameDt)) {
+                            case FirstPersonReloadInput::Reload: firstPersonPresentation.Reload(); break;
+                            case FirstPersonReloadInput::MagCheck: firstPersonPresentation.TriggerAction("MagCheck"); break;
+                            case FirstPersonReloadInput::None: break;
+                            }
                             if (InputMap::GetButtonDown("Inspect")) firstPersonPresentation.TriggerAction("Inspect");
-                            if (InputMap::GetButtonDown("MagCheck")) firstPersonPresentation.TriggerAction("MagCheck");
                             if (InputMap::GetButtonDown("Melee")) firstPersonPresentation.TriggerAction("Melee");
-                            if (InputMap::GetButtonDown("Holster"))
-                                firstPersonPresentation.TriggerAction(
-                                    firstPersonPresentation.IsEquipped() ? "Holster" : "Draw");
+                            // Two slots, AK and unarmed: 1/2 pick one, the wheel (either way) and
+                            // Holster toggle between them.
+                            if (InputMap::GetButtonDown("Weapon1")) firstPersonPresentation.SetEquipped(true);
+                            if (InputMap::GetButtonDown("Weapon2")) firstPersonPresentation.SetEquipped(false);
+                            if (Input::GetScrollDeltaY() != 0.0 || InputMap::GetButtonDown("Holster"))
+                                firstPersonPresentation.SetEquipped(!firstPersonPresentation.IsEquipped());
+                        } else {
+                            fpReloadButton = {}; // focus lost mid-press: never resolve it as a tap
                         }
                         const float planarSpeed = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z));
-                        firstPersonPresentation.Tick(planarSpeed, gameHasInput && InputMap::GetButton("Sprint"),
+                        firstPersonPresentation.Tick(gameDt, planarSpeed, gameHasInput && InputMap::GetButton("Sprint"),
                                                      weaponInput && InputMap::GetButton("Fire2"));
                     }
                 }

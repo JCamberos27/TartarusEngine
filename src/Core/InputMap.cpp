@@ -83,17 +83,16 @@ std::vector<Action> Defaults() {
         // First-person weapon actions (#165 FirstPersonPresentation). Fire/Aim reuse Fire1/Fire2
         // rather than adding new mouse-bound actions - the two only ever apply to a controller
         // with its gravity gun turned off, so the bindings never actually collide in one scene.
+        // Reload is tap/hold: a tap reloads (tactical or empty, from the magazine count), a hold
+        // checks the magazine - so neither EmptyReload nor MagCheck needs a key of its own.
         act("Reload",   GLFW_KEY_R, kNone, kNone, kNone, kNone, kNone, false),
-        // TEMPORARY DEBUG BINDING - not gameplay. EmptyReload is authored (it has its own arms
-        // and weapon clips and is a Committed-tier state) but unreachable: main.cpp hardcodes the
-        // Reload key to TacReload, and there is no ammo system to gate "magazine empty" on. G is
-        // otherwise unbound. Remove this line (and its main.cpp use) once an ammo system decides
-        // when EmptyReload should fire.
-        act("EmptyReload", GLFW_KEY_G, kNone, kNone, kNone, kNone, kNone, false),
+        act("FireMode", GLFW_KEY_B, kNone, kNone, kNone, kNone, kNone, false), // semi <-> full auto
         act("Inspect",  GLFW_KEY_F, kNone, kNone, kNone, kNone, kNone, false),
-        act("Melee",    GLFW_KEY_V, kNone, kNone, kNone, kNone, kNone, false),
-        act("MagCheck", GLFW_KEY_T, kNone, kNone, kNone, kNone, kNone, false),
+        act("Melee",    GLFW_KEY_Q, kNone, kNone, kNone, kNone, kNone, false),
         act("Holster",  GLFW_KEY_H, kNone, kNone, kNone, kNone, kNone, false),
+        // Weapon slots: 1 = the AK, 2 = unarmed (the scroll wheel toggles between them too).
+        act("Weapon1",  GLFW_KEY_1, kNone, kNone, kNone, kNone, kNone, false),
+        act("Weapon2",  GLFW_KEY_2, kNone, kNone, kNone, kNone, kNone, false),
     };
 }
 
