@@ -1996,6 +1996,8 @@ void TestWeaponProcedural() {
         WeaponProceduralInput in;
         in.IKOff = true;
         in.Lean = 1.0f;
+        in.WalkSpeed = 6.0f;     // references left at 0 follow the player's own speeds
+        in.SprintSpeed = 9.6f;
         in.Velocity = glm::vec3(0.0f, 0.0f, -3.0f);
         const WeaponProceduralPose p = run(st, k, in, 2.0f);
         CHECK(p.IKWeight == 0.0f);
@@ -2003,6 +2005,11 @@ void TestWeaponProcedural() {
         CHECK(p.WalkRate == k.Locomotion.MinRate);                   // 3 / 6 m/s, clamped up to the minimum
         in.Velocity = glm::vec3(0.0f, 0.0f, -7.2f);
         CHECK(std::fabs(run(st, k, in, 0.1f).WalkRate - 1.2f) < 1e-4f);
+        in.WalkSpeed = 3.5f;     // a scene's own tuning: full walk speed plays at 1x
+        in.Velocity = glm::vec3(0.0f, 0.0f, -3.5f);
+        CHECK(std::fabs(run(st, k, in, 0.1f).WalkRate - 1.0f) < 1e-4f);
+        k.Locomotion.WalkReference = 7.0f; // an explicit reference wins
+        CHECK(std::fabs(run(st, k, in, 0.1f).WalkRate - 0.6f) < 1e-4f);
         in.IKOff = false;
         CHECK(run(st, k, in, 0.5f).IKWeight == 1.0f);
     }

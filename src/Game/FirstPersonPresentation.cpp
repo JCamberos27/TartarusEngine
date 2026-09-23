@@ -130,6 +130,8 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     m_Offset = config.ViewModelOffset;
     m_Rotation = config.ViewModelRotation;
     m_Scale = config.ViewModelScale;
+    m_WalkSpeed = config.MoveSpeed;
+    m_SprintSpeed = config.MoveSpeed * config.SprintMultiplier;
     // Not validated here: MakePerspective is the engine's one guarded projection constructor
     // (#202) and corrects every degenerate FOV, so an out-of-range value costs a wrong-looking
     // view model, never a broken frame. The Inspector already clamps it to 20..150.
@@ -415,6 +417,8 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     in.Ads = ac->HasTag(K::kTagAds);
     in.IKOff = ac->HasTag(K::kTagHidden) || (!m_Set.Procedural.IK.OffTag.empty() && ac->HasTag(m_Set.Procedural.IK.OffTag.c_str()));
     in.Lean = m_Equipped ? lean : 0.0f;
+    in.WalkSpeed = m_WalkSpeed;
+    in.SprintSpeed = m_SprintSpeed;
     in.StateName = &ac->StateName;
     in.StateTags = &ac->StateTags;
     const WeaponProceduralPose& pose = m_Procedural.Update(m_Set.Procedural, in);
