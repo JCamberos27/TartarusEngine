@@ -456,12 +456,31 @@ struct AnimatorParam {
     float Value = 0.0f;
 };
 
+// One layer's live playback (Animator v2). Stack[0] is the oldest pose still contributing;
+// the last entry is the current state. Every entry above the first fades in over the one below
+// it, so interrupting a crossfade keeps the pose it had reached instead of popping.
+struct AnimatorLayerRuntime {
+    struct Item {
+        int   State = -1;
+        float Phase = 0.0f;        // normalized time in the state: 1 = one pass, >1 counts loops
+        float Fade = 1.0f;         // 0..1 blend-in weight over the entries below
+        float FadeDuration = 0.0f; // seconds for Fade 0 -> 1 (0 = instant)
+    };
+    std::vector<Item> Stack;
+    int  Transition = -1;          // the transition whose crossfade is running, or -1
+    bool Interruptible = true;     // false while a non-interruptible transition fades
+};
+
 // #175 Part B - drives this entity's model from an Animator Controller asset (.controller):
-// clips as states, crossfaded transitions on parameter conditions. While playing it takes over
-// from an Animation component on the same entity. Game code steers it with the setters below.
+// clips (or 1D blend trees) as states on one or more layers, crossfaded transitions on parameter
+// conditions. While playing it takes over from an Animation component on the same entity. Game
+// code steers it with the setters below and reads back state, tags and fired events.
 struct AnimatorControllerComponent {
     std::string Controller;  // project-relative .controller path
     float Speed = 1.0f;      // multiplies every state's speed
+    // Which of the controller's tracks this entity plays (empty = the first). A controller can
+    // hold several clip sets per state - e.g. "arms" and "weapon" - for rigs animated together.
+    std::string Track;
 
     void  SetFloat(const std::string& name, float v)  { Param(name, 0).Value = v; }
     void  SetInt(const std::string& name, int v)      { Param(name, 1).Value = (float)v; }
@@ -473,13 +492,33 @@ struct AnimatorControllerComponent {
         return 0.0f;
     }
     const std::string& CurrentState() const { return StateName; }
+    // Base-layer queries, valid after the controller's first update.
+    bool InState(const std::string& name) const { return StateName == name; }
+    bool HasTag(const std::string& tag) const {
+        for (const auto& t : StateTags) if (t == tag) return true;
+        return false;
+    }
+    // Events whose time was crossed during the last update (cleared at the start of each one).
+    bool EventFired(const std::string& name) const {
+        for (const auto& e : FiredEvents) if (e == name) return true;
+        return false;
+    }
 
     // --- runtime (not serialized) ---
     std::vector<AnimatorParam> Params; // seeded from the controller's defaults at start
     bool  Started = false;
-    int   State = -1;
-    std::string StateName;
-    float StateTime = 0.0f;            // seconds in the current state, scaled by speed
+    int   State = -1;                  // base layer: current state index
+    std::string StateName;             // base layer: current state name
+    std::vector<std::string> StateTags;// base layer: current state's tags
+    float StateTime = 0.0f;            // base layer: normalized time in the current state
+    bool  InTransition = false;        // base layer: a crossfade is still running
+    std::vector<std::string> FiredEvents;
+    std::vector<AnimatorLayerRuntime> Layers;
+    // Follower mode: when set, this entity mirrors the driver's layers/states/times exactly and
+    // evaluates no transitions of its own - the way a weapon rig stays locked to the arms.
+    entt::entity Driver = entt::null;
+    // Keep updating while the entity is inactive (hidden rigs that must still leave a state).
+    bool UpdateWhenInactive = false;
 
     // A parameter by name, created (with `type`) if the controller hasn't declared it yet -
     // game code may set values before the first frame.

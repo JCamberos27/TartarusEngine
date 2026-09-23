@@ -1,26 +1,42 @@
 {
   "armsModel": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",
+  "controller": "assets/fps/AKS74U/AKS74U.controller",
+  "gameplay": {
+    "adsBob": {
+      "ease": 8.0,
+      "fullSpeed": 3.5,
+      "side": 0.003,
+      "stride": 2.4,
+      "vertical": 0.0015
+    },
+    "allowFullAuto": true,
+    "magazine": 30,
+    "recoil": {
+      "offset": [
+        0.0,
+        0.002,
+        0.014
+      ],
+      "pitch": 1.2,
+      "rise": 0.035,
+      "settle": 0.08
+    },
+    "regripMax": 20.0,
+    "regripMin": 10.0,
+    "reloadHoldSeconds": 0.35,
+    "rpm": 700.0
+  },
+  "viewRotation": [
+    0.0,
+    180.0,
+    0.0
+  ],
   "weaponModel": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",
-  "defaultState": "Idle",
-  "viewRotation": [0.0, 180.0, 0.0],
-  "weaponSocket": "ik_hand_gun",
+  "weaponMountRotation": [
+    0.0,
+    90.0,
+    90.0
+  ],
   "weaponRoot": "root",
-  "weaponMountRotation": [0.0, 90.0, 90.0],
-  "clips": [
-    { "name": "Idle", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx", "loop": true, "fade": 0.12 },
-    { "name": "Walk", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Walk.fbx", "loop": true, "fade": 0.10 },
-    { "name": "IdleToSprint", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_IdleToSprint.fbx", "weapon": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_IdleToSprint.fbx", "fade": 0.05 },
-    { "name": "Sprint", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Sprint.fbx", "weapon": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Sprint.fbx", "loop": true, "fade": 0.08 },
-    { "name": "SprintToIdle", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_SprintToIdle.fbx", "weapon": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_SprintToIdle.fbx", "fade": 0.05 },
-    { "name": "Aim", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Aim.fbx", "loop": true, "fade": 0.10 },
-    { "name": "Draw", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Draw.fbx", "fade": 0.05 },
-    { "name": "Holster", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Holster.fbx", "weapon": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Holster.fbx", "fade": 0.05 },
-    { "name": "Fire", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Fire.fbx", "weapon": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Fire.fbx", "fade": 0.03 },
-    { "name": "TacReload", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Tac_Reload.fbx", "weapon": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Tac_Reload.fbx", "fade": 0.05 },
-    { "name": "EmptyReload", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Empty_Reload.fbx", "weapon": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Empty_Reload.fbx", "fade": 0.05 },
-    { "name": "Inspect", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Inspect.fbx", "weapon": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Inspect.fbx", "fade": 0.08 },
-    { "name": "MagCheck", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Mag_Check.fbx", "weapon": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Mag_Check.fbx", "fade": 0.06 },
-    { "name": "Melee", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Melee.fbx", "weapon": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Melee.fbx", "fade": 0.04 },
-    { "name": "Regrip", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Regrip.fbx", "fade": 0.06 }
-  ]
+  "weaponSocket": "ik_hand_gun"
 }
