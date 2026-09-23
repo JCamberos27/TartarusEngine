@@ -173,9 +173,18 @@ bool Draw(const char* id, Curve& curve, const ImVec2& sizeIn, const Options& o) 
     if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && hoverKey < 0 && hoverHandle == 0) {
         float t, v;
         toCurve(mouse, t, v);
-        sel = curve.AddKey(std::clamp(t, t0, t1));
+        t = std::clamp(t, t0, t1);
+        // Two keys at one time make a step; select the existing one instead.
+        int existing = -1;
+        for (int i = 0; i < (int)curve.Keys.size(); ++i)
+            if (std::fabs(curve.Keys[i].Time - t) < (t1 - t0) * 1e-3f) existing = i;
+        if (existing >= 0) {
+            sel = existing;
+        } else {
+            sel = curve.AddKey(t);
+            committed = true;
+        }
         st.SetDrag(0);
-        committed = true;
     }
     if (st.Drag() != 0 && sel >= 0 && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
         (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f)) {
@@ -200,19 +209,63 @@ bool Draw(const char* id, Curve& curve, const ImVec2& sizeIn, const Options& o) 
         st.SetDrag(0);
         committed = true;
     }
+    // Right-click a key for its menu (not an instant delete: there is no undo here).
+    const ImGuiID keyMenuKey = st.Id ^ 0x55u;
     if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
         if (hoverKey >= 0) {
-            if (curve.Keys.size() > 1) {
-                curve.Keys.erase(curve.Keys.begin() + hoverKey);
-                sel = -1;
-                committed = true;
-            }
+            sel = hoverKey;
+            ImGui::GetStateStorage()->SetInt(keyMenuKey, hoverKey);
+            ImGui::OpenPopup("##curvekey");
         } else {
             ImGui::OpenPopup("##curvepresets");
         }
     }
-    if (hovered && hoverKey < 0 && hoverHandle == 0 && st.Drag() == 0)
-        EditorUI::SetTooltip("Double-click: add key   Right-click: presets / delete key");
+    const auto deleteKey = [&](int i) {
+        if (i < 0 || i >= (int)curve.Keys.size() || curve.Keys.size() <= 1) return;
+        curve.Keys.erase(curve.Keys.begin() + i);
+        sel = -1;
+        committed = true;
+    };
+    if (hovered && sel >= 0 && st.Drag() == 0 &&
+        (ImGui::IsKeyPressed(ImGuiKey_Delete, false) || ImGui::IsKeyPressed(ImGuiKey_Backspace, false)))
+        deleteKey(sel);
+    if (ImGui::BeginPopup("##curvekey")) {
+        const int k = ImGui::GetStateStorage()->GetInt(keyMenuKey, -1);
+        if (k >= 0 && k < (int)curve.Keys.size()) {
+            CurveKey& key = curve.Keys[k];
+            ImGui::TextDisabled("Key %d", k + 1);
+            if (ImGui::MenuItem("Flat tangents")) {
+                key.InTangent = key.OutTangent = 0.0f;
+                committed = true;
+            }
+            if (ImGui::MenuItem("Smooth tangents")) {
+                Curve smooth = curve;
+                smooth.AutoTangents();
+                key.InTangent = smooth.Keys[k].InTangent;
+                key.OutTangent = smooth.Keys[k].OutTangent;
+                committed = true;
+            }
+            if (ImGui::MenuItem("Value to 0")) {
+                key.Value = 0.0f;
+                committed = true;
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Delete key", "Del", false, curve.Keys.size() > 1)) deleteKey(k);
+        } else {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    if (hovered && st.Drag() == 0) {
+        if (hoverKey >= 0) {
+            char tv[96], vv[48];
+            std::snprintf(vv, sizeof vv, o.ValueFormat, curve.Keys[hoverKey].Value);
+            std::snprintf(tv, sizeof tv, "Time %.3f   Value %s\nDrag to move, right-click for options", curve.Keys[hoverKey].Time, vv);
+            EditorUI::SetTooltip("%s", tv);
+        } else if (hoverHandle == 0) {
+            EditorUI::SetTooltip("Double-click: add a key   Right-click: presets\nSelect a key and press Delete to remove it");
+        }
+    }
 
     if (ImGui::BeginPopup("##curvepresets")) {
         const float amp = PeakOf(curve, o.PresetAmplitude);
@@ -254,6 +307,10 @@ bool Draw(const char* id, Curve& curve, const ImVec2& sizeIn, const Options& o) 
         if (ImGui::MenuItem("Smooth all tangents")) {
             curve.AutoTangents();
             committed = true;
+        }
+        if (o.Default) {
+            ImGui::Separator();
+            preset("Reset to default", *o.Default);
         }
         ImGui::EndPopup();
     }

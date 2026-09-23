@@ -44,7 +44,8 @@ void ComputeGlobals(const Pose& pose, const std::vector<int>& parents, std::vect
 void RefreshGlobals(const Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int from) {
     if (!ValidNode(pose, from)) return;
     // Parents come first, so one forward pass from `from` reaches every descendant.
-    std::vector<unsigned char> dirty(pose.size(), 0);
+    thread_local std::vector<unsigned char> dirty;
+    dirty.assign(pose.size(), 0);
     dirty[from] = 1;
     for (size_t i = (size_t)from; i < pose.size(); ++i) {
         const int p = parents[i];
@@ -164,9 +165,11 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose) {
     const float w = std::clamp(rig.Weight, 0.0f, 1.0f);
     if (!rig.Enabled || w <= 0.0f || pose.empty() || (int)pose.size() != model.NodeCount()) return;
 
-    std::vector<int> parents(pose.size());
+    // Scratch reused across calls: this runs every frame for every rigged object.
+    thread_local std::vector<int> parents;
+    thread_local std::vector<glm::mat4> globals;
+    parents.resize(pose.size());
     for (int i = 0; i < (int)pose.size(); ++i) parents[i] = model.NodeParent(i);
-    std::vector<glm::mat4> globals;
     ComputeGlobals(pose, parents, globals);
 
     // Limbs that keep their animated grip remember where the end sat relative to its target
@@ -176,14 +179,15 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose) {
         int Upper, Lower, End, Target;
         glm::mat4 Relative{1.0f};
     };
-    std::vector<Limb> limbs;
+    Limb limbs[2];
+    int limbCount = 0;
     for (const IKLimb* l : {&rig.LimbA, &rig.LimbB}) {
         if (!l->Enabled || l->Weight <= 0.0f) continue;
         Limb limb{l, model.NodeIndex(l->Upper), model.NodeIndex(l->Lower), model.NodeIndex(l->End),
                   model.NodeIndex(l->Target)};
         if (limb.Upper < 0 || limb.Lower < 0 || limb.End < 0 || limb.Target < 0) continue;
         if (l->KeepAnimatedOffset) limb.Relative = glm::inverse(globals[limb.Target]) * globals[limb.End];
-        limbs.push_back(limb);
+        limbs[limbCount++] = limb;
     }
 
     for (const IKBoneOffset& off : rig.Offsets) {
@@ -193,14 +197,8 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose) {
         OffsetBone(pose, parents, globals, i, off.Position * w, rot, Position(globals[i]) + off.Pivot);
     }
 
-    for (const Limb& limb : limbs) {
-        const glm::mat4 goal = limb.Settings->KeepAnimatedOffset ? globals[limb.Target] * limb.Relative
-                                                                 : globals[limb.Target];
-        const glm::quat goalRot = Rotation(goal);
-        SolveTwoBone(pose, parents, globals, limb.Upper, limb.Lower, limb.End, Position(goal),
-                     limb.Settings->MatchRotation ? &goalRot : nullptr, limb.Settings->Weight * w);
-    }
-
+    // The look-at goes before the limbs: aiming a spine or head bone swings the arms hanging off
+    // it, and the limbs then reach for their targets from wherever that left them.
     if (rig.LookAtEnabled) {
         const int bone = model.NodeIndex(rig.LookAtBone);
         const int target = model.NodeIndex(rig.LookAtTarget);
@@ -208,6 +206,30 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose) {
             AimBone(pose, parents, globals, bone, rig.LookAtAxis, Position(globals[target]),
                     rig.LookAtMaxAngle, rig.LookAtWeight * w);
     }
+
+    for (int n = 0; n < limbCount; ++n) {
+        const Limb& limb = limbs[n];
+        const glm::mat4 goal = limb.Settings->KeepAnimatedOffset ? globals[limb.Target] * limb.Relative
+                                                                 : globals[limb.Target];
+        const glm::quat goalRot = Rotation(goal);
+        SolveTwoBone(pose, parents, globals, limb.Upper, limb.Lower, limb.End, Position(goal),
+                     limb.Settings->MatchRotation ? &goalRot : nullptr, limb.Settings->Weight * w);
+    }
+}
+
+std::vector<std::string> MissingBones(const IKRigComponent& rig, const Model& model) {
+    std::vector<std::string> missing;
+    const auto need = [&](const std::string& name) {
+        if (!name.empty() && model.NodeIndex(name) >= 0) return;
+        const std::string label = name.empty() ? "(a bone left empty)" : name;
+        if (std::find(missing.begin(), missing.end(), label) == missing.end()) missing.push_back(label);
+    };
+    for (const IKLimb* l : {&rig.LimbA, &rig.LimbB}) {
+        if (!l->Enabled) continue;
+        need(l->Upper); need(l->Lower); need(l->End); need(l->Target);
+    }
+    if (rig.LookAtEnabled) { need(rig.LookAtBone); need(rig.LookAtTarget); }
+    return missing;
 }
 
 } // namespace IK

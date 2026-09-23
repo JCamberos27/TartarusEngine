@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <string>
 #include <vector>
 
 class Model;
@@ -56,5 +57,9 @@ void AimBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>
 // Runs an IK Rig component on `pose` for `model`: its bone offsets (runtime, written by game
 // code), then its limbs and look-at. No-op when the rig is disabled or its weight is 0.
 void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose);
+
+// The bones an enabled limb or look-at names that `model` doesn't have (an empty name counts),
+// for the Inspector's warning. Empty when the rig can run as set up.
+std::vector<std::string> MissingBones(const IKRigComponent& rig, const Model& model);
 
 } // namespace IK
