@@ -264,6 +264,51 @@ world(local) = position + rotation * (scale * local)
 - With `CameraBone = "head"` the shoulders land below and slightly behind the camera
   and the hands/gun land in front — a normal first-person frame.
 
+### ADS sight centring — camera offset, not a weapon mount offset
+
+The weapon mount is **rotation-only on purpose** (`weaponMountRotation`, no translation).
+A `weaponMountOffset` that restores the artist's exact socket→root translation was tried
+(af4ad15, reverted in c01f451): it moved the AK out of the hands, so the gun stays where
+the rotation-only mount puts it.
+
+With that mount, the `Aim` pose leaves the sight line about 5 cm left of and 3 cm above
+the `head`-bone camera. You see this as "the camera is too far right of the AK in ADS". It
+is corrected in the scene, not in code:
+
+```jsonc
+// FPS_Animation_smoke_play.json, FirstPersonController
+"View Model Offset":   [0.0562, -0.032, 0.0]   // camera frame: +x right, +y up, +z back
+"View Model Rotation": [-0.24, 0.39, 0.0]      // Y-X-Z degrees, pivots on the head bone = the camera
+```
+
+**What "aligned" means here:** the front post's tip sits centred in the rear U-notch,
+flush with the notch's top edge, and that point is exactly on screen centre. Both sights
+were located from the mesh itself (`work/sight_align_probe.cpp` prints 0.5 mm heightmaps
+of both), not from bone positions or the highest vertex:
+
+| sight point (raw weapon frame) | x | y | z |
+|---|---|---|---|
+| rear notch, centre at shoulder height | −0.0682 | 1.559 | 0.4865 |
+| front post, centre of tip | −0.0698 | 1.558 | 0.7235 |
+
+The line between them is **0.39° right and 0.24° down** of the camera's forward axis. An
+offset alone can put the eye on that line, so the post sits inside the notch, but the
+aligned sights then land about 4 px right and 2 px low of centre. That's why the small
+rotation is there. The probe solves rotation and offset together; with the values above,
+both sights land within **0.1 px** of centre. That was confirmed in Play mode at View Model
+FOV 20 (3× magnified): post centred in the notch, tip flush, on the crosshair.
+
+Trap: `ads_sight_probe.cpp` (af4ad15) picks the "front sight" as the highest mid-plane
+vertex. That is the top of the right-hand **protective ear**, 5 mm right of and 5 mm above
+the post, so its numbers are off by about that much. Use `sight_align_probe.cpp`.
+
+The offset and rotation apply in every state, so hip fire shifts by the same ~6 cm and
+~0.5°, which reads as normal. Both are read in `FirstPersonPresentation::Start()`, so
+after changing them, Stop and Play again. To re-measure:
+`work\build_probe.bat sight_align_probe`, then
+`work\sight_align_probe.exe <A_FP_ADS> <A_FP_Aim> <A_W_ADS> - 0 90 90 <offset xyz> <rotation xyz>`.
+If the rig or clips are re-exported, re-read the two sight points off the heightmaps first.
+
 ### Config fields
 
 ```cpp

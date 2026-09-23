@@ -69,13 +69,13 @@
         "Throw Charge Time": 1.0,
         "View Model FOV": 60.0,
         "View Model Offset": [
-          0.0,
-          0.0,
+          0.0562,
+          -0.032,
           0.0
         ],
         "View Model Rotation": [
-          0.0,
-          0.0,
+          -0.24,
+          0.39,
           0.0
         ],
         "View Model Scale": 1.0
