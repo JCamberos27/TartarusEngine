@@ -138,13 +138,51 @@ public:
     // bind pose (#98 — a rig with no clip playing used to render in raw mesh space).
     void UploadBoneMatrices(Shader& shader) const;
     bool IsPlayingAnimation() const { return m_Anim.Clip >= 0; }
+    // Has the current clip run out? True when nothing is set to play, false while a wrapping clip
+    // runs, and - unlike IsPlayingAnimation(), which a ClampForever clip never clears - true for a
+    // ClampForever clip that has reached its last frame and is now only holding it. This is the
+    // question a "did that one-shot finish?" gate actually wants: IsPlayingAnimation() answers
+    // "is a clip still driving the pose", and a held pose still is.
+    bool AnimationFinished() const;
     int  BoneCount() const { return m_D->BoneCounter; }
     // The current skinning matrix of bone `i` (bind pose when nothing plays). For tests / tools.
     glm::mat4 FinalBoneMatrix(int i) const {
         if (i < 0 || i >= m_D->BoneCounter) return glm::mat4(1.0f);
-        const bool posed = m_Anim.Clip >= 0 || m_FadeDuration > 0.0f;
+        const bool posed = m_ExternalPose || m_Anim.Clip >= 0 || m_FadeDuration > 0.0f;
         return posed && i < (int)m_FinalBoneMatrices.size() ? m_FinalBoneMatrices[i] : m_D->BindPoseBones[i];
     }
+
+    // Model-root-space transform of a named node (a bone, for a rig) as it currently stands:
+    // the animated pose while a clip plays, the bind pose otherwise. This is the NODE's world,
+    // not a skinning matrix - it is what you multiply by the entity's world transform to get a
+    // bone's world position, e.g. to hang a camera off a head bone. Returns false when the model
+    // has no node of that name, in which case `out` is left untouched.
+    bool NodeTransform(const std::string& name, glm::mat4& out) const;
+
+    // --- Animator pose API ------------------------------------------------------------------
+    // The Animator Controller (AnimatorController.cpp) blends poses itself - crossfade stacks,
+    // blend trees, layers with bone masks - so it needs "sample a clip" and "apply a pose" as
+    // separate steps rather than PlayAnimation's single built-in crossfade. A pose is one
+    // LocalTRS per node, in the flattened parents-first order of NodeName()/NodeParent().
+    int NodeCount() const { return (int)m_D->Nodes.size(); }
+    int NodeIndex(const std::string& name) const; // -1 when absent
+    const std::string& NodeName(int i) const { return m_D->Nodes[i].Name; }
+    int NodeParent(int i) const { return m_D->Nodes[i].Parent; }
+    // Every node at its authored bind-local transform.
+    void BindLocalPose(std::vector<LocalTRS>& out) const;
+    // Clip `clip` at `seconds` of playback under `wrap`; nodes the clip doesn't animate keep
+    // their bind value. `driven`, when given, is set to 1 per node the clip has a channel for.
+    // Returns false (and writes the bind pose) when the clip index is invalid.
+    bool SampleLocalPose(int clip, float seconds, AnimationWrapMode wrap, std::vector<LocalTRS>& out,
+                         std::vector<unsigned char>* driven = nullptr) const;
+    // Makes `pose` this model's current pose: fills the node globals and skinning palette, and
+    // from then on NodeTransform, FinalBoneMatrix and UploadBoneMatrices report it while
+    // UpdateAnimation leaves it alone. The next PlayAnimation/StopAnimation hands control back
+    // to the built-in playback. A pose of the wrong size is ignored.
+    void ApplyLocalPose(const std::vector<LocalTRS>& pose);
+    bool HasExternalPose() const { return m_ExternalPose; }
+    // Seconds into the current clip as a 0..1 fraction of its length (0 when nothing plays).
+    float NormalizedTime() const;
 
     const std::string& Path() const { return m_Path; }
     // #132 - the file was renamed or moved outside the editor; the loaded data stays valid.
@@ -249,6 +287,7 @@ private:
     PlaybackState m_AnimFrom;      // what's being faded out (Clip -1 = the bind pose)
     float m_FadeElapsed = 0.0f, m_FadeDuration = 0.0f; // crossfade progress; duration 0 = none
     bool m_PosePending = false;    // a fade to "stopped" still needs final matrices this frame
+    bool m_ExternalPose = false;   // ApplyLocalPose owns the pose until the next PlayAnimation
     std::vector<glm::mat4> m_FinalBoneMatrices;
     std::vector<glm::mat4> m_NodeGlobals; // scratch, one per AnimNode
 

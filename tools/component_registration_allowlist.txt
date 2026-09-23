@@ -22,3 +22,4 @@ StaticTag               = The "Static" checkbox in the Inspector header.
 HiddenInSceneTag        = Editor Scene-view "hidden" column in the Hierarchy (#236 B). No runtime effect.
 SceneLockedTag          = Editor Scene-view "locked" column in the Hierarchy (#236 B). No runtime effect.
 LodCulledTag            = Runtime-only (#163): set per view by World::ApplyLod on renderers of LOD levels the view isn't using. Never saved, no Inspector.
+ViewModelTag            = Runtime-only: FirstPersonPresentation::Start sets it on the spawned arms + weapon so SceneRenderer draws them in the view-model sub-pass. Those entities only exist during Play; never saved, no Inspector.

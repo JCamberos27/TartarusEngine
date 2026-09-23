@@ -1,0 +1,388 @@
+{
+  "autoExposure": false,
+  "autoExposureMaxEV": 4.0,
+  "autoExposureMinEV": -4.0,
+  "autoExposureSpeedDown": 1.0,
+  "autoExposureSpeedUp": 2.0,
+  "bloomEnabled": false,
+  "bloomIntensity": 0.25,
+  "bloomKnee": 0.5,
+  "bloomThreshold": 1.0,
+  "boxes": [
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        0.23999999463558197,
+        0.25,
+        0.30000001192092896
+      ],
+      "id": 0,
+      "name": "Animation Test Floor",
+      "order": 1,
+      "parentId": -1,
+      "position": [
+        0.0,
+        -0.5,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        40.0,
+        1.0,
+        40.0
+      ]
+    }
+  ],
+  "chromaticAberration": 0.0,
+  "depthOfField": false,
+  "dofMaxBlur": 8.0,
+  "empties": [
+    {
+      "First Person Controller": {
+        "Animation Set": {
+          "path": "assets/fps/AKS74U/AKS74U.fpsanim",
+          "pathGuid": "c0ff631aac421f76"
+        },
+        "Camera Bone": "head",
+        "Capsule Height": 1.7999999523162842,
+        "Capsule Radius": 0.30000001192092896,
+        "Eye Height": 1.600000023841858,
+        "Field of View": 75.0,
+        "Gravity": 18.0,
+        "Gravity Gun": false,
+        "Invert Y": false,
+        "Jump Speed": 5.5,
+        "Kill Height": -20.0,
+        "Max Throw Speed": 18.0,
+        "Min Throw Speed": 4.0,
+        "Mouse Sensitivity": 0.10000000149011612,
+        "Move Speed": 3.5,
+        "Sprint Multiplier": 1.600000023841858,
+        "Throw Backspin": 2.0,
+        "Throw Charge Time": 1.0,
+        "View Model FOV": 50.0,
+        "View Model Offset": [
+          0.05620000138878822,
+          -0.03200000151991844,
+          0.0
+        ],
+        "View Model Rotation": [
+          -0.23999999463558197,
+          0.38999998569488525,
+          0.0
+        ],
+        "View Model Scale": 1.0
+      },
+      "id": 1,
+      "name": "FPS Player Start",
+      "order": 2,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.05000000074505806,
+        4.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "exposureEV": 0.0,
+  "filmGrain": 0.0,
+  "filmGrainResponse": 0.800000011920929,
+  "focusDistance": 10.0,
+  "focusRange": 3.0,
+  "fogBaseHeight": 0.0,
+  "fogColor": [
+    0.550000011920929,
+    0.6200000047683716,
+    0.7200000286102295
+  ],
+  "fogDensity": 0.009999999776482582,
+  "fogEnabled": false,
+  "fogEnd": 300.0,
+  "fogHeightFalloff": 0.0,
+  "fogMode": 2,
+  "fogStart": 10.0,
+  "formatVersion": 4,
+  "fxaa": false,
+  "gradeColorFilter": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "gradeContrast": 0.0,
+  "gradeSaturation": 0.0,
+  "gradeTemperature": 0.0,
+  "gradeTint": 0.0,
+  "libraryMaterials": [
+    {
+      "path": "materials/sandbox/court_floor.mat",
+      "pathGuid": "af2c57edb9eeead3"
+    },
+    {
+      "path": "materials/sandbox/arena_glass.mat",
+      "pathGuid": "2b02bddbbc176106"
+    },
+    {
+      "path": "materials/sandbox/backboard_glass.mat",
+      "pathGuid": "a00f0b02ee9bb028"
+    },
+    {
+      "path": "materials/sandbox/rim.mat",
+      "pathGuid": "e62f07d31b9df2ce"
+    },
+    {
+      "path": "materials/sandbox/net.mat",
+      "pathGuid": "9a60da12561af3f2"
+    },
+    {
+      "path": "materials/sandbox/basketball.mat",
+      "pathGuid": "9ec0856b3181ad4f"
+    },
+    {
+      "path": "materials/sandbox/water.mat",
+      "pathGuid": "7b94769ce0f84595"
+    },
+    {
+      "path": "materials/sandbox/gallery_chrome.mat",
+      "pathGuid": "d43b10aee251de3c"
+    },
+    {
+      "path": "materials/sandbox/gallery_gold.mat",
+      "pathGuid": "6cd312ca7538ce16"
+    },
+    {
+      "path": "materials/sandbox/gallery_brushed.mat",
+      "pathGuid": "b30f3b5631a2c4d1"
+    },
+    {
+      "path": "materials/sandbox/gallery_carpaint.mat",
+      "pathGuid": "5af22ea260759521"
+    },
+    {
+      "path": "materials/sandbox/gallery_velvet.mat",
+      "pathGuid": "2c58a10670b0ee18"
+    },
+    {
+      "path": "materials/sandbox/gallery_jade.mat",
+      "pathGuid": "79947b909dfe220a"
+    },
+    {
+      "path": "materials/sandbox/gallery_glass.mat",
+      "pathGuid": "66f617b3879ddb59"
+    },
+    {
+      "path": "materials/sandbox/gallery_neon.mat",
+      "pathGuid": "eb13ea79fff0ea7e"
+    }
+  ],
+  "libraryModels": [
+    "assets/characters/ybot/Y Bot.fbx",
+    {
+      "path": "models/basketball/rim.obj",
+      "pathGuid": "aa06bf914b4a03c0"
+    },
+    {
+      "path": "models/basketball/net.obj",
+      "pathGuid": "9f5eb74f6735cbca"
+    },
+    {
+      "path": "models/basketball/basketball.obj",
+      "pathGuid": "3e65fa8b4567e911"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",
+      "pathGuid": "101cd70269fca765"
+    },
+    {
+      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",
+      "pathGuid": "6f35fb7e3ac4ee7b"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
+      "pathGuid": "4168495e7bad8625"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Walk.fbx",
+      "pathGuid": "6e8123547b7ff1e4"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_IdleToSprint.fbx",
+      "pathGuid": "e9c31ac6116dfd06"
+    },
+    {
+      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_IdleToSprint.fbx",
+      "pathGuid": "971a40ef2e78a7a9"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Sprint.fbx",
+      "pathGuid": "3862c30a005b6f45"
+    },
+    {
+      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Sprint.fbx",
+      "pathGuid": "438b9b2758b79a49"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_SprintToIdle.fbx",
+      "pathGuid": "b1146b87d6885ed2"
+    },
+    {
+      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_SprintToIdle.fbx",
+      "pathGuid": "c5582401991a3963"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Draw.fbx",
+      "pathGuid": "1938b9509f147780"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Holster.fbx",
+      "pathGuid": "8d4c78b10f9caed1"
+    },
+    {
+      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Holster.fbx",
+      "pathGuid": "2a62a06dbf117169"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Fire.fbx",
+      "pathGuid": "818ad9a16cc62d87"
+    },
+    {
+      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Fire.fbx",
+      "pathGuid": "77923d570c4ce1c5"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Tac_Reload.fbx",
+      "pathGuid": "007cce9507dc0627"
+    },
+    {
+      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Tac_Reload.fbx",
+      "pathGuid": "81b5689d2228d3a9"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Empty_Reload.fbx",
+      "pathGuid": "3348386df4b6a44b"
+    },
+    {
+      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Empty_Reload.fbx",
+      "pathGuid": "d0dfc9ab0c48a48d"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Inspect.fbx",
+      "pathGuid": "19f07109f9ebb97d"
+    },
+    {
+      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Inspect.fbx",
+      "pathGuid": "0b328cb32a01d270"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Mag_Check.fbx",
+      "pathGuid": "58a7ef1b4bd1ae0e"
+    },
+    {
+      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Mag_Check.fbx",
+      "pathGuid": "a01aa15f799151d3"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Melee.fbx",
+      "pathGuid": "48e798f1913d3f54"
+    },
+    {
+      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Melee.fbx",
+      "pathGuid": "6fb7b6fdfc2b4941"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Regrip.fbx",
+      "pathGuid": "c10ae2c34481e1f7"
+    },
+    {
+      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Aim.fbx",
+      "pathGuid": "9004884db6cdfb0e"
+    }
+  ],
+  "libraryPrefabs": [],
+  "librarySounds": [],
+  "libraryTextures": [
+    {
+      "path": "textures/proto_grid_light.png",
+      "pathGuid": "c90849c8fc6c88b0"
+    },
+    {
+      "path": "textures/proto_grid_dark.png",
+      "pathGuid": "2b60657ce9aa4555"
+    },
+    {
+      "path": "textures/proto_grid_orange.png",
+      "pathGuid": "c389fb6bc574bb89"
+    },
+    {
+      "path": "textures/basketball/court_floor.jpg",
+      "pathGuid": "fd3b90b6c8f0b253"
+    },
+    {
+      "path": "textures/basketball/wood_detail.png",
+      "pathGuid": "e5f0e29613cac82f"
+    },
+    {
+      "path": "textures/basketball/wood_seams_normal.png",
+      "pathGuid": "346137cb492678b5"
+    },
+    {
+      "path": "textures/basketball/backboard.png",
+      "pathGuid": "caf13370e27a0035"
+    },
+    {
+      "path": "textures/basketball/basketball_albedo.png",
+      "pathGuid": "3821385da1bbeb84"
+    },
+    {
+      "path": "textures/basketball/basketball_normal.png",
+      "pathGuid": "a631a899eff1effb"
+    }
+  ],
+  "maxPointShadows": 2,
+  "maxSpotShadows": 4,
+  "models": [],
+  "motionBlur": false,
+  "motionBlurIntensity": 0.5,
+  "motionBlurSamples": 12,
+  "msaaSamples": 4,
+  "shadowCascades": 4,
+  "shadowDistance": 500.0,
+  "shadowResolution": 4096,
+  "shadowsEnabled": true,
+  "skyAmbientIntensity": 1.100000023841858,
+  "skyHorizonColor": [
+    0.30000001192092896,
+    0.3400000035762787,
+    0.41999998688697815
+  ],
+  "skyZenithColor": [
+    0.05999999865889549,
+    0.07999999821186066,
+    0.14000000059604645
+  ],
+  "ssaoBias": 0.02500000037252903,
+  "ssaoEnabled": true,
+  "ssaoIntensity": 1.0,
+  "ssaoRadius": 0.5,
+  "tonemapOperator": 1,
+  "vignetteIntensity": 0.0,
+  "vignetteSmoothness": 0.4000000059604645
+}

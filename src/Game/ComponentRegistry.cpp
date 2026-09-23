@@ -207,6 +207,9 @@ void RegisterEngineComponents() {
               "The .controller file this object runs." },
             { "Speed", T::Float, TARTARUS_REFLECT_FIELD(AnimatorControllerComponent, Speed), 0.01f,
               "Multiplies every state's playback speed.", 0.0f, 10.0f },
+            { "Track", T::String, TARTARUS_REFLECT_FIELD(AnimatorControllerComponent, Track), 0.0f,
+              "Which of the controller's clip tracks this object plays (empty = the first).\n"
+              "A controller can carry several clip sets per state, e.g. \"arms\" and \"weapon\"." },
         };
         m.Fields[0].EditorHidden = true;
         Register<AnimatorControllerComponent>(std::move(m));
@@ -301,6 +304,24 @@ void RegisterEngineComponents() {
             { "Throw Backspin", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ThrowBackspin), 0.05f,
               "Gravity gun: backspin (revolutions per second) put on a thrown ball, like a real shot.\n"
               "Only round (sphere collider) bodies get it.", 0.0f, 20.0f },
+            { "Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AnimationSet), 0.0f,
+              "Optional .fpsanim asset for a camera-bound first-person arms and weapon presentation." },
+            { "View Model Offset", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelOffset), 0.01f,
+              "Residual nudge, in the play camera's frame, applied on top of the Camera Bone\n"
+              "anchor. Leave at zero unless you are deliberately nudging the view model." },
+            { "Camera Bone", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CameraBone), 0.0f,
+              "Rig bone the play camera sits on (\"head\" by default). The view model is placed so\n"
+              "this bone lands exactly on the camera. Empty puts the model's root there instead." },
+            { "View Model Rotation", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelRotation), 0.5f,
+              "Euler rotation offset, in degrees, applied after the play camera orientation." },
+            { "View Model Scale", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelScale), 0.01f,
+              "Scale of the first-person arms and weapon presentation.", 0.01f, 100.0f },
+            { "View Model FOV", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelFov), 0.25f,
+              "Vertical FOV, in degrees, the first-person arms and weapon are projected with in the\n"
+              "renderer's view-model pass (drawn after a depth clear, so the world can't clip them).\n"
+              "Independent of the world camera's FOV: this changes how the held weapon is framed,\n"
+              "never the scene behind it. Narrower than the world FOV by default, which is what\n"
+              "keeps the weapon reading as held instead of stretched.", 20.0f, 150.0f },
         },
     });
 
@@ -751,6 +772,7 @@ void RegisterEngineComponents() {
         {"Animation", "Clip"},
         {"Animator Controller", "Controller"},
         {"Transform Controller", "Script Path"},
+        {"First Person Controller", "Animation Set"},
     };
     for (const auto& [component, field] : kAssetPathFields)
         for (RegisteredComponent& rc : Storage())
