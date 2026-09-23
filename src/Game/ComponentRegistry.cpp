@@ -215,6 +215,58 @@ void RegisterEngineComponents() {
         Register<AnimatorControllerComponent>(std::move(m));
     }
 
+    // Procedural IK on top of the Animator Controller's pose (src/Game/IK.h). Runs in Play,
+    // after the controller blends its layers and before the pose reaches the renderer.
+    {
+        ReflectComponent m;
+        m.Name = "IK Rig"; m.Icon = ICON_FA_HAND; m.Category = "Rendering";
+        m.Tooltip = "Inverse kinematics on this object's animated pose: up to two two-bone limbs (arms, legs)\n"
+                    "and a look-at. Needs an Animator Controller on the same object.";
+        m.Fields = {
+            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, Enabled), 0.0f,
+              "Run the rig." },
+            { "Weight", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, Weight), 0.01f,
+              "Blend from the animated pose (0) to the solved one (1).", 0.0f, 1.0f },
+
+            { "Limb A Enabled", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.Enabled), 0.0f, "Solve this limb." },
+            { "Limb A Upper", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.Upper), 0.0f, "Upper bone, e.g. upperarm_r." },
+            { "Limb A Lower", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.Lower), 0.0f, "Middle bone, e.g. lowerarm_r." },
+            { "Limb A End", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.End), 0.0f, "End bone, e.g. hand_r." },
+            { "Limb A Target", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.Target), 0.0f, "Bone the end reaches for." },
+            { "Limb A Keep Animated Offset", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.KeepAnimatedOffset), 0.0f,
+              "Reach for where the end sat relative to Target in the animated pose (hands keep\n"
+              "their grip on a procedurally moved gun), instead of for Target itself." },
+            { "Limb A Match Rotation", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.MatchRotation), 0.0f,
+              "Also turn the end bone to the goal's rotation." },
+            { "Limb A Weight", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.Weight), 0.01f, "Limb blend.", 0.0f, 1.0f },
+
+            { "Limb B Enabled", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.Enabled), 0.0f, "Solve this limb." },
+            { "Limb B Upper", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.Upper), 0.0f, "Upper bone, e.g. upperarm_l." },
+            { "Limb B Lower", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.Lower), 0.0f, "Middle bone, e.g. lowerarm_l." },
+            { "Limb B End", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.End), 0.0f, "End bone, e.g. hand_l." },
+            { "Limb B Target", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.Target), 0.0f, "Bone the end reaches for." },
+            { "Limb B Keep Animated Offset", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.KeepAnimatedOffset), 0.0f,
+              "Reach for where the end sat relative to Target in the animated pose, instead of for Target itself." },
+            { "Limb B Match Rotation", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.MatchRotation), 0.0f,
+              "Also turn the end bone to the goal's rotation." },
+            { "Limb B Weight", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.Weight), 0.01f, "Limb blend.", 0.0f, 1.0f },
+
+            { "Look At Enabled", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LookAtEnabled), 0.0f, "Aim a bone at another." },
+            { "Look At Bone", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LookAtBone), 0.0f, "The bone that turns, e.g. head." },
+            { "Look At Target", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LookAtTarget), 0.0f, "The bone it faces." },
+            { "Look At Aim Axis", T::Vec3, TARTARUS_REFLECT_FIELD(IKRigComponent, LookAtAxis), 0.01f,
+              "The bone's local axis that should point at the target." },
+            { "Look At Max Angle", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LookAtMaxAngle), 0.5f,
+              "Largest turn, in degrees.", 0.0f, 180.0f },
+            { "Look At Weight", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LookAtWeight), 0.01f, "Look-at blend.", 0.0f, 1.0f },
+        };
+        // Collapsible groups in the Inspector.
+        for (size_t i = 0; i < m.Fields.size(); ++i) {
+            m.Fields[i].Group = i < 2 ? nullptr : i < 10 ? "Limb A" : i < 18 ? "Limb B" : "Look At";
+        }
+        Register<IKRigComponent>(std::move(m));
+    }
+
     Register<AnimatorComponent>({
         "Animator", ICON_FA_PERSON_RUNNING,
         "Procedural motion driven every frame in Play mode - continuous spin, orbit around an "

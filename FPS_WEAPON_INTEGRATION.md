@@ -127,7 +127,8 @@ Alternatively, if you have a flat list of 15 AK-style clips:
      2. Run `work\socket_probe.exe <armsBase> <armsClip|-> <weaponBase> <weaponClip|->` over several clips.
      3. Socket → weaponRoot should be the same rotation, with about zero translation, in every clip. If it isn't, fix the rig, not the engine.
    - **View Rotation**: 180 Y if the arms render behind the camera (a Blender `-Y` rig).
-   - **Gameplay**: magazine, rounds per minute, full-auto allowed, reload-hold time, fidget timing, ADS recoil and walk bob.
+   - **Gameplay**: magazine, rounds per minute, full-auto allowed, reload-hold time, fidget timing.
+   - **Procedural**: recoil curves, sway, bob, breathing, ADS aim offset, per-state offsets, lean and the IK bone names. See [PROCEDURAL_ANIMATION.md](PROCEDURAL_ANIMATION.md). For a Manny-rig weapon the IK defaults already fit. In the controller, give Walk/Sprint the `WalkRate` / `SprintRate` speed parameters, and tag states that must play untouched (Draw, Holster) `IKOff`.
 3. The arms and weapon model paths are shown read-only in the Inspector. Edit them in the file.
 
 Every field is validated on load. A bad value shows its error in the Inspector, and Play refuses to start the weapon.

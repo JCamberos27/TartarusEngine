@@ -529,6 +529,45 @@ struct AnimatorControllerComponent {
     }
 };
 
+// One two-bone chain of an IK Rig (shoulder-elbow-hand, hip-knee-foot).
+struct IKLimb {
+    bool Enabled = false;
+    std::string Upper, Lower, End; // node names on this entity's model
+    std::string Target;            // node the end reaches for
+    // Reach for where the end sat relative to Target in the ANIMATED pose, rather than for Target
+    // itself: a hand keeps its authored grip while the gun it holds is moved procedurally.
+    bool KeepAnimatedOffset = true;
+    bool MatchRotation = true;     // also turn the end to the goal's rotation
+    float Weight = 1.0f;
+};
+
+// A procedural rigid move of one bone and everything under it, in model space. Runtime only:
+// game code writes these each frame (the first-person recoil/sway stack does).
+struct IKBoneOffset {
+    std::string Bone;
+    glm::vec3 Position{0.0f};
+    glm::quat Rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 Pivot{0.0f};         // rotation centre, relative to the bone's own position
+};
+
+// Post-process IK on an Animator Controller's output pose (IK.h): procedural bone offsets, up to
+// two two-bone limbs and a look-at, run after the layers blend and before the pose is applied.
+struct IKRigComponent {
+    bool Enabled = true;
+    float Weight = 1.0f;           // master blend, offsets included (0 = the animated pose)
+    IKLimb LimbA;
+    IKLimb LimbB;
+    bool LookAtEnabled = false;
+    std::string LookAtBone;
+    std::string LookAtTarget;
+    glm::vec3 LookAtAxis{0.0f, 0.0f, 1.0f}; // the bone's local axis that should face the target
+    float LookAtMaxAngle = 60.0f;
+    float LookAtWeight = 1.0f;
+
+    // --- runtime (not serialized) ---
+    std::vector<IKBoneOffset> Offsets;
+};
+
 struct AnimatorComponent {
     glm::vec3 SpinDegPerSec{0.0f};   // continuous local rotation: angular velocity, degrees/second, about this vector's own direction
 

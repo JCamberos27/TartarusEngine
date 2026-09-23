@@ -13,6 +13,7 @@
 #include "EditorUIPrimitives.h"
 #include "AnimationSystem.h"
 #include "AnimatorController.h"
+#include "CurveEditor.h"
 #include "AssetLibrary.h"
 #include "Components.h"
 #include "FirstPersonAnimation.h"
@@ -49,6 +50,238 @@ bool InputName(const char* id, std::string& s, float width, bool allowEmpty = fa
 
 bool RemoveButton(const char* tooltip) {
     return ActionButton(ICON_FA_XMARK, tooltip, false, ImVec2(ImGui::GetFrameHeight(), 0.0f));
+}
+
+// The weapon definition's procedural block (FirstPersonProcedural.h): recoil, sway, bob,
+// breathing, aim, per-state offsets, locomotion rates, lean and IK. Every committed edit sets the
+// changed flag; a running Play session picks the saved file up within a moment.
+void DrawWeaponProcedural(WeaponProceduralSettings& p, float labelW, float rpm, bool& changed) {
+    auto row = [&](const char* label, const char* tip) {
+        ImGui::TextUnformatted(label);
+        if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+        ImGui::SameLine(labelW);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+    };
+    auto dragF = [&](const char* label, const char* id, float& v, float speed, float lo, float hi, const char* fmt, const char* tip) {
+        row(label, tip);
+        ImGui::DragFloat(id, &v, speed, lo, hi, fmt);
+        if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
+    };
+    auto dragV2 = [&](const char* label, const char* id, glm::vec2& v, float speed, const char* fmt, const char* tip) {
+        row(label, tip);
+        float f[2] = {v.x, v.y};
+        if (ImGui::DragFloat2(id, f, speed, 0.0f, 0.0f, fmt)) v = {f[0], f[1]};
+        if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
+    };
+    auto dragV3 = [&](const char* label, const char* id, glm::vec3& v, float speed, const char* fmt, const char* tip) {
+        row(label, tip);
+        float f[3] = {v.x, v.y, v.z};
+        if (ImGui::DragFloat3(id, f, speed, 0.0f, 0.0f, fmt)) v = {f[0], f[1], f[2]};
+        if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
+    };
+    auto check = [&](const char* label, const char* id, bool& v, const char* tip) {
+        row(label, tip);
+        if (EditorUIPrimitives::Checkbox(id, &v)) changed = true;
+    };
+    auto name = [&](const char* label, const char* id, std::string& v, const char* tip) {
+        row(label, tip);
+        if (InputName(id, v, -FLT_MIN, true)) changed = true;
+    };
+    auto spring = [&](const char* label, const char* id, FirstPersonSpring& sp, const char* tip) {
+        row(label, tip);
+        float f[2] = {sp.Frequency, sp.Damping};
+        if (ImGui::DragFloat2(id, f, 0.05f, 0.0f, 0.0f, "%.2f")) {
+            sp.Frequency = std::max(0.1f, f[0]);
+            sp.Damping = std::max(0.0f, f[1]);
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
+    };
+    const float curveH = ImGui::GetFontSize() * 5.0f;
+    auto curve = [&](const char* label, const char* id, Curve& c, const char* fmt, float presetAmp, const char* tip) {
+        ImGui::TextUnformatted(label);
+        if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+        CurveEditor::Options o;
+        o.ValueFormat = fmt;
+        o.PresetAmplitude = presetAmp;
+        if (CurveEditor::Draw(id, c, ImVec2(0.0f, curveH), o)) changed = true;
+    };
+    auto curve3 = [&](const char* id, FirstPersonCurve3& c, const char* xl, const char* yl, const char* zl,
+                      const char* fmtXY, const char* fmtZ, float ampXY, float ampZ) {
+        ImGui::PushID(id);
+        curve(xl, "##x", c.X, fmtXY, ampXY, nullptr);
+        curve(yl, "##y", c.Y, fmtXY, ampXY, nullptr);
+        curve(zl, "##z", c.Z, fmtZ, ampZ, nullptr);
+        ImGui::PopID();
+    };
+
+    ImGui::SeparatorText(ICON_FA_WAVE_SQUARE "  Procedural");
+    ImGui::TextWrapped("Moves the arms rig's gun bone on top of the animation; two-bone IK keeps both hands on it. "
+                       "Camera frame: +X right, +Y up, +Z back. Metres and degrees. Curves are keyed over 0..1.");
+
+    if (ImGui::CollapsingHeader("Recoil##proc")) {
+        auto& r = p.Recoil;
+        check("Enabled", "##rcen", r.Enabled, nullptr);
+        dragF("Duration (s)", "##rcdur", r.Duration, 0.005f, 0.02f, 3.0f, "%.3f", "Seconds one shot's curves span (their 0..1).");
+        dragF("Hip Scale", "##rchip", r.HipScale, 0.01f, 0.0f, 5.0f, "%.2f", "Multiplier for hip fire (which also plays the Fire clip).");
+        dragF("ADS Scale", "##rcads", r.AdsScale, 0.01f, 0.0f, 5.0f, "%.2f", "Multiplier with sights up.");
+        dragV3("Pivot (m)", "##rcpiv", r.Pivot, 0.001f, "%.3f", "Rotation centre relative to the gun bone, camera frame.\nPush it back (+Z) to pivot nearer the shoulder.");
+        spring("Smoothing", "##rcspr", r.Smoothing, "Spring frequency (Hz) and damping ratio (1 = no overshoot) the summed kicks run through.");
+        ImGui::SeparatorText("Per-shot random scale (min, max)");
+        dragV2("Pitch", "##rcrp", r.PitchRange, 0.01f, "%.2f", nullptr);
+        dragV2("Yaw", "##rcry", r.YawRange, 0.01f, "%.2f", "A negative min lets it kick either way.");
+        dragV2("Roll", "##rcrr", r.RollRange, 0.01f, "%.2f", nullptr);
+        dragV2("Side", "##rcrs", r.SideRange, 0.01f, "%.2f", nullptr);
+        dragV2("Up", "##rcru", r.UpRange, 0.01f, "%.2f", nullptr);
+        dragV2("Kickback", "##rcrk", r.KickRange, 0.01f, "%.2f", nullptr);
+        ImGui::SeparatorText("Shot curves");
+        curve3("rcrot", r.Rotation, "Pitch (deg)", "Yaw (deg)", "Roll (deg)", "%.2f", "%.2f", 1.0f, 1.0f);
+        curve3("rcpos", r.Position, "Side (m)", "Up (m)", "Kickback (m)", "%.4f", "%.4f", 0.002f, 0.01f);
+        ImGui::SeparatorText("Camera punch");
+        curve("Camera Pitch (deg)", "##rccp", r.CameraPitch, "%.2f", 0.5f, "View punch: what the player sees, not where they aim.");
+        curve("Camera Yaw (deg)", "##rccy", r.CameraYaw, "%.2f", 0.2f, nullptr);
+        dragV2("Camera Yaw Range", "##rccyr", r.CameraYawRange, 0.01f, "%.2f", nullptr);
+        dragF("Camera Scale", "##rccs", r.CameraScale, 0.01f, 0.0f, 5.0f, "%.2f", nullptr);
+
+        // What a burst looks like with these numbers: the gun's pitch over 1.5 s of a 10-round
+        // burst at the weapon's rpm, every random pick at its middle.
+        WeaponProceduralSettings sim = p;
+        sim.Sway.Enabled = sim.Bob.Enabled = sim.Breath.Enabled = sim.Lean.Enabled = false;
+        sim.StateOffsets.clear();
+        auto& sr = sim.Recoil;
+        for (glm::vec2* range : {&sr.PitchRange, &sr.YawRange, &sr.RollRange, &sr.SideRange, &sr.UpRange, &sr.KickRange, &sr.CameraYawRange})
+            *range = glm::vec2((range->x + range->y) * 0.5f);
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.Dt = 1.0f / 120.0f;
+        const float interval = rpm > 0.0f ? 60.0f / rpm : 0.1f;
+        float pitch[180];
+        float next = 0.0f, peak = 0.01f;
+        int shots = 0;
+        for (int f = 0; f < 180; ++f) {
+            if (shots < 10 && f * in.Dt >= next) { st.OnShot(sim, true); next += interval; ++shots; }
+            pitch[f] = st.Update(sim, in).Rotation.x;
+            peak = std::max(peak, std::fabs(pitch[f]));
+        }
+        char overlay[64];
+        std::snprintf(overlay, sizeof overlay, "10-round burst: pitch peaks %.2f deg", peak);
+        ImGui::PlotLines("##burst", pitch, 180, 0, overlay, -peak * 0.25f, peak * 1.15f, ImVec2(-FLT_MIN, curveH));
+    }
+
+    if (ImGui::CollapsingHeader("Sway##proc")) {
+        auto& w = p.Sway;
+        check("Enabled", "##swen", w.Enabled, nullptr);
+        dragF("Look Rotation", "##swlr", w.LookRotation, 0.01f, 0.0f, 20.0f, "%.2f deg", "Lag per 100 deg/s of turn.");
+        dragF("Look Position", "##swlp", w.LookPosition, 0.0001f, 0.0f, 0.1f, "%.4f m", "Lag per 100 deg/s of turn.");
+        dragF("Max Rotation", "##swmr", w.MaxRotation, 0.05f, 0.0f, 45.0f, "%.1f deg", nullptr);
+        dragF("Max Position", "##swmp", w.MaxPosition, 0.0005f, 0.0f, 0.2f, "%.3f m", nullptr);
+        dragF("Move Position", "##swmv", w.MovePosition, 0.0001f, 0.0f, 0.05f, "%.4f m", "Trail per m/s of movement.");
+        dragF("Move Roll", "##swro", w.MoveRoll, 0.01f, 0.0f, 10.0f, "%.2f deg", "Tilt into a strafe, per m/s.");
+        dragF("ADS Scale", "##swads", w.AdsScale, 0.01f, 0.0f, 2.0f, "%.2f", nullptr);
+        spring("Spring", "##swspr", w.Spring, "Frequency (Hz) and damping ratio. Under 1 overshoots, which reads as weight.");
+    }
+
+    if (ImGui::CollapsingHeader("Bob##proc")) {
+        auto& b = p.Bob;
+        check("Enabled", "##boen", b.Enabled, nullptr);
+        dragF("Walk Stride (m)", "##bows", b.WalkStride, 0.05f, 0.1f, 10.0f, "%.2f", "Distance per cycle (two steps).");
+        dragF("Sprint Stride (m)", "##boss", b.SprintStride, 0.05f, 0.1f, 10.0f, "%.2f", nullptr);
+        dragF("Full Speed (m/s)", "##bofs", b.WalkFullSpeed, 0.05f, 0.1f, 30.0f, "%.2f", "Speed at full amplitude.");
+        dragF("Hip Scale", "##bohip", b.HipScale, 0.01f, 0.0f, 5.0f, "%.2f", "The walk/sprint clips already bob at the hip.");
+        dragF("ADS Scale", "##boads", b.AdsScale, 0.01f, 0.0f, 5.0f, "%.2f", nullptr);
+        dragF("Ease (1/s)", "##boea", b.Ease, 0.1f, 0.1f, 50.0f, "%.1f", "How fast it fades in and out.");
+        ImGui::SeparatorText("Walk cycle");
+        curve3("bowalk", b.Walk, "Side (m)", "Up (m)", "Roll (deg)", "%.4f", "%.2f", 0.003f, 0.5f);
+        ImGui::SeparatorText("Sprint cycle");
+        curve3("bosprint", b.Sprint, "Side (m)", "Up (m)", "Roll (deg)", "%.4f", "%.2f", 0.008f, 1.0f);
+    }
+
+    if (ImGui::CollapsingHeader("Breathing##proc")) {
+        auto& br = p.Breath;
+        check("Enabled", "##bren", br.Enabled, nullptr);
+        dragF("Period (s)", "##brper", br.Period, 0.05f, 0.2f, 20.0f, "%.2f", "Seconds per breath.");
+        dragF("Hip Scale", "##brhip", br.HipScale, 0.01f, 0.0f, 5.0f, "%.2f", nullptr);
+        dragF("ADS Scale", "##brads", br.AdsScale, 0.01f, 0.0f, 5.0f, "%.2f", nullptr);
+        ImGui::PushID("brc");
+        curve("Side (m)", "##x", br.Position.X, "%.4f", 0.0005f, nullptr);
+        curve("Up (m)", "##y", br.Position.Y, "%.4f", 0.0005f, nullptr);
+        curve("Forward (m)", "##z", br.Position.Z, "%.4f", 0.0005f, nullptr);
+        curve("Pitch (deg)", "##p", br.Pitch, "%.3f", 0.1f, nullptr);
+        ImGui::PopID();
+    }
+
+    if (ImGui::CollapsingHeader("Aim (ADS)##proc")) {
+        auto& a = p.Aim;
+        dragV3("Position (m)", "##aipos", a.Position, 0.0005f, "%.4f", "Added to the gun with sights up, on top of the Aim clip.\nZero keeps the clip's sight picture exactly.");
+        dragV3("Rotation (deg)", "##airot", a.Rotation, 0.05f, "%.2f", nullptr);
+        dragF("Blend Time (s)", "##aibt", a.BlendTime, 0.005f, 0.0f, 2.0f, "%.3f", "Seconds in and out.");
+        curve("Blend Easing", "##aiblend", a.Blend, "%.2f", 1.0f, "Maps the 0..1 blend to the weight actually applied.");
+    }
+
+    if (ImGui::CollapsingHeader("State Offsets##proc")) {
+        ImGui::TextWrapped("Tweak the gun's pose while a state (by name or tag) plays, e.g. lower it in Sprint.");
+        for (int i = 0; i < (int)p.StateOffsets.size(); ++i) {
+            auto& o = p.StateOffsets[i];
+            ImGui::PushID(i);
+            ImGui::Separator();
+            row("State or Tag", nullptr);
+            if (InputName("##somatch", o.Match, ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x, true))
+                changed = true;
+            ImGui::SameLine();
+            bool removed = false;
+            if (RemoveButton("Remove this offset")) {
+                p.StateOffsets.erase(p.StateOffsets.begin() + i);
+                changed = removed = true;
+            }
+            if (!removed) {
+                dragV3("Position (m)", "##sopos", o.Position, 0.0005f, "%.4f", nullptr);
+                dragV3("Rotation (deg)", "##sorot", o.Rotation, 0.05f, "%.2f", nullptr);
+                dragF("Blend In (s)", "##sobi", o.BlendIn, 0.005f, 0.0f, 5.0f, "%.3f", nullptr);
+                dragF("Blend Out (s)", "##sobo", o.BlendOut, 0.005f, 0.0f, 5.0f, "%.3f", nullptr);
+            }
+            ImGui::PopID();
+            if (removed) break;
+        }
+        if (ActionButton(ICON_FA_PLUS "  Add State Offset", "Add a pose tweak for a state or tag", false, ImVec2(-FLT_MIN, 0.0f))) {
+            p.StateOffsets.push_back({"Walk", {}, {}, 0.2f, 0.25f});
+            changed = true;
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Locomotion Rate##proc")) {
+        auto& l = p.Locomotion;
+        ImGui::TextWrapped("Sets the WalkRate / SprintRate parameters from the player's speed. Use them as the Walk and "
+                           "Sprint states' speed parameter so the clips step at the pace you move.");
+        check("Match Speed", "##lomatch", l.MatchSpeed, nullptr);
+        dragF("Walk Reference", "##lowr", l.WalkReference, 0.05f, 0.0f, 30.0f, l.WalkReference > 0.0f ? "%.2f m/s" : "auto",
+              "Speed the walk clip plays at rate 1. 0 (auto) = the player controller's Move Speed.");
+        dragF("Sprint Reference", "##losr", l.SprintReference, 0.05f, 0.0f, 30.0f, l.SprintReference > 0.0f ? "%.2f m/s" : "auto",
+              "Speed the sprint clip plays at rate 1. 0 (auto) = Move Speed x Sprint Multiplier.");
+        dragF("Min Rate", "##lomin", l.MinRate, 0.01f, 0.0f, 5.0f, "%.2f", nullptr);
+        dragF("Max Rate", "##lomax", l.MaxRate, 0.01f, 0.0f, 5.0f, "%.2f", nullptr);
+    }
+
+    if (ImGui::CollapsingHeader("Lean##proc")) {
+        auto& l = p.Lean;
+        check("Enabled", "##leen", l.Enabled, "LeanLeft / LeanRight input actions (Z / C by default).");
+        dragF("Camera Roll", "##leang", l.Angle, 0.1f, 0.0f, 45.0f, "%.1f deg", nullptr);
+        dragF("Camera Offset", "##leoff", l.Offset, 0.005f, 0.0f, 1.0f, "%.3f m", "Side step of the view at full lean.");
+        dragF("Weapon Roll", "##lewr", l.WeaponRoll, 0.1f, 0.0f, 45.0f, "%.1f deg", "Extra gun roll into the lean.");
+        dragF("Speed (1/s)", "##lespd", l.Speed, 0.1f, 0.1f, 50.0f, "%.1f", nullptr);
+    }
+
+    if (ImGui::CollapsingHeader("IK##proc")) {
+        auto& k = p.IK;
+        check("Enabled", "##iken", k.Enabled, "Off: the procedural motion moves the whole view model instead of the gun.");
+        name("Gun Bone", "##ikgun", k.GunBone, "Arms-rig bone the procedural motion moves (the weapon rides it).");
+        name("Right Upper", "##ikru", k.RightUpper, nullptr);
+        name("Right Lower", "##ikrl", k.RightLower, nullptr);
+        name("Right Hand", "##ikrh", k.RightHand, nullptr);
+        name("Left Upper", "##iklu", k.LeftUpper, nullptr);
+        name("Left Lower", "##ikll", k.LeftLower, nullptr);
+        name("Left Hand", "##iklh", k.LeftHand, nullptr);
+        name("Off Tag", "##iktag", k.OffTag, "States with this tag play purely as authored (IK and procedural offsets fade out).");
+        dragF("Blend Time (s)", "##ikbt", k.BlendTime, 0.005f, 0.0f, 2.0f, "%.3f", nullptr);
+    }
 }
 
 std::string UniqueName(const std::string& base, const std::vector<std::string>& taken) {
@@ -1551,8 +1784,8 @@ void EditorLayer::DrawControllerAssetInspector(const std::string& path) {
     }
 }
 
-// A weapon definition (.fpsanim): the rigs, the controller, the mount and the gameplay numbers,
-// edited in place and saved on every committed change. Changes apply the next time Play starts.
+// A weapon definition (.fpsanim): the rigs, the controller, the mount, the gameplay numbers and
+// the procedural block, edited in place and saved on every committed change.
 void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     struct Cache {
         std::string Path;
@@ -1652,21 +1885,10 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
           "Seconds of settled Idle before the Fidget trigger fires (random between min and max).");
     dragF("Fidget Max (s)", "##wrmax", g.RegripMax, 0.1f, 0.0f, 120.0f, "%.1f", nullptr);
 
-    ImGui::SeparatorText("ADS Recoil (procedural)");
-    dragF("Pitch (deg)", "##wrp", g.RecoilPitchDegrees, 0.05f, 0.0f, 20.0f, "%.2f", "Muzzle rise per shot, pivoting on the eye.");
-    dragV3("Offset (m)", "##wro", g.RecoilOffset, 0.0005f, "%.4f", "Camera-frame kick per shot: +y up, +z back into the shoulder.");
-    dragF("Rise (s)", "##wrr", g.RecoilRise, 0.001f, 0.005f, 0.5f, "%.3f", "Time to full kick.");
-    dragF("Settle (s)", "##wrs", g.RecoilSettle, 0.001f, 0.005f, 1.0f, "%.3f", "Exponential settle back onto the sights.");
-
-    ImGui::SeparatorText("ADS Walk Bob (procedural)");
-    dragF("Stride (m)", "##wbs", g.BobStride, 0.05f, 0.1f, 10.0f, "%.2f", "Distance of one stride (two steps).");
-    dragF("Side (m)", "##wbx", g.BobSide, 0.0001f, 0.0f, 0.05f, "%.4f", nullptr);
-    dragF("Vertical (m)", "##wby", g.BobVertical, 0.0001f, 0.0f, 0.05f, "%.4f", nullptr);
-    dragF("Full Speed (m/s)", "##wbf", g.BobFullSpeed, 0.05f, 0.1f, 20.0f, "%.2f", "Planar speed at full amplitude.");
-    dragF("Ease (1/s)", "##wbe", g.BobEase, 0.1f, 0.1f, 50.0f, "%.1f", "How fast the bob fades in and out.");
+    DrawWeaponProcedural(s.Procedural, labelW, g.RoundsPerMinute, changed);
 
     ImGui::Spacing();
-    ImGui::TextDisabled("Changes apply the next time Play starts.");
+    ImGui::TextDisabled("Gameplay and procedural numbers apply live in Play; rigs and controller on the next Play.");
     if (changed) {
         if (s.SaveFile(path)) cache.Stamp = fs::last_write_time(fs::u8path(path), ec);
         else Log::Error("Couldn't save " + ProjectPaths::Relativize(path) + ".");

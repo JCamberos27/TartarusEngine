@@ -16,6 +16,8 @@
 #include "UnitTests.h"
 
 #include "AnimatorController.h"
+#include "Curve.h"
+#include "IK.h"
 #include "FirstPersonAnimation.h"
 #include "AudioEngine.h"
 #include "Log.h" // #178 stack traces
@@ -1719,7 +1721,11 @@ void TestFirstPersonAnimationFSM() {
         "recoil":{"pitch":2.0}}})", v2, &error));
     CHECK(v2.Controller == "weapons/w.controller" && v2.Clips.empty());
     CHECK(v2.Gameplay.Magazine == 20 && v2.Gameplay.RoundsPerMinute == 600.0f && !v2.Gameplay.AllowFullAuto);
-    CHECK(v2.Gameplay.RecoilPitchDegrees == 2.0f && v2.Gameplay.RecoilRise == 0.035f); // unspecified = defaults
+    // A pre-procedural recoil block becomes curves of the same shape: the 2 degree kick peaks at
+    // the old rise time (defaults for what's unspecified), ADS only.
+    CHECK(std::fabs(v2.Procedural.Recoil.Duration - (0.035f + 5.0f * 0.08f)) < 1e-5f);
+    CHECK(std::fabs(v2.Procedural.Recoil.Rotation.X.Evaluate(0.035f / v2.Procedural.Recoil.Duration) - 2.0f) < 1e-4f);
+    CHECK(v2.Procedural.Recoil.HipScale == 0.0f && v2.Procedural.Recoil.PitchRange == glm::vec2(1.0f));
     FirstPersonAnimationSet again;
     CHECK(FirstPersonAnimationSet::FromJsonString(v2.ToJsonString(), again, &error));
     CHECK(again.Controller == v2.Controller && again.Gameplay.Magazine == 20 && !again.Gameplay.AllowFullAuto);
@@ -1884,6 +1890,282 @@ void TestProjectWatcher() {
     fs::remove_all(dir, ec);
 }
 
+// --- Procedural animation: the first-person weapon stack --------------------------------------
+void TestWeaponProcedural() {
+    // Settings round-trip through the .fpsanim "procedural" block.
+    const WeaponProceduralSettings defaults = WeaponProceduralSettings::Defaults();
+    WeaponProceduralSettings loaded;
+    std::string error;
+    CHECK(WeaponProceduralSettings::FromJson(defaults.ToJson(), loaded, &error));
+    CHECK(std::fabs(loaded.Recoil.Rotation.X.Evaluate(0.2f) - defaults.Recoil.Rotation.X.Evaluate(0.2f)) < 1e-4f);
+    CHECK(std::fabs(loaded.Bob.Sprint.Z.Evaluate(0.3f) - defaults.Bob.Sprint.Z.Evaluate(0.3f)) < 1e-4f);
+    CHECK(loaded.StateOffsets.size() == defaults.StateOffsets.size() && loaded.IK.GunBone == "ik_hand_gun");
+    WeaponProceduralSettings untouched = defaults;
+    CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"recoil":{"duration":0}})"), untouched, &error));
+    CHECK(error.find("duration") != std::string::npos);
+    CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"sway":{"lookRotation":"big"}})"), untouched, &error));
+    CHECK(!WeaponProceduralSettings::FromJson(json::parse(R"({"bob":{"walk":{"x":[[0,"a"]]}}})"), untouched, &error));
+    CHECK(untouched.Recoil.Duration == defaults.Recoil.Duration); // a bad load changes nothing
+    // Partial blocks keep everything they don't name.
+    CHECK(WeaponProceduralSettings::FromJson(json::parse(R"({"lean":{"angle":20}})"), untouched, &error));
+    CHECK(untouched.Lean.Angle == 20.0f && untouched.Lean.Offset == defaults.Lean.Offset);
+
+    // One layer at a time, everything else off, so each can be read in isolation.
+    WeaponProceduralSettings s = defaults;
+    s.Sway.Enabled = s.Bob.Enabled = s.Breath.Enabled = s.Lean.Enabled = false;
+    s.StateOffsets.clear();
+    const auto run = [](WeaponProceduralState& st, const WeaponProceduralSettings& set, WeaponProceduralInput in,
+                        float seconds) {
+        in.Dt = 1.0f / 120.0f;
+        for (float t = 0.0f; t < seconds; t += in.Dt) st.Update(set, in);
+        return st.Pose();
+    };
+
+    // Recoil: a shot kicks the muzzle up and back, and it settles back to rest.
+    {
+        WeaponProceduralState st;
+        st.OnShot(s, true);
+        const WeaponProceduralPose early = run(st, s, {}, 0.06f);
+        CHECK(early.Rotation.x > 0.5f && early.Position.z > 0.005f);
+        CHECK(early.CameraKick.x > 0.0f);
+        const WeaponProceduralPose rest = run(st, s, {}, 1.5f);
+        CHECK(std::fabs(rest.Rotation.x) < 0.02f && std::fabs(rest.Position.z) < 1e-4f && st.ActiveShots() == 0);
+    }
+    // Full auto overlaps shots into a climb bigger than any single kick.
+    {
+        WeaponProceduralState single, burst;
+        single.OnShot(s, true);
+        float singlePeak = 0.0f, burstPeak = 0.0f;
+        WeaponProceduralInput in;
+        in.Dt = 1.0f / 120.0f;
+        for (int f = 0; f < 120; ++f) singlePeak = std::max(singlePeak, single.Update(s, in).Rotation.x);
+        for (int f = 0; f < 120; ++f) {
+            if (f % 10 == 0) burst.OnShot(s, true); // ~720 rpm
+            burstPeak = std::max(burstPeak, burst.Update(s, in).Rotation.x);
+        }
+        CHECK(burstPeak > singlePeak * 1.5f);
+    }
+    // A disabled recoil does nothing.
+    {
+        WeaponProceduralSettings off = s;
+        off.Recoil.Enabled = false;
+        WeaponProceduralState st;
+        st.OnShot(off, true);
+        CHECK(st.ActiveShots() == 0);
+    }
+
+    // Sway: turning right, the gun lags (yaws left of the view) and settles when the turn stops.
+    {
+        WeaponProceduralSettings sw = s;
+        sw.Sway.Enabled = true;
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.LookRate = glm::vec2(200.0f, 0.0f);
+        const WeaponProceduralPose turning = run(st, sw, in, 0.5f);
+        CHECK(turning.Rotation.y > 0.5f && turning.Position.x < 0.0f);
+        CHECK(turning.Rotation.y <= sw.Sway.MaxRotation * 1.5f);
+        const WeaponProceduralPose settled = run(st, sw, {}, 3.0f);
+        CHECK(std::fabs(settled.Rotation.y) < 0.02f);
+    }
+
+    // Per-state offsets blend in on a state name or a tag, and back out.
+    {
+        WeaponProceduralSettings so = s;
+        so.StateOffsets = {{"Sprint", glm::vec3(0.0f, -0.02f, 0.0f), glm::vec3(0.0f, 0.0f, 10.0f), 0.2f, 0.2f}};
+        WeaponProceduralState st;
+        const std::string sprint = "Sprint", idle = "Idle";
+        const std::vector<std::string> noTags, sprintTag = {"Sprint"};
+        WeaponProceduralInput in;
+        in.StateName = &sprint;
+        in.StateTags = &noTags;
+        WeaponProceduralPose p = run(st, so, in, 0.5f);
+        CHECK(std::fabs(p.Position.y + 0.02f) < 1e-4f && std::fabs(p.Rotation.z - 10.0f) < 1e-3f);
+        in.StateName = &idle;
+        p = run(st, so, in, 0.5f);
+        CHECK(std::fabs(p.Position.y) < 1e-5f);
+        in.StateTags = &sprintTag;
+        p = run(st, so, in, 0.5f);
+        CHECK(std::fabs(p.Position.y + 0.02f) < 1e-4f);
+    }
+
+    // IK fades out in states tagged IKOff; the lean rolls the camera; clip rates follow speed.
+    {
+        WeaponProceduralSettings k = s;
+        k.Lean.Enabled = true;
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.IKOff = true;
+        in.Lean = 1.0f;
+        in.WalkSpeed = 6.0f;     // references left at 0 follow the player's own speeds
+        in.SprintSpeed = 9.6f;
+        in.Velocity = glm::vec3(0.0f, 0.0f, -3.0f);
+        const WeaponProceduralPose p = run(st, k, in, 2.0f);
+        CHECK(p.IKWeight == 0.0f);
+        CHECK(std::fabs(p.CameraRoll - k.Lean.Angle) < 0.05f && std::fabs(p.CameraSide - k.Lean.Offset) < 0.01f);
+        CHECK(p.WalkRate == k.Locomotion.MinRate);                   // 3 / 6 m/s, clamped up to the minimum
+        in.Velocity = glm::vec3(0.0f, 0.0f, -7.2f);
+        CHECK(std::fabs(run(st, k, in, 0.1f).WalkRate - 1.2f) < 1e-4f);
+        in.WalkSpeed = 3.5f;     // a scene's own tuning: full walk speed plays at 1x
+        in.Velocity = glm::vec3(0.0f, 0.0f, -3.5f);
+        CHECK(std::fabs(run(st, k, in, 0.1f).WalkRate - 1.0f) < 1e-4f);
+        k.Locomotion.WalkReference = 7.0f; // an explicit reference wins
+        CHECK(std::fabs(run(st, k, in, 0.1f).WalkRate - 0.6f) < 1e-4f);
+        in.IKOff = false;
+        CHECK(run(st, k, in, 0.5f).IKWeight == 1.0f);
+    }
+
+    // Bob follows the stride and scales with speed; standing still, it fades away.
+    {
+        WeaponProceduralSettings b = s;
+        b.Bob.Enabled = true;
+        b.Bob.HipScale = 1.0f;
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.Velocity = glm::vec3(0.0f, 0.0f, -3.5f);
+        in.Dt = 1.0f / 120.0f;
+        float maxSide = 0.0f;
+        for (int f = 0; f < 480; ++f) maxSide = std::max(maxSide, std::fabs(st.Update(b, in).Position.x));
+        CHECK(maxSide > 0.002f && maxSide < 0.0035f);
+        in.Velocity = glm::vec3(0.0f);
+        CHECK(std::fabs(run(st, b, in, 2.0f).Position.x) < 1e-4f);
+    }
+}
+
+// --- Procedural animation: curves and IK -----------------------------------------------------
+void TestCurve() {
+    auto near = [](float a, float b, float eps = 1e-4f) { return std::fabs(a - b) <= eps; };
+    Curve empty;
+    CHECK(empty.Evaluate(0.3f) == 0.0f);
+    CHECK(Curve::Constant(2.5f).Evaluate(-4.0f) == 2.5f && Curve::Constant(2.5f).Evaluate(9.0f) == 2.5f);
+
+    const Curve line = Curve::Line(0.0f, 0.0f, 2.0f, 4.0f);
+    CHECK(near(line.Evaluate(1.0f), 2.0f));          // a line stays a line under Hermite
+    CHECK(near(line.Evaluate(0.5f), 1.0f));
+    CHECK(line.Evaluate(-1.0f) == 0.0f && line.Evaluate(3.0f) == 4.0f); // clamped, not extrapolated
+    CHECK(line.Evaluate(std::numeric_limits<float>::quiet_NaN()) == 0.0f);
+
+    const Curve ease = Curve::EaseInOut();
+    CHECK(near(ease.Evaluate(0.5f), 0.5f));
+    CHECK(ease.Evaluate(0.05f) < 0.05f);             // flat start
+    CHECK(ease.Evaluate(0.95f) > 0.95f);             // flat end
+
+    const Curve kick = Curve::Kick(0.1f);
+    CHECK(near(kick.Evaluate(0.1f), 1.0f));
+    CHECK(near(kick.Evaluate(1.0f), 0.0f));
+    CHECK(kick.Evaluate(0.05f) > 0.3f);              // it rises fast
+
+    // AddKey keeps the shape it lands on.
+    Curve edited = ease;
+    const float before = edited.Evaluate(0.3f);
+    const int k = edited.AddKey(0.3f);
+    CHECK(edited.Keys.size() == 3 && k == 1);
+    CHECK(near(edited.Evaluate(0.3f), before));
+
+    Curve round;
+    CHECK(Curve::FromJson(kick.ToJson(), round));
+    CHECK(round.Keys.size() == kick.Keys.size());
+    CHECK(near(round.Evaluate(0.37f), kick.Evaluate(0.37f), 1e-3f));
+    Curve untouched = line;
+    CHECK(!Curve::FromJson(json::parse(R"([[0,1],["x",2]])"), untouched));
+    CHECK(!Curve::FromJson(json::parse(R"({"t":1})"), untouched));
+    CHECK(untouched.Keys.size() == 2);               // a bad load leaves the curve alone
+    CHECK(Curve::FromJson(json::parse(R"([[1,5],[0,3]])"), untouched) && untouched.Keys[0].Time == 0.0f); // sorted
+}
+
+void TestIKSolver() {
+    // root (scaled, as imported rigs are) -> upper -> lower -> end, plus a child of the end.
+    IK::Pose pose(5);
+    const std::vector<int> parents = {-1, 0, 1, 2, 3};
+    pose[0].S = glm::vec3(0.5f);
+    pose[0].R = glm::angleAxis(0.4f, glm::normalize(glm::vec3(1, 2, 3)));
+    pose[1].T = glm::vec3(0.0f, 1.0f, 0.0f);
+    pose[2].T = glm::vec3(1.0f, 0.0f, 0.0f);
+    pose[2].R = glm::angleAxis(0.5f, glm::vec3(0, 0, 1)); // a bent elbow
+    pose[3].T = glm::vec3(1.0f, 0.0f, 0.0f);
+    pose[4].T = glm::vec3(0.2f, 0.0f, 0.0f);
+    std::vector<glm::mat4> g;
+    IK::ComputeGlobals(pose, parents, g);
+    const glm::vec3 a = IK::Position(g[1]), b = IK::Position(g[2]), c = IK::Position(g[3]);
+    const float reach = glm::length(b - a) + glm::length(c - b);
+    const glm::vec3 bendAxis = glm::normalize(glm::cross(c - a, b - a));
+    const glm::vec3 childOffset = glm::inverse(IK::Rotation(g[3])) * (IK::Position(g[4]) - c);
+
+    // Reachable: the end lands on the target, bone lengths hold, the elbow bends the same way.
+    {
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        const glm::vec3 target = a + glm::normalize(glm::vec3(0.4f, -0.3f, 0.5f)) * (reach * 0.7f);
+        const glm::quat targetRot = glm::angleAxis(1.0f, glm::normalize(glm::vec3(0, 1, 1)));
+        CHECK(IK::SolveTwoBone(p, parents, gg, 1, 2, 3, target, &targetRot, 1.0f));
+        const glm::vec3 na = IK::Position(gg[1]), nb = IK::Position(gg[2]), nc = IK::Position(gg[3]);
+        CHECK(glm::length(nc - target) < 1e-4f);
+        CHECK(std::fabs(glm::length(nb - na) - glm::length(b - a)) < 1e-4f);
+        CHECK(std::fabs(glm::length(nc - nb) - glm::length(c - b)) < 1e-4f);
+        CHECK(glm::length(na - a) < 1e-5f);                    // the shoulder never moves
+        CHECK(std::fabs(glm::dot(IK::Rotation(gg[3]), targetRot)) > 1.0f - 1e-5f);
+        // The child rides the end rigidly.
+        CHECK(glm::length(glm::inverse(IK::Rotation(gg[3])) * (IK::Position(gg[4]) - nc) - childOffset) < 1e-4f);
+    }
+    // Same bend side: re-solving onto the end's own spot changes nothing, so the elbow is never
+    // flipped through the limb.
+    {
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        CHECK(IK::SolveTwoBone(p, parents, gg, 1, 2, 3, c, nullptr, 1.0f));
+        CHECK(glm::length(IK::Position(gg[2]) - b) < 1e-4f);
+        CHECK(glm::dot(glm::normalize(glm::cross(IK::Position(gg[3]) - a, IK::Position(gg[2]) - a)), bendAxis) > 0.999f);
+    }
+    // Out of reach: the chain straightens toward the target instead of breaking.
+    {
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        const glm::vec3 dir = glm::normalize(glm::vec3(-1.0f, 0.2f, 0.1f));
+        CHECK(IK::SolveTwoBone(p, parents, gg, 1, 2, 3, a + dir * reach * 3.0f, nullptr, 1.0f));
+        const glm::vec3 nc = IK::Position(gg[3]);
+        CHECK(glm::dot(glm::normalize(nc - a), dir) > 0.9999f);
+        CHECK(std::fabs(glm::length(nc - a) - reach) < reach * 1e-3f);
+    }
+    // Weight 0 is the input pose; weight 0.5 goes halfway.
+    {
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        const glm::vec3 target = a + glm::vec3(0.3f, 0.3f, 0.3f);
+        CHECK(IK::SolveTwoBone(p, parents, gg, 1, 2, 3, target, nullptr, 0.0f));
+        CHECK(glm::length(IK::Position(gg[3]) - c) < 1e-6f);
+        CHECK(IK::SolveTwoBone(p, parents, gg, 1, 2, 3, target, nullptr, 0.5f));
+        CHECK(glm::length(IK::Position(gg[3]) - glm::mix(c, target, 0.5f)) < 1e-4f);
+    }
+    // A zero-length bone is refused, and bad indices are.
+    {
+        IK::Pose p = pose;
+        p[2].T = glm::vec3(0.0f);
+        std::vector<glm::mat4> gg;
+        IK::ComputeGlobals(p, parents, gg);
+        CHECK(!IK::SolveTwoBone(p, parents, gg, 1, 2, 3, a, nullptr, 1.0f));
+        CHECK(!IK::SolveTwoBone(p, parents, gg, 1, 2, 99, a, nullptr, 1.0f));
+    }
+    // OffsetBone moves a bone and its subtree rigidly, rotating about the pivot.
+    {
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        const glm::quat spin = glm::angleAxis(glm::radians(90.0f), glm::vec3(0, 1, 0));
+        const glm::vec3 pivot = c + glm::vec3(0.1f, 0.0f, 0.0f);
+        IK::OffsetBone(p, parents, gg, 3, glm::vec3(0.0f, 0.2f, 0.0f), spin, pivot);
+        CHECK(glm::length(IK::Position(gg[3]) - (pivot + spin * (c - pivot) + glm::vec3(0, 0.2f, 0))) < 1e-4f);
+        CHECK(glm::length(glm::inverse(IK::Rotation(gg[3])) * (IK::Position(gg[4]) - IK::Position(gg[3])) - childOffset) < 1e-4f);
+        CHECK(glm::length(IK::Position(gg[2]) - b) < 1e-6f); // the parent is untouched
+    }
+    // AimBone turns its axis onto the target, within the limit.
+    {
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        const glm::vec3 target = c + glm::vec3(0.0f, 0.0f, 2.0f);
+        IK::AimBone(p, parents, gg, 3, glm::vec3(1, 0, 0), target, 180.0f, 1.0f);
+        const glm::vec3 axis = IK::Rotation(gg[3]) * glm::vec3(1, 0, 0);
+        CHECK(glm::dot(glm::normalize(axis), glm::normalize(target - IK::Position(gg[3]))) > 0.9999f);
+    }
+}
+
 } // namespace
 
 int RunUnitTests() {
@@ -1897,6 +2179,9 @@ int RunUnitTests() {
         {"AnimatorController", TestAnimatorController},
         {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
+        {"Curve", TestCurve},
+        {"IKSolver", TestIKSolver},
+        {"WeaponProcedural", TestWeaponProcedural},
         {"AssetIdentity", TestAssetIdentity},
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},
