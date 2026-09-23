@@ -20,8 +20,9 @@ if not exist "build\CMakeCache.txt" (
   )
 )
 
-echo Building the latest (Release)... output goes to build\last-build.log
-cmake --build build --config Release --parallel > build\last-build.log 2>&1
+rem The launch screen (tools\launcher) plays while the Release build runs behind it, and
+rem exits with the build's result. Output goes to build\last-build.log.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\launcher\launch-screen.ps1" -Build
 if errorlevel 1 (
   echo.
   echo *** BUILD FAILED - last lines of build\last-build.log: ***
