@@ -309,12 +309,8 @@ void FirstPersonPresentation::Update(World& world, const Camera& camera) {
         glm::mat4 socket(1.0f), weaponRoot(1.0f);
         if (m_ArmsModel->NodeTransform(m_Set.WeaponSocket, socket) &&
             m_WeaponModel->NodeTransform(m_Set.WeaponRoot, weaponRoot)) {
-            // The offset sits between socket and rotation because it is in the SOCKET's frame:
-            // T(offset) * R(rotation) has to equal inv(socket) * weaponRoot for `mount` to come
-            // out identity - rotation alone expresses only half of the authored relationship.
             const glm::mat4 mount =
-                socket * glm::translate(glm::mat4(1.0f), m_Set.WeaponMountOffset) *
-                glm::mat4_cast(QuaternionFromEulerYXZ(m_Set.WeaponMountRotation)) *
+                socket * glm::mat4_cast(QuaternionFromEulerYXZ(m_Set.WeaponMountRotation)) *
                 glm::inverse(weaponRoot);
             weaponPosition = position + rotation * (m_Scale * glm::vec3(mount[3]));
             weaponRotation = NormalizeRotation(rotation * QuaternionFromMatrix(mount));

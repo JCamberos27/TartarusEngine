@@ -69,7 +69,6 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     parsed.WeaponSocket = String(root, "weaponSocket");
     parsed.WeaponRoot = String(root, "weaponRoot");
     parsed.WeaponMountRotation = Vec3(root, "weaponMountRotation", glm::vec3(0.0f));
-    parsed.WeaponMountOffset = Vec3(root, "weaponMountOffset", glm::vec3(0.0f));
     if (parsed.ArmsModel.empty()) return Fail(error, "missing required string 'armsModel'");
     if (parsed.WeaponModel.empty()) return Fail(error, "missing required string 'weaponModel'");
     if (!std::isfinite(parsed.ViewRotation.x) || !std::isfinite(parsed.ViewRotation.y) ||
@@ -78,9 +77,6 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     if (!std::isfinite(parsed.WeaponMountRotation.x) || !std::isfinite(parsed.WeaponMountRotation.y) ||
         !std::isfinite(parsed.WeaponMountRotation.z))
         return Fail(error, "'weaponMountRotation' must be three finite numbers (Y-X-Z degrees)");
-    if (!std::isfinite(parsed.WeaponMountOffset.x) || !std::isfinite(parsed.WeaponMountOffset.y) ||
-        !std::isfinite(parsed.WeaponMountOffset.z))
-        return Fail(error, "'weaponMountOffset' must be three finite numbers (metres, socket frame)");
     if (parsed.WeaponSocket.empty() != parsed.WeaponRoot.empty())
         return Fail(error, "'weaponSocket' and 'weaponRoot' must be given together (or both omitted)");
 

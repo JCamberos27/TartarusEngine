@@ -6,7 +6,6 @@
   "weaponSocket": "ik_hand_gun",
   "weaponRoot": "root",
   "weaponMountRotation": [0.0, 90.0, 90.0],
-  "weaponMountOffset": [-0.0761, -0.0701, -0.0310],
   "clips": [
     { "name": "Idle", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx", "loop": true, "fade": 0.12 },
     { "name": "Walk", "arms": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Walk.fbx", "loop": true, "fade": 0.10 },

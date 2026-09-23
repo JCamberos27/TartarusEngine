@@ -131,10 +131,6 @@ world-space / evaluated bounding boxes and bone landmarks quoted below.
   "weaponModel": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",
   "defaultState": "Idle",
   "viewRotation": [0.0, 180.0, 0.0],   // NEW: Y-X-Z degrees, see section 5
-  "weaponSocket": "ik_hand_gun",       // bone on the ARMS rig the gun rides on
-  "weaponRoot": "root",                // bone on the WEAPON rig that lands on it
-  "weaponMountRotation": [0.0, 90.0, 90.0],          // Y-X-Z degrees, see section 4
-  "weaponMountOffset": [-0.0761, -0.0701, -0.0310],  // metres, socket frame, see section 4
   "clips": [
     { "name": "Idle",  "arms": ".../FP_Idle.fbx", "loop": true, "fade": 0.12 },
     { "name": "Aim",   "armsBindPose": true, "loop": true, "fade": 0.10 },
@@ -154,16 +150,11 @@ Parsed by `FirstPersonAnimationSet::FromJsonString`
   weapon clips, so those states deliberately leave it empty; the runtime must honour
   that fallback rather than guessing a clip name.
 - `loop`, `fade` (seconds, 0..5).
-- `weaponMountRotation` / `weaponMountOffset` — the fixed mount between socket and
-  weapon root: `mount = socket * T(offset) * R(rotation) * weaponRoot^-1` (section 4).
-  Both were measured from the source FBXs: the rotation alone is exactly (0, 90, 90),
-  but the authored pair **also** carries the translation. Absent → `{0,0,0}` = the old
-  rotation-only mount, so older `.fpsanim` files behave exactly as before.
 - Unknown/absent optional keys fall back to defaults, so older `.fpsanim` files keep
   loading.
 
-`viewRotation` and both mount fields are validated for finiteness at load; a bad value
-fails the load with a specific message rather than silently producing a NaN transform.
+`viewRotation` is validated for finiteness at load; a bad value fails the load with a
+specific message rather than silently producing a NaN transform.
 
 ---
 
@@ -272,53 +263,6 @@ world(local) = position + rotation * (scale * local)
   defaults to `{0, 0, 0}`.
 - With `CameraBone = "head"` the shoulders land below and slightly behind the camera
   and the hands/gun land in front — a normal first-person frame.
-
-### The weapon attachment — the mount is rotation **and** translation
-
-The weapon rides a bone on the arms rig (`weaponSocket = ik_hand_gun`), solved from the
-two posed node globals (`FirstPersonPresentation.cpp::Update`):
-
-```
-weaponEntity * weaponRoot = armsEntity * socket * mount
-⇒ weaponEntity = armsEntity * (socket * mount * weaponRoot^-1)
-```
-
-`mount` used to be **rotation only** — `socket * R(weaponMountRotation) * weaponRoot^-1`.
-Measured against the source FBXs (`work/ads_sight_probe.cpp`), the authored relationship
-`inv(socket) * weaponRoot` has rotation **exactly** `(0, 90, 90)` *and* a translation of
-`(-0.0761, -0.0701, -0.0310)` m in the socket frame. A rotation cannot express that
-translation, so the attachment matrix `E` collapsed to a pure **108 mm translation** of
-the gun relative to the artist's pose — 77 mm left, 29 mm up, 70 mm nearer the camera,
-rotation error only 0.03° — in *every* state (the offset lives in the socket frame, so
-it rotates with the hand).
-
-ADS, rear sight against the `head`-bone camera (`ads_sight_probe`):
-
-| | lateral | vertical | depth |
-|---|---|---|---|
-| authored (artist's pose) | +28.9 mm right | +2.1 mm up | 394 mm |
-| engine, rotation-only mount | **−48.4 mm left** | **+31.0 mm above** | 324 mm |
-| caused by the missing translation | −77.4 mm | +28.9 mm | −69.6 mm |
-
-That is the "the camera ends up to the right of the AK" report, quantified: the camera
-sat 53 mm right of the gun's centre plane, and the gun floated 108 mm off the grip
-(nearest right-hand vertex to the gun: 51 mm authored → 128 mm in-engine). Sight-line
-yaw was +0.24° and pitch +0.94° — negligible, so no rotation fix is needed.
-
-**Fix, two halves:**
-
-1. **`weaponMountOffset`** (new `.fpsanim` field, socket frame) makes
-   `T(offset) * R(rotation) == inv(socket) * weaponRoot`, i.e. `E = I` — the gun returns
-   to the authored pose in every state. Default `{0,0,0}` keeps the old behaviour.
-2. The authored pose itself aims **28.9 mm right** of the head bone (the artist aligned
-   the sight with the right eye), so `FPS_Animation_smoke_play.json` carries
-   `View Model Offset = [-0.029, -0.002, 0.0]` to put the rear sight exactly on the
-   camera axis. Camera-frame signs: +x right, +y up, **+z is back**, so a needed *forward*
-   correction enters negated (`offset.z = engineDepth − authoredDepth`).
-
-With both applied the two halves add up to the single scene-only value
-`(0.048, −0.031, −0.070)` that `ads_sight_probe` also prints — the arithmetic
-cross-check that they measure the same thing.
 
 ### Config fields
 
@@ -465,7 +409,6 @@ main CMake project.
 | `bind_probe.cpp` | The base FBX's **bind pose** against each clip, node by node: world positions of `head`, `ik_hand_gun` and the hands, plus the worst bind↔clip displacement. Answers "what does the engine paint when no clip is live?" — the tool that found the disappearing-arms bug |
 | `fbx_info.cpp` | What is actually inside an FBX: nodes, meshes, and every take it carries — per-bone weight lists and per-take animated node names |
 | `mag_probe.cpp` | Out-of-range skin-weight audit under the engine's exact flag set (`--scan` over every shipped FBX), a post-processing **flag bisect**, per-bone raw `aiBone` dumps, and forward-skin positions at chosen ticks. The tool that proved `aiProcess_JoinIdenticalVertices` was deleting the spare magazine |
-| `ads_sight_probe.cpp` | ADS sight line against the `head`-bone camera through the engine's **exact vertex path** (bind-node bake → 4-slot renormalised weights → `GlobalInverse * global * mOffsetMatrix` palette): authored vs attached placement, top-profile sight identification, lateral/vertical/yaw/pitch, and the `weaponMountOffset` / `View Model Offset` values. The tool that measured the rotation-only mount bug and centred the sight |
 | `build_probe.bat` | `cmd /c "work\build_probe.bat <name>"` — builds `work\<name>.cpp` with the right vcvars + `/MD` + assimp/glm include and lib paths, so a new probe is one command instead of the `cl` line above |
 | `export_clip.py` | Blender-side clip export: applies the pairing rule above, pins the weapon NLA off, restores both armatures **in memory** (never saves the `.blend`), and prints `weapon action paired = …`. Run as `blender -b "<blend>" --python work\export_clip.py -- <action> <out.fbx> <start> <end> <meshes 0|1> [weapon\|auto]` |
 | `extract_frames.py` | Frames from a video via Blender's VSE — there is no ffmpeg on this box, so this is how a Play-mode recording gets turned into PNGs/contact sheet for inspection |
