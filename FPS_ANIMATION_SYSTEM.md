@@ -2,237 +2,227 @@
 
 Branch: `feature/fps-first-person-animation`
 
-This is the **how it works** document: what the system is made of, how a frame flows
-through it, the asset format, the gameplay rules, and the invariants that keep it from
-re-breaking. Three companion documents:
+This is the **how it works** document. It covers what the system is made of, how a frame
+flows through it, the asset formats, the gameplay rules, and the invariants that keep it
+from breaking again. Companion documents:
 
 | Document | Read it when |
 |---|---|
-| **`FPS_WEAPON_INTEGRATION.md`** | You are adding a new weapon (or re-exporting this one). Step-by-step workflow + checklist |
-| **`FPS_ANIMATION_INVESTIGATION.md`** | You are about to form a new hypothesis about skinning/import. Everything already measured and ruled out, with numbers |
-| `tools/assimp_patches/README.md` | You are bumping assimp, or a weapon's spare magazine vanished on import |
+| **`ANIMATOR.md`** | You're editing a weapon's animation graph: states, transitions, layers, the Animator window |
+| **`FPS_WEAPON_INTEGRATION.md`** | You're adding a new weapon (or re-exporting this one). Step-by-step workflow and checklist |
+| **`FPS_ANIMATION_INVESTIGATION.md`** | You're about to form a new hypothesis about skinning or import. It lists everything already measured and ruled out, with numbers |
+| `tools/assimp_patches/README.md` | You're bumping assimp, or a weapon's spare magazine vanished on import |
 
 ---
 
 ## 1. Overview
 
-A player with a `FirstPersonController` whose **Animation Set** field names an `.fpsanim`
-asset gets a camera-bound pair of rigs during Play: **arms** and **weapon**, each a
-separately-animated skinned FBX. Leave the field empty and the controller behaves exactly
-as it did before this branch (the Sandbox gravity gun is untouched).
+During Play, a player whose `FirstPersonController` has a **Weapon Definition**
+(`.fpsanim`) in its Animation Set field gets a camera-bound pair of rigs:
+
+- **arms**: a skinned FBX.
+- **weapon**: a second skinned FBX.
+
+If the field is empty, the controller behaves exactly as it did before this branch; the
+Sandbox gravity gun is untouched.
+
+The work is split three ways:
+
+| Piece | Owns | Edited in |
+|---|---|---|
+| **Animator Controller** (`.controller`) | *Which animation plays when*: states, transitions, priorities, fades, events, tags | Animator window (`ANIMATOR.md`) |
+| **Weapon definition** (`.fpsanim`) | Which rigs, which controller, how the gun mounts in the hands, and the gameplay numbers (magazine, rpm, recoil, bob…) | Inspector, with the file selected in the Asset Browser |
+| **`FirstPersonPresentation`** (C++) | Placement on the camera, input → controller parameters, ammo/fire modes, the procedural ADS kick and bob | code (rarely needed per weapon) |
 
 ```
-                 .fpsanim (asset)                    FirstPersonController (scene)
-   arms/weapon FBX · 15 named states · socket   Animation Set · Camera Bone · View Model
-                          │                          Offset/Rotation/Scale/FOV
-                          └──────────────┬───────────────┘
-                                         ▼
-                     FirstPersonPresentation   (src/Game, runtime only)
-          Start ─ spawns 2 entities, attaches + validates every clip, plays defaultState
-          Update ─ places arms on the camera bone, weapon on the arms' gun socket
-          Tick ─ state machine: resting pose / transitions / one-shots, ammo, regrip, hide
-          Stop ─ destroys both entities before the scene snapshot is restored
-                                         │  ViewModelTag
-                                         ▼
-                     SceneRenderer view-model sub-pass (own FOV, depth cleared)
+ .fpsanim ─ rigs · controller · socket · gameplay        FirstPersonController (scene)
+            │                                            Camera Bone · View Model Offset/Rotation/Scale/FOV
+            ▼                                                     │
+ FirstPersonPresentation (src/Game, runtime only) ◄───────────────┘
+   Start  ─ spawns arms + weapon entities, each with an AnimatorControllerComponent
+            (arms: driver, track "arms"; weapon: follower, track "weapon", Driver = arms)
+   Update ─ reads last frame's events/tags, drops unused triggers, hides/shows the rigs,
+            places arms on the camera bone and the weapon on the arms' gun socket
+   input  ─ Fire / Reload / MagCheck / Inspect / Melee / Equipped → controller parameters
+   Tick   ─ Speed/Sprint/Aim/Equipped/Ammo parameters, Fidget timer, recoil + bob clocks
+   Stop   ─ destroys both entities before the scene snapshot is restored
+            │
+            ▼
+ UpdateAnimatorControllers (AnimatorController.cpp) ─ state machine → blended pose → Model::ApplyLocalPose
+            │  ViewModelTag
+            ▼
+ SceneRenderer view-model sub-pass (own FOV, depth cleared)
 ```
 
-Nothing it creates is ever saved: the entities exist only between Play and Stop, and
-`ViewModelTag` is runtime-only. The PhysX character stays the only physics authority —
-the view model has no collider.
+Nothing the presentation creates is ever saved. The entities exist only between Play and
+Stop, and `ViewModelTag` is runtime-only. The PhysX character stays the only physics
+authority, and the view model has no collider.
 
-### Per-frame order (`src/main.cpp`, Play loop, `playUsesPlayer` branch)
+### Per-frame order (`src/main.cpp`, Play loop)
 
-1. `player.Update(...)` — movement + camera.
-2. `firstPersonPresentation.Update(world, player.Cam)` — pose both rigs from the camera.
-3. Weapon input (only when the game has input **and** the controller's gravity gun is off):
-   `FireMode` → `ToggleFireMode`, `Fire1` → `UpdateTrigger`, `Reload` via
-   `FirstPersonReloadButton` → `Reload` / `MagCheck`, `Inspect`, `Melee`,
-   `Weapon1`/`Weapon2`/scroll/`Holster` → `SetEquipped`.
-4. `firstPersonPresentation.Tick(dt, planarSpeed, sprinting, aiming)` — advance the
-   state machine. `aiming` = `Fire2` held.
+1. `player.Update(...)`: movement and camera.
+2. `firstPersonPresentation.Update(world, player.Cam)`:
+   - consume the events the controller fired last frame (`Shot` spends a round, `Refill` fills the magazine);
+   - reset the one-frame triggers;
+   - apply hidden or shown;
+   - pose both rigs from the camera.
+3. Weapon input. This only runs when the game has input **and** the controller's gravity gun is off:
+   - `FireMode` → `ToggleFireMode`
+   - `Fire1` → `UpdateTrigger`
+   - `Reload` → `UpdateReloadKey`
+   - `Inspect` and `Melee` → `TriggerAction`
+   - `Weapon1`, `Weapon2`, scroll and `Holster` → `SetEquipped`
+4. `firstPersonPresentation.Tick(dt, planarSpeed, sprinting, aiming)`: sets the locomotion parameters. `aiming` means `Fire2` is held.
+5. `UpdateAnimatorControllers(...)`: the arms controller runs, the weapon mirrors it, and both models are posed.
 
-Because `Update` runs before `Tick`, a state change or hide/unhide shows on the next
-frame — one frame of latency, by design, so a frame never mixes two placements.
+Placement reads the pose from the previous frame. That one frame of latency is deliberate, so
+a frame never mixes two placements.
 
 ### Code map
 
 | File | Role |
 |------|------|
-| `src/Game/FirstPersonAnimation.{h,cpp}` | Pure, unit-tested rules: `.fpsanim` parsing/validation, tiers + interrupt rule, resting-state choice, transitions, reload choice, regrip delay, R tap/hold |
-| `src/Game/FirstPersonPresentation.{h,cpp}` | The runtime driver: `Start`/`Stop`/`Update`/`Tick`, `Fire`/`Reload`/`SetEquipped`/`TriggerAction`, ADS recoil + walk bob |
-| `src/Game/Components.h` | `FirstPersonControllerComponent` view-model fields, `ViewModelTag` |
-| `src/Game/ComponentRegistry.cpp` | Inspector/serialization for those fields; `Animation Set` is an asset-path field |
-| `src/Core/InputMap.{h,cpp}` | Default bindings + `MergeDefaults` |
+| `src/Game/AnimatorController.{h,cpp}` | The general animator: `.controller` v2 format, `AdvanceAnimator` (state machine), sampling and blending, the tracks/driver group, `BuildFirstPersonController`'s output format |
+| `src/Game/FirstPersonAnimation.{h,cpp}` | The weapon definition (`.fpsanim` v1/v2), `FirstPersonAnimatorContract` (the parameter, tag and event names), `BuildFirstPersonController` (the standard FPS graph), `FirstPersonReloadButton`, `FirstPersonRegripDelay` |
+| `src/Game/FirstPersonPresentation.{h,cpp}` | The runtime driver: `Start`/`Stop`/`Update`/`Tick`, fire, reload, equip, ADS recoil and walk bob |
+| `src/Game/Components.h` | `AnimatorControllerComponent` (params, tags, events, `Track`, `Driver`), `FirstPersonControllerComponent`, `ViewModelTag` |
+| `src/Editor/EditorLayer_Animator.cpp` | The Animator window, the component's Inspector section, and the `.fpsanim` / `.controller` asset inspectors |
+| `src/Renderer/Model.{h,cpp}` | Import, skinning, `SampleLocalPose` / `ApplyLocalPose`, `NodeTransform` |
 | `src/Renderer/SceneRenderer.cpp`, `RenderFrameContext.h` | The view-model sub-pass (`ViewModelFov`) |
-| `src/Renderer/Model.{h,cpp}` | Import, skinning, `NodeTransform`, `AnimationFinished` |
-| `src/Assets/AssetDatabase.cpp`, `src/Editor/EditorLayer_AssetBrowser.cpp` | `.fpsanim` registered as an asset type and scanned for references |
-| `src/Tests/UnitTests.cpp` | `TestFirstPersonAnimationSet`, `TestFirstPersonAnimationFSM`, `TestInputMap` |
+| `src/Core/InputMap.{h,cpp}` | Default bindings and `MergeDefaults` |
+| `src/Tests/UnitTests.cpp` | `TestAnimatorController`, `TestFirstPersonAnimationSet`, `TestFirstPersonAnimationFSM` (drives the AK graph through the real runtime), `TestInputMap` |
+| `src/main.cpp` | Play-loop wiring; `--upgrade-fpsanim` (v1 → controller) |
 | `tools/assimp_patches/` + `tools/apply_assimp_patches.cmake` | Local assimp fix, applied at configure time |
-| `tools/component_registration_allowlist.txt` | `ViewModelTag` is allow-listed (runtime-only) — CI fails without it |
+| `tools/component_registration_allowlist.txt` | `ViewModelTag` is allow-listed (runtime-only). CI fails without it |
 
 ---
 
-## 2. The `.fpsanim` asset
+## 2. The weapon definition (`.fpsanim`)
 
-The asset is the contract between an exported weapon and the engine. The shipped one is
-`project/assets/fps/AKS74U/AKS74U.fpsanim`.
+The shipped definition is `project/assets/fps/AKS74U/AKS74U.fpsanim`. Select it in the
+Asset Browser's **Animation** folder to edit it in the Inspector.
 
 ```jsonc
 {
-  "armsModel":   "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",  // required: mesh + skeleton + bind pose
+  "armsModel":   "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",  // required: mesh + skeleton + REST bind pose
   "weaponModel": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",        // required
-  "defaultState": "Idle",                   // optional; defaults to the first clip; must name a clip
-  "viewRotation": [0.0, 180.0, 0.0],        // optional, Y-X-Z degrees: the FBXs' axis convention (§6)
-  "weaponSocket": "ik_hand_gun",            // optional: bone on the ARMS rig the gun rides
-  "weaponRoot":   "root",                   // bone on the WEAPON rig that lands on the socket
-  "weaponMountRotation": [0.0, 90.0, 90.0], // Y-X-Z degrees, fixed socket -> weaponRoot rotation
-  "clips": [
-    { "name": "Idle", "arms": ".../AKS-74U_A_FP_Idle.fbx", "loop": true, "fade": 0.12 },
-    { "name": "Fire", "arms": ".../AKS-74U_A_FP_Fire.fbx", "weapon": ".../AKS-74U_A_W_Fire.fbx", "fade": 0.03 }
-    // ... one entry per state, see the table below
-  ]
+  "controller":  "assets/fps/AKS74U/AKS74U.controller",                 // the Animator Controller (tracks "arms" + "weapon")
+  "viewRotation": [0, 180, 0],        // Y-X-Z degrees: the FBXs' axis convention (§6)
+  "weaponSocket": "ik_hand_gun",      // bone on the ARMS rig the gun rides
+  "weaponRoot":   "root",             // bone on the WEAPON rig that lands on the socket
+  "weaponMountRotation": [0, 90, 90], // fixed socket -> weaponRoot rotation (rotation only)
+  "gameplay": {
+    "magazine": 30, "rpm": 700, "allowFullAuto": true, "reloadHoldSeconds": 0.35,
+    "regripMin": 10, "regripMax": 20,
+    "recoil": { "pitch": 1.2, "offset": [0, 0.002, 0.014], "rise": 0.035, "settle": 0.08 },
+    "adsBob": { "stride": 2.4, "side": 0.003, "vertical": 0.0015, "fullSpeed": 3.5, "ease": 8 }
+  }
 }
 ```
 
-Validation (`FirstPersonAnimationSet::FromJsonString`) fails the load, with a specific
-message, on: invalid JSON; missing `armsModel`/`weaponModel`; a non-finite
-`viewRotation`/`weaponMountRotation`; `weaponSocket` without `weaponRoot` (or vice
-versa); an empty `clips` array; a clip with no `name`, or with neither `arms` nor
-`"armsBindPose": true`; `fade` outside 0..5; duplicate names; a `defaultState` that names
-no clip. Then `Start()` attaches **every** clip up front and fails Play if any file
-can't be attached — a bad path surfaces when Play starts, not mid-reload.
+**Validation.** `FirstPersonAnimationSet::FromJsonString` fails the load, with a specific
+message, on any of these:
+- missing `armsModel` or `weaponModel`
+- non-finite rotations
+- `weaponSocket` given without `weaponRoot`, or the other way round
+- neither a `controller` nor a v1 `clips` list
+- a non-positive `rpm`, recoil rise or settle, bob stride or full speed, or reload hold time
 
-Per clip:
+**Attach check.** `Start()` then attaches **every** clip in the controller, the arms track on
+the arms model and the weapon track on the weapon model. It fails Play if any clip can't be
+attached, so a bad path shows up when Play starts, not in the middle of a reload.
 
-- `arms` **or** `armsBindPose: true` — required. `armsBindPose` means "use the base
-  model's own bind pose for this state" (no clip). Nothing ships using it today; `Aim`
-  has its own clip.
-- `weapon` — optional **by design**. With no weapon clip the weapon crossfades to its
-  bind pose (which, for this set, *is* the ADS pose) — see §8 item 5.
-- `loop` (default false) — resting states loop; one-shots don't.
-- `fade` (seconds, default 0.08) — crossfade *into* this state.
+**v1 files.** An older file with a flat `clips` list and no `controller` still runs: the
+standard graph is built in memory. To turn one into a real controller, use the Inspector's
+**Create Controller from Clips** button, or run:
 
-### The state contract
+```powershell
+build\Release\TartarusEngine.exe --upgrade-fpsanim <abs .fpsanim> <abs out.controller> <project-relative controller ref>
+```
 
-State **names** are the interface. The driver refers to them by name, so a new weapon
-must use these exact names:
+That's how `AKS74U.controller` was produced.
 
-| State | Kind (tier) | Loop | How it's reached | AKS74U arms / weapon clip |
-|---|---|---|---|---|
-| `Idle` | resting | ✓ | not moving | `FP_Idle` / — |
-| `Walk` | resting | ✓ | moving, not aiming | `FP_Walk` / — |
-| `Sprint` | resting | ✓ | Sprint held **and** moving (beats aiming) | `FP_Sprint` / `W_Sprint` |
-| `Aim` | resting | ✓ | Fire2 held (also while walking) | `FP_Aim` / — |
-| `IdleToSprint` | Transition (0) | | Idle → Sprint | `FP_IdleToSprint` / `W_IdleToSprint` |
-| `SprintToIdle` | Transition (0) | | Sprint → anything but Aim | `FP_SprintToIdle` / `W_SprintToIdle` |
-| `Fire` | Action (1) | | Fire1 at the hip | `FP_Fire` / `W_Fire` |
-| `Inspect` | Action (1) | | F | `FP_Inspect` / `W_Inspect` |
-| `MagCheck` | Action (1) | | R held ≥ 0.35 s | `FP_Mag_Check` / `W_Mag_Check` |
-| `Regrip` | Action (1) | | automatic, 10–20 s of settled Idle | `FP_Regrip` / — |
-| `TacReload` | Committed (2) | | R tap, 1–29 rounds | `FP_Tac_Reload` / `W_Tac_Reload` |
-| `EmptyReload` | Committed (2) | | R tap, 0 rounds | `FP_Empty_Reload` / `W_Empty_Reload` |
-| `Melee` | Committed (2) | | Q | `FP_Melee` / `W_Melee` |
-| `Draw` | Equip (3) | | 1, or scroll/H while unarmed | `FP_Draw` / — |
-| `Holster` | Equip (3) | | 2, or scroll/H while armed | `FP_Holster` / `W_Holster` |
+### The contract between the driver and a weapon's controller
 
-**Which states are required.** The four resting states (`Idle`, `Walk`, `Sprint`,
-`Aim`) must exist — `Tick` switches to them unconditionally, and a missing one logs an
-error every frame it's wanted. `IdleToSprint`, `SprintToIdle` and `Regrip` are optional
-(looked up with `Find` first, skipped when absent). Every other one-shot is optional in
-the file, but pressing its key without it logs `unknown semantic state` — so in
-practice ship all 15, or remove the input.
+The driver refers to **names**, not states. A weapon's controller can have any states and
+any transitions, as long as it uses these names (`FirstPersonAnimatorContract`):
+
+| Kind | Name | Meaning |
+|---|---|---|
+| Float param | `Speed` | Planar speed, m/s |
+| Bool params | `Sprint`, `Aim`, `Equipped` | Sprint held, aim held, weapon wanted in hand |
+| Int param | `Ammo` | Rounds in the magazine |
+| Triggers (one frame) | `Fire`, `Reload`, `MagCheck`, `Inspect`, `Melee`, `Fidget` | Set on input and dropped the next frame if no transition took them. `Fidget` comes after 10–20 s in a state tagged `Idle` |
+| Tag | `ADS` | Sights are up: fire is a procedural kick (no `Fire` trigger), walking bobs |
+| Tag | `Reload` | A reload is running: R does nothing |
+| Tag | `Hidden` | Unarmed: both rigs are hidden. The controllers keep running |
+| Tag | `Idle` | Settled idle: counts toward `Fidget` |
+| Event | `Shot` | A round leaves the gun (hip fire). Put it at time 0 on the fire state |
+| Event | `Refill` | The magazine is full again. Put it at time 1 on each reload state, so a reload cut short doesn't count |
 
 ---
 
-## 3. The state machine
+## 3. The AK's graph (the standard first-person graph)
 
-The rules are pure functions in `FirstPersonAnimation.h`, pinned by
-`TestFirstPersonAnimationFSM`; `FirstPersonPresentation::Tick` applies them.
+`AKS74U.controller` is exactly `BuildFirstPersonController` applied to the original 15 clips.
+Open it in the Animator to see it. It reproduces the behaviour of the old hard-coded state
+machine, and `TestFirstPersonAnimationFSM` pins that behaviour.
 
-**Resting state** (`FirstPersonRestingState`), consulted only while no one-shot holds:
+| State | Priority | Tags | Reached by |
+|---|---|---|---|
+| `Idle`, `Walk`, `Sprint`, `Aim` | 0 | `Idle` / – / – / `ADS` | Entry, and locomotion transitions between them |
+| `IdleToSprint`, `SprintToIdle` | 1 | | Idle → Sprint; Sprint → not-Aim |
+| `Regrip`, `Fire`, `Inspect`, `MagCheck` | 2 | | Idle + `Fidget`; Any + `Fire` / `Inspect` / `MagCheck` |
+| `TacReload`, `EmptyReload`, `Melee` | 3 | `Reload` (reloads) | Any + `Reload` (`Ammo` > 0 / = 0); Any + `Melee` |
+| `Draw`, `Holster` | 4 | | Holstered + `Equipped`; Any + not `Equipped` |
+| `Holstered` | 5 | `Hidden` | Holster, when it ends. Holds Holster's last frame |
 
-```
-sprinting && moving  → Sprint      (no sprinting in ADS: sprint drops the sights)
-aiming               → Aim         (walking too — procedural bob, §4)
-moving               → Walk
-otherwise            → Idle        (moving = planar speed > 0.05 m/s)
-```
+- **Locomotion.**
+  - Sprinting (held **and** moving) beats aiming, and aiming beats walking.
+  - Idle → Sprint plays `IdleToSprint`.
+  - Leaving Sprint plays `SprintToIdle`, unless you're aiming: aiming out of a sprint goes straight to `Aim`.
+- **Any State transitions.** All of them have **Respect Priority** on, so a request only takes over a state of strictly lower priority:
+  - A fire, inspect or mag check can cut a sprint transition short.
+  - Nothing below 4 interrupts a reload or melee.
+  - Holster can't cut Draw short. Pressing 1, 2 or scroll mid-swap queues instead.
+  - Fire, Inspect, MagCheck and Melee also have **To Self** on, so pressing again restarts them.
+- **One-shots.** Every one-shot leaves through **Exit** at exit time 1.0. Entry then picks the resting state from the current input (Sprint, Aim or Walk, else Idle). That's why a reload started in ADS hands back to `Aim`.
+- **Clips missing on the weapon track.** Idle, Walk, Aim, Draw and Regrip have no weapon clip, so the weapon crossfades to its bind pose, which for this set *is* the ADS pose. §8 item 5 explains why that must be a fade, not a cut.
 
-**Transitions** (`FirstPersonTransitionVia`): only the Idle↔Sprint pair was authored.
-`Idle → Sprint` plays `IdleToSprint`; `Sprint → X` plays `SprintToIdle` unless `X` is
-`Aim` (aiming out of a sprint goes straight to the sights). Everything else crossfades
-directly using the destination's `fade`.
-
-**One-shots and tiers** (`FirstPersonTierOf` / `FirstPersonCanInterrupt`): a request
-takes over only if it **strictly outranks** what's playing, or re-requests the **same**
-state (restart — Fire spam, re-tapping Melee):
-
-```
-Transition (0)  <  Action (1)  <  Committed (2)  <  Equip (3)
-IdleToSprint       Fire             TacReload         Draw
-SprintToIdle       Inspect          EmptyReload       Holster
-                   MagCheck         Melee
-                   Regrip
-```
-
-So: any real action pre-empts a sprint transition; Fire/Inspect/MagCheck/Regrip are
-freely interruptible; a reload or melee can only be cut short by Draw/Holster; Draw and
-Holster can't interrupt each other (1/2/scroll mid-swap is ignored). While unarmed only
-`Draw` is accepted.
-
-**Completion.** One-shots play with `ClampForever` (never `Once` — see §8 item 3) and
-are "finished" when `Model::AnimationFinished()` is true for every rig that was given a
-clip (a state with no weapon clip doesn't wait on the weapon). Then `Tick` clears the
-action, refills the magazine if a reload landed, and resolves the resting state again —
-so a reload started in ADS hands back to `Aim` if Fire2 is still held.
+To change behaviour, edit the graph: fades, priorities, extra states and new transitions
+need no code. §9 lists what does still need code.
 
 ---
 
 ## 4. Weapon gameplay
 
-All in `FirstPersonPresentation` (`Fire()` / `UpdateTrigger()` / `Reload()` /
-`SetEquipped()` / `Tick()`); input is read in `main.cpp` (§1).
+This lives in `FirstPersonPresentation`, and its numbers come from the definition's `gameplay` block.
 
 | Input (action name) | Default key | Does |
 |---|---|---|
-| `Fire1` | LMB / L-Ctrl | 1 round per shot. Hip: the `Fire` clip. ADS: procedural kick. Dry trigger does nothing |
-| `Fire2` | RMB / L-Alt | Hold to aim |
-| `FireMode` | B | Toggle Semi-Auto (default) / Full-Auto (~700 rpm, one round per 86 ms while held). Logged to the Console; resets to semi on Play |
-| `Reload` tap | R | `TacReload` with rounds left, `EmptyReload` at 0; nothing when full or already reloading |
-| `Reload` hold ≥ 0.35 s | R | `MagCheck` (fires at the threshold; the release then does nothing) |
-| `Inspect` | F | `Inspect` |
-| `Melee` | Q | `Melee` |
-| `Weapon1` / `Weapon2` | 1 / 2 | Draw the weapon / Holster to unarmed |
-| scroll wheel, `Holster` | wheel / H | Toggle between the two |
-| `Sprint` | L-Shift | Sprint (drops ADS) |
+| `Fire1` | LMB / L-Ctrl | Fires one round per shot. At the hip it sets the `Fire` trigger, and the round is spent on the `Shot` event. In a state tagged `ADS` it's a procedural kick instead. A dry trigger does nothing |
+| `Fire2` | RMB / L-Alt | Hold to aim (the `Aim` parameter) |
+| `FireMode` | B | Toggles Semi-Auto (the default) and Full-Auto (60/rpm s between rounds while held). Logged to the Console. Does nothing if `allowFullAuto` is false |
+| `Reload` tap | R | Sets the `Reload` trigger when the magazine isn't full and no `Reload`-tagged state is playing |
+| `Reload` hold ≥ `reloadHoldSeconds` | R | Sets the `MagCheck` trigger |
+| `Inspect` / `Melee` | F / Q | Set those triggers |
+| `Weapon1` / `Weapon2` | 1 / 2 | Set `Equipped` true / false |
+| scroll wheel, `Holster` | wheel / H | Toggle `Equipped` |
+| `Sprint` | L-Shift | The `Sprint` parameter. Sprinting drops ADS |
 
-Defaults live in `InputMap::Defaults()`; `project/settings.json` holds the saved list and
-**wins** per action, and `InputMap::MergeDefaults` tops it up with any default it lacks.
-So changing a default key needs both edits (or delete that action from settings.json).
+Defaults live in `InputMap::Defaults()`. `project/settings.json` holds the saved list and
+**wins** per action, and `InputMap::MergeDefaults` tops it up with any default it lacks. To
+change a default key, edit both places, or delete that action from `settings.json`.
 
-- **Magazine:** 30 rounds (`kMagazineSize`), refilled when a reload clip *completes*;
-  anything that cuts a reload short (Holster) leaves the count as it was. No reserve
-  ammo. Running dry never auto-reloads — the player presses R for `EmptyReload`.
-- **Regrip:** after 10–20 s (uniform random, re-rolled each time) of uninterrupted
-  `Idle`; Action tier, so any input cuts it off. Never from Aim/Walk.
-- **Unarmed:** there is no unarmed arms pose, so once `Holster` finishes both rigs get
-  `DeactivatedTag` + `InactiveTag` (not drawn, clips paused), cleared again by `Draw`.
-- **ADS fire:** the set has no ADS fire clip, and the hip `Fire` clip would pull the
-  sights off centre every shot. Settled in `Aim`, `Fire()` keeps the pose and kicks the
-  whole view model about the eye in camera space — 1.2° muzzle up plus 14 mm back / 2 mm
-  up, 35 ms linear rise then an 80 ms exponential settle — returning exactly to the §5
-  sight picture. Each shot re-enters the rise at the current kick, so full-auto chains
-  into a shake instead of snapping between rounds.
-- **ADS while walking:** there is no aim-walk clip, and the hip `Walk` clip would pull the
-  sights off centre, so the `Aim` pose gets a procedural camera-plane figure-eight bob:
-  3 mm side-to-side per stride, 1.5 mm vertical per step, stride 2.4 m, full amplitude at
-  3.5 m/s, eased in/out at 8/s. Firing while walking in ADS is the kick on top of the bob.
-
-Tuning constants: recoil and bob are at the top of `FirstPersonPresentation.cpp`;
-magazine size and fire rate (`kMagazineSize`, `kFullAutoInterval`) in the header; the tap/
-hold threshold in `FirstPersonReloadButton::kHoldSeconds`. They are **per-engine, not
-per-weapon** today — see §9.
+- **Magazine.** Refilled on the controller's `Refill` event. Anything that cuts a reload short, such as Holster, leaves the count unchanged. There is no reserve ammo, and running dry never auto-reloads.
+- **Triggers last one controller update.** `Update()` resets them each frame, so fire pressed during a reload is dropped rather than firing when the reload ends. The same happened in the old code.
+- **Fidget.** After `regripMin`–`regripMax` s (uniformly random, re-rolled each time) in a state tagged `Idle`, with no crossfade running.
+- **Unarmed.** While the playing state is tagged `Hidden`, both rigs get `DeactivatedTag` and `InactiveTag`, so they aren't drawn. Their animators have `UpdateWhenInactive` set, so the controller can still leave the state.
+- **ADS fire.** The set has no ADS fire clip, and the hip `Fire` clip would pull the sights off centre on every shot. So in an `ADS` state the pose is kept and the whole view model kicks about the eye, in camera space:
+  - `recoil.pitch` degrees of muzzle rise, plus `recoil.offset`.
+  - A `rise` linear ramp, then a `settle` exponential return to the §5 sight picture.
+  - Each shot re-enters the rise at the current kick, so full-auto chains into a shake instead of snapping between rounds.
+- **ADS while walking.** There is no aim-walk clip, so an `ADS` state gets a procedural camera-plane figure-eight bob from `adsBob`. Firing while walking in ADS adds the kick on top of the bob.
 
 ---
 
@@ -418,8 +408,8 @@ rollback.
 | 1 | Arms fine at bind pose, "fan of blades" the instant a clip played | `Model::ProcessMesh` skipped the node's world transform for skinned meshes, while Assimp's `mOffsetMatrix` expects root-space vertices | `bake = nodeTransform` for **every** mesh |
 | 2 | Arms + weapon ~1 m above the camera | Root parked on the camera; rig is authored standing | Camera-bone anchor (§5) |
 | 3 | Arms rendered behind the camera | Rig faces model `+Z`, camera looks `-Z` | `viewRotation [0,180,0]` (§6) |
-| 4 | Arms + gun blinked to a T-pose at the end of every one-shot | `Once` clears the clip → bind pose (the Manny T-pose) | One-shots use `ClampForever` + `AnimationFinished()` |
-| 5 | Spare magazine hard-cut in/out around weapon clips | `StopAnimation()` = fade 0 to bind; `mag2` is 121.8 mm off bind at both clip ends | No-weapon-clip states call `PlayAnimation(-1, clip.Fade, wrap)` — a fade to bind |
+| 4 | Arms + gun blinked to a T-pose at the end of every one-shot | `Once` clears the clip → bind pose (the Manny T-pose) | Non-looping states hold their last frame (`ClampForever` sampling); `Holstered` holds Holster's end |
+| 5 | Spare magazine hard-cut in/out around weapon clips | A cut to bind; `mag2` is 121.8 mm off bind at both clip ends | A state with no weapon clip is an *empty motion*, which the animator crossfades to bind like any other pose |
 | 6 | Spare magazine invisible in the engine | assimp's `JoinIdenticalVertices` ignored bone weights, merged the two coincident magazine islands | Local assimp patch (`tools/assimp_patches/0001-…`) |
 | 7 | Gun lagged the hands by up to 68 cm | Weapon clips never move the gun's root | Weapon socket (§5) |
 | 8 | New default keys did nothing | Saved `settings.json` input list replaced `Defaults()` wholesale | `InputMap::MergeDefaults` |
@@ -444,19 +434,20 @@ clip FBXs (frame-0 pose), and `≈ translate(-0.069, 1.503, 0.446)` for the weap
 (the ADS pose — the gun-socket delta). Applying `C⁻¹` was tried and dropped the weapon
 to the floor. `mag2`'s `C` is an outlier on purpose.
 
-### 3. `ClampForever`, never `Once`
+### 3. Hold the last frame, never drop to bind
 
-`Once` clears `Clip` at the end, so `UploadBoneMatrices` *and* `NodeTransform` fall back
-to the base FBX's bind pose — the Manny T-pose (`ik_hand_gun` 678 mm off) — for a frame,
-and the next crossfade travels through it. `Play()` uses `ClampForever` for non-looping
-states and reads completion with `Model::AnimationFinished()`, since a held clip never
-clears `IsPlayingAnimation()`. `Once`'s contract is untouched for other callers.
+`Once` clears the clip at the end, so the model falls back to the base FBX's bind pose, the
+Manny T-pose (`ik_hand_gun` 678 mm off). That lasts a frame, and the next crossfade travels
+through it. The animator samples non-looping states with `ClampForever`, so their last frame
+holds until a transition takes over. For the same reason `Holstered` plays Holster's clips
+held at their end: Draw then fades out of the holstered pose, not out of the T-pose. The
+model's own `PlayAnimation` / `Once` contract is untouched for other callers.
 
 ### 5. Fade to bind, don't cut
 
-`m_ActionGateWeapon = !WeaponClip.empty()` means a no-weapon-clip state never waits on
-the weapon's `AnimationFinished()` (which would see `Clip == -1` and report done at
-once). The clip files were not touched.
+A state with no weapon clip is an empty motion on the weapon track. On the base layer that
+means "bind pose", and it goes through the same crossfade stack as any clip, so the spare
+magazine fades rather than pops. The clip files were not touched.
 
 ### 6. The assimp patch — a fresh clone depends on it
 
@@ -473,16 +464,16 @@ checked out LF (`.gitattributes`) because `git apply` needs it.
 
 ## 9. Known gaps / next steps
 
-1. **One weapon per controller; gameplay constants are engine-wide.** Magazine size
-   (30), fire rate (700 rpm), recoil, bob, the two slots (1 = the set, 2 = unarmed) and
-   the tier table are compiled-in, not read from the `.fpsanim`. A second weapon today
-   means a second scene/controller. `FPS_WEAPON_INTEGRATION.md` §6 lists what a real
-   multi-weapon inventory needs.
+1. **One weapon per player.** The two slots are "1 = the definition, 2 = unarmed". A real
+   inventory means several definitions on the controller and swapping them on
+   Holster → Draw. `FPS_WEAPON_INTEGRATION.md` §6 lists what that needs. Per-weapon
+   numbers and animation logic are already data (the `.fpsanim` gameplay block and the
+   `.controller`).
 2. **`Idle`, `Walk`, `Aim`, `Draw`, `Regrip` have no weapon clips** — the `A_W_Idle` /
    `A_W_Walk` actions don't exist in the `.blend` (verified with
    `work/bl_idle_probe2.py`), so closing the gap means authoring animation. Ask first.
-3. **No ADS fire / aim-walk clips** — both are procedural (§4). If they're authored,
-   the procedural paths in `Fire()` and `Tick()` should defer to them.
+3. **No ADS fire / aim-walk clips.** Both are procedural (§4) and tied to the `ADS` tag.
+   If they're authored, add them to the graph and drop the tag from that state.
 4. **View-model fields are captured at `Start()`**, not live-tunable — Stop/Play.
 5. **The camera sits on the `head` bone origin** (skull base, 1.557 m) rather than the
    eyes; the ADS offset absorbs it. There is no eye bone on this rig.
@@ -517,6 +508,7 @@ CI (`.github/workflows/build.yml`) additionally runs
 `tools/check_component_registration.py`: any new `*Tag`/`*Component` struct in
 `Components.h` must be registered or allow-listed.
 
+Open `AKS74U.controller` in the Animator during Play to watch states change live.
 Manual pass in the Game tab: hip fire, ADS fire (semi + full), walk while aiming, sprint
 out of ADS, tap/hold R at 30 / 15 / 0 rounds, F, Q, 1/2/scroll mid-action, idle for 20 s.
 
@@ -573,8 +565,11 @@ placement, which is exactly where the original bug was.
 - **The weapon is socket-parented, not co-posed.** Arms get the camera-derived pose; the
   weapon's root is solved onto `weaponSocket` every frame. A gun that drifts from the
   hands is a socket/mount/pairing problem, not placement math.
-- **State names are the API.** Renaming a state in an `.fpsanim` silently unhooks its
-  input (and logs `unknown semantic state` on use).
+- **Parameter, tag and event names are the API** (`FirstPersonAnimatorContract`). State
+  names are free, but renaming the `Fire` *parameter* or dropping the `ADS` tag silently
+  unhooks that behaviour.
+- **Parameters the driver sets every frame** (Speed, Aim, …) overwrite whatever you type
+  into the Animator's live Parameters panel.
 - **Input defaults vs `settings.json`.** The saved list wins per action.
 - **View-model fields don't hot-reload** — Stop/Play.
 - **Don't re-check what `FPS_ANIMATION_INVESTIGATION.md` ruled out** without new evidence.

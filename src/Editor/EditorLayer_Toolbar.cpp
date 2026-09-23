@@ -669,6 +669,9 @@ void EditorLayer::DrawWindowMenuBody() {
             ImGui::MenuItem(ICON_FA_SITEMAP "  Scene Hierarchy", nullptr, &m_ShowHierarchy);
             ImGui::MenuItem(ICON_FA_SLIDERS "  Inspector", nullptr, &m_ShowInspector);
             ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Asset Browser", nullptr, &m_ShowAssetBrowser);
+            ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Animator", nullptr, &m_ShowAnimator);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("The Animator Controller graph editor: states, transitions, layers and parameters.");
             ImGui::MenuItem(ICON_FA_LIGHTBULB "  Lighting", nullptr, &m_ShowLighting);
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Environment (sky / ambient), post-processing (exposure / tone map) and shadow settings in one place.");

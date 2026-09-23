@@ -1,9 +1,12 @@
 #include "FirstPersonAnimation.h"
+#include "AnimatorController.h"
+#include "AtomicFile.h"
 
 #include <json.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <unordered_set>
 
@@ -44,6 +47,13 @@ bool Fail(std::string* error, const std::string& message) {
     return false;
 }
 
+bool Finite(const glm::vec3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
+
+void RoundFloats(json& j) {
+    if (j.is_number_float()) { j = std::round(j.get<double>() * 1e6) / 1e6; return; }
+    if (j.is_object() || j.is_array()) for (auto& v : j) RoundFloats(v);
+}
+
 } // namespace
 
 const FirstPersonAnimationClip* FirstPersonAnimationSet::Find(const std::string& state) const {
@@ -65,6 +75,7 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     FirstPersonAnimationSet parsed;
     parsed.ArmsModel = String(root, "armsModel");
     parsed.WeaponModel = String(root, "weaponModel");
+    parsed.Controller = String(root, "controller");
     parsed.DefaultState = String(root, "defaultState");
     parsed.ViewRotation = Vec3(root, "viewRotation", glm::vec3(0.0f));
     parsed.WeaponSocket = String(root, "weaponSocket");
@@ -72,42 +83,72 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     parsed.WeaponMountRotation = Vec3(root, "weaponMountRotation", glm::vec3(0.0f));
     if (parsed.ArmsModel.empty()) return Fail(error, "missing required string 'armsModel'");
     if (parsed.WeaponModel.empty()) return Fail(error, "missing required string 'weaponModel'");
-    if (!std::isfinite(parsed.ViewRotation.x) || !std::isfinite(parsed.ViewRotation.y) ||
-        !std::isfinite(parsed.ViewRotation.z))
+    if (!Finite(parsed.ViewRotation))
         return Fail(error, "'viewRotation' must be three finite numbers (Y-X-Z degrees)");
-    if (!std::isfinite(parsed.WeaponMountRotation.x) || !std::isfinite(parsed.WeaponMountRotation.y) ||
-        !std::isfinite(parsed.WeaponMountRotation.z))
+    if (!Finite(parsed.WeaponMountRotation))
         return Fail(error, "'weaponMountRotation' must be three finite numbers (Y-X-Z degrees)");
     if (parsed.WeaponSocket.empty() != parsed.WeaponRoot.empty())
         return Fail(error, "'weaponSocket' and 'weaponRoot' must be given together (or both omitted)");
 
-    const auto clipsIt = root.find("clips");
-    if (clipsIt == root.end() || !clipsIt->is_array() || clipsIt->empty())
-        return Fail(error, "'clips' must be a non-empty array");
-
-    std::unordered_set<std::string> names;
-    for (const json& item : *clipsIt) {
-        if (!item.is_object()) return Fail(error, "every item in 'clips' must be an object");
-        FirstPersonAnimationClip clip;
-        clip.Name = String(item, "name");
-        clip.ArmsClip = String(item, "arms");
-        clip.ArmsBindPose = Bool(item, "armsBindPose", false);
-        clip.WeaponClip = String(item, "weapon");
-        clip.Loop = Bool(item, "loop", false);
-        clip.Fade = Number(item, "fade", 0.08f);
-        if (clip.Name.empty()) return Fail(error, "every clip needs a non-empty 'name'");
-        if (clip.ArmsClip.empty() && !clip.ArmsBindPose)
-            return Fail(error, "clip '" + clip.Name + "' needs 'arms' or armsBindPose=true");
-        if (!std::isfinite(clip.Fade) || clip.Fade < 0.0f || clip.Fade > 5.0f)
-            return Fail(error, "clip '" + clip.Name + "' has an invalid 'fade' (expected 0..5)");
-        if (!names.insert(clip.Name).second)
-            return Fail(error, "duplicate clip name '" + clip.Name + "'");
-        parsed.Clips.push_back(std::move(clip));
+    if (const auto g = root.find("gameplay"); g != root.end() && g->is_object()) {
+        FirstPersonWeaponGameplay& gp = parsed.Gameplay;
+        gp.Magazine = std::max(1, (int)Number(*g, "magazine", (float)gp.Magazine));
+        gp.RoundsPerMinute = Number(*g, "rpm", gp.RoundsPerMinute);
+        gp.AllowFullAuto = Bool(*g, "allowFullAuto", gp.AllowFullAuto);
+        gp.ReloadHoldSeconds = Number(*g, "reloadHoldSeconds", gp.ReloadHoldSeconds);
+        gp.RegripMin = Number(*g, "regripMin", gp.RegripMin);
+        gp.RegripMax = Number(*g, "regripMax", gp.RegripMax);
+        if (const auto r = g->find("recoil"); r != g->end() && r->is_object()) {
+            gp.RecoilPitchDegrees = Number(*r, "pitch", gp.RecoilPitchDegrees);
+            gp.RecoilOffset = Vec3(*r, "offset", gp.RecoilOffset);
+            gp.RecoilRise = Number(*r, "rise", gp.RecoilRise);
+            gp.RecoilSettle = Number(*r, "settle", gp.RecoilSettle);
+        }
+        if (const auto b = g->find("adsBob"); b != g->end() && b->is_object()) {
+            gp.BobStride = Number(*b, "stride", gp.BobStride);
+            gp.BobSide = Number(*b, "side", gp.BobSide);
+            gp.BobVertical = Number(*b, "vertical", gp.BobVertical);
+            gp.BobFullSpeed = Number(*b, "fullSpeed", gp.BobFullSpeed);
+            gp.BobEase = Number(*b, "ease", gp.BobEase);
+        }
+        if (!(gp.RoundsPerMinute > 0.0f) || !std::isfinite(gp.RoundsPerMinute))
+            return Fail(error, "'gameplay.rpm' must be a positive number");
+        if (!(gp.RecoilRise > 0.0f) || !(gp.RecoilSettle > 0.0f) || !(gp.BobStride > 0.0f) || !(gp.BobFullSpeed > 0.0f))
+            return Fail(error, "'gameplay' recoil rise/settle and bob stride/fullSpeed must be positive");
+        if (!(gp.ReloadHoldSeconds > 0.0f)) return Fail(error, "'gameplay.reloadHoldSeconds' must be positive");
+        if (!Finite(gp.RecoilOffset)) return Fail(error, "'gameplay.recoil.offset' must be three finite numbers");
+        if (gp.RegripMax < gp.RegripMin) std::swap(gp.RegripMin, gp.RegripMax);
     }
 
-    if (parsed.DefaultState.empty()) parsed.DefaultState = parsed.Clips.front().Name;
-    if (!parsed.Find(parsed.DefaultState))
-        return Fail(error, "defaultState '" + parsed.DefaultState + "' does not name a clip");
+    // v1: a flat clip list (no controller).
+    const auto clipsIt = root.find("clips");
+    const bool hasClips = clipsIt != root.end() && clipsIt->is_array() && !clipsIt->empty();
+    if (parsed.Controller.empty() && !hasClips)
+        return Fail(error, "needs a 'controller' (.controller path), or a v1 non-empty 'clips' array");
+    if (hasClips) {
+        std::unordered_set<std::string> names;
+        for (const json& item : *clipsIt) {
+            if (!item.is_object()) return Fail(error, "every item in 'clips' must be an object");
+            FirstPersonAnimationClip clip;
+            clip.Name = String(item, "name");
+            clip.ArmsClip = String(item, "arms");
+            clip.ArmsBindPose = Bool(item, "armsBindPose", false);
+            clip.WeaponClip = String(item, "weapon");
+            clip.Loop = Bool(item, "loop", false);
+            clip.Fade = Number(item, "fade", 0.08f);
+            if (clip.Name.empty()) return Fail(error, "every clip needs a non-empty 'name'");
+            if (clip.ArmsClip.empty() && !clip.ArmsBindPose)
+                return Fail(error, "clip '" + clip.Name + "' needs 'arms' or armsBindPose=true");
+            if (!std::isfinite(clip.Fade) || clip.Fade < 0.0f || clip.Fade > 5.0f)
+                return Fail(error, "clip '" + clip.Name + "' has an invalid 'fade' (expected 0..5)");
+            if (!names.insert(clip.Name).second)
+                return Fail(error, "duplicate clip name '" + clip.Name + "'");
+            parsed.Clips.push_back(std::move(clip));
+        }
+        if (parsed.DefaultState.empty()) parsed.DefaultState = parsed.Clips.front().Name;
+        if (!parsed.Find(parsed.DefaultState))
+            return Fail(error, "defaultState '" + parsed.DefaultState + "' does not name a clip");
+    }
 
     out = std::move(parsed);
     return true;
@@ -115,50 +156,173 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
 
 bool FirstPersonAnimationSet::LoadFile(const std::string& path, FirstPersonAnimationSet& out,
                                         std::string* error) {
-    std::ifstream in(path);
+    std::ifstream in(std::filesystem::u8path(path));
     if (!in.is_open()) return Fail(error, "could not open '" + path + "'");
     return FromJsonString(std::string(std::istreambuf_iterator<char>(in), {}), out, error);
 }
 
-FirstPersonActionTier FirstPersonTierOf(const std::string& state) {
-    if (state == "IdleToSprint" || state == "SprintToIdle") return FirstPersonActionTier::Transition;
-    if (state == "Fire" || state == "Inspect" || state == "MagCheck" || state == "Regrip")
-        return FirstPersonActionTier::Action;
-    if (state == "TacReload" || state == "EmptyReload" || state == "Melee") return FirstPersonActionTier::Committed;
-    if (state == "Draw" || state == "Holster") return FirstPersonActionTier::Equip;
-    return FirstPersonActionTier::None;
+std::string FirstPersonAnimationSet::ToJsonString() const {
+    auto vec3 = [](const glm::vec3& v) { return json::array({v.x, v.y, v.z}); };
+    const FirstPersonWeaponGameplay& gp = Gameplay;
+    json j;
+    j["armsModel"] = ArmsModel;
+    j["weaponModel"] = WeaponModel;
+    j["controller"] = Controller;
+    j["viewRotation"] = vec3(ViewRotation);
+    if (!WeaponSocket.empty()) {
+        j["weaponSocket"] = WeaponSocket;
+        j["weaponRoot"] = WeaponRoot;
+        j["weaponMountRotation"] = vec3(WeaponMountRotation);
+    }
+    j["gameplay"] = {
+        {"magazine", gp.Magazine},
+        {"rpm", gp.RoundsPerMinute},
+        {"allowFullAuto", gp.AllowFullAuto},
+        {"reloadHoldSeconds", gp.ReloadHoldSeconds},
+        {"regripMin", gp.RegripMin},
+        {"regripMax", gp.RegripMax},
+        {"recoil", {{"pitch", gp.RecoilPitchDegrees}, {"offset", vec3(gp.RecoilOffset)},
+                    {"rise", gp.RecoilRise}, {"settle", gp.RecoilSettle}}},
+        {"adsBob", {{"stride", gp.BobStride}, {"side", gp.BobSide}, {"vertical", gp.BobVertical},
+                    {"fullSpeed", gp.BobFullSpeed}, {"ease", gp.BobEase}}},
+    };
+    RoundFloats(j);
+    return j.dump(2);
 }
 
-bool FirstPersonCanInterrupt(const std::string& state, FirstPersonActionTier requestedTier,
-                             const std::string& current, FirstPersonActionTier currentTier) {
-    if (current.empty() || currentTier == FirstPersonActionTier::None) return true;
-    if (state == current) return true; // restart in place (Fire spam, re-tapping Melee, ...)
-    return requestedTier > currentTier;
+bool FirstPersonAnimationSet::SaveFile(const std::string& path) const {
+    return AtomicFile::WriteJson(std::filesystem::u8path(path), json::parse(ToJsonString()));
 }
 
-std::string FirstPersonRestingState(float planarSpeed, bool sprinting, bool aiming) {
-    const bool moving = planarSpeed > 0.05f;
-    if (sprinting && moving) return "Sprint"; // no sprinting in ADS: sprint drops the sights
-    if (aiming) return "Aim"; // walking too: the driver adds a procedural walk bob to the pose
-    if (moving) return "Walk";
-    return "Idle";
+// --- the standard graph ----------------------------------------------------------------------
+
+AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set) {
+    using AC = AnimatorController;
+    namespace K = FirstPersonAnimatorContract;
+    AC c;
+    c.Tracks = {"arms", "weapon"};
+    c.Parameters = {
+        {K::kSpeed, AC::ParamType::Float, 0.0f},     {K::kSprint, AC::ParamType::Bool, 0.0f},
+        {K::kAim, AC::ParamType::Bool, 0.0f},        {K::kEquipped, AC::ParamType::Bool, 1.0f},
+        {K::kAmmo, AC::ParamType::Int, (float)set.Gameplay.Magazine},
+        {K::kFire, AC::ParamType::Trigger, 0.0f},    {K::kReload, AC::ParamType::Trigger, 0.0f},
+        {K::kMagCheck, AC::ParamType::Trigger, 0.0f},{K::kInspect, AC::ParamType::Trigger, 0.0f},
+        {K::kMelee, AC::ParamType::Trigger, 0.0f},   {K::kFidget, AC::ParamType::Trigger, 0.0f},
+    };
+    AC::Layer& L = c.Layers[0];
+    L.Name = "Base Layer";
+    L.EntryPosition = {-330.0f, 60.0f};
+    L.AnyPosition = {-330.0f, -260.0f};
+    L.ExitPosition = {980.0f, -60.0f};
+
+    struct Spec { const char* Name; int Priority; float X, Y; std::vector<std::string> Tags; };
+    // Priority = how hard a state is to interrupt from Any State: locomotion 0, transition clips
+    // 1, fidgets / fire / inspect 2, reloads and melee 3, equip 4, unarmed 5.
+    const std::vector<Spec> specs = {
+        {"Idle", 0, 0, 0, {K::kTagIdle}},  {"Walk", 0, 0, 120, {}},         {"Sprint", 0, 330, 120, {}},
+        {"Aim", 0, 0, 240, {K::kTagAds}},  {"IdleToSprint", 1, 330, 0, {}}, {"SprintToIdle", 1, 330, 240, {}},
+        {"Regrip", 2, 0, -140, {}},        {"Fire", 2, 660, -330, {}},      {"Inspect", 2, 660, -255, {}},
+        {"MagCheck", 2, 660, -180, {}},    {"Melee", 3, 660, -105, {}},     {"TacReload", 3, 660, -30, {K::kTagReload}},
+        {"EmptyReload", 3, 660, 45, {K::kTagReload}},
+        {"Draw", 4, -330, 330, {}},        {"Holster", 4, 330, 400, {}},    {"Holstered", 5, 0, 440, {K::kTagHidden}},
+    };
+    auto fadeOf = [&](const char* name) {
+        const FirstPersonAnimationClip* clip = set.Find(name);
+        return clip ? clip->Fade : 0.08f;
+    };
+    for (const Spec& sp : specs) {
+        // Holstered holds Holster's last frame (hidden anyway) so Draw fades out of the holstered
+        // pose rather than through the bind T-pose.
+        const FirstPersonAnimationClip* clip = set.Find(std::string(sp.Name) == "Holstered" ? "Holster" : sp.Name);
+        if (!clip && std::string(sp.Name) != "Holstered") continue;
+        AC::State s;
+        s.Name = sp.Name;
+        s.Priority = sp.Priority;
+        s.Tags = sp.Tags;
+        s.Position = {sp.X, sp.Y};
+        s.Motions.resize(2);
+        if (clip) {
+            s.Loop = std::string(sp.Name) == "Holstered" ? false : clip->Loop;
+            if (!clip->ArmsBindPose) s.Motions[0].Clip = clip->ArmsClip;
+            s.Motions[1].Clip = clip->WeaponClip;
+        } else {
+            s.Loop = false;
+        }
+        if (s.Name == "Fire") s.Events = {{K::kEventShot, 0.0f}};
+        if (s.Name == "TacReload" || s.Name == "EmptyReload") s.Events = {{K::kEventRefill, 1.0f}};
+        L.States.push_back(std::move(s));
+    }
+    L.DefaultState = L.FindState(set.DefaultState) >= 0 ? set.DefaultState : "Idle";
+
+    auto cond = [](const char* p, AC::Op op, float v = 0.0f) { return AC::Condition{p, op, v}; };
+    const AC::Condition moving = cond(K::kSpeed, AC::Op::Greater, 0.05f);
+    const AC::Condition still = cond(K::kSpeed, AC::Op::Less, 0.05f);
+    const AC::Condition sprint = cond(K::kSprint, AC::Op::If), noSprint = cond(K::kSprint, AC::Op::IfNot);
+    const AC::Condition aim = cond(K::kAim, AC::Op::If), noAim = cond(K::kAim, AC::Op::IfNot);
+    auto has = [&](const char* s) { return L.FindState(s) >= 0; };
+    auto add = [&](AC::Source kind, const char* from, const char* to, std::vector<AC::Condition> cs,
+                   float duration, bool exitTime = false) {
+        if ((kind == AC::Source::State && !has(from)) || (std::string(to) != AC::kExitState && !has(to))) return;
+        AC::Transition t;
+        t.FromKind = kind;
+        if (kind == AC::Source::State) t.From = from;
+        t.To = to;
+        t.Conditions = std::move(cs);
+        t.Duration = duration;
+        t.HasExitTime = exitTime;
+        t.ExitTime = 1.0f;
+        if (kind == AC::Source::Any) { t.RespectPriority = true; t.CanTransitionToSelf = true; }
+        L.Transitions.push_back(std::move(t));
+    };
+    using S = AC::Source;
+    const char* exitTo = AC::kExitState;
+
+    // Entry: the resting state for the current input (layer start, and every one-shot's return).
+    add(S::Entry, "", "Sprint", {sprint, moving}, 0.0f);
+    add(S::Entry, "", "Aim", {aim}, 0.0f);
+    add(S::Entry, "", "Walk", {moving}, 0.0f);
+
+    // Any State, highest priority first. Holster can't cut Draw short (equal priority) and Draw
+    // only leaves Holstered, so 1/2/scroll mid-swap simply queues.
+    add(S::Any, "", "Holster", {cond(K::kEquipped, AC::Op::IfNot)}, fadeOf("Holster"));
+    add(S::Any, "", "EmptyReload", {cond(K::kReload, AC::Op::If), cond(K::kAmmo, AC::Op::Less, 0.5f)}, fadeOf("EmptyReload"));
+    add(S::Any, "", "TacReload", {cond(K::kReload, AC::Op::If), cond(K::kAmmo, AC::Op::Greater, 0.5f)}, fadeOf("TacReload"));
+    add(S::Any, "", "Melee", {cond(K::kMelee, AC::Op::If)}, fadeOf("Melee"));
+    add(S::Any, "", "Fire", {cond(K::kFire, AC::Op::If)}, fadeOf("Fire"));
+    add(S::Any, "", "Inspect", {cond(K::kInspect, AC::Op::If)}, fadeOf("Inspect"));
+    add(S::Any, "", "MagCheck", {cond(K::kMagCheck, AC::Op::If)}, fadeOf("MagCheck"));
+    // Holster's own Any transition must not restart it every frame while unequipped.
+    for (auto& t : L.Transitions) if (t.FromKind == S::Any && t.To == "Holster") t.CanTransitionToSelf = false;
+
+    // Locomotion. Sprinting (held AND moving) beats aiming, aiming beats walking; only the
+    // Idle<->Sprint pair has transition clips, and aiming out of a sprint skips SprintToIdle.
+    add(S::State, "Idle", has("IdleToSprint") ? "IdleToSprint" : "Sprint", {sprint, moving}, fadeOf("IdleToSprint"));
+    add(S::State, "Idle", "Aim", {aim}, fadeOf("Aim"));
+    add(S::State, "Idle", "Walk", {moving}, fadeOf("Walk"));
+    add(S::State, "Idle", "Regrip", {cond(K::kFidget, AC::Op::If)}, fadeOf("Regrip"));
+    add(S::State, "Walk", "Sprint", {sprint, moving}, fadeOf("Sprint"));
+    add(S::State, "Walk", "Aim", {aim}, fadeOf("Aim"));
+    add(S::State, "Walk", "Idle", {still}, fadeOf("Idle"));
+    add(S::State, "Aim", "Sprint", {sprint, moving}, fadeOf("Sprint"));
+    add(S::State, "Aim", "Walk", {noAim, moving}, fadeOf("Walk"));
+    add(S::State, "Aim", "Idle", {noAim, still}, fadeOf("Idle"));
+    add(S::State, "Sprint", "Aim", {aim, noSprint}, fadeOf("Aim"));
+    add(S::State, "Sprint", "Aim", {aim, still}, fadeOf("Aim"));
+    const char* sprintOut = has("SprintToIdle") ? "SprintToIdle" : exitTo;
+    add(S::State, "Sprint", sprintOut, {noSprint}, fadeOf("SprintToIdle"));
+    add(S::State, "Sprint", sprintOut, {still}, fadeOf("SprintToIdle"));
+
+    // One-shots return through Exit when their clip ends; Entry then picks the resting state.
+    for (const char* s : {"IdleToSprint", "SprintToIdle", "Regrip", "Fire", "Inspect", "MagCheck", "Melee",
+                          "TacReload", "EmptyReload", "Draw"})
+        add(S::State, s, exitTo, {}, 0.1f, true);
+    add(S::State, "Holster", "Holstered", {}, 0.0f, true);
+    add(S::State, "Holstered", "Draw", {cond(K::kEquipped, AC::Op::If)}, fadeOf("Draw"));
+    return c;
 }
 
-std::string FirstPersonTransitionVia(const std::string& from, const std::string& to) {
-    if (from == "Idle" && to == "Sprint") return "IdleToSprint";
-    // Aiming out of a sprint goes straight to the sights - waiting out SprintToIdle first
-    // would make ADS feel unresponsive.
-    if (from == "Sprint" && to != "Sprint" && to != "Aim") return "SprintToIdle";
-    return "";
-}
-
-std::string FirstPersonReloadStateFor(int ammo, int capacity) {
-    if (ammo >= capacity) return "";
-    return ammo <= 0 ? "EmptyReload" : "TacReload";
-}
-
-float FirstPersonRegripDelay(float unit01) {
-    return 10.0f + 10.0f * std::clamp(unit01, 0.0f, 1.0f);
+float FirstPersonRegripDelay(float unit01, float minSeconds, float maxSeconds) {
+    return minSeconds + (maxSeconds - minSeconds) * std::clamp(unit01, 0.0f, 1.0f);
 }
 
 FirstPersonReloadInput FirstPersonReloadButton::Update(bool down, float dt) {
@@ -170,7 +334,7 @@ FirstPersonReloadInput FirstPersonReloadButton::Update(bool down, float dt) {
             return FirstPersonReloadInput::None;
         }
         Held += dt;
-        if (!Fired && Held >= kHoldSeconds) {
+        if (!Fired && Held >= HoldSeconds) {
             Fired = true;
             return FirstPersonReloadInput::MagCheck;
         }

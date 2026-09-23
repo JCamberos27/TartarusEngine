@@ -47,7 +47,7 @@ struct RegisteredComponent; // ComponentRegistry.h
 struct ReflectField;        // ComponentReflection.h
 
 struct AssetGridCell {
-    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot, Shader } kind;
+    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot, Shader, Animator, Weapon } kind;
     std::string key;
     std::string display;
     std::shared_ptr<Model> model;
@@ -1614,14 +1614,19 @@ private:
     AssetDirListingCache m_ShotsListingCache;
     // Same idea for project/shaders/ — Phase 6 item 15's "browsable" Shaders folder.
     AssetDirListingCache m_ShadersListingCache;
+    // Animator Controllers (.controller) and weapon definitions (.fpsanim) anywhere under the
+    // project, listed in a virtual "Animation" folder.
+    AssetDirListingCache m_AnimationListingCache;
     float m_AssetListingRefreshTimer = 0.0f;   // ticks up in DrawAssetBrowser; see kAssetListingRefreshInterval
     bool m_AssetBrowserFocusedLastFrame = false; // edge-detects m_AssetBrowserFocused for "just gained focus"
     void RefreshScenesListingIfNeeded();
     void RefreshShotsListingIfNeeded();
     void RefreshShadersListingIfNeeded();
+    void RefreshAnimationListingIfNeeded();
     void InvalidateScenesListing() { m_ScenesListingCache.valid = false; }
     void InvalidateShotsListing() { m_ShotsListingCache.valid = false; }
     void InvalidateShadersListing() { m_ShadersListingCache.valid = false; }
+    void InvalidateAnimationListing() { m_AnimationListingCache.valid = false; }
 public:
     // #236 G — Refresh / Reimport All (Ctrl+R): bust every Asset Browser cache so the next frame
     // re-scans the scenes/ and screenshots/ folders and re-renders thumbnails from disk.
@@ -1926,9 +1931,19 @@ private:
     // #175 Part B - Animator Controller component: picker, live parameters, controller editor
     // (EditorLayer_Animator.cpp). The working copy is re-read when the file changes on disk.
     void DrawAnimatorControllerExtra(World& world, entt::entity entity);
-    AnimatorController m_CtrlEdit;
-    std::string m_CtrlEditPath;
-    std::filesystem::file_time_type m_CtrlEditStamp{};
+public:
+    // Animator v2 - the node-graph Animator window (EditorLayer_Animator.cpp): layers, parameters,
+    // a pan/zoom state graph and the selection's properties, with its own undo and live Play view.
+    // `entity` (optional) supplies the rig whose clips the pickers offer and whose state is shown live.
+    void OpenAnimatorWindow(const std::string& controllerRel, entt::entity entity = entt::null);
+private:
+    void DrawAnimatorWindow(World& world);
+    // Inspector panels for a selected .fpsanim (weapon definition) / .controller asset.
+    void DrawWeaponDefinitionEditor(const std::string& path);
+    void DrawControllerAssetInspector(const std::string& path);
+    bool m_ShowAnimator = false;
+    struct AnimatorWindowState;
+    std::shared_ptr<AnimatorWindowState> m_AnimatorWin; // shared_ptr: the type is only complete in EditorLayer_Animator.cpp
     void DrawReflectedComponentExtra(const char* componentName, World& world, entt::entity entity,
                                      ReflectExtraPhase phase);
     // Multi-select counterpart: `sel` is every selected entity that has this component.

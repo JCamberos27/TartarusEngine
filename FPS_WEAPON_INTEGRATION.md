@@ -1,28 +1,33 @@
 # Adding a First-Person Weapon
 
-The workflow for bringing a new weapon (arms + weapon rig + clips) into the
-first-person system, built from what it took to ship the AKS-74U. Use the checklist at
-the bottom as the PR checklist.
+This is the workflow for bringing a new weapon (arms, a weapon rig and its clips) into the
+first-person system, based on what it took to ship the AKS-74U. **No code is needed**
+for a weapon that behaves like a normal firearm. The whole setup happens in the editor:
 
-For how the runtime works, see **`FPS_ANIMATION_SYSTEM.md`**. This guide links into its
-sections as `SYSTEM §n`.
+- an Animator Controller graph
+- a weapon definition (`.fpsanim`)
+- the scene's First Person Controller
+
+Use the checklist at the bottom as the PR checklist.
+
+References:
+- **`ANIMATOR.md`**: the Animator window, states and transitions.
+- **`FPS_ANIMATION_SYSTEM.md`** (cited below as `SYSTEM §n`): how the runtime works.
 
 ---
 
 ## 0. What "a weapon" is to the engine
 
-A weapon is one **`.fpsanim`** file plus the FBXs it names:
+| File | What it holds | Edited in |
+|---|---|---|
+| Arms base FBX | Arms mesh, skeleton, and a bind pose exported at **REST** | Blender |
+| Weapon base FBX | Weapon mesh and its own armature | Blender |
+| Clip FBXs | One per state, channels only | Blender |
+| **`<Weapon>.controller`** | States, transitions, priorities, fades, events and tags. Each state has an `arms` clip and optionally a `weapon` clip | **Animator window** |
+| **`<Weapon>.fpsanim`** | Which models and controller, the gun mount, and the gameplay numbers | **Inspector** (select it in the Asset Browser) |
 
-- an **arms base** FBX: arms mesh, skeleton, and a bind pose exported at **REST**
-- a **weapon base** FBX: weapon mesh plus its own armature
-- one **arms clip** FBX per state, channels only
-- zero or one **weapon clip** FBX per state, channels only
-
-A scene opts in by setting the player's **First Person Controller → Animation Set** to
-the `.fpsanim` and turning **Gravity Gun** off.
-
-No code change is needed for a weapon that fits the existing contract: the same 15
-state names, one magazine, semi/full-auto. §6 lists what does need code.
+A scene uses the weapon when the player's **First Person Controller → Animation Set** is set
+to the `.fpsanim` and **Gravity Gun** is off.
 
 ---
 
@@ -32,79 +37,100 @@ state names, one magazine, semi/full-auto. §6 lists what does need code.
 
 | Requirement | Why |
 |---|---|
-| Arms rig has a **camera bone**, e.g. `head` (a node is enough, it doesn't need to be skinned) | The camera is pinned to it (SYSTEM §5) |
-| Arms rig has a **gun socket bone**, e.g. `ik_hand_gun` | The weapon root is solved onto it every frame |
-| Weapon rig has a **root bone** that the socket carries rigidly | `weaponRoot` |
-| Socket → weaponRoot is a **pure rotation**, with no translation, and the same for every clip | The mount is rotation-only by design (SYSTEM §5) |
-| No more than **4 bone influences per vertex** matter | The engine keeps the 4 largest and renormalises |
+| The arms rig has a **camera bone**, e.g. `head` (a node is enough; it doesn't need to be skinned) | The camera is pinned to it (SYSTEM §5) |
+| The arms rig has a **gun socket bone**, e.g. `ik_hand_gun` | The weapon's root is solved onto it every frame |
+| The weapon rig has a **root bone** that the socket carries rigidly | This is `weaponRoot` |
+| Socket → weaponRoot is a **pure rotation**, the same for every clip | The mount is rotation-only by design (SYSTEM §5) |
+| At most **4 bone influences per vertex** matter | The engine keeps the 4 largest and renormalises |
 
 **Export rules** (details in SYSTEM §7):
 
-1. **Arms base:** `pose_position = REST`, `bake_anim = False`, with meshes. Never export it from a posed frame.
-2. **Clips:** channels only (`meshes=0` / `object_types={"ARMATURE"}`), `bake_anim_simplify_factor=0`, `add_leaf_bones=False`, no NLA, no all-actions, and `axis_forward=-Z`, `axis_up=Y`.
-3. **Pair the weapon action while baking arms clips.** If the arms rig has any constraint targeting the weapon rig (the AK's left hand is `CHILD_OF → AK:magazine`), bake `A_FP_<x>` while the weapon plays `A_W_<x>`. If no weapon action exists, bake against the weapon's bind/ADS action. Getting this wrong makes the hand drift, which is 22.8 mm on MagCheck and 22 cm on Idle.
+1. **Arms base:** set `pose_position = REST` and `bake_anim = False`, and export with meshes.
+2. **Clips:** channels only (`object_types={"ARMATURE"}`), with:
+   - `bake_anim_simplify_factor=0`
+   - `add_leaf_bones=False`
+   - no NLA and no all-actions
+   - `axis_forward=-Z`, `axis_up=Y`
+3. **Pair the weapon action while baking arms clips.** If the arms rig has a constraint that
+   targets the weapon rig (the AK's left hand is `CHILD_OF → AK:magazine`), bake `A_FP_<x>`
+   while the weapon plays `A_W_<x>`, or the weapon's bind/ADS action if there isn't one.
+   Getting this wrong makes the hand drift: 22.8 mm on MagCheck, 22 cm on Idle.
 4. Record each clip's frame range in the weapon's `export_manifest.json`.
 
-**Tooling state:** `work/export_clip.py` implements rules 2–3, but it is AKS-specific. It hard-codes the object names `Armature` and `AK`, the `A_FP_`/`A_W_` prefixes and a mesh-name list. For a new rig:
-
-- Copy it and change those names, or parameterise them.
-- Weapon-rig clip exports have no tracked script.
-
-**Ask before modifying any source `.blend`.** Drive Blender headless (`--background`).
+**Tooling:**
+- `work/export_clip.py` implements rules 2–3, but it hard-codes the AK's object names (`Armature`, `AK`), the `A_FP_` / `A_W_` prefixes and a mesh list. For a new rig, copy it and change those.
+- Weapon-rig clip exports have no tracked script yet.
+- **Ask before modifying any source `.blend`.** Drive Blender headless (`--background`).
 
 **Folder layout** (mirror the AK):
 
 ```
 project/assets/fps/<Weapon>/
 ├── <Weapon>.fpsanim
+├── <Weapon>.controller
 ├── export_manifest.json
 ├── FirstPerson/<prefix>_FP_<Base>.fbx, <prefix>_FP_<State>.fbx ...
 └── Weapon/<prefix>_W_<Base>.fbx,  <prefix>_W_<State>.fbx ...
 ```
 
-Commit each FBX together with the `.meta` file the editor generates for it. `.meta` files are LF, per `.gitattributes`.
+Commit every FBX, `.controller` and `.fpsanim` together with the `.meta` file the editor
+generates for it.
 
 ---
 
-## 2. Write the `.fpsanim`
+## 2. Build the animation graph (Animator window)
 
-Start from a copy of `project/assets/fps/AKS74U/AKS74U.fpsanim`. For the schema and validation rules, see SYSTEM §2.
+The fastest start is to **copy the AK's graph** and re-point its clips:
 
-```jsonc
-{
-  "armsModel":   "assets/fps/<Weapon>/FirstPerson/<prefix>_FP_<Base>.fbx",
-  "weaponModel": "assets/fps/<Weapon>/Weapon/<prefix>_W_<Base>.fbx",
-  "defaultState": "Idle",
-  "viewRotation": [0, 180, 0],          // 180 if the arms render behind the camera (Blender -Y-facing rig)
-  "weaponSocket": "<arms socket bone>",
-  "weaponRoot":   "<weapon root bone>",
-  "weaponMountRotation": [0, 0, 0],     // measure it, don't guess (step 3)
-  "clips": [ /* the 15 states below */ ]
-}
-```
+1. Duplicate `AKS74U.controller` (Asset Browser → Animation → right-click → Duplicate), and rename it `<Weapon>.controller`.
+2. Double-click it to open the **Animator** window.
+3. Click each state. In the right panel, set **Motion: arms** and **Motion: weapon** to the new weapon's clips. Pick them from the list, or drag the FBX from the Asset Browser onto the slot.
+4. Leave **Motion: weapon** empty for states where the gun doesn't move by itself. The gun then holds its bind pose.
+5. Adjust fades (transition **Duration**), add or remove states, and change priorities as the weapon needs. A pump shotgun might loop a `ReloadShell` state, for example. See `ANIMATOR.md` for the full editor.
 
-**States.** The names are the API, so they must match exactly:
+Alternatively, if you have a flat list of 15 AK-style clips:
+1. Write a v1 `.fpsanim` with a `clips` list.
+2. Select it and press **Create Controller from Clips**. This generates the standard graph.
 
-| Must exist | Optional (skipped if absent) | Optional in the file, but its key logs an error if missing |
-|---|---|---|
-| `Idle`, `Walk`, `Sprint`, `Aim` (all `"loop": true`) | `IdleToSprint`, `SprintToIdle`, `Regrip` | `Fire`, `TacReload`, `EmptyReload`, `Inspect`, `MagCheck`, `Melee`, `Draw`, `Holster` |
+**What the graph must provide.** The driver only talks to the graph through these names
+(SYSTEM §2):
 
-**Per state:**
+| Must have | Why |
+|---|---|
+| Parameters `Speed` (Float), `Sprint` / `Aim` / `Equipped` (Bool), `Ammo` (Int), and triggers `Fire`, `Reload`, `MagCheck`, `Inspect`, `Melee`, `Fidget` | The driver sets these. A trigger with no transition just does nothing |
+| Tag `ADS` on the aim state | Makes fire a procedural kick and turns on the walk bob |
+| Tag `Reload` on reload states, plus a **`Refill` event at time 1** on each | Blocks R during a reload, and refills only when the reload completes |
+| A **`Shot` event at time 0** on the hip-fire state | That's when a round is spent. Without it, hip fire is free |
+| A state tagged `Hidden` reached when `Equipped` is false | Hides the rigs when unarmed |
+| Tag `Idle` on the idle state | Enables the `Fidget` trigger (regrip) |
 
-- Give an `arms` clip for every state. Give a `weapon` clip only when the weapon moves by itself (bolt, magazine, trigger).
-- A state without a `weapon` clip fades the weapon to its bind pose. Make sure that bind pose is a sensible resting pose.
-- Suggested fades: resting states 0.08–0.12, transitions/equip 0.05, Fire 0.03.
+**Priorities.** Any State transitions with **Respect Priority** only take over a lower-priority state. The AK uses:
+
+| Priority | States |
+|---|---|
+| 0 | locomotion |
+| 1 | sprint transitions |
+| 2 | fire, inspect, fidget |
+| 3 | reloads, melee |
+| 4 | draw, holster |
+| 5 | holstered |
 
 ---
 
-## 3. Measure the mount
+## 3. Write the weapon definition
 
-Don't eyeball `weaponMountRotation`.
+1. Duplicate `AKS74U.fpsanim` and rename it `<Weapon>.fpsanim`.
+2. Select it. In the Inspector, set:
+   - **Controller**: your `<Weapon>.controller`.
+   - **Weapon Socket / Weapon Root / Mount Rotation**. **Measure** the mount; don't guess:
+     1. Build the probe: `cmd /c "work\build_probe.bat socket_probe"`.
+     2. Run `work\socket_probe.exe <armsBase> <armsClip|-> <weaponBase> <weaponClip|->` over several clips.
+     3. Socket → weaponRoot should be the same rotation, with about zero translation, in every clip. If it isn't, fix the rig, not the engine.
+   - **View Rotation**: 180 Y if the arms render behind the camera (a Blender `-Y` rig).
+   - **Gameplay**: magazine, rounds per minute, full-auto allowed, reload-hold time, fidget timing, ADS recoil and walk bob.
+3. The arms and weapon model paths are shown read-only in the Inspector. Edit them in the file.
 
-1. Build the probe with `cmd /c "work\build_probe.bat socket_probe"`. The probe needs the configured, patched `build\_deps` (SYSTEM §11).
-2. Run `work\socket_probe.exe <armsBase> <armsClip|-> <weaponBase> <weaponClip|->` over several clips.
-3. Check that the socket-to-weaponRoot relation is the same rotation with ~0 translation in every clip's frame 0. If it isn't, fix the rig, not the engine.
-4. Run `work\hand_probe.exe` on a couple of clips. A hand whose path is much longer than its partner's means a pairing mistake.
+Every field is validated on load. A bad value shows its error in the Inspector, and Play refuses to start the weapon.
 
 ---
 
@@ -114,61 +140,50 @@ Don't eyeball `weaponMountRotation`.
    - **Animation Set**: the `.fpsanim`
    - **Gravity Gun**: off
    - **Camera Bone**: your camera bone
-   - **View Model FOV**: ~50–60
-2. Press Play and check the basics:
-   - arms in front, not behind (otherwise flip `viewRotation`)
-   - not floating (otherwise check the camera bone)
-   - gun in the hands through Sprint, Draw and Holster (otherwise check the socket and mount)
-3. **Centre the ADS sights.** Hold `Fire2` and adjust **View Model Offset** (metres, camera frame) and **View Model Rotation** (degrees) until the sights sit on screen centre.
-   - To solve it exactly instead, locate both sight points from the mesh with `work/sight_align_probe.cpp` (SYSTEM §5).
-   - Play-mode edits revert on Stop, so write the final values into the scene file.
-   - The offset also shifts hip fire. That's expected.
-4. View-model fields are read at Play start, so Stop and Play again after every change.
+   - **View Model FOV**: about 50–60
+2. Press Play and check:
+   - the arms are in front of the camera, not behind it (otherwise fix View Rotation)
+   - they don't float (otherwise fix Camera Bone)
+   - the gun stays in the hands through Sprint, Draw and Holster (otherwise fix the socket or mount)
+3. **Centre the ADS sights.**
+   - Hold `Fire2` and adjust **View Model Offset** and **View Model Rotation** until the sights sit on screen centre.
+   - To solve it exactly, use `work/sight_align_probe.cpp` (SYSTEM §5).
+   - Write the final values into the scene file: Play-mode edits revert.
+4. View-model fields and the weapon definition are read when Play starts, so **Stop and Play again** after each change. Controller edits apply live.
 
 ---
 
 ## 5. Verify
 
-Build, run the unit tests and run the smoke test as in SYSTEM §10. Then:
+Run the build, unit tests and smoke test as in SYSTEM §10. Then:
 
-- `--smoke-test project\scenes`: your scene passes with `newGlErrors=0 newLogErrors=0`. A missing clip or a bad path fails here, because `Start()` attaches every clip up front.
-- Console on Play shows: `First-person presentation loaded '<path>' with N semantic states.`
+- `--smoke-test project\scenes`: your scene passes with `newGlErrors=0 newLogErrors=0`.
+- The Console on Play shows: `First-person presentation loaded '<path>' (<controller>, N states).`
+- **Watch it live.** Open the controller in the Animator during Play. The playing state is highlighted, with its progress bar.
 - **Manual pass** in the Game tab:
-  - idle for 20 s (Regrip)
-  - walk and sprint (transitions)
-  - hip fire, then ADS fire semi and full (B)
+  - idle for 20 s (fidget)
+  - walk, sprint, and sprint out of ADS
+  - hip fire, then ADS fire in semi and full (B)
   - walk while aiming
-  - sprint out of ADS
-  - R tap at partial and at 0 rounds, and R hold
-  - F, Q
-  - 1/2/scroll, including mid-reload
-- Look at the spare magazine, if the weapon has one, during both reloads. If it's missing, see SYSTEM §8.6.
+  - tap R at partial ammo and at 0 rounds, and hold R
+  - F and Q
+  - 1, 2 and scroll, including mid-reload
+- If the weapon has a spare magazine, check it's visible during both reloads. If it's missing, see SYSTEM §8.6.
 
 ---
 
-## 6. When a weapon needs code
+## 6. When a weapon does need code
 
-These are compiled-in today and are the first things to move into the asset when a second weapon arrives:
-
-| Hard-coded today | Where | To generalise |
+| Still in code | Where | To generalise |
 |---|---|---|
-| Magazine 30 | `FirstPersonPresentation::kMagazineSize` | `"magazine"` in `.fpsanim` |
-| Fire rate 700 rpm, semi/full only | `kFullAutoInterval`, `ToggleFireMode` | `"rpm"`, `"fireModes": ["semi","auto","burst"]` |
-| ADS recoil / walk-bob constants | top of `FirstPersonPresentation.cpp` | a `"procedural"` block |
-| State → tier table | `FirstPersonTierOf` | an optional per-clip `"tier"`, keeping today's names as defaults |
-| Two slots: 1 = the one set, 2 = unarmed | `main.cpp` input block | a list of Animation Sets on the controller, one presentation live at a time (Holster → swap set → Draw) |
-| ADS offset/rotation per **scene** | `FirstPersonControllerComponent` | per weapon in `.fpsanim`, with the scene values as a nudge on top |
-| No HUD | `Ammo()`, `IsFullAuto()` exist | a HUD overlay reading them |
+| Two slots: 1 = this weapon, 2 = unarmed | `main.cpp` input block, `FirstPersonPresentation` | A list of weapon definitions on the controller, swapped on Holster → Draw |
+| The input → parameter mapping | `FirstPersonPresentation` (`FirstPersonAnimatorContract`) | New inputs, e.g. a fire-mode selector animation, need a new parameter name there |
+| ADS fire and walk bob are procedural | `FirstPersonPresentation::Fire` / `Tick` / `Update` | If a weapon ships real ADS fire/walk clips, drop the `ADS` tag from its aim state and build the logic in the graph |
+| No HUD | `Ammo()`, `IsFullAuto()` exist | A HUD overlay that reads them |
 
-Keep new rules as pure functions in `FirstPersonAnimation.h`, with checks in `TestFirstPersonAnimationFSM`. That is how every current rule is pinned.
-
-If you add a new `*Tag` or `*Component` to `Components.h`, register it or allow-list it in `tools/component_registration_allowlist.txt`. CI's Debug job fails otherwise.
-
-If you add a new input action:
-
-- add it to `InputMap::Defaults()`
-- add it to `project/settings.json`, because the saved list wins per action
-- update the bindings table in SYSTEM §4
+If you add a new `*Tag` or `*Component` to `Components.h`, register it or allow-list it in
+`tools/component_registration_allowlist.txt`, or CI's Debug job fails. A new input action goes
+in `InputMap::Defaults()` **and** `project/settings.json`.
 
 ---
 
@@ -178,16 +193,22 @@ If you add a new input action:
 ### Weapon: <name>
 **Assets**
 - [ ] Arms base exported at REST, with meshes; clips exported channels-only
-- [ ] Arms clips baked against the paired weapon action (hand_probe path lengths sane)
+- [ ] Arms clips baked against the paired weapon action (hand_probe path lengths look sane)
 - [ ] Frame ranges recorded in export_manifest.json
-- [ ] FBX + .meta committed under project/assets/fps/<Weapon>/
+- [ ] FBX + .controller + .fpsanim, each with its .meta, committed under project/assets/fps/<Weapon>/
 - [ ] Source .blend untouched, or the change was approved
 
-**.fpsanim**
-- [ ] Idle / Walk / Sprint / Aim present and looping
-- [ ] All 15 state names spelled exactly, or the unused inputs removed
-- [ ] weaponSocket / weaponRoot set; weaponMountRotation measured with socket_probe
-- [ ] viewRotation correct (arms in front of the camera)
+**Controller**
+- [ ] Every state's arms clip set; weapon clips wherever the gun moves by itself
+- [ ] Contract names present: Speed/Sprint/Aim/Equipped/Ammo + Fire/Reload/MagCheck/Inspect/Melee/Fidget
+- [ ] Tags: ADS (aim), Reload (reloads), Hidden (holstered), Idle (idle)
+- [ ] Events: Shot @0 on hip fire, Refill @1 on every reload
+- [ ] Any State transitions: Respect Priority on; priorities make sense
+
+**Weapon definition**
+- [ ] Controller set; socket/root set; mount rotation measured with socket_probe
+- [ ] View rotation correct (arms in front of the camera)
+- [ ] Gameplay numbers set (magazine, rpm, full-auto, recoil, bob)
 
 **Scene**
 - [ ] Animation Set assigned, Gravity Gun off, Camera Bone set
@@ -196,7 +217,7 @@ If you add a new input action:
 **Verification**
 - [ ] Unit tests exit 0
 - [ ] Smoke: scene PASS, newLogErrors=0
-- [ ] Manual pass: idle/regrip, walk, sprint, hip + ADS fire (semi/full), ADS walk,
-      sprint-out-of-ADS, tac/empty reload, mag check, inspect, melee, draw/holster
-- [ ] FPS_ANIMATION_SYSTEM.md updated if any rule, key or constant changed
+- [ ] Manual pass: idle/fidget, walk, sprint, hip and ADS fire (semi/full), ADS walk,
+      sprint out of ADS, tac/empty reload, mag check, inspect, melee, draw/holster
+- [ ] Docs updated if any rule, key or contract name changed
 ```
