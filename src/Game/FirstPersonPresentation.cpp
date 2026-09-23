@@ -7,7 +7,9 @@
 #include "Components.h"
 #include "IK.h"
 #include "Log.h"
+#include "GameModuleAPI.h"
 #include "Model.h"
+#include "PhysicsWorld.h"
 #include "ProjectPaths.h"
 #include "RotationMath.h"
 #include "World.h"
@@ -34,6 +36,12 @@ glm::quat CameraRotation(const Camera& camera) {
 
 bool FinitePositive(float value) {
     return std::isfinite(value) && value > 0.0f;
+}
+
+bool SameIKSetup(const WeaponIKSettings& a, const WeaponIKSettings& b) {
+    return a.Enabled == b.Enabled && a.GunBone == b.GunBone && a.RightUpper == b.RightUpper &&
+           a.RightLower == b.RightLower && a.RightHand == b.RightHand && a.LeftUpper == b.LeftUpper &&
+           a.LeftLower == b.LeftLower && a.LeftHand == b.LeftHand;
 }
 
 std::string TrackOr(const AnimatorController& ctrl, const char* wanted, int fallback) {
@@ -278,9 +286,14 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
         Log::Warn("First-person presentation: kept the running weapon tuning; the edited file doesn't load: " + why);
         return;
     }
-    // Numbers only: the rigs and controller need a restart of Play to change.
+    // Numbers (and the IK bones) only: the rigs and controller need a restart of Play to change.
+    const bool rebuildIK = !SameIKSetup(m_Set.Procedural.IK, fresh.Procedural.IK);
     m_Set.Gameplay = fresh.Gameplay;
     m_Set.Procedural = fresh.Procedural;
+    if (rebuildIK && m_World && m_World->Registry.valid(m_Arms)) {
+        m_World->Registry.remove<IKRigComponent>(m_Arms);
+        m_UsesIK = SetupIK();
+    }
     m_ReloadKey.HoldSeconds = m_Set.Gameplay.ReloadHoldSeconds;
     m_Ammo = std::min(m_Ammo, m_Set.Gameplay.Magazine);
 }
@@ -471,11 +484,31 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
     // Recoil view punch and lean, on the camera the whole frame renders from.
     {
         const WeaponProceduralPose& p = m_Procedural.Pose();
-        m_KickAngles = glm::vec3(p.CameraKick.x, p.CameraKick.y, p.CameraRoll);
+        // The lean's side step stops short of walls, or it would put the eye through them; the
+        // roll shrinks with it, so leaning against a wall reads as blocked rather than broken.
+        float side = p.CameraSide, roll = p.CameraRoll;
+        if (std::fabs(side) > 1e-4f) {
+            const glm::vec3 dir = camera.Right() * (side > 0.0f ? 1.0f : -1.0f);
+            const float origin[3] = {camera.Position.x, camera.Position.y, camera.Position.z};
+            const float d[3] = {dir.x, dir.y, dir.z};
+            constexpr float kEyeRadius = 0.12f; // keeps the near plane off the wall
+            RaycastHit hit;
+            QueryFilter filter;
+            filter.HitTriggers = 0;
+            if (PhysicsWorld::SphereCastFiltered(origin, d, kEyeRadius, std::fabs(side), filter, hit) && hit.Hit) {
+                const float room = std::max(0.0f, hit.Distance - 0.02f);
+                const float fraction = room / std::fabs(side);
+                side *= fraction;
+                roll *= fraction;
+            }
+        }
+        // Never punch the view past straight up/down, where the look basis flips.
+        const float pitch = std::clamp(camera.Pitch + p.CameraKick.x, -89.0f, 89.0f) - camera.Pitch;
+        m_KickAngles = glm::vec3(pitch, p.CameraKick.y, roll);
         camera.Pitch += m_KickAngles.x;
         camera.Yaw += m_KickAngles.y;
         camera.Roll += m_KickAngles.z;
-        m_KickOffset = camera.Right() * p.CameraSide;
+        m_KickOffset = camera.Right() * side;
         camera.Position += m_KickOffset;
         m_KickApplied = true;
     }
@@ -511,11 +544,13 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
     }
 
     const glm::quat cameraRotation = CameraRotation(camera);
-    // Without IK (a rig lacking the gun bone or arm chains) the procedural pose moves the whole
-    // view model about the eye instead, in the camera's own frame.
+    // Without IK (switched off, or a rig lacking the gun bone or arm chains) the procedural pose
+    // moves the whole view model about the eye instead, in the camera's own frame - faded by the
+    // same weight IK uses, so Off-tagged states still play as authored.
     const WeaponProceduralPose& proc = m_Procedural.Pose();
-    const glm::quat procRotation = m_UsesIK ? glm::quat(1.0f, 0.0f, 0.0f, 0.0f) : proc.RotationQuat();
-    const glm::vec3 procPosition = m_UsesIK ? glm::vec3(0.0f) : proc.Position;
+    const glm::quat identity(1.0f, 0.0f, 0.0f, 0.0f);
+    const glm::quat procRotation = m_UsesIK ? identity : glm::slerp(identity, proc.RotationQuat(), proc.IKWeight);
+    const glm::vec3 procPosition = m_UsesIK ? glm::vec3(0.0f) : proc.Position * proc.IKWeight;
     // The asset's axis correction is the inner factor (it describes the models' own space), then
     // the scene's View Model Rotation as a tweak on top of that.
     const glm::quat rotation = NormalizeRotation(cameraRotation * procRotation *

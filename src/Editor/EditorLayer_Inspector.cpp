@@ -20,6 +20,7 @@
 #include "AABB.h"
 #include "Log.h"
 #include "AnimationSystem.h" // Animation component clip references (#175)
+#include "IK.h"              // IK Rig bone validation
 #include "EditorSettings.h"
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
@@ -3285,6 +3286,96 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
 
     if (std::strcmp(componentName, "Animator Controller") == 0 && phase == ReflectExtraPhase::Top) {
         DrawAnimatorControllerExtra(world, entity); // #175 Part B
+        return;
+    }
+
+    // First Person Controller: the weapon's tuning (recoil, sway, bob, IK, ...) lives in its
+    // weapon definition, which otherwise only turns up in the Asset Browser's Animation folder.
+    if (std::strcmp(componentName, "First Person Controller") == 0 && phase == ReflectExtraPhase::Bottom) {
+        const auto* fp = registry.try_get<FirstPersonControllerComponent>(entity);
+        if (!fp || fp->AnimationSet.empty()) return;
+        const std::string path = std::filesystem::u8path(ProjectPaths::Resolve(fp->AnimationSet)).generic_u8string();
+        std::error_code ec;
+        const bool exists = std::filesystem::exists(std::filesystem::u8path(path), ec);
+        ImGui::BeginDisabled(!exists);
+        if (ActionButton(ICON_FA_CROSSHAIRS "  Edit Weapon Definition",
+                         exists ? "Open this weapon's recoil, sway, bob, lean and IK tuning in the Inspector"
+                                : "The Animation Set file doesn't exist",
+                         false, ImVec2(-FLT_MIN, 0.0f))) {
+            ClearSelection();
+            m_SelectedAssetKey = path;
+            m_SelectedAssetIsFolder = false;
+            m_ExtraAssetSelection.clear();
+            NavigateAssetFolder("Animation");
+        }
+        ImGui::EndDisabled();
+        return;
+    }
+
+    // IK Rig: say why it would do nothing (no controller, no model, bones the model doesn't
+    // have), and offer the common rigs' bone names so nobody has to type them.
+    if (std::strcmp(componentName, "IK Rig") == 0 && phase == ReflectExtraPhase::Top) {
+        auto* rig = registry.try_get<IKRigComponent>(entity);
+        if (!rig) return;
+        const ImVec4 warn = EditorUIPrimitives::WarningColor();
+        const auto warning = [&](const std::string& text) {
+            ImGui::PushStyleColor(ImGuiCol_Text, warn);
+            ImGui::TextWrapped(ICON_FA_TRIANGLE_EXCLAMATION "  %s", text.c_str());
+            ImGui::PopStyleColor();
+        };
+        const auto* rc = registry.try_get<RenderableComponent>(entity);
+        const Model* model = rc ? rc->ModelRef.get() : nullptr;
+        if (!registry.all_of<AnimatorControllerComponent>(entity))
+            warning("Needs an Animator Controller on this object: the rig works on the controller's pose.");
+        if (!model) {
+            warning("Needs a Mesh Renderer with a rigged model.");
+        } else {
+            const std::vector<std::string> missing = IK::MissingBones(*rig, *model);
+            if (!missing.empty()) {
+                std::string list;
+                for (const auto& m : missing) list += (list.empty() ? "" : ", ") + m;
+                warning("Not on this model: " + list + ". The parts that use them are skipped.");
+            }
+        }
+        if (!rig->LimbA.Enabled && !rig->LimbB.Enabled && !rig->LookAtEnabled)
+            ImGui::TextDisabled(ICON_FA_CIRCLE_INFO "  Enable a limb or the look-at below, or pick a preset.");
+
+        if (ImGui::Button(ICON_FA_WAND_MAGIC_SPARKLES "  Presets", ImVec2(-FLT_MIN, 0.0f))) ImGui::OpenPopup("##ikpresets");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Fill in the bone names of a common skeleton");
+        if (ImGui::BeginPopup("##ikpresets")) {
+            const auto limb = [](IKLimb& l, const char* upper, const char* lower, const char* end, const char* target) {
+                l.Enabled = true;
+                l.Upper = upper;
+                l.Lower = lower;
+                l.End = end;
+                l.Target = target;
+            };
+            if (ImGui::MenuItem("UE5 Mannequin: arms to IK hand bones")) {
+                PushUndo(world, "IK Rig Preset");
+                limb(rig->LimbA, "upperarm_r", "lowerarm_r", "hand_r", "ik_hand_r");
+                limb(rig->LimbB, "upperarm_l", "lowerarm_l", "hand_l", "ik_hand_l");
+                rig->LimbA.KeepAnimatedOffset = rig->LimbB.KeepAnimatedOffset = false;
+            }
+            if (ImGui::MenuItem("UE5 Mannequin: legs to IK foot bones")) {
+                PushUndo(world, "IK Rig Preset");
+                limb(rig->LimbA, "thigh_r", "calf_r", "foot_r", "ik_foot_r");
+                limb(rig->LimbB, "thigh_l", "calf_l", "foot_l", "ik_foot_l");
+                rig->LimbA.KeepAnimatedOffset = rig->LimbB.KeepAnimatedOffset = false;
+            }
+            if (ImGui::MenuItem("Mixamo: arms")) {
+                PushUndo(world, "IK Rig Preset");
+                limb(rig->LimbA, "mixamorig:RightArm", "mixamorig:RightForeArm", "mixamorig:RightHand", "");
+                limb(rig->LimbB, "mixamorig:LeftArm", "mixamorig:LeftForeArm", "mixamorig:LeftHand", "");
+            }
+            if (ImGui::MenuItem("Mixamo: legs")) {
+                PushUndo(world, "IK Rig Preset");
+                limb(rig->LimbA, "mixamorig:RightUpLeg", "mixamorig:RightLeg", "mixamorig:RightFoot", "");
+                limb(rig->LimbB, "mixamorig:LeftUpLeg", "mixamorig:LeftLeg", "mixamorig:LeftFoot", "");
+            }
+            ImGui::Separator();
+            ImGui::TextDisabled("Mixamo rigs have no IK target bones:\nset each limb's Target yourself.");
+            ImGui::EndPopup();
+        }
         return;
     }
 

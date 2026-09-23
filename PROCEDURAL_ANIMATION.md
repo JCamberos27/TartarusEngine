@@ -2,7 +2,14 @@
 
 The first-person weapon plays its clips exactly as authored. A stack of procedural layers then moves the arms rig's **gun bone** (`ik_hand_gun` on the Manny rig), and **two-bone IK** keeps both hands on it. The weapon is socketed to that bone, so it follows. This is the approach Kinemation's CAS takes.
 
-Everything is tuned per weapon in the weapon definition (`.fpsanim`): select it in the Asset Browser and open **Procedural** in the Inspector. Edits save immediately and apply **live in Play** (the running game re-reads the file within a quarter second).
+Everything is tuned per weapon in the weapon definition (`.fpsanim`). To open it, either:
+
+- select the player object and press **Edit Weapon Definition** at the bottom of its First Person Controller, or
+- select the file in the Asset Browser's **Animation** folder.
+
+Then open **Procedural** in the Inspector. Edits save immediately and apply **live in Play**: the running game re-reads the file within a quarter second, and that includes changes to the IK bone names.
+
+Every field explains itself when you hover its label. Each section has a **Reset to Defaults** button, which asks before it resets anything, because these edits can't be undone.
 
 ## Axes and units
 
@@ -22,15 +29,15 @@ All layers are summed:
 
 | Layer | What it does |
 |---|---|
-| **Recoil** | Each shot starts its own curves: pitch, yaw, roll, side, up and kickback. Each channel is scaled by a random pick from its min/max range; a negative min kicks either way. Full-auto overlaps shots into a climb. A spring (frequency, damping) smooths the sum. Separate **Hip** and **ADS** scales apply; hip fire also plays the Fire clip. A **camera punch** (pitch/yaw curves) moves the view, not the aim. The Inspector plots a 10-round burst at the weapon's rpm. |
+| **Recoil** | Each shot starts its own curves: pitch, yaw, roll, side, up and kickback. Each channel is scaled by a random pick from its min/max range; a negative min kicks either way. Full-auto overlaps shots into a climb. A spring (frequency, damping) smooths the sum. Separate **Hip** and **ADS** scales apply; hip fire also plays the Fire clip. A **camera punch** (pitch/yaw curves) moves the view, not the aim. The Inspector plots a 10-round burst at the weapon's rpm. A shot curve that doesn't end at 0 gets a warning, because the gun would snap back when each shot expires. |
 | **Sway** | Look sway: the gun lags behind turns (per 100 deg/s). Move sway: it trails movement and tilts into strafes (per m/s). Both run through a spring (damping under 1 overshoots) and are scaled down in ADS. |
 | **Bob** | Walk and sprint cycles (side, up, roll) are phase-locked to distance travelled and blended by speed and sprint. Separate hip and ADS scales. |
 | **Breathing** | A slow idle loop (side, up, forward, pitch), calmer in ADS. |
 | **Aim (ADS)** | A position/rotation offset blended in while a state tagged `ADS` plays, eased by the blend curve. Zero keeps the Aim clip's sight picture exactly. |
-| **State Offsets** | A pose tweak per state name or tag, e.g. lower and roll the gun in `Sprint`, with blend in/out times. |
+| **State Offsets** | A pose tweak per state name or tag, e.g. lower and roll the gun in `Sprint`, with blend in/out times. The drop-down next to the name lists the controller's states and tags. A name the controller doesn't have is shown in the warning colour. |
 | **Locomotion Rate** | Sets the `WalkRate` / `SprintRate` parameters from the player's speed. Use them as the Walk and Sprint states' **speed parameter** so the clips step at the pace you move. |
-| **Lean** | `LeanLeft` / `LeanRight` (default **Z / C**) roll the camera, slide it sideways, and roll the gun a little further into the lean. |
-| **IK** | Bone names (gun bone, both arm chains) and the **Off Tag** (`IKOff`). States carrying that tag, and hidden states, fade IK and every offset out over the blend time, so they play purely as authored. The AK tags Draw and Holster. |
+| **Lean** | `LeanLeft` / `LeanRight` (default **Z / C**, rebindable in Settings → This Project → Input) roll the camera, slide it sideways, and roll the gun a little further into the lean. The side step stops short of walls, so leaning can't put the eye through them, and the roll shrinks with it. Sprinting straightens up unless **While Sprinting** is on. |
+| **IK** | Bone names (gun bone, both arm chains) and the **Off Tag** (`IKOff`). The drop-downs list the arms rig's bones; names it lacks are shown in the warning colour. States with the Off tag, and hidden states, fade every offset out over the blend time, so they play purely as authored. The AK tags Draw and Holster. Turning **Enabled** off keeps the motion but moves the whole view model instead of the gun bone. |
 
 ### Curve editor
 
@@ -39,8 +46,10 @@ All layers are summed:
 | Move a key | Drag it |
 | Change a key's slope | Drag the selected key's handles |
 | Add a key | Double-click the curve's background |
-| Delete a key | Right-click it |
-| Presets and smoothing | Right-click the background: flat, line, ease, kick, sine, smooth tangents |
+| See a key's values | Hover it |
+| Key options | Right-click it: flat or smooth tangents, value to 0, delete |
+| Delete a key | Select it and press **Delete**, or use its right-click menu |
+| Presets and smoothing | Right-click the background: flat, line, ease, kick, sine, smooth tangents, **Reset to default** |
 | Exact values | Edit the number row under the graph |
 
 ## The IK Rig component (any rig)
@@ -52,6 +61,16 @@ All layers are summed:
   - **Match Rotation:** also turns the end bone to the goal.
 - **Look At:** turns a bone's axis toward another bone, clamped to a maximum angle.
 - **Weight:** blends the solved pose with the animated pose.
+
+The look-at runs before the limbs, so aiming a spine bone still leaves the hands on their targets.
+
+The component's Inspector warns when:
+
+- there's no Animator Controller,
+- there's no rigged model, or
+- a bone name isn't on the model.
+
+**Presets** fill in the bone names for the UE5 Mannequin (arms or legs to its IK bones) and for Mixamo.
 
 Code can also push rigid bone offsets through `IKRigComponent::Offsets` (runtime only); the first-person driver does this. The math is in `src/Game/IK.h` (`SolveTwoBone`, `OffsetBone`, `AimBone`) and works on any `LocalTRS` pose.
 
