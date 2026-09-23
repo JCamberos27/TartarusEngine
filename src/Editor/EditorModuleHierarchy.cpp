@@ -53,23 +53,10 @@ bool FlatGlyphButton(const EditorModuleHostAPI& host, const char* icon, const ch
 void Draw(const EditorModuleHostAPI& host) {
     if (host.GetShowHierarchy && !host.GetShowHierarchy()) return;
 
-    // Q12 (Phase 4 / #6) — same faint warm wash as the Inspector while Playing; see its Draw() for
-    // the full rationale (editing stays live, this is a "reverts on Stop" reminder, not a lock).
-    const bool inPlayMode = host.GetInPlayMode && host.GetInPlayMode();
-    if (inPlayMode) {
-        const ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
-        const ImVec4 amber(1.0f, 0.549f, 0.157f, 1.0f);
-        const float mix = 0.08f;
-        ImGui::PushStyleColor(ImGuiCol_WindowBg,
-            ImVec4(bg.x + (amber.x - bg.x) * mix, bg.y + (amber.y - bg.y) * mix,
-                   bg.z + (amber.z - bg.z) * mix, bg.w));
-    }
-
     bool visible = true;
     PushTabChromeText();
     const bool open = ImGui::Begin("Scene Hierarchy", &visible, ImGuiWindowFlags_None);
     PopTabChromeText();
-    if (inPlayMode) ImGui::PopStyleColor();
     if (host.SetShowHierarchy) host.SetShowHierarchy(visible); // capture the title-bar X
     if (!open) { ImGui::End(); return; }
 

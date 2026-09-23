@@ -237,7 +237,7 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
     ImGui::SameLine();
     if (ActionButton(EDITOR_ICON_HISTORY, "Toggle History", m_ShowHistory)) m_ShowHistory = !m_ShowHistory;
 
-    // --- Capture + notifications ---------------------------------------------------------------
+    // --- Capture -------------------------------------------------------------------------------
     divider();
     {
         char tip[128];
@@ -253,36 +253,6 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
         if (ImGui::BeginPopup("##ActionBarCapturePopup")) {
             if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
             DrawCaptureOptionsPopupBody();
-            ImGui::EndPopup();
-        }
-    }
-    ImGui::SameLine();
-    {
-        const int unread = NotificationUnreadCount();
-        char tip[32];
-        std::snprintf(tip, sizeof(tip), "Notifications%s", unread > 0 ? " (unread)" : "");
-        if (ActionButton(ICON_FA_BELL, tip)) {
-            ImGui::OpenPopup("##ActionBarNotificationsPopup");
-            MarkNotificationsRead();
-        }
-        if (unread > 0) {
-            const ImVec2 btnMin = ImGui::GetItemRectMin();
-            const ImVec2 btnMax = ImGui::GetItemRectMax();
-            char countStr[8];
-            std::snprintf(countStr, sizeof(countStr), "%d", unread > 99 ? 99 : unread);
-            const ImVec2 textSize = ImGui::CalcTextSize(countStr);
-            const float badgeR = std::max(7.0f * m_UIScale, textSize.x * 0.5f + 2.0f * m_UIScale);
-            const ImVec2 center(btnMax.x - badgeR * 0.7f, btnMin.y + badgeR * 0.7f);
-            ImDrawList* dl = ImGui::GetWindowDrawList();
-            dl->AddCircleFilled(center, badgeR, IM_COL32(219, 60, 60, 255));
-            dl->AddText(ImVec2(center.x - textSize.x * 0.5f, center.y - textSize.y * 0.5f),
-                        IM_COL32(255, 255, 255, 255), countStr);
-        }
-        if (ImGui::BeginPopup("##ActionBarNotificationsPopup")) {
-            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
-            ImGui::TextDisabled("Notifications");
-            ImGui::Separator();
-            DrawNotificationsPopupBody();
             ImGui::EndPopup();
         }
     }
