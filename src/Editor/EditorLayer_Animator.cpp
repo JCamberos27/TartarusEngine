@@ -252,8 +252,10 @@ void DrawWeaponProcedural(WeaponProceduralSettings& p, float labelW, float rpm, 
         ImGui::TextWrapped("Sets the WalkRate / SprintRate parameters from the player's speed. Use them as the Walk and "
                            "Sprint states' speed parameter so the clips step at the pace you move.");
         check("Match Speed", "##lomatch", l.MatchSpeed, nullptr);
-        dragF("Walk Reference", "##lowr", l.WalkReference, 0.05f, 0.1f, 30.0f, "%.2f m/s", "Speed the walk clip plays at rate 1.");
-        dragF("Sprint Reference", "##losr", l.SprintReference, 0.05f, 0.1f, 30.0f, "%.2f m/s", "Speed the sprint clip plays at rate 1.");
+        dragF("Walk Reference", "##lowr", l.WalkReference, 0.05f, 0.0f, 30.0f, l.WalkReference > 0.0f ? "%.2f m/s" : "auto",
+              "Speed the walk clip plays at rate 1. 0 (auto) = the player controller's Move Speed.");
+        dragF("Sprint Reference", "##losr", l.SprintReference, 0.05f, 0.0f, 30.0f, l.SprintReference > 0.0f ? "%.2f m/s" : "auto",
+              "Speed the sprint clip plays at rate 1. 0 (auto) = Move Speed x Sprint Multiplier.");
         dragF("Min Rate", "##lomin", l.MinRate, 0.01f, 0.0f, 5.0f, "%.2f", nullptr);
         dragF("Max Rate", "##lomax", l.MaxRate, 0.01f, 0.0f, 5.0f, "%.2f", nullptr);
     }

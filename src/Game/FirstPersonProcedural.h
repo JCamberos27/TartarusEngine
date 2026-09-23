@@ -124,11 +124,14 @@ struct WeaponStateOffset {
 };
 
 // Locomotion clips play at a rate that follows the player's actual speed (the controller's Walk
-// and Sprint states use the WalkRate / SprintRate parameters as their speed).
+// and Sprint states use the WalkRate / SprintRate parameters as their speed): rate 1 at the
+// reference speed, slower below it.
 struct WeaponLocomotionSettings {
     bool MatchSpeed = true;
-    float WalkReference = 6.0f;    // m/s the walk clip was authored for
-    float SprintReference = 9.6f;
+    // m/s at which each clip plays at rate 1. 0 = the player's own full speed (the controller's
+    // Move Speed, and Move Speed x Sprint Multiplier), so any scene's tuning plays at 1x.
+    float WalkReference = 0.0f;
+    float SprintReference = 0.0f;
     float MinRate = 0.6f;
     float MaxRate = 1.4f;
 };
@@ -191,6 +194,9 @@ struct WeaponProceduralInput {
     bool Ads = false;              // the current state is tagged ADS
     bool IKOff = false;            // the current state is tagged IKOff (or hidden)
     float Lean = 0.0f;             // -1 left .. +1 right
+    // The player's full walk and sprint speeds (m/s), for references left at 0.
+    float WalkSpeed = 0.0f;
+    float SprintSpeed = 0.0f;
     // The current state's name and tags, for StateOffsets.
     const std::string* StateName = nullptr;
     const std::vector<std::string>* StateTags = nullptr;

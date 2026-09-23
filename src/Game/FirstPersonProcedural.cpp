@@ -350,11 +350,14 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
     };
     if (!positive(s.Recoil.Duration, "recoil.duration") || !positive(s.Bob.WalkStride, "bob.walkStride") ||
         !positive(s.Bob.SprintStride, "bob.sprintStride") || !positive(s.Bob.WalkFullSpeed, "bob.walkFullSpeed") ||
-        !positive(s.Breath.Period, "breath.period") || !positive(s.Locomotion.WalkReference, "locomotion.walkReference") ||
-        !positive(s.Locomotion.SprintReference, "locomotion.sprintReference") ||
+        !positive(s.Breath.Period, "breath.period") ||
         !positive(s.Recoil.Smoothing.Frequency, "recoil.smoothing.frequency") ||
         !positive(s.Sway.Spring.Frequency, "sway.spring.frequency"))
         return false;
+    if (!(s.Locomotion.WalkReference >= 0.0f) || !(s.Locomotion.SprintReference >= 0.0f)) {
+        if (error) *error = "'procedural.locomotion' references must be 0 (the player's speed) or positive";
+        return false;
+    }
     out = std::move(s);
     return true;
 }
@@ -515,9 +518,11 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
 
     // Locomotion clip rates.
     const auto& lo = s.Locomotion;
+    const float walkRef = lo.WalkReference > 0.0f ? lo.WalkReference : in.WalkSpeed;
+    const float sprintRef = lo.SprintReference > 0.0f ? lo.SprintReference : in.SprintSpeed;
     if (lo.MatchSpeed && speed > 0.05f) {
-        pose.WalkRate = std::clamp(speed / lo.WalkReference, lo.MinRate, lo.MaxRate);
-        pose.SprintRate = std::clamp(speed / lo.SprintReference, lo.MinRate, lo.MaxRate);
+        if (walkRef > 0.0f) pose.WalkRate = std::clamp(speed / walkRef, lo.MinRate, lo.MaxRate);
+        if (sprintRef > 0.0f) pose.SprintRate = std::clamp(speed / sprintRef, lo.MinRate, lo.MaxRate);
     }
 
     m_Pose = pose;

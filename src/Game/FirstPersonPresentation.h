@@ -110,6 +110,8 @@ private:
     glm::vec3 m_Offset{0.0f};
     glm::vec3 m_Rotation{0.0f};
     float m_Scale = 1.0f;
+    float m_WalkSpeed = 0.0f;     // the controller's full walk / sprint speeds (m/s)
+    float m_SprintSpeed = 0.0f;
     float m_ViewModelFov = -1.0f; // authored in Start(), read by ViewModelFov()
     std::string m_CameraBone;     // rig node the play camera is pinned to (empty = root-anchored)
     bool m_CameraBoneWarned = false;
