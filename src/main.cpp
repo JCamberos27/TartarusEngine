@@ -543,19 +543,12 @@ int main(int argc, char** argv) {
     Log::OpenFile(headless ? "Headless.log" : playerMode ? "Player.log" : "Editor.log");
 
     try {
-        // Up before anything else so it covers the whole startup, including the GL context
-        // creation and shader compiles below. The main window stays hidden until its first
-        // frame is presented (see Window::Show), so the two never overlap.
-        // Preferences first: the splash centres on the monitor the saved window placement is on
-        // (#155), and nothing earlier reads them. Per-user file, no GL or project state needed.
+        // Per-user preferences, loaded before anything reads them. No GL or project state needed.
         EditorSettings::Load();
+        // The editor starts with no splash: the console shows the load log until the main window
+        // presents its first frame (see Window::Show). Only a built game can opt into one.
         SplashScreen splash;
-        if (!headless && !playerMode) {
-            const EditorSettings& es = EditorSettings::Get();
-            SplashScreen::TargetRect target{es.WindowX, es.WindowY, es.WindowWidth, es.WindowHeight};
-            splash.Show(EnginePaths::Resolve("assets/branding/splash.png"), 1.0f,
-                        es.WindowPlacementValid ? &target : nullptr);
-        } else if (!headless && playerMode && !playerCfg.SplashPath.empty()) {
+        if (!headless && playerMode && !playerCfg.SplashPath.empty()) {
             // #174 - the game's own splash, staged into the build by BuildPipeline. No target
             // rect: a player has no saved editor placement, so this centres on the primary
             // monitor. Empty SplashPath (the default) keeps the old behaviour of no splash at

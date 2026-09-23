@@ -5,11 +5,6 @@ rem checked out. The desktop "Tartarus Engine" shortcut points here so a double-
 rem can never run a stale exe again.
 cd /d "%~dp0"
 
-rem First say what is about to run and whether it is the newest GitHub update, and offer
-rem to switch to main or to try an open pull request (tools\editor-status.ps1). Waits a few
-rem seconds for a key, so a plain double-click still just launches.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\editor-status.ps1"
-
 echo Closing any running Tartarus Engine instances...
 taskkill /F /IM TartarusEngine.exe >nul 2>&1
 
@@ -41,6 +36,5 @@ if errorlevel 1 (
 rem The engine resolves its shipped assets from the exe's own location (EnginePaths, audit
 rem #355) and walks up for project/, so the working directory no longer matters - launch it
 rem in place.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\editor-status.ps1" -Brief
 start "" "build\Release\TartarusEngine.exe"
 timeout /t 3 >nul
