@@ -1377,7 +1377,6 @@ void TestFirstPersonAnimationSet() {
         "weaponSocket":"ik_hand_gun",
         "weaponRoot":"root",
         "weaponMountRotation":[0,90,90],
-        "weaponMountOffset":[-0.0761,-0.0701,-0.0310],
         "clips":[
             {"name":"Idle","arms":"animations/A_FP_Idle.fbx","loop":true,"fade":0.15},
             {"name":"Fire","arms":"animations/A_FP_Fire.fbx","weapon":"animations/A_W_Fire.fbx"}
@@ -1400,8 +1399,6 @@ void TestFirstPersonAnimationSet() {
     CHECK(set.WeaponRoot == "root");
     CHECK(set.WeaponMountRotation.x == 0.0f && set.WeaponMountRotation.y == 90.0f &&
           set.WeaponMountRotation.z == 90.0f);
-    CHECK(set.WeaponMountOffset.x == -0.0761f && set.WeaponMountOffset.y == -0.0701f &&
-          set.WeaponMountOffset.z == -0.0310f);
     // Omitted mount fields stay neutral: no socket means "share the arms' pose", the old
     // behaviour, rather than snapping the weapon to a socket it was never told about.
     CHECK(FirstPersonAnimationSet::FromJsonString(
@@ -1410,8 +1407,6 @@ void TestFirstPersonAnimationSet() {
     CHECK(set.WeaponSocket.empty() && set.WeaponRoot.empty());
     CHECK(set.WeaponMountRotation.x == 0.0f && set.WeaponMountRotation.y == 0.0f &&
           set.WeaponMountRotation.z == 0.0f);
-    CHECK(set.WeaponMountOffset.x == 0.0f && set.WeaponMountOffset.y == 0.0f &&
-          set.WeaponMountOffset.z == 0.0f); // absent field keeps the rotation-only mount
     CHECK(FirstPersonAnimationSet::FromJsonString(valid, set, &error)); // back to the full set
 
     const FirstPersonAnimationSet original = set;
