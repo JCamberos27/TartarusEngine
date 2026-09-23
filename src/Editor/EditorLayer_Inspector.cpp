@@ -2195,6 +2195,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         if (!m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder) {
             if (LowerExt(m_SelectedAssetKey) == ".mat")
                 DrawMaterialAssetEditor(world, assets, m_SelectedAssetKey);
+            else if (LowerExt(m_SelectedAssetKey) == ".fpsanim")
+                DrawWeaponDefinitionEditor(m_SelectedAssetKey);
+            else if (LowerExt(m_SelectedAssetKey) == ".controller")
+                DrawControllerAssetInspector(m_SelectedAssetKey);
             else
                 DrawAssetImportInspector(world, assets, m_SelectedAssetKey);
             InspectorEnd();

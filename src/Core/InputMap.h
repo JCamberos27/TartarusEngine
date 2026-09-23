@@ -68,4 +68,11 @@ constexpr int kGamepadAxisCount = 6;
 nlohmann::json ToJson(const std::vector<Action>& actions);
 std::vector<Action> FromJson(const nlohmann::json& j);
 
+// A saved action list wins over its defaults, but it must never *lose* one. The file only holds
+// the actions that existed the last time it was written, so anything added since then would be
+// missing from the live map - and an unknown name only warns once, which reads as "the key does
+// nothing". Appends every default whose name the list does not already have, leaving the file's
+// own entries (including its bindings) untouched.
+void MergeDefaults(std::vector<Action>& actions);
+
 } // namespace InputMap

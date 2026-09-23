@@ -1,0 +1,183 @@
+diff --git a/code/PostProcessing/JoinVerticesProcess.cpp b/code/PostProcessing/JoinVerticesProcess.cpp
+index f4c623c98..04c372d58 100644
+--- a/code/PostProcessing/JoinVerticesProcess.cpp
++++ b/code/PostProcessing/JoinVerticesProcess.cpp
+@@ -54,6 +54,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ #include <unordered_set>
+ #include <unordered_map>
+ #include <memory>
++#include <cmath>
++#include <cstddef>
++#include <utility>
+ 
+ using namespace Assimp;
+ 
+@@ -240,6 +243,83 @@ private:
+     unsigned mNumColorChannels;
+ };
+ 
++namespace {
++
++// -------------------------------------------------------------------------------------------
++// Vertex identity has to include the skin binding, not just the geometric attributes.
++//
++// Two vertices sitting in exactly the same place but driven by different bones are two
++// *different* vertices: folding one into the other deletes a binding and leaves the
++// surviving vertex as the only representative. That is not hypothetical - the AKS-74U view
++// model ships a second magazine island modelled precisely on top of the installed magazine
++// and driven by its own `mag2` bone, and joining them dropped `mag2` entirely, so the
++// spare magazine never animated.
++//
++// `skin` points into the `vertexBindings` table built up-front in ProcessMesh() and left
++// untouched for the map's whole lifetime, so the pointers stay valid and the key itself
++// stays as cheap to copy as the plain Vertex it replaces.
++// -------------------------------------------------------------------------------------------
++struct SkinnedVertex {
++    Vertex v;
++    const std::pair<unsigned int, ai_real> *skin;
++    unsigned int skinCount;
++};
++
++// Hashes a deliberately coarse quantisation of each weight (1/1024, ~50x looser than the
++// tolerance SameSkin() compares with). Disagreeing on a bucket boundary can only cost a
++// *missed* merge, because equality still has the final say - it can never make two
++// differently skinned vertices look identical.
++inline std::size_t HashSkin(const SkinnedVertex &k) {
++    std::size_t seed = std::hash<Vertex>()(k.v);
++    for (unsigned int i = 0; i < k.skinCount; ++i) {
++        hash_combine(seed, k.skin[i].first,
++                     (std::size_t)std::llround((double)k.skin[i].second * 1024.0));
++    }
++    return seed;
++}
++
++struct SkinnedVertexHash {
++    std::size_t operator()(const SkinnedVertex &k) const noexcept {
++        return HashSkin(k);
++    }
++};
++
++// Same tolerance areVerticesEqual() uses, so the binding is held to the same standard as
++// the rest of the vertex. Bone indices are compared exactly: they are integers, and a
++// mismatch there is precisely the case we must never merge.
++inline bool SameSkin(const SkinnedVertex &a, const SkinnedVertex &b) {
++    if (a.skinCount != b.skinCount) {
++        return false;
++    }
++    static const ai_real skinEpsilon = (ai_real)1e-5;
++    for (unsigned int i = 0; i < a.skinCount; ++i) {
++        if (a.skin[i].first != b.skin[i].first) {
++            return false;
++        }
++        if (std::fabs(a.skin[i].second - b.skin[i].second) > skinEpsilon) {
++            return false;
++        }
++    }
++    return true;
++}
++
++struct SkinnedVertexEqual {
++    SkinnedVertexEqual(unsigned numUVChannels, unsigned numColorChannels) :
++            mNumUVChannels(numUVChannels),
++            mNumColorChannels(numColorChannels) {}
++
++    bool operator()(const SkinnedVertex &lhs, const SkinnedVertex &rhs) const {
++        return SameSkin(lhs, rhs) &&
++               areVerticesEqual(lhs.v, rhs.v, mNumUVChannels, mNumColorChannels);
++    }
++
++private:
++    unsigned mNumUVChannels;
++    unsigned mNumColorChannels;
++};
++
++} // namespace
++
+ static constexpr size_t JOINED_VERTICES_MARK = 0x80000000u;
+ 
+ // now start the JoinVerticesProcess
+@@ -313,13 +393,37 @@ int JoinVerticesProcess::ProcessMesh( aiMesh* pMesh, unsigned int meshIndex) {
+             uniqueAnimatedVertices[animMeshIndex].reserve(pMesh->mNumVertices);
+         }
+     }
++    // Canonical per-vertex skin bindings: for each vertex, (bone index, weight) pairs in
++    // bone-array order, which is the same order for every vertex in the mesh and therefore
++    // a stable way to say "this vertex is bound like that one". Built only when the mesh
++    // is actually skinned, so the unskinned imports that make up almost every other asset
++    // pay nothing for this beyond one empty vector.
++    std::vector<std::vector<std::pair<unsigned int, ai_real>>> vertexBindings;
++    if (pMesh->mNumBones > 0) {
++        vertexBindings.resize(pMesh->mNumVertices);
++        for (unsigned int boneIdx = 0; boneIdx < pMesh->mNumBones; ++boneIdx) {
++            const aiBone *bone = pMesh->mBones[boneIdx];
++            if (bone == nullptr || bone->mWeights == nullptr) {
++                continue;
++            }
++            for (unsigned int w = 0; w < bone->mNumWeights; ++w) {
++                const unsigned int vertexIdx = bone->mWeights[w].mVertexId;
++                if (vertexIdx >= pMesh->mNumVertices) {
++                    continue;
++                }
++                vertexBindings[vertexIdx].emplace_back(boneIdx, bone->mWeights[w].mWeight);
++            }
++        }
++    }
++
+     // a map that maps a vertex to its new index
+     const auto numBuckets = pMesh->mNumVertices;
+-    const auto hasher = std::hash<Vertex>();
+-    const auto comparator = std::equal_to<Vertex>(
++    const auto hasher = SkinnedVertexHash();
++    const auto comparator = SkinnedVertexEqual(
+             pMesh->GetNumUVChannels(),
+             pMesh->GetNumColorChannels());
+-    std::unordered_map<Vertex, int> vertex2Index(numBuckets, hasher, comparator);
++    std::unordered_map<SkinnedVertex, int, SkinnedVertexHash, SkinnedVertexEqual> vertex2Index(
++            numBuckets, hasher, comparator);
+     // we can not end up with more vertices than we started with
+     vertex2Index.reserve(pMesh->mNumVertices);
+     // Now check each vertex if it brings something new to the table
+@@ -330,7 +434,18 @@ int JoinVerticesProcess::ProcessMesh( aiMesh* pMesh, unsigned int meshIndex) {
+             continue;
+         }
+         // collect the vertex data
+-        Vertex v(pMesh,a);
++        SkinnedVertex v;
++        v.v = Vertex(pMesh, a);
++        if (!vertexBindings.empty()) {
++            // data() may be null for a vertex no bone mentions; skinCount stays 0 then, so
++            // it is never dereferenced and the vertex compares as "unskinned" - which is
++            // exactly what it is.
++            v.skin = vertexBindings[a].data();
++            v.skinCount = (unsigned int)vertexBindings[a].size();
++        } else {
++            v.skin = nullptr;
++            v.skinCount = 0;
++        }
+         // is the vertex already in the map?
+         auto it = vertex2Index.find(v);
+         // if the vertex is not in the map then it is a new vertex add it.
+@@ -404,13 +519,17 @@ int JoinVerticesProcess::ProcessMesh( aiMesh* pMesh, unsigned int meshIndex) {
+             ASSIMP_LOG_ERROR( "X-Export: aiBone shall contain weights, but pointer to them is nullptr." );
+         }
+ 
+-        if (newWeights.size() > 0) {
+-            // kill the old and replace them with the translated weights
+-            delete [] bone->mWeights;
+-            bone->mNumWeights = (unsigned int)newWeights.size();
+-
++        // Always rewrite, even when every weight was filtered out above. Skipping the
++        // update in that case used to leave the old count and the old vertex ids in
++        // place, handing the caller indices into a buffer that has already been
++        // shrunk - a silent, invisible loss of that bone's entire binding.
++        delete [] bone->mWeights;
++        bone->mNumWeights = (unsigned int)newWeights.size();
++        if (bone->mNumWeights > 0) {
+             bone->mWeights = new aiVertexWeight[bone->mNumWeights];
+-            memcpy( bone->mWeights, &newWeights[0], bone->mNumWeights * sizeof( aiVertexWeight));
++            memcpy(bone->mWeights, newWeights.data(), bone->mNumWeights * sizeof(aiVertexWeight));
++        } else {
++            bone->mWeights = nullptr;
+         }
+     }
+     return pMesh->mNumVertices;

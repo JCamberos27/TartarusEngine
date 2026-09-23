@@ -289,6 +289,18 @@ struct LayerComponent {
 struct HiddenInSceneTag {};
 struct SceneLockedTag {};
 
+// Runtime only, never saved: set by FirstPersonPresentation on the arms and weapon entities it
+// creates for Play, and read by the renderer's view-model sub-pass. Tagged entities are drawn
+// last, after a depth clear, projected with FirstPersonControllerComponent::ViewModelFov instead
+// of the view's own FOV — the depth clear is what stops world geometry (metres away) from
+// clipping hands that sit ~0.3 m from the eye, and the separate, usually narrower FOV is what
+// makes a held weapon read as held rather than stretched into the scene.
+//
+// A caller that leaves RenderFrameContext::ViewModelFov at its default — the editor Scene tab,
+// which previews through its own camera — has no sub-pass to run, so tagged entities are drawn
+// there as ordinary scene geometry exactly as before.
+struct ViewModelTag {};
+
 // A dynamic light. Point/Spot use the entity's world position; Directional (the sun) ignores
 // position and takes its travel direction from the entity's -Z axis (rotate the entity to aim
 // it), matching the spot-cone convention. Every kind goes through the same LightBuffer SSBO and
@@ -391,6 +403,21 @@ struct FirstPersonControllerComponent {
     float MaxThrowSpeed = 18.0f;    // m/s, fully charged
     float ThrowChargeTime = 1.0f;   // seconds to full power
     float ThrowBackspin = 2.0f;     // revolutions per second given to a thrown ball (round bodies only)
+
+    // Optional camera-bound arms + weapon presentation. The .fpsanim asset defines paired clips;
+    // leaving this empty preserves the existing controller exactly (including Sandbox gravity gun
+    // playtests). The fields below are authored setup, not a second physics character.
+    std::string AnimationSet;
+    // The rig bone the play camera sits on. Placement parks this bone's world position exactly on
+    // the camera, so ViewModelOffset below is only a residual nudge - which matters because these
+    // rigs are authored standing in their own scene (feet at y=0, head near y=1.56): without a
+    // bone anchor the model's root goes where the camera is and the whole rig floats ~1 m above
+    // the view. Leave empty to fall back to positioning the model's root directly on the camera.
+    std::string CameraBone = "head";
+    glm::vec3 ViewModelOffset{0.0f};
+    glm::vec3 ViewModelRotation{0.0f};
+    float ViewModelScale = 1.0f;
+    float ViewModelFov = 60.0f;
 };
 
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue
@@ -429,12 +456,31 @@ struct AnimatorParam {
     float Value = 0.0f;
 };
 
+// One layer's live playback (Animator v2). Stack[0] is the oldest pose still contributing;
+// the last entry is the current state. Every entry above the first fades in over the one below
+// it, so interrupting a crossfade keeps the pose it had reached instead of popping.
+struct AnimatorLayerRuntime {
+    struct Item {
+        int   State = -1;
+        float Phase = 0.0f;        // normalized time in the state: 1 = one pass, >1 counts loops
+        float Fade = 1.0f;         // 0..1 blend-in weight over the entries below
+        float FadeDuration = 0.0f; // seconds for Fade 0 -> 1 (0 = instant)
+    };
+    std::vector<Item> Stack;
+    int  Transition = -1;          // the transition whose crossfade is running, or -1
+    bool Interruptible = true;     // false while a non-interruptible transition fades
+};
+
 // #175 Part B - drives this entity's model from an Animator Controller asset (.controller):
-// clips as states, crossfaded transitions on parameter conditions. While playing it takes over
-// from an Animation component on the same entity. Game code steers it with the setters below.
+// clips (or 1D blend trees) as states on one or more layers, crossfaded transitions on parameter
+// conditions. While playing it takes over from an Animation component on the same entity. Game
+// code steers it with the setters below and reads back state, tags and fired events.
 struct AnimatorControllerComponent {
     std::string Controller;  // project-relative .controller path
     float Speed = 1.0f;      // multiplies every state's speed
+    // Which of the controller's tracks this entity plays (empty = the first). A controller can
+    // hold several clip sets per state - e.g. "arms" and "weapon" - for rigs animated together.
+    std::string Track;
 
     void  SetFloat(const std::string& name, float v)  { Param(name, 0).Value = v; }
     void  SetInt(const std::string& name, int v)      { Param(name, 1).Value = (float)v; }
@@ -446,13 +492,33 @@ struct AnimatorControllerComponent {
         return 0.0f;
     }
     const std::string& CurrentState() const { return StateName; }
+    // Base-layer queries, valid after the controller's first update.
+    bool InState(const std::string& name) const { return StateName == name; }
+    bool HasTag(const std::string& tag) const {
+        for (const auto& t : StateTags) if (t == tag) return true;
+        return false;
+    }
+    // Events whose time was crossed during the last update (cleared at the start of each one).
+    bool EventFired(const std::string& name) const {
+        for (const auto& e : FiredEvents) if (e == name) return true;
+        return false;
+    }
 
     // --- runtime (not serialized) ---
     std::vector<AnimatorParam> Params; // seeded from the controller's defaults at start
     bool  Started = false;
-    int   State = -1;
-    std::string StateName;
-    float StateTime = 0.0f;            // seconds in the current state, scaled by speed
+    int   State = -1;                  // base layer: current state index
+    std::string StateName;             // base layer: current state name
+    std::vector<std::string> StateTags;// base layer: current state's tags
+    float StateTime = 0.0f;            // base layer: normalized time in the current state
+    bool  InTransition = false;        // base layer: a crossfade is still running
+    std::vector<std::string> FiredEvents;
+    std::vector<AnimatorLayerRuntime> Layers;
+    // Follower mode: when set, this entity mirrors the driver's layers/states/times exactly and
+    // evaluates no transitions of its own - the way a weapon rig stays locked to the arms.
+    entt::entity Driver = entt::null;
+    // Keep updating while the entity is inactive (hidden rigs that must still leave a state).
+    bool UpdateWhenInactive = false;
 
     // A parameter by name, created (with `type`) if the controller hasn't declared it yet -
     // game code may set values before the first frame.
