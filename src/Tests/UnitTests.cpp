@@ -16,6 +16,8 @@
 #include "UnitTests.h"
 
 #include "AnimatorController.h"
+#include "Curve.h"
+#include "IK.h"
 #include "FirstPersonAnimation.h"
 #include "AudioEngine.h"
 #include "Log.h" // #178 stack traces
@@ -1884,6 +1886,141 @@ void TestProjectWatcher() {
     fs::remove_all(dir, ec);
 }
 
+// --- Procedural animation: curves and IK -----------------------------------------------------
+void TestCurve() {
+    auto near = [](float a, float b, float eps = 1e-4f) { return std::fabs(a - b) <= eps; };
+    Curve empty;
+    CHECK(empty.Evaluate(0.3f) == 0.0f);
+    CHECK(Curve::Constant(2.5f).Evaluate(-4.0f) == 2.5f && Curve::Constant(2.5f).Evaluate(9.0f) == 2.5f);
+
+    const Curve line = Curve::Line(0.0f, 0.0f, 2.0f, 4.0f);
+    CHECK(near(line.Evaluate(1.0f), 2.0f));          // a line stays a line under Hermite
+    CHECK(near(line.Evaluate(0.5f), 1.0f));
+    CHECK(line.Evaluate(-1.0f) == 0.0f && line.Evaluate(3.0f) == 4.0f); // clamped, not extrapolated
+    CHECK(line.Evaluate(std::numeric_limits<float>::quiet_NaN()) == 0.0f);
+
+    const Curve ease = Curve::EaseInOut();
+    CHECK(near(ease.Evaluate(0.5f), 0.5f));
+    CHECK(ease.Evaluate(0.05f) < 0.05f);             // flat start
+    CHECK(ease.Evaluate(0.95f) > 0.95f);             // flat end
+
+    const Curve kick = Curve::Kick(0.1f);
+    CHECK(near(kick.Evaluate(0.1f), 1.0f));
+    CHECK(near(kick.Evaluate(1.0f), 0.0f));
+    CHECK(kick.Evaluate(0.05f) > 0.3f);              // it rises fast
+
+    // AddKey keeps the shape it lands on.
+    Curve edited = ease;
+    const float before = edited.Evaluate(0.3f);
+    const int k = edited.AddKey(0.3f);
+    CHECK(edited.Keys.size() == 3 && k == 1);
+    CHECK(near(edited.Evaluate(0.3f), before));
+
+    Curve round;
+    CHECK(Curve::FromJson(kick.ToJson(), round));
+    CHECK(round.Keys.size() == kick.Keys.size());
+    CHECK(near(round.Evaluate(0.37f), kick.Evaluate(0.37f), 1e-3f));
+    Curve untouched = line;
+    CHECK(!Curve::FromJson(json::parse(R"([[0,1],["x",2]])"), untouched));
+    CHECK(!Curve::FromJson(json::parse(R"({"t":1})"), untouched));
+    CHECK(untouched.Keys.size() == 2);               // a bad load leaves the curve alone
+    CHECK(Curve::FromJson(json::parse(R"([[1,5],[0,3]])"), untouched) && untouched.Keys[0].Time == 0.0f); // sorted
+}
+
+void TestIKSolver() {
+    // root (scaled, as imported rigs are) -> upper -> lower -> end, plus a child of the end.
+    IK::Pose pose(5);
+    const std::vector<int> parents = {-1, 0, 1, 2, 3};
+    pose[0].S = glm::vec3(0.5f);
+    pose[0].R = glm::angleAxis(0.4f, glm::normalize(glm::vec3(1, 2, 3)));
+    pose[1].T = glm::vec3(0.0f, 1.0f, 0.0f);
+    pose[2].T = glm::vec3(1.0f, 0.0f, 0.0f);
+    pose[2].R = glm::angleAxis(0.5f, glm::vec3(0, 0, 1)); // a bent elbow
+    pose[3].T = glm::vec3(1.0f, 0.0f, 0.0f);
+    pose[4].T = glm::vec3(0.2f, 0.0f, 0.0f);
+    std::vector<glm::mat4> g;
+    IK::ComputeGlobals(pose, parents, g);
+    const glm::vec3 a = IK::Position(g[1]), b = IK::Position(g[2]), c = IK::Position(g[3]);
+    const float reach = glm::length(b - a) + glm::length(c - b);
+    const glm::vec3 bendAxis = glm::normalize(glm::cross(c - a, b - a));
+    const glm::vec3 childOffset = glm::inverse(IK::Rotation(g[3])) * (IK::Position(g[4]) - c);
+
+    // Reachable: the end lands on the target, bone lengths hold, the elbow bends the same way.
+    {
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        const glm::vec3 target = a + glm::normalize(glm::vec3(0.4f, -0.3f, 0.5f)) * (reach * 0.7f);
+        const glm::quat targetRot = glm::angleAxis(1.0f, glm::normalize(glm::vec3(0, 1, 1)));
+        CHECK(IK::SolveTwoBone(p, parents, gg, 1, 2, 3, target, &targetRot, 1.0f));
+        const glm::vec3 na = IK::Position(gg[1]), nb = IK::Position(gg[2]), nc = IK::Position(gg[3]);
+        CHECK(glm::length(nc - target) < 1e-4f);
+        CHECK(std::fabs(glm::length(nb - na) - glm::length(b - a)) < 1e-4f);
+        CHECK(std::fabs(glm::length(nc - nb) - glm::length(c - b)) < 1e-4f);
+        CHECK(glm::length(na - a) < 1e-5f);                    // the shoulder never moves
+        CHECK(std::fabs(glm::dot(IK::Rotation(gg[3]), targetRot)) > 1.0f - 1e-5f);
+        // The child rides the end rigidly.
+        CHECK(glm::length(glm::inverse(IK::Rotation(gg[3])) * (IK::Position(gg[4]) - nc) - childOffset) < 1e-4f);
+    }
+    // Same bend side: re-solving onto the end's own spot changes nothing, so the elbow is never
+    // flipped through the limb.
+    {
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        CHECK(IK::SolveTwoBone(p, parents, gg, 1, 2, 3, c, nullptr, 1.0f));
+        CHECK(glm::length(IK::Position(gg[2]) - b) < 1e-4f);
+        CHECK(glm::dot(glm::normalize(glm::cross(IK::Position(gg[3]) - a, IK::Position(gg[2]) - a)), bendAxis) > 0.999f);
+    }
+    // Out of reach: the chain straightens toward the target instead of breaking.
+    {
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        const glm::vec3 dir = glm::normalize(glm::vec3(-1.0f, 0.2f, 0.1f));
+        CHECK(IK::SolveTwoBone(p, parents, gg, 1, 2, 3, a + dir * reach * 3.0f, nullptr, 1.0f));
+        const glm::vec3 nc = IK::Position(gg[3]);
+        CHECK(glm::dot(glm::normalize(nc - a), dir) > 0.9999f);
+        CHECK(std::fabs(glm::length(nc - a) - reach) < reach * 1e-3f);
+    }
+    // Weight 0 is the input pose; weight 0.5 goes halfway.
+    {
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        const glm::vec3 target = a + glm::vec3(0.3f, 0.3f, 0.3f);
+        CHECK(IK::SolveTwoBone(p, parents, gg, 1, 2, 3, target, nullptr, 0.0f));
+        CHECK(glm::length(IK::Position(gg[3]) - c) < 1e-6f);
+        CHECK(IK::SolveTwoBone(p, parents, gg, 1, 2, 3, target, nullptr, 0.5f));
+        CHECK(glm::length(IK::Position(gg[3]) - glm::mix(c, target, 0.5f)) < 1e-4f);
+    }
+    // A zero-length bone is refused, and bad indices are.
+    {
+        IK::Pose p = pose;
+        p[2].T = glm::vec3(0.0f);
+        std::vector<glm::mat4> gg;
+        IK::ComputeGlobals(p, parents, gg);
+        CHECK(!IK::SolveTwoBone(p, parents, gg, 1, 2, 3, a, nullptr, 1.0f));
+        CHECK(!IK::SolveTwoBone(p, parents, gg, 1, 2, 99, a, nullptr, 1.0f));
+    }
+    // OffsetBone moves a bone and its subtree rigidly, rotating about the pivot.
+    {
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        const glm::quat spin = glm::angleAxis(glm::radians(90.0f), glm::vec3(0, 1, 0));
+        const glm::vec3 pivot = c + glm::vec3(0.1f, 0.0f, 0.0f);
+        IK::OffsetBone(p, parents, gg, 3, glm::vec3(0.0f, 0.2f, 0.0f), spin, pivot);
+        CHECK(glm::length(IK::Position(gg[3]) - (pivot + spin * (c - pivot) + glm::vec3(0, 0.2f, 0))) < 1e-4f);
+        CHECK(glm::length(glm::inverse(IK::Rotation(gg[3])) * (IK::Position(gg[4]) - IK::Position(gg[3])) - childOffset) < 1e-4f);
+        CHECK(glm::length(IK::Position(gg[2]) - b) < 1e-6f); // the parent is untouched
+    }
+    // AimBone turns its axis onto the target, within the limit.
+    {
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        const glm::vec3 target = c + glm::vec3(0.0f, 0.0f, 2.0f);
+        IK::AimBone(p, parents, gg, 3, glm::vec3(1, 0, 0), target, 180.0f, 1.0f);
+        const glm::vec3 axis = IK::Rotation(gg[3]) * glm::vec3(1, 0, 0);
+        CHECK(glm::dot(glm::normalize(axis), glm::normalize(target - IK::Position(gg[3]))) > 0.9999f);
+    }
+}
+
 } // namespace
 
 int RunUnitTests() {
@@ -1897,6 +2034,8 @@ int RunUnitTests() {
         {"AnimatorController", TestAnimatorController},
         {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
+        {"Curve", TestCurve},
+        {"IKSolver", TestIKSolver},
         {"AssetIdentity", TestAssetIdentity},
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},

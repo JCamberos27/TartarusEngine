@@ -4,6 +4,7 @@
 #include "AssetDatabase.h" // #132 - clip GUIDs
 #include "AtomicFile.h"
 #include "Components.h"
+#include "IK.h"
 #include "Log.h"
 #include "Model.h"
 #include "ProjectPaths.h"
@@ -741,7 +742,8 @@ void ApplyAdditive(Pose& pose, const Pose& layer, const Pose& ref, const std::ve
 }
 
 void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, Model& model,
-               AssetLibrary& assets, int track, const std::function<float(int, int)>& stateLength) {
+               AssetLibrary& assets, int track, const std::function<float(int, int)>& stateLength,
+               const IKRigComponent* ikRig) {
     if (model.NodeCount() == 0) return;
     Sampler smp{model, assets, track, {}, {}};
     Pose bind, pose, layerPose, refPose;
@@ -777,6 +779,8 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
             ApplyAdditive(pose, layerPose, refPose, mask, L.Weight);
         }
     }
+    // Procedural offsets and IK run on the finished blend, so they see what the clips did.
+    if (ikRig) IK::ApplyRig(*ikRig, model, pose);
     model.ApplyLocalPose(pose);
 }
 
@@ -840,7 +844,9 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
                 r.AC->InTransition = dac.InTransition;
                 r.AC->FiredEvents = dac.FiredEvents;
             }
-            if (r.M) PoseModel(*ctrl, *r.AC, *r.M, assets, ctrl->TrackIndex(r.AC->Track), stateLength);
+            if (r.M)
+                PoseModel(*ctrl, *r.AC, *r.M, assets, ctrl->TrackIndex(r.AC->Track), stateLength,
+                          world.Registry.try_get<IKRigComponent>(r.E));
         }
     }
 }
