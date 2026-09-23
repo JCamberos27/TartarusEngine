@@ -142,17 +142,7 @@
       "invertGamepadAxis": false,
       "name": "Melee",
       "negative": -1,
-      "positive": 86
-    },
-    {
-      "altNegative": -1,
-      "altPositive": -1,
-      "gamepadAxis": -1,
-      "gamepadButton": -1,
-      "invertGamepadAxis": false,
-      "name": "MagCheck",
-      "negative": -1,
-      "positive": 84
+      "positive": 81
     },
     {
       "altNegative": -1,
@@ -163,6 +153,36 @@
       "name": "Holster",
       "negative": -1,
       "positive": 72
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": -1,
+      "invertGamepadAxis": false,
+      "name": "Weapon1",
+      "negative": -1,
+      "positive": 49
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": -1,
+      "invertGamepadAxis": false,
+      "name": "Weapon2",
+      "negative": -1,
+      "positive": 50
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": -1,
+      "invertGamepadAxis": false,
+      "name": "FireMode",
+      "negative": -1,
+      "positive": 66
     }
   ],
   "physics": {
