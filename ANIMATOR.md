@@ -159,6 +159,8 @@ if (anim.EventFired("Refill")) ammo = magazine;
   that sets a parameter every frame overwrites whatever you enter there.
 - **Tests.** `AdvanceAnimator(ctrl, component, dt, stateLength)` runs the state machine
   without a model. `TestAnimatorController` and `TestFirstPersonAnimationFSM` use it.
+- **IK.** An `IKRigComponent` on the same entity runs on the blended pose just before it is
+  applied (two-bone limbs, look-at, runtime bone offsets). See PROCEDURAL_ANIMATION.md.
 - **Model API.** Posing goes through `Model::SampleLocalPose` / `Model::ApplyLocalPose`. The
   model's own `PlayAnimation` path is left untouched for every other caller.
 
