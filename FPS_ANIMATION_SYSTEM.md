@@ -2,619 +2,580 @@
 
 Branch: `feature/fps-first-person-animation`
 
-This is the **how it works / what's in the tree** document: the asset pipeline, the
-runtime, the three fixes this branch landed, and the invariants you have to keep to
-avoid re-breaking them. The long forensic writeup of the original "fan of blades"
-tear (what was measured, what was ruled out) lives separately in
-`FPS_ANIMATION_INVESTIGATION.md` — read that before forming new hypotheses about
-skinning.
+This is the **how it works** document: what the system is made of, how a frame flows
+through it, the asset format, the gameplay rules, and the invariants that keep it from
+re-breaking. Three companion documents:
 
----
-
-## 1. TL;DR — what this branch fixed
-
-| # | Symptom | Root cause | Fix |
-|---|---------|-----------|-----|
-| 1 | Arms rendered fine at bind pose, tore into a "fan of blades" the instant any clip played | `Model::ProcessMesh` skipped the owning node's world transform for skinned meshes, while Assimp's `mOffsetMatrix` values expect root-space vertices | `bake = nodeTransform` — bake the node transform for **every** mesh, skinned or not |
-| 2 | Arms + weapon floated ~1 m above the player capsule / camera | The rig is authored *standing* (feet at `y=0`, head at `y≈1.56`) but the presentation parked the model's **root** at the camera | Anchor placement on a rig bone (`head`): solve for the root that puts the bone exactly on the camera |
-| 3 | Arms and weapon rendered on the opposite side of the camera (behind it) | Blender character faces `-Y` → FBX converts it to model `+Z`; the engine camera looks down its own `-Z`. Exactly 180° out | New `viewRotation` field on the `.fpsanim` asset, `[0, 180, 0]` |
-| 4 | The spare magazine existed in Blender but was invisible in the engine — reload showed no second mag in the hand | assimp's `aiProcess_JoinIdenticalVertices` keyed its dedup on position/normal/uv/colour and **ignored bone weights**, so the two coincident magazine islands (identical at rest, told apart only by the `magazine`/`mag2` bones) merged — and the losing bone was left holding 17594 stale vertex ids | Local assimp patch: skin-aware vertex identity + always rewrite `mNumWeights`. Applied at configure time from `tools/assimp_patches/` |
-
-Fix 1 is a renderer bug affecting **any** skinned FBX, not just this rig. Fixes 2 and 3
-are first-person-presentation concerns. Fix 4 is upstream of the engine entirely — see
-§8 item 8 and `FPS_ANIMATION_INVESTIGATION.md` UPDATE 5; it will re-break silently if
-assimp's `GIT_TAG` is bumped without rebasing the patch.
-
-Everything below assumes you've read section 3 (the bake rule) — it is the invariant
-most likely to be broken by accident.
-
----
-
-## 2. The asset pipeline
-
-```
-C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend      (read-only ground truth)
-        │  Blender export (frame ranges recorded in export_manifest.json)
-        ▼
-project/assets/fps/AKS74U/
-├── AKS74U.fpsanim                       the semantic state machine (15 states)
-├── export_manifest.json                 which .blend, which frame range per clip
-├── verification_report.json             per-FBX import check ("ok": true for all)
-├── FirstPerson/
-│   ├── AKS-74U_A_FP_ADS.fbx             armsModel: mesh + skeleton + base node tree
-│   └── AKS-74U_A_FP_<State>.fbx         one per state: baked animation only
-└── Weapon/
-    ├── AKS-74U_A_W_ADS.fbx              weaponModel: mesh + `AK` armature + base node tree
-    └── AKS-74U_A_W_<State>.fbx          one per state (not every state has one)
-```
-
-### Export rule: pair the weapon action with the arms action
-
-`CB_ik_hand_l` carries `CHILD_OF -> AK:magazine` at influence 1.0, so **the left arm is
-glued to the weapon armature's magazine bone** — Blender's bake samples the weapon as
-much as it samples the arms. An arms clip must therefore be exported while the weapon is
-playing the action `AKS74U.fpsanim` will play alongside it:
-
-| arms clip | weapon action during the bake |
+| Document | Read it when |
 |---|---|
-| `A_FP_<x>` | `A_W_<x>`, when that action exists |
-| Idle / Walk / Aim / Draw / Regrip (empty `weapon` in `.fpsanim`) | `A_W_ADS` — the weapon holds its bind pose, and the bind pose *is* the ADS export |
-
-`work/export_clip.py` derives this from the action name, pins the weapon's NLA off for
-the duration, and restores both armatures in memory.
-
-**Skipping it is not subtle.** The shipped `AKS-74U_A_FP_Idle.fbx` was baked with the
-file still saved on `A_W_Tac_Reload`, whose magazine starts moving around frame 44 —
-inside the idle's 0..128 range — so the left hand chased a magazine being pulled out of
-the gun while the right hand sat still:
-
-| clip | `hand_l` world path, before → after re-export |
-|---|---|
-| Idle | 223.6 mm → **2.1 mm** (right hand: 2.6 mm) |
-| Empty_Reload | 2324 mm → 3062 mm |
-| Inspect | 1140 mm → 881 mm |
-| Melee | 1057 → 999 mm |
-
-> **Correction — see `FPS_ANIMATION_INVESTIGATION.md` UPDATE 6.** An earlier revision of
-> this section claimed `Mag_Check` "and the other twelve measured identical under both
-> pairings and were left alone". That was **wrong for `Mag_Check`**, and the clip shipped
-> visibly broken because of it. A clean A/B — same action, same `0..260` range, same
-> `meshes=0`, *only* the paired weapon action differing — settles it:
->
-> | MagCheck bake | `hand_l` world path |
-> |---|---|
-> | shipped (as found) | 1085.7 mm |
-> | rebaked against `A_W_Tac_Reload` | **1086.3 mm** (Δ 0.6 — matches shipped) |
-> | rebaked against `A_W_Mag_Check` | **1062.9 mm** (Δ **−22.8** — the fix) |
->
-> Pairing alone moves the hand **23.4 mm**, and the shipped file is the `A_W_Tac_Reload`
-> bake to within noise. The whole 4:00:42 batch has since been re-exported with correct
-> pairing. Re-check any clip with `work/hand_probe.cpp` (section 7) or `work/bl_pair_check.py`.
-
-**Clip FBXs are channel-only: always export with `meshes=0`.** Geometry comes from the
-`ADS` armsModel, so a meshed export bolts on stray meshes (`Mesh.001`, `Mesh.003`, 267
-nodes) and doubles the file for nothing. The clips that work are 265 nodes / 0 meshes.
-
-**The `.blend` is now saved on that same neutral pairing** (user-approved; see
-`FPS_ANIMATION_INVESTIGATION.md` UPDATE 6, "Closing the door"): `Armature` → `A_FP_Idle`,
-`AK` → `A_W_ADS`. It used to be saved on `A_FP_Tac_Reload` / `A_W_Tac_Reload`, which is
-what baked the broken 4:00:42 batch. `export_clip.py` still **never** saves it —
-`work/set_neutral_action.py` is the only script that writes the file, with
-`work/inspect_blend.py` / `work/preflight_neutral.py` to read it, and
-`AKS-74U 60fps (Revised).blend.pre-neutral.bak` sitting beside the original as the
-rollback.
-
-Export arm clips with **`meshes 0`**: `Model::AttachClip` reads only the clip's channels,
-so meshes add nothing but a material — and the material the meshed export brought in
-referenced a missing `T_Quantum_Basemesh_Arms_Normal.1003.png`.
-
-### The `.blend` standing rule
-
-**Always ask before changing anything in `AKS-74U 60fps (Revised).blend`.** Read-only
-inspection is fine and was the norm all session, but still give a courtesy heads-up.
-Never open it in a connected interactive Blender instance that holds a dirty scene —
-drive it headless instead:
-
-```powershell
-& "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background `
-    "C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend" --python work\bl_inspect.py
-```
-
-`work/bl_inspect.py` and `work/bl_inspect2.py` are the read-only scripts used for the
-world-space / evaluated bounding boxes and bone landmarks quoted below.
-
-### `AKS74U.fpsanim` schema
-
-```jsonc
-{
-  "armsModel":   "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",
-  "weaponModel": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",
-  "defaultState": "Idle",
-  "viewRotation": [0.0, 180.0, 0.0],   // NEW: Y-X-Z degrees, see section 5
-  "clips": [
-    { "name": "Idle",  "arms": ".../FP_Idle.fbx", "loop": true, "fade": 0.12 },
-    { "name": "Aim",   "armsBindPose": true, "loop": true, "fade": 0.10 },
-    { "name": "Fire",  "arms": ".../FP_Fire.fbx", "weapon": ".../W_Fire.fbx", "fade": 0.03 }
-    // ...
-  ]
-}
-```
-
-Parsed by `FirstPersonAnimationSet::FromJsonString`
-(`src/Game/FirstPersonAnimation.cpp`). Per clip:
-
-- `arms` **or** `armsBindPose: true` — required. `armsBindPose` means "use the base
-  model's own bind pose as this state's pose" (used by `Aim`; the base file's node
-  tree is the ADS pose).
-- `weapon` — optional **by design**. The AK source has no Idle/Walk/Draw/Regrip
-  weapon clips, so those states deliberately leave it empty; the runtime must honour
-  that fallback rather than guessing a clip name.
-- `loop`, `fade` (seconds, 0..5).
-- Unknown/absent optional keys fall back to defaults, so older `.fpsanim` files keep
-  loading.
-
-`viewRotation` is validated for finiteness at load; a bad value fails the load with a
-specific message rather than silently producing a NaN transform.
+| **`FPS_WEAPON_INTEGRATION.md`** | You are adding a new weapon (or re-exporting this one). Step-by-step workflow + checklist |
+| **`FPS_ANIMATION_INVESTIGATION.md`** | You are about to form a new hypothesis about skinning/import. Everything already measured and ruled out, with numbers |
+| `tools/assimp_patches/README.md` | You are bumping assimp, or a weapon's spare magazine vanished on import |
 
 ---
 
-## 3. Vertex space and the bake rule (the important invariant)
+## 1. Overview
 
-### The spaces
+A player with a `FirstPersonController` whose **Animation Set** field names an `.fpsanim`
+asset gets a camera-bound pair of rigs during Play: **arms** and **weapon**, each a
+separately-animated skinned FBX. Leave the field empty and the controller behaves exactly
+as it did before this branch (the Sandbox gravity gun is untouched).
 
 ```
-mesh-local  --[ ProcessMesh `bake` ]-->  model ROOT space  --[ palette ]-->  ? 
-                                                                           
-palette[i] = GlobalInverseTransform * PosedGlobal[i] * BoneOffset[i]
+                 .fpsanim (asset)                    FirstPersonController (scene)
+   arms/weapon FBX · 15 named states · socket   Animation Set · Camera Bone · View Model
+                          │                          Offset/Rotation/Scale/FOV
+                          └──────────────┬───────────────┘
+                                         ▼
+                     FirstPersonPresentation   (src/Game, runtime only)
+          Start ─ spawns 2 entities, attaches + validates every clip, plays defaultState
+          Update ─ places arms on the camera bone, weapon on the arms' gun socket
+          Tick ─ state machine: resting pose / transitions / one-shots, ammo, regrip, hide
+          Stop ─ destroys both entities before the scene snapshot is restored
+                                         │  ViewModelTag
+                                         ▼
+                     SceneRenderer view-model sub-pass (own FOV, depth cleared)
 ```
 
-`GlobalInverseTransform` is `inverse(rootNodeTransform)` (identity for these files).
-`PosedGlobal` comes from `EvaluatePose()` walking `m_D->Nodes` parents-first.
+Nothing it creates is ever saved: the entities exist only between Play and Stop, and
+`ViewModelTag` is runtime-only. The PhysX character stays the only physics authority —
+the view model has no collider.
 
-The shader (`src/Renderer/shaders/ModelVertex.glsl`) does standard weighted-blend
-skinning: `skinMat += uBones[id] * weight` over 4 slots, `totalWeight <= 0.0001 →
-identity`.
+### Per-frame order (`src/main.cpp`, Play loop, `playUsesPlayer` branch)
 
-### The rule
+1. `player.Update(...)` — movement + camera.
+2. `firstPersonPresentation.Update(world, player.Cam)` — pose both rigs from the camera.
+3. Weapon input (only when the game has input **and** the controller's gravity gun is off):
+   `FireMode` → `ToggleFireMode`, `Fire1` → `UpdateTrigger`, `Reload` via
+   `FirstPersonReloadButton` → `Reload` / `MagCheck`, `Inspect`, `Melee`,
+   `Weapon1`/`Weapon2`/scroll/`Holster` → `SetEquipped`.
+4. `firstPersonPresentation.Tick(dt, planarSpeed, sprinting, aiming)` — advance the
+   state machine. `aiming` = `Fire2` held.
 
-```cpp
-const glm::mat4& bake = nodeTransform;   // ALWAYS — skinned or not
-```
-
-`Model::ProcessMesh` folds the owning node's world transform into the vertex data for
-**every** mesh. The palette never mentions the mesh node's own frame, so this is the
-only thing that puts the vertex into root space before skinning.
-
-The winding-flip correction (for a negative-determinant node transform) now applies to
-skinned meshes too, for the same reason.
-
-### Why it read as "no bug at bind, tears when a clip plays"
-
-At bind pose the entire palette collapses to `GlobalInverse * C`, a *single* matrix
-shared by every bone — a missing node transform just uniformly reorients the mesh, so
-nothing tears. Only once a clip plays does each bone apply its own delta to that
-un-rotated vertex, blowing a 0.02 m edge apart into 0.5 m blades.
-
-### `C` is not an error term — do not cancel it
-
-Define `C = RestGlobal * BoneOffset`. It is tempting to treat `C` as residual error and
-apply `bake = C⁻¹ * nodeTransform`. **That is wrong**, and it was tried:
-
-- Assimp's FBX path builds `mOffsetMatrix = inverse(TransformLink) * absolute_transform`
-  (`FBXConverter.cpp:1674`), where `absolute_transform` is the **root** node's transform
-  — identity here.
-- So `C` is the node tree's **pose-versus-bind delta**, not a residual:
-  - arms base node tree = rest → `C == I`
-  - clip FBX node trees = frame-0 pose → `C` varies per bone (measured spread ≈ 2.16
-    for `FP_Idle`, ≈ 2.21 for `FP_Sprint`)
-  - weapon base node tree = **ADS pose** → `C ≈ translate(-0.069, 1.503, 0.446)`, i.e.
-    the gun-socket delta
-- Cancelling it erased the pose Assimp had already baked into the node tree and dropped
-  the weapon from the hands down to the model's origin (the floor).
-
-Measurements that pinned this down (`work/pose_probe.cpp`, after the bake fix):
-
-| file | bake | resulting root-space box |
-|------|------|--------------------------|
-| `FP_Idle` @ t=0 | `nodeTransform` | `x[-0.330, 0.217]  y[0.959, 1.538]  z[-0.088, 0.705]` |
-| `FP_Idle` @ t=0 | `C⁻¹·nodeTransform` *(wrong)* | `x[-0.288, 0.219]  y[0.895, 1.699]  z[-0.117, 0.757]` |
-| `W_ADS` | `C⁻¹·nodeTransform` *(wrong)* | ≈ origin — the gun on the floor |
-
-`mag2`'s `C` is an outlier on purpose: the magazine bone moves independently. Not a bug.
-
----
-
-## 4. Runtime placement — the camera-bone anchor
+Because `Update` runs before `Tick`, a state change or hide/unhide shows on the next
+frame — one frame of latency, by design, so a frame never mixes two placements.
 
 ### Code map
 
 | File | Role |
 |------|------|
-| `src/main.cpp` | `Start` ≈ line 1214; camera setup 705-707 / 1191-1221; `Update(world, player.Cam)` ≈ 2142; `Tick` ≈ 2158 |
-| `src/Game/Components.h` | `FirstPersonControllerComponent` — the authored fields |
-| `src/Game/FirstPersonPresentation.{h,cpp}` | `Start`/`Stop`/`SetState`/`Tick`/`TriggerAction`/`Update` |
-| `src/Game/FirstPersonAnimation.{h,cpp}` | `.fpsanim` parsing + the tiered interrupt rules |
-| `src/Renderer/Model.{h,cpp}` | import, skinning, pose evaluation, `NodeTransform` |
+| `src/Game/FirstPersonAnimation.{h,cpp}` | Pure, unit-tested rules: `.fpsanim` parsing/validation, tiers + interrupt rule, resting-state choice, transitions, reload choice, regrip delay, R tap/hold |
+| `src/Game/FirstPersonPresentation.{h,cpp}` | The runtime driver: `Start`/`Stop`/`Update`/`Tick`, `Fire`/`Reload`/`SetEquipped`/`TriggerAction`, ADS recoil + walk bob |
+| `src/Game/Components.h` | `FirstPersonControllerComponent` view-model fields, `ViewModelTag` |
+| `src/Game/ComponentRegistry.cpp` | Inspector/serialization for those fields; `Animation Set` is an asset-path field |
+| `src/Core/InputMap.{h,cpp}` | Default bindings + `MergeDefaults` |
+| `src/Renderer/SceneRenderer.cpp`, `RenderFrameContext.h` | The view-model sub-pass (`ViewModelFov`) |
+| `src/Renderer/Model.{h,cpp}` | Import, skinning, `NodeTransform`, `AnimationFinished` |
+| `src/Assets/AssetDatabase.cpp`, `src/Editor/EditorLayer_AssetBrowser.cpp` | `.fpsanim` registered as an asset type and scanned for references |
+| `src/Tests/UnitTests.cpp` | `TestFirstPersonAnimationSet`, `TestFirstPersonAnimationFSM`, `TestInputMap` |
+| `tools/assimp_patches/` + `tools/apply_assimp_patches.cmake` | Local assimp fix, applied at configure time |
+| `tools/component_registration_allowlist.txt` | `ViewModelTag` is allow-listed (runtime-only) — CI fails without it |
 
-`Update()` gives the arms and the weapon the **identical** world pose every frame —
-they are two rigs standing in one shared root space, so there is no separate weapon
-placement logic to keep in sync.
+---
 
-### The placement math
+## 2. The `.fpsanim` asset
 
-These rigs are authored **standing in their own scene**: feet at `y = 0`, head at
-`y ≈ 1.557`, arms spanning `y ≈ 0.96–1.54`. The player camera is at `EyeHeight = 1.6`
-above the capsule base.
+The asset is the contract between an exported weapon and the engine. The shipped one is
+`project/assets/fps/AKS74U/AKS74U.fpsanim`.
 
-The old code parked the model's **root** at `camera.Position + offset`, i.e. at ~1.42 m
-— and then the mesh added its own 0.96–1.54 m on top, landing the arms at 2.3–2.9 m
-while the camera sat at 1.6 m. That is the "arms way above the collider" bug.
+```jsonc
+{
+  "armsModel":   "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",  // required: mesh + skeleton + bind pose
+  "weaponModel": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",        // required
+  "defaultState": "Idle",                   // optional; defaults to the first clip; must name a clip
+  "viewRotation": [0.0, 180.0, 0.0],        // optional, Y-X-Z degrees: the FBXs' axis convention (§6)
+  "weaponSocket": "ik_hand_gun",            // optional: bone on the ARMS rig the gun rides
+  "weaponRoot":   "root",                   // bone on the WEAPON rig that lands on the socket
+  "weaponMountRotation": [0.0, 90.0, 90.0], // Y-X-Z degrees, fixed socket -> weaponRoot rotation
+  "clips": [
+    { "name": "Idle", "arms": ".../AKS-74U_A_FP_Idle.fbx", "loop": true, "fade": 0.12 },
+    { "name": "Fire", "arms": ".../AKS-74U_A_FP_Fire.fbx", "weapon": ".../AKS-74U_A_W_Fire.fbx", "fade": 0.03 }
+    // ... one entry per state, see the table below
+  ]
+}
+```
 
-The fix solves for the root that puts a **rig bone** exactly on the camera:
+Validation (`FirstPersonAnimationSet::FromJsonString`) fails the load, with a specific
+message, on: invalid JSON; missing `armsModel`/`weaponModel`; a non-finite
+`viewRotation`/`weaponMountRotation`; `weaponSocket` without `weaponRoot` (or vice
+versa); an empty `clips` array; a clip with no `name`, or with neither `arms` nor
+`"armsBindPose": true`; `fade` outside 0..5; duplicate names; a `defaultState` that names
+no clip. Then `Start()` attaches **every** clip up front and fails Play if any file
+can't be attached — a bad path surfaces when Play starts, not mid-reload.
+
+Per clip:
+
+- `arms` **or** `armsBindPose: true` — required. `armsBindPose` means "use the base
+  model's own bind pose for this state" (no clip). Nothing ships using it today; `Aim`
+  has its own clip.
+- `weapon` — optional **by design**. With no weapon clip the weapon crossfades to its
+  bind pose (which, for this set, *is* the ADS pose) — see §8 item 5.
+- `loop` (default false) — resting states loop; one-shots don't.
+- `fade` (seconds, default 0.08) — crossfade *into* this state.
+
+### The state contract
+
+State **names** are the interface. The driver refers to them by name, so a new weapon
+must use these exact names:
+
+| State | Kind (tier) | Loop | How it's reached | AKS74U arms / weapon clip |
+|---|---|---|---|---|
+| `Idle` | resting | ✓ | not moving | `FP_Idle` / — |
+| `Walk` | resting | ✓ | moving, not aiming | `FP_Walk` / — |
+| `Sprint` | resting | ✓ | Sprint held **and** moving (beats aiming) | `FP_Sprint` / `W_Sprint` |
+| `Aim` | resting | ✓ | Fire2 held (also while walking) | `FP_Aim` / — |
+| `IdleToSprint` | Transition (0) | | Idle → Sprint | `FP_IdleToSprint` / `W_IdleToSprint` |
+| `SprintToIdle` | Transition (0) | | Sprint → anything but Aim | `FP_SprintToIdle` / `W_SprintToIdle` |
+| `Fire` | Action (1) | | Fire1 at the hip | `FP_Fire` / `W_Fire` |
+| `Inspect` | Action (1) | | F | `FP_Inspect` / `W_Inspect` |
+| `MagCheck` | Action (1) | | R held ≥ 0.35 s | `FP_Mag_Check` / `W_Mag_Check` |
+| `Regrip` | Action (1) | | automatic, 10–20 s of settled Idle | `FP_Regrip` / — |
+| `TacReload` | Committed (2) | | R tap, 1–29 rounds | `FP_Tac_Reload` / `W_Tac_Reload` |
+| `EmptyReload` | Committed (2) | | R tap, 0 rounds | `FP_Empty_Reload` / `W_Empty_Reload` |
+| `Melee` | Committed (2) | | Q | `FP_Melee` / `W_Melee` |
+| `Draw` | Equip (3) | | 1, or scroll/H while unarmed | `FP_Draw` / — |
+| `Holster` | Equip (3) | | 2, or scroll/H while armed | `FP_Holster` / `W_Holster` |
+
+**Which states are required.** The four resting states (`Idle`, `Walk`, `Sprint`,
+`Aim`) must exist — `Tick` switches to them unconditionally, and a missing one logs an
+error every frame it's wanted. `IdleToSprint`, `SprintToIdle` and `Regrip` are optional
+(looked up with `Find` first, skipped when absent). Every other one-shot is optional in
+the file, but pressing its key without it logs `unknown semantic state` — so in
+practice ship all 15, or remove the input.
+
+---
+
+## 3. The state machine
+
+The rules are pure functions in `FirstPersonAnimation.h`, pinned by
+`TestFirstPersonAnimationFSM`; `FirstPersonPresentation::Tick` applies them.
+
+**Resting state** (`FirstPersonRestingState`), consulted only while no one-shot holds:
+
+```
+sprinting && moving  → Sprint      (no sprinting in ADS: sprint drops the sights)
+aiming               → Aim         (walking too — procedural bob, §4)
+moving               → Walk
+otherwise            → Idle        (moving = planar speed > 0.05 m/s)
+```
+
+**Transitions** (`FirstPersonTransitionVia`): only the Idle↔Sprint pair was authored.
+`Idle → Sprint` plays `IdleToSprint`; `Sprint → X` plays `SprintToIdle` unless `X` is
+`Aim` (aiming out of a sprint goes straight to the sights). Everything else crossfades
+directly using the destination's `fade`.
+
+**One-shots and tiers** (`FirstPersonTierOf` / `FirstPersonCanInterrupt`): a request
+takes over only if it **strictly outranks** what's playing, or re-requests the **same**
+state (restart — Fire spam, re-tapping Melee):
+
+```
+Transition (0)  <  Action (1)  <  Committed (2)  <  Equip (3)
+IdleToSprint       Fire             TacReload         Draw
+SprintToIdle       Inspect          EmptyReload       Holster
+                   MagCheck         Melee
+                   Regrip
+```
+
+So: any real action pre-empts a sprint transition; Fire/Inspect/MagCheck/Regrip are
+freely interruptible; a reload or melee can only be cut short by Draw/Holster; Draw and
+Holster can't interrupt each other (1/2/scroll mid-swap is ignored). While unarmed only
+`Draw` is accepted.
+
+**Completion.** One-shots play with `ClampForever` (never `Once` — see §8 item 3) and
+are "finished" when `Model::AnimationFinished()` is true for every rig that was given a
+clip (a state with no weapon clip doesn't wait on the weapon). Then `Tick` clears the
+action, refills the magazine if a reload landed, and resolves the resting state again —
+so a reload started in ADS hands back to `Aim` if Fire2 is still held.
+
+---
+
+## 4. Weapon gameplay
+
+All in `FirstPersonPresentation` (`Fire()` / `UpdateTrigger()` / `Reload()` /
+`SetEquipped()` / `Tick()`); input is read in `main.cpp` (§1).
+
+| Input (action name) | Default key | Does |
+|---|---|---|
+| `Fire1` | LMB / L-Ctrl | 1 round per shot. Hip: the `Fire` clip. ADS: procedural kick. Dry trigger does nothing |
+| `Fire2` | RMB / L-Alt | Hold to aim |
+| `FireMode` | B | Toggle Semi-Auto (default) / Full-Auto (~700 rpm, one round per 86 ms while held). Logged to the Console; resets to semi on Play |
+| `Reload` tap | R | `TacReload` with rounds left, `EmptyReload` at 0; nothing when full or already reloading |
+| `Reload` hold ≥ 0.35 s | R | `MagCheck` (fires at the threshold; the release then does nothing) |
+| `Inspect` | F | `Inspect` |
+| `Melee` | Q | `Melee` |
+| `Weapon1` / `Weapon2` | 1 / 2 | Draw the weapon / Holster to unarmed |
+| scroll wheel, `Holster` | wheel / H | Toggle between the two |
+| `Sprint` | L-Shift | Sprint (drops ADS) |
+
+Defaults live in `InputMap::Defaults()`; `project/settings.json` holds the saved list and
+**wins** per action, and `InputMap::MergeDefaults` tops it up with any default it lacks.
+So changing a default key needs both edits (or delete that action from settings.json).
+
+- **Magazine:** 30 rounds (`kMagazineSize`), refilled when a reload clip *completes*;
+  anything that cuts a reload short (Holster) leaves the count as it was. No reserve
+  ammo. Running dry never auto-reloads — the player presses R for `EmptyReload`.
+- **Regrip:** after 10–20 s (uniform random, re-rolled each time) of uninterrupted
+  `Idle`; Action tier, so any input cuts it off. Never from Aim/Walk.
+- **Unarmed:** there is no unarmed arms pose, so once `Holster` finishes both rigs get
+  `DeactivatedTag` + `InactiveTag` (not drawn, clips paused), cleared again by `Draw`.
+- **ADS fire:** the set has no ADS fire clip, and the hip `Fire` clip would pull the
+  sights off centre every shot. Settled in `Aim`, `Fire()` keeps the pose and kicks the
+  whole view model about the eye in camera space — 1.2° muzzle up plus 14 mm back / 2 mm
+  up, 35 ms linear rise then an 80 ms exponential settle — returning exactly to the §5
+  sight picture. Each shot re-enters the rise at the current kick, so full-auto chains
+  into a shake instead of snapping between rounds.
+- **ADS while walking:** there is no aim-walk clip, and the hip `Walk` clip would pull the
+  sights off centre, so the `Aim` pose gets a procedural camera-plane figure-eight bob:
+  3 mm side-to-side per stride, 1.5 mm vertical per step, stride 2.4 m, full amplitude at
+  3.5 m/s, eased in/out at 8/s. Firing while walking in ADS is the kick on top of the bob.
+
+Tuning constants: recoil and bob are at the top of `FirstPersonPresentation.cpp`;
+magazine size and fire rate (`kMagazineSize`, `kFullAutoInterval`) in the header; the tap/
+hold threshold in `FirstPersonReloadButton::kHoldSeconds`. They are **per-engine, not
+per-weapon** today — see §9.
+
+---
+
+## 5. Placement: camera bone, weapon socket, ADS centring
+
+### Camera-bone anchor
+
+The rigs are authored **standing in their own scene** (feet at `y = 0`, head at
+`y ≈ 1.557`). Parking the model's root on the camera floats the arms ~1 m overhead, so
+`Update()` solves for the root that puts a **rig bone** exactly on the camera:
 
 ```
 world(local) = position + rotation * (scale * local)
 ⇒ position   = camera.Position - rotation * (scale * boneLocal)
+rotation     = cameraRotation * recoil * viewRotation(asset) * ViewModelRotation(scene)
+position    += cameraRotation * (ViewModelOffset + recoilOffset + bob)
 ```
 
-- `rotation` still comes from the camera (including pitch), so the rig tracks look
-  direction and the bone stays pinned through it.
-- `ViewModelOffset` therefore becomes a **residual nudge in the camera's frame** and
-  defaults to `{0, 0, 0}`.
-- With `CameraBone = "head"` the shoulders land below and slightly behind the camera
-  and the hands/gun land in front — a normal first-person frame.
+`boneLocal` comes from `Model::NodeTransform(CameraBone)` in the **current pose**, so the
+bone stays pinned through the animation. `head` is a node, not one of the 52 skinned
+bones — `BoneInfoMap` won't find it; only `NodeTransform` will. A missing bone logs one
+warning and falls back to root-anchored placement.
 
-### ADS sight centring — camera offset, not a weapon mount offset
+### Weapon socket
 
-The weapon mount is **rotation-only on purpose** (`weaponMountRotation`, no translation).
-A `weaponMountOffset` that restores the artist's exact socket→root translation was tried
-(af4ad15, reverted in c01f451): it moved the AK out of the hands, so the gun stays where
-the rotation-only mount puts it.
+The weapon is **not** given the arms' pose. It rides the arms rig's gun socket:
 
-With that mount, the `Aim` pose leaves the sight line about 5 cm left of and 3 cm above
-the `head`-bone camera. You see this as "the camera is too far right of the AK in ADS". It
-is corrected in the scene, not in code:
+```
+weaponEntity = armsEntity * (socket * mount * weaponRoot⁻¹)
+  socket     = arms NodeTransform(weaponSocket)        posed
+  weaponRoot = weapon NodeTransform(weaponRoot)         posed
+  mount      = rotation-only weaponMountRotation        (0, 90, 90) for this set
+```
+
+Only the weapon's **root** is overridden; its own channels (bolt, trigger, magazine…)
+still animate. Without the socket the gun barely follows the hands (measured
+socket-vs-weapon error: Sprint 14.5 cm, Draw 18.2, Holster 21.7, Aim 67.8). The mount is
+**rotation-only on purpose**: a translated mount (af4ad15, reverted in c01f451) pulled
+the AK out of the hands.
+
+### ADS sight centring — scene config, not code
+
+With the rotation-only mount, `Aim` leaves the sight line ~5 cm left of and ~3 cm above
+the `head` camera. That is corrected on the scene's controller:
 
 ```jsonc
-// FPS_Animation_smoke_play.json, FirstPersonController
+// project/scenes/FPS_Animation_smoke_play.json, First Person Controller
 "View Model Offset":   [0.0562, -0.032, 0.0]   // camera frame: +x right, +y up, +z back
 "View Model Rotation": [-0.24, 0.39, 0.0]      // Y-X-Z degrees, pivots on the head bone = the camera
+"View Model FOV":      50.0
+"Camera Bone":         "head"
 ```
 
-**What "aligned" means here:** the front post's tip sits centred in the rear U-notch,
-flush with the notch's top edge, and that point is exactly on screen centre. Both sights
-were located from the mesh itself (`work/sight_align_probe.cpp` prints 0.5 mm heightmaps
-of both), not from bone positions or the highest vertex:
+"Aligned" means the front post's tip sits centred in the rear U-notch, flush with its
+top edge, exactly on screen centre. Both sights were located from the mesh
+(`work/sight_align_probe.cpp`, 0.5 mm heightmaps), not from bones:
 
 | sight point (raw weapon frame) | x | y | z |
 |---|---|---|---|
 | rear notch, centre at shoulder height | −0.0682 | 1.559 | 0.4865 |
 | front post, centre of tip | −0.0698 | 1.558 | 0.7235 |
 
-The line between them is **0.39° right and 0.24° down** of the camera's forward axis. An
-offset alone can put the eye on that line, so the post sits inside the notch, but the
-aligned sights then land about 4 px right and 2 px low of centre. That's why the small
-rotation is there. The probe solves rotation and offset together; with the values above,
-both sights land within **0.1 px** of centre. That was confirmed in Play mode at View Model
-FOV 20 (3× magnified): post centred in the notch, tip flush, on the crosshair.
+That line is 0.39° right and 0.24° down of camera forward — hence the small rotation;
+offset alone leaves the aligned sights ~4 px right / 2 px low. With both, the sights land
+within 0.1 px of centre (confirmed in Play at View Model FOV 20). The offset/rotation
+apply in every state, so hip fire shifts by the same ~6 cm / ~0.5°, which reads as
+normal. All view-model fields are read in `Start()` — **Stop and Play again** after
+changing them.
 
-Trap: `ads_sight_probe.cpp` (af4ad15) picks the "front sight" as the highest mid-plane
-vertex. That is the top of the right-hand **protective ear**, 5 mm right of and 5 mm above
-the post, so its numbers are off by about that much. Use `sight_align_probe.cpp`.
-
-The offset and rotation apply in every state, so hip fire shifts by the same ~6 cm and
-~0.5°, which reads as normal. Both are read in `FirstPersonPresentation::Start()`, so
-after changing them, Stop and Play again. To re-measure:
+To re-measure (e.g. after re-exporting the rig):
 `work\build_probe.bat sight_align_probe`, then
-`work\sight_align_probe.exe <A_FP_ADS> <A_FP_Aim> <A_W_ADS> - 0 90 90 <offset xyz> <rotation xyz>`.
-If the rig or clips are re-exported, re-read the two sight points off the heightmaps first.
+`work\sight_align_probe.exe <A_FP_ADS> <A_FP_Aim> <A_W_ADS> - 0 90 90 <offset xyz> <rotation xyz>`;
+re-read the two sight points off the heightmaps first.
+Trap: `ads_sight_probe.cpp` (in af4ad15) picks the highest mid-plane vertex as the front
+sight — that's the top of the right-hand protective ear, ~5 mm off. Use `sight_align_probe`.
 
-### Config fields
+### Scene fields (`FirstPersonControllerComponent`)
 
-```cpp
-std::string CameraBone = "head";   // empty = fall back to root-anchored placement
-glm::vec3   ViewModelOffset{0.0f}; // residual, camera frame
-glm::vec3   ViewModelRotation{0.0f}; // per-scene Y-X-Z degrees, applied AFTER the asset's viewRotation
-float       ViewModelScale = 1.0f;
-```
+| Inspector field | Default | Meaning |
+|---|---|---|
+| Animation Set | empty | `.fpsanim` path; empty = no view model |
+| Camera Bone | `head` | arms-rig node pinned to the camera; empty = root-anchored |
+| View Model Offset | 0,0,0 | residual nudge, camera frame |
+| View Model Rotation | 0,0,0 | Y-X-Z degrees, applied after the asset's `viewRotation` |
+| View Model Scale | 1 | must be finite and > 0 |
+| View Model FOV | 60 | vertical FOV of the view-model sub-pass, clamped 20–150 in the Inspector |
+| Gravity Gun | — | must be **off**: weapon input is only read when it is |
 
-Both new/reworded fields are registered in `src/Game/ComponentRegistry.cpp`, so they
-serialize and show up in the Inspector automatically. If the named bone is missing the
-presentation logs **one** warning and falls back to root-anchored placement — it does
-not spam the console every frame.
+### View-model render pass
 
-### `Model::NodeTransform(name, out)`
-
-```cpp
-// Model-root-space transform of a named node, in the current pose (bind when no clip plays).
-bool Model::NodeTransform(const std::string& name, glm::mat4& out) const;
-```
-
-- Returns the **node's** world matrix, *not* a skinning matrix. Multiply it by the
-  entity's world transform to get a bone's world position.
-- Returns `false` and leaves `out` untouched when the model has no such node.
-- Posed path reads `m_NodeGlobals` (filled by `EvaluatePose`), gated on
-  `m_NodeGlobals.size() == nodes.size()` so it never reads an un-initialised scratch
-  buffer before the first evaluation or after a reimport.
-- Bind path walks each ancestor's `BindLocal` up the parent chain.
-
-**Important:** the `head` bone is present as a **node** (266 nodes, depth 11 under
-`spine_05 → neck_01 → neck_02 → head`) but is **not one of the 52 skinned bones** —
-so `BoneInfoMap`/`FinalBoneMatrix` will not find it. Only `NodeTransform` will. The arms
-model imports as a **single mesh** (`SK_FP_Arms_Manneguin`, 20,411 verts, 52 bones), so
-there is no head geometry for the camera to be trapped inside.
+Entities with `ViewModelTag` are drawn last in `SceneRenderer::RenderScene`, after a
+depth clear, with their own perspective at `ViewModelFov` (near/far shared with the
+world pass), so world geometry can't clip hands 0.3 m from the eye and the weapon
+doesn't stretch with the world FOV. They're skipped by the SSAO depth prepass and cast/
+receive no shadows. The editor **Scene** tab passes no FOV, so there they draw as
+ordinary geometry.
 
 ---
 
-## 5. Orientation — `viewRotation`
+## 6. Orientation — `viewRotation`
 
-The Manny rig comes out of Blender facing `-Y`. Blender's default FBX axis conversion
-maps it to `(x, y, z) → (x, z, -y)`, so `-Y` becomes **`+Z`** in engine space. The
-engine camera's local forward is **`-Z`**. The rig therefore faced exactly backwards:
-the arms and weapon rendered behind the camera.
+The Manny rig comes out of Blender facing `-Y`; Blender's FBX axis conversion
+(`(x, y, z) → (x, z, -y)`) makes that model **`+Z`**, while the engine camera looks down
+**`-Z`** — exactly backwards. The correction is `"viewRotation": [0, 180, 0]` on the
+**asset**, because it describes the axis convention of the two FBXs it names — not in
+`ModelImportSettings` (per-FBX, and the two files must agree) or in every scene.
 
-Rather than a magic number in scene data, the correction lives on the **asset**:
-
-```jsonc
-"viewRotation": [0.0, 180.0, 0.0]     // Y-X-Z degrees
-```
-
-because it describes the axis convention of the two FBXs the asset names. It would be
-wrong to put it in `ModelImportSettings` (that's per-FBX, and the arms/weapon are
-separate files that must stay in agreement) or in every scene that uses the set.
-
-Composition order in `FirstPersonPresentation::Update`:
-
-```cpp
-rotation = cameraRotation * QuaternionFromEulerYXZ(m_Set.ViewRotation)  // asset
-                                 * QuaternionFromEulerYXZ(m_Rotation);  // scene tweak
-```
-
-The anchor math uses this same `rotation`, so adding a `viewRotation` keeps the head
-bone pinned to the camera — flipping the model flips the root's offset around with it,
-which is what you want (the body ends up *behind* the camera, the arms in front).
-
-### Axis reference used everywhere in this work
-
-Blender (Z-up, cm) → engine (Y-up, m):
-
-```
-(x_b, y_b, z_b)  →  (x_b, z_b, -y_b) / 100
-```
-
-Bone world position in Blender: `arm.matrix_world @ pose_bone.matrix`.
+Axis reference used throughout: Blender (Z-up, cm) → engine (Y-up, m) is
+`(x_b, y_b, z_b) → (x_b, z_b, -y_b) / 100`; a bone's world position in Blender is
+`arm.matrix_world @ pose_bone.matrix`.
 
 ---
 
-## 6. Verifying changes
+## 7. The asset pipeline
+
+```
+C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend      (read-only ground truth)
+        │  work/export_clip.py (headless Blender), ranges in export_manifest.json
+        ▼
+project/assets/fps/AKS74U/
+├── AKS74U.fpsanim                       the state contract (15 states)
+├── export_manifest.json                 which .blend, which frame range per clip
+├── verification_report.json             per-FBX import check ("ok": true for all)
+├── FirstPerson/
+│   ├── AKS-74U_A_FP_ADS.fbx             armsModel: mesh + skeleton + REST bind pose
+│   └── AKS-74U_A_FP_<State>.fbx         one per state: channels only (meshes=0)
+└── Weapon/
+    ├── AKS-74U_A_W_ADS.fbx              weaponModel: mesh + `AK` armature (bind = ADS pose)
+    └── AKS-74U_A_W_<State>.fbx          one per state that has weapon motion (11 files)
+```
+
+### Export rules
+
+1. **The base arms file is exported at REST** (`pose_position = REST`,
+   `bake_anim = False`). Exporting it from a posed frame made the node tree disagree with
+   the skin's bind data (`FPS_ANIMATION_INVESTIGATION.md`, fix 1).
+2. **Clip FBXs are channel-only: `meshes=0`.** `Model::AttachClip` reads only channels;
+   a meshed export adds stray meshes (`Mesh.001`, 267 nodes vs 265), doubles the file,
+   and dragged in a material referencing a missing texture.
+3. **Pair the weapon action with the arms action during the bake.** `CB_ik_hand_l`
+   carries `CHILD_OF → AK:magazine` at influence 1.0 — the left hand is glued to the
+   weapon's magazine bone, so the bake samples the weapon too:
+
+   | arms clip | weapon action during the bake |
+   |---|---|
+   | `A_FP_<x>` | `A_W_<x>`, when that action exists |
+   | Idle / Walk / Aim / Draw / Regrip (no weapon clip) | `A_W_ADS` — the weapon's bind pose *is* the ADS export |
+
+   `work/export_clip.py` applies this automatically and prints `weapon action paired = …`.
+   Getting it wrong is not subtle: the old Idle had the left hand chase a magazine
+   being pulled out (223.6 mm of hand travel → **2.1 mm** after re-export), and
+   `Mag_Check` shipped 22.8 mm off (`FPS_ANIMATION_INVESTIGATION.md` UPDATE 6). Check a
+   clip with `work/hand_probe.cpp` or `work/bl_pair_check.py`.
+4. **`export_manifest.json` is the frame-range record.** Its `frameStart`/`frameEnd` per
+   action are what `export_clip.py` should be given. Nothing regenerates it or
+   `verification_report.json`. Both date from the original export, so their `meshes` /
+   `meshCount` fields predate rule 2. Keep the frame ranges accurate by hand when adding
+   or re-cutting a clip.
+
+### The `.blend` standing rule
+
+**Always ask before changing anything in `AKS-74U 60fps (Revised).blend`.** Read-only
+inspection is fine. Drive it headless — never through an interactive Blender holding a
+dirty scene:
 
 ```powershell
-# headless smoke test over every scene
-.\build\Release\TartarusEngine.exe --smoke-test project\scenes
+& "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background `
+    "C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend" --python work\bl_inspect.py
 ```
 
-Expected for this branch: `FPS_Animation_smoke_play.json` →
-`PASS ... frames=100 loadOk=1 newGlErrors=0 newLogErrors=0 playCycles=2`.
-`Apartment` and `Sandbox` fail on **pre-existing missing assets** (`Y Bot.fbx` and
-friends are gitignored per the Mixamo licence) — unrelated to this work.
+The file is saved on the neutral pairing `Armature` → `A_FP_Idle`, `AK` → `A_W_ADS`
+(it used to be saved on `A_FP_Tac_Reload`/`A_W_Tac_Reload`, which baked the broken
+batch). `export_clip.py` never saves it; `work/set_neutral_action.py` is the only
+script that writes it, and `AKS-74U 60fps (Revised).blend.pre-neutral.bak` is the
+rollback.
 
-No `DIAG` leftovers: `grep -c DIAG src\Renderer\Model.cpp` must return `0`.
+---
+
+## 8. Invariants — the fixes this branch landed, and how to not undo them
+
+| # | Symptom | Root cause | Fix (keep it) |
+|---|---------|-----------|-----|
+| 1 | Arms fine at bind pose, "fan of blades" the instant a clip played | `Model::ProcessMesh` skipped the node's world transform for skinned meshes, while Assimp's `mOffsetMatrix` expects root-space vertices | `bake = nodeTransform` for **every** mesh |
+| 2 | Arms + weapon ~1 m above the camera | Root parked on the camera; rig is authored standing | Camera-bone anchor (§5) |
+| 3 | Arms rendered behind the camera | Rig faces model `+Z`, camera looks `-Z` | `viewRotation [0,180,0]` (§6) |
+| 4 | Arms + gun blinked to a T-pose at the end of every one-shot | `Once` clears the clip → bind pose (the Manny T-pose) | One-shots use `ClampForever` + `AnimationFinished()` |
+| 5 | Spare magazine hard-cut in/out around weapon clips | `StopAnimation()` = fade 0 to bind; `mag2` is 121.8 mm off bind at both clip ends | No-weapon-clip states call `PlayAnimation(-1, clip.Fade, wrap)` — a fade to bind |
+| 6 | Spare magazine invisible in the engine | assimp's `JoinIdenticalVertices` ignored bone weights, merged the two coincident magazine islands | Local assimp patch (`tools/assimp_patches/0001-…`) |
+| 7 | Gun lagged the hands by up to 68 cm | Weapon clips never move the gun's root | Weapon socket (§5) |
+| 8 | New default keys did nothing | Saved `settings.json` input list replaced `Defaults()` wholesale | `InputMap::MergeDefaults` |
+
+### 1. The bake rule (the invariant most likely to be broken by accident)
+
+```cpp
+const glm::mat4& bake = nodeTransform;   // ALWAYS — skinned or not
+palette[i] = GlobalInverseTransform * PosedGlobal[i] * BoneOffset[i]
+```
+
+The palette never mentions the mesh node's own frame, so the bake is the only thing
+that puts vertices into root space before skinning. At bind pose the whole palette
+collapses to one shared matrix, so a missing node transform just reorients the mesh;
+only when a clip plays does each bone apply its own delta and tear it apart. The
+winding-flip correction for negative-determinant nodes applies to skinned meshes too.
+
+**`C = RestGlobal · BoneOffset` is not an error term — do not cancel it.** Assimp builds
+`mOffsetMatrix = inverse(TransformLink) * absolute_transform`, so `C` is the node tree's
+**pose-versus-bind delta**: `I` for the rest-exported arms base, varying per bone for
+clip FBXs (frame-0 pose), and `≈ translate(-0.069, 1.503, 0.446)` for the weapon base
+(the ADS pose — the gun-socket delta). Applying `C⁻¹` was tried and dropped the weapon
+to the floor. `mag2`'s `C` is an outlier on purpose.
+
+### 3. `ClampForever`, never `Once`
+
+`Once` clears `Clip` at the end, so `UploadBoneMatrices` *and* `NodeTransform` fall back
+to the base FBX's bind pose — the Manny T-pose (`ik_hand_gun` 678 mm off) — for a frame,
+and the next crossfade travels through it. `Play()` uses `ClampForever` for non-looping
+states and reads completion with `Model::AnimationFinished()`, since a held clip never
+clears `IsPlayingAnimation()`. `Once`'s contract is untouched for other callers.
+
+### 5. Fade to bind, don't cut
+
+`m_ActionGateWeapon = !WeaponClip.empty()` means a no-weapon-clip state never waits on
+the weapon's `AnimationFinished()` (which would see `Clip == -1` and report done at
+once). The clip files were not touched.
+
+### 6. The assimp patch — a fresh clone depends on it
+
+assimp comes from GitHub at a pinned `GIT_TAG`. Stock v5.4.3's dedup key ignored bone
+weights, so the two coincident magazine islands merged and the losing bone kept 17,594
+stale vertex ids (193,534 dropped weights over 27 files; all 11 weapon FBXs affected,
+arms clean). `tools/apply_assimp_patches.cmake` applies the patch at configure time.
+Consequences: (a) `build/_deps` must be configured before probes link against it;
+(b) bumping `GIT_TAG` fails configure loudly until the patch is rebased; (c) don't swap
+it for `importer.optimizeGraph=false` — that costs +348% verts vs +18.7%. `*.patch` is
+checked out LF (`.gitattributes`) because `git apply` needs it.
+
+---
+
+## 9. Known gaps / next steps
+
+1. **One weapon per controller; gameplay constants are engine-wide.** Magazine size
+   (30), fire rate (700 rpm), recoil, bob, the two slots (1 = the set, 2 = unarmed) and
+   the tier table are compiled-in, not read from the `.fpsanim`. A second weapon today
+   means a second scene/controller. `FPS_WEAPON_INTEGRATION.md` §6 lists what a real
+   multi-weapon inventory needs.
+2. **`Idle`, `Walk`, `Aim`, `Draw`, `Regrip` have no weapon clips** — the `A_W_Idle` /
+   `A_W_Walk` actions don't exist in the `.blend` (verified with
+   `work/bl_idle_probe2.py`), so closing the gap means authoring animation. Ask first.
+3. **No ADS fire / aim-walk clips** — both are procedural (§4). If they're authored,
+   the procedural paths in `Fire()` and `Tick()` should defer to them.
+4. **View-model fields are captured at `Start()`**, not live-tunable — Stop/Play.
+5. **The camera sits on the `head` bone origin** (skull base, 1.557 m) rather than the
+   eyes; the ADS offset absorbs it. There is no eye bone on this rig.
+6. **No HUD** — ammo and fire mode are Console-only (`Ammo()`, `IsFullAuto()` are there
+   for one).
+7. **The FPS scene is not in CI.** CI's smoke test runs `tests/smoke-scenes/`; the FPS
+   scene lives in `project/scenes/` and is only smoke-tested locally. Adding an FPS smoke
+   scene would gate `.fpsanim` loading and clip attachment on every push.
+8. **Materials/textures are out of scope.** Untextured rendering is expected;
+   `Texture: failed to load ...` and `Y Bot.fbx` import errors are known noise.
+
+---
+
+## 10. Verifying changes
+
+```powershell
+cmake --build build --config Release -- /m /v:minimal        # close the editor first (LNK1104)
+$p = Start-Process build\Release\TartarusEngine.exe -ArgumentList "--unit-tests" -Wait -PassThru `
+       -RedirectStandardOutput build\probe\ut.txt; $p.ExitCode   # 0 = all checks passed
+$p = Start-Process build\Release\TartarusEngine.exe -ArgumentList "--smoke-test","project\scenes" -Wait -PassThru `
+       -RedirectStandardOutput build\probe\smoke.txt
+```
+
+Release is a GUI-subsystem binary: run it through `Start-Process -Wait` with redirected
+output or you get no output and no exit code.
+
+Expected: unit tests exit 0; smoke `FPS_Animation_smoke_play.json` →
+`PASS ... loadOk=1 newGlErrors=0 newLogErrors=0 playCycles=2`. `Apartment` and
+`Sandbox` fail locally on **pre-existing missing assets** (Mixamo files are gitignored).
+
+CI (`.github/workflows/build.yml`) additionally runs
+`tools/check_component_registration.py`: any new `*Tag`/`*Component` struct in
+`Components.h` must be registered or allow-listed.
+
+Manual pass in the Game tab: hip fire, ADS fire (semi + full), walk while aiming, sprint
+out of ADS, tap/hold R at 30 / 15 / 0 rounds, F, Q, 1/2/scroll mid-action, idle for 20 s.
 
 ### Editor / screenshot gotchas
 
-- The editor auto-reopens the last scene from
-  `C:\Users\jacob\AppData\Local\TartarusEngine\editor_prefs.json` (`lastScenePath`);
-  back it up before letting a script drive the editor.
-- Play mode auto-starts on launch for this setup; `PLAY MODE — changes revert on Stop`
-  is in the title bar.
-- The window is maximised at 2560×1440, and `read` on a full screenshot returns a
-  **downscaled preview**. Click coordinates must come from full-res crops
-  (`System.Drawing` crop → read the crop), not from preview pixels — a preview scale of
-  ~1.28 makes tab/button clicks miss silently.
-- Win32 mouse clicks: `mouse_event(0x02)` down / `0x04)` up via `Add-Type`.
-- Use `Window → Console`, not the notification bell, to read logs (the bell truncates).
-- Read the scene's `cam`/`yaw`/`pitch` debug overlay in the Game tab to confirm what the
-  player camera is actually doing.
+- The editor reopens the last scene from `%LOCALAPPDATA%\TartarusEngine\editor_prefs.json`
+  (`lastScenePath`); back it up before letting a script drive the editor.
+- Play-mode edits revert on Stop — write tuned values into the scene file.
+- A full screenshot read back is a **downscaled preview**; derive click coordinates from
+  full-resolution crops.
+- Use `Window → Console`, not the notification bell (it truncates).
+- The Game tab's `cam`/`yaw`/`pitch` overlay shows what the player camera is really doing.
 
 ---
 
-## 7. Standalone probes (`work/`)
+## 11. Standalone probes (`work/`)
 
-These link directly against the **prebuilt** Assimp + glm under
-`build\_deps\` — no engine rebuild, no editor, no UI. This is the preferred way to
-test a hypothesis about import/skinning math.
-
-```powershell
-$wt = "$PWD\build\_deps"
-cmd /c "`"C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat`" >nul 2>&1 && ^
- cl /nologo /EHsc /std:c++17 /MD /O2 ^
- /I`"$wt\assimp-src\include`" /I`"$wt\assimp-build\include`" /I`"$wt\glm-src`" ^
- work\pose_probe.cpp /Fe:work\pose_probe.exe /link ^
- /LIBPATH:`"$wt\assimp-build\lib\Release`" /LIBPATH:`"$wt\assimp-build\contrib\zlib\Release`" ^
- assimp-vc145-mt.lib zlibstatic.lib"
-```
-
-**Must be `/MD`, not `/MT`** — the prebuilt Assimp lib is `MD_DynamicRelease` despite the
-`-mt` in its filename (that suffix is Assimp's naming convention, not its runtime).
-PowerShell 5.1 has no `&&`; chain inside `cmd /c "..."`. They are **not** built by the
-main CMake project.
+C++ probes link directly against the **prebuilt, patched** Assimp + glm in
+`build\_deps\` — no engine rebuild, no editor. Preferred for any import/skinning
+hypothesis. Build one with `cmd /c "work\build_probe.bat <name>"` (vcvars, `/MD`,
+include/lib paths). **Must be `/MD`**: the prebuilt lib is `MD_DynamicRelease` despite
+the `-mt` in its name. Binaries, logs and re-exported FBXs under `work/` are gitignored;
+only sources are tracked.
 
 | Probe | What it answers |
 |-------|-----------------|
-| `pose_probe.cpp` | Decisive arms/weapon bind + posed bounding boxes — the tool that found the `C` misunderstanding and then verified the fix |
+| `pose_probe.cpp` | Arms/weapon bind + posed bounding boxes — found the `C` misunderstanding, verified the bake fix |
 | `bake_audit_probe.cpp` | Per-skinned-mesh: what transform `ProcessMesh` actually bakes |
-| `forward_skin_probe.cpp` | Forward (CPU) skinning result for a mesh |
-| `clip_coverage_probe.cpp` | Which bones a clip actually drives |
-| `bone_dump.cpp` | Per-bone `|A−I|`, `|C−I|`, `C`'s translation, hierarchy depth ≤3 |
-| `nodes.cpp` | Node-name search across the hierarchy (how `head` was located); `--chain <node>` prints one node's full ancestor chain |
-| `align_probe.cpp`, `diag_probe.cpp` | Axis alignment / ad-hoc diagnostics |
-| `assimp_probe.cpp`, `full_skin_probe.cpp`, `bone_match_probe.cpp`, `dup_name_probe.cpp` | The earlier bone-math investigations — see `FPS_ANIMATION_INVESTIGATION.md` |
-| `bl_inspect.py`, `bl_inspect2.py`, `bl_idle_probe.py`, `bl_idle_probe2.py`, `bl_pair_check.py` | Read-only Blender ground truth: world/evaluated AABBs, bone landmarks, per-bone motion under a given weapon pairing |
-| `hand_probe.cpp` | Per-bone motion through a whole clip — left-vs-right path, per-sample rotation/translation step, loop seam, skinned-but-undriven bones. The tool that found the left-hand bug |
-| `bind_probe.cpp` | The base FBX's **bind pose** against each clip, node by node: world positions of `head`, `ik_hand_gun` and the hands, plus the worst bind↔clip displacement. Answers "what does the engine paint when no clip is live?" — the tool that found the disappearing-arms bug |
-| `fbx_info.cpp` | What is actually inside an FBX: nodes, meshes, and every take it carries — per-bone weight lists and per-take animated node names |
-| `mag_probe.cpp` | Out-of-range skin-weight audit under the engine's exact flag set (`--scan` over every shipped FBX), a post-processing **flag bisect**, per-bone raw `aiBone` dumps, and forward-skin positions at chosen ticks. The tool that proved `aiProcess_JoinIdenticalVertices` was deleting the spare magazine |
-| `build_probe.bat` | `cmd /c "work\build_probe.bat <name>"` — builds `work\<name>.cpp` with the right vcvars + `/MD` + assimp/glm include and lib paths, so a new probe is one command instead of the `cl` line above |
-| `export_clip.py` | Blender-side clip export: applies the pairing rule above, pins the weapon NLA off, restores both armatures **in memory** (never saves the `.blend`), and prints `weapon action paired = …`. Run as `blender -b "<blend>" --python work\export_clip.py -- <action> <out.fbx> <start> <end> <meshes 0|1> [weapon\|auto]` |
-| `extract_frames.py` | Frames from a video via Blender's VSE — there is no ffmpeg on this box, so this is how a Play-mode recording gets turned into PNGs/contact sheet for inspection |
-| `inspect_blend.py`, `preflight_neutral.py` | Read-only dumps of the `.blend`: live actions per armature + NLA, compression and saved-with version, `pose_position`, and a datablock fingerprint to diff before/after a write |
-| `set_neutral_action.py` | The **only** script that saves the `.blend`, and only when explicitly approved: parks it on the neutral `A_FP_Idle` / `A_W_ADS` pairing |
+| `forward_skin_probe.cpp`, `full_skin_probe.cpp` | CPU forward skinning of a mesh |
+| `clip_coverage_probe.cpp` | Which bones a clip drives |
+| `bone_dump.cpp` | Per-bone `|A−I|`, `|C−I|`, `C`'s translation |
+| `nodes.cpp` | Node-name search; `--chain <node>` prints an ancestor chain (how `head` was found) |
+| `hand_probe.cpp` | Per-bone motion through a clip: left-vs-right path, loop seam, undriven bones. Found the left-hand pairing bug |
+| `bind_probe.cpp` | Bind pose vs each clip, node by node. Found the T-pose blink |
+| `socket_probe.cpp` | Socket-vs-weapon-root error per clip; derived `weaponMountRotation` |
+| `sight_align_probe.cpp` | Sight heightmaps + solved ADS offset/rotation (§5) |
+| `fbx_info.cpp` | Nodes, meshes, takes, per-bone weights inside an FBX |
+| `mag_probe.cpp` | Out-of-range weight audit, post-process flag bisect. Proved the assimp vertex-join bug |
+| `align_probe.cpp`, `diag_probe.cpp`, `assimp_probe.cpp`, `bone_match_probe.cpp`, `dup_name_probe.cpp` | Earlier investigations — see `FPS_ANIMATION_INVESTIGATION.md` |
+| `bl_inspect*.py`, `bl_idle_probe*.py`, `bl_pair_check.py`, `bl_mag_probe.py` | Read-only Blender ground truth |
+| `export_clip.py` | Clip export with the pairing rule: `blender -b "<blend>" --python work\export_clip.py -- <action> <out.fbx> <start> <end> <meshes 0\|1> [weapon\|auto]` |
+| `inspect_blend.py`, `preflight_neutral.py`, `set_neutral_action.py` | Read the `.blend`'s saved state / (only with approval) park it on the neutral pairing |
+| `extract_frames.py` | Frames from a Play recording via Blender's VSE (no ffmpeg here) |
 
-**Probes link the *same* assimp the engine does**, which now carries
-`tools/assimp_patches/*.patch` (see §8). If you build a probe against a re-cloned
-`build\_deps` that hasn't been configured yet, run `cmake --build build` once first or
-you'll be measuring unpatched assimp.
-
-**Gotcha:** `AiToGlm` must be a *direct element copy*. `glm::make_mat4(&m.a1)` reads
-column-major from Assimp's row-major matrix and silently transposes everything — that
-bug sat in `bake_audit_probe.cpp` and made its output meaningless until it was fixed.
-Copy the implementation from `work/pose_probe.cpp`.
+**Gotcha:** `AiToGlm` must be a *direct element copy*; `glm::make_mat4(&m.a1)` silently
+transposes Assimp's row-major matrix. Copy the one in `work/pose_probe.cpp`. And the
+probes replicate `Model.cpp`, they are not it — they omitted `ProcessMesh`'s vertex
+placement, which is exactly where the original bug was.
 
 ---
 
-## 8. Known gaps / next steps
+## 12. Things that will bite you
 
-1. **`Idle` and `Walk` have no weapon clips.** `AKS74U.fpsanim` leaves their `weapon`
-   entries empty, and the runtime falls back explicitly (the weapon holds its current
-   pose, which is the ADS/bind pose). Note the `A_W_Idle` / `A_W_Walk` **actions do not
-   exist in the `.blend`** — verified with `work/bl_idle_probe2.py` — so this is not an
-   export that was forgotten; closing the gap means *authoring* animation. **Ask before
-   touching the `.blend`.** Until then the exporter bakes those arms clips against
-   `A_W_ADS`, which is exactly what the engine renders alongside them.
-2. **`View Model FOV` works, but is captured at Start.** A view-model sub-pass runs at
-   the end of `SceneRenderer::RenderScene`, clears depth, re-projects `ViewModelTag`
-   entities with their own perspective (near/far shared with the world pass) and
-   re-Culls the froxel lists into its own FrameState. The world gather, the SSAO depth
-   prepass and the Scene tab all keep the world projection. The value is read in
-   `FirstPersonPresentation::Start()`, so it is **not live-tunable** — Stop/Play after
-   changing it. `ViewModelFov()` returns −1 when no first-person presentation is active,
-   which leaves the pass off; the Inspector clamps the field to 20–150.
-3. **Materials/textures are out of scope** per the user. Untextured rendering is
-   expected and correct; `Texture: failed to load ...` console errors are known noise,
-   as are the `Y Bot.fbx` import failures.
-4. **The camera sits on the head bone's origin**, which is the skull base, not the eye
-   socket — 1.557 m vs `EyeHeight` 1.6 m. Close enough to read as correct; if you want
-   exact eye placement, anchor on an eye bone (none exists on this rig) or nudge with
-   `ViewModelOffset`.
-5. **`FirstPersonPresentation::Tick`/state-transition logic** was exercised by the
-   smoke test's 2 play cycles, not stress-tested across all 15 states in the editor.
-   Worth a manual pass through Fire/Reload/Sprint/Melee with the Game tab open.
-6. **A one-shot state must request `ClampForever`, never `Once`.** `Once` clears
-   `Clip` at the end, which drops `UploadBoneMatrices` and `Model::NodeTransform` back
-   to the base FBX's **bind pose** — and for these rigs that bind pose is the Manny
-   T-pose (`work/bind_probe.cpp`: `ik_hand_gun` 678 mm from where the animation puts
-   it), so the arms *and* the socket-parented weapon both blink out of frame, and the
-   next crossfade then travels through the T-pose. `Play()` therefore uses `ClampForever`
-   for non-looping states and reads completion with `Model::AnimationFinished()`, since
-   a held clip never clears `IsPlayingAnimation()`. `Once`'s own "returns to bind pose"
-   contract is untouched for every other caller. See `FPS_ANIMATION_INVESTIGATION.md`
-   UPDATE 4 for the measurements.
-7. **The weapon's `mag2` bone is 121.8 mm off bind at t=0 *and* tEnd of every weapon
-   clip** (measured with `work/bind_probe.cpp`, node globals vs node globals — worst node
-   in the rig, worst rotation 0.0°, i.e. a pure translation), and both magazine islands
-   sit exactly on top of each other *at* bind. `Play()` used to call `StopAnimation()`
-   whenever it entered a state with no weapon clip (Idle/Walk/Aim/Draw/Regrip), which is
-   `PlayAnimation(-1)` with an implicit **fade of 0** — so the spare magazine hard-cut in
-   and out at both ends of every weapon clip. **Fixed:** that branch now calls
-   `PlayAnimation(-1, clip.Fade, wrap)`, a supported fade-to-bind. `Model::PlayAnimation`
-   starts a fade whenever a clip is currently live, `NodeTransform` stays posed for the
-   whole fade (so the socket tracks it) and lands on the bind walk exactly when the fade
-   ends, and `m_ActionGateWeapon = !WeaponClip.empty()` means this branch never waits on
-   `AnimationFinished()`, which would otherwise see `Clip == -1` and report done at once.
-   The clip files were **not** touched, so if that snap was authored behaviour the data is
-   exactly as it was.
-8. **assimp is patched locally; a fresh clone depends on that patch.** assimp comes from
-   github at a pinned `GIT_TAG` (`CMakeLists.txt`) rather than a fork, and stock v5.4.3's
-   `aiProcess_JoinIdenticalVertices` silently destroyed the spare magazine: its dedup key
-   ignored bone weights, so the two *coincident* magazine islands — modelled exactly on
-   top of each other and told apart only by the `magazine` / `mag2` bones — merged into
-   one, and the losing bone was then left holding 17594 stale vertex ids. Every engine
-   path downstream (`ExtractBoneWeights`, `ModelVertex.glsl`) behaved correctly; it just
-   received nothing. The fix rides along as
-   `tools/assimp_patches/0001-join-vertices-keep-skin-bindings-apart.patch`, applied at
-   configure time by `tools/apply_assimp_patches.cmake`. **All 11 weapon FBXs were
-   affected** (193,534 dropped weights over 27 files); the arms files were clean.
-   Consequences to remember: (a) `build/_deps` no longer survives a clean configure
-   unpatched — that's what the hook is for; (b) if you ever bump assimp's `GIT_TAG`, the
-   applier fails the configure loudly instead of building without the fix, and the patch
-   will need rebasing; (c) don't "optimise" it away with the per-asset
-   `importer.optimizeGraph=false` fallback — that keeps the mesh correct but costs
-   29215 → 130947 verts (+348%) versus +18.7% for the patch. See
-   `FPS_ANIMATION_INVESTIGATION.md` UPDATE 5.
-9. **`EmptyReload` is now driven by the magazine count** (it used to be reachable only via
-   a temporary `G` debug key, now removed). See "Weapon gameplay" below.
-   Two traps were cleared on the way to the old debug key: (a) the binding was dead on arrival because
-   `ProjectSettings` let `project/settings.json`'s 13-entry `input` array *replace*
-   `Defaults()` wholesale, so any newly-added default key read nothing (`Lookup()` warns
-   once, then the key is silently dead) — `InputMap::MergeDefaults` now tops a saved list
-   up with missing defaults, pinned by 4 assertions in `TestInputMap`; (b) the clip itself
-   is fine — `TacReload`, sharing the same weapon-clip path, shows the spare magazine.
-
-10. **Ten stale arm clips were re-exported — the "4:00:42 batch".** `Mag_Check` was the
-    only one that was *visibly* wrong, but all ten now come from a single exporter run
-    with correct weapon pairing and `meshes=0`. Measured `hand_l` deltas against what
-    shipped: `Mag_Check` **−22.8 mm**, everything else **≤3.2 mm** — because
-    `A_W_Tac_Reload`'s magazine only starts moving around frame 44 and every other stale
-    clip's range ends by frame 46, so the wrong pairing was *latent* everywhere except
-    `Mag_Check`'s 0..260 range. **`ADS` was deliberately not touched:** it is the base
-    model (geometry + bind pose + node tree) every clip attaches to, and its animation is
-    never played — rebaking it was the one genuinely break-everything risk here. Also
-    untouched: `Idle`, `Aim`, `Empty_Reload`, `Inspect`, `Melee`, already exported
-    correctly. See `FPS_ANIMATION_INVESTIGATION.md` UPDATE 6.
-
-### Weapon gameplay — ammo, binds, equip, ADS fire
-
-All in `FirstPersonPresentation` (`Fire()` / `Reload()` / `SetEquipped()` / `Tick(dt, …)`),
-with the pure rules in `FirstPersonAnimation.h` pinned by `TestFirstPersonAnimationFSM`.
-Input is read in `main.cpp` next to `firstPersonPresentation.Update`.
-
-| Input | Does |
-|---|---|
-| LMB / L-Ctrl (`Fire1`) | 1 round per shot. Hip: the `Fire` clip. ADS: procedural kick (below). Dry trigger does nothing — the empty reload is always the player's R |
-| B (`FireMode`) | Toggle Semi-Auto (one shot per press, the default) / Full-Auto (held, ~700 rpm = every 86 ms). Logged to the Console; resets to semi on Play |
-| R tap (`Reload`) | `TacReload` with rounds left, `EmptyReload` at 0, nothing when full or already reloading |
-| R hold ≥ 0.35 s | `MagCheck` (fires at the threshold; the release then does nothing) |
-| F (`Inspect`) | `Inspect` |
-| Q (`Melee`) | `Melee` |
-| 1 / 2 (`Weapon1` / `Weapon2`) | Draw the AK / Holster to unarmed |
-| Scroll wheel, H (`Holster`) | Toggle between the two |
-
-- **Magazine:** 30 rounds (`kMagazineSize`), refilled when the reload clip *completes*;
-  anything that cuts a reload short (Holster) leaves the count unchanged. No reserve ammo.
-  `EmptyReload` / `MagCheck` no longer have keys of their own.
-- **Regrip:** after 10–20 s (uniform random, re-rolled each time) of uninterrupted
-  `Idle`, as an `Action`-tier one-shot, so any input cuts it off. Never from Aim/Walk.
-- **Unarmed:** no unarmed arms pose exists, so once `Holster` finishes both rigs get
-  `DeactivatedTag` + `InactiveTag` (not drawn, clips paused), cleared again by `Draw`.
-  Draw/Holster still can't interrupt each other, so 1/2/scroll mid-swap is ignored.
-- **ADS fire:** the source set has no ADS fire clip, and the hip `Fire` clip would pull
-  the sights off centre every shot. When settled in `Aim`, `Fire()` keeps the pose and
-  kicks the whole view model about the eye in camera space — 1.2° muzzle up plus 14 mm
-  back / 2 mm up, 35 ms rise then an 80 ms exponential settle — so the sight picture
-  returns exactly to the one measured in §4. Each shot re-enters the rise at the current
-  kick, so full-auto chains into a shake instead of snapping between rounds.
-- **ADS while moving:** aiming wins over Walk, but sprinting (Sprint held *and* moving)
-  wins over aiming — no sprinting in ADS, sprint drops the sights
-  (`FirstPersonRestingState`). Releasing Sprint with Fire2 still held goes straight back
-  to `Aim`, skipping `SprintToIdle`. There is no aim-walk clip, so the Aim pose gets
-  a procedural bob instead of the hip `Walk` clip (which would pull the sights off
-  centre): a camera-plane figure-eight, 3 mm side-to-side per stride and 1.5 mm vertical
-  per step, stride 2.4 m, full amplitude at 3.5 m/s, eased in/out at 8/s. Firing while
-  walking in ADS is the same kick on top of the bob. Every other action (reloads, MagCheck,
-  Inspect, Melee) plays from ADS as its normal clip and hands back to `Aim` if Fire2 is
-  still held.
-
----
-
-## 9. Things that will bite you
-
-- **Two frames of reference, one pose.** Arms and weapon get *identical* world pose.
-  Any arms/weapon separation is root-space mesh placement, never transform code.
-- **`C = RestGlobal · BoneOffset` is pose-vs-bind, not error.** See section 3.
-- **Don't re-check what `FPS_ANIMATION_INVESTIGATION.md` ruled out** without new
-  evidence — each item there was killed with hard numbers, not guesswork.
-- **The standalone probes replicate `Model.cpp`, they are not `Model.cpp`.** They
-  omitted `ProcessMesh`'s vertex placement entirely — which is precisely where the bug
-  was. A faithful replica that agrees with Blender proves *bone transforms*, not the
-  whole pipeline.
-- **Preview downscales; crops don't.** Derive every UI click from a full-resolution crop.
+- **The weapon is socket-parented, not co-posed.** Arms get the camera-derived pose; the
+  weapon's root is solved onto `weaponSocket` every frame. A gun that drifts from the
+  hands is a socket/mount/pairing problem, not placement math.
+- **State names are the API.** Renaming a state in an `.fpsanim` silently unhooks its
+  input (and logs `unknown semantic state` on use).
+- **Input defaults vs `settings.json`.** The saved list wins per action.
+- **View-model fields don't hot-reload** — Stop/Play.
+- **Don't re-check what `FPS_ANIMATION_INVESTIGATION.md` ruled out** without new evidence.
+- **Never touch the `.blend` without asking.**

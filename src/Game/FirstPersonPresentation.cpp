@@ -135,6 +135,7 @@ void FirstPersonPresentation::Stop(World& world) {
     m_CameraBone.clear();
     m_ViewModelFov = -1.0f;
     m_CameraBoneWarned = false;
+    m_WeaponSocketWarned = false;
     m_ActionGateArms = false;
     m_ActionGateWeapon = false;
     m_ActionState.clear();
