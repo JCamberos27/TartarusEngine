@@ -2029,6 +2029,48 @@ void TestWeaponProcedural() {
         in.Velocity = glm::vec3(0.0f);
         CHECK(std::fabs(run(st, b, in, 2.0f).Position.x) < 1e-4f);
     }
+
+    // Values the Inspector can produce mid-edit never break the stack: zero lengths stay finite,
+    // a Min Rate above Max Rate is read in order, and switching IK off keeps the motion (the
+    // presentation moves the whole view model instead) rather than fading it away.
+    {
+        WeaponProceduralSettings z = WeaponProceduralSettings::Defaults();
+        z.Recoil.Duration = 0.0f;
+        z.Bob.WalkStride = z.Bob.SprintStride = 0.0f;
+        z.Bob.WalkFullSpeed = 0.0f;
+        z.Breath.Period = 0.0f;
+        z.Locomotion.MinRate = 1.3f;
+        z.Locomotion.MaxRate = 0.7f;
+        z.IK.Enabled = false;
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.Velocity = glm::vec3(0.0f, 0.0f, -20.0f);
+        in.WalkSpeed = 4.0f;
+        st.OnShot(z, true);
+        in.Dt = 0.0f;                        // a paused frame right after the shot
+        st.Update(z, in);
+        const WeaponProceduralPose p = run(st, z, in, 0.5f);
+        const auto finite = [](const glm::vec3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); };
+        CHECK(finite(p.Position) && finite(p.Rotation));
+        CHECK(p.WalkRate == 1.3f);           // 20 / 4 m/s, clamped to the larger of the two limits
+        CHECK(p.IKWeight == 1.0f);
+    }
+
+    // Sprinting straightens up out of a lean unless the weapon allows leaning while sprinting.
+    {
+        WeaponProceduralSettings l = s;
+        l.Lean.Enabled = true;
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.Lean = -1.0f;
+        in.Sprinting = true;
+        CHECK(std::fabs(run(st, l, in, 2.0f).CameraRoll) < 1e-3f);
+        l.Lean.WhileSprinting = true;
+        CHECK(std::fabs(run(st, l, in, 2.0f).CameraRoll + l.Lean.Angle) < 0.05f);
+        std::string err;
+        WeaponProceduralSettings back = WeaponProceduralSettings::Defaults();
+        CHECK(WeaponProceduralSettings::FromJson(l.ToJson(), back, &err) && back.Lean.WhileSprinting);
+    }
 }
 
 // --- Procedural animation: curves and IK -----------------------------------------------------

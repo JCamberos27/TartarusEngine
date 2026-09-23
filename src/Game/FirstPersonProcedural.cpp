@@ -218,7 +218,7 @@ json WeaponProceduralSettings::ToJson() const {
     j["locomotion"] = {{"matchSpeed", l.MatchSpeed}, {"walkReference", l.WalkReference},
                        {"sprintReference", l.SprintReference}, {"minRate", l.MinRate}, {"maxRate", l.MaxRate}};
     j["lean"] = {{"enabled", Lean.Enabled}, {"angle", Lean.Angle}, {"offset", Lean.Offset},
-                 {"weaponRoll", Lean.WeaponRoll}, {"speed", Lean.Speed}};
+                 {"weaponRoll", Lean.WeaponRoll}, {"speed", Lean.Speed}, {"whileSprinting", Lean.WhileSprinting}};
     const auto& k = IK;
     j["ik"] = {{"enabled", k.Enabled}, {"gunBone", k.GunBone},
                {"rightUpper", k.RightUpper}, {"rightLower", k.RightLower}, {"rightHand", k.RightHand},
@@ -327,6 +327,7 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.Number("offset", s.Lean.Offset);
         r.Number("weaponRoll", s.Lean.WeaponRoll);
         r.Number("speed", s.Lean.Speed);
+        r.Bool("whileSprinting", s.Lean.WhileSprinting);
     });
     root.Object("ik", [&](Reader& r) {
         auto& o = s.IK;
@@ -414,7 +415,7 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     WeaponProceduralPose pose;
 
     // Blend weights.
-    m_IK = MoveToward(m_IK, (in.IKOff || !s.IK.Enabled) ? 0.0f : 1.0f,
+    m_IK = MoveToward(m_IK, in.IKOff ? 0.0f : 1.0f,
                       s.IK.BlendTime > 0.0f ? dt / s.IK.BlendTime : 1.0f);
     m_Ads = MoveToward(m_Ads, in.Ads ? 1.0f : 0.0f, s.Aim.BlendTime > 0.0f ? dt / s.Aim.BlendTime : 1.0f);
     const float ads = s.Aim.Blend.Empty() ? m_Ads : std::clamp(s.Aim.Blend.Evaluate(m_Ads), 0.0f, 1.0f);
@@ -424,16 +425,18 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     // Recoil: every live shot's curves, summed, then smoothed by a spring so full-auto builds
     // into a climb and settles back instead of stepping.
     const auto& r = s.Recoil;
+    // Guarded here as well as in FromJson: the Inspector edits these live.
+    const float duration = std::max(r.Duration, 0.01f);
     glm::vec3 recoilRot(0.0f), recoilPos(0.0f);
     glm::vec2 camera(0.0f);
     for (Shot& shot : m_Shots) {
         shot.Time += dt;
-        const float u = shot.Time / r.Duration;
+        const float u = shot.Time / duration;
         recoilRot += r.Rotation.Evaluate(u) * shot.Rot * shot.Scale;
         recoilPos += r.Position.Evaluate(u) * shot.Pos * shot.Scale;
         camera += glm::vec2(r.CameraPitch.Evaluate(u), r.CameraYaw.Evaluate(u) * shot.CamYaw) * shot.Scale * r.CameraScale;
     }
-    m_Shots.erase(std::remove_if(m_Shots.begin(), m_Shots.end(), [&](const Shot& sh) { return sh.Time >= r.Duration; }),
+    m_Shots.erase(std::remove_if(m_Shots.begin(), m_Shots.end(), [&](const Shot& sh) { return sh.Time >= duration; }),
                   m_Shots.end());
     if (!r.Enabled) {
         recoilRot = recoilPos = glm::vec3(0.0f);
@@ -470,9 +473,9 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     const auto& b = s.Bob;
     const float speed = glm::length(glm::vec2(in.Velocity.x, in.Velocity.z));
     const float ease = std::min(1.0f, dt * std::max(b.Ease, 0.0f));
-    m_BobWeight += ((b.Enabled ? std::min(speed / b.WalkFullSpeed, 1.0f) : 0.0f) - m_BobWeight) * ease;
+    m_BobWeight += ((b.Enabled ? std::min(speed / std::max(b.WalkFullSpeed, 0.01f), 1.0f) : 0.0f) - m_BobWeight) * ease;
     m_BobSprint += ((in.Sprinting ? 1.0f : 0.0f) - m_BobSprint) * ease;
-    const float stride = b.WalkStride + (b.SprintStride - b.WalkStride) * m_BobSprint;
+    const float stride = std::max(b.WalkStride + (b.SprintStride - b.WalkStride) * m_BobSprint, 0.01f);
     m_BobPhase = std::fmod(m_BobPhase + speed * dt / stride, 1.0f);
     const glm::vec3 bob = (b.Walk.Evaluate(m_BobPhase) * (1.0f - m_BobSprint) + b.Sprint.Evaluate(m_BobPhase) * m_BobSprint) *
                           m_BobWeight * adsMix(b.HipScale, b.AdsScale);
@@ -481,7 +484,7 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
 
     // Breathing: a slow idle drift, calmer with sights up.
     const auto& br = s.Breath;
-    m_BreathPhase = std::fmod(m_BreathPhase + dt / br.Period, 1.0f);
+    m_BreathPhase = std::fmod(m_BreathPhase + dt / std::max(br.Period, 0.05f), 1.0f);
     if (br.Enabled) {
         const float scale = adsMix(br.HipScale, br.AdsScale);
         pose.Position += br.Position.Evaluate(m_BreathPhase) * scale;
@@ -511,7 +514,8 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
 
     // Lean: the camera rolls and slides; the gun rolls a little further into it.
     const auto& l = s.Lean;
-    m_Lean += ((l.Enabled ? std::clamp(in.Lean, -1.0f, 1.0f) : 0.0f) - m_Lean) * std::min(1.0f, dt * std::max(l.Speed, 0.0f));
+    const bool canLean = l.Enabled && (l.WhileSprinting || !in.Sprinting);
+    m_Lean += ((canLean ? std::clamp(in.Lean, -1.0f, 1.0f) : 0.0f) - m_Lean) * std::min(1.0f, dt * std::max(l.Speed, 0.0f));
     pose.CameraRoll = m_Lean * l.Angle;
     pose.CameraSide = m_Lean * l.Offset;
     pose.Rotation.z += -m_Lean * l.WeaponRoll;
@@ -520,9 +524,12 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     const auto& lo = s.Locomotion;
     const float walkRef = lo.WalkReference > 0.0f ? lo.WalkReference : in.WalkSpeed;
     const float sprintRef = lo.SprintReference > 0.0f ? lo.SprintReference : in.SprintSpeed;
+    // std::clamp needs lo <= hi: a Min above Max must not be undefined behaviour.
+    const float minRate = std::max(0.0f, std::min(lo.MinRate, lo.MaxRate));
+    const float maxRate = std::max(minRate, std::max(lo.MinRate, lo.MaxRate));
     if (lo.MatchSpeed && speed > 0.05f) {
-        if (walkRef > 0.0f) pose.WalkRate = std::clamp(speed / walkRef, lo.MinRate, lo.MaxRate);
-        if (sprintRef > 0.0f) pose.SprintRate = std::clamp(speed / sprintRef, lo.MinRate, lo.MaxRate);
+        if (walkRef > 0.0f) pose.WalkRate = std::clamp(speed / walkRef, minRate, maxRate);
+        if (sprintRef > 0.0f) pose.SprintRate = std::clamp(speed / sprintRef, minRate, maxRate);
     }
 
     m_Pose = pose;
