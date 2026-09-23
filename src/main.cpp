@@ -1239,6 +1239,7 @@ int main(int argc, char** argv) {
             // Runtime-only arms/weapon entities were created after the play snapshot. Remove
             // them before restoring the authored world so they can never be serialized or leak
             // into another scene after a stop.
+            firstPersonPresentation.RemoveViewKick(player.Cam);
             firstPersonPresentation.Stop(world);
             editor.OnExitPlayMode(world, assets);
             playing = false;
@@ -2149,6 +2150,9 @@ int main(int argc, char** argv) {
                 PhysicsWorld::Step(gameDt, world,
                                    [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); });
                 if (playUsesPlayer) {
+                    // The weapon's view punch / lean comes off before the player integrates
+                    // its own look and position, and goes back on in Update below.
+                    firstPersonPresentation.RemoveViewKick(player.Cam);
                     player.Update(gameDt, world, window.Handle(), gameHasInput);
                     if (firstPersonPresentation.IsActive()) {
                         firstPersonPresentation.Update(world, player.Cam);
@@ -2174,9 +2178,11 @@ int main(int argc, char** argv) {
                         } else {
                             firstPersonPresentation.ResetReloadKey(); // focus lost mid-press: never resolve it as a tap
                         }
-                        const float planarSpeed = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z));
-                        firstPersonPresentation.Tick(gameDt, planarSpeed, gameHasInput && InputMap::GetButton("Sprint"),
-                                                     weaponInput && InputMap::GetButton("Fire2"));
+                        const float lean = gameHasInput ? (InputMap::GetButton("LeanRight") ? 1.0f : 0.0f) -
+                                                              (InputMap::GetButton("LeanLeft") ? 1.0f : 0.0f)
+                                                        : 0.0f;
+                        firstPersonPresentation.Tick(gameDt, player.Velocity, gameHasInput && InputMap::GetButton("Sprint"),
+                                                     weaponInput && InputMap::GetButton("Fire2"), lean);
                     }
                 }
                 // The Play-mode camera is the ears: positional sources (#201) attenuate and pan

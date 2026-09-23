@@ -48,7 +48,8 @@
             0.0,
             120.0
           ],
-          "speed": 1.0
+          "speed": 1.0,
+          "speedParam": "WalkRate"
         },
         {
           "loop": true,
@@ -67,7 +68,8 @@
             330.0,
             120.0
           ],
-          "speed": 1.0
+          "speed": 1.0,
+          "speedParam": "SprintRate"
         },
         {
           "loop": true,
@@ -301,7 +303,10 @@
             330.0
           ],
           "priority": 4,
-          "speed": 1.0
+          "speed": 1.0,
+          "tags": [
+            "IKOff"
+          ]
         },
         {
           "loop": false,
@@ -321,7 +326,10 @@
             400.0
           ],
           "priority": 4,
-          "speed": 1.0
+          "speed": 1.0,
+          "tags": [
+            "IKOff"
+          ]
         },
         {
           "loop": false,
@@ -857,6 +865,16 @@
     {
       "default": 0.0,
       "name": "Speed",
+      "type": "float"
+    },
+    {
+      "default": 1.0,
+      "name": "WalkRate",
+      "type": "float"
+    },
+    {
+      "default": 1.0,
+      "name": "SprintRate",
       "type": "float"
     },
     {
