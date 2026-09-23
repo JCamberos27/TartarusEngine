@@ -142,6 +142,7 @@ struct WeaponLeanSettings {
     float Offset = 0.28f;          // camera side shift at full lean, metres
     float WeaponRoll = 6.0f;       // extra gun roll into the lean, degrees
     float Speed = 6.0f;            // 1/s
+    bool WhileSprinting = false;   // off: sprinting straightens up
 };
 
 struct WeaponIKSettings {
@@ -150,6 +151,8 @@ struct WeaponIKSettings {
     std::string RightUpper = "upperarm_r", RightLower = "lowerarm_r", RightHand = "hand_r";
     std::string LeftUpper = "upperarm_l", LeftLower = "lowerarm_l", LeftHand = "hand_l";
     std::string OffTag = "IKOff";  // states with this tag play purely as authored
+    // Off, or when the arms rig lacks any of the bones above: the procedural motion moves the
+    // whole view model about the eye instead of the gun bone.
     float BlendTime = 0.12f;
 };
 
@@ -179,7 +182,9 @@ struct WeaponProceduralPose {
     glm::vec2 CameraKick{0.0f};    // view punch, degrees (pitch, yaw)
     float CameraRoll = 0.0f;       // lean, degrees
     float CameraSide = 0.0f;       // lean, metres along the camera's right
-    float IKWeight = 1.0f;         // 0..1, eased toward 0 in states tagged OffTag
+    // 0..1, eased toward 0 in states tagged OffTag: how much of the procedural motion (and the IK
+    // carrying it) applies. IK.Enabled doesn't change it; that picks IK vs whole-view-model.
+    float IKWeight = 1.0f;
     float WalkRate = 1.0f;         // for the controller's WalkRate / SprintRate parameters
     float SprintRate = 1.0f;
 
