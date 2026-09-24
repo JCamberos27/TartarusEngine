@@ -269,7 +269,7 @@ With the rotation-only mount, `Aim` leaves the sight line ~5 cm left of and ~3 c
 the `head` camera. That is corrected on the scene's controller:
 
 ```jsonc
-// project/scenes/FPS_Animation_smoke_play.json, First Person Controller
+// project/scenes/Sandbox.json, Player Spawn > First Person Controller
 "View Model Offset":   [0.0562, -0.032, 0.0]   // camera frame: +x right, +y up, +z back
 "View Model Rotation": [-0.24, 0.39, 0.0]      // Y-X-Z degrees, pivots on the head bone = the camera
 "View Model FOV":      50.0
@@ -500,9 +500,9 @@ $p = Start-Process build\Release\TartarusEngine.exe -ArgumentList "--smoke-test"
 Release is a GUI-subsystem binary: run it through `Start-Process -Wait` with redirected
 output or you get no output and no exit code.
 
-Expected: unit tests exit 0; smoke `FPS_Animation_smoke_play.json` →
-`PASS ... loadOk=1 newGlErrors=0 newLogErrors=0 playCycles=2`. `Apartment` and
-`Sandbox` fail locally on **pre-existing missing assets** (Mixamo files are gitignored).
+Expected: unit tests exit 0. The AK is tested in `Sandbox.json` (its Player Spawn carries
+it); Sandbox and `Apartment` need the gitignored Mixamo characters and HDRI sky locally, or
+their smoke runs fail on the missing assets.
 
 CI (`.github/workflows/build.yml`) additionally runs
 `tools/check_component_registration.py`: any new `*Tag`/`*Component` struct in
