@@ -54,417 +54,6 @@ bool RemoveButton(const char* tooltip) {
     return ActionButton(ICON_FA_XMARK, tooltip, false, ImVec2(ImGui::GetFrameHeight(), 0.0f));
 }
 
-bool ContainsNoCase(const std::string& text, const char* needle) {
-    const auto lower = [](unsigned char c) { return (char)std::tolower(c); };
-    std::string a(text), b(needle);
-    std::transform(a.begin(), a.end(), a.begin(), lower);
-    std::transform(b.begin(), b.end(), b.begin(), lower);
-    return a.find(b) != std::string::npos;
-}
-
-// A small drop-down button that fills `value` from `items`, with a type-to-filter box. True when
-// something was picked.
-bool PickFromList(const char* id, std::string& value, const std::vector<std::string>& items, const char* tip) {
-    bool picked = false;
-    ImGui::SetNextItemWidth(ImGui::GetFrameHeight());
-    ImGui::SetNextWindowSizeConstraints(ImVec2(ImGui::GetFontSize() * 14.0f, 0.0f),
-                                        ImVec2(FLT_MAX, ImGui::GetFontSize() * 24.0f));
-    if (ImGui::BeginCombo(id, nullptr, ImGuiComboFlags_NoPreview)) {
-        static char filter[64] = "";
-        if (ImGui::IsWindowAppearing()) {
-            filter[0] = '\0';
-            ImGui::SetKeyboardFocusHere();
-        }
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputTextWithHint("##filter", "Type to filter", filter, sizeof filter);
-        if (items.empty()) ImGui::TextDisabled("(nothing to pick from)");
-        for (const std::string& item : items) {
-            if (filter[0] && !ContainsNoCase(item, filter)) continue;
-            if (ImGui::Selectable(item.c_str(), item == value)) {
-                picked = item != value;
-                value = item;
-            }
-        }
-        ImGui::EndCombo();
-    }
-    if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
-    return picked;
-}
-
-// What the weapon's procedural section can offer as choices: the arms rig's bones (null until
-// that rig is loaded) and the controller's state names and tags.
-struct WeaponProceduralContext {
-    const Model* Arms = nullptr;
-    std::vector<std::string> Bones;
-    std::vector<std::string> StatesAndTags;
-    bool CanLoadArms = false;   // the rig isn't loaded yet but can be, on request
-    bool LoadArms = false;      // out: the user asked to load it
-};
-
-// The weapon definition's procedural block (FirstPersonProcedural.h): recoil, sway, bob,
-// breathing, aim, per-state offsets, locomotion rates, lean and IK. Every committed edit sets the
-// changed flag; a running Play session picks the saved file up within a moment.
-void DrawWeaponProcedural(WeaponProceduralSettings& p, float labelW, float rpm, WeaponProceduralContext& ctx, bool& changed) {
-    static const WeaponProceduralSettings kDefaults = WeaponProceduralSettings::Defaults();
-    const ImVec4 warn = EditorUIPrimitives::WarningColor();
-
-    auto row = [&](const char* label, const char* tip) {
-        ImGui::TextUnformatted(label);
-        if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
-        ImGui::SameLine(labelW);
-        ImGui::SetNextItemWidth(-FLT_MIN);
-    };
-    // AlwaysClamp: a Ctrl+click typed value obeys the same limits as a drag.
-    auto dragF = [&](const char* label, const char* id, float& v, float speed, float lo, float hi, const char* fmt, const char* tip) {
-        row(label, tip);
-        ImGui::DragFloat(id, &v, speed, lo, hi, fmt, ImGuiSliderFlags_AlwaysClamp);
-        if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
-        if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
-    };
-    auto dragV2 = [&](const char* label, const char* id, glm::vec2& v, float speed, const char* fmt, const char* tip) {
-        row(label, tip);
-        float f[2] = {v.x, v.y};
-        if (ImGui::DragFloat2(id, f, speed, 0.0f, 0.0f, fmt)) v = {f[0], f[1]};
-        if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
-        if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
-    };
-    // A random range: min and max, kept in order.
-    auto range = [&](const char* label, const char* id, glm::vec2& v, const char* tip) {
-        dragV2(label, id, v, 0.01f, "%.2f", tip);
-        if (v.x > v.y) std::swap(v.x, v.y);
-    };
-    auto dragV3 = [&](const char* label, const char* id, glm::vec3& v, float speed, const char* fmt, const char* tip) {
-        row(label, tip);
-        float f[3] = {v.x, v.y, v.z};
-        if (ImGui::DragFloat3(id, f, speed, 0.0f, 0.0f, fmt)) v = {f[0], f[1], f[2]};
-        if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
-        if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
-    };
-    auto check = [&](const char* label, const char* id, bool& v, const char* tip) {
-        row(label, tip);
-        if (EditorUIPrimitives::Checkbox(id, &v)) changed = true;
-        if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
-    };
-    auto spring = [&](const char* label, const char* id, FirstPersonSpring& sp, const char* tip) {
-        row(label, tip);
-        float f[2] = {sp.Frequency, sp.Damping};
-        if (ImGui::DragFloat2(id, f, 0.05f, 0.0f, 0.0f, "%.2f")) {
-            sp.Frequency = std::clamp(f[0], 0.1f, 100.0f);
-            sp.Damping = std::clamp(f[1], 0.0f, 5.0f);
-        }
-        if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
-        if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
-    };
-    // A text field with a picker next to it. With `known`, a name the list doesn't have is shown
-    // in the warning colour.
-    auto pickField = [&](const char* label, const char* id, std::string& v, const std::vector<std::string>& items,
-                         bool validate, const char* tip, const char* pickTip) {
-        row(label, tip);
-        ImGui::PushID(id);
-        const bool unknown = validate && std::find(items.begin(), items.end(), v) == items.end();
-        if (unknown) ImGui::PushStyleColor(ImGuiCol_Text, warn);
-        const float w = ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x;
-        if (InputName("##name", v, w, true)) changed = true;
-        if (unknown) ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered()) {
-            if (unknown) EditorUI::SetTooltip("The arms rig has no bone named '%s'.", v.c_str());
-            else if (tip) EditorUI::SetTooltip("%s", tip);
-        }
-        ImGui::SameLine();
-        if (PickFromList("##pick", v, items, pickTip)) changed = true;
-        ImGui::PopID();
-    };
-    const float curveH = ImGui::GetFontSize() * 5.0f;
-    auto curve = [&](const char* label, const char* id, Curve& c, const Curve& def, const char* fmt, float presetAmp, const char* tip) {
-        ImGui::TextUnformatted(label);
-        if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
-        CurveEditor::Options o;
-        o.ValueFormat = fmt;
-        o.PresetAmplitude = presetAmp;
-        o.Default = &def;
-        if (CurveEditor::Draw(id, c, ImVec2(0.0f, curveH), o)) changed = true;
-    };
-    auto curve3 = [&](const char* id, FirstPersonCurve3& c, const FirstPersonCurve3& def, const char* xl, const char* yl,
-                      const char* zl, const char* fmtXY, const char* fmtZ, float ampXY, float ampZ, const char* tip) {
-        ImGui::PushID(id);
-        curve(xl, "##x", c.X, def.X, fmtXY, ampXY, tip);
-        curve(yl, "##y", c.Y, def.Y, fmtXY, ampXY, tip);
-        curve(zl, "##z", c.Z, def.Z, fmtZ, ampZ, tip);
-        ImGui::PopID();
-    };
-    // A shot's curve that doesn't come back to 0 by the end of the shot snaps the gun when the
-    // shot expires.
-    auto endsAtZero = [&](const char* what, const Curve& c) {
-        if (c.Empty()) return;
-        float peak = 0.0f;
-        for (const CurveKey& k : c.Keys) peak = std::max(peak, std::fabs(k.Value));
-        const float end = c.Evaluate(1.0f);
-        if (std::fabs(end) > std::max(peak * 0.02f, 1e-5f))
-            ImGui::TextColored(warn, ICON_FA_TRIANGLE_EXCLAMATION "  %s ends at %g, not 0: it will snap back when each shot ends.", what, end);
-    };
-    // Puts one section back to the defaults, after a confirmation (there is no undo here).
-    auto resetSection = [&](const char* id, const char* what, const std::function<void()>& apply) {
-        ImGui::PushID(id);
-        char tip[128];
-        std::snprintf(tip, sizeof tip, "Put every %s setting back to the engine default", what);
-        if (ActionButton(ICON_FA_ROTATE_LEFT "  Reset to Defaults", tip, false, ImVec2(-FLT_MIN, 0.0f)))
-            ImGui::OpenPopup("##reset");
-        if (ImGui::BeginPopup("##reset")) {
-            ImGui::Text("Reset all %s settings to the defaults?", what);
-            ImGui::TextDisabled("This can't be undone.");
-            if (ImGui::Button("Reset")) {
-                apply();
-                changed = true;
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
-            ImGui::EndPopup();
-        }
-        ImGui::PopID();
-    };
-
-    ImGui::SeparatorText(ICON_FA_WAVE_SQUARE "  Procedural");
-    ImGui::TextWrapped("Moves the arms rig's gun bone on top of the animation; two-bone IK keeps both hands on it. "
-                       "Camera frame: +X right, +Y up, +Z back. Metres and degrees.");
-    ImGui::TextDisabled(ICON_FA_CIRCLE_INFO "  Hover a label for help. Curves: double-click adds a key, right-click for presets.");
-
-    if (ImGui::CollapsingHeader("Recoil##proc")) {
-        auto& r = p.Recoil;
-        check("Enabled", "##rcen", r.Enabled, "Procedural recoil on every shot, hip and ADS.");
-        dragF("Duration (s)", "##rcdur", r.Duration, 0.005f, 0.02f, 3.0f, "%.3f",
-              "Seconds one shot's curves span. The curves below are keyed over 0..1 of it.");
-        dragF("Hip Scale", "##rchip", r.HipScale, 0.01f, 0.0f, 5.0f, "%.2f",
-              "Multiplier for hip fire, which also plays the Fire clip (so it needs less).");
-        dragF("ADS Scale", "##rcads", r.AdsScale, 0.01f, 0.0f, 5.0f, "%.2f", "Multiplier with sights up.");
-        dragV3("Pivot (m)", "##rcpiv", r.Pivot, 0.001f, "%.3f",
-               "Rotation centre relative to the gun bone, camera frame.\nPush it back (+Z) to pivot nearer the shoulder.");
-        spring("Smoothing", "##rcspr", r.Smoothing,
-               "Spring frequency (Hz) and damping ratio the summed kicks run through.\n"
-               "Higher frequency = snappier. Damping 1 = no overshoot, under 1 = bouncier.");
-        ImGui::SeparatorText("Per-shot random scale (min, max)");
-        range("Pitch", "##rcrp", r.PitchRange, "Each shot multiplies its pitch curve by a random value in this range.");
-        range("Yaw", "##rcry", r.YawRange, "A negative min lets the shot kick either way.");
-        range("Roll", "##rcrr", r.RollRange, "A negative min lets the shot roll either way.");
-        range("Side", "##rcrs", r.SideRange, "A negative min lets the shot push either way.");
-        range("Up", "##rcru", r.UpRange, "Random scale for the Up curve.");
-        range("Kickback", "##rcrk", r.KickRange, "Random scale for the Kickback curve.");
-        ImGui::SeparatorText("Shot curves");
-        const char* shotTip = "One shot's motion over its Duration (0 = the shot, 1 = Duration later). "
-                              "Should end at 0. Shots overlap and add, so full-auto climbs.";
-        curve3("rcrot", r.Rotation, kDefaults.Recoil.Rotation, "Pitch (deg)", "Yaw (deg)", "Roll (deg)", "%.2f", "%.2f",
-               1.0f, 1.0f, shotTip);
-        curve3("rcpos", r.Position, kDefaults.Recoil.Position, "Side (m)", "Up (m)", "Kickback (m)", "%.4f", "%.4f",
-               0.002f, 0.01f, shotTip);
-        endsAtZero("Pitch", r.Rotation.X);
-        endsAtZero("Yaw", r.Rotation.Y);
-        endsAtZero("Roll", r.Rotation.Z);
-        endsAtZero("Side", r.Position.X);
-        endsAtZero("Up", r.Position.Y);
-        endsAtZero("Kickback", r.Position.Z);
-        ImGui::SeparatorText("Camera punch");
-        const char* camTip = "View punch per shot, degrees: what the player sees, not where they aim. Recovers on its own.";
-        curve("Camera Pitch (deg)", "##rccp", r.CameraPitch, kDefaults.Recoil.CameraPitch, "%.2f", 0.5f, camTip);
-        curve("Camera Yaw (deg)", "##rccy", r.CameraYaw, kDefaults.Recoil.CameraYaw, "%.2f", 0.2f, camTip);
-        endsAtZero("Camera Pitch", r.CameraPitch);
-        endsAtZero("Camera Yaw", r.CameraYaw);
-        range("Camera Yaw Range", "##rccyr", r.CameraYawRange, "Random scale for the camera yaw; a negative min kicks either way.");
-        dragF("Camera Scale", "##rccs", r.CameraScale, 0.01f, 0.0f, 5.0f, "%.2f", "Multiplier for the whole camera punch (0 = off).");
-
-        // What a burst looks like with these numbers: the gun's pitch over 1.5 s of a 10-round
-        // burst at the weapon's rpm, every random pick at its middle.
-        WeaponProceduralSettings sim = p;
-        sim.Sway.Enabled = sim.Bob.Enabled = sim.Breath.Enabled = sim.Lean.Enabled = false;
-        sim.StateOffsets.clear();
-        auto& sr = sim.Recoil;
-        for (glm::vec2* rg : {&sr.PitchRange, &sr.YawRange, &sr.RollRange, &sr.SideRange, &sr.UpRange, &sr.KickRange, &sr.CameraYawRange})
-            *rg = glm::vec2((rg->x + rg->y) * 0.5f);
-        WeaponProceduralState st;
-        WeaponProceduralInput in;
-        in.Dt = 1.0f / 120.0f;
-        const float interval = rpm > 0.0f ? 60.0f / rpm : 0.1f;
-        float pitch[180];
-        float next = 0.0f, peak = 0.01f;
-        int shots = 0;
-        for (int f = 0; f < 180; ++f) {
-            if (shots < 10 && f * in.Dt >= next) { st.OnShot(sim, true); next += interval; ++shots; }
-            pitch[f] = st.Update(sim, in).Rotation.x;
-            peak = std::max(peak, std::fabs(pitch[f]));
-        }
-        char overlay[64];
-        std::snprintf(overlay, sizeof overlay, "10-round ADS burst: pitch peaks %.2f deg", peak);
-        ImGui::PlotLines("##burst", pitch, 180, 0, overlay, -peak * 0.25f, peak * 1.15f, ImVec2(-FLT_MIN, curveH));
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("The gun's pitch over 1.5 s of a 10-round burst at this weapon's rounds per minute,\n"
-                                 "with every random range at its middle. Updates as you edit.");
-        resetSection("rcreset", "Recoil", [&] { p.Recoil = kDefaults.Recoil; });
-    }
-
-    if (ImGui::CollapsingHeader("Sway##proc")) {
-        auto& w = p.Sway;
-        check("Enabled", "##swen", w.Enabled, "The gun lags behind turns and trails against movement.");
-        dragF("Look Rotation", "##swlr", w.LookRotation, 0.01f, 0.0f, 20.0f, "%.2f deg", "Rotation lag per 100 deg/s of turn.");
-        dragF("Look Position", "##swlp", w.LookPosition, 0.0001f, 0.0f, 0.1f, "%.4f m", "Position lag per 100 deg/s of turn.");
-        dragF("Max Rotation", "##swmr", w.MaxRotation, 0.05f, 0.0f, 45.0f, "%.1f deg", "Largest rotation sway, however fast the turn.");
-        dragF("Max Position", "##swmp", w.MaxPosition, 0.0005f, 0.0f, 0.2f, "%.3f m", "Largest position sway, however fast the turn or move.");
-        dragF("Move Position", "##swmv", w.MovePosition, 0.0001f, 0.0f, 0.05f, "%.4f m", "Trail per m/s of movement.");
-        dragF("Move Roll", "##swro", w.MoveRoll, 0.01f, 0.0f, 10.0f, "%.2f deg", "Tilt into a strafe, per m/s.");
-        dragF("ADS Scale", "##swads", w.AdsScale, 0.01f, 0.0f, 2.0f, "%.2f", "Multiplier with sights up (lower = steadier aim).");
-        spring("Spring", "##swspr", w.Spring, "Frequency (Hz) and damping ratio. Under 1 overshoots, which reads as weight.");
-        resetSection("swreset", "Sway", [&] { p.Sway = kDefaults.Sway; });
-    }
-
-    if (ImGui::CollapsingHeader("Bob##proc")) {
-        auto& b = p.Bob;
-        check("Enabled", "##boen", b.Enabled, "Walk and sprint bob, locked to the distance travelled.");
-        dragF("Walk Stride (m)", "##bows", b.WalkStride, 0.05f, 0.1f, 10.0f, "%.2f", "Distance per cycle (two steps) while walking.");
-        dragF("Sprint Stride (m)", "##boss", b.SprintStride, 0.05f, 0.1f, 10.0f, "%.2f", "Distance per cycle (two steps) while sprinting.");
-        dragF("Full Speed (m/s)", "##bofs", b.WalkFullSpeed, 0.05f, 0.1f, 30.0f, "%.2f", "Speed at which the bob reaches full amplitude.");
-        dragF("Hip Scale", "##bohip", b.HipScale, 0.01f, 0.0f, 5.0f, "%.2f", "Multiplier at the hip. The walk/sprint clips already bob there.");
-        dragF("ADS Scale", "##boads", b.AdsScale, 0.01f, 0.0f, 5.0f, "%.2f", "Multiplier with sights up.");
-        dragF("Ease (1/s)", "##boea", b.Ease, 0.1f, 0.1f, 50.0f, "%.1f", "How fast the bob fades in when you start moving and out when you stop.");
-        const char* cycleTip = "One stride (two steps), keyed over 0..1. Should start and end on the same value so it loops.";
-        ImGui::SeparatorText("Walk cycle");
-        curve3("bowalk", b.Walk, kDefaults.Bob.Walk, "Side (m)", "Up (m)", "Roll (deg)", "%.4f", "%.2f", 0.003f, 0.5f, cycleTip);
-        ImGui::SeparatorText("Sprint cycle");
-        curve3("bosprint", b.Sprint, kDefaults.Bob.Sprint, "Side (m)", "Up (m)", "Roll (deg)", "%.4f", "%.2f", 0.008f, 1.0f, cycleTip);
-        resetSection("boreset", "Bob", [&] { p.Bob = kDefaults.Bob; });
-    }
-
-    if (ImGui::CollapsingHeader("Breathing##proc")) {
-        auto& br = p.Breath;
-        check("Enabled", "##bren", br.Enabled, "A slow idle drift, always running.");
-        dragF("Period (s)", "##brper", br.Period, 0.05f, 0.2f, 20.0f, "%.2f", "Seconds per breath.");
-        dragF("Hip Scale", "##brhip", br.HipScale, 0.01f, 0.0f, 5.0f, "%.2f", "Multiplier at the hip.");
-        dragF("ADS Scale", "##brads", br.AdsScale, 0.01f, 0.0f, 5.0f, "%.2f", "Multiplier with sights up (lower = steadier aim).");
-        const char* breathTip = "One breath, keyed over 0..1. Should start and end on the same value so it loops.";
-        ImGui::PushID("brc");
-        curve("Side (m)", "##x", br.Position.X, kDefaults.Breath.Position.X, "%.4f", 0.0005f, breathTip);
-        curve("Up (m)", "##y", br.Position.Y, kDefaults.Breath.Position.Y, "%.4f", 0.0005f, breathTip);
-        curve("Back (m)", "##z", br.Position.Z, kDefaults.Breath.Position.Z, "%.4f", 0.0005f, breathTip);
-        curve("Pitch (deg)", "##p", br.Pitch, kDefaults.Breath.Pitch, "%.3f", 0.1f, breathTip);
-        ImGui::PopID();
-        resetSection("brreset", "Breathing", [&] { p.Breath = kDefaults.Breath; });
-    }
-
-    if (ImGui::CollapsingHeader("Aim (ADS)##proc")) {
-        auto& a = p.Aim;
-        dragV3("Position (m)", "##aipos", a.Position, 0.0005f, "%.4f",
-               "Added to the gun with sights up, on top of the Aim clip.\nZero keeps the clip's sight picture exactly.");
-        dragV3("Rotation (deg)", "##airot", a.Rotation, 0.05f, "%.2f", "Pitch, yaw, roll added with sights up.");
-        dragF("Blend Time (s)", "##aibt", a.BlendTime, 0.005f, 0.0f, 2.0f, "%.3f", "Seconds to blend the aim offset in and out.");
-        curve("Blend Easing", "##aiblend", a.Blend, kDefaults.Aim.Blend, "%.2f", 1.0f,
-              "Maps the 0..1 blend to the weight actually applied. Should run from 0 to 1.");
-        resetSection("aireset", "Aim", [&] { p.Aim = kDefaults.Aim; });
-    }
-
-    if (ImGui::CollapsingHeader("State Offsets##proc")) {
-        ImGui::TextWrapped("Tweak the gun's pose while a state (by name or tag) plays, e.g. lower it in Sprint.");
-        const char* matchTip = "A state name or tag from the weapon's Animator Controller.";
-        for (int i = 0; i < (int)p.StateOffsets.size(); ++i) {
-            auto& o = p.StateOffsets[i];
-            ImGui::PushID(i);
-            ImGui::Separator();
-            row("State or Tag", matchTip);
-            const float w = ImGui::GetContentRegionAvail().x - 2.0f * (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x);
-            const bool unknown = !ctx.StatesAndTags.empty() && !o.Match.empty() &&
-                                 std::find(ctx.StatesAndTags.begin(), ctx.StatesAndTags.end(), o.Match) == ctx.StatesAndTags.end();
-            if (unknown) ImGui::PushStyleColor(ImGuiCol_Text, warn);
-            if (InputName("##somatch", o.Match, w, true)) changed = true;
-            if (unknown) ImGui::PopStyleColor();
-            if (ImGui::IsItemHovered()) {
-                if (unknown) EditorUI::SetTooltip("No state or tag in the controller is called '%s', so it never applies.", o.Match.c_str());
-                else EditorUI::SetTooltip("%s", matchTip);
-            }
-            ImGui::SameLine();
-            if (PickFromList("##sopick", o.Match, ctx.StatesAndTags, "Pick a state or tag from the controller")) changed = true;
-            ImGui::SameLine();
-            bool removed = false;
-            if (RemoveButton("Remove this offset")) {
-                p.StateOffsets.erase(p.StateOffsets.begin() + i);
-                changed = removed = true;
-            }
-            if (!removed) {
-                dragV3("Position (m)", "##sopos", o.Position, 0.0005f, "%.4f", "Added to the gun while the state plays, camera frame.");
-                dragV3("Rotation (deg)", "##sorot", o.Rotation, 0.05f, "%.2f", "Pitch, yaw, roll added while the state plays.");
-                dragF("Blend In (s)", "##sobi", o.BlendIn, 0.005f, 0.0f, 5.0f, "%.3f", "Seconds to blend in when the state starts.");
-                dragF("Blend Out (s)", "##sobo", o.BlendOut, 0.005f, 0.0f, 5.0f, "%.3f", "Seconds to blend out when it ends.");
-            }
-            ImGui::PopID();
-            if (removed) break;
-        }
-        if (ActionButton(ICON_FA_PLUS "  Add State Offset", "Add a pose tweak for a state or tag", false, ImVec2(-FLT_MIN, 0.0f))) {
-            p.StateOffsets.push_back({"Walk", {}, {}, 0.2f, 0.25f});
-            changed = true;
-        }
-    }
-
-    if (ImGui::CollapsingHeader("Locomotion Rate##proc")) {
-        auto& l = p.Locomotion;
-        ImGui::TextWrapped("Sets the WalkRate / SprintRate parameters from the player's speed. Use them as the Walk and "
-                           "Sprint states' speed parameter so the clips step at the pace you move.");
-        check("Match Speed", "##lomatch", l.MatchSpeed, "Off: both rates stay at 1.");
-        dragF("Walk Reference", "##lowr", l.WalkReference, 0.05f, 0.0f, 30.0f, l.WalkReference > 0.0f ? "%.2f m/s" : "auto",
-              "Speed the walk clip plays at rate 1. 0 (auto) = the player controller's Move Speed.");
-        dragF("Sprint Reference", "##losr", l.SprintReference, 0.05f, 0.0f, 30.0f, l.SprintReference > 0.0f ? "%.2f m/s" : "auto",
-              "Speed the sprint clip plays at rate 1. 0 (auto) = Move Speed x Sprint Multiplier.");
-        // Each limit bounds the other, so Min can never pass Max.
-        dragF("Min Rate", "##lomin", l.MinRate, 0.01f, 0.0f, l.MaxRate, "%.2f", "Slowest the clips play, however slowly you move.");
-        dragF("Max Rate", "##lomax", l.MaxRate, 0.01f, l.MinRate, 5.0f, "%.2f", "Fastest the clips play, however fast you move.");
-        resetSection("loreset", "Locomotion Rate", [&] { p.Locomotion = kDefaults.Locomotion; });
-    }
-
-    if (ImGui::CollapsingHeader("Lean##proc")) {
-        auto& l = p.Lean;
-        check("Enabled", "##leen", l.Enabled, "LeanLeft / LeanRight input actions (Z / C by default; rebind them in Settings > This Project > Input).");
-        dragF("Camera Roll", "##leang", l.Angle, 0.1f, 0.0f, 45.0f, "%.1f deg", "Camera roll at full lean.");
-        dragF("Camera Offset", "##leoff", l.Offset, 0.005f, 0.0f, 1.0f, "%.3f m",
-              "Side step of the view at full lean. It stops short of walls.");
-        dragF("Weapon Roll", "##lewr", l.WeaponRoll, 0.1f, 0.0f, 45.0f, "%.1f deg", "Extra gun roll into the lean.");
-        dragF("Speed (1/s)", "##lespd", l.Speed, 0.1f, 0.1f, 50.0f, "%.1f", "How fast the lean goes in and comes back.");
-        check("While Sprinting", "##lesprint", l.WhileSprinting, "Off: sprinting straightens up.");
-        resetSection("lereset", "Lean", [&] { p.Lean = kDefaults.Lean; });
-    }
-
-    if (ImGui::CollapsingHeader("IK##proc")) {
-        auto& k = p.IK;
-        check("Enabled", "##iken", k.Enabled, "Off: the procedural motion moves the whole view model instead of the gun.");
-        if (!ctx.Arms) {
-            if (ctx.CanLoadArms) {
-                if (ActionButton(ICON_FA_MAGNIFYING_GLASS "  Check Bones Against the Arms Rig",
-                                 "Load the arms model to pick bones from a list and flag names it doesn't have",
-                                 false, ImVec2(-FLT_MIN, 0.0f)))
-                    ctx.LoadArms = true;
-            } else {
-                ImGui::TextDisabled("The arms model isn't available, so bone names can't be checked.");
-            }
-        }
-        const bool validate = ctx.Arms != nullptr;
-        const char* pickTip = "Pick a bone from the arms rig";
-        pickField("Gun Bone", "##ikgun", k.GunBone, ctx.Bones, validate,
-                  "Arms-rig bone the procedural motion moves (the weapon rides it).", pickTip);
-        pickField("Right Upper", "##ikru", k.RightUpper, ctx.Bones, validate, "Right upper arm (shoulder joint).", pickTip);
-        pickField("Right Lower", "##ikrl", k.RightLower, ctx.Bones, validate, "Right forearm (elbow joint).", pickTip);
-        pickField("Right Hand", "##ikrh", k.RightHand, ctx.Bones, validate, "Right hand (wrist joint).", pickTip);
-        pickField("Left Upper", "##iklu", k.LeftUpper, ctx.Bones, validate, "Left upper arm (shoulder joint).", pickTip);
-        pickField("Left Lower", "##ikll", k.LeftLower, ctx.Bones, validate, "Left forearm (elbow joint).", pickTip);
-        pickField("Left Hand", "##iklh", k.LeftHand, ctx.Bones, validate, "Left hand (wrist joint).", pickTip);
-        if (validate) {
-            int missing = 0;
-            for (const std::string* b : {&k.GunBone, &k.RightUpper, &k.RightLower, &k.RightHand, &k.LeftUpper, &k.LeftLower, &k.LeftHand})
-                if (ctx.Arms->NodeIndex(*b) < 0) ++missing;
-            if (missing)
-                ImGui::TextColored(warn, ICON_FA_TRIANGLE_EXCLAMATION "  %d bone%s not on the arms rig: IK is off and the whole view model moves instead.",
-                                   missing, missing == 1 ? " is" : "s are");
-        }
-        pickField("Off Tag", "##iktag", k.OffTag, ctx.StatesAndTags, false,
-                  "States with this tag play purely as authored: IK and the procedural motion fade out.",
-                  "Pick a tag from the controller");
-        dragF("Blend Time (s)", "##ikbt", k.BlendTime, 0.005f, 0.0f, 2.0f, "%.3f", "Seconds to fade out and back in around Off-tagged states.");
-        resetSection("ikreset", "IK", [&] { p.IK = kDefaults.IK; });
-    }
-}
-
 std::string UniqueName(const std::string& base, const std::vector<std::string>& taken) {
     std::string name = base;
     for (int n = 2; std::find(taken.begin(), taken.end(), name) != taken.end(); ++n)
@@ -1318,9 +907,19 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         ImFont* font = ImGui::GetFont();
         const float fs = ImGui::GetFontSize() * fontScale;
         const ImVec2 ts = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, label.c_str());
-        const ImVec2 tp((a.x + b.x - ts.x) * 0.5f, (a.y + b.y - ts.y) * 0.5f);
+        // A state's tags ride under its name, small.
+        std::string tagLine;
+        if (n.Kind == NodeKind::State)
+            for (const auto& t : Ly.States[n.Index].Tags) tagLine += (tagLine.empty() ? "" : "  ") + t;
+        const float tfs = fs * 0.72f;
+        const float lift = tagLine.empty() ? 0.0f : tfs * 0.55f;
+        const ImVec2 tp((a.x + b.x - ts.x) * 0.5f, (a.y + b.y - ts.y) * 0.5f - lift);
         dl->PushClipRect(a, b, true);
         dl->AddText(font, fs, tp, IM_COL32(240, 240, 240, 255), label.c_str());
+        if (!tagLine.empty()) {
+            const ImVec2 tts = font->CalcTextSizeA(tfs, FLT_MAX, 0.0f, tagLine.c_str());
+            dl->AddText(font, tfs, ImVec2((a.x + b.x - tts.x) * 0.5f, tp.y + ts.y), IM_COL32(190, 205, 225, 210), tagLine.c_str());
+        }
         dl->PopClipRect();
     }
 
@@ -1631,24 +1230,60 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                                  "priority than the current one - e.g. firing (2) can't cut a reload (3) short.");
         row("Tags");
         {
-            std::string tags;
-            for (size_t k = 0; k < s.Tags.size(); ++k) tags += (k ? ", " : "") + s.Tags[k];
-            if (InputName("##stags", tags, -FLT_MIN, true)) {
-                s.Tags.clear();
-                std::string cur;
-                for (char ch : tags + ",") {
-                    if (ch == ',') {
-                        while (!cur.empty() && cur.front() == ' ') cur.erase(cur.begin());
-                        while (!cur.empty() && cur.back() == ' ') cur.pop_back();
-                        if (!cur.empty()) s.Tags.push_back(cur);
-                        cur.clear();
-                    } else {
-                        cur += ch;
-                    }
+            // One chip per tag (click to remove), wrapping under the value column, then "+".
+            const float colX = ImGui::GetCursorPosX();
+            const float right = ImGui::GetWindowContentRegionMax().x;
+            const ImGuiStyle& style = ImGui::GetStyle();
+            int removeTag = -1;
+            for (int k = 0; k < (int)s.Tags.size(); ++k) {
+                ImGui::PushID(k);
+                const std::string chip = s.Tags[k] + "  " ICON_FA_XMARK;
+                const float w = ImGui::CalcTextSize(chip.c_str()).x + style.FramePadding.x * 2.0f;
+                if (k > 0) {
+                    ImGui::SameLine();
+                    if (ImGui::GetCursorPosX() + w > right) { ImGui::NewLine(); ImGui::SetCursorPosX(colX); }
                 }
-                changed = true;
+                const char* desc = KnownTagDescription(s.Tags[k]);
+                char tip[512];
+                std::snprintf(tip, sizeof tip, "%s
+
+Click to remove.", desc ? desc : "A custom tag: game code reads it with HasTag().");
+                if (ActionButton(chip.c_str(), tip, true)) removeTag = k;
+                ImGui::PopID();
             }
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Comma-separated. Game code reads them with HasTag() - e.g. \"ADS\", \"Hidden\".");
+            if (!s.Tags.empty()) {
+                ImGui::SameLine();
+                if (ImGui::GetCursorPosX() + ImGui::GetFrameHeight() > right) { ImGui::NewLine(); ImGui::SetCursorPosX(colX); }
+            }
+            if (ActionButton(ICON_FA_PLUS "##addtag", "Add a tag", false, ImVec2(ImGui::GetFrameHeight(), 0.0f)))
+                ImGui::OpenPopup("##tagpick");
+            if (removeTag >= 0) { s.Tags.erase(s.Tags.begin() + removeTag); changed = true; }
+            ImGui::SetNextWindowSizeConstraints(ImVec2(ImGui::GetFontSize() * 18.0f, 0.0f), ImVec2(ImGui::GetFontSize() * 26.0f, FLT_MAX));
+            if (ImGui::BeginPopup("##tagpick")) {
+                ImGui::TextDisabled("Tags the first-person driver reads");
+                for (const auto& t : FirstPersonAnimatorContract::kKnownTags) {
+                    const bool has = std::find(s.Tags.begin(), s.Tags.end(), t.Name) != s.Tags.end();
+                    if (ImGui::Selectable(t.Name, has, has ? ImGuiSelectableFlags_Disabled : 0)) {
+                        s.Tags.push_back(t.Name);
+                        changed = true;
+                    }
+                    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetFontSize() * 24.0f);
+                    ImGui::Indent();
+                    ImGui::TextDisabled("%s", t.Description);
+                    ImGui::Unindent();
+                    ImGui::PopTextWrapPos();
+                }
+                ImGui::Separator();
+                static char custom[64] = "";
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::InputTextWithHint("##customtag", "Custom tag, then Enter", custom, sizeof custom,
+                                             ImGuiInputTextFlags_EnterReturnsTrue) && custom[0]) {
+                    if (std::find(s.Tags.begin(), s.Tags.end(), custom) == s.Tags.end()) { s.Tags.push_back(custom); changed = true; }
+                    custom[0] = ' ';
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
         }
 
         // Motions, one per track.
@@ -1962,157 +1597,5 @@ void EditorLayer::DrawControllerAssetInspector(const std::string& path) {
             ImGui::BulletText("%s: %d states, %d transitions", L.Name.c_str(), (int)L.States.size(), (int)L.Transitions.size());
     } else {
         ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s", "Can't read this controller.");
-    }
-}
-
-// A weapon definition (.fpsanim): the rigs, the controller, the mount, the gameplay numbers and
-// the procedural block, edited in place and saved on every committed change.
-void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
-    struct Cache {
-        std::string Path;
-        fs::file_time_type Stamp{};
-        FirstPersonAnimationSet Set;
-        std::string Error;
-    };
-    static Cache cache;
-    std::error_code ec;
-    const auto stamp = fs::last_write_time(fs::u8path(path), ec);
-    if (cache.Path != path || cache.Stamp != stamp) {
-        cache.Path = path;
-        cache.Stamp = stamp;
-        cache.Error.clear();
-        if (!FirstPersonAnimationSet::LoadFile(path, cache.Set, &cache.Error)) cache.Set = {};
-    }
-    ImGui::SeparatorText(ICON_FA_CROSSHAIRS "  Weapon Definition");
-    ImGui::TextWrapped("%s", ProjectPaths::Relativize(path).c_str());
-    if (!cache.Error.empty()) {
-        ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s", cache.Error.c_str());
-        return;
-    }
-    FirstPersonAnimationSet& s = cache.Set;
-    FirstPersonWeaponGameplay& g = s.Gameplay;
-    bool changed = false;
-    const float labelW = 150.0f * m_UIScale;
-    auto row = [&](const char* label, const char* tip) {
-        ImGui::TextUnformatted(label);
-        if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
-        ImGui::SameLine(labelW);
-        ImGui::SetNextItemWidth(-FLT_MIN);
-    };
-    auto dragF = [&](const char* label, const char* id, float& v, float speed, float lo, float hi, const char* fmt, const char* tip) {
-        row(label, tip);
-        ImGui::DragFloat(id, &v, speed, lo, hi, fmt);
-        if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
-    };
-    auto dragV3 = [&](const char* label, const char* id, glm::vec3& v, float speed, const char* fmt, const char* tip) {
-        row(label, tip);
-        float f[3] = {v.x, v.y, v.z};
-        if (ImGui::DragFloat3(id, f, speed, 0.0f, 0.0f, fmt)) v = {f[0], f[1], f[2]};
-        if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
-    };
-
-    ImGui::SeparatorText("Animation");
-    row("Controller", "The Animator Controller that animates both rigs: its \"arms\" track plays on the arms\n"
-                      "model and its \"weapon\" track on the weapon model.");
-    if (ImGui::BeginCombo("##wctrl", s.Controller.empty() ? "(v1 clip list)" : s.Controller.c_str())) {
-        for (const std::string& c : FindAnimatorControllers())
-            if (ImGui::Selectable(c.c_str(), c == s.Controller)) { s.Controller = c; changed = true; }
-        ImGui::EndCombo();
-    }
-    if (!s.Controller.empty()) {
-        if (ActionButton(ICON_FA_DIAGRAM_PROJECT "  Open Controller in Animator", "Edit the weapon's states and transitions",
-                         false, ImVec2(-FLT_MIN, 0.0f)))
-            OpenAnimatorWindow(s.Controller);
-    } else if (!s.Clips.empty()) {
-        ImGui::TextWrapped("This is a v1 file: its %d clips run on the standard first-person graph built in memory.",
-                           (int)s.Clips.size());
-        if (ActionButton(ICON_FA_WAND_MAGIC_SPARKLES "  Create Controller from Clips",
-                         "Write the standard first-person graph for these clips next to this file and point the weapon at it",
-                         false, ImVec2(-FLT_MIN, 0.0f))) {
-            const fs::path out = fs::u8path(path).replace_extension(".controller");
-            if (BuildFirstPersonController(s).SaveFile(out.u8string())) {
-                s.Controller = ProjectPaths::Relativize(out.generic_u8string());
-                s.Clips.clear();
-                changed = true;
-                InvalidateAnimationListing();
-                OpenAnimatorWindow(s.Controller);
-            }
-        }
-    }
-
-    ImGui::SeparatorText("Rigs");
-    row("Arms Model", "The arms FBX: mesh, skeleton and a REST bind pose.");
-    ImGui::TextDisabled("%s", s.ArmsModel.c_str());
-    row("Weapon Model", "The weapon FBX: mesh and its own armature.");
-    ImGui::TextDisabled("%s", s.WeaponModel.c_str());
-    dragV3("View Rotation", "##wvrot", s.ViewRotation, 0.5f, "%.1f",
-           "Y-X-Z degrees that face the rigs down the camera's -Z (180 Y for a Blender -Y rig).");
-    row("Weapon Socket", "Bone on the ARMS rig the gun rides (empty = the weapon shares the arms' pose).");
-    if (InputName("##wsock", s.WeaponSocket, -FLT_MIN, true)) changed = true;
-    row("Weapon Root", "Bone on the WEAPON rig that lands on the socket.");
-    if (InputName("##wroot", s.WeaponRoot, -FLT_MIN, true)) changed = true;
-    dragV3("Mount Rotation", "##wmount", s.WeaponMountRotation, 0.5f, "%.1f",
-           "Fixed socket -> weapon root rotation, Y-X-Z degrees. Measure it with work/socket_probe.");
-
-    ImGui::SeparatorText("Gameplay");
-    row("Magazine", "Rounds per magazine.");
-    if (ImGui::InputInt("##wmag", &g.Magazine)) { g.Magazine = std::max(1, g.Magazine); changed = true; }
-    dragF("Rounds / Minute", "##wrpm", g.RoundsPerMinute, 5.0f, 60.0f, 2000.0f, "%.0f", "Full-auto cadence.");
-    row("Full-Auto", "Off for a semi-only weapon: B then does nothing.");
-    if (EditorUIPrimitives::Checkbox("##wauto", &g.AllowFullAuto)) changed = true;
-    dragF("Reload Hold (s)", "##whold", g.ReloadHoldSeconds, 0.01f, 0.05f, 2.0f, "%.2f",
-          "R held this long checks the magazine instead of reloading.");
-    // Each bounds the other, so Min can never pass Max.
-    dragF("Fidget Min (s)", "##wrmin", g.RegripMin, 0.1f, 0.0f, g.RegripMax, "%.1f",
-          "Seconds of settled Idle before the Fidget trigger fires (random between min and max).");
-    dragF("Fidget Max (s)", "##wrmax", g.RegripMax, 0.1f, g.RegripMin, 120.0f, "%.1f",
-          "Seconds of settled Idle before the Fidget trigger fires (random between min and max).");
-    dragF("ADS Zoom", "##wadsz", g.AdsZoom, 0.01f, 1.0f, 8.0f, "%.2fx",
-          "How much the world magnifies with the sights up (1 = no zoom). Mouse look slows to match.");
-    dragF("ADS Gun Zoom", "##wadsvz", g.AdsViewModelZoom, 0.01f, 1.0f, 4.0f, "%.2fx",
-          "How much the gun itself magnifies with the sights up (1 = none).");
-    dragF("ADS Zoom Time (s)", "##wadst", g.AdsZoomTime, 0.01f, 0.0f, 2.0f, "%.2f",
-          "Roughly how long the zoom takes to settle in or out (eased at both ends).");
-    dragF("Impact Impulse (N*s)", "##wimp", g.ImpactImpulse, 0.1f, 0.0f, 100.0f, "%.1f",
-          "How hard each round shoves the physics body it hits, at the hit point (0 = no push).");
-    dragF("Impact Max Speed (m/s)", "##wimpv", g.ImpactMaxSpeed, 0.1f, 0.0f, 50.0f, "%.1f",
-          "Caps the velocity one round can add, so light props fly without rocketing off.");
-
-    // Choices for the procedural section's pickers: the controller's states and tags, and the
-    // arms rig's bones once it is loaded (only on request - a big FBX shouldn't load just
-    // because the Inspector opened).
-    WeaponProceduralContext ctx;
-    if (!s.Controller.empty())
-        if (const auto ctrl = GetAnimatorController(s.Controller)) {
-            for (const auto& L : ctrl->Layers)
-                for (const auto& st : L.States) {
-                    ctx.StatesAndTags.push_back(st.Name);
-                    for (const auto& t : st.Tags) ctx.StatesAndTags.push_back(t);
-                }
-            std::sort(ctx.StatesAndTags.begin(), ctx.StatesAndTags.end());
-            ctx.StatesAndTags.erase(std::unique(ctx.StatesAndTags.begin(), ctx.StatesAndTags.end()), ctx.StatesAndTags.end());
-        }
-    std::shared_ptr<Model> arms;
-    const std::string armsPath = s.ArmsModel.empty() ? std::string() : ProjectPaths::Resolve(s.ArmsModel);
-    if (!armsPath.empty() && m_AssetsPtr) {
-        const fs::path want = fs::u8path(armsPath).lexically_normal();
-        for (const auto& m : m_AssetsPtr->Models())
-            if (m && fs::u8path(m->Path()).lexically_normal() == want) { arms = m; break; }
-        ctx.CanLoadArms = !arms && fs::exists(want, ec);
-    }
-    if (arms) {
-        ctx.Arms = arms.get();
-        for (int i = 0; i < arms->NodeCount(); ++i) ctx.Bones.push_back(arms->NodeName(i));
-    }
-
-    DrawWeaponProcedural(s.Procedural, labelW, g.RoundsPerMinute, ctx, changed);
-    if (ctx.LoadArms && m_AssetsPtr && !m_AssetsPtr->LoadModel(armsPath))
-        Log::Warn("Couldn't load the arms model '" + s.ArmsModel + "' to check bone names.");
-
-    ImGui::Spacing();
-    ImGui::TextDisabled("Gameplay and procedural numbers apply live in Play; rigs and controller on the next Play.");
-    if (changed) {
-        if (s.SaveFile(path)) cache.Stamp = fs::last_write_time(fs::u8path(path), ec);
-        else Log::Error("Couldn't save " + ProjectPaths::Relativize(path) + ".");
     }
 }
