@@ -109,6 +109,9 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         gp.ReloadHoldSeconds = Number(*g, "reloadHoldSeconds", gp.ReloadHoldSeconds);
         gp.RegripMin = Number(*g, "regripMin", gp.RegripMin);
         gp.RegripMax = Number(*g, "regripMax", gp.RegripMax);
+        gp.AdsZoom = std::clamp(Number(*g, "adsZoom", gp.AdsZoom), 1.0f, 8.0f);
+        gp.AdsViewModelZoom = std::clamp(Number(*g, "adsViewModelZoom", gp.AdsViewModelZoom), 1.0f, 4.0f);
+        gp.AdsZoomTime = std::clamp(Number(*g, "adsZoomTime", gp.AdsZoomTime), 0.0f, 2.0f);
         if (!(gp.RoundsPerMinute > 0.0f) || !std::isfinite(gp.RoundsPerMinute))
             return Fail(error, "'gameplay.rpm' must be a positive number");
         if (!(gp.ReloadHoldSeconds > 0.0f)) return Fail(error, "'gameplay.reloadHoldSeconds' must be positive");
@@ -218,6 +221,9 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
         {"reloadHoldSeconds", gp.ReloadHoldSeconds},
         {"regripMin", gp.RegripMin},
         {"regripMax", gp.RegripMax},
+        {"adsZoom", gp.AdsZoom},
+        {"adsViewModelZoom", gp.AdsViewModelZoom},
+        {"adsZoomTime", gp.AdsZoomTime},
     };
     j["procedural"] = Procedural.ToJson();
     RoundFloats(j);

@@ -709,12 +709,14 @@ int main(int argc, char** argv) {
         // scene's Camera entity, mirrored each frame into playSceneCam.
         bool playUsesPlayer = true;
         bool playGravityGun = true;
+        float playBaseFov = 75.0f;          // the player's authored FOV / mouse sensitivity; the
+        float playBaseSensitivity = 0.1f;   // weapon's ADS zoom scales both from these each frame
         // With a weapon (Animation Set) on the controller, the gravity gun is the unarmed slot:
         // live only while the weapon is holstered (2 / scroll / Holster), off while it's in hand.
         auto gravityGunLive = [&] {
             return playGravityGun && !(firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped());
         };
-        // The crosshair dot: with a weapon in hand it's a red dot where the barrel points (hidden
+        // The crosshair dot: with a weapon in hand it's a red dot on whatever the barrel points at (hidden
         // in ADS and whenever the gun isn't simply held); otherwise the plain white centre dot.
         auto crosshairDot = [&](const glm::mat4& v, const glm::mat4& p, int w, int h) {
             CrosshairOverlay::Dot dot;
@@ -722,15 +724,18 @@ int main(int argc, char** argv) {
             glm::vec3 at;
             dot.Visible = false;
             if (!firstPersonPresentation.BarrelAimPoint(at)) return dot;
-            // Projected the way the gun is drawn - through the view model's own FOV - so the dot
-            // sits on the barrel's line as the player sees it, not where the world FOV would put it.
-            const float vmFov = firstPersonPresentation.ViewModelFov();
-            const glm::mat4 proj = vmFov > 0.0f && h > 0 ? MakePerspective(vmFov, (float)w / (float)h, 0.05f, 1000.0f) : p;
-            const glm::vec4 clip = proj * v * glm::vec4(at, 1.0f);
+            // Through the world camera: the dot lands on the surface the bore actually hits (a
+            // laser, not a screen marker). The gun draws through its own FOV, so at the edges the
+            // drawn barrel and this point part a little - the point is the truth.
+            const glm::vec4 clip = p * v * glm::vec4(at, 1.0f);
             if (clip.w <= 1e-4f) return dot;
             const glm::vec2 ndc = glm::vec2(clip) / clip.w;
             dot.Pixel = (ndc * 0.5f + 0.5f) * glm::vec2((float)w, (float)h);
             dot.Color = glm::vec3(1.0f, 0.12f, 0.1f);
+            // A real spot ~2 cm across: its pixel size falls off with the hit's depth, so it
+            // shrinks on a far wall and swells up close (clamped so it never vanishes or balloons).
+            constexpr float kSpotRadius = 0.01f; // metres
+            dot.Radius = std::clamp(kSpotRadius * p[1][1] / clip.w * 0.5f * (float)h, 1.2f, 16.0f);
             dot.Visible = true;
             return dot;
         };
@@ -1234,6 +1239,8 @@ int main(int argc, char** argv) {
                 player.Size = glm::vec3(fp.CapsuleRadius * 2.0f, std::max(fp.CapsuleHeight, fp.CapsuleRadius * 2.0f + 0.1f),
                                         fp.CapsuleRadius * 2.0f);
                 player.MouseSensitivity = fp.MouseSensitivity;
+                playBaseSensitivity = fp.MouseSensitivity;
+                playBaseFov = fp.FieldOfView;
                 player.InvertY = fp.InvertY;
                 player.KillY = fp.KillY;
                 player.Cam.Fov = fp.FieldOfView;
@@ -2178,6 +2185,8 @@ int main(int argc, char** argv) {
                     // The weapon's view punch / lean comes off before the player integrates
                     // its own look and position, and goes back on in Update below.
                     firstPersonPresentation.RemoveViewKick(player.Cam);
+                    // Last frame's ADS zoom: the look slows with the view so the sights track the same.
+                    player.MouseSensitivity = playBaseSensitivity * firstPersonPresentation.LookScale(playBaseFov);
                     player.Update(gameDt, world, window.Handle(), gameHasInput);
                     if (firstPersonPresentation.IsActive()) {
                         firstPersonPresentation.Update(world, player.Cam);
@@ -2216,6 +2225,7 @@ int main(int argc, char** argv) {
                         firstPersonPresentation.Tick(gameDt, player.Velocity, gameHasInput && InputMap::GetButton("Sprint"),
                                                      weaponInput && InputMap::GetButton("Fire2"), lean);
                     }
+                    player.Cam.Fov = firstPersonPresentation.WorldFov(playBaseFov);
                 }
                 // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
                 // against wherever the player is looking from, updated after the move so the

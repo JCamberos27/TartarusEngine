@@ -19,6 +19,9 @@ public:
         bool Visible = true;
         glm::vec2 Pixel{-1.0f};          // bottom-left origin; negative = the centre
         glm::vec3 Color{1.0f};
+        // > 0: a laser spot of this radius in pixels (hot core, soft glow, no rim) instead of the
+        // fixed-size crosshair dot.
+        float Radius = 0.0f;
     };
     // `charge` 0..1 while a throw charges, negative otherwise.
     void Draw(unsigned int dstFbo, int width, int height, bool holding, float charge, const Dot& dot = {});
