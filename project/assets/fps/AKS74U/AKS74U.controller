@@ -143,7 +143,10 @@
             -140.0
           ],
           "priority": 2,
-          "speed": 1.0
+          "speed": 1.0,
+          "tags": [
+            "IKOff"
+          ]
         },
         {
           "events": [
