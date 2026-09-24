@@ -4,10 +4,17 @@
   },
   "armsModel": "assets/quantum/FirstPerson/Quantum_Arms_FP.fbx",
   "controller": "assets/fps/AKS74U/AKS74U.controller",
+  "ads": {
+    "zoom": 1.3,
+    "viewModelZoom": 1.1,
+    "zoomTime": 0.16,
+    "referenceState": "Aim",
+    "carryTag": "ADSCarry",
+    "matchElbows": true,
+    "matchTwist": true,
+    "aimHoldTime": 0.15
+  },
   "gameplay": {
-    "adsViewModelZoom": 1.1,
-    "adsZoom": 1.3,
-    "adsZoomTime": 0.16,
     "allowFullAuto": true,
     "impactImpulse": 5.0,
     "impactMaxSpeed": 7.0,
