@@ -144,6 +144,15 @@ struct AnimatorController {
 
 // Weights of a 1D blend tree's children for `value`: at most two non-zero, summing to 1.
 // `children` need not be sorted. Exposed for tests and the Animator window preview.
+// How much a crossfading state shows at fade progress `fade` (0..1, linear in time): eased in
+// and out, so a pose settles into the next instead of sliding over at a constant rate and
+// stopping dead. Anything weighting by a crossfade (e.g. the first-person ADS correction)
+// should use the same curve.
+inline float AnimatorCrossfadeWeight(float fade) {
+    fade = fade < 0.0f ? 0.0f : (fade > 1.0f ? 1.0f : fade);
+    return fade * fade * (3.0f - 2.0f * fade);
+}
+
 std::vector<float> AnimatorBlendWeights(const std::vector<AnimatorController::BlendChild>& children, float value);
 
 // Per node of a rig described by `parent` (parents first) and `name`: 1 when the node is inside
