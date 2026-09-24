@@ -245,7 +245,7 @@ This lives in `FirstPersonPresentation`, and its numbers come from the definitio
 | `FireMode` | B | Toggles Semi-Auto (the default) and Full-Auto (60/rpm s between rounds while held). Logged to the Console. Does nothing if `allowFullAuto` is false |
 | `Reload` tap | R | Sets the `Reload` trigger when the magazine isn't full and no `Reload`-tagged state is playing |
 | `Reload` hold ≥ `reloadHoldSeconds` | R | Sets the `MagCheck` trigger |
-| `Inspect` / `Melee` | F / Q | Set those triggers |
+| `Inspect` / `Melee` | I / Q | Set those triggers |
 | `Weapon1` / `Weapon2` | 1 / 2 | Set `Equipped` true / false |
 | scroll wheel, `Holster` | wheel / H | Toggle `Equipped` |
 | `Sprint` | L-Shift | The `Sprint` parameter. Sprinting drops ADS |
