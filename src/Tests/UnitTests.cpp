@@ -1572,6 +1572,19 @@ void TestFirstPersonAnimationSet() {
         R"({"armsModel":"a.fbx","weaponModel":"w.fbx","weaponRoot":"root","clips":[{"name":"Idle","arms":"i.fbx"}]})",
         set, &error));
     CHECK(error.find("weaponSocket") != std::string::npos);
+
+    // Material overrides, keyed by the FBX's material name, round-trip through the v2 writer.
+    CHECK(FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"c.controller",
+            "weaponMaterials":{"aks74u":"m/ak.mat","cartridge":"m/round.mat"}})", set, &error));
+    CHECK(set.WeaponMaterials.size() == 2 && set.ArmsMaterials.empty());
+    FirstPersonAnimationSet again;
+    CHECK(FirstPersonAnimationSet::FromJsonString(set.ToJsonString(), again, &error));
+    CHECK(again.WeaponMaterials == set.WeaponMaterials);
+    CHECK(!FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"c.controller","weaponMaterials":{"aks74u":3}})",
+        set, &error));
+    CHECK(error.find("weaponMaterials.aks74u") != std::string::npos);
 }
 
 // Animator v2 - the standard first-person graph (BuildFirstPersonController), driven through the

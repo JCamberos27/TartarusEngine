@@ -1,0 +1,15 @@
+{
+  "guid": "47fe55433568f31a",
+  "metaVersion": 1,
+  "type": "texture",
+  "importer": {
+    "textureType": 0,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "filterMode": 2,
+    "wrapMode": 0,
+    "maxTextureSize": 512,
+    "anisoLevel": 16,
+    "compression": 2
+  }
+}

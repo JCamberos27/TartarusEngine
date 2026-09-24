@@ -709,6 +709,11 @@ int main(int argc, char** argv) {
         // scene's Camera entity, mirrored each frame into playSceneCam.
         bool playUsesPlayer = true;
         bool playGravityGun = true;
+        // With a weapon (Animation Set) on the controller, the gravity gun is the unarmed slot:
+        // live only while the weapon is holstered (2 / scroll / Holster), off while it's in hand.
+        auto gravityGunLive = [&] {
+            return playGravityGun && !(firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped());
+        };
         entt::entity playCameraEntity = entt::null;
         Camera playSceneCam;
         // Default spawn/editor-camera start: south of the Sandbox's Character Plaza, looking north
@@ -1221,8 +1226,8 @@ int main(int argc, char** argv) {
                 player.RespawnFeet = glm::vec3(spawn[3]);
                 player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
                 YawPitchFromWorld(spawn, player.Cam.Yaw, player.Cam.Pitch);
-                // FPS presentation is opt-in on the controller. Sandbox keeps its gravity gun
-                // path untouched because its controller has no Animation Set assigned.
+                // FPS presentation is opt-in on the controller (its Animation Set). With the
+                // gravity gun also on, that becomes the unarmed slot - see gravityGunLive.
                 firstPersonPresentation.Start(world, assets, fp);
             } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
                 playUsesPlayer = false;
@@ -2122,7 +2127,7 @@ int main(int argc, char** argv) {
             if (simThisFrame) {
                 // The gravity gun (#185, promoted off its old debug harness) is a normal part of
                 // Play mode, not a debug tool — always live whenever the game has input focus.
-                if (gameHasInput && playUsesPlayer && playGravityGun) {
+                if (gameHasInput && playUsesPlayer && gravityGunLive()) {
                     gravityGun.Update(gameDt, player);
                 }
                 // G = explosion shockwave at the player. A separate physics *debug/test* tool
@@ -2156,11 +2161,24 @@ int main(int argc, char** argv) {
                     player.Update(gameDt, world, window.Handle(), gameHasInput);
                     if (firstPersonPresentation.IsActive()) {
                         firstPersonPresentation.Update(world, player.Cam);
-                        // The weapon system owns Fire1/Fire2/FireMode/Reload/Inspect/Melee/Holster/
-                        // Weapon1/Weapon2 and the scroll wheel whenever the gravity gun is off for this
-                        // controller (#165 GravityGun) - the two never read input in the same
-                        // scene, so no bindings collide.
-                        const bool weaponInput = gameHasInput && !playGravityGun;
+                        // The weapon owns Fire1/Fire2/FireMode/Reload/Inspect/Melee while it's in
+                        // hand. With the gravity gun on the controller, holstering hands the mouse
+                        // to it instead (gravityGunLive), so the two never read the same frame.
+                        // Weapon1/Weapon2/Holster always switch between them.
+                        const bool weaponInput = gameHasInput && !gravityGunLive();
+                        if (gameHasInput) {
+                            const bool wasEquipped = firstPersonPresentation.IsEquipped();
+                            if (InputMap::GetButtonDown("Weapon1")) firstPersonPresentation.SetEquipped(true);
+                            if (InputMap::GetButtonDown("Weapon2")) firstPersonPresentation.SetEquipped(false);
+                            // The wheel is the gravity gun's hold distance, so it only switches without one.
+                            if ((!playGravityGun && Input::GetScrollDeltaY() != 0.0) || InputMap::GetButtonDown("Holster"))
+                                firstPersonPresentation.SetEquipped(!firstPersonPresentation.IsEquipped());
+                            // Drawing the weapon drops whatever the gravity gun was holding.
+                            if (playGravityGun && !wasEquipped && firstPersonPresentation.IsEquipped()) {
+                                if (PhysicsWorld::IsGrabbing()) PhysicsWorld::ReleaseBody(false, nullptr);
+                                gravityGun.Reset();
+                            }
+                        }
                         if (weaponInput) {
                             if (InputMap::GetButtonDown("FireMode")) firstPersonPresentation.ToggleFireMode();
                             firstPersonPresentation.UpdateTrigger(InputMap::GetButtonDown("Fire1"),
@@ -2169,12 +2187,6 @@ int main(int argc, char** argv) {
                             firstPersonPresentation.UpdateReloadKey(InputMap::GetButton("Reload"), gameDt);
                             if (InputMap::GetButtonDown("Inspect")) firstPersonPresentation.TriggerAction("Inspect");
                             if (InputMap::GetButtonDown("Melee")) firstPersonPresentation.TriggerAction("Melee");
-                            // Two slots, AK and unarmed: 1/2 pick one, the wheel (either way) and
-                            // Holster toggle between them.
-                            if (InputMap::GetButtonDown("Weapon1")) firstPersonPresentation.SetEquipped(true);
-                            if (InputMap::GetButtonDown("Weapon2")) firstPersonPresentation.SetEquipped(false);
-                            if (Input::GetScrollDeltaY() != 0.0 || InputMap::GetButtonDown("Holster"))
-                                firstPersonPresentation.SetEquipped(!firstPersonPresentation.IsEquipped());
                         } else {
                             firstPersonPresentation.ResetReloadKey(); // focus lost mid-press: never resolve it as a tap
                         }
@@ -3230,7 +3242,7 @@ int main(int argc, char** argv) {
                     colliderGizmo.Draw(gvView, gvProj, world, EditorSettings::Get().ShowColliders);
                     glDepthMask(GL_TRUE);
                 }
-                if (playing && playUsesPlayer && playGravityGun && gravityGun.IsCharging())
+                if (playing && playUsesPlayer && gravityGunLive() && gravityGun.IsCharging())
                     drawThrowArc(gvView, gvProj, gvEye);
 
                 gameHdr.ResolveTo();
@@ -3259,8 +3271,8 @@ int main(int argc, char** argv) {
                 }
                 if (playing && playUsesPlayer)
                     crosshair.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
-                                   playGravityGun && gravityGun.IsHolding(),
-                                   playGravityGun && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f);
+                                   gravityGunLive() && gravityGun.IsHolding(),
+                                   gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f);
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
 
                 // #143: exponentially smoothed (same 0.92/0.08 blend as the Scene view's status
@@ -3399,7 +3411,7 @@ int main(int argc, char** argv) {
                     colliderGizmo.Draw(view, proj, world, EditorSettings::Get().ShowColliders);
                     glDepthMask(GL_TRUE);
                 }
-                if (playing && playUsesPlayer && playGravityGun && gravityGun.IsCharging())
+                if (playing && playUsesPlayer && gravityGunLive() && gravityGun.IsCharging())
                     drawThrowArc(view, proj, gameCam->Position);
                 gameHdr.ResolveTo();
 
@@ -3425,8 +3437,8 @@ int main(int argc, char** argv) {
                                  WithDepthEffects(MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity, dt, 1, gameCam->Position), world, gameHdr, view, proj, 1));
                 }
                 if (playing && playUsesPlayer)
-                    crosshair.Draw(0, mw, mh, playGravityGun && gravityGun.IsHolding(),
-                                   playGravityGun && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f);
+                    crosshair.Draw(0, mw, mh, gravityGunLive() && gravityGun.IsHolding(),
+                                   gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f);
             }
 
             {
