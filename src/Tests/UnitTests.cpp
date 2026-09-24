@@ -19,6 +19,7 @@
 #include "Curve.h"
 #include "IK.h"
 #include "FirstPersonAnimation.h"
+#include "FirstPersonAdsCarry.h"
 #include "AudioEngine.h"
 #include "Log.h" // #178 stack traces
 #include "InputMap.h"
@@ -1777,6 +1778,121 @@ void TestFirstPersonAnimationFSM() {
     }
 }
 
+// ADS animations: the "ads" settings block (and its pre-block gameplay keys), the generator's
+// tags and ADS_<action> variants, and how much of a crossfade stack a carried action owns.
+void TestFirstPersonAds() {
+    namespace K = FirstPersonAnimatorContract;
+    std::string error;
+    const std::string head = R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"c.controller",)";
+
+    // Legacy: the zoom under gameplay still loads, into the ads block.
+    FirstPersonAnimationSet legacy;
+    CHECK(FirstPersonAnimationSet::FromJsonString(
+        head + R"("gameplay":{"adsZoom":1.5,"adsViewModelZoom":1.2,"adsZoomTime":0.1}})", legacy, &error));
+    CHECK(legacy.Ads.Zoom == 1.5f && legacy.Ads.ViewModelZoom == 1.2f && legacy.Ads.ZoomTime == 0.1f);
+    CHECK(legacy.Ads.ReferenceState == "Aim" && legacy.Ads.CarryTag == K::kTagAdsCarry);
+
+    // The block wins over the legacy keys, clamps, and round-trips.
+    FirstPersonAnimationSet set;
+    CHECK(FirstPersonAnimationSet::FromJsonString(
+        head + R"("gameplay":{"adsZoom":3.0},"ads":{"zoom":1.3,"viewModelZoom":99,"zoomTime":0.16,
+        "referenceState":"Sights","carryTag":"Carry","matchElbows":false,"matchTwist":false,"aimHoldTime":0.3}})",
+        set, &error));
+    CHECK(set.Ads.Zoom == 1.3f && set.Ads.ViewModelZoom == 4.0f && set.Ads.ZoomTime == 0.16f);
+    CHECK(set.Ads.ReferenceState == "Sights" && set.Ads.CarryTag == "Carry");
+    CHECK(!set.Ads.MatchElbows && !set.Ads.MatchTwist && set.Ads.AimHoldTime == 0.3f);
+    FirstPersonAnimationSet again;
+    CHECK(FirstPersonAnimationSet::FromJsonString(set.ToJsonString(), again, &error));
+    CHECK(again.Ads.Zoom == set.Ads.Zoom && again.Ads.ViewModelZoom == set.Ads.ViewModelZoom &&
+          again.Ads.ReferenceState == "Sights" && again.Ads.CarryTag == "Carry" && !again.Ads.MatchElbows &&
+          !again.Ads.MatchTwist && again.Ads.AimHoldTime == 0.3f);
+    // An empty reference ("first ADS-tagged state") survives the round trip too.
+    CHECK(FirstPersonAnimationSet::FromJsonString(head + R"("ads":{"referenceState":""}})", set, &error));
+    CHECK(set.Ads.ReferenceState.empty());
+    CHECK(FirstPersonAnimationSet::FromJsonString(set.ToJsonString(), again, &error) && again.Ads.ReferenceState.empty());
+
+    // Every known tag has a description; custom tags don't.
+    for (const auto& t : K::kKnownTags) CHECK(K::KnownTagDescription(t.Name) == t.Description);
+    CHECK(K::KnownTagDescription("MyTag") == nullptr);
+
+    // The generator: carry and busy tags, and an ADS clip becomes an aim-routed state.
+    FirstPersonAnimationSet v1;
+    v1.ArmsModel = "arms.fbx";
+    v1.WeaponModel = "weapon.fbx";
+    for (const char* n : {"Idle", "Aim", "TacReload", "EmptyReload", "MagCheck", "Inspect", "Melee", "Regrip",
+                          "ADS_TacReload"}) {
+        FirstPersonAnimationClip c;
+        c.Name = n;
+        c.ArmsClip = std::string("FP_") + n + ".fbx";
+        c.Loop = std::string(n) == "Idle" || std::string(n) == "Aim";
+        c.Fade = 0.1f;
+        v1.Clips.push_back(c);
+    }
+    v1.DefaultState = "Idle";
+    const AnimatorController ctrl = BuildFirstPersonController(v1);
+    const auto& L = ctrl.Layers[0];
+    auto state = [&](const char* n) -> const AnimatorController::State& { return L.States[L.FindState(n)]; };
+    CHECK(L.FindState("ADS TacReload") >= 0 && L.FindState("ADS MagCheck") < 0 && L.FindState("ADS_TacReload") < 0);
+    CHECK(state("TacReload").HasTag(K::kTagAdsCarry) && state("TacReload").HasTag(K::kTagReload));
+    CHECK(state("MagCheck").HasTag(K::kTagAdsCarry) && state("MagCheck").HasTag(K::kTagBusy));
+    CHECK(state("Inspect").HasTag(K::kTagBusy) && !state("Inspect").HasTag(K::kTagAdsCarry));
+    CHECK(state("Melee").HasTag(K::kTagBusy) && state("Regrip").HasTag(K::kTagIKOff));
+    const auto& adsReload = state("ADS TacReload");
+    CHECK(adsReload.HasTag(K::kTagAds) && adsReload.HasTag(K::kTagReload) && !adsReload.HasTag(K::kTagAdsCarry));
+    CHECK(adsReload.MotionFor(0).Clip == "FP_ADS_TacReload.fbx" && adsReload.Priority == state("TacReload").Priority);
+
+    AnimatorControllerComponent ac;
+    const auto oneSecond = [](int, int) { return 1.0f; };
+    auto run = [&](float seconds) {
+        for (float t = 0.0f; t < seconds - 1e-4f; t += 1.0f / 60.0f) AdvanceAnimator(ctrl, ac, 1.0f / 60.0f, oneSecond);
+    };
+    run(0.1f);
+    ac.SetInt(K::kAmmo, 12);
+    ac.SetTrigger(K::kReload); run(0.05f);
+    CHECK(ac.StateName == "TacReload");                       // hip: the hip clip
+    run(1.5f);
+    ac.SetBool(K::kAim, true); run(0.2f);
+    CHECK(ac.StateName == "Aim");
+    ac.SetTrigger(K::kReload); run(0.05f);
+    CHECK(ac.StateName == "ADS TacReload" && ac.HasTag(K::kTagAds)); // aiming: the ADS clip
+    run(1.5f);
+    CHECK(ac.StateName == "Aim");                             // and back to the sights
+    ac.SetTrigger(K::kMagCheck); run(0.05f);
+    CHECK(ac.StateName == "MagCheck");                        // no ADS clip: the hip one (carried)
+    ac.SetInt(K::kAmmo, 0);
+    run(1.5f);
+    ac.SetTrigger(K::kReload); run(0.05f);
+    CHECK(ac.StateName == "EmptyReload");                     // no ADS_EmptyReload either
+
+    // EvaluateAdsCarry: each crossfade entry fades in over what's beneath it.
+    std::vector<AdsCarryAction> actions(1);
+    actions[0].State = 2;
+    actions[0].T = glm::vec3(0.1f, 0.0f, 0.0f);
+    actions[0].R = glm::angleAxis(glm::radians(10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    actions[0].Swivel[0] = 0.4f;
+    AnimatorLayerRuntime layer;
+    layer.Stack = {{1, 0.0f, 1.0f, 0.0f}};
+    CHECK(EvaluateAdsCarry(layer, actions, 0.0f, 1.0f).Action == nullptr); // not playing
+    layer.Stack = {{2, 0.0f, 1.0f, 0.0f}};
+    AdsCarrySample full = EvaluateAdsCarry(layer, actions, 0.0f, 1.0f);
+    CHECK(full.Action == &actions[0] && full.Weight == 1.0f && std::fabs(full.T.x - 0.1f) < 1e-6f &&
+          std::fabs(full.Swivel[0] - 0.4f) < 1e-6f);
+    CHECK(EvaluateAdsCarry(layer, actions, 0.0f, 0.0f).Weight == 0.0f);    // not aiming: nothing
+    CHECK(std::fabs(EvaluateAdsCarry(layer, actions, 0.0f, 0.5f).Weight - 0.5f) < 1e-6f);
+    // Leaving the action: Aim fading in on top at half way leaves the action 1 - w(0.5).
+    layer.Stack = {{2, 0.9f, 1.0f, 0.3f}, {0, 0.0f, 0.5f, 0.3f}};
+    const float w = AnimatorCrossfadeWeight(0.5f);
+    AdsCarrySample leaving = EvaluateAdsCarry(layer, actions, 0.0f, 1.0f);
+    CHECK(leaving.Action == &actions[0] && std::fabs(leaving.Weight - (1.0f - w)) < 1e-5f);
+    CHECK(std::fabs(leaving.T.x - 0.1f * (1.0f - w)) < 1e-6f);
+    // dt predicts the fade the controller is about to advance to.
+    const float next = AnimatorCrossfadeWeight(0.5f + 0.03f / 0.3f);
+    CHECK(std::fabs(EvaluateAdsCarry(layer, actions, 0.03f, 1.0f).Weight - (1.0f - next)) < 1e-5f);
+    // Entering: the action fading in over Aim.
+    layer.Stack = {{0, 0.5f, 1.0f, 0.0f}, {2, 0.0f, 0.25f, 0.3f}};
+    CHECK(std::fabs(EvaluateAdsCarry(layer, actions, 0.0f, 1.0f).Weight - AnimatorCrossfadeWeight(0.25f)) < 1e-5f);
+}
+
 // --- #132: asset identity - path keys, asset types, GUID-following references ------------------
 void TestAssetIdentity() {
     namespace fs = std::filesystem;
@@ -2295,6 +2411,7 @@ int RunUnitTests() {
         {"AnimatorController", TestAnimatorController},
         {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
+        {"FirstPersonAds", TestFirstPersonAds},
         {"Curve", TestCurve},
         {"IKSolver", TestIKSolver},
         {"WeaponProcedural", TestWeaponProcedural},

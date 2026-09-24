@@ -113,8 +113,13 @@ bool PropertyRows::Vec3(const char* label, glm::vec3& v, float speed, const char
     ImGui::PushID(label);
     Label(label, tip);
     const ImGuiStyle& st = ImGui::GetStyle();
-    const float mark = ImGui::CalcTextSize("W").x + 2.0f;
-    const float w = (ImGui::GetContentRegionAvail().x - 3.0f * mark - 2.0f * st.ItemSpacing.x - 3.0f * st.ItemInnerSpacing.x) / 3.0f;
+    // The fields share what the three letters leave, so the row ends flush with the others.
+    float marks = 0.0f;
+    for (int i = 0; i < 3; ++i) {
+        const char letter[2] = {axes && axes[i] ? axes[i] : "XYZ"[i], '\0'};
+        marks += ImGui::CalcTextSize(letter).x;
+    }
+    const float w = (ImGui::GetContentRegionAvail().x - marks - 2.0f * st.ItemSpacing.x - 3.0f * st.ItemInnerSpacing.x) / 3.0f;
     bool c = false;
     for (int i = 0; i < 3; ++i) {
         ImGui::PushID(i);
