@@ -48,6 +48,7 @@ void CrosshairOverlay::Draw(unsigned int dstFbo, int width, int height, bool hol
     m_Shader->SetInt("uDotVisible", dot.Visible ? 1 : 0);
     m_Shader->SetVec2("uDotPos", dot.Pixel.x < 0.0f ? glm::vec2((float)width, (float)height) * 0.5f : dot.Pixel);
     m_Shader->SetVec3("uDotColor", dot.Color);
+    m_Shader->SetFloat("uDotRadius", dot.Radius);
     glBindVertexArray(m_VAO);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     glBindVertexArray(0);
