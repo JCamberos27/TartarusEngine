@@ -529,7 +529,7 @@ empty('Arena Reflection Probe', (0, 4.0, CZ), parent=g_alight,
 # --- the player spawns at the arena door, looking in; a camera frames the court for the Game view.
 empty('Player Spawn', (0, 0.02, CZ - HALL_Z - 4.5), (0, 180, 0), extra={'First Person Controller': {
     'Move Speed': 4.0, 'Sprint Multiplier': 1.6, 'Jump Speed': 5.5, 'Eye Height': 1.7, 'Capsule Radius': 0.3,
-    'Capsule Height': 1.85, 'Mouse Sensitivity': 0.1, 'Invert Y': False, 'Field of View': 75.0, 'Kill Height': -20.0,
+    'Capsule Height': 1.85, 'Mouse Sensitivity': 0.1, 'Invert Y': False, 'Field of View': 90.0, 'Kill Height': -20.0,
     'Gravity': 18.0, 'Gravity Gun': True, 'Min Throw Speed': 3.5, 'Max Throw Speed': 16.0, 'Throw Charge Time': 1.1,
     'Throw Backspin': 2.0,
     # The AKS-74U in hand; the gravity gun is the unarmed slot (2 / Holster puts the AK away).
