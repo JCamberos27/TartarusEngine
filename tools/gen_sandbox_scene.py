@@ -227,7 +227,7 @@ for row in range(base):
     for c in range(base - row):
         x = 14 + c * 1.02 + row * 0.51
         box(f'Pyramid Crate {row}-{c}', (x, 0.1 + 0.5 + row * 1.0 + 0.001 * row, -8), (1, 1, 1),
-            m=mat(ORANGE if (row + c) % 2 == 0 else TEAL, 0.7), body=rigidbody(8), friction=0.7, parent=g_phys)
+            m=mat(ORANGE if (row + c) % 2 == 0 else TEAL, 0.7), body=rigidbody(2.5), friction=0.7, parent=g_phys)
 
 # Brick wall of small crates (staggered)
 for row in range(6):
@@ -235,7 +235,7 @@ for row in range(6):
     off = 0 if row % 2 == 0 else 0.4
     for c in range(n):
         box(f'Wall Brick {row}-{c}', (24 + off + c * 0.81, 0.1 + 0.3 + row * 0.6 + 0.001 * row, -3),
-            (0.8, 0.6, 0.4), m=mat((0.55, 0.12, 0.09) if row % 2 == 0 else (0.45, 0.10, 0.08), 0.8), body=rigidbody(3),
+            (0.8, 0.6, 0.4), m=mat((0.55, 0.12, 0.09) if row % 2 == 0 else (0.45, 0.10, 0.08), 0.8), body=rigidbody(1.2),
             friction=0.8, parent=g_phys)
 
 # Ramp with balls parked at the top; they roll off as soon as Play starts
@@ -248,20 +248,20 @@ box('Ramp Back Stop', (16, top_y + 0.6, 5 - L / 2 * math.cos(math.radians(ang)) 
 for k in range(5):
     x = 14.6 + k * 0.7
     sphere(f'Ramp Ball {k + 1}', (x, top_y + 0.9, 5 - L / 2 * math.cos(math.radians(ang)) + 0.6), 0.3,
-           mat(PALETTE[k + 3], 0.25, 0.1 if k % 2 else 0.8), body=rigidbody(2, 0.02, 0.05, True), parent=g_phys)
+           mat(PALETTE[k + 3], 0.25, 0.1 if k % 2 else 0.8), body=rigidbody(0.8, 0.02, 0.05, True), parent=g_phys)
 
 # Domino run: the first one is tipped, so the whole line cascades on Play
 for k in range(18):
     tilt = 20 if k == 0 else 0
     box(f'Domino {k + 1}', (26, 0.1 + 0.6 + (0.1 if k == 0 else 0), 4 + k * 0.55), (0.6, 1.2, 0.15),
         rot=(tilt, 0, 0), m=mat((0.95, 0.95, 0.93) if k % 2 == 0 else (0.1, 0.1, 0.11), 0.35),
-        body=rigidbody(1.5), friction=0.5, parent=g_phys)
+        body=rigidbody(0.8), friction=0.5, parent=g_phys)
 
 # Loose spheres of different sizes / materials for pushing around
 for k in range(8):
     r = 0.25 + 0.1 * (k % 4)
     sphere(f'Physics Ball {k + 1}', (18 + (k % 4) * 1.6, 0.1 + r + 0.01, -13 + (k // 4) * 1.6), r,
-           mat(PALETTE[k], 0.3 if k % 2 else 0.6, 1.0 if k in (2, 5) else 0.0), body=rigidbody(1 + r * 4),
+           mat(PALETTE[k], 0.3 if k % 2 else 0.6, 1.0 if k in (2, 5) else 0.0), body=rigidbody(0.5 + r * 1.5),
            parent=g_phys)
 
 # ---------------------------------------------------------------- ball pit (north)
@@ -586,9 +586,10 @@ for k, (label, file) in enumerate(GALLERY):
 box('Gallery Plinth', (0, 0.05, -9), (17, 0.1, 2.2), m=mat((0.26, 0.28, 0.31), 0.6), parent=g_gal)
 
 # ---------------------------------------------------------------- wrecking ball (physics playground)
-# A 120 kg ball on a seven-link chain of Ball joints, starting 55 degrees up; on Play it swings
-# into the brick wall. The links are heavy (25 kg) and damped: a light chain on a heavy ball (the
-# old 6 kg : 150 kg) is a mass ratio the solver can't hold, so the chain stretched and whipped.
+# A 20 kg ball on a seven-link chain of Ball joints, starting 55 degrees up; on Play it swings
+# into the brick wall. The links are 4 kg and damped: a light chain on a heavy ball (the old
+# 6 kg : 150 kg) is a mass ratio the solver can't hold, so the chain stretched and whipped.
+# Props are light enough that AK rounds (5 N*s each) send them flying.
 g_wreck = group('Wrecking Ball', parent=g_phys)
 PIV = (27.2, 8.6, -6.6)
 for sx in (-1, 1):
@@ -602,7 +603,7 @@ prev = -1
 for k in range(7):
     c = tuple(PIV[i] + d[i] * (LINK / 2 + LINK * k) for i in range(3))
     link = prim('capsule', f'Chain Link {k + 1}', c, (0.24, LINK, 0.24), mat((0.3, 0.3, 0.32), 0.35, 1.0),
-                parent=g_wreck, collider=col('capsule', half=(0.25, 0.25, 0)), body=rigidbody(25, 0.15, 0.8),
+                parent=g_wreck, collider=col('capsule', half=(0.25, 0.25, 0)), body=rigidbody(4, 0.15, 0.8),
                 extra={'rotation': [-(180 - 55), 0, 0]})
     ents['models'][-1]['joint'] = {'type': 2, 'connectedOrder': prev, 'anchor': [0, -LINK / 2, 0], 'axis': [1, 0, 0],
                                    'breakForce': 0.0, 'breakTorque': 0.0, 'useLimit': False, 'limitLower': 0.0,
@@ -610,7 +611,7 @@ for k in range(7):
     prev = link
 BR = 0.6
 bc = tuple(PIV[i] + d[i] * (LINK * 7 + BR) for i in range(3))
-sphere('Wrecking Ball', bc, BR, mat((0.14, 0.14, 0.15), 0.35, 0.95), body=rigidbody(120, 0.05, 0.3, True),
+sphere('Wrecking Ball', bc, BR, mat((0.14, 0.14, 0.15), 0.35, 0.95), body=rigidbody(20, 0.05, 0.3, True),
        friction=0.5, bounce=0.1, parent=g_wreck)
 ents['models'][-1]['joint'] = {'type': 2, 'connectedOrder': prev, 'anchor': [-d[0] * BR, -d[1] * BR, -d[2] * BR],
                                'axis': [1, 0, 0], 'breakForce': 0.0, 'breakTorque': 0.0, 'useLimit': False,
