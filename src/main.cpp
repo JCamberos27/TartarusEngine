@@ -709,7 +709,7 @@ int main(int argc, char** argv) {
         // scene's Camera entity, mirrored each frame into playSceneCam.
         bool playUsesPlayer = true;
         bool playGravityGun = true;
-        float playBaseFov = 75.0f;          // the player's authored FOV / mouse sensitivity; the
+        float playBaseFov = 58.7f;          // the player's vertical FOV / mouse sensitivity; the
         float playBaseSensitivity = 0.1f;   // weapon's ADS zoom scales both from these each frame
         // With a weapon (Animation Set) on the controller, the gravity gun is the unarmed slot:
         // live only while the weapon is holstered (2 / scroll / Holster), off while it's in hand.
@@ -1240,10 +1240,10 @@ int main(int argc, char** argv) {
                                         fp.CapsuleRadius * 2.0f);
                 player.MouseSensitivity = fp.MouseSensitivity;
                 playBaseSensitivity = fp.MouseSensitivity;
-                playBaseFov = fp.FieldOfView;
+                playBaseFov = fp.VerticalFov();
                 player.InvertY = fp.InvertY;
                 player.KillY = fp.KillY;
-                player.Cam.Fov = fp.FieldOfView;
+                player.Cam.Fov = fp.VerticalFov();
                 playGravityGun = fp.GravityGun;
                 gravityGun.Settings.MinThrowSpeed = fp.MinThrowSpeed;
                 gravityGun.Settings.MaxThrowSpeed = std::max(fp.MaxThrowSpeed, fp.MinThrowSpeed);
