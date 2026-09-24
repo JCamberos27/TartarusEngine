@@ -28,6 +28,7 @@ AdsCarryResult BuildAdsCarry(const AdsCarryInputs& in) {
     const FirstPersonAdsSettings& settings = *in.Settings;
     const auto& L = in.Controller->Layers[0];
     const int armsTrack = in.Controller->TrackIndex(in.ArmsTrack);
+    const int weaponTrack = in.WeaponTrack.empty() ? -1 : in.Controller->TrackIndex(in.WeaponTrack);
     const int socket = arms.NodeIndex(in.GunBone);
     const int head = in.CameraBone.empty() ? -1 : arms.NodeIndex(in.CameraBone);
 
@@ -59,9 +60,10 @@ AdsCarryResult BuildAdsCarry(const AdsCarryInputs& in) {
     std::vector<int> parents(arms.NodeCount());
     for (int i = 0; i < (int)parents.size(); ++i) parents[i] = arms.NodeParent(i);
     // A state's first frame, and its socket relative to the camera bone (which sits on the eye).
+    int clip = -1;
     auto firstFrame = [&](int state, std::vector<LocalTRS>& pose, glm::mat4& socketFromEye, std::string& problem) {
         const std::string& path = L.States[state].MotionFor(armsTrack).Clip;
-        const int clip = path.empty() ? -1 : ResolveAnimationClip(arms, path, *in.Assets);
+        clip = path.empty() ? -1 : ResolveAnimationClip(arms, path, *in.Assets);
         if (clip < 0) {
             problem = path.empty() ? "has no arms clip" : "its arms clip '" + path + "' didn't load";
             return false;
@@ -83,6 +85,37 @@ AdsCarryResult BuildAdsCarry(const AdsCarryInputs& in) {
     }
     std::vector<glm::mat4> aimGlobals;
     IK::ComputeGlobals(aimPose, parents, aimGlobals);
+    // A state's length, the way the controller counts its phase: its longest motion.
+    auto stateLength = [&](int state, int armsClip) {
+        float len = arms.AnimationLength(armsClip);
+        if (in.Weapon && weaponTrack >= 0) {
+            const std::string& wpath = L.States[state].MotionFor(weaponTrack).Clip;
+            const int wclip = wpath.empty() ? -1 : ResolveAnimationClip(*in.Weapon, wpath, *in.Assets);
+            if (wclip >= 0) len = std::max(len, in.Weapon->AnimationLength(wclip));
+        }
+        return len > 1e-4f ? len : 1.0f;
+    };
+    result.Reference = reference;
+    result.AimClip = clip;
+    result.AimLength = stateLength(reference, clip);
+    result.AimLoop = L.States[reference].Loop;
+
+    // The action bones and everything under them play the clip; the aim pose holds the rest.
+    if (report.UsesIK && !settings.ActionBones.empty()) {
+        std::vector<char> action(parents.size(), 0);
+        for (const std::string& bone : settings.ActionBones) {
+            const int i = arms.NodeIndex(bone);
+            if (i < 0) report.Warnings.push_back("The arms rig has no '" + bone + "' bone (an action bone).");
+            else action[i] = 1;
+        }
+        for (size_t i = 0; i < parents.size(); ++i) // parents come first
+            if (parents[i] >= 0 && action[parents[i]]) action[i] = 1;
+        if (std::find(action.begin(), action.end(), 1) != action.end()) {
+            result.HoldMask.resize(parents.size());
+            for (size_t i = 0; i < parents.size(); ++i) result.HoldMask[i] = action[i] ? 0.0f : 1.0f;
+            report.HoldsAim = true;
+        }
+    }
 
     for (int state : carried) {
         AdsCarryReport::Entry entry;
@@ -98,12 +131,18 @@ AdsCarryResult BuildAdsCarry(const AdsCarryInputs& in) {
             report.Entries.push_back(entry);
             continue;
         }
-        const glm::mat4 c = aim * glm::inverse(hip);
         AdsCarryAction a;
         a.State = state;
         a.StateName = entry.State;
-        a.R = QuaternionFromMatrix(c);
-        a.T = glm::vec3(c[3]);
+        a.Clip = clip;
+        a.Length = stateLength(state, clip);
+        a.Hip = hip;
+        a.Aim = aim;
+        if (!report.HoldsAim) { // the hold keeps the gun on the sights itself
+            const glm::mat4 c = aim * glm::inverse(hip);
+            a.R = QuaternionFromMatrix(c);
+            a.T = glm::vec3(c[3]);
+        }
         entry.GunOffsetCm = glm::length(a.T) * 100.0f;
         entry.GunTurnDeg = glm::degrees(glm::angle(a.R));
 
@@ -116,6 +155,10 @@ AdsCarryResult BuildAdsCarry(const AdsCarryInputs& in) {
             probe.Offsets[in.ProceduralOffset] = IKBoneOffset{in.Rig->Offsets[in.ProceduralOffset].Bone};
             probe.LimbA.Swivel = probe.LimbB.Swivel = 0.0f;
             probe.LocalRotations.clear();
+            if (report.HoldsAim) {
+                probe.HoldPose = aimPose;
+                probe.HoldWeights = result.HoldMask;
+            }
             const IKLimb* limbs[2] = {&probe.LimbA, &probe.LimbB};
             if (settings.MatchElbows) {
                 // How far each elbow has to swing about its shoulder->hand line to land on the
@@ -202,7 +245,7 @@ AdsCarrySample EvaluateAdsCarry(const AnimatorLayerRuntime& layer, const std::ve
         for (const AdsCarryAction& a : actions)
             if (a.State == stack[k].State) {
                 total += w;
-                if (w > best) { best = w; out.Action = &a; }
+                if (w > best) { best = w; out.Action = &a; out.Phase = stack[k].Phase + std::max(dt, 0.0f) / a.Length; }
             }
     }
     if (!out.Action) return out;
@@ -212,4 +255,38 @@ AdsCarrySample EvaluateAdsCarry(const AnimatorLayerRuntime& layer, const std::ve
     out.Swivel[0] = out.Action->Swivel[0] * out.Weight;
     out.Swivel[1] = out.Action->Swivel[1] * out.Weight;
     return out;
+}
+
+glm::mat4 AdsGunMotionMove(const glm::mat4& aim, const glm::mat4& hip, const glm::mat4& hipNow, const glm::vec3& pivot,
+                           float keepRotation, float keepPosition) {
+    // The clip's gun motion since its first frame, in the gun's own frame; split into a turn
+    // about the sight and the movement that leaves, and keep a share of each.
+    const glm::mat4 motion = glm::inverse(hip) * hipNow;
+    const glm::quat turn = QuaternionFromMatrix(motion);
+    const glm::vec3 q = glm::vec3(glm::inverse(aim) * glm::vec4(pivot, 1.0f)); // the sight, gun frame
+    const glm::vec3 move = glm::vec3(motion[3]) - q + turn * q;
+    const glm::quat kept = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), turn, keepRotation);
+    const glm::mat4 local = glm::translate(glm::mat4(1.0f), move * keepPosition + q) * glm::mat4_cast(kept) *
+                            glm::translate(glm::mat4(1.0f), -q);
+    return aim * local * glm::inverse(aim);
+}
+
+bool AdsGunMotion(Model& arms, const AdsCarrySample& sample, int gunBone, int cameraBone, const glm::vec3& sightPivot,
+                  float keepRotation, float keepPosition, glm::quat& r, glm::vec3& t) {
+    const AdsCarryAction* a = sample.Action;
+    if (!a || a->Clip < 0 || gunBone < 0 || sample.Weight <= 0.0f || (keepRotation <= 0.0f && keepPosition <= 0.0f))
+        return false;
+    thread_local std::vector<LocalTRS> pose;
+    thread_local std::vector<glm::mat4> globals;
+    thread_local std::vector<int> parents;
+    parents.resize(arms.NodeCount());
+    for (int i = 0; i < (int)parents.size(); ++i) parents[i] = arms.NodeParent(i);
+    arms.SampleLocalPose(a->Clip, std::max(sample.Phase, 0.0f) * a->Length, AnimationWrapMode::ClampForever, pose);
+    IK::ComputeGlobals(pose, parents, globals);
+    const glm::vec3 eye = cameraBone >= 0 ? IK::Position(globals[cameraBone]) : glm::vec3(0.0f);
+    const glm::mat4 hipNow = glm::translate(glm::mat4(1.0f), -eye) * globals[gunBone];
+    const glm::mat4 m = AdsGunMotionMove(a->Aim, a->Hip, hipNow, sightPivot, keepRotation, keepPosition);
+    r = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), QuaternionFromMatrix(m), sample.Weight);
+    t = glm::vec3(m[3]) * sample.Weight;
+    return true;
 }

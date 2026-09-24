@@ -161,8 +161,21 @@ The `.fpsanim` `ads` block:
 ```json
 "ads": { "zoom": 1.3, "viewModelZoom": 1.1, "zoomTime": 0.16,
          "referenceState": "Aim", "carryTag": "ADSCarry",
-         "matchElbows": true, "matchTwist": true, "aimHoldTime": 0.15 }
+         "matchElbows": true, "matchTwist": true, "aimHoldTime": 0.15,
+         "actionBones": ["clavicle_l"],
+         "gunMotion": {"MagCheck": {"rotation": 0.6, "position": 0.2}}, "sightPivot": 0.25 }
 ```
+
+By default a carried action plays **only on the left arm** (**Action Bones**, `actionBones`:
+each bone with everything under it). The gun and the right hand stay in the aim pose, still
+playing the aim clip, while the left hand does the reload or mag check relative to the gun.
+Leave the list empty to carry the whole clip instead (the gun moves as it does at the hip).
+
+An action that has to show the gun (the mag check tipping the mag into view) can keep part of
+its clip's own gun motion on top: **Gun Motion** in the Aim-Down-Sights table (`gunMotion`, per
+state: the share of the turn and of the movement), turned about the rear sight (**Sight Pivot**
+metres ahead of the eye, `sightPivot`) so the sights stay near the centre. The right hand
+follows the gun; 0 / 0 keeps it locked.
 
 (`gameplay.adsZoom`, `adsViewModelZoom` and `adsZoomTime` from older files still load.)
 

@@ -1888,6 +1888,56 @@ void TestFirstPersonAds() {
     // dt predicts the fade the controller is about to advance to.
     const float next = AnimatorCrossfadeWeight(0.5f + 0.03f / 0.3f);
     CHECK(std::fabs(EvaluateAdsCarry(layer, actions, 0.03f, 1.0f).Weight - (1.0f - next)) < 1e-5f);
+    // Action bones: the left arm by default, a list in the file, empty = carry the whole clip.
+    {
+        FirstPersonAnimationSet bones;
+        CHECK(FirstPersonAnimationSet::FromJsonString(head + R"("ads":{}})", bones, &error));
+        CHECK(bones.Ads.ActionBones == std::vector<std::string>{"clavicle_l"});
+        CHECK(FirstPersonAnimationSet::FromJsonString(head + R"("ads":{"actionBones":["clavicle_l","clavicle_r"]}})", bones, &error));
+        FirstPersonAnimationSet back;
+        CHECK(FirstPersonAnimationSet::FromJsonString(bones.ToJsonString(), back, &error));
+        CHECK(back.Ads.ActionBones == (std::vector<std::string>{"clavicle_l", "clavicle_r"}));
+        CHECK(FirstPersonAnimationSet::FromJsonString(head + R"("ads":{"actionBones":[]}})", bones, &error));
+        CHECK(bones.Ads.ActionBones.empty());
+        CHECK(FirstPersonAnimationSet::FromJsonString(bones.ToJsonString(), back, &error) && back.Ads.ActionBones.empty());
+    }
+
+    // AdsGunMotionMove: the kept share of a clip's own gun motion, about the rear sight.
+    {
+        auto nearM = [](const glm::mat4& a, const glm::mat4& b) {
+            for (int c = 0; c < 4; ++c)
+                for (int r = 0; r < 4; ++r)
+                    if (std::fabs(a[c][r] - b[c][r]) > 1e-4f) return false;
+            return true;
+        };
+        const glm::mat4 aim = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.05f, -0.2f));
+        const glm::mat4 hip = glm::translate(glm::mat4(1.0f), glm::vec3(0.1f, -0.15f, -0.3f)) *
+                              glm::mat4_cast(glm::angleAxis(0.3f, glm::vec3(0.0f, 1.0f, 0.0f)));
+        const glm::mat4 now = hip * glm::translate(glm::mat4(1.0f), glm::vec3(0.02f, -0.08f, 0.03f)) *
+                              glm::mat4_cast(glm::angleAxis(0.6f, glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f))));
+        const glm::vec3 sight(0.0f, 0.0f, -0.25f);
+        CHECK(nearM(AdsGunMotionMove(aim, hip, hip, sight, 0.6f, 0.2f), glm::mat4(1.0f)));  // first frame: none
+        CHECK(nearM(AdsGunMotionMove(aim, hip, now, sight, 0.0f, 0.0f), glm::mat4(1.0f)));  // nothing kept: locked
+        CHECK(nearM(AdsGunMotionMove(aim, hip, now, sight, 1.0f, 1.0f) * aim, aim * glm::inverse(hip) * now)); // all
+        // Turn only: the gun turns about the sight, which stays put.
+        const glm::mat4 turned = AdsGunMotionMove(aim, hip, now, sight, 0.5f, 0.0f);
+        CHECK(glm::length(glm::vec3(turned * glm::vec4(sight, 1.0f)) - sight) < 1e-4f);
+        CHECK(!nearM(turned, glm::mat4(1.0f)));
+    }
+    // Gun motion settings: MagCheck by default, per state in the file.
+    {
+        FirstPersonAnimationSet gm;
+        CHECK(FirstPersonAnimationSet::FromJsonString(head + R"("ads":{}})", gm, &error));
+        CHECK(gm.Ads.GunMotionFor("MagCheck") && !gm.Ads.GunMotionFor("TacReload"));
+        CHECK(FirstPersonAnimationSet::FromJsonString(
+            head + R"("ads":{"gunMotion":{"TacReload":{"rotation":0.3,"position":2}},"sightPivot":0.3}})", gm, &error));
+        CHECK(!gm.Ads.GunMotionFor("MagCheck") && gm.Ads.GunMotionFor("TacReload")->Position == 1.0f);
+        FirstPersonAnimationSet back;
+        CHECK(FirstPersonAnimationSet::FromJsonString(gm.ToJsonString(), back, &error));
+        CHECK(back.Ads.GunMotionFor("TacReload") && std::fabs(back.Ads.GunMotionFor("TacReload")->Rotation - 0.3f) < 1e-6f &&
+              std::fabs(back.Ads.SightPivot - 0.3f) < 1e-6f);
+    }
+
     // Entering: the action fading in over Aim.
     layer.Stack = {{0, 0.5f, 1.0f, 0.0f}, {2, 0.0f, 0.25f, 0.3f}};
     CHECK(std::fabs(EvaluateAdsCarry(layer, actions, 0.0f, 1.0f).Weight - AnimatorCrossfadeWeight(0.25f)) < 1e-5f);
