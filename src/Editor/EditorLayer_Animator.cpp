@@ -2067,6 +2067,12 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
           "Seconds of settled Idle before the Fidget trigger fires (random between min and max).");
     dragF("Fidget Max (s)", "##wrmax", g.RegripMax, 0.1f, g.RegripMin, 120.0f, "%.1f",
           "Seconds of settled Idle before the Fidget trigger fires (random between min and max).");
+    dragF("ADS Zoom", "##wadsz", g.AdsZoom, 0.01f, 1.0f, 8.0f, "%.2fx",
+          "How much the world magnifies with the sights up (1 = no zoom). Mouse look slows to match.");
+    dragF("ADS Gun Zoom", "##wadsvz", g.AdsViewModelZoom, 0.01f, 1.0f, 4.0f, "%.2fx",
+          "How much the gun itself magnifies with the sights up (1 = none).");
+    dragF("ADS Zoom Time (s)", "##wadst", g.AdsZoomTime, 0.01f, 0.0f, 2.0f, "%.2f",
+          "Roughly how long the zoom takes to settle in or out (eased at both ends).");
 
     // Choices for the procedural section's pickers: the controller's states and tags, and the
     // arms rig's bones once it is loaded (only on request - a big FBX shouldn't load just
