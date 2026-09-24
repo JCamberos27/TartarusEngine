@@ -556,7 +556,11 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // here: the world's draws have already consumed this frame's lists.
         RenderFrameContext vmCtx = ctx;
         vmCtx.Proj = vmProj;
-        const FrameState vmFs = GatherFrameState(world, vmCtx, in);
+        FrameState vmFs = GatherFrameState(world, vmCtx, in);
+        // The SSAO map was built from the world's depth pre-pass, which skips the view model, so
+        // sampling it here stamps whatever stands behind the gun (a Y Bot, a wall) onto it as
+        // occlusion - the weapon read as see-through. The view model gets no screen-space AO.
+        vmFs.ssaoOn = false;
         if (vmFs.clusterOn) {
             clusterGrid.Cull(*in.clusterBuildShader, *in.clusterCullShader, vmCtx.View, vmCtx.Proj,
                              vmFs.clusterNearZ, vmFs.clusterFarZ, vmFs.vp[2], vmFs.vp[3]);
