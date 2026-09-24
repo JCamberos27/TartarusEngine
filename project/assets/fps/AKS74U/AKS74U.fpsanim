@@ -9,7 +9,13 @@
     "reloadHoldSeconds": 0.35,
     "rpm": 700.0
   },
-  "procedural": {},
+  "procedural": {
+    "bob": {
+      "walkStride": 3.2,
+      "sprintStride": 4.3,
+      "walkFullSpeed": 4.0
+    }
+  },
   "viewRotation": [
     0.0,
     180.0,
