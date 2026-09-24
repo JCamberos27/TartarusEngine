@@ -38,7 +38,7 @@ public:
     // Keeps the presentation in camera space, and takes in what the animator reported last
     // frame (fired events, the current state's tags). Call once per simulated frame, before the
     // input calls below and Tick(). The renderer draws these rigs in its own view-model
-    // sub-pass - see ViewModelFov() - so the world camera's FOV is never touched.
+    // sub-pass - see ViewModelFov(); the world camera's FOV only changes through WorldFov().
     // Also applies this frame's view punch and lean to `camera` (see RemoveViewKick).
     void Update(World& world, Camera& camera);
     // Re-places the arms and weapon from this frame's finished pose (clips + IK). Call after
@@ -50,7 +50,12 @@ public:
 
     // Vertical FOV in degrees for that sub-pass, or a non-positive value when there is nothing
     // to put in it (no animation set is running). Only Start()/Stop() change it.
-    float ViewModelFov() const { return IsActive() ? m_ViewModelFov : -1.0f; }
+    // Narrowed by the ADS zoom while the sights are up.
+    float ViewModelFov() const;
+    // The world camera's vertical FOV for `baseFov` under the ADS zoom, and the matching mouse
+    // look scale (the ratio of the two view widths, so the sights track the same per pixel).
+    float WorldFov(float baseFov) const;
+    float LookScale(float baseFov) const;
 
     // Per-frame locomotion + timers. Sets the controller's Speed/Sprint/Aim/Equipped/Ammo, runs
     // the Fidget timer, and advances the procedural stack. `velocity` is the player's world
@@ -107,6 +112,7 @@ private:
     void PlaceRigs(World& world, const Camera& camera);
     void SetupBolt(AssetLibrary& assets, const AnimatorController& ctrl);
     void SetupMuzzle(int bolt, const std::vector<int>& parents);
+    void SetupAdsActions(AssetLibrary& assets, const AnimatorController& ctrl);
     void ReloadIfChanged(float dt);
 
     World* m_World = nullptr;
@@ -142,6 +148,13 @@ private:
     bool m_HaveMuzzle = false;
     glm::vec3 m_MuzzleLocal{0.0f}, m_BoreLocal{0.0f, 0.0f, -1.0f}; // weapon root space
     glm::vec3 m_AimPoint{0.0f};
+    // Reloads and the mag check with the sights up: the hip clip plays exactly as authored and
+    // the whole view model is carried rigidly by the move that takes that clip's first-frame gun
+    // onto Aim's (camera-bone relative, rig space), so the hands never leave the magazine.
+    struct AdsAction { int State = -1; glm::quat R{1.0f, 0.0f, 0.0f, 0.0f}; glm::vec3 T{0.0f}; };
+    std::vector<AdsAction> m_AdsActions;
+    float m_AdsHold = 0.0f;       // 0..1, eased toward "aim held"
+    float m_Zoom = 0.0f, m_ZoomRate = 0.0f; // ADS zoom 0..1, critically damped spring
     bool m_AimPointValid = false;
     float m_LookYaw = 0.0f, m_LookPitch = 0.0f, m_PrevLookYaw = 0.0f, m_PrevLookPitch = 0.0f;
     bool m_HaveLook = false;
