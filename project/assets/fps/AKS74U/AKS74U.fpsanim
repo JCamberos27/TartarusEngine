@@ -1,5 +1,8 @@
 {
-  "armsModel": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",
+  "armsMaterials": {
+    "M_Quantum_Arms": "assets/quantum/Materials/M_Quantum_Arms.mat"
+  },
+  "armsModel": "assets/quantum/FirstPerson/Quantum_Arms_FP.fbx",
   "controller": "assets/fps/AKS74U/AKS74U.controller",
   "gameplay": {
     "adsViewModelZoom": 1.1,
