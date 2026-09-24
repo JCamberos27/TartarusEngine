@@ -7,6 +7,7 @@
     "_BaseColor": [1, 1, 1],
     "_Metallic": 1.0,
     "_Roughness": 1.0,
+    "_DoubleSided": true,
     "_AlbedoMap": "assets/fps/AKS74U/Textures/Cartridge_545x39mm_Albedo_Transparency.png",
     "_NormalMap": "assets/fps/AKS74U/Textures/Cartridge_545x39mm_Normal.png",
     "_MetallicMap": "assets/fps/AKS74U/Textures/Cartridge_545x39mm_Metallic.png",
