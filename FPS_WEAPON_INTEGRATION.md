@@ -128,10 +128,47 @@ Alternatively, if you have a flat list of 15 AK-style clips:
      3. Socket → weaponRoot should be the same rotation, with about zero translation, in every clip. If it isn't, fix the rig, not the engine.
    - **View Rotation**: 180 Y if the arms render behind the camera (a Blender `-Y` rig).
    - **Gameplay**: magazine, rounds per minute, full-auto allowed, reload-hold time, fidget timing.
+   - **Aim-Down-Sights**: view and gun zoom, sight alignment, and how actions play while aiming (see [Aim-down-sights animations](#aim-down-sights-animations)).
    - **Procedural**: recoil curves, sway, bob, breathing, ADS aim offset, per-state offsets, lean and the IK bone names. See [PROCEDURAL_ANIMATION.md](PROCEDURAL_ANIMATION.md). For a Manny-rig weapon the IK defaults already fit. In the controller, give Walk/Sprint the `WalkRate` / `SprintRate` speed parameters, and tag states that must play untouched (Draw, Holster) `IKOff`.
 3. The arms and weapon model paths are shown read-only in the Inspector. Edit them in the file.
 
 Every field is validated on load. A bad value shows its error in the Inspector, and Play refuses to start the weapon.
+
+### Aim-down-sights animations
+
+Each action (tac reload, empty reload, mag check, inspect) can play two ways while aiming. Mix
+them freely per action.
+
+**Carry the hip clip (no new animation).** Tag the hip state `ADSCarry` (the standard graph
+already does for TacReload, EmptyReload and MagCheck). While aiming, the engine moves the gun
+onto the sights for the length of the action and matches the elbows and wrists to the aim pose,
+so it looks like the hip clip done on the sights and ends there with no readjust. Needs:
+- an aim state tagged `ADS` (named in **Reference Pose**, default `Aim`);
+- the arm IK on (**IK** section, bones found) - otherwise the whole rig is carried.
+
+**Authored ADS clip.** Export the action as its own clip and add it to the controller:
+- *Standard graph:* name the clip `ADS_<action>`; the generator adds an `ADS <action>` state
+  routed on Aim.
+- *Own graph:* add a state tagged `ADS` (+ `Reload` for reloads, `Busy` otherwise) and an Any
+  State transition on the action's trigger **and** `Aim`, placed before the hip one (Any State
+  transitions are checked in order), with a matching or higher priority. Exit through Exit.
+
+Tags that matter (pick them from the `+` on a state's Tags in the Animator): `ADS`, `ADSCarry`,
+`Reload`, `Busy`, `IKOff`, `Idle`, `Hidden`. Firing is refused in `Reload` and `Busy` states.
+
+The `.fpsanim` `ads` block:
+
+```json
+"ads": { "zoom": 1.3, "viewModelZoom": 1.1, "zoomTime": 0.16,
+         "referenceState": "Aim", "carryTag": "ADSCarry",
+         "matchElbows": true, "matchTwist": true, "aimHoldTime": 0.15 }
+```
+
+(`gameplay.adsZoom`, `adsViewModelZoom` and `adsZoomTime` from older files still load.)
+
+**Check it:** press Play, do each action while aiming, stop, and open the weapon's Inspector.
+The **Aim-Down-Sights** table shows each action's mode (Aim pose / ADS clip / Carried / Drops to
+hip), what was measured, and warnings (missing clip, no reference, no IK).
 
 ---
 
@@ -167,6 +204,7 @@ Run the build, unit tests and smoke test as in SYSTEM §10. Then:
   - hip fire, then ADS fire in semi and full (B)
   - walk while aiming
   - tap R at partial ammo and at 0 rounds, and hold R
+  - the same while aiming: each ADS action ends on the sights with no readjust, and firing does nothing during it
   - F and Q
   - 1, 2 and scroll, including mid-reload
 - If the weapon has a spare magazine, check it's visible during both reloads. If it's missing, see SYSTEM §8.6.
