@@ -712,10 +712,12 @@ struct Sampler {
 };
 
 // The pose one layer's crossfade stack produces. `base` fills in for empty motions.
+// `top`, when given, also receives the current (topmost) state's own unblended pose.
 void SampleLayer(const AnimatorController::Layer& L, const AnimatorLayerRuntime& rt, Sampler& smp,
                  const std::vector<AnimatorParam>& params, const std::function<float(int, int)>& stateLength,
-                 int layerIndex, const Pose& base, bool atPhaseZero, Pose& out) {
+                 int layerIndex, const Pose& base, bool atPhaseZero, Pose& out, Pose* top = nullptr) {
     out = base;
+    if (top) *top = base;
     Pose item;
     bool first = true;
     for (const auto& it : rt.Stack) {
@@ -724,8 +726,9 @@ void SampleLayer(const AnimatorController::Layer& L, const AnimatorLayerRuntime&
         float len = stateLength(layerIndex, it.State);
         if (!(len > 1e-4f)) len = 1.0f;
         if (!smp.Sample(s, atPhaseZero ? 0.0f : it.Phase, len, params, item)) item = base;
+        if (top) *top = item;
         if (first) { out = item; first = false; }
-        else BlendInto(out, item, it.Fade);
+        else BlendInto(out, item, AnimatorCrossfadeWeight(it.Fade));
     }
 }
 
@@ -746,7 +749,7 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
                const IKRigComponent* ikRig) {
     if (model.NodeCount() == 0) return;
     Sampler smp{model, assets, track, {}, {}};
-    Pose bind, pose, layerPose, refPose;
+    Pose bind, pose, layerPose, refPose, gripPose;
     model.BindLocalPose(bind);
     pose = bind;
     std::vector<std::string> names;
@@ -756,7 +759,9 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
         const auto& rt = ac.Layers[li];
         if (rt.Stack.empty()) continue;
         if (li == 0) {
-            SampleLayer(L, rt, smp, ac.Params, stateLength, li, bind, false, pose);
+            // The grip the IK keeps comes from the state being faded into (see IK::ApplyRig).
+            SampleLayer(L, rt, smp, ac.Params, stateLength, li, bind, false, pose,
+                        ikRig && rt.Stack.size() > 1 ? &gripPose : nullptr);
             continue;
         }
         if (L.Weight <= 0.0f) continue;
@@ -780,7 +785,7 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
         }
     }
     // Procedural offsets and IK run on the finished blend, so they see what the clips did.
-    if (ikRig) IK::ApplyRig(*ikRig, model, pose);
+    if (ikRig) IK::ApplyRig(*ikRig, model, pose, gripPose.empty() ? nullptr : &gripPose);
     model.ApplyLocalPose(pose);
 }
 
