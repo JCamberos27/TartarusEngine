@@ -1,0 +1,16 @@
+{
+  "matVersion": 2,
+  "name": "AKS-74U",
+  "_comment": "AKS-74U body: blued steel + wood furniture. Full PBR set from the source texture pack.",
+  "shader": "engine://Standard.shader",
+  "properties": {
+    "_BaseColor": [1, 1, 1],
+    "_Metallic": 1.0,
+    "_Roughness": 1.0,
+    "_AlbedoMap": "assets/fps/AKS74U/Textures/AKS74U_Albedo_Transparency.png",
+    "_NormalMap": "assets/fps/AKS74U/Textures/AKS74U_Normal.png",
+    "_MetallicMap": "assets/fps/AKS74U/Textures/AKS74U_Metallic.png",
+    "_RoughnessMap": "assets/fps/AKS74U/Textures/AKS74U_Roughness.png",
+    "_AOMap": "assets/fps/AKS74U/Textures/AKS74U_Occlusion.png"
+  }
+}

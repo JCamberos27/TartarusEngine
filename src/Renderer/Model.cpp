@@ -585,6 +585,7 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
     Material mat;
     aiMaterial* material = scene->mMaterials[materialIndex];
     aiString str_unused;
+    mat.Name = material->GetName().C_Str();
 
     auto loadSlot = [&](aiTextureType type, TextureRole role) -> std::shared_ptr<Texture> {
         if (material->GetTextureCount(type) == 0) return nullptr;

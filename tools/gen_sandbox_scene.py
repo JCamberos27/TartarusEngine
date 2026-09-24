@@ -531,7 +531,11 @@ empty('Player Spawn', (0, 0.02, CZ - HALL_Z - 4.5), (0, 180, 0), extra={'First P
     'Move Speed': 6.0, 'Sprint Multiplier': 1.6, 'Jump Speed': 5.5, 'Eye Height': 1.7, 'Capsule Radius': 0.3,
     'Capsule Height': 1.85, 'Mouse Sensitivity': 0.1, 'Invert Y': False, 'Field of View': 75.0, 'Kill Height': -20.0,
     'Gravity': 18.0, 'Gravity Gun': True, 'Min Throw Speed': 3.5, 'Max Throw Speed': 16.0, 'Throw Charge Time': 1.1,
-    'Throw Backspin': 2.0}})
+    'Throw Backspin': 2.0,
+    # The AKS-74U in hand; the gravity gun is the unarmed slot (2 / Holster puts the AK away).
+    'Animation Set': {'path': 'assets/fps/AKS74U/AKS74U.fpsanim', 'pathGuid': 'c0ff631aac421f76'},
+    'Camera Bone': 'head', 'View Model FOV': 50.0, 'View Model Offset': [0.0562, -0.032, 0.0],
+    'View Model Rotation': [-0.24, 0.39, 0.0], 'View Model Scale': 1.0}})
 cam_pos = (-15.0 * COURT_S, 7.2 * COURT_S, CZ - 8.2 * COURT_S)
 tgt = (0.0, 2.0, CZ)
 dx, dy, dz = tgt[0] - cam_pos[0], tgt[1] - cam_pos[1], tgt[2] - cam_pos[2]
@@ -629,8 +633,9 @@ scene = {
     '_comment': 'Tartarus Sandbox - the default testing scene. Centre: animated Mixamo Y Bots (idle/walk/run/'
                 'strafe/jump + one on an Animator Controller; assets in project/assets/characters/ybot, not in '
                 'git). South: glass-walled basketball arena (an NBA court at 1.5x with 2x hoops and balls, goal '
-                'triggers, scoreboard) - Play spawns you at its door; right mouse grabs a ball, hold left mouse '
-                'to charge a shot. Between: fountain (particles). North: material gallery, then the ball '
+                'triggers, scoreboard) - Play spawns you at its door with the AKS-74U; press 2 (or Holster) for '
+                'the gravity gun - right mouse grabs a ball, hold left mouse to charge a shot - and 1 for the AK '
+                'again. Between: fountain (particles). North: material gallery, then the ball '
                 'pit. East: physics playground (crate pyramid, brick wall + wrecking ball on a chain of joints, '
                 'ball ramp, domino run). West: movement course (stairs, ramps, step blocks, lift, turntable). '
                 'Late-afternoon sun, sky ambient, light fog, colour grading. Regenerate with '
