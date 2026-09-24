@@ -338,7 +338,8 @@ void RegisterEngineComponents() {
             { "Invert Y", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, InvertY), 0.0f,
               "Moving the mouse up looks down." },
             { "Field of View", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, FieldOfView), 0.25f,
-              "Vertical field of view, in degrees.", 20.0f, 150.0f },
+              "Horizontal field of view in degrees, measured on a 16:9 screen (90 = the usual shooter FOV). "
+              "Wider screens see more at the sides.", 30.0f, 150.0f },
             { "Kill Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, KillY), 0.5f,
               "Falling below this world height respawns the player at this object.", -100000.0f, 100000.0f },
             { "Gravity", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, Gravity), 0.1f,
