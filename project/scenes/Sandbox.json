@@ -2974,7 +2974,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -3054,7 +3054,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -3134,7 +3134,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -3214,7 +3214,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -3294,7 +3294,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -3374,7 +3374,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -3454,7 +3454,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -3500,7 +3500,7 @@
       "order": 70,
       "parentId": 518,
       "position": [
-        28.860000610351562,
+        28.860000610351563,
         0.4000000059604645,
         -3.0
       ],
@@ -3534,7 +3534,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -3614,7 +3614,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -3694,7 +3694,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -3774,7 +3774,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -3854,7 +3854,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -3934,7 +3934,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -4014,7 +4014,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -4094,7 +4094,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -4174,7 +4174,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -4254,7 +4254,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -4334,7 +4334,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -4414,7 +4414,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -4494,7 +4494,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -4574,7 +4574,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -4654,7 +4654,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -4700,7 +4700,7 @@
       "order": 85,
       "parentId": 518,
       "position": [
-        28.860000610351562,
+        28.860000610351563,
         1.6019999980926514,
         -3.0
       ],
@@ -4734,7 +4734,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -4814,7 +4814,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -4894,7 +4894,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -4974,7 +4974,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -5054,7 +5054,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -5134,7 +5134,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -5214,7 +5214,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -5294,7 +5294,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -5374,7 +5374,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -5454,7 +5454,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -5534,7 +5534,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -5614,7 +5614,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -5694,7 +5694,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -5774,7 +5774,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -5854,7 +5854,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -5900,7 +5900,7 @@
       "order": 100,
       "parentId": 518,
       "position": [
-        28.860000610351562,
+        28.860000610351563,
         2.803999900817871,
         -3.0
       ],
@@ -5934,7 +5934,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -6014,7 +6014,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -6094,7 +6094,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -6174,7 +6174,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -6254,7 +6254,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -6334,7 +6334,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -6414,7 +6414,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -6494,7 +6494,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.2,
+        "Mass": 1.2000000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -6699,7 +6699,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -6779,7 +6779,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -6859,7 +6859,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -6939,7 +6939,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -7019,7 +7019,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -7099,7 +7099,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -7179,7 +7179,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -7259,7 +7259,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -7339,7 +7339,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -7419,7 +7419,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -7499,7 +7499,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -7579,7 +7579,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -7659,7 +7659,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -7739,7 +7739,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -7819,7 +7819,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -7899,7 +7899,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -7979,7 +7979,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -8059,7 +8059,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -9965,7 +9965,7 @@
       "scale": [
         48.974998474121094,
         0.11999999731779099,
-        28.860000610351562
+        28.860000610351563
       ]
     },
     {
@@ -10003,7 +10003,7 @@
       "scale": [
         0.05999999865889549,
         15.0,
-        30.860000610351562
+        30.860000610351563
       ]
     },
     {
@@ -10041,7 +10041,7 @@
       "scale": [
         0.05999999865889549,
         15.0,
-        30.860000610351562
+        30.860000610351563
       ]
     },
     {
@@ -12688,7 +12688,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351562
+        30.860000610351563
       ]
     },
     {
@@ -12747,7 +12747,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351562
+        30.860000610351563
       ]
     },
     {
@@ -12806,7 +12806,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351562
+        30.860000610351563
       ]
     },
     {
@@ -12865,7 +12865,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351562
+        30.860000610351563
       ]
     },
     {
@@ -12924,7 +12924,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351562
+        30.860000610351563
       ]
     },
     {
@@ -12983,7 +12983,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351562
+        30.860000610351563
       ]
     },
     {
@@ -13042,7 +13042,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351562
+        30.860000610351563
       ]
     },
     {
@@ -13101,7 +13101,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351562
+        30.860000610351563
       ]
     },
     {
@@ -13160,7 +13160,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351562
+        30.860000610351563
       ]
     },
     {
@@ -13480,7 +13480,7 @@
       "order": 348,
       "parentId": 523,
       "position": [
-        -19.672500610351562,
+        -19.672500610351563,
         3.940000057220459,
         36.810001373291016
       ],
@@ -13721,7 +13721,7 @@
       "order": 352,
       "parentId": 523,
       "position": [
-        -19.672500610351562,
+        -19.672500610351563,
         2.8299999237060547,
         36.810001373291016
       ],
@@ -14100,7 +14100,7 @@
       "order": 366,
       "parentId": 528,
       "position": [
-        19.672500610351562,
+        19.672500610351563,
         3.940000057220459,
         36.810001373291016
       ],
@@ -14341,7 +14341,7 @@
       "order": 370,
       "parentId": 528,
       "position": [
-        19.672500610351562,
+        19.672500610351563,
         2.8299999237060547,
         36.810001373291016
       ],
@@ -18692,7 +18692,7 @@
         "Size": [
           50.974998474121094,
           8.0,
-          30.860000610351562
+          30.860000610351563
         ]
       },
       "id": 549,
@@ -18726,7 +18726,7 @@
         "Capsule Height": 1.850000023841858,
         "Capsule Radius": 0.30000001192092896,
         "Eye Height": 1.7000000476837158,
-        "Field of View": 75.0,
+        "Field of View": 90.0,
         "Gravity": 18.0,
         "Gravity Gun": true,
         "Invert Y": false,
@@ -19092,6 +19092,14 @@
     {
       "path": "materials/sandbox/gallery_neon.mat",
       "pathGuid": "eb13ea79fff0ea7e"
+    },
+    {
+      "path": "assets/fps/AKS74U/Materials/AKS74U.mat",
+      "pathGuid": "43edbab5337788c2"
+    },
+    {
+      "path": "assets/fps/AKS74U/Materials/Cartridge_545x39mm.mat",
+      "pathGuid": "97e35a4f8b04858c"
     }
   ],
   "libraryModels": [
@@ -19218,6 +19226,26 @@
     {
       "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Aim.fbx",
       "pathGuid": "9004884db6cdfb0e"
+    },
+    {
+      "path": "assets/characters/ybot/jump.fbx",
+      "pathGuid": "47989bc921f5169a"
+    },
+    {
+      "path": "assets/characters/ybot/left strafe walking.fbx",
+      "pathGuid": "0680ed3abdd0e509"
+    },
+    {
+      "path": "assets/characters/ybot/standard run.fbx",
+      "pathGuid": "eb6288377db03bdb"
+    },
+    {
+      "path": "assets/characters/ybot/walking.fbx",
+      "pathGuid": "b47100444710726a"
+    },
+    {
+      "path": "assets/characters/ybot/idle.fbx",
+      "pathGuid": "ffab44c3075cc1c3"
     }
   ],
   "libraryPrefabs": [],
@@ -19258,6 +19286,46 @@
     {
       "path": "textures/basketball/basketball_normal.png",
       "pathGuid": "a631a899eff1effb"
+    },
+    {
+      "path": "assets/fps/AKS74U/Textures/AKS74U_Albedo_Transparency.png",
+      "pathGuid": "7b7ff3d89a801e9b"
+    },
+    {
+      "path": "assets/fps/AKS74U/Textures/AKS74U_Normal.png",
+      "pathGuid": "ddf9f803479dcf51"
+    },
+    {
+      "path": "assets/fps/AKS74U/Textures/AKS74U_Metallic.png",
+      "pathGuid": "fe12ee5959aa01e3"
+    },
+    {
+      "path": "assets/fps/AKS74U/Textures/AKS74U_Roughness.png",
+      "pathGuid": "3478f940ace06417"
+    },
+    {
+      "path": "assets/fps/AKS74U/Textures/AKS74U_Occlusion.png",
+      "pathGuid": "533e95bf9b3a528b"
+    },
+    {
+      "path": "assets/fps/AKS74U/Textures/Cartridge_545x39mm_Albedo_Transparency.png",
+      "pathGuid": "cf91557a2170ebb2"
+    },
+    {
+      "path": "assets/fps/AKS74U/Textures/Cartridge_545x39mm_Normal.png",
+      "pathGuid": "5f5e9c41e791adff"
+    },
+    {
+      "path": "assets/fps/AKS74U/Textures/Cartridge_545x39mm_Metallic.png",
+      "pathGuid": "47fe55433568f31a"
+    },
+    {
+      "path": "assets/fps/AKS74U/Textures/Cartridge_545x39mm_Roughness.png",
+      "pathGuid": "304561875618662e"
+    },
+    {
+      "path": "assets/fps/AKS74U/Textures/Cartridge_545x39mm_Occlusion.png",
+      "pathGuid": "2c708ddb3e919ee4"
     }
   ],
   "maxPointShadows": 2,
@@ -19691,7 +19759,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.019999999552965164,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -19774,7 +19842,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.019999999552965164,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -19857,7 +19925,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.019999999552965164,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -19940,7 +20008,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.019999999552965164,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -20023,7 +20091,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.019999999552965164,
-        "Mass": 0.8,
+        "Mass": 0.800000011920929,
         "Use Gravity": true
       },
       "collider": {
@@ -20189,7 +20257,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.025,
+        "Mass": 1.024999976158142,
         "Use Gravity": true
       },
       "collider": {
@@ -20272,7 +20340,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.175,
+        "Mass": 1.1749999523162842,
         "Use Gravity": true
       },
       "collider": {
@@ -20355,7 +20423,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.325,
+        "Mass": 1.3250000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -20521,7 +20589,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.025,
+        "Mass": 1.024999976158142,
         "Use Gravity": true
       },
       "collider": {
@@ -20604,7 +20672,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.175,
+        "Mass": 1.1749999523162842,
         "Use Gravity": true
       },
       "collider": {
@@ -20687,7 +20755,7 @@
         "Interpolate": "Interpolate",
         "Is Kinematic": false,
         "Linear Damping": 0.05000000074505806,
-        "Mass": 1.325,
+        "Mass": 1.3250000476837158,
         "Use Gravity": true
       },
       "collider": {
@@ -21900,7 +21968,7 @@
       "position": [
         -0.5842999815940857,
         1.5,
-        -19.861099243164062
+        -19.861099243164063
       ],
       "rotation": [
         0.0,
@@ -25054,7 +25122,7 @@
       "position": [
         -0.739300012588501,
         2.799999952316284,
-        -17.427200317382812
+        -17.427200317382813
       ],
       "rotation": [
         0.0,
@@ -26629,7 +26697,7 @@
       "parentId": 519,
       "path": "primitive://sphere#s218",
       "position": [
-        3.1847000122070312,
+        3.1847000122070313,
         2.799999952316284,
         -16.065000534057617
       ],
@@ -35594,7 +35662,7 @@
       "position": [
         27.200000762939453,
         6.076300144195557,
-        -10.204299926757812
+        -10.204299926757813
       ],
       "rotation": [
         0.8870108127593994,
