@@ -115,6 +115,7 @@ private:
     void WriteIK();
     void PlaceRigs(World& world, const Camera& camera);
     void ApplyHidden(World& world);
+    void WriteAdsHold(IKRigComponent& rig, const AdsCarrySample& carry);
     void SetupBolt(AssetLibrary& assets, const AnimatorController& ctrl);
     void SetupMuzzle(int bolt, const std::vector<int>& parents);
     void SetupAdsCarry();
@@ -144,6 +145,10 @@ private:
 
     bool m_Equipped = true;       // what the player asked for (the controller catches up)
     bool m_HiddenApplied = false; // what Update() last pushed onto the entities
+    bool m_AdsHolding = false;    // WriteAdsHold: the aim pose is holding the rig
+    float m_AdsAimTime = 0.0f;    // ... how far into the aim clip it is
+    float m_AdsHoldLast = 0.0f;   // ... its weight while the action played
+    float m_AdsReleaseT = 0.0f;   // ... and seconds since the action faded out
     int m_Ammo = 30;
     bool m_FullAuto = false;
     float m_FireCooldown = 0.0f;  // full-auto: seconds until the next round may go
