@@ -140,6 +140,28 @@ void DrawAds(PropertyRows& r, FirstPersonAnimationSet& s, const WeaponContext& c
     r.Check("Match Twist", ads.MatchTwist, "Also match the forearm / upper-arm twist bones, so the wrists don't re-roll after the action.");
     r.Float("Aim Hold Time", ads.AimHoldTime, 0.005f, 0.0f, 2.0f, "%.2f s",
             "Seconds for a carried action to rise onto (or drop off) the sights when aim is pressed or released partway through.");
+    {
+        // Typed as a comma-separated list.
+        std::string list;
+        for (const std::string& bone : ads.ActionBones) list += (list.empty() ? "" : ", ") + bone;
+        if (r.Text("Action Bones", list,
+                   "The bones a carried action plays on while aiming, each with everything under it (clavicle_l = "
+                   "the left arm). The rest of the rig - the gun and the other hand - stays in the aim pose, and the "
+                   "action's hand keeps its grip relative to the gun. Empty = the whole clip is carried onto the "
+                   "sights instead (the gun moves as it does at the hip).")) {
+            ads.ActionBones.clear();
+            size_t start = 0;
+            while (start <= list.size()) {
+                size_t end = list.find(',', start);
+                if (end == std::string::npos) end = list.size();
+                std::string bone = list.substr(start, end - start);
+                bone.erase(0, bone.find_first_not_of(" \t"));
+                bone.erase(bone.find_last_not_of(" \t") + 1);
+                if (!bone.empty()) ads.ActionBones.push_back(bone);
+                start = end + 1;
+            }
+        }
+    }
 
     // Every action-like state and how it plays with the sights up.
     const AdsCarryReport* report = FindAdsCarryReport(path);
@@ -152,10 +174,12 @@ void DrawAds(PropertyRows& r, FirstPersonAnimationSet& s, const WeaponContext& c
         ImGui::Spacing();
         const ImGuiTableFlags flags = ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp |
                                       ImGuiTableFlags_PadOuterX;
-        if (ImGui::BeginTable("##adsactions", 3, flags)) {
+        const bool holds = !ads.ActionBones.empty();
+        if (ImGui::BeginTable("##adsactions", holds ? 4 : 3, flags)) {
             ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("With the sights up", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-            ImGui::TableSetupColumn("Measured", ImGuiTableColumnFlags_WidthStretch, 1.6f);
+            ImGui::TableSetupColumn("With the sights up", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+            if (holds) ImGui::TableSetupColumn("Gun Motion", ImGuiTableColumnFlags_WidthStretch, 1.3f);
+            ImGui::TableSetupColumn("Measured", ImGuiTableColumnFlags_WidthStretch, 1.3f);
             ImGui::TableHeadersRow();
             int rows = 0;
             for (const auto& st : L.States) {
@@ -188,12 +212,54 @@ void DrawAds(PropertyRows& r, FirstPersonAnimationSet& s, const WeaponContext& c
                                             "Add the carry tag, or a real ADS clip in a state tagged ADS.");
                         break;
                 }
+                if (holds) {
+                    ImGui::TableNextColumn();
+                    if (mode == AdsMode::Carried) {
+                        // The share of the clip's own gun turn / movement kept on top of the hold.
+                        const auto* existing = ads.GunMotionFor(st.Name);
+                        float rot = existing ? existing->Rotation * 100.0f : 0.0f, pos = existing ? existing->Position * 100.0f : 0.0f;
+                        ImGui::PushID(st.Name.c_str());
+                        const float w = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+                        bool edited = false;
+                        ImGui::SetNextItemWidth(w);
+                        ImGui::DragFloat("##rot", &rot, 0.5f, 0.0f, 100.0f, "turn %.0f%%", ImGuiSliderFlags_AlwaysClamp);
+                        if (ImGui::IsItemHovered())
+                            EditorUI::SetTooltip("How much of the clip's own gun turn plays on the sights (the mag check tipping\n"
+                                                 "the mag into view), about the rear sight so the sights stay centred. 0 = locked.");
+                        edited |= ImGui::IsItemDeactivatedAfterEdit();
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(w);
+                        ImGui::DragFloat("##pos", &pos, 0.5f, 0.0f, 100.0f, "move %.0f%%", ImGuiSliderFlags_AlwaysClamp);
+                        if (ImGui::IsItemHovered())
+                            EditorUI::SetTooltip("How much of the clip's own gun movement plays on the sights. 0 = locked.");
+                        edited |= ImGui::IsItemDeactivatedAfterEdit();
+                        const float oldRot = existing ? existing->Rotation : 0.0f, oldPos = existing ? existing->Position : 0.0f;
+                        if (rot / 100.0f != oldRot || pos / 100.0f != oldPos) {
+                            auto& list = ads.GunMotions;
+                            auto it = std::find_if(list.begin(), list.end(), [&](const auto& m) { return m.State == st.Name; });
+                            if (it == list.end()) it = list.insert(list.end(), {st.Name, 0.0f, 0.0f});
+                            it->Rotation = rot / 100.0f;
+                            it->Position = pos / 100.0f;
+                            if (it->Rotation <= 0.0f && it->Position <= 0.0f) list.erase(it);
+                        }
+                        if (edited) r.MarkChanged();
+                        ImGui::PopID();
+                    } else {
+                        ImGui::TextDisabled("-");
+                    }
+                }
                 ImGui::TableNextColumn();
                 if (mode == AdsMode::Carried) {
                     if (!entry) {
                         ImGui::TextDisabled(report ? "not measured (restart Play)" : "measured when you press Play");
                     } else if (!entry->Problem.empty()) {
                         ImGui::TextColored(EditorUIPrimitives::WarningColor(), "%s", entry->Problem.c_str());
+                    } else if (report->HoldsAim) {
+                        ImGui::Text("elbow %.0f deg, %d twist", entry->SwivelDeg[1], entry->MatchedBones);
+                        if (ImGui::IsItemHovered())
+                            EditorUI::SetTooltip("The gun and the other hand stay in the aim pose; the action bones play the clip.\n"
+                                                 "Elbow swing: right %.1f deg, left %.1f deg. Twist bones matched: %d.",
+                                                 entry->SwivelDeg[0], entry->SwivelDeg[1], entry->MatchedBones);
                     } else {
                         ImGui::Text("gun %.1f cm, %.0f deg", entry->GunOffsetCm, entry->GunTurnDeg);
                         if (ImGui::IsItemHovered())
