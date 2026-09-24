@@ -36,6 +36,11 @@ struct FirstPersonWeaponGameplay {
     bool AllowFullAuto = true;            // false: B does nothing (semi-only weapon)
     float ReloadHoldSeconds = 0.35f;      // R held this long checks the magazine instead of reloading
     float RegripMin = 10.0f, RegripMax = 20.0f; // seconds of settled Idle before a Fidget
+    // Sights up: the world view magnifies by AdsZoom (1 = none) and the gun by AdsViewModelZoom,
+    // eased in and out over about AdsZoomTime seconds. Mouse look scales with the world zoom.
+    float AdsZoom = 1.0f;
+    float AdsViewModelZoom = 1.0f;
+    float AdsZoomTime = 0.2f;
 };
 
 struct FirstPersonAnimationSet {
