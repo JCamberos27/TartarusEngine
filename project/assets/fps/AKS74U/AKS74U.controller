@@ -192,7 +192,10 @@
             -255.0
           ],
           "priority": 2,
-          "speed": 1.0
+          "speed": 1.0,
+          "tags": [
+            "Busy"
+          ]
         },
         {
           "loop": false,
@@ -212,7 +215,11 @@
             -180.0
           ],
           "priority": 2,
-          "speed": 1.0
+          "speed": 1.0,
+          "tags": [
+            "Busy",
+            "ADSCarry"
+          ]
         },
         {
           "loop": false,
@@ -232,7 +239,10 @@
             -105.0
           ],
           "priority": 3,
-          "speed": 1.0
+          "speed": 1.0,
+          "tags": [
+            "Busy"
+          ]
         },
         {
           "events": [
@@ -260,7 +270,8 @@
           "priority": 3,
           "speed": 1.0,
           "tags": [
-            "Reload"
+            "Reload",
+            "ADSCarry"
           ]
         },
         {
@@ -289,7 +300,8 @@
           "priority": 3,
           "speed": 1.0,
           "tags": [
-            "Reload"
+            "Reload",
+            "ADSCarry"
           ]
         },
         {
