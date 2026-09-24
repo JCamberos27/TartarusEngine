@@ -10,6 +10,7 @@
 #include <memory>
 #include <random>
 #include <string>
+#include <vector>
 
 class AssetLibrary;
 class Camera;
@@ -95,6 +96,21 @@ public:
     // Where the barrel points (world space): down the bore from the muzzle to the first surface.
     // False while the gun isn't simply held at the hip (ADS, sprinting, reloading, holstered).
     bool BarrelAimPoint(glm::vec3& out) const;
+    // The gun's laser, straight down the bore: from the muzzle to the first surface it meets
+    // (`hit` false = nothing within range; `to` is then the end of the range). On whenever the
+    // gun is in hand and not put away, whatever it's doing - it swings with the reloads.
+    struct Laser {
+        glm::vec3 From{0.0f}, To{0.0f}, Normal{0.0f, 1.0f, 0.0f};
+        bool Hit = false;
+    };
+    bool LaserBeam(Laser& out) const;
+    // Where the rounds fired since the last call struck (down the bore from the muzzle), oldest
+    // first. The caller leaves the holes; the list empties.
+    struct ShotHit {
+        glm::vec3 Point{0.0f}, Normal{0.0f, 1.0f, 0.0f};
+        unsigned Entity = 0xFFFFFFFFu;
+    };
+    std::vector<ShotHit> TakeShotHits();
     const std::string& CurrentState() const;
     const std::string& LastError() const { return m_LastError; }
     const WeaponProceduralPose& ProceduralPose() const { return m_Procedural.Pose(); }
@@ -120,7 +136,7 @@ private:
     void SetupMuzzle(int bolt, const std::vector<int>& parents);
     void SetupAdsCarry();
     AdsCarrySample SampleAdsCarry(float dt) const;
-    void ShotImpact(); // a round leaves the bore: shove whatever it hits
+    void ShotImpact(); // a round leaves the bore: note where it hits and shove that
     void ReloadIfChanged(float dt);
 
     World* m_World = nullptr;
@@ -177,6 +193,16 @@ private:
     bool m_HaveMuzzle = false;
     glm::vec3 m_MuzzleLocal{0.0f}, m_BoreLocal{0.0f, 0.0f, -1.0f}; // weapon root space
     glm::vec3 m_AimPoint{0.0f};
+    glm::vec3 m_AimNormal{0.0f, 1.0f, 0.0f};
+    bool m_AimHit = false;        // the bore ray met a surface within range
+    std::vector<ShotHit> m_ShotHits;
+    // The sight line measured in Play (weapon root space), for a weapon without a saved one.
+    bool m_SightMeasured = false;
+    float m_SightSettled = 0.0f;  // seconds the sights have been steady for measuring
+    bool m_SightLogged = false;
+    glm::vec3 m_SightOrigin{0.0f}, m_SightDirection{0.0f, 0.0f, -1.0f};
+    float m_SinceShot = 1e3f;     // seconds since a round left
+    float m_PlanarSpeed = 0.0f;   // the player's, from the last Tick
     glm::vec3 m_Muzzle{0.0f}, m_BoreDir{0.0f, 0.0f, -1.0f}; // world, from the last PlaceRigs
     // Actions carried onto the sights while aiming (FirstPersonAdsCarry.h).
     AdsCarryResult m_AdsCarry;

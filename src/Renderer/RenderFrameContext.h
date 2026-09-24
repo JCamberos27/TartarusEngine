@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <functional>
 
 class HdrTarget;
 class OpaqueColorCopy;
@@ -49,4 +50,9 @@ struct RenderFrameContext {
     // world camera's FOV, and therefore everything the sky/cluster/shadow passes were fitted
     // to, is untouched.
     float ViewModelFov = -1.0f;
+
+    // Drawn once the world is down (opaque, transparent, particles) and before the view-model
+    // sub-pass clears depth: world-space effects that need the scene's depth - bullet holes, the
+    // weapon's laser - and that the arms and gun then cover. Empty = nothing.
+    std::function<void()> WorldOverlay;
 };

@@ -41,6 +41,15 @@ struct FirstPersonWeaponGameplay {
     // so light props don't rocket off. 0 = rounds push nothing.
     float ImpactImpulse = 0.0f;
     float ImpactMaxSpeed = 8.0f;
+    // Zeroing: rounds (and the laser) leave the muzzle aimed to cross the sight line
+    // ZeroDistance metres out, like a sighted-in rifle - dead on the front post there, a little
+    // low closer, a little high past it. 0 = straight down the bore as modelled.
+    float ZeroDistance = 25.0f;
+    // The sight line in weapon-root space (the eye's position and look direction with the sights
+    // up, measured in Play). Without one it's measured the first time the sights settle, and the
+    // log prints the values to save here.
+    bool HasSightLine = false;
+    glm::vec3 SightOrigin{0.0f}, SightDirection{0.0f, 0.0f, -1.0f};
 };
 
 // Aim-down-sights. Two ways a weapon's actions (reloads, mag check, ...) can play with the
