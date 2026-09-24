@@ -14,7 +14,7 @@ CrosshairOverlay::~CrosshairOverlay() {
     if (m_VAO) glDeleteVertexArrays(1, &m_VAO);
 }
 
-void CrosshairOverlay::Draw(unsigned int dstFbo, int width, int height, bool holding, float charge) {
+void CrosshairOverlay::Draw(unsigned int dstFbo, int width, int height, bool holding, float charge, const Dot& dot) {
     if (width <= 0 || height <= 0) return;
     if (!m_Shader) {
         try {
@@ -45,6 +45,9 @@ void CrosshairOverlay::Draw(unsigned int dstFbo, int width, int height, bool hol
     m_Shader->SetFloat("uScale", std::max(0.75f, (float)height / 1080.0f));
     m_Shader->SetInt("uHolding", holding ? 1 : 0);
     m_Shader->SetFloat("uCharge", charge);
+    m_Shader->SetInt("uDotVisible", dot.Visible ? 1 : 0);
+    m_Shader->SetVec2("uDotPos", dot.Pixel.x < 0.0f ? glm::vec2((float)width, (float)height) * 0.5f : dot.Pixel);
+    m_Shader->SetVec3("uDotColor", dot.Color);
     glBindVertexArray(m_VAO);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     glBindVertexArray(0);

@@ -15,6 +15,7 @@
 #include "World.h"
 
 #include <glm/gtc/constants.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
@@ -182,6 +183,7 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     }
     m_Procedural.Reset();
     m_UsesIK = SetupIK();
+    SetupBolt(assets, *ctrl);
     int states = 0;
     for (const auto& L : ctrl->Layers) states += (int)L.States.size();
     Log::Info("First-person presentation loaded '" + config.AnimationSet + "' (" +
@@ -283,7 +285,97 @@ bool FirstPersonPresentation::SetupIK() {
 // Camera-frame procedural pose -> the arms rig's model space. The arms entity is rotated
 // camera * C (C = the asset's view rotation, then the scene's tweak) and scaled by m_Scale, so a
 // camera-frame vector v is C^-1 v / scale in model space, and a rotation q is C^-1 q C.
+// The procedural bolt rides along the travel the weapon's own Fire clip authors: sample that clip,
+// and the bolt's farthest point from where it starts is the stroke (weapon model space).
+void FirstPersonPresentation::SetupBolt(AssetLibrary& assets, const AnimatorController& ctrl) {
+    m_BoltStroke = glm::vec3(0.0f);
+    m_HaveMuzzle = false;
+    const WeaponRecoilSettings& r = m_Set.Procedural.Recoil;
+    if (!m_World || !m_WeaponModel) return;
+    const int bolt = m_WeaponModel->NodeIndex(r.BoltBone);
+    const int weaponTrack = ctrl.TrackIndex(TrackOr(ctrl, "weapon", 1));
+    int clip = -1;
+    for (const auto& L : ctrl.Layers)
+        for (const auto& st : L.States)
+            if (st.Name == "Fire" && clip < 0 && !st.MotionFor(weaponTrack).Clip.empty())
+                clip = ResolveAnimationClip(*m_WeaponModel, st.MotionFor(weaponTrack).Clip, assets);
+    if (bolt < 0 || clip < 0) {
+        Log::Warn("First-person presentation: no '" + r.BoltBone + "' bone or weapon Fire clip to measure the bolt from; no procedural bolt.");
+        return;
+    }
+    std::vector<int> parents(m_WeaponModel->NodeCount());
+    for (int i = 0; i < (int)parents.size(); ++i) parents[i] = m_WeaponModel->NodeParent(i);
+    std::vector<LocalTRS> pose;
+    std::vector<glm::mat4> globals;
+    glm::vec3 start(0.0f);
+    const float length = m_WeaponModel->AnimationLength(clip);
+    for (int k = 0; k <= 60; ++k) {
+        m_WeaponModel->SampleLocalPose(clip, length * (float)k / 60.0f, AnimationWrapMode::ClampForever, pose);
+        IK::ComputeGlobals(pose, parents, globals);
+        const glm::vec3 at = IK::Position(globals[bolt]);
+        if (k == 0) start = at;
+        else if (glm::length(at - start) > glm::length(m_BoltStroke)) m_BoltStroke = at - start;
+    }
+    SetupMuzzle(bolt, parents);
+    if (r.BoltCycle <= 0.0f) return;
+    auto& rig = m_World->Registry.emplace_or_replace<IKRigComponent>(m_Weapon);
+    rig.Offsets.assign(1, IKBoneOffset{});
+    rig.Offsets[0].Bone = r.BoltBone;
+}
+
+// The bolt rides the bore, so its travel is the barrel's axis. The muzzle is the front face of the
+// weapon mesh along that axis: the verts nearest the tip and within a few cm of the line, averaged
+// (the booster's ring centres on the bore even if the bolt bone sits a little off it). Both are
+// kept in the weapon root's space, which is what the socket moves.
+void FirstPersonPresentation::SetupMuzzle(int bolt, const std::vector<int>& parents) {
+    if (glm::length(m_BoltStroke) < 1e-5f) return;
+    const int root = m_WeaponModel->NodeIndex(m_Set.WeaponRoot.empty() ? std::string("root") : m_Set.WeaponRoot);
+    std::vector<LocalTRS> bind;
+    std::vector<glm::mat4> globals;
+    m_WeaponModel->BindLocalPose(bind);
+    IK::ComputeGlobals(bind, parents, globals);
+    const glm::vec3 axis = -glm::normalize(m_BoltStroke);
+    const glm::vec3 origin = IK::Position(globals[bolt]);
+    std::vector<glm::vec3> verts;
+    std::vector<unsigned int> indices;
+    m_WeaponModel->CollisionGeometry(verts, indices);
+    const float stroke = glm::length(m_BoltStroke); // ~9 cm on an AK: a scale-free yardstick
+    const float radius = stroke * 0.45f;
+    float tip = -1e30f;
+    const auto offLine = [&](const glm::vec3& v, float t) { return glm::length(v - origin - axis * t); };
+    for (const glm::vec3& v : verts) {
+        const float t = glm::dot(v - origin, axis);
+        if (offLine(v, t) < radius) tip = std::max(tip, t);
+    }
+    if (tip < 0.0f) return;
+    glm::vec3 sum(0.0f);
+    int n = 0;
+    for (const glm::vec3& v : verts) {
+        const float t = glm::dot(v - origin, axis);
+        if (t > tip - stroke * 0.06f && offLine(v, t) < radius) { sum += v; ++n; }
+    }
+    const glm::mat4 rootInv = root >= 0 ? glm::inverse(globals[root]) : glm::mat4(1.0f);
+    m_MuzzleLocal = glm::vec3(rootInv * glm::vec4(sum / (float)n, 1.0f));
+    m_BoreLocal = glm::normalize(glm::mat3(rootInv) * axis);
+    m_HaveMuzzle = true;
+    char msg[160];
+    std::snprintf(msg, sizeof msg, "First-person: bolt stroke %.1f, muzzle %.1f ahead of the bolt (model units x100).",
+                  stroke * 100.0f, tip * 100.0f);
+    Log::Info(msg);
+}
+
+bool FirstPersonPresentation::BarrelAimPoint(glm::vec3& out) const {
+    const auto* ac = Animator();
+    if (!m_AimPointValid || !ac || !m_Equipped) return false;
+    if (!(ac->HasTag(K::kTagIdle) || ac->StateName == "Walk" || ac->StateName == "Fire")) return false;
+    out = m_AimPoint;
+    return true;
+}
+
 void FirstPersonPresentation::WriteIK() {
+    if (m_World && m_World->Registry.valid(m_Weapon))
+        if (auto* bolt = m_World->Registry.try_get<IKRigComponent>(m_Weapon); bolt && !bolt->Offsets.empty())
+            bolt->Offsets[0].Position = m_BoltStroke * m_Procedural.Pose().Bolt;
     if (!m_UsesIK || !m_World || !m_World->Registry.valid(m_Arms)) return;
     auto* rig = m_World->Registry.try_get<IKRigComponent>(m_Arms);
     if (!rig || rig->Offsets.empty()) return;
@@ -365,10 +457,17 @@ bool FirstPersonPresentation::Fire() {
     auto* ac = Animator();
     if (!ac || !m_Equipped || HasTag(K::kTagHidden)) return false;
     if (m_Ammo <= 0) return false; // dry: the player has to press Reload themselves
-    if (ac->HasTag(K::kTagAds)) {
+    const bool ads = ac->HasTag(K::kTagAds);
+    // With recoil.hipProcedural, hip rounds kick procedurally too wherever the gun is simply
+    // being held (idle, walking, or still settling from a shot); anywhere else (sprinting, an
+    // inspect) the trigger still goes through the controller's Fire state, which cuts it short.
+    const bool hipProcedural = m_Set.Procedural.Recoil.HipProcedural &&
+                               (ac->HasTag(K::kTagIdle) || ac->StateName == "Walk" || ac->StateName == "Fire");
+    if (ads || hipProcedural) {
         // Each round starts its own recoil curves; full-auto overlaps them into a climb.
-        m_Procedural.OnShot(m_Set.Procedural, true);
+        m_Procedural.OnShot(m_Set.Procedural, ads);
         --m_Ammo;
+        m_IdleTime = 0.0f; // shooting isn't settling: no fidget mid-burst
         return true;
     }
     // Hip fire: the controller plays Fire (or refuses, e.g. mid-reload); the round is spent -
@@ -505,6 +604,12 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
         m_FlatForward = glm::length(f) > 1e-5f ? glm::normalize(f) : glm::vec3(0.0f, 0.0f, -1.0f);
         m_FlatRight = glm::normalize(glm::cross(m_FlatForward, glm::vec3(0.0f, 1.0f, 0.0f)));
     }
+    // Aim climb: unlike the punch below it stays - the player has to pull it back down.
+    {
+        const glm::vec2 climb = m_Procedural.Pose().AimKick;
+        camera.Pitch = std::clamp(camera.Pitch + climb.x, -89.0f, 89.0f);
+        camera.Yaw += climb.y;
+    }
     // Recoil view punch and lean, on the camera the whole frame renders from.
     {
         const WeaponProceduralPose& p = m_Procedural.Pose();
@@ -542,7 +647,7 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
         // What the controller did last frame: rounds spent on hip fire, a reload that landed.
         if (ac->EventFired(K::kEventShot)) {
             m_Ammo = std::max(0, m_Ammo - 1);
-            m_Procedural.OnShot(m_Set.Procedural, false);
+            m_Procedural.OnShot(m_Set.Procedural, false, /*cycleBolt=*/false); // the Fire clip cycles it
         }
         if (ac->EventFired(K::kEventRefill)) m_Ammo = m_Set.Gameplay.Magazine;
         ac->FiredEvents.clear();
@@ -648,4 +753,26 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
 
     world.SetWorldPose(m_Weapon, weaponPosition, weaponRotation);
     world.Registry.get<TransformComponent>(m_Weapon).Scale = glm::vec3(m_Scale);
+
+    // Where the barrel points: down the bore from the muzzle to the first thing it meets.
+    m_AimPointValid = false;
+    glm::mat4 rootPose(1.0f);
+    if (m_HaveMuzzle && m_WeaponModel->NodeTransform(m_Set.WeaponRoot.empty() ? std::string("root") : m_Set.WeaponRoot, rootPose)) {
+        const glm::mat4 W = glm::translate(glm::mat4(1.0f), weaponPosition) * glm::mat4_cast(weaponRotation) *
+                            glm::scale(glm::mat4(1.0f), glm::vec3(m_Scale)) * rootPose;
+        const glm::vec3 muzzle = glm::vec3(W * glm::vec4(m_MuzzleLocal, 1.0f));
+        const glm::vec3 dir = glm::normalize(glm::mat3(W) * m_BoreLocal);
+        constexpr float kRange = 300.0f;
+        const float o[3] = {muzzle.x, muzzle.y, muzzle.z}, d[3] = {dir.x, dir.y, dir.z};
+        RaycastHit hit;
+        QueryFilter filter;
+        filter.HitTriggers = 0;
+        // Plumbing, not a gameplay query: kept out of the physics debug overlay's raycast lines.
+        const bool recording = PhysicsWorld::GetQueryRecording();
+        PhysicsWorld::SetQueryRecording(false);
+        const bool struck = PhysicsWorld::RaycastFiltered(o, d, kRange, filter, hit) && hit.Hit;
+        PhysicsWorld::SetQueryRecording(recording);
+        m_AimPoint = muzzle + dir * (struck ? hit.Distance : kRange);
+        m_AimPointValid = true;
+    }
 }
