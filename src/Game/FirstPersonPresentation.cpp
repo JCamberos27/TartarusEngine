@@ -793,27 +793,34 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
         for (const char* t : {K::kFire, K::kReload, K::kMagCheck, K::kInspect, K::kMelee, K::kFidget}) ac->ResetTrigger(t);
     }
 
-    // Unarmed hides the rigs the way an unticked "active" box does. DeactivatedTag is what keeps
-    // InactiveTag from being recomputed away by World::SyncActiveInHierarchy; the animators keep
-    // running (UpdateWhenInactive) so Draw can bring them back.
-    const bool hidden = ac && ac->HasTag(K::kTagHidden);
-    if (hidden != m_HiddenApplied) {
-        for (entt::entity e : {m_Arms, m_Weapon}) {
-            if (hidden) {
-                world.Registry.emplace_or_replace<DeactivatedTag>(e);
-                world.Registry.emplace_or_replace<InactiveTag>(e);
-            } else {
-                world.Registry.remove<DeactivatedTag, InactiveTag>(e);
-            }
-        }
-        m_HiddenApplied = hidden;
-    }
-
+    ApplyHidden(world);
     PlaceRigs(world, camera);
 }
 
 void FirstPersonPresentation::LateUpdate(World& world, const Camera& camera) {
-    if (IsActive()) PlaceRigs(world, camera);
+    if (!IsActive()) return;
+    // Again once the animators have run: the frame Holster hands over to Holstered would
+    // otherwise render visible, in Holstered's pose (Holster's first frame).
+    ApplyHidden(world);
+    PlaceRigs(world, camera);
+}
+
+// Unarmed hides the rigs the way an unticked "active" box does. DeactivatedTag is what keeps
+// InactiveTag from being recomputed away by World::SyncActiveInHierarchy; the animators keep
+// running (UpdateWhenInactive) so Draw can bring them back.
+void FirstPersonPresentation::ApplyHidden(World& world) {
+    const auto* ac = Animator();
+    const bool hidden = ac && ac->HasTag(K::kTagHidden);
+    if (hidden == m_HiddenApplied) return;
+    for (entt::entity e : {m_Arms, m_Weapon}) {
+        if (hidden) {
+            world.Registry.emplace_or_replace<DeactivatedTag>(e);
+            world.Registry.emplace_or_replace<InactiveTag>(e);
+        } else {
+            world.Registry.remove<DeactivatedTag, InactiveTag>(e);
+        }
+    }
+    m_HiddenApplied = hidden;
 }
 
 // Pins the arms to the camera and the weapon to the arms' gun socket, from the rigs' current

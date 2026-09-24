@@ -114,6 +114,7 @@ private:
     bool SetupIK();
     void WriteIK();
     void PlaceRigs(World& world, const Camera& camera);
+    void ApplyHidden(World& world);
     void SetupBolt(AssetLibrary& assets, const AnimatorController& ctrl);
     void SetupMuzzle(int bolt, const std::vector<int>& parents);
     void SetupAdsCarry();
