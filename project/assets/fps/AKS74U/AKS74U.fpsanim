@@ -16,6 +16,10 @@
     0.0
   ],
   "weaponModel": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",
+  "weaponMaterials": {
+    "aks74u": "assets/fps/AKS74U/Materials/AKS74U.mat",
+    "cartridge_545x39mm": "assets/fps/AKS74U/Materials/Cartridge_545x39mm.mat"
+  },
   "weaponMountRotation": [
     0.0,
     90.0,
