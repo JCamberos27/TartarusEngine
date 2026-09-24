@@ -264,7 +264,7 @@ bool FirstPersonAnimationSet::SaveFile(const std::string& path) const {
     return AtomicFile::WriteJson(std::filesystem::u8path(path), json::parse(ToJsonString()));
 }
 
-const char* KnownTagDescription(const std::string& tag) {
+const char* FirstPersonAnimatorContract::KnownTagDescription(const std::string& tag) {
     for (const auto& t : FirstPersonAnimatorContract::kKnownTags)
         if (tag == t.Name) return t.Description;
     return nullptr;
