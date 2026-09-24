@@ -41,6 +41,9 @@ public:
     // sub-pass - see ViewModelFov() - so the world camera's FOV is never touched.
     // Also applies this frame's view punch and lean to `camera` (see RemoveViewKick).
     void Update(World& world, Camera& camera);
+    // Re-places the arms and weapon from this frame's finished pose (clips + IK). Call after
+    // UpdateAnimatorControllers, so the gun sits in the hands the frame renders with.
+    void LateUpdate(World& world, const Camera& camera);
     // Takes the view punch / lean back off the camera. Call before anything reads or integrates
     // the camera as the player's own (Player::Update), and when Play stops.
     void RemoveViewKick(Camera& camera);
@@ -98,6 +101,7 @@ private:
     void SetError(const std::string& message);
     bool SetupIK();
     void WriteIK();
+    void PlaceRigs(World& world, const Camera& camera);
     void ReloadIfChanged(float dt);
 
     World* m_World = nullptr;
