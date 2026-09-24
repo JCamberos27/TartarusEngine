@@ -249,8 +249,12 @@ bool FirstPersonPresentation::SetupIK() {
     };
     limb(rig.LimbA, k.RightUpper, k.RightLower, k.RightHand);
     limb(rig.LimbB, k.LeftUpper, k.LeftLower, k.LeftHand);
-    rig.Offsets.assign(1, IKBoneOffset{});
-    rig.Offsets[0].Bone = k.GunBone;
+    // Two offsets on the gun bone: the ADS-action correction (about the camera bone) first, then
+    // the procedural pose on top of wherever that put the gun.
+    rig.Offsets.assign(2, IKBoneOffset{});
+    rig.Offsets[kAdsOffset].Bone = k.GunBone;
+    rig.Offsets[kAdsOffset].PivotBone = m_CameraBone;
+    rig.Offsets[kProceduralOffset].Bone = k.GunBone;
 
     // Self-check on the real rig: pull the gun 10% of an arm's length toward the right shoulder
     // and tip it 5 degrees, solve, and measure how far each hand lands from its grip. Anything
@@ -268,8 +272,8 @@ bool FirstPersonPresentation::SetupIK() {
         const float armLength = glm::length(IK::Position(before[hands[0]]) - IK::Position(before[shoulder]));
         IKRigComponent probe = rig;
         const glm::vec3 toShoulder = IK::Position(before[shoulder]) - IK::Position(before[gun]);
-        probe.Offsets[0].Position = glm::length(toShoulder) > 1e-6f ? glm::normalize(toShoulder) * armLength * 0.1f : glm::vec3(0.0f);
-        probe.Offsets[0].Rotation = glm::angleAxis(glm::radians(5.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        probe.Offsets[kProceduralOffset].Position = glm::length(toShoulder) > 1e-6f ? glm::normalize(toShoulder) * armLength * 0.1f : glm::vec3(0.0f);
+        probe.Offsets[kProceduralOffset].Rotation = glm::angleAxis(glm::radians(5.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         IK::ApplyRig(probe, *m_ArmsModel, pose);
         IK::ComputeGlobals(pose, parents, after);
         float worst = 0.0f;
@@ -360,13 +364,12 @@ void FirstPersonPresentation::SetupAdsActions(AssetLibrary& assets, const Animat
     std::vector<int> parents(m_ArmsModel->NodeCount());
     for (int i = 0; i < (int)parents.size(); ++i) parents[i] = m_ArmsModel->NodeParent(i);
     // The socket at a state's first frame, relative to the camera bone (which sits on the eye).
-    auto firstFrame = [&](const std::string& state, glm::mat4& out) {
+    auto firstFrame = [&](const std::string& state, glm::mat4& out, std::vector<LocalTRS>& pose) {
         const int si = L.FindState(state);
         if (si < 0 || socket < 0) return false;
         const std::string& path = L.States[si].MotionFor(armsTrack).Clip;
         const int clip = path.empty() ? -1 : ResolveAnimationClip(*m_ArmsModel, path, assets);
         if (clip < 0) return false;
-        std::vector<LocalTRS> pose;
         std::vector<glm::mat4> globals;
         m_ArmsModel->SampleLocalPose(clip, 0.0f, AnimationWrapMode::ClampForever, pose);
         IK::ComputeGlobals(pose, parents, globals);
@@ -375,15 +378,64 @@ void FirstPersonPresentation::SetupAdsActions(AssetLibrary& assets, const Animat
         return true;
     };
     glm::mat4 aim;
-    if (!firstFrame("Aim", aim)) return;
+    std::vector<LocalTRS> aimPose, hipPose;
+    if (!firstFrame("Aim", aim, aimPose)) return;
+    std::vector<glm::mat4> aimGlobals, hipGlobals;
+    IK::ComputeGlobals(aimPose, parents, aimGlobals);
+    const IKRigComponent* rig = m_UsesIK && m_World ? m_World->Registry.try_get<IKRigComponent>(m_Arms) : nullptr;
     for (const char* name : {"TacReload", "EmptyReload", "MagCheck"}) {
         glm::mat4 hip;
-        if (!firstFrame(name, hip)) continue;
+        if (!firstFrame(name, hip, hipPose)) continue;
         const glm::mat4 c = aim * glm::inverse(hip);
         AdsAction a;
         a.State = L.FindState(name);
         a.R = QuaternionFromMatrix(c);
         a.T = glm::vec3(c[3]);
+        // Solve the clip's first frame with its correction, as Play will, and measure how far each
+        // elbow has to swing about its shoulder->hand line to land on Aim's.
+        if (rig && (int)rig->Offsets.size() > kProceduralOffset) {
+            IKRigComponent probe = *rig;
+            probe.Weight = 1.0f;
+            probe.Offsets[kAdsOffset].Rotation = a.R;
+            probe.Offsets[kAdsOffset].Position = a.T;
+            probe.Offsets[kProceduralOffset] = IKBoneOffset{rig->Offsets[kProceduralOffset].Bone};
+            probe.LimbA.Swivel = probe.LimbB.Swivel = 0.0f;
+            IK::ApplyRig(probe, *m_ArmsModel, hipPose);
+            IK::ComputeGlobals(hipPose, parents, hipGlobals);
+            const IKLimb* limbs[2] = {&probe.LimbA, &probe.LimbB};
+            for (int arm = 0; arm < 2; ++arm) {
+                const int up = m_ArmsModel->NodeIndex(limbs[arm]->Upper), lo = m_ArmsModel->NodeIndex(limbs[arm]->Lower),
+                          end = m_ArmsModel->NodeIndex(limbs[arm]->End);
+                if (up < 0 || lo < 0 || end < 0) continue;
+                const glm::vec3 s = IK::Position(hipGlobals[up]);
+                const glm::vec3 n = glm::normalize(IK::Position(hipGlobals[end]) - s);
+                glm::vec3 from = IK::Position(hipGlobals[lo]) - s, to = IK::Position(aimGlobals[lo]) - IK::Position(aimGlobals[up]);
+                from -= n * glm::dot(from, n);
+                to -= n * glm::dot(to, n);
+                if (glm::length(from) < 1e-6f || glm::length(to) < 1e-6f) continue;
+                a.Swivel[arm] = std::atan2(glm::dot(n, glm::cross(from, to)), glm::dot(from, to));
+            }
+            // With the swivel on, the solved chain lands on Aim's; what's left is the helper
+            // bones the clip keys but IK doesn't solve (the forearm / upper-arm twists, which
+            // spread the wrist's roll along the skin). Record their local correction too.
+            std::vector<LocalTRS> solved;
+            glm::mat4 unused;
+            firstFrame(name, unused, solved);
+            probe.LimbA.Swivel = a.Swivel[0];
+            probe.LimbB.Swivel = a.Swivel[1];
+            IK::ApplyRig(probe, *m_ArmsModel, solved);
+            for (const IKLimb* limb : limbs) {
+                const int up = m_ArmsModel->NodeIndex(limb->Upper), lo = m_ArmsModel->NodeIndex(limb->Lower),
+                          end = m_ArmsModel->NodeIndex(limb->End);
+                if (up < 0 || lo < 0 || end < 0) continue;
+                for (int i = 0; i < m_ArmsModel->NodeCount(); ++i) {
+                    const int p = parents[i];
+                    if (i == lo || i == end || (p != up && p != lo)) continue; // direct children of the chain only
+                    const glm::quat d = glm::normalize(aimPose[i].R * glm::inverse(glm::normalize(solved[i].R)));
+                    if (std::fabs(d.w) < 0.99999f) a.Locals.push_back({m_ArmsModel->NodeName(i), d});
+                }
+            }
+        }
         m_AdsActions.push_back(a);
     }
 }
@@ -443,14 +495,66 @@ void FirstPersonPresentation::WriteIK() {
             bolt->Offsets[0].Position = m_BoltStroke * m_Procedural.Pose().Bolt;
     if (!m_UsesIK || !m_World || !m_World->Registry.valid(m_Arms)) return;
     auto* rig = m_World->Registry.try_get<IKRigComponent>(m_Arms);
-    if (!rig || rig->Offsets.empty()) return;
+    if (!rig || (int)rig->Offsets.size() <= kProceduralOffset) return;
     const WeaponProceduralPose& p = m_Procedural.Pose();
     const glm::quat C = NormalizeRotation(QuaternionFromEulerYXZ(m_Set.ViewRotation) * QuaternionFromEulerYXZ(m_Rotation));
     const glm::quat Ci = glm::inverse(C);
     rig->Weight = p.IKWeight;
-    rig->Offsets[0].Position = Ci * p.Position / m_Scale;
-    rig->Offsets[0].Rotation = NormalizeRotation(Ci * p.RotationQuat() * C);
-    rig->Offsets[0].Pivot = Ci * p.Pivot / m_Scale;
+    // With the sights up through a reload or mag check, only the GUN is carried onto Aim's sight
+    // line (about the camera bone, in model space); the arms follow it by IK, so the shoulders
+    // stay where the body is and nothing has to settle back when the action ends.
+    glm::quat adsR(1.0f, 0.0f, 0.0f, 0.0f);
+    glm::vec3 adsT(0.0f);
+    float swivel[2], adsW = 0.0f;
+    const AdsAction* action = nullptr;
+    AdsActionCorrection(m_TickDt, adsR, adsT, swivel, &action, &adsW);
+    rig->LimbA.Swivel = swivel[0];
+    rig->LimbB.Swivel = swivel[1];
+    rig->LocalRotations.clear();
+    if (action)
+        for (const auto& [bone, d] : action->Locals)
+            rig->LocalRotations.push_back({bone, glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), d, adsW)});
+    rig->Offsets[kAdsOffset].Rotation = adsR;
+    rig->Offsets[kAdsOffset].Position = adsT;
+    rig->Offsets[kProceduralOffset].Position = Ci * p.Position / m_Scale;
+    rig->Offsets[kProceduralOffset].Rotation = NormalizeRotation(Ci * p.RotationQuat() * C);
+    rig->Offsets[kProceduralOffset].Pivot = Ci * p.Pivot / m_Scale;
+}
+
+bool FirstPersonPresentation::AdsActionCorrection(float dt, glm::quat& rotation, glm::vec3& translation,
+                                                  float swivel[2], const AdsAction** action, float* weight) const {
+    rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    translation = glm::vec3(0.0f);
+    if (swivel) swivel[0] = swivel[1] = 0.0f;
+    if (action) *action = nullptr;
+    if (weight) *weight = 0.0f;
+    const auto* ac = Animator();
+    if (!ac || ac->Layers.empty() || m_AdsHold <= 0.0f || m_AdsActions.empty()) return false;
+    // Each crossfade entry fades in over everything beneath it; walk down from the top, with each
+    // fade advanced the way the controller is about to (so the offset matches the pose it poses).
+    const auto& stack = ac->Layers[0].Stack;
+    float remaining = 1.0f, total = 0.0f, best = 0.0f;
+    const AdsAction* dominant = nullptr;
+    for (int k = (int)stack.size() - 1; k >= 0 && remaining > 0.0f; --k) {
+        float fade = stack[k].Fade;
+        if (dt > 0.0f && fade < 1.0f)
+            fade = stack[k].FadeDuration > 0.0f ? std::min(1.0f, fade + dt / stack[k].FadeDuration) : 1.0f;
+        const float w = k == 0 ? remaining : remaining * AnimatorCrossfadeWeight(fade);
+        remaining -= w;
+        for (const AdsAction& a : m_AdsActions)
+            if (a.State == stack[k].State) {
+                total += w;
+                if (w > best) { best = w; dominant = &a; }
+            }
+    }
+    if (!dominant) return false;
+    const float w = total * m_AdsHold;
+    rotation = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), dominant->R, w);
+    translation = dominant->T * w;
+    if (swivel) { swivel[0] = dominant->Swivel[0] * w; swivel[1] = dominant->Swivel[1] * w; }
+    if (action) *action = dominant;
+    if (weight) *weight = w;
+    return true;
 }
 
 void FirstPersonPresentation::ReloadIfChanged(float dt) {
@@ -625,6 +729,7 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     ac->SetBool(K::kSprint, sprinting);
     ac->SetBool(K::kAim, aiming);
     m_AdsHold = std::clamp(m_AdsHold + (aiming ? dt : -dt) / 0.15f, 0.0f, 1.0f);
+    m_TickDt = dt;
     // ADS zoom: in while the sights are up - Aim, or a reload / mag check carried onto them -
     // and out otherwise. A critically damped spring eases both ends, and a re-press mid-way
     // turns around smoothly instead of restarting.
@@ -819,33 +924,14 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
     // Rotation still comes from the camera, so the rig tracks pitch and the bone stays pinned
     // through it; ViewModelOffset then reads as a residual nudge in the camera's frame.
     //
-    // With the sights up through a reload or mag check, the rig is also carried by that clip's
-    // ADS correction C (about the camera bone), weighted by how much of the blend is the action:
+    //
+    // Without IK, an ADS reload / mag check carries the whole rig instead (the IK path moves only
+    // the gun - see WriteIK), by that clip's correction C about the camera bone:
     //     world(x) = camera + rotation * scale * (C.R * (x - bone) + C.T)
     glm::vec3 position = camera.Position;
     glm::quat actionR(1.0f, 0.0f, 0.0f, 0.0f);
     glm::vec3 actionT(0.0f);
-    const auto* ac = world.Registry.try_get<AnimatorControllerComponent>(m_Arms);
-    if (ac && !ac->Layers.empty() && m_AdsHold > 0.0f && !m_AdsActions.empty()) {
-        // Each crossfade entry fades in over everything beneath it; walk down from the top.
-        const auto& stack = ac->Layers[0].Stack;
-        float remaining = 1.0f, total = 0.0f, best = 0.0f;
-        const AdsAction* dominant = nullptr;
-        for (int k = (int)stack.size() - 1; k >= 0 && remaining > 0.0f; --k) {
-            const float w = k == 0 ? remaining : remaining * stack[k].Fade;
-            remaining -= w;
-            for (const AdsAction& a : m_AdsActions)
-                if (a.State == stack[k].State) {
-                    total += w;
-                    if (w > best) { best = w; dominant = &a; }
-                }
-        }
-        if (dominant) {
-            const float w = total * m_AdsHold;
-            actionR = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), dominant->R, w);
-            actionT = dominant->T * w;
-        }
-    }
+    if (!m_UsesIK) AdsActionCorrection(0.0f, actionR, actionT);
     const glm::quat rigRotation = NormalizeRotation(rotation * actionR);
     position += rotation * (m_Scale * actionT);
     glm::mat4 anchor(1.0f);

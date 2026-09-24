@@ -2216,6 +2216,21 @@ void TestIKSolver() {
         CHECK(IK::SolveTwoBone(p, parents, gg, 1, 2, 3, target, nullptr, 1.0f));
         CHECK(glm::length(IK::Position(gg[3]) - target) < glm::length(ac) * 2e-5f);
     }
+    // Swivel turns the solved elbow about the root->target line by exactly that angle, and the
+    // end still lands on the target.
+    {
+        IK::Pose p0 = pose, p1 = pose;
+        std::vector<glm::mat4> g0 = g, g1 = g;
+        const glm::vec3 target = a + glm::normalize(glm::vec3(0.4f, -0.3f, 0.5f)) * (reach * 0.7f);
+        CHECK(IK::SolveTwoBone(p0, parents, g0, 1, 2, 3, target, nullptr, 1.0f));
+        CHECK(IK::SolveTwoBone(p1, parents, g1, 1, 2, 3, target, nullptr, 1.0f, 0.3f));
+        CHECK(glm::length(IK::Position(g1[3]) - target) < 1e-4f);
+        const glm::vec3 n = glm::normalize(target - a);
+        glm::vec3 e0 = IK::Position(g0[2]) - a, e1 = IK::Position(g1[2]) - a;
+        e0 -= n * glm::dot(e0, n);
+        e1 -= n * glm::dot(e1, n);
+        CHECK(std::fabs(std::atan2(glm::dot(n, glm::cross(e0, e1)), glm::dot(e0, e1)) - 0.3f) < 1e-3f);
+    }
     // Out of reach: the chain straightens toward the target instead of breaking.
     {
         IK::Pose p = pose;

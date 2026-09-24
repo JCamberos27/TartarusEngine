@@ -800,7 +800,7 @@
         },
         {
           "conditions": [],
-          "duration": 0.1,
+          "duration": 0.3,
           "exitTime": 1.0,
           "from": "MagCheck",
           "hasExitTime": true,
@@ -816,7 +816,7 @@
         },
         {
           "conditions": [],
-          "duration": 0.1,
+          "duration": 0.3,
           "exitTime": 1.0,
           "from": "TacReload",
           "hasExitTime": true,
@@ -824,7 +824,7 @@
         },
         {
           "conditions": [],
-          "duration": 0.1,
+          "duration": 0.3,
           "exitTime": 1.0,
           "from": "EmptyReload",
           "hasExitTime": true,
