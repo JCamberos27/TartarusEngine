@@ -31,6 +31,23 @@ glm::vec3 Perpendicular(const glm::vec3& v) {
 
 bool ValidNode(const Pose& pose, int i) { return i >= 0 && i < (int)pose.size(); }
 
+// The shortest rotation taking unit vector `from` onto unit vector `to`. Not glm::rotation: that
+// returns identity whenever the two are within ~5e-4 rad (its FLT_EPSILON cut on the cosine),
+// so a reach that only needs a tiny swing - a hand holding the gun through the idle - lands up
+// to ~0.3 mm short on some frames and not others, and the hand visibly flickers. The half-angle
+// form below stays exact all the way down to parallel.
+glm::quat RotationBetween(const glm::vec3& from, const glm::vec3& to) {
+    const glm::dvec3 f(from), t(to);
+    const double d = glm::dot(f, t);
+    if (d < -1.0 + 1e-12) { // opposite: half a turn about any perpendicular
+        const glm::vec3 axis = Perpendicular(from);
+        return glm::quat(0.0f, axis.x, axis.y, axis.z);
+    }
+    const glm::dvec3 c = glm::cross(f, t);
+    const glm::dquat q = glm::normalize(glm::dquat(1.0 + d, c.x, c.y, c.z));
+    return glm::quat((float)q.w, (float)q.x, (float)q.y, (float)q.z);
+}
+
 } // namespace
 
 void ComputeGlobals(const Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals) {
@@ -124,7 +141,7 @@ bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::
     const glm::quat q0 = glm::angleAxis(acAb1 - acAb0, axis);
     const glm::quat q1 = glm::angleAxis(baBc1 - baBc0, axis);
     const glm::vec3 at = t - a;
-    const glm::quat q2 = glm::length(at) > 1e-8f ? glm::rotation(glm::normalize(ac), glm::normalize(at))
+    const glm::quat q2 = glm::length(at) > 1e-8f ? RotationBetween(glm::normalize(ac), glm::normalize(at))
                                                  : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
 
     const glm::quat endRot = Rotation(globals[end]);
@@ -152,7 +169,7 @@ void AimBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>
     const glm::vec3 to = targetPos - pos;
     if (glm::length(to) < 1e-6f) return;
     const glm::vec3 from = glm::normalize(rot * glm::normalize(aimAxis));
-    glm::quat delta = glm::rotation(from, glm::normalize(to));
+    glm::quat delta = RotationBetween(from, glm::normalize(to));
     const float angle = glm::angle(delta);
     const float limit = glm::radians(std::max(0.0f, maxAngleDeg));
     float fraction = std::clamp(weight, 0.0f, 1.0f);
