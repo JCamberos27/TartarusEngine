@@ -23,6 +23,7 @@
 #include "Frustum.h"
 #include "Camera.h"    // MakePerspective — the view-model sub-pass's one projection switch
 #include "ParticleRenderer.h"
+#include "GLStateCache.h"
 #include "gl.h"
 #include "Core/Profiler.h"
 
@@ -534,6 +535,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // the context is gone. The OS reclaims the handful of GL objects with the process.
         static ParticleRenderer* particles = new ParticleRenderer();
         if (particles->Draw(world, ctx) > 0) ++localStats.DrawCalls;
+    }
+    if (ctx.WorldOverlay) {
+        ctx.WorldOverlay();
+        GLStateCache::Invalidate();
     }
 
     // --- View-model sub-pass: tagged geometry, its own projection, after a depth clear --------

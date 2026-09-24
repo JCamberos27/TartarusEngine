@@ -849,6 +849,11 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         r.Heading("Impacts");
         r.Float("Impulse", g.ImpactImpulse, 0.1f, 0.0f, 100.0f, "%.1f N*s", "How hard each round shoves the physics body it hits, at the hit point (0 = no push).");
         r.Float("Max Speed", g.ImpactMaxSpeed, 0.1f, 0.0f, 50.0f, "%.1f m/s", "Caps the velocity one round can add, so light props fly without rocketing off.");
+        r.Heading("Zeroing");
+        r.Float("Zero Distance", g.ZeroDistance, 0.5f, 0.0f, 500.0f, "%.0f m",
+                "Rounds and the laser cross the sight line this far out: dead on the front post there, a little low closer, a little high past it. 0 = straight down the bore.");
+        r.Value("Sight Line", g.HasSightLine ? "saved" : "measured in Play the first time the sights settle",
+                "The eye's line through the sights, in weapon space. Without a saved one, Play measures it and logs the values to save in the .fpsanim.");
     }
 
     std::snprintf(summary, sizeof summary, "socket %s", s.WeaponSocket.empty() ? "(shared pose)" : s.WeaponSocket.c_str());
