@@ -14,7 +14,7 @@
     "matchTwist": true,
     "aimHoldTime": 0.15,
     "actionBones": ["clavicle_l"],
-    "gunMotion": {"MagCheck": {"rotation": 0.6, "position": 0.2}},
+    "gunMotion": {"EmptyReload": {"rotation": 0.18, "position": 0.25}, "MagCheck": {"rotation": 0.6, "position": 0.2}, "TacReload": {"rotation": 0.18, "position": 0.25}},
     "sightPivot": 0.25
   },
   "gameplay": {
