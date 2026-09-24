@@ -115,6 +115,15 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         parsed.Ads.ZoomTime = Number(*g, "adsZoomTime", parsed.Ads.ZoomTime);
         gp.ImpactImpulse = std::max(0.0f, Number(*g, "impactImpulse", gp.ImpactImpulse));
         gp.ImpactMaxSpeed = std::max(0.0f, Number(*g, "impactMaxSpeed", gp.ImpactMaxSpeed));
+        gp.ZeroDistance = std::max(0.0f, Number(*g, "zeroDistance", gp.ZeroDistance));
+        if (const auto sl = g->find("sightLine"); sl != g->end() && sl->is_object()) {
+            const glm::vec3 o = Vec3(*sl, "origin", glm::vec3(0.0f)), d = Vec3(*sl, "direction", glm::vec3(0.0f));
+            if (Finite(o) && Finite(d) && glm::length(d) > 1e-6f) {
+                gp.HasSightLine = true;
+                gp.SightOrigin = o;
+                gp.SightDirection = glm::normalize(d);
+            }
+        }
         if (!(gp.RoundsPerMinute > 0.0f) || !std::isfinite(gp.RoundsPerMinute))
             return Fail(error, "'gameplay.rpm' must be a positive number");
         if (!(gp.ReloadHoldSeconds > 0.0f)) return Fail(error, "'gameplay.reloadHoldSeconds' must be positive");
@@ -261,7 +270,10 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
         {"regripMax", gp.RegripMax},
         {"impactImpulse", gp.ImpactImpulse},
         {"impactMaxSpeed", gp.ImpactMaxSpeed},
+        {"zeroDistance", gp.ZeroDistance},
     };
+    if (gp.HasSightLine)
+        j["gameplay"]["sightLine"] = {{"origin", vec3(gp.SightOrigin)}, {"direction", vec3(gp.SightDirection)}};
     j["ads"] = {
         {"zoom", Ads.Zoom},
         {"viewModelZoom", Ads.ViewModelZoom},

@@ -25,7 +25,12 @@
     "regripMax": 20.0,
     "regripMin": 10.0,
     "reloadHoldSeconds": 0.35,
-    "rpm": 700.0
+    "rpm": 700.0,
+    "sightLine": {
+      "direction": [-0.999992, -0.00393, -0.000798],
+      "origin": [0.28145, 0.05775, 0.00013]
+    },
+    "zeroDistance": 25.0
   },
   "procedural": {
     "bob": {

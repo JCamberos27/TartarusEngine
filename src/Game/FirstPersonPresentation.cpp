@@ -439,6 +439,22 @@ bool FirstPersonPresentation::BarrelAimPoint(glm::vec3& out) const {
     return true;
 }
 
+bool FirstPersonPresentation::LaserBeam(Laser& out) const {
+    const auto* ac = Animator();
+    if (!m_AimPointValid || !ac || !m_Equipped || ac->HasTag(K::kTagHidden)) return false;
+    out.From = m_Muzzle;
+    out.To = m_AimPoint;
+    out.Normal = m_AimNormal;
+    out.Hit = m_AimHit;
+    return true;
+}
+
+std::vector<FirstPersonPresentation::ShotHit> FirstPersonPresentation::TakeShotHits() {
+    std::vector<ShotHit> hits;
+    hits.swap(m_ShotHits);
+    return hits;
+}
+
 void FirstPersonPresentation::WriteIK() {
     if (m_World && m_World->Registry.valid(m_Weapon))
         if (auto* bolt = m_World->Registry.try_get<IKRigComponent>(m_Weapon); bolt && !bolt->Offsets.empty())
@@ -612,6 +628,7 @@ bool FirstPersonPresentation::Fire() {
     if (ads || hipProcedural) {
         // Each round starts its own recoil curves; full-auto overlaps them into a climb.
         m_Procedural.OnShot(m_Set.Procedural, ads);
+        m_SinceShot = 0.0f;
         --m_Ammo;
         ShotImpact();
         m_IdleTime = 0.0f; // shooting isn't settling: no fidget mid-burst
@@ -625,7 +642,7 @@ bool FirstPersonPresentation::Fire() {
 
 void FirstPersonPresentation::ShotImpact() {
     const auto& g = m_Set.Gameplay;
-    if (!m_World || !m_AimPointValid || g.ImpactImpulse <= 0.0f) return;
+    if (!m_World || !m_AimPointValid) return;
     const float o[3] = {m_Muzzle.x, m_Muzzle.y, m_Muzzle.z}, d[3] = {m_BoreDir.x, m_BoreDir.y, m_BoreDir.z};
     RaycastHit hit;
     QueryFilter filter;
@@ -635,6 +652,11 @@ void FirstPersonPresentation::ShotImpact() {
     const bool struck = PhysicsWorld::RaycastFiltered(o, d, 300.0f, filter, hit) && hit.Hit;
     PhysicsWorld::SetQueryRecording(recording);
     if (!struck) return;
+    // Bounded, in case nothing drains it (no renderer this session).
+    if (m_ShotHits.size() < 256)
+        m_ShotHits.push_back({glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]),
+                              glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]), hit.Entity});
+    if (g.ImpactImpulse <= 0.0f) return;
     const auto e = static_cast<entt::entity>(hit.Entity);
     const auto* rb = m_World->Registry.valid(e) ? m_World->Registry.try_get<RigidbodyComponent>(e) : nullptr;
     if (!rb || rb->IsKinematic) return;
@@ -703,6 +725,8 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     m_FireCooldown = std::max(0.0f, m_FireCooldown - dt);
 
     ac->SetFloat(K::kSpeed, planarSpeed);
+    m_PlanarSpeed = planarSpeed;
+    m_SinceShot += dt;
     ac->SetBool(K::kSprint, sprinting);
     // The aim press drives the corner peek, even up against cover; tucked off a wall with no
     // peek to lean out on, the sights can't come up.
@@ -877,6 +901,7 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
         if (ac->EventFired(K::kEventShot)) {
             m_Ammo = std::max(0, m_Ammo - 1);
             m_Procedural.OnShot(m_Set.Procedural, false, /*cycleBolt=*/false); // the Fire clip cycles it
+            m_SinceShot = 0.0f;
             ShotImpact();
         }
         if (ac->EventFired(K::kEventRefill)) m_Ammo = m_Set.Gameplay.Magazine;
@@ -1071,12 +1096,50 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
 
     // Where the barrel points: down the bore from the muzzle to the first thing it meets.
     m_AimPointValid = false;
+    m_AimHit = false;
     glm::mat4 rootPose(1.0f);
     if (m_HaveMuzzle && m_WeaponModel->NodeTransform(m_Set.WeaponRoot.empty() ? std::string("root") : m_Set.WeaponRoot, rootPose)) {
         const glm::mat4 W = glm::translate(glm::mat4(1.0f), weaponPosition) * glm::mat4_cast(weaponRotation) *
                             glm::scale(glm::mat4(1.0f), glm::vec3(m_Scale)) * rootPose;
         const glm::vec3 muzzle = glm::vec3(W * glm::vec4(m_MuzzleLocal, 1.0f));
-        const glm::vec3 dir = glm::normalize(glm::mat3(W) * m_BoreLocal);
+        const glm::vec3 bore = glm::normalize(glm::mat3(W) * m_BoreLocal);
+        const FirstPersonWeaponGameplay& gp = m_Set.Gameplay;
+        // No saved sight line: measure it while the sights are up and steady (settled on the
+        // sights, standing still, not just fired, not peeking) - the eye then looks straight
+        // down it. Smoothed over the steady spell so breathing and sway average out.
+        if (!gp.HasSightLine) {
+            const auto* sac = Animator();
+            const bool steady = sac && sac->HasTag(K::kTagAds) && m_Zoom > 0.999f && m_AdsHold >= 1.0f &&
+                                m_PlanarSpeed < 0.1f && m_SinceShot > 0.6f && m_PeekLean == 0.0f;
+            m_SightSettled = steady ? m_SightSettled + m_TickDt : 0.0f;
+            if (m_SightSettled > 0.25f) {
+                const glm::mat4 Wi = glm::inverse(W);
+                const glm::vec3 o = glm::vec3(Wi * glm::vec4(camera.Position, 1.0f));
+                const glm::vec3 d = glm::normalize(glm::mat3(Wi) * camera.Front());
+                const float k = m_SightMeasured ? 1.0f - std::exp(-m_TickDt / 0.4f) : 1.0f;
+                m_SightOrigin = glm::mix(m_SightOrigin, o, k);
+                m_SightDirection = glm::normalize(glm::mix(m_SightDirection, d, k));
+                m_SightMeasured = true;
+                if (!m_SightLogged && m_SightSettled > 1.5f) {
+                    m_SightLogged = true;
+                    char msg[320];
+                    std::snprintf(msg, sizeof msg,
+                                  "First-person: sight line measured - save it in the .fpsanim's gameplay block: "
+                                  "\"sightLine\": {\"origin\": [%.5f, %.5f, %.5f], \"direction\": [%.6f, %.6f, %.6f]}",
+                                  m_SightOrigin.x, m_SightOrigin.y, m_SightOrigin.z, m_SightDirection.x,
+                                  m_SightDirection.y, m_SightDirection.z);
+                    Log::Info(msg);
+                }
+            }
+        }
+        // Zeroed: from the muzzle to the point ZeroDistance metres down the sight line.
+        glm::vec3 dir = bore;
+        if (gp.ZeroDistance > 0.0f && (gp.HasSightLine || m_SightMeasured)) {
+            const glm::vec3 so = glm::vec3(W * glm::vec4(gp.HasSightLine ? gp.SightOrigin : m_SightOrigin, 1.0f));
+            const glm::vec3 sd = glm::normalize(glm::mat3(W) * (gp.HasSightLine ? gp.SightDirection : m_SightDirection));
+            const glm::vec3 zeroAt = so + sd * gp.ZeroDistance;
+            if (glm::length(zeroAt - muzzle) > 1e-3f) dir = glm::normalize(zeroAt - muzzle);
+        }
         constexpr float kRange = 300.0f;
         const float o[3] = {muzzle.x, muzzle.y, muzzle.z}, d[3] = {dir.x, dir.y, dir.z};
         RaycastHit hit;
@@ -1088,6 +1151,8 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
         const bool struck = PhysicsWorld::RaycastFiltered(o, d, kRange, filter, hit) && hit.Hit;
         PhysicsWorld::SetQueryRecording(recording);
         m_AimPoint = muzzle + dir * (struck ? hit.Distance : kRange);
+        m_AimHit = struck;
+        if (struck) m_AimNormal = glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]);
         m_Muzzle = muzzle;
         m_BoreDir = dir;
         m_AimPointValid = true;
