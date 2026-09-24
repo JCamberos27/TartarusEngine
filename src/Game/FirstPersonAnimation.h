@@ -68,6 +68,28 @@ struct FirstPersonAdsSettings {
     // Seconds for a carried action to rise onto / drop off the sights when aim is pressed or
     // released partway through it.
     float AimHoldTime = 0.15f;
+    // The bones a carried action plays on with the sights up (each with everything under it):
+    // the rest of the rig - the gun and the other arm - keeps playing the reference (aim) state,
+    // and the action's hands keep their grip relative to the gun, so the left hand reloads while
+    // the gun stays on the sights. Empty = the whole action is carried onto the sights instead
+    // (the gun moves as in the hip clip).
+    std::vector<std::string> ActionBones{"clavicle_l"};
+    // Per carried action, how much of its clip's own gun motion plays on top of that anyway: the
+    // share of its turn (the mag check tipping the mag into view) and of its movement, turned
+    // about the rear sight (SightPivot metres ahead of the eye) so the sights stay near the
+    // centre. Unlisted = none.
+    struct GunMotion {
+        std::string State;
+        float Rotation = 0.0f;
+        float Position = 0.0f;
+    };
+    std::vector<GunMotion> GunMotions{{"MagCheck", 0.6f, 0.2f}};
+    float SightPivot = 0.25f;
+    const GunMotion* GunMotionFor(const std::string& state) const {
+        for (const GunMotion& m : GunMotions)
+            if (m.State == state) return &m;
+        return nullptr;
+    }
 };
 
 struct FirstPersonAnimationSet {

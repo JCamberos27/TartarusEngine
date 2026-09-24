@@ -3,6 +3,7 @@
 #include "Components.h"
 #include "Model.h"
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 #include <algorithm>
@@ -189,6 +190,15 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
     thread_local std::vector<glm::mat4> globals;
     parents.resize(pose.size());
     for (int i = 0; i < (int)pose.size(); ++i) parents[i] = model.NodeParent(i);
+    // The held pose goes in first; the grips of limbs that aren't held are read from the pose
+    // as animated (or the grip pose), before it.
+    const bool hold = rig.HoldPose.size() == pose.size() && rig.HoldWeights.size() == pose.size();
+    thread_local std::vector<glm::mat4> animated;
+    if (hold) {
+        ComputeGlobals(gripPose && gripPose->size() == pose.size() ? *gripPose : pose, parents, animated);
+        for (size_t i = 0; i < pose.size(); ++i)
+            if (rig.HoldWeights[i] > 0.0f) pose[i] = LocalTRS::Blend(pose[i], rig.HoldPose[i], std::min(rig.HoldWeights[i], 1.0f));
+    }
     for (const auto& [bone, rot] : rig.LocalRotations) {
         const int i = model.NodeIndex(bone);
         if (i >= 0)
@@ -214,7 +224,17 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
         Limb limb{l, model.NodeIndex(l->Upper), model.NodeIndex(l->Lower), model.NodeIndex(l->End),
                   model.NodeIndex(l->Target)};
         if (limb.Upper < 0 || limb.Lower < 0 || limb.End < 0 || limb.Target < 0) continue;
-        if (l->KeepAnimatedOffset) limb.Relative = glm::inverse(grip[limb.Target]) * grip[limb.End];
+        if (l->KeepAnimatedOffset) {
+            limb.Relative = glm::inverse(grip[limb.Target]) * grip[limb.End];
+            if (hold) {
+                // Held hand: the held pose's grip; free hand: its animated grip; in between, a mix.
+                const float h = std::clamp(rig.HoldWeights[limb.End], 0.0f, 1.0f);
+                const glm::mat4 free = glm::inverse(animated[limb.Target]) * animated[limb.End];
+                const glm::mat4 held = glm::inverse(globals[limb.Target]) * globals[limb.End];
+                const glm::quat r = glm::slerp(Rotation(free), Rotation(held), h);
+                limb.Relative = glm::translate(glm::mat4(1.0f), glm::mix(Position(free), Position(held), h)) * glm::mat4_cast(r);
+            }
+        }
         limbs[limbCount++] = limb;
     }
 
