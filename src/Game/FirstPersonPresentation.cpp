@@ -123,6 +123,30 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
         // by Stop(), so it never reaches a scene file.
         world.Registry.emplace_or_replace<ViewModelTag>(e);
     }
+    // .fpsanim material overrides: every submesh whose imported material has the listed name.
+    auto applyMaterials = [&](entt::entity e, const std::vector<std::pair<std::string, std::string>>& overrides) {
+        auto& renderable = world.Registry.get<RenderableComponent>(e);
+        for (const auto& [name, matPath] : overrides) {
+            auto mat = assets.LoadMaterial(ProjectPaths::Resolve(matPath));
+            if (!mat || mat->Missing) {
+                Log::Warn("First-person: material '" + matPath + "' for '" + name + "' could not be loaded.",
+                          LogContext::Asset(config.AnimationSet));
+                continue;
+            }
+            bool used = false;
+            for (int i = 0; i < renderable.ModelRef->MeshCount(); ++i) {
+                if (renderable.ModelRef->MeshMaterial(i).Name != name) continue;
+                if (i >= (int)renderable.Materials.size()) renderable.Materials.resize(i + 1);
+                renderable.Materials[i] = mat;
+                used = true;
+            }
+            if (!used)
+                Log::Warn("First-person: no submesh uses a material named '" + name + "' (from '" +
+                          config.AnimationSet + "').", LogContext::Asset(config.AnimationSet));
+        }
+    };
+    applyMaterials(m_Arms, m_Set.ArmsMaterials);
+    applyMaterials(m_Weapon, m_Set.WeaponMaterials);
     // The arms run the controller; the weapon mirrors it on its own track. Both keep running
     // while hidden (unarmed), or the controller could never leave its Hidden state.
     auto& armsAnim = world.Registry.emplace_or_replace<AnimatorControllerComponent>(m_Arms);

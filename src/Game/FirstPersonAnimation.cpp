@@ -89,6 +89,17 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         return Fail(error, "'weaponMountRotation' must be three finite numbers (Y-X-Z degrees)");
     if (parsed.WeaponSocket.empty() != parsed.WeaponRoot.empty())
         return Fail(error, "'weaponSocket' and 'weaponRoot' must be given together (or both omitted)");
+    for (auto [key, dst] : {std::pair{"armsMaterials", &parsed.ArmsMaterials},
+                            std::pair{"weaponMaterials", &parsed.WeaponMaterials}}) {
+        const auto it = root.find(key);
+        if (it == root.end()) continue;
+        if (!it->is_object()) return Fail(error, std::string("'") + key + "' must be an object of material name -> .mat path");
+        for (const auto& [name, mat] : it->items()) {
+            if (!mat.is_string() || mat.get<std::string>().empty())
+                return Fail(error, std::string("'") + key + "." + name + "' must be a .mat path");
+            dst->emplace_back(name, mat.get<std::string>());
+        }
+    }
 
     if (const auto g = root.find("gameplay"); g != root.end() && g->is_object()) {
         FirstPersonWeaponGameplay& gp = parsed.Gameplay;
@@ -193,6 +204,12 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
         j["weaponSocket"] = WeaponSocket;
         j["weaponRoot"] = WeaponRoot;
         j["weaponMountRotation"] = vec3(WeaponMountRotation);
+    }
+    for (auto [key, src] : {std::pair{"armsMaterials", &ArmsMaterials}, std::pair{"weaponMaterials", &WeaponMaterials}}) {
+        if (src->empty()) continue;
+        json m = json::object();
+        for (const auto& [name, mat] : *src) m[name] = mat;
+        j[key] = std::move(m);
     }
     j["gameplay"] = {
         {"magazine", gp.Magazine},

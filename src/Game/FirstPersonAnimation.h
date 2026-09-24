@@ -64,6 +64,10 @@ struct FirstPersonAnimationSet {
     std::string WeaponSocket;
     std::string WeaponRoot;
     glm::vec3 WeaponMountRotation{0.0f};
+    // Optional .mat overrides, keyed by the source FBX's material name ("aks74u" -> a .mat path).
+    // Every submesh using that material draws with the .mat; unlisted materials keep the import.
+    std::vector<std::pair<std::string, std::string>> ArmsMaterials;
+    std::vector<std::pair<std::string, std::string>> WeaponMaterials;
     FirstPersonWeaponGameplay Gameplay;
     // Recoil, sway, bob, breathing, aim, per-state offsets, lean and IK (FirstPersonProcedural.h).
     // Files from before it existed load their old gameplay.recoil / adsBob numbers into it.

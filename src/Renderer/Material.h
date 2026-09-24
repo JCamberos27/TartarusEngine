@@ -26,6 +26,10 @@ struct MaterialProp {
 // PBR (metallic-roughness workflow) material. Maps are optional; when absent the
 // corresponding scalar factor is used uniformly across the surface.
 struct Material {
+    // The source file's material name (FBX/glTF), set on import. Lets a data file pick submeshes
+    // by material instead of by submesh index (e.g. .fpsanim "weaponMaterials"). Not saved.
+    std::string Name;
+
     glm::vec3 BaseColor{1.0f};
     float Metallic = 0.0f;
     float Roughness = 0.5f;
