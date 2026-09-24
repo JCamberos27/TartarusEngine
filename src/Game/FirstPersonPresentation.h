@@ -113,6 +113,7 @@ private:
     void SetupBolt(AssetLibrary& assets, const AnimatorController& ctrl);
     void SetupMuzzle(int bolt, const std::vector<int>& parents);
     void SetupAdsActions(AssetLibrary& assets, const AnimatorController& ctrl);
+    void ShotImpact(); // a round leaves the bore: shove whatever it hits
     void ReloadIfChanged(float dt);
 
     World* m_World = nullptr;
@@ -148,6 +149,7 @@ private:
     bool m_HaveMuzzle = false;
     glm::vec3 m_MuzzleLocal{0.0f}, m_BoreLocal{0.0f, 0.0f, -1.0f}; // weapon root space
     glm::vec3 m_AimPoint{0.0f};
+    glm::vec3 m_Muzzle{0.0f}, m_BoreDir{0.0f, 0.0f, -1.0f}; // world, from the last PlaceRigs
     // Reloads and the mag check with the sights up: the hip clip plays exactly as authored and
     // the whole view model is carried rigidly by the move that takes that clip's first-frame gun
     // onto Aim's (camera-bone relative, rig space), so the hands never leave the magazine.
