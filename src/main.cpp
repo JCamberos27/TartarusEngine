@@ -2227,6 +2227,8 @@ int main(int argc, char** argv) {
                 UpdateAnimators(world, gameDt);
                 UpdateSkeletalAnimations(world, assets); // #175 — Animation components drive their models' clips
                 UpdateAnimatorControllers(world, assets, gameDt); // #175 Part B — state machines
+                // The arms are posed now (clips + IK): seat the gun in this frame's hands.
+                if (playUsesPlayer) firstPersonPresentation.LateUpdate(world, player.Cam);
             }
 
             // The gameplay DLL watches its freshly-built source copy even while editing, and
