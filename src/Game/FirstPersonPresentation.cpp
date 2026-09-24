@@ -567,6 +567,18 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
         m_HiddenApplied = hidden;
     }
 
+    PlaceRigs(world, camera);
+}
+
+void FirstPersonPresentation::LateUpdate(World& world, const Camera& camera) {
+    if (IsActive()) PlaceRigs(world, camera);
+}
+
+// Pins the arms to the camera and the weapon to the arms' gun socket, from the rigs' current
+// posed node globals. Update runs it before the animators have posed this frame, so on its own
+// the gun rode last frame's hands - a frame behind every clip, sway and bob change, which read as
+// the left hand sliding on the handguard. LateUpdate runs it again once they have.
+void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
     const glm::quat cameraRotation = CameraRotation(camera);
     // Without IK (switched off, or a rig lacking the gun bone or arm chains) the procedural pose
     // moves the whole view model about the eye instead, in the camera's own frame - faded by the
