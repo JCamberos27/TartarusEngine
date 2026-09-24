@@ -1,5 +1,6 @@
 #pragma once
 
+#include "FirstPersonAdsCarry.h"
 #include "FirstPersonAnimation.h"
 
 #include <entt/entt.hpp>
@@ -101,6 +102,9 @@ public:
     // arms rig has the gun bone and both arm chains) or the whole view model does.
     const FirstPersonAnimationSet& Set() const { return m_Set; }
     bool UsesIK() const { return m_UsesIK; }
+    // What the ADS carry measured at Start (and on live edits): per carried state, the gun move
+    // onto the sights and the arm matching - for the weapon Inspector.
+    const AdsCarryReport& AdsReport() const { return m_AdsCarry.Report; }
 
 private:
     bool AttachAndValidate(AssetLibrary& assets, const AnimatorController& ctrl);
@@ -112,18 +116,16 @@ private:
     void PlaceRigs(World& world, const Camera& camera);
     void SetupBolt(AssetLibrary& assets, const AnimatorController& ctrl);
     void SetupMuzzle(int bolt, const std::vector<int>& parents);
-    void SetupAdsActions(AssetLibrary& assets, const AnimatorController& ctrl);
+    void SetupAdsCarry();
+    AdsCarrySample SampleAdsCarry(float dt) const;
     void ShotImpact(); // a round leaves the bore: shove whatever it hits
-    struct AdsAction;
-    // How far the current blend is into an ADS action, and that action's correction, weighted.
-    // `dt` > 0 predicts the controller's next advance (for offsets written before it runs).
-    bool AdsActionCorrection(float dt, glm::quat& rotation, glm::vec3& translation, float swivel[2] = nullptr,
-                             const AdsAction** action = nullptr, float* weight = nullptr) const;
     void ReloadIfChanged(float dt);
 
     World* m_World = nullptr;
     FirstPersonAnimationSet m_Set;
     std::string m_ControllerPath;
+    AssetLibrary* m_Assets = nullptr;                       // for re-measuring on live edits
+    std::shared_ptr<const AnimatorController> m_Controller;
     entt::entity m_Arms = entt::null;
     entt::entity m_Weapon = entt::null;
     std::shared_ptr<Model> m_ArmsModel;
@@ -155,22 +157,9 @@ private:
     glm::vec3 m_MuzzleLocal{0.0f}, m_BoreLocal{0.0f, 0.0f, -1.0f}; // weapon root space
     glm::vec3 m_AimPoint{0.0f};
     glm::vec3 m_Muzzle{0.0f}, m_BoreDir{0.0f, 0.0f, -1.0f}; // world, from the last PlaceRigs
-    // Reloads and the mag check with the sights up: the hip clip plays exactly as authored and
-    // the whole view model is carried rigidly by the move that takes that clip's first-frame gun
-    // onto Aim's (camera-bone relative, rig space), so the hands never leave the magazine.
-    // Swivel: per arm (right, left), the constant elbow swing that makes the IK'd clip's first
-    // frame hold its elbows exactly where Aim does - so the action starts and ends in Aim's pose.
-    struct AdsAction {
-        int State = -1;
-        glm::quat R{1.0f, 0.0f, 0.0f, 0.0f};
-        glm::vec3 T{0.0f};
-        float Swivel[2] = {0.0f, 0.0f};
-        // The arms' other bones (twist helpers) whose local rotation the IK'd first frame still
-        // doesn't share with Aim's: the local rotation that makes it so.
-        std::vector<std::pair<std::string, glm::quat>> Locals;
-    };
-    std::vector<AdsAction> m_AdsActions;
-    float m_AdsHold = 0.0f;       // 0..1, eased toward "aim held"
+    // Actions carried onto the sights while aiming (FirstPersonAdsCarry.h).
+    AdsCarryResult m_AdsCarry;
+    float m_AdsHold = 0.0f;       // 0..1, eased toward "aim held" over Ads.AimHoldTime
     float m_TickDt = 0.0f;        // the last Tick's dt: the step the animators take next
     // IK rig offset slots on the arms: the ADS-action gun correction, then the procedural pose.
     static constexpr int kAdsOffset = 0, kProceduralOffset = 1;

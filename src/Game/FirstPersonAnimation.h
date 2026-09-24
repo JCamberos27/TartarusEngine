@@ -36,16 +36,38 @@ struct FirstPersonWeaponGameplay {
     bool AllowFullAuto = true;            // false: B does nothing (semi-only weapon)
     float ReloadHoldSeconds = 0.35f;      // R held this long checks the magazine instead of reloading
     float RegripMin = 10.0f, RegripMax = 20.0f; // seconds of settled Idle before a Fidget
-    // Sights up: the world view magnifies by AdsZoom (1 = none) and the gun by AdsViewModelZoom,
-    // eased in and out over about AdsZoomTime seconds. Mouse look scales with the world zoom.
-    float AdsZoom = 1.0f;
-    float AdsViewModelZoom = 1.0f;
-    float AdsZoomTime = 0.2f;
     // Each round shoves the dynamic body the bore hits: ImpactImpulse N*s at the hit point
     // (so it spins as well as flies), capped at ImpactMaxSpeed m/s of velocity change per round
     // so light props don't rocket off. 0 = rounds push nothing.
     float ImpactImpulse = 0.0f;
     float ImpactMaxSpeed = 8.0f;
+};
+
+// Aim-down-sights. Two ways a weapon's actions (reloads, mag check, ...) can play with the
+// sights up, and a weapon can mix them per action:
+//  - Authored: the controller has a real ADS clip for the action, in a state tagged ADS that
+//    it reaches while Aim is held. It plays exactly as animated.
+//  - Carried: the action only has a hip clip, in a state tagged CarryTag. While aiming, the
+//    driver carries the GUN from where that clip holds it onto ReferenceState's sight line and
+//    the arm IK follows, so the body stays put. With MatchElbows / MatchTwist the arms are also
+//    matched to the reference pose at the clip's ends (elbow swing, forearm/upper-arm twist
+//    bones), so the action starts and ends exactly in the aim pose and moves like the hip clip
+//    in between.
+struct FirstPersonAdsSettings {
+    // The view: the world magnifies by Zoom (1 = none) and the gun by ViewModelZoom, eased in
+    // and out over about ZoomTime seconds. Mouse look scales with the world zoom.
+    float Zoom = 1.0f;
+    float ViewModelZoom = 1.0f;
+    float ZoomTime = 0.2f;
+    // The pose carried actions are measured against: the aiming state (empty = the first state
+    // tagged ADS).
+    std::string ReferenceState = "Aim";
+    std::string CarryTag = "ADSCarry";
+    bool MatchElbows = true;
+    bool MatchTwist = true;
+    // Seconds for a carried action to rise onto / drop off the sights when aim is pressed or
+    // released partway through it.
+    float AimHoldTime = 0.15f;
 };
 
 struct FirstPersonAnimationSet {
@@ -79,6 +101,7 @@ struct FirstPersonAnimationSet {
     std::vector<std::pair<std::string, std::string>> ArmsMaterials;
     std::vector<std::pair<std::string, std::string>> WeaponMaterials;
     FirstPersonWeaponGameplay Gameplay;
+    FirstPersonAdsSettings Ads;
     // Recoil, sway, bob, breathing, aim, per-state offsets, lean and IK (FirstPersonProcedural.h).
     // Files from before it existed load their old gameplay.recoil / adsBob numbers into it.
     WeaponProceduralSettings Procedural = WeaponProceduralSettings::Defaults();
@@ -119,9 +142,27 @@ inline constexpr const char* kMelee = "Melee";
 inline constexpr const char* kFidget = "Fidget";     // after RegripMin..Max s in a state tagged Idle
 // State tags the driver reads.
 inline constexpr const char* kTagAds = "ADS";        // sights up: fire is a procedural kick, aim offset on
-inline constexpr const char* kTagReload = "Reload";  // a reload is running (R does nothing)
+inline constexpr const char* kTagAdsCarry = "ADSCarry"; // hip clip carried onto the sights while aiming
+inline constexpr const char* kTagReload = "Reload";  // a reload is running (R does nothing, no firing)
+inline constexpr const char* kTagBusy = "Busy";      // hands busy (mag check, inspect, melee): no firing
 inline constexpr const char* kTagHidden = "Hidden";  // unarmed: both rigs hidden
 inline constexpr const char* kTagIdle = "Idle";      // settled idle: counts toward the Fidget
+inline constexpr const char* kTagIKOff = "IKOff";    // the default procedural IK off tag: plays as authored
+
+// Every tag above, with what it does - for the editors' tag pickers and tooltips.
+struct KnownTag { const char* Name; const char* Description; };
+inline constexpr KnownTag kKnownTags[] = {
+    {kTagAds, "Sights up. The ADS zoom, sight alignment and ADS recoil apply; firing is a procedural kick. "
+              "Tag the aiming state, and any real ADS clip (an ADS reload, say)."},
+    {kTagAdsCarry, "While aiming, this state's hip clip is carried onto the sights: the gun moves to the aim "
+                   "pose's sight line and the arms follow by IK. For actions that have no ADS clip."},
+    {kTagReload, "A reload is running: R does nothing and the gun can't fire."},
+    {kTagBusy, "The hands are busy (mag check, inspect, melee): the gun can't fire."},
+    {kTagIdle, "A settled idle: standing in it long enough plays the Fidget."},
+    {kTagHidden, "Unarmed: both rigs are hidden."},
+    {kTagIKOff, "Plays exactly as animated: the hand IK and procedural motion fade out (the weapon's IK Off Tag)."},
+};
+const char* KnownTagDescription(const std::string& tag); // nullptr for a custom tag
 // Events the driver reacts to.
 inline constexpr const char* kEventShot = "Shot";    // a round leaves the gun (hip fire)
 inline constexpr const char* kEventRefill = "Refill";// the magazine is full again

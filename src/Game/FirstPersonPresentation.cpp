@@ -185,7 +185,9 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     m_Procedural.Seed(m_Rng()); // a fresh recoil pattern every Play, not the same one each time
     m_UsesIK = SetupIK();
     SetupBolt(assets, *ctrl);
-    SetupAdsActions(assets, *ctrl);
+    m_Assets = &assets;
+    m_Controller = ctrl;
+    SetupAdsCarry();
     int states = 0;
     for (const auto& L : ctrl->Layers) states += (int)L.States.size();
     Log::Info("First-person presentation loaded '" + config.AnimationSet + "' (" +
@@ -204,6 +206,9 @@ void FirstPersonPresentation::Stop(World& world) {
     m_WeaponModel.reset();
     m_Set = {};
     m_ControllerPath.clear();
+    m_Controller.reset();
+    m_Assets = nullptr;
+    m_AdsCarry = {};
     m_CameraBone.clear();
     m_ViewModelFov = -1.0f;
     m_CameraBoneWarned = false;
@@ -342,11 +347,11 @@ float ZoomedFov(float fov, float zoom, float t) {
 } // namespace
 
 float FirstPersonPresentation::ViewModelFov() const {
-    return IsActive() ? ZoomedFov(m_ViewModelFov, m_Set.Gameplay.AdsViewModelZoom, m_Zoom) : -1.0f;
+    return IsActive() ? ZoomedFov(m_ViewModelFov, m_Set.Ads.ViewModelZoom, m_Zoom) : -1.0f;
 }
 
 float FirstPersonPresentation::WorldFov(float baseFov) const {
-    return IsActive() ? ZoomedFov(baseFov, m_Set.Gameplay.AdsZoom, m_Zoom) : baseFov;
+    return IsActive() ? ZoomedFov(baseFov, m_Set.Ads.Zoom, m_Zoom) : baseFov;
 }
 
 float FirstPersonPresentation::LookScale(float baseFov) const {
@@ -354,90 +359,31 @@ float FirstPersonPresentation::LookScale(float baseFov) const {
     return std::tan(glm::radians(fov) * 0.5f) / std::tan(glm::radians(baseFov) * 0.5f);
 }
 
-void FirstPersonPresentation::SetupAdsActions(AssetLibrary& assets, const AnimatorController& ctrl) {
-    m_AdsActions.clear();
-    if (!m_ArmsModel || ctrl.Layers.empty() || m_Set.WeaponSocket.empty()) return;
-    const auto& L = ctrl.Layers[0];
-    const int armsTrack = ctrl.TrackIndex(TrackOr(ctrl, "arms", 0));
-    const int socket = m_ArmsModel->NodeIndex(m_Set.WeaponSocket);
-    const int head = m_CameraBone.empty() ? -1 : m_ArmsModel->NodeIndex(m_CameraBone);
-    std::vector<int> parents(m_ArmsModel->NodeCount());
-    for (int i = 0; i < (int)parents.size(); ++i) parents[i] = m_ArmsModel->NodeParent(i);
-    // The socket at a state's first frame, relative to the camera bone (which sits on the eye).
-    auto firstFrame = [&](const std::string& state, glm::mat4& out, std::vector<LocalTRS>& pose) {
-        const int si = L.FindState(state);
-        if (si < 0 || socket < 0) return false;
-        const std::string& path = L.States[si].MotionFor(armsTrack).Clip;
-        const int clip = path.empty() ? -1 : ResolveAnimationClip(*m_ArmsModel, path, assets);
-        if (clip < 0) return false;
-        std::vector<glm::mat4> globals;
-        m_ArmsModel->SampleLocalPose(clip, 0.0f, AnimationWrapMode::ClampForever, pose);
-        IK::ComputeGlobals(pose, parents, globals);
-        const glm::vec3 eye = head >= 0 ? IK::Position(globals[head]) : glm::vec3(0.0f);
-        out = glm::translate(glm::mat4(1.0f), -eye) * globals[socket];
-        return true;
-    };
-    glm::mat4 aim;
-    std::vector<LocalTRS> aimPose, hipPose;
-    if (!firstFrame("Aim", aim, aimPose)) return;
-    std::vector<glm::mat4> aimGlobals, hipGlobals;
-    IK::ComputeGlobals(aimPose, parents, aimGlobals);
-    const IKRigComponent* rig = m_UsesIK && m_World ? m_World->Registry.try_get<IKRigComponent>(m_Arms) : nullptr;
-    for (const char* name : {"TacReload", "EmptyReload", "MagCheck"}) {
-        glm::mat4 hip;
-        if (!firstFrame(name, hip, hipPose)) continue;
-        const glm::mat4 c = aim * glm::inverse(hip);
-        AdsAction a;
-        a.State = L.FindState(name);
-        a.R = QuaternionFromMatrix(c);
-        a.T = glm::vec3(c[3]);
-        // Solve the clip's first frame with its correction, as Play will, and measure how far each
-        // elbow has to swing about its shoulder->hand line to land on Aim's.
-        if (rig && (int)rig->Offsets.size() > kProceduralOffset) {
-            IKRigComponent probe = *rig;
-            probe.Weight = 1.0f;
-            probe.Offsets[kAdsOffset].Rotation = a.R;
-            probe.Offsets[kAdsOffset].Position = a.T;
-            probe.Offsets[kProceduralOffset] = IKBoneOffset{rig->Offsets[kProceduralOffset].Bone};
-            probe.LimbA.Swivel = probe.LimbB.Swivel = 0.0f;
-            IK::ApplyRig(probe, *m_ArmsModel, hipPose);
-            IK::ComputeGlobals(hipPose, parents, hipGlobals);
-            const IKLimb* limbs[2] = {&probe.LimbA, &probe.LimbB};
-            for (int arm = 0; arm < 2; ++arm) {
-                const int up = m_ArmsModel->NodeIndex(limbs[arm]->Upper), lo = m_ArmsModel->NodeIndex(limbs[arm]->Lower),
-                          end = m_ArmsModel->NodeIndex(limbs[arm]->End);
-                if (up < 0 || lo < 0 || end < 0) continue;
-                const glm::vec3 s = IK::Position(hipGlobals[up]);
-                const glm::vec3 n = glm::normalize(IK::Position(hipGlobals[end]) - s);
-                glm::vec3 from = IK::Position(hipGlobals[lo]) - s, to = IK::Position(aimGlobals[lo]) - IK::Position(aimGlobals[up]);
-                from -= n * glm::dot(from, n);
-                to -= n * glm::dot(to, n);
-                if (glm::length(from) < 1e-6f || glm::length(to) < 1e-6f) continue;
-                a.Swivel[arm] = std::atan2(glm::dot(n, glm::cross(from, to)), glm::dot(from, to));
-            }
-            // With the swivel on, the solved chain lands on Aim's; what's left is the helper
-            // bones the clip keys but IK doesn't solve (the forearm / upper-arm twists, which
-            // spread the wrist's roll along the skin). Record their local correction too.
-            std::vector<LocalTRS> solved;
-            glm::mat4 unused;
-            firstFrame(name, unused, solved);
-            probe.LimbA.Swivel = a.Swivel[0];
-            probe.LimbB.Swivel = a.Swivel[1];
-            IK::ApplyRig(probe, *m_ArmsModel, solved);
-            for (const IKLimb* limb : limbs) {
-                const int up = m_ArmsModel->NodeIndex(limb->Upper), lo = m_ArmsModel->NodeIndex(limb->Lower),
-                          end = m_ArmsModel->NodeIndex(limb->End);
-                if (up < 0 || lo < 0 || end < 0) continue;
-                for (int i = 0; i < m_ArmsModel->NodeCount(); ++i) {
-                    const int p = parents[i];
-                    if (i == lo || i == end || (p != up && p != lo)) continue; // direct children of the chain only
-                    const glm::quat d = glm::normalize(aimPose[i].R * glm::inverse(glm::normalize(solved[i].R)));
-                    if (std::fabs(d.w) < 0.99999f) a.Locals.push_back({m_ArmsModel->NodeName(i), d});
-                }
-            }
-        }
-        m_AdsActions.push_back(a);
-    }
+void FirstPersonPresentation::SetupAdsCarry() {
+    m_AdsCarry = {};
+    if (!m_ArmsModel || !m_Controller || !m_Assets) return;
+    AdsCarryInputs in;
+    in.Arms = m_ArmsModel.get();
+    in.Assets = m_Assets;
+    in.Controller = m_Controller.get();
+    in.Settings = &m_Set.Ads;
+    in.ArmsTrack = TrackOr(*m_Controller, "arms", 0);
+    in.GunBone = m_Set.WeaponSocket.empty() ? m_Set.Procedural.IK.GunBone : m_Set.WeaponSocket;
+    in.CameraBone = m_CameraBone;
+    in.Rig = m_UsesIK && m_World ? m_World->Registry.try_get<IKRigComponent>(m_Arms) : nullptr;
+    in.AdsOffset = kAdsOffset;
+    in.ProceduralOffset = kProceduralOffset;
+    m_AdsCarry = BuildAdsCarry(in);
+    PublishAdsCarryReport(m_SetFile.u8string(), m_AdsCarry.Report);
+    for (const std::string& w : m_AdsCarry.Report.Warnings) Log::Warn("First-person ADS: " + w);
+    for (const auto& e : m_AdsCarry.Report.Entries)
+        if (!e.Problem.empty()) Log::Warn("First-person ADS: '" + e.State + "' can't be carried onto the sights: it " + e.Problem + ".");
+}
+
+AdsCarrySample FirstPersonPresentation::SampleAdsCarry(float dt) const {
+    const auto* ac = Animator();
+    if (!ac || ac->Layers.empty()) return {};
+    return EvaluateAdsCarry(ac->Layers[0], m_AdsCarry.Actions, dt, m_AdsHold);
 }
 
 // The bolt rides the bore, so its travel is the barrel's axis. The muzzle is the front face of the
@@ -505,56 +451,20 @@ void FirstPersonPresentation::WriteIK() {
     // stay where the body is and nothing has to settle back when the action ends.
     glm::quat adsR(1.0f, 0.0f, 0.0f, 0.0f);
     glm::vec3 adsT(0.0f);
-    float swivel[2], adsW = 0.0f;
-    const AdsAction* action = nullptr;
-    AdsActionCorrection(m_TickDt, adsR, adsT, swivel, &action, &adsW);
-    rig->LimbA.Swivel = swivel[0];
-    rig->LimbB.Swivel = swivel[1];
+    const AdsCarrySample carry = SampleAdsCarry(m_TickDt);
+    adsR = carry.R;
+    adsT = carry.T;
+    rig->LimbA.Swivel = carry.Swivel[0];
+    rig->LimbB.Swivel = carry.Swivel[1];
     rig->LocalRotations.clear();
-    if (action)
-        for (const auto& [bone, d] : action->Locals)
-            rig->LocalRotations.push_back({bone, glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), d, adsW)});
+    if (carry.Action)
+        for (const auto& [bone, d] : carry.Action->Locals)
+            rig->LocalRotations.push_back({bone, glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), d, carry.Weight)});
     rig->Offsets[kAdsOffset].Rotation = adsR;
     rig->Offsets[kAdsOffset].Position = adsT;
     rig->Offsets[kProceduralOffset].Position = Ci * p.Position / m_Scale;
     rig->Offsets[kProceduralOffset].Rotation = NormalizeRotation(Ci * p.RotationQuat() * C);
     rig->Offsets[kProceduralOffset].Pivot = Ci * p.Pivot / m_Scale;
-}
-
-bool FirstPersonPresentation::AdsActionCorrection(float dt, glm::quat& rotation, glm::vec3& translation,
-                                                  float swivel[2], const AdsAction** action, float* weight) const {
-    rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-    translation = glm::vec3(0.0f);
-    if (swivel) swivel[0] = swivel[1] = 0.0f;
-    if (action) *action = nullptr;
-    if (weight) *weight = 0.0f;
-    const auto* ac = Animator();
-    if (!ac || ac->Layers.empty() || m_AdsHold <= 0.0f || m_AdsActions.empty()) return false;
-    // Each crossfade entry fades in over everything beneath it; walk down from the top, with each
-    // fade advanced the way the controller is about to (so the offset matches the pose it poses).
-    const auto& stack = ac->Layers[0].Stack;
-    float remaining = 1.0f, total = 0.0f, best = 0.0f;
-    const AdsAction* dominant = nullptr;
-    for (int k = (int)stack.size() - 1; k >= 0 && remaining > 0.0f; --k) {
-        float fade = stack[k].Fade;
-        if (dt > 0.0f && fade < 1.0f)
-            fade = stack[k].FadeDuration > 0.0f ? std::min(1.0f, fade + dt / stack[k].FadeDuration) : 1.0f;
-        const float w = k == 0 ? remaining : remaining * AnimatorCrossfadeWeight(fade);
-        remaining -= w;
-        for (const AdsAction& a : m_AdsActions)
-            if (a.State == stack[k].State) {
-                total += w;
-                if (w > best) { best = w; dominant = &a; }
-            }
-    }
-    if (!dominant) return false;
-    const float w = total * m_AdsHold;
-    rotation = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), dominant->R, w);
-    translation = dominant->T * w;
-    if (swivel) { swivel[0] = dominant->Swivel[0] * w; swivel[1] = dominant->Swivel[1] * w; }
-    if (action) *action = dominant;
-    if (weight) *weight = w;
-    return true;
 }
 
 void FirstPersonPresentation::ReloadIfChanged(float dt) {
@@ -573,12 +483,18 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
     }
     // Numbers (and the IK bones) only: the rigs and controller need a restart of Play to change.
     const bool rebuildIK = !SameIKSetup(m_Set.Procedural.IK, fresh.Procedural.IK);
+    const FirstPersonAdsSettings& oldAds = m_Set.Ads;
+    const bool remeasure = rebuildIK || oldAds.ReferenceState != fresh.Ads.ReferenceState ||
+                           oldAds.CarryTag != fresh.Ads.CarryTag || oldAds.MatchElbows != fresh.Ads.MatchElbows ||
+                           oldAds.MatchTwist != fresh.Ads.MatchTwist;
     m_Set.Gameplay = fresh.Gameplay;
+    m_Set.Ads = fresh.Ads;
     m_Set.Procedural = fresh.Procedural;
     if (rebuildIK && m_World && m_World->Registry.valid(m_Arms)) {
         m_World->Registry.remove<IKRigComponent>(m_Arms);
         m_UsesIK = SetupIK();
     }
+    if (remeasure) SetupAdsCarry();
     m_ReloadKey.HoldSeconds = m_Set.Gameplay.ReloadHoldSeconds;
     m_Ammo = std::min(m_Ammo, m_Set.Gameplay.Magazine);
 }
@@ -626,6 +542,9 @@ bool FirstPersonPresentation::Fire() {
     auto* ac = Animator();
     if (!ac || !m_Equipped || HasTag(K::kTagHidden)) return false;
     if (m_Ammo <= 0) return false; // dry: the player has to press Reload themselves
+    // Reloading or otherwise busy hands: no round, whether the state is a hip clip the controller
+    // would refuse to interrupt anyway or an ADS one that would otherwise kick procedurally.
+    if (ac->HasTag(K::kTagReload) || ac->HasTag(K::kTagBusy)) return false;
     const bool ads = ac->HasTag(K::kTagAds);
     // With recoil.hipProcedural, hip rounds kick procedurally too wherever the gun is simply
     // being held (idle, walking, or still settling from a shot); anywhere else (sprinting, an
@@ -728,16 +647,18 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     ac->SetFloat(K::kSpeed, planarSpeed);
     ac->SetBool(K::kSprint, sprinting);
     ac->SetBool(K::kAim, aiming);
-    m_AdsHold = std::clamp(m_AdsHold + (aiming ? dt : -dt) / 0.15f, 0.0f, 1.0f);
+    m_AdsHold = m_Set.Ads.AimHoldTime > 0.0f
+                    ? std::clamp(m_AdsHold + (aiming ? dt : -dt) / m_Set.Ads.AimHoldTime, 0.0f, 1.0f)
+                    : (aiming ? 1.0f : 0.0f);
     m_TickDt = dt;
     // ADS zoom: in while the sights are up - Aim, or a reload / mag check carried onto them -
     // and out otherwise. A critically damped spring eases both ends, and a re-press mid-way
     // turns around smoothly instead of restarting.
     {
         bool onSights = ac->HasTag(K::kTagAds);
-        for (const AdsAction& a : m_AdsActions) onSights = onSights || (aiming && a.State == ac->State);
+        for (const AdsCarryAction& a : m_AdsCarry.Actions) onSights = onSights || (aiming && a.State == ac->State);
         const float target = onSights && m_Equipped ? 1.0f : 0.0f;
-        const float time = m_Set.Gameplay.AdsZoomTime;
+        const float time = m_Set.Ads.ZoomTime;
         if (time <= 0.0f) {
             m_Zoom = target;
             m_ZoomRate = 0.0f;
@@ -931,7 +852,11 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
     glm::vec3 position = camera.Position;
     glm::quat actionR(1.0f, 0.0f, 0.0f, 0.0f);
     glm::vec3 actionT(0.0f);
-    if (!m_UsesIK) AdsActionCorrection(0.0f, actionR, actionT);
+    if (!m_UsesIK) {
+        const AdsCarrySample carry = SampleAdsCarry(0.0f);
+        actionR = carry.R;
+        actionT = carry.T;
+    }
     const glm::quat rigRotation = NormalizeRotation(rotation * actionR);
     position += rotation * (m_Scale * actionT);
     glm::mat4 anchor(1.0f);
