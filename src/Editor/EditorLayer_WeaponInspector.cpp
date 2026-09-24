@@ -387,7 +387,10 @@ void DrawRecoil(PropertyRows& r, WeaponRecoilSettings& rc, float rpm) {
         r.Vec3("Max", rc.ShakeMax, 0.01f, "%.2f", "Degrees of shake (pitch, yaw, roll) at full trauma.", "PYR");
         r.Float("Frequency", rc.ShakeFrequency, 0.1f, 0.0f, 60.0f, "%.1f Hz", "How fast the shake's noise moves.");
         r.Float("Decay", rc.ShakeDecay, 0.05f, 0.0f, 20.0f, "%.2f /s", "Trauma drained per second.");
-        r.Float("ADS Scale", rc.ShakeAdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "Multiplier for the visible shake with the sights up.");
+        r.Float("ADS Scale", rc.ShakeAdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "Multiplier for the visible shake (and the roll and FOV punch below) with the sights up.");
+        r.Float("Camera Roll", rc.CameraRoll, 0.01f, 0.0f, 10.0f, "%.2f deg", "Each round snaps the view's roll a random way by up to this much, and it springs back.");
+        r.Float("FOV Punch", rc.FovPunch, 0.01f, -10.0f, 10.0f, "%.2f deg", "Each round pulses the field of view by about this much (+ widens), springing back.");
+        r.Spring("Punch Spring", rc.PunchSpring.Frequency, rc.PunchSpring.Damping, "How the roll and FOV punch snap in and settle.");
         ImGui::TreePop();
     }
 
@@ -445,6 +448,8 @@ void DrawMovement(PropertyRows& r, WeaponProceduralSettings& p, const WeaponCont
         r.Float("Move Roll", w.MoveRoll, 0.01f, 0.0f, 10.0f, "%.2f deg", "Tilt into a strafe, per m/s.");
         r.Float("ADS Scale", w.AdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "Multiplier with the sights up (lower = steadier aim).");
         r.Spring("Spring", w.Spring.Frequency, w.Spring.Damping, "Damping under 1 overshoots, which reads as weight.");
+        r.Float("Look Smoothing", w.LookSmoothing, 0.1f, 0.0f, 60.0f, w.LookSmoothing > 0.0f ? "%.1f Hz" : "raw",
+                "Smooths the mouse's turn rate before it drives the sway, so the gun glides instead of buzzing. Lower = smoother, laggier.");
         r.ResetButton("Sway", [&] { p.Sway = kDefaults.Sway; });
         ImGui::TreePop();
     }
@@ -474,6 +479,15 @@ void DrawMovement(PropertyRows& r, WeaponProceduralSettings& p, const WeaponCont
         r.Float("Period", br.Period, 0.05f, 0.2f, 20.0f, "%.2f s", "Seconds per breath.");
         r.Float("Hip Scale", br.HipScale, 0.01f, 0.0f, 5.0f, "x%.2f", "Multiplier at the hip.");
         r.Float("ADS Scale", br.AdsScale, 0.01f, 0.0f, 5.0f, "x%.2f", "Multiplier with the sights up (lower = steadier aim).");
+        r.Heading("Drift");
+        r.Vec3("Position", br.DriftPosition, 0.00005f, "%.4f", "Metres of slow, never-repeating drift (side, up, back) on top of the breath.");
+        r.Vec3("Rotation", br.DriftRotation, 0.005f, "%.3f", "Degrees of drift (pitch, yaw, roll).", "PYR");
+        r.Float("Frequency", br.DriftFrequency, 0.01f, 0.0f, 5.0f, "%.2f Hz", "How fast the drift wanders.");
+        r.Heading("Exertion");
+        r.Float("Scale", br.ExertionScale, 0.01f, 1.0f, 10.0f, "x%.2f", "How much bigger the breath and drift get when winded from sprinting.");
+        r.Float("Rate", br.ExertionRate, 0.01f, 1.0f, 5.0f, "x%.2f", "How much faster the breathing gets when winded.");
+        r.Float("Build", br.ExertionBuild, 0.05f, 0.0f, 30.0f, "%.1f s", "Seconds of sprinting to be fully winded.");
+        r.Float("Recover", br.ExertionRecover, 0.05f, 0.0f, 30.0f, "%.1f s", "Seconds to get the breath back after sprinting.");
         if (Tree("Breath curves")) {
             const char* tip = "One breath, keyed over 0..1. Should start and end on the same value so it loops.";
             CurveRow(r, "Side (m)", "##bx", br.Position.X, kDefaults.Breath.Position.X, "%.4f", 0.0005f, tip);
@@ -483,6 +497,62 @@ void DrawMovement(PropertyRows& r, WeaponProceduralSettings& p, const WeaponCont
             ImGui::TreePop();
         }
         r.ResetButton("Breathing", [&] { p.Breath = kDefaults.Breath; });
+        ImGui::TreePop();
+    }
+    if (Tree("Jump & Land")) {
+        auto& j = p.Jump;
+        r.Check("Enabled", j.Enabled, "The gun lags against vertical speed in the air and kicks down on landing.");
+        r.Float("Air Position", j.AirPosition, 0.0001f, 0.0f, 0.05f, "%.4f m", "Lag per m/s of vertical speed (rising pulls the gun down, falling floats it up).");
+        r.Float("Air Pitch", j.AirPitch, 0.01f, 0.0f, 10.0f, "%.2f deg", "Muzzle lag per m/s of vertical speed.");
+        r.Float("Max Position", j.MaxPosition, 0.0005f, 0.0f, 0.2f, "%.3f m", "Largest air lag.");
+        r.Float("Max Pitch", j.MaxPitch, 0.05f, 0.0f, 45.0f, "%.1f deg", "Largest air pitch.");
+        r.Float("Land Position", j.LandPosition, 0.0001f, 0.0f, 0.05f, "%.4f m", "How far a landing drops the gun, per m/s of fall speed.");
+        r.Float("Land Pitch", j.LandPitch, 0.01f, 0.0f, 10.0f, "%.2f deg", "Muzzle dip per m/s of fall speed.");
+        r.Float("Land Roll", j.LandRoll, 0.01f, 0.0f, 10.0f, "%.2f deg", "Roll a random way per m/s of fall speed.");
+        r.Float("Min Impact", j.MinImpact, 0.05f, 0.0f, 20.0f, "%.2f m/s", "Softer touchdowns (steps, slopes) don't kick.");
+        r.Float("Max Impact", j.MaxImpact, 0.05f, 0.0f, 50.0f, "%.2f m/s", "Harder landings kick no more than this.");
+        r.Float("ADS Scale", j.AdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "Multiplier with the sights up.");
+        r.Spring("Spring", j.Spring.Frequency, j.Spring.Damping, "How the gun settles after a landing (damping under 1 bounces).");
+        r.ResetButton("Jump & Land", [&] { p.Jump = kDefaults.Jump; });
+        ImGui::TreePop();
+    }
+    if (Tree("Camera Motion")) {
+        auto& c = p.CameraMotion;
+        r.Check("Enabled", c.Enabled, "The view itself moves with your steps, strafes and landings (never where you aim).");
+        r.Vec2("Walk Bob", c.WalkBob, 0.0005f, "%.4f", "Head bob at full walk: height (m, down on each footfall), roll (deg, once per stride).");
+        r.Vec2("Sprint Bob", c.SprintBob, 0.0005f, "%.4f", "Head bob at full sprint: height (m), roll (deg).");
+        r.Float("Strafe Roll", c.StrafeRoll, 0.01f, 0.0f, 5.0f, "%.2f deg", "Roll into a strafe, per m/s of sideways speed.");
+        r.Float("Land Dip", c.LandDip, 0.0005f, 0.0f, 0.1f, "%.4f m", "How far a landing drops the view, per m/s of fall speed.");
+        r.Float("Land Pitch", c.LandPitch, 0.01f, 0.0f, 5.0f, "%.2f deg", "Nod per m/s of fall speed.");
+        r.Float("ADS Scale", c.AdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "Multiplier with the sights up.");
+        r.Spring("Spring", c.Spring.Frequency, c.Spring.Damping, "How the landing dip and strafe roll settle.");
+        r.ResetButton("Camera Motion", [&] { p.CameraMotion = kDefaults.CameraMotion; });
+        ImGui::TreePop();
+    }
+    if (Tree("Walls")) {
+        auto& o = p.Obstruction;
+        r.Check("Enabled", o.Enabled, "The gun pulls back off walls in front of you instead of clipping into them.");
+        r.Float("Reach", o.Reach, 0.005f, 0.0f, 3.0f, "%.2f m", "Distance from the eye to just past the muzzle: anything nearer pushes the gun back.");
+        r.Vec2("Probe Offset", o.ProbeOffset, 0.005f, "%.3f",
+               "Where the second probe runs from, metres right and up of the eye (along the barrel), so walls on the gun's side count too.");
+        r.Heading("1. Retract");
+        r.Float("Max Retract", o.MaxRetract, 0.005f, 0.0f, 0.5f, "%.2f m",
+                "First the gun slides straight back, one for one with how far the wall is in, so the muzzle stops at the surface and you can still aim. Up to this far.");
+        r.Heading("2. Tuck");
+        r.Float("Tuck Range", o.TuckRange, 0.005f, 0.0f, 1.0f, "%.2f m", "Past the retract, how much closer the wall has to get for a full tuck.");
+        r.Vec3("Low Position", o.Position, 0.001f, "%.3f", "Metres the gun moves in a full low ready (side, up, back).");
+        r.Vec3("Low Rotation", o.Rotation, 0.1f, "%.1f", "Degrees in a full low ready (pitch: - = muzzle down, yaw, roll).", "PYR");
+        r.Vec3("High Position", o.HighPosition, 0.001f, "%.3f", "The same for a high ready: used when what's in the way faces up (a table, the top of a low wall).");
+        r.Vec3("High Rotation", o.HighRotation, 0.1f, "%.1f", "Degrees in a full high ready (pitch: + = muzzle up).", "PYR");
+        r.Vec3("Side Position", o.SidePosition, 0.001f, "%.3f",
+               "For an edge beside the barrel (a corner you're peeking past, a door frame) on the right: metres the gun moves aside. Mirrored for the left.");
+        r.Vec3("Side Rotation", o.SideRotation, 0.1f, "%.1f", "Degrees the gun turns away from that edge (yaw: + = muzzle left). Mirrored for the left.", "PYR");
+        float block = o.BlockAt * 100.0f;
+        r.Float("Block At", block, 0.5f, 0.0f, 100.0f, block > 0.0f ? "%.0f%% tucked" : "never",
+                "Tucked this far, the gun won't fire and the sights drop. 0 = never.");
+        o.BlockAt = block / 100.0f;
+        r.Spring("Spring", o.Spring.Frequency, o.Spring.Damping, "How it eases on and off the wall.");
+        r.ResetButton("Walls", [&] { p.Obstruction = kDefaults.Obstruction; });
         ImGui::TreePop();
     }
     if (Tree("Locomotion Rate")) {
@@ -501,11 +571,18 @@ void DrawMovement(PropertyRows& r, WeaponProceduralSettings& p, const WeaponCont
     }
     if (Tree("Lean")) {
         auto& l = p.Lean;
-        r.Check("Enabled", l.Enabled, "LeanLeft / LeanRight input actions (Z / C by default; rebind them in Settings > This Project > Input).");
+        r.Check("Enabled", l.Enabled, "The lean, driven by the corner peek below.");
+        r.Check("Corner Peek", l.CornerPeek, "Aiming with cover just ahead leans out around its open side, as far as clearing the edge takes.");
+        r.Float("Peek Range", l.PeekRange, 0.01f, 0.0f, 5.0f, "%.2f m", "How close the cover has to be ahead of you for aiming to peek around it.");
+        r.Float("Peek Margin", l.PeekMargin, 0.005f, 0.0f, 0.5f, "%.2f m", "How far past the edge the view leans, beyond just clearing it.");
         r.Float("Camera Roll", l.Angle, 0.1f, 0.0f, 45.0f, "%.1f deg", "Camera roll at full lean.");
-        r.Float("Camera Offset", l.Offset, 0.005f, 0.0f, 1.0f, "%.3f m", "Side step of the view at full lean. It stops short of walls.");
+        r.Float("Camera Offset", l.Offset, 0.005f, 0.0f, 1.0f, "%.3f m",
+                "Side step of the view at full lean. The head swings over on an arc, so it also drops a little. It stops short of walls.");
+        r.Spring("Spring", l.Spring.Frequency, l.Spring.Damping, "How the lean goes out and comes back (damping under 1 settles with a slight overshoot).");
         r.Float("Weapon Roll", l.WeaponRoll, 0.1f, 0.0f, 45.0f, "%.1f deg", "Extra gun roll into the lean.");
-        r.Float("Speed", l.Speed, 0.1f, 0.1f, 50.0f, "%.1f /s", "How fast the lean goes in and comes back.");
+        r.Float("Weapon Roll ADS", l.WeaponRollAds, 0.01f, 0.0f, 2.0f, "x%.2f", "Multiplier on that roll with the sights up (lower keeps the sights readable).");
+        r.Spring("Weapon Spring", l.WeaponSpring.Frequency, l.WeaponSpring.Damping,
+                 "The gun's roll follows on its own, slower spring, so it lags and settles after the head - weight.");
         r.Check("While Sprinting", l.WhileSprinting, "Off: sprinting straightens up.");
         r.ResetButton("Lean", [&] { p.Lean = kDefaults.Lean; });
         ImGui::TreePop();
@@ -789,7 +866,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     std::snprintf(summary, sizeof summary, "%s", rc.Enabled ? (rc.ShakeAmount > 0.0f ? "kick, climb, shake" : "kick, climb") : "off");
     if (r.Section(ICON_FA_BURST, "Recoil", summary)) DrawRecoil(r, s.Procedural.Recoil, g.RoundsPerMinute);
 
-    if (r.Section(ICON_FA_PERSON_RUNNING, "Movement", "sway, bob, breathing, lean")) DrawMovement(r, s.Procedural, ctx);
+    if (r.Section(ICON_FA_PERSON_RUNNING, "Movement", "sway, bob, breathing, jump, camera, walls")) DrawMovement(r, s.Procedural, ctx);
 
     std::snprintf(summary, sizeof summary, "%s", s.Procedural.IK.Enabled ? "hands on the gun" : "off");
     if (r.Section(ICON_FA_HAND, "IK", summary)) DrawIK(r, s.Procedural.IK, ctx);

@@ -1650,9 +1650,15 @@ struct LayerQueryFilter : PxQueryFilterCallback {
     PxU32 mask = 0xFFFFFFFFu;
     bool triggers = true;
     bool touchMode = false;
+    bool skipSimulated = false; // ignore simulated (non-kinematic) dynamic bodies
     PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor,
                                    PxHitFlags&) override {
         if (actor && actor == skip) return PxQueryHitType::eNONE;
+        if (skipSimulated && actor) {
+            if (const PxRigidDynamic* dyn = actor->is<PxRigidDynamic>();
+                dyn && !(dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC))
+                return PxQueryHitType::eNONE;
+        }
         if (shape) {
             if (!triggers && (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
             const PxU32 layerBit = shape->getSimulationFilterData().word0;
@@ -1699,11 +1705,12 @@ void FillHit(const HitT& b, RaycastHit& outHit) {
 }
 
 bool SweepFiltered(const PxGeometry& geom, const PxTransform& pose, const float dir[3], float maxDistance,
-                   const QueryFilter& f, RaycastHit& outHit) {
+                   const QueryFilter& f, RaycastHit& outHit, bool skipSimulated = false) {
     outHit = RaycastHit{};
     PxVec3 d;
     if (!g_State || !g_State->scene || maxDistance <= 0.0f || !NormalizedDir(dir, d)) return false;
     LayerQueryFilter lf = MakeFilter(f);
+    lf.skipSimulated = skipSimulated;
     PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER);
     PxSweepBuffer buf;
     if (!g_State->scene->sweep(geom, pose, d, maxDistance, buf, PxHitFlag::eDEFAULT, fd, &lf) || !buf.hasBlock)
@@ -1786,6 +1793,14 @@ bool SphereCastFiltered(const float origin[3], const float dir[3], float radius,
     if (radius <= 0.0f) return false;
     return SweepFiltered(PxSphereGeometry(radius), PxTransform(PxVec3(origin[0], origin[1], origin[2])),
                          dir, maxDistance, f, outHit);
+}
+
+bool SphereCastSolid(const float origin[3], const float dir[3], float radius, float maxDistance,
+                     const QueryFilter& f, RaycastHit& outHit) {
+    outHit = RaycastHit{};
+    if (radius <= 0.0f) return false;
+    return SweepFiltered(PxSphereGeometry(radius), PxTransform(PxVec3(origin[0], origin[1], origin[2])),
+                         dir, maxDistance, f, outHit, /*skipSimulated=*/true);
 }
 
 bool BoxCast(const float center[3], const float halfExtents[3], const float rotation[4], const float dir[3],

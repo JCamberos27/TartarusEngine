@@ -2219,11 +2219,9 @@ int main(int argc, char** argv) {
                         } else {
                             firstPersonPresentation.ResetReloadKey(); // focus lost mid-press: never resolve it as a tap
                         }
-                        const float lean = gameHasInput ? (InputMap::GetButton("LeanRight") ? 1.0f : 0.0f) -
-                                                              (InputMap::GetButton("LeanLeft") ? 1.0f : 0.0f)
-                                                        : 0.0f;
+                        // No lean key: aiming at a corner peeks around it (the presentation's corner peek).
                         firstPersonPresentation.Tick(gameDt, player.Velocity, gameHasInput && InputMap::GetButton("Sprint"),
-                                                     weaponInput && InputMap::GetButton("Fire2"), lean);
+                                                     weaponInput && InputMap::GetButton("Fire2"), 0.0f, player.Grounded);
                     }
                     player.Cam.Fov = firstPersonPresentation.WorldFov(playBaseFov);
                 }

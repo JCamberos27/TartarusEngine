@@ -218,7 +218,7 @@ Run the build, unit tests and smoke test as in SYSTEM §10. Then:
   - walk while aiming
   - tap R at partial ammo and at 0 rounds, and hold R
   - the same while aiming: each ADS action ends on the sights with no readjust, and firing does nothing during it
-  - F and Q
+  - I (inspect) and Q (melee), and aim at the Weapon Feel Range cover to corner-peek
   - 1, 2 and scroll, including mid-reload
 - If the weapon has a spare magazine, check it's visible during both reloads. If it's missing, see SYSTEM §8.6.
 

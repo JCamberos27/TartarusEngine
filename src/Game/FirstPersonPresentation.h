@@ -61,7 +61,7 @@ public:
     // Per-frame locomotion + timers. Sets the controller's Speed/Sprint/Aim/Equipped/Ammo, runs
     // the Fidget timer, and advances the procedural stack. `velocity` is the player's world
     // velocity; `lean` is -1 (left) .. +1 (right).
-    void Tick(float dt, const glm::vec3& velocity, bool sprinting, bool aiming, float lean = 0.0f);
+    void Tick(float dt, const glm::vec3& velocity, bool sprinting, bool aiming, float lean = 0.0f, bool grounded = true);
 
     // Input. Each is a plain "not right now" false when the weapon isn't in hand (or has nothing
     // to do); the controller decides what can interrupt what.
@@ -145,6 +145,21 @@ private:
 
     bool m_Equipped = true;       // what the player asked for (the controller catches up)
     bool m_HiddenApplied = false; // what Update() last pushed onto the entities
+    float m_WallDistance = -1.0f; // Update: metres to what's in front of the gun (< 0 = nothing near)
+    bool m_WallFacesUp = false;
+    // Corner peek: -1 (out left) .. 1 (out right), from UpdateCornerPeek; the side picked when
+    // the aim started (0 = none yet), and whether the player was aiming last Tick.
+    float m_PeekLean = 0.0f;
+    int m_PeekSide = 0;
+    glm::vec3 m_PeekFrom{0.0f}; // where the eye was when the peek side was picked
+    bool m_Aiming = false;
+    void UpdateCornerPeek(const Camera& camera);
+    float m_WallSide = 0.0f;      // its surface normal along the view's right (-1..1)
+    // Tucked far enough off a wall that the gun can't fire or aim.
+    bool WallBlocked() const {
+        const float at = m_Set.Procedural.Obstruction.BlockAt;
+        return at > 0.0f && m_Procedural.Pose().Obstruction >= at;
+    }
     bool m_AdsHolding = false;    // WriteAdsHold: the aim pose is holding the rig
     float m_AdsAimTime = 0.0f;    // ... how far into the aim clip it is
     float m_AdsHoldLast = 0.0f;   // ... its weight while the action played
