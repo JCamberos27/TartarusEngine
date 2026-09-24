@@ -57,6 +57,7 @@
 #undef far
 #include "UndoDeltaChain.h"
 #include "World.h"
+#include "BulletHoles.h"
 #include "RotationMath.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -2457,6 +2458,82 @@ void TestWeaponProcedural() {
 }
 
 // --- Procedural animation: curves and IK -----------------------------------------------------
+// Bullet holes stay on what was hit: a world-space hole stays put, one in an entity follows it
+// (moved and turned), a destroyed entity takes its holes, and past capacity the oldest go.
+void TestBulletHoles() {
+    auto near = [](const glm::vec3& a, const glm::vec3& b) { return glm::length(a - b) < 1e-4f; };
+    World world;
+    BulletHoleList holes;
+    std::vector<BulletHoleList::Placed> out;
+    holes.Add(world, entt::null, glm::vec3(1, 2, 3), glm::vec3(0, 0, 2));
+    holes.Resolve(world, out);
+    CHECK(out.size() == 1);
+    CHECK(near(out[0].Position, glm::vec3(1, 2, 3)));
+    CHECK(near(out[0].Normal, glm::vec3(0, 0, 1)));
+    CHECK(std::abs(glm::dot(out[0].Tangent, out[0].Normal)) < 1e-4f);
+
+    const entt::entity crate = world.Registry.create();
+    auto& t = world.Registry.emplace<TransformComponent>(crate);
+    t.Position = glm::vec3(10, 0, 0);
+    t.Scale = glm::vec3(2.0f);
+    world.RebuildWorldTransformCache();
+    holes.Add(world, crate, glm::vec3(11, 0, 0), glm::vec3(1, 0, 0)); // its +X face
+    // Knocked over: moved and turned 90 degrees about Y, so +X now faces -Z.
+    t.Position = glm::vec3(0, 0, -5);
+    t.Rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3(0, 1, 0));
+    world.RebuildWorldTransformCache();
+    holes.Resolve(world, out);
+    CHECK(out.size() == 2);
+    CHECK(near(out[1].Position, glm::vec3(0, 0, -6)));
+    CHECK(near(out[1].Normal, glm::vec3(0, 0, -1)));
+    CHECK(std::abs(glm::dot(out[1].Tangent, out[1].Normal)) < 1e-4f);
+
+    world.Registry.destroy(crate);
+    holes.Resolve(world, out);
+    CHECK(out.size() == 1 && holes.Size() == 1);
+
+    for (std::size_t i = 0; i < BulletHoleList::kCapacity + 10; ++i)
+        holes.Add(world, entt::null, glm::vec3((float)i, 0, 0), glm::vec3(0, 1, 0));
+    CHECK(holes.Size() == BulletHoleList::kCapacity);
+    holes.Resolve(world, out);
+    bool hasNewest = false, hasOldest = false;
+    for (const auto& h : out) {
+        if (near(h.Position, glm::vec3((float)(BulletHoleList::kCapacity + 9), 0, 0))) hasNewest = true;
+        if (near(h.Position, glm::vec3(1, 2, 3))) hasOldest = true;
+    }
+    CHECK(hasNewest && !hasOldest);
+    holes.Clear();
+    CHECK(holes.Size() == 0);
+}
+
+// Zeroing settings: a zero distance and a saved sight line survive a save/load; no sight line
+// stays none, and a zero-length direction is rejected as none.
+void TestWeaponZero() {
+    FirstPersonAnimationSet set;
+    std::string error;
+    CHECK(FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","clips":[{"name":"Idle","arms":"idle.fbx","loop":true}]})", set, &error));
+    set.Controller = "w.controller"; // saved sets reference their controller, not v1 clips
+    set.Gameplay.ZeroDistance = 50.0f;
+    set.Gameplay.HasSightLine = true;
+    set.Gameplay.SightOrigin = glm::vec3(0.28f, 0.058f, 0.0f);
+    set.Gameplay.SightDirection = glm::normalize(glm::vec3(-1.0f, -0.004f, 0.0f));
+    auto roundTrip = [&](const FirstPersonAnimationSet& in, FirstPersonAnimationSet& out) {
+        return FirstPersonAnimationSet::FromJsonString(in.ToJsonString(), out, &error);
+    };
+    FirstPersonAnimationSet back;
+    const bool loaded = roundTrip(set, back);
+    CHECK(loaded);
+    if (!loaded) return;
+    CHECK(std::abs(back.Gameplay.ZeroDistance - 50.0f) < 1e-4f);
+    CHECK(back.Gameplay.HasSightLine);
+    CHECK(glm::length(back.Gameplay.SightOrigin - set.Gameplay.SightOrigin) < 1e-5f);
+    CHECK(glm::length(back.Gameplay.SightDirection - set.Gameplay.SightDirection) < 1e-5f);
+    set.Gameplay.HasSightLine = false;
+    FirstPersonAnimationSet none;
+    CHECK(roundTrip(set, none) && !none.Gameplay.HasSightLine);
+}
+
 void TestCurve() {
     auto near = [](float a, float b, float eps = 1e-4f) { return std::fabs(a - b) <= eps; };
     Curve empty;
@@ -2632,6 +2709,8 @@ int RunUnitTests() {
         {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
         {"FirstPersonAds", TestFirstPersonAds},
+        {"BulletHoles", TestBulletHoles},
+        {"WeaponZero", TestWeaponZero},
         {"Curve", TestCurve},
         {"IKSolver", TestIKSolver},
         {"WeaponProcedural", TestWeaponProcedural},
