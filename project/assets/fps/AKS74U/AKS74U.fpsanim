@@ -9,7 +9,14 @@
     "reloadHoldSeconds": 0.35,
     "rpm": 700.0
   },
-  "procedural": {},
+  "procedural": {
+    "sight": {
+      "mode": 2,
+      "referenceBone": "root",
+      "rear": [-0.0401, 0.0563, 0.0],
+      "front": [-0.2771, 0.0552, -0.0001]
+    }
+  },
   "viewRotation": [
     0.0,
     180.0,

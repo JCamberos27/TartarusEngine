@@ -601,6 +601,15 @@ int main(int argc, char** argv) {
     const glm::vec3 R0(-0.0682f, 1.559f, 0.4865f);
     const glm::vec3 F0(-0.06983f, 1.558f, 0.7235f);
 
+    // The same points in the weapon root's space: what Sight Alignment's Manual mode takes
+    // (Reference Bone = root).
+    {
+        const glm::mat4 wi = glm::inverse(wroot);
+        const glm::vec3 r = glm::vec3(wi * glm::vec4(R0, 1.0f)), f = glm::vec3(wi * glm::vec4(F0, 1.0f));
+        printf("\nManual sight points (weapon-root space): rear (%.4f, %.4f, %.4f) front (%.4f, %.4f, %.4f)\n",
+               r.x, r.y, r.z, f.x, f.y, f.z);
+    }
+
     const glm::vec3 viewRot(0.0f, 180.0f, 0.0f);   // AKS74U.fpsanim viewRotation
     // FirstPersonPresentation::Update, in the camera frame (+x right, +y up, +z back):
     //   q = Qv * Qs * (E * p - head) + offset
