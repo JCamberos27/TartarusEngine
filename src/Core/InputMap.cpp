@@ -87,16 +87,12 @@ std::vector<Action> Defaults() {
         // checks the magazine - so neither EmptyReload nor MagCheck needs a key of its own.
         act("Reload",   GLFW_KEY_R, kNone, kNone, kNone, kNone, kNone, false),
         act("FireMode", GLFW_KEY_B, kNone, kNone, kNone, kNone, kNone, false), // semi <-> full auto
-        act("Inspect",  GLFW_KEY_F, kNone, kNone, kNone, kNone, kNone, false),
+        act("Inspect",  GLFW_KEY_I, kNone, kNone, kNone, kNone, kNone, false),
         act("Melee",    GLFW_KEY_Q, kNone, kNone, kNone, kNone, kNone, false),
         act("Holster",  GLFW_KEY_H, kNone, kNone, kNone, kNone, kNone, false),
         // Weapon slots: 1 = the AK, 2 = unarmed (the scroll wheel toggles between them too).
         act("Weapon1",  GLFW_KEY_1, kNone, kNone, kNone, kNone, kNone, false),
         act("Weapon2",  GLFW_KEY_2, kNone, kNone, kNone, kNone, kNone, false),
-        // Lean (procedural: the camera rolls and slides, the gun rolls into it). Q and E are
-        // Melee and Interact, so these sit on Z / C.
-        act("LeanLeft",  GLFW_KEY_Z, kNone, kNone, kNone, kNone, kNone, false),
-        act("LeanRight", GLFW_KEY_C, kNone, kNone, kNone, kNone, kNone, false),
     };
 }
 
