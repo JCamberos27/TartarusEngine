@@ -2073,6 +2073,10 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
           "How much the gun itself magnifies with the sights up (1 = none).");
     dragF("ADS Zoom Time (s)", "##wadst", g.AdsZoomTime, 0.01f, 0.0f, 2.0f, "%.2f",
           "Roughly how long the zoom takes to settle in or out (eased at both ends).");
+    dragF("Impact Impulse (N*s)", "##wimp", g.ImpactImpulse, 0.1f, 0.0f, 100.0f, "%.1f",
+          "How hard each round shoves the physics body it hits, at the hit point (0 = no push).");
+    dragF("Impact Max Speed (m/s)", "##wimpv", g.ImpactMaxSpeed, 0.1f, 0.0f, 50.0f, "%.1f",
+          "Caps the velocity one round can add, so light props fly without rocketing off.");
 
     // Choices for the procedural section's pickers: the controller's states and tags, and the
     // arms rig's bones once it is loaded (only on request - a big FBX shouldn't load just

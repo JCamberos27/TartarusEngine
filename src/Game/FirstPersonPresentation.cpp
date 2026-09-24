@@ -532,6 +532,7 @@ bool FirstPersonPresentation::Fire() {
         // Each round starts its own recoil curves; full-auto overlaps them into a climb.
         m_Procedural.OnShot(m_Set.Procedural, ads);
         --m_Ammo;
+        ShotImpact();
         m_IdleTime = 0.0f; // shooting isn't settling: no fidget mid-burst
         return true;
     }
@@ -539,6 +540,29 @@ bool FirstPersonPresentation::Fire() {
     // and the hip recoil kicks - on its Shot event, so a refused trigger costs nothing.
     ac->SetTrigger(K::kFire);
     return true;
+}
+
+void FirstPersonPresentation::ShotImpact() {
+    const auto& g = m_Set.Gameplay;
+    if (!m_World || !m_AimPointValid || g.ImpactImpulse <= 0.0f) return;
+    const float o[3] = {m_Muzzle.x, m_Muzzle.y, m_Muzzle.z}, d[3] = {m_BoreDir.x, m_BoreDir.y, m_BoreDir.z};
+    RaycastHit hit;
+    QueryFilter filter;
+    filter.HitTriggers = 0;
+    const bool recording = PhysicsWorld::GetQueryRecording();
+    PhysicsWorld::SetQueryRecording(false);
+    const bool struck = PhysicsWorld::RaycastFiltered(o, d, 300.0f, filter, hit) && hit.Hit;
+    PhysicsWorld::SetQueryRecording(recording);
+    if (!struck) return;
+    const auto e = static_cast<entt::entity>(hit.Entity);
+    const auto* rb = m_World->Registry.valid(e) ? m_World->Registry.try_get<RigidbodyComponent>(e) : nullptr;
+    if (!rb || rb->IsKinematic) return;
+    // Light props: capped at ImpactMaxSpeed of velocity change; heavy ones just get the impulse.
+    float impulse = g.ImpactImpulse;
+    if (g.ImpactMaxSpeed > 0.0f) impulse = std::min(impulse, g.ImpactMaxSpeed * std::max(rb->Mass, 0.01f));
+    const glm::vec3 j = m_BoreDir * impulse;
+    const float jv[3] = {j.x, j.y, j.z};
+    PhysicsWorld::AddForceAtPosition(hit.Entity, jv, hit.Point, ForceMode::Impulse);
 }
 
 void FirstPersonPresentation::ToggleFireMode() {
@@ -734,6 +758,7 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
         if (ac->EventFired(K::kEventShot)) {
             m_Ammo = std::max(0, m_Ammo - 1);
             m_Procedural.OnShot(m_Set.Procedural, false, /*cycleBolt=*/false); // the Fire clip cycles it
+            ShotImpact();
         }
         if (ac->EventFired(K::kEventRefill)) m_Ammo = m_Set.Gameplay.Magazine;
         ac->FiredEvents.clear();
@@ -888,6 +913,8 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
         const bool struck = PhysicsWorld::RaycastFiltered(o, d, kRange, filter, hit) && hit.Hit;
         PhysicsWorld::SetQueryRecording(recording);
         m_AimPoint = muzzle + dir * (struck ? hit.Distance : kRange);
+        m_Muzzle = muzzle;
+        m_BoreDir = dir;
         m_AimPointValid = true;
     }
 }
