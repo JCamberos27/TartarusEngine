@@ -55,6 +55,24 @@ struct WeaponRecoilSettings {
     glm::vec2 SideRange{-1.0f, 1.0f};
     glm::vec2 UpRange{0.9f, 1.1f};
     glm::vec2 KickRange{0.9f, 1.1f};
+    // Runtime variety, so no two rounds - and no two bursts - leave the gun the same way:
+    //  - KickSpread: each round's muzzle rise leaves at its own angle off straight up (degrees,
+    //    normal sigma; KickBias shifts the mean, + = right), turning part of the pitch curve into
+    //    yaw - and the camera punch with it - so the kick has a direction, not just a size.
+    //  - TimeJitter: each round's curves play over Duration * [1 - j, 1 + j].
+    //  - FirstShotScale: the first round of a burst kicks this much harder (the gun at rest).
+    //  - Wander: full-auto aim drift sideways is a random walk (degrees sigma per round) that
+    //    WanderReturn (0..1 per round) pulls back toward centre, so a burst meanders instead of
+    //    climbing a straight line. BurstGrowth widens KickSpread and Wander per round of the
+    //    burst (up to x BurstGrowthMax): the first rounds stay tight, a long burst gets away.
+    float KickSpread = 0.0f;
+    float KickBias = 0.0f;
+    float TimeJitter = 0.0f;
+    float FirstShotScale = 1.0f;
+    float Wander = 0.0f;
+    float WanderReturn = 0.3f;
+    float BurstGrowth = 0.0f;
+    float BurstGrowthMax = 1.0f;
     float HipScale = 0.6f;    // hip fire also plays the Fire clip, so the kick is smaller
     float AdsScale = 1.0f;
     glm::vec3 Pivot{0.0f, 0.0f, 0.0f}; // rotation centre, camera frame, relative to the gun bone
@@ -247,7 +265,10 @@ private:
     struct Shot {
         float Time = 0.0f;
         float Scale = 1.0f;
+        float Duration = 1.0f;
         glm::vec3 Rot{1.0f}, Pos{1.0f};
+        float Lift = 0.0f;     // yaw taken from the pitch curve: the kick's direction off vertical
+        float CamPitch = 1.0f;
         float CamYaw = 1.0f;
     };
     struct Spring3 {
@@ -259,6 +280,8 @@ private:
     glm::vec2 m_AimPending{0.0f};     // climb still to feed in (spread over a few frames)
     glm::vec2 m_AimRecoverable{0.0f}; // climb that recovery will hand back
     float m_SinceShot = 1e9f;
+    int m_BurstShots = 0;             // rounds so far in the current burst
+    float m_Wander = 0.0f;            // the sideways drift's random walk (degrees per round)
     float m_BoltTime = 1e9f;
     Spring3 m_RecoilRot, m_RecoilPos, m_SwayRot, m_SwayPos, m_Camera;
     float m_BobWeight = 0.0f, m_BobSprint = 0.0f, m_BobPhase = 0.0f;

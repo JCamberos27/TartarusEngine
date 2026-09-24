@@ -182,8 +182,10 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
         return false;
     }
     m_Procedural.Reset();
+    m_Procedural.Seed(m_Rng()); // a fresh recoil pattern every Play, not the same one each time
     m_UsesIK = SetupIK();
     SetupBolt(assets, *ctrl);
+    SetupAdsActions(assets, *ctrl);
     int states = 0;
     for (const auto& L : ctrl->Layers) states += (int)L.States.size();
     Log::Info("First-person presentation loaded '" + config.AnimationSet + "' (" +
@@ -218,6 +220,8 @@ void FirstPersonPresentation::Stop(World& world) {
     m_HaveLook = false;
     m_SetFile.clear();
     m_ReloadPoll = 0.0f;
+    m_AdsHold = 0.0f;
+    m_Zoom = m_ZoomRate = 0.0f;
 }
 
 bool FirstPersonPresentation::SetupIK() {
@@ -321,6 +325,67 @@ void FirstPersonPresentation::SetupBolt(AssetLibrary& assets, const AnimatorCont
     auto& rig = m_World->Registry.emplace_or_replace<IKRigComponent>(m_Weapon);
     rig.Offsets.assign(1, IKBoneOffset{});
     rig.Offsets[0].Bone = r.BoltBone;
+}
+
+namespace {
+// A vertical FOV narrowed by `zoom` (magnification), blended by `t` in view-width space.
+float ZoomedFov(float fov, float zoom, float t) {
+    if (t <= 0.0f || zoom <= 1.0f) return fov;
+    const float full = std::tan(glm::radians(fov) * 0.5f);
+    const float half = glm::mix(full, full / zoom, t);
+    return glm::degrees(2.0f * std::atan(half));
+}
+} // namespace
+
+float FirstPersonPresentation::ViewModelFov() const {
+    return IsActive() ? ZoomedFov(m_ViewModelFov, m_Set.Gameplay.AdsViewModelZoom, m_Zoom) : -1.0f;
+}
+
+float FirstPersonPresentation::WorldFov(float baseFov) const {
+    return IsActive() ? ZoomedFov(baseFov, m_Set.Gameplay.AdsZoom, m_Zoom) : baseFov;
+}
+
+float FirstPersonPresentation::LookScale(float baseFov) const {
+    const float fov = WorldFov(baseFov);
+    return std::tan(glm::radians(fov) * 0.5f) / std::tan(glm::radians(baseFov) * 0.5f);
+}
+
+void FirstPersonPresentation::SetupAdsActions(AssetLibrary& assets, const AnimatorController& ctrl) {
+    m_AdsActions.clear();
+    if (!m_ArmsModel || ctrl.Layers.empty() || m_Set.WeaponSocket.empty()) return;
+    const auto& L = ctrl.Layers[0];
+    const int armsTrack = ctrl.TrackIndex(TrackOr(ctrl, "arms", 0));
+    const int socket = m_ArmsModel->NodeIndex(m_Set.WeaponSocket);
+    const int head = m_CameraBone.empty() ? -1 : m_ArmsModel->NodeIndex(m_CameraBone);
+    std::vector<int> parents(m_ArmsModel->NodeCount());
+    for (int i = 0; i < (int)parents.size(); ++i) parents[i] = m_ArmsModel->NodeParent(i);
+    // The socket at a state's first frame, relative to the camera bone (which sits on the eye).
+    auto firstFrame = [&](const std::string& state, glm::mat4& out) {
+        const int si = L.FindState(state);
+        if (si < 0 || socket < 0) return false;
+        const std::string& path = L.States[si].MotionFor(armsTrack).Clip;
+        const int clip = path.empty() ? -1 : ResolveAnimationClip(*m_ArmsModel, path, assets);
+        if (clip < 0) return false;
+        std::vector<LocalTRS> pose;
+        std::vector<glm::mat4> globals;
+        m_ArmsModel->SampleLocalPose(clip, 0.0f, AnimationWrapMode::ClampForever, pose);
+        IK::ComputeGlobals(pose, parents, globals);
+        const glm::vec3 eye = head >= 0 ? IK::Position(globals[head]) : glm::vec3(0.0f);
+        out = glm::translate(glm::mat4(1.0f), -eye) * globals[socket];
+        return true;
+    };
+    glm::mat4 aim;
+    if (!firstFrame("Aim", aim)) return;
+    for (const char* name : {"TacReload", "EmptyReload", "MagCheck"}) {
+        glm::mat4 hip;
+        if (!firstFrame(name, hip)) continue;
+        const glm::mat4 c = aim * glm::inverse(hip);
+        AdsAction a;
+        a.State = L.FindState(name);
+        a.R = QuaternionFromMatrix(c);
+        a.T = glm::vec3(c[3]);
+        m_AdsActions.push_back(a);
+    }
 }
 
 // The bolt rides the bore, so its travel is the barrel's axis. The muzzle is the front face of the
@@ -535,6 +600,27 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     ac->SetFloat(K::kSpeed, planarSpeed);
     ac->SetBool(K::kSprint, sprinting);
     ac->SetBool(K::kAim, aiming);
+    m_AdsHold = std::clamp(m_AdsHold + (aiming ? dt : -dt) / 0.15f, 0.0f, 1.0f);
+    // ADS zoom: in while the sights are up - Aim, or a reload / mag check carried onto them -
+    // and out otherwise. A critically damped spring eases both ends, and a re-press mid-way
+    // turns around smoothly instead of restarting.
+    {
+        bool onSights = ac->HasTag(K::kTagAds);
+        for (const AdsAction& a : m_AdsActions) onSights = onSights || (aiming && a.State == ac->State);
+        const float target = onSights && m_Equipped ? 1.0f : 0.0f;
+        const float time = m_Set.Gameplay.AdsZoomTime;
+        if (time <= 0.0f) {
+            m_Zoom = target;
+            m_ZoomRate = 0.0f;
+        } else if (dt > 0.0f) {
+            const float w = 4.7f / time; // ~98% settled after `time`
+            const float x = m_Zoom - target;
+            const float e = std::exp(-w * dt);
+            const float next = (x + (m_ZoomRate + w * x) * dt) * e;
+            m_ZoomRate = (m_ZoomRate - (m_ZoomRate + w * x) * w * dt) * e;
+            m_Zoom = std::clamp(target + next, 0.0f, 1.0f);
+        }
+    }
     ac->SetBool(K::kEquipped, m_Equipped);
     ac->SetInt(K::kAmmo, m_Ammo);
 
@@ -707,10 +793,39 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
     // so     position = camera.Position - rotation * (scale * boneLocal).
     // Rotation still comes from the camera, so the rig tracks pitch and the bone stays pinned
     // through it; ViewModelOffset then reads as a residual nudge in the camera's frame.
+    //
+    // With the sights up through a reload or mag check, the rig is also carried by that clip's
+    // ADS correction C (about the camera bone), weighted by how much of the blend is the action:
+    //     world(x) = camera + rotation * scale * (C.R * (x - bone) + C.T)
     glm::vec3 position = camera.Position;
+    glm::quat actionR(1.0f, 0.0f, 0.0f, 0.0f);
+    glm::vec3 actionT(0.0f);
+    const auto* ac = world.Registry.try_get<AnimatorControllerComponent>(m_Arms);
+    if (ac && !ac->Layers.empty() && m_AdsHold > 0.0f && !m_AdsActions.empty()) {
+        // Each crossfade entry fades in over everything beneath it; walk down from the top.
+        const auto& stack = ac->Layers[0].Stack;
+        float remaining = 1.0f, total = 0.0f, best = 0.0f;
+        const AdsAction* dominant = nullptr;
+        for (int k = (int)stack.size() - 1; k >= 0 && remaining > 0.0f; --k) {
+            const float w = k == 0 ? remaining : remaining * stack[k].Fade;
+            remaining -= w;
+            for (const AdsAction& a : m_AdsActions)
+                if (a.State == stack[k].State) {
+                    total += w;
+                    if (w > best) { best = w; dominant = &a; }
+                }
+        }
+        if (dominant) {
+            const float w = total * m_AdsHold;
+            actionR = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), dominant->R, w);
+            actionT = dominant->T * w;
+        }
+    }
+    const glm::quat rigRotation = NormalizeRotation(rotation * actionR);
+    position += rotation * (m_Scale * actionT);
     glm::mat4 anchor(1.0f);
     if (!m_CameraBone.empty() && m_ArmsModel && m_ArmsModel->NodeTransform(m_CameraBone, anchor)) {
-        position -= rotation * (m_Scale * glm::vec3(anchor[3]));
+        position -= rigRotation * (m_Scale * glm::vec3(anchor[3]));
     } else if (!m_CameraBone.empty() && !m_CameraBoneWarned) {
         m_CameraBoneWarned = true;
         Log::Warn("First-person presentation: arms model has no '" + m_CameraBone +
@@ -718,7 +833,7 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
     }
     position += cameraRotation * (m_Offset + procPosition);
 
-    world.SetWorldPose(m_Arms, position, rotation);
+    world.SetWorldPose(m_Arms, position, rigRotation);
     world.Registry.get<TransformComponent>(m_Arms).Scale = glm::vec3(m_Scale);
 
     // The weapon is parented to the arms rig's gun socket rather than handed the same pose
@@ -733,7 +848,7 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
     // overridden: its own clip channels (bolt, trigger, magazine, ...) still animate underneath,
     // which is the whole point of the separate rig.
     glm::vec3 weaponPosition = position;
-    glm::quat weaponRotation = rotation;
+    glm::quat weaponRotation = rigRotation;
     if (!m_Set.WeaponSocket.empty() && m_ArmsModel && m_WeaponModel) {
         glm::mat4 socket(1.0f), weaponRoot(1.0f);
         if (m_ArmsModel->NodeTransform(m_Set.WeaponSocket, socket) &&
@@ -741,8 +856,8 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
             const glm::mat4 mount =
                 socket * glm::mat4_cast(QuaternionFromEulerYXZ(m_Set.WeaponMountRotation)) *
                 glm::inverse(weaponRoot);
-            weaponPosition = position + rotation * (m_Scale * glm::vec3(mount[3]));
-            weaponRotation = NormalizeRotation(rotation * QuaternionFromMatrix(mount));
+            weaponPosition = position + rigRotation * (m_Scale * glm::vec3(mount[3]));
+            weaponRotation = NormalizeRotation(rigRotation * QuaternionFromMatrix(mount));
         } else if (!m_WeaponSocketWarned) {
             m_WeaponSocketWarned = true;
             Log::Warn("First-person presentation: arms model has no '" + m_Set.WeaponSocket +

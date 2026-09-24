@@ -14,6 +14,10 @@ float Pick(std::mt19937& rng, const glm::vec2& range) {
     return std::uniform_real_distribution<float>(std::min(range.x, range.y), std::max(range.x, range.y))(rng);
 }
 
+float Gauss(std::mt19937& rng, float mean, float sigma) {
+    return sigma > 0.0f ? std::normal_distribution<float>(mean, sigma)(rng) : mean;
+}
+
 float Smooth01(float t) {
     t = std::clamp(t, 0.0f, 1.0f);
     return t * t * (3.0f - 2.0f * t);
@@ -184,6 +188,9 @@ json WeaponProceduralSettings::ToJson() const {
         {"rotation", Curve3Json(r.Rotation)}, {"position", Curve3Json(r.Position)},
         {"pitchRange", Vec(r.PitchRange)}, {"yawRange", Vec(r.YawRange)}, {"rollRange", Vec(r.RollRange)},
         {"sideRange", Vec(r.SideRange)}, {"upRange", Vec(r.UpRange)}, {"kickRange", Vec(r.KickRange)},
+        {"kickSpread", r.KickSpread}, {"kickBias", r.KickBias}, {"timeJitter", r.TimeJitter},
+        {"firstShotScale", r.FirstShotScale}, {"wander", r.Wander}, {"wanderReturn", r.WanderReturn},
+        {"burstGrowth", r.BurstGrowth}, {"burstGrowthMax", r.BurstGrowthMax},
         {"hipScale", r.HipScale}, {"adsScale", r.AdsScale}, {"pivot", Vec(r.Pivot)},
         {"smoothing", SpringJson(r.Smoothing)},
         {"cameraPitch", r.CameraPitch.ToJson()}, {"cameraYaw", r.CameraYaw.ToJson()},
@@ -250,6 +257,14 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.Vector("sideRange", o.SideRange);
         r.Vector("upRange", o.UpRange);
         r.Vector("kickRange", o.KickRange);
+        r.Number("kickSpread", o.KickSpread);
+        r.Number("kickBias", o.KickBias);
+        r.Number("timeJitter", o.TimeJitter);
+        r.Number("firstShotScale", o.FirstShotScale);
+        r.Number("wander", o.Wander);
+        r.Number("wanderReturn", o.WanderReturn);
+        r.Number("burstGrowth", o.BurstGrowth);
+        r.Number("burstGrowthMax", o.BurstGrowthMax);
         r.Number("hipScale", o.HipScale);
         r.Number("adsScale", o.AdsScale);
         r.Vector("pivot", o.Pivot);
@@ -405,12 +420,25 @@ void WeaponProceduralState::Reset() {
 void WeaponProceduralState::OnShot(const WeaponProceduralSettings& s, bool ads, bool cycleBolt) {
     const auto& r = s.Recoil;
     if (!r.Enabled) return;
+    // A pause longer than a couple of cycles at any sane rate starts a new burst.
+    m_BurstShots = m_SinceShot > 0.25f ? 0 : m_BurstShots + 1;
+    if (m_BurstShots == 0) m_Wander = 0.0f;
+    const float growth = std::clamp(1.0f + r.BurstGrowth * (float)m_BurstShots, 1.0f, std::max(1.0f, r.BurstGrowthMax));
     Shot shot;
-    shot.Scale = ads ? r.AdsScale : r.HipScale;
+    shot.Scale = (ads ? r.AdsScale : r.HipScale) * (m_BurstShots == 0 ? r.FirstShotScale : 1.0f);
+    const float jitter = std::clamp(r.TimeJitter, 0.0f, 0.9f);
+    shot.Duration = Pick(m_Rng, {1.0f - jitter, 1.0f + jitter});
     shot.Rot = {Pick(m_Rng, r.PitchRange), Pick(m_Rng, r.YawRange), Pick(m_Rng, r.RollRange)};
     shot.Pos = {Pick(m_Rng, r.SideRange), Pick(m_Rng, r.UpRange), Pick(m_Rng, r.KickRange)};
-    shot.CamYaw = Pick(m_Rng, r.CameraYawRange);
-    const glm::vec2 climb(Pick(m_Rng, r.AimPitch), Pick(m_Rng, r.AimYaw));
+    // The kick's direction: part of the rise swings sideways, and the camera punch follows it.
+    const float angle = glm::radians(std::clamp(Gauss(m_Rng, r.KickBias, r.KickSpread * growth), -75.0f, 75.0f));
+    shot.Lift = shot.Rot.x * std::sin(angle);
+    shot.Rot.x *= std::cos(angle);
+    shot.CamPitch = shot.Rot.x;
+    shot.CamYaw = Pick(m_Rng, r.CameraYawRange) + std::sin(angle) * 2.0f;
+    // Sideways climb: a random walk pulled back toward centre, so the burst meanders.
+    m_Wander = m_Wander * (1.0f - std::clamp(r.WanderReturn, 0.0f, 1.0f)) + Gauss(m_Rng, 0.0f, r.Wander * growth);
+    const glm::vec2 climb(Pick(m_Rng, r.AimPitch), Pick(m_Rng, r.AimYaw) + m_Wander);
     m_AimPending += climb * shot.Scale;
     m_AimRecoverable += climb * shot.Scale * std::clamp(r.AimRecovery, 0.0f, 1.0f);
     m_SinceShot = 0.0f;
@@ -449,12 +477,15 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     glm::vec2 camera(0.0f);
     for (Shot& shot : m_Shots) {
         shot.Time += dt;
-        const float u = shot.Time / duration;
-        recoilRot += r.Rotation.Evaluate(u) * shot.Rot * shot.Scale;
+        const float u = shot.Time / (duration * shot.Duration);
+        const glm::vec3 rot = r.Rotation.Evaluate(u);
+        recoilRot += (rot * shot.Rot + glm::vec3(0.0f, rot.x * shot.Lift, 0.0f)) * shot.Scale;
         recoilPos += r.Position.Evaluate(u) * shot.Pos * shot.Scale;
-        camera += glm::vec2(r.CameraPitch.Evaluate(u), r.CameraYaw.Evaluate(u) * shot.CamYaw) * shot.Scale * r.CameraScale;
+        camera += glm::vec2(r.CameraPitch.Evaluate(u) * shot.CamPitch, r.CameraYaw.Evaluate(u) * shot.CamYaw) *
+                  shot.Scale * r.CameraScale;
     }
-    m_Shots.erase(std::remove_if(m_Shots.begin(), m_Shots.end(), [&](const Shot& sh) { return sh.Time >= duration; }),
+    m_Shots.erase(std::remove_if(m_Shots.begin(), m_Shots.end(),
+                                 [&](const Shot& sh) { return sh.Time >= duration * sh.Duration; }),
                   m_Shots.end());
     if (!r.Enabled) {
         recoilRot = recoilPos = glm::vec3(0.0f);

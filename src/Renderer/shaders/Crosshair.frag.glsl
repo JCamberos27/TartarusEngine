@@ -12,6 +12,7 @@ uniform float uCharge;   // 0..1, < 0 = not charging
 uniform int   uDotVisible;
 uniform vec2  uDotPos;   // pixels - the centre, or where the weapon's barrel points
 uniform vec3  uDotColor;
+uniform float uDotRadius; // > 0: a laser spot this many pixels across (radius), sized by distance
 
 // Coverage of a band [r0, r1] around the centre, anti-aliased over ~1 px.
 float band(float d, float r0, float r1) {
@@ -25,7 +26,16 @@ void main() {
     vec4 col = vec4(0.0);
 
     // The dot, with a dark rim, readable on bright sky and dark floors alike.
-    if (uDotVisible == 1) {
+    if (uDotVisible == 1 && uDotRadius > 0.0) {
+        // Laser spot: a near-white hot core inside the colour, and a soft glow around it.
+        float dd = length(gl_FragCoord.xy - uDotPos);
+        float r = uDotRadius;
+        float core = clamp(r - dd + 0.5, 0.0, 1.0);
+        float hot = clamp(r * 0.45 - dd + 0.5, 0.0, 1.0);
+        float glow = exp(-pow(dd / (r * 2.2 + 1.5), 2.0)) * 0.55;
+        vec3 c = mix(uDotColor, vec3(1.0, 0.85, 0.8), hot);
+        col = vec4(c, max(core, glow));
+    } else if (uDotVisible == 1) {
         float dd = length(gl_FragCoord.xy - uDotPos);
         float dotA = clamp(2.6 * s - dd + 0.5, 0.0, 1.0);
         float rimA = clamp(3.8 * s - dd + 0.5, 0.0, 1.0);
