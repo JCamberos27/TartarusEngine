@@ -714,6 +714,26 @@ int main(int argc, char** argv) {
         auto gravityGunLive = [&] {
             return playGravityGun && !(firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped());
         };
+        // The crosshair dot: with a weapon in hand it's a red dot where the barrel points (hidden
+        // in ADS and whenever the gun isn't simply held); otherwise the plain white centre dot.
+        auto crosshairDot = [&](const glm::mat4& v, const glm::mat4& p, int w, int h) {
+            CrosshairOverlay::Dot dot;
+            if (!firstPersonPresentation.IsActive() || !firstPersonPresentation.IsEquipped()) return dot;
+            glm::vec3 at;
+            dot.Visible = false;
+            if (!firstPersonPresentation.BarrelAimPoint(at)) return dot;
+            // Projected the way the gun is drawn - through the view model's own FOV - so the dot
+            // sits on the barrel's line as the player sees it, not where the world FOV would put it.
+            const float vmFov = firstPersonPresentation.ViewModelFov();
+            const glm::mat4 proj = vmFov > 0.0f && h > 0 ? MakePerspective(vmFov, (float)w / (float)h, 0.05f, 1000.0f) : p;
+            const glm::vec4 clip = proj * v * glm::vec4(at, 1.0f);
+            if (clip.w <= 1e-4f) return dot;
+            const glm::vec2 ndc = glm::vec2(clip) / clip.w;
+            dot.Pixel = (ndc * 0.5f + 0.5f) * glm::vec2((float)w, (float)h);
+            dot.Color = glm::vec3(1.0f, 0.12f, 0.1f);
+            dot.Visible = true;
+            return dot;
+        };
         entt::entity playCameraEntity = entt::null;
         Camera playSceneCam;
         // Default spawn/editor-camera start: south of the Sandbox's Character Plaza, looking north
@@ -3274,7 +3294,8 @@ int main(int argc, char** argv) {
                 if (playing && playUsesPlayer)
                     crosshair.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
                                    gravityGunLive() && gravityGun.IsHolding(),
-                                   gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f);
+                                   gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f,
+                                   crosshairDot(gvView, gvProj, gvWidth, gvHeight));
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
 
                 // #143: exponentially smoothed (same 0.92/0.08 blend as the Scene view's status
@@ -3440,7 +3461,8 @@ int main(int argc, char** argv) {
                 }
                 if (playing && playUsesPlayer)
                     crosshair.Draw(0, mw, mh, gravityGunLive() && gravityGun.IsHolding(),
-                                   gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f);
+                                   gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f,
+                                   crosshairDot(view, proj, mw, mh));
             }
 
             {

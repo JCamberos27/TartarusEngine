@@ -9,6 +9,9 @@ uniform vec2  uSize;     // target size, pixels
 uniform float uScale;    // pixel scale (1 at 1080p)
 uniform int   uHolding;
 uniform float uCharge;   // 0..1, < 0 = not charging
+uniform int   uDotVisible;
+uniform vec2  uDotPos;   // pixels - the centre, or where the weapon's barrel points
+uniform vec3  uDotColor;
 
 // Coverage of a band [r0, r1] around the centre, anti-aliased over ~1 px.
 float band(float d, float r0, float r1) {
@@ -21,11 +24,14 @@ void main() {
     float s = uScale;
     vec4 col = vec4(0.0);
 
-    // Centre dot with a dark rim, readable on bright sky and dark floors alike.
-    float dotA = clamp(2.6 * s - d + 0.5, 0.0, 1.0);
-    float rimA = clamp(3.8 * s - d + 0.5, 0.0, 1.0);
-    col = mix(col, vec4(0.0, 0.0, 0.0, 0.55), rimA);
-    col = mix(col, vec4(1.0, 1.0, 1.0, 0.95), dotA);
+    // The dot, with a dark rim, readable on bright sky and dark floors alike.
+    if (uDotVisible == 1) {
+        float dd = length(gl_FragCoord.xy - uDotPos);
+        float dotA = clamp(2.6 * s - dd + 0.5, 0.0, 1.0);
+        float rimA = clamp(3.8 * s - dd + 0.5, 0.0, 1.0);
+        col = mix(col, vec4(0.0, 0.0, 0.0, 0.55), rimA);
+        col = mix(col, vec4(uDotColor, 0.95), dotA);
+    }
 
     if (uHolding == 1) {
         float ring = band(d, 13.0 * s, 15.0 * s);
