@@ -1958,6 +1958,40 @@ void TestWeaponProcedural() {
         }
         CHECK(burstPeak > singlePeak * 1.5f);
     }
+    // Aim climb moves the real aim and only its recoverable share comes back; the bolt cycles
+    // back and home within its cycle. Off by default (defaults have no climb and no bolt).
+    {
+        WeaponProceduralSettings a = s;
+        a.Recoil.AimPitch = glm::vec2(0.5f);
+        a.Recoil.AimYaw = glm::vec2(0.1f);
+        a.Recoil.AimRecovery = 0.5f;
+        a.Recoil.AimRecoveryDelay = 0.1f;
+        a.Recoil.AimRecoverySpeed = 20.0f;
+        a.Recoil.BoltCycle = 0.08f;
+        a.Recoil.AdsScale = 1.0f;
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.Dt = 1.0f / 120.0f;
+        glm::vec2 aim(0.0f), peak(0.0f);
+        float boltPeak = 0.0f;
+        for (int f = 0; f < 240; ++f) {
+            if (f < 30 && f % 10 == 0) st.OnShot(a, true); // three rounds
+            const WeaponProceduralPose& p = st.Update(a, in);
+            aim += p.AimKick;
+            peak = glm::max(peak, aim);
+            if (f < 10) boltPeak = std::max(boltPeak, p.Bolt);
+        }
+        CHECK(std::fabs(peak.x - 1.5f) < 0.02f && std::fabs(peak.y - 0.3f) < 0.01f);
+        CHECK(std::fabs(aim.x - 0.75f) < 0.02f); // half of it recovered
+        CHECK(boltPeak > 0.95f && st.Pose().Bolt == 0.0f);
+        WeaponProceduralSettings back;
+        CHECK(WeaponProceduralSettings::FromJson(a.ToJson(), back, &error));
+        CHECK(back.Recoil.AimPitch == a.Recoil.AimPitch && back.Recoil.BoltCycle == a.Recoil.BoltCycle &&
+              back.Recoil.AimRecovery == a.Recoil.AimRecovery && !back.Recoil.HipProcedural);
+        WeaponProceduralState plain;
+        plain.OnShot(s, true);
+        CHECK(plain.Update(s, in).AimKick == glm::vec2(0.0f) && plain.Pose().Bolt == 0.0f);
+    }
     // A disabled recoil does nothing.
     {
         WeaponProceduralSettings off = s;
