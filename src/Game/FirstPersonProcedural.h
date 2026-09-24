@@ -95,6 +95,16 @@ struct WeaponRecoilSettings {
     float AimRecovery = 0.0f;
     float AimRecoveryDelay = 0.12f;
     float AimRecoverySpeed = 8.0f;
+    // Camera shake: each round adds ShakeAmount of "trauma" (0..1, draining at ShakeDecay per
+    // second); the view shakes by trauma^2 x ShakeMax degrees (pitch, yaw, roll) of smooth noise
+    // at ShakeFrequency Hz. Squaring keeps a single round a tremor and lets full auto build into
+    // a rattle. On top of the punch, and like it, never moves where the player aims.
+    // ShakeAdsScale multiplies the visible shake with the sights up. ShakeAmount 0 = off.
+    float ShakeAmount = 0.0f;
+    glm::vec3 ShakeMax{0.4f, 0.4f, 1.0f};
+    float ShakeFrequency = 20.0f;
+    float ShakeDecay = 3.0f;
+    float ShakeAdsScale = 0.6f;
     // Hip fire kicks procedurally, like ADS, instead of restarting the controller's Fire state
     // every round. Off plays the Fire clip (the older behaviour).
     bool HipProcedural = false;
@@ -219,7 +229,7 @@ struct WeaponProceduralPose {
     glm::vec2 CameraKick{0.0f};    // view punch, degrees (pitch, yaw)
     glm::vec2 AimKick{0.0f};       // aim climb this frame, degrees (pitch, yaw) - apply once, keep
     float Bolt = 0.0f;             // 0..1 of the bolt's travel toward the rear
-    float CameraRoll = 0.0f;       // lean, degrees
+    float CameraRoll = 0.0f;       // lean + shake, degrees
     float CameraSide = 0.0f;       // lean, metres along the camera's right
     // 0..1, eased toward 0 in states tagged OffTag: how much of the procedural motion (and the IK
     // carrying it) applies. IK.Enabled doesn't change it; that picks IK vs whole-view-model.
@@ -283,6 +293,8 @@ private:
     int m_BurstShots = 0;             // rounds so far in the current burst
     float m_Wander = 0.0f;            // the sideways drift's random walk (degrees per round)
     float m_BoltTime = 1e9f;
+    float m_Trauma = 0.0f;            // camera shake, 0..1
+    float m_ShakeTime = 0.0f;         // noise clock (cycles)
     Spring3 m_RecoilRot, m_RecoilPos, m_SwayRot, m_SwayPos, m_Camera;
     float m_BobWeight = 0.0f, m_BobSprint = 0.0f, m_BobPhase = 0.0f;
     float m_BreathPhase = 0.0f;

@@ -18,6 +18,21 @@ float Gauss(std::mt19937& rng, float mean, float sigma) {
     return sigma > 0.0f ? std::normal_distribution<float>(mean, sigma)(rng) : mean;
 }
 
+// Smooth 1D value noise in [-1, 1]: hashed lattice values, quintic-eased between them.
+float Noise1(float x, unsigned channel) {
+    auto lattice = [channel](int i) {
+        unsigned h = (unsigned)i * 374761393u + channel * 668265263u;
+        h = (h ^ (h >> 13)) * 1274126177u;
+        h ^= h >> 16;
+        return (float)(h & 0xffffu) / 32767.5f - 1.0f;
+    };
+    const float f = std::floor(x);
+    const float t = x - f;
+    const float e = t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+    const int i = (int)f;
+    return lattice(i) + (lattice(i + 1) - lattice(i)) * e;
+}
+
 float Smooth01(float t) {
     t = std::clamp(t, 0.0f, 1.0f);
     return t * t * (3.0f - 2.0f * t);
@@ -198,6 +213,8 @@ json WeaponProceduralSettings::ToJson() const {
         {"cameraSmoothing", SpringJson(r.CameraSmoothing)},
         {"aimPitch", Vec(r.AimPitch)}, {"aimYaw", Vec(r.AimYaw)}, {"aimRecovery", r.AimRecovery},
         {"aimRecoveryDelay", r.AimRecoveryDelay}, {"aimRecoverySpeed", r.AimRecoverySpeed},
+        {"shakeAmount", r.ShakeAmount}, {"shakeMax", Vec(r.ShakeMax)}, {"shakeFrequency", r.ShakeFrequency},
+        {"shakeDecay", r.ShakeDecay}, {"shakeAdsScale", r.ShakeAdsScale},
         {"hipProcedural", r.HipProcedural}, {"boltCycle", r.BoltCycle}, {"boltBone", r.BoltBone},
     };
     const auto& w = Sway;
@@ -279,6 +296,11 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.Number("aimRecovery", o.AimRecovery);
         r.Number("aimRecoveryDelay", o.AimRecoveryDelay);
         r.Number("aimRecoverySpeed", o.AimRecoverySpeed);
+        r.Number("shakeAmount", o.ShakeAmount);
+        r.Vector("shakeMax", o.ShakeMax);
+        r.Number("shakeFrequency", o.ShakeFrequency);
+        r.Number("shakeDecay", o.ShakeDecay);
+        r.Number("shakeAdsScale", o.ShakeAdsScale);
         r.Bool("hipProcedural", o.HipProcedural);
         r.Number("boltCycle", o.BoltCycle);
         r.String("boltBone", o.BoltBone);
@@ -442,6 +464,7 @@ void WeaponProceduralState::OnShot(const WeaponProceduralSettings& s, bool ads, 
     m_AimPending += climb * shot.Scale;
     m_AimRecoverable += climb * shot.Scale * std::clamp(r.AimRecovery, 0.0f, 1.0f);
     m_SinceShot = 0.0f;
+    m_Trauma = std::min(1.0f, m_Trauma + std::max(r.ShakeAmount, 0.0f));
     if (cycleBolt) m_BoltTime = 0.0f;
     // A runaway trigger can't grow this without bound: the oldest shot has done its work.
     if (m_Shots.size() >= 32) m_Shots.erase(m_Shots.begin());
@@ -498,6 +521,15 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     if (r.CameraSmoothing.Frequency > 0.0f) {
         m_Camera.Step(glm::vec3(camera, 0.0f), dt, r.CameraSmoothing);
         camera = glm::vec2(m_Camera.X);
+    }
+    // Shake: smooth noise on each axis, sized by trauma squared, laid over the punch.
+    m_Trauma = std::max(0.0f, m_Trauma - std::max(r.ShakeDecay, 0.0f) * dt);
+    m_ShakeTime = std::fmod(m_ShakeTime + dt * std::max(r.ShakeFrequency, 0.0f), 4096.0f);
+    if (r.Enabled && m_Trauma > 0.0f) {
+        const float amount = m_Trauma * m_Trauma * adsMix(1.0f, r.ShakeAdsScale);
+        camera.x += amount * r.ShakeMax.x * Noise1(m_ShakeTime, 1u);
+        camera.y += amount * r.ShakeMax.y * Noise1(m_ShakeTime, 2u);
+        pose.CameraRoll += amount * r.ShakeMax.z * Noise1(m_ShakeTime, 3u);
     }
     pose.CameraKick = camera;
     pose.Pivot = r.Pivot;
@@ -595,7 +627,7 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     const auto& l = s.Lean;
     const bool canLean = l.Enabled && (l.WhileSprinting || !in.Sprinting);
     m_Lean += ((canLean ? std::clamp(in.Lean, -1.0f, 1.0f) : 0.0f) - m_Lean) * std::min(1.0f, dt * std::max(l.Speed, 0.0f));
-    pose.CameraRoll = m_Lean * l.Angle;
+    pose.CameraRoll += m_Lean * l.Angle;
     pose.CameraSide = m_Lean * l.Offset;
     pose.Rotation.z += -m_Lean * l.WeaponRoll;
 
