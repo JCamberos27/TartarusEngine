@@ -65,6 +65,25 @@ struct WeaponRecoilSettings {
     Curve CameraYaw;
     glm::vec2 CameraYawRange{-1.0f, 1.0f};
     float CameraScale = 1.0f;
+    // Smooths the punch (rounds' curves summed) so full auto reads as one rolling push instead
+    // of a jolt per round. Frequency 0 = unsmoothed (the older behaviour).
+    FirstPersonSpring CameraSmoothing{0.0f, 1.0f};
+    // Aim climb: each round moves where the player actually aims (degrees, a random pick in
+    // [min, max] scaled like the kick), unlike the camera punch above, which only moves what they
+    // see. Once the trigger has rested AimRecoveryDelay seconds, AimRecovery (0..1) of the climb
+    // eases back at AimRecoverySpeed degrees/second; the rest is the player's to pull down.
+    glm::vec2 AimPitch{0.0f};
+    glm::vec2 AimYaw{0.0f};
+    float AimRecovery = 0.0f;
+    float AimRecoveryDelay = 0.12f;
+    float AimRecoverySpeed = 8.0f;
+    // Hip fire kicks procedurally, like ADS, instead of restarting the controller's Fire state
+    // every round. Off plays the Fire clip (the older behaviour).
+    bool HipProcedural = false;
+    // Seconds the bolt takes to slam back and return each round (the weapon rig's BoltBone,
+    // along the travel its Fire clip authors). 0 = no procedural bolt.
+    float BoltCycle = 0.0f;
+    std::string BoltBone = "bolt";
 };
 
 struct WeaponSwaySettings {
@@ -180,6 +199,8 @@ struct WeaponProceduralPose {
     glm::vec3 Rotation{0.0f};      // gun bone, degrees (pitch, yaw, roll)
     glm::vec3 Pivot{0.0f};         // rotation centre relative to the gun bone, camera frame
     glm::vec2 CameraKick{0.0f};    // view punch, degrees (pitch, yaw)
+    glm::vec2 AimKick{0.0f};       // aim climb this frame, degrees (pitch, yaw) - apply once, keep
+    float Bolt = 0.0f;             // 0..1 of the bolt's travel toward the rear
     float CameraRoll = 0.0f;       // lean, degrees
     float CameraSide = 0.0f;       // lean, metres along the camera's right
     // 0..1, eased toward 0 in states tagged OffTag: how much of the procedural motion (and the IK
@@ -211,7 +232,8 @@ class WeaponProceduralState {
 public:
     void Reset();
     // A round was fired: starts one recoil instance.
-    void OnShot(const WeaponProceduralSettings& s, bool ads);
+    // `cycleBolt` false when the weapon's Fire clip is already cycling the bolt itself.
+    void OnShot(const WeaponProceduralSettings& s, bool ads, bool cycleBolt = true);
     const WeaponProceduralPose& Update(const WeaponProceduralSettings& s, const WeaponProceduralInput& in);
     const WeaponProceduralPose& Pose() const { return m_Pose; }
     int ActiveShots() const { return (int)m_Shots.size(); }
@@ -234,7 +256,11 @@ private:
     };
 
     std::vector<Shot> m_Shots;
-    Spring3 m_RecoilRot, m_RecoilPos, m_SwayRot, m_SwayPos;
+    glm::vec2 m_AimPending{0.0f};     // climb still to feed in (spread over a few frames)
+    glm::vec2 m_AimRecoverable{0.0f}; // climb that recovery will hand back
+    float m_SinceShot = 1e9f;
+    float m_BoltTime = 1e9f;
+    Spring3 m_RecoilRot, m_RecoilPos, m_SwayRot, m_SwayPos, m_Camera;
     float m_BobWeight = 0.0f, m_BobSprint = 0.0f, m_BobPhase = 0.0f;
     float m_BreathPhase = 0.0f;
     float m_Ads = 0.0f;            // 0..1 linear, eased by Aim.Blend

@@ -86,6 +86,9 @@ public:
     int MagazineSize() const { return m_Set.Gameplay.Magazine; }
     bool IsActive() const { return m_Arms != entt::null; }
     bool IsEquipped() const { return m_Equipped; }
+    // Where the barrel points (world space): down the bore from the muzzle to the first surface.
+    // False while the gun isn't simply held at the hip (ADS, sprinting, reloading, holstered).
+    bool BarrelAimPoint(glm::vec3& out) const;
     const std::string& CurrentState() const;
     const std::string& LastError() const { return m_LastError; }
     const WeaponProceduralPose& ProceduralPose() const { return m_Procedural.Pose(); }
@@ -102,6 +105,8 @@ private:
     bool SetupIK();
     void WriteIK();
     void PlaceRigs(World& world, const Camera& camera);
+    void SetupBolt(AssetLibrary& assets, const AnimatorController& ctrl);
+    void SetupMuzzle(int bolt, const std::vector<int>& parents);
     void ReloadIfChanged(float dt);
 
     World* m_World = nullptr;
@@ -133,6 +138,11 @@ private:
     // is taken into the camera's flat frame there too.
     WeaponProceduralState m_Procedural;
     bool m_UsesIK = false;
+    glm::vec3 m_BoltStroke{0.0f}; // weapon model space, from the Fire clip (SetupBolt)
+    bool m_HaveMuzzle = false;
+    glm::vec3 m_MuzzleLocal{0.0f}, m_BoreLocal{0.0f, 0.0f, -1.0f}; // weapon root space
+    glm::vec3 m_AimPoint{0.0f};
+    bool m_AimPointValid = false;
     float m_LookYaw = 0.0f, m_LookPitch = 0.0f, m_PrevLookYaw = 0.0f, m_PrevLookPitch = 0.0f;
     bool m_HaveLook = false;
     glm::vec3 m_FlatRight{1.0f, 0.0f, 0.0f}, m_FlatForward{0.0f, 0.0f, -1.0f};
