@@ -1,16 +1,38 @@
 {
+  "factorsScaleMaps": true,
   "matVersion": 2,
   "name": "AKS-74U",
-  "_comment": "AKS-74U body: blued steel + wood furniture. Full PBR set from the source texture pack.",
-  "shader": "engine://Standard.shader",
   "properties": {
-    "_BaseColor": [1, 1, 1],
-    "_Metallic": 1.0,
-    "_Roughness": 1.0,
+    "_AOMap": "assets/fps/AKS74U/Textures/AKS74U_Occlusion.png",
     "_AlbedoMap": "assets/fps/AKS74U/Textures/AKS74U_Albedo_Transparency.png",
-    "_NormalMap": "assets/fps/AKS74U/Textures/AKS74U_Normal.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": true,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
     "_MetallicMap": "assets/fps/AKS74U/Textures/AKS74U_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/fps/AKS74U/Textures/AKS74U_Normal.png",
+    "_Roughness": 1.0,
     "_RoughnessMap": "assets/fps/AKS74U/Textures/AKS74U_Roughness.png",
-    "_AOMap": "assets/fps/AKS74U/Textures/AKS74U_Occlusion.png"
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "533e95bf9b3a528b",
+    "_AlbedoMap": "7b7ff3d89a801e9b",
+    "_MetallicMap": "fe12ee5959aa01e3",
+    "_NormalMap": "ddf9f803479dcf51",
+    "_RoughnessMap": "3478f940ace06417"
   }
 }
