@@ -109,9 +109,10 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         gp.ReloadHoldSeconds = Number(*g, "reloadHoldSeconds", gp.ReloadHoldSeconds);
         gp.RegripMin = Number(*g, "regripMin", gp.RegripMin);
         gp.RegripMax = Number(*g, "regripMax", gp.RegripMax);
-        gp.AdsZoom = std::clamp(Number(*g, "adsZoom", gp.AdsZoom), 1.0f, 8.0f);
-        gp.AdsViewModelZoom = std::clamp(Number(*g, "adsViewModelZoom", gp.AdsViewModelZoom), 1.0f, 4.0f);
-        gp.AdsZoomTime = std::clamp(Number(*g, "adsZoomTime", gp.AdsZoomTime), 0.0f, 2.0f);
+        // Before the "ads" block, the zoom lived here.
+        parsed.Ads.Zoom = Number(*g, "adsZoom", parsed.Ads.Zoom);
+        parsed.Ads.ViewModelZoom = Number(*g, "adsViewModelZoom", parsed.Ads.ViewModelZoom);
+        parsed.Ads.ZoomTime = Number(*g, "adsZoomTime", parsed.Ads.ZoomTime);
         gp.ImpactImpulse = std::max(0.0f, Number(*g, "impactImpulse", gp.ImpactImpulse));
         gp.ImpactMaxSpeed = std::max(0.0f, Number(*g, "impactMaxSpeed", gp.ImpactMaxSpeed));
         if (!(gp.RoundsPerMinute > 0.0f) || !std::isfinite(gp.RoundsPerMinute))
@@ -150,6 +151,24 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
                 p.Bob.HipScale = 0.0f;    // ADS only, as before
             }
         }
+    }
+    if (const auto a = root.find("ads"); a != root.end() && a->is_object()) {
+        FirstPersonAdsSettings& ads = parsed.Ads;
+        ads.Zoom = Number(*a, "zoom", ads.Zoom);
+        ads.ViewModelZoom = Number(*a, "viewModelZoom", ads.ViewModelZoom);
+        ads.ZoomTime = Number(*a, "zoomTime", ads.ZoomTime);
+        if (a->contains("referenceState")) ads.ReferenceState = String(*a, "referenceState");
+        if (const std::string tag = String(*a, "carryTag"); !tag.empty()) ads.CarryTag = tag;
+        ads.MatchElbows = Bool(*a, "matchElbows", ads.MatchElbows);
+        ads.MatchTwist = Bool(*a, "matchTwist", ads.MatchTwist);
+        ads.AimHoldTime = Number(*a, "aimHoldTime", ads.AimHoldTime);
+    }
+    {
+        FirstPersonAdsSettings& ads = parsed.Ads;
+        ads.Zoom = std::clamp(std::isfinite(ads.Zoom) ? ads.Zoom : 1.0f, 1.0f, 8.0f);
+        ads.ViewModelZoom = std::clamp(std::isfinite(ads.ViewModelZoom) ? ads.ViewModelZoom : 1.0f, 1.0f, 4.0f);
+        ads.ZoomTime = std::clamp(std::isfinite(ads.ZoomTime) ? ads.ZoomTime : 0.2f, 0.0f, 2.0f);
+        ads.AimHoldTime = std::clamp(std::isfinite(ads.AimHoldTime) ? ads.AimHoldTime : 0.15f, 0.0f, 2.0f);
     }
     if (const auto p = root.find("procedural"); p != root.end()) {
         std::string why;
@@ -223,11 +242,18 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
         {"reloadHoldSeconds", gp.ReloadHoldSeconds},
         {"regripMin", gp.RegripMin},
         {"regripMax", gp.RegripMax},
-        {"adsZoom", gp.AdsZoom},
-        {"adsViewModelZoom", gp.AdsViewModelZoom},
-        {"adsZoomTime", gp.AdsZoomTime},
         {"impactImpulse", gp.ImpactImpulse},
         {"impactMaxSpeed", gp.ImpactMaxSpeed},
+    };
+    j["ads"] = {
+        {"zoom", Ads.Zoom},
+        {"viewModelZoom", Ads.ViewModelZoom},
+        {"zoomTime", Ads.ZoomTime},
+        {"referenceState", Ads.ReferenceState},
+        {"carryTag", Ads.CarryTag},
+        {"matchElbows", Ads.MatchElbows},
+        {"matchTwist", Ads.MatchTwist},
+        {"aimHoldTime", Ads.AimHoldTime},
     };
     j["procedural"] = Procedural.ToJson();
     RoundFloats(j);
@@ -236,6 +262,12 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
 
 bool FirstPersonAnimationSet::SaveFile(const std::string& path) const {
     return AtomicFile::WriteJson(std::filesystem::u8path(path), json::parse(ToJsonString()));
+}
+
+const char* KnownTagDescription(const std::string& tag) {
+    for (const auto& t : FirstPersonAnimatorContract::kKnownTags)
+        if (tag == t.Name) return t.Description;
+    return nullptr;
 }
 
 // --- the standard graph ----------------------------------------------------------------------
@@ -265,10 +297,12 @@ AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set
     const std::vector<Spec> specs = {
         {"Idle", 0, 0, 0, {K::kTagIdle}},  {"Walk", 0, 0, 120, {}},         {"Sprint", 0, 330, 120, {}},
         {"Aim", 0, 0, 240, {K::kTagAds}},  {"IdleToSprint", 1, 330, 0, {}}, {"SprintToIdle", 1, 330, 240, {}},
-        {"Regrip", 2, 0, -140, {}},        {"Fire", 2, 660, -330, {}},      {"Inspect", 2, 660, -255, {}},
-        {"MagCheck", 2, 660, -180, {}},    {"Melee", 3, 660, -105, {}},     {"TacReload", 3, 660, -30, {K::kTagReload}},
-        {"EmptyReload", 3, 660, 45, {K::kTagReload}},
-        {"Draw", 4, -330, 330, {}},        {"Holster", 4, 330, 400, {}},    {"Holstered", 5, 0, 440, {K::kTagHidden}},
+        {"Regrip", 2, 0, -140, {K::kTagIKOff}}, {"Fire", 2, 660, -330, {}}, {"Inspect", 2, 660, -255, {K::kTagBusy}},
+        {"MagCheck", 2, 660, -180, {K::kTagBusy, K::kTagAdsCarry}}, {"Melee", 3, 660, -105, {K::kTagBusy}},
+        {"TacReload", 3, 660, -30, {K::kTagReload, K::kTagAdsCarry}},
+        {"EmptyReload", 3, 660, 45, {K::kTagReload, K::kTagAdsCarry}},
+        {"Draw", 4, -330, 330, {K::kTagIKOff}}, {"Holster", 4, 330, 400, {K::kTagIKOff}},
+        {"Holstered", 5, 0, 440, {K::kTagHidden}},
     };
     auto fadeOf = [&](const char* name) {
         const FirstPersonAnimationClip* clip = set.Find(name);
@@ -296,6 +330,26 @@ AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set
         if (s.Name == "TacReload" || s.Name == "EmptyReload") s.Events = {{K::kEventRefill, 1.0f}};
         L.States.push_back(std::move(s));
     }
+    // Real ADS clips: a clip named "ADS_<action>" becomes an "ADS <action>" state tagged ADS (and
+    // what the hip action is tagged, minus ADSCarry), which the action's trigger reaches instead
+    // of the hip state while Aim is held. Without one, the hip state is carried onto the sights.
+    std::vector<std::string> adsVariants;
+    for (const char* action : {"TacReload", "EmptyReload", "MagCheck", "Inspect"}) {
+        const FirstPersonAnimationClip* clip = set.Find(std::string("ADS_") + action);
+        const int hip = L.FindState(action);
+        if (!clip || hip < 0) continue;
+        AC::State s = L.States[hip];
+        s.Name = std::string("ADS ") + action;
+        s.Tags.erase(std::remove(s.Tags.begin(), s.Tags.end(), std::string(K::kTagAdsCarry)), s.Tags.end());
+        s.Tags.insert(s.Tags.begin(), K::kTagAds);
+        s.Position += glm::vec2(260.0f, 0.0f);
+        s.Loop = clip->Loop;
+        s.Motions.assign(2, {});
+        if (!clip->ArmsBindPose) s.Motions[0].Clip = clip->ArmsClip;
+        s.Motions[1].Clip = clip->WeaponClip;
+        L.States.push_back(std::move(s));
+        adsVariants.push_back(action);
+    }
     L.DefaultState = L.FindState(set.DefaultState) >= 0 ? set.DefaultState : "Idle";
 
     auto cond = [](const char* p, AC::Op op, float v = 0.0f) { return AC::Condition{p, op, v}; };
@@ -303,10 +357,10 @@ AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set
     const AC::Condition still = cond(K::kSpeed, AC::Op::Less, 0.05f);
     const AC::Condition sprint = cond(K::kSprint, AC::Op::If), noSprint = cond(K::kSprint, AC::Op::IfNot);
     const AC::Condition aim = cond(K::kAim, AC::Op::If), noAim = cond(K::kAim, AC::Op::IfNot);
-    auto has = [&](const char* s) { return L.FindState(s) >= 0; };
-    auto add = [&](AC::Source kind, const char* from, const char* to, std::vector<AC::Condition> cs,
+    auto has = [&](const std::string& s) { return L.FindState(s) >= 0; };
+    auto add = [&](AC::Source kind, const std::string& from, const std::string& to, std::vector<AC::Condition> cs,
                    float duration, bool exitTime = false) {
-        if ((kind == AC::Source::State && !has(from)) || (std::string(to) != AC::kExitState && !has(to))) return;
+        if ((kind == AC::Source::State && !has(from)) || (to != AC::kExitState && !has(to))) return;
         AC::Transition t;
         t.FromKind = kind;
         if (kind == AC::Source::State) t.From = from;
@@ -329,6 +383,19 @@ AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set
     // Any State, highest priority first. Holster can't cut Draw short (equal priority) and Draw
     // only leaves Holstered, so 1/2/scroll mid-swap simply queues.
     add(S::Any, "", "Holster", {cond(K::kEquipped, AC::Op::IfNot)}, fadeOf("Holster"));
+    // An action's ADS clip goes first: Any State transitions are checked in order, so with Aim
+    // held it takes the trigger before the hip state can.
+    const auto actionConditions = [&](const std::string& action) -> std::vector<AC::Condition> {
+        if (action == "EmptyReload") return {cond(K::kReload, AC::Op::If), cond(K::kAmmo, AC::Op::Less, 0.5f)};
+        if (action == "TacReload") return {cond(K::kReload, AC::Op::If), cond(K::kAmmo, AC::Op::Greater, 0.5f)};
+        if (action == "MagCheck") return {cond(K::kMagCheck, AC::Op::If)};
+        return {cond(K::kInspect, AC::Op::If)};
+    };
+    for (const std::string& action : adsVariants) {
+        std::vector<AC::Condition> cs = actionConditions(action);
+        cs.push_back(aim);
+        add(S::Any, "", "ADS " + action, std::move(cs), fadeOf(("ADS_" + action).c_str()));
+    }
     add(S::Any, "", "EmptyReload", {cond(K::kReload, AC::Op::If), cond(K::kAmmo, AC::Op::Less, 0.5f)}, fadeOf("EmptyReload"));
     add(S::Any, "", "TacReload", {cond(K::kReload, AC::Op::If), cond(K::kAmmo, AC::Op::Greater, 0.5f)}, fadeOf("TacReload"));
     add(S::Any, "", "Melee", {cond(K::kMelee, AC::Op::If)}, fadeOf("Melee"));
@@ -357,9 +424,12 @@ AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set
     add(S::State, "Sprint", sprintOut, {still}, fadeOf("SprintToIdle"));
 
     // One-shots return through Exit when their clip ends; Entry then picks the resting state.
-    for (const char* s : {"IdleToSprint", "SprintToIdle", "Regrip", "Fire", "Inspect", "MagCheck", "Melee",
-                          "TacReload", "EmptyReload", "Draw"})
+    for (const char* s : {"IdleToSprint", "SprintToIdle", "Regrip", "Fire", "Inspect", "Melee", "Draw"})
         add(S::State, s, exitTo, {}, 0.1f, true);
+    // The reloads and the mag check settle back over longer, so a carried ADS action eases its
+    // arms into the aim pose instead of snapping.
+    for (const char* s : {"MagCheck", "TacReload", "EmptyReload"}) add(S::State, s, exitTo, {}, 0.3f, true);
+    for (const std::string& action : adsVariants) add(S::State, "ADS " + action, exitTo, {}, 0.3f, true);
     add(S::State, "Holster", "Holstered", {}, 0.0f, true);
     add(S::State, "Holstered", "Draw", {cond(K::kEquipped, AC::Op::If)}, fadeOf("Draw"));
     return c;
