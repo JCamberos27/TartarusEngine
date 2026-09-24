@@ -188,6 +188,10 @@ json WeaponProceduralSettings::ToJson() const {
         {"smoothing", SpringJson(r.Smoothing)},
         {"cameraPitch", r.CameraPitch.ToJson()}, {"cameraYaw", r.CameraYaw.ToJson()},
         {"cameraYawRange", Vec(r.CameraYawRange)}, {"cameraScale", r.CameraScale},
+        {"cameraSmoothing", SpringJson(r.CameraSmoothing)},
+        {"aimPitch", Vec(r.AimPitch)}, {"aimYaw", Vec(r.AimYaw)}, {"aimRecovery", r.AimRecovery},
+        {"aimRecoveryDelay", r.AimRecoveryDelay}, {"aimRecoverySpeed", r.AimRecoverySpeed},
+        {"hipProcedural", r.HipProcedural}, {"boltCycle", r.BoltCycle}, {"boltBone", r.BoltBone},
     };
     const auto& w = Sway;
     j["sway"] = {
@@ -254,6 +258,15 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.CurveField("cameraYaw", o.CameraYaw);
         r.Vector("cameraYawRange", o.CameraYawRange);
         r.Number("cameraScale", o.CameraScale);
+        r.Spring("cameraSmoothing", o.CameraSmoothing);
+        r.Vector("aimPitch", o.AimPitch);
+        r.Vector("aimYaw", o.AimYaw);
+        r.Number("aimRecovery", o.AimRecovery);
+        r.Number("aimRecoveryDelay", o.AimRecoveryDelay);
+        r.Number("aimRecoverySpeed", o.AimRecoverySpeed);
+        r.Bool("hipProcedural", o.HipProcedural);
+        r.Number("boltCycle", o.BoltCycle);
+        r.String("boltBone", o.BoltBone);
     });
     root.Object("sway", [&](Reader& r) {
         auto& o = s.Sway;
@@ -389,7 +402,7 @@ void WeaponProceduralState::Reset() {
     m_Rng = rng;
 }
 
-void WeaponProceduralState::OnShot(const WeaponProceduralSettings& s, bool ads) {
+void WeaponProceduralState::OnShot(const WeaponProceduralSettings& s, bool ads, bool cycleBolt) {
     const auto& r = s.Recoil;
     if (!r.Enabled) return;
     Shot shot;
@@ -397,6 +410,11 @@ void WeaponProceduralState::OnShot(const WeaponProceduralSettings& s, bool ads) 
     shot.Rot = {Pick(m_Rng, r.PitchRange), Pick(m_Rng, r.YawRange), Pick(m_Rng, r.RollRange)};
     shot.Pos = {Pick(m_Rng, r.SideRange), Pick(m_Rng, r.UpRange), Pick(m_Rng, r.KickRange)};
     shot.CamYaw = Pick(m_Rng, r.CameraYawRange);
+    const glm::vec2 climb(Pick(m_Rng, r.AimPitch), Pick(m_Rng, r.AimYaw));
+    m_AimPending += climb * shot.Scale;
+    m_AimRecoverable += climb * shot.Scale * std::clamp(r.AimRecovery, 0.0f, 1.0f);
+    m_SinceShot = 0.0f;
+    if (cycleBolt) m_BoltTime = 0.0f;
     // A runaway trigger can't grow this without bound: the oldest shot has done its work.
     if (m_Shots.size() >= 32) m_Shots.erase(m_Shots.begin());
     m_Shots.push_back(shot);
@@ -446,8 +464,38 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     m_RecoilPos.Step(recoilPos, dt, r.Smoothing);
     pose.Rotation += m_RecoilRot.X;
     pose.Position += m_RecoilPos.X;
+    if (r.CameraSmoothing.Frequency > 0.0f) {
+        m_Camera.Step(glm::vec3(camera, 0.0f), dt, r.CameraSmoothing);
+        camera = glm::vec2(m_Camera.X);
+    }
     pose.CameraKick = camera;
     pose.Pivot = r.Pivot;
+
+    // Aim climb: fed in over ~30 ms (a round's impulse, not a one-frame snap), then - once the
+    // trigger rests - the recoverable share eases back.
+    {
+        const float feed = std::min(1.0f, dt / 0.03f);
+        glm::vec2 kick = m_AimPending * feed;
+        m_AimPending -= kick;
+        m_SinceShot += dt;
+        if (m_SinceShot >= r.AimRecoveryDelay && r.AimRecoverySpeed > 0.0f) {
+            const float len = glm::length(m_AimRecoverable);
+            if (len > 1e-6f) {
+                const float step = std::min(len, r.AimRecoverySpeed * dt);
+                const glm::vec2 back = m_AimRecoverable * (step / len);
+                m_AimRecoverable -= back;
+                kick -= back;
+            }
+        }
+        pose.AimKick = r.Enabled ? kick : glm::vec2(0.0f);
+    }
+    // Bolt: slams back over the first 35% of its cycle (easing out), returns over the rest.
+    m_BoltTime += dt;
+    if (r.Enabled && r.BoltCycle > 0.0f && m_BoltTime < r.BoltCycle) {
+        const float u = m_BoltTime / r.BoltCycle;
+        pose.Bolt = u < 0.35f ? std::sin(glm::half_pi<float>() * u / 0.35f)
+                              : 0.5f + 0.5f * std::cos(glm::pi<float>() * (u - 0.35f) / 0.65f);
+    }
 
     // Sway: the gun lags behind a turn and trails against movement.
     const auto& w = s.Sway;
