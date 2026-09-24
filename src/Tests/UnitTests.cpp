@@ -2204,6 +2204,18 @@ void TestIKSolver() {
         CHECK(glm::length(IK::Position(gg[2]) - b) < 1e-4f);
         CHECK(glm::dot(glm::normalize(glm::cross(IK::Position(gg[3]) - a, IK::Position(gg[2]) - a)), bendAxis) > 0.999f);
     }
+    // A tiny reach still lands: a target swung ~2e-4 rad off the current a->c line (a hand
+    // holding a gun through the idle) must be met exactly, not left short by a "near parallel"
+    // cut-off - that was the left hand flickering on the AK's handguard.
+    {
+        IK::Pose p = pose;
+        std::vector<glm::mat4> gg = g;
+        const glm::vec3 ac = c - a;
+        const glm::vec3 side = glm::normalize(glm::cross(ac, bendAxis));
+        const glm::vec3 target = c + side * (glm::length(ac) * 2e-4f);
+        CHECK(IK::SolveTwoBone(p, parents, gg, 1, 2, 3, target, nullptr, 1.0f));
+        CHECK(glm::length(IK::Position(gg[3]) - target) < glm::length(ac) * 2e-5f);
+    }
     // Out of reach: the chain straightens toward the target instead of breaking.
     {
         IK::Pose p = pose;
