@@ -47,7 +47,7 @@ void OffsetBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::ma
 // solved one (1). Returns false when the chain is degenerate (zero-length bones) or invalid.
 bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals,
                   int upper, int lower, int end, const glm::vec3& targetPos, const glm::quat* targetRot,
-                  float weight);
+                  float weight, float swivel = 0.0f);
 
 // Rotates `bone` so its local axis `aimAxis` points at `targetPos`, by at most `maxAngleDeg`,
 // blended by `weight`.
@@ -56,7 +56,10 @@ void AimBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>
 
 // Runs an IK Rig component on `pose` for `model`: its bone offsets (runtime, written by game
 // code), then its limbs and look-at. No-op when the rig is disabled or its weight is 0.
-void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose);
+// `gripPose`, when given, is where limbs that keep their animated offset read that offset from
+// instead of `pose`: a crossfade blends two arm shapes joint by joint, and even when both hold
+// the gun the same way the blend doesn't, so the animator passes the pose it's fading into.
+void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const Pose* gripPose = nullptr);
 
 // The bones an enabled limb or look-at names that `model` doesn't have (an empty name counts),
 // for the Inspector's warning. Empty when the rig can run as set up.
