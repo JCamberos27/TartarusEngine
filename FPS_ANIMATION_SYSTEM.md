@@ -183,6 +183,15 @@ A reload, mag check or inspect while aiming can play in one of two ways, per act
   - per arm, the elbow swivel onto the aim pose's elbow (`ads.matchElbows`);
   - the twist-helper bone locals the IK doesn't solve (`ads.matchTwist`).
 
+  With `ads.actionBones` (default `clavicle_l`) the gun correction isn't needed: every other
+  bone is held in the aim pose through `IKRigComponent::HoldPose` (the aim clip, still playing
+  from where the aim state was), fully while the action is in the blend and eased off over
+  0.3 s after, and the action's hand keeps its grip relative to the gun, so only the left arm
+  plays the clip. `WriteAdsHold` in `FirstPersonPresentation` drives it. Per state,
+  `ads.gunMotion` adds back a share of the clip's own gun turn / movement on top
+  (`AdsGunMotion`, about the rear sight `ads.sightPivot` ahead of the eye) - the mag check's
+  tip that brings the magazine into view.
+
   With all three the solved first frame *is* the aim pose, so the action starts and ends on
   the sights and moves like the hip clip in between. `EvaluateAdsCarry` weights the correction
   by how much of the crossfade stack the action owns, times how long aim has been held

@@ -12,7 +12,10 @@
     "carryTag": "ADSCarry",
     "matchElbows": true,
     "matchTwist": true,
-    "aimHoldTime": 0.15
+    "aimHoldTime": 0.15,
+    "actionBones": ["clavicle_l"],
+    "gunMotion": {"MagCheck": {"rotation": 0.6, "position": 0.2}},
+    "sightPivot": 0.25
   },
   "gameplay": {
     "allowFullAuto": true,

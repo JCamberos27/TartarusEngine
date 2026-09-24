@@ -7,6 +7,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include "RotationMath.h"
+#include "Animation.h" // LocalTRS
 #include <entt/entt.hpp>
 
 class Model;
@@ -583,6 +584,12 @@ struct IKRigComponent {
     // Extra local rotations (pre-multiplied onto a bone's animated local rotation, scaled by
     // Weight), applied before everything else - e.g. twist bones the limbs don't solve.
     std::vector<std::pair<std::string, glm::quat>> LocalRotations;
+    // A pose the bones are pulled toward first, each by its HoldWeights entry (node order; empty
+    // = none) - e.g. the aim pose keeping the gun and right arm on the sights while a reload
+    // plays on the left arm. A limb whose hand is held keeps the held pose's grip on its target;
+    // one that isn't keeps its animated grip, so it plays its motion relative to the target.
+    std::vector<LocalTRS> HoldPose;
+    std::vector<float> HoldWeights;
 };
 
 struct AnimatorComponent {

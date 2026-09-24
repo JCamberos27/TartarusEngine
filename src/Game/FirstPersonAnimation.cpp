@@ -162,6 +162,22 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         ads.MatchElbows = Bool(*a, "matchElbows", ads.MatchElbows);
         ads.MatchTwist = Bool(*a, "matchTwist", ads.MatchTwist);
         ads.AimHoldTime = Number(*a, "aimHoldTime", ads.AimHoldTime);
+        if (const auto m = a->find("gunMotion"); m != a->end() && m->is_object()) {
+            ads.GunMotions.clear();
+            for (const auto& [state, v] : m->items()) {
+                if (!v.is_object() || state.empty()) continue;
+                FirstPersonAdsSettings::GunMotion g{state, Number(v, "rotation", 0.0f), Number(v, "position", 0.0f)};
+                g.Rotation = std::clamp(std::isfinite(g.Rotation) ? g.Rotation : 0.0f, 0.0f, 1.0f);
+                g.Position = std::clamp(std::isfinite(g.Position) ? g.Position : 0.0f, 0.0f, 1.0f);
+                ads.GunMotions.push_back(g);
+            }
+        }
+        ads.SightPivot = Number(*a, "sightPivot", ads.SightPivot);
+        if (const auto b = a->find("actionBones"); b != a->end() && b->is_array()) {
+            ads.ActionBones.clear();
+            for (const auto& bone : *b)
+                if (bone.is_string() && !bone.get<std::string>().empty()) ads.ActionBones.push_back(bone.get<std::string>());
+        }
     }
     {
         FirstPersonAdsSettings& ads = parsed.Ads;
@@ -169,6 +185,7 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         ads.ViewModelZoom = std::clamp(std::isfinite(ads.ViewModelZoom) ? ads.ViewModelZoom : 1.0f, 1.0f, 4.0f);
         ads.ZoomTime = std::clamp(std::isfinite(ads.ZoomTime) ? ads.ZoomTime : 0.2f, 0.0f, 2.0f);
         ads.AimHoldTime = std::clamp(std::isfinite(ads.AimHoldTime) ? ads.AimHoldTime : 0.15f, 0.0f, 2.0f);
+        ads.SightPivot = std::clamp(std::isfinite(ads.SightPivot) ? ads.SightPivot : 0.25f, 0.0f, 2.0f);
     }
     if (const auto p = root.find("procedural"); p != root.end()) {
         std::string why;
@@ -254,7 +271,11 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
         {"matchElbows", Ads.MatchElbows},
         {"matchTwist", Ads.MatchTwist},
         {"aimHoldTime", Ads.AimHoldTime},
+        {"actionBones", Ads.ActionBones},
+        {"sightPivot", Ads.SightPivot},
     };
+    j["ads"]["gunMotion"] = json::object();
+    for (const auto& m : Ads.GunMotions) j["ads"]["gunMotion"][m.State] = {{"rotation", m.Rotation}, {"position", m.Position}};
     j["procedural"] = Procedural.ToJson();
     RoundFloats(j);
     return j.dump(2);

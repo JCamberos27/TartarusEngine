@@ -209,6 +209,7 @@ void FirstPersonPresentation::Stop(World& world) {
     m_Controller.reset();
     m_Assets = nullptr;
     m_AdsCarry = {};
+    m_AdsHolding = false;
     m_CameraBone.clear();
     m_ViewModelFov = -1.0f;
     m_CameraBoneWarned = false;
@@ -368,6 +369,8 @@ void FirstPersonPresentation::SetupAdsCarry() {
     in.Controller = m_Controller.get();
     in.Settings = &m_Set.Ads;
     in.ArmsTrack = TrackOr(*m_Controller, "arms", 0);
+    in.Weapon = m_WeaponModel.get();
+    in.WeaponTrack = TrackOr(*m_Controller, "weapon", 1);
     in.GunBone = m_Set.WeaponSocket.empty() ? m_Set.Procedural.IK.GunBone : m_Set.WeaponSocket;
     in.CameraBone = m_CameraBone;
     in.Rig = m_UsesIK && m_World ? m_World->Registry.try_get<IKRigComponent>(m_Arms) : nullptr;
@@ -454,6 +457,17 @@ void FirstPersonPresentation::WriteIK() {
     const AdsCarrySample carry = SampleAdsCarry(m_TickDt);
     adsR = carry.R;
     adsT = carry.T;
+    WriteAdsHold(*rig, carry);
+    // Actions that keep some of their own gun motion (the mag check tipping the mag into view),
+    // on top of the hold, turned about the rear sight so the sights stay near the centre.
+    if (carry.Action && m_ArmsModel && !rig->HoldPose.empty())
+        if (const auto* motion = m_Set.Ads.GunMotionFor(carry.Action->StateName)) {
+            const std::string& gun = m_Set.WeaponSocket.empty() ? m_Set.Procedural.IK.GunBone : m_Set.WeaponSocket;
+            const glm::vec3 sight = Ci * glm::vec3(0.0f, 0.0f, -m_Set.Ads.SightPivot) / m_Scale;
+            AdsGunMotion(*m_ArmsModel, carry, m_ArmsModel->NodeIndex(gun),
+                         m_CameraBone.empty() ? -1 : m_ArmsModel->NodeIndex(m_CameraBone), sight, motion->Rotation,
+                         motion->Position, adsR, adsT);
+        }
     rig->LimbA.Swivel = carry.Swivel[0];
     rig->LimbB.Swivel = carry.Swivel[1];
     rig->LocalRotations.clear();
@@ -465,6 +479,48 @@ void FirstPersonPresentation::WriteIK() {
     rig->Offsets[kProceduralOffset].Position = Ci * p.Position / m_Scale;
     rig->Offsets[kProceduralOffset].Rotation = NormalizeRotation(Ci * p.RotationQuat() * C);
     rig->Offsets[kProceduralOffset].Pivot = Ci * p.Pivot / m_Scale;
+}
+
+// With action bones, a carried action plays only on them: the aim clip holds the rest of the
+// rig (the gun and the other hand) in the IK's hold pose, still playing from where the aim state
+// was when the action began, so the sights keep their idle life instead of freezing.
+void FirstPersonPresentation::WriteAdsHold(IKRigComponent& rig, const AdsCarrySample& carry) {
+    const AdsCarryResult& r = m_AdsCarry;
+    const bool valid = !r.HoldMask.empty() && r.AimClip >= 0 && m_ArmsModel && (int)r.HoldMask.size() == m_ArmsModel->NodeCount();
+    // Fully held while the action is anywhere in the blend (a partial hold would let the clip's
+    // gun motion through during its crossfades), by how far aim is held; once it has faded out,
+    // eased off over kRelease so the held aim clip hands back to the aim state without a step.
+    constexpr float kRelease = 0.3f;
+    float weight = 0.0f;
+    if (valid && carry.Action) {
+        weight = std::clamp(m_AdsHold, 0.0f, 1.0f);
+        m_AdsHoldLast = weight;
+        m_AdsReleaseT = 0.0f;
+    } else if (valid && m_AdsHolding) {
+        m_AdsReleaseT += m_TickDt;
+        const float x = std::clamp(m_AdsReleaseT / kRelease, 0.0f, 1.0f);
+        weight = m_AdsHoldLast * (1.0f - x * x * (3.0f - 2.0f * x));
+    }
+    if (weight <= 0.0f) {
+        rig.HoldPose.clear();
+        rig.HoldWeights.clear();
+        m_AdsHolding = false;
+        return;
+    }
+    if (!m_AdsHolding) {
+        // Pick the aim clip up where it was playing (if it's still in the blend), not at 0.
+        m_AdsAimTime = 0.0f;
+        if (const auto* ac = Animator(); ac && !ac->Layers.empty())
+            for (const auto& item : ac->Layers[0].Stack)
+                if (item.State == r.Reference) m_AdsAimTime = item.Phase * r.AimLength;
+        m_AdsHolding = true;
+    } else {
+        m_AdsAimTime += m_TickDt;
+    }
+    m_ArmsModel->SampleLocalPose(r.AimClip, m_AdsAimTime, r.AimLoop ? AnimationWrapMode::Loop : AnimationWrapMode::ClampForever,
+                                 rig.HoldPose);
+    rig.HoldWeights.resize(r.HoldMask.size());
+    for (size_t i = 0; i < r.HoldMask.size(); ++i) rig.HoldWeights[i] = r.HoldMask[i] * weight;
 }
 
 void FirstPersonPresentation::ReloadIfChanged(float dt) {
@@ -486,7 +542,7 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
     const FirstPersonAdsSettings& oldAds = m_Set.Ads;
     const bool remeasure = rebuildIK || oldAds.ReferenceState != fresh.Ads.ReferenceState ||
                            oldAds.CarryTag != fresh.Ads.CarryTag || oldAds.MatchElbows != fresh.Ads.MatchElbows ||
-                           oldAds.MatchTwist != fresh.Ads.MatchTwist;
+                           oldAds.MatchTwist != fresh.Ads.MatchTwist || oldAds.ActionBones != fresh.Ads.ActionBones;
     m_Set.Gameplay = fresh.Gameplay;
     m_Set.Ads = fresh.Ads;
     m_Set.Procedural = fresh.Procedural;
