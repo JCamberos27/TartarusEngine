@@ -1,15 +1,16 @@
 {
+  "folder": "assets/quantum/Textures/Head",
   "guid": "53c56365fccaaaf6",
-  "metaVersion": 1,
-  "type": "texture",
   "importer": {
-    "textureType": 0,
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
     "generateMipmaps": true,
     "isSRGB": true,
-    "filterMode": 2,
-    "wrapMode": 0,
     "maxTextureSize": 4096,
-    "anisoLevel": 16,
-    "compression": 2
-  }
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
 }
