@@ -442,7 +442,16 @@
       "wander": 0.12,
       "wanderReturn": 0.25,
       "burstGrowth": 0.08,
-      "burstGrowthMax": 2.0
+      "burstGrowthMax": 2.0,
+      "shakeAmount": 0.28,
+      "shakeMax": [
+        0.35,
+        0.3,
+        0.9
+      ],
+      "shakeFrequency": 18.0,
+      "shakeDecay": 2.6,
+      "shakeAdsScale": 0.8
     }
   },
   "viewRotation": [
