@@ -41,6 +41,11 @@ struct FirstPersonWeaponGameplay {
     float AdsZoom = 1.0f;
     float AdsViewModelZoom = 1.0f;
     float AdsZoomTime = 0.2f;
+    // Each round shoves the dynamic body the bore hits: ImpactImpulse N*s at the hit point
+    // (so it spins as well as flies), capped at ImpactMaxSpeed m/s of velocity change per round
+    // so light props don't rocket off. 0 = rounds push nothing.
+    float ImpactImpulse = 0.0f;
+    float ImpactMaxSpeed = 8.0f;
 };
 
 struct FirstPersonAnimationSet {
