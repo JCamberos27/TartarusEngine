@@ -108,7 +108,7 @@ void OffsetBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::ma
 
 bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals,
                   int upper, int lower, int end, const glm::vec3& targetPos, const glm::quat* targetRot,
-                  float weight) {
+                  float weight, float swivel) {
     if (!ValidNode(pose, upper) || !ValidNode(pose, lower) || !ValidNode(pose, end)) return false;
     weight = std::clamp(weight, 0.0f, 1.0f);
     if (weight <= 0.0f) return true;
@@ -141,8 +141,10 @@ bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::
     const glm::quat q0 = glm::angleAxis(acAb1 - acAb0, axis);
     const glm::quat q1 = glm::angleAxis(baBc1 - baBc0, axis);
     const glm::vec3 at = t - a;
-    const glm::quat q2 = glm::length(at) > 1e-8f ? RotationBetween(glm::normalize(ac), glm::normalize(at))
-                                                 : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    glm::quat q2 = glm::length(at) > 1e-8f ? RotationBetween(glm::normalize(ac), glm::normalize(at))
+                                           : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    // Swivel: the whole solved limb turns about the root->target line, so the end stays on it.
+    if (swivel != 0.0f && glm::length(at) > 1e-8f) q2 = glm::angleAxis(swivel, glm::normalize(at)) * q2;
 
     const glm::quat endRot = Rotation(globals[end]);
     const glm::quat newGa = glm::normalize(q2 * q0 * ga);
@@ -178,7 +180,7 @@ void AimBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>
     SetGlobal(pose, parents, globals, bone, pos, glm::normalize(delta * rot));
 }
 
-void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose) {
+void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const Pose* gripPose) {
     const float w = std::clamp(rig.Weight, 0.0f, 1.0f);
     if (!rig.Enabled || w <= 0.0f || pose.empty() || (int)pose.size() != model.NodeCount()) return;
 
@@ -187,7 +189,16 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose) {
     thread_local std::vector<glm::mat4> globals;
     parents.resize(pose.size());
     for (int i = 0; i < (int)pose.size(); ++i) parents[i] = model.NodeParent(i);
+    for (const auto& [bone, rot] : rig.LocalRotations) {
+        const int i = model.NodeIndex(bone);
+        if (i >= 0)
+            pose[i].R = glm::normalize(glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::normalize(rot), w) * pose[i].R);
+    }
     ComputeGlobals(pose, parents, globals);
+    thread_local std::vector<glm::mat4> gripGlobals;
+    const bool ownGrip = gripPose && gripPose->size() == pose.size();
+    if (ownGrip) ComputeGlobals(*gripPose, parents, gripGlobals);
+    const std::vector<glm::mat4>& grip = ownGrip ? gripGlobals : globals;
 
     // Limbs that keep their animated grip remember where the end sat relative to its target
     // BEFORE any offset moves the target.
@@ -203,15 +214,17 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose) {
         Limb limb{l, model.NodeIndex(l->Upper), model.NodeIndex(l->Lower), model.NodeIndex(l->End),
                   model.NodeIndex(l->Target)};
         if (limb.Upper < 0 || limb.Lower < 0 || limb.End < 0 || limb.Target < 0) continue;
-        if (l->KeepAnimatedOffset) limb.Relative = glm::inverse(globals[limb.Target]) * globals[limb.End];
+        if (l->KeepAnimatedOffset) limb.Relative = glm::inverse(grip[limb.Target]) * grip[limb.End];
         limbs[limbCount++] = limb;
     }
 
     for (const IKBoneOffset& off : rig.Offsets) {
         const int i = model.NodeIndex(off.Bone);
         if (i < 0) continue;
+        const int pivotBone = off.PivotBone.empty() ? i : model.NodeIndex(off.PivotBone);
         const glm::quat rot = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::normalize(off.Rotation), w);
-        OffsetBone(pose, parents, globals, i, off.Position * w, rot, Position(globals[i]) + off.Pivot);
+        OffsetBone(pose, parents, globals, i, off.Position * w, rot,
+                   Position(globals[pivotBone >= 0 ? pivotBone : i]) + off.Pivot);
     }
 
     // The look-at goes before the limbs: aiming a spine or head bone swings the arms hanging off
@@ -230,7 +243,8 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose) {
                                                                  : globals[limb.Target];
         const glm::quat goalRot = Rotation(goal);
         SolveTwoBone(pose, parents, globals, limb.Upper, limb.Lower, limb.End, Position(goal),
-                     limb.Settings->MatchRotation ? &goalRot : nullptr, limb.Settings->Weight * w);
+                     limb.Settings->MatchRotation ? &goalRot : nullptr, limb.Settings->Weight * w,
+                     limb.Settings->Swivel * w);
     }
 }
 

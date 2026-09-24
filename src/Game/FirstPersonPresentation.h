@@ -114,6 +114,11 @@ private:
     void SetupMuzzle(int bolt, const std::vector<int>& parents);
     void SetupAdsActions(AssetLibrary& assets, const AnimatorController& ctrl);
     void ShotImpact(); // a round leaves the bore: shove whatever it hits
+    struct AdsAction;
+    // How far the current blend is into an ADS action, and that action's correction, weighted.
+    // `dt` > 0 predicts the controller's next advance (for offsets written before it runs).
+    bool AdsActionCorrection(float dt, glm::quat& rotation, glm::vec3& translation, float swivel[2] = nullptr,
+                             const AdsAction** action = nullptr, float* weight = nullptr) const;
     void ReloadIfChanged(float dt);
 
     World* m_World = nullptr;
@@ -153,9 +158,22 @@ private:
     // Reloads and the mag check with the sights up: the hip clip plays exactly as authored and
     // the whole view model is carried rigidly by the move that takes that clip's first-frame gun
     // onto Aim's (camera-bone relative, rig space), so the hands never leave the magazine.
-    struct AdsAction { int State = -1; glm::quat R{1.0f, 0.0f, 0.0f, 0.0f}; glm::vec3 T{0.0f}; };
+    // Swivel: per arm (right, left), the constant elbow swing that makes the IK'd clip's first
+    // frame hold its elbows exactly where Aim does - so the action starts and ends in Aim's pose.
+    struct AdsAction {
+        int State = -1;
+        glm::quat R{1.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec3 T{0.0f};
+        float Swivel[2] = {0.0f, 0.0f};
+        // The arms' other bones (twist helpers) whose local rotation the IK'd first frame still
+        // doesn't share with Aim's: the local rotation that makes it so.
+        std::vector<std::pair<std::string, glm::quat>> Locals;
+    };
     std::vector<AdsAction> m_AdsActions;
     float m_AdsHold = 0.0f;       // 0..1, eased toward "aim held"
+    float m_TickDt = 0.0f;        // the last Tick's dt: the step the animators take next
+    // IK rig offset slots on the arms: the ADS-action gun correction, then the procedural pose.
+    static constexpr int kAdsOffset = 0, kProceduralOffset = 1;
     float m_Zoom = 0.0f, m_ZoomRate = 0.0f; // ADS zoom 0..1, critically damped spring
     bool m_AimPointValid = false;
     float m_LookYaw = 0.0f, m_LookPitch = 0.0f, m_PrevLookYaw = 0.0f, m_PrevLookPitch = 0.0f;

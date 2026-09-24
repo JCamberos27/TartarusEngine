@@ -547,6 +547,9 @@ struct IKLimb {
     bool KeepAnimatedOffset = true;
     bool MatchRotation = true;     // also turn the end to the goal's rotation
     float Weight = 1.0f;
+    // Runtime: radians to swing the solved limb about its root->end line (the elbow's "door"),
+    // after the solve - the end stays put. Game code writes it (first-person ADS actions do).
+    float Swivel = 0.0f;
 };
 
 // A procedural rigid move of one bone and everything under it, in model space. Runtime only:
@@ -556,6 +559,9 @@ struct IKBoneOffset {
     glm::vec3 Position{0.0f};
     glm::quat Rotation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3 Pivot{0.0f};         // rotation centre, relative to the bone's own position
+    // When set, the rotation centre is this bone's position (plus Pivot) in the same pose,
+    // instead of the offset bone's own.
+    std::string PivotBone;
 };
 
 // Post-process IK on an Animator Controller's output pose (IK.h): procedural bone offsets, up to
@@ -574,6 +580,9 @@ struct IKRigComponent {
 
     // --- runtime (not serialized) ---
     std::vector<IKBoneOffset> Offsets;
+    // Extra local rotations (pre-multiplied onto a bone's animated local rotation, scaled by
+    // Weight), applied before everything else - e.g. twist bones the limbs don't solve.
+    std::vector<std::pair<std::string, glm::quat>> LocalRotations;
 };
 
 struct AnimatorComponent {
