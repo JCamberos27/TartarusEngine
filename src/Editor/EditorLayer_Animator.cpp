@@ -1243,11 +1243,9 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                     ImGui::SameLine();
                     if (ImGui::GetCursorPosX() + w > right) { ImGui::NewLine(); ImGui::SetCursorPosX(colX); }
                 }
-                const char* desc = KnownTagDescription(s.Tags[k]);
+                const char* desc = FirstPersonAnimatorContract::KnownTagDescription(s.Tags[k]);
                 char tip[512];
-                std::snprintf(tip, sizeof tip, "%s
-
-Click to remove.", desc ? desc : "A custom tag: game code reads it with HasTag().");
+                std::snprintf(tip, sizeof tip, "%s\n\nClick to remove.", desc ? desc : "A custom tag: game code reads it with HasTag().");
                 if (ActionButton(chip.c_str(), tip, true)) removeTag = k;
                 ImGui::PopID();
             }
@@ -1279,7 +1277,7 @@ Click to remove.", desc ? desc : "A custom tag: game code reads it with HasTag()
                 if (ImGui::InputTextWithHint("##customtag", "Custom tag, then Enter", custom, sizeof custom,
                                              ImGuiInputTextFlags_EnterReturnsTrue) && custom[0]) {
                     if (std::find(s.Tags.begin(), s.Tags.end(), custom) == s.Tags.end()) { s.Tags.push_back(custom); changed = true; }
-                    custom[0] = ' ';
+                    custom[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::EndPopup();

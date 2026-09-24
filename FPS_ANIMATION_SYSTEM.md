@@ -85,12 +85,15 @@ a frame never mixes two placements.
 | `src/Game/AnimatorController.{h,cpp}` | The general animator: `.controller` v2 format, `AdvanceAnimator` (state machine), sampling and blending, the tracks/driver group, `BuildFirstPersonController`'s output format |
 | `src/Game/FirstPersonAnimation.{h,cpp}` | The weapon definition (`.fpsanim` v1/v2), `FirstPersonAnimatorContract` (the parameter, tag and event names), `BuildFirstPersonController` (the standard FPS graph), `FirstPersonReloadButton`, `FirstPersonRegripDelay` |
 | `src/Game/FirstPersonPresentation.{h,cpp}` | The runtime driver: `Start`/`Stop`/`Update`/`Tick`, fire, reload, equip, ADS recoil and walk bob |
+| `src/Game/FirstPersonAdsCarry.{h,cpp}` | Carrying hip clips onto the sights: `BuildAdsCarry` (measures each `ADSCarry` state against the aim pose), `EvaluateAdsCarry` (how much of the crossfade stack a carried action owns), and the per-weapon report the Inspector shows |
 | `src/Game/Components.h` | `AnimatorControllerComponent` (params, tags, events, `Track`, `Driver`), `FirstPersonControllerComponent`, `ViewModelTag` |
-| `src/Editor/EditorLayer_Animator.cpp` | The Animator window, the component's Inspector section, and the `.fpsanim` / `.controller` asset inspectors |
+| `src/Editor/EditorLayer_Animator.cpp` | The Animator window (state tags as chips with a known-tag picker), the component's Inspector section, and the `.controller` asset inspector |
+| `src/Editor/EditorLayer_WeaponInspector.cpp` | The `.fpsanim` weapon Inspector: overview badges, undo/redo, and the Animation / Aim-Down-Sights / Gameplay / Rigs / Recoil / Movement / IK sections |
+| `src/Editor/EditorPropertyRows.{h,cpp}` | `PropertyRows`: the shared label-column rows, sections, badges and reset buttons the weapon Inspector is built from |
 | `src/Renderer/Model.{h,cpp}` | Import, skinning, `SampleLocalPose` / `ApplyLocalPose`, `NodeTransform` |
 | `src/Renderer/SceneRenderer.cpp`, `RenderFrameContext.h` | The view-model sub-pass (`ViewModelFov`) |
 | `src/Core/InputMap.{h,cpp}` | Default bindings and `MergeDefaults` |
-| `src/Tests/UnitTests.cpp` | `TestAnimatorController`, `TestFirstPersonAnimationSet`, `TestFirstPersonAnimationFSM` (drives the AK graph through the real runtime), `TestInputMap` |
+| `src/Tests/UnitTests.cpp` | `TestAnimatorController`, `TestFirstPersonAnimationSet`, `TestFirstPersonAnimationFSM` (drives the AK graph through the real runtime), `TestFirstPersonAds` (the `ads` block, ADS variants, carry weights), `TestInputMap` |
 | `src/main.cpp` | Play-loop wiring; `--upgrade-fpsanim` (v1 → controller) |
 | `tools/assimp_patches/` + `tools/apply_assimp_patches.cmake` | Local assimp fix, applied at configure time |
 | `tools/component_registration_allowlist.txt` | `ViewModelTag` is allow-listed (runtime-only). CI fails without it |
@@ -153,12 +156,40 @@ any transitions, as long as it uses these names (`FirstPersonAnimatorContract`):
 | Bool params | `Sprint`, `Aim`, `Equipped` | Sprint held, aim held, weapon wanted in hand |
 | Int param | `Ammo` | Rounds in the magazine |
 | Triggers (one frame) | `Fire`, `Reload`, `MagCheck`, `Inspect`, `Melee`, `Fidget` | Set on input and dropped the next frame if no transition took them. `Fidget` comes after 10–20 s in a state tagged `Idle` |
-| Tag | `ADS` | Sights are up: fire is a procedural kick (no `Fire` trigger), walking bobs |
-| Tag | `Reload` | A reload is running: R does nothing |
+| Tag | `ADS` | Sights are up: fire is a procedural kick (no `Fire` trigger), walking bobs, the view zooms. An authored ADS action ("ADS TacReload") carries it too |
+| Tag | `ADSCarry` | While aim is held, this state's hip clip is carried onto the sights (see below). The tag name is `ads.carryTag` |
+| Tag | `Reload` | A reload is running: R does nothing, and the gun can't fire |
+| Tag | `Busy` | The hands are busy (mag check, inspect, melee): the gun can't fire |
+| Tag | `IKOff` | The arm IK is off: the clip plays untouched (Draw, Holster, Regrip) |
 | Tag | `Hidden` | Unarmed: both rigs are hidden. The controllers keep running |
 | Tag | `Idle` | Settled idle: counts toward `Fidget` |
 | Event | `Shot` | A round leaves the gun (hip fire). Put it at time 0 on the fire state |
 | Event | `Refill` | The magazine is full again. Put it at time 1 on each reload state, so a reload cut short doesn't count |
+
+### ADS actions: authored clips or carried hip clips
+
+A reload, mag check or inspect while aiming can play in one of two ways, per action:
+
+- **Authored ADS clip.** Add a clip named `ADS_<action>` (`ADS_TacReload`, `ADS_EmptyReload`,
+  `ADS_MagCheck`, `ADS_Inspect`). The standard graph adds an `ADS <action>` state tagged `ADS`
+  (plus the hip state's other tags, minus `ADSCarry`), reached with Aim held before the hip
+  state can take the trigger, and leaving through Exit after 0.3 s. It plays as authored.
+- **Carried hip clip.** With no ADS clip, the hip state plays, and if it's tagged `ADSCarry`
+  it is carried onto the sights. `BuildAdsCarry` measures, once at Play start, the clip's
+  first frame against the reference state's (`ads.referenceState`, default `Aim`; empty = the
+  first `ADS`-tagged state):
+  - the rigid gun correction about the camera bone, applied to the gun only through the IK
+    `kAdsOffset` slot, so the arms follow it by IK and the shoulders stay put;
+  - per arm, the elbow swivel onto the aim pose's elbow (`ads.matchElbows`);
+  - the twist-helper bone locals the IK doesn't solve (`ads.matchTwist`).
+
+  With all three the solved first frame *is* the aim pose, so the action starts and ends on
+  the sights and moves like the hip clip in between. `EvaluateAdsCarry` weights the correction
+  by how much of the crossfade stack the action owns, times how long aim has been held
+  (`ads.aimHoldTime`). Without IK the whole view model is carried instead (the shoulders move).
+
+The weapon Inspector's **Aim-Down-Sights** section lists each action's mode and, after a Play
+session, what was measured (gun offset, turn, elbow swivel, matched bones) and any warnings.
 
 ---
 
