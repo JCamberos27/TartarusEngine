@@ -1667,7 +1667,18 @@ void TestFirstPersonAnimationFSM() {
     CHECK(ac.StateName == "Sprint");
     input(0.0f, false, false); run(0.05f);
     CHECK(ac.StateName == "SprintToIdle");
+    input(2.0f, true, false); run(0.05f);
+    CHECK(ac.StateName == "Sprint");              // re-pressed partway out: straight back
+    input(0.0f, false, false); run(0.05f);
+    CHECK(ac.StateName == "SprintToIdle");
     run(1.2f);
+    CHECK(ac.StateName == "Idle");
+    // A tap: let go partway in and it's straight back to rest, not the rest of IdleToSprint.
+    input(2.0f, true, false); run(0.05f);
+    CHECK(ac.StateName == "IdleToSprint");
+    input(2.0f, false, false); run(0.05f);
+    CHECK(ac.StateName == "Walk");
+    input(0.0f, false, false); run(0.3f);
     CHECK(ac.StateName == "Idle");
 
     // Hip fire plays Fire (a Shot per trigger, restarting on spam) and returns to Idle.
@@ -2283,6 +2294,165 @@ void TestWeaponProcedural() {
         std::string err;
         WeaponProceduralSettings back = WeaponProceduralSettings::Defaults();
         CHECK(WeaponProceduralSettings::FromJson(l.ToJson(), back, &err) && back.Lean.WhileSprinting);
+    }
+
+    // Feel layers: jump and land, the camera, walls, exertion, the per-round punch, soft sway.
+    {
+        WeaponProceduralSettings f = s;
+        f.Recoil.Enabled = false;
+        // In the air, rising pulls the gun down and dips the muzzle; a hard landing kicks it
+        // down further, and it settles back to rest.
+        WeaponProceduralState st;
+        WeaponProceduralInput air;
+        air.Grounded = false;
+        air.VerticalVelocity = 5.0f;
+        const WeaponProceduralPose rising = run(st, f, air, 0.5f);
+        CHECK(rising.Position.y < -0.005f && rising.Rotation.x < -0.5f);
+        air.VerticalVelocity = -8.0f;
+        run(st, f, air, 0.5f);
+        WeaponProceduralInput ground;
+        float lowest = 0.0f, nod = 0.0f;
+        for (int i = 0; i < 40; ++i) {
+            const WeaponProceduralPose& p = run(st, f, ground, 1.0f / 120.0f);
+            lowest = std::min(lowest, p.Position.y);
+            nod = std::min(nod, p.CameraKick.x);
+        }
+        CHECK(lowest < -0.02f && nod < -0.5f); // the gun drops and the view nods
+        const WeaponProceduralPose settled = run(st, f, ground, 3.0f);
+        CHECK(glm::length(settled.Position) < 1e-3f && std::fabs(settled.CameraOffset.y) < 1e-3f);
+        // A step down (below MinImpact) doesn't kick.
+        WeaponProceduralState soft;
+        air.VerticalVelocity = -1.0f;
+        run(soft, f, air, 0.2f);
+        float softLow = 0.0f;
+        for (int i = 0; i < 40; ++i) softLow = std::min(softLow, run(soft, f, ground, 1.0f / 120.0f).Position.y);
+        CHECK(softLow > -0.001f);
+
+        // Walls, stage 1: just inside reach the gun only slides back, as far as the wall is in,
+        // still aimed.
+        WeaponProceduralState wall;
+        WeaponProceduralInput near;
+        near.WallDistance = f.Obstruction.Reach - 0.05f;
+        const WeaponProceduralPose retracted = run(wall, f, near, 1.5f);
+        CHECK(std::fabs(retracted.Position.z - 0.05f) < 2e-3f && retracted.Obstruction < 0.01f &&
+              std::fabs(retracted.Rotation.x) < 0.05f);
+        // Stage 2: pressed against it, the gun tucks (low ready) and is blocked.
+        near.WallDistance = 0.1f;
+        const WeaponProceduralPose pushed = run(wall, f, near, 1.5f);
+        CHECK(pushed.Obstruction > 0.95f && pushed.Position.z > f.Obstruction.MaxRetract && pushed.Rotation.x < -10.0f);
+        CHECK(pushed.Obstruction >= f.Obstruction.BlockAt);
+        // A surface that faces up tucks the muzzle up instead.
+        WeaponProceduralState table;
+        WeaponProceduralInput top = near;
+        top.WallFacesUp = true;
+        CHECK(run(table, f, top, 1.5f).Rotation.x > 10.0f);
+        // An edge on the right of the barrel (its surface facing left) pushes the muzzle left
+        // and the gun aside, instead of dropping it; mirrored on the left.
+        WeaponProceduralState edgeR, edgeL;
+        WeaponProceduralInput byEdge = near;
+        byEdge.WallSide = -0.9f;
+        const WeaponProceduralPose pushedLeft = run(edgeR, f, byEdge, 1.5f);
+        CHECK(pushedLeft.Rotation.y > 10.0f && pushedLeft.Position.x < 0.0f && pushedLeft.Rotation.x > -6.0f);
+        byEdge.WallSide = 0.9f;
+        const WeaponProceduralPose pushedRight = run(edgeL, f, byEdge, 1.5f);
+        CHECK(pushedRight.Rotation.y < -10.0f && pushedRight.Position.x > 0.0f);
+        near.WallDistance = -1.0f;
+        CHECK(run(wall, f, near, 1.5f).Obstruction < 0.01f);
+        near.WallDistance = f.Obstruction.Reach + 0.1f; // beyond reach: nothing
+        CHECK(run(wall, f, near, 1.5f).Obstruction < 0.01f);
+
+        // Head bob and strafe roll: only while moving on the ground.
+        WeaponProceduralSettings fb = f;
+        fb.Bob.Enabled = true;
+        WeaponProceduralState cam;
+        WeaponProceduralInput walk;
+        walk.Velocity = glm::vec3(3.0f, 0.0f, 0.0f);
+        float dip = 0.0f, roll = 0.0f;
+        for (int i = 0; i < 240; ++i) {
+            const WeaponProceduralPose& p = run(cam, fb, walk, 1.0f / 120.0f);
+            dip = std::min(dip, p.CameraOffset.y);
+            roll = std::min(roll, p.CameraRoll);
+        }
+        CHECK(dip < -0.002f && roll < -0.5f); // strafing right rolls into it
+        WeaponProceduralInput still;
+        const WeaponProceduralPose rest = run(cam, fb, still, 3.0f);
+        CHECK(std::fabs(rest.CameraOffset.y) < 1e-4f && std::fabs(rest.CameraRoll) < 0.02f);
+
+        // Exertion: breathing gets bigger after a sprint, and recovers.
+        WeaponProceduralSettings b = f;
+        b.Breath.Enabled = true;
+        b.Bob.Enabled = b.CameraMotion.Enabled = false;
+        auto breathSpan = [&](WeaponProceduralState& bs, WeaponProceduralInput in2) {
+            float lo = 1e9f, hi = -1e9f;
+            for (int i = 0; i < 600; ++i) {
+                const float y = run(bs, b, in2, 1.0f / 120.0f).Position.y;
+                lo = std::min(lo, y);
+                hi = std::max(hi, y);
+            }
+            return hi - lo;
+        };
+        WeaponProceduralState calm, winded;
+        const float calmSpan = breathSpan(calm, still);
+        WeaponProceduralInput sprint;
+        sprint.Sprinting = true;
+        run(winded, b, sprint, 6.0f);
+        CHECK(breathSpan(winded, still) > calmSpan * 1.4f);
+
+        // The per-round punch: a roll and an FOV pulse that spring back to nothing.
+        WeaponProceduralSettings pr = s;
+        WeaponProceduralState ps;
+        ps.OnShot(pr, false);
+        float peakFov = 0.0f, peakRoll = 0.0f;
+        for (int i = 0; i < 30; ++i) {
+            const WeaponProceduralPose& p = run(ps, pr, still, 1.0f / 120.0f);
+            peakFov = std::max(peakFov, p.FovKick);
+            peakRoll = std::max(peakRoll, std::fabs(p.CameraRoll));
+        }
+        CHECK(peakFov > pr.Recoil.FovPunch * pr.Recoil.HipScale * 0.3f && peakRoll > 0.03f);
+        CHECK(std::fabs(run(ps, pr, still, 2.0f).FovKick) < 1e-3f);
+
+        // Sway eases into its limit instead of passing it, however hard the flick.
+        WeaponProceduralSettings sw = f;
+        sw.Sway.Enabled = true;
+        WeaponProceduralState ss;
+        WeaponProceduralInput flick;
+        flick.LookRate = glm::vec2(5000.0f, 0.0f);
+        const WeaponProceduralPose swung = run(ss, sw, flick, 1.0f);
+        CHECK(std::fabs(swung.Rotation.y) <= sw.Sway.MaxRotation + 1e-3f && std::fabs(swung.Rotation.y) > sw.Sway.MaxRotation * 0.9f);
+
+        // Lean: the head arcs over (slides Offset, drops a little, rolls Angle); the gun's roll
+        // lags behind it early on.
+        {
+            WeaponProceduralSettings ls = f;
+            ls.Lean.Enabled = true;
+            WeaponProceduralState lst;
+            WeaponProceduralInput right;
+            right.Lean = 1.0f;
+            const WeaponProceduralPose early = run(lst, ls, right, 0.08f);
+            const float headFrac = early.CameraRoll / ls.Lean.Angle;
+            const float gunFrac = -early.Rotation.z / ls.Lean.WeaponRoll;
+            CHECK(headFrac > 0.02f && gunFrac < headFrac);
+            const WeaponProceduralPose full = run(lst, ls, right, 3.0f);
+            const float radius = ls.Lean.Offset / std::sin(glm::radians(ls.Lean.Angle));
+            CHECK(std::fabs(full.CameraSide - ls.Lean.Offset) < 2e-3f);
+            CHECK(std::fabs(full.CameraOffset.y + radius * (1.0f - std::cos(glm::radians(ls.Lean.Angle)))) < 2e-3f);
+            CHECK(std::fabs(full.CameraRoll - ls.Lean.Angle) < 0.1f && std::fabs(full.Rotation.z + ls.Lean.WeaponRoll) < 0.1f);
+        }
+
+        // The new blocks round-trip.
+        WeaponProceduralSettings edited = defaults;
+        edited.Jump.LandPitch = 2.5f;
+        edited.CameraMotion.SprintBob = glm::vec2(0.02f, 0.9f);
+        edited.Obstruction.Reach = 1.1f;
+        edited.Breath.ExertionScale = 3.0f;
+        edited.Recoil.FovPunch = -0.4f;
+        edited.Sway.LookSmoothing = 9.0f;
+        WeaponProceduralSettings back = WeaponProceduralSettings::Defaults();
+        std::string err;
+        CHECK(WeaponProceduralSettings::FromJson(edited.ToJson(), back, &err));
+        CHECK(back.Jump.LandPitch == 2.5f && back.CameraMotion.SprintBob == glm::vec2(0.02f, 0.9f) &&
+              back.Obstruction.Reach == 1.1f && back.Breath.ExertionScale == 3.0f && back.Recoil.FovPunch == -0.4f &&
+              back.Sway.LookSmoothing == 9.0f);
     }
 }
 

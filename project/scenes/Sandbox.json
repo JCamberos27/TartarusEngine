@@ -17343,6 +17343,800 @@
         0.30000001192092896,
         3.0
       ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 559,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.26,
+              0.28,
+              0.31
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Range Pad",
+      "order": 1,
+      "parentId": 558,
+      "position": [
+        44.0,
+        0.05,
+        17.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        20.0,
+        0.1,
+        26.0
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 560,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.62,
+              0.64,
+              0.68
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Range Wall",
+      "order": 2,
+      "parentId": 558,
+      "position": [
+        44.0,
+        2.0,
+        4.2
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        20.0,
+        4.0,
+        0.4
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 561,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.62,
+              0.64,
+              0.68
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Range Low Wall",
+      "order": 3,
+      "parentId": 558,
+      "position": [
+        37.0,
+        0.55,
+        11.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.1,
+        0.3
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 562,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.62,
+              0.64,
+              0.68
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Range Pillar",
+      "order": 4,
+      "parentId": 558,
+      "position": [
+        40.5,
+        1.5,
+        19.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.6,
+        3.0,
+        0.6
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 563,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.62,
+              0.64,
+              0.68
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Range Step 1",
+      "order": 5,
+      "parentId": 558,
+      "position": [
+        50.0,
+        0.375,
+        11.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        0.75,
+        3.0
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 564,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.62,
+              0.64,
+              0.68
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Range Step 2",
+      "order": 6,
+      "parentId": 558,
+      "position": [
+        50.0,
+        0.75,
+        14.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.5,
+        3.0
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 565,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.62,
+              0.64,
+              0.68
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Range Step 3",
+      "order": 7,
+      "parentId": 558,
+      "position": [
+        50.0,
+        1.125,
+        17.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        2.25,
+        3.0
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 566,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.62,
+              0.64,
+              0.68
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Range Step 4",
+      "order": 8,
+      "parentId": 558,
+      "position": [
+        50.0,
+        1.5,
+        20.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        3.0,
+        3.0
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 567,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.62,
+              0.64,
+              0.68
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Range Ledge",
+      "order": 9,
+      "parentId": 558,
+      "position": [
+        37.0,
+        0.5,
+        25.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.0,
+        4.0
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 568,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.95,
+              0.45,
+              0.12
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Range Target 1",
+      "order": 10,
+      "parentId": 558,
+      "position": [
+        38.0,
+        1.2,
+        29.6
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        2.4,
+        0.2
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 569,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.95,
+              0.45,
+              0.12
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Range Target 2",
+      "order": 11,
+      "parentId": 558,
+      "position": [
+        44.0,
+        1.2,
+        29.6
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        2.4,
+        0.2
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 570,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.95,
+              0.45,
+              0.12
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Range Target 3",
+      "order": 12,
+      "parentId": 558,
+      "position": [
+        50.0,
+        1.2,
+        29.6
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        2.4,
+        0.2
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 571,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.62,
+              0.64,
+              0.68
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Range Cover",
+      "order": 13,
+      "parentId": 558,
+      "position": [
+        44.0,
+        1.25,
+        24.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        2.4,
+        2.5,
+        0.4
+      ]
     }
   ],
   "chromaticAberration": 0.0,
@@ -18986,6 +19780,28 @@
       "name": "Wrecking Ball",
       "order": 545,
       "parentId": 518,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 558,
+      "name": "Weapon Feel Range",
+      "order": 559,
+      "parentId": -1,
       "position": [
         0.0,
         0.0,

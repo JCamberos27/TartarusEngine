@@ -444,6 +444,16 @@ AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set
     add(S::State, "Sprint", sprintOut, {noSprint}, fadeOf("SprintToIdle"));
     add(S::State, "Sprint", sprintOut, {still}, fadeOf("SprintToIdle"));
 
+    // The sprint in / out clips never make the player wait: pressing sprint again partway out
+    // goes straight back to sprinting, letting go partway in straight back to rest, and aiming
+    // leaves the way out at once. A fidget gives way to moving or aiming the same way.
+    add(S::State, "SprintToIdle", "Sprint", {sprint, moving}, 0.1f);
+    add(S::State, "SprintToIdle", "Aim", {aim, noSprint}, 0.1f);
+    add(S::State, "IdleToSprint", exitTo, {noSprint}, 0.15f);
+    add(S::State, "IdleToSprint", exitTo, {still}, 0.15f);
+    add(S::State, "Regrip", exitTo, {moving}, 0.15f);
+    add(S::State, "Regrip", exitTo, {aim}, 0.15f);
+
     // One-shots return through Exit when their clip ends; Entry then picks the resting state.
     for (const char* s : {"IdleToSprint", "SprintToIdle", "Regrip", "Fire", "Inspect", "Melee", "Draw"})
         add(S::State, s, exitTo, {}, 0.1f, true);

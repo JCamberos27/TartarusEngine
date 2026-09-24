@@ -871,6 +871,100 @@
           "from": "Holstered",
           "hasExitTime": false,
           "to": "Draw"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "Sprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "Aim"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "Regrip",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "Regrip",
+          "hasExitTime": false,
+          "to": "Exit"
         }
       ],
       "weight": 1.0
