@@ -133,7 +133,7 @@
       "invertGamepadAxis": false,
       "name": "Inspect",
       "negative": -1,
-      "positive": 70
+      "positive": 73
     },
     {
       "altNegative": -1,
@@ -184,26 +184,6 @@
       "name": "FireMode",
       "negative": -1,
       "positive": 66
-    },
-    {
-      "altNegative": -1,
-      "altPositive": -1,
-      "gamepadAxis": -1,
-      "gamepadButton": -1,
-      "invertGamepadAxis": false,
-      "name": "LeanLeft",
-      "negative": -1,
-      "positive": 90
-    },
-    {
-      "altNegative": -1,
-      "altPositive": -1,
-      "gamepadAxis": -1,
-      "gamepadButton": -1,
-      "invertGamepadAxis": false,
-      "name": "LeanRight",
-      "negative": -1,
-      "positive": 67
     }
   ],
   "physics": {

@@ -43,9 +43,12 @@ float MoveToward(float from, float to, float step) {
     return std::max(to, from - step);
 }
 
-glm::vec3 ClampLength(const glm::vec3& v, float maxLen) {
+// Eases into +-limit instead of stopping dead at it: ~linear well below, never past it.
+float SoftLimit(float v, float limit) { return limit > 0.0f ? limit * std::tanh(v / limit) : 0.0f; }
+glm::vec3 SoftLimit(const glm::vec3& v, float limit) { return {SoftLimit(v.x, limit), SoftLimit(v.y, limit), SoftLimit(v.z, limit)}; }
+glm::vec3 SoftLimitLength(const glm::vec3& v, float limit) {
     const float len = glm::length(v);
-    return len > maxLen && len > 1e-9f ? v * (maxLen / len) : v;
+    return len > 1e-9f ? v * (SoftLimit(len, limit) / len) : v;
 }
 
 // --- JSON ------------------------------------------------------------------------------------
@@ -216,13 +219,14 @@ json WeaponProceduralSettings::ToJson() const {
         {"shakeAmount", r.ShakeAmount}, {"shakeMax", Vec(r.ShakeMax)}, {"shakeFrequency", r.ShakeFrequency},
         {"shakeDecay", r.ShakeDecay}, {"shakeAdsScale", r.ShakeAdsScale},
         {"hipProcedural", r.HipProcedural}, {"boltCycle", r.BoltCycle}, {"boltBone", r.BoltBone},
+        {"cameraRoll", r.CameraRoll}, {"fovPunch", r.FovPunch}, {"punchSpring", SpringJson(r.PunchSpring)},
     };
     const auto& w = Sway;
     j["sway"] = {
         {"enabled", w.Enabled}, {"lookRotation", w.LookRotation}, {"lookPosition", w.LookPosition},
         {"maxRotation", w.MaxRotation}, {"maxPosition", w.MaxPosition},
         {"movePosition", w.MovePosition}, {"moveRoll", w.MoveRoll}, {"adsScale", w.AdsScale},
-        {"spring", SpringJson(w.Spring)},
+        {"spring", SpringJson(w.Spring)}, {"lookSmoothing", w.LookSmoothing},
     };
     const auto& b = Bob;
     j["bob"] = {
@@ -234,6 +238,30 @@ json WeaponProceduralSettings::ToJson() const {
     j["breath"] = {
         {"enabled", br.Enabled}, {"period", br.Period}, {"position", Curve3Json(br.Position)},
         {"pitch", br.Pitch.ToJson()}, {"hipScale", br.HipScale}, {"adsScale", br.AdsScale},
+        {"driftPosition", Vec(br.DriftPosition)}, {"driftRotation", Vec(br.DriftRotation)},
+        {"driftFrequency", br.DriftFrequency}, {"exertionScale", br.ExertionScale}, {"exertionRate", br.ExertionRate},
+        {"exertionBuild", br.ExertionBuild}, {"exertionRecover", br.ExertionRecover},
+    };
+    const auto& jp = Jump;
+    j["jump"] = {
+        {"enabled", jp.Enabled}, {"airPosition", jp.AirPosition}, {"airPitch", jp.AirPitch},
+        {"maxPosition", jp.MaxPosition}, {"maxPitch", jp.MaxPitch}, {"landPosition", jp.LandPosition},
+        {"landPitch", jp.LandPitch}, {"landRoll", jp.LandRoll}, {"minImpact", jp.MinImpact},
+        {"maxImpact", jp.MaxImpact}, {"adsScale", jp.AdsScale}, {"spring", SpringJson(jp.Spring)},
+    };
+    const auto& cm = CameraMotion;
+    j["cameraMotion"] = {
+        {"enabled", cm.Enabled}, {"walkBob", Vec(cm.WalkBob)}, {"sprintBob", Vec(cm.SprintBob)},
+        {"strafeRoll", cm.StrafeRoll}, {"landDip", cm.LandDip}, {"landPitch", cm.LandPitch},
+        {"adsScale", cm.AdsScale}, {"spring", SpringJson(cm.Spring)},
+    };
+    const auto& ob = Obstruction;
+    j["obstruction"] = {
+        {"enabled", ob.Enabled}, {"reach", ob.Reach}, {"maxRetract", ob.MaxRetract}, {"tuckRange", ob.TuckRange},
+        {"probeOffset", Vec(ob.ProbeOffset)}, {"position", Vec(ob.Position)}, {"rotation", Vec(ob.Rotation)},
+        {"highPosition", Vec(ob.HighPosition)}, {"highRotation", Vec(ob.HighRotation)},
+        {"sidePosition", Vec(ob.SidePosition)}, {"sideRotation", Vec(ob.SideRotation)}, {"blockAt", ob.BlockAt},
+        {"spring", SpringJson(ob.Spring)},
     };
     j["aim"] = {{"position", Vec(Aim.Position)}, {"rotation", Vec(Aim.Rotation)},
                 {"blendTime", Aim.BlendTime}, {"blend", Aim.Blend.ToJson()}};
@@ -246,7 +274,10 @@ json WeaponProceduralSettings::ToJson() const {
     j["locomotion"] = {{"matchSpeed", l.MatchSpeed}, {"walkReference", l.WalkReference},
                        {"sprintReference", l.SprintReference}, {"minRate", l.MinRate}, {"maxRate", l.MaxRate}};
     j["lean"] = {{"enabled", Lean.Enabled}, {"angle", Lean.Angle}, {"offset", Lean.Offset},
-                 {"weaponRoll", Lean.WeaponRoll}, {"speed", Lean.Speed}, {"whileSprinting", Lean.WhileSprinting}};
+                 {"weaponRoll", Lean.WeaponRoll}, {"weaponRollAds", Lean.WeaponRollAds},
+                 {"spring", SpringJson(Lean.Spring)}, {"weaponSpring", SpringJson(Lean.WeaponSpring)},
+                 {"whileSprinting", Lean.WhileSprinting}, {"cornerPeek", Lean.CornerPeek},
+                 {"peekRange", Lean.PeekRange}, {"peekMargin", Lean.PeekMargin}};
     const auto& k = IK;
     j["ik"] = {{"enabled", k.Enabled}, {"gunBone", k.GunBone},
                {"rightUpper", k.RightUpper}, {"rightLower", k.RightLower}, {"rightHand", k.RightHand},
@@ -304,6 +335,9 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.Bool("hipProcedural", o.HipProcedural);
         r.Number("boltCycle", o.BoltCycle);
         r.String("boltBone", o.BoltBone);
+        r.Number("cameraRoll", o.CameraRoll);
+        r.Number("fovPunch", o.FovPunch);
+        r.Spring("punchSpring", o.PunchSpring);
     });
     root.Object("sway", [&](Reader& r) {
         auto& o = s.Sway;
@@ -316,6 +350,7 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.Number("moveRoll", o.MoveRoll);
         r.Number("adsScale", o.AdsScale);
         r.Spring("spring", o.Spring);
+        r.Number("lookSmoothing", o.LookSmoothing);
     });
     root.Object("bob", [&](Reader& r) {
         auto& o = s.Bob;
@@ -337,6 +372,55 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.CurveField("pitch", o.Pitch);
         r.Number("hipScale", o.HipScale);
         r.Number("adsScale", o.AdsScale);
+        r.Vector("driftPosition", o.DriftPosition);
+        r.Vector("driftRotation", o.DriftRotation);
+        r.Number("driftFrequency", o.DriftFrequency);
+        r.Number("exertionScale", o.ExertionScale);
+        r.Number("exertionRate", o.ExertionRate);
+        r.Number("exertionBuild", o.ExertionBuild);
+        r.Number("exertionRecover", o.ExertionRecover);
+    });
+    root.Object("jump", [&](Reader& r) {
+        auto& o = s.Jump;
+        r.Bool("enabled", o.Enabled);
+        r.Number("airPosition", o.AirPosition);
+        r.Number("airPitch", o.AirPitch);
+        r.Number("maxPosition", o.MaxPosition);
+        r.Number("maxPitch", o.MaxPitch);
+        r.Number("landPosition", o.LandPosition);
+        r.Number("landPitch", o.LandPitch);
+        r.Number("landRoll", o.LandRoll);
+        r.Number("minImpact", o.MinImpact);
+        r.Number("maxImpact", o.MaxImpact);
+        r.Number("adsScale", o.AdsScale);
+        r.Spring("spring", o.Spring);
+    });
+    root.Object("cameraMotion", [&](Reader& r) {
+        auto& o = s.CameraMotion;
+        r.Bool("enabled", o.Enabled);
+        r.Vector("walkBob", o.WalkBob);
+        r.Vector("sprintBob", o.SprintBob);
+        r.Number("strafeRoll", o.StrafeRoll);
+        r.Number("landDip", o.LandDip);
+        r.Number("landPitch", o.LandPitch);
+        r.Number("adsScale", o.AdsScale);
+        r.Spring("spring", o.Spring);
+    });
+    root.Object("obstruction", [&](Reader& r) {
+        auto& o = s.Obstruction;
+        r.Bool("enabled", o.Enabled);
+        r.Number("reach", o.Reach);
+        r.Number("maxRetract", o.MaxRetract);
+        r.Number("tuckRange", o.TuckRange);
+        r.Vector("probeOffset", o.ProbeOffset);
+        r.Vector("position", o.Position);
+        r.Vector("rotation", o.Rotation);
+        r.Vector("highPosition", o.HighPosition);
+        r.Vector("highRotation", o.HighRotation);
+        r.Vector("sidePosition", o.SidePosition);
+        r.Vector("sideRotation", o.SideRotation);
+        r.Number("blockAt", o.BlockAt);
+        r.Spring("spring", o.Spring);
     });
     root.Object("aim", [&](Reader& r) {
         r.Vector("position", s.Aim.Position);
@@ -376,8 +460,13 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.Number("angle", s.Lean.Angle);
         r.Number("offset", s.Lean.Offset);
         r.Number("weaponRoll", s.Lean.WeaponRoll);
-        r.Number("speed", s.Lean.Speed);
+        r.Number("weaponRollAds", s.Lean.WeaponRollAds);
+        r.Spring("spring", s.Lean.Spring);
+        r.Spring("weaponSpring", s.Lean.WeaponSpring);
         r.Bool("whileSprinting", s.Lean.WhileSprinting);
+        r.Bool("cornerPeek", s.Lean.CornerPeek);
+        r.Number("peekRange", s.Lean.PeekRange);
+        r.Number("peekMargin", s.Lean.PeekMargin);
     });
     root.Object("ik", [&](Reader& r) {
         auto& o = s.IK;
@@ -465,6 +554,15 @@ void WeaponProceduralState::OnShot(const WeaponProceduralSettings& s, bool ads, 
     m_AimRecoverable += climb * shot.Scale * std::clamp(r.AimRecovery, 0.0f, 1.0f);
     m_SinceShot = 0.0f;
     m_Trauma = std::min(1.0f, m_Trauma + std::max(r.ShakeAmount, 0.0f));
+    // The camera's per-round roll and FOV pulse: a kick of the punch spring's velocity, sized so
+    // the spring's first swing peaks near the amount.
+    {
+        const float w = glm::two_pi<float>() * std::max(r.PunchSpring.Frequency, 0.01f);
+        const float scale = shot.Scale * (ads ? r.ShakeAdsScale : 1.0f) * w * 1.6f;
+        const float side = std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < 0.5f ? -1.0f : 1.0f;
+        m_Punch.V.x += side * Pick(m_Rng, {0.5f, 1.0f}) * r.CameraRoll * scale;
+        m_Punch.V.y += r.FovPunch * scale;
+    }
     if (cycleBolt) m_BoltTime = 0.0f;
     // A runaway trigger can't grow this without bound: the oldest shot has done its work.
     if (m_Shots.size() >= 32) m_Shots.erase(m_Shots.begin());
@@ -531,6 +629,11 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
         camera.y += amount * r.ShakeMax.y * Noise1(m_ShakeTime, 2u);
         pose.CameraRoll += amount * r.ShakeMax.z * Noise1(m_ShakeTime, 3u);
     }
+    m_Punch.Step(glm::vec3(0.0f), dt, r.PunchSpring);
+    if (r.Enabled) {
+        pose.CameraRoll += m_Punch.X.x;
+        pose.FovKick += m_Punch.X.y;
+    }
     pose.CameraKick = camera;
     pose.Pivot = r.Pivot;
 
@@ -563,14 +666,18 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     // Sway: the gun lags behind a turn and trails against movement.
     const auto& w = s.Sway;
     glm::vec3 swayRot(0.0f), swayPos(0.0f);
+    // Mouse input is ragged frame to frame: low-pass the rate so the gun glides instead of buzzing.
+    m_Look = w.LookSmoothing > 0.0f
+                 ? m_Look + (in.LookRate - m_Look) * (1.0f - std::exp(-glm::two_pi<float>() * w.LookSmoothing * dt))
+                 : in.LookRate;
     if (w.Enabled) {
-        const glm::vec2 look = in.LookRate / 100.0f;
+        const glm::vec2 look = m_Look / 100.0f;
         swayRot = glm::vec3(-look.y, look.x, -0.5f * look.x) * w.LookRotation;
         swayPos = glm::vec3(-look.x, -look.y, 0.0f) * w.LookPosition;
         swayPos += glm::vec3(-in.Velocity.x, 0.0f, -in.Velocity.z) * w.MovePosition;
         swayRot.z += -in.Velocity.x * w.MoveRoll;
-        swayRot = glm::clamp(swayRot, glm::vec3(-w.MaxRotation), glm::vec3(w.MaxRotation));
-        swayPos = ClampLength(swayPos, w.MaxPosition);
+        swayRot = SoftLimit(swayRot, w.MaxRotation);
+        swayPos = SoftLimitLength(swayPos, w.MaxPosition);
         const float scale = adsMix(1.0f, w.AdsScale);
         swayRot *= scale;
         swayPos *= scale;
@@ -595,11 +702,70 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
 
     // Breathing: a slow idle drift, calmer with sights up.
     const auto& br = s.Breath;
-    m_BreathPhase = std::fmod(m_BreathPhase + dt / std::max(br.Period, 0.05f), 1.0f);
+    // Sprinting winds the player; it builds while sprinting and fades once they stop.
+    m_Exertion = in.Sprinting ? std::min(1.0f, m_Exertion + (br.ExertionBuild > 0.0f ? dt / br.ExertionBuild : 1.0f))
+                              : std::max(0.0f, m_Exertion - (br.ExertionRecover > 0.0f ? dt / br.ExertionRecover : 1.0f));
+    const float winded = Smooth01(m_Exertion);
+    const float rate = 1.0f + (std::max(br.ExertionRate, 0.0f) - 1.0f) * winded;
+    m_BreathPhase = std::fmod(m_BreathPhase + dt * rate / std::max(br.Period, 0.05f), 1.0f);
+    m_DriftTime = std::fmod(m_DriftTime + dt * rate * std::max(br.DriftFrequency, 0.0f), 4096.0f);
     if (br.Enabled) {
-        const float scale = adsMix(br.HipScale, br.AdsScale);
+        const float scale = adsMix(br.HipScale, br.AdsScale) * (1.0f + (std::max(br.ExertionScale, 0.0f) - 1.0f) * winded);
         pose.Position += br.Position.Evaluate(m_BreathPhase) * scale;
         pose.Rotation.x += br.Pitch.Evaluate(m_BreathPhase) * scale;
+        // Two octaves of noise per axis: a slow wander with a little faster texture on it.
+        auto drift = [&](unsigned ch) { return 0.75f * Noise1(m_DriftTime, ch) + 0.25f * Noise1(m_DriftTime * 2.7f, ch + 17u); };
+        pose.Position += glm::vec3(drift(11u), drift(12u), drift(13u)) * br.DriftPosition * scale;
+        pose.Rotation += glm::vec3(drift(14u), drift(15u), drift(16u)) * br.DriftRotation * scale;
+    }
+
+    // Jump and land: the gun lags against vertical speed in the air, and a landing kicks it
+    // (and the camera) down by the fall speed.
+    const auto& jp = s.Jump;
+    const auto& cm = s.CameraMotion;
+    float impact = 0.0f;
+    if (in.Grounded && !m_WasGrounded) impact = std::max(0.0f, -m_AirVy);
+    if (!in.Grounded) m_AirVy = in.VerticalVelocity;
+    m_WasGrounded = in.Grounded;
+    {
+        const float jumpScale = adsMix(1.0f, jp.AdsScale);
+        glm::vec3 airPos(0.0f), airRot(0.0f);
+        if (jp.Enabled && !in.Grounded) {
+            airPos.y = SoftLimit(-in.VerticalVelocity * jp.AirPosition, jp.MaxPosition);
+            airRot.x = SoftLimit(-in.VerticalVelocity * jp.AirPitch, jp.MaxPitch);
+        }
+        const float hit = impact >= jp.MinImpact ? std::min(impact, std::max(jp.MaxImpact, jp.MinImpact)) : 0.0f;
+        if (jp.Enabled && hit > 0.0f) {
+            const float kick = glm::two_pi<float>() * std::max(jp.Spring.Frequency, 0.01f) * 1.6f;
+            const float side = std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < 0.5f ? -1.0f : 1.0f;
+            m_JumpPos.V.y -= hit * jp.LandPosition * kick * jumpScale;
+            m_JumpRot.V.x -= hit * jp.LandPitch * kick * jumpScale;
+            m_JumpRot.V.z += side * hit * jp.LandRoll * kick * jumpScale;
+        }
+        m_JumpPos.Step(airPos * jumpScale, dt, jp.Spring);
+        m_JumpRot.Step(airRot * jumpScale, dt, jp.Spring);
+        pose.Position += m_JumpPos.X;
+        pose.Rotation += m_JumpRot.X;
+    }
+
+    // The camera: head bob on the gun bob's stride, a roll into strafes, a dip on landing.
+    if (cm.Enabled) {
+        const float camScale = adsMix(1.0f, cm.AdsScale);
+        const glm::vec2 amp = (cm.WalkBob * (1.0f - m_BobSprint) + cm.SprintBob * m_BobSprint) * m_BobWeight * camScale;
+        const float tau = glm::two_pi<float>();
+        pose.CameraOffset.y -= amp.x * 0.5f * (1.0f - std::cos(2.0f * tau * m_BobPhase)); // down on each footfall
+        pose.CameraRoll += amp.y * std::sin(tau * m_BobPhase);
+        if (impact >= s.Jump.MinImpact) {
+            const float hit = std::min(impact, std::max(s.Jump.MaxImpact, s.Jump.MinImpact));
+            const float kick = glm::two_pi<float>() * std::max(cm.Spring.Frequency, 0.01f) * 1.6f;
+            m_CamMotion.V.y -= hit * cm.LandDip * kick * camScale;
+            m_CamMotion.V.x -= hit * cm.LandPitch * kick * camScale;
+        }
+        const float strafe = in.Grounded ? in.Velocity.x * cm.StrafeRoll * camScale : 0.0f;
+        m_CamMotion.Step(glm::vec3(0.0f, 0.0f, -strafe), dt, cm.Spring);
+        pose.CameraOffset.y += m_CamMotion.X.y;
+        pose.CameraKick.x += m_CamMotion.X.x;
+        pose.CameraRoll += m_CamMotion.X.z;
     }
 
     // ADS aim offset.
@@ -623,13 +789,66 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
         pose.Rotation += o.Rotation * weight;
     }
 
-    // Lean: the camera rolls and slides; the gun rolls a little further into it.
+    // Walls: first slide the gun straight back as far as the wall is in (the muzzle stops at
+    // the surface, still aimed), then tuck it - down, or up off a surface that faces up.
+    {
+        const auto& ob = s.Obstruction;
+        float in_ = 0.0f;
+        if (ob.Enabled && ob.Reach > 0.0f && in.WallDistance >= 0.0f) in_ = std::max(0.0f, ob.Reach - in.WallDistance);
+        const float maxRetract = std::max(ob.MaxRetract, 0.0f);
+        const float retract = std::min(in_, maxRetract);
+        const float tuck = ob.TuckRange > 0.0f ? Smooth01((in_ - maxRetract) / ob.TuckRange) : (in_ > maxRetract ? 1.0f : 0.0f);
+        // Which way to tuck only changes while tucking, so leaving a table or a corner doesn't
+        // flip it mid-way. An edge beside the barrel (its surface facing sideways) pushes the gun
+        // aside, away from it: -1 = it's on the left, +1 = on the right.
+        const float up = tuck > 0.0f ? (in.WallFacesUp ? 1.0f : 0.0f) : m_Obstruct.X.z;
+        const float sideways = std::clamp((std::fabs(in.WallSide) - 0.35f) / 0.35f, 0.0f, 1.0f);
+        const float aside = tuck > 0.0f ? (in.WallSide < 0.0f ? sideways : -sideways) : m_ObstructSide.X.x;
+        m_Obstruct.Step(glm::vec3(retract, tuck, up), dt, ob.Spring);
+        m_ObstructSide.Step(glm::vec3(aside, 0.0f, 0.0f), dt, ob.Spring);
+        const float back = std::clamp(m_Obstruct.X.x, 0.0f, maxRetract);
+        const float k = std::clamp(m_Obstruct.X.y, 0.0f, 1.0f);
+        const float high = std::clamp(m_Obstruct.X.z, 0.0f, 1.0f);
+        const float side = std::clamp(m_ObstructSide.X.x, -1.0f, 1.0f);
+        // Low or high ready, then aside by how sideways the surface faces; the side pose is for
+        // an obstruction on the right, mirrored (x, yaw, roll) for the left.
+        const float as = std::fabs(side), sign = side < 0.0f ? -1.0f : 1.0f;
+        const glm::vec3 mirror(sign, 1.0f, sign);
+        const glm::vec3 tuckPos = ob.Position + (ob.HighPosition - ob.Position) * high;
+        const glm::vec3 tuckRot = ob.Rotation + (ob.HighRotation - ob.Rotation) * high;
+        const glm::vec3 sideRot(ob.SideRotation.x, ob.SideRotation.y * sign, ob.SideRotation.z * sign);
+        pose.Obstruction = k;
+        pose.Position.z += back;
+        pose.Position += (tuckPos + (ob.SidePosition * mirror - tuckPos) * as) * k;
+        pose.Rotation += (tuckRot + (sideRot - tuckRot) * as) * k;
+    }
+
+    // Lean: the head swings over on an arc about the waist (rolling, sliding and dropping a
+    // little); the gun rolls a little further into it, lagging on its own spring.
     const auto& l = s.Lean;
     const bool canLean = l.Enabled && (l.WhileSprinting || !in.Sprinting);
-    m_Lean += ((canLean ? std::clamp(in.Lean, -1.0f, 1.0f) : 0.0f) - m_Lean) * std::min(1.0f, dt * std::max(l.Speed, 0.0f));
-    pose.CameraRoll += m_Lean * l.Angle;
-    pose.CameraSide = m_Lean * l.Offset;
-    pose.Rotation.z += -m_Lean * l.WeaponRoll;
+    const float leanTarget = canLean ? std::clamp(in.Lean, -1.0f, 1.0f) : 0.0f;
+    {
+        glm::vec3 head(m_Lean.X.x, 0.0f, 0.0f), headV(m_Lean.V.x, 0.0f, 0.0f);
+        glm::vec3 gun(m_Lean.X.y, 0.0f, 0.0f), gunV(m_Lean.V.y, 0.0f, 0.0f);
+        Spring3 a{head, headV}, g{gun, gunV};
+        a.Step(glm::vec3(leanTarget, 0.0f, 0.0f), dt, l.Spring);
+        g.Step(glm::vec3(leanTarget, 0.0f, 0.0f), dt, l.WeaponSpring);
+        m_Lean.X = glm::vec3(a.X.x, g.X.x, 0.0f);
+        m_Lean.V = glm::vec3(a.V.x, g.V.x, 0.0f);
+    }
+    const float lean = std::clamp(m_Lean.X.x, -1.2f, 1.2f); // a spring may overshoot a touch
+    const float angle = glm::radians(l.Angle);
+    const float theta = lean * angle;
+    if (std::fabs(std::sin(angle)) > 1e-4f) {
+        const float radius = l.Offset / std::sin(angle); // the pivot below the eye that gives Offset at Angle
+        pose.CameraSide = radius * std::sin(theta);
+        pose.CameraOffset.y -= radius * (1.0f - std::cos(theta));
+    } else {
+        pose.CameraSide = lean * l.Offset;
+    }
+    pose.CameraRoll += lean * l.Angle;
+    pose.Rotation.z += -m_Lean.X.y * l.WeaponRoll * adsMix(1.0f, l.WeaponRollAds);
 
     // Locomotion clip rates.
     const auto& lo = s.Locomotion;

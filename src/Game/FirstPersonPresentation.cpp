@@ -352,11 +352,12 @@ float FirstPersonPresentation::ViewModelFov() const {
 }
 
 float FirstPersonPresentation::WorldFov(float baseFov) const {
-    return IsActive() ? ZoomedFov(baseFov, m_Set.Ads.Zoom, m_Zoom) : baseFov;
+    return IsActive() ? ZoomedFov(baseFov, m_Set.Ads.Zoom, m_Zoom) + m_Procedural.Pose().FovKick : baseFov;
 }
 
 float FirstPersonPresentation::LookScale(float baseFov) const {
-    const float fov = WorldFov(baseFov);
+    // The zoom only: the per-round FOV pulse mustn't wobble the mouse.
+    const float fov = IsActive() ? ZoomedFov(baseFov, m_Set.Ads.Zoom, m_Zoom) : baseFov;
     return std::tan(glm::radians(fov) * 0.5f) / std::tan(glm::radians(baseFov) * 0.5f);
 }
 
@@ -598,6 +599,7 @@ bool FirstPersonPresentation::Fire() {
     auto* ac = Animator();
     if (!ac || !m_Equipped || HasTag(K::kTagHidden)) return false;
     if (m_Ammo <= 0) return false; // dry: the player has to press Reload themselves
+    if (WallBlocked()) return false; // tucked off a wall: the muzzle is in it
     // Reloading or otherwise busy hands: no round, whether the state is a hip clip the controller
     // would refuse to interrupt anyway or an ADS one that would otherwise kick procedurally.
     if (ac->HasTag(K::kTagReload) || ac->HasTag(K::kTagBusy)) return false;
@@ -692,7 +694,7 @@ void FirstPersonPresentation::SetEquipped(bool equipped) {
     if (auto* ac = Animator()) ac->SetBool(K::kEquipped, equipped);
 }
 
-void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool sprinting, bool aiming, float lean) {
+void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool sprinting, bool aiming, float lean, bool grounded) {
     auto* ac = Animator();
     if (!ac) return;
     ReloadIfChanged(dt);
@@ -702,6 +704,10 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
 
     ac->SetFloat(K::kSpeed, planarSpeed);
     ac->SetBool(K::kSprint, sprinting);
+    // The aim press drives the corner peek, even up against cover; tucked off a wall with no
+    // peek to lean out on, the sights can't come up.
+    m_Aiming = aiming;
+    if (WallBlocked() && m_PeekSide == 0) aiming = false;
     ac->SetBool(K::kAim, aiming);
     m_AdsHold = m_Set.Ads.AimHoldTime > 0.0f
                     ? std::clamp(m_AdsHold + (aiming ? dt : -dt) / m_Set.Ads.AimHoldTime, 0.0f, 1.0f)
@@ -742,9 +748,14 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     m_PrevLookPitch = m_LookPitch;
     in.Velocity = glm::vec3(glm::dot(velocity, m_FlatRight), 0.0f, -glm::dot(velocity, m_FlatForward));
     in.Sprinting = sprinting && planarSpeed > 0.1f;
+    in.VerticalVelocity = velocity.y;
+    in.Grounded = grounded;
+    in.WallDistance = m_Equipped ? m_WallDistance : -1.0f;
+    in.WallFacesUp = m_WallFacesUp;
+    in.WallSide = m_WallSide;
     in.Ads = ac->HasTag(K::kTagAds);
     in.IKOff = ac->HasTag(K::kTagHidden) || (!m_Set.Procedural.IK.OffTag.empty() && ac->HasTag(m_Set.Procedural.IK.OffTag.c_str()));
-    in.Lean = m_Equipped ? lean : 0.0f;
+    in.Lean = m_Equipped ? std::clamp(lean + m_PeekLean, -1.0f, 1.0f) : 0.0f;
     in.WalkSpeed = m_WalkSpeed;
     in.SprintSpeed = m_SprintSpeed;
     in.StateName = &ac->StateName;
@@ -796,6 +807,7 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
         m_FlatForward = glm::length(f) > 1e-5f ? glm::normalize(f) : glm::vec3(0.0f, 0.0f, -1.0f);
         m_FlatRight = glm::normalize(glm::cross(m_FlatForward, glm::vec3(0.0f, 1.0f, 0.0f)));
     }
+    UpdateCornerPeek(camera);
     // Aim climb: unlike the punch below it stays - the player has to pull it back down.
     {
         const glm::vec2 climb = m_Procedural.Pose().AimKick;
@@ -829,9 +841,34 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
         camera.Pitch += m_KickAngles.x;
         camera.Yaw += m_KickAngles.y;
         camera.Roll += m_KickAngles.z;
-        m_KickOffset = camera.Right() * side;
+        m_KickOffset = camera.Right() * (side + p.CameraOffset.x) + camera.Up() * p.CameraOffset.y - camera.Front() * p.CameraOffset.z;
         camera.Position += m_KickOffset;
         m_KickApplied = true;
+    }
+    // What's in front of the gun, for it pulling back off walls - probed from where the eye
+    // actually is this frame (leaned, bobbed) and along the rolled barrel line, so peeking past a
+    // corner doesn't hit the corner the body is behind. The nearer hit wins, so a wall on the
+    // gun's side or a door frame counts as well as what's dead ahead; its surface says which way
+    // to tuck (up off a table, aside off an edge beside the barrel).
+    m_WallDistance = -1.0f;
+    m_WallFacesUp = false;
+    m_WallSide = 0.0f;
+    if (const auto& ob = m_Set.Procedural.Obstruction; ob.Enabled && ob.Reach > 0.0f) {
+        const glm::vec3 f = camera.Front(), right = camera.Right(), up = camera.Up();
+        const float d[3] = {f.x, f.y, f.z};
+        QueryFilter filter;
+        filter.HitTriggers = 0;
+        for (const glm::vec3& from : {camera.Position, camera.Position + right * ob.ProbeOffset.x + up * ob.ProbeOffset.y}) {
+            const float origin[3] = {from.x, from.y, from.z};
+            RaycastHit hit;
+            if (PhysicsWorld::SphereCastSolid(origin, d, 0.04f, ob.Reach, filter, hit) && hit.Hit &&
+                (m_WallDistance < 0.0f || hit.Distance < m_WallDistance)) {
+                const glm::vec3 n(hit.Normal[0], hit.Normal[1], hit.Normal[2]);
+                m_WallDistance = hit.Distance;
+                m_WallFacesUp = n.y > 0.6f;
+                m_WallSide = glm::dot(n, right);
+            }
+        }
     }
 
     auto* ac = world.Registry.try_get<AnimatorControllerComponent>(m_Arms);
@@ -851,6 +888,70 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
 
     ApplyHidden(world);
     PlaceRigs(world, camera);
+}
+
+// Aiming with cover just ahead leans out around it: whichever side clears the edge soonest (the
+// gun's side, right, on a tie), picked when the aim starts and kept while it's held, and only as
+// far out as clearing the edge takes. `camera` is the player's own view (no lean or punch on it),
+// so the test always runs from where the body actually is.
+void FirstPersonPresentation::UpdateCornerPeek(const Camera& camera) {
+    const WeaponLeanSettings& l = m_Set.Procedural.Lean;
+    if (!l.Enabled || !l.CornerPeek || !m_Aiming || !m_Equipped || l.Offset <= 0.0f || l.PeekRange <= 0.0f) {
+        m_PeekLean = 0.0f;
+        m_PeekSide = 0;
+        return;
+    }
+    QueryFilter filter;
+    filter.HitTriggers = 0;
+    const glm::vec3 eye = camera.Position, f = camera.Front();
+    // Walked off from the cover (still aiming): the peek eases back in.
+    if (m_PeekSide != 0) {
+        const glm::vec2 moved(eye.x - m_PeekFrom.x, eye.z - m_PeekFrom.z);
+        if (glm::length(moved) > l.PeekRange + 0.5f) {
+            m_PeekLean = 0.0f;
+            m_PeekSide = 0;
+        }
+    }
+    glm::vec3 right = camera.Right();
+    right.y = 0.0f;
+    right = glm::length(right) > 1e-5f ? glm::normalize(right) : glm::vec3(1.0f, 0.0f, 0.0f);
+    auto cast = [&](const glm::vec3& from, const glm::vec3& dir, float radius, float range, float& dist) {
+        const float o[3] = {from.x, from.y, from.z}, d[3] = {dir.x, dir.y, dir.z};
+        RaycastHit hit;
+        if (PhysicsWorld::SphereCastSolid(o, d, radius, range, filter, hit) && hit.Hit) { dist = hit.Distance; return true; }
+        return false;
+    };
+    // Cover straight ahead, close enough to peek from?
+    float cover = 0.0f;
+    if (!cast(eye, f, 0.05f, l.PeekRange, cover)) {
+        // Nothing in the way: no peek - but keep one that's already out (the view is past the
+        // edge now and may see clear), until the aim is released.
+        if (m_PeekSide == 0) m_PeekLean = 0.0f;
+        return;
+    }
+    // How far out each side the view clears the edge: step out, stopping where the head can't
+    // move (a wall beside it), and look past the cover's depth.
+    constexpr int kSteps = 10;
+    auto clearAt = [&](int side) {
+        for (int k = 1; k <= kSteps; ++k) {
+            const float off = l.Offset * (float)k / (float)kSteps;
+            float blocked = 0.0f;
+            if (cast(eye, right * (float)side, 0.12f, off, blocked)) return -1.0f; // no room to lean out
+            float ahead = 0.0f;
+            if (!cast(eye + right * (off * (float)side), f, 0.05f, cover + 0.6f, ahead) || ahead > cover + 0.45f) return off;
+        }
+        return -1.0f;
+    };
+    if (m_PeekSide == 0) {
+        const float r = clearAt(1), lft = clearAt(-1);
+        m_PeekSide = r >= 0.0f && (lft < 0.0f || r <= lft + 1e-3f) ? 1 : (lft >= 0.0f ? -1 : 0);
+        if (m_PeekSide == 0) { m_PeekLean = 0.0f; return; }
+        m_PeekFrom = eye;
+    }
+    const float need = clearAt(m_PeekSide);
+    // Out as far as clearing the edge takes (full out if it can't be measured from here any more).
+    const float amount = need < 0.0f ? std::fabs(m_PeekLean) : std::min(1.0f, (need + l.PeekMargin) / l.Offset);
+    m_PeekLean = (float)m_PeekSide * amount;
 }
 
 void FirstPersonPresentation::LateUpdate(World& world, const Camera& camera) {

@@ -105,6 +105,12 @@ struct WeaponRecoilSettings {
     float ShakeFrequency = 20.0f;
     float ShakeDecay = 3.0f;
     float ShakeAdsScale = 0.6f;
+    // Per-round camera extras, each a sprung impulse that snaps in and settles on its own: a
+    // random roll either way (degrees) and an FOV pulse (degrees, + widens), both scaled by
+    // ShakeAdsScale with the sights up. 0 = off.
+    float CameraRoll = 0.3f;
+    float FovPunch = 0.35f;
+    FirstPersonSpring PunchSpring{9.0f, 0.55f};
     // Hip fire kicks procedurally, like ADS, instead of restarting the controller's Fire state
     // every round. Off plays the Fire clip (the older behaviour).
     bool HipProcedural = false;
@@ -123,9 +129,13 @@ struct WeaponSwaySettings {
     float MaxPosition = 0.02f;     // metres
     // Move sway: the gun trails against movement and tilts into strafes. Per m/s.
     float MovePosition = 0.0015f;  // metres
-    float MoveRoll = 0.6f;         // degrees
+    float MoveRoll = 0.45f;        // degrees
     float AdsScale = 0.25f;
     FirstPersonSpring Spring{6.0f, 0.55f};
+    // Hz the look rate is low-passed at before it drives the sway: mouse input is ragged frame
+    // to frame, and the raw rate made the gun buzz. 0 = raw. The Max limits are soft (the sway
+    // eases into them rather than stopping dead).
+    float LookSmoothing = 16.0f;
 };
 
 struct WeaponBobSettings {
@@ -149,6 +159,74 @@ struct WeaponBreathSettings {
     Curve Pitch;                   // degrees
     float HipScale = 1.0f;
     float AdsScale = 0.35f;
+    // Organic drift on top of the breath: smooth noise per axis at DriftFrequency Hz, so the
+    // idle never loops visibly. Metres (side, up, back) and degrees (pitch, yaw, roll).
+    glm::vec3 DriftPosition{0.0004f, 0.0003f, 0.0f};
+    glm::vec3 DriftRotation{0.10f, 0.14f, 0.18f};
+    float DriftFrequency = 0.3f;
+    // Exertion: sprinting winds the player. At full, the breath and drift are ExertionScale x
+    // bigger and ExertionRate x faster; it builds over ExertionBuild seconds of sprint and fades
+    // over ExertionRecover once they stop.
+    float ExertionScale = 2.2f;
+    float ExertionRate = 1.7f;
+    float ExertionBuild = 4.0f;
+    float ExertionRecover = 5.0f;
+};
+
+// Jumping and landing: in the air the gun lags against vertical speed (rising pulls it down,
+// falling floats it up); landing kicks it down by the fall speed, and a spring brings it back.
+struct WeaponJumpSettings {
+    bool Enabled = true;
+    float AirPosition = 0.003f;   // metres per m/s of vertical speed
+    float AirPitch = 0.5f;        // degrees per m/s (rising dips the muzzle)
+    float MaxPosition = 0.025f;
+    float MaxPitch = 4.0f;
+    float LandPosition = 0.005f;  // metres down per m/s of impact
+    float LandPitch = 1.0f;       // degrees of muzzle dip per m/s
+    float LandRoll = 0.5f;        // degrees per m/s, a random side each landing
+    float MinImpact = 1.5f;       // m/s: softer touchdowns (steps, slopes) don't kick
+    float MaxImpact = 12.0f;
+    float AdsScale = 0.5f;
+    FirstPersonSpring Spring{4.5f, 0.45f};
+};
+
+// The camera itself (what the whole view sees, never where the player aims): a head bob
+// phase-locked to the gun bob's stride - down on each footfall (metres) and a roll once per
+// stride (degrees) - a roll into strafes, and a dip on landing.
+struct WeaponCameraMotionSettings {
+    bool Enabled = true;
+    glm::vec2 WalkBob{0.005f, 0.2f};   // height, roll at full walk
+    glm::vec2 SprintBob{0.012f, 0.5f};
+    float StrafeRoll = 0.3f;           // degrees per m/s of sideways speed, into the strafe
+    float LandDip = 0.01f;             // metres per m/s of impact
+    float LandPitch = 0.35f;           // degrees of nod per m/s
+    float AdsScale = 0.4f;
+    FirstPersonSpring Spring{5.0f, 0.55f};
+};
+
+// Walls, in two stages. Something closer than Reach in front of the gun first slides it straight
+// back, one for one, so the muzzle stops at the surface while the player can still aim (up to
+// MaxRetract metres); past that, over TuckRange more metres, it tucks into a low ready (Position,
+// Rotation: degrees, - pitch = muzzle down) - or a high ready (HighPosition, HighRotation) when
+// what's in the way faces up (the top of a low wall, a table), or aside (SidePosition,
+// SideRotation, for an obstruction on the right; mirrored for the left) when it's an edge beside
+// the barrel (a corner, a door frame), so a peek keeps the gun up. Tucked past BlockAt (0..1), the
+// gun won't fire and the sights drop. The driver probes from the eye and from ProbeOffset (the
+// barrel: metres right, up of the eye) and takes the nearer hit.
+struct WeaponObstructionSettings {
+    bool Enabled = true;
+    float Reach = 0.75f;               // metres from the eye to past the muzzle
+    float MaxRetract = 0.12f;
+    float TuckRange = 0.2f;
+    glm::vec2 ProbeOffset{0.1f, -0.08f};
+    glm::vec3 Position{0.015f, -0.015f, 0.05f};
+    glm::vec3 Rotation{-12.0f, 14.0f, 16.0f};
+    glm::vec3 HighPosition{0.0f, 0.02f, 0.04f};
+    glm::vec3 HighRotation{20.0f, -6.0f, -10.0f};
+    glm::vec3 SidePosition{-0.025f, -0.005f, 0.04f};
+    glm::vec3 SideRotation{-3.0f, 16.0f, 8.0f};
+    float BlockAt = 0.0f;              // 0 = never blocks (the default: tucked or peeking, it still fires)
+    FirstPersonSpring Spring{8.0f, 1.0f};
 };
 
 struct WeaponAimSettings {
@@ -183,13 +261,26 @@ struct WeaponLocomotionSettings {
     float MaxRate = 1.4f;
 };
 
+// Lean: the head swings over on an arc about a pivot at the waist - it rolls by Angle, moves
+// Offset metres sideways and drops a little with it, the way a body leans - driven by a spring,
+// so it eases out and settles. The gun rolls a little further into it on its own, slower spring,
+// so it lags and settles after the head (less with the sights up).
 struct WeaponLeanSettings {
     bool Enabled = true;
-    float Angle = 12.0f;           // camera roll at full lean, degrees
-    float Offset = 0.28f;          // camera side shift at full lean, metres
-    float WeaponRoll = 6.0f;       // extra gun roll into the lean, degrees
-    float Speed = 6.0f;            // 1/s
+    float Angle = 14.0f;           // camera roll at full lean, degrees
+    float Offset = 0.3f;           // camera side shift at full lean, metres
+    float WeaponRoll = 4.0f;       // extra gun roll into the lean, degrees
+    float WeaponRollAds = 0.5f;    // ... times this with the sights up
+    FirstPersonSpring Spring{3.2f, 0.8f};
+    FirstPersonSpring WeaponSpring{2.4f, 0.6f};
     bool WhileSprinting = false;   // off: sprinting straightens up
+    // Corner peek (the only way the lean is driven): aiming with cover within PeekRange metres
+    // straight ahead leans out around whichever side of it is open - only as far as it takes to
+    // clear the edge (plus PeekMargin metres), up to Offset. The side is picked when the aim
+    // starts and kept while it's held; releasing the aim comes back behind cover.
+    bool CornerPeek = true;
+    float PeekRange = 1.0f;
+    float PeekMargin = 0.08f;
 };
 
 struct WeaponIKSettings {
@@ -208,6 +299,9 @@ struct WeaponProceduralSettings {
     WeaponSwaySettings Sway;
     WeaponBobSettings Bob;
     WeaponBreathSettings Breath;
+    WeaponJumpSettings Jump;
+    WeaponCameraMotionSettings CameraMotion;
+    WeaponObstructionSettings Obstruction;
     WeaponAimSettings Aim;
     std::vector<WeaponStateOffset> StateOffsets;
     WeaponLocomotionSettings Locomotion;
@@ -229,8 +323,11 @@ struct WeaponProceduralPose {
     glm::vec2 CameraKick{0.0f};    // view punch, degrees (pitch, yaw)
     glm::vec2 AimKick{0.0f};       // aim climb this frame, degrees (pitch, yaw) - apply once, keep
     float Bolt = 0.0f;             // 0..1 of the bolt's travel toward the rear
-    float CameraRoll = 0.0f;       // lean + shake, degrees
+    float CameraRoll = 0.0f;       // lean + shake + head bob, degrees
     float CameraSide = 0.0f;       // lean, metres along the camera's right
+    glm::vec3 CameraOffset{0.0f};  // head bob + landing, camera frame, metres
+    float FovKick = 0.0f;          // degrees added to the world FOV
+    float Obstruction = 0.0f;      // 0..1, how far the gun is tucked off a wall (past the retract)
     // 0..1, eased toward 0 in states tagged OffTag: how much of the procedural motion (and the IK
     // carrying it) applies. IK.Enabled doesn't change it; that picks IK vs whole-view-model.
     float IKWeight = 1.0f;
@@ -244,6 +341,11 @@ struct WeaponProceduralInput {
     float Dt = 0.0f;
     glm::vec2 LookRate{0.0f};      // degrees/second of view turn (yaw right +, pitch up +)
     glm::vec3 Velocity{0.0f};      // camera frame, m/s (horizontal plane)
+    float VerticalVelocity = 0.0f; // m/s, + up
+    bool Grounded = true;
+    float WallDistance = -1.0f;    // metres to whatever is in front of the gun (< 0 = nothing near)
+    bool WallFacesUp = false;      // ... and its surface faces up (a table, a low wall's top)
+    float WallSide = 0.0f;         // ... and its normal along the view's right: - = it's on the right
     bool Sprinting = false;
     bool Ads = false;              // the current state is tagged ADS
     bool IKOff = false;            // the current state is tagged IKOff (or hidden)
@@ -296,10 +398,20 @@ private:
     float m_Trauma = 0.0f;            // camera shake, 0..1
     float m_ShakeTime = 0.0f;         // noise clock (cycles)
     Spring3 m_RecoilRot, m_RecoilPos, m_SwayRot, m_SwayPos, m_Camera;
+    Spring3 m_JumpRot, m_JumpPos;      // air lag + landing kick
+    Spring3 m_CamMotion;               // landing dip (y), nod (x), strafe roll (z)
+    Spring3 m_Punch;                   // per-round camera roll (x), FOV pulse (y)
+    Spring3 m_Obstruct;                // retract (x), tuck (y), faces up (z)
+    Spring3 m_ObstructSide;            // aside: -1 (on the left) .. 1 (on the right), in x
+    glm::vec2 m_Look{0.0f};            // low-passed look rate
+    float m_DriftTime = 0.0f;
+    float m_Exertion = 0.0f;           // 0..1
+    bool m_WasGrounded = true;
+    float m_AirVy = 0.0f;              // vertical speed last frame in the air
     float m_BobWeight = 0.0f, m_BobSprint = 0.0f, m_BobPhase = 0.0f;
     float m_BreathPhase = 0.0f;
     float m_Ads = 0.0f;            // 0..1 linear, eased by Aim.Blend
-    float m_Lean = 0.0f;
+    Spring3 m_Lean;                // x: the head's lean (-1..1), y: the gun's roll lag (-1..1)
     float m_IK = 1.0f;
     std::vector<float> m_StateWeights;
     WeaponProceduralPose m_Pose;
