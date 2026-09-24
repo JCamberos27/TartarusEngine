@@ -1,4 +1,6 @@
 #pragma once
+#include <algorithm>
+#include <cmath>
 #include <string>
 #include <memory>
 #include <cstdint>
@@ -394,7 +396,13 @@ struct FirstPersonControllerComponent {
     float CapsuleHeight = 1.8f;
     float MouseSensitivity = 0.1f;  // degrees per pixel
     bool  InvertY = false;
-    float FieldOfView = 75.0f;
+    // HORIZONTAL degrees on a 16:9 screen - the "FOV 90" of a shooter's settings menu. The
+    // camera itself is vertical (VerticalFov); a wider screen sees more at the sides (Hor+).
+    float FieldOfView = 90.0f;
+    float VerticalFov() const {
+        const float h = glm::radians(std::clamp(FieldOfView, 1.0f, 179.0f));
+        return glm::degrees(2.0f * std::atan(std::tan(0.5f * h) * (9.0f / 16.0f)));
+    }
     float KillY = -20.0f;           // falling below this respawns at the spawn point
     bool  GravityGun = true;        // the built-in pick-up/throw tool (right/left mouse)
     float Gravity = 18.0f;          // m/s^2 pulling the player down - game feel, separate from the physics world's
