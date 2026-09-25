@@ -30,14 +30,20 @@ if not exist "build\CMakeCache.txt" (
   )
 )
 
-rem The launch screen (tools\launcher) plays while the Release build runs behind it. Output
-rem goes to build\last-build.log. Exit codes: 0 built; 10 / 11 the build failed and the screen
-rem already showed the errors and asked - launch the previous build / close. Anything else
-rem (the screen itself failed) falls back to the plain report below.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\launcher\launch-screen.ps1" -Build
+rem The launch screen (tools\launcher) plays while the Release build runs behind it: the CRT
+rem window (launch-crt.ps1), or the console screen (launch-screen.ps1) where WPF can't start
+rem (exit 99, nothing built yet). Output goes to build\last-build.log. Exit codes: 0 built;
+rem 10 / 11 the build failed and the screen already showed the errors and asked - launch the
+rem previous build / close. Anything else (the screen itself failed) falls back to the plain
+rem report below.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\launcher\launch-crt.ps1" -Build
+if errorlevel 99 if not errorlevel 100 (
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\launcher\launch-screen.ps1" -Build
+)
 if errorlevel 11 exit /b 1
 if errorlevel 10 goto launch
 if errorlevel 1 (
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\launcher\launch-screen.ps1" -Reveal
   echo.
   echo *** BUILD FAILED - last lines of build\last-build.log: ***
   powershell -NoProfile -Command "Get-Content build\last-build.log -Tail 25"

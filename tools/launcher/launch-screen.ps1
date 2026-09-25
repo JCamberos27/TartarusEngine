@@ -6,7 +6,8 @@
 #   launch-screen.ps1 [-Build] [-Reveal]
 #     -Build   runs the Release build alongside. Exit codes: 0 built; on a failed build the screen
 #              lists the errors and asks - 10 launch the previous build, 11 close.
-#     -Reveal  only shows the console window (run-editor.cmd starts it minimized) and exits.
+#     -Reveal  only shows the console window (run-editor.cmd starts it minimized, the CRT screen
+#              hides it) and exits.
 #
 # The text lives in TartarusEngineAscii.txt, split into ::banner / ::art.
 param([switch]$Build, [switch]$Reveal)
@@ -127,8 +128,13 @@ public static class TartarusLaunchConsole {
         if ((GetWindowLongPtr(window, -20).ToInt64() & 0x00080000L) != 0) SetLayeredWindowAttributes(window, 0, 255, 2);
         SetForegroundWindow(window);
     }
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
+    // Shows the console again: minimized by run-editor.cmd, or hidden by the CRT screen.
     public static void Reveal() {
-        IntPtr window = GetConsoleWindow(); if (window != IntPtr.Zero && IsIconic(window)) ShowWindow(window, 9);
+        IntPtr window = GetConsoleWindow(); if (window == IntPtr.Zero) return;
+        if (!IsWindowVisible(window)) ShowWindow(window, 5);  // SW_SHOW
+        if (IsIconic(window)) ShowWindow(window, 9);          // SW_RESTORE
+        SetForegroundWindow(window);
     }
 }
 '@ -ErrorAction Stop
