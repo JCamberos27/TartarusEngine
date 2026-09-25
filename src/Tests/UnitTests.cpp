@@ -18,6 +18,7 @@
 #include "AnimatorController.h"
 #include "RootMotion.h"
 #include "FirstPersonBody.h"
+#include "FirstPersonBodyContract.h"
 #include "Curve.h"
 #include "IK.h"
 #include "FirstPersonAnimation.h"
@@ -1395,6 +1396,75 @@ void TestBlendTree2D() {
     // Foot IK: the pelvis drops to the lower foot (capped), rises a little when both are up.
     CHECK(near(FirstPersonBodyFootPelvis(-0.1f, 0.0f, 0.35f, 0.15f), -0.1f) && near(FirstPersonBodyFootPelvis(0.05f, -0.5f, 0.35f, 0.15f), -0.35f));
     CHECK(near(FirstPersonBodyFootPelvis(0.2f, 0.3f, 0.35f, 0.15f), 0.15f) && near(FirstPersonBodyFootPelvis(0.0f, 0.0f, 0.35f, 0.15f), 0.0f));
+}
+
+// The body's setup check: a controller built from the contract tables passes; one missing piece is named.
+void TestFirstPersonBodyValidate() {
+    FirstPersonBodyComponent cfg;
+    cfg.TurnThreshold = 55.0f; cfg.StartStopClips = true; cfg.CrouchHeight = 1.2f; cfg.FootIK = true; cfg.WeaponArms = true;
+    cfg.SpineAim = 1.0f;
+    AnimatorController full;
+    for (const auto& p : FPBody::Params()) full.Parameters.push_back({p.Name, p.Type, 0.0f});
+    for (const auto& st : FPBody::States()) {
+        AnimatorController::State state;
+        state.Name = st.Name;
+        if (state.Name == FPBody::kStateJump || state.Name == FPBody::kStateFall) state.Tags.push_back(FPBody::kTagAirborne);
+        full.Layers[0].States.push_back(state);
+    }
+    FPBody::ValidationInput in;
+    in.Config = &cfg;
+    in.HasPieces = in.HasDriverPiece = in.ControllerSet = true;
+    in.Controller = &full;
+    in.HasBone = [](const std::string&) { return true; };
+    in.PieceNames = {"Quantum_Head", "Quantum_Arms"};
+    auto count = [](const std::vector<FPBody::Check>& c, FPBody::Severity level) {
+        int n = 0;
+        for (const auto& x : c) if (x.Level == level) ++n;
+        return n;
+    };
+    auto has = [](const std::vector<FPBody::Check>& c, const char* text) {
+        for (const auto& x : c) if (x.Message.find(text) != std::string::npos) return true;
+        return false;
+    };
+    std::vector<FPBody::Check> r = FPBody::Validate(in);
+    CHECK(FPBody::Worst(r) == FPBody::Severity::Info && count(r, FPBody::Severity::Warning) == 0); // only the root-motion note
+
+    // A missing parameter, state, bone, tag and piece are each named.
+    AnimatorController broken = full;
+    broken.Parameters.erase(std::remove_if(broken.Parameters.begin(), broken.Parameters.end(),
+                            [](const AnimatorController::Parameter& p) { return p.Name == FPBody::kTurnAngle; }), broken.Parameters.end());
+    auto& sts = broken.Layers[0].States;
+    sts.erase(std::remove_if(sts.begin(), sts.end(), [](const AnimatorController::State& st) { return st.Name == FPBody::kStateStop; }), sts.end());
+    for (auto& st : sts) st.Tags.clear();
+    in.Controller = &broken;
+    in.HasBone = [](const std::string& b) { return b != "foot_l"; };
+    in.PieceNames = {"Quantum_Head"};
+    r = FPBody::Validate(in);
+    CHECK(has(r, "'TurnAngle'") && has(r, "state 'Stop'") && has(r, "'foot_l'") && has(r, "'Airborne' tag") && has(r, "'Arms' (Arms Piece)"));
+    CHECK(r.front().Level == FPBody::Severity::Warning);
+
+    // Features that are off need nothing: a bare controller is fine for a body with every option off.
+    FirstPersonBodyComponent plain;
+    AnimatorController bare;
+    bare.Parameters = {{FPBody::kMoveX, AnimatorController::ParamType::Float, 0}, {FPBody::kMoveY, AnimatorController::ParamType::Float, 0},
+                       {FPBody::kSpeed, AnimatorController::ParamType::Float, 0}, {FPBody::kSprint, AnimatorController::ParamType::Bool, 0},
+                       {FPBody::kGrounded, AnimatorController::ParamType::Bool, 0}, {FPBody::kAirborne, AnimatorController::ParamType::Bool, 0},
+                       {FPBody::kJump, AnimatorController::ParamType::Trigger, 0}};
+    AnimatorController::State loco; loco.Name = FPBody::kStateLocomotion;
+    AnimatorController::State jump; jump.Name = FPBody::kStateJump;
+    AnimatorController::State fall; fall.Name = FPBody::kStateFall;
+    AnimatorController::State land; land.Name = FPBody::kStateLand;
+    bare.Layers[0].States = {loco, jump, fall, land};
+    FPBody::ValidationInput in2;
+    in2.Config = &plain; in2.HasPieces = in2.HasDriverPiece = in2.ControllerSet = true; in2.Controller = &bare;
+    in2.PieceNames = {"Quantum_Head"};
+    CHECK(count(FPBody::Validate(in2), FPBody::Severity::Warning) == 0);
+
+    // Structural errors come first.
+    FPBody::ValidationInput in3;
+    in3.Config = &plain;
+    r = FPBody::Validate(in3);
+    CHECK(!r.empty() && r.front().Level == FPBody::Severity::Error);
 }
 
 void TestRootMotion() {
@@ -2958,6 +3028,7 @@ int RunUnitTests() {
         {"ComponentRegistry", TestComponentRegistry},
         {"AnimatorController", TestAnimatorController},
         {"RootMotion", TestRootMotion},
+        {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
         {"BlendTree2D", TestBlendTree2D},
         {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
