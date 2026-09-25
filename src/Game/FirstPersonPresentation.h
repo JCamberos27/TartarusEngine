@@ -215,6 +215,7 @@ private:
     // Actions carried onto the sights while aiming (FirstPersonAdsCarry.h).
     AdsCarryResult m_AdsCarry;
     float m_AdsHold = 0.0f;       // 0..1, eased toward "aim held" over Ads.AimHoldTime
+    float m_SinceUnhidden = 0.0f; // seconds the weapon has been out of its Hidden state (the laser waits for the gun to be up)
     float m_TickDt = 0.0f;        // the last Tick's dt: the step the animators take next
     // IK rig offset slots on the arms: the ADS-action gun correction, then the procedural pose.
     static constexpr int kAdsOffset = 0, kProceduralOffset = 1;

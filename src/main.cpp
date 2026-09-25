@@ -2518,7 +2518,7 @@ int main(int argc, char** argv) {
                 // reach every occluder (animated models padded like the main pass's culling).
                 glm::vec3 casterMin(std::numeric_limits<float>::max()), casterMax(-std::numeric_limits<float>::max());
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-                    if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
+                    if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(entity)) continue;
                     const auto& r = world.Registry.get<RenderableComponent>(entity);
                     if (!r.ModelRef) continue;
                     glm::vec3 bmin = r.ModelRef->BoundsMin(), bmax = r.ModelRef->BoundsMax();
@@ -2559,7 +2559,7 @@ int main(int argc, char** argv) {
                     // the near slice covers a few metres yet used to redraw the whole level x4.
                     Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
                     for (auto entity : casters) {
-                        if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
+                        if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(entity)) continue;
                         auto& renderable = world.Registry.get<RenderableComponent>(entity);
                         // #163 - Cast Shadows: Off skips; Two Sided draws without back-face culling.
                         if (renderable.CastShadows == RenderableComponent::ShadowCasting::Off) continue;
@@ -2631,7 +2631,7 @@ int main(int argc, char** argv) {
                     localShadowShader.SetFloat(localFarLoc, spotShadowFar[s]);
                     Frustum lf = Frustum::FromViewProj(spotShadowVP[s]);
                     for (auto entity : casters) {
-                        if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
+                        if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(entity)) continue;
                         auto& r = world.Registry.get<RenderableComponent>(entity);
                         if (r.CastShadows == RenderableComponent::ShadowCasting::Off) continue; // #163
                         const bool twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
@@ -2698,7 +2698,7 @@ int main(int argc, char** argv) {
                         localShadowShader.SetMat4(cubeLightViewProjLoc, vp);
                         Frustum lf = Frustum::FromViewProj(vp);
                         for (auto entity : casters) {
-                            if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
+                            if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(entity)) continue;
                             auto& r = world.Registry.get<RenderableComponent>(entity);
                             if (r.CastShadows == RenderableComponent::ShadowCasting::Off) continue; // #163
                             const bool twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
@@ -2862,7 +2862,7 @@ int main(int argc, char** argv) {
                 const Frustum frustum = Frustum::FromViewProj(proj * view);
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
-                    if (world.Registry.all_of<ViewModelTag>(entity)) continue; // see note above
+                    if (world.Registry.any_of<ViewModelTag, PoseSourceTag>(entity)) continue; // see note above
                     if (editorView) {
                         if (world.Registry.all_of<HiddenInSceneTag>(entity)) continue;
                         const auto* lc = world.Registry.try_get<LayerComponent>(entity);
@@ -2985,7 +2985,7 @@ int main(int argc, char** argv) {
                 if (editor.SceneSearchActive() && !editor.OverlaysHidden()) {
                     if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
                     for (auto e : world.Registry.view<const TransformComponent, const RenderableComponent>()) {
-                        if (world.Registry.any_of<InactiveTag, LodCulledTag, HiddenInSceneTag>(e)) continue;
+                        if (world.Registry.any_of<InactiveTag, LodCulledTag, HiddenInSceneTag, PoseSourceTag>(e)) continue;
                         if (editor.MatchesSceneSearch(world, e)) continue;
                         const auto& r = world.Registry.get<const RenderableComponent>(e);
                         if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;

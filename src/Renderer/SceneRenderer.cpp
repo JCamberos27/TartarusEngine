@@ -363,6 +363,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         auto& renderable = world.Registry.get<RenderableComponent>(entity);
         // #163 - Shadows Only: drawn by the shadow passes, never in the camera view.
         if (renderable.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
+        if (world.Registry.all_of<PoseSourceTag>(entity)) continue; // animated only (the first-person arms rig)
         // Tagged view-model geometry belongs to the sub-pass below when there is one; with no
         // sub-pass this view draws it here like anything else. `isViewModel` is therefore just
         // "route to the other list", not "hide".
