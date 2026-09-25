@@ -2285,10 +2285,11 @@ int main(int argc, char** argv) {
                 UpdateAnimatorControllers(world, assets, gameDt); // #175 Part B — state machines
                 // The arms are posed now (clips + IK): seat the gun in this frame's hands.
                 if (playUsesPlayer) {
-                    firstPersonBody.LateUpdate(world, player.Cam, gameDt); // camera into the body's head
+                    firstPersonBody.LateUpdate(world, player.Cam, gameDt, firstPersonPresentation.ArmsEntity(),
+                                               firstPersonPresentation.CameraBone()); // camera into the body's head
                     firstPersonPresentation.LateUpdate(world, player.Cam);
                     // The body's hands onto the arms rig's, now that the rig is seated.
-                    firstPersonBody.ArmsLateUpdate(world, player.Cam, firstPersonPresentation.ArmsEntity(),
+                    firstPersonBody.ArmsLateUpdate(world, firstPersonPresentation.ArmsEntity(),
                                                    firstPersonPresentation.ViewModelFov(), gameDt);
                     // This frame's rounds, down the bore from the muzzle: a hole where each struck.
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits())
