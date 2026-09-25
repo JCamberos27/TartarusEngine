@@ -1886,6 +1886,19 @@ void TestFirstPersonAnimationSet() {
         set, &error));
     CHECK(error.find("weaponSocket") != std::string::npos);
 
+    // A v1 file (a clip list, no controller) survives an edit-and-save: the writer keeps its clips and
+    // default state, or the saved file would no longer load and Play would refuse to start.
+    {
+        FirstPersonAnimationSet v1;
+        CHECK(FirstPersonAnimationSet::FromJsonString(
+            R"({"armsModel":"a.fbx","weaponModel":"w.fbx","defaultState":"Idle","clips":[{"name":"Idle","arms":"i.fbx","loop":true},{"name":"Fire","arms":"f.fbx","weapon":"wf.fbx","fade":0.05}]})",
+            v1, &error));
+        FirstPersonAnimationSet back;
+        CHECK(FirstPersonAnimationSet::FromJsonString(v1.ToJsonString(), back, &error));
+        CHECK(back.Clips.size() == 2 && back.DefaultState == "Idle" && back.Clips[0].Loop && back.Clips[1].WeaponClip == "wf.fbx" &&
+              std::abs(back.Clips[1].Fade - 0.05f) < 1e-4f && back.Controller.empty());
+    }
+
     // Material overrides, keyed by the FBX's material name, round-trip through the v2 writer.
     CHECK(FirstPersonAnimationSet::FromJsonString(
         R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"c.controller",
