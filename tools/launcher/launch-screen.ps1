@@ -1,56 +1,32 @@
-# The launch screen run-editor.cmd shows while the editor builds: the Tartarus banner, the art,
-# then Genesis types rapidly into the console. The build runs in the background the whole time,
-# so the show costs no extra launch time. Any key skips the animation.
+# The launch screen run-editor.cmd shows while the editor builds: the art fades in, the Tartarus
+# lockup wipes in beneath it, and a status line and progress bar track the build. The build runs
+# in the background the whole time, so the show costs no extra launch time. Any key skips the
+# animation.
 #
-#   launch-screen.ps1 [-Build]   -Build runs the Release build alongside and exits with its code
+#   launch-screen.ps1 [-Build] [-Reveal]
+#     -Build   runs the Release build alongside. Exit codes: 0 built; on a failed build the screen
+#              lists the errors and asks - 10 launch the previous build, 11 close.
+#     -Reveal  only shows the console window (run-editor.cmd starts it minimized, the CRT screen
+#              hides it) and exits.
 #
-# The text lives in TartarusEngineAscii.txt, split into ::banner / ::binary / ::art / ::genesis.
-param([switch]$Build)
+# The text lives in TartarusEngineAscii.txt, split into ::banner / ::art.
+param([switch]$Build, [switch]$Reveal)
 
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $E = [char]27
 
-$sections = @{}
-$current = $null
-foreach ($line in [IO.File]::ReadAllLines((Join-Path $PSScriptRoot 'TartarusEngineAscii.txt'))) {
-    if ($line.StartsWith('::')) { $current = $line.Substring(2); $sections[$current] = New-Object System.Collections.Generic.List[string]; continue }
-    if ($current) { $sections[$current].Add($line) }
-}
-
-# --- the build, started first so it overlaps the whole show -------------------------------------
-$buildProc = $null
-if ($Build) {
-    $buildProc = Start-Process -FilePath 'cmd.exe' -WorkingDirectory $root -WindowStyle Hidden -PassThru `
-        -ArgumentList '/c', 'cmake --build build --config Release --parallel > build\last-build.log 2>&1'
-    $null = $buildProc.Handle # without this, Windows PowerShell never reports the ExitCode
-}
-
-# --- console helpers -------------------------------------------------------------------------------
-# The desktop shortcut starts this as an ordinary (not maximized) window.  Give it a deliberate,
-# generous size for the logo, then centre it in the usable desktop area.  The API calls
-# are best-effort so launching from Windows Terminal or a redirected session still works normally.
-function Set-LaunchConsoleLayout {
-    param(
-        [int]$Columns,
-        [int]$Rows,
-        [int]$FontHeight
-    )
-    $columns = $Columns; $rows = $Rows
-    try {
-        $columns = [Math]::Min($columns, [Console]::LargestWindowWidth)
-        $rows = [Math]::Min($rows, [Console]::LargestWindowHeight)
-        [Console]::SetBufferSize([Math]::Max([Console]::BufferWidth, $columns), [Math]::Max([Console]::BufferHeight, $rows))
-        [Console]::SetWindowSize($columns, $rows)
-    } catch {}
-
-    try {
-        if (-not ('TartarusLaunchConsole' -as [type])) { Add-Type -TypeDefinition @'
+# --- the console window API -------------------------------------------------------------------------
+function Load-ConsoleApi {
+    if ('TartarusLaunchConsole' -as [type]) { return }
+    Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 public static class TartarusLaunchConsole {
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)] public struct COORD { public short X, Y; }
+    [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+    [StructLayout(LayoutKind.Sequential)] struct MONITORINFO { public int Size; public RECT Monitor, Work; public uint Flags; }
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] public struct CONSOLE_FONT_INFOEX {
         public uint Size; public uint Font; public COORD FontSize; public int Family, Weight;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string FaceName;
@@ -64,6 +40,56 @@ public static class TartarusLaunchConsole {
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")] static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")] static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int index, IntPtr value);
     [DllImport("user32.dll")] static extern bool ShowScrollBar(IntPtr hWnd, int bar, bool show);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int cmd);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
+    [DllImport("user32.dll")] static extern IntPtr MonitorFromPoint(POINT p, uint flags);
+    [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr LoadImage(IntPtr instance, string name, uint type, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+    // The work area of the monitor under the mouse: the screen is shown where the user is looking.
+    static bool Work(out RECT work) {
+        POINT p; MONITORINFO info = new MONITORINFO(); info.Size = Marshal.SizeOf(typeof(MONITORINFO));
+        if (GetCursorPos(out p) && GetMonitorInfo(MonitorFromPoint(p, 1), ref info)) { work = info.Work; return true; }
+        return SystemParametersInfo(48, 0, out work, 0);
+    }
+    public static int[] WorkArea() {
+        RECT work; if (!Work(out work)) return new int[] { 1920, 1040 };
+        return new int[] { work.Right - work.Left, work.Bottom - work.Top };
+    }
+    // The engine's icon on the window and its taskbar button, in place of the console's.
+    public static void SetIcon(string path) {
+        IntPtr window = GetConsoleWindow(); if (window == IntPtr.Zero) return;
+        IntPtr big = LoadImage(IntPtr.Zero, path, 1, 32, 32, 0x10), small = LoadImage(IntPtr.Zero, path, 1, 16, 16, 0x10);
+        if (big != IntPtr.Zero) SendMessage(window, 0x0080, (IntPtr)1, big);    // WM_SETICON, ICON_BIG
+        if (small != IntPtr.Zero) SendMessage(window, 0x0080, IntPtr.Zero, small);
+    }
+    [ComImport, Guid("ea1afb91-9e28-4b86-90e9-9e9f8a5eefaf"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface ITaskbarList3 {
+        void HrInit(); void AddTab(IntPtr h); void DeleteTab(IntPtr h); void ActivateTab(IntPtr h); void SetActiveAlt(IntPtr h);
+        void MarkFullscreenWindow(IntPtr h, int fullscreen);
+        void SetProgressValue(IntPtr h, ulong completed, ulong total);
+        void SetProgressState(IntPtr h, int state);
+    }
+    [ComImport, Guid("56FDF344-FD6D-11d0-958A-006097C9A090"), ClassInterface(ClassInterfaceType.None)] class TaskbarList { }
+    static ITaskbarList3 taskbar;
+    // The build's progress on the taskbar button too. States: 0 none, 2 normal, 4 error.
+    public static void TaskbarProgress(int state, double fraction) {
+        try {
+            IntPtr window = GetConsoleWindow(); if (window == IntPtr.Zero) return;
+            if (taskbar == null) { taskbar = (ITaskbarList3)new TaskbarList(); taskbar.HrInit(); }
+            taskbar.SetProgressState(window, state);
+            if (state != 0) taskbar.SetProgressValue(window, (ulong)(Math.Max(0.0, Math.Min(1.0, fraction)) * 1000), 1000);
+        } catch { }
+    }
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool GetCurrentConsoleFontEx(IntPtr output, bool maximumWindow, ref CONSOLE_FONT_INFOEX info);
+    // The size of one character cell in pixels (width, height).
+    public static int[] CellSize() {
+        CONSOLE_FONT_INFOEX info = new CONSOLE_FONT_INFOEX(); info.Size = (uint)Marshal.SizeOf(typeof(CONSOLE_FONT_INFOEX));
+        if (!GetCurrentConsoleFontEx(GetStdHandle(-11), false, ref info) || info.FontSize.X <= 0) return new int[] { 7, 15 };
+        return new int[] { info.FontSize.X, info.FontSize.Y };
+    }
     public static void UseFontHeight(short height) {
         CONSOLE_FONT_INFOEX info = new CONSOLE_FONT_INFOEX();
         info.Size = (uint)Marshal.SizeOf(typeof(CONSOLE_FONT_INFOEX)); info.FontSize.Y = height;
@@ -79,76 +105,90 @@ public static class TartarusLaunchConsole {
         ShowScrollBar(window, 0, false); // SB_HORZ
         SetWindowPos(window, IntPtr.Zero, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020);
     }
-    public static void Center() {
+    [DllImport("user32.dll")] static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint key, byte alpha, uint flags);
+    // run-editor.cmd starts the console minimized, so its default-sized window is never seen. The
+    // console can't be sized while minimized, so restore it fully transparent first.
+    public static void RestoreHidden() {
+        IntPtr window = GetConsoleWindow(); if (window == IntPtr.Zero || !IsIconic(window)) return;
+        long ex = GetWindowLongPtr(window, -20).ToInt64();
+        SetWindowLongPtr(window, -20, new IntPtr(ex | 0x00080000L)); // WS_EX_LAYERED
+        SetLayeredWindowAttributes(window, 0, 0, 2);                   // LWA_ALPHA, fully clear
+        ShowWindow(window, 9);                                          // SW_RESTORE
+    }
+    // Centres the window, then makes it opaque and brings it forward.
+    public static void ShowCentered() {
         IntPtr window = GetConsoleWindow(); if (window == IntPtr.Zero) return;
-        RECT bounds, work; if (!GetWindowRect(window, out bounds) || !SystemParametersInfo(48, 0, out work, 0)) return;
-        int width = bounds.Right - bounds.Left, height = bounds.Bottom - bounds.Top;
-        int x = work.Left + Math.Max(0, (work.Right - work.Left - width) / 2);
-        int y = work.Top + Math.Max(0, (work.Bottom - work.Top - height) / 2);
-        SetWindowPos(window, IntPtr.Zero, x, y, 0, 0, 0x0001 | 0x0004 | 0x0010);
+        RECT work, bounds;
+        if (Work(out work) && GetWindowRect(window, out bounds)) {
+            int width = bounds.Right - bounds.Left, height = bounds.Bottom - bounds.Top;
+            int x = work.Left + Math.Max(0, (work.Right - work.Left - width) / 2);
+            int y = work.Top + Math.Max(0, (work.Bottom - work.Top - height) / 2);
+            SetWindowPos(window, IntPtr.Zero, x, y, 0, 0, 0x0001 | 0x0004 | 0x0010);
+        }
+        if ((GetWindowLongPtr(window, -20).ToInt64() & 0x00080000L) != 0) SetLayeredWindowAttributes(window, 0, 255, 2);
+        SetForegroundWindow(window);
+    }
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
+    // Shows the console again: minimized by run-editor.cmd, or hidden by the CRT screen.
+    public static void Reveal() {
+        IntPtr window = GetConsoleWindow(); if (window == IntPtr.Zero) return;
+        if (!IsWindowVisible(window)) ShowWindow(window, 5);  // SW_SHOW
+        if (IsIconic(window)) ShowWindow(window, 9);          // SW_RESTORE
+        SetForegroundWindow(window);
     }
 }
 '@ -ErrorAction Stop
-        }
-        [TartarusLaunchConsole]::UseFontHeight([int16]$FontHeight)
-        # Recalculate after the smaller font is applied: it lets the complete supplied logo fit
-        # without turning the launch window into a maximized full-screen console.
-        try {
-            $columns = [Math]::Min($columns, [Console]::LargestWindowWidth)
-            $rows = [Math]::Min($rows, [Console]::LargestWindowHeight)
-            [Console]::SetBufferSize([Math]::Max([Console]::BufferWidth, $columns), [Math]::Max([Console]::BufferHeight, $rows))
-            [Console]::SetWindowSize($columns, $rows)
-            # Match the scrollback buffer to the visible area. Genesis then scrolls naturally,
-            # without reserving space for a persistent console scrollbar.
-            [Console]::SetBufferSize($columns, $rows)
-        } catch {}
-        [TartarusLaunchConsole]::RemoveChromeAndScrollbar()
-        [TartarusLaunchConsole]::Center()
-    } catch {}
 }
 
-Set-LaunchConsoleLayout -Columns 166 -Rows 96 -FontHeight 10
-try { [Console]::CursorVisible = $false; [Console]::ForegroundColor = [ConsoleColor]::White; [Console]::BackgroundColor = [ConsoleColor]::Black } catch {}
-$width = 166; $height = 96
-try { $width = [Math]::Max(40, [Console]::WindowWidth - 1); $height = [Math]::Max(20, [Console]::WindowHeight) } catch {}
-$out = [Console]::Out
-$skipped = $false
-
-function Rgb([int]$r, [int]$g, [int]$b) { "$E[38;2;${r};${g};${b}m" }
-$reset = "$E[0m"
-$clear = "$E[2J$E[3J$E[H"
-
-function Skip-Requested {
-    if ($script:skipped) { return $true }
-    try {
-        if ([Console]::KeyAvailable) { [void][Console]::ReadKey($true); $script:skipped = $true }
-    } catch {}
-    return $script:skipped
+if ($Reveal) {
+    try { Load-ConsoleApi; [TartarusLaunchConsole]::Reveal() } catch {}
+    exit 0
 }
 
-function Pause-Frame([int]$ms) { if (-not (Skip-Requested)) { Start-Sleep -Milliseconds $ms } }
-
-# Centre a block of lines horizontally as one unit (keeps ASCII art aligned), cropped to the window.
-function Center-Block([string[]]$lines) {
-    $lead = [int]::MaxValue; $wide = 0
-    foreach ($l in $lines) {
-        if ($l.Trim().Length -eq 0) { continue }
-        $lead = [Math]::Min($lead, $l.Length - $l.TrimStart().Length)
-        $wide = [Math]::Max($wide, $l.Length)
-    }
-    if ($lead -eq [int]::MaxValue) { $lead = 0 }
-    $pad = ' ' * [Math]::Max(0, [int](($width - ($wide - $lead)) / 2))
-    foreach ($l in $lines) {
-        $s = if ($l.Length -gt $lead) { $pad + $l.Substring($lead) } else { '' }
-        if ($s.Length -gt $width) { $s = $s.Substring(0, $width) }
-        $s
-    }
+$sections = @{}
+$current = $null
+foreach ($line in [IO.File]::ReadAllLines((Join-Path $PSScriptRoot 'TartarusEngineAscii.txt'))) {
+    if ($line.StartsWith('::')) { $current = $line.Substring(2); $sections[$current] = New-Object System.Collections.Generic.List[string]; continue }
+    if ($current) { $sections[$current].Add($line) }
 }
 
-# Blank lines that push a block of $rows lines to the vertical middle of the window.
-function Top-Pad([int]$rows) { "`n" * [Math]::Max(0, [int](($height - $rows) / 2)) }
+# --- the build, started first so it overlaps the whole show -------------------------------------
+$buildLog = Join-Path $root 'build\last-build.log'
+$progressFile = Join-Path $root 'build\launch-progress.txt'
+$buildProc = $null
+if ($Build) {
+    $buildProc = Start-Process -FilePath 'cmd.exe' -WorkingDirectory $root -WindowStyle Hidden -PassThru `
+        -ArgumentList '/c', 'cmake --build build --config Release --parallel > build\last-build.log 2>&1'
+    $null = $buildProc.Handle # without this, Windows PowerShell never reports the ExitCode
+}
+$clock = [Diagnostics.Stopwatch]::StartNew()
+
+# The version line: the project version, and the branch and commit being built.
+$versionText = ''
+try {
+    $cmake = [IO.File]::ReadAllText((Join-Path $root 'CMakeLists.txt'))
+    if ($cmake -match 'project\(\s*\w+\s+VERSION\s+([\d.]+)') { $versionText = "v$($Matches[1])" }
+} catch {}
+try {
+    $branch = (& git -C $root rev-parse --abbrev-ref HEAD 2>$null | Select-Object -First 1)
+    $commit = (& git -C $root rev-parse --short HEAD 2>$null | Select-Object -First 1)
+    if ($branch -and $commit) { $versionText = (@($versionText, "$branch @ $commit") | Where-Object { $_ }) -join "   $([char]0x00B7)   " }
+} catch {}
+
+# --- the blocks ------------------------------------------------------------------------------------
+# Each block loses its blank rows and its common indent, so the layout sizes to the ink alone.
+function Trim-Block([string[]]$lines) {
+    $lines = @($lines | ForEach-Object { $_.TrimEnd() })
+    $first = 0; while ($first -lt $lines.Count -and -not $lines[$first]) { $first++ }
+    $last = $lines.Count - 1; while ($last -ge $first -and -not $lines[$last]) { $last-- }
+    if ($first -gt $last) { return @() }
+    $lines = $lines[$first..$last]
+    $lead = ($lines | Where-Object { $_ } | ForEach-Object { $_.Length - $_.TrimStart().Length } | Measure-Object -Minimum).Minimum
+    @($lines | ForEach-Object { if ($_.Length -gt $lead) { $_.Substring($lead) } else { '' } })
+}
 
 # Shrinks ASCII art by $f in both directions, keeping the densest character of each f x f cell.
+# Only used when the display can't fit the full-size layout.
 function Shrink-Art([string[]]$lines, [int]$f) {
     $ramp = ' .:-=+*#%@'
     $w = ($lines | Measure-Object -Property Length -Maximum).Maximum
@@ -170,157 +210,339 @@ function Shrink-Art([string[]]$lines, [int]$f) {
     }
 }
 
-# --- 1. banner: Tartarus over Engine, in clean white ------------------------------------------------
-$banner = $sections['banner']
-# Keep the whole supplied lockup visible on ordinary displays. Large ASCII titles are sampled down
-# as a unit when necessary; this is preferable to hiding their right-hand side in a wider-than-screen
-# console window.
-$bannerWidth = ($banner | Measure-Object -Property Length -Maximum).Maximum
-$bannerFit = [int][Math]::Ceiling($bannerWidth / [double][Math]::Max(1, $width - 4))
-if ($bannerFit -gt 1) { $banner = @(Shrink-Art $banner $bannerFit) }
-$rows = @(Center-Block $banner)
+function Block-Width([string[]]$lines) { [int]($lines | Measure-Object -Property Length -Maximum).Maximum }
 
-$binary = New-Object System.Collections.Generic.List[string]
-foreach ($b in $sections['binary']) {
-    $line = ''
-    foreach ($w in ($b -split '\s+' | Where-Object { $_ })) {
-        if ($line -and ($line.Length + $w.Length + 1) -gt ($width - 8)) { $binary.Add($line); $line = '' }
-        $line = if ($line) { "$line $w" } else { $w }
-    }
-    if ($line) { $binary.Add($line) }
-    $binary.Add('')
+$art = @(Trim-Block $sections['art'])
+$banner = @(Trim-Block $sections['banner'])
+
+# The composition, side by side: the art on the left; on the right the lockup with the status,
+# the progress bar and the version line under it. The window is then widened (or heightened) to a
+# 3:2 landscape frame, the spare columns split evenly into the two margins and the gap between.
+$aspect = 1.5
+$marginY = 3; $minMarginX = 6; $gapStatus = 3; $gapBar = 1; $gapVersion = 2
+$barWidth = 64
+function Layout-Size([double]$cellAspect = 0.47) {   # cell width / height
+    $script:rightRows = $banner.Count + $gapStatus + 1 + $gapBar + 1 + $gapVersion + 1
+    $script:contentCols = (Block-Width $art) + (Block-Width $banner)
+    $script:contentRows = [Math]::Max($art.Count, $rightRows)
+    $script:rows = $contentRows + 2 * $marginY
+    $script:cols = [Math]::Max($contentCols + 3 * $minMarginX, [int][Math]::Ceiling($aspect * $rows / $cellAspect))
+    # Content wider than 3:2 allows: add rows instead, so the frame keeps its shape.
+    $script:rows = [Math]::Max($rows, [int][Math]::Ceiling($cols * $cellAspect / $aspect))
 }
+Layout-Size
 
-$out.Write($clear + (Top-Pad ($rows.Count + 2 + $binary.Count)))
-for ($i = 0; $i -lt $rows.Count; $i++) {
-    $out.WriteLine("$(Rgb 255 255 255)$($rows[$i])$reset")
-    Pause-Frame 30
-}
-$out.WriteLine(); $out.WriteLine()
-foreach ($w in $binary) {
-    $pad = ' ' * [Math]::Max(0, [int](($width - $w.Length) / 2))
-    $out.WriteLine("$(Rgb 255 255 255)$pad$w$reset")
-    Pause-Frame 30
-}
-Pause-Frame 900
-
-# --- 2. the art, alone on screen, drawn in top to bottom in white ----------------------------------
-$art = @($sections['art'])
-$artWidth = ($art | Measure-Object -Property Length -Maximum).Maximum
-$fit = [int][Math]::Max(
-    [Math]::Ceiling($art.Count / [double]($height - 2)),
-    [Math]::Ceiling($artWidth / [double][Math]::Max(1, $width - 4)))
-if ($fit -gt 1) { $art = @(Shrink-Art $art $fit) }
-$white = Rgb 255 255 255
-$out.Write($clear + (Top-Pad $art.Count))
-foreach ($l in (Center-Block $art)) {
-    $sb = New-Object System.Text.StringBuilder
-    $last = $null
-    foreach ($ch in $l.ToCharArray()) {
-        if ($ch -ne ' ') {
-            $col = $white
-            if ($col -ne $last) { [void]$sb.Append($col); $last = $col }
-        }
-        [void]$sb.Append($ch)
-    }
-    $out.WriteLine($sb.Append($reset).ToString())
-    Pause-Frame ([int](1200 / $art.Count))   # the whole figure draws in about a second
-}
-Pause-Frame 1800
-
-# --- 3. Genesis types at high speed ----------------------------------------------------------------
-# SystemSounds is asynchronous. A tiny tick is played while text is arriving, throttled to a rate
-# the Windows audio mixer can render instead of trying to queue thousands of overlapping sounds.
-$gold = Rgb 255 200 90; $verse = Rgb 210 150 70; $text = Rgb 170 170 178
-$indent = ' ' * [Math]::Max(0, [int](($width - 76) / 2))   # the text is wrapped at 76 columns
-$genesis = $sections['genesis']
-$charactersPerSecond = 150000
-$charactersPerFrame = 256
-$charactersPerWrite = 32
-$soundEveryMilliseconds = 45
-$out.Write($clear + ("`n" * $height))
-$typed = New-Object System.Text.StringBuilder
-for ($i = 0; $i -lt $genesis.Count; $i++) {
-    $l = $genesis[$i]
-    if ($l -match '^Genesis Chapter') {
-        [void]$typed.Append("`n$indent$gold$E[1m$l$E[22m$reset`n")
-    } elseif ($l -match '^(\d+:\d+\.)(.*)$') {
-        [void]$typed.Append("$indent$verse$($Matches[1])$text$($Matches[2])$reset`n")
-    } else {
-        [void]$typed.Append("$indent$text$l$reset`n")
-    }
-
-}
-
-$stopwatch = [Diagnostics.Stopwatch]::StartNew()
-$lastSoundAt = -$soundEveryMilliseconds
-for ($i = 0; $i -lt $typed.Length; $i += $charactersPerWrite) {
-    $count = [Math]::Min($charactersPerWrite, $typed.Length - $i)
-    # Write short bursts rather than one host call per glyph. The result still visibly types in,
-    # but it remains quick even with the full text of Genesis.
-    $out.Write($typed.ToString($i, $count))
-    if ((($i + $count) % $charactersPerFrame) -eq 0) {
-        if (Skip-Requested) { break }
-        $targetMilliseconds = (($i + $count) * 1000.0) / $charactersPerSecond
-        if (($stopwatch.ElapsedMilliseconds - $lastSoundAt) -ge $soundEveryMilliseconds) {
-            try { [System.Media.SystemSounds]::Beep.Play() } catch {}
-            $lastSoundAt = $stopwatch.ElapsedMilliseconds
-        }
-        # A short spin preserves the fast, typewriter-like cadence without the 15 ms granularity
-        # of Start-Sleep on many Windows hosts.
-        while ($stopwatch.Elapsed.TotalMilliseconds -lt $targetMilliseconds) { [Threading.Thread]::SpinWait(128) }
-    }
-}
-# --- keep the conclusion synchronized with the build -----------------------------------------------
-$buildExitCode = 0
-if ($buildProc) {
-    $spin = '|/-\'; $n = 0
-    while (-not $buildProc.HasExited) {
-        $out.Write("`r  Building the latest (Release)... $($spin[$n % 4])")
-        $n++
-        Start-Sleep -Milliseconds 120
-    }
-    if ($n -gt 0) { $out.Write("`r" + (' ' * 44) + "`r") }
-    $buildProc.WaitForExit()
-    $buildExitCode = $buildProc.ExitCode
-    if ($buildExitCode -ne 0) { exit $buildExitCode }
-}
-
-# Amen is deliberately withheld until the engine build has completed, so the final cue and the
-# prompt always arrive together at the end of loading.
-$out.Write($clear)
-try {
-    $width = [Math]::Max(40, [Console]::WindowWidth - 1)
-    $height = [Math]::Max(20, [Console]::WindowHeight)
-} catch {}
-$amen = 'Amen.'
-$promptPrefix = 'There is no '
-$promptEsc = 'Esc'
-$promptSuffix = 'ape.'
-$prompt = "$promptPrefix$promptEsc$promptSuffix"
-$promptRow = [Math]::Max(1, [int]($height / 2) - 1)
-$amenRow = [Math]::Min($height, $promptRow + 3)
-$amenPad = ' ' * [Math]::Max(0, [int](($width - $amen.Length) / 2))
-$promptPad = ' ' * [Math]::Max(0, [int](($width - $prompt.Length) / 2))
-$out.Write("$E[$amenRow;1H$E[2K$amenPad$gold$amen$reset")
-$out.Write("$E[$promptRow;1H$E[2K$promptPad$text$promptPrefix$E[4m$promptEsc$E[24m$promptSuffix$reset")
-try { [Console]::CursorVisible = $true } catch {}
-
-# run-editor.cmd launches the editor only after this script exits. Waiting here turns the prompt
-# into an intentional final transition instead of a message that flashes past. Escape is the only
-# accepted key; every other key is ignored with a quiet system tick.
-if ($Build) {
+# --- the window: exactly the composition's size, borderless, centred ------------------------------
+# The API calls are best-effort so launching from Windows Terminal or a redirected session still
+# works; the layout then crops to whatever window it gets.
+function Set-LaunchConsoleLayout([int]$Columns, [int]$Rows) {
     try {
-        do {
-            $key = [Console]::ReadKey($true)
-            if ($key.Key -eq [ConsoleKey]::Escape) {
-                $accepted = Rgb 90 230 120
-                $out.Write("$E[$promptRow;1H$E[2K$promptPad$text$promptPrefix$accepted$E[4m$promptEsc$E[24m$text$promptSuffix$reset")
-                Start-Sleep -Milliseconds 180
-            } else {
-                [System.Media.SystemSounds]::Beep.Play()
-            }
-        } while ($key.Key -ne [ConsoleKey]::Escape)
+        Load-ConsoleApi
+        [TartarusLaunchConsole]::RestoreHidden()
+        # The largest Consolas size (a cell is about h tall, h/2 wide) whose window fills no more
+        # than ~80% of the monitor's height and ~85% of its width.
+        $work = [TartarusLaunchConsole]::WorkArea()
+        $font = [int][Math]::Floor([Math]::Min($work[1] * 0.8 / $Rows, $work[0] * 0.85 / ($Columns * 0.5)))
+        [TartarusLaunchConsole]::UseFontHeight([int16][Math]::Max(5, [Math]::Min(16, $font)))
+        # The real cell shape sets the columns that make the frame exactly 3:2.
+        $cell = [TartarusLaunchConsole]::CellSize()
+        Layout-Size ($cell[0] / [double]$cell[1])
+        $Columns = $script:cols; $Rows = $script:rows
+        $c = [Math]::Min($Columns, [Console]::LargestWindowWidth)
+        $r = [Math]::Min($Rows, [Console]::LargestWindowHeight)
+        # Grow the buffer first (a window can't outsize it), then match it to the window exactly.
+        [Console]::SetBufferSize([Math]::Max([Console]::BufferWidth, $c), [Math]::Max([Console]::BufferHeight, $r))
+        [Console]::SetWindowSize($c, $r)
+        [Console]::SetBufferSize($c, $r)
+        [TartarusLaunchConsole]::RemoveChromeAndScrollbar()
     } catch {}
 }
-exit $buildExitCode
+
+try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
+$out = [Console]::Out
+# Everything draws on true black (the console's own "black" is a grey 12,12,12). The screen is
+# blacked out before the window is shown, so the first thing seen is the empty stage.
+$black = "$E[48;2;0;0;0m"
+try { [Console]::CursorVisible = $false } catch {}
+$out.Write("$black$E[2J$E[3J$E[H")
+Set-LaunchConsoleLayout $cols $rows
+$out.Write("$black$E[2J$E[3J$E[H")
+try { [Console]::Title = 'Tartarus Engine' } catch {}
+try { [TartarusLaunchConsole]::SetIcon((Join-Path $root 'extern\branding\tartarus_icon.ico')) } catch {}
+try { [TartarusLaunchConsole]::ShowCentered() } catch {}
+
+$winW = $cols; $winH = $rows
+try { $winW = [Console]::WindowWidth; $winH = [Console]::WindowHeight } catch {}
+# A display too small for the full size: halve the art (and, if need be, the lockup) rather than
+# crop them.
+if ($winW -lt $contentCols + 2 -or $winH -lt $contentRows) {
+    $art = @(Shrink-Art $art 2)
+    if ($winW -lt (Block-Width $art) + (Block-Width $banner) + 2) { $banner = @(Shrink-Art $banner 2) }
+    Layout-Size
+}
+# Place the two columns in whatever window we have (exactly the window, normally): the spare
+# width is split evenly between the left margin, the gap and the right margin.
+$artWidth = Block-Width $art
+$bannerWidth = Block-Width $banner
+$spare = [Math]::Max(0, $winW - $artWidth - $bannerWidth)
+$artCol = [int][Math]::Floor($spare / 3) + 1                        # columns and rows are 1-based
+$rightCol = $artCol + $artWidth + [int][Math]::Floor($spare / 3)
+$contentTop = [Math]::Max(0, [int](($winH - $contentRows) / 2))
+$artRow = $contentTop + [int](($contentRows - $art.Count) / 2) + 1
+$bannerRow = $contentTop + [int](($contentRows - $rightRows) / 2) + 1
+$bannerCol = $rightCol
+$statusRow = $bannerRow + $banner.Count + $gapStatus
+$barRow = $statusRow + 1 + $gapBar
+$versionRow = $barRow + 1 + $gapVersion
+$artCenter = $artCol + $artWidth / 2.0
+$rightCenter = $rightCol + $bannerWidth / 2.0
+$barWidth = [Math]::Min($barWidth, $bannerWidth)
+$barCol = [int]($rightCenter - $barWidth / 2.0)
+
+$skipped = $false
+function Rgb([double]$r, [double]$g, [double]$b) {
+    $r = [int][Math]::Max(0.0, [Math]::Min(255.0, $r)); $g = [int][Math]::Max(0.0, [Math]::Min(255.0, $g)); $b = [int][Math]::Max(0.0, [Math]::Min(255.0, $b))
+    "$E[38;2;${r};${g};${b}m"
+}
+function At([int]$row, [int]$col) { "$E[${row};${col}H" }
+
+function Skip-Requested {
+    if ($script:skipped) { return $true }
+    try {
+        if ([Console]::KeyAvailable) { [void][Console]::ReadKey($true); $script:skipped = $true }
+    } catch {}
+    return $script:skipped
+}
+function Pause-Frame([int]$ms) { if (-not (Skip-Requested)) { Start-Sleep -Milliseconds $ms } }
+
+# --- the art -----------------------------------------------------------------------------------------
+# Each glyph is lit by its density, so the figure keeps its depth instead of reading flat white.
+# The lines are split once into runs of one tone, so a redraw at a new brightness is cheap.
+$tone = @{ '.' = 0.34; ':' = 0.46; '-' = 0.56; '=' = 0.66; '+' = 0.74; '*' = 0.82; '#' = 0.90; '%' = 0.96; '@' = 1.0 }
+$artRuns = @(foreach ($line in $art) {
+    $runs = New-Object System.Collections.Generic.List[object]
+    $i = 0
+    while ($i -lt $line.Length) {
+        $ch = [string]$line[$i]
+        $t = if ($ch -eq ' ') { -1.0 } elseif ($tone.ContainsKey($ch)) { $tone[$ch] } else { 1.0 }
+        $j = $i + 1
+        while ($j -lt $line.Length) {
+            $c = [string]$line[$j]
+            $u = if ($c -eq ' ') { -1.0 } elseif ($tone.ContainsKey($c)) { $tone[$c] } else { 1.0 }
+            if ($u -ne $t) { break }
+            $j++
+        }
+        $runs.Add(@($t, $line.Substring($i, $j - $i)))
+        $i = $j
+    }
+    , $runs
+})
+function Draw-Art([double]$level) {
+    $sb = New-Object System.Text.StringBuilder
+    for ($i = 0; $i -lt $artRuns.Count; $i++) {
+        $runs = $artRuns[$i]; if ($runs.Count -eq 0) { continue }
+        [void]$sb.Append((At ($artRow + $i) $artCol))
+        foreach ($r in $runs) {
+            if ($r[0] -ge 0) { $v = 255 * $level * $r[0]; [void]$sb.Append((Rgb $v $v ($v + 6))) }
+            [void]$sb.Append($r[1])
+        }
+    }
+    $out.Write($sb.ToString())
+}
+
+# --- the lockup ----------------------------------------------------------------------------------
+# Drawn up to column $upTo (the wipe), with a gold leading edge while it travels. $warm tints the
+# whole lockup toward candlelight, $level dims it.
+function Draw-Banner([int]$upTo, [double]$level = 1.0, [double]$warm = 0.0) {
+    $sb = New-Object System.Text.StringBuilder
+    $edge = 10
+    $body = Rgb ((236 + 19 * $warm) * $level) ((236 - 26 * $warm) * $level) ((240 - 100 * $warm) * $level)
+    $gold = Rgb (255 * $level) (214 * $level) (140 * $level)
+    for ($i = 0; $i -lt $banner.Count; $i++) {
+        $line = $banner[$i]; if (-not $line) { continue }
+        $n = [Math]::Min($upTo, $line.Length); if ($n -le 0) { continue }
+        $solid = [Math]::Max(0, [Math]::Min($n, $upTo - $edge))
+        [void]$sb.Append((At ($bannerRow + $i) $bannerCol))
+        [void]$sb.Append($body).Append($line.Substring(0, $solid))
+        [void]$sb.Append($gold).Append($line.Substring($solid, $n - $solid))
+    }
+    $out.Write($sb.ToString())
+}
+
+# --- the status, bar and version lines -------------------------------------------------------------
+function Draw-Centered([int]$row, [string]$text, [string]$color, [double]$center = $rightCenter, [int]$span = $bannerWidth) {
+    $clear = [Math]::Max(1, [int]($center - $span / 2.0))
+    $col = [Math]::Max(1, [int]($center - $text.Length / 2.0))
+    $out.Write("$(At $row $clear)$(' ' * $span)$(At $row $col)$color$text")
+}
+function Draw-Status([string]$text, [string]$color) { Draw-Centered $statusRow ($text.ToCharArray() -join ' ') $color }
+function Draw-Bar([double]$fraction, [double]$level = 1.0) {
+    $filled = [int][Math]::Round([Math]::Max(0.0, [Math]::Min(1.0, $fraction)) * $barWidth)
+    $out.Write("$(At $barRow $barCol)$(Rgb (228 * $level) (184 * $level) (104 * $level))$([string][char]0x2501 * $filled)" +
+               "$(Rgb (44 * $level) (44 * $level) (50 * $level))$([string][char]0x2500 * ($barWidth - $filled))")
+}
+function Draw-Version([double]$level = 1.0) {
+    if ($versionText) { Draw-Centered $versionRow $versionText (Rgb (78 * $level) (78 * $level) (86 * $level)) }
+}
+
+# --- 1. the art fades up out of the dark -----------------------------------------------------------
+foreach ($level in 0.06, 0.14, 0.26, 0.4, 0.56, 0.72, 0.86, 1.0) {
+    if (Skip-Requested) { break }
+    Draw-Art $level
+    Start-Sleep -Milliseconds 60
+}
+Draw-Art 1.0
+Pause-Frame 450
+
+# --- 2. the lockup wipes in, left to right ---------------------------------------------------------
+for ($x = 8; $x -lt $bannerWidth + 10; $x += 8) {
+    if (Skip-Requested) { break }
+    Draw-Banner $x
+    Start-Sleep -Milliseconds 10
+}
+Draw-Banner ($bannerWidth + 10)
+Draw-Version
+Pause-Frame 250
+
+# --- 3. the build: a pulse, a progress bar and a candlelit lockup until it finishes ----------------
+# MSBuild prints one "Project.vcxproj -> output" line per finished project; progress counts them
+# against the last successful build, with its duration filling in the long compiles between.
+$expectProjects = 0; $expectSeconds = 0.0
+try {
+    $p = ([IO.File]::ReadAllText($progressFile)).Trim() -split '\s+'
+    $expectProjects = [int]$p[0]; $expectSeconds = [double]::Parse($p[1], [Globalization.CultureInfo]::InvariantCulture)
+} catch {}
+function Read-BuildLog {
+    try {
+        $fs = New-Object IO.FileStream($buildLog, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]'ReadWrite, Delete')
+        try { return (New-Object IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Dispose() }
+    } catch { return '' }
+}
+function Count-Projects([string]$log) { ([regex]::Matches($log, '\.vcxproj -> ')).Count }
+
+$dim = Rgb 120 120 128
+$buildExitCode = 0
+$shown = 0.0; $projects = 0
+if ($buildProc) {
+    $tick = 0; $flicker = 0.12; $flickerTarget = 0.12
+    $rand = New-Object Random
+    while (-not $buildProc.HasExited) {
+        if ($tick % 4 -eq 0) { $projects = Count-Projects (Read-BuildLog) }
+        $t = $clock.Elapsed.TotalSeconds
+        $byProjects = if ($expectProjects -gt 0) { $projects / [double]$expectProjects } else { 0.0 }
+        $byTime = if ($expectSeconds -gt 0) { 0.9 * $t / $expectSeconds } else { 0.9 * (1 - [Math]::Exp(-$t / 90)) }
+        $target = [Math]::Min(0.97, [Math]::Max($byProjects, $byTime))
+        if ($target -gt $shown) { $shown += ($target - $shown) * 0.25 }
+
+        # Candlelight: the lockup's warmth wanders, eased, toward a new random level.
+        if ($tick % 5 -eq 0) { $flickerTarget = 0.05 + $rand.NextDouble() * 0.35 }
+        $flicker += ($flickerTarget - $flicker) * 0.3
+        Draw-Banner ($bannerWidth + 10) (1.0 - $flicker * 0.18) $flicker
+        if ($tick % 5 -eq 0) { Draw-Status ('BUILDING' + ('.' * (($tick / 5) % 4)).PadRight(3)) $dim }
+        Draw-Bar $shown
+        [TartarusLaunchConsole]::TaskbarProgress(2, $shown)
+        $tick++
+        Start-Sleep -Milliseconds 70
+    }
+    $buildProc.WaitForExit()
+    $buildExitCode = $buildProc.ExitCode
+    $buildSeconds = 0.0
+    try { $buildSeconds = ($buildProc.ExitTime - $buildProc.StartTime).TotalSeconds } catch {}
+    Draw-Banner ($bannerWidth + 10)
+}
+
+# --- a failed build: the errors, on screen, and a choice -------------------------------------------
+if ($buildExitCode -ne 0) {
+    try { [TartarusLaunchConsole]::TaskbarProgress(4, 1.0) } catch {}
+    foreach ($level in 0.7, 0.45, 0.25, 0.1, 0.0) { Draw-Art $level; Start-Sleep -Milliseconds 40 }
+    $log = Read-BuildLog
+    $prefix = [string]$root + '\'
+    $errors = New-Object System.Collections.Generic.List[string]
+    foreach ($l in ($log -split "`r?`n")) {
+        if ($l -notmatch '(?i)(\berror\b|CMake Error)') { continue }
+        $l = ($l -replace '\s*\[[^\]]*\.vcxproj\]\s*$', '').Trim()
+        $l = $l.Replace($prefix, '').Replace($prefix.Replace('\', '/'), '')
+        if (-not $errors.Contains($l)) { $errors.Add($l) }
+    }
+    if ($errors.Count -eq 0) {
+        foreach ($l in (($log -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -Last 8)) { $errors.Add($l.Trim()) }
+    }
+    $maxLines = [Math]::Min(14, [Math]::Max(1, $art.Count - 12))
+    $shownErrors = @($errors | Select-Object -First $maxLines)
+    # The errors take the art's place, on the left.
+    $textWidth = $artWidth - 2
+    $row = $artRow + [Math]::Max(0, [int](($art.Count - $shownErrors.Count - 6) / 2))
+    Draw-Centered $row ('BUILD FAILED'.ToCharArray() -join ' ') (Rgb 235 90 80) $artCenter $artWidth
+    $row += 3
+    $blockWidth = [Math]::Min($textWidth, (($shownErrors | Measure-Object -Property Length -Maximum).Maximum))
+    $col = [Math]::Max(1, [int]($artCenter - $blockWidth / 2.0))
+    foreach ($l in $shownErrors) {
+        if ($l.Length -gt $textWidth) { $l = $l.Substring(0, $textWidth - 3) + '...' }
+        $out.Write("$(At $row $col)$(Rgb 236 128 116)$l"); $row++
+    }
+    if ($errors.Count -gt $shownErrors.Count) {
+        $out.Write("$(At $row $col)$(Rgb 150 90 86)... and $($errors.Count - $shownErrors.Count) more in build\last-build.log"); $row++
+    }
+    Draw-Centered ($row + 2) 'The previous build does not contain your latest changes.' (Rgb 110 110 118) $artCenter $artWidth
+
+    Draw-Status 'BUILD FAILED' (Rgb 235 90 80)
+    Draw-Centered $barRow '[Y]  launch the previous build        [N]  close' (Rgb 200 200 206)
+    try { while ([Console]::KeyAvailable) { [void][Console]::ReadKey($true) } } catch {}
+    $choice = 11
+    try {
+        while ($true) {
+            $key = [Console]::ReadKey($true).Key
+            if ($key -eq [ConsoleKey]::Y) { $choice = 10; break }
+            if ($key -eq [ConsoleKey]::N -or $key -eq [ConsoleKey]::Escape) { break }
+        }
+    } catch {}
+    $out.Write("$E[0m$E[2J$E[H")
+    try { [Console]::CursorVisible = $true } catch {}
+    exit $choice
+}
+
+# --- done: fill the bar, READY, and fade the whole screen to black ---------------------------------
+if ($buildProc) {
+    while ($shown -lt 0.995) {
+        $shown += (1 - $shown) * 0.45; Draw-Bar $shown
+        try { [TartarusLaunchConsole]::TaskbarProgress(2, $shown) } catch {}
+        Start-Sleep -Milliseconds 25
+    }
+    Draw-Bar 1.0
+    # Next launch's progress estimate. A build that was only up to date says little; keep the old.
+    $projects = Count-Projects (Read-BuildLog)
+    if ($projects -gt 0 -and ($clock.Elapsed.TotalSeconds -gt 8 -or $expectProjects -eq 0)) {
+        try {
+            [IO.File]::WriteAllText($progressFile, "$projects $($clock.Elapsed.TotalSeconds.ToString('0.0', [Globalization.CultureInfo]::InvariantCulture))")
+        } catch {}
+    }
+}
+# READY, and how long the build took.
+$builtIn = ''
+if ($buildProc -and $buildSeconds -gt 0) {
+    $builtIn = if ($buildSeconds -ge 60) { '{0} min {1} s' -f [int][Math]::Floor($buildSeconds / 60), [int]($buildSeconds % 60) }
+               else { $buildSeconds.ToString('0.0', [Globalization.CultureInfo]::InvariantCulture) + ' s' }
+    $builtIn = "built in $builtIn"
+}
+function Draw-Ready([double]$level = 1.0) {
+    $word = 'READY'.ToCharArray() -join ' '
+    $tail = if ($builtIn) { "     $builtIn" } else { '' }
+    $col = [Math]::Max(1, [int]($rightCenter - ($word.Length + $tail.Length) / 2.0))
+    $clear = [Math]::Max(1, [int]($rightCenter - $bannerWidth / 2.0))
+    $out.Write("$(At $statusRow $clear)$(' ' * $bannerWidth)$(At $statusRow $col)$(Rgb (120 * $level) (220 * $level) (140 * $level))$word" +
+               "$(Rgb (96 * $level) (96 * $level) (104 * $level))$tail")
+}
+Draw-Ready
+try { [TartarusLaunchConsole]::TaskbarProgress(0, 0) } catch {}
+Start-Sleep -Milliseconds 750
+foreach ($level in 0.8, 0.6, 0.42, 0.26, 0.13, 0.04, 0.0) {
+    Draw-Art $level
+    Draw-Banner ($bannerWidth + 10) $level
+    Draw-Ready $level
+    if ($buildProc) { Draw-Bar 1.0 $level }
+    Draw-Version $level
+    Start-Sleep -Milliseconds 45
+}
+$out.Write("$E[0m$E[2J$E[H")
+try { [Console]::CursorVisible = $true } catch {}
+exit 0
