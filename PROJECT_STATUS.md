@@ -29,7 +29,7 @@ camera around. This is what "root motion" means: the animation itself
 supplies the movement, not a separate physics script guessing at how far
 a walk cycle should move you.
 
-**Player locomotion, phase 2 — done.** The player's own body now has the
+**Player locomotion, phase 2 â€” done.** The player's own body now has the
 arms that hold the gun. The old separate floating arms are still there
 behind the scenes (they animate the reload, inspect, aim and so on), but
 what you see is the body's own arms following their hands, so it is one
@@ -39,7 +39,7 @@ no hand pulling off the gun. Holstering hides the arms, draw and Play both
 bring them straight onto the gun, and the camera keeps the same height
 armed or unarmed.
 
-**Player locomotion, phase 3 — done.** The polish pass:
+**Player locomotion, phase 3 â€” done.** The polish pass:
 - **Turning in place.** Turn the view far enough while standing still and
   the feet step around to face it, with the chest twisting to keep up. The
   turn speed is capped so the feet never slide, and the mouse feels
@@ -57,7 +57,7 @@ armed or unarmed.
   just before landing, or just after stepping off an edge, still counts.
   You can jump out of a crouch when there is room.
 
-**Weapon states with the new arms — checked.** Aim down sights, reload,
+**Weapon states with the new arms â€” checked.** Aim down sights, reload,
 inspect, melee, holster and draw, and firing while walking were played and
 captured frame by frame. It turned up three bugs, all fixed: a pair of hands
 flashing after the holster, the camera rising when you holstered, and the
@@ -65,11 +65,13 @@ gun sitting still while the hands did the equip animation at Play.
 
 ## What is next
 
-- **Retire the separate arms model.** The gun should ride the body's own
-  gun-hand bone directly, so the hidden second arms rig and the extra
-  shadow it can cast go away. This is the biggest remaining piece.
-- **Small polish.** The laser beam shows briefly at the start of a draw,
-  feet have no toe bend, foot placement is off while airborne, and the
+- **The separate arms rig is now a hidden pose source.** It is not drawn
+  and casts no shadow (the body's own arms do), but it still plays the
+  weapon's animations and keeps the sights locked to the camera. Moving
+  the gun onto the body's own gun-hand bone was looked at and set aside: the
+  sights have to stay camera-locked, so a camera-space rig is still needed
+  (see issue #424).
+- **Small polish.** Feet have no toe bend, foot placement is off while airborne, and the
   camera during a jump out of a crouch could be smoother.
 - **Known limits.** A stop clip covers one foot phase, so entering it can
   make the feet pop slightly. There is no weapon-spread bonus for standing
