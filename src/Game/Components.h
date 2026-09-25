@@ -463,6 +463,10 @@ struct FirstPersonBodyComponent {
     // pass, at the view model's screen position), and the arms rig itself is no longer drawn -
     // its gun is. Off leaves the arms rig drawing the arms, as before.
     bool WeaponArms = false;
+    // The body piece that is the arms (a child whose name contains this, case-insensitive). While
+    // Weapon Arms holds it is drawn with the gun in the view-model pass, so its hands sit exactly
+    // where the first-person rig's do.
+    std::string ArmsPiece = "Arms";
     // How much of the camera's pitch the spine takes (0 = the body stays upright, 1 = the chest
     // tilts as far as the view), so the shoulders follow the view and the hands stay in reach.
     float SpineAim = 0.0f;

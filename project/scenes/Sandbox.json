@@ -42596,6 +42596,39 @@
         1,
         1
       ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "animations/fps_body_locomotion.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": 2,
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "id": 663,
+      "name": "Arms",
+      "order": 664,
+      "parentId": 657,
+      "path": "assets/quantum/FirstPerson/Quantum_Arms_FP.fbx",
+      "pathGuid": "19bbef7e387a5ef4",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
     }
   ],
   "motionBlur": false,
