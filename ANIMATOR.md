@@ -68,9 +68,10 @@ The first-person weapon uses this system. See `FPS_ANIMATION_SYSTEM.md` for that
 
 | Field | Meaning |
 |---|---|
-| Motion (one per track) | A **Clip**, or a **Blend Tree 1D**. Pick a clip from the list, or drag an FBX from the Asset Browser onto the slot. If there is no clip on the base layer, that track holds its bind pose. On a higher layer, no clip means the state adds nothing. |
+| Motion (one per track) | A **Clip**, or a **Blend Tree 1D**. Pick a clip from the list (type to search; **Project files** lists animation files no scene has loaded yet, such as `assets/animations/mc_core_motion`), or drag an FBX from the Asset Browser onto the slot. If there is no clip on the base layer, that track holds its bind pose. On a higher layer, no clip means the state adds nothing. |
 | Speed / Speed Param | Playback rate. The optional Float parameter multiplies it. |
 | Loop | Loops (on) or holds the last frame (off). |
+| Root Motion | With the component's Root Motion on, this state's travel moves the object. Off keeps the travel in the pose. Under the checkbox, the window shows how far the clip travels and turns per pass, and its speed, measured on the selected rig. |
 | Priority | Used by Any State transitions that have **Respect Priority** on (see below). |
 | Tags | Comma-separated labels that game code reads with `HasTag` (e.g. `ADS`, `Reload`, `Hidden`). They keep code independent of state names. |
 | Events | A name at a normalized time: 0 = entry, 1 = the end of one pass. Game code sees it through `EventFired(name)` on the frame it is crossed. Looping states fire their events every loop. |
@@ -136,6 +137,33 @@ transitions of its own. This is how the weapon rig stays locked to the arms.
 A state lasts as long as the longest motion across every rig in the group, so a shorter clip
 on one track holds its last frame instead of cutting the other track short.
 
+### Root motion
+
+A clip can author travel on its root bone: a walk that really moves forward, a turn that
+really turns. With **Root Motion** on in the component (Animator Controller, or a plain
+Animation component), that travel comes out of the pose and moves the object instead. The
+character stays on its object, collision and cameras follow it, and a looping walk keeps
+walking instead of snapping back each loop.
+
+| Setting | Meaning |
+|---|---|
+| Root Motion: **Off** | The clips play exactly as authored. |
+| Root Motion: **Apply** | The travel moves the object. On a simulated Rigidbody it becomes the body's velocity, so walls stop the character. Freeze the body's X and Z rotation so it can't tip over. A kinematic body, or an object with no Rigidbody, moves its Transform. |
+| Root Motion: **In Place** | The pose stays in place, but the object doesn't move. Game code reads the motion and moves the object itself (for example through a character controller). This is also the mode for a second rig parented to one that applies it, such as a separate head mesh. |
+| Root Bone | Whose travel counts. **Auto** picks `root` when the rig has one (Unreal and most game rigs), else the hips or pelvis (Mixamo). |
+| Rotation | Turns in the clips turn the object. Off leaves the turn in the pose. |
+| Vertical | Height changes move the object. Off (the usual choice) leaves jumps and crouches in the pose, so the object stays on the ground. |
+
+How it works:
+- **Ground plane only by default.** The root's travel along the ground and its heading become the object's movement. What's left in the pose is the bob, the lean and the hip sway.
+- **Crossfades and blend trees mix their travel** in the same proportions as the poses, so walk-to-run speeds up smoothly.
+- **Loops carry on** from where the last pass ended.
+- **Only the base layer drives root motion.** Higher layers never move the object.
+- **Per-state opt-out:** a state with **Root Motion** off in the Animator window keeps its travel in the pose.
+- **Live readout:** while playing, the Inspector's Root Motion section shows the live speed (m/s) and turn rate (°/s).
+- **Clip packs:** packs often ship each clip twice, with root motion and in place (`_No_Rm` in the MC Core Motion pack). With Root Motion on, use the version with root motion.
+- **Try it:** the Sandbox's *Root Motion Demo* (x −42, z −30) has two Quantum characters running the same controller. One has Root Motion on and walks, stops, turns and walks back. The other has it off: its mesh walks away from its object and snaps back each loop.
+
 ---
 
 ## 4. For programmers
@@ -163,6 +191,19 @@ if (anim.EventFired("Refill")) ammo = magazine;
   applied (two-bone limbs, look-at, runtime bone offsets). See PROCEDURAL_ANIMATION.md.
 - **Model API.** Posing goes through `Model::SampleLocalPose` / `Model::ApplyLocalPose`. The
   model's own `PlayAnimation` path is left untouched for every other caller.
+- **Root motion.** The maths is in `src/Game/RootMotion.h`, and `TestRootMotion` covers it.
+  - After each update the component's `RootMotion` holds the last frame's motion:
+    - `DeltaPosition`: world metres, or the parent's space when the object is parented.
+    - `DeltaYaw`: degrees.
+    - `Speed` / `TurnRate`: smoothed.
+  - In **In Place** mode, apply the motion yourself:
+    ```cpp
+    const auto& rm = registry.get<AnimatorControllerComponent>(e).RootMotion;
+    controllerMove += rm.DeltaPosition;  // e.g. through your character controller
+    yawDegrees    += rm.DeltaYaw;
+    ```
+  - `ApplyRootMotion` (`AnimationSystem.h`) is what **Apply** does.
+  - The first-person player is never moved by it: its own controller owns its movement.
 
 ### File format (v2)
 
@@ -202,4 +243,4 @@ if (anim.EventFired("Refill")) ammo = magazine;
 - 2D blend trees, sub-state machines and animation curves.
 - Per-transition interruption source (Unity's *Current / Next / ordered* settings). This system has only *Interruptible* on/off plus priorities.
 - A preview of motions in the window while in Edit mode.
-- Root motion and IK.
+- Root motion on higher layers, and extracting a curve (e.g. a speed parameter) from it.

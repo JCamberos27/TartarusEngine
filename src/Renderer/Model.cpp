@@ -859,6 +859,19 @@ const AnimationClip* Model::ClipAt(int i, const std::vector<int>** nodeChannel) 
     return &clip;
 }
 
+LocalTRS Model::SampleClipNode(int clipIndex, const AnimationClip& clip, int channel, int node, float ticks) const {
+    LocalTRS t = clip.Channels[channel].Sample(ticks, m_D->Nodes[node].BindTRS);
+    const int e = clipIndex - (int)m_D->Animations.size();
+    if (e >= 0 && e < (int)m_ExternalClips.size()) {
+        const auto& corr = m_ExternalClips[e].Correction;
+        if (node < (int)corr.size() && corr[node] != glm::quat(1.0f, 0.0f, 0.0f, 0.0f)) {
+            t.T = corr[node] * t.T;
+            t.R = glm::normalize(corr[node] * t.R);
+        }
+    }
+    return t;
+}
+
 float Model::AnimationLength(int index) const {
     const std::vector<int>* nc = nullptr;
     const AnimationClip* c = ClipAt(index, &nc);
@@ -915,6 +928,28 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
                   LogContext::Asset(m_Path));
         return -1;
     }
+    // Rest-orientation differences at the top of the animated hierarchy (a bone whose parent the
+    // clip doesn't drive): the clip's rotations and translations there are in its own file's
+    // frame. The usual case is an axis convention - a Z-up pack on a Y-up rig, whose root holds
+    // the conversion as an FBX pre-rotation that the clip's root keys don't include - which
+    // would otherwise lay the character on its back. Same-export rigs get no correction.
+    for (int n = 0; n < (int)m_D->Nodes.size(); ++n) {
+        if (x.NodeChannel[n] < 0) continue;
+        const int parent = m_D->Nodes[n].Parent;
+        if (parent >= 0 && x.NodeChannel[parent] >= 0) continue;
+        const AnimNode* src = nullptr;
+        for (const AnimNode& s : source.m_D->Nodes)
+            if (s.Name == m_D->Nodes[n].Name) { src = &s; break; }
+        if (!src) continue;
+        const glm::quat corr = glm::normalize(m_D->Nodes[n].BindTRS.R * glm::inverse(src->BindTRS.R));
+        if (std::abs(corr.w) > 0.99996f) continue; // under ~1 degree: the same rest pose
+        if (x.Correction.empty()) x.Correction.assign(m_D->Nodes.size(), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+        x.Correction[n] = corr;
+        Log::Info("Animation: '" + ref + "' is authored in a different rest frame at '" + m_D->Nodes[n].Name +
+                  "' (" + std::to_string((int)std::lround(glm::degrees(glm::angle(corr)))) + " deg, e.g. Z-up vs Y-up); "
+                  "retargeted onto '" + std::filesystem::u8path(m_Path).filename().u8string() + "'.",
+                  LogContext::Asset(m_Path));
+    }
     if (matched * 2 < (int)clip.Channels.size())
         Log::Warn("Animation: '" + ref + "' matches only " + std::to_string(matched) + " of its " +
                   std::to_string(clip.Channels.size()) + " animated bones on '" + m_Path +
@@ -952,9 +987,17 @@ void Model::UpdateAnimation(float dt) {
     const bool fading = m_FadeDuration > 0.0f;
     if (m_Anim.Clip < 0 && !fading && !m_PosePending) return;
 
+    // Root motion (SetRootMotion): each playing clip's motion over this step, mixed by the fade.
+    RootMotionMix motion;
+    const float fadeW = fading ? std::clamp(m_FadeElapsed / m_FadeDuration, 0.0f, 1.0f) : 1.0f;
     auto advance = [&](PlaybackState& s) {
         if (s.Clip < 0) return;
+        const float before = s.Time;
         s.Time += dt * s.Speed;
+        if (m_RootMotionNode >= 0) {
+            const float w = &s == &m_Anim ? fadeW : 1.0f - fadeW;
+            motion.Add(ClipRootMotion(s.Clip, before, s.Time, s.Wrap, m_RootMotionNode, m_RootMotionSettings), w);
+        }
         // Once: stop at the end (back to the bind pose, like Unity's legacy Animation).
         const float len = AnimationLength(s.Clip);
         if (s.Wrap == AnimationWrapMode::Once && (s.Time >= len || s.Time < 0.0f)) s.Clip = -1;
@@ -965,6 +1008,7 @@ void Model::UpdateAnimation(float dt) {
         m_FadeElapsed += std::fabs(dt);
         if (m_FadeElapsed >= m_FadeDuration) { m_FadeDuration = 0.0f; m_AnimFrom = {}; }
     }
+    if (m_RootMotionNode >= 0) m_RootMotionPending = m_RootMotionPending.Then(motion.Result());
     EvaluatePose();
     m_PosePending = false;
 }
@@ -1007,19 +1051,42 @@ void Model::EvaluatePose() {
     const float curTicks = cur ? WrappedClipTicks(*cur, m_Anim.Time, m_Anim.Wrap) : 0.0f;
     const float fromTicks = from ? WrappedClipTicks(*from, m_AnimFrom.Time, m_AnimFrom.Wrap) : 0.0f;
 
+    // Root motion: the root node of each clip is put back in place before the two are blended.
+    const int rootNode = m_RootMotionNode < (int)nodes.size() ? m_RootMotionNode : -1;
+    auto inPlace = [&](const LocalTRS& sampled, const PlaybackState& s, int node) {
+        // Ping-pong has no root motion to hand over (ClipRootMotion), so it plays as authored.
+        if (s.Clip < 0 || s.Wrap == AnimationWrapMode::PingPong) return sampled;
+        const glm::mat4 parent = nodes[node].Parent >= 0 ? m_NodeGlobals[nodes[node].Parent] : glm::mat4(1.0f);
+        const glm::mat4 toModel = m_D->GlobalInverseTransform * parent;
+        const glm::mat4 x = toModel * sampled.ToMatrix();
+        const glm::mat4 x0 = SampleNodeModelSpace(s.Clip, 0.0f, AnimationWrapMode::ClampForever, node);
+        const glm::mat4 local = glm::inverse(toModel) * RootMotionInPlace(x, x0, m_RootMotionSettings);
+        LocalTRS out = sampled;
+        glm::vec3 skew, scale; glm::vec4 persp;
+        if (glm::decompose(local, scale, out.R, out.T, skew, persp)) out.R = glm::normalize(out.R);
+        return out;
+    };
+
     for (size_t i = 0; i < nodes.size(); ++i) {
         const AnimNode& n = nodes[i];
         const int cc = cur ? (*curMap)[i] : -1;
+        const bool strip = (int)i == rootNode;
         glm::mat4 local;
         if (!blending) {
-            local = cc >= 0 ? cur->Channels[cc].Sample(curTicks, n.BindTRS).ToMatrix() : n.BindLocal;
+            if (cc < 0) local = n.BindLocal;
+            else {
+                const LocalTRS b = SampleClipNode(m_Anim.Clip, *cur, cc, (int)i, curTicks);
+                local = (strip ? inPlace(b, m_Anim, (int)i) : b).ToMatrix();
+            }
         } else {
             const int fc = from ? (*fromMap)[i] : -1;
             if (cc < 0 && fc < 0) {
                 local = n.BindLocal;
             } else {
-                const LocalTRS a = fc >= 0 ? from->Channels[fc].Sample(fromTicks, n.BindTRS) : n.BindTRS;
-                const LocalTRS b = cc >= 0 ? cur->Channels[cc].Sample(curTicks, n.BindTRS) : n.BindTRS;
+                LocalTRS a = fc >= 0 ? SampleClipNode(m_AnimFrom.Clip, *from, fc, (int)i, fromTicks) : n.BindTRS;
+                LocalTRS b = cc >= 0 ? SampleClipNode(m_Anim.Clip, *cur, cc, (int)i, curTicks) : n.BindTRS;
+                if (strip && fc >= 0) a = inPlace(a, m_AnimFrom, (int)i);
+                if (strip && cc >= 0) b = inPlace(b, m_Anim, (int)i);
                 local = LocalTRS::Blend(a, b, w).ToMatrix();
             }
         }
@@ -1055,7 +1122,7 @@ bool Model::SampleLocalPose(int clip, float seconds, AnimationWrapMode wrap, std
     for (size_t i = 0; i < nodes.size(); ++i) {
         const int ch = (*map)[i];
         if (ch < 0) continue;
-        out[i] = c->Channels[ch].Sample(ticks, nodes[i].BindTRS);
+        out[i] = SampleClipNode(clip, *c, ch, (int)i, ticks);
         if (driven) (*driven)[i] = 1;
     }
     return true;
@@ -1074,6 +1141,93 @@ void Model::ApplyLocalPose(const std::vector<LocalTRS>& pose) {
     }
     m_ExternalPose = true;
     m_PosePending = false;
+}
+
+int Model::FindRootMotionNode(const std::string& name) const {
+    const auto& nodes = m_D->Nodes;
+    if (!name.empty()) return NodeIndex(name);
+    // The auto pick is asked for every frame: remember it per import.
+    if (m_AutoRootMotionFor == m_D.get()) return m_AutoRootMotionNode;
+    m_AutoRootMotionFor = m_D.get();
+    m_AutoRootMotionNode = -1;
+    auto leaf = [](const std::string& s) { // "mixamorig:Hips" -> "hips"
+        const size_t colon = s.find_last_of(':');
+        std::string l = colon == std::string::npos ? s : s.substr(colon + 1);
+        for (char& ch : l) ch = (char)std::tolower((unsigned char)ch);
+        return l;
+    };
+    for (int i = 0; i < (int)nodes.size(); ++i)
+        if (nodes[i].Parent >= 0 && leaf(nodes[i].Name) == "root") return m_AutoRootMotionNode = i;
+    for (int i = 0; i < (int)nodes.size(); ++i) {
+        const std::string l = leaf(nodes[i].Name);
+        if (l == "hips" || l == "pelvis") return m_AutoRootMotionNode = i;
+    }
+    return -1;
+}
+
+glm::mat4 Model::SampleNodeModelSpace(int clip, float seconds, AnimationWrapMode wrap, int node) const {
+    const auto& nodes = m_D->Nodes;
+    if (node < 0 || node >= (int)nodes.size()) return glm::mat4(1.0f);
+    const std::vector<int>* map = nullptr;
+    const AnimationClip* c = clip >= 0 ? ClipAt(clip, &map) : nullptr;
+    const float ticks = c ? WrappedClipTicks(*c, seconds, wrap) : 0.0f;
+    glm::mat4 g(1.0f);
+    for (int i = node; i >= 0; i = nodes[i].Parent) {
+        const int ch = c ? (*map)[i] : -1;
+        g = (ch >= 0 ? SampleClipNode(clip, *c, ch, i, ticks).ToMatrix() : nodes[i].BindLocal) * g;
+    }
+    return m_D->GlobalInverseTransform * g;
+}
+
+glm::mat4 Model::PoseNodeModelSpace(const std::vector<LocalTRS>& pose, int node) const {
+    const auto& nodes = m_D->Nodes;
+    if (node < 0 || node >= (int)nodes.size() || pose.size() != nodes.size()) return glm::mat4(1.0f);
+    glm::mat4 g(1.0f);
+    for (int i = node; i >= 0; i = nodes[i].Parent) g = pose[i].ToMatrix() * g;
+    return m_D->GlobalInverseTransform * g;
+}
+
+void Model::SetPoseNodeModelSpace(std::vector<LocalTRS>& pose, int node, const glm::mat4& modelSpace) const {
+    const auto& nodes = m_D->Nodes;
+    if (node < 0 || node >= (int)nodes.size() || pose.size() != nodes.size()) return;
+    const glm::mat4 parent = nodes[node].Parent >= 0 ? PoseNodeModelSpace(pose, nodes[node].Parent)
+                                                     : m_D->GlobalInverseTransform;
+    const glm::mat4 local = glm::inverse(parent) * modelSpace;
+    glm::vec3 scale, skew, t; glm::vec4 persp;
+    glm::quat r;
+    if (!glm::decompose(local, scale, r, t, skew, persp)) return;
+    pose[node].T = t;
+    pose[node].R = glm::normalize(r);
+}
+
+void Model::StripRootMotion(std::vector<LocalTRS>& pose, int clip, int node, const RootMotionSettings& s) const {
+    if (node < 0 || node >= NodeCount() || pose.size() != (size_t)NodeCount()) return;
+    const glm::mat4 x = PoseNodeModelSpace(pose, node);
+    const glm::mat4 x0 = SampleNodeModelSpace(clip, 0.0f, AnimationWrapMode::ClampForever, node);
+    SetPoseNodeModelSpace(pose, node, RootMotionInPlace(x, x0, s));
+}
+
+RootMotionDelta Model::ClipRootMotion(int clip, float t0, float t1, AnimationWrapMode wrap, int node,
+                                      const RootMotionSettings& s) const {
+    const float len = AnimationLength(clip);
+    if (node < 0 || !(len > 0.0f) || wrap == AnimationWrapMode::PingPong) return {};
+    const bool loop = wrap == AnimationWrapMode::Loop;
+    return RootMotionBetween(
+        [&](float t) { return SampleNodeModelSpace(clip, t, AnimationWrapMode::ClampForever, node); },
+        t0, t1, len, loop, s);
+}
+
+void Model::SetRootMotion(int node, const RootMotionSettings& s) {
+    if (node >= NodeCount()) node = -1;
+    if (node != m_RootMotionNode) m_RootMotionPending = {};
+    m_RootMotionNode = node;
+    m_RootMotionSettings = s;
+}
+
+RootMotionDelta Model::ConsumeRootMotion() {
+    const RootMotionDelta d = m_RootMotionPending;
+    m_RootMotionPending = {};
+    return d;
 }
 
 float Model::NormalizedTime() const {

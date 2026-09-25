@@ -38,6 +38,25 @@ std::vector<RegisteredComponent>& Storage() {
 }
 } // namespace
 
+namespace {
+// The four root-motion fields (RootMotionOptions) starting at `first`: stable keys, the mode's
+// labels, one collapsible group, and the options hidden while it's Off. The bone is drawn by a
+// custom picker (the model's bones), so it's EditorHidden.
+void SetupRootMotionFields(ReflectComponent& m, size_t first) {
+    static const char* kModeLabels = "Off\0Apply\0In Place\0";
+    static const char* kKeys[] = {"rootMotion", "rootMotionBone", "rootMotionRotation", "rootMotionVertical"};
+    for (size_t i = 0; i < 4; ++i) {
+        ReflectField& f = m.Fields[first + i];
+        f.Key = kKeys[i];
+        f.Group = "Root Motion";
+        if (i > 0) { f.VisibleIfField = "Root Motion"; f.VisibleIfValue = 0; f.VisibleIfNot = true; }
+    }
+    m.Fields[first].EnumLabels = kModeLabels;
+    m.Fields[first].EnumCount = 3;
+    m.Fields[first + 1].EditorHidden = true;
+}
+} // namespace
+
 const std::vector<RegisteredComponent>& All() { return Storage(); }
 
 void Add(RegisteredComponent entry) { Storage().push_back(std::move(entry)); }
@@ -187,10 +206,24 @@ void RegisterEngineComponents() {
               "Playback rate (1 = authored speed; negative plays backwards).", -10.0f, 10.0f },
             { "Cross Fade", T::Float, TARTARUS_REFLECT_FIELD(SkeletalAnimationComponent, CrossFade), 0.01f,
               "Seconds to blend when the clip changes while playing.", 0.0f, 5.0f },
+            { "Root Motion", T::Enum, TARTARUS_REFLECT_FIELD(SkeletalAnimationComponent, RootMotion.Mode), 0.0f,
+              "What happens to the travel the clips author on the root bone.\n"
+              "Off: the clips play as authored (a walk drags the mesh away and snaps back each loop).\n"
+              "Apply: the travel moves this object instead, and the pose stays in place.\n"
+              "In Place: the pose stays in place and the object doesn't move - game code reads the\n"
+              "motion and moves it (e.g. through a character controller)." },
+            { "Root Motion Bone", T::String, TARTARUS_REFLECT_FIELD(SkeletalAnimationComponent, RootMotion.Bone), 0.0f,
+              "The bone whose travel is the character's (empty = auto: \"root\", else the hips / pelvis)." },
+            { "Root Motion Rotation", T::Bool, TARTARUS_REFLECT_FIELD(SkeletalAnimationComponent, RootMotion.Rotation), 0.0f,
+              "Turns in the clips turn the object. Off: the turn stays in the pose." },
+            { "Root Motion Vertical", T::Bool, TARTARUS_REFLECT_FIELD(SkeletalAnimationComponent, RootMotion.Vertical), 0.0f,
+              "Height changes in the clips move the object up and down. Off (usual): jumps and crouches\n"
+              "stay in the pose, and the object keeps to the ground." },
         };
         m.Fields[0].EditorHidden = true;
         m.Fields[2].EnumLabels = kWrapLabels;
         m.Fields[2].EnumCount = 4;
+        SetupRootMotionFields(m, 5);
         Register<SkeletalAnimationComponent>(std::move(m));
     }
 
@@ -210,8 +243,22 @@ void RegisterEngineComponents() {
             { "Track", T::String, TARTARUS_REFLECT_FIELD(AnimatorControllerComponent, Track), 0.0f,
               "Which of the controller's clip tracks this object plays (empty = the first).\n"
               "A controller can carry several clip sets per state, e.g. \"arms\" and \"weapon\"." },
+            { "Root Motion", T::Enum, TARTARUS_REFLECT_FIELD(AnimatorControllerComponent, RootMotion.Mode), 0.0f,
+              "What happens to the travel the clips author on the root bone.\n"
+              "Off: the clips play as authored (a walk drags the mesh away and snaps back each loop).\n"
+              "Apply: the travel moves this object instead, and the pose stays in place.\n"
+              "In Place: the pose stays in place and the object doesn't move - game code reads the\n"
+              "motion and moves it (e.g. through a character controller)." },
+            { "Root Motion Bone", T::String, TARTARUS_REFLECT_FIELD(AnimatorControllerComponent, RootMotion.Bone), 0.0f,
+              "The bone whose travel is the character's (empty = auto: \"root\", else the hips / pelvis)." },
+            { "Root Motion Rotation", T::Bool, TARTARUS_REFLECT_FIELD(AnimatorControllerComponent, RootMotion.Rotation), 0.0f,
+              "Turns in the clips turn the object. Off: the turn stays in the pose." },
+            { "Root Motion Vertical", T::Bool, TARTARUS_REFLECT_FIELD(AnimatorControllerComponent, RootMotion.Vertical), 0.0f,
+              "Height changes in the clips move the object up and down. Off (usual): jumps and crouches\n"
+              "stay in the pose, and the object keeps to the ground." },
         };
         m.Fields[0].EditorHidden = true;
+        SetupRootMotionFields(m, 3);
         Register<AnimatorControllerComponent>(std::move(m));
     }
 
