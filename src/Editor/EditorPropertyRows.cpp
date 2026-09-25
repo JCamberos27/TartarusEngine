@@ -104,7 +104,8 @@ bool PropertyRows::Range(const char* label, glm::vec2& v, float speed, const cha
     ImGui::DragFloat("##max", &f[1], speed, 0.0f, 0.0f, fmt);
     Tip(tip);
     c |= ImGui::IsItemDeactivatedAfterEdit();
-    v = {std::min(f[0], f[1]), std::max(f[0], f[1])};
+    // Ordered only when the edit ends: swapping every frame handed the dragged field the other's role mid-drag.
+    v = c ? glm::vec2(std::min(f[0], f[1]), std::max(f[0], f[1])) : glm::vec2(f[0], f[1]);
     ImGui::PopID();
     return Commit(c);
 }
