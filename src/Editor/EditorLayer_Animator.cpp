@@ -733,7 +733,7 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
             if (ImGui::BeginTabItem(tab)) {
                 static int s_against = 0; // 0 none, 1 body, 2 weapon
                 ImGui::SetNextItemWidth(-FLT_MIN);
-                ImGui::Combo("##against", &s_against, "Check the graph only Also check it as a first-person body controller Also check it as a first-person weapon controller ");
+                ImGui::Combo("##against", &s_against, "Check the graph only\0Also check it as a first-person body controller\0Also check it as a first-person weapon controller\0");
                 std::vector<FPBody::Check> contract;
                 if (s_against == 1) {
                     FirstPersonBodyComponent all;
