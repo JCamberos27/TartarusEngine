@@ -41,6 +41,13 @@ public:
     // Inside the range, and back toward it, the view is free. 0 = unlimited. Set before each Update;
     // the turn beyond the limit is dropped.
     float MaxYawRate = 0.0f;
+    // Crouching (the Input Manager's "Crouch", held): the capsule shrinks to CrouchHeight metres and
+    // the move slows to CrouchSpeedMultiplier of MoveSpeed (no sprint, no jump). 0 = no crouching -
+    // set by whatever wants it (a first-person body). Standing up waits for headroom.
+    float CrouchHeight = 0.0f;
+    float CrouchSpeedMultiplier = 0.45f;
+    bool Crouched = false;
+    float CrouchBlend = 0.0f; // 0 standing .. 1 crouched: eases the eye height
     float YawFreeCenter = 0.0f;
     float YawFreeRange = 0.0f;
     // Out, per Update: the input as a horizontal velocity (m/s, world - what the player asked

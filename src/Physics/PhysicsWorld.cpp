@@ -1842,6 +1842,28 @@ int OverlapBox(const float center[3], const float halfExtents[3], const float ro
                            f, out, maxEntities);
 }
 
+bool ResizeCharacter(float cylinderHalfHeight) {
+    if (!HasCharacter() || cylinderHalfHeight <= 0.0f) return false;
+    auto* cap = static_cast<PxCapsuleController*>(g_State->controller);
+    const PxExtendedVec3 foot = cap->getFootPosition();
+    cap->resize(2.0f * cylinderHalfHeight);
+    cap->setFootPosition(foot); // resize does not promise to keep the bottom where it was
+    return true;
+}
+
+bool CharacterFitsAt(float cylinderHalfHeight) {
+    if (!HasCharacter() || cylinderHalfHeight <= 0.0f) return false;
+    auto* cap = static_cast<PxCapsuleController*>(g_State->controller);
+    const PxExtendedVec3 foot = cap->getFootPosition();
+    // A hair smaller and lifted, so the floor under the feet and a wall alongside don't count.
+    const float radius = std::max(0.02f, cap->getRadius() - 0.03f);
+    const PxVec3 centre((float)foot.x, (float)foot.y + 0.04f + cylinderHalfHeight + radius, (float)foot.z);
+    const PxQuat lieAlongY(PxPi * 0.5f, PxVec3(0.0f, 0.0f, 1.0f)); // PhysX capsules lie along X
+    QueryFilter f;
+    f.HitTriggers = 0;
+    return OverlapFiltered(PxCapsuleGeometry(radius, cylinderHalfHeight), PxTransform(centre, lieAlongY), f, nullptr, 0) == 0;
+}
+
 // ==================================================================================
 // #185 debug tooling — a small, general-use visual debugger
 // ==================================================================================
