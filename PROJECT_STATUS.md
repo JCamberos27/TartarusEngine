@@ -29,43 +29,48 @@ camera around. This is what "root motion" means: the animation itself
 supplies the movement, not a separate physics script guessing at how far
 a walk cycle should move you.
 
-**Player locomotion, phase 2 â€” not started.** Right now the gun and the
-arms holding it are a completely separate model that floats in front of
-the camera, not attached to the body at all. Phase 2 means giving the
-player's own body real arms that hold the gun, so there's one connected
-character instead of two overlapping ones.
+**Player locomotion, phase 2 — done.** The player's own body now has the
+arms that hold the gun. The old separate floating arms are still there
+behind the scenes (they animate the reload, inspect, aim and so on), but
+what you see is the body's own arms following their hands, so it is one
+connected character. Where the camera sits comes from the body's
+shoulders, so the gun stays within the arms' reach: no stretched arms and
+no hand pulling off the gun. Holstering hides the arms, draw and Play both
+bring them straight onto the gun, and the camera keeps the same height
+armed or unarmed.
 
-**Player locomotion, phase 3 â€” not started.** Polish work: turning in
-place without the body twisting oddly, smooth starts/stops instead of
-snapping straight into a walk, crouching, and feet that plant properly on
-slopes and stairs instead of clipping through them.
+**Player locomotion, phase 3 — done.** The polish pass:
+- **Turning in place.** Turn the view far enough while standing still and
+  the feet step around to face it, with the chest twisting to keep up. The
+  turn speed is capped so the feet never slide, and the mouse feels
+  normal while aiming.
+- **Starts and stops.** Real start and stop clips play as you begin or end
+  a run. Tapping a move key does not trigger a stop clip or a full
+  push-off.
+- **Crouch.** Hold Left Ctrl. The body drops with a shorter collision
+  capsule and a lower camera, moves slower, and has its own stand-to-crouch,
+  turn, start and stop clips. It only stands up when there is headroom.
+- **Foot placement.** Feet are placed on the ground under them, so they no
+  longer clip into slopes and stairs, and a planted foot stays put instead
+  of skating. Going up or down small stairs no longer bounces the camera.
+- **Jump and land.** You keep your speed through a landing. A jump pressed
+  just before landing, or just after stepping off an edge, still counts.
+  You can jump out of a crouch when there is room.
 
-## Recent fix (this session)
+**Weapon states with the new arms — checked.** Aim down sights, reload,
+inspect, melee, holster and draw, and firing while walking were played and
+captured frame by frame. It turned up three bugs, all fixed: a pair of hands
+flashing after the holster, the camera rising when you holstered, and the
+gun sitting still while the hands did the equip animation at Play.
 
-The player's body has its own set of arms baked into its torso model
-(inherited from the "Quantum" character asset), and they were never told
-to hide themselves. So in Play mode you'd see two disconnected sets of
-arms at once: the body's own arms (hanging in whatever pose the walk
-animation left them in) and the separate gun-holding arms floating out in
-front of the camera, with no relationship to each other.
+## What is next
 
-The engine already has a setting built for exactly this ("Hidden Bones"
-on the body's settings), it just wasn't filled in for this scene. It's now
-set to hide the body's arms from the shoulder down, so only the
-gun-holding arms show. This is a one-line data fix in the scene file, not
-a code change â€” verified by reading the code that does the hiding and by
-inspecting the actual character model file to confirm the bone names, but
-**not verified by running the engine and looking at it**, since this cloud
-session has no graphics hardware or Vulkan drivers to actually launch the
-editor. Worth a quick look next time you're at your own machine to confirm
-it looks right.
-
-## Known limitations of this work session
-
-This session runs in a cloud container with no GPU and no Vulkan SDK
-installed, and the project's build/run workflow (`run-editor.cmd`) is
-Windows-specific. That means changes to C++ code or shaders can be
-written and reasoned through carefully, but can't be compiled or run here
-to confirm they work â€” that has to happen on your own machine. Pure data
-changes (like the scene fix above) can be verified more confidently by
-reading the code that consumes them.
+- **Retire the separate arms model.** The gun should ride the body's own
+  gun-hand bone directly, so the hidden second arms rig and the extra
+  shadow it can cast go away. This is the biggest remaining piece.
+- **Small polish.** The laser beam shows briefly at the start of a draw,
+  feet have no toe bend, foot placement is off while airborne, and the
+  camera during a jump out of a crouch could be smoother.
+- **Known limits.** A stop clip covers one foot phase, so entering it can
+  make the feet pop slightly. There is no weapon-spread bonus for standing
+  still yet (the engine only has recoil kick).
