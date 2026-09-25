@@ -189,7 +189,8 @@ A reload, mag check or inspect while aiming can play in one of two ways, per act
   0.3 s after, and the action's hand keeps its grip relative to the gun, so only the left arm
   plays the clip. `WriteAdsHold` in `FirstPersonPresentation` drives it. Per state,
   `ads.gunMotion` adds back a share of the clip's own gun turn / movement on top
-  (`AdsGunMotion`, about the rear sight `ads.sightPivot` ahead of the eye) - the mag check's
+  (`AdsGunMotion`, about the rear sight `ads.sightPivot` ahead of the eye; by default 18% / 25%
+  for the reloads and 60% / 20% for the mag check) - the mag check's
   tip that brings the magazine into view.
 
   With all three the solved first frame *is* the aim pose, so the action starts and ends on
