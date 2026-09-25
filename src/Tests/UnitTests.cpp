@@ -1831,8 +1831,8 @@ void TestFirstPersonAds() {
     FirstPersonAnimationSet v1;
     v1.ArmsModel = "arms.fbx";
     v1.WeaponModel = "weapon.fbx";
-    for (const char* n : {"Idle", "Aim", "TacReload", "EmptyReload", "MagCheck", "Inspect", "Melee", "Regrip",
-                          "ADS_TacReload"}) {
+    for (const char* n : {"Idle", "Walk", "Sprint", "Fire", "Aim", "TacReload", "EmptyReload", "MagCheck", "Inspect",
+                          "Melee", "Regrip", "ADS_TacReload"}) {
         FirstPersonAnimationClip c;
         c.Name = n;
         c.ArmsClip = std::string("FP_") + n + ".fbx";
@@ -1848,6 +1848,7 @@ void TestFirstPersonAds() {
     CHECK(state("TacReload").HasTag(K::kTagAdsCarry) && state("TacReload").HasTag(K::kTagReload));
     CHECK(state("MagCheck").HasTag(K::kTagAdsCarry) && state("MagCheck").HasTag(K::kTagBusy));
     CHECK(state("Inspect").HasTag(K::kTagBusy) && !state("Inspect").HasTag(K::kTagAdsCarry));
+    CHECK(state("Walk").HasTag(K::kTagReady) && state("Fire").HasTag(K::kTagReady) && !state("Sprint").HasTag(K::kTagReady));
     CHECK(state("Melee").HasTag(K::kTagBusy) && state("Regrip").HasTag(K::kTagIKOff));
     const auto& adsReload = state("ADS TacReload");
     CHECK(adsReload.HasTag(K::kTagAds) && adsReload.HasTag(K::kTagReload) && !adsReload.HasTag(K::kTagAdsCarry));
@@ -1936,11 +1937,16 @@ void TestFirstPersonAds() {
         CHECK(glm::length(glm::vec3(turned * glm::vec4(sight, 1.0f)) - sight) < 1e-4f);
         CHECK(!nearM(turned, glm::mat4(1.0f)));
     }
-    // Gun motion settings: MagCheck by default, per state in the file.
+    // Gun motion settings: the reloads and the mag check by default, per state in the file.
     {
         FirstPersonAnimationSet gm;
         CHECK(FirstPersonAnimationSet::FromJsonString(head + R"("ads":{}})", gm, &error));
-        CHECK(gm.Ads.GunMotionFor("MagCheck") && !gm.Ads.GunMotionFor("TacReload"));
+        CHECK(gm.Ads.GunMotionFor("MagCheck") && gm.Ads.GunMotionFor("TacReload") && gm.Ads.GunMotionFor("EmptyReload"));
+        CHECK(std::fabs(gm.Ads.GunMotionFor("TacReload")->Rotation - 0.18f) < 1e-6f);
+        // A file that lists none keeps none.
+        FirstPersonAnimationSet none;
+        CHECK(FirstPersonAnimationSet::FromJsonString(head + R"("ads":{"gunMotion":{}}})", none, &error));
+        CHECK(none.Ads.GunMotions.empty());
         CHECK(FirstPersonAnimationSet::FromJsonString(
             head + R"("ads":{"gunMotion":{"TacReload":{"rotation":0.3,"position":2}},"sightPivot":0.3}})", gm, &error));
         CHECK(!gm.Ads.GunMotionFor("MagCheck") && gm.Ads.GunMotionFor("TacReload")->Position == 1.0f);
@@ -2465,9 +2471,10 @@ void TestBulletHoles() {
     World world;
     BulletHoleList holes;
     std::vector<BulletHoleList::Placed> out;
-    holes.Add(world, entt::null, glm::vec3(1, 2, 3), glm::vec3(0, 0, 2));
+    holes.Add(world, entt::null, glm::vec3(1, 2, 3), glm::vec3(0, 0, 2), 0.003f);
     holes.Resolve(world, out);
     CHECK(out.size() == 1);
+    CHECK(std::abs(out[0].Radius - 0.003f) < 1e-7f); // each hole keeps the size its weapon gave it
     CHECK(near(out[0].Position, glm::vec3(1, 2, 3)));
     CHECK(near(out[0].Normal, glm::vec3(0, 0, 1)));
     CHECK(std::abs(glm::dot(out[0].Tangent, out[0].Normal)) < 1e-4f);
@@ -2532,6 +2539,38 @@ void TestWeaponZero() {
     set.Gameplay.HasSightLine = false;
     FirstPersonAnimationSet none;
     CHECK(roundTrip(set, none) && !none.Gameplay.HasSightLine);
+
+    // The barrel and laser: defaults, then a hand-set muzzle, a laser and a hole size round trip.
+    CHECK(none.Muzzle.Auto && none.Laser.Enabled && std::abs(none.Gameplay.BulletHoleRadius - 0.0045f) < 1e-6f);
+    set.Muzzle.Auto = false;
+    set.Muzzle.Origin = glm::vec3(0.0f, 0.05f, -0.4f);
+    set.Muzzle.Direction = glm::vec3(0.0f, 0.0f, -2.0f);
+    set.Laser.Enabled = false;
+    set.Laser.Color = glm::vec3(0.02f, 1.0f, 0.05f);
+    set.Laser.BeamBrightness = 0.5f;
+    set.Laser.SpotBrightness = 4.0f;
+    set.Gameplay.BulletHoleRadius = 0.0028f;
+    FirstPersonAnimationSet barrel;
+    CHECK(roundTrip(set, barrel));
+    CHECK(!barrel.Muzzle.Auto && glm::length(barrel.Muzzle.Origin - set.Muzzle.Origin) < 1e-5f);
+    CHECK(glm::length(barrel.Muzzle.Direction - glm::vec3(0.0f, 0.0f, -1.0f)) < 1e-5f); // normalized on load
+    CHECK(!barrel.Laser.Enabled && glm::length(barrel.Laser.Color - set.Laser.Color) < 1e-5f);
+    CHECK(std::abs(barrel.Laser.BeamBrightness - 0.5f) < 1e-5f && std::abs(barrel.Laser.SpotBrightness - 4.0f) < 1e-5f);
+    CHECK(std::abs(barrel.Gameplay.BulletHoleRadius - 0.0028f) < 1e-6f);
+    // A hand-set muzzle needs a direction.
+    FirstPersonAnimationSet bad;
+    CHECK(!FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"w.controller","muzzle":{"auto":false,"direction":[0,0,0]}})",
+        bad, &error));
+
+    // What Play found is kept per weapon file, whatever the path spelling.
+    FirstPersonBarrelReport report;
+    report.Detected = report.HasMuzzle = true;
+    report.DetectedOrigin = glm::vec3(1.0f, 2.0f, 3.0f);
+    PublishBarrelReport("Assets/FPS/Test/../Test/Gun.fpsanim", report);
+    const FirstPersonBarrelReport* found = FindBarrelReport("assets/fps/test/gun.fpsanim");
+    CHECK(found && found->Detected && glm::length(found->DetectedOrigin - report.DetectedOrigin) < 1e-6f);
+    CHECK(!FindBarrelReport("assets/fps/test/other.fpsanim"));
 }
 
 void TestCurve() {

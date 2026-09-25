@@ -99,9 +99,11 @@ public:
     // The gun's laser, straight down the bore: from the muzzle to the first surface it meets
     // (`hit` false = nothing within range; `to` is then the end of the range). On whenever the
     // gun is in hand and not put away, whatever it's doing - it swings with the reloads.
+    // The colours are the weapon's laser settings (linear HDR): the beam's and the dot's.
     struct Laser {
         glm::vec3 From{0.0f}, To{0.0f}, Normal{0.0f, 1.0f, 0.0f};
         bool Hit = false;
+        glm::vec3 BeamColor{1.1f, 0.025f, 0.015f}, SpotColor{9.0f, 0.2f, 0.12f};
     };
     bool LaserBeam(Laser& out) const;
     // Where the rounds fired since the last call struck (down the bore from the muzzle), oldest
@@ -109,6 +111,7 @@ public:
     struct ShotHit {
         glm::vec3 Point{0.0f}, Normal{0.0f, 1.0f, 0.0f};
         unsigned Entity = 0xFFFFFFFFu;
+        float HoleRadius = 0.0045f; // the weapon's bullet hole, metres
     };
     std::vector<ShotHit> TakeShotHits();
     const std::string& CurrentState() const;
@@ -133,7 +136,7 @@ private:
     void ApplyHidden(World& world);
     void WriteAdsHold(IKRigComponent& rig, const AdsCarrySample& carry);
     void SetupBolt(AssetLibrary& assets, const AnimatorController& ctrl);
-    void SetupMuzzle(int bolt, const std::vector<int>& parents);
+    void SetupMuzzle(int bolt);
     void SetupAdsCarry();
     AdsCarrySample SampleAdsCarry(float dt) const;
     void ShotImpact(); // a round leaves the bore: note where it hits and shove that
@@ -192,6 +195,7 @@ private:
     glm::vec3 m_BoltStroke{0.0f}; // weapon model space, from the Fire clip (SetupBolt)
     bool m_HaveMuzzle = false;
     glm::vec3 m_MuzzleLocal{0.0f}, m_BoreLocal{0.0f, 0.0f, -1.0f}; // weapon root space
+    FirstPersonBarrelReport m_Barrel; // what SetupMuzzle and the sight measuring found, for the Inspector
     glm::vec3 m_AimPoint{0.0f};
     glm::vec3 m_AimNormal{0.0f, 1.0f, 0.0f};
     bool m_AimHit = false;        // the bore ray met a surface within range

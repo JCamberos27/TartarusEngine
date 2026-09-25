@@ -7,7 +7,9 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <cctype>
 #include <fstream>
+#include <map>
 #include <unordered_set>
 
 using json = nlohmann::json;
@@ -116,6 +118,8 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         gp.ImpactImpulse = std::max(0.0f, Number(*g, "impactImpulse", gp.ImpactImpulse));
         gp.ImpactMaxSpeed = std::max(0.0f, Number(*g, "impactMaxSpeed", gp.ImpactMaxSpeed));
         gp.ZeroDistance = std::max(0.0f, Number(*g, "zeroDistance", gp.ZeroDistance));
+        gp.BulletHoleRadius = Number(*g, "bulletHoleRadius", gp.BulletHoleRadius);
+        gp.BulletHoleRadius = std::clamp(std::isfinite(gp.BulletHoleRadius) ? gp.BulletHoleRadius : 0.0045f, 0.0f, 0.1f);
         if (const auto sl = g->find("sightLine"); sl != g->end() && sl->is_object()) {
             const glm::vec3 o = Vec3(*sl, "origin", glm::vec3(0.0f)), d = Vec3(*sl, "direction", glm::vec3(0.0f));
             if (Finite(o) && Finite(d) && glm::length(d) > 1e-6f) {
@@ -196,6 +200,25 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         ads.AimHoldTime = std::clamp(std::isfinite(ads.AimHoldTime) ? ads.AimHoldTime : 0.15f, 0.0f, 2.0f);
         ads.SightPivot = std::clamp(std::isfinite(ads.SightPivot) ? ads.SightPivot : 0.25f, 0.0f, 2.0f);
     }
+    if (const auto m = root.find("muzzle"); m != root.end() && m->is_object()) {
+        FirstPersonMuzzleSettings& mz = parsed.Muzzle;
+        mz.Auto = Bool(*m, "auto", mz.Auto);
+        const glm::vec3 o = Vec3(*m, "origin", mz.Origin), d = Vec3(*m, "direction", mz.Direction);
+        if (!Finite(o) || !Finite(d)) return Fail(error, "'muzzle.origin' and 'muzzle.direction' must be three finite numbers");
+        mz.Origin = o;
+        if (glm::length(d) > 1e-6f) mz.Direction = glm::normalize(d);
+        else if (!mz.Auto) return Fail(error, "'muzzle.direction' can't be zero when 'muzzle.auto' is false");
+    }
+    if (const auto l = root.find("laser"); l != root.end() && l->is_object()) {
+        FirstPersonLaserSettings& ls = parsed.Laser;
+        ls.Enabled = Bool(*l, "enabled", ls.Enabled);
+        const glm::vec3 c = Vec3(*l, "color", ls.Color);
+        if (Finite(c)) ls.Color = glm::max(c, glm::vec3(0.0f));
+        ls.BeamBrightness = Number(*l, "beamBrightness", ls.BeamBrightness);
+        ls.SpotBrightness = Number(*l, "spotBrightness", ls.SpotBrightness);
+        ls.BeamBrightness = std::clamp(std::isfinite(ls.BeamBrightness) ? ls.BeamBrightness : 1.1f, 0.0f, 100.0f);
+        ls.SpotBrightness = std::clamp(std::isfinite(ls.SpotBrightness) ? ls.SpotBrightness : 9.0f, 0.0f, 100.0f);
+    }
     if (const auto p = root.find("procedural"); p != root.end()) {
         std::string why;
         if (!WeaponProceduralSettings::FromJson(*p, parsed.Procedural, &why)) return Fail(error, why);
@@ -271,6 +294,7 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
         {"impactImpulse", gp.ImpactImpulse},
         {"impactMaxSpeed", gp.ImpactMaxSpeed},
         {"zeroDistance", gp.ZeroDistance},
+        {"bulletHoleRadius", gp.BulletHoleRadius},
     };
     if (gp.HasSightLine)
         j["gameplay"]["sightLine"] = {{"origin", vec3(gp.SightOrigin)}, {"direction", vec3(gp.SightDirection)}};
@@ -288,6 +312,11 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
     };
     j["ads"]["gunMotion"] = json::object();
     for (const auto& m : Ads.GunMotions) j["ads"]["gunMotion"][m.State] = {{"rotation", m.Rotation}, {"position", m.Position}};
+    j["muzzle"] = {{"auto", Muzzle.Auto}, {"origin", vec3(Muzzle.Origin)}, {"direction", vec3(Muzzle.Direction)}};
+    j["laser"] = {{"enabled", Laser.Enabled},
+                  {"color", vec3(Laser.Color)},
+                  {"beamBrightness", Laser.BeamBrightness},
+                  {"spotBrightness", Laser.SpotBrightness}};
     j["procedural"] = Procedural.ToJson();
     RoundFloats(j);
     return j.dump(2);
@@ -295,6 +324,27 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
 
 bool FirstPersonAnimationSet::SaveFile(const std::string& path) const {
     return AtomicFile::WriteJson(std::filesystem::u8path(path), json::parse(ToJsonString()));
+}
+
+namespace {
+std::string ReportKey(const std::string& path) {
+    std::string key = std::filesystem::u8path(path).lexically_normal().generic_u8string();
+    std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+    return key;
+}
+std::map<std::string, FirstPersonBarrelReport>& BarrelReports() {
+    static std::map<std::string, FirstPersonBarrelReport> reports;
+    return reports;
+}
+} // namespace
+
+void PublishBarrelReport(const std::string& weaponPath, const FirstPersonBarrelReport& report) {
+    BarrelReports()[ReportKey(weaponPath)] = report;
+}
+
+const FirstPersonBarrelReport* FindBarrelReport(const std::string& weaponPath) {
+    const auto it = BarrelReports().find(ReportKey(weaponPath));
+    return it == BarrelReports().end() ? nullptr : &it->second;
 }
 
 const char* FirstPersonAnimatorContract::KnownTagDescription(const std::string& tag) {
@@ -328,9 +378,9 @@ AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set
     // Priority = how hard a state is to interrupt from Any State: locomotion 0, transition clips
     // 1, fidgets / fire / inspect 2, reloads and melee 3, equip 4, unarmed 5.
     const std::vector<Spec> specs = {
-        {"Idle", 0, 0, 0, {K::kTagIdle}},  {"Walk", 0, 0, 120, {}},         {"Sprint", 0, 330, 120, {}},
+        {"Idle", 0, 0, 0, {K::kTagIdle}},  {"Walk", 0, 0, 120, {K::kTagReady}},         {"Sprint", 0, 330, 120, {}},
         {"Aim", 0, 0, 240, {K::kTagAds}},  {"IdleToSprint", 1, 330, 0, {}}, {"SprintToIdle", 1, 330, 240, {}},
-        {"Regrip", 2, 0, -140, {K::kTagIKOff}}, {"Fire", 2, 660, -330, {}}, {"Inspect", 2, 660, -255, {K::kTagBusy}},
+        {"Regrip", 2, 0, -140, {K::kTagIKOff}}, {"Fire", 2, 660, -330, {K::kTagReady}}, {"Inspect", 2, 660, -255, {K::kTagBusy}},
         {"MagCheck", 2, 660, -180, {K::kTagBusy, K::kTagAdsCarry}}, {"Melee", 3, 660, -105, {K::kTagBusy}},
         {"TacReload", 3, 660, -30, {K::kTagReload, K::kTagAdsCarry}},
         {"EmptyReload", 3, 660, 45, {K::kTagReload, K::kTagAdsCarry}},
