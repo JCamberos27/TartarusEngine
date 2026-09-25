@@ -11,6 +11,7 @@ class Camera;
 class Model;
 class Player;
 class World;
+struct FirstPersonBodyComponent;
 
 // True first person (#405, phase 1): the player's own body, drawn in the world under the play
 // camera and walked by its clips' root motion.
@@ -60,6 +61,7 @@ public:
 private:
     void Fail(const std::string& message);
     void ApplySpineAim(const Camera& camera, float amount, float twist);
+    void ApplyFootIK(World& world, const FirstPersonBodyComponent& cfg, float dt);
 
     entt::entity m_Body = entt::null;   // the root: placed at the feet, its pieces ride along
     entt::entity m_Driver = entt::null; // the piece whose Animator Controller runs the body
@@ -80,6 +82,18 @@ private:
     float m_IdleTime = 1.0f;       // seconds with no move input (a start clip needs a real pause)
     glm::vec2 m_LastDir{0.0f, 1.0f}; // the last move direction (body frame) and whether it was a sprint
     bool m_LastSprint = false;
+    bool m_Grounded = false;       // at the last Tick
+    float m_FootWeight = 0.0f;     // 0..1: how much foot IK is on (eases at the edges of grounded)
+    bool m_HaveFoot = false;
+    float m_StepOffset = 0.0f;     // metres the body is off the capsule's height: a stair's pop, eased out
+    float m_LastCapsuleY = 0.0f;
+    bool m_HaveCapsule = false, m_LastGrounded = false;
+    bool m_FootPlanted[2] = {false, false};     // foot lock: pinned in the world while planted
+    glm::vec3 m_FootLock[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
+    float m_FootLockWeight[2] = {0.0f, 0.0f};
+    float m_FootYaw = 0.0f;
+    float m_FootOffset[2] = {0.0f, 0.0f};                 // ground under each foot minus the capsule's, smoothed
+    glm::vec3 m_FootNormal[2] = {glm::vec3(0, 1, 0), glm::vec3(0, 1, 0)};
     float m_MoveTime = 0.0f;       // seconds of move input in a row (a tap is not a run to stop from)
     bool m_WasCrouched = false;    // for the stand<->crouch edge
     float m_StopDistance = 0.0f, m_StartDistance = 0.0f; // metres the start / stop clip has carried the body
@@ -117,4 +131,7 @@ bool FirstPersonBodyShouldTurn(float offset, float thresholdDegrees);
 glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw);
 // The eye in model space: the head's standing position, plus `bob` of the head's motion away
 // from it, plus `offset` given in the body's frame (x right, y up, z forward).
+// How far the pelvis moves (metres, + up) to put the feet on ground `offL` / `offR` above the
+// capsule's: down to the lower foot (at most `maxDrop`), up a little (`maxRaise`) when both are higher.
+float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise);
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset);
