@@ -5,6 +5,7 @@
 #include "Texture.h"
 #include "AssetDatabase.h"
 #include "ProjectSettings.h" // #121 - virtual folders are project data, not scene data
+#include "ProjectPaths.h"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -135,6 +136,7 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
                 } catch (...) {}
             }
         }
+        AdoptDiskFolder(path);
         model = std::make_shared<Model>(path, GetModelSettings(path));
     }
 
@@ -207,6 +209,7 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path, Text
     if (it != m_TextureCache.end()) return it->second;
 
     ResolveTextureSettings(path, use);
+    AdoptDiskFolder(path);
 
     // Register the GUID BEFORE constructing the Texture, not after (audit #75). TextureCache's
     // on-disk entry is keyed by AssetDatabase::GuidForPath when one is registered, falling back
@@ -241,6 +244,7 @@ void AssetLibrary::RegisterSound(const std::string& path) {
                 ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
             } catch (...) {}
         }
+        AdoptDiskFolder(path);
     }
 }
 
@@ -294,6 +298,7 @@ std::shared_ptr<MaterialAsset> AssetLibrary::LoadMaterial(const std::string& pat
             ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
         } catch (...) {}
     }
+    AdoptDiskFolder(path);
     return ma;
 }
 
@@ -335,6 +340,7 @@ void AssetLibrary::RegisterPrefab(const std::string& path) {
                 ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
             } catch (...) {}
         }
+        AdoptDiskFolder(path);
     }
 }
 
@@ -442,6 +448,40 @@ void AssetLibrary::ClearMetadataOnly() {
     m_ModelSettings.clear();
     m_Labels.clear();
     m_AllLabelsDirty = true;
+}
+
+void AssetLibrary::AdoptDiskFolder(const std::string& path) {
+    if (path.empty() || path.find("://") != std::string::npos || m_AssetFolder.count(path)) return;
+    std::string dir = ProjectPaths::Relativize(path);
+    std::replace(dir.begin(), dir.end(), '\\', '/');
+    if (dir.empty() || dir.find(':') != std::string::npos || dir[0] == '/') return; // outside the project
+    const size_t slash = dir.find_last_of('/');
+    if (slash == std::string::npos) return;                          // already at the root
+    dir.resize(slash);
+    try {
+        const json j = json::parse(AssetDatabase::ReadMetaFields(path));
+        if (j.contains("folder")) return;                            // chosen in the browser
+    } catch (...) {}
+
+    auto sameName = [](const std::string& a, const std::string& b) {
+        return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
+            return std::tolower((unsigned char)x) == std::tolower((unsigned char)y); });
+    };
+    // Walk the directories top-down, reusing "Shaders" for "shaders" and so on.
+    std::string folder;
+    bool added = false;
+    for (size_t start = 0; start <= dir.size();) {
+        size_t end = dir.find('/', start);
+        if (end == std::string::npos) end = dir.size();
+        const std::string wanted = (folder.empty() ? "" : folder + "/") + dir.substr(start, end - start);
+        auto it = std::find_if(m_Folders.begin(), m_Folders.end(),
+                               [&](const std::string& f) { return sameName(f, wanted); });
+        if (it != m_Folders.end()) folder = *it;
+        else { folder = wanted; m_Folders.push_back(folder); added = true; }
+        start = end + 1;
+    }
+    if (added) PersistFolders();
+    m_AssetFolder[path] = folder;
 }
 
 void AssetLibrary::CreateFolder(const std::string& folderPath) {
