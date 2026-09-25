@@ -80,6 +80,7 @@ private:
     float m_IdleTime = 1.0f;       // seconds with no move input (a start clip needs a real pause)
     glm::vec2 m_LastDir{0.0f, 1.0f}; // the last move direction (body frame) and whether it was a sprint
     bool m_LastSprint = false;
+    float m_MoveTime = 0.0f;       // seconds of move input in a row (a tap is not a run to stop from)
     bool m_WasCrouched = false;    // for the stand<->crouch edge
     float m_StopDistance = 0.0f, m_StartDistance = 0.0f; // metres the start / stop clip has carried the body
     bool m_Still = false;          // standing still at the last Tick (the view's turn is then limited)
