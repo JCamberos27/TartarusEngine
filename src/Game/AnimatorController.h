@@ -40,19 +40,23 @@ struct AnimatorController {
         float Threshold = 0.0f;
     };
 
-    // What a state plays on one track: a clip, or a 1D blend tree of clips along a parameter.
+    // What a state plays on one track: a clip, or a blend tree of clips - 1D along one parameter,
+    // or 2D (freeform cartesian) over two, e.g. a directional walk/jog blend on MoveX / MoveY.
     // An empty motion is legal: on the base layer the track falls back to its bind pose (a weapon
     // with no clip for that state), on a higher layer it contributes nothing.
     struct BlendChild {
         std::string Clip;
-        float Threshold = 0.0f;
+        float Threshold = 0.0f;           // 1D: where on BlendParam; 2D: the X position
         float Speed = 1.0f;
+        float ThresholdY = 0.0f;          // 2D only: the Y position (on BlendParamY)
     };
     struct Motion {
         std::string Clip;                 // a clip reference (AnimationSystem.h), used when no children
-        std::string BlendParam;           // blend tree: the Float parameter it blends along
+        std::string BlendParam;           // blend tree: the Float parameter it blends along (2D: X)
+        std::string BlendParamY;          // 2D blend tree: the Y parameter; empty = a 1D tree
         std::vector<BlendChild> Children; // blend tree: sorted by Threshold when evaluated
         bool IsBlendTree() const { return !Children.empty(); }
+        bool Is2D() const { return !BlendParamY.empty(); }
         bool Empty() const { return Clip.empty() && Children.empty(); }
     };
 
@@ -157,6 +161,12 @@ inline float AnimatorCrossfadeWeight(float fade) {
 }
 
 std::vector<float> AnimatorBlendWeights(const std::vector<AnimatorController::BlendChild>& children, float value);
+// Weights of a 2D (freeform cartesian) blend tree's children at (x, y), each child sitting at
+// (Threshold, ThresholdY): gradient-band interpolation, as Unity's Freeform Cartesian. A child's
+// weight is 1 on its own position and fades out toward every other child; they sum to 1.
+std::vector<float> AnimatorBlendWeights2D(const std::vector<AnimatorController::BlendChild>& children, float x, float y);
+// The weights of `m`'s children for the current parameter values (1D or 2D).
+std::vector<float> AnimatorMotionWeights(const AnimatorController::Motion& m, const std::vector<AnimatorParam>& params);
 
 // How much each entry of a crossfade stack shows in the final pose, given each entry's Fade
 // (bottom first): the entries blend in order, each over everything below it, eased by

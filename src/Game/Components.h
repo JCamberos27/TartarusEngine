@@ -429,6 +429,37 @@ struct FirstPersonControllerComponent {
     float ViewModelFov = 60.0f;
 };
 
+// True first person (FirstPersonBody.h): the player's own full body, drawn in the world under the
+// play camera. Put it on the body's root object, anywhere in a scene with a First Person
+// Controller. The body is modular: the root's children are its pieces (head, torso, legs, feet -
+// or clothing in their place), each a rigged model on the same skeleton. The first piece with an
+// Animator Controller (a locomotion controller - see animations/fps_body_locomotion.controller)
+// drives; every other piece follows it. The root may itself be that piece.
+// In Play the body stands at the player's feet facing the view, the controller gets the player's
+// movement as parameters (MoveX / MoveY / Speed / Sprint / Grounded / Airborne / Jump), and the
+// clips' root motion walks the player's capsule. The play camera sits in the body's head.
+struct FirstPersonBodyComponent {
+    // 0 = the capsule moves exactly as the clips travel (root motion), 1 = as the input asks
+    // (the clips only animate). Between: a blend - heavier and more grounded toward 0.
+    float Responsiveness = 0.0f;
+    float ParamSmoothing = 0.12f;  // seconds the MoveX / MoveY parameters take to follow the input
+    float RunSpeed = 3.26f;        // m/s asked of the blend tree when moving (the jog clips' speed)
+    float SprintSpeed = 4.72f;     // ... and while sprinting (the run clip's)
+    std::string HeadBone = "head";
+    // The eyes, from the head bone, in the body's frame (x right, y up, z forward), metres.
+    glm::vec3 CameraOffset{0.0f, 0.08f, 0.1f};
+    // How much of the head's own motion (bob, sway, lean) the camera follows: 0 = it rides at
+    // the head's standing height, steady; 1 = locked to the head bone.
+    float HeadBob = 0.5f;
+    float CameraSmoothing = 0.06f; // seconds; smooths the head motion in the body's frame
+    // Pieces that cast a shadow but aren't drawn in first person, comma separated: a child is
+    // hidden when its name contains one of these (case-insensitive). The camera is in the head.
+    std::string HiddenParts = "Head";
+    // Bones collapsed while the body is the player's, comma separated (empty = none) - e.g.
+    // "upperarm_l, upperarm_r" on a one-piece body whose arms a first-person arms model draws.
+    std::string HiddenBones;
+};
+
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue
 // cycling. Applied only while the scene is playing — edit mode always shows the authored
 // pose. All parameters are authored/serialized; the Base* fields and Initialized are runtime

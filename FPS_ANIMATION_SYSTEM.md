@@ -503,6 +503,41 @@ checked out LF (`.gitattributes`) because `git apply` needs it.
 
 ---
 
+## 8b. The player's body (true first person, #405)
+
+The player can have a full body under the camera: the MC Core Motion locomotion clips walk it by
+root motion, and the camera rides in its head. It shares the UE5 mannequin skeleton with the AK's
+first-person clips (down to the fingers and `ik_hand_gun`), which phase 2 builds on.
+
+**Setup (the Sandbox's Player Spawn has one).** A root object with a **First Person Body**
+component, its children the body pieces - `Quantum_Head`, `_Torso`, `_UnderPants`, `_Legs`,
+`_Feet` today, clothing later - each a rigged model with an Animator Controller on
+`animations/fps_body_locomotion.controller`. The first piece with an Animator Controller drives;
+the others follow it (`AnimatorControllerComponent::Driver`, set in Play). Pieces whose names
+match **Hidden Parts** (default `Head`) cast shadows but aren't drawn.
+
+**Per frame** (`FirstPersonBody`, `src/Game/FirstPersonBody.h`), around `Player::Update`:
+
+1. `BeforePlayerMove` takes the camera back out of the head and hands the Player last step's root
+   motion (`Player::RootMotionVelocity`, weighted `1 - Responsiveness`; none while airborne).
+2. `Player::Update` looks and sweeps the capsule with the blend of root motion and input.
+3. `Tick` stands the body at the capsule's feet facing the camera's yaw and sets the controller's
+   `MoveX` / `MoveY` (the input in the body's frame, m/s, smoothed), `Speed`, `Sprint`,
+   `Grounded`, `Airborne` (off the ground > 0.15 s) and `Jump`.
+4. The animators run: the driver's root motion is **In Place** (stripped from the pose, reported).
+5. `LateUpdate` takes the reported travel for the next move and puts the camera in the head: the
+   head bone plus **Camera Offset**, **Head Bob** of its motion, smoothed in the body's frame.
+
+**The controller.** A 2D blend tree of idle plus walk and jog in eight directions and run forward,
+each child at its clip's measured velocity (walk forward 1.53 m/s, jog forward 3.26, jog right
+2.95, jog backward 2.26, run 4.72), plus Jump / Fall / Land. The Player's move speeds become
+**Run Speed** / **Sprint Speed** so the input asks for what the clips have.
+
+**Phase 1 limits.** The separate first-person arms still draw the arms and gun; the body has no
+arms of its own (the modular pieces have none). Looking straight down shows little of the body
+until the spine aim offset (phase 2). No turn-in-place, starts / stops, crouch or foot IK yet
+(phase 3) - see #405.
+
 ## 9. Known gaps / next steps
 
 1. **One weapon per player.** The two slots are "1 = the definition, 2 = unarmed". A real
