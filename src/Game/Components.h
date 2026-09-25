@@ -488,6 +488,10 @@ struct FirstPersonBodyComponent {
     // the move speed as a fraction of Run Speed (the crouch-walk clips travel about 1.35 m/s).
     float CrouchHeight = 0.0f;
     float CrouchSpeed = 0.42f;
+    // Foot IK: each foot is put on the ground under it (a ray down), the pelvis drops to the lower
+    // foot (at most FootIKMaxDrop metres) and the legs are re-solved, so the feet meet stairs and slopes.
+    bool FootIK = false;
+    float FootIKMaxDrop = 0.35f;
 };
 
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue

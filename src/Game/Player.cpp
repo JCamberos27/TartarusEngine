@@ -71,6 +71,7 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     Velocity.x = horizontal.x;
     Velocity.z = horizontal.z;
 
+    const bool wasGrounded = Grounded;
     Jumped = false;
     if (readInput && Grounded && !Crouched && InputMap::GetButtonDown("Jump")) {
         Velocity.y = JumpSpeed; // one impulse; the capsule move below integrates the arc
@@ -100,6 +101,19 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     unsigned flags = PhysicsWorld::MoveCharacter(d, dt);
 
     Grounded = (flags & PhysicsWorld::CC_DOWN) != 0;
+    // Walking down a small step or stair: the capsule would step off the edge and fall a few
+    // centimetres each time (the camera bounces). Stay on the ground when there is some within a
+    // step's height below - not after a jump, and not off a real drop.
+    if (!Grounded && wasGrounded && !Jumped && Velocity.y <= 0.0f) {
+        float before[3];
+        PhysicsWorld::GetCharacterFootPosition(before);
+        const float snap[3] = {0.0f, -0.3f, 0.0f};
+        if (PhysicsWorld::MoveCharacter(snap, dt) & PhysicsWorld::CC_DOWN) {
+            Grounded = true;
+        } else {
+            PhysicsWorld::SetCharacterFootPosition(before);
+        }
+    }
     if (Grounded && Velocity.y < 0.0f) Velocity.y = 0.0f;          // stop accumulating fall speed
     if ((flags & PhysicsWorld::CC_UP) && Velocity.y > 0.0f) Velocity.y = 0.0f; // bonk head
 

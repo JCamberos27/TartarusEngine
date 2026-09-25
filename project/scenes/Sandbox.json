@@ -23790,6 +23790,8 @@
         "Camera Smoothing": 0.06,
         "Crouch Height": 1.2,
         "Crouch Speed": 0.42,
+        "Foot IK": true,
+        "Foot IK Max Drop": 0.35,
         "Head Bob": 0.5,
         "Head Bone": "head",
         "Hidden Bones": "",
