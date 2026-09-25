@@ -476,6 +476,10 @@ struct FirstPersonBodyComponent {
     // How much of the view's twist off the body's heading the spine takes (0..1), so the chest
     // faces the view while the feet have not turned yet.
     float SpineTwist = 0.0f;
+    // While the body stands still, the view turns no faster than this many degrees a second once it
+    // is past the Turn Threshold (where the feet must step round) - what the turn clips can keep up
+    // with, so they don't slide. Aiming within the threshold is free. 0 = no limit.
+    float MaxTurnRate = 0.0f;
 };
 
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue
