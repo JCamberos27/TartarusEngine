@@ -5,6 +5,7 @@
 // (controller, socket, IK bones, ADS actions). Every committed edit is saved straight to the
 // file, where a running Play picks it up, and goes on the Inspector's own undo stack (the arrows
 // in the overview card).
+#include "SetupChecksUI.h"
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
 #include "EditorPropertyRows.h"
@@ -884,6 +885,15 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         ImGui::SameLine();
         std::snprintf(buf, sizeof buf, "ADS: %d clip%s, %d carried", authored, authored == 1 ? "" : "s", carried);
         PropertyRows::Badge(problems ? Status::Warning : Status::Ok, buf, "See Aim-Down-Sights.");
+    }
+    // The setup checks: what the controller and rigs still lack for this weapon to work end to end.
+    {
+        FirstPersonWeaponCheckInput wi;
+        wi.Set = &s;
+        wi.Controller = ctx.Controller.get();
+        if (ctx.Arms) wi.HasArmsBone = [arms = ctx.Arms](const std::string& b) { return arms->NodeIndex(b) >= 0; };
+        ImGui::Spacing();
+        SetupChecksUI::Draw(FirstPersonWeaponValidate(wi), "Setup: everything the driver needs is there", "##weaponsetup");
     }
     ImGui::Spacing();
 
