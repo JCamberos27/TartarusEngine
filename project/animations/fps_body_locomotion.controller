@@ -309,7 +309,7 @@
         {
           "name": "Land",
           "loop": false,
-          "speed": 1.0,
+          "speed": 1.4,
           "position": [
             260.0,
             140.0
@@ -792,7 +792,7 @@
         {
           "from": "Locomotion",
           "to": "Jump",
-          "duration": 0.1,
+          "duration": 0.08,
           "conditions": [
             {
               "mode": "if",
@@ -801,7 +801,8 @@
             }
           ],
           "hasExitTime": false,
-          "exitTime": 1.0
+          "exitTime": 1.0,
+          "offset": 0.15
         },
         {
           "from": "Locomotion",
@@ -873,7 +874,7 @@
           "duration": 0.3,
           "conditions": [],
           "hasExitTime": true,
-          "exitTime": 0.3
+          "exitTime": 0.5
         },
         {
           "from": "Locomotion",
@@ -972,7 +973,7 @@
         {
           "from": "Start",
           "to": "Jump",
-          "duration": 0.1,
+          "duration": 0.08,
           "conditions": [
             {
               "mode": "if",
@@ -981,7 +982,8 @@
             }
           ],
           "hasExitTime": false,
-          "exitTime": 1.0
+          "exitTime": 1.0,
+          "offset": 0.15
         },
         {
           "from": "Start",
@@ -1022,7 +1024,7 @@
         {
           "from": "Stop",
           "to": "Jump",
-          "duration": 0.1,
+          "duration": 0.08,
           "conditions": [
             {
               "mode": "if",
@@ -1031,7 +1033,8 @@
             }
           ],
           "hasExitTime": false,
-          "exitTime": 1.0
+          "exitTime": 1.0,
+          "offset": 0.15
         },
         {
           "from": "Stop",
@@ -1072,7 +1075,7 @@
         {
           "from": "StopRun",
           "to": "Jump",
-          "duration": 0.1,
+          "duration": 0.08,
           "conditions": [
             {
               "mode": "if",
@@ -1081,7 +1084,8 @@
             }
           ],
           "hasExitTime": false,
-          "exitTime": 1.0
+          "exitTime": 1.0,
+          "offset": 0.15
         },
         {
           "from": "StopRun",
@@ -1120,6 +1124,153 @@
             {
               "mode": "ifNot",
               "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Turn",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchLoco",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchTurn",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchStart",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchStop",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchDown",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchUp",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "Turn",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchDown",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchUp",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
               "threshold": 0.0
             }
           ],
