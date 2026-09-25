@@ -671,7 +671,10 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     // Holstered, the rig is inactive: the arms ease back to the locomotion clips' pose, but out of the
     // view-model pass at once (there they would show as a hand at the bottom of the view).
     const bool follow = haveRig && !reg.all_of<InactiveTag>(weaponArms);
-    m_ArmsWeight += ((follow ? 1.0f : 0.0f) - m_ArmsWeight) * Follow(dt, 0.1f);
+    // Drawn, the arms take the rig's hands from the first frame: eased in, the draw (and Play's first
+    // frames) would show the hands out of the idle pose while the gun is already up. Only off eases.
+    if (follow) m_ArmsWeight = 1.0f;
+    else m_ArmsWeight -= m_ArmsWeight * Follow(dt, 0.1f);
     const bool viewModelArms = follow;
     // The body's arms piece goes into the view-model pass with the gun (its hands then sit where the
     // rig's do); off, it is an ordinary piece of the body again.
