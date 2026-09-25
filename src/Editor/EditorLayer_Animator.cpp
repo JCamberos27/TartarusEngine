@@ -1116,18 +1116,40 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         W.ClearSelection();
         changed = true;
     };
-    auto duplicateStates = [&]() {
+    // withTransitions: the copies also get the transitions of the originals - between two copied states
+    // they connect the copies; to or from a state that isn't copied they connect the copy to that state.
+    auto duplicateStates = [&](bool withTransitions) {
         std::vector<std::string> names;
         for (const auto& s : Ly.States) names.push_back(s.Name);
         std::vector<int> fresh;
+        std::vector<std::pair<std::string, std::string>> renamed; // original name -> copy name
         for (int s : W.SelStates) {
             if (s < 0 || s >= (int)Ly.States.size()) continue;
             AC::State copy = Ly.States[s];
+            const std::string original = copy.Name;
             copy.Name = UniqueName(copy.Name, names);
             names.push_back(copy.Name);
+            renamed.push_back({original, copy.Name});
             copy.Position += glm::vec2(30.0f, 30.0f);
             Ly.States.push_back(std::move(copy));
             fresh.push_back((int)Ly.States.size() - 1);
+        }
+        if (withTransitions) {
+            auto copyOf = [&](const std::string& n) -> const std::string* {
+                for (const auto& r : renamed) if (r.first == n) return &r.second;
+                return nullptr;
+            };
+            const size_t count = Ly.Transitions.size();
+            for (size_t i = 0; i < count; ++i) {
+                const AC::Transition t = Ly.Transitions[i];
+                const std::string* from = t.FromKind == AC::Source::State ? copyOf(t.From) : nullptr;
+                const std::string* to = t.To == AC::kExitState ? nullptr : copyOf(t.To);
+                if (!from && !to) continue;
+                AC::Transition n = t;
+                if (from) n.From = *from;
+                if (to) n.To = *to;
+                Ly.Transitions.push_back(std::move(n));
+            }
         }
         W.ClearSelection();
         W.SelStates = fresh;
@@ -1250,7 +1272,8 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                     Ly.DefaultState = Ly.States[n.Index].Name;
                     changed = true;
                 }
-                if (ImGui::MenuItem(ICON_FA_COPY "  Duplicate", "Ctrl+D")) duplicateStates();
+                if (ImGui::MenuItem(ICON_FA_COPY "  Duplicate", "Ctrl+D")) duplicateStates(false);
+                if (ImGui::MenuItem(ICON_FA_COPY "  Duplicate with transitions", "Ctrl+Shift+D")) duplicateStates(true);
                 if (ImGui::MenuItem(ICON_FA_TRASH "  Delete", "Del")) deleteStates(W.SelStates);
             }
         } else if (W.ContextTransition >= 0) {
@@ -1279,7 +1302,7 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                 changed = true;
             }
         }
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !W.SelStates.empty()) duplicateStates();
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !W.SelStates.empty()) duplicateStates(io.KeyShift);
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) { if (io.KeyShift) W.Step(W.Redo, W.Undo); else W.Step(W.Undo, W.Redo); }
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) W.Step(W.Redo, W.Undo);
         if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F)) W.FramePending = true;
