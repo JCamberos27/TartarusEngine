@@ -425,6 +425,47 @@ void RegisterEngineComponents() {
         },
     });
 
+    // True FPS (#405) - the player's own body under the play camera, walked by root motion.
+    {
+        ReflectComponent m;
+        m.Name = "First Person Body"; m.Icon = ICON_FA_PERSON; m.Category = "Gameplay";
+        m.Tooltip = "The player's own body in Play: it stands at the First Person Controller's feet facing the\n"
+                    "view, its Animator Controller gets the movement as parameters (MoveX, MoveY, Speed, Sprint,\n"
+                    "Grounded, Airborne, Jump), and the clips' root motion walks the player. The camera sits\n"
+                    "in its head. Put it on the body's root; its children are the pieces (head, torso, legs,\n"
+                    "feet or clothing), and the first one with an Animator Controller drives the rest.";
+        m.Fields = {
+            { "Responsiveness", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Responsiveness), 0.01f,
+              "How the player moves: 0 = exactly as the clips travel (root motion - weighty, feet planted),\n"
+              "1 = as the input asks (snappy; the clips only animate). In between blends the two.", 0.0f, 1.0f },
+            { "Parameter Smoothing", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ParamSmoothing), 0.005f,
+              "Seconds MoveX / MoveY take to follow the input - how quickly the body changes gait.", 0.0f, 1.0f },
+            { "Run Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, RunSpeed), 0.01f,
+              "Metres per second asked of the blend tree when moving. Match a clip's speed (the jog, 3.26).", 0.0f, 20.0f },
+            { "Sprint Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SprintSpeed), 0.01f,
+              "... and while sprinting (the run clip, 4.72).", 0.0f, 20.0f },
+            { "Head Bone", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HeadBone), 0.0f,
+              "The bone the camera sits on." },
+            { "Camera Offset", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, CameraOffset), 0.005f,
+              "The eyes from the head bone, in the body's frame (X right, Y up, Z forward), metres." },
+            { "Head Bob", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HeadBob), 0.01f,
+              "How much of the head's own motion the camera follows: 0 = steady at the head's standing\n"
+              "height, 1 = locked to the head bone.", 0.0f, 1.0f },
+            { "Camera Smoothing", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, CameraSmoothing), 0.005f,
+              "Seconds of smoothing on the head's motion (in the body's frame, so it never lags behind).", 0.0f, 0.5f },
+            { "Hidden Parts", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HiddenParts), 0.0f,
+              "Body pieces that cast a shadow but aren't drawn in first person, comma separated: a child\n"
+              "is hidden when its name contains one of these. The camera sits in the head." },
+            { "Hidden Bones", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HiddenBones), 0.0f,
+              "Bones collapsed in Play, comma separated (empty = none) - e.g. the arms of a one-piece\n"
+              "body while a first-person arms model draws them." },
+        };
+        for (size_t i = 4; i < m.Fields.size(); ++i) m.Fields[i].Group = "Camera";
+        m.Fields.back().Group = nullptr;
+        m.Fields[m.Fields.size() - 2].Group = nullptr;
+        Register<FirstPersonBodyComponent>(std::move(m));
+    }
+
     // #177 - a basic CPU particle emitter (fire, sparks, smoke, dust). Simulated every frame,
     // in the editor as well as Play, so it can be tuned live; the live particles aren't saved.
     {

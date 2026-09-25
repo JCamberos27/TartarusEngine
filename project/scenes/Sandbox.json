@@ -23779,6 +23779,44 @@
         1,
         1
       ]
+    },
+    {
+      "First Person Body": {
+        "Camera Offset": [
+          0.0,
+          0.08,
+          0.1
+        ],
+        "Camera Smoothing": 0.06,
+        "Head Bob": 0.5,
+        "Head Bone": "head",
+        "Hidden Bones": "",
+        "Hidden Parts": "Head",
+        "Parameter Smoothing": 0.12,
+        "Responsiveness": 0.0,
+        "Run Speed": 3.26,
+        "Sprint Speed": 4.72
+      },
+      "id": 657,
+      "name": "Player Body",
+      "order": 658,
+      "parentId": 550,
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
     }
   ],
   "exposureEV": 0.0,
@@ -42373,6 +42411,171 @@
       "name": "Quantum - Root Motion Off Head",
       "order": 657,
       "parentId": 655,
+      "path": "assets/quantum/Models/Quantum_Head.fbx",
+      "pathGuid": "372aa659f6e66c47",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "animations/fps_body_locomotion.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": 2,
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "id": 658,
+      "name": "Torso",
+      "order": 659,
+      "parentId": 657,
+      "path": "assets/quantum/Models/Quantum_Torso.fbx",
+      "pathGuid": "34f0109f85dae259",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "animations/fps_body_locomotion.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": 2,
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "id": 659,
+      "name": "UnderPants",
+      "order": 660,
+      "parentId": 657,
+      "path": "assets/quantum/Models/Quantum_UnderPants.fbx",
+      "pathGuid": "2aeb5f71b8365204",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "animations/fps_body_locomotion.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": 2,
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "id": 660,
+      "name": "Legs",
+      "order": 661,
+      "parentId": 657,
+      "path": "assets/quantum/Models/Quantum_Legs.fbx",
+      "pathGuid": "c36e291cf458911c",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "animations/fps_body_locomotion.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": 2,
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "id": 661,
+      "name": "Feet",
+      "order": 662,
+      "parentId": 657,
+      "path": "assets/quantum/Models/Quantum_Feet.fbx",
+      "pathGuid": "94a5ede2259c1ecf",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "animations/fps_body_locomotion.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": 2,
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "id": 662,
+      "name": "Head",
+      "order": 663,
+      "parentId": 657,
       "path": "assets/quantum/Models/Quantum_Head.fbx",
       "pathGuid": "372aa659f6e66c47",
       "position": [

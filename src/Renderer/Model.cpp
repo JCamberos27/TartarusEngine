@@ -26,6 +26,12 @@
 #include <set>
 
 namespace {
+// A hidden node's scale: its subtree folds into its pivot (tiny, not zero, so nothing divides by it).
+const glm::mat4 kCollapse(glm::vec4(1e-4f, 0, 0, 0), glm::vec4(0, 1e-4f, 0, 0), glm::vec4(0, 0, 1e-4f, 0), glm::vec4(0, 0, 0, 1));
+} // namespace
+
+
+namespace {
 
 glm::mat4 AiToGlm(const aiMatrix4x4& from) {
     glm::mat4 to;
@@ -1091,6 +1097,7 @@ void Model::EvaluatePose() {
             }
         }
         m_NodeGlobals[i] = n.Parent >= 0 ? m_NodeGlobals[n.Parent] * local : local;
+        if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = m_NodeGlobals[i] * kCollapse;
         if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = m_D->GlobalInverseTransform * m_NodeGlobals[i] * n.BoneOffset;
     }
 }
@@ -1137,10 +1144,20 @@ void Model::ApplyLocalPose(const std::vector<LocalTRS>& pose) {
         const AnimNode& n = nodes[i];
         const glm::mat4 local = pose[i].ToMatrix();
         m_NodeGlobals[i] = n.Parent >= 0 ? m_NodeGlobals[n.Parent] * local : local;
+        if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = m_NodeGlobals[i] * kCollapse;
         if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = m_D->GlobalInverseTransform * m_NodeGlobals[i] * n.BoneOffset;
     }
     m_ExternalPose = true;
     m_PosePending = false;
+}
+
+void Model::SetHiddenNodes(const std::vector<int>& nodes) {
+    m_HiddenNodes.clear();
+    for (int n : nodes) {
+        if (n < 0 || n >= NodeCount()) continue;
+        if (m_HiddenNodes.empty()) m_HiddenNodes.assign(NodeCount(), 0);
+        m_HiddenNodes[n] = 1;
+    }
 }
 
 int Model::FindRootMotionNode(const std::string& name) const {

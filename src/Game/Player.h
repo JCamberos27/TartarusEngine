@@ -31,6 +31,16 @@ public:
     float KillY = -20.0f;
     glm::vec3 RespawnFeet{0.0f, 1.0f, 0.0f};
 
+    // A first-person body (FirstPersonBody.h) steering the capsule by root motion: the clips'
+    // horizontal velocity (m/s, world) and how much of it replaces the input's (0 = input only,
+    // 1 = root motion only). Set before each Update; zero weight is the plain controller.
+    glm::vec3 RootMotionVelocity{0.0f};
+    float RootMotionWeight = 0.0f;
+    // Out, per Update: the input as a horizontal velocity (m/s, world - what the player asked
+    // for, before root motion), and whether a jump started this frame.
+    glm::vec3 WishVelocity{0.0f};
+    bool Jumped = false;
+
     // readInput == false keeps the body simulating (gravity, collision, resting on geometry)
     // but ignores mouse-look / WASD / jump — used while the game runs inside the docked Game
     // panel and the player hasn't clicked in to take control yet (Esc hands control back).
