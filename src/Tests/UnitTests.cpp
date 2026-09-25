@@ -16,6 +16,7 @@
 #include "UnitTests.h"
 
 #include "AnimatorController.h"
+#include "RootMotion.h"
 #include "Curve.h"
 #include "IK.h"
 #include "FirstPersonAnimation.h"
@@ -1297,6 +1298,122 @@ void TestComponentRegistry() {
                 CHECK(*ReflectEnumLabel(f, f.EnumCount) == '\0'); // out of range -> ""
             }
         }
+    }
+}
+
+// --- Root motion: extraction, in-place poses, loops, blending (RootMotion.h) --------------------
+void TestRootMotion() {
+    const float kPi = 3.14159265f;
+    auto near = [](float a, float b, float eps = 1e-3f) { return std::abs(a - b) <= eps; };
+    auto nearV = [](const glm::vec3& a, const glm::vec3& b, float eps = 1e-3f) { return glm::length(a - b) <= eps; };
+    auto nearM = [](const glm::mat4& a, const glm::mat4& b, float eps = 1e-3f) {
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r)
+                if (std::abs(a[c][r] - b[c][r]) > eps) return false;
+        return true;
+    };
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    RootMotionSettings s; // rotation on, vertical off
+
+    // A walk: 1.4 m/s forward (+Z) for a 1 s loop, bobbing and swaying as it goes.
+    auto walk = [&](float t) {
+        return glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.9f + 0.03f * std::sin(t * 2.0f * kPi), 1.4f * t)) *
+               glm::rotate(glm::mat4(1.0f), 0.05f * std::sin(t * 2.0f * kPi), glm::vec3(1.0f, 0.0f, 0.0f));
+    };
+    RootMotionDelta d = RootMotionBetween(walk, 0.2f, 0.5f, 1.0f, true, s);
+    CHECK(nearV(d.Translation, glm::vec3(0.0f, 0.0f, 0.42f)) && near(d.Yaw, 0.0f));
+    d = RootMotionBetween(walk, 0.9f, 1.1f, 1.0f, true, s);   // across the loop: keeps walking
+    CHECK(nearV(d.Translation, glm::vec3(0.0f, 0.0f, 0.28f)));
+    d = RootMotionBetween(walk, 0.5f, 2.5f, 1.0f, true, s);   // two whole passes in one step
+    CHECK(nearV(d.Translation, glm::vec3(0.0f, 0.0f, 2.8f)));
+    d = RootMotionBetween(walk, 0.8f, 1.3f, 1.0f, false, s);  // a one-shot stops at its end
+    CHECK(nearV(d.Translation, glm::vec3(0.0f, 0.0f, 0.28f)));
+    const RootMotionDelta back = RootMotionBetween(walk, 0.5f, 0.2f, 1.0f, true, s);
+    CHECK(nearV(back.Translation, glm::vec3(0.0f, 0.0f, -0.42f)));
+    // In place: the root stays over its first frame, still bobbing.
+    const glm::mat4 ip = RootMotionInPlace(walk(0.25f), walk(0.0f), s);
+    CHECK(near(ip[3].x, 0.0f) && near(ip[3].z, 0.0f) && near(ip[3].y, walk(0.25f)[3].y));
+
+    // A turn on the spot: 90 degrees over 1 s.
+    auto turn = [&](float t) { return glm::rotate(glm::mat4(1.0f), 0.5f * kPi * t, up); };
+    d = RootMotionBetween(turn, 0.0f, 1.0f, 1.0f, false, s);
+    CHECK(near(d.Yaw, 0.5f * kPi) && nearV(d.Translation, glm::vec3(0.0f)));
+    RootMotionSettings noTurn;
+    noTurn.Rotation = false;
+    CHECK(near(RootMotionBetween(turn, 0.0f, 1.0f, 1.0f, false, noTurn).Yaw, 0.0f));
+    CHECK(nearM(RootMotionInPlace(turn(0.6f), turn(0.0f), noTurn), turn(0.6f))); // the turn stays in the pose
+
+    // A curving walk whose root starts off-centre and already turned: the object's motion times the
+    // in-place pose must land exactly where the clip put the root, at every time.
+    auto curve = [&](float t) {
+        const float yaw = 0.3f + 0.8f * t;
+        return glm::translate(glm::mat4(1.0f), glm::vec3(0.5f + std::sin(t) * 2.0f, 0.95f, -0.3f + t * t)) *
+               glm::rotate(glm::mat4(1.0f), yaw, up) * glm::rotate(glm::mat4(1.0f), 0.1f * t, glm::vec3(0.0f, 0.0f, 1.0f));
+    };
+    for (float t : {0.0f, 0.37f, 0.9f}) {
+        const glm::mat4 moved = RootMotionBetween(curve, 0.0f, t, 1.0f, false, s).Matrix();
+        CHECK(nearM(moved * RootMotionInPlace(curve(t), curve(0.0f), s), curve(t)));
+    }
+    // Deltas chain: [0, 0.4] then [0.4, 0.9] is [0, 0.9].
+    const RootMotionDelta a = RootMotionBetween(curve, 0.0f, 0.4f, 1.0f, false, s);
+    const RootMotionDelta b = RootMotionBetween(curve, 0.4f, 0.9f, 1.0f, false, s);
+    CHECK(nearM(a.Then(b).Matrix(), RootMotionBetween(curve, 0.0f, 0.9f, 1.0f, false, s).Matrix()));
+
+    // Height: kept in the pose unless Vertical is on.
+    auto hop = [&](float t) { return glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 1.0f + t, 0.0f)); };
+    CHECK(near(RootMotionBetween(hop, 0.0f, 0.5f, 1.0f, false, s).Translation.y, 0.0f));
+    RootMotionSettings vertical;
+    vertical.Vertical = true;
+    CHECK(near(RootMotionBetween(hop, 0.0f, 0.5f, 1.0f, false, vertical).Translation.y, 0.5f));
+
+    // Mixing (crossfades, blend trees) and the crossfade stack's weights.
+    RootMotionMix mix;
+    RootMotionDelta one, two;
+    one.Translation = glm::vec3(0.0f, 0.0f, 1.0f);
+    two.Translation = glm::vec3(0.0f, 0.0f, 3.0f);
+    two.Yaw = 1.0f;
+    mix.Add(one, 1.0f);
+    mix.Add(two, 3.0f);
+    CHECK(nearV(mix.Result().Translation, glm::vec3(0.0f, 0.0f, 2.5f)) && near(mix.Result().Yaw, 0.75f));
+    CHECK(RootMotionMix{}.Result().IsZero());
+    std::vector<float> w = AnimatorStackWeights({1.0f});
+    CHECK(w.size() == 1 && near(w[0], 1.0f));
+    w = AnimatorStackWeights({1.0f, 0.5f});
+    CHECK(near(w[0], 0.5f) && near(w[1], 0.5f));
+    w = AnimatorStackWeights({1.0f, 1.0f, 0.25f});
+    CHECK(near(w[0], 0.0f) && near(w[0] + w[1] + w[2], 1.0f) && near(w[2], AnimatorCrossfadeWeight(0.25f)));
+
+    // A state opting out round-trips; the default isn't written.
+    AnimatorController c;
+    c.Layers[0].States.resize(2);
+    c.Layers[0].States[0].Name = "Walk";
+    c.Layers[0].States[1].Name = "Drift";
+    c.Layers[0].States[1].RootMotion = false;
+    AnimatorController back2;
+    CHECK(AnimatorController::FromJsonString(c.ToJsonString(), back2));
+    CHECK(back2.Layers[0].States[0].RootMotion && !back2.Layers[0].States[1].RootMotion);
+    CHECK(c.ToJsonString().find("rootMotion") != std::string::npos);
+
+    // The component options serialize through reflection with stable keys.
+    AnimatorControllerComponent ac;
+    ac.RootMotion.Mode = (int)RootMotionMode::Apply;
+    ac.RootMotion.Bone = "root";
+    ac.RootMotion.Rotation = false;
+    ac.RootMotion.Vertical = true;
+    const RegisteredComponent* reg = nullptr;
+    for (const auto& r : ComponentRegistry::All())
+        if (std::string(r.Meta.Name) == "Animator Controller") reg = &r;
+    CHECK(reg != nullptr);
+    if (reg) {
+        int found = 0;
+        for (const ReflectField& f : reg->Meta.Fields) {
+            const std::string key = ReflectFieldKey(f);
+            if (key == "rootMotion") { ++found; CHECK(*(int*)f.Address(&ac) == 1); }
+            if (key == "rootMotionBone") { ++found; CHECK(*(std::string*)f.Address(&ac) == "root"); }
+            if (key == "rootMotionRotation") { ++found; CHECK(!*(bool*)f.Address(&ac)); }
+            if (key == "rootMotionVertical") { ++found; CHECK(*(bool*)f.Address(&ac)); }
+        }
+        CHECK(found == 4);
     }
 }
 
@@ -2745,6 +2862,7 @@ int RunUnitTests() {
         {"MaterialRobustness", TestMaterialRobustness},
         {"ComponentRegistry", TestComponentRegistry},
         {"AnimatorController", TestAnimatorController},
+        {"RootMotion", TestRootMotion},
         {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
         {"FirstPersonAds", TestFirstPersonAds},

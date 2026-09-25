@@ -27,6 +27,7 @@
 #include "AudioEngine.h" // AudioEngine::SoundHandle - m_PlayModeAudioHandles
 
 struct GLFWwindow;
+struct RootMotionOptions;
 class World;
 class Camera;
 class AssetLibrary;
@@ -1892,6 +1893,9 @@ private:
     // #175 Part B - Animator Controller component: picker, live parameters, controller editor
     // (EditorLayer_Animator.cpp). The working copy is re-read when the file changes on disk.
     void DrawAnimatorControllerExtra(World& world, entt::entity entity);
+    // The Root Motion group's extras on an Animation / Animator Controller component: the root
+    // bone picker, what was found, warnings, and the live motion while playing.
+    void DrawRootMotionExtra(World& world, entt::entity entity, RootMotionOptions& opts, Model* model);
 public:
     // Animator v2 - the node-graph Animator window (EditorLayer_Animator.cpp): layers, parameters,
     // a pan/zoom state graph and the selection's properties, with its own undo and live Play view.
