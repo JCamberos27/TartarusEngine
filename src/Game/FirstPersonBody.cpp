@@ -246,7 +246,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     const glm::vec2 target = FirstPersonBodyLocalMove(player.WishVelocity, m_Yaw);
     // Letting go at speed, the gait holds for the moment a stop clip is being picked (the blend would
     // otherwise slow the body on its own first, and the stop clip's own travel come on top of it).
-    const bool holdForStop = cfg.StartStopClips && glm::length(target) < 0.01f && m_IdleTime < 0.05f && glm::length(m_Move) > 1.2f;
+    const bool holdForStop = cfg.StartStopClips && glm::length(target) < 0.01f && m_IdleTime < 0.05f && glm::length(m_Move) > (player.Crouched ? 0.6f : 1.2f);
     if (!holdForStop) m_Move += (target - m_Move) * Follow(dt, cfg.ParamSmoothing);
     m_AirTime = player.Grounded ? 0.0f : m_AirTime + dt;
 
@@ -309,8 +309,15 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
         const glm::vec2 wishLocal = FirstPersonBodyLocalMove(player.WishVelocity, m_Yaw);
         const float wishLen = glm::length(wishLocal);
         const bool wantsMove = wishLen > 0.1f;
-        const bool plain = cfg.StartStopClips && player.Grounded && ac.InState("Locomotion") && !m_Turning;
+        const bool plain = cfg.StartStopClips && player.Grounded && (ac.InState("Locomotion") || ac.InState("CrouchLoco")) && !m_Turning;
         ac.SetBool("Moving", wantsMove);
+        // Standing still, dropping into or rising out of a crouch plays its transition clip; on the
+        // move it is just the crossfade between the gaits.
+        if (cfg.StartStopClips && player.Grounded && !wantsMove && glm::length(m_Move) < 0.4f && player.Crouched != m_WasCrouched) {
+            if (player.Crouched && ac.InState("Locomotion")) ac.SetTrigger("CrouchDown");
+            if (!player.Crouched && ac.InState("CrouchLoco")) ac.SetTrigger("CrouchUp");
+        }
+        m_WasCrouched = player.Crouched;
         // How far the clips carry the body: logged, to tune them against the feel.
         const bool inStop = ac.InState("Stop") || ac.InState("StopRun"), inStart = ac.InState("Start");
         const float travel = glm::length(glm::vec2(ac.RootMotion.DeltaPosition.x, ac.RootMotion.DeltaPosition.z));
@@ -337,7 +344,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
         } else {
             const float before = m_IdleTime;
             m_IdleTime += dt;
-            if (plain && before < 0.05f && m_IdleTime >= 0.05f && glm::length(m_Move) > 1.2f) {
+            if (plain && before < 0.05f && m_IdleTime >= 0.05f && glm::length(m_Move) > (player.Crouched ? 0.6f : 1.2f)) {
                 ac.SetFloat("StopX", m_LastDir.x);
                 ac.SetFloat("StopY", m_LastDir.y);
                 ac.SetTrigger(m_LastSprint && m_LastDir.y > 0.7f ? "StopRun" : "Stop");
