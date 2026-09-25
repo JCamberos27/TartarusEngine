@@ -92,6 +92,10 @@ public:
     int Ammo() const { return m_Ammo; }
     int MagazineSize() const { return m_Set.Gameplay.Magazine; }
     bool IsActive() const { return m_Arms != entt::null; }
+    // The runtime arms rig's entity (null when inactive) - the body's arms take their hands from it.
+    entt::entity ArmsEntity() const { return m_Arms; }
+    // The arms rig node the play camera is pinned to (empty = the rig's root sits on the camera).
+    const std::string& CameraBone() const { return m_CameraBone; }
     bool IsEquipped() const { return m_Equipped; }
     // Where the barrel points (world space): down the bore from the muzzle to the first surface.
     // False while the gun isn't simply held at the hip (ADS, sprinting, reloading, holstered).

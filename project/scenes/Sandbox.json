@@ -23790,12 +23790,14 @@
         "Camera Smoothing": 0.06,
         "Head Bob": 0.5,
         "Head Bone": "head",
-        "Hidden Bones": "clavicle_l, clavicle_r",
+        "Hidden Bones": "",
         "Hidden Parts": "Head",
         "Parameter Smoothing": 0.12,
         "Responsiveness": 0.0,
         "Run Speed": 3.26,
-        "Sprint Speed": 4.72
+        "Spine Aim": 0.6,
+        "Sprint Speed": 4.72,
+        "Weapon Arms": true
       },
       "id": 657,
       "name": "Player Body",
@@ -42578,6 +42580,39 @@
       "parentId": 657,
       "path": "assets/quantum/Models/Quantum_Head.fbx",
       "pathGuid": "372aa659f6e66c47",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "animations/fps_body_locomotion.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": 2,
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "id": 663,
+      "name": "Arms",
+      "order": 664,
+      "parentId": 657,
+      "path": "assets/quantum/FirstPerson/Quantum_Arms_FP.fbx",
+      "pathGuid": "19bbef7e387a5ef4",
       "position": [
         0,
         0,

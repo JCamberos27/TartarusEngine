@@ -463,6 +463,18 @@ void RegisterEngineComponents() {
         for (size_t i = 4; i < m.Fields.size(); ++i) m.Fields[i].Group = "Camera";
         m.Fields.back().Group = nullptr;
         m.Fields[m.Fields.size() - 2].Group = nullptr;
+        m.Fields.push_back({ "Weapon Arms", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, WeaponArms), 0.0f,
+              "The body's arms hold the weapon: they take the first-person arms' pose and reach their\n"
+              "hands onto theirs, and the separate arms model stops being drawn (its gun still is)." });
+        m.Fields.push_back({ "Spine Aim", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineAim), 0.01f,
+              "How much of the camera's pitch the spine takes: 0 = upright, 1 = the chest tilts as far\n"
+              "as the view. The shoulders follow the view, so the hands stay in reach.", 0.0f, 1.0f });
+        m.Fields.push_back({ "Arms Piece", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmsPiece), 0.0f,
+              "The child piece that is the body's arms (its name contains this). With Weapon Arms it is\n"
+              "drawn with the gun, in the view-model pass, so its hands sit exactly where the rig's do." });
+        m.Fields[m.Fields.size() - 3].Group = "Arms";
+        m.Fields[m.Fields.size() - 2].Group = "Arms";
+        m.Fields.back().Group = "Arms";
         Register<FirstPersonBodyComponent>(std::move(m));
     }
 

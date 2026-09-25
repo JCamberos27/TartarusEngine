@@ -458,6 +458,18 @@ struct FirstPersonBodyComponent {
     // Bones collapsed while the body is the player's, comma separated (empty = none) - e.g.
     // "upperarm_l, upperarm_r" on a one-piece body whose arms a first-person arms model draws.
     std::string HiddenBones;
+    // Phase 2 (#405): the body's own arms hold the weapon. While the first-person arms rig is
+    // up, the body's arms take its pose and IK their hands onto its hands (seen in the world
+    // pass, at the view model's screen position), and the arms rig itself is no longer drawn -
+    // its gun is. Off leaves the arms rig drawing the arms, as before.
+    bool WeaponArms = false;
+    // The body piece that is the arms (a child whose name contains this, case-insensitive). While
+    // Weapon Arms holds it is drawn with the gun in the view-model pass, so its hands sit exactly
+    // where the first-person rig's do.
+    std::string ArmsPiece = "Arms";
+    // How much of the camera's pitch the spine takes (0 = the body stays upright, 1 = the chest
+    // tilts as far as the view), so the shoulders follow the view and the hands stay in reach.
+    float SpineAim = 0.0f;
 };
 
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue
