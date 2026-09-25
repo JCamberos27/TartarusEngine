@@ -1054,7 +1054,8 @@ void Model::EvaluatePose() {
     // Root motion: the root node of each clip is put back in place before the two are blended.
     const int rootNode = m_RootMotionNode < (int)nodes.size() ? m_RootMotionNode : -1;
     auto inPlace = [&](const LocalTRS& sampled, const PlaybackState& s, int node) {
-        if (s.Clip < 0) return sampled;
+        // Ping-pong has no root motion to hand over (ClipRootMotion), so it plays as authored.
+        if (s.Clip < 0 || s.Wrap == AnimationWrapMode::PingPong) return sampled;
         const glm::mat4 parent = nodes[node].Parent >= 0 ? m_NodeGlobals[nodes[node].Parent] : glm::mat4(1.0f);
         const glm::mat4 toModel = m_D->GlobalInverseTransform * parent;
         const glm::mat4 x = toModel * sampled.ToMatrix();
@@ -1145,6 +1146,10 @@ void Model::ApplyLocalPose(const std::vector<LocalTRS>& pose) {
 int Model::FindRootMotionNode(const std::string& name) const {
     const auto& nodes = m_D->Nodes;
     if (!name.empty()) return NodeIndex(name);
+    // The auto pick is asked for every frame: remember it per import.
+    if (m_AutoRootMotionFor == m_D.get()) return m_AutoRootMotionNode;
+    m_AutoRootMotionFor = m_D.get();
+    m_AutoRootMotionNode = -1;
     auto leaf = [](const std::string& s) { // "mixamorig:Hips" -> "hips"
         const size_t colon = s.find_last_of(':');
         std::string l = colon == std::string::npos ? s : s.substr(colon + 1);
@@ -1152,10 +1157,10 @@ int Model::FindRootMotionNode(const std::string& name) const {
         return l;
     };
     for (int i = 0; i < (int)nodes.size(); ++i)
-        if (nodes[i].Parent >= 0 && leaf(nodes[i].Name) == "root") return i;
+        if (nodes[i].Parent >= 0 && leaf(nodes[i].Name) == "root") return m_AutoRootMotionNode = i;
     for (int i = 0; i < (int)nodes.size(); ++i) {
         const std::string l = leaf(nodes[i].Name);
-        if (l == "hips" || l == "pelvis") return i;
+        if (l == "hips" || l == "pelvis") return m_AutoRootMotionNode = i;
     }
     return -1;
 }
