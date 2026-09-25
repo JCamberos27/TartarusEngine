@@ -480,6 +480,10 @@ struct FirstPersonBodyComponent {
     // is past the Turn Threshold (where the feet must step round) - what the turn clips can keep up
     // with, so they don't slide. Aiming within the threshold is free. 0 = no limit.
     float MaxTurnRate = 0.0f;
+    // Starting and stopping play their own clips (a push-off, a braking step) instead of blending
+    // straight between idle and the gait; the clips' root motion then eases the capsule up to
+    // speed and down again.
+    bool StartStopClips = false;
 };
 
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue
