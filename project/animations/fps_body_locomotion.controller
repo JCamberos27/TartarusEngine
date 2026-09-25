@@ -90,6 +90,16 @@
       "name": "Crouched",
       "type": "bool",
       "default": 0.0
+    },
+    {
+      "name": "CrouchDown",
+      "type": "trigger",
+      "default": 0.0
+    },
+    {
+      "name": "CrouchUp",
+      "type": "trigger",
+      "default": 0.0
     }
   ],
   "tracks": [
@@ -642,6 +652,140 @@
             "Crouch",
             "Turn"
           ]
+        },
+        {
+          "name": "CrouchDown",
+          "loop": false,
+          "speed": 1.5,
+          "position": [
+            520.0,
+            400.0
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/animations/mc_core_motion/Crouch/AM_Stand_Idle_Trans_Crouch_02.fbx",
+              "clipGuid": "8c9fdfb2ae24e5ba"
+            }
+          },
+          "tags": [
+            "Crouch"
+          ]
+        },
+        {
+          "name": "CrouchUp",
+          "loop": false,
+          "speed": 1.5,
+          "position": [
+            780.0,
+            400.0
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/animations/mc_core_motion/Crouch/AM_Crouch_Idle_Trans_Stand_01.fbx",
+              "clipGuid": "6c94a5f0977ea438"
+            }
+          },
+          "tags": [
+            "Crouch"
+          ]
+        },
+        {
+          "name": "CrouchStart",
+          "loop": false,
+          "speed": 1.5,
+          "position": [
+            260.0,
+            540.0
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "StartX",
+              "blendParamY": "StartY",
+              "children": [
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Start.fbx",
+                  "clipGuid": "3c06fc15fecbb0a6",
+                  "threshold": 0.0,
+                  "thresholdY": 1.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Start.fbx",
+                  "clipGuid": "783db248a2970435",
+                  "threshold": 0.0,
+                  "thresholdY": -1.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left_Start.fbx",
+                  "clipGuid": "7b1209d617221eb0",
+                  "threshold": -1.0,
+                  "thresholdY": 0.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right_Start.fbx",
+                  "clipGuid": "405245ef1bf03807",
+                  "threshold": 1.0,
+                  "thresholdY": 0.0,
+                  "speed": 1.0
+                }
+              ]
+            }
+          },
+          "tags": [
+            "Crouch",
+            "Start"
+          ]
+        },
+        {
+          "name": "CrouchStop",
+          "loop": false,
+          "speed": 1.5,
+          "position": [
+            520.0,
+            540.0
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "StopX",
+              "blendParamY": "StopY",
+              "children": [
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Stop.fbx",
+                  "clipGuid": "a01f53ceb2de0fd6",
+                  "threshold": 0.0,
+                  "thresholdY": 1.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Stop.fbx",
+                  "clipGuid": "ff6a62f304227a31",
+                  "threshold": 0.0,
+                  "thresholdY": -1.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left_Stop.fbx",
+                  "clipGuid": "9f701734f074f557",
+                  "threshold": -1.0,
+                  "thresholdY": 0.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right_Stop.fbx",
+                  "clipGuid": "932102775d75aa9e",
+                  "threshold": 1.0,
+                  "thresholdY": 0.0,
+                  "speed": 1.0
+                }
+              ]
+            }
+          },
+          "tags": [
+            "Crouch",
+            "Stop"
+          ]
         }
       ],
       "transitions": [
@@ -927,6 +1071,222 @@
         },
         {
           "from": "StopRun",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Locomotion",
+          "to": "CrouchDown",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "CrouchDown",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.3
+        },
+        {
+          "from": "CrouchDown",
+          "to": "Locomotion",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchDown",
+          "to": "CrouchLoco",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchDown",
+          "to": "CrouchLoco",
+          "duration": 0.25,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.92
+        },
+        {
+          "from": "CrouchLoco",
+          "to": "CrouchUp",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "CrouchUp",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchUp",
+          "to": "CrouchLoco",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchUp",
+          "to": "Locomotion",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchUp",
+          "to": "Locomotion",
+          "duration": 0.3,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.62
+        },
+        {
+          "from": "CrouchLoco",
+          "to": "CrouchStart",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchLoco",
+          "to": "CrouchStop",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.75
+        },
+        {
+          "from": "CrouchStart",
+          "to": "Locomotion",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStart",
+          "to": "CrouchLoco",
+          "duration": 0.2,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.42
+        },
+        {
+          "from": "CrouchStart",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStop",
+          "to": "Locomotion",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStop",
+          "to": "CrouchLoco",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStop",
+          "to": "CrouchLoco",
+          "duration": 0.2,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.92
+        },
+        {
+          "from": "CrouchStop",
           "to": "Fall",
           "duration": 0.25,
           "conditions": [
