@@ -83,6 +83,8 @@ private:
     glm::vec2 m_LastDir{0.0f, 1.0f}; // the last move direction (body frame) and whether it was a sprint
     bool m_LastSprint = false;
     bool m_Grounded = false;       // at the last Tick
+    glm::vec3 m_ArmedEyeDelta{0.0f}; // the shoulder-anchored eye minus the head's, in the body's frame (slow)
+    bool m_HaveArmedEye = false;
     bool m_ArmsEasedOut = false;   // the arms piece is hidden while it eases off a holstered gun
     int m_ArmsShadow = 1;          // its RenderableComponent::CastShadows before that
     bool m_InLand = false;         // the animator is in the landing state (the input drives the capsule)

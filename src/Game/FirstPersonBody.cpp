@@ -515,9 +515,15 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             const glm::vec3 offset = camera.Right() * m_RigEyeToShoulders.x + camera.Up() * m_RigEyeToShoulders.y +
                                      camera.Front() * (m_RigEyeToShoulders.z + kReachSlack);
             const glm::vec3 fromShoulders = m_Feet + yaw * (t.Scale * (m_Shoulders + toRest)) - offset;
+            // Remember where this puts the eye against the head's: unarmed the eye keeps that height, or
+            // the camera would jump when the gun is holstered.
+            const glm::vec3 delta = glm::inverse(yaw) * (fromShoulders - eyeWorld);
+            if (!m_HaveArmedEye) { m_ArmedEyeDelta = delta; m_HaveArmedEye = true; }
+            if (m_ArmsWeight > 0.99f) m_ArmedEyeDelta += (delta - m_ArmedEyeDelta) * Follow(dt, 0.5f);
             eyeWorld = glm::mix(eyeWorld, fromShoulders, std::min(m_ArmsWeight, 1.0f));
         }
     }
+    if (m_HaveArmedEye) eyeWorld += yaw * m_ArmedEyeDelta * (1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f));
     m_CameraApplied = eyeWorld - camera.Position;
     camera.Position = eyeWorld;
 }
