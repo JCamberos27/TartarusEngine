@@ -398,6 +398,8 @@ struct FirstPersonControllerComponent {
     float MoveSpeed = 6.0f;
     float SprintMultiplier = 1.6f;
     float JumpSpeed = 5.5f;
+    float JumpBufferTime = 0.12f; // a jump pressed this long (seconds) before landing still happens on landing
+    float CoyoteTime = 0.10f;     // a jump pressed this long after stepping off an edge still counts
     float EyeHeight = 1.6f;
     float CapsuleRadius = 0.3f;
     float CapsuleHeight = 1.8f;
@@ -498,6 +500,42 @@ struct FirstPersonBodyComponent {
     // foot (at most FootIKMaxDrop metres) and the legs are re-solved, so the feet meet stairs and slopes.
     bool FootIK = false;
     float FootIKMaxDrop = 0.35f;
+    // --- Advanced tuning (defaults are the values the body was tuned with) ---
+    float EyeSlack = 0.035f; // Eye Slack
+    float ReachSlack = 0.04f; // Reach Slack
+    float ShrugStart = 0.9f; // Shrug Start
+    float ShrugMax = 0.12f; // Shrug Max
+    float ArmsEaseOut = 0.1f; // Arms Ease Out
+    float TurnLagFloor = 90.0f; // Turn Lag Floor
+    float TurnLagMargin = 5.0f; // Turn Lag Margin
+    float TurnEndAngle = 8.0f; // Turn End Angle
+    float TurnMinTime = 0.3f; // Turn Min Time
+    float TurnTimeout = 4.0f; // Turn Timeout
+    float TurnMoveEase = 0.08f; // Turn Move Ease
+    float StartIdleTime = 0.25f; // Start Idle Time
+    float StartMaxMove = 0.6f; // Start Max Move
+    float StopMinRunTime = 0.6f; // Stop Min Run Time
+    float StopMinRunTimeCrouched = 0.7f; // Stop Min Run Time (Crouched)
+    float StopMinSpeed = 1.2f; // Stop Min Speed
+    float StopMinSpeedCrouched = 0.6f; // Stop Min Speed (Crouched)
+    float StopDebounce = 0.05f; // Stop Debounce
+    float StopRunForward = 0.7f; // Stop Run Forward
+    float AirborneDelay = 0.15f; // Airborne Delay
+    float FootLockDrift = 0.12f; // Foot Lock Drift
+    float FootPlantedHeight = 0.05f; // Foot Planted Height
+    float FootRayUp = 0.5f; // Foot Ray Up
+    float FootRayLength = 1.0f; // Foot Ray Length
+    float FootMaxRaise = 0.25f; // Foot Max Raise
+    float PelvisMaxRaise = 0.0f; // Pelvis Max Raise
+    float FootOffsetEase = 0.06f; // Foot Offset Ease
+    float FootNormalEase = 0.08f; // Foot Normal Ease
+    float FootIKFade = 0.1f; // Foot IK Fade
+    float FootTiltMax = 25.0f; // Foot Tilt Max
+    float FootLockEaseIn = 0.04f; // Foot Lock Ease In
+    float FootLockEaseOut = 0.08f; // Foot Lock Ease Out
+    float StairPopRise = 0.03f; // Stair Pop Rise
+    float StairPopRate = 2.5f; // Stair Pop Rate
+    float StairEase = 0.09f; // Stair Ease
 };
 
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue

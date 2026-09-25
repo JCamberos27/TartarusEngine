@@ -1303,6 +1303,35 @@ void TestComponentRegistry() {
     }
 }
 
+// The body's tuning fields: every float has a tooltip, a range that holds its default, and the
+// defaults are the values the body was tuned with (so a scene saved before they existed plays the same).
+void TestFirstPersonBodyTuning() {
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    FirstPersonBodyComponent body;
+    FirstPersonControllerComponent ctrl;
+    auto near = [](float a, float b) { return std::abs(a - b) < 1e-5f; };
+    CHECK(near(body.EyeSlack, 0.035f) && near(body.ReachSlack, 0.04f) && near(body.ShrugStart, 0.9f) && near(body.ShrugMax, 0.12f));
+    CHECK(near(body.TurnLagFloor, 90.0f) && near(body.TurnLagMargin, 5.0f) && near(body.TurnEndAngle, 8.0f) && near(body.TurnMinTime, 0.3f) &&
+          near(body.TurnTimeout, 4.0f) && near(body.TurnMoveEase, 0.08f));
+    CHECK(near(body.StartIdleTime, 0.25f) && near(body.StartMaxMove, 0.6f) && near(body.StopMinRunTime, 0.6f) && near(body.StopMinRunTimeCrouched, 0.7f) &&
+          near(body.StopMinSpeed, 1.2f) && near(body.StopMinSpeedCrouched, 0.6f) && near(body.StopDebounce, 0.05f) && near(body.StopRunForward, 0.7f));
+    CHECK(near(body.FootLockDrift, 0.12f) && near(body.FootPlantedHeight, 0.05f) && near(body.FootRayUp, 0.5f) && near(body.FootRayLength, 1.0f) &&
+          near(body.FootMaxRaise, 0.25f) && near(body.PelvisMaxRaise, 0.0f) && near(body.FootTiltMax, 25.0f) && near(body.StairPopRise, 0.03f) &&
+          near(body.StairPopRate, 2.5f) && near(body.StairEase, 0.09f) && near(body.AirborneDelay, 0.15f));
+    CHECK(near(ctrl.JumpBufferTime, 0.12f) && near(ctrl.CoyoteTime, 0.10f));
+    for (const RegisteredComponent& rc : ComponentRegistry::All()) {
+        const bool isBody = std::string(rc.Meta.Name) == "First Person Body", isCtrl = std::string(rc.Meta.Name) == "First Person Controller";
+        if (!isBody && !isCtrl) continue;
+        void* inst = isBody ? (void*)&body : (void*)&ctrl;
+        for (const ReflectField& f : rc.Meta.Fields) {
+            CHECK(f.Tooltip && *f.Tooltip);
+            if (f.Type != ReflectFieldType::Float || f.Max <= f.Min) continue;
+            const float v = *static_cast<float*>(f.Address(inst));
+            CHECK(v >= f.Min - 1e-6f && v <= f.Max + 1e-6f);
+        }
+    }
+}
+
 // --- Root motion: extraction, in-place poses, loops, blending (RootMotion.h) --------------------
 // #405 - 2D blend trees and the first-person body's frame maths.
 void TestBlendTree2D() {
@@ -3029,6 +3058,7 @@ int RunUnitTests() {
         {"AnimatorController", TestAnimatorController},
         {"RootMotion", TestRootMotion},
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
+        {"FirstPersonBodyTuning", TestFirstPersonBodyTuning},
         {"BlendTree2D", TestBlendTree2D},
         {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
