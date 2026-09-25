@@ -262,6 +262,7 @@ bool AnimatorController::FromJsonString(const std::string& text, AnimatorControl
         st.Speed = Num(s, "speed", 1.0f);
         st.SpeedParam = Str(s, "speedParam");
         st.Loop = Flag(s, "loop", true);
+        st.RootMotion = Flag(s, "rootMotion", true);
         st.Priority = (int)Num(s, "priority", 0.0f);
         st.Tags = Strings(s, "tags");
         st.Position = Vec2(s, "position", glm::vec2(0.0f));
@@ -363,6 +364,7 @@ std::string AnimatorController::ToJsonString() const {
                        {"position", {s.Position.x, s.Position.y}}};
             if (!s.SpeedParam.empty()) st["speedParam"] = s.SpeedParam;
             if (s.Priority != 0) st["priority"] = s.Priority;
+            if (!s.RootMotion) st["rootMotion"] = false;
             if (!s.Tags.empty()) st["tags"] = s.Tags;
             json ms = json::object();
             for (int t = 0; t < (int)Tracks.size(); ++t)
@@ -433,6 +435,18 @@ std::vector<float> AnimatorBlendWeights(const std::vector<AnimatorController::Bl
             w[order[k + 1]] += t;
             break;
         }
+    }
+    return w;
+}
+
+std::vector<float> AnimatorStackWeights(const std::vector<float>& fades) {
+    std::vector<float> w(fades.size(), 0.0f);
+    if (fades.empty()) return w;
+    w[0] = 1.0f;
+    for (size_t k = 1; k < fades.size(); ++k) {
+        const float a = AnimatorCrossfadeWeight(fades[k]);
+        for (size_t j = 0; j < k; ++j) w[j] *= 1.0f - a;
+        w[k] = a;
     }
     return w;
 }
@@ -622,6 +636,7 @@ void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent
             float len = stateLength ? stateLength(li, it.State) : 1.0f;
             if (!(len > 1e-4f)) len = 1.0f;
             const float before = it.Phase;
+            it.PrevPhase = before;
             it.Phase += dt * std::abs(speed) / len;
             if (k + 1 == rt.Stack.size()) CrossEvents(s, before, it.Phase, ac.FiredEvents);
             if (it.Fade < 1.0f)
@@ -660,6 +675,9 @@ struct Sampler {
     AssetLibrary& Assets;
     int Track;
     Pose Tmp, Tmp2;
+    // Root motion: when RootNode >= 0, states that use it are sampled in place.
+    int RootNode = -1;
+    RootMotionSettings RM;
 
     int Clip(const std::string& ref) { return ref.empty() ? -1 : ResolveAnimationClip(M, ref, Assets); }
 
@@ -686,12 +704,14 @@ struct Sampler {
         const auto& m = s.MotionFor(Track);
         if (m.Empty()) return false;
         const AnimationWrapMode wrap = s.Loop ? AnimationWrapMode::Loop : AnimationWrapMode::ClampForever;
+        const bool strip = RootNode >= 0 && s.RootMotion;
         if (!m.IsBlendTree()) {
             const int c = Clip(m.Clip);
             if (c < 0) return false;
             // Real time, not stretched: tracks of different lengths each play at their own rate
             // and a shorter one holds (or loops) - how the paired arms/weapon clips were authored.
             M.SampleLocalPose(c, phase * stateLen, wrap, out);
+            if (strip) M.StripRootMotion(out, c, RootNode, RM);
             return true;
         }
         // Blend tree: children are phase-synced, so a walk and a run keep their feet in step.
@@ -703,11 +723,34 @@ struct Sampler {
             const int c = Clip(m.Children[i].Clip);
             if (c < 0) continue;
             M.SampleLocalPose(c, phase * M.AnimationLength(c), wrap, any ? Tmp2 : out);
+            if (strip) M.StripRootMotion(any ? Tmp2 : out, c, RootNode, RM);
             if (any) BlendInto(out, Tmp2, w[i] / (acc + w[i]));
             acc += w[i];
             any = true;
         }
         return any;
+    }
+
+    // The root's travel in state `s` between two phases, timed exactly as Sample plays it.
+    RootMotionDelta Motion(const AnimatorController::State& s, float phase0, float phase1, float stateLen,
+                           const std::vector<AnimatorParam>& params) {
+        const auto& m = s.MotionFor(Track);
+        if (RootNode < 0 || !s.RootMotion || m.Empty() || phase0 < 0.0f) return {};
+        const AnimationWrapMode wrap = s.Loop ? AnimationWrapMode::Loop : AnimationWrapMode::ClampForever;
+        if (!m.IsBlendTree()) {
+            const int c = Clip(m.Clip);
+            return c < 0 ? RootMotionDelta{} : M.ClipRootMotion(c, phase0 * stateLen, phase1 * stateLen, wrap, RootNode, RM);
+        }
+        const auto w = AnimatorBlendWeights(m.Children, ParamValue(params, m.BlendParam, 0.0f));
+        RootMotionMix mix;
+        for (size_t i = 0; i < m.Children.size(); ++i) {
+            if (w[i] <= 0.0f) continue;
+            const int c = Clip(m.Children[i].Clip);
+            if (c < 0) continue;
+            const float len = M.AnimationLength(c);
+            mix.Add(M.ClipRootMotion(c, phase0 * len, phase1 * len, wrap, RootNode, RM), w[i]);
+        }
+        return mix.Result();
     }
 };
 
@@ -744,11 +787,16 @@ void ApplyAdditive(Pose& pose, const Pose& layer, const Pose& ref, const std::ve
     }
 }
 
+// Poses `model` from the component's layers. With `rootNode` >= 0 the base layer's states are
+// sampled in place, and `motion` receives their mixed travel since the last update.
 void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, Model& model,
                AssetLibrary& assets, int track, const std::function<float(int, int)>& stateLength,
-               const IKRigComponent* ikRig) {
+               const IKRigComponent* ikRig, int rootNode, const RootMotionSettings& rm, RootMotionDelta* motion) {
+    if (motion) *motion = {};
     if (model.NodeCount() == 0) return;
     Sampler smp{model, assets, track, {}, {}};
+    smp.RootNode = rootNode;
+    smp.RM = rm;
     Pose bind, pose, layerPose, refPose, gripPose;
     model.BindLocalPose(bind);
     pose = bind;
@@ -762,6 +810,23 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
             // The grip the IK keeps comes from the state being faded into (see IK::ApplyRig).
             SampleLayer(L, rt, smp, ac.Params, stateLength, li, bind, false, pose,
                         ikRig && rt.Stack.size() > 1 ? &gripPose : nullptr);
+            if (motion && rootNode >= 0) {
+                // Each entry's travel, weighted by how much of it shows in the blended pose.
+                std::vector<float> fades;
+                for (const auto& it : rt.Stack) fades.push_back(it.Fade);
+                const std::vector<float> w = AnimatorStackWeights(fades);
+                RootMotionMix mix;
+                for (size_t k = 0; k < rt.Stack.size(); ++k) {
+                    const auto& it = rt.Stack[k];
+                    if (it.State < 0 || it.State >= (int)L.States.size()) continue;
+                    float len = stateLength(li, it.State);
+                    if (!(len > 1e-4f)) len = 1.0f;
+                    mix.Add(smp.Motion(L.States[it.State], it.PrevPhase, it.Phase, len, ac.Params), w[k]);
+                }
+                *motion = mix.Result();
+            }
+            // Later layers sample their own states whole: the base layer already owns the root.
+            smp.RootNode = -1;
             continue;
         }
         if (L.Weight <= 0.0f) continue;
@@ -849,9 +914,17 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
                 r.AC->InTransition = dac.InTransition;
                 r.AC->FiredEvents = dac.FiredEvents;
             }
-            if (r.M)
-                PoseModel(*ctrl, *r.AC, *r.M, assets, ctrl->TrackIndex(r.AC->Track), stateLength,
-                          world.Registry.try_get<IKRigComponent>(r.E));
+            if (!r.M) continue;
+            RootMotionOptions& rmo = r.AC->RootMotion;
+            const bool rootMotion = rmo.Mode != (int)RootMotionMode::Off;
+            rmo.ResolvedBone = rootMotion ? r.M->FindRootMotionNode(rmo.Bone) : -1;
+            RootMotionSettings rms;
+            rms.Rotation = rmo.Rotation;
+            rms.Vertical = rmo.Vertical;
+            RootMotionDelta motion;
+            PoseModel(*ctrl, *r.AC, *r.M, assets, ctrl->TrackIndex(r.AC->Track), stateLength,
+                      world.Registry.try_get<IKRigComponent>(r.E), rmo.ResolvedBone, rms, &motion);
+            ApplyRootMotion(world, r.E, rmo, motion, dt);
         }
     }
 }

@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -355,6 +356,73 @@ void EditorLayer::DrawAnimatorControllerExtra(World& world, entt::entity entity)
         ImGui::SameLine();
         ImGui::TextDisabled("(%.0f%%%s)", 100.0f * std::fmod(ac->StateTime, 1.0f), ac->InTransition ? ", blending" : "");
         for (auto& p : ac->Params) LiveParamWidget(p, ImGui::GetContentRegionAvail().x * 0.5f);
+    }
+}
+
+void EditorLayer::DrawRootMotionExtra(World& world, entt::entity entity, RootMotionOptions& opts, Model* model) {
+    if (opts.Mode == (int)RootMotionMode::Off) return;
+    ImGui::SeparatorText(ICON_FA_PERSON_WALKING "  Root Motion");
+    // Label column like the controller picker above.
+    const float valueX = ImGui::GetContentRegionAvail().x * 0.35f;
+    auto PropertyLabel = [&](const char* label, const char* tip) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(label);
+        if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+        ImGui::SameLine(valueX);
+    };
+
+    // The bone: auto, or any of the model's nodes (searchable - a rig has hundreds).
+    const int autoNode = model ? model->FindRootMotionNode() : -1;
+    const std::string autoLabel = autoNode >= 0 ? "Auto (" + model->NodeName(autoNode) + ")" : std::string("Auto (none found)");
+    PropertyLabel("Root Bone", "The bone whose travel is the character's. Auto picks \"root\" when the rig has one\n"
+                               "(Unreal, most game rigs), else the hips / pelvis (Mixamo).");
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    if (ImGui::BeginCombo("##rmbone", opts.Bone.empty() ? autoLabel.c_str() : opts.Bone.c_str(), ImGuiComboFlags_HeightLarge)) {
+        static char filter[96] = "";
+        ClipFilterBox(filter, sizeof filter);
+        if (!filter[0] && ImGui::Selectable(autoLabel.c_str(), opts.Bone.empty())) {
+            PushUndo(world, "Set Root Motion Bone");
+            opts.Bone.clear();
+        }
+        if (model)
+            for (int n = 0; n < model->NodeCount(); ++n) {
+                const std::string& name = model->NodeName(n);
+                if (!ClipFilterMatch(filter, name)) continue;
+                if (ImGui::Selectable((name + "##rmn" + std::to_string(n)).c_str(), name == opts.Bone)) {
+                    PushUndo(world, "Set Root Motion Bone");
+                    opts.Bone = name;
+                }
+            }
+        ImGui::EndCombo();
+    }
+    const int node = model ? model->FindRootMotionNode(opts.Bone) : -1;
+    if (!model || model->NodeCount() == 0)
+        ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s", "Needs a rigged model.");
+    else if (node < 0)
+        ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
+                           opts.Bone.empty() ? "No root, hips or pelvis bone found - pick the root bone."
+                                             : "This model has no bone of that name.");
+
+    // Who moves the object.
+    auto& reg = world.Registry;
+    if (opts.Mode == (int)RootMotionMode::Apply) {
+        if (reg.all_of<FirstPersonControllerComponent>(entity)) {
+            ImGui::TextDisabled(ICON_FA_CIRCLE_INFO "  The player moves itself: root motion is only reported here.");
+        } else if (const auto* rb = reg.try_get<RigidbodyComponent>(entity); rb && !rb->IsKinematic) {
+            ImGui::TextDisabled(ICON_FA_CIRCLE_INFO "  Drives the Rigidbody's velocity, so walls stop it.");
+            if (opts.Rotation && !(rb->FreezeRotationX && rb->FreezeRotationZ))
+                ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
+                                   "Freeze the Rigidbody's X and Z rotation, or the character can tip over.");
+        }
+    } else {
+        ImGui::TextDisabled(ICON_FA_CIRCLE_INFO "  In Place: game code reads RootMotion.DeltaPosition / DeltaYaw.");
+    }
+
+    // Live: what the clips are doing right now.
+    if (m_InPlayMode) {
+        PropertyLabel("Live", "This frame's root motion (smoothed).");
+        if (opts.ResolvedBone < 0) ImGui::TextDisabled("not running");
+        else ImGui::Text("%.2f m/s   %+.0f deg/s", opts.Speed, opts.TurnRate);
     }
 }
 
@@ -1173,9 +1241,21 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         ImGui::PushID(id);
         ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::BeginCombo("##clip", ClipLabel(ref).c_str(), ImGuiComboFlags_HeightLarge)) {
-            if (ImGui::Selectable("(none)", ref.empty())) { ref.clear(); edited = true; }
+            static char filter[128] = "";
+            ClipFilterBox(filter, sizeof filter);
+            if (!filter[0] && ImGui::Selectable("(none)", ref.empty())) { ref.clear(); edited = true; }
             for (const auto& [r, label] : W.Clips)
-                if (ImGui::Selectable((label + "##" + r).c_str(), r == ref)) { ref = r; edited = true; }
+                if (ClipFilterMatch(filter, label + " " + r) && ImGui::Selectable((label + "##" + r).c_str(), r == ref)) {
+                    ref = r;
+                    edited = true;
+                }
+            // Files no scene has loaded yet (e.g. an imported animation pack).
+            std::string picked = ref;
+            if (ProjectClipFileList(filter, picked) && picked != ref) {
+                ref = picked;
+                edited = true;
+            }
+            if (edited) ImGui::CloseCurrentPopup();
             ImGui::EndCombo();
         }
         if (ImGui::IsItemHovered())
@@ -1222,6 +1302,49 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Optional: a Float parameter that multiplies Speed.");
         row("Loop");
         if (EditorUIPrimitives::Checkbox("##sloop", &s.Loop)) changed = true;
+        row("Root Motion");
+        if (EditorUIPrimitives::Checkbox("##srm", &s.RootMotion)) changed = true;
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("When the object's Animator Controller has Root Motion on, this state's travel moves\n"
+                                 "the object. Off keeps the travel in the pose, as authored.");
+        {
+            // What the clip itself travels, measured on the rig (needs one picked above).
+            Model* rigModel = nullptr;
+            const AnimatorControllerComponent* rigAc = nullptr;
+            if (W.Entity != entt::null && world.Registry.valid(W.Entity)) {
+                if (const auto* rc = world.Registry.try_get<RenderableComponent>(W.Entity)) rigModel = rc->ModelRef.get();
+                rigAc = world.Registry.try_get<AnimatorControllerComponent>(W.Entity);
+            }
+            const AC::Motion& m = s.MotionFor(rigAc ? D.TrackIndex(rigAc->Track) : 0);
+            const int node = rigModel ? rigModel->FindRootMotionNode(rigAc ? rigAc->RootMotion.Bone : std::string()) : -1;
+            if (assets && rigModel && node >= 0 && !m.Empty()) {
+                RootMotionSettings rms;
+                if (rigAc) { rms.Rotation = rigAc->RootMotion.Rotation; rms.Vertical = rigAc->RootMotion.Vertical; }
+                auto describe = [&](const std::string& ref, const char* prefix) {
+                    const int c = ResolveAnimationClip(*rigModel, ref, *assets);
+                    const float len = c >= 0 ? rigModel->AnimationLength(c) : 0.0f;
+                    if (!(len > 0.0f)) return;
+                    const RootMotionDelta d = rigModel->ClipRootMotion(c, 0.0f, len, AnimationWrapMode::ClampForever, node, rms);
+                    const float dist = glm::length(glm::vec2(d.Translation.x, d.Translation.z));
+                    if (dist < 0.005f && std::abs(d.Yaw) < 0.01f) ImGui::TextDisabled("%sin place", prefix);
+                    else ImGui::TextDisabled("%s%.2f m, %+.0f deg per pass  (%.2f m/s)", prefix, dist, glm::degrees(d.Yaw), dist / len);
+                };
+                row("");
+                if (!m.IsBlendTree()) describe(m.Clip, "");
+                else {
+                    ImGui::TextDisabled("Per child:");
+                    for (const auto& child : m.Children) {
+                        row("");
+                        const std::string prefix = ClipLabel(child.Clip) + ": ";
+                        describe(child.Clip, prefix.c_str());
+                    }
+                }
+                if (ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("The root's travel over one pass of the clip, measured on %s.\n"
+                                         "Use the speeds to set blend thresholds and movement speeds that match the feet.",
+                                         rigModel->NodeName(node).c_str());
+            }
+        }
         row("Priority");
         ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::InputInt("##sprio", &s.Priority)) changed = true;
@@ -1597,3 +1720,77 @@ void EditorLayer::DrawControllerAssetInspector(const std::string& path) {
         ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s", "Can't read this controller.");
     }
 }
+
+// --- Clip pickers: project files ---------------------------------------------------------------
+
+namespace EditorInternal {
+
+const std::vector<std::string>& ProjectModelFiles() {
+    static std::vector<std::string> files;
+    static std::chrono::steady_clock::time_point scanned{};
+    const auto now = std::chrono::steady_clock::now();
+    if (!files.empty() && now - scanned < std::chrono::seconds(5)) return files;
+    scanned = now;
+    files.clear();
+    std::error_code ec;
+    const fs::path root(ProjectPaths::Root());
+    for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
+         !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+        if (it.depth() == 0 && it->is_directory() && it->path().filename() == "Library") {
+            it.disable_recursion_pending();
+            continue;
+        }
+        if (!it->is_regular_file()) continue;
+        std::string ext = it->path().extension().string();
+        for (char& ch : ext) ch = (char)std::tolower((unsigned char)ch);
+        if (ext == ".fbx" || ext == ".gltf" || ext == ".glb" || ext == ".dae")
+            files.push_back(fs::relative(it->path(), root, ec).generic_u8string());
+    }
+    std::sort(files.begin(), files.end());
+    return files;
+}
+
+bool ClipFilterMatch(const char* filter, const std::string& text) {
+    if (!filter || !*filter) return true;
+    std::string hay = text;
+    for (char& ch : hay) ch = (char)std::tolower((unsigned char)ch);
+    const char* p = filter;
+    while (*p) {
+        while (*p == ' ') ++p;
+        const char* start = p;
+        while (*p && *p != ' ') ++p;
+        if (p == start) break;
+        std::string word(start, p);
+        for (char& ch : word) ch = (char)std::tolower((unsigned char)ch);
+        if (hay.find(word) == std::string::npos) return false;
+    }
+    return true;
+}
+
+void ClipFilterBox(char* buf, size_t size) {
+    if (ImGui::IsWindowAppearing()) { buf[0] = '\0'; ImGui::SetKeyboardFocusHere(); }
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputTextWithHint("##clipfilter", ICON_FA_MAGNIFYING_GLASS "  Search clips (e.g. walk fwd no_rm)", buf, size);
+}
+
+bool ProjectClipFileList(const char* filter, std::string& ref, int maxShown) {
+    bool picked = false, header = false;
+    int shown = 0, matched = 0;
+    for (const std::string& path : ProjectModelFiles()) {
+        if (!ClipFilterMatch(filter, path)) continue;
+        ++matched;
+        if (shown >= maxShown) continue;
+        if (!header) {
+            ImGui::SeparatorText("Project files");
+            header = true;
+        }
+        const std::string label = fs::u8path(path).stem().u8string() + "##pf" + path;
+        if (ImGui::Selectable(label.c_str(), path == ref)) { ref = path; picked = true; }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s\n\nLoads when picked (the file's first clip).", path.c_str());
+        ++shown;
+    }
+    if (matched > shown) ImGui::TextDisabled("%d more - type to narrow the list", matched - shown);
+    return picked;
+}
+
+} // namespace EditorInternal

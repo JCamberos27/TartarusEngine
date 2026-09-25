@@ -69,6 +69,9 @@ struct AnimatorController {
         float Speed = 1.0f;
         std::string SpeedParam;      // optional Float parameter multiplying Speed
         bool Loop = true;
+        // With root motion on (the component's Root Motion), this state's travel moves the object.
+        // False keeps it in the pose instead - e.g. a clip whose drift you want left as authored.
+        bool RootMotion = true;
         int Priority = 0;            // see Transition::RespectPriority
         std::vector<std::string> Tags;
         std::vector<Event> Events;
@@ -154,6 +157,11 @@ inline float AnimatorCrossfadeWeight(float fade) {
 }
 
 std::vector<float> AnimatorBlendWeights(const std::vector<AnimatorController::BlendChild>& children, float value);
+
+// How much each entry of a crossfade stack shows in the final pose, given each entry's Fade
+// (bottom first): the entries blend in order, each over everything below it, eased by
+// AnimatorCrossfadeWeight. Sums to 1. Root motion mixes the entries' travel by these.
+std::vector<float> AnimatorStackWeights(const std::vector<float>& fades);
 
 // Per node of a rig described by `parent` (parents first) and `name`: 1 when the node is inside
 // `layer`'s bone mask, else 0.
