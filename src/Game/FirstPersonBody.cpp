@@ -63,6 +63,18 @@ float FirstPersonBodyYaw(const glm::vec3& front, float fallback) {
     return std::atan2(front.x, front.z); // rotating +Z by this about +Y gives (sin, 0, cos)
 }
 
+float FirstPersonBodyWrapAngle(float radians) {
+    const float twoPi = 6.28318530718f;
+    radians = std::fmod(radians, twoPi);
+    if (radians > 3.14159265359f) radians -= twoPi;
+    else if (radians <= -3.14159265359f) radians += twoPi;
+    return radians;
+}
+
+bool FirstPersonBodyShouldTurn(float offset, float thresholdDegrees) {
+    return thresholdDegrees > 0.0f && std::abs(offset) > glm::radians(thresholdDegrees);
+}
+
 glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw) {
     const glm::quat r = YawRotation(yaw);
     const glm::vec3 v(worldVelocity.x, 0.0f, worldVelocity.z);
@@ -112,7 +124,7 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     // an object: this class places the body itself. Turns stay in the pose: the view owns the yaw.
     auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
     ac.RootMotion.Mode = (int)RootMotionMode::InPlace;
-    ac.RootMotion.Rotation = false;
+    ac.RootMotion.Rotation = true; // the turn clips' yaw is read (DeltaYaw) to turn the body; the pose stays facing forward
     ac.RootMotion.Vertical = false;
 
     Model& model = *reg.get<RenderableComponent>(m_Driver).ModelRef;
@@ -150,7 +162,16 @@ bool FirstPersonBody::Start(World& world, Player& player) {
         m_Models.push_back(reg.get<RenderableComponent>(e).ModelRef);
         m_Pieces.push_back(e);
         if (e != m_Driver)
-            if (auto* pac = reg.try_get<AnimatorControllerComponent>(e)) pac->Driver = m_Driver;
+            if (auto* pac = reg.try_get<AnimatorControllerComponent>(e)) {
+                pac->Driver = m_Driver;
+                // The same root-motion handling as the driver's, or the pieces' poses part company
+                // (a stripped turn on one, the turn left in the pose on another).
+                const auto& dm = reg.get<AnimatorControllerComponent>(m_Driver).RootMotion;
+                pac->RootMotion.Mode = dm.Mode;
+                pac->RootMotion.Bone = dm.Bone;
+                pac->RootMotion.Rotation = dm.Rotation;
+                pac->RootMotion.Vertical = dm.Vertical;
+            }
         // A hidden piece still casts its shadow; the camera is inside the head.
         const std::string name = lower(reg.all_of<NameComponent>(e) ? reg.get<NameComponent>(e).Name : std::string());
         for (const std::string& part : hiddenParts)
@@ -204,7 +225,8 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     } else {
         m_Feet = camera.Position - glm::vec3(0.0f, player.EyeHeight, 0.0f);
     }
-    m_Yaw = FirstPersonBodyYaw(camera.Front(), m_Yaw);
+    m_ViewYaw = FirstPersonBodyYaw(camera.Front(), m_ViewYaw);
+    if (!m_HaveHeading) { m_Yaw = m_ViewYaw; m_HaveHeading = true; }
     world.SetWorldPose(m_Body, m_Feet, YawRotation(m_Yaw));
 
     // The movement, in the body's frame, eased so the gait changes smoothly.
@@ -214,6 +236,53 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
 
     if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
     auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
+
+    // The heading. Moving, the body faces the view (a quick ease, no pop). Standing still with a
+    // Turn Threshold, it keeps its heading until the view is that far off, then a turn clip carries
+    // it round (the clip's own yaw turns it, so the feet plant).
+    const bool still = player.Grounded && glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) < 0.1f &&
+                       glm::length(m_Move) < 0.2f;
+    float offset = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw);
+    if (cfg.TurnThreshold <= 0.0f) {
+        m_Yaw = m_ViewYaw;
+        m_Turning = false;
+    } else if (m_Turning) {
+        m_TurnTime += dt;
+        if (ac.InState("Turn")) {
+            const float step = glm::radians(ac.RootMotion.DeltaYaw);
+            m_Yaw += step;
+            m_TurnDone += step;
+        }
+        offset = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw);
+        // Done when the clip has played out (a 180 takes longer than a 90), the view is reached, or
+        // the player moves off; the timeout is only a guard.
+        const bool clipDone = m_TurnTime > 0.3f && (!ac.InState("Turn") || ac.StateTime >= 0.97f);
+        if (!still || std::abs(offset) < glm::radians(8.0f) || clipDone || m_TurnTime > 4.0f) {
+            Log::Info("First Person Body: turned " + std::to_string(glm::degrees(m_TurnDone)).substr(0, 6) + " deg in " +
+                      std::to_string(m_TurnTime).substr(0, 4) + " s, " + std::to_string(glm::degrees(offset)).substr(0, 6) + " deg off the view.");
+            m_Turning = false;
+        }
+    } else if (still) {
+        if (FirstPersonBodyShouldTurn(offset, cfg.TurnThreshold)) {
+            m_Turning = true;
+            m_TurnTime = 0.0f;
+            m_TurnDone = 0.0f;
+            ac.SetFloat("TurnAngle", std::clamp(glm::degrees(offset), -180.0f, 180.0f));
+        }
+    } else {
+        m_Yaw += offset * Follow(dt, 0.08f);
+    }
+    // The view can outrun a turn clip: the body never lags it by more than this (a bounded slide of
+    // the feet beats a chest twisted right round). Keep Mouse Sensitivity low enough that the turn clips keep up.
+    if (cfg.TurnThreshold > 0.0f) {
+        const float lag = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw), maxLag = glm::radians(std::max(cfg.TurnThreshold + 5.0f, 90.0f));
+        if (std::abs(lag) > maxLag) m_Yaw = m_ViewYaw - std::copysign(maxLag, lag);
+    }
+    m_Yaw = FirstPersonBodyWrapAngle(m_Yaw);
+    m_Twist = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw);
+    world.SetWorldPose(m_Body, m_Feet, YawRotation(m_Yaw));
+    ac.SetBool("Turning", m_Turning);
+
     ac.SetFloat("MoveX", m_Move.x);
     ac.SetFloat("MoveY", m_Move.y);
     ac.SetFloat("Speed", glm::length(m_Move));
@@ -235,7 +304,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
     const auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
     const glm::vec3 d = ac.RootMotion.DeltaPosition;
-    m_RootVelocity = dt > 0.0f ? glm::vec3(d.x, 0.0f, d.z) / dt : glm::vec3(0.0f);
+    m_RootVelocity = dt > 0.0f && !m_Turning ? glm::vec3(d.x, 0.0f, d.z) / dt : glm::vec3(0.0f);
 
     // The chest follows the view's pitch first, so the head (and the camera on it) and the
     // shoulders are where they will be drawn.
@@ -275,7 +344,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         return mid;
     };
     const glm::vec3 shouldersAnimated = shouldersNow();
-    if (cfg.SpineAim > 0.0f) ApplySpineAim(camera, cfg.SpineAim);
+    if (cfg.SpineAim > 0.0f || cfg.SpineTwist > 0.0f) ApplySpineAim(camera, cfg.SpineAim, m_Twist * cfg.SpineTwist);
     if (!haveHead) return;
 
     // The camera into the head: smoothed in the body's own frame, so it never trails the move.
@@ -328,9 +397,9 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     camera.Position = eyeWorld;
 }
 
-// Tilts the spine by `amount` of the camera's pitch, spread evenly over spine_01..spine_05 and taken
-// about the model's X axis, on every piece so they stay one skeleton.
-void FirstPersonBody::ApplySpineAim(const Camera& camera, float amount) {
+// Tilts the spine by `amount` of the camera's pitch and twists it by `twist` radians, spread evenly over spine_01..spine_05 (pitch about
+// the model's X axis, twist about Y), on every piece so they stay one skeleton.
+void FirstPersonBody::ApplySpineAim(const Camera& camera, float amount, float twist) {
     const float pitch = std::asin(std::clamp(camera.Front().y, -1.0f, 1.0f)); // up is positive
     static const char* const kSpine[] = {"spine_01", "spine_02", "spine_03", "spine_04", "spine_05"};
     std::vector<int> parents;
@@ -347,7 +416,9 @@ void FirstPersonBody::ApplySpineAim(const Camera& camera, float amount) {
         for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
         IK::ComputeGlobals(pose, parents, globals);
         // Rotating +Z about +X by theta gives (0, -sin, cos): looking up needs a negative angle.
-        const glm::quat step = glm::angleAxis(-pitch * amount / (float)bones.size(), glm::vec3(1.0f, 0.0f, 0.0f));
+        // The twist about the model's up turns the chest toward the view (positive = to the left).
+        const glm::quat step = glm::angleAxis(twist / (float)bones.size(), glm::vec3(0.0f, 1.0f, 0.0f)) *
+                               glm::angleAxis(-pitch * amount / (float)bones.size(), glm::vec3(1.0f, 0.0f, 0.0f));
         for (int i : bones) IK::OffsetBone(pose, parents, globals, i, glm::vec3(0.0f), step, IK::Position(globals[i]));
         m.ApplyLocalPose(pose);
     }
@@ -434,7 +505,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 const float armLen = glm::length(IK::Position(globals[lower]) - a) + glm::length(IK::Position(globals[hand]) - IK::Position(globals[lower]));
                 const glm::vec3 toTarget = target - a;
                 const float dist = glm::length(toTarget);
-                const float excess = std::min(dist - armLen * 0.97f, 0.08f);
+                const float excess = std::min(dist - armLen * 0.97f, 0.12f);
                 if (excess > 1e-4f && dist > 1e-5f)
                     IK::OffsetBone(pose, parents, globals, clav, toTarget / dist * excess * m_ArmsWeight, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
             }
