@@ -1,4 +1,5 @@
 #include "FirstPersonBody.h"
+#include "BodyDebugDraw.h"
 #include "FirstPersonBodyContract.h"
 
 #include "Camera.h"
@@ -100,6 +101,7 @@ void FirstPersonBody::Fail(const std::string& message) {
 
 bool FirstPersonBody::Start(World& world, Player& player) {
     *this = FirstPersonBody{};
+    BodyDebug::Info() = BodyDebug::Snapshot{};
     auto& reg = world.Registry;
     auto bodies = reg.view<FirstPersonBodyComponent>(entt::exclude<InactiveTag>);
     if (bodies.begin() == bodies.end()) return false;
@@ -202,6 +204,8 @@ bool FirstPersonBody::Start(World& world, Player& player) {
 }
 
 void FirstPersonBody::Stop(World& world) {
+    BodyDebug::Info() = BodyDebug::Snapshot{};
+    BodyDebug::Clear();
     if (m_PoseSource != entt::null && world.Registry.valid(m_PoseSource)) world.Registry.remove<PoseSourceTag>(m_PoseSource);
     for (entt::entity e : m_ArmsTagged)
         if (world.Registry.valid(e)) world.Registry.remove<ViewModelTag>(e);
@@ -237,6 +241,8 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     if (!reg.valid(m_Body)) { m_Body = entt::null; return; }
     const auto& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
     m_Responsiveness = cfg.Responsiveness;
+    BodyDebug::Clear();
+    m_SinceTrigger += dt;
 
     // Stand at the capsule's feet, facing the view.
     if (PhysicsWorld::HasCharacter()) {
@@ -259,6 +265,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     m_ViewYaw = FirstPersonBodyYaw(camera.Front(), m_ViewYaw);
     if (!m_HaveHeading) { m_Yaw = m_ViewYaw; m_HaveHeading = true; }
     world.SetWorldPose(m_Body, m_Feet, YawRotation(m_Yaw));
+    auto fireTrigger = [&](AnimatorControllerComponent& a, const char* name) { a.SetTrigger(name); m_LastTrigger = name; m_SinceTrigger = 0.0f; };
 
     // The movement, in the body's frame, eased so the gait changes smoothly.
     const glm::vec2 target = FirstPersonBodyLocalMove(player.WishVelocity, m_Yaw);
@@ -335,8 +342,8 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
         // Standing still, dropping into or rising out of a crouch plays its transition clip; on the
         // move it is just the crossfade between the gaits.
         if (cfg.StartStopClips && player.Grounded && !wantsMove && glm::length(m_Move) < 0.4f && player.Crouched != m_WasCrouched) {
-            if (player.Crouched && ac.InState(FPBody::kStateLocomotion)) ac.SetTrigger(FPBody::kCrouchDown);
-            if (!player.Crouched && ac.InState(FPBody::kStateCrouchLoco)) ac.SetTrigger(FPBody::kCrouchUp);
+            if (player.Crouched && ac.InState(FPBody::kStateLocomotion)) fireTrigger(ac, FPBody::kCrouchDown);
+            if (!player.Crouched && ac.InState(FPBody::kStateCrouchLoco)) fireTrigger(ac, FPBody::kCrouchUp);
         }
         m_WasCrouched = player.Crouched;
         // How far the clips carry the body: logged, to tune them against the feel.
@@ -357,7 +364,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
             if (plain && m_IdleTime >= cfg.StartIdleTime && glm::length(m_Move) < cfg.StartMaxMove) {
                 ac.SetFloat(FPBody::kStartX, dir.x);
                 ac.SetFloat(FPBody::kStartY, dir.y);
-                ac.SetTrigger(FPBody::kStart);
+                fireTrigger(ac, FPBody::kStart);
             }
             m_LastDir = dir;
             m_LastSprint = glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) > m_RunSpeed * 1.05f;
@@ -373,7 +380,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
                 glm::length(m_Move) > (player.Crouched ? cfg.StopMinSpeedCrouched : cfg.StopMinSpeed)) {
                 ac.SetFloat(FPBody::kStopX, m_LastDir.x);
                 ac.SetFloat(FPBody::kStopY, m_LastDir.y);
-                ac.SetTrigger(m_LastSprint && m_LastDir.y > cfg.StopRunForward ? FPBody::kStopRun : FPBody::kStop);
+                fireTrigger(ac, m_LastSprint && m_LastDir.y > cfg.StopRunForward ? FPBody::kStopRun : FPBody::kStop);
             }
         }
     }
@@ -386,7 +393,46 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     ac.SetBool(FPBody::kCrouched, player.Crouched);
     // Off the ground for a moment (not a step down a stair): falling.
     ac.SetBool(FPBody::kAirborne, m_AirTime > cfg.AirborneDelay);
-    if (player.Jumped) ac.SetTrigger(FPBody::kJump);
+    if (player.Jumped) fireTrigger(ac, FPBody::kJump);
+
+    // What the body is doing, for the Inspector's live readout and the Scene viewport's overlay.
+    {
+        BodyDebug::Snapshot& d = BodyDebug::Info();
+        d.Valid = true;
+        d.AnimatorState = ac.StateName;
+        d.StateTime = ac.StateTime;
+        d.Turning = m_Turning;
+        d.ViewOffsetDeg = glm::degrees(FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw));
+        d.TwistDeg = glm::degrees(m_Twist);
+        d.Still = m_Still;
+        d.IdleTime = m_IdleTime;
+        d.MoveTime = m_MoveTime;
+        d.MoveSpeed = glm::length(m_Move);
+        d.RootSpeed = glm::length(m_RootVelocity);
+        d.StepOffset = m_StepOffset;
+        d.ArmsWeight = m_ArmsWeight;
+        d.LastTrigger = m_LastTrigger;
+        d.LastTriggerAgo = m_SinceTrigger;
+        if (BodyDebug::Enabled()) {
+            const glm::vec3 base = m_Feet + glm::vec3(0.0f, 0.03f, 0.0f);
+            const auto heading = [&](float yaw) { return glm::vec3(std::sin(yaw), 0.0f, std::cos(yaw)); };
+            BodyDebug::Arrow(base, base + heading(m_Yaw) * 0.9f, glm::vec4(1.0f, 0.85f, 0.2f, 1.0f));      // the body's heading
+            BodyDebug::Arrow(base, base + heading(m_ViewYaw) * 0.9f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));   // where the view faces
+            if (cfg.TurnThreshold > 0.0f) {                                                                // the turn threshold wedge
+                const float t = glm::radians(cfg.TurnThreshold);
+                const glm::vec4 wedge(1.0f, 0.55f, 0.15f, 0.9f);
+                BodyDebug::Line(base, base + heading(m_Yaw + t) * 1.0f, wedge);
+                BodyDebug::Line(base, base + heading(m_Yaw - t) * 1.0f, wedge);
+                for (int i = 0; i < 12; ++i)
+                    BodyDebug::Line(base + heading(m_Yaw - t + 2.0f * t * (float)i / 12.0f) * 1.0f,
+                                    base + heading(m_Yaw - t + 2.0f * t * (float)(i + 1) / 12.0f) * 1.0f, wedge);
+            }
+            if (glm::length(m_RootVelocity) > 0.05f)                                                       // what the clips carry the capsule at
+                BodyDebug::Arrow(base + glm::vec3(0.0f, 0.1f, 0.0f), base + glm::vec3(0.0f, 0.1f, 0.0f) + m_RootVelocity * 0.4f, glm::vec4(0.2f, 0.9f, 1.0f, 1.0f));
+            if (std::abs(m_StepOffset) > 0.005f)                                                           // a stair being eased out
+                BodyDebug::Line(base, base + glm::vec3(0.0f, m_StepOffset, 0.0f), glm::vec4(1.0f, 0.2f, 0.8f, 1.0f));
+        }
+    }
 }
 
 void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::entity weaponArms,
@@ -513,6 +559,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             const float kEyeSlack = cfg.EyeSlack;
             const glm::vec3 gap = shouldersAnimated - m_Shoulders;
             if (const float gapLen = glm::length(gap); gapLen > kEyeSlack) m_Shoulders = shouldersAnimated - gap / gapLen * kEyeSlack;
+            BodyDebug::Info().EyeSlack = glm::length(shouldersAnimated - m_Shoulders);
             // A little slack: the shoulders sit this much further toward the gun than the rig's, so the
             // support arm is never at full stretch (a straight arm jumps at every small motion).
             const float kReachSlack = cfg.ReachSlack;
@@ -528,6 +575,12 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         }
     }
     if (m_HaveArmedEye) eyeWorld += yaw * m_ArmedEyeDelta * (1.0f - std::clamp(m_ArmsWeight, 0.0f, 1.0f));
+    if (BodyDebug::Enabled()) {
+        const glm::vec3 shoulders = m_Feet + yaw * (t.Scale * m_Shoulders);
+        BodyDebug::Cross(eyeWorld, 0.04f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));       // the camera
+        BodyDebug::Cross(shoulders, 0.04f, glm::vec4(1.0f, 0.3f, 1.0f, 1.0f));      // the shoulders the eye is anchored to
+        BodyDebug::Line(shoulders, eyeWorld, glm::vec4(1.0f, 0.3f, 1.0f, 0.7f));
+    }
     m_CameraApplied = eyeWorld - camera.Position;
     camera.Position = eyeWorld;
 }
@@ -590,16 +643,30 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         QueryFilter filter;
         filter.HitTriggers = 0;
         RaycastHit hit;
-        if (PhysicsWorld::RaycastSolid(origin, down, cfg.FootRayLength, filter, hit) && hit.Hit) {
+        const bool rayHit = PhysicsWorld::RaycastSolid(origin, down, cfg.FootRayLength, filter, hit) && hit.Hit;
+        if (rayHit) {
             offset = std::clamp(hit.Point[1] - m_Feet.y, -maxDrop, cfg.FootMaxRaise);
             normal = glm::normalize(glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]));
             if (normal.y < 0.5f) normal = glm::vec3(0.0f, 1.0f, 0.0f); // a wall, not a floor
+        }
+        if (BodyDebug::Enabled()) {
+            const glm::vec3 from(origin[0], origin[1], origin[2]);
+            const glm::vec3 to = rayHit ? glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]) : from + glm::vec3(0.0f, -cfg.FootRayLength, 0.0f);
+            BodyDebug::Line(from, to, rayHit ? glm::vec4(0.3f, 1.0f, 0.4f, 1.0f) : glm::vec4(1.0f, 0.3f, 0.3f, 1.0f)); // the ground ray
+            if (rayHit) BodyDebug::Cross(to, 0.04f, glm::vec4(0.3f, 1.0f, 0.4f, 1.0f));
+            BodyDebug::Cross(footWorld, 0.05f, m_FootPlanted[s] ? glm::vec4(0.3f, 1.0f, 0.4f, 1.0f) : glm::vec4(1.0f, 0.4f, 0.3f, 1.0f)); // the animated foot: green planted
+            if (m_FootPlanted[s]) BodyDebug::Cross(m_FootLock[s], 0.03f, glm::vec4(0.3f, 0.9f, 1.0f, 1.0f));                            // where it is pinned
         }
         if (!m_HaveFoot) { m_FootOffset[s] = offset; m_FootNormal[s] = normal; }
         m_FootOffset[s] += (offset - m_FootOffset[s]) * Follow(dt, cfg.FootOffsetEase);
         m_FootNormal[s] = glm::normalize(m_FootNormal[s] + (normal - m_FootNormal[s]) * Follow(dt, cfg.FootNormalEase));
     }
     m_HaveFoot = true;
+    {
+        BodyDebug::Snapshot& d = BodyDebug::Info();
+        d.FootWeight = m_FootWeight;
+        for (int s = 0; s < 2; ++s) { d.FootOffset[s] = m_FootOffset[s]; d.FootPlanted[s] = m_FootPlanted[s]; d.FootLock[s] = m_FootLockWeight[s]; }
+    }
 
     const float pelvisDelta = FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], maxDrop, cfg.PelvisMaxRaise) * m_FootWeight;
     static const char* const kLegs[2][3] = {{FPBody::kBoneThigh[0], FPBody::kBoneCalf[0], FPBody::kBoneFoot[0]}, {FPBody::kBoneThigh[1], FPBody::kBoneCalf[1], FPBody::kBoneFoot[1]}};

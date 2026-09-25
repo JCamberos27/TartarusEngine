@@ -162,6 +162,7 @@ struct EditorSettings {
     // occupied, #185 PR 5). On by default now that the physics system is real; toggled from the
     // toolbar Gizmos popup.
     bool  ShowColliders          = true;
+    bool  ShowBodyDebug          = false; // the Gizmos > Player body overlay (foot IK rays, headings, eye anchor)
 
     // --- Tool palette (Phase 3 item 3): the vertical Hand/Translate/Rotate/Scale/Rect/Universal
     // + Measure/Duplicate-Array + space/pivot rail docked to the Scene viewport's left edge,
