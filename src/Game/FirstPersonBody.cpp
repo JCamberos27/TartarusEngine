@@ -2,6 +2,7 @@
 
 #include "Camera.h"
 #include "Components.h"
+#include "IK.h"
 #include "Log.h"
 #include "Model.h"
 #include "PhysicsWorld.h"
@@ -49,6 +50,12 @@ glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw) {
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset) {
     const float b = std::clamp(bob, 0.0f, 1.0f);
     return restHead + (head - restHead) * b + kRight * offset.x + glm::vec3(0.0f, offset.y, 0.0f) + kForward * offset.z;
+}
+
+glm::vec3 FirstPersonBodyViewModelToWorldFov(const glm::vec3& c, float worldFovDeg, float viewModelFovDeg) {
+    if (!(worldFovDeg > 0.0f) || !(viewModelFovDeg > 0.0f)) return c;
+    const float k = std::tan(glm::radians(worldFovDeg) * 0.5f) / std::tan(glm::radians(viewModelFovDeg) * 0.5f);
+    return {c.x * k, c.y * k, c.z};
 }
 
 void FirstPersonBody::Fail(const std::string& message) {
@@ -122,6 +129,7 @@ bool FirstPersonBody::Start(World& world, Player& player) {
         }
         m->SetHiddenNodes(nodes);
         m_Models.push_back(reg.get<RenderableComponent>(e).ModelRef);
+        m_Pieces.push_back(e);
         if (e != m_Driver)
             if (auto* pac = reg.try_get<AnimatorControllerComponent>(e)) pac->Driver = m_Driver;
         // A hidden piece still casts its shadow; the camera is inside the head.
@@ -208,6 +216,10 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt) {
     const glm::vec3 d = ac.RootMotion.DeltaPosition;
     m_RootVelocity = dt > 0.0f ? glm::vec3(d.x, 0.0f, d.z) / dt : glm::vec3(0.0f);
 
+    // The chest follows the view's pitch first, so the head (and the camera on it) and the
+    // shoulders are where they will be drawn.
+    if (cfg.SpineAim > 0.0f) ApplySpineAim(camera, cfg.SpineAim);
+
     // The camera into the head: smoothed in the body's own frame, so it never trails the move.
     const auto* rc = reg.try_get<RenderableComponent>(m_Driver);
     const Model* model = rc ? rc->ModelRef.get() : nullptr;
@@ -222,4 +234,106 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt) {
     const glm::vec3 eyeWorld = m_Feet + YawRotation(m_Yaw) * (t.Scale * m_Eye);
     m_CameraApplied = eyeWorld - camera.Position;
     camera.Position = eyeWorld;
+}
+
+// Tilts the spine by `amount` of the camera's pitch, spread evenly over spine_01..spine_05 and taken
+// about the model's X axis, on every piece so they stay one skeleton.
+void FirstPersonBody::ApplySpineAim(const Camera& camera, float amount) {
+    const float pitch = std::asin(std::clamp(camera.Front().y, -1.0f, 1.0f)); // up is positive
+    static const char* const kSpine[] = {"spine_01", "spine_02", "spine_03", "spine_04", "spine_05"};
+    std::vector<int> parents;
+    std::vector<glm::mat4> globals;
+    for (const auto& mp : m_Models) {
+        Model& m = *mp;
+        IK::Pose pose = m.AppliedLocalPose();
+        if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
+        std::vector<int> bones;
+        for (const char* name : kSpine)
+            if (const int i = m.NodeIndex(name); i >= 0) bones.push_back(i);
+        if (bones.empty()) continue;
+        parents.resize(pose.size());
+        for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
+        IK::ComputeGlobals(pose, parents, globals);
+        // Rotating +Z about +X by theta gives (0, -sin, cos): looking up needs a negative angle.
+        const glm::quat step = glm::angleAxis(-pitch * amount / (float)bones.size(), glm::vec3(1.0f, 0.0f, 0.0f));
+        for (int i : bones) IK::OffsetBone(pose, parents, globals, i, glm::vec3(0.0f), step, IK::Position(globals[i]));
+        m.ApplyLocalPose(pose);
+    }
+}
+
+void FirstPersonBody::ArmsLateUpdate(World& world, const Camera& camera, entt::entity weaponArms, float viewModelFov, float dt) {
+    if (!IsActive()) return;
+    auto& reg = world.Registry;
+    if (!reg.valid(m_Body)) return;
+    const bool enabled = reg.get<FirstPersonBodyComponent>(m_Body).WeaponArms;
+    const bool haveRig = enabled && weaponArms != entt::null && reg.valid(weaponArms) &&
+                         reg.all_of<RenderableComponent>(weaponArms) && viewModelFov > 0.0f;
+    // The rig keeps posing (its hands are the targets) but is no longer drawn.
+    if (haveRig) reg.get<RenderableComponent>(weaponArms).CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
+    // Holstered, the rig is inactive: the arms ease back to the locomotion clips'.
+    const bool follow = haveRig && !reg.all_of<InactiveTag>(weaponArms);
+    m_ArmsWeight += ((follow ? 1.0f : 0.0f) - m_ArmsWeight) * Follow(dt, 0.1f);
+    if (m_ArmsWeight < 1e-3f || !haveRig) return;
+
+    const Model* rig = reg.get<RenderableComponent>(weaponArms).ModelRef.get();
+    if (!rig || rig->AppliedLocalPose().empty()) return;
+    const IK::Pose& rigPose = rig->AppliedLocalPose();
+    if ((int)rigPose.size() != rig->NodeCount()) return;
+    const glm::mat4 rigWorld = world.ComposeWorldTransform(weaponArms);
+
+    struct Side { const char *Clavicle, *Upper, *Lower, *Hand; };
+    static const Side kSides[2] = {{"clavicle_l", "upperarm_l", "lowerarm_l", "hand_l"},
+                                   {"clavicle_r", "upperarm_r", "lowerarm_r", "hand_r"}};
+    // Where each of the rig's hands is drawn in the world pass: seen from the camera, in the same place.
+    const glm::vec3 right = camera.Right(), up = camera.Up(), front = camera.Front();
+    glm::vec3 handPos[2]{};
+    glm::quat handRot[2]{};
+    bool haveHand[2] = {false, false};
+    for (int s = 0; s < 2; ++s) {
+        glm::mat4 h(1.0f);
+        if (!rig->NodeTransform(kSides[s].Hand, h)) continue;
+        const glm::mat4 w = rigWorld * h;
+        const glm::vec3 d = glm::vec3(w[3]) - camera.Position;
+        const glm::vec3 c = FirstPersonBodyViewModelToWorldFov({glm::dot(d, right), glm::dot(d, up), glm::dot(d, front)},
+                                                               camera.Fov, viewModelFov);
+        handPos[s] = camera.Position + right * c.x + up * c.y + front * c.z;
+        handRot[s] = IK::Rotation(w);
+        haveHand[s] = true;
+    }
+
+    std::vector<int> parents;
+    std::vector<glm::mat4> globals;
+    for (size_t k = 0; k < m_Models.size(); ++k) {
+        Model& m = *m_Models[k];
+        IK::Pose pose = m.AppliedLocalPose();
+        if (pose.empty() || (int)pose.size() != m.NodeCount() || !reg.valid(m_Pieces[k])) continue;
+        parents.resize(pose.size());
+        for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
+
+        // The rig's arm shapes first (rotations only: the body keeps its own bone lengths), so the
+        // elbows bend the way the animation has them; the solve then only fixes the hands.
+        std::vector<char> under(pose.size(), 0);
+        for (const Side& sd : kSides)
+            if (const int c = m.NodeIndex(sd.Clavicle); c >= 0) under[c] = 1;
+        for (int i = 0; i < (int)pose.size(); ++i) {
+            if (!under[i] && parents[i] >= 0 && under[parents[i]]) under[i] = 1;
+            if (!under[i]) continue;
+            const int r = rig->NodeIndex(m.NodeName(i));
+            if (r >= 0) pose[i].R = glm::normalize(glm::slerp(pose[i].R, rigPose[r].R, m_ArmsWeight));
+        }
+
+        const glm::mat4 toModel = glm::inverse(world.ComposeWorldTransform(m_Pieces[k]));
+        const glm::quat toModelRot = IK::Rotation(toModel);
+        IK::ComputeGlobals(pose, parents, globals);
+        for (int s = 0; s < 2; ++s) {
+            if (!haveHand[s]) continue;
+            const int upper = m.NodeIndex(kSides[s].Upper), lower = m.NodeIndex(kSides[s].Lower),
+                      hand = m.NodeIndex(kSides[s].Hand);
+            if (upper < 0 || lower < 0 || hand < 0) continue;
+            const glm::vec3 target = glm::vec3(toModel * glm::vec4(handPos[s], 1.0f));
+            const glm::quat rot = glm::normalize(toModelRot * handRot[s]);
+            IK::SolveTwoBone(pose, parents, globals, upper, lower, hand, target, &rot, m_ArmsWeight);
+        }
+        m.ApplyLocalPose(pose);
+    }
 }

@@ -1385,6 +1385,18 @@ void TestBlendTree2D() {
     CHECK(near(eye.x, 0.02f - 0.1f) && near(eye.y, 1.6f) && near(eye.z, 0.3f));
     eye = FirstPersonBodyEye(rest, head, 0.5f, glm::vec3(0.0f));
     CHECK(near(eye.y, 1.575f) && near(eye.z, 0.05f));
+
+    // Phase 2: a view-model point redrawn in the world pass keeps its screen position. Same FOV
+    // = unchanged; a wider world FOV pushes x/y out by the tangent ratio; depth never changes.
+    const glm::vec3 p(0.2f, -0.3f, 0.5f);
+    glm::vec3 q = FirstPersonBodyViewModelToWorldFov(p, 60.0f, 60.0f);
+    CHECK(near(q.x, p.x) && near(q.y, p.y) && near(q.z, p.z));
+    q = FirstPersonBodyViewModelToWorldFov(p, 90.0f, 60.0f); // tan45 / tan30
+    CHECK(near(q.x, p.x / std::tan(glm::radians(30.0f))) && near(q.y, p.y / std::tan(glm::radians(30.0f))) && near(q.z, 0.5f));
+    // What each projection puts on screen (x / (z * tan(fov/2))) agrees.
+    CHECK(near(q.x / (q.z * std::tan(glm::radians(45.0f))), p.x / (p.z * std::tan(glm::radians(30.0f)))));
+    q = FirstPersonBodyViewModelToWorldFov(p, 0.0f, 60.0f); // no view model: identity
+    CHECK(near(q.x, p.x) && near(q.z, p.z));
 }
 
 void TestRootMotion() {
