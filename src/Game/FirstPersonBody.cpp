@@ -60,9 +60,9 @@ void FirstPersonBody::Fail(const std::string& message) {
 bool FirstPersonBody::Start(World& world, Player& player) {
     *this = FirstPersonBody{};
     auto& reg = world.Registry;
-    entt::entity body = entt::null;
-    for (auto e : reg.view<FirstPersonBodyComponent>(entt::exclude<InactiveTag>)) { body = e; break; }
-    if (body == entt::null) return false;
+    auto bodies = reg.view<FirstPersonBodyComponent>(entt::exclude<InactiveTag>);
+    if (bodies.begin() == bodies.end()) return false;
+    const entt::entity body = *bodies.begin(); // the first; a scene has one player
     const auto& cfg = reg.get<FirstPersonBodyComponent>(body);
 
     // The pieces: the root itself and its children, each a rigged model on the one skeleton.
