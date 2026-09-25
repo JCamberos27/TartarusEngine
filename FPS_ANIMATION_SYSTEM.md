@@ -60,20 +60,32 @@ authority, and the view model has no collider.
 
 ### Per-frame order (`src/main.cpp`, Play loop)
 
-1. `player.Update(...)`: movement and camera.
-2. `firstPersonPresentation.Update(world, player.Cam)`:
+1. `firstPersonPresentation.RemoveViewKick(player.Cam)`: takes last frame's view punch and lean
+   off the camera, so the player only integrates its own look.
+2. `firstPersonBody.BeforePlayerMove(player, player.Cam)`: takes the camera back out of the
+   body's head and hands the Player last step's root motion (§8b). A no-op without a
+   First Person Body in the scene.
+3. `player.Update(...)`: movement and camera.
+4. `firstPersonBody.Tick(...)`: stands the body at the capsule's feet and sets its locomotion
+   parameters.
+5. `firstPersonPresentation.Update(world, player.Cam)`:
    - consume the events the controller fired last frame (`Shot` spends a round, `Refill` fills the magazine);
    - reset the one-frame triggers;
    - apply hidden or shown;
    - pose both rigs from the camera.
-3. Weapon input. This only runs when the game has input **and** the controller's gravity gun is off:
+6. Weapon input. This only runs when the game has input **and** the controller's gravity gun is off:
    - `FireMode` → `ToggleFireMode`
    - `Fire1` → `UpdateTrigger`
    - `Reload` → `UpdateReloadKey`
    - `Inspect` and `Melee` → `TriggerAction`
    - `Weapon1`, `Weapon2`, scroll and `Holster` → `SetEquipped`
-4. `firstPersonPresentation.Tick(dt, planarSpeed, sprinting, aiming)`: sets the locomotion parameters. `aiming` means `Fire2` is held.
-5. `UpdateAnimatorControllers(...)`: the arms controller runs, the weapon mirrors it, and both models are posed.
+7. `firstPersonPresentation.Tick(dt, planarSpeed, sprinting, aiming)`: sets the locomotion parameters. `aiming` means `Fire2` is held.
+8. `UpdateAnimatorControllers(...)`: the arms controller runs, the weapon mirrors it, and both
+   models are posed. The body's controller runs here too, its root motion In Place.
+9. `firstPersonBody.LateUpdate(...)`: reads the body's travel for the next move and puts the
+   camera in its head.
+10. `firstPersonPresentation.LateUpdate(world, player.Cam)`: re-places the arms and weapon from
+    this frame's finished pose (clips and IK), on the final camera.
 
 Placement reads the pose from the previous frame. That one frame of latency is deliberate, so
 a frame never mixes two placements.
@@ -85,16 +97,19 @@ a frame never mixes two placements.
 | `src/Game/AnimatorController.{h,cpp}` | The general animator: `.controller` v2 format, `AdvanceAnimator` (state machine), sampling and blending, the tracks/driver group, `BuildFirstPersonController`'s output format |
 | `src/Game/FirstPersonAnimation.{h,cpp}` | The weapon definition (`.fpsanim` v1/v2), `FirstPersonAnimatorContract` (the parameter, tag and event names), `BuildFirstPersonController` (the standard FPS graph), `FirstPersonReloadButton`, `FirstPersonRegripDelay` |
 | `src/Game/FirstPersonPresentation.{h,cpp}` | The runtime driver: `Start`/`Stop`/`Update`/`Tick`, fire, reload, equip, ADS recoil and walk bob |
+| `src/Game/FirstPersonBody.{h,cpp}` | The player's body (§8b): stands it at the capsule's feet, feeds its locomotion controller, hands its root motion to the Player and puts the camera in its head |
+| `src/Game/AnimationSystem.{h,cpp}` | `ApplyRootMotion`: a clip's travel moves the object (a dynamic Rigidbody's velocity, or the Transform), or is only reported (In Place) |
 | `src/Game/FirstPersonAdsCarry.{h,cpp}` | Carrying hip clips onto the sights: `BuildAdsCarry` (measures each `ADSCarry` state against the aim pose), `EvaluateAdsCarry` (how much of the crossfade stack a carried action owns), and the per-weapon report the Inspector shows |
-| `src/Game/Components.h` | `AnimatorControllerComponent` (params, tags, events, `Track`, `Driver`), `FirstPersonControllerComponent`, `ViewModelTag` |
+| `src/Game/Components.h` | `AnimatorControllerComponent` (params, tags, events, `Track`, `Driver`, `RootMotion`), `FirstPersonControllerComponent`, `FirstPersonBodyComponent`, `ViewModelTag` |
 | `src/Editor/EditorLayer_Animator.cpp` | The Animator window (state tags as chips with a known-tag picker), the component's Inspector section, and the `.controller` asset inspector |
 | `src/Editor/EditorLayer_WeaponInspector.cpp` | The `.fpsanim` weapon Inspector: overview badges, undo/redo, and the Animation / Aim-Down-Sights / Gameplay / Rigs / Recoil / Movement / IK sections |
 | `src/Editor/EditorPropertyRows.{h,cpp}` | `PropertyRows`: the shared label-column rows, sections, badges and reset buttons the weapon Inspector is built from |
 | `src/Renderer/Model.{h,cpp}` | Import, skinning, `SampleLocalPose` / `ApplyLocalPose`, `NodeTransform` |
 | `src/Renderer/SceneRenderer.cpp`, `RenderFrameContext.h` | The view-model sub-pass (`ViewModelFov`) |
 | `src/Core/InputMap.{h,cpp}` | Default bindings and `MergeDefaults` |
-| `src/Tests/UnitTests.cpp` | `TestAnimatorController`, `TestFirstPersonAnimationSet`, `TestFirstPersonAnimationFSM` (drives the AK graph through the real runtime), `TestFirstPersonAds` (the `ads` block, ADS variants, carry weights), `TestInputMap` |
+| `src/Tests/UnitTests.cpp` | `TestAnimatorController`, `TestFirstPersonAnimationSet`, `TestFirstPersonAnimationFSM` (drives the AK graph through the real runtime), `TestFirstPersonAds` (the `ads` block, ADS variants, carry weights), `TestBlendTree2D` (2D weights, JSON, the body's frame maths), `TestInputMap` |
 | `src/main.cpp` | Play-loop wiring; `--upgrade-fpsanim` (v1 → controller) |
+| `project/animations/fps_body_locomotion.controller` | The body's locomotion: a 2D blend of idle, walk and jog in eight directions and run, plus Jump / Fall / Land (MC Core Motion clips, `project/assets/animations/mc_core_motion/`) |
 | `tools/assimp_patches/` + `tools/apply_assimp_patches.cmake` | Local assimp fix, applied at configure time |
 | `tools/component_registration_allowlist.txt` | `ViewModelTag` is allow-listed (runtime-only). CI fails without it |
 
@@ -560,6 +575,11 @@ until the spine aim offset (phase 2). No turn-in-place, starts / stops, crouch o
    scene would gate `.fpsanim` loading and clip attachment on every push.
 8. **Materials/textures are out of scope.** Untextured rendering is expected;
    `Texture: failed to load ...` and `Y Bot.fbx` import errors are known noise.
+9. **The true-FPS body is phase 1 of #405.** The body walks by root motion under the
+   camera, but the arms still come from the separate view model (the modular Quantum pieces
+   have none). Phase 2 is arms on the body (camera-relative hand IK, a spine aim offset,
+   retiring the separate arms). Phase 3 is polish: turn in place, starts and stops, crouch,
+   foot IK. See §8b and the issue.
 
 ---
 
