@@ -1331,11 +1331,11 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                                      "Applies the next time you go fullscreen (F11).");
             const std::vector<std::string> monitors = Window::MonitorNames();
             std::string current = prefs.FullscreenMonitor < 0 || prefs.FullscreenMonitor >= (int)monitors.size()
-                ? std::string("Display the window is on")
+                ? std::string("Current display")
                 : std::to_string(prefs.FullscreenMonitor + 1) + ": " + monitors[prefs.FullscreenMonitor];
             ImGui::SetNextItemWidth(kw);
             if (ImGui::BeginCombo("Fullscreen display", current.c_str())) {
-                if (ImGui::Selectable("Display the window is on", prefs.FullscreenMonitor < 0)) {
+                if (ImGui::Selectable("Current display (the one the editor is on)", prefs.FullscreenMonitor < 0)) {
                     prefs.FullscreenMonitor = -1; EditorSettings::Save();
                 }
                 for (int i = 0; i < (int)monitors.size(); ++i) {

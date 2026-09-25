@@ -161,7 +161,11 @@ void DrawFolderNode(const EditorModuleHostAPI& host, const std::vector<std::stri
     for (const auto& f : folders)
         if (ParentFolderOf(f) == folderPath) children.push_back(f);
     std::sort(children.begin(), children.end(),
-              [](const std::string& a, const std::string& b) { return LeafNameOf(a) < LeafNameOf(b); });
+              [](const std::string& a, const std::string& b) { // A-Z ignoring case, like the grid
+                  const std::string la = LeafNameOf(a), lb = LeafNameOf(b);
+                  return std::lexicographical_compare(la.begin(), la.end(), lb.begin(), lb.end(), [](char x, char y) {
+                      return std::tolower((unsigned char)x) < std::tolower((unsigned char)y); });
+              });
 
     const bool hasChildren = !children.empty();
     const bool wasExpanded = isRoot ||
