@@ -9,6 +9,7 @@
 #include "Camera.h"
 #include "Player.h"
 #include "FirstPersonPresentation.h"
+#include "FirstPersonBody.h"
 #include "World.h"
 #include "Components.h"
 #include "gl.h"
@@ -692,6 +693,7 @@ int main(int argc, char** argv) {
         }
         Player player;
         FirstPersonPresentation firstPersonPresentation;
+        FirstPersonBody firstPersonBody; // #405 - true first person: the player's own body
         GravityGun gravityGun;
         CrosshairOverlay crosshair; // Play-mode crosshair + gravity gun hold / throw-charge indicator
         TrajectoryRibbon throwArc;  // red predicted path while the gravity gun charges a throw
@@ -1271,6 +1273,7 @@ int main(int argc, char** argv) {
                 // FPS presentation is opt-in on the controller (its Animation Set). With the
                 // gravity gun also on, that becomes the unarmed slot - see gravityGunLive.
                 firstPersonPresentation.Start(world, assets, fp);
+                firstPersonBody.Start(world, player); // a First Person Body in the scene: root-motion movement
             } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
                 playUsesPlayer = false;
                 playGravityGun = false;
@@ -1288,6 +1291,7 @@ int main(int argc, char** argv) {
             // into another scene after a stop.
             firstPersonPresentation.RemoveViewKick(player.Cam);
             firstPersonPresentation.Stop(world);
+            firstPersonBody.Stop(world);
             bulletHoles.Clear();
             editor.OnExitPlayMode(world, assets);
             playing = false;
@@ -2209,7 +2213,9 @@ int main(int argc, char** argv) {
                     firstPersonPresentation.RemoveViewKick(player.Cam);
                     // Last frame's ADS zoom: the look slows with the view so the sights track the same.
                     player.MouseSensitivity = playBaseSensitivity * firstPersonPresentation.LookScale(playBaseFov);
+                    firstPersonBody.BeforePlayerMove(player, player.Cam); // camera out of the head, root motion in
                     player.Update(gameDt, world, window.Handle(), gameHasInput);
+                    firstPersonBody.Tick(world, player, player.Cam, gameDt);
                     if (firstPersonPresentation.IsActive()) {
                         firstPersonPresentation.Update(world, player.Cam);
                         // The weapon owns Fire1/Fire2/FireMode/Reload/Inspect/Melee while it's in
@@ -2279,6 +2285,7 @@ int main(int argc, char** argv) {
                 UpdateAnimatorControllers(world, assets, gameDt); // #175 Part B — state machines
                 // The arms are posed now (clips + IK): seat the gun in this frame's hands.
                 if (playUsesPlayer) {
+                    firstPersonBody.LateUpdate(world, player.Cam, gameDt); // camera into the body's head
                     firstPersonPresentation.LateUpdate(world, player.Cam);
                     // This frame's rounds, down the bore from the muzzle: a hole where each struck.
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits())
