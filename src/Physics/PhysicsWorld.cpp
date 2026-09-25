@@ -1764,6 +1764,22 @@ bool RaycastFiltered(const float origin[3], const float dir[3], float maxDistanc
     return true;
 }
 
+bool RaycastSolid(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f,
+                  RaycastHit& outHit) {
+    outHit = RaycastHit{};
+    PxVec3 d;
+    if (!g_State || !g_State->scene || maxDistance <= 0.0f || !NormalizedDir(dir, d)) return false;
+    LayerQueryFilter lf = MakeFilter(f);
+    lf.skipSimulated = true;
+    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER);
+    PxRaycastBuffer buf;
+    if (!g_State->scene->raycast(PxVec3(origin[0], origin[1], origin[2]), d, maxDistance, buf, PxHitFlag::eDEFAULT, fd, &lf) ||
+        !buf.hasBlock)
+        return false;
+    FillHit(buf.block, outHit);
+    return true;
+}
+
 int RaycastAll(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f,
                RaycastHit* out, int maxHits) {
     PxVec3 d;

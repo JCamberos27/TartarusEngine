@@ -2,6 +2,7 @@
 
 #include "Camera.h"
 #include "Components.h"
+#include "GameModuleAPI.h"
 #include "IK.h"
 #include "Log.h"
 #include "Model.h"
@@ -79,6 +80,10 @@ glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw) {
     const glm::quat r = YawRotation(yaw);
     const glm::vec3 v(worldVelocity.x, 0.0f, worldVelocity.z);
     return {glm::dot(v, r * kRight), glm::dot(v, r * kForward)};
+}
+
+float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise) {
+    return std::clamp(std::min(offL, offR), -std::max(maxDrop, 0.0f), std::max(maxRaise, 0.0f));
 }
 
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset) {
@@ -234,7 +239,17 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     if (PhysicsWorld::HasCharacter()) {
         float f[3];
         PhysicsWorld::GetCharacterFootPosition(f);
-        m_Feet = glm::vec3(f[0], f[1], f[2]);
+        // A stair pops the capsule up (or down) in a frame: the body (and so the camera on its head)
+        // stays where it was and eases to the new height; the legs' IK reaches the step meanwhile.
+        const float rise = f[1] - m_LastCapsuleY;
+        if (cfg.FootIK && m_HaveCapsule && player.Grounded && m_LastGrounded && dt > 0.0f && std::abs(rise) > 0.03f &&
+            std::abs(rise) / dt > 2.5f)
+            m_StepOffset = std::clamp(m_StepOffset - rise, -0.3f, 0.3f);
+        m_StepOffset -= m_StepOffset * Follow(dt, player.Grounded && cfg.FootIK ? 0.09f : 0.03f);
+        m_LastCapsuleY = f[1];
+        m_LastGrounded = player.Grounded;
+        m_HaveCapsule = true;
+        m_Feet = glm::vec3(f[0], f[1] + m_StepOffset, f[2]);
     } else {
         m_Feet = camera.Position - glm::vec3(0.0f, player.EyeHeight, 0.0f);
     }
@@ -249,6 +264,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     const bool holdForStop = cfg.StartStopClips && glm::length(target) < 0.01f && m_IdleTime < 0.05f && glm::length(m_Move) > (player.Crouched ? 0.6f : 1.2f);
     if (!holdForStop) m_Move += (target - m_Move) * Follow(dt, cfg.ParamSmoothing);
     m_AirTime = player.Grounded ? 0.0f : m_AirTime + dt;
+    m_Grounded = player.Grounded;
 
     if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
     auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
@@ -380,6 +396,8 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     const glm::vec3 d = ac.RootMotion.DeltaPosition;
     m_RootVelocity = dt > 0.0f && !m_Turning ? glm::vec3(d.x, 0.0f, d.z) / dt : glm::vec3(0.0f);
 
+    ApplyFootIK(world, cfg, dt); // the pelvis and legs first: everything after reads the final pose
+
     // The chest follows the view's pitch first, so the head (and the camera on it) and the
     // shoulders are where they will be drawn.
     const auto* rc = reg.try_get<RenderableComponent>(m_Driver);
@@ -500,6 +518,110 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     }
     m_CameraApplied = eyeWorld - camera.Position;
     camera.Position = eyeWorld;
+}
+
+// Puts each foot on the ground under it: a ray down from the animated foot gives how far the ground
+// is above / below the capsule's, the pelvis drops to the lower foot, and the legs are re-solved to
+// the offset feet (tilted toward the ground while planted). On every piece so they stay one skeleton.
+void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& cfg, float dt) {
+    auto& reg = world.Registry;
+    const bool on = cfg.FootIK && m_Grounded && PhysicsWorld::HasCharacter() && reg.valid(m_Driver) &&
+                    !reg.get<AnimatorControllerComponent>(m_Driver).HasTag("Airborne");
+    m_FootWeight += ((on ? 1.0f : 0.0f) - m_FootWeight) * Follow(dt, 0.1f);
+    if (m_FootWeight < 1e-3f) {
+        m_HaveFoot = false;
+        m_FootPlanted[0] = m_FootPlanted[1] = false;
+        m_FootLockWeight[0] = m_FootLockWeight[1] = 0.0f;
+        return;
+    }
+    const auto* rc = reg.try_get<RenderableComponent>(m_Driver);
+    if (!rc || !rc->ModelRef) return;
+    const Model& drv = *rc->ModelRef;
+    const IK::Pose driverPose = drv.AppliedLocalPose();
+    if (driverPose.empty() || (int)driverPose.size() != drv.NodeCount()) return;
+    const int footNode[2] = {drv.NodeIndex("foot_l"), drv.NodeIndex("foot_r")};
+    if (footNode[0] < 0 || footNode[1] < 0) return;
+
+    const auto& t = reg.get<TransformComponent>(m_Body);
+    const float scale = std::max(t.Scale.y, 1e-3f);
+    const glm::quat yaw = YawRotation(m_Yaw);
+    std::vector<int> parents(driverPose.size());
+    for (int i = 0; i < (int)driverPose.size(); ++i) parents[i] = drv.NodeParent(i);
+    std::vector<glm::mat4> globals;
+    IK::ComputeGlobals(driverPose, parents, globals);
+
+    const float maxDrop = std::max(cfg.FootIKMaxDrop, 0.0f);
+    float animHeight[2];
+    glm::vec3 lockShift[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // world, horizontal: animated foot -> pinned foot
+    // No pinning while the body turns on the spot (the feet must step) or the heading swings.
+    const bool yawSteady = !m_Turning && std::abs(FirstPersonBodyWrapAngle(m_Yaw - m_FootYaw)) < glm::radians(2.0f);
+    m_FootYaw = m_Yaw;
+    for (int s = 0; s < 2; ++s) {
+        const glm::vec3 footWorld = m_Feet + yaw * (scale * IK::Position(globals[footNode[s]]));
+        animHeight[s] = footWorld.y - m_Feet.y;
+        // Foot lock: a planted foot stays where it landed instead of sliding when the animation and the
+        // capsule's travel disagree a little; it lets go when the foot lifts or the mismatch gets big.
+        const bool planted = animHeight[s] < 0.05f && yawSteady;
+        if (planted) {
+            if (!m_FootPlanted[s]) { m_FootPlanted[s] = true; m_FootLock[s] = footWorld; }
+            const glm::vec3 drift(footWorld.x - m_FootLock[s].x, 0.0f, footWorld.z - m_FootLock[s].z);
+            if (glm::dot(drift, drift) > 0.12f * 0.12f) m_FootLock[s] = footWorld; // too far: plant again here
+        } else {
+            m_FootPlanted[s] = false;
+        }
+        m_FootLockWeight[s] += ((m_FootPlanted[s] ? 1.0f : 0.0f) - m_FootLockWeight[s]) * Follow(dt, m_FootPlanted[s] ? 0.04f : 0.08f);
+        lockShift[s] = glm::vec3(m_FootLock[s].x - footWorld.x, 0.0f, m_FootLock[s].z - footWorld.z) * (m_FootLockWeight[s] * m_FootWeight);
+        float offset = 0.0f;
+        glm::vec3 normal(0.0f, 1.0f, 0.0f);
+        const float origin[3] = {footWorld.x, footWorld.y + 0.5f, footWorld.z};
+        const float down[3] = {0.0f, -1.0f, 0.0f};
+        QueryFilter filter;
+        filter.HitTriggers = 0;
+        RaycastHit hit;
+        if (PhysicsWorld::RaycastSolid(origin, down, 1.0f, filter, hit) && hit.Hit) {
+            offset = std::clamp(hit.Point[1] - m_Feet.y, -maxDrop, 0.25f);
+            normal = glm::normalize(glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]));
+            if (normal.y < 0.5f) normal = glm::vec3(0.0f, 1.0f, 0.0f); // a wall, not a floor
+        }
+        if (!m_HaveFoot) { m_FootOffset[s] = offset; m_FootNormal[s] = normal; }
+        m_FootOffset[s] += (offset - m_FootOffset[s]) * Follow(dt, 0.06f);
+        m_FootNormal[s] = glm::normalize(m_FootNormal[s] + (normal - m_FootNormal[s]) * Follow(dt, 0.08f));
+    }
+    m_HaveFoot = true;
+
+    const float pelvisDelta = FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], maxDrop, 0.0f) * m_FootWeight;
+    static const char* const kLegs[2][3] = {{"thigh_l", "calf_l", "foot_l"}, {"thigh_r", "calf_r", "foot_r"}};
+    const glm::quat yawInverse = glm::inverse(yaw);
+    for (const auto& mp : m_Models) {
+        Model& m = *mp;
+        IK::Pose pose = m.AppliedLocalPose();
+        if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
+        const int pelvis = m.NodeIndex("pelvis");
+        if (pelvis < 0) continue;
+        parents.resize(pose.size());
+        for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
+        IK::ComputeGlobals(pose, parents, globals);
+        IK::OffsetBone(pose, parents, globals, pelvis, glm::vec3(0.0f, pelvisDelta / scale, 0.0f),
+                       glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
+        for (int s = 0; s < 2; ++s) {
+            const int thigh = m.NodeIndex(kLegs[s][0]), calf = m.NodeIndex(kLegs[s][1]), foot = m.NodeIndex(kLegs[s][2]);
+            if (thigh < 0 || calf < 0 || foot < 0) continue;
+            const glm::vec3 target = IK::Position(globals[foot]) +
+                                     glm::vec3(0.0f, (m_FootOffset[s] * m_FootWeight - pelvisDelta) / scale, 0.0f) +
+                                     yawInverse * lockShift[s] / scale;
+            // The foot lies on the ground while it is planted: its own rotation tilted to the normal.
+            const float planted = 1.0f - std::clamp((animHeight[s] - 0.06f) / 0.09f, 0.0f, 1.0f);
+            const glm::vec3 normal = yawInverse * m_FootNormal[s];
+            const float angle = std::min(std::acos(std::clamp(normal.y, -1.0f, 1.0f)), glm::radians(25.0f)) * planted * m_FootWeight;
+            glm::quat footRot = IK::Rotation(globals[foot]);
+            const glm::vec3 axis = glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), normal);
+            if (angle > 1e-4f && glm::dot(axis, axis) > 1e-8f) footRot = glm::angleAxis(angle, glm::normalize(axis)) * footRot;
+            // Flat ground and nothing pinned: leave the clip's own pose alone.
+            if (glm::length(target - IK::Position(globals[foot])) < 5e-4f && angle < 1e-3f) continue;
+            IK::SolveTwoBone(pose, parents, globals, thigh, calf, foot, target, &footRot, 1.0f);
+        }
+        m.ApplyLocalPose(pose);
+    }
 }
 
 // Tilts the spine by `amount` of the camera's pitch and twists it by `twist` radians, spread evenly over spine_01..spine_05 (pitch about

@@ -489,14 +489,20 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Crouch Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, CrouchSpeed), 0.01f,
               "The move speed while crouched, as a fraction of Run Speed. The crouch-walk clips travel\n"
               "about 1.35 m/s, so Run Speed x this should be near that or the feet slide.", 0.05f, 1.0f });
+        m.Fields.push_back({ "Foot IK", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootIK), 0.0f,
+              "Each foot is put on the ground under it, the pelvis drops to the lower foot and the legs are re-solved, so the feet meet stairs and slopes." });
+        m.Fields.push_back({ "Foot IK Max Drop", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootIKMaxDrop), 0.01f,
+              "The most the pelvis may drop (metres) to let the lower foot reach the ground.", 0.0f, 1.0f });
+        m.Fields[m.Fields.size() - 2].Group = "Foot IK";
+        m.Fields.back().Group = "Foot IK";
         m.Fields.push_back({ "Start Stop Clips", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StartStopClips), 0.0f,
               "Starting and stopping play their own clips (a push-off, a braking step) instead of blending\n"
               "straight between idle and the gait; their root motion eases the capsule up to speed and down." });
+        m.Fields[m.Fields.size() - 8].Group = "Turning";
+        m.Fields[m.Fields.size() - 7].Group = "Turning";
         m.Fields[m.Fields.size() - 6].Group = "Turning";
-        m.Fields[m.Fields.size() - 5].Group = "Turning";
-        m.Fields[m.Fields.size() - 4].Group = "Turning";
-        m.Fields[m.Fields.size() - 3].Group = "Crouch";
-        m.Fields[m.Fields.size() - 2].Group = "Crouch";
+        m.Fields[m.Fields.size() - 5].Group = "Crouch";
+        m.Fields[m.Fields.size() - 4].Group = "Crouch";
         m.Fields.back().Group = "Locomotion";
         Register<FirstPersonBodyComponent>(std::move(m));
     }
