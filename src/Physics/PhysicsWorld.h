@@ -82,6 +82,13 @@ bool GetCharacterCapsule(float outFootPos[3], float* outRadius, float* outCylHal
 // Returns a mask of CharacterCollision bits; 0 when there is no character or world.
 unsigned MoveCharacter(const float disp[3], float dt);
 
+// Change the capsule's cylinder half-height (crouching), keeping the feet where they are.
+// False when there is no character.
+bool ResizeCharacter(float cylinderHalfHeight);
+// Whether the capsule, at that cylinder half-height and the current foot position, is clear of
+// solid geometry (triggers and the character itself ignored): standing up from a crouch.
+bool CharacterFitsAt(float cylinderHalfHeight);
+
 // --- Triggers (#185 PR 5) --------------------------------------------------------------
 // Step() rebuilds this frame's enter/stay/exit list from PhysX's onTrigger callback (dynamic
 // and kinematic bodies) plus a capsule overlap for the Player. Backs

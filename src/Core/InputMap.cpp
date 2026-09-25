@@ -76,8 +76,9 @@ std::vector<Action> Defaults() {
         act("Vertical",   GLFW_KEY_W, GLFW_KEY_S, GLFW_KEY_UP,    GLFW_KEY_DOWN, kNone, GLFW_GAMEPAD_AXIS_LEFT_Y, true),
         act("Jump",   GLFW_KEY_SPACE,      kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_A,          kNone, false),
         act("Sprint", GLFW_KEY_LEFT_SHIFT, kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_LEFT_THUMB, kNone, false),
-        act("Fire1",  kMouseBase + 0, kNone, GLFW_KEY_LEFT_CONTROL, kNone, GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER, kNone, false),
+        act("Fire1",  kMouseBase + 0, kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER, kNone, false),
         act("Fire2",  kMouseBase + 1, kNone, GLFW_KEY_LEFT_ALT,     kNone, GLFW_GAMEPAD_BUTTON_LEFT_BUMPER,  kNone, false),
+        act("Crouch", GLFW_KEY_LEFT_CONTROL, kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_RIGHT_THUMB, kNone, false),
         act("Interact", GLFW_KEY_E, kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_X, kNone, false),
         act("Cancel", GLFW_KEY_ESCAPE, kNone, kNone, kNone, GLFW_GAMEPAD_BUTTON_START, kNone, false),
         // First-person weapon actions (#165 FirstPersonPresentation). Fire/Aim reuse Fire1/Fire2
