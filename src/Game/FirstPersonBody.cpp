@@ -184,6 +184,8 @@ bool FirstPersonBody::Start(World& world, Player& player) {
 
     // The input asks the blend tree for speeds its clips have.
     m_RunSpeed = std::max(cfg.RunSpeed, 0.01f);
+    m_CrouchHeight = cfg.CrouchHeight;
+    m_CrouchSpeed = cfg.CrouchSpeed;
     player.MoveSpeed = m_RunSpeed;
     player.SprintMultiplier = std::max(cfg.SprintSpeed, 0.01f) / m_RunSpeed;
 
@@ -205,6 +207,8 @@ void FirstPersonBody::BeforePlayerMove(Player& player, Camera& camera) {
     camera.Position -= m_CameraApplied;
     m_CameraApplied = glm::vec3(0.0f);
     player.MaxYawRate = 0.0f;
+    player.CrouchHeight = IsActive() ? m_CrouchHeight : 0.0f;
+    player.CrouchSpeedMultiplier = m_CrouchSpeed;
     if (!IsActive()) return;
     if (m_Still) {
         // Aiming is free within the turn threshold either side of the body; the limit is on the turn
@@ -263,7 +267,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
         m_Turning = false;
     } else if (m_Turning) {
         m_TurnTime += dt;
-        if (ac.InState("Turn")) {
+        if (ac.InState("Turn") || ac.InState("CrouchTurn")) {
             const float step = glm::radians(ac.RootMotion.DeltaYaw);
             m_Yaw += step;
             m_TurnDone += step;
@@ -346,6 +350,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     ac.SetFloat("Speed", glm::length(m_Move));
     ac.SetBool("Sprint", glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) > m_RunSpeed * 1.05f);
     ac.SetBool("Grounded", player.Grounded);
+    ac.SetBool("Crouched", player.Crouched);
     // Off the ground for a moment (not a step down a stair): falling.
     ac.SetBool("Airborne", m_AirTime > 0.15f);
     if (player.Jumped) ac.SetTrigger("Jump");
@@ -470,11 +475,14 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             // The eye may trail or under-follow the shoulders by only this much: a clip that throws the
             // shoulders about (a stop pulling the body back) would otherwise carry them out of the
             // arms' reach and a hand would come off the gun. Bigger motions move the camera with them.
-            constexpr float kReachSlack = 0.035f;
+            constexpr float kEyeSlack = 0.035f;
             const glm::vec3 gap = shouldersAnimated - m_Shoulders;
-            if (const float gapLen = glm::length(gap); gapLen > kReachSlack) m_Shoulders = shouldersAnimated - gap / gapLen * kReachSlack;
+            if (const float gapLen = glm::length(gap); gapLen > kEyeSlack) m_Shoulders = shouldersAnimated - gap / gapLen * kEyeSlack;
+            // A little slack: the shoulders sit this much further toward the gun than the rig's, so the
+            // support arm is never at full stretch (a straight arm jumps at every small motion).
+            constexpr float kReachSlack = 0.04f;
             const glm::vec3 offset = camera.Right() * m_RigEyeToShoulders.x + camera.Up() * m_RigEyeToShoulders.y +
-                                     camera.Front() * m_RigEyeToShoulders.z;
+                                     camera.Front() * (m_RigEyeToShoulders.z + kReachSlack);
             const glm::vec3 fromShoulders = m_Feet + yaw * (t.Scale * (m_Shoulders + toRest)) - offset;
             eyeWorld = glm::mix(eyeWorld, fromShoulders, std::min(m_ArmsWeight, 1.0f));
         }
@@ -591,7 +599,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 const float armLen = glm::length(IK::Position(globals[lower]) - a) + glm::length(IK::Position(globals[hand]) - IK::Position(globals[lower]));
                 const glm::vec3 toTarget = target - a;
                 const float dist = glm::length(toTarget);
-                const float excess = std::min(dist - armLen * 0.97f, 0.12f);
+                const float excess = std::min(dist - armLen * 0.9f, 0.12f);
                 if (excess > 1e-4f && dist > 1e-5f)
                     IK::OffsetBone(pose, parents, globals, clav, toTarget / dist * excess * m_ArmsWeight, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
             }
