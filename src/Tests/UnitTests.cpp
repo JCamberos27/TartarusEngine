@@ -17,6 +17,7 @@
 
 #include "AnimatorController.h"
 #include "RootMotion.h"
+#include "FirstPersonBody.h"
 #include "Curve.h"
 #include "IK.h"
 #include "FirstPersonAnimation.h"
@@ -1302,6 +1303,90 @@ void TestComponentRegistry() {
 }
 
 // --- Root motion: extraction, in-place poses, loops, blending (RootMotion.h) --------------------
+// #405 - 2D blend trees and the first-person body's frame maths.
+void TestBlendTree2D() {
+    auto near = [](float a, float b, float eps = 1e-3f) { return std::abs(a - b) <= eps; };
+    using AC = AnimatorController;
+    // Idle in the middle, walks at their velocities (x right, y forward), a jog further out.
+    std::vector<AC::BlendChild> ch = {
+        {"idle", 0.0f, 1.0f, 0.0f},  {"fwd", 0.0f, 1.0f, 1.5f},   {"bwd", 0.0f, 1.0f, -1.2f},
+        {"left", -1.3f, 1.0f, 0.0f}, {"right", 1.6f, 1.0f, 0.0f}, {"jog", 0.0f, 1.0f, 3.3f},
+    };
+    auto sum = [](const std::vector<float>& w) { float t = 0.0f; for (float v : w) t += v; return t; };
+    // On a child: all of it.
+    for (size_t i = 0; i < ch.size(); ++i) {
+        const auto w = AnimatorBlendWeights2D(ch, ch[i].Threshold, ch[i].ThresholdY);
+        CHECK(near(w[i], 1.0f) && near(sum(w), 1.0f));
+    }
+    // Half way to the walk forward: idle and walk share it, nothing else.
+    auto w = AnimatorBlendWeights2D(ch, 0.0f, 0.75f);
+    CHECK(near(w[0], 0.5f) && near(w[1], 0.5f) && near(w[2] + w[3] + w[4] + w[5], 0.0f));
+    // Diagonal forward-left: forward and left both, no right or backward.
+    w = AnimatorBlendWeights2D(ch, -0.6f, 0.7f);
+    CHECK(w[1] > 0.1f && w[3] > 0.1f && near(w[4], 0.0f) && near(w[2], 0.0f) && near(sum(w), 1.0f));
+    // Beyond the jog: the jog.
+    w = AnimatorBlendWeights2D(ch, 0.0f, 6.0f);
+    CHECK(near(w[5], 1.0f));
+    // Every weight in [0, 1], summing to 1, anywhere.
+    bool ok = true;
+    for (float x = -4.0f; x <= 4.0f; x += 0.37f)
+        for (float y = -4.0f; y <= 4.0f; y += 0.41f) {
+            const auto ww = AnimatorBlendWeights2D(ch, x, y);
+            for (float v : ww) ok = ok && v >= -1e-5f && v <= 1.0f + 1e-5f;
+            ok = ok && near(sum(ww), 1.0f);
+        }
+    CHECK(ok);
+
+    // AnimatorMotionWeights picks 1D or 2D from the motion; the JSON keeps the Y side.
+    AC::Motion m;
+    m.BlendParam = "MoveX";
+    m.BlendParamY = "MoveY";
+    m.Children = ch;
+    std::vector<AnimatorParam> params = {{"MoveX", 0, 1.6f}, {"MoveY", 0, 0.0f}};
+    CHECK(near(AnimatorMotionWeights(m, params)[4], 1.0f));
+    AC ctrl;
+    ctrl.Parameters = {{"MoveX"}, {"MoveY"}};
+    ctrl.Tracks = {"main"};
+    AC::Layer L;
+    L.Name = "Base Layer";
+    AC::State st;
+    st.Name = "Locomotion";
+    st.Motions = {m};
+    L.States = {st};
+    L.DefaultState = "Locomotion";
+    ctrl.Layers = {L};
+    AC back;
+    CHECK(AC::FromJsonString(ctrl.ToJsonString(), back));
+    const AC::Motion& bm = back.Layers[0].States[0].Motions[0];
+    CHECK(bm.Is2D() && bm.BlendParamY == "MoveY" && bm.Children.size() == ch.size() &&
+          near(bm.Children[2].ThresholdY, -1.2f) && near(bm.Children[4].Threshold, 1.6f));
+    // A 1D tree stays 1D (no Y written or read back).
+    ctrl.Layers[0].States[0].Motions[0].BlendParamY.clear();
+    CHECK(AC::FromJsonString(ctrl.ToJsonString(), back) && !back.Layers[0].States[0].Motions[0].Is2D());
+
+    // The body's frame. A model facing +Z turned to look down -Z (a camera at yaw -90).
+    const float yaw = FirstPersonBodyYaw(glm::vec3(0.0f, -0.3f, -1.0f));
+    CHECK(near(std::abs(yaw), 3.14159265f));
+    CHECK(near(FirstPersonBodyYaw(glm::vec3(0.0f, 1.0f, 0.0f), 0.25f), 0.25f)); // straight up: keep the last
+    // Facing -Z with +Y up, the right hand points to +X (the camera's own Right()).
+    glm::vec2 lm = FirstPersonBodyLocalMove(glm::vec3(0.0f, 5.0f, -2.0f), yaw);
+    CHECK(near(lm.x, 0.0f) && near(lm.y, 2.0f));
+    lm = FirstPersonBodyLocalMove(glm::vec3(1.5f, 0.0f, 0.0f), yaw);
+    CHECK(near(lm.x, 1.5f) && near(lm.y, 0.0f));
+    // Facing +Z (yaw 0): right is -X, as the mannequin's own frame.
+    lm = FirstPersonBodyLocalMove(glm::vec3(-1.0f, 0.0f, 1.0f), 0.0f);
+    CHECK(near(lm.x, 1.0f) && near(lm.y, 1.0f));
+    // The eye: steady at the standing head with no bob, following it fully at 1, offset in the
+    // body's frame (x right = model -X).
+    const glm::vec3 rest(0.0f, 1.6f, 0.0f), head(0.02f, 1.55f, 0.1f);
+    glm::vec3 eye = FirstPersonBodyEye(rest, head, 0.0f, glm::vec3(0.0f));
+    CHECK(near(eye.y, 1.6f) && near(eye.z, 0.0f));
+    eye = FirstPersonBodyEye(rest, head, 1.0f, glm::vec3(0.1f, 0.05f, 0.2f));
+    CHECK(near(eye.x, 0.02f - 0.1f) && near(eye.y, 1.6f) && near(eye.z, 0.3f));
+    eye = FirstPersonBodyEye(rest, head, 0.5f, glm::vec3(0.0f));
+    CHECK(near(eye.y, 1.575f) && near(eye.z, 0.05f));
+}
+
 void TestRootMotion() {
     const float kPi = 3.14159265f;
     auto near = [](float a, float b, float eps = 1e-3f) { return std::abs(a - b) <= eps; };
@@ -2863,6 +2948,7 @@ int RunUnitTests() {
         {"ComponentRegistry", TestComponentRegistry},
         {"AnimatorController", TestAnimatorController},
         {"RootMotion", TestRootMotion},
+        {"BlendTree2D", TestBlendTree2D},
         {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
         {"FirstPersonAds", TestFirstPersonAds},

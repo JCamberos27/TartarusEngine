@@ -206,6 +206,11 @@ public:
     // -1 turns it off.
     void SetRootMotion(int node, const RootMotionSettings& s);
     int RootMotionNode() const { return m_RootMotionNode; }
+
+    // Nodes drawn collapsed: each one's subtree folds into its pivot (scale ~0), so skinned
+    // geometry it drives disappears - e.g. a first-person body's arms while separate view-model
+    // arms are shown. Empty = none. The pose itself is unchanged; only the node globals are.
+    void SetHiddenNodes(const std::vector<int>& nodes);
     RootMotionDelta ConsumeRootMotion();
 
     const std::string& Path() const { return m_Path; }
@@ -343,6 +348,7 @@ private:
     // FindRootMotionNode's auto pick, for the import it was found on.
     mutable const SharedData* m_AutoRootMotionFor = nullptr;
     mutable int m_AutoRootMotionNode = -1;
+    std::vector<unsigned char> m_HiddenNodes; // per node, SetHiddenNodes (empty = none hidden)
 
     // Last engine frame index on which TickAnimationOnce() actually advanced this model; an
     // impossible sentinel (uint64_t max) so frame index 0 doesn't look "already ticked".

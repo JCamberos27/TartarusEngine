@@ -109,12 +109,14 @@ AnimatorController::Motion MotionFromJson(const json& m) {
     if (!m.is_object()) return out;
     out.Clip = AssetDatabase::FollowRef(Str(m, "clip"), Str(m, "clipGuid")); // #132
     out.BlendParam = Str(m, "blendParam");
+    out.BlendParamY = Str(m, "blendParamY");
     if (const auto cs = m.find("children"); cs != m.end() && cs->is_array())
         for (const auto& c : *cs) {
             if (!c.is_object()) continue;
             AnimatorController::BlendChild ch;
             ch.Clip = AssetDatabase::FollowRef(Str(c, "clip"), Str(c, "clipGuid"));
             ch.Threshold = Num(c, "threshold", 0.0f);
+            ch.ThresholdY = Num(c, "thresholdY", 0.0f);
             ch.Speed = Num(c, "speed", 1.0f);
             out.Children.push_back(std::move(ch));
         }
@@ -133,10 +135,13 @@ json MotionToJson(const AnimatorController::Motion& m) {
     for (const auto& c : m.Children) {
         json cj = ClipJson(c.Clip);
         cj["threshold"] = c.Threshold;
+        if (m.Is2D()) cj["thresholdY"] = c.ThresholdY;
         cj["speed"] = c.Speed;
         cs.push_back(std::move(cj));
     }
-    return {{"blendParam", m.BlendParam}, {"children", cs}};
+    json out = {{"blendParam", m.BlendParam}, {"children", cs}};
+    if (m.Is2D()) out["blendParamY"] = m.BlendParamY;
+    return out;
 }
 
 std::vector<AnimatorController::Condition> ConditionsFromJson(const json& t) {
@@ -439,6 +444,48 @@ std::vector<float> AnimatorBlendWeights(const std::vector<AnimatorController::Bl
     return w;
 }
 
+std::vector<float> AnimatorBlendWeights2D(const std::vector<AnimatorController::BlendChild>& children, float x, float y) {
+    const size_t n = children.size();
+    std::vector<float> w(n, 0.0f);
+    if (n == 0) return w;
+    if (n == 1) { w[0] = 1.0f; return w; }
+    const glm::vec2 p(x, y);
+    float sum = 0.0f;
+    for (size_t i = 0; i < n; ++i) {
+        const glm::vec2 pi(children[i].Threshold, children[i].ThresholdY);
+        float wi = 1.0f;
+        for (size_t j = 0; j < n && wi > 0.0f; ++j) {
+            if (j == i) continue;
+            const glm::vec2 pij = glm::vec2(children[j].Threshold, children[j].ThresholdY) - pi;
+            const float len2 = glm::dot(pij, pij);
+            if (len2 < 1e-10f) continue; // two children on one spot: neither shuts the other out
+            wi = std::min(wi, 1.0f - glm::dot(p - pi, pij) / len2);
+        }
+        w[i] = std::max(wi, 0.0f);
+        sum += w[i];
+    }
+    if (sum > 1e-6f) {
+        for (float& v : w) v /= sum;
+        return w;
+    }
+    // Outside every band (can't happen with a finite set, but be safe): the nearest child.
+    size_t best = 0;
+    float bestD = 1e30f;
+    for (size_t i = 0; i < n; ++i) {
+        const float d = glm::distance(p, glm::vec2(children[i].Threshold, children[i].ThresholdY));
+        if (d < bestD) { bestD = d; best = i; }
+    }
+    w[best] = 1.0f;
+    return w;
+}
+
+std::vector<float> AnimatorMotionWeights(const AnimatorController::Motion& m, const std::vector<AnimatorParam>& params) {
+    if (m.Is2D())
+        return AnimatorBlendWeights2D(m.Children, ParamValue(params, m.BlendParam, 0.0f),
+                                      ParamValue(params, m.BlendParamY, 0.0f));
+    return AnimatorBlendWeights(m.Children, ParamValue(params, m.BlendParam, 0.0f));
+}
+
 std::vector<float> AnimatorStackWeights(const std::vector<float>& fades) {
     std::vector<float> w(fades.size(), 0.0f);
     if (fades.empty()) return w;
@@ -691,7 +738,7 @@ struct Sampler {
             const int c = Clip(m.Clip);
             return c >= 0 ? M.AnimationLength(c) : 0.0f;
         }
-        const auto w = AnimatorBlendWeights(m.Children, ParamValue(params, m.BlendParam, 0.0f));
+        const auto w = AnimatorMotionWeights(m, params);
         float len = 0.0f;
         for (size_t i = 0; i < m.Children.size(); ++i) {
             if (w[i] <= 0.0f) continue;
@@ -719,7 +766,7 @@ struct Sampler {
             return true;
         }
         // Blend tree: children are phase-synced, so a walk and a run keep their feet in step.
-        const auto w = AnimatorBlendWeights(m.Children, ParamValue(params, m.BlendParam, 0.0f));
+        const auto w = AnimatorMotionWeights(m, params);
         bool any = false;
         float acc = 0.0f;
         for (size_t i = 0; i < m.Children.size(); ++i) {
@@ -745,7 +792,7 @@ struct Sampler {
             const int c = Clip(m.Clip);
             return c < 0 ? RootMotionDelta{} : M.ClipRootMotion(c, phase0 * stateLen, phase1 * stateLen, wrap, RootNode, RM);
         }
-        const auto w = AnimatorBlendWeights(m.Children, ParamValue(params, m.BlendParam, 0.0f));
+        const auto w = AnimatorMotionWeights(m, params);
         RootMotionMix mix;
         for (size_t i = 0; i < m.Children.size(); ++i) {
             if (w[i] <= 0.0f) continue;
