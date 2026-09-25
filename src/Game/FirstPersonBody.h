@@ -41,7 +41,16 @@ public:
 
     void BeforePlayerMove(Player& player, Camera& camera);
     void Tick(World& world, const Player& player, const Camera& camera, float dt);
-    void LateUpdate(World& world, Camera& camera, float dt);
+    // `weaponArms` / `rigCameraBone`: the presentation's arms rig entity and the node its camera
+    // is pinned to (see ArmsLateUpdate) - with Weapon Arms the eye is put where the rig's is
+    // relative to the body's shoulders, so the rig's hands are within the body's reach.
+    void LateUpdate(World& world, Camera& camera, float dt, entt::entity weaponArms = entt::null,
+                    const std::string& rigCameraBone = std::string());
+    // Phase 2, after FirstPersonPresentation::LateUpdate has seated the arms rig and gun: the
+    // body's arms take that rig's arm pose and reach their hands onto its hands (Weapon Arms).
+    // `weaponArms` is the presentation's arms entity (null = none), `viewModelFov` its sub-pass
+    // FOV in degrees. The arms rig stops being drawn while this holds; the gun still is.
+    void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt);
 
     // The controller parameters of the last Tick (body frame: x right, y forward, m/s).
     glm::vec2 Move() const { return m_Move; }
@@ -50,10 +59,20 @@ public:
 
 private:
     void Fail(const std::string& message);
+    void ApplySpineAim(const Camera& camera, float amount);
 
     entt::entity m_Body = entt::null;   // the root: placed at the feet, its pieces ride along
     entt::entity m_Driver = entt::null; // the piece whose Animator Controller runs the body
     std::vector<std::shared_ptr<Model>> m_Models; // every piece's model (Stop un-hides their bones)
+    std::vector<entt::entity> m_Pieces;           // ... and its entity, in step with m_Models
+    float m_ArmsWeight = 0.0f;                    // 0..1: how much the arms follow the weapon's
+    int m_ShoulderNode[2] = {-1, -1};             // upperarm_l / upperarm_r on the driver
+    glm::vec3 m_ShouldersSlow{0.0f};              // their midpoint in model space, a slow average (the standing height)
+    glm::vec3 m_Shoulders{0.0f};                  // ... the part of the clips' motion the eye follows, smoothed
+    bool m_HaveShoulders = false;
+    glm::vec3 m_RigEyeToShoulders{0.0f};          // rig: camera bone to its shoulders, in the camera's frame (smoothed)
+    bool m_HaveRigOffset = false;
+    std::vector<entt::entity> m_ArmsTagged;       // pieces given the ViewModelTag
     std::string m_LastError;
     int m_HeadNode = -1;
     glm::vec3 m_RestHead{0.0f};   // head bone, model space, in the bind pose
