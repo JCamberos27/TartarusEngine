@@ -1,7 +1,7 @@
 # The launch screen on a CRT: the same composition as launch-screen.ps1 (the art on the left; the
 # lockup, status, progress bar and version on the right) drawn in a borderless WPF window, with a
 # pixel shader (crt.fx / crt.ps) turning the whole window into a curved, scanlined tube that
-# powers on and off, with its sounds. The build runs in the background the whole time. Any key
+# powers on, with its sounds. The build runs in the background the whole time. Any key
 # (or a click) skips the intro; M mutes the sound, and is remembered.
 #
 #   launch-crt.ps1 [-Build]
@@ -222,14 +222,13 @@ $candle = [Windows.Media.Color]::FromRgb(255, 222, 170)
 $S = @{
     Phase = 'intro'; Skip = 0.0; PhaseAt = 0.0; Shown = 0.0; Projects = 0; LastPoll = -1.0
     Flicker = 0.12; FlickerTarget = 0.12; NextFlicker = 0.0; ExitCode = 0; BuildSeconds = 0.0; Crash = $null
-    Rand = (New-Object Random); Closing = $false; Started = $false; OffSoundAt = $null
+    Rand = (New-Object Random); Closing = $false; Started = $false
 }
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $introEnd = 2.7
 
 function Enter-Phase([string]$name) {
     $S.Phase = $name; $S.PhaseAt = $clock.Elapsed.TotalSeconds + $S.Skip
-    if ($name -eq 'off' -and $sound) { $S.OffSoundAt = [Diagnostics.Stopwatch]::StartNew(); $sound.PowerOffSound() }
 }
 function Set-SoundHint { $ui.SoundHint.Text = if ($muted) { 'M   sound on' } else { 'M   mute' } }
 Set-SoundHint
@@ -266,9 +265,9 @@ function Update-Frame {
         $crt.Size = New-Object Windows.Point ($ui.Tube.ActualWidth * $scale), ($ui.Tube.ActualHeight * $scale)
     }
     $since = $t - $S.PhaseAt
-    # The whine and hum rise with the picture and die with it.
+    # The whine and hum rise with the picture, and fade out as the window closes.
     if ($sound) {
-        $sound.SetHum($(switch ($S.Phase) { 'intro' { Clamp01 (($t - 0.25) / 1.1) } 'off' { 1.0 - (Clamp01 ($since / 0.3)) } default { 1.0 } }))
+        $sound.SetHum($(switch ($S.Phase) { 'intro' { Clamp01 (($t - 0.25) / 1.1) } 'close' { 1.0 - (Clamp01 ($since / 0.15)) } default { 1.0 } }))
     }
 
     switch ($S.Phase) {
@@ -338,7 +337,7 @@ function Update-Frame {
                     }
                 }
             }
-            if ($since -ge 1.1) { $taskbar.ProgressState = 'None'; $S.ExitCode = 0; Enter-Phase 'off' }
+            if ($since -ge 1.1) { $taskbar.ProgressState = 'None'; $S.ExitCode = 0; Enter-Phase 'close' }
         }
         'failed' {
             $fade = Ease-Out ($since / 0.45)
@@ -348,13 +347,10 @@ function Update-Frame {
             $ui.Prompt.Opacity = Ease-Out (($since - 0.3) / 0.4)
             Set-Wipe 1.2 $white
         }
-        'off' {
-            # Power off: the picture collapses to a line, the line to a point, the point fades.
-            $ui.Power.ScaleY = 0.004 + 0.996 * (1.0 - (Ease-In ($since / 0.22)))
-            $ui.Power.ScaleX = 1.0 - 0.998 * (Ease-In (($since - 0.2) / 0.16))
-            $ui.Flash.Opacity = 0.55 * (Clamp01 ($since / 0.2)) + 0.45 * (Clamp01 (($since - 0.2) / 0.05))
-            $ui.Stage.Opacity = 1.0 - (Clamp01 (($since - 0.36) / 0.2))
-            if ($since -ge 0.6 -and -not $S.Closing) { $S.Closing = $true; $window.Close() }
+        'close' {
+            # No power-off: the picture stays as it is while the hum fades (so it doesn't click
+            # off), then the window closes.
+            if ($since -ge 0.15 -and -not $S.Closing) { $S.Closing = $true; $window.Close() }
         }
     }
 }
@@ -375,7 +371,7 @@ $window.Add_KeyDown({
         elseif ($e.Key -eq 'N' -or $e.Key -eq 'Escape') { Choose 11 }
     }
 })
-function Choose([int]$code) { if ($S.Phase -eq 'failed') { $S.ExitCode = $code; Enter-Phase 'off' } }
+function Choose([int]$code) { if ($S.Phase -eq 'failed') { $S.ExitCode = $code; Enter-Phase 'close' } }
 $hover = New-Object Windows.Media.SolidColorBrush ([Windows.Media.Color]::FromRgb(255, 214, 140))
 $plain = New-Object Windows.Media.SolidColorBrush ([Windows.Media.Color]::FromRgb(200, 200, 206))
 foreach ($b in $ui.PromptYes, $ui.PromptNo) {
@@ -405,14 +401,7 @@ $window.Add_ContentRendered({
 [Windows.Media.CompositionTarget]::add_Rendering($onFrame)
 try { [void]$window.ShowDialog() } catch { $S.Crash = $_ }
 [Windows.Media.CompositionTarget]::remove_Rendering($onFrame)
-# Let power-off's sound finish before the process (and its audio) ends.
-if ($sound) {
-    if ($S.OffSoundAt -and -not $muted) {
-        $left = 800 - $S.OffSoundAt.ElapsedMilliseconds
-        if ($left -gt 0) { Start-Sleep -Milliseconds $left }
-    }
-    $sound.Dispose()
-}
+if ($sound) { $sound.Dispose() }
 
 # The screen broke mid-show: still report the build honestly (run-editor.cmd prints the log).
 if ($S.Crash) {
