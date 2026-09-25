@@ -9,6 +9,7 @@
 #include "Camera.h"
 #include "Player.h"
 #include "FirstPersonPresentation.h"
+#include "BodyDebugDraw.h"
 #include "FirstPersonBody.h"
 #include "World.h"
 #include "Components.h"
@@ -2200,6 +2201,7 @@ int main(int argc, char** argv) {
                 {
                     const EditorSettings& es = EditorSettings::Get();
                     PhysicsWorld::SetDebugDrawFlags(es.PhysicsDebugDrawFlags);
+                    BodyDebug::SetEnabled(playing && es.ShowBodyDebug);
                     PhysicsWorld::SetEventLogging(es.LogPhysicsEvents || smokeTestMode); // #169
                     PhysicsWorld::SetQueryRecording((es.PhysicsDebugDrawFlags & PhysicsWorld::PDD_Raycasts) != 0u);
                 }
@@ -3139,7 +3141,7 @@ int main(int argc, char** argv) {
                 // toggle, so it runs when either is on.
                 {
                     const bool showShapes = EditorSettings::Get().ShowColliders;
-                    const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u;
+                    const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u || BodyDebug::Enabled();
                     if ((showShapes || showDebug) && !editor.OverlaysHidden()) {
                         glEnable(GL_DEPTH_TEST);
                         glDepthMask(GL_FALSE);

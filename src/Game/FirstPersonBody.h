@@ -120,6 +120,8 @@ private:
     glm::vec2 m_Move{0.0f};
     glm::vec3 m_RootVelocity{0.0f};
     float m_AirTime = 0.0f;
+    std::string m_LastTrigger;     // the last start / stop / crouch / jump trigger fired (for the debug readout)
+    float m_SinceTrigger = 1000.0f;
     float m_RunSpeed = 0.0f;
     float m_Responsiveness = 0.0f; // the component's, from the last Tick
 };
