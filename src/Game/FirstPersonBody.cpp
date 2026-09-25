@@ -662,6 +662,11 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                          reg.all_of<RenderableComponent>(weaponArms) && viewModelFov > 0.0f;
     // The rig keeps posing (its hands are the targets) but is no longer drawn.
     if (haveRig) reg.get<RenderableComponent>(weaponArms).CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
+    // Holstered, the rig is inactive: the arms ease back to the locomotion clips' pose, but out of the
+    // view-model pass at once (there they would show as a hand at the bottom of the view).
+    const bool follow = haveRig && !reg.all_of<InactiveTag>(weaponArms);
+    m_ArmsWeight += ((follow ? 1.0f : 0.0f) - m_ArmsWeight) * Follow(dt, 0.1f);
+    const bool viewModelArms = follow;
     // The body's arms piece goes into the view-model pass with the gun (its hands then sit where the
     // rig's do); off, it is an ordinary piece of the body again.
     for (size_t k = 0; k < m_Pieces.size(); ++k) {
@@ -671,15 +676,19 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         for (char& c : name) c = (char)std::tolower((unsigned char)c);
         for (char& c : want) c = (char)std::tolower((unsigned char)c);
         if (want.empty() || name.find(want) == std::string::npos) continue;
-        if (haveRig) {
+        if (viewModelArms) {
             if (!reg.all_of<ViewModelTag>(e)) { reg.emplace<ViewModelTag>(e); m_ArmsTagged.push_back(e); }
         } else if (reg.all_of<ViewModelTag>(e)) {
             reg.remove<ViewModelTag>(e);
         }
+        // Easing off a holstered gun the pose is still the rig's (its hands, no gun to hold): shown, it
+        // would be a pair of hands hanging in the view for a few frames. Hidden until it has settled.
+        auto& rc = reg.get<RenderableComponent>(e);
+        const bool easeOut = haveRig && !follow && m_ArmsWeight > 1e-3f;
+        if (easeOut && !m_ArmsEasedOut) { m_ArmsShadow = (int)rc.CastShadows; m_ArmsEasedOut = true; }
+        if (easeOut) rc.CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
+        else if (m_ArmsEasedOut) { rc.CastShadows = (RenderableComponent::ShadowCasting)m_ArmsShadow; m_ArmsEasedOut = false; }
     }
-    // Holstered, the rig is inactive: the arms ease back to the locomotion clips'.
-    const bool follow = haveRig && !reg.all_of<InactiveTag>(weaponArms);
-    m_ArmsWeight += ((follow ? 1.0f : 0.0f) - m_ArmsWeight) * Follow(dt, 0.1f);
     if (m_ArmsWeight < 1e-3f || !haveRig) return;
 
     const Model* rig = reg.get<RenderableComponent>(weaponArms).ModelRef.get();
