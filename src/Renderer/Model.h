@@ -10,6 +10,7 @@
 #include "Animation.h"
 #include "Material.h"
 #include "MaterialAsset.h"
+#include "RootMotion.h"
 
 class Texture;
 class Shader;
@@ -184,6 +185,29 @@ public:
     // Seconds into the current clip as a 0..1 fraction of its length (0 when nothing plays).
     float NormalizedTime() const;
 
+    // --- Root motion (RootMotion.h) -------------------------------------------------------------
+    // The node whose travel is the character's: `name` when this model has it, else (empty name)
+    // the first of "root" (any namespace), then the hips/pelvis. -1 when none is found.
+    int FindRootMotionNode(const std::string& name = {}) const;
+    // Model-space transform (what the entity's transform multiplies) of `node` in clip `clip` at
+    // `seconds` under `wrap`. Ancestors the clip doesn't animate hold their bind pose.
+    glm::mat4 SampleNodeModelSpace(int clip, float seconds, AnimationWrapMode wrap, int node) const;
+    // The same for a node of a local pose, and its inverse: rewrite `node`'s local transform so
+    // that its model-space transform becomes `modelSpace` (its own scale is kept).
+    glm::mat4 PoseNodeModelSpace(const std::vector<LocalTRS>& pose, int node) const;
+    void SetPoseNodeModelSpace(std::vector<LocalTRS>& pose, int node, const glm::mat4& modelSpace) const;
+    // Takes `clip`'s root motion out of `pose` (a sample of that clip): see RootMotionInPlace.
+    void StripRootMotion(std::vector<LocalTRS>& pose, int clip, int node, const RootMotionSettings& s) const;
+    // The root's motion in `clip` between playback times t0 and t1 (seconds, unwrapped).
+    RootMotionDelta ClipRootMotion(int clip, float t0, float t1, AnimationWrapMode wrap, int node,
+                                   const RootMotionSettings& s) const;
+    // Built-in playback (PlayAnimation / an Animation component): with a node set (>= 0) the
+    // playing clips are posed in place and their motion collects until ConsumeRootMotion takes it.
+    // -1 turns it off.
+    void SetRootMotion(int node, const RootMotionSettings& s);
+    int RootMotionNode() const { return m_RootMotionNode; }
+    RootMotionDelta ConsumeRootMotion();
+
     const std::string& Path() const { return m_Path; }
     // #132 - the file was renamed or moved outside the editor; the loaded data stays valid.
     void SetPath(const std::string& path) { m_Path = path; }
@@ -298,11 +322,27 @@ private:
         size_t SourceChannels = 0;      // of the source rebuilds its clip list; a changed channel
                                         // count then drops the clip instead of reading stale data)
         std::vector<int> NodeChannel;   // per node of THIS model -> channel in Clip, or -1
+        // Per node of this model: a rotation applied on top of the clip's sampled local, for the
+        // top animated bones whose rest orientation differs between the two files - e.g. a Z-up
+        // animation pack on a Y-up rig whose root carries the axis conversion as a pre-rotation.
+        // Empty when no bone needs one.
+        std::vector<glm::quat> Correction;
         std::string Ref, DisplayName;
     };
     std::vector<ExternalClip> m_ExternalClips;
     // The clip at combined index `i` and its node->channel map for this model (nullptr if none).
     const AnimationClip* ClipAt(int i, const std::vector<int>** nodeChannel) const;
+    // Clip `clipIndex`'s channel `channel` sampled for node `node` at `ticks`, with the attached
+    // clip's retarget correction applied.
+    LocalTRS SampleClipNode(int clipIndex, const AnimationClip& clip, int channel, int node, float ticks) const;
+
+    // Built-in playback root motion (SetRootMotion).
+    int m_RootMotionNode = -1;
+    RootMotionSettings m_RootMotionSettings;
+    RootMotionDelta m_RootMotionPending;
+    // FindRootMotionNode's auto pick, for the import it was found on.
+    mutable const SharedData* m_AutoRootMotionFor = nullptr;
+    mutable int m_AutoRootMotionNode = -1;
 
     // Last engine frame index on which TickAnimationOnce() actually advanced this model; an
     // impossible sentinel (uint64_t max) so frame index 0 doesn't look "already ticked".

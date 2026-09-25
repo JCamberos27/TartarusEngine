@@ -3251,8 +3251,11 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             ? (model->OwnAnimationCount() > 0 ? model->AnimationName(0) + " (first)" : std::string("(none)"))
             : (resolved >= 0 ? model->AnimationName(resolved) : anim->Clip);
         ImGui::SetNextItemWidth(-FLT_MIN);
-        if (ImGui::BeginCombo("##animclip", preview.c_str())) {
+        if (ImGui::BeginCombo("##animclip", preview.c_str(), ImGuiComboFlags_HeightLarge)) {
+            static char filter[128] = "";
+            ClipFilterBox(filter, sizeof filter);
             auto pick = [&](const std::string& ref, const std::string& label, float seconds) {
+                if (!ClipFilterMatch(filter, label + " " + ref)) return;
                 char text[256];
                 std::snprintf(text, sizeof(text), "%s  (%.2fs)", label.c_str(), seconds);
                 if (ImGui::Selectable(text, ref == anim->Clip)) {
@@ -3274,6 +3277,12 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                     pick(ref, model->AnimationName(idx), model->AnimationLength(idx));
                 }
             }
+            // Animation files no scene has loaded yet (e.g. an imported pack).
+            std::string file = anim->Clip;
+            if (ProjectClipFileList(filter, file) && file != anim->Clip) {
+                PushUndo(world, "Set Animation Clip");
+                anim->Clip = file;
+            }
             ImGui::EndCombo();
         }
         if (resolved < 0 && !anim->Clip.empty())
@@ -3284,6 +3293,11 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             if (ImGui::Button(previewing ? ICON_FA_STOP "  Stop" : ICON_FA_PLAY "  Play")) {
                 if (previewing) model->StopAnimation();
                 else {
+                    // With root motion on, preview in place: the object doesn't move in edit mode.
+                    RootMotionSettings rms;
+                    rms.Rotation = anim->RootMotion.Rotation;
+                    rms.Vertical = anim->RootMotion.Vertical;
+                    model->SetRootMotion(anim->RootMotion.Mode != 0 ? model->FindRootMotionNode(anim->RootMotion.Bone) : -1, rms);
                     model->PlayAnimation(resolved < 0 ? 0 : resolved, 0.0f, (AnimationWrapMode)std::clamp(anim->WrapMode, 0, 3), anim->Speed);
                 }
             }
@@ -3293,6 +3307,18 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
 
     if (std::strcmp(componentName, "Animator Controller") == 0 && phase == ReflectExtraPhase::Top) {
         DrawAnimatorControllerExtra(world, entity); // #175 Part B
+        return;
+    }
+    // Root motion: the bone picker and live readout, under the Root Motion group.
+    if (phase == ReflectExtraPhase::Bottom &&
+        (std::strcmp(componentName, "Animator Controller") == 0 || std::strcmp(componentName, "Animation") == 0)) {
+        const auto* rc = registry.try_get<RenderableComponent>(entity);
+        Model* model = rc ? rc->ModelRef.get() : nullptr;
+        if (std::strcmp(componentName, "Animation") == 0) {
+            if (auto* sa = registry.try_get<SkeletalAnimationComponent>(entity)) DrawRootMotionExtra(world, entity, sa->RootMotion, model);
+        } else if (auto* ac = registry.try_get<AnimatorControllerComponent>(entity)) {
+            DrawRootMotionExtra(world, entity, ac->RootMotion, model);
+        }
         return;
     }
 
