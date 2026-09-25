@@ -444,12 +444,35 @@ struct FirstPersonControllerComponent {
 // #175 / #113 — Unity's (legacy) Animation component: plays one of the entity's model clips in
 // Play mode. Serialized fields are the authored setup; game code drives it at runtime by
 // changing Clip (crossfades to it) or IsPlaying. SkeletalAnimationSystem applies it each frame.
+// Root motion (RootMotion.h): what a component does with the travel its clips author on the root
+// bone. Off plays the clips as authored (a walk drags the mesh away from the object and snaps
+// back each loop). Apply takes the travel out of the pose and moves the object by it. In Place
+// takes it out of the pose too but leaves the object where it is: game code reads the motion
+// (RootMotionDeltaPosition / Yaw) and moves the object itself, or a second rig follows one that
+// applies it.
+enum class RootMotionMode : int { Off = 0, Apply = 1, InPlace = 2 };
+
+struct RootMotionOptions {
+    int  Mode = 0;              // RootMotionMode
+    std::string Bone;           // the root bone; empty = auto ("root", else the hips / pelvis)
+    bool Rotation = true;       // turns in the clip turn the object (off: they stay in the pose)
+    bool Vertical = false;      // height changes move the object (off: jumps, crouches stay in the pose)
+
+    // --- runtime (not serialized): the last update's motion ---
+    glm::vec3 DeltaPosition{0.0f}; // world-space metres (the parent's space when parented)
+    float DeltaYaw = 0.0f;         // degrees about +Y
+    float Speed = 0.0f;            // horizontal m/s, for readouts and game code
+    float TurnRate = 0.0f;         // degrees / s
+    int ResolvedBone = -1;         // node index on the model, -1 = not found
+};
+
 struct SkeletalAnimationComponent {
     std::string Clip;                // clip name; empty = the model's first clip
     bool PlayAutomatically = true;   // start when Play begins
     int  WrapMode = 1;               // AnimationWrapMode: 0 Once, 1 Loop, 2 PingPong, 3 ClampForever
     float Speed = 1.0f;              // playback rate; negative plays backwards
     float CrossFade = 0.25f;         // seconds to blend when the clip changes
+    RootMotionOptions RootMotion;
 
     // --- runtime (not serialized) ---
     bool Started = false;            // PlayAutomatically has been applied this run
@@ -474,6 +497,7 @@ struct AnimatorLayerRuntime {
         float Phase = 0.0f;        // normalized time in the state: 1 = one pass, >1 counts loops
         float Fade = 1.0f;         // 0..1 blend-in weight over the entries below
         float FadeDuration = 0.0f; // seconds for Fade 0 -> 1 (0 = instant)
+        float PrevPhase = -1.0f;   // Phase before the last advance (root motion); -1 = just entered
     };
     std::vector<Item> Stack;
     int  Transition = -1;          // the transition whose crossfade is running, or -1
@@ -490,6 +514,7 @@ struct AnimatorControllerComponent {
     // Which of the controller's tracks this entity plays (empty = the first). A controller can
     // hold several clip sets per state - e.g. "arms" and "weapon" - for rigs animated together.
     std::string Track;
+    RootMotionOptions RootMotion; // from the base layer; a state can opt out (State::RootMotion)
 
     void  SetFloat(const std::string& name, float v)  { Param(name, 0).Value = v; }
     void  SetInt(const std::string& name, int v)      { Param(name, 1).Value = (float)v; }

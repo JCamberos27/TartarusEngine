@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "parameters": [],
+  "tracks": ["main"],
+  "layers": [
+    {
+      "name": "Base Layer",
+      "weight": 1.0,
+      "blending": "Override",
+      "defaultState": "Idle",
+      "entryPosition": [-260.0, 0.0],
+      "anyPosition": [-260.0, -120.0],
+      "exitPosition": [900.0, 0.0],
+      "states": [
+        {"name": "Idle", "speed": 1.0, "loop": true, "position": [0.0, 0.0],
+         "motions": {"main": {"clip": "assets/animations/mc_core_motion/Idle/AM_Stand_Idle_01.fbx"}}},
+        {"name": "Walk Start", "speed": 1.0, "loop": false, "position": [220.0, 0.0],
+         "motions": {"main": {"clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Start.fbx"}}},
+        {"name": "Walk", "speed": 1.0, "loop": true, "position": [440.0, 0.0],
+         "motions": {"main": {"clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd.fbx"}}},
+        {"name": "Walk Stop", "speed": 1.0, "loop": false, "position": [660.0, 0.0],
+         "motions": {"main": {"clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Stop.fbx"}}},
+        {"name": "Turn Around", "speed": 1.0, "loop": false, "position": [330.0, 130.0],
+         "motions": {"main": {"clip": "assets/animations/mc_core_motion/Turn/AM_Stand_Idle_Turn_R180.fbx"}}}
+      ],
+      "transitions": [
+        {"from": "Idle", "to": "Walk Start", "hasExitTime": true, "exitTime": 0.35, "duration": 0.3, "conditions": []},
+        {"from": "Walk Start", "to": "Walk", "hasExitTime": true, "exitTime": 0.92, "duration": 0.2, "conditions": []},
+        {"from": "Walk", "to": "Walk Stop", "hasExitTime": true, "exitTime": 2.0, "duration": 0.25, "conditions": []},
+        {"from": "Walk Stop", "to": "Turn Around", "hasExitTime": true, "exitTime": 0.9, "duration": 0.3, "conditions": []},
+        {"from": "Turn Around", "to": "Idle", "hasExitTime": true, "exitTime": 0.98, "duration": 0.2, "conditions": []}
+      ]
+    }
+  ]
+}

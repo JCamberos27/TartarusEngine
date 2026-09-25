@@ -23757,6 +23757,28 @@
         1.0,
         1.0
       ]
+    },
+    {
+      "id": 652,
+      "name": "Root Motion Demo",
+      "order": 653,
+      "parentId": -1,
+      "position": [
+        -42.0,
+        0.0,
+        -30.0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
     }
   ],
   "exposureEV": 0.0,
@@ -42237,6 +42259,138 @@
         "type": 1,
         "useLimit": false
       }
+    },
+    {
+      "Animator Controller": {
+        "Controller": "animations/quantum_root_motion.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": 1,
+        "rootMotionBone": "",
+        "rootMotionRotation": true,
+        "rootMotionVertical": false
+      },
+      "id": 653,
+      "name": "Quantum - Root Motion On",
+      "order": 654,
+      "parentId": 652,
+      "path": "assets/quantum/Models/Quantum_Body_Full.fbx",
+      "pathGuid": "5ec75801d215e72f",
+      "position": [
+        -2.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "animations/quantum_root_motion.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": 2,
+        "rootMotionBone": "",
+        "rootMotionRotation": true,
+        "rootMotionVertical": false
+      },
+      "id": 654,
+      "name": "Quantum - Root Motion On Head",
+      "order": 655,
+      "parentId": 653,
+      "path": "assets/quantum/Models/Quantum_Head.fbx",
+      "pathGuid": "372aa659f6e66c47",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "animations/quantum_root_motion.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": 0,
+        "rootMotionBone": "",
+        "rootMotionRotation": true,
+        "rootMotionVertical": false
+      },
+      "id": 655,
+      "name": "Quantum - Root Motion Off",
+      "order": 656,
+      "parentId": 652,
+      "path": "assets/quantum/Models/Quantum_Body_Full.fbx",
+      "pathGuid": "5ec75801d215e72f",
+      "position": [
+        2.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "animations/quantum_root_motion.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": 0,
+        "rootMotionBone": "",
+        "rootMotionRotation": true,
+        "rootMotionVertical": false
+      },
+      "id": 656,
+      "name": "Quantum - Root Motion Off Head",
+      "order": 657,
+      "parentId": 655,
+      "path": "assets/quantum/Models/Quantum_Head.fbx",
+      "pathGuid": "372aa659f6e66c47",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
     }
   ],
   "motionBlur": false,
