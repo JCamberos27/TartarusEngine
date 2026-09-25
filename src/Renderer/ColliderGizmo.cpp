@@ -1,3 +1,4 @@
+#include "BodyDebugDraw.h"
 #include "ColliderGizmo.h"
 
 #include "Shader.h"
@@ -248,6 +249,8 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
             V.resize(base + (size_t)n * 14);
         }
     }
+    // The true-first-person body's overlay (BodyDebug, filled by FirstPersonBody while it plays).
+    if (BodyDebug::Enabled() && !BodyDebug::Verts().empty()) V.insert(V.end(), BodyDebug::Verts().begin(), BodyDebug::Verts().end());
     const GLsizei glowVerts = (GLsizei)(V.size() / 7) - wireVerts;
 
     if (V.empty()) return;
