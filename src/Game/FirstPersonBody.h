@@ -83,6 +83,8 @@ private:
     glm::vec2 m_LastDir{0.0f, 1.0f}; // the last move direction (body frame) and whether it was a sprint
     bool m_LastSprint = false;
     bool m_Grounded = false;       // at the last Tick
+    bool m_ArmsEasedOut = false;   // the arms piece is hidden while it eases off a holstered gun
+    int m_ArmsShadow = 1;          // its RenderableComponent::CastShadows before that
     bool m_InLand = false;         // the animator is in the landing state (the input drives the capsule)
     float m_FootWeight = 0.0f;     // 0..1: how much foot IK is on (eases at the edges of grounded)
     bool m_HaveFoot = false;
