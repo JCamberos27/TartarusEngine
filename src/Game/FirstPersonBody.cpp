@@ -201,6 +201,7 @@ bool FirstPersonBody::Start(World& world, Player& player) {
 }
 
 void FirstPersonBody::Stop(World& world) {
+    if (m_PoseSource != entt::null && world.Registry.valid(m_PoseSource)) world.Registry.remove<PoseSourceTag>(m_PoseSource);
     for (entt::entity e : m_ArmsTagged)
         if (world.Registry.valid(e)) world.Registry.remove<ViewModelTag>(e);
     for (const auto& m : m_Models)
@@ -666,8 +667,15 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     const bool enabled = reg.get<FirstPersonBodyComponent>(m_Body).WeaponArms;
     const bool haveRig = enabled && weaponArms != entt::null && reg.valid(weaponArms) &&
                          reg.all_of<RenderableComponent>(weaponArms) && viewModelFov > 0.0f;
-    // The rig keeps posing (its hands are the targets) but is no longer drawn.
-    if (haveRig) reg.get<RenderableComponent>(weaponArms).CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
+    // The rig keeps posing (its hands are the targets) but is neither drawn nor casts a shadow: the
+    // body's arms, which follow it, are what is seen and what shadows.
+    if (haveRig) {
+        if (!reg.all_of<PoseSourceTag>(weaponArms)) reg.emplace<PoseSourceTag>(weaponArms);
+        m_PoseSource = weaponArms;
+    } else if (m_PoseSource != entt::null) {
+        if (reg.valid(m_PoseSource)) reg.remove<PoseSourceTag>(m_PoseSource); // Weapon Arms off: it is the visible arms again
+        m_PoseSource = entt::null;
+    }
     // Holstered, the rig is inactive: the arms ease back to the locomotion clips' pose, but out of the
     // view-model pass at once (there they would show as a hand at the bottom of the view).
     const bool follow = haveRig && !reg.all_of<InactiveTag>(weaponArms);

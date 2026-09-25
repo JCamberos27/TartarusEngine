@@ -478,6 +478,8 @@ bool FirstPersonPresentation::BarrelAimPoint(glm::vec3& out) const {
 bool FirstPersonPresentation::LaserBeam(Laser& out) const {
     const auto* ac = Animator();
     if (!m_Set.Laser.Enabled || !m_AimPointValid || !ac || !m_Equipped || ac->HasTag(K::kTagHidden)) return false;
+    // A draw starts with the gun low: its beam would curl across the bottom of the view.
+    if (m_SinceUnhidden < 0.35f) return false;
     out.BeamColor = m_Set.Laser.Color * m_Set.Laser.BeamBrightness;
     out.SpotColor = m_Set.Laser.Color * m_Set.Laser.SpotBrightness;
     out.From = m_Muzzle;
@@ -780,6 +782,7 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     ac->SetFloat(K::kSpeed, planarSpeed);
     m_PlanarSpeed = planarSpeed;
     m_SinceShot += dt;
+    m_SinceUnhidden = ac->HasTag(K::kTagHidden) ? 0.0f : m_SinceUnhidden + dt;
     ac->SetBool(K::kSprint, sprinting);
     // The aim press drives the corner peek, even up against cover; tucked off a wall with no
     // peek to lean out on, the sights can't come up.

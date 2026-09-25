@@ -548,10 +548,19 @@ each child at its clip's measured velocity (walk forward 1.53 m/s, jog forward 3
 2.95, jog backward 2.26, run 4.72), plus Jump / Fall / Land. The Player's move speeds become
 **Run Speed** / **Sprint Speed** so the input asks for what the clips have.
 
-**Phase 1 limits.** The separate first-person arms still draw the arms and gun; the body has no
-arms of its own (the modular pieces have none). Looking straight down shows little of the body
-until the spine aim offset (phase 2). No turn-in-place, starts / stops, crouch or foot IK yet
-(phase 3) - see #405.
+**Phases 2 and 3.** The body has arms (the `ArmsPiece`, an arms-only Quantum piece). It copies the
+arms rig's arm shapes and solves its hands to the rig's hands (`FirstPersonBody::ArmsLateUpdate`),
+the camera is anchored to the shoulders while armed (`kEyeSlack`, `kReachSlack`, the shrug), and it
+keeps that height unarmed. Drawn, the arms take the rig's hands from the first frame; holstered
+they leave the view-model pass at once. Phase 3 added turn in place with a turn-rate cap, start /
+stop clips, crouch, foot IK with foot lock, stair easing and jump / land polish.
+
+**The arms rig is a hidden pose source.** It still runs the weapon's controller, the IK and the
+ADS carry (the sights must stay camera-locked, which the body's swaying arms cannot do), but it
+carries `PoseSourceTag`: never drawn, no shadow, no SSAO depth, no search tint. The body's arms
+are what is seen and what casts the arm shadow (before, both cast: a double shadow). Retiring it
+fully (the weapon controller on the body's arms, the gun on the body's `ik_hand_gun`) was looked
+at and set aside - see issue #424 for why.
 
 ## 9. Known gaps / next steps
 

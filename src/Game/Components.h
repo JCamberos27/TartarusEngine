@@ -304,6 +304,12 @@ struct SceneLockedTag {};
 // there as ordinary scene geometry exactly as before.
 struct ViewModelTag {};
 
+// Animated but never drawn: no camera pass, no shadow, no SSAO depth, no search tint. The first-person
+// arms rig once the body's arms take its hands (FirstPersonBody::ArmsLateUpdate): it keeps posing (its
+// hands are the targets, the sights stay camera-locked) but the body's own arms are what is seen and
+// what casts the shadow. Runtime only, like ViewModelTag.
+struct PoseSourceTag {};
+
 // A dynamic light. Point/Spot use the entity's world position; Directional (the sun) ignores
 // position and takes its travel direction from the entity's -Z axis (rotate the entity to aim
 // it), matching the spot-cone convention. Every kind goes through the same LightBuffer SSBO and
