@@ -14,6 +14,7 @@
 #include "AnimationSystem.h"
 #include "AnimatorController.h"
 #include "AnimatorLint.h"
+#include "ClipAnalysis.h"
 #include "FirstPersonBodyContract.h"
 #include "FirstPersonAnimation.h"
 #include "Components.h"
@@ -36,6 +37,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <unordered_map>
 
 using namespace EditorInternal;
 namespace fs = std::filesystem;
@@ -1511,14 +1513,70 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                     if (dist < 0.005f && std::abs(d.Yaw) < 0.01f) ImGui::TextDisabled("%sin place", prefix);
                     else ImGui::TextDisabled("%s%.2f m, %+.0f deg per pass  (%.2f m/s)", prefix, dist, glm::degrees(d.Yaw), dist / len);
                 };
+                // Full measurement of one clip: travel, foot contacts, stride, loop seam and a speed plot.
+                auto analyse = [&](const std::string& ref, const char* label) {
+                    const int c = ResolveAnimationClip(*rigModel, ref, *assets);
+                    if (c < 0) return;
+                    struct Cached { const Model* M = nullptr; int Clip = -1, Node = -1; bool Rot = false, Vert = false; ClipAnalysis::Result R; };
+                    static std::unordered_map<std::string, Cached> s_cache;
+                    Cached& e = s_cache[std::string(label) + "|" + ref];
+                    if (e.M != rigModel || e.Clip != c || e.Node != node || e.Rot != rms.Rotation || e.Vert != rms.Vertical) {
+                        const std::string feet[2] = {FPBody::kBoneFoot[0], FPBody::kBoneFoot[1]};
+                        std::vector<std::string> seam = {FPBody::kBoneFoot[0], FPBody::kBoneFoot[1], FPBody::kBoneHand[0], FPBody::kBoneHand[1], "head"};
+                        e = {rigModel, c, node, rms.Rotation, rms.Vertical, ClipAnalysis::Analyze(*rigModel, c, node, rms, feet, seam)};
+                    }
+                    const ClipAnalysis::Result& a = e.R;
+                    if (!a.Valid) return;
+                    ImGui::PushID(label);
+                    if (ImGui::TreeNode("##analysis", ICON_FA_CHART_LINE "  Analyse %s", label[0] ? label : "clip")) {
+                        ImGui::Text("Length %.2f s   travel %.2f m   speed %.2f m/s   turn %+.0f deg", a.Length, a.Distance, a.Speed, a.YawDegrees);
+                        if (std::abs(a.VerticalDelta) > 0.01f) ImGui::Text("Net height change %+.2f m", a.VerticalDelta);
+                        if (a.LoopSeam > 0.0f) {
+                            const bool bad = a.LoopSeam > 0.03f;
+                            ImGui::TextColored(bad ? EditorUIPrimitives::WarningColor() : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled),
+                                               "Loop seam %.1f cm (%s)%s", a.LoopSeam * 100.0f, a.LoopSeamBone.c_str(), bad ? "  - visible pop when it loops" : "");
+                        }
+                        ImGui::PlotLines("##speed", a.SpeedProfile.data(), (int)a.SpeedProfile.size(), 0, "ground speed over the clip", 0.0f, FLT_MAX, ImVec2(-FLT_MIN, 50.0f));
+                        // Contact strips: filled where the foot is planted.
+                        const ImVec2 origin = ImGui::GetCursorScreenPos();
+                        const float w = ImGui::GetContentRegionAvail().x, h = 10.0f;
+                        ImDrawList* dl = ImGui::GetWindowDrawList();
+                        for (int f = 0; f < 2; ++f) {
+                            const ClipAnalysis::Foot& ft = a.Feet[f];
+                            const float y = origin.y + f * (h + 3.0f);
+                            dl->AddRectFilled({origin.x, y}, {origin.x + w, y + h}, IM_COL32(60, 60, 60, 160));
+                            if (!ft.Found) continue;
+                            // Draw each contact as a bar from its start for ContactFraction / plants of the clip.
+                            const float each = ft.ContactStarts.empty() ? 0.0f : ft.ContactFraction / ft.ContactStarts.size();
+                            for (float st : ft.ContactStarts) {
+                                const float x0 = origin.x + st * w, x1 = origin.x + std::min(1.0f, st + each) * w;
+                                dl->AddRectFilled({x0, y}, {x1, y + h}, f == 0 ? IM_COL32(90, 170, 255, 220) : IM_COL32(255, 170, 90, 220));
+                                if (st + each > 1.0f) dl->AddRectFilled({origin.x, y}, {origin.x + (st + each - 1.0f) * w, y + h}, f == 0 ? IM_COL32(90, 170, 255, 220) : IM_COL32(255, 170, 90, 220));
+                            }
+                        }
+                        ImGui::Dummy({w, 2 * h + 3.0f});
+                        for (int f = 0; f < 2; ++f) {
+                            const ClipAnalysis::Foot& ft = a.Feet[f];
+                            if (!ft.Found) { ImGui::TextDisabled("%s: bone not found on this rig", ft.Bone.c_str()); continue; }
+                            std::string starts;
+                            for (float st : ft.ContactStarts) { char b[16]; std::snprintf(b, sizeof b, "%s%.2f", starts.empty() ? "" : ", ", st); starts += b; }
+                            ImGui::Text("%s: plants at %s (of 1.0), down %.0f%%, stride %.2f m", ft.Bone.c_str(), starts.empty() ? "-" : starts.c_str(), ft.ContactFraction * 100.0f, ft.Stride);
+                        }
+                        ImGui::TextDisabled("Blue = left foot planted, orange = right. Use the plant times for Stop transition offsets \nand Start exit times; the stride against the speed tells if the feet will slide.");
+                        ImGui::TreePop();
+                    }
+                    ImGui::PopID();
+                };
                 row("");
-                if (!m.IsBlendTree()) describe(m.Clip, "");
+                if (!m.IsBlendTree()) { describe(m.Clip, ""); row(""); analyse(m.Clip, ""); }
                 else {
                     ImGui::TextDisabled("Per child:");
                     for (const auto& child : m.Children) {
                         row("");
                         const std::string prefix = ClipLabel(child.Clip) + ": ";
                         describe(child.Clip, prefix.c_str());
+                        row("");
+                        analyse(child.Clip, ClipLabel(child.Clip).c_str());
                     }
                 }
                 if (ImGui::IsItemHovered())
