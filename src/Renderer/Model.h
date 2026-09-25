@@ -182,6 +182,9 @@ public:
     // to the built-in playback. A pose of the wrong size is ignored.
     void ApplyLocalPose(const std::vector<LocalTRS>& pose);
     bool HasExternalPose() const { return m_ExternalPose; }
+    // The last pose ApplyLocalPose was given (empty before the first): for code that edits a
+    // finished pose - IK on top of the animator's - and applies it again.
+    const std::vector<LocalTRS>& AppliedLocalPose() const { return m_AppliedPose; }
     // Seconds into the current clip as a 0..1 fraction of its length (0 when nothing plays).
     float NormalizedTime() const;
 
@@ -317,6 +320,7 @@ private:
     float m_FadeElapsed = 0.0f, m_FadeDuration = 0.0f; // crossfade progress; duration 0 = none
     bool m_PosePending = false;    // a fade to "stopped" still needs final matrices this frame
     bool m_ExternalPose = false;   // ApplyLocalPose owns the pose until the next PlayAnimation
+    std::vector<LocalTRS> m_AppliedPose; // ... and what it was given (AppliedLocalPose)
     std::vector<glm::mat4> m_FinalBoneMatrices;
     std::vector<glm::mat4> m_NodeGlobals; // scratch, one per AnimNode
 

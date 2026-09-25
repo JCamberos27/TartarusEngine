@@ -23790,12 +23790,14 @@
         "Camera Smoothing": 0.06,
         "Head Bob": 0.5,
         "Head Bone": "head",
-        "Hidden Bones": "clavicle_l, clavicle_r",
+        "Hidden Bones": "",
         "Hidden Parts": "Head",
         "Parameter Smoothing": 0.12,
         "Responsiveness": 0.0,
         "Run Speed": 3.26,
-        "Sprint Speed": 4.72
+        "Spine Aim": 0.6,
+        "Sprint Speed": 4.72,
+        "Weapon Arms": true
       },
       "id": 657,
       "name": "Player Body",

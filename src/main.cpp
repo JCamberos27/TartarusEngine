@@ -2287,6 +2287,9 @@ int main(int argc, char** argv) {
                 if (playUsesPlayer) {
                     firstPersonBody.LateUpdate(world, player.Cam, gameDt); // camera into the body's head
                     firstPersonPresentation.LateUpdate(world, player.Cam);
+                    // The body's hands onto the arms rig's, now that the rig is seated.
+                    firstPersonBody.ArmsLateUpdate(world, player.Cam, firstPersonPresentation.ArmsEntity(),
+                                                   firstPersonPresentation.ViewModelFov(), gameDt);
                     // This frame's rounds, down the bore from the muzzle: a hole where each struck.
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits())
                         bulletHoles.Add(world, static_cast<entt::entity>(hit.Entity), hit.Point, hit.Normal, hit.HoleRadius);
