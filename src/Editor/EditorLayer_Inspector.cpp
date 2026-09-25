@@ -22,6 +22,7 @@
 #include "AnimationSystem.h" // Animation component clip references (#175)
 #include "IK.h"              // IK Rig bone validation
 #include "FirstPersonBodyContract.h" // First Person Body setup check
+#include "BodyDebugDraw.h"
 #include "EditorSettings.h"
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
@@ -3399,6 +3400,27 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                 if (!c.Hint.empty()) ImGui::TextDisabled("    %s", c.Hint.c_str());
                 ImGui::PopTextWrapPos();
             }
+            ImGui::TreePop();
+        }
+        // Live: what the body is doing right now (Play only).
+        const BodyDebug::Snapshot& d = BodyDebug::Info();
+        if (d.Valid && ImGui::TreeNodeEx("##bodylive", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth, "Live (Play)")) {
+            auto row = [](const char* label, const char* fmt, auto... args) {
+                ImGui::TextDisabled("%s", label);
+                ImGui::SameLine(190.0f);
+                ImGui::Text(fmt, args...);
+            };
+            row("Animator state", "%s  (%.0f%% of the pass)", d.AnimatorState.c_str(), (d.StateTime - std::floor(d.StateTime)) * 100.0f);
+            row("Move / clips carry", "%.2f / %.2f m/s", d.MoveSpeed, d.RootSpeed);
+            row("Turning", "%s   view %+.0f deg off, chest twist %+.0f deg", d.Turning ? "yes" : "no", d.ViewOffsetDeg, d.TwistDeg);
+            row("Idle / run time", "%.2f s  /  %.2f s%s", d.IdleTime, d.MoveTime, d.Still ? "   (standing still)" : "");
+            if (!d.LastTrigger.empty()) row("Last trigger", "%s  %.1f s ago", d.LastTrigger.c_str(), d.LastTriggerAgo);
+            row("Foot IK", "%.0f%%   L %+.0f cm %s %.0f%%   R %+.0f cm %s %.0f%%", d.FootWeight * 100.0f,
+                d.FootOffset[0] * 100.0f, d.FootPlanted[0] ? "planted" : "air", d.FootLock[0] * 100.0f,
+                d.FootOffset[1] * 100.0f, d.FootPlanted[1] ? "planted" : "air", d.FootLock[1] * 100.0f);
+            row("Stair ease", "%+.1f cm", d.StepOffset * 100.0f);
+            row("Arms / eye", "arms follow weapon %.0f%%,  eye off shoulders %.1f cm", d.ArmsWeight * 100.0f, d.EyeSlack * 100.0f);
+            row("Scene overlay", "%s   %d lines", BodyDebug::Enabled() ? "on" : "off (Gizmos > Player body)", (int)(BodyDebug::Verts().size() / 14));
             ImGui::TreePop();
         }
         ImGui::Spacing();
