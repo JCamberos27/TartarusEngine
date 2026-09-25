@@ -8,6 +8,8 @@
 #include "World.h"
 #include "RotationMath.h"
 #include "Components.h"
+#include "PhysicsWorld.h"
+#include "GameModuleAPI.h" // BodyState
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -92,6 +94,68 @@ void UpdateAnimators(World& world, float dt) {
     }
 }
 
+void ApplyRootMotion(World& world, entt::entity entity, RootMotionOptions& opts, const RootMotionDelta& motion, float dt) {
+    opts.DeltaPosition = glm::vec3(0.0f);
+    opts.DeltaYaw = 0.0f;
+    auto* transform = world.Registry.try_get<TransformComponent>(entity);
+    if (!transform || opts.Mode == (int)RootMotionMode::Off || opts.ResolvedBone < 0) {
+        opts.Speed = opts.TurnRate = 0.0f;
+        return;
+    }
+    // The motion is in the model's space; the object's own rotation and scale take it to its
+    // parent's space, and the parent's world matrix on to world space for the readout.
+    const glm::vec3 parentDelta = transform->Rotation * (transform->Scale * motion.Translation);
+    glm::mat3 parentWorld(1.0f);
+    if (const auto* h = world.Registry.try_get<HierarchyComponent>(entity); h && world.Registry.valid(h->Parent))
+        parentWorld = glm::mat3(world.GetCachedWorldTransform(h->Parent));
+    const glm::vec3 worldDelta = parentWorld * parentDelta;
+    opts.DeltaPosition = worldDelta;
+    opts.DeltaYaw = glm::degrees(motion.Yaw);
+    if (dt > 0.0f) {
+        // Smoothed a little: per-frame travel steps with the clip's keys.
+        const float k = 1.0f - std::exp(-dt * 12.0f);
+        opts.Speed += (glm::length(glm::vec2(worldDelta.x, worldDelta.z)) / dt - opts.Speed) * k;
+        opts.TurnRate += (opts.DeltaYaw / dt - opts.TurnRate) * k;
+    }
+    if (opts.Mode != (int)RootMotionMode::Apply || motion.IsZero()) return;
+    // The player's controller owns its own movement.
+    if (world.Registry.all_of<FirstPersonControllerComponent>(entity)) return;
+
+    const glm::quat turned = transform->Rotation * glm::angleAxis(motion.Yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+    const auto* body = world.Registry.try_get<RigidbodyComponent>(entity);
+    BodyState state;
+    const unsigned id = (unsigned)entt::to_integral(entity);
+    if (body && !body->IsKinematic && dt > 0.0f && PhysicsWorld::GetBodyState(id, state) && state.Valid) {
+        // A simulated body is steered, not teleported: the travel becomes its velocity (gravity
+        // keeps the vertical unless Vertical is on), so walls and slopes still stop it.
+        glm::vec3 v = worldDelta / dt;
+        if (!opts.Vertical) v.y = state.Velocity[1];
+        const float vv[3] = {v.x, v.y, v.z};
+        PhysicsWorld::SetLinearVelocity(id, vv);
+        if (motion.Yaw != 0.0f) {
+            transform->SetRotationQuaternion(turned);
+            const TransformComponent w = world.WorldSpaceTransform(entity);
+            const float p[3] = {w.Position.x, w.Position.y, w.Position.z};
+            const float q[4] = {w.Rotation.x, w.Rotation.y, w.Rotation.z, w.Rotation.w};
+            PhysicsWorld::SetActorPose(id, p, q, false);
+        }
+        return;
+    }
+    // Everything else (a kinematic body follows its transform on the next physics step).
+    transform->Position += parentDelta;
+    if (motion.Yaw != 0.0f) transform->SetRotationQuaternion(turned);
+}
+
+void ApplyModelRootMotion(World& world, entt::entity entity, Model& model, RootMotionOptions& opts, float dt) {
+    const bool on = opts.Mode != (int)RootMotionMode::Off;
+    opts.ResolvedBone = on ? model.FindRootMotionNode(opts.Bone) : -1;
+    RootMotionSettings s;
+    s.Rotation = opts.Rotation;
+    s.Vertical = opts.Vertical;
+    model.SetRootMotion(opts.ResolvedBone, s);
+    ApplyRootMotion(world, entity, opts, model.ConsumeRootMotion(), dt);
+}
+
 std::string AnimationClipRef(const Model& source, int sourceClip) {
     std::string ref = ProjectPaths::Relativize(source.Path());
     if (source.OwnAnimationCount() > 1) ref += "#" + source.AnimationName(sourceClip);
@@ -129,7 +193,7 @@ int ResolveAnimationClip(Model& model, const std::string& clipRef, AssetLibrary&
     return model.AttachClip(*src, srcClip, clipRef, AnimationClipLabel(*src, srcClip));
 }
 
-void UpdateSkeletalAnimations(World& world, AssetLibrary& assets) {
+void UpdateSkeletalAnimations(World& world, AssetLibrary& assets, float dt) {
     // #175 Part B - an Animator Controller on the same entity owns the model's clip.
     auto view = world.Registry.view<SkeletalAnimationComponent, RenderableComponent>(
         entt::exclude<InactiveTag, AnimatorControllerComponent>);
@@ -139,6 +203,8 @@ void UpdateSkeletalAnimations(World& world, AssetLibrary& assets) {
         if (!model) continue;
 
         const AnimationWrapMode wrap = (AnimationWrapMode)std::clamp(anim.WrapMode, 0, 3);
+        if (!anim.Started) model->ConsumeRootMotion(); // nothing an edit-mode preview collected
+        ApplyModelRootMotion(world, e, *model, anim.RootMotion, dt);
         if (!anim.Started) {
             anim.Started = true;
             anim.IsPlaying = anim.PlayAutomatically;

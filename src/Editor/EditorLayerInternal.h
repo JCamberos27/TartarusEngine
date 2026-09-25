@@ -418,4 +418,16 @@ inline std::shared_ptr<Texture> LoadScreenshotTexture(const std::string& path, i
     return std::make_shared<Texture>(path, s);
 }
 
+// --- Clip pickers (EditorLayer_Animator.cpp) -----------------------------------------------------
+// Model files anywhere under the project (project-relative, sorted), so a picker can offer an
+// animation file that no scene has loaded yet - it loads when picked. Rescanned every few seconds.
+const std::vector<std::string>& ProjectModelFiles();
+// Case-insensitive "every word of `filter` appears in `text`"; an empty filter matches all.
+bool ClipFilterMatch(const char* filter, const std::string& text);
+// The search box a clip picker's popup starts with (focused as it opens). `buf` is its text.
+void ClipFilterBox(char* buf, size_t size);
+// The project's model files matching `filter`, as a "Project files" section of a picker. Returns
+// true when one is picked (its path written to `ref`). Lists at most `maxShown`.
+bool ProjectClipFileList(const char* filter, std::string& ref, int maxShown = 150);
+
 } // namespace EditorInternal

@@ -1824,7 +1824,13 @@ int main(int argc, char** argv) {
                             const Model* am = arc ? arc->ModelRef.get() : nullptr;
                             std::cout << "[SmokeTest]   animator " << entt::to_integral(ae) << " state=" << ac.StateName
                                       << " clip=" << (am && am->CurrentAnimation() >= 0 ? am->AnimationName(am->CurrentAnimation()) : std::string("(none)"))
-                                      << " params=" << ac.Params.size() << "\n";
+                                      << " params=" << ac.Params.size();
+                            if (ac.RootMotion.Mode != 0) { // where root motion has taken the object
+                                const glm::vec3 p = world.WorldSpaceTransform(ae).Position;
+                                std::cout << " rootMotion=" << ac.RootMotion.Mode << " bone=" << ac.RootMotion.ResolvedBone
+                                          << " speed=" << ac.RootMotion.Speed << " pos=(" << p.x << ", " << p.y << ", " << p.z << ")";
+                            }
+                            std::cout << "\n";
                         }
                         for (auto [pe, ps] : world.Registry.view<const ParticleSystemComponent>().each()) { // #177
                             glm::vec3 lo(1e9f), hi(-1e9f);
@@ -2269,7 +2275,7 @@ int main(int argc, char** argv) {
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
                 UpdateAnimators(world, gameDt);
-                UpdateSkeletalAnimations(world, assets); // #175 — Animation components drive their models' clips
+                UpdateSkeletalAnimations(world, assets, gameDt); // #175 — Animation components drive their models' clips
                 UpdateAnimatorControllers(world, assets, gameDt); // #175 Part B — state machines
                 // The arms are posed now (clips + IK): seat the gun in this frame's hands.
                 if (playUsesPlayer) {
