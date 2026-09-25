@@ -566,3 +566,110 @@ FirstPersonReloadInput FirstPersonReloadButton::Update(bool down, float dt) {
     Down = false;
     return Fired ? FirstPersonReloadInput::None : FirstPersonReloadInput::Reload;
 }
+
+std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponCheckInput& in) {
+    using namespace FirstPersonAnimatorContract;
+    using PT = AnimatorController::ParamType;
+    using Sev = FPBody::Severity;
+    std::vector<FPBody::Check> out;
+    if (!in.Set) return out;
+    const FirstPersonAnimationSet& set = *in.Set;
+    auto add = [&](Sev level, std::string msg, std::string hint = {}) { out.push_back({level, std::move(msg), std::move(hint)}); };
+
+    if (set.Controller.empty() && set.Clips.empty())
+        add(Sev::Error, "No controller.", "Set the Controller (the Animation section): it animates both rigs.");
+    if (in.Controller) {
+        const AnimatorController& c = *in.Controller;
+        struct P { const char* Name; PT Type; Sev Level; const char* What; };
+        static const P kParams[] = {
+            {kSpeed, PT::Float, Sev::Warning, "The planar speed the walk / sprint blend uses."},
+            {kSprint, PT::Bool, Sev::Warning, "True while sprinting: the sprint state."},
+            {kAim, PT::Bool, Sev::Warning, "True while aim is held: the ADS state."},
+            {kEquipped, PT::Bool, Sev::Warning, "Whether the weapon is wanted in hand: Draw / Holster."},
+            {kAmmo, PT::Int, Sev::Info, "Rounds in the magazine (for an empty-reload variant)."},
+            {kWalkRate, PT::Float, Sev::Info, "Use it as the walk state's Speed Parameter so the clip follows the player's speed."},
+            {kSprintRate, PT::Float, Sev::Info, "Use it as the sprint state's Speed Parameter."},
+            {kFire, PT::Trigger, Sev::Warning, "Set on the trigger pull: the fire clip."},
+            {kReload, PT::Trigger, Sev::Warning, "Set on R: the reload."},
+            {kMagCheck, PT::Trigger, Sev::Info, "Set on a held R: the magazine check."},
+            {kInspect, PT::Trigger, Sev::Info, "Set on the Inspect key."},
+            {kMelee, PT::Trigger, Sev::Info, "Set on the Melee key."},
+            {kFidget, PT::Trigger, Sev::Info, "Set after a long idle: the fidget."},
+        };
+        for (const P& p : kParams) {
+            const AnimatorController::Parameter* found = c.FindParameter(p.Name);
+            if (!found)
+                add(p.Level, std::string("The controller has no parameter '") + p.Name + "'. " + p.What,
+                    p.Level == Sev::Warning ? "Add it in the Animator window's Parameters tab." : "Optional: add it to use this.");
+            else if ((p.Type == PT::Trigger) != (found->Type == PT::Trigger))
+                add(Sev::Warning, std::string("'") + p.Name + "' should be a " + (p.Type == PT::Trigger ? "Trigger" : "non-trigger parameter") + ".",
+                    "Change its type in the Parameters tab.");
+        }
+        auto anyState = [&](auto pred) {
+            for (const auto& L : c.Layers)
+                for (const auto& s : L.States)
+                    if (pred(s)) return true;
+            return false;
+        };
+        auto hasEvent = [&](const char* name) {
+            return anyState([&](const AnimatorController::State& s) {
+                for (const auto& e : s.Events)
+                    if (e.Name == name) return true;
+                return false;
+            });
+        };
+        auto hasTag = [&](const char* tag) { return anyState([&](const AnimatorController::State& s) { return s.HasTag(tag); }); };
+        if (!hasEvent(kEventShot))
+            add(Sev::Warning, std::string("No state has a '") + kEventShot + "' event.",
+                "Add a 'Shot' event on the fire clip at the moment a round leaves the gun; without it hip fire spends no ammo.");
+        if (!hasEvent(kEventRefill))
+            add(Sev::Warning, std::string("No state has a '") + kEventRefill + "' event.",
+                "Add a 'Refill' event on the reload clips at the moment the magazine is in; without it a reload never refills.");
+        if (!hasTag(kTagHidden))
+            add(Sev::Warning, std::string("No state is tagged '") + kTagHidden + "'.",
+                "Tag the unarmed (Holstered) state 'Hidden' so both rigs hide when the weapon is put away.");
+        if (!hasTag(kTagAds))
+            add(Sev::Warning, std::string("No state is tagged '") + kTagAds + "'.",
+                "Tag the aiming state 'ADS' so the zoom, sight alignment and ADS recoil apply.");
+        if (!hasTag(kTagReload))
+            add(Sev::Info, std::string("No state is tagged '") + kTagReload + "'.", "Tag the reload states so R does nothing and the gun can't fire mid-reload.");
+        if (!hasTag(kTagBusy))
+            add(Sev::Info, std::string("No state is tagged '") + kTagBusy + "'.", "Tag mag check / inspect / melee 'Busy' so the gun can't fire during them.");
+        if (!hasTag(kTagIdle))
+            add(Sev::Info, std::string("No state is tagged '") + kTagIdle + "'.", "Tag the settled idle 'Idle' to get the fidget.");
+        if (!set.Ads.ReferenceState.empty()) {
+            bool found = false;
+            for (const auto& L : c.Layers) found = found || L.FindState(set.Ads.ReferenceState) >= 0;
+            if (!found)
+                add(Sev::Warning, "ADS Reference State '" + set.Ads.ReferenceState + "' is not a state in the controller.",
+                    "Pick the aim state in the Aim-Down-Sights section.");
+        }
+    }
+    if (in.HasArmsBone) {
+        auto need = [&](const std::string& bone, const char* what) {
+            if (bone.empty() || in.HasArmsBone(bone)) return;
+            add(Sev::Warning, "The arms rig has no bone '" + bone + "'. " + what,
+                "Fix the name in the IK / Rigs & Mount section (bones come from the arms model).");
+        };
+        const WeaponIKSettings& k = set.Procedural.IK;
+        if (k.Enabled) {
+            need(k.GunBone, "The gun bone the procedural motion moves.");
+            need(k.RightUpper, "Right arm IK.");
+            need(k.RightLower, "Right arm IK.");
+            need(k.RightHand, "Right arm IK.");
+            need(k.LeftUpper, "Left arm IK.");
+            need(k.LeftLower, "Left arm IK.");
+            need(k.LeftHand, "Left arm IK.");
+        }
+        need(set.WeaponSocket, "The socket the weapon rides.");
+    }
+    if (in.HasWeaponBone) {
+        if (!set.WeaponRoot.empty() && !in.HasWeaponBone(set.WeaponRoot))
+            add(Sev::Warning, "The weapon model has no bone '" + set.WeaponRoot + "' (Weapon Root).", "Set the weapon's root node in Rigs & Mount.");
+        const std::string& bolt = set.Procedural.Recoil.BoltBone;
+        if (!bolt.empty() && !in.HasWeaponBone(bolt))
+            add(Sev::Info, "The weapon model has no bone '" + bolt + "' (Bolt Bone): no procedural bolt.", "Set Bolt Bone in the Recoil section, or clear it.");
+    }
+    std::stable_sort(out.begin(), out.end(), [](const FPBody::Check& a, const FPBody::Check& b) { return (int)a.Level > (int)b.Level; });
+    return out;
+}

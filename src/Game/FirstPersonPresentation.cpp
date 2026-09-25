@@ -638,6 +638,18 @@ bool FirstPersonPresentation::AttachAndValidate(AssetLibrary& assets, const Anim
         SetError("state '" + state + "' cannot attach " + track + " clip '" + clip + "'");
         return false;
     };
+    // What the driver expects of this weapon, as warnings (a missing Shot / Refill event, a tag or a bone silently
+    // turns a feature off): the same list the Weapon Inspector shows.
+    {
+        FirstPersonWeaponCheckInput wi;
+        wi.Set = &m_Set;
+        wi.Controller = &ctrl;
+        wi.HasArmsBone = [arms = m_ArmsModel.get()](const std::string& b) { return arms->NodeIndex(b) >= 0; };
+        wi.HasWeaponBone = [weapon = m_WeaponModel.get()](const std::string& b) { return weapon->NodeIndex(b) >= 0; };
+        for (const FPBody::Check& c : FirstPersonWeaponValidate(wi))
+            if (c.Level == FPBody::Severity::Warning || c.Level == FPBody::Severity::Error)
+                Log::Warn("First-person weapon: " + c.Message + " " + c.Hint);
+    }
     for (const auto& L : ctrl.Layers)
         for (const auto& s : L.States)
             for (auto [model, track, name] : {std::tuple<Model*, int, const char*>{m_ArmsModel.get(), armsTrack, "arms"},
