@@ -613,7 +613,11 @@ void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent
             auto& top = rt.Stack.back();
             if (top.State >= (int)L.States.size() || L.States[top.State].Name != ac.StateName) {
                 const int same = L.FindState(ac.StateName);
-                if (same >= 0) { rt.Stack.clear(); rt.Stack.push_back({same, top.Phase, 1.0f, 0.0f}); }
+                if (same >= 0) {
+                    const float phase = top.Phase; // `top` dies with the clear
+                    rt.Stack.clear();
+                    rt.Stack.push_back({same, phase, 1.0f, 0.0f});
+                }
             }
         }
         rt.Stack.erase(std::remove_if(rt.Stack.begin(), rt.Stack.end(),

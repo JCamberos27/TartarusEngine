@@ -1728,8 +1728,10 @@ namespace EditorInternal {
 const std::vector<std::string>& ProjectModelFiles() {
     static std::vector<std::string> files;
     static std::chrono::steady_clock::time_point scanned{};
+    static bool once = false;
     const auto now = std::chrono::steady_clock::now();
-    if (!files.empty() && now - scanned < std::chrono::seconds(5)) return files;
+    if (once && now - scanned < std::chrono::seconds(5)) return files;
+    once = true;
     scanned = now;
     files.clear();
     std::error_code ec;
@@ -1744,7 +1746,7 @@ const std::vector<std::string>& ProjectModelFiles() {
         std::string ext = it->path().extension().string();
         for (char& ch : ext) ch = (char)std::tolower((unsigned char)ch);
         if (ext == ".fbx" || ext == ".gltf" || ext == ".glb" || ext == ".dae")
-            files.push_back(fs::relative(it->path(), root, ec).generic_u8string());
+            files.push_back(it->path().lexically_relative(root).generic_u8string()); // no disk access per file
     }
     std::sort(files.begin(), files.end());
     return files;
