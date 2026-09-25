@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 
 // Editor-only preferences — NOT scene data. These control how the editor UI itself behaves
 // (independent of any particular scene) and persist across restarts in their own small file,
@@ -69,6 +70,9 @@ struct EditorSettings {
     // Loaded on startup when the file still exists; empty (or missing file) falls back to the
     // built-in default (project/scenes/Sandbox.json). Written by OpenScene / DoSaveAs. (#95)
     std::string LastScenePath;
+    // File > Open Recent, newest first. Save() moves LastScenePath to the front, so every place
+    // that records the last scene also records it here.
+    std::vector<std::string> RecentScenes;
 
     // GameViewPanel's own preferences (see GameViewPanel::LoadSettings/SaveSettings) — kept here
     // rather than in a separate file so they persist through the same Load()/Save() call every
