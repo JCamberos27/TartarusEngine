@@ -151,6 +151,7 @@ void EditorSettings::Load() {
     s.LightGizmoOpacity = SafeValue(root, "lightGizmoOpacity", s.LightGizmoOpacity);
     s.LightGizmoScale = SafeValue(root, "lightGizmoScale", s.LightGizmoScale);
     s.ShowColliders = SafeValue(root, "showColliders", s.ShowColliders);
+    s.ShowBodyDebug = SafeValue(root, "showBodyDebug", s.ShowBodyDebug);
     s.ToolPaletteCollapsed = SafeValue(root, "toolPaletteCollapsed", s.ToolPaletteCollapsed);
     s.PhysicsDebugInput = SafeValue(root, "physicsDebugInput", s.PhysicsDebugInput);
     s.ShowPhysicsPanel = SafeValue(root, "showPhysicsPanel", s.ShowPhysicsPanel);
@@ -303,6 +304,7 @@ void EditorSettings::Flush() {
     root["lightGizmoOpacity"] = Get().LightGizmoOpacity;
     root["lightGizmoScale"] = Get().LightGizmoScale;
     root["showColliders"] = Get().ShowColliders;
+    root["showBodyDebug"] = Get().ShowBodyDebug;
     root["toolPaletteCollapsed"] = Get().ToolPaletteCollapsed;
     root["physicsDebugInput"] = Get().PhysicsDebugInput;
     root["showPhysicsPanel"] = Get().ShowPhysicsPanel;

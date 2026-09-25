@@ -909,6 +909,14 @@ void EditorLayer::DrawGizmosPopupBody() {
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Green wireframe of every Collider's shape (#185), edit and Play mode.");
     ImGui::EndDisabled();
 
+    bool bodyDbg = EditorSettings::Get().ShowBodyDebug;
+    if (EditorUIPrimitives::Checkbox("Player body", &bodyDbg)) {
+        EditorSettings::Get().ShowBodyDebug = bodyDbg;
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("In Play, in the Scene viewport: the true-first-person body's foot IK rays (green = hit, red = miss,\nplanted feet green, pinned point cyan), body heading (yellow) vs view (white) with the turn threshold wedge,\nroot-motion velocity (cyan), stair easing (magenta), and the camera (white cross) on its shoulders (magenta).");
+
     bool physDbg = EditorSettings::Get().PhysicsDebugInput;
     if (EditorUIPrimitives::Checkbox("Physics debug input", &physDbg)) {
         EditorSettings::Get().PhysicsDebugInput = physDbg;
