@@ -23357,7 +23357,7 @@
         "Kill Height": -20.0,
         "Max Throw Speed": 16.0,
         "Min Throw Speed": 3.5,
-        "Mouse Sensitivity": 0.10000000149011612,
+        "Mouse Sensitivity": 0.05000000074505806,
         "Move Speed": 4.0,
         "Sprint Multiplier": 1.600000023841858,
         "Throw Backspin": 2.0,
@@ -23796,7 +23796,9 @@
         "Responsiveness": 0.0,
         "Run Speed": 3.26,
         "Spine Aim": 0.6,
+        "Spine Twist": 1.0,
         "Sprint Speed": 4.72,
+        "Turn Threshold": 55.0,
         "Weapon Arms": true
       },
       "id": 657,

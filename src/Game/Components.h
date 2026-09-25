@@ -470,6 +470,12 @@ struct FirstPersonBodyComponent {
     // How much of the camera's pitch the spine takes (0 = the body stays upright, 1 = the chest
     // tilts as far as the view), so the shoulders follow the view and the hands stay in reach.
     float SpineAim = 0.0f;
+    // Standing still, the body keeps its heading until the view is this many degrees off it, then
+    // turns on the spot (the turn clips). 0 = the body always faces the view.
+    float TurnThreshold = 0.0f;
+    // How much of the view's twist off the body's heading the spine takes (0..1), so the chest
+    // faces the view while the feet have not turned yet.
+    float SpineTwist = 0.0f;
 };
 
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue

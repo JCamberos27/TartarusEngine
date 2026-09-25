@@ -59,7 +59,7 @@ public:
 
 private:
     void Fail(const std::string& message);
-    void ApplySpineAim(const Camera& camera, float amount);
+    void ApplySpineAim(const Camera& camera, float amount, float twist);
 
     entt::entity m_Body = entt::null;   // the root: placed at the feet, its pieces ride along
     entt::entity m_Driver = entt::null; // the piece whose Animator Controller runs the body
@@ -74,6 +74,12 @@ private:
     bool m_HaveRigOffset = false;
     std::vector<entt::entity> m_ArmsTagged;       // pieces given the ViewModelTag
     std::string m_LastError;
+    float m_ViewYaw = 0.0f;        // the view's heading, radians (the body's turns aim at it)
+    bool m_HaveHeading = false;
+    bool m_Turning = false;        // a turn-in-place clip is carrying the body round
+    float m_TurnTime = 0.0f;       // seconds into it
+    float m_TurnDone = 0.0f;       // radians the clip has turned the body so far
+    float m_Twist = 0.0f;          // view heading minus body heading, radians, wrapped
     int m_HeadNode = -1;
     glm::vec3 m_RestHead{0.0f};   // head bone, model space, in the bind pose
     glm::vec3 m_Eye{0.0f};        // the smoothed eye, model space
@@ -93,6 +99,10 @@ private:
 // The heading (radians about +Y) that turns a model facing +Z to look along `front`'s flat
 // direction. 0 when `front` is (near) vertical.
 float FirstPersonBodyYaw(const glm::vec3& front, float fallback = 0.0f);
+// An angle wrapped to (-pi, pi].
+float FirstPersonBodyWrapAngle(float radians);
+// Whether a body standing still, `offset` radians off the view, starts turning on the spot.
+bool FirstPersonBodyShouldTurn(float offset, float thresholdDegrees);
 // A world velocity in the frame of a body at heading `yaw`: x = to its right, y = forward.
 glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw);
 // The eye in model space: the head's standing position, plus `bob` of the head's motion away
