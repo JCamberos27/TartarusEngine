@@ -13,10 +13,12 @@
 #include "EditorUIPrimitives.h"
 #include "AnimationSystem.h"
 #include "AnimatorController.h"
+#include "AnimatorLint.h"
+#include "FirstPersonBodyContract.h"
+#include "FirstPersonAnimation.h"
+#include "Components.h"
 #include "CurveEditor.h"
 #include "AssetLibrary.h"
-#include "Components.h"
-#include "FirstPersonAnimation.h"
 #include "Log.h"
 #include "Model.h"
 #include "ProjectPaths.h"
@@ -720,6 +722,77 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                 changed = true;
             }
             ImGui::EndTabItem();
+        }
+        // Lint: the mistakes a controller loads fine with and then quietly doesn't do what it was built to.
+        {
+            const std::vector<AnimatorLint::Issue> issues = AnimatorLint::Check(D);
+            int problems = 0;
+            for (const auto& i : issues) problems += i.Severity != AnimatorLint::Level::Info;
+            char tab[48];
+            std::snprintf(tab, sizeof tab, problems ? "Lint (%d)###lint" : "Lint###lint", problems);
+            if (ImGui::BeginTabItem(tab)) {
+                static int s_against = 0; // 0 none, 1 body, 2 weapon
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::Combo("##against", &s_against, "Check the graph only Also check it as a first-person body controller Also check it as a first-person weapon controller ");
+                std::vector<FPBody::Check> contract;
+                if (s_against == 1) {
+                    FirstPersonBodyComponent all;
+                    all.TurnThreshold = 55.0f; all.StartStopClips = true; all.CrouchHeight = 1.2f; all.FootIK = true; all.WeaponArms = true;
+                    FPBody::ValidationInput in;
+                    in.Config = &all;
+                    in.HasPieces = in.HasDriverPiece = in.ControllerSet = true;
+                    in.Controller = &D;
+                    contract = FPBody::Validate(in);
+                } else if (s_against == 2) {
+                    FirstPersonAnimationSet set;
+                    set.Controller = W.Rel;
+                    FirstPersonWeaponCheckInput in;
+                    in.Set = &set;
+                    in.Controller = &D;
+                    contract = FirstPersonWeaponValidate(in);
+                }
+                if (issues.empty() && contract.empty()) {
+                    ImGui::TextColored(EditorUIPrimitives::SuccessColor(), ICON_FA_CIRCLE_CHECK "  Nothing to report.");
+                }
+                for (const auto& iss : issues) {
+                    ImVec4 col = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+                    const char* icon = ICON_FA_CIRCLE_INFO;
+                    if (iss.Severity == AnimatorLint::Level::Error) { col = EditorUIPrimitives::DangerColor(); icon = ICON_FA_CIRCLE_XMARK; }
+                    else if (iss.Severity == AnimatorLint::Level::Warning) { col = EditorUIPrimitives::WarningColor(); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
+                    ImGui::PushID((int)(&iss - issues.data()) + 5000);
+                    ImGui::TextColored(col, "%s", icon);
+                    ImGui::SameLine();
+                    ImGui::PushTextWrapPos(0.0f);
+                    ImGui::TextUnformatted(iss.Message.c_str());
+                    ImGui::PopTextWrapPos();
+                    const bool clickable = iss.State >= 0 || iss.Transition >= 0;
+                    if (clickable && ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                    if (clickable && ImGui::IsItemClicked()) {
+                        if (iss.Layer >= 0 && iss.Layer < (int)D.Layers.size()) W.Layer = iss.Layer;
+                        W.ClearSelection();
+                        if (iss.Transition >= 0) W.SelTransition = iss.Transition;
+                        else W.SelStates = {iss.State};
+                    }
+                    if (!iss.Hint.empty()) ImGui::TextDisabled("    %s", iss.Hint.c_str());
+                    ImGui::PopID();
+                }
+                if (!contract.empty()) {
+                    ImGui::SeparatorText(s_against == 1 ? "As a body controller" : "As a weapon controller");
+                    for (const auto& c : contract) {
+                        ImVec4 col = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+                        const char* icon = ICON_FA_CIRCLE_INFO;
+                        if (c.Level == FPBody::Severity::Error) { col = EditorUIPrimitives::DangerColor(); icon = ICON_FA_CIRCLE_XMARK; }
+                        else if (c.Level == FPBody::Severity::Warning) { col = EditorUIPrimitives::WarningColor(); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
+                        ImGui::TextColored(col, "%s", icon);
+                        ImGui::SameLine();
+                        ImGui::PushTextWrapPos(0.0f);
+                        ImGui::TextUnformatted(c.Message.c_str());
+                        if (!c.Hint.empty()) ImGui::TextDisabled("    %s", c.Hint.c_str());
+                        ImGui::PopTextWrapPos();
+                    }
+                }
+                ImGui::EndTabItem();
+            }
         }
         ImGui::EndTabBar();
     }
