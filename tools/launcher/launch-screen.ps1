@@ -82,6 +82,13 @@ public static class TartarusLaunchConsole {
             if (state != 0) taskbar.SetProgressValue(window, (ulong)(Math.Max(0.0, Math.Min(1.0, fraction)) * 1000), 1000);
         } catch { }
     }
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool GetCurrentConsoleFontEx(IntPtr output, bool maximumWindow, ref CONSOLE_FONT_INFOEX info);
+    // The size of one character cell in pixels (width, height).
+    public static int[] CellSize() {
+        CONSOLE_FONT_INFOEX info = new CONSOLE_FONT_INFOEX(); info.Size = (uint)Marshal.SizeOf(typeof(CONSOLE_FONT_INFOEX));
+        if (!GetCurrentConsoleFontEx(GetStdHandle(-11), false, ref info) || info.FontSize.X <= 0) return new int[] { 7, 15 };
+        return new int[] { info.FontSize.X, info.FontSize.Y };
+    }
     public static void UseFontHeight(short height) {
         CONSOLE_FONT_INFOEX info = new CONSOLE_FONT_INFOEX();
         info.Size = (uint)Marshal.SizeOf(typeof(CONSOLE_FONT_INFOEX)); info.FontSize.Y = height;
@@ -202,13 +209,20 @@ function Block-Width([string[]]$lines) { [int]($lines | Measure-Object -Property
 $art = @(Trim-Block $sections['art'])
 $banner = @(Trim-Block $sections['banner'])
 
-# The composition, top to bottom: margin, art, gap, lockup, gap, status, gap, progress bar, gap,
-# version, margin.
-$marginX = 4; $marginY = 2; $gapArt = 3; $gapStatus = 2; $gapBar = 1; $gapVersion = 2
+# The composition, side by side: the art on the left; on the right the lockup with the status,
+# the progress bar and the version line under it. The window is then widened (or heightened) to a
+# 3:2 landscape frame, the spare columns split evenly into the two margins and the gap between.
+$aspect = 1.5
+$marginY = 3; $minMarginX = 6; $gapStatus = 3; $gapBar = 1; $gapVersion = 2
 $barWidth = 64
-function Layout-Size {
-    $script:cols = [Math]::Max((Block-Width $art), (Block-Width $banner)) + 2 * $marginX
-    $script:rows = $marginY + $art.Count + $gapArt + $banner.Count + $gapStatus + 1 + $gapBar + 1 + $gapVersion + 1 + $marginY
+function Layout-Size([double]$cellAspect = 0.47) {   # cell width / height
+    $script:rightRows = $banner.Count + $gapStatus + 1 + $gapBar + 1 + $gapVersion + 1
+    $script:contentCols = (Block-Width $art) + (Block-Width $banner)
+    $script:contentRows = [Math]::Max($art.Count, $rightRows)
+    $script:rows = $contentRows + 2 * $marginY
+    $script:cols = [Math]::Max($contentCols + 3 * $minMarginX, [int][Math]::Ceiling($aspect * $rows / $cellAspect))
+    # Content wider than 3:2 allows: add rows instead, so the frame keeps its shape.
+    $script:rows = [Math]::Max($rows, [int][Math]::Ceiling($cols * $cellAspect / $aspect))
 }
 Layout-Size
 
@@ -220,10 +234,14 @@ function Set-LaunchConsoleLayout([int]$Columns, [int]$Rows) {
         Load-ConsoleApi
         [TartarusLaunchConsole]::RestoreHidden()
         # The largest Consolas size (a cell is about h tall, h/2 wide) whose window fills no more
-        # than ~90% of the desktop.
+        # than ~80% of the monitor's height and ~85% of its width.
         $work = [TartarusLaunchConsole]::WorkArea()
-        $font = [int][Math]::Floor([Math]::Min($work[1] * 0.9 / $Rows, $work[0] * 0.9 / ($Columns * 0.55)))
-        [TartarusLaunchConsole]::UseFontHeight([int16][Math]::Max(6, [Math]::Min(16, $font)))
+        $font = [int][Math]::Floor([Math]::Min($work[1] * 0.8 / $Rows, $work[0] * 0.85 / ($Columns * 0.5)))
+        [TartarusLaunchConsole]::UseFontHeight([int16][Math]::Max(5, [Math]::Min(16, $font)))
+        # The real cell shape sets the columns that make the frame exactly 3:2.
+        $cell = [TartarusLaunchConsole]::CellSize()
+        Layout-Size ($cell[0] / [double]$cell[1])
+        $Columns = $script:cols; $Rows = $script:rows
         $c = [Math]::Min($Columns, [Console]::LargestWindowWidth)
         $r = [Math]::Min($Rows, [Console]::LargestWindowHeight)
         # Grow the buffer first (a window can't outsize it), then match it to the window exactly.
@@ -249,25 +267,31 @@ try { [TartarusLaunchConsole]::ShowCentered() } catch {}
 
 $winW = $cols; $winH = $rows
 try { $winW = [Console]::WindowWidth; $winH = [Console]::WindowHeight } catch {}
-# A display too small for the full size: halve the art rather than crop it.
-if ($winW -lt $cols -or $winH -lt $rows) {
+# A display too small for the full size: halve the art (and, if need be, the lockup) rather than
+# crop them.
+if ($winW -lt $contentCols + 2 -or $winH -lt $contentRows) {
     $art = @(Shrink-Art $art 2)
-    if ($winW -lt (Block-Width $banner) + 2) { $banner = @(Shrink-Art $banner 2) }
+    if ($winW -lt (Block-Width $art) + (Block-Width $banner) + 2) { $banner = @(Shrink-Art $banner 2) }
     Layout-Size
 }
-# Centre the composition in whatever window we have (exactly the window, normally).
-$top = [Math]::Max(0, [int](($winH - $rows) / 2)) + $marginY
-$artRow = $top + 1                                        # rows are 1-based in VT sequences
-$bannerRow = $artRow + $art.Count + $gapArt
+# Place the two columns in whatever window we have (exactly the window, normally): the spare
+# width is split evenly between the left margin, the gap and the right margin.
+$artWidth = Block-Width $art
+$bannerWidth = Block-Width $banner
+$spare = [Math]::Max(0, $winW - $artWidth - $bannerWidth)
+$artCol = [int][Math]::Floor($spare / 3) + 1                        # columns and rows are 1-based
+$rightCol = $artCol + $artWidth + [int][Math]::Floor($spare / 3)
+$contentTop = [Math]::Max(0, [int](($winH - $contentRows) / 2))
+$artRow = $contentTop + [int](($contentRows - $art.Count) / 2) + 1
+$bannerRow = $contentTop + [int](($contentRows - $rightRows) / 2) + 1
+$bannerCol = $rightCol
 $statusRow = $bannerRow + $banner.Count + $gapStatus
 $barRow = $statusRow + 1 + $gapBar
 $versionRow = $barRow + 1 + $gapVersion
-$artWidth = Block-Width $art
-$artCol = [Math]::Max(0, [int](($winW - $artWidth) / 2)) + 1
-$bannerWidth = Block-Width $banner
-$bannerCol = [Math]::Max(0, [int](($winW - $bannerWidth) / 2)) + 1
-$barWidth = [Math]::Min($barWidth, $winW - 2 * $marginX)
-$barCol = [Math]::Max(0, [int](($winW - $barWidth) / 2)) + 1
+$artCenter = $artCol + $artWidth / 2.0
+$rightCenter = $rightCol + $bannerWidth / 2.0
+$barWidth = [Math]::Min($barWidth, $bannerWidth)
+$barCol = [int]($rightCenter - $barWidth / 2.0)
 
 $skipped = $false
 function Rgb([double]$r, [double]$g, [double]$b) {
@@ -340,9 +364,10 @@ function Draw-Banner([int]$upTo, [double]$level = 1.0, [double]$warm = 0.0) {
 }
 
 # --- the status, bar and version lines -------------------------------------------------------------
-function Draw-Centered([int]$row, [string]$text, [string]$color) {
-    $col = [Math]::Max(1, [int](($winW - $text.Length) / 2) + 1)
-    $out.Write("$(At $row 1)$E[2K$(At $row $col)$color$text")
+function Draw-Centered([int]$row, [string]$text, [string]$color, [double]$center = $rightCenter, [int]$span = $bannerWidth) {
+    $clear = [Math]::Max(1, [int]($center - $span / 2.0))
+    $col = [Math]::Max(1, [int]($center - $text.Length / 2.0))
+    $out.Write("$(At $row $clear)$(' ' * $span)$(At $row $col)$color$text")
 }
 function Draw-Status([string]$text, [string]$color) { Draw-Centered $statusRow ($text.ToCharArray() -join ' ') $color }
 function Draw-Bar([double]$fraction, [double]$level = 1.0) {
@@ -438,12 +463,13 @@ if ($buildExitCode -ne 0) {
     }
     $maxLines = [Math]::Min(14, [Math]::Max(1, $art.Count - 12))
     $shownErrors = @($errors | Select-Object -First $maxLines)
-    $textWidth = $winW - 2 * $marginX - 4
+    # The errors take the art's place, on the left.
+    $textWidth = $artWidth - 2
     $row = $artRow + [Math]::Max(0, [int](($art.Count - $shownErrors.Count - 6) / 2))
-    Draw-Centered $row ('BUILD FAILED'.ToCharArray() -join ' ') (Rgb 235 90 80)
+    Draw-Centered $row ('BUILD FAILED'.ToCharArray() -join ' ') (Rgb 235 90 80) $artCenter $artWidth
     $row += 3
     $blockWidth = [Math]::Min($textWidth, (($shownErrors | Measure-Object -Property Length -Maximum).Maximum))
-    $col = [Math]::Max(1, [int](($winW - $blockWidth) / 2) + 1)
+    $col = [Math]::Max(1, [int]($artCenter - $blockWidth / 2.0))
     foreach ($l in $shownErrors) {
         if ($l.Length -gt $textWidth) { $l = $l.Substring(0, $textWidth - 3) + '...' }
         $out.Write("$(At $row $col)$(Rgb 236 128 116)$l"); $row++
@@ -451,10 +477,9 @@ if ($buildExitCode -ne 0) {
     if ($errors.Count -gt $shownErrors.Count) {
         $out.Write("$(At $row $col)$(Rgb 150 90 86)... and $($errors.Count - $shownErrors.Count) more in build\last-build.log"); $row++
     }
-    Draw-Centered ($row + 2) 'The previous build does not contain your latest changes.' (Rgb 110 110 118)
+    Draw-Centered ($row + 2) 'The previous build does not contain your latest changes.' (Rgb 110 110 118) $artCenter $artWidth
 
     Draw-Status 'BUILD FAILED' (Rgb 235 90 80)
-    $out.Write("$(At $barRow 1)$E[2K")
     Draw-Centered $barRow '[Y]  launch the previous build        [N]  close' (Rgb 200 200 206)
     try { while ([Console]::KeyAvailable) { [void][Console]::ReadKey($true) } } catch {}
     $choice = 11
@@ -496,8 +521,9 @@ if ($buildProc -and $buildSeconds -gt 0) {
 function Draw-Ready([double]$level = 1.0) {
     $word = 'READY'.ToCharArray() -join ' '
     $tail = if ($builtIn) { "     $builtIn" } else { '' }
-    $col = [Math]::Max(1, [int](($winW - $word.Length - $tail.Length) / 2) + 1)
-    $out.Write("$(At $statusRow 1)$E[2K$(At $statusRow $col)$(Rgb (120 * $level) (220 * $level) (140 * $level))$word" +
+    $col = [Math]::Max(1, [int]($rightCenter - ($word.Length + $tail.Length) / 2.0))
+    $clear = [Math]::Max(1, [int]($rightCenter - $bannerWidth / 2.0))
+    $out.Write("$(At $statusRow $clear)$(' ' * $bannerWidth)$(At $statusRow $col)$(Rgb (120 * $level) (220 * $level) (140 * $level))$word" +
                "$(Rgb (96 * $level) (96 * $level) (104 * $level))$tail")
 }
 Draw-Ready
