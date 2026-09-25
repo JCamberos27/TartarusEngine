@@ -1252,6 +1252,8 @@ int main(int argc, char** argv) {
                 player.Gravity = -std::abs(fp.Gravity);
                 player.SprintMultiplier = fp.SprintMultiplier;
                 player.JumpSpeed = fp.JumpSpeed;
+                player.JumpBufferTime = fp.JumpBufferTime;
+                player.CoyoteTime = fp.CoyoteTime;
                 player.EyeHeight = fp.EyeHeight;
                 player.Size = glm::vec3(fp.CapsuleRadius * 2.0f, std::max(fp.CapsuleHeight, fp.CapsuleRadius * 2.0f + 0.1f),
                                         fp.CapsuleRadius * 2.0f);

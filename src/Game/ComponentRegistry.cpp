@@ -374,6 +374,10 @@ void RegisterEngineComponents() {
               "Speed multiplier while Shift is held.", 1.0f, 10.0f },
             { "Jump Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, JumpSpeed), 0.05f,
               "Upward launch speed. Jump height is about Jump Speed^2 / (2 x Gravity).", 0.0f, 50.0f },
+            { "Jump Buffer Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, JumpBufferTime), 0.005f,
+              "A jump pressed this many seconds before landing still happens the moment you land.", 0.0f, 0.5f },
+            { "Coyote Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CoyoteTime), 0.005f,
+              "A jump pressed this many seconds after stepping off an edge still counts.", 0.0f, 0.5f },
             { "Eye Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, EyeHeight), 0.01f,
               "Camera height above the feet.", 0.1f, 10.0f },
             { "Capsule Radius", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CapsuleRadius), 0.01f,
@@ -460,9 +464,6 @@ void RegisterEngineComponents() {
               "Bones collapsed in Play, comma separated (empty = none) - e.g. the arms of a one-piece\n"
               "body while a first-person arms model draws them." },
         };
-        for (size_t i = 4; i < m.Fields.size(); ++i) m.Fields[i].Group = "Camera";
-        m.Fields.back().Group = nullptr;
-        m.Fields[m.Fields.size() - 2].Group = nullptr;
         m.Fields.push_back({ "Weapon Arms", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, WeaponArms), 0.0f,
               "The body's arms hold the weapon: they take the first-person arms' pose and reach their\n"
               "hands onto theirs, and the separate arms model stops being drawn (its gun still is)." });
@@ -472,9 +473,6 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Arms Piece", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmsPiece), 0.0f,
               "The child piece that is the body's arms (its name contains this). With Weapon Arms it is\n"
               "drawn with the gun, in the view-model pass, so its hands sit exactly where the rig's do." });
-        m.Fields[m.Fields.size() - 3].Group = "Arms";
-        m.Fields[m.Fields.size() - 2].Group = "Arms";
-        m.Fields.back().Group = "Arms";
         m.Fields.push_back({ "Turn Threshold", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnThreshold), 1.0f,
               "Standing still, the body keeps its heading until the view is this many degrees off it,\n"
               "then turns on the spot with the turn clips. 0 = the body always faces the view.", 0.0f, 170.0f });
@@ -493,17 +491,127 @@ void RegisterEngineComponents() {
               "Each foot is put on the ground under it, the pelvis drops to the lower foot and the legs are re-solved, so the feet meet stairs and slopes." });
         m.Fields.push_back({ "Foot IK Max Drop", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootIKMaxDrop), 0.01f,
               "The most the pelvis may drop (metres) to let the lower foot reach the ground.", 0.0f, 1.0f });
-        m.Fields[m.Fields.size() - 2].Group = "Foot IK";
-        m.Fields.back().Group = "Foot IK";
         m.Fields.push_back({ "Start Stop Clips", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StartStopClips), 0.0f,
               "Starting and stopping play their own clips (a push-off, a braking step) instead of blending\n"
               "straight between idle and the gait; their root motion eases the capsule up to speed and down." });
-        m.Fields[m.Fields.size() - 8].Group = "Turning";
-        m.Fields[m.Fields.size() - 7].Group = "Turning";
-        m.Fields[m.Fields.size() - 6].Group = "Turning";
-        m.Fields[m.Fields.size() - 5].Group = "Crouch";
-        m.Fields[m.Fields.size() - 4].Group = "Crouch";
-        m.Fields.back().Group = "Locomotion";
+        m.Fields.push_back({ "Eye Slack", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, EyeSlack), 0.001f,
+              "How far (metres) the camera may trail or lead the body's shoulders. A clip that throws the shoulders about (a stop pulling the body back)\nwould otherwise carry them out of the arms' reach and a hand would come off the gun. Bigger motions move the camera with them.", 0.0f, 0.2f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Reach Slack", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ReachSlack), 0.001f,
+              "The body's shoulders sit this much (metres) further toward the gun than the arms rig's, so the support arm is never at full stretch\n(a straight arm jumps at every small motion).", 0.0f, 0.2f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Shrug Start", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ShrugStart), 0.01f,
+              "A shoulder shrugs toward the gun once its hand is this fraction of the arm's length away, instead of the arm stretching.", 0.5f, 1.2f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Shrug Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ShrugMax), 0.005f,
+              "The most (metres) a shoulder may shrug toward the gun.", 0.0f, 0.4f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Arms Ease Out", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmsEaseOut), 0.005f,
+              "Seconds the body's arms take to ease back to the locomotion pose once the gun is holstered.", 0.01f, 1.0f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Turn Lag Floor", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnLagFloor), 1.0f,
+              "The body never lags the view by more than the larger of this (degrees) and Turn Threshold + Turn Lag Margin: a bounded slide of the feet\nbeats a chest twisted right round. Keep Mouse Sensitivity low enough that the turn clips keep up.", 0.0f, 180.0f });
+        m.Fields.back().Group = "Turning (advanced)";
+        m.Fields.push_back({ "Turn Lag Margin", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnLagMargin), 0.5f,
+              "Added to Turn Threshold when working out the most the body may lag the view (see Turn Lag Floor).", 0.0f, 90.0f });
+        m.Fields.back().Group = "Turning (advanced)";
+        m.Fields.push_back({ "Turn End Angle", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnEndAngle), 0.5f,
+              "A turn on the spot ends once the body is within this many degrees of the view.", 0.0f, 45.0f });
+        m.Fields.back().Group = "Turning (advanced)";
+        m.Fields.push_back({ "Turn Min Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnMinTime), 0.01f,
+              "A turn lasts at least this many seconds before it can end because its clip has finished.", 0.0f, 2.0f });
+        m.Fields.back().Group = "Turning (advanced)";
+        m.Fields.push_back({ "Turn Timeout", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnTimeout), 0.1f,
+              "A guard: a turn ends after this many seconds whatever the clip does.", 0.5f, 20.0f });
+        m.Fields.back().Group = "Turning (advanced)";
+        m.Fields.push_back({ "Turn Move Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnMoveEase), 0.005f,
+              "Moving, the body eases to face the view in this many seconds (a quick ease, no pop).", 0.005f, 1.0f });
+        m.Fields.back().Group = "Turning (advanced)";
+        m.Fields.push_back({ "Start Idle Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StartIdleTime), 0.01f,
+              "A start clip plays only after the input has been idle this many seconds: a tap between keys is not a start.", 0.0f, 2.0f });
+        m.Fields.back().Group = "Start & Stop (advanced)";
+        m.Fields.push_back({ "Start Max Move", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StartMaxMove), 0.05f,
+              "... and only while the body's current speed (m/s) is below this.", 0.0f, 5.0f });
+        m.Fields.back().Group = "Start & Stop (advanced)";
+        m.Fields.push_back({ "Stop Min Run Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StopMinRunTime), 0.01f,
+              "A stop clip needs a run of at least this many seconds to stop from: a tap of the keys (or a step or two) just eases to a halt.", 0.0f, 3.0f });
+        m.Fields.back().Group = "Start & Stop (advanced)";
+        m.Fields.push_back({ "Stop Min Run Time (Crouched)", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StopMinRunTimeCrouched), 0.01f,
+              "The same while crouched.", 0.0f, 3.0f });
+        m.Fields.back().Group = "Start & Stop (advanced)";
+        m.Fields.push_back({ "Stop Min Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StopMinSpeed), 0.05f,
+              "... and at least this speed (m/s) to shed.", 0.0f, 10.0f });
+        m.Fields.back().Group = "Start & Stop (advanced)";
+        m.Fields.push_back({ "Stop Min Speed (Crouched)", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StopMinSpeedCrouched), 0.05f,
+              "The same while crouched.", 0.0f, 10.0f });
+        m.Fields.back().Group = "Start & Stop (advanced)";
+        m.Fields.push_back({ "Stop Debounce", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StopDebounce), 0.005f,
+              "Seconds of no input before a stop is decided (tapping between two keys isn't one).", 0.0f, 0.5f });
+        m.Fields.back().Group = "Start & Stop (advanced)";
+        m.Fields.push_back({ "Stop Run Forward", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StopRunForward), 0.05f,
+              "A stop after a sprint uses the Stop Run clip when the last direction of travel was at least this far forward (0 = sideways, 1 = straight ahead).", 0.0f, 1.0f });
+        m.Fields.back().Group = "Start & Stop (advanced)";
+        m.Fields.push_back({ "Airborne Delay", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, AirborneDelay), 0.01f,
+              "Seconds off the ground before the controller's Airborne parameter is set (a step down a stair isn't a fall).", 0.0f, 1.0f });
+        m.Fields.back().Group = "Locomotion (advanced)";
+        m.Fields.push_back({ "Foot Lock Drift", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockDrift), 0.005f,
+              "A planted foot is pinned where it landed; if the animation and the capsule's travel drift this far apart (metres) it plants again where the animation is.", 0.01f, 1.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot Planted Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPlantedHeight), 0.005f,
+              "The animated foot counts as planted (pinned to the ground) while it is lower than this (metres).", 0.0f, 0.3f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot Ray Up", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootRayUp), 0.05f,
+              "The ground ray under each foot starts this far (metres) above the animated foot.", 0.0f, 2.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot Ray Length", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootRayLength), 0.05f,
+              "... and reaches this far (metres) down.", 0.1f, 3.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot Max Raise", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootMaxRaise), 0.01f,
+              "The most (metres) a foot is lifted to meet ground higher than the capsule's.", 0.0f, 1.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Pelvis Max Raise", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, PelvisMaxRaise), 0.01f,
+              "The most (metres) the pelvis may rise when both feet are on higher ground. 0 = never: the legs reach for the step instead.", 0.0f, 0.5f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot Offset Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootOffsetEase), 0.005f,
+              "Seconds the ground height under each foot takes to follow the ray.", 0.005f, 1.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot Normal Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootNormalEase), 0.005f,
+              "Seconds the ground's slope under each foot takes to follow the ray.", 0.005f, 1.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot IK Fade", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootIKFade), 0.005f,
+              "Seconds foot IK takes to fade in and out (it lets go in the air).", 0.005f, 1.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot Tilt Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootTiltMax), 1.0f,
+              "The most (degrees) a planted foot tilts to lie on a slope.", 0.0f, 60.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot Lock Ease In", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockEaseIn), 0.005f,
+              "Seconds a foot takes to be pinned once it is planted.", 0.005f, 1.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Foot Lock Ease Out", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockEaseOut), 0.005f,
+              "Seconds a foot takes to be released once it lifts.", 0.005f, 1.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Stair Pop Rise", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StairPopRise), 0.005f,
+              "A sudden change of the capsule's height at least this big (metres) counts as a stair: the body eases to the new height instead of popping.", 0.005f, 0.3f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Stair Pop Rate", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StairPopRate), 0.1f,
+              "... and only when it is at least this fast (m/s), so a slope doesn't trigger it.", 0.5f, 20.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Stair Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StairEase), 0.005f,
+              "Seconds the body takes to ease up or down a stair (0.03 s when Foot IK is off).", 0.005f, 1.0f });
+        m.Fields.back().Group = "Foot IK (advanced)";
+        // Groups, by name (not by position: reordering fields must not move them).
+        {
+            static const std::pair<const char*, const char*> kGroups[] = {
+                {"Head Bone", "Camera"}, {"Camera Offset", "Camera"}, {"Head Bob", "Camera"}, {"Camera Smoothing", "Camera"},
+                {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Arms Piece", "Arms"},
+                {"Turn Threshold", "Turning"}, {"Spine Twist", "Turning"}, {"Max Turn Rate", "Turning"},
+                {"Crouch Height", "Crouch"}, {"Crouch Speed", "Crouch"},
+                {"Foot IK", "Foot IK"}, {"Foot IK Max Drop", "Foot IK"}, {"Start Stop Clips", "Locomotion"},
+            };
+            for (auto& f : m.Fields)
+                for (const auto& [name, group] : kGroups)
+                    if (std::strcmp(f.Name, name) == 0) f.Group = group;
+        }
         Register<FirstPersonBodyComponent>(std::move(m));
     }
 

@@ -245,10 +245,10 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
         // A stair pops the capsule up (or down) in a frame: the body (and so the camera on its head)
         // stays where it was and eases to the new height; the legs' IK reaches the step meanwhile.
         const float rise = f[1] - m_LastCapsuleY;
-        if (cfg.FootIK && m_HaveCapsule && player.Grounded && m_LastGrounded && dt > 0.0f && std::abs(rise) > 0.03f &&
-            std::abs(rise) / dt > 2.5f)
+        if (cfg.FootIK && m_HaveCapsule && player.Grounded && m_LastGrounded && dt > 0.0f && std::abs(rise) > cfg.StairPopRise &&
+            std::abs(rise) / dt > cfg.StairPopRate)
             m_StepOffset = std::clamp(m_StepOffset - rise, -0.3f, 0.3f);
-        m_StepOffset -= m_StepOffset * Follow(dt, player.Grounded && cfg.FootIK ? 0.09f : 0.03f);
+        m_StepOffset -= m_StepOffset * Follow(dt, player.Grounded && cfg.FootIK ? cfg.StairEase : 0.03f);
         m_LastCapsuleY = f[1];
         m_LastGrounded = player.Grounded;
         m_HaveCapsule = true;
@@ -264,7 +264,8 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     const glm::vec2 target = FirstPersonBodyLocalMove(player.WishVelocity, m_Yaw);
     // Letting go at speed, the gait holds for the moment a stop clip is being picked (the blend would
     // otherwise slow the body on its own first, and the stop clip's own travel come on top of it).
-    const bool holdForStop = cfg.StartStopClips && glm::length(target) < 0.01f && m_IdleTime < 0.05f && glm::length(m_Move) > (player.Crouched ? 0.6f : 1.2f);
+    const bool holdForStop = cfg.StartStopClips && glm::length(target) < 0.01f && m_IdleTime < cfg.StopDebounce &&
+                         glm::length(m_Move) > (player.Crouched ? cfg.StopMinSpeedCrouched : cfg.StopMinSpeed);
     if (!holdForStop) m_Move += (target - m_Move) * Follow(dt, cfg.ParamSmoothing);
     m_AirTime = player.Grounded ? 0.0f : m_AirTime + dt;
     m_Grounded = player.Grounded;
@@ -295,8 +296,8 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
         offset = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw);
         // Done when the clip has played out (a 180 takes longer than a 90), the view is reached, or
         // the player moves off; the timeout is only a guard.
-        const bool clipDone = m_TurnTime > 0.3f && (!ac.InState(FPBody::kStateTurn) || ac.StateTime >= 0.97f);
-        if (!still || std::abs(offset) < glm::radians(8.0f) || clipDone || m_TurnTime > 4.0f) {
+        const bool clipDone = m_TurnTime > cfg.TurnMinTime && (!ac.InState(FPBody::kStateTurn) || ac.StateTime >= 0.97f);
+        if (!still || std::abs(offset) < glm::radians(cfg.TurnEndAngle) || clipDone || m_TurnTime > cfg.TurnTimeout) {
             Log::Info("First Person Body: turned " + std::to_string(glm::degrees(m_TurnDone)).substr(0, 6) + " deg in " +
                       std::to_string(m_TurnTime).substr(0, 4) + " s, " + std::to_string(glm::degrees(offset)).substr(0, 6) + " deg off the view.");
             m_Turning = false;
@@ -309,12 +310,12 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
             ac.SetFloat(FPBody::kTurnAngle, std::clamp(glm::degrees(offset), -180.0f, 180.0f));
         }
     } else {
-        m_Yaw += offset * Follow(dt, 0.08f);
+        m_Yaw += offset * Follow(dt, cfg.TurnMoveEase);
     }
     // The view can outrun a turn clip: the body never lags it by more than this (a bounded slide of
     // the feet beats a chest twisted right round). Keep Mouse Sensitivity low enough that the turn clips keep up.
     if (cfg.TurnThreshold > 0.0f) {
-        const float lag = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw), maxLag = glm::radians(std::max(cfg.TurnThreshold + 5.0f, 90.0f));
+        const float lag = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw), maxLag = glm::radians(std::max(cfg.TurnThreshold + cfg.TurnLagMargin, cfg.TurnLagFloor));
         if (std::abs(lag) > maxLag) m_Yaw = m_ViewYaw - std::copysign(maxLag, lag);
     }
     m_Yaw = FirstPersonBodyWrapAngle(m_Yaw);
@@ -353,7 +354,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
         }
         if (wantsMove) {
             const glm::vec2 dir = wishLocal / wishLen;
-            if (plain && m_IdleTime >= 0.25f && glm::length(m_Move) < 0.6f) {
+            if (plain && m_IdleTime >= cfg.StartIdleTime && glm::length(m_Move) < cfg.StartMaxMove) {
                 ac.SetFloat(FPBody::kStartX, dir.x);
                 ac.SetFloat(FPBody::kStartY, dir.y);
                 ac.SetTrigger(FPBody::kStart);
@@ -366,12 +367,13 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
             const float before = m_IdleTime;
             m_IdleTime += dt;
             // A stop needs a run to stop from: a tap of the keys (or a step or two) just eases to a halt.
-            const bool ranEnough = m_MoveTime >= (player.Crouched ? 0.7f : 0.6f);
-            if (before < 0.05f && m_IdleTime >= 0.05f) m_MoveTime = 0.0f;
-            if (plain && ranEnough && before < 0.05f && m_IdleTime >= 0.05f && glm::length(m_Move) > (player.Crouched ? 0.6f : 1.2f)) {
+            const bool ranEnough = m_MoveTime >= (player.Crouched ? cfg.StopMinRunTimeCrouched : cfg.StopMinRunTime);
+            if (before < cfg.StopDebounce && m_IdleTime >= cfg.StopDebounce) m_MoveTime = 0.0f;
+            if (plain && ranEnough && before < cfg.StopDebounce && m_IdleTime >= cfg.StopDebounce &&
+                glm::length(m_Move) > (player.Crouched ? cfg.StopMinSpeedCrouched : cfg.StopMinSpeed)) {
                 ac.SetFloat(FPBody::kStopX, m_LastDir.x);
                 ac.SetFloat(FPBody::kStopY, m_LastDir.y);
-                ac.SetTrigger(m_LastSprint && m_LastDir.y > 0.7f ? FPBody::kStopRun : FPBody::kStop);
+                ac.SetTrigger(m_LastSprint && m_LastDir.y > cfg.StopRunForward ? FPBody::kStopRun : FPBody::kStop);
             }
         }
     }
@@ -383,7 +385,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     ac.SetBool(FPBody::kGrounded, player.Grounded);
     ac.SetBool(FPBody::kCrouched, player.Crouched);
     // Off the ground for a moment (not a step down a stair): falling.
-    ac.SetBool(FPBody::kAirborne, m_AirTime > 0.15f);
+    ac.SetBool(FPBody::kAirborne, m_AirTime > cfg.AirborneDelay);
     if (player.Jumped) ac.SetTrigger(FPBody::kJump);
 }
 
@@ -508,12 +510,12 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             // The eye may trail or under-follow the shoulders by only this much: a clip that throws the
             // shoulders about (a stop pulling the body back) would otherwise carry them out of the
             // arms' reach and a hand would come off the gun. Bigger motions move the camera with them.
-            constexpr float kEyeSlack = 0.035f;
+            const float kEyeSlack = cfg.EyeSlack;
             const glm::vec3 gap = shouldersAnimated - m_Shoulders;
             if (const float gapLen = glm::length(gap); gapLen > kEyeSlack) m_Shoulders = shouldersAnimated - gap / gapLen * kEyeSlack;
             // A little slack: the shoulders sit this much further toward the gun than the rig's, so the
             // support arm is never at full stretch (a straight arm jumps at every small motion).
-            constexpr float kReachSlack = 0.04f;
+            const float kReachSlack = cfg.ReachSlack;
             const glm::vec3 offset = camera.Right() * m_RigEyeToShoulders.x + camera.Up() * m_RigEyeToShoulders.y +
                                      camera.Front() * (m_RigEyeToShoulders.z + kReachSlack);
             const glm::vec3 fromShoulders = m_Feet + yaw * (t.Scale * (m_Shoulders + toRest)) - offset;
@@ -537,7 +539,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     auto& reg = world.Registry;
     const bool on = cfg.FootIK && m_Grounded && PhysicsWorld::HasCharacter() && reg.valid(m_Driver) &&
                     !reg.get<AnimatorControllerComponent>(m_Driver).HasTag(FPBody::kTagAirborne);
-    m_FootWeight += ((on ? 1.0f : 0.0f) - m_FootWeight) * Follow(dt, 0.1f);
+    m_FootWeight += ((on ? 1.0f : 0.0f) - m_FootWeight) * Follow(dt, cfg.FootIKFade);
     if (m_FootWeight < 1e-3f) {
         m_HaveFoot = false;
         m_FootPlanted[0] = m_FootPlanted[1] = false;
@@ -571,35 +573,35 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         animHeight[s] = footWorld.y - m_Feet.y;
         // Foot lock: a planted foot stays where it landed instead of sliding when the animation and the
         // capsule's travel disagree a little; it lets go when the foot lifts or the mismatch gets big.
-        const bool planted = animHeight[s] < 0.05f && yawSteady;
+        const bool planted = animHeight[s] < cfg.FootPlantedHeight && yawSteady;
         if (planted) {
             if (!m_FootPlanted[s]) { m_FootPlanted[s] = true; m_FootLock[s] = footWorld; }
             const glm::vec3 drift(footWorld.x - m_FootLock[s].x, 0.0f, footWorld.z - m_FootLock[s].z);
-            if (glm::dot(drift, drift) > 0.12f * 0.12f) m_FootLock[s] = footWorld; // too far: plant again here
+            if (glm::dot(drift, drift) > cfg.FootLockDrift * cfg.FootLockDrift) m_FootLock[s] = footWorld; // too far: plant again here
         } else {
             m_FootPlanted[s] = false;
         }
-        m_FootLockWeight[s] += ((m_FootPlanted[s] ? 1.0f : 0.0f) - m_FootLockWeight[s]) * Follow(dt, m_FootPlanted[s] ? 0.04f : 0.08f);
+        m_FootLockWeight[s] += ((m_FootPlanted[s] ? 1.0f : 0.0f) - m_FootLockWeight[s]) * Follow(dt, m_FootPlanted[s] ? cfg.FootLockEaseIn : cfg.FootLockEaseOut);
         lockShift[s] = glm::vec3(m_FootLock[s].x - footWorld.x, 0.0f, m_FootLock[s].z - footWorld.z) * (m_FootLockWeight[s] * m_FootWeight);
         float offset = 0.0f;
         glm::vec3 normal(0.0f, 1.0f, 0.0f);
-        const float origin[3] = {footWorld.x, footWorld.y + 0.5f, footWorld.z};
+        const float origin[3] = {footWorld.x, footWorld.y + cfg.FootRayUp, footWorld.z};
         const float down[3] = {0.0f, -1.0f, 0.0f};
         QueryFilter filter;
         filter.HitTriggers = 0;
         RaycastHit hit;
-        if (PhysicsWorld::RaycastSolid(origin, down, 1.0f, filter, hit) && hit.Hit) {
-            offset = std::clamp(hit.Point[1] - m_Feet.y, -maxDrop, 0.25f);
+        if (PhysicsWorld::RaycastSolid(origin, down, cfg.FootRayLength, filter, hit) && hit.Hit) {
+            offset = std::clamp(hit.Point[1] - m_Feet.y, -maxDrop, cfg.FootMaxRaise);
             normal = glm::normalize(glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]));
             if (normal.y < 0.5f) normal = glm::vec3(0.0f, 1.0f, 0.0f); // a wall, not a floor
         }
         if (!m_HaveFoot) { m_FootOffset[s] = offset; m_FootNormal[s] = normal; }
-        m_FootOffset[s] += (offset - m_FootOffset[s]) * Follow(dt, 0.06f);
-        m_FootNormal[s] = glm::normalize(m_FootNormal[s] + (normal - m_FootNormal[s]) * Follow(dt, 0.08f));
+        m_FootOffset[s] += (offset - m_FootOffset[s]) * Follow(dt, cfg.FootOffsetEase);
+        m_FootNormal[s] = glm::normalize(m_FootNormal[s] + (normal - m_FootNormal[s]) * Follow(dt, cfg.FootNormalEase));
     }
     m_HaveFoot = true;
 
-    const float pelvisDelta = FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], maxDrop, 0.0f) * m_FootWeight;
+    const float pelvisDelta = FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], maxDrop, cfg.PelvisMaxRaise) * m_FootWeight;
     static const char* const kLegs[2][3] = {{FPBody::kBoneThigh[0], FPBody::kBoneCalf[0], FPBody::kBoneFoot[0]}, {FPBody::kBoneThigh[1], FPBody::kBoneCalf[1], FPBody::kBoneFoot[1]}};
     const glm::quat yawInverse = glm::inverse(yaw);
     for (const auto& mp : m_Models) {
@@ -622,7 +624,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
             // The foot lies on the ground while it is planted: its own rotation tilted to the normal.
             const float planted = 1.0f - std::clamp((animHeight[s] - 0.06f) / 0.09f, 0.0f, 1.0f);
             const glm::vec3 normal = yawInverse * m_FootNormal[s];
-            const float angle = std::min(std::acos(std::clamp(normal.y, -1.0f, 1.0f)), glm::radians(25.0f)) * planted * m_FootWeight;
+            const float angle = std::min(std::acos(std::clamp(normal.y, -1.0f, 1.0f)), glm::radians(cfg.FootTiltMax)) * planted * m_FootWeight;
             glm::quat footRot = IK::Rotation(globals[foot]);
             const glm::vec3 axis = glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), normal);
             if (angle > 1e-4f && glm::dot(axis, axis) > 1e-8f) footRot = glm::angleAxis(angle, glm::normalize(axis)) * footRot;
@@ -665,7 +667,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     if (!IsActive()) return;
     auto& reg = world.Registry;
     if (!reg.valid(m_Body)) return;
-    const bool enabled = reg.get<FirstPersonBodyComponent>(m_Body).WeaponArms;
+    const FirstPersonBodyComponent& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
+    const bool enabled = cfg.WeaponArms;
     const bool haveRig = enabled && weaponArms != entt::null && reg.valid(weaponArms) &&
                          reg.all_of<RenderableComponent>(weaponArms) && viewModelFov > 0.0f;
     // The rig keeps posing (its hands are the targets) but is neither drawn nor casts a shadow: the
@@ -683,7 +686,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     // Drawn, the arms take the rig's hands from the first frame: eased in, the draw (and Play's first
     // frames) would show the hands out of the idle pose while the gun is already up. Only off eases.
     if (follow) m_ArmsWeight = 1.0f;
-    else m_ArmsWeight -= m_ArmsWeight * Follow(dt, 0.1f);
+    else m_ArmsWeight -= m_ArmsWeight * Follow(dt, cfg.ArmsEaseOut);
     const bool viewModelArms = follow;
     // The body's arms piece goes into the view-model pass with the gun (its hands then sit where the
     // rig's do); off, it is an ordinary piece of the body again.
@@ -761,7 +764,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 const float armLen = glm::length(IK::Position(globals[lower]) - a) + glm::length(IK::Position(globals[hand]) - IK::Position(globals[lower]));
                 const glm::vec3 toTarget = target - a;
                 const float dist = glm::length(toTarget);
-                const float excess = std::min(dist - armLen * 0.9f, 0.12f);
+                const float excess = std::min(dist - armLen * cfg.ShrugStart, cfg.ShrugMax);
                 if (excess > 1e-4f && dist > 1e-5f)
                     IK::OffsetBone(pose, parents, globals, clav, toTarget / dist * excess * m_ArmsWeight, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
             }
